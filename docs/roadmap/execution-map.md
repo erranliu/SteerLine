@@ -111,6 +111,8 @@ flowchart LR
 
 #65–#68 按硬前置串行整体交付后开工，一项一个实现 PR。#65 使用已交付配置/绑定封套和[生命周期端口](../validation/core-decoupling-03-lifecycle/README.md)，不重建副作用协调。可以提前只读盘点、审阅接口和准备 fixture；不能把接口草案或包内实验当作提前领取资格。前述串行阶段共享 execution/contracts、Service 和恢复入口，不按文件不同允许并行实施。旧到新测试路径映射随职责迁移交付，quick 不得因名称变化漏跑或重复矩阵。
 
+2026-10-02：#66 当前为[未提交候选](../validation/core-decoupling-05-composition/README.md)，规定组合验收失败且 Git refs/fixture 受权限限制；协调会话完成独立复审、发布及完整权限验收前，#66 → #67 开工门槛仍未满足。
+
 #68 后按[后续维护约束](../spec/core-maintenance-constraints.md)并行存储 #69 → #70 与客户端 #71 → #72，各自仍等待硬前置。写端口/中心提交/SQL/schema 的修改由存储线负责；产品 DTO/CLI/adapter/TUI 由客户端线负责。两线通过稳定应用 Query/Command 接口隔离，不存在存储先完成才允许客户端开工的隐含边。共享类型形状和应用组装、守卫/quick 构造段必须指定所有者并顺序集成；冲突未解决时暂停该共享改动，不能用双实现或任意写入口绕过。
 
 与多候选/本机 API/版本隔离工作同时进行时，涉及 Config、ExecutionRecord、Service、恢复、事件/问题、CLI 或 query 构造入口的修改需串行集成；既有任务的固定 Spec 不被本表自动修改。API 消费通用业务端口，新实现适配和组装不进入产品 UI。中心 DAG 不因本次规划文件变化自动建任务或改边。

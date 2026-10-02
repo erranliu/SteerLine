@@ -15,15 +15,38 @@ import (
 )
 
 func validateNativeStateLocation(c Config) error {
-	key, err := repoStateKey(c)
-	if err != nil {
-		return nativeErr("authority_mismatch", "cannot resolve the repository's stable native state location")
+	if c.RepositoryStateKey == "" || c.StateRoot == "" {
+		return nativeErr("authority_mismatch", "application configuration lacks its fixed repository state location")
 	}
-	expected := filepath.Join(SteerlineStateRoot(), key)
+	if err := c.ResolveIdentity(context.Background()); err != nil {
+		return err
+	}
+	if c.RepositoryStateKey != RepositoryStateKey(c.Identity()) {
+		return nativeErr("authority_mismatch", "repository state key differs from the resolved repository identity")
+	}
+	expected := filepath.Join(c.StateRoot, c.RepositoryStateKey)
 	if canonical(c.RunDir) != canonical(expected) {
 		return nativeErr("authority_mismatch", "native tasks require the repository's stable shared state directory; remove the custom run_dir setting")
 	}
 	return nil
+}
+
+// RepositoryStateKey derives a pure storage identity from an explicit Git
+// common directory. Application roots and default paths remain external.
+func RepositoryStateKey(identity string) string {
+	common := identity
+	if resolved, err := filepath.EvalSymlinks(common); err == nil {
+		common = resolved
+	}
+	name := filepath.Base(common)
+	if strings.EqualFold(name, ".git") {
+		name = filepath.Base(filepath.Dir(common))
+	}
+	name = strings.Trim(regexp.MustCompile(`[^a-zA-Z0-9._-]+`).ReplaceAllString(name, "-"), "-.")
+	if name == "" {
+		name = "repo"
+	}
+	return name + "-" + shortHash(canonical(common))[:12]
 }
 
 func cleanupNewNativeDB(path string) {

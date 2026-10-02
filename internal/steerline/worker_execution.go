@@ -3,15 +3,15 @@ package steerline
 import (
 	"context"
 	"errors"
-	"os/exec"
-	"runtime"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
-	return requireWorkerFlowCapabilitiesWithResolver(ctx, c, builtinLifecycleResolver{})
+	if c.ExecutionDirectory == nil {
+		return errors.New("execution directory is required")
+	}
+	return requireWorkerFlowCapabilitiesWithResolver(ctx, c, c.ExecutionDirectory)
 }
 
 func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, resolver executionapi.LifecycleResolver) error {
@@ -22,7 +22,10 @@ func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, re
 	if err != nil {
 		return err
 	}
-	setup := lifecycleSetupForConfig(c, entry)
+	setup, err := lifecycleSetupForConfig(c, entry)
+	if err != nil {
+		return err
+	}
 	lifecycle, probeErr := resolver.ResolveLifecycle(setup.Clone())
 	if probeErr != nil {
 		return probeErr
@@ -32,51 +35,6 @@ func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, re
 		return probeErr
 	}
 	return validateLifecycleStartCapability(setup.Snapshot.Ref, report)
-}
-func preflightCodexWorkerFlow(ctx context.Context, c Config) error {
-	codex := codexProfileSettings(c)
-	if c.agentName() != "codex" {
-		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "resumable worker flow requires Codex"}
-	}
-	if c.hostName() != "local" {
-		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "this worker-flow host is not supported"}
-	}
-	permissions, err := codexworker.CompilePolicy(c.ExecutionPolicy, runtime.GOOS, c.hostName(), c.agentName(), codex.WindowsSandbox, codex.Profile, codex.Args)
-	if err != nil {
-		return err
-	}
-	if err := (codexworker.Config{Policy: c.ExecutionPolicy, Args: codex.Args, Sandbox: permissions.Sandbox, WindowsSandbox: permissions.WindowsSandbox, ReasoningEffort: codex.ReasoningEffort}).Validate(runtime.GOOS); err != nil {
-		return err
-	}
-	command := Command{Executable: codex.Executable, Args: codex.Args}
-	if err := resolveCommand(&command); err != nil {
-		return err
-	}
-	runner := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-	err = codexworker.ProbeCapabilities(ctx, codexworker.ProbeConfig{
-		Executable: command.Executable, Args: command.Args, Repository: c.Repository, RunDir: c.RunDir,
-	}, codexworker.ProbePort{
-		Output: func(ctx context.Context, executable string, args []string) ([]byte, error) {
-			return runner.Output(ctx, Command{Executable: executable, Args: args})
-		},
-		HistoryAvailable: func(ctx context.Context) bool {
-			historyCommand := codexworker.ReaderCommand(Command{Executable: codex.Executable, Args: codex.Args}, codex.Profile)
-			return codexworker.HistoryAvailable(ctx, historyCommand, c.Repository, localManagedProcessHost{timeout: duration(c.CommandTimeout)}.StartManaged)
-		},
-		StartManaged: func(cmd *exec.Cmd) (func(), error) {
-			owned, err := startProcess(cmd)
-			if err != nil {
-				return nil, err
-			}
-			return owned.Close, nil
-		},
-	})
-	var unsupported *codexworker.ProbeError
-	if errors.As(err, &unsupported) {
-		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: unsupported.Diagnostic, Cause: unsupported.Cause}
-	}
-	return err
-
 }
 
 // workerFlowContext binds one persisted run to its fixed profile and records.

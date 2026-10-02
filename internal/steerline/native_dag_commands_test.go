@@ -1061,7 +1061,7 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store 
 	}
 	require(t, c.bindPublicationTarget(ctx))
 	fixed := c.projectExecutionProfile().Freeze()
-	if !verifyFixedExecutionProfile(fixed) {
+	if !testVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("published discard fixture has no valid frozen profile")
 	}
 	page, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, taskID)

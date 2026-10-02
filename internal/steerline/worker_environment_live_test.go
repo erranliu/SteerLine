@@ -30,9 +30,11 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	ctx := context.Background()
 	c := Config{TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: repo, Remote: "origin", Branch: "main", RunDir: filepath.Join(stateRoot, "state"), WorktreeRoot: filepath.Join(stateRoot, "worktrees"), Host: "orca", Agent: "codex", Claimant: "readiness-acceptance", ExecutableTypes: []string{"task"}, Git: Command{Executable: "git"}, CommandTimeout: "10s", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", ShutdownGrace: "10s"}
 	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: codex, WindowsSandbox: "unelevated"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "4m"})
-	key, err := repoStateKey(c)
+	key, err := fixtureRepositoryStateKey(c)
 	require(t, err)
-	c.RunDir = filepath.Join(SteerlineStateRoot(), key)
+	c.RunDir = filepath.Join(fixtureStateRoot(), key)
+	c.StateRoot, c.RepositoryStateKey = fixtureStateRoot(), key
+	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	require(t, c.ResolveIdentity(ctx))
 	require(t, requireWorkerFlowCapabilities(ctx, c))
@@ -70,7 +72,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 		_, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "9001154", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "acceptance", Explicit: true})
 		require(t, err)
 	}
-	s, err := NewService(c)
+	s, err := newTestService(c)
 	require(t, err)
 	defer s.Close()
 	run := s.find("9001154")

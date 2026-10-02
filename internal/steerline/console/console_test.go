@@ -111,7 +111,7 @@ func (c *testControlClient) DecisionEligibility(context.Context, ProjectRef, *st
 }
 
 func testProject(key string) ProjectRef {
-	return ProjectRef{Key: key, Name: key, ConfigPath: "/tmp/" + key + ".json", RunDir: "/tmp/" + key + "-state", Identity: "/repo/" + key, Config: steerline.Config{TaskPoll: "1s", ShutdownGrace: "10s"}}
+	return ProjectRef{Key: key, Name: key, ConfigPath: "/tmp/" + key + ".json", RunDir: "/tmp/" + key + "-state", Identity: "/repo/" + key, Config: consoleFixtureConfig(steerline.Config{TaskPoll: "1s", ShutdownGrace: "10s"}, "/tmp/"+key+".json")}
 }
 
 func readySnapshot(ref ProjectRef, now time.Time) ProjectSnapshot {
@@ -119,7 +119,7 @@ func readySnapshot(ref ProjectRef, now time.Time) ProjectSnapshot {
 	runtime := &steerline.Runtime{
 		SchemaVersion: steerline.WorkerFlowRuntimeSchema,
 		Repository:    steerline.Repository{Identity: ref.Identity},
-		Service:       steerline.ServiceState{InstanceID: "instance-" + ref.Name, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}},
+		Service:       steerline.ServiceState{ConfigDigest: ref.Config.LoadedConfigDigest(), InstanceID: "instance-" + ref.Name, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}},
 		Control:       steerline.ControlState{DispatchMode: "manual", Revision: 7},
 		Runs:          []*steerline.Run{},
 	}
@@ -148,7 +148,7 @@ func decisionSnapshot(ref ProjectRef, now time.Time) (ProjectSnapshot, *steerlin
 	for i := range options {
 		options[i] = executionapi.DecisionOption{ID: fmt.Sprintf("o%d", i), Label: fmt.Sprintf("选项 %d", i+1), Detail: fmt.Sprintf("详细说明 %02d：完整内容", i+1)}
 	}
-	run := &steerline.Run{TaskID: "task-decision", RunID: "0123456789abcdef0123456789abcdef", AttemptID: "fedcba9876543210fedcba9876543210", ControlRevision: 9, WorkflowVersion: steerline.WorkerFlowVersion, ExecutionID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Host: "local", Backend: "local", Protocol: "local_process", FinishTaskStatus: "waiting_decision", ExecutionStatus: "succeeded", Decision: &steerline.DecisionState{ID: "decision-0123456789abcdef0123456789ab", AttemptID: "fedcba9876543210fedcba9876543210", Version: 3, Status: "pending", Request: steerline.DecisionRequest{Question: strings.Repeat("问题", 24), Context: "背景第一行\n背景第二行", Options: options, Recommended: "o10", AllowFreeText: true}}}
+	run := &steerline.Run{TaskID: "task-decision", RunID: "0123456789abcdef0123456789abcdef", AttemptID: "fedcba9876543210fedcba9876543210", ControlRevision: 9, WorkflowVersion: steerline.WorkerFlowVersion, ExecutionID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Host: "local", Agent: "codex", Backend: "local", Protocol: "local_process", FinishTaskStatus: "waiting_decision", ExecutionStatus: "succeeded", Decision: &steerline.DecisionState{ID: "decision-0123456789abcdef0123456789ab", AttemptID: "fedcba9876543210fedcba9876543210", Version: 3, Status: "pending", Request: steerline.DecisionRequest{Question: strings.Repeat("问题", 24), Context: "背景第一行\n背景第二行", Options: options, Recommended: "o10", AllowFreeText: true}}}
 	runtime.Runs = []*steerline.Run{run}
 	snapshot.Connection.Snapshot.Runtime = runtime
 	snapshot.Observation.Runtime = runtime
@@ -870,11 +870,11 @@ func stringPointer(value string) *string { return &value }
 
 func TestViewProfilesSeparateLiveWindowsAndRecoverAfterClose(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	first, _, _, err := acquireViewProfile()
+	first, _, _, err := acquireViewProfile(os.Getenv("STEERLINE_HOME"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	second, _, _, err := acquireViewProfile()
+	second, _, _, err := acquireViewProfile(os.Getenv("STEERLINE_HOME"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -884,7 +884,7 @@ func TestViewProfilesSeparateLiveWindowsAndRecoverAfterClose(t *testing.T) {
 	firstDir, secondDir := first.dir, second.dir
 	first.close()
 	second.close()
-	reopened, _, _, err := acquireViewProfile()
+	reopened, _, _, err := acquireViewProfile(os.Getenv("STEERLINE_HOME"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1063,10 +1063,10 @@ func TestLoadProjectsSupportsZeroPartialAndExplicitConfigs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(steerline.GlobalExecutionConfigPath(), global, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(os.Getenv("STEERLINE_HOME"), "execution.json"), global, 0600); err != nil {
 		t.Fatal(err)
 	}
-	projects, err := LoadProjects("")
+	projects, err := LoadProjects("", consoleFixtureSource{home: home})
 	if err != nil || len(projects) != 0 {
 		t.Fatalf("empty config directory: %+v %v", projects, err)
 	}
@@ -1086,7 +1086,7 @@ func TestLoadProjectsSupportsZeroPartialAndExplicitConfigs(t *testing.T) {
 	if err = os.WriteFile(filepath.Join(etc, "broken.json"), []byte("not-json"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	projects, err = LoadProjects("")
+	projects, err = LoadProjects("", consoleFixtureSource{home: home})
 	if err != nil || len(projects) != 2 {
 		t.Fatalf("partial config directory: %+v %v", projects, err)
 	}
@@ -1098,7 +1098,7 @@ func TestLoadProjectsSupportsZeroPartialAndExplicitConfigs(t *testing.T) {
 	}
 	external := filepath.Join(t.TempDir(), "outside.json")
 	writeConsoleTestConfig(t, external, repo, filepath.Join(home, "state-explicit"))
-	explicit, err := LoadProjects(external)
+	explicit, err := LoadProjects(external, consoleFixtureSource{home: home})
 	if err != nil || len(explicit) != 1 || explicit[0].ConfigPath != external || explicit[0].Identity == "" {
 		t.Fatalf("explicit config outside etc was not selected: %+v %v", explicit, err)
 	}

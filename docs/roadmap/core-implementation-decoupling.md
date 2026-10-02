@@ -69,6 +69,8 @@ flowchart TD
 
 ## 顺序与交接
 
+2026-10-02：#66 已形成未提交实现候选，见[候选交接与验证记录](../validation/core-decoupling-05-composition/README.md)。最终产品构建、定向安全测试与生产依赖检查通过；规定 quick + CD66 组合失败，Git refs/隔离 Git fixture 受权限限制。等待协调会话独立复审、发布及完整权限验收，尚未验收或合并，#67 未启动。
+
 #65 → #66 → #67 → #68 串行交付；#68 后分为存储 #69 → #70 和客户端 #71 → #72，两线可按下述修改归属并行，每项一个实现 PR。#65 消费[生命周期端口](../validation/core-decoupling-03-lifecycle/README.md)；#63 复用[通用事件与问题 #62](../spec/core-decoupling-01-events.spec.md)及[验收记录](../validation/core-decoupling-01-events/README.md)，不意味着整个主包隔离已完成。
 
 | 交接 | 下游获得的实际能力 | 共享修改与开工门槛 |

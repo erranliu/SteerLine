@@ -12,7 +12,7 @@ func TestRealIsolatedRecoveryPreview(t *testing.T) {
 	if configPath == "" || runID == "" {
 		t.Skip("set STEERLINE_REAL_RECOVERY_CONFIG and STEERLINE_REAL_RECOVERY_RUN_ID for an isolated read-only preview")
 	}
-	c, err := LoadConfig(configPath)
+	c, err := loadFixtureConfig(configPath)
 	if err != nil {
 		t.Fatal(err)
 	}

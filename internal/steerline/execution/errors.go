@@ -2,7 +2,6 @@ package execution
 
 import (
 	"errors"
-	"strconv"
 )
 
 type BackendErrorCode string
@@ -61,17 +60,4 @@ func UnsupportedAdapterOperation(operation, diagnostic string) error {
 func IsAdapterError(err error, kind AdapterErrorKind) bool {
 	var target *AdapterError
 	return errors.As(err, &target) && target.Kind == kind
-}
-
-func ExecutionBackendKind(host string) (backend, protocol string, err error) {
-	switch host {
-	case "", "local":
-		return string(BackendLocal), string(ProtocolLocalProcess), nil
-	case "orca":
-		return string(BackendOrca), string(ProtocolOrcaTerminalV2), nil
-	case "orca_supervised":
-		return string(BackendOrca), string(ProtocolOrcaSupervised), nil
-	default:
-		return "", "", errors.New("unsupported execution host " + strconv.Quote(host) + "; fallback is disabled")
-	}
 }

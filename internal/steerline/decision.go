@@ -508,13 +508,3 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 	}
 	return nil
 }
-
-// Native Orca Dispatches are unsupervised. The center owns the exact agent
-// terminal created with the worktree and never uses Codex's exec protocol.
-
-func orcaQuestionID(decision *DecisionState) string {
-	if decision == nil || decision.Request.QuestionRoute == nil {
-		return ""
-	}
-	return decision.Request.QuestionRoute.QuestionID
-}

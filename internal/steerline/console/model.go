@@ -27,10 +27,13 @@ func (realClock) Now() time.Time                         { return time.Now() }
 func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
 type Options struct {
-	RunID   string
-	Query   QuerySource
-	Control ControlClient
-	Clock   Clock
+	RunID           string
+	Query           QuerySource
+	Control         ControlClient
+	Clock           Clock
+	ApplicationHome string
+	ApplicationBin  string
+	ApplicationEtc  string
 }
 
 type rowKind int
@@ -175,16 +178,17 @@ type executionProfileChoice struct {
 }
 
 type Model struct {
-	ctx        context.Context
-	query      QuerySource
-	control    ControlClient
-	clock      Clock
-	projects   []projectState
-	selected   int
-	width      int
-	height     int
-	generation uint64
-	refreshID  uint64
+	ctx            context.Context
+	query          QuerySource
+	control        ControlClient
+	clock          Clock
+	projects       []projectState
+	selected       int
+	applicationEtc string
+	width          int
+	height         int
+	generation     uint64
+	refreshID      uint64
 
 	profile  *viewProfile
 	prefs    ViewFile
@@ -204,36 +208,41 @@ type Model struct {
 
 // LoadProjects reads either one explicit config or all configs under etc.
 // Invalid project files stay in the list so their errors remain visible.
-func LoadProjects(configPath string) ([]ProjectRef, error) {
+func LoadProjects(configPath string, source ConfigSource) ([]ProjectRef, error) {
+	if source == nil {
+		return nil, errors.New("application config source is required")
+	}
 	var refs []ProjectRef
 	if strings.TrimSpace(configPath) != "" {
 		absolute, err := filepath.Abs(configPath)
 		if err != nil {
 			return nil, err
 		}
-		config, loadErr := steerline.LoadConfig(absolute)
+		config, loadErr := source.LoadConfig(absolute)
 		name := strings.TrimSuffix(filepath.Base(absolute), filepath.Ext(absolute))
 		if loadErr != nil {
 			return []ProjectRef{invalidProjectRef(name, absolute, loadErr)}, nil
 		}
-		refs = append(refs, makeProjectRef(name, absolute, config))
+		home, bin, _ := source.ApplicationPaths()
+		refs = append(refs, makeProjectRef(name, absolute, config, source.NormalizerSelector, home, bin))
 	} else {
-		projects, err := steerline.ListProjects()
+		projects, err := source.ConfigFiles()
 		if err != nil {
 			return nil, err
 		}
 		for _, project := range projects {
-			path, _ := filepath.Abs(project.ConfigPath)
+			path, _ := filepath.Abs(project.Path)
 			if project.Err != nil {
 				refs = append(refs, invalidProjectRef(project.Name, path, project.Err))
 				continue
 			}
-			config, loadErr := steerline.LoadConfig(path)
+			config, loadErr := source.LoadConfig(path)
 			if loadErr != nil {
 				refs = append(refs, invalidProjectRef(project.Name, path, loadErr))
 				continue
 			}
-			refs = append(refs, makeProjectRef(project.Name, path, config))
+			home, bin, _ := source.ApplicationPaths()
+			refs = append(refs, makeProjectRef(project.Name, path, config, source.NormalizerSelector, home, bin))
 		}
 	}
 	identityNames := map[string][]string{}
@@ -260,7 +269,7 @@ func invalidProjectRef(name, path string, configErr error) ProjectRef {
 	return ProjectRef{Key: key, Name: name, ConfigPath: path, Error: configErr.Error()}
 }
 
-func makeProjectRef(name, path string, config steerline.Config) ProjectRef {
+func makeProjectRef(name, path string, config steerline.Config, selectNormalizer func([]byte) steerline.Normalizer, home, bin string) ProjectRef {
 	absoluteRunDir, _ := filepath.Abs(config.RunDir)
 	configPath, _ := filepath.Abs(path)
 	key, _ := absoluteViewKey(configPath, absoluteRunDir)
@@ -269,11 +278,11 @@ func makeProjectRef(name, path string, config steerline.Config) ProjectRef {
 		return ProjectRef{Key: key, Name: name, ConfigPath: configPath, Config: config, RunDir: absoluteRunDir, Error: "resolve repository identity: " + err.Error()}
 	}
 	identity = config.Identity()
-	return ProjectRef{Key: key, Name: name, ConfigPath: configPath, Config: config, Identity: identity, RunDir: absoluteRunDir}
+	return ProjectRef{Key: key, Name: name, ConfigPath: configPath, Config: config, NormalizerSelector: selectNormalizer, ApplicationHome: home, ApplicationBin: bin, Identity: identity, RunDir: absoluteRunDir}
 }
 
 func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, error) {
-	profile, prefs, diagnostic, err := acquireViewProfile()
+	profile, prefs, diagnostic, err := acquireViewProfile(options.ApplicationHome)
 	if err != nil {
 		return Model{}, err
 	}
@@ -286,7 +295,7 @@ func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, e
 	if options.Clock == nil {
 		options.Clock = realClock{}
 	}
-	m := Model{ctx: ctx, query: options.Query, control: options.Control, clock: options.Clock, profile: profile, prefs: prefs, prefsErr: diagnostic, runFocus: options.RunID, selected: -1}
+	m := Model{ctx: ctx, query: options.Query, control: options.Control, clock: options.Clock, profile: profile, prefs: prefs, prefsErr: diagnostic, runFocus: options.RunID, selected: -1, applicationEtc: options.ApplicationEtc}
 	for _, ref := range refs {
 		view, exists := prefs.Projects[ref.Key]
 		if !exists {

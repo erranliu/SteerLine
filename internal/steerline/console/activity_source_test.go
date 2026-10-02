@@ -16,7 +16,7 @@ func TestConsoleSourceFallbackNormalizerAndLateActivitySwitch(t *testing.T) {
 	if err := os.WriteFile(logPath, []byte(`{"type":"session","version":1,"session_id":"p"}`+"\n"+`not-json`+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	source := newFileSource(steerline.Config{})
+	source := newFileSource(steerline.Config{}, (consoleFixtureSource{}).NormalizerSelector)
 	fallback, err := source.ReadLog(logPath, steerline.JournalCursor{})
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +51,7 @@ func TestConsoleSourceDiagnosesBadActivityAndKeepsFollowingValidLine(t *testing.
 	if err := os.WriteFile(activityPath, []byte("{bad json}\nnull\n"+`{"v":1,"seq":1,"kind":"claim"}`+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	batch, err := newFileSource(steerline.Config{}).ReadLog(logPath, steerline.JournalCursor{})
+	batch, err := newFileSource(steerline.Config{}, (consoleFixtureSource{}).NormalizerSelector).ReadLog(logPath, steerline.JournalCursor{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestConsoleSourceInvalidSequenceCannotEraseValidEvents(t *testing.T) {
 	if err := os.WriteFile(steerline.ActivityPath(logPath), []byte(body), 0600); err != nil {
 		t.Fatal(err)
 	}
-	batch, err := newFileSource(steerline.Config{}).ReadLog(logPath, steerline.JournalCursor{})
+	batch, err := newFileSource(steerline.Config{}, (consoleFixtureSource{}).NormalizerSelector).ReadLog(logPath, steerline.JournalCursor{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestConsoleSourceInvalidSequenceCannotEraseValidEvents(t *testing.T) {
 
 func TestConsoleSourceFreshReplayResetsNormalizer(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "events.jsonl")
-	source := newFileSource(steerline.Config{})
+	source := newFileSource(steerline.Config{}, (consoleFixtureSource{}).NormalizerSelector)
 	if err := os.WriteFile(logPath, []byte("{\"type\":\"thread.started\",\"thread_id\":\"old\"}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}

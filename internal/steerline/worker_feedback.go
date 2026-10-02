@@ -147,7 +147,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	if execution.RecoveryRequired {
 		if execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed" {
 			if execution.Process == nil && execution.SessionID == "" && execution.TurnNumber == 0 {
-				return s.startManuallyRecoveredInitialCodex(ctx, run, answer, command.CommandID)
+				return s.startManuallyRecoveredInitialWorker(ctx, run, answer, command.CommandID)
 			}
 			prompt := "The previous worker process stopped. Inspect the current worktree, Git status, existing work, and persistent task history before continuing. Do not replay an earlier request blindly.\n\n" + workerFeedbackText(answer, run.Decision.Request)
 			if err := s.beginLocalRecoveryAttempt(ctx, run, answer.OptionID); err != nil {

@@ -49,7 +49,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 			return Config{}, errors.New("execution snapshot v5 is required; preserve original state and external session")
 		}
 		fixed := *workflow.ExecutionProfile
-		if fixed.ID == "" || !verifyFixedExecutionProfile(fixed) || workflow.ConfigDigest != fixed.AcceptedConfigVersion {
+		if fixed.ID == "" || !verifyFixedExecutionProfile(fixed, base.ExecutionDirectory) || workflow.ConfigDigest != fixed.AcceptedConfigVersion {
 			return Config{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed execution profile identity is incomplete"}
 		}
 		config := base.ApplyFixedExecutionProfile(fixed)
@@ -70,7 +70,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 				return Config{}, errors.New("bound execution lost its original policy resource snapshot")
 			}
 			if e.WorkflowRunID == workflow.WorkflowRunID && e.PolicyResources != nil {
-				if err := verifyPolicyResources(e.PolicyResources, fixed.Digest, e.Workspace.Worktree, e); err != nil {
+				if err := verifyPolicyResources(config, e.PolicyResources, fixed.Digest, e.Workspace.Worktree, e); err != nil {
 					return Config{}, err
 				}
 			}

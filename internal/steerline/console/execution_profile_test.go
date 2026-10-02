@@ -19,7 +19,7 @@ func TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(steerline.GlobalExecutionConfigPath(), global, 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(os.Getenv("STEERLINE_HOME"), "execution.json"), global, 0600); err != nil {
 		t.Fatal(err)
 	}
 	repo := filepath.Join(t.TempDir(), "repo")
@@ -37,7 +37,7 @@ func TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart(t 
 	if err = os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	cfg, err := steerline.LoadConfig(path)
+	cfg, err := (consoleFixtureSource{home: os.Getenv("STEERLINE_HOME")}).LoadConfig(path)
 	if err != nil || cfg.LoadedConfigDigest() == "" {
 		t.Fatalf("loaded config has no digest: %v", err)
 	}
@@ -54,7 +54,7 @@ func TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart(t 
 	}
 	m.profileChoice = &executionProfileChoice{taskID: "task-B"}
 	current := renderExecutionProfileChoice(m, m.projects[0], 40)
-	for _, want := range []string{"本地 Codex", "Agent：codex", "未在全局配置固定", "Thinking effort：high", "Sandbox：workspace-write"} {
+	for _, want := range []string{"local", "Agent：codex", "未在全局配置固定", "Reasoning effort：high", "Sandbox：workspace-write"} {
 		if !strings.Contains(current, want) {
 			t.Fatalf("ready task missed %q: %s", want, current)
 		}
@@ -85,11 +85,11 @@ func TestOrcaExecutionProfilesNameAgentModelEffortAndRemoteTarget(t *testing.T) 
 		config steerline.Config
 		want   []string
 	}{
-		{config: steerline.Config{TaskAuthority: "native", Host: "orca", Agent: "pi"}, want: []string{"Orca 本机终端", "Agent：pi", "Model：由所选 agent 决定", "Thinking effort：不适用"}},
-		{config: steerline.Config{TaskAuthority: "native", Host: "orca", Agent: "codex", ImplementationDisplay: []string{"Model：chosen-model", "Reasoning effort：xhigh"}}, want: []string{"Orca 本机终端", "Agent：codex", "Model：chosen-model", "Thinking effort：xhigh"}},
-		{config: steerline.Config{TaskAuthority: "native", Host: "orca_supervised", Agent: "codex", ImplementationDisplay: []string{"Model：remote-model", "Reasoning effort：high", "目标环境：remote-env", "连接：fixed-connection"}}, want: []string{"Orca 受监管远程", "Model：remote-model", "Thinking effort：high", "目标环境：remote-env", "连接：fixed-connection"}},
+		{config: steerline.Config{TaskAuthority: "native", Host: "orca", Agent: "pi", ImplementationDisplay: []string{"Model：由所选 agent 决定", "Reasoning effort：不适用"}}, want: []string{"orca", "Agent：pi", "Model：由所选 agent 决定", "Reasoning effort：不适用"}},
+		{config: steerline.Config{TaskAuthority: "native", Host: "orca", Agent: "codex", ImplementationDisplay: []string{"Model：chosen-model", "Reasoning effort：xhigh"}}, want: []string{"orca", "Agent：codex", "Model：chosen-model", "Reasoning effort：xhigh"}},
+		{config: steerline.Config{TaskAuthority: "native", Host: "orca_supervised", Agent: "codex", ImplementationDisplay: []string{"Model：remote-model", "Reasoning effort：high", "目标环境：remote-env", "连接：fixed-connection"}}, want: []string{"orca_supervised", "Model：remote-model", "Reasoning effort：high", "目标环境：remote-env", "连接：fixed-connection"}},
 	} {
-		ref := ProjectRef{Config: sample.config}
+		ref := ProjectRef{Config: consoleFixtureConfig(sample.config, "fixture")}
 		m := Model{width: 120, profileChoice: &executionProfileChoice{taskID: "task"}}
 		shown := renderExecutionProfileChoice(m, projectState{ref: ref}, 40)
 		for _, want := range sample.want {

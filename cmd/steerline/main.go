@@ -17,7 +17,8 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
-	consoleui "github.com/erranliu/SteerLine/internal/steerline/console"
+
+	steerlineapp "github.com/erranliu/SteerLine/internal/steerlineapp"
 )
 
 func main() {
@@ -66,7 +67,7 @@ func run() error {
 		return fmt.Errorf("-execution-profile is only valid with control -action start_task")
 	}
 	if command == "codex-session-launch" {
-		return steerline.RunCodexSessionLauncher(context.Background(), *config)
+		return steerlineapp.RunSessionLauncher(context.Background(), *config, steerlineapp.NewProcessHost(30*time.Second))
 	}
 	if command != "run" && command != "start-service" && command != "stop-service" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "certify-backend" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
 		return fmt.Errorf("unknown command %q", command)
@@ -78,7 +79,7 @@ func run() error {
 		return fmt.Errorf("-service-window is only valid with run")
 	}
 	if command == "install" {
-		dst, e := steerline.InstallSelf()
+		dst, e := steerlineapp.InstallSelf()
 		if e != nil {
 			return e
 		}
@@ -86,7 +87,7 @@ func run() error {
 		return nil
 	}
 	if command == "launchers" {
-		written, e := steerline.InstallLaunchers()
+		written, e := steerlineapp.InstallLaunchers()
 		if e != nil {
 			return e
 		}
@@ -102,7 +103,11 @@ func run() error {
 	if command == "projects" {
 		return runProjects(*proj, *action)
 	}
-	c, e := steerline.LoadConfig(*config)
+	loadConfig := steerlineapp.LoadConfig
+	if command == "tasks" || command == "control" && *requestID != "" {
+		loadConfig = steerlineapp.LoadQueryConfig
+	}
+	c, e := loadConfig(*config)
 	if e != nil {
 		return e
 	}
@@ -118,14 +123,14 @@ func run() error {
 				paths = append(paths, value)
 			}
 		}
-		report, err := steerline.CertifyExecutionBackend(ctx, c, paths)
+		report, err := steerlineapp.CertifyExecutionBackend(ctx, c, paths)
 		if err != nil {
 			return err
 		}
 		return json.NewEncoder(os.Stdout).Encode(report)
 	}
 	if command == "start-service" {
-		result, err := steerline.StartService(ctx, *config, steerline.StartServiceOptions{})
+		result, err := steerlineapp.StartConfiguredService(ctx, c, *config, steerline.StartServiceOptions{})
 		if err != nil {
 			return err
 		}
@@ -276,7 +281,7 @@ func run() error {
 			defer windowCancel()
 			ctx = windowCtx
 		}
-		return steerline.RunConfiguredService(ctx, c, *dispatchMode, *startupID, *console)
+		return steerlineapp.RunConfiguredService(ctx, c, *dispatchMode, *startupID, *console)
 	}
 	if command == "check" {
 		if e = c.Preflight(ctx, true); e != nil {
@@ -353,13 +358,9 @@ func runConsoleCommand(args []string) error {
 	if !stdinIsTTY() || !stdoutIsTTY() {
 		return errors.New("console requires an interactive terminal")
 	}
-	projects, err := consoleui.LoadProjects(*config)
-	if err != nil {
-		return err
-	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	return consoleui.Run(ctx, projects, consoleui.Options{RunID: *runID})
+	return steerlineapp.RunConsole(ctx, *config, *runID)
 }
 
 func runNativeTaskCommand(args []string) error {
@@ -496,7 +497,12 @@ func runNativeTaskCommand(args []string) error {
 	default:
 		return fmt.Errorf("unsupported task command %q", subcommand)
 	}
-	c, err := steerline.LoadConfig(*config)
+	loadConfig := steerlineapp.LoadConfig
+	readOnly := subcommand == "show" || subcommand == "list" || subcommand == "graph" || subcommand == "export"
+	if readOnly {
+		loadConfig = steerlineapp.LoadQueryConfig
+	}
+	c, err := loadConfig(*config)
 	if err != nil {
 		return err
 	}
@@ -504,7 +510,7 @@ func runNativeTaskCommand(args []string) error {
 		return errors.New("authority_mismatch: task commands require task_authority=native in the configuration")
 	}
 	var store *steerline.SQLiteStore
-	if subcommand == "graph" || subcommand == "export" {
+	if readOnly {
 		store, err = steerline.OpenNativeTaskReader(context.Background(), &c)
 	} else {
 		store, err = steerline.OpenNativeTaskProject(context.Background(), &c)
@@ -527,6 +533,13 @@ func runNativeTaskCommand(args []string) error {
 		}
 	}
 	defer store.Close()
+	var commands steerline.CommandService
+	if !readOnly {
+		commands, err = steerlineapp.NewCommandService(store, c)
+		if err != nil {
+			return err
+		}
+	}
 	query := steerline.NewQueryService(store, c.Identity())
 	var result steerline.NativeTaskPage
 	switch subcommand {
@@ -539,7 +552,7 @@ func runNativeTaskCommand(args []string) error {
 		if readErr != nil {
 			return readErr
 		}
-		validation, validateErr := (steerline.CommandService{Store: store, Project: c.Identity()}).ValidateTaskBatch(context.Background(), c, payload)
+		validation, validateErr := commands.ValidateTaskBatch(context.Background(), c, payload)
 		if validateErr != nil {
 			return validateErr
 		}
@@ -555,13 +568,13 @@ func runNativeTaskCommand(args []string) error {
 		if readErr != nil {
 			return readErr
 		}
-		receipt, createErr := (steerline.CommandService{Store: store, Project: c.Identity()}).CreateTaskBatch(context.Background(), c, payload, *requestID, *expectedAuthority, *by)
+		receipt, createErr := commands.CreateTaskBatch(context.Background(), c, payload, *requestID, *expectedAuthority, *by)
 		if createErr != nil {
 			return createErr
 		}
 		return json.NewEncoder(os.Stdout).Encode(receipt)
 	case "discard":
-		receipt, discardErr := (steerline.CommandService{Store: store, Project: c.Identity()}).DiscardNativeTask(context.Background(), c, *taskID, *requestID, *expectedVersion, *reason, *by)
+		receipt, discardErr := commands.DiscardNativeTask(context.Background(), c, *taskID, *requestID, *expectedVersion, *reason, *by)
 		if discardErr != nil {
 			return discardErr
 		}
@@ -571,7 +584,7 @@ func runNativeTaskCommand(args []string) error {
 		for i := range ids {
 			ids[i] = strings.TrimSpace(ids[i])
 		}
-		receipt, addErr := (steerline.CommandService{Store: store, Project: c.Identity()}).AddNativeTaskPredecessors(context.Background(), c, steerline.TaskPredecessorAddInput{TaskID: *taskID, PredecessorIDs: ids, RequestID: *requestID, ExpectedTaskVersion: *expectedVersion, ExpectedGraphRevision: *expectedGraphRevision, Reason: *reason, RequestedBy: *by})
+		receipt, addErr := commands.AddNativeTaskPredecessors(context.Background(), c, steerline.TaskPredecessorAddInput{TaskID: *taskID, PredecessorIDs: ids, RequestID: *requestID, ExpectedTaskVersion: *expectedVersion, ExpectedGraphRevision: *expectedGraphRevision, Reason: *reason, RequestedBy: *by})
 		if addErr != nil {
 			return addErr
 		}
@@ -650,11 +663,11 @@ func runProjects(project, action string) error {
 	}
 	if act == "console" {
 		if project != "" {
-			projects, listErr := steerline.ListProjects()
+			projects, listErr := steerlineapp.ListProjects()
 			if listErr != nil {
 				return listErr
 			}
-			chosen, resolveErr := steerline.ResolveProject(projects, project)
+			chosen, resolveErr := steerlineapp.ResolveProject(projects, project)
 			if resolveErr != nil {
 				return resolveErr
 			}
@@ -662,12 +675,12 @@ func runProjects(project, action string) error {
 		}
 		return runConsoleCommand(nil)
 	}
-	projects, e := steerline.ListProjects()
+	projects, e := steerlineapp.ListProjects()
 	if e != nil {
 		return e
 	}
 	if len(projects) == 0 {
-		return fmt.Errorf("no project configs under %s", steerline.SteerlineEtcDir())
+		return fmt.Errorf("no project configs under %s", steerlineapp.EtcDir())
 	}
 	if strings.EqualFold(act, "list") {
 		printProjects(projects)
@@ -693,22 +706,22 @@ func runProjects(project, action string) error {
 	return cmd.Run()
 }
 
-func pickProject(projects []steerline.ProjectInfo, sel string) (steerline.ProjectInfo, error) {
+func pickProject(projects []steerlineapp.ProjectInfo, sel string) (steerlineapp.ProjectInfo, error) {
 	if sel != "" {
-		return steerline.ResolveProject(projects, sel)
+		return steerlineapp.ResolveProject(projects, sel)
 	}
 	if len(projects) == 1 {
 		return projects[0], nil
 	}
 	printProjects(projects)
 	if !stdinIsTTY() {
-		return steerline.ProjectInfo{}, fmt.Errorf("multiple projects; pass -project <name|number>")
+		return steerlineapp.ProjectInfo{}, fmt.Errorf("multiple projects; pass -project <name|number>")
 	}
 	line, e := readLine("project (number or name): ")
 	if e != nil {
-		return steerline.ProjectInfo{}, e
+		return steerlineapp.ProjectInfo{}, e
 	}
-	return steerline.ResolveProject(projects, line)
+	return steerlineapp.ResolveProject(projects, line)
 }
 
 func pickAction(action string) (string, error) {
@@ -744,7 +757,7 @@ func pickAction(action string) (string, error) {
 	return "", fmt.Errorf("invalid action %q", line)
 }
 
-func printProjects(projects []steerline.ProjectInfo) {
+func printProjects(projects []steerlineapp.ProjectInfo) {
 	fmt.Println("Projects:")
 	for i, p := range projects {
 		state := p.RunDir
@@ -777,11 +790,11 @@ func readLine(prompt string) (string, error) {
 // printHome shows where this machine keeps the shared SteerLine binary, configs
 // and per-repo state, resolved independently of the current source worktree.
 func printHome(configPath string) {
-	fmt.Println("STEERLINE_HOME", steerline.SteerlineHome())
-	fmt.Println("bin           ", steerline.SteerlineBinDir())
-	fmt.Println("etc           ", steerline.SteerlineEtcDir())
-	fmt.Println("state root    ", steerline.SteerlineStateRoot())
-	c, e := steerline.LoadConfig(configPath)
+	fmt.Println("STEERLINE_HOME", steerlineapp.HomeDir())
+	fmt.Println("bin           ", steerlineapp.BinDir())
+	fmt.Println("etc           ", steerlineapp.EtcDir())
+	fmt.Println("state root    ", steerlineapp.StateRoot())
+	c, e := steerlineapp.LoadQueryConfig(configPath)
 	if e != nil {
 		fmt.Println("config        ", "(not loaded:", e.Error()+")")
 		return

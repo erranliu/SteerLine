@@ -64,7 +64,7 @@ func newEnvironmentFixture(t *testing.T, state fakeNativeOrcaState, model string
 	}))
 	_, err = commands.ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: "8154", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true})
 	require(t, err)
-	s, err := NewService(c)
+	s, err := newTestService(c)
 	require(t, err)
 	workerCancel := enableTestLifecycleMessages(s)
 	f := &environmentFixture{service: s, config: c, statePath: statePath, run: s.find("8154"), workerCancel: workerCancel}
@@ -326,7 +326,7 @@ func TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput(t *test
 	f.prepare(t)
 	stopTestLifecycleMessages(f.service, f.workerCancel)
 	require(t, f.service.Close())
-	s, err := NewService(f.config)
+	s, err := newTestService(f.config)
 	require(t, err)
 	f.service, f.run = s, s.find("8154")
 	f.workerCancel = enableTestLifecycleMessages(s)
@@ -367,7 +367,7 @@ func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 	}
 	stopTestLifecycleMessages(f.service, f.workerCancel)
 	require(t, f.service.Close())
-	s, err := NewService(f.config)
+	s, err := newTestService(f.config)
 	require(t, err)
 	f.service, f.run = s, s.find("8154")
 	f.workerCancel = enableTestLifecycleMessages(s)
@@ -446,7 +446,7 @@ func testManagedLaunchRecovery(t *testing.T, renamed bool) {
 	}
 	if renamed {
 		require(t, f.service.Close())
-		s, err := NewService(f.config)
+		s, err := newTestService(f.config)
 		require(t, err)
 		f.service, f.run = s, s.find("8154")
 		require(t, s.resumeConfiguredWork(context.Background()))

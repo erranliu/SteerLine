@@ -10,8 +10,11 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
 
 func TestCLIExecutionProfileIsBoundIntoStartTaskRequest(t *testing.T) {
@@ -20,13 +23,22 @@ func TestCLIExecutionProfileIsBoundIntoStartTaskRequest(t *testing.T) {
 		t.Fatalf("initialize repository: %v: %s", err, output)
 	}
 	worker := executionapi.PublicationPolicy{Publisher: "worker"}
+	host := steerlineapp.NewProcessHost(30 * time.Second)
+	directory, err := steerlineapp.NewBuiltinDirectory(host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	workerPayload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: os.Args[0], WindowsSandbox: "unelevated"})
+	hostPayload, _ := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{Executable: "fixture-host", Shell: "cmd.exe", WaitTimeout: "1m"})
 	config := steerline.Config{
 		Repository: repository, Git: steerline.Command{Executable: "git"},
 		ExecutionPolicy:   executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"},
 		PublicationPolicy: executionapi.PublicationPolicy{Publisher: steerline.PublisherExecutionProfile},
 		PR:                publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: steerline.Command{Executable: os.Args[0]}},
-		ExecutionProfiles: []steerline.ExecutionProfile{{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ConfiguredPublicationPolicy: &worker, Codex: steerline.Command{Executable: os.Args[0], WindowsSandbox: "unelevated"}}},
+		ExecutionProfiles: []steerline.ExecutionProfile{{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ConfiguredPublicationPolicy: &worker, ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: workerPayload}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: hostPayload}}}},
 	}
+	config.ProcessHost = host
+	config.BindApplicationConfig(directory, "fixture", "", "accepted", true)
 	if _, err := startTaskControlPayload(context.Background(), &config, "101", ""); err == nil {
 		t.Fatal("manual start silently selected a profile")
 	}

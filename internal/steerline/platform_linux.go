@@ -77,6 +77,7 @@ func probeLockFile(path string) (bool, error) {
 type childProcess struct{ identity executionapi.ProcessIdentity }
 
 func (p *childProcess) Identity() executionapi.ProcessIdentity { return p.identity }
+func (*childProcess) OwnedProcess() bool                       { return true }
 func (p *childProcess) Kill()                                  { syscall.Kill(-p.identity.PID, syscall.SIGKILL) }
 func (p *childProcess) Close()                                 { p.Kill() }
 func startProcess(cmd *exec.Cmd) (*childProcess, error) {

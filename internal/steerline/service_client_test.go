@@ -196,11 +196,11 @@ func TestStartServiceReobservesExistingPendingAttempt(t *testing.T) {
 	exe, err := os.Executable()
 	require(t, err)
 	options := StartServiceOptions{Executable: exe, WaitTimeout: 150 * time.Millisecond, PollInterval: 15 * time.Millisecond}
-	first, err := StartService(context.Background(), configPath, options)
+	first, err := testStartService(context.Background(), configPath, options)
 	if err != nil || first.Status != "pending" || first.StartupID != id {
 		t.Fatalf("first pending observation=%+v err=%v", first, err)
 	}
-	second, err := StartService(context.Background(), configPath, options)
+	second, err := testStartService(context.Background(), configPath, options)
 	if err != nil || second.Status != "pending" || second.StartupID != id {
 		t.Fatalf("repeated start launched or changed the pending attempt: second=%+v err=%v", second, err)
 	}
@@ -271,7 +271,7 @@ func TestStartServiceSerializesSameConfig(t *testing.T) {
 	starts := make(chan outcome, 2)
 	for range 2 {
 		go func() {
-			result, err := StartService(context.Background(), configPath, opts)
+			result, err := testStartService(context.Background(), configPath, opts)
 			starts <- outcome{result, err}
 		}()
 	}
@@ -303,7 +303,7 @@ func TestStartServiceReportsPreflightFailureAndPendingHandshake(t *testing.T) {
 		f := newFixture(t)
 		f.c.PR.Repository = "wrong/repository"
 		config, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
-		result, err := StartService(context.Background(), configPath, StartServiceOptions{Executable: buildServiceLifecycleCLI(t), WaitTimeout: 15 * time.Second})
+		result, err := testStartService(context.Background(), configPath, StartServiceOptions{Executable: buildServiceLifecycleCLI(t), WaitTimeout: 15 * time.Second})
 		if err != nil || result.Status != "failed" || !strings.Contains(result.Error, "does not match Git remote") {
 			t.Fatalf("preflight result=%+v err=%v", result, err)
 		}
@@ -332,11 +332,11 @@ func TestStartServiceReportsPreflightFailureAndPendingHandshake(t *testing.T) {
 		t.Setenv("STEERLINE_FAKE_PR_DELAY", "2s")
 		config, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
 		serviceExe := buildServiceLifecycleCLI(t)
-		result, err := StartService(context.Background(), configPath, StartServiceOptions{Executable: serviceExe, WaitTimeout: 350 * time.Millisecond, PollInterval: 25 * time.Millisecond})
+		result, err := testStartService(context.Background(), configPath, StartServiceOptions{Executable: serviceExe, WaitTimeout: 350 * time.Millisecond, PollInterval: 25 * time.Millisecond})
 		if err != nil || result.Status != "pending" || result.StartupID == "" {
 			t.Fatalf("pending startup result=%+v err=%v", result, err)
 		}
-		again, err := StartService(context.Background(), configPath, StartServiceOptions{Executable: serviceExe, WaitTimeout: 350 * time.Millisecond, PollInterval: 25 * time.Millisecond})
+		again, err := testStartService(context.Background(), configPath, StartServiceOptions{Executable: serviceExe, WaitTimeout: 350 * time.Millisecond, PollInterval: 25 * time.Millisecond})
 		if err != nil || again.Status != "pending" || again.StartupID != result.StartupID {
 			t.Fatalf("repeat observation changed startup attempt: first=%+v second=%+v err=%v", result, again, err)
 		}
@@ -365,7 +365,7 @@ func TestStartServiceReportsPreflightFailureAndPendingHandshake(t *testing.T) {
 		config, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
 		testExe, err := os.Executable()
 		require(t, err)
-		result, err := StartService(context.Background(), configPath, StartServiceOptions{Executable: testExe, WaitTimeout: 2 * time.Second, PollInterval: 30 * time.Millisecond})
+		result, err := testStartService(context.Background(), configPath, StartServiceOptions{Executable: testExe, WaitTimeout: 2 * time.Second, PollInterval: 30 * time.Millisecond})
 		if err != nil || result.Status != "failed" || result.StartupID == "" {
 			t.Fatalf("early-exit result=%+v err=%v", result, err)
 		}
@@ -410,7 +410,7 @@ func lifecycleConfigFile(t *testing.T, f *fixture, runDir string) (Config, strin
 	}
 	configPath := filepath.Join(filepath.Dir(runDir), "service-config.json")
 	require(t, os.WriteFile(configPath, data, 0600))
-	loaded, err := LoadConfig(configPath)
+	loaded, err := loadFixtureConfig(configPath)
 	require(t, err)
 	require(t, loaded.ResolveIdentity(context.Background()))
 	return loaded, configPath

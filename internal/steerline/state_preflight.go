@@ -7,8 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func validateRetiredWholeRunResultCommands(ctx context.Context, db *sql.DB) error {
@@ -123,15 +121,17 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		return err
 	}
 	for _, workflow := range snapshot.WorkflowRuns {
-		if workflow.WorkflowVersion != WorkerFlowVersion || workflow.ExecutionProfile == nil || !verifyFixedExecutionProfile(*workflow.ExecutionProfile) || workflow.ConfigDigest != workflow.ExecutionProfile.AcceptedConfigVersion {
+		if workflow.WorkflowVersion != WorkerFlowVersion || workflow.ExecutionProfile == nil || !verifyFixedExecutionProfile(*workflow.ExecutionProfile, c.ExecutionDirectory) || workflow.ConfigDigest != workflow.ExecutionProfile.AcceptedConfigVersion {
 			return nativeErr("unsupported_schema", "worker-flow-v1 refuses an old WorkflowRun; preserve the original state and external session")
 		}
 	}
 	for _, execution := range snapshot.Executions {
 		boundSnapshot := false
+		var fixedProfile *FixedExecutionProfile
 		for _, workflow := range snapshot.WorkflowRuns {
 			if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ProjectIdentity == execution.ProjectIdentity && workflow.ExecutionProfile != nil && execution.ConfigurationDigest == workflow.ExecutionProfile.Digest {
 				boundSnapshot = true
+				fixedProfile = workflow.ExecutionProfile
 				break
 			}
 		}
@@ -141,13 +141,18 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		if err := validateExecutionImplementationData(&execution); err != nil {
 			return nativeErr("unsupported_schema", "execution implementation binding is invalid: "+err.Error())
 		}
+		fixedConfig := c.ApplyFixedExecutionProfile(*fixedProfile)
+		entry, resolveErr := registrationFor(fixedConfig)
+		if resolveErr != nil || execution.Backend != string(entry.Key.Backend) || execution.Agent != entry.Key.Agent || execution.Protocol != string(entry.Key.Protocol) {
+			return nativeErr("unsupported_schema", "execution identity differs from its fixed implementation snapshot")
+		}
 		if execution.Process != nil && !awaitingRecoveryResources(&execution) {
 			if execution.PolicyResources == nil {
 				return nativeErr("unsupported_schema", "bound execution requires its original policy resource snapshot; preserve external state")
 			}
 			matched := false
 			for _, workflow := range snapshot.WorkflowRuns {
-				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && verifyPolicyResources(execution.PolicyResources, workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, &execution) == nil {
+				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && verifyPolicyResources(fixedConfig, execution.PolicyResources, workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, &execution) == nil {
 					matched = true
 				}
 			}
@@ -155,32 +160,29 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 				return nativeErr("unsupported_schema", "execution policy resources differ from the original snapshot")
 			}
 		}
-		if execution.Backend == string(executionapi.BackendLocal) && execution.Protocol != string(executionapi.ProtocolLocalCodexAppServer) {
-			return nativeErr("unsupported_schema", "worker-flow-v1 refuses an old local execution protocol; preserve its external process and state")
-		}
-		if execution.Backend == string(executionapi.BackendOrca) && execution.Agent == "codex" && (c.managedWindowsOrca() || execution.Environment != nil) {
+		if execution.Environment != nil {
 			env := execution.Environment
 			if env == nil || env.Preparation == nil || !stableExecutionID(env.Preparation.TurnID) || !stableExecutionID(env.Preparation.Nonce) || env.Preparation.StartedAt.IsZero() || !env.Preparation.Deadline.After(env.Preparation.StartedAt) {
-				return nativeErr("unsupported_schema", "managed Orca execution lacks its frozen readiness intent")
+				return nativeErr("unsupported_schema", "execution readiness lacks its frozen preparation intent")
 			}
 			matched := false
 			for _, workflow := range snapshot.WorkflowRuns {
-				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && verifyFixedExecutionProfile(*workflow.ExecutionProfile) && workflow.ExecutionProfile.Digest == env.ProfileDigest {
+				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && verifyFixedExecutionProfile(*workflow.ExecutionProfile, c.ExecutionDirectory) && workflow.ExecutionProfile.Digest == env.ProfileDigest {
 					matched = true
 				}
 			}
 			if !matched {
-				return nativeErr("unsupported_schema", "managed Orca readiness differs from its frozen execution profile")
+				return nativeErr("unsupported_schema", "execution readiness differs from its frozen profile")
 			}
 			p := env.Preparation
 			if p.Verified && (p.Receipt == nil || !p.Evidence.Verified || p.Receipt.ProbeIdentity != p.Probe || p.Receipt.InputSHA256 != p.InputDigest) {
-				return nativeErr("unsupported_schema", "managed Orca readiness lacks verified receipt/tool facts")
+				return nativeErr("unsupported_schema", "execution readiness lacks verified receipt/tool facts")
 			}
 			if env.Ready && (!p.Verified || p.Invalidated || execution.Process == nil || execution.SessionID == "" || execution.SessionGeneration == "") {
-				return nativeErr("unsupported_schema", "managed Orca ready state has no verified original session")
+				return nativeErr("unsupported_schema", "ready execution has no verified original session")
 			}
 			if execution.Process != nil && (env.Runtime != execution.Process.RuntimeID || env.LaunchCommand == "" || len(env.WriteRoots) == 0 || canonical(env.WriteRoots[0]) != canonical(execution.Workspace.Worktree)) {
-				return nativeErr("unsupported_schema", "managed Orca resource evidence is incomplete or changed")
+				return nativeErr("unsupported_schema", "execution resource evidence is incomplete or changed")
 			}
 		}
 	}

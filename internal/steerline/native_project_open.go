@@ -14,6 +14,9 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*SQLiteStore, error)
 	if requireNativeTaskAuthority(*c) != nil {
 		return nil, nativeErr("authority_mismatch", "configuration must explicitly select task_authority=native")
 	}
+	if err := validateWorkflowConfig(c, nil); err != nil {
+		return nil, err
+	}
 	if err := validateNativeStateLocation(*c); err != nil {
 		return nil, err
 	}
@@ -105,6 +108,9 @@ func OpenNativeTaskReader(ctx context.Context, c *Config) (*SQLiteStore, error) 
 func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*SQLiteStore, error) {
 	if c == nil || requireNativeTaskAuthority(*c) != nil {
 		return nil, nativeErr("authority_mismatch", "native task command requires task_authority=native")
+	}
+	if err := validateWorkflowConfig(c, nil); err != nil {
+		return nil, err
 	}
 	if err := validateNativeStateLocation(*c); err != nil {
 		return nil, err

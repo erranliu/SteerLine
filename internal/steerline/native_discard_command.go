@@ -36,6 +36,9 @@ type taskDiscardPlan struct {
 }
 
 func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, taskID, requestID string, expectedVersion uint64, reason, requestedBy string) (TaskDiscardReceipt, error) {
+	if err := validateWorkflowConfig(&config, nil); err != nil {
+		return TaskDiscardReceipt{}, err
+	}
 	if c.Store == nil || c.Project == "" || config.Identity() != c.Project {
 		return TaskDiscardReceipt{}, nativeErr("authority_mismatch", "discard requires the configured native project")
 	}

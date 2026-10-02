@@ -73,11 +73,13 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 	commit := nativeSeedCommit
 	c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: repo, Remote: "origin", Branch: "main", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "10s", ShutdownGrace: "10s", ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Git: Command{Executable: "git"}}
 	setTestCodexProfile(t, &c, codexworker.ProfileConfig{Executable: os.Args[0]})
-	key, err := repoStateKey(c)
+	key, err := fixtureRepositoryStateKey(c)
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.RunDir = filepath.Join(SteerlineStateRoot(), key)
+	c.StateRoot, c.RepositoryStateKey = fixtureStateRoot(), key
+	c.RunDir = filepath.Join(c.StateRoot, key)
+	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	c.Git = Command{Executable: os.Args[0], Args: []string{"--fake", "publication-git", "git"}}
 	return c, commit
 }
@@ -708,7 +710,7 @@ func TestNativeInitializationRefusesExistingBeadsTaskDatabase(t *testing.T) {
 func TestNewServiceRejectsNonNativeAuthorityBeforeCreatingState(t *testing.T) {
 	c, _ := nativeTaskFixture(t)
 	c.TaskAuthority = ""
-	if _, err := NewService(c); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
+	if _, err := newTestService(c); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
 		t.Fatalf("direct service construction accepted missing native authority: %v", err)
 	}
 	if _, err := os.Stat(c.RunDir); !os.IsNotExist(err) {

@@ -62,7 +62,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err != nil {
 		t.Fatal(err)
 	}
-	service, err := NewService(c)
+	service, err := newTestService(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err := service.Close(); err != nil {
 		t.Fatal(err)
 	}
-	service, err = NewService(c)
+	service, err = newTestService(c)
 	if err != nil {
 		t.Fatal(err)
 	}

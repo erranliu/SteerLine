@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "source_commit": "5bbbfcd6a16d34cdfd77dfa8894c1661a885b799",
+  "source_sha256": "c12bb264191a126e00eb08dd371a3d343dd84084b4b7e23ad75af8dbae9a83a7",
+  "root_production_file_count": 100,
+  "root_filename_and_source_keyword_hits": [],
+  "windows_dependency_count": 232,
+  "linux_dependency_count": 221,
+  "forbidden_dependency_packages": [],
+  "all_build_condition_project_import_file_count": 174,
+  "forbidden_source_import_edges": [],
+  "implementation_reverse_imports": [],
+  "console_app_reverse_imports": []
+}

@@ -407,14 +407,15 @@ func TestSupervisedOrcaExecutionBindingRequiresExactDispatchIdentity(t *testing.
 	c := supervisedFixtureConfig(t)
 	runID, attemptID := newID(), newID()
 	ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: targetFor(c), Agent: agentFor(c), RunID: runID, AttemptID: attemptID, WorkspacePath: "C:/remote/worktree", WorkspaceBranch: "erranliu/remote", BaseCommit: strings.Repeat("a", 40), External: executionapi.ProcessIdentity{Kind: "orca_supervised", RuntimeID: "runtime-1", OrchestrationRun: "run-1", Task: "task-1", Dispatch: "dispatch-1", ExecutionHost: "host-1", WorktreeID: "repo-1::C:/remote/worktree"}}
-	if err := validateExecutionRef(ref); err != nil {
+	if err := validateCatalogRef(ref); err != nil {
 		t.Fatalf("complete supervised binding rejected: %v", err)
 	}
 	ref.External.Dispatch = ""
-	if err := validateExecutionRef(ref); err == nil {
+	if err := validateCatalogRef(ref); err == nil {
 		t.Fatal("supervised binding without its exact Dispatch was accepted")
 	}
-	backend, protocol, err := executionapi.ExecutionBackendKind("orca_supervised")
+	entry, err := registrationFor(supervisedFixtureConfig(t))
+	backend, protocol := string(entry.Key.Backend), string(entry.Key.Protocol)
 	if err != nil || backend != string(executionapi.BackendOrca) || protocol != string(executionapi.ProtocolOrcaSupervised) {
 		t.Fatalf("backend resolution = %q/%q, %v", backend, protocol, err)
 	}
@@ -605,20 +606,20 @@ func TestLoadConfigRequiresExplicitRemoteCancellationFalse(t *testing.T) {
 	if err = os.WriteFile(configPath, projectConfigJSON(t, c), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(GlobalExecutionConfigPath(), withoutPolicy, 0600); err != nil {
+	if err = os.WriteFile(fixtureGlobalExecutionConfigPath(), withoutPolicy, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = LoadConfig(configPath); err == nil || !strings.Contains(err.Error(), "explicitly set to false") {
+	if _, err = loadFixtureConfig(configPath); err == nil || !strings.Contains(err.Error(), "explicitly set to false") {
 		t.Fatalf("missing remote cancellation policy error = %v", err)
 	}
 	supervised["remote_cancel_available"] = json.RawMessage("true")
 	orca["supervised"], _ = json.Marshal(supervised)
 	fields["orca"], _ = json.Marshal(orca)
 	withEnabledStop, _ := json.Marshal(map[string]any{"execution_profiles": []any{fields}, "default_execution_profile": "remote"})
-	if err = os.WriteFile(GlobalExecutionConfigPath(), withEnabledStop, 0600); err != nil {
+	if err = os.WriteFile(fixtureGlobalExecutionConfigPath(), withEnabledStop, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = LoadConfig(configPath); err == nil || !strings.Contains(err.Error(), "fixed unavailable") {
+	if _, err = loadFixtureConfig(configPath); err == nil || !strings.Contains(err.Error(), "fixed unavailable") {
 		t.Fatalf("enabled remote cancellation error = %v", err)
 	}
 }

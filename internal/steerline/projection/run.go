@@ -33,7 +33,7 @@ func Run(task contracts.TaskRecord, workflow contracts.WorkflowRunRecord, execut
 		RecoveryRequired: execution.RecoveryRequired, RecoveryState: execution.RecoveryState, RecoveryVersion: execution.RecoveryVersion,
 		RunID: workflow.WorkflowRunID, WorkflowVersion: workflow.WorkflowVersion, WorkflowConfigDigest: workflow.ConfigDigest,
 		ControlRevision: workflow.ControlRevision, ExecutionID: execution.ExecutionID, Claimant: task.Claimant,
-		Host: HostForExecution(execution.Backend, execution.Protocol), Backend: execution.Backend, Protocol: execution.Protocol,
+		Host: workflowExecutionHost(workflow), Backend: execution.Backend, Protocol: execution.Protocol,
 		Agent: execution.Agent, Target: execution.Target, Process: execution.Process, WorkspaceIntent: execution.WorkspaceIntent,
 		StartedAt: copyPtr(execution.TurnStartedAt), EndedAt: copyPtr(execution.TurnEndedAt), LogPath: copyPtr(execution.LogPath),
 		LastEvent: copyPtr(execution.LastEvent), Summary: copyPtr(execution.Summary), Error: copyPtr(execution.Error), ManualStop: copyPtr(execution.ManualStop),
@@ -94,6 +94,13 @@ func executionViewStatus(e contracts.ExecutionRecord) string {
 	}
 }
 
+func workflowExecutionHost(workflow contracts.WorkflowRunRecord) string {
+	if workflow.ExecutionProfile == nil {
+		return ""
+	}
+	return workflow.ExecutionProfile.Host
+}
+
 func Execution(run contracts.Run, e contracts.ExecutionRecord) contracts.Run {
 	run.Process, run.Target = copyPtr(e.Process), e.Target
 	run.WorkspaceIntent = copyPtr(e.WorkspaceIntent)
@@ -102,7 +109,7 @@ func Execution(run contracts.Run, e contracts.ExecutionRecord) contracts.Run {
 		if e.Workspace.Worktree == "" {
 			branch, base = e.WorkspaceIntent.Branch, e.WorkspaceIntent.BaseCommit
 		}
-		if path == "" && e.Protocol != string(executionapi.ProtocolOrcaSupervised) {
+		if path == "" && e.Target.ConnectionID == "" && e.Target.ExternalRuntime == "" {
 			path = e.WorkspaceIntent.Path
 		}
 		if branch == "" {

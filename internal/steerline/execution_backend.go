@@ -13,7 +13,6 @@ import (
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 func executionStopperFor(c Config) (executionapi.ExecutionStopper, error) {
@@ -31,6 +30,14 @@ func executionStopperFor(c Config) (executionapi.ExecutionStopper, error) {
 func unsupported(name string) error {
 	return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: name + " is not supported by this backend"}
 }
+
+func evidenceDigest(value string) bool {
+	if len(value) != 64 {
+		return false
+	}
+	_, err := hex.DecodeString(value)
+	return err == nil
+}
 func digestValue(v any) string {
 	b, _ := json.Marshal(v)
 	h := sha256.Sum256(b)
@@ -38,6 +45,19 @@ func digestValue(v any) string {
 }
 
 type executionRecords struct{ root string }
+
+// SaveExecutionCapabilityReport persists one already verified, generic report
+// using the center's capability record format.
+func SaveExecutionCapabilityReport(c Config, report executionapi.CapabilityReport) error {
+	if c.RunDir == "" {
+		return errors.New("run directory is required for a capability report")
+	}
+	records := executionRecords{root: c.RunDir}
+	if _, err := records.loadCapabilityReport(report); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return records.saveCapabilityReport(report)
+}
 
 func capabilityReportKey(report executionapi.CapabilityReport) string {
 	return digestValue(struct {
@@ -102,7 +122,7 @@ func stableOperationID(value string) bool {
 }
 
 func (r executionRecords) saveCapabilityReport(report executionapi.CapabilityReport) error {
-	if report.Version != 1 || report.Backend == "" || report.Protocol == "" || report.Target.ID == "" || report.Agent.Name == "" || report.PlatformVersion == "" || report.CheckedAt.IsZero() || report.Protocol == executionapi.ProtocolOrcaSupervised && report.CenterVersion == "" {
+	if report.Version != 1 || report.Backend == "" || report.Protocol == "" || report.Target.ID == "" || report.Agent.Name == "" || report.PlatformVersion == "" || report.CheckedAt.IsZero() {
 		return errors.New("incomplete capability report")
 	}
 	seen := map[string]bool{}
@@ -196,21 +216,8 @@ func validateExecutionRef(ref executionapi.ExecutionRef) error {
 	if ref.Target.ID == "" || ref.Agent.Name == "" || !commitHash.MatchString(ref.BaseCommit) {
 		return errors.New("execution binding lacks a verified target, agent or workspace")
 	}
-	switch {
-	case ref.Backend == executionapi.BackendLocal && (ref.Protocol == executionapi.ProtocolLocalProcess || ref.Protocol == executionapi.ProtocolLocalCodexAppServer):
-		if ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || ref.External.Kind != "os" || ref.External.PID <= 0 || ref.External.Created == "" || ref.External.Executable == "" {
-			return errors.New("local execution binding lacks a verified process identity")
-		}
-	case ref.Backend == executionapi.BackendOrca && ref.Protocol == executionapi.ProtocolOrcaTerminalV2:
-		if ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || ref.External.Kind != "orca" || ref.External.Terminal == "" || ref.External.RuntimeID == "" || ref.External.Incarnation == "" {
-			return errors.New("Orca execution binding lacks runtime/terminal/incarnation identity")
-		}
-	case ref.Backend == executionapi.BackendOrca && ref.Protocol == executionapi.ProtocolOrcaSupervised:
-		if ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || ref.External.Kind != "orca_supervised" || ref.External.RuntimeID == "" || ref.External.OrchestrationRun == "" || ref.External.Task == "" || ref.External.Dispatch == "" || ref.External.ExecutionHost == "" || ref.External.WorktreeID == "" {
-			return errors.New("supervised Orca execution binding lacks exact runtime/Run/Task/Dispatch/host/worktree identity")
-		}
-	default:
-		return errors.New("unsupported backend/protocol binding")
+	if ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || ref.External.Kind == "" {
+		return errors.New("execution binding lacks workspace or resource identity")
 	}
 	return nil
 }
@@ -282,120 +289,8 @@ func (r executionRecords) loadOperation(run, attempt, id string) (executionapi.O
 	return op, nil
 }
 
-type localExecutionBackend struct {
-	config Config
-}
-
-func (b localExecutionBackend) Identity() (executionapi.BackendKind, executionapi.ExecutionProtocol) {
-	return executionapi.BackendLocal, executionapi.ProtocolLocalProcess
-}
-func (b localExecutionBackend) Probe(ctx context.Context, target executionapi.ExecutionTarget, agent executionapi.AgentSpec) (executionapi.CapabilityReport, error) {
-	if agent.Name != "codex" {
-		return executionapi.CapabilityReport{}, unsupported("local_process agent " + agent.Name)
-	}
-	settings := codexProfileSettings(b.config)
-	out, err := (Runner{Dir: b.config.Repository, Timeout: positiveDuration(b.config.CommandTimeout, 30*time.Second)}).Output(ctx, Command{Executable: settings.Executable, Args: settings.Args}, "--version")
-	if err != nil {
-		return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendUnreachable, Diagnostic: "local Codex version probe failed", Cause: err}
-	}
-	version := strings.TrimSpace(string(out))
-	if version == "" {
-		return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "local Codex version probe returned no version"}
-	}
-	return capabilityReport(executionapi.BackendLocal, executionapi.ProtocolLocalProcess, target, agent, version), nil
-}
-func (b localExecutionBackend) Observe(ctx context.Context, ref executionapi.ExecutionRef) (executionapi.Observation, error) {
-	if ref.Backend != executionapi.BackendLocal || ref.Protocol != executionapi.ProtocolLocalProcess && ref.Protocol != executionapi.ProtocolLocalCodexAppServer || ref.Target != targetFor(b.config) {
-		return executionapi.Observation{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed local process target changed"}
-	}
-	if err := ctx.Err(); err != nil {
-		return executionapi.Observation{}, err
-	}
-	label := inspectProcess(&ref.External)
-	liveness := "unverifiable"
-	if label == "matching process still exists" {
-		liveness = "live"
-	} else if label == "process absent" {
-		liveness = "exited"
-	} else if strings.Contains(label, "different process") {
-		return executionapi.Observation{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: label}
-	}
-	return executionapi.Observation{Liveness: liveness, Connection: "connected", ObservedAt: now(), Source: "os-process-probe", Diagnostic: label}, nil
-}
-func (b localExecutionBackend) InspectWorkspace(ctx context.Context, ref executionapi.ExecutionRef) (executionapi.WorkspaceInspection, error) {
-	if ref.Backend != executionapi.BackendLocal || ref.Protocol != executionapi.ProtocolLocalProcess && ref.Protocol != executionapi.ProtocolLocalCodexAppServer || ref.Target != targetFor(b.config) {
-		return executionapi.WorkspaceInspection{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "local workspace target differs from the fixed execution"}
-	}
-	return inspectBoundWorkspace(ctx, b.config, ref)
-}
-
-func inspectBoundWorkspace(ctx context.Context, c Config, ref executionapi.ExecutionRef) (executionapi.WorkspaceInspection, error) {
-	if ref.Incomplete || ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || !commitHash.MatchString(ref.BaseCommit) {
-		return executionapi.WorkspaceInspection{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "workspace ref is incomplete"}
-	}
-	if c.identity == "" {
-		if err := c.ResolveIdentity(ctx); err != nil {
-			return executionapi.WorkspaceInspection{}, err
-		}
-	}
-	intent := &executionapi.WorkspaceIntent{Path: ref.WorkspacePath, Branch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit}
-	repository, err := workspaceRepository(c)
-	if err != nil {
-		return executionapi.WorkspaceInspection{}, err
-	}
-	inspection, err := workspace.Inspect(ctx, workspaceGit(c), repository, intent)
-	if err != nil {
-		return executionapi.WorkspaceInspection{}, err
-	}
-	return inspection, nil
-}
-
-func (b localExecutionBackend) StopExecution(ctx context.Context, ref executionapi.ExecutionRef, _ executionapi.Operation, handle executionapi.StopHandle) (executionapi.StopReceipt, error) {
-	if ref.Backend != executionapi.BackendLocal || (ref.Protocol != executionapi.ProtocolLocalProcess && ref.Protocol != executionapi.ProtocolLocalCodexAppServer) || ref.Target != targetFor(b.config) {
-		return executionapi.StopReceipt{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed local process target changed"}
-	}
-	if handle == nil || handle.Identity() != ref.External {
-		return executionapi.StopReceipt{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "local stop handle does not match the fixed process identity"}
-	}
-	if err := ctx.Err(); err != nil {
-		return executionapi.StopReceipt{}, err
-	}
-	obs, err := b.Observe(ctx, ref)
-	if err != nil {
-		return executionapi.StopReceipt{}, err
-	}
-	if obs.Liveness == "exited" {
-		return executionapi.StopReceipt{Disposition: "confirmed", Diagnostic: obs.Diagnostic}, nil
-	}
-	if obs.Liveness != "live" {
-		return executionapi.StopReceipt{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "local process liveness cannot be verified"}
-	}
-	handle.Kill()
-	return executionapi.StopReceipt{Disposition: "accepted"}, nil
-}
-
-func capabilityReport(backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, target executionapi.ExecutionTarget, agent executionapi.AgentSpec, version string) executionapi.CapabilityReport {
-	caps := []executionapi.Capability{{Name: "start", Status: executionapi.CapabilityNotTested}, {Name: "observe", Status: executionapi.CapabilityNotTested}, {Name: "stop", Status: executionapi.CapabilityNotTested}, {Name: "detach_observation", Status: executionapi.CapabilityNotTested}, {Name: "operation_reconciliation", Status: executionapi.CapabilityNotTested}, {Name: "workspace_inspection", Status: executionapi.CapabilityNotTested}, {Name: "output_reading", Status: executionapi.CapabilityNotTested}, {Name: "output_turns", Status: executionapi.CapabilityNotTested}, {Name: "output_final_answer", Status: executionapi.CapabilityNotTested}, {Name: "resource_settlement", Status: executionapi.CapabilityUnsupported}}
-	return executionapi.CapabilityReport{Version: 1, Backend: backend, Protocol: protocol, Target: target, Agent: agent, PlatformVersion: version, CheckedAt: now(), Capabilities: caps}
-}
-
 func retiredExecutionCapabilityName(name string) bool {
 	return name == "reply_continue" || name == "retry"
-}
-func backendFor(c Config) executionapi.ExecutionBackend {
-	entry, err := registrationFor(c)
-	if err != nil {
-		return rejectedExecutionBackend{err}
-	}
-	return entry.Backend(c)
-}
-func agentFor(c Config) executionapi.AgentSpec { return executionapi.AgentSpec{Name: c.agentName()} }
-func targetFor(c Config) executionapi.ExecutionTarget {
-	entry, err := registrationFor(c)
-	if err != nil {
-		return executionapi.ExecutionTarget{}
-	}
-	return entry.Target(c)
 }
 func (s *Service) readRunWorkspace(ctx context.Context, run *Run) (executionapi.WorkspaceInspection, error) {
 	if run == nil || run.WorkflowVersion != WorkerFlowVersion {

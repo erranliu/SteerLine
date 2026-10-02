@@ -274,7 +274,7 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task Task
 	for i := range s.domain.Executions {
 		candidate := &s.domain.Executions[i]
 		matches := candidate.Target.WorktreeID == path || candidate.Workspace.Worktree == path
-		if !matches && filepath.IsAbs(path) && hostForExecution(candidate.Backend, candidate.Protocol) == "local" {
+		if !matches && filepath.IsAbs(path) && executionUsesLocalWorkspace(s.Config, executionapi.BackendKind(candidate.Backend), executionapi.ExecutionProtocol(candidate.Protocol), candidate.Agent) {
 			matches = canonical(candidate.Target.WorktreeID) == canonical(path) || canonical(candidate.Workspace.Worktree) == canonical(path)
 		}
 		if !matches {
@@ -290,7 +290,7 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task Task
 	if execution == nil || workflow == nil || execution.Target.Branch == "" || !validCommit(execution.Target.BaseRevision) {
 		return nativeErr("contract_mismatch", "discarded workspace path lacks a fixed branch and base identity")
 	}
-	if hostForExecution(execution.Backend, execution.Protocol) != "local" {
+	if !executionUsesLocalWorkspace(s.Config, executionapi.BackendKind(execution.Backend), executionapi.ExecutionProtocol(execution.Protocol), execution.Agent) {
 		return executionapi.UnsupportedAdapterOperation("WorkspaceCleanup", "remote native worktree cleanup is unavailable")
 	}
 	if !filepath.IsAbs(path) {
@@ -367,7 +367,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	if execution == nil || execution.Process == nil {
 		return nativeErr("outcome_unknown", "discarded task has no fixed local process identity")
 	}
-	if hostForExecution(execution.Backend, execution.Protocol) != "local" {
+	if !executionUsesLocalWorkspace(s.Config, executionapi.BackendKind(execution.Backend), executionapi.ExecutionProtocol(execution.Protocol), execution.Agent) {
 		return executionapi.UnsupportedAdapterOperation("StopExecution", "remote native worker cancellation is unavailable")
 	}
 	workflowRunID := execution.WorkflowRunID
@@ -476,12 +476,11 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 				return err
 			}
 		} else {
-			required := []string{"start", "observe", "workspace_inspection", "output_reading"}
-			if c.hostName() == "orca_supervised" {
-				required = append(required, "message_inbox", "resource_settlement")
-			} else {
-				required = append(required, "stop")
+			entry, registryErr := registrationFor(c)
+			if registryErr != nil {
+				return registryErr
 			}
+			required := append([]string(nil), entry.CleanupCapabilities...)
 			if _, err = s.requireBackendCapabilitiesFor(ctx, backendFor(c), targetFor(c), agentFor(c), required...); err != nil {
 				return err
 			}

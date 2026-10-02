@@ -2,14 +2,13 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
+
 	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -191,99 +190,6 @@ func TestOperationRecordRejectsCorruptionBeforeUse(t *testing.T) {
 	}
 	if _, err := r.loadOperation(run, attempt, "op"); err == nil {
 		t.Fatal("expected operation path conflict to be reported")
-	}
-}
-
-func TestNativeEvidenceCertificationRequiresFixedTargetAndVersion(t *testing.T) {
-	c, _ := nativeTaskFixture(t)
-	path := filepath.Join(t.TempDir(), "local-native.json")
-	evidence := map[string]any{"version": 1, "captured_at": time.Now().UTC(), "platform": runtime.GOOS + "/" + runtime.GOARCH, "backend": "local", "protocol": "local_codex_app_server_v1", "target_id": targetFor(c).ID, "agent": "codex", "codex_version": "codex-cli 0.159.2", "output_sha256": strings.Repeat("a", 64), "output_bytes": 77, "stop_status": "confirmed", "process_absent": true}
-	write := func() {
-		t.Helper()
-		data, err := json.Marshal(evidence)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if err = os.WriteFile(path, data, 0600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	write()
-	report, err := CertifyExecutionBackend(context.Background(), c, []string{path})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"start", "observe", "stop", "output_reading"} {
-		if capabilityStatus(report, name) != executionapi.CapabilityVerified {
-			t.Fatalf("%s not verified from native evidence: %#v", name, report)
-		}
-	}
-	if capabilityStatus(report, "retry") != executionapi.CapabilityNotTested {
-		t.Fatalf("legacy backend retry capability was retained: %#v", report.Capabilities)
-	}
-	c.ExecutionRequirements.Capabilities = []string{"workspace_inspection"}
-	_, err = evaluateExecutionRequirements(context.Background(), c)
-	require(t, err)
-	evidence["protocol"] = "local_process"
-	write()
-	if _, err = CertifyExecutionBackend(context.Background(), c, []string{path}); err == nil {
-		t.Fatal("old protocol evidence satisfied registered app-server route")
-	}
-	evidence["protocol"] = "local_codex_app_server_v1"
-	evidence["target_id"] = "different-target"
-	write()
-	if _, err = CertifyExecutionBackend(context.Background(), c, []string{path}); err == nil {
-		t.Fatal("foreign target evidence certified")
-	}
-	if _, err = (executionRecords{root: c.RunDir}).loadCapabilityReport(report); err != nil {
-		t.Fatalf("certified evidence did not survive source artifact change: %v", err)
-	}
-}
-
-func TestOrcaCertificationRequiresAgentAndTerminalEvidence(t *testing.T) {
-	f := newFixture(t)
-	exe, err := os.Executable()
-	if err != nil {
-		t.Fatal(err)
-	}
-	f.c.Host = "orca"
-	f.c.Agent = "codex"
-	f.c.Host, f.c.Agent = "orca", "codex"
-	setTestOrcaProfile(t, &f.c, orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca", t.TempDir()}, Shell: "cmd.exe", WaitTimeout: "5s"})
-	common := map[string]any{"version": 1, "captured_at": time.Now().UTC(), "platform": runtime.GOOS + "/" + runtime.GOARCH, "backend": "orca", "protocol": "orca_terminal_v2", "target_id": targetFor(f.c).ID, "agent": "codex", "orca_version": "fake-orca/1", "codex_version": "codex-cli 0.159.2", "stop_status": "confirmed"}
-	write := func(name string, fields map[string]any) string {
-		t.Helper()
-		copy := map[string]any{}
-		for key, value := range common {
-			copy[key] = value
-		}
-		for key, value := range fields {
-			copy[key] = value
-		}
-		data, err := json.Marshal(copy)
-		if err != nil {
-			t.Fatal(err)
-		}
-		path := filepath.Join(t.TempDir(), name+".json")
-		if err = os.WriteFile(path, data, 0600); err != nil {
-			t.Fatal(err)
-		}
-		return path
-	}
-	agent := write("agent", map[string]any{"worktree_created": true, "agent_terminal_bound": true, "initial_output_observed": true, "git_clean": true})
-	adapter := write("adapter", map[string]any{"reconnect_matched": true, "worktree_retained": true, "output_bytes": 22, "output_sha256": strings.Repeat("b", 64), "output_source": "stream"})
-	workspace := write("workspace", map[string]any{"workspace_inspected": true, "base_ancestor": true, "git_clean": true})
-	if _, err = CertifyExecutionBackend(context.Background(), f.c, []string{adapter}); err == nil {
-		t.Fatal("Orca start was certified without agent evidence")
-	}
-	report, err := CertifyExecutionBackend(context.Background(), f.c, []string{agent, adapter, workspace})
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, name := range []string{"start", "observe", "stop", "output_reading", "workspace_inspection"} {
-		if capabilityStatus(report, name) != executionapi.CapabilityVerified {
-			t.Fatalf("%s not verified: %#v", name, report)
-		}
 	}
 }
 

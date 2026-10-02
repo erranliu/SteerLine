@@ -3,19 +3,23 @@ package steerline
 import (
 	"bytes"
 	"embed"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 //go:embed launcher/*
 var launcherFS embed.FS
 
 // InstallLaunchers writes the console and service-window entry points plus
-// their README into STEERLINE_HOME. Templates are stored
+// their README into the caller's application directory. Templates are stored
 // LF and written CRLF so they behave as native .bat files.
-func InstallLaunchers() ([]string, error) {
-	dir := SteerlineHome()
+func InstallLaunchers(dir string) ([]string, error) {
+	if strings.TrimSpace(dir) == "" {
+		return nil, errors.New("launcher directory is required")
+	}
 	if e := os.MkdirAll(dir, 0700); e != nil {
 		return nil, e
 	}

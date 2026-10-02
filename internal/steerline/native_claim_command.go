@@ -41,13 +41,12 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err := validateWorkflowConfig(&config, nil); err != nil {
 		return TaskClaimReceipt{}, err
 	}
-	if err := config.prepareWorktreeRoot(); err != nil {
+	entry, err := registrationFor(config)
+	if err != nil {
 		return TaskClaimReceipt{}, err
 	}
-	if config.managedWindowsOrca() {
-		if _, err := nativeOrcaFixedAgentCommand(config); err != nil {
-			return TaskClaimReceipt{}, err
-		}
+	if err := config.prepareWorktreeRoot(); err != nil {
+		return TaskClaimReceipt{}, err
 	}
 	if err := ValidateNativeTaskID(options.TaskID); err != nil {
 		return TaskClaimReceipt{}, err
@@ -94,6 +93,13 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		}
 		config.requirementsEvaluation = &evaluation
 	}
+	claimPreparation, err := entry.PrepareClaim(ctx, config)
+	if err != nil {
+		return TaskClaimReceipt{}, err
+	}
+	if err := requireWorkerFlowCapabilities(ctx, config); err != nil {
+		return TaskClaimReceipt{}, err
+	}
 	if err := config.bindPublicationTarget(ctx); err != nil {
 		return TaskClaimReceipt{}, err
 	}
@@ -101,10 +107,6 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		p := config.bindProjectPolicy(*options.ExecutionProfile)
 		options.ExecutionProfile = &p
 	}
-	if _, err := policyNativeVersion(ctx, config); err != nil {
-		return TaskClaimReceipt{}, err
-	}
-
 	graph, err := sqlite.taskGraphSnapshot(ctx, c.Project)
 	if err != nil {
 		return TaskClaimReceipt{}, err
@@ -175,10 +177,6 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 			return TaskClaimReceipt{}, nativeErr("base_missing_delivery", "acquired branch base does not contain a verified predecessor merge commit")
 		}
 	}
-	entry, err := registrationFor(config)
-	if err != nil {
-		return TaskClaimReceipt{}, err
-	}
 	backend, protocol := entry.Key.Backend, entry.Key.Protocol
 	target := targetFor(config)
 	target.Branch, target.BaseRevision = config.Branch, base
@@ -201,11 +199,12 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		wfr.ExecutionProfile = &fixed
 	}
 	execution := ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, CurrentAttemptID: attemptID, Generation: newID(), ConfigurationDigest: wfr.ExecutionProfile.Digest, OwnerServiceInstanceID: options.ServiceInstanceID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}
-	if config.managedWindowsOrca() {
-		if _, err := nativeOrcaFixedAgentCommand(config); err != nil {
-			return TaskClaimReceipt{}, err
+	if claimPreparation.RequiresReadiness {
+		timeout := claimPreparation.WaitTimeout
+		if timeout <= 0 {
+			timeout = 2 * time.Minute
 		}
-		execution.Environment = &WorkerEnvironment{ProfileDigest: wfr.ExecutionProfile.Digest, Preparation: &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: created, Deadline: created.Add(positiveDuration(orcaProfileSettings(config).WaitTimeout, 2*time.Minute))}}
+		execution.Environment = &WorkerEnvironment{ProfileDigest: wfr.ExecutionProfile.Digest, Preparation: &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: created, Deadline: created.Add(timeout)}}
 	}
 	execution.WorkspaceIntent, err = planWorkspace(config, task.TaskID, workflowRunID, base)
 	if err != nil {
@@ -232,7 +231,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		if e := verifyClaimConfigFiles(config); e != nil {
 			return e
 		}
-		if !verifyFixedExecutionProfile(*wfr.ExecutionProfile) {
+		if !verifyFixedExecutionProfile(*wfr.ExecutionProfile, config.ExecutionDirectory) {
 			return nativeErr("stale_profile", "claim snapshot changed after evaluation")
 		}
 		current, e := taskGraphSnapshotTx(ctx, tx, c.Project)

@@ -1,6 +1,7 @@
 package console
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -18,14 +19,19 @@ type LogBatch struct {
 
 // fileSource reads the activity journal.
 type fileSource struct {
-	cfg steerline.Config
+	cfg              steerline.Config
+	selectNormalizer func([]byte) steerline.Normalizer
 
 	mu          sync.Mutex
 	normalizers map[string]steerline.Normalizer
 }
 
-func newFileSource(c steerline.Config) *fileSource {
-	return &fileSource{cfg: c, normalizers: make(map[string]steerline.Normalizer)}
+func newFileSource(c steerline.Config, selectors ...func([]byte) steerline.Normalizer) *fileSource {
+	var selector func([]byte) steerline.Normalizer
+	if len(selectors) > 0 {
+		selector = selectors[0]
+	}
+	return &fileSource{cfg: c, selectNormalizer: selector, normalizers: make(map[string]steerline.Normalizer)}
 }
 
 func (f *fileSource) ReadLog(logPath string, cursor steerline.JournalCursor) (LogBatch, error) {
@@ -57,6 +63,9 @@ func (f *fileSource) ReadLog(logPath string, cursor steerline.JournalCursor) (Lo
 		}
 		return batch, nil
 	}
+	if f.selectNormalizer == nil {
+		return LogBatch{}, errors.New("application raw log normalizer selector is required")
+	}
 	var firstLine []byte
 	if len(framed.Lines) > 0 {
 		firstLine = framed.Lines[0]
@@ -64,7 +73,7 @@ func (f *fileSource) ReadLog(logPath string, cursor steerline.JournalCursor) (Lo
 	normalizer := f.normalizerFor(path, framed.Cursor, firstLine, framed.Reset)
 	for _, line := range framed.Lines {
 		if normalizer == nil {
-			normalizer = steerline.DetectNormalizer(line)
+			normalizer = f.detect(line)
 			f.storeNormalizer(path, framed.Cursor, normalizer)
 		}
 		batch.Activity = append(batch.Activity, steerline.NormalizeFallbackLine(normalizer, line, &framed.Cursor)...)
@@ -96,12 +105,19 @@ func (f *fileSource) normalizerFor(path string, cursor steerline.JournalCursor, 
 	if len(first) == 0 {
 		return nil
 	}
-	n := steerline.DetectNormalizer(first)
+	n := f.detect(first)
 	if len(f.normalizers) >= 64 {
 		f.normalizers = make(map[string]steerline.Normalizer)
 	}
 	f.normalizers[key] = n
 	return n
+}
+
+func (f *fileSource) detect(first []byte) steerline.Normalizer {
+	if f.selectNormalizer != nil {
+		return f.selectNormalizer(first)
+	}
+	return nil
 }
 
 func (f *fileSource) storeNormalizer(path string, cursor steerline.JournalCursor, normalizer steerline.Normalizer) {

@@ -87,15 +87,16 @@ func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
 		{"orca_supervised", executionapi.ProtocolOrcaSupervised, executionapi.ProtocolOrcaSupervised},
 	} {
 		t.Run(test.host, func(t *testing.T) {
-			config := Config{Host: test.host, Agent: "codex"}
+			config := Config{ExecutionDirectory: testExecutionDirectory(t), Host: test.host, Agent: "codex"}
 			orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}
 			var remoteSettings *remote.ProfileConfig
 			if test.host == "orca_supervised" {
 				remoteSettings = &remote.ProfileConfig{ConnectionID: "fixed-connection", EnvironmentID: "fixed-environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1}
 			}
 			setTestImplementationProfiles(t, &config, codexworker.ProfileConfig{Executable: "codex"}, orca, remoteSettings)
-			backend, _, err := executionapi.ExecutionBackendKind(test.host)
+			entry, err := registrationFor(config)
 			require(t, err)
+			backend := string(entry.Key.Backend)
 			target := targetFor(config)
 			run := &Run{Host: test.host, Agent: "codex", Backend: backend, Protocol: string(test.protocol), Target: target}
 			execution := &ExecutionRecord{Agent: "codex", Backend: backend, Protocol: string(test.protocol), Target: target}
@@ -126,7 +127,7 @@ func feedbackIdentityMismatch(err error) bool {
 }
 
 func TestEveryRegisteredExecutionUsesTheLifecyclePort(t *testing.T) {
-	for key, entry := range builtinExecutionRegistry {
+	for key, entry := range testExecutionDirectory(t).entries {
 		if entry.Lifecycle == nil {
 			t.Fatalf("%+v has no lifecycle port", key)
 		}

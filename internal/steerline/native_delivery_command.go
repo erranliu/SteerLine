@@ -25,6 +25,9 @@ type TaskDeliveryReceipt = taskdomain.TaskDeliveryReceipt
 // rechecks the task, selected workflow result and fixed gate evidence in one
 // transaction before writing delivery, closed state and graph revision.
 func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, taskID string, expectedTaskVersion uint64, workflowRunID string, verifier TaskDeliveryVerifier) (TaskDeliveryReceipt, error) {
+	if err := validateWorkflowConfig(&config, nil); err != nil {
+		return TaskDeliveryReceipt{}, err
+	}
 	sqlite := c.Store
 	if sqlite == nil || c.Project == "" || config.Identity() != c.Project {
 		return TaskDeliveryReceipt{}, nativeErr("authority_mismatch", "delivery requires the configured native project")

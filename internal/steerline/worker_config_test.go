@@ -30,7 +30,7 @@ func TestWorkerFlowConfigRejectsOldProjectGates(t *testing.T) {
 		if err = os.WriteFile(path, data, 0600); err != nil {
 			t.Fatal(err)
 		}
-		return LoadConfig(path)
+		return loadFixtureConfig(path)
 	}
 	loaded, err := write(base)
 	if err != nil || loaded.WorkflowProtocol != WorkerFlowVersion {
@@ -81,7 +81,7 @@ func TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation(t *testing.T) {
 	}
 	c.WorkflowProtocol = WorkerFlowVersion
 	workspaceRoot := filepath.Join(c.RunDir, "worktrees")
-	if _, err := NewService(c); err == nil || !strings.Contains(err.Error(), "unsupported_schema") {
+	if _, err := newTestService(c); err == nil || !strings.Contains(err.Error(), "unsupported_schema") {
 		t.Fatalf("old state was not rejected: %v", err)
 	}
 	if _, err := os.Stat(workspaceRoot); !os.IsNotExist(err) {
@@ -103,7 +103,7 @@ func TestFreshWorkerFlowRuntimeUsesDistinctFormat(t *testing.T) {
 	if err := project.Close(); err != nil {
 		t.Fatal(err)
 	}
-	service, err := NewService(c)
+	service, err := newTestService(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +116,7 @@ func TestFreshWorkerFlowRuntimeUsesDistinctFormat(t *testing.T) {
 	if err := service.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := NewService(c)
+	reopened, err := newTestService(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -175,7 +175,7 @@ func TestWorkerFlowRejectsOldLocalExecutionProtocol(t *testing.T) {
 		t.Fatal(err)
 	}
 	workspaceRoot := filepath.Join(c.RunDir, "worktrees")
-	if _, err := NewService(c); err == nil || !strings.Contains(err.Error(), "unsupported_schema") {
+	if _, err := newTestService(c); err == nil || !strings.Contains(err.Error(), "unsupported_schema") {
 		t.Fatalf("old local execution was not rejected: %v", err)
 	}
 	if _, err := os.Stat(workspaceRoot); !os.IsNotExist(err) {

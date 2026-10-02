@@ -63,6 +63,8 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 ## 主包与执行实现解耦
 
+2026-10-02：#66 的[未提交候选记录](../validation/core-decoupling-05-composition/README.md)已保存。规定组合验收未通过，等待协调会话独立复审、发布及完整权限验证；#66 未合并，#67 未启动。
+
 [主包解耦规划](core-implementation-decoupling.md)继续完成通用业务与具体实现的边界。#63 的配置和原生绑定契约已交付，任务身份及验收依据保留在其 Spec/Plan；本活动清单从 #65 继续。既有执行策略、工作区、发布和需求契约作为基础复用，不再列入活动实施清单；剩余原生验收限制见[既有验收记录](../validation/execution-isolation-cleanup/README.md)。本目标严格要求主包直属生产/测试文件名与源码无平台关键字，且没有具体实现的直接或传递依赖，不能靠改名或转移可写 Service 达标。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |

@@ -44,7 +44,7 @@ func TestNativeOrcaAgentSelectionUsesFrozenProfile(t *testing.T) {
 			t.Fatal(err)
 		}
 		frozen := profile.Freeze()
-		if !verifyFixedExecutionProfile(frozen) {
+		if !testVerifyFixedExecutionProfile(frozen) {
 			t.Fatal("profile digest changed while freezing")
 		}
 		selected := base.ApplyFixedExecutionProfile(frozen)

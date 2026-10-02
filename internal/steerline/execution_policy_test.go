@@ -30,27 +30,27 @@ func TestProjectPolicyRejectsMissingOrOldConfiguration(t *testing.T) {
 		require(t, os.WriteFile(path, data, 0600))
 	}
 	write()
-	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), "execution_policy") {
+	if _, err := loadFixtureConfig(path); err == nil || !strings.Contains(err.Error(), "execution_policy") {
 		t.Fatalf("missing authority accepted: %v", err)
 	}
 	body["execution_policy"] = workspacePolicyFixture()
 	for _, field := range []string{"sandbox", "windows_sandbox"} {
 		body[field] = "workspace-write"
 		write()
-		if _, err := LoadConfig(path); err == nil {
+		if _, err := loadFixtureConfig(path); err == nil {
 			t.Fatalf("old project authorization field accepted: %s", field)
 		}
 		delete(body, field)
 	}
 	write()
-	if _, err := LoadConfig(path); err != nil {
+	if _, err := loadFixtureConfig(path); err != nil {
 		t.Fatal(err)
 	}
 	for _, field := range []string{"sandbox", "windows_sandbox"} {
 		raw, err := json.Marshal(map[string]any{"execution_profiles": []map[string]any{{"id": "local", "name": "Local", "host": "local", "agent": "codex", field: "workspace-write", "codex": map[string]string{"executable": "codex"}}}})
 		require(t, err)
-		require(t, os.WriteFile(GlobalExecutionConfigPath(), raw, 0600))
-		if _, err := LoadConfig(path); err == nil {
+		require(t, os.WriteFile(fixtureGlobalExecutionConfigPath(), raw, 0600))
+		if _, err := loadFixtureConfig(path); err == nil {
 			t.Fatalf("old global authorization field accepted: %s", field)
 		}
 	}
@@ -99,7 +99,7 @@ func TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority(t *testin
 	c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), Repository: "repository", Branch: "main", Host: "local", Agent: "codex"}
 	setTestCodexProfile(t, &c, codexworker.ProfileConfig{Executable: "codex"})
 	original := c.projectExecutionProfile().Freeze(configurationProjectIdentity(c))
-	if !verifyFixedExecutionProfile(original) {
+	if !testVerifyFixedExecutionProfile(original) {
 		t.Fatalf("valid snapshot rejected: %+v", original)
 	}
 	c.ExecutionPolicy.Network = "deny"
@@ -115,7 +115,7 @@ func TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority(t *testin
 	} {
 		copy := original
 		mutate(&copy)
-		if verifyFixedExecutionProfile(copy) {
+		if testVerifyFixedExecutionProfile(copy) {
 			t.Fatalf("damaged snapshot accepted: %+v", copy)
 		}
 	}
@@ -136,10 +136,10 @@ func TestProjectPolicyNativeReportsRetainOriginalSnapshotDigests(t *testing.T) {
 			}
 			continue
 		}
-		if verifyFixedExecutionProfile(report.Profile) {
+		if testVerifyFixedExecutionProfile(report.Profile) {
 			t.Fatalf("old native report was accepted as current format: %s", name)
 		}
-		if verifyPolicyResources(report.Execution.PolicyResources, report.Profile.Digest, report.Execution.Workspace.Worktree, &report.Execution) == nil {
+		if verifyPolicyResources(testConfigWithDirectory(Config{}).ApplyFixedExecutionProfile(report.Profile), report.Execution.PolicyResources, report.Profile.Digest, report.Execution.Workspace.Worktree, &report.Execution) == nil {
 			t.Fatalf("historical native permission receipt was accepted as current evidence: %s", name)
 		}
 	}
@@ -152,7 +152,7 @@ func TestProjectPolicyRejectsGlobalConflictsBeforeRepositoryProbe(t *testing.T) 
 	raw, err := json.Marshal(map[string]any{"execution_policy": workspacePolicyFixture(), "repository": t.TempDir(), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "git": map[string]string{"executable": "must-never-be-called"}})
 	require(t, err)
 	require(t, os.WriteFile(path, raw, 0600))
-	_, err = LoadConfig(path)
+	_, err = loadFixtureConfig(path)
 	if err == nil || !strings.Contains(err.Error(), "unsupported managed launch") {
 		t.Fatalf("unsafe args reached repository identity probe: %v", err)
 	}

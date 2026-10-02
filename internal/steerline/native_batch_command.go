@@ -66,6 +66,9 @@ func (e taskBatchReplay) Error() string { return "task batch command already app
 // then persists the batch, tasks, contracts, edges, event and command receipt
 // in one center transaction.
 func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data []byte, requestID string, expectedAuthorityVersion uint64, requestedBy string) (TaskBatchReceipt, error) {
+	if err := validateWorkflowConfig(&config, nil); err != nil {
+		return TaskBatchReceipt{}, err
+	}
 	batch, canonicalPayload, err := decodeTaskBatch(data)
 	if err != nil {
 		return TaskBatchReceipt{}, err

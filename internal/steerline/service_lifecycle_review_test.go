@@ -35,7 +35,7 @@ func TestLifecycleAuditRejectedStartupPreservesOwnerFiles(t *testing.T) {
 			}
 			before, err := os.ReadFile(recordPath)
 			require(t, err)
-			if err := RunConfiguredService(context.Background(), c, "manual", record.StartupID, "off"); err == nil {
+			if err := testRunConfiguredService(context.Background(), c, "manual", record.StartupID, "off"); err == nil {
 				t.Fatal("a completed startup ID was reused")
 			}
 			after, err := os.ReadFile(recordPath)
@@ -63,7 +63,7 @@ func TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEff
 			t.Fatalf("%s did not reject missing native authority: %v", name, err)
 		}
 	}
-	assertAuthorityError("RunConfiguredService", RunConfiguredService(context.Background(), c, "manual", "", "off"))
+	assertAuthorityError("RunConfiguredService", testRunConfiguredService(context.Background(), c, "manual", "", "off"))
 	_, stopErr := StopService(context.Background(), c, "operator", time.Second)
 	assertAuthorityError("StopService", stopErr)
 	if _, err := ControlSnapshot(c); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
@@ -74,9 +74,6 @@ func TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEff
 	}
 	if _, err := InspectRecovery(context.Background(), c, "run"); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
 		t.Fatalf("InspectRecovery did not reject missing native authority: %v", err)
-	}
-	if _, err := CertifyExecutionBackend(context.Background(), c, []string{"missing.json"}); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
-		t.Fatalf("CertifyExecutionBackend did not reject missing native authority: %v", err)
 	}
 	assertAuthorityError("VerifyTaskContractFiles", VerifyTaskContractFiles(context.Background(), c, TaskContract{}))
 	if _, err := os.Stat(runDir); !os.IsNotExist(err) {
@@ -89,7 +86,7 @@ func TestRunConfiguredServiceRejectsBeadsBeforeCreatingStartupEvidence(t *testin
 	f.c.WorkflowProtocol = WorkerFlowVersion
 	sentinel := filepath.Join(f.c.Repository, ".beads")
 	require(t, os.Mkdir(sentinel, 0700))
-	err := RunConfiguredService(context.Background(), f.c, "manual", "", "off")
+	err := testRunConfiguredService(context.Background(), f.c, "manual", "", "off")
 	if err == nil || !strings.Contains(err.Error(), "Beads state exists") {
 		t.Fatalf("service did not refuse old repository state before startup: %v", err)
 	}
@@ -158,7 +155,7 @@ func TestLifecycleReviewExistingServiceDoesNotNeedInstalledBinary(t *testing.T) 
 	initialized := f.service(t)
 	require(t, initialized.Close())
 	c, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
-	s, err := NewService(c)
+	s, err := newTestService(c)
 	require(t, err)
 	t.Cleanup(func() { _ = s.Close() })
 	identity, err := currentProcessIdentity()
@@ -173,7 +170,7 @@ func TestLifecycleReviewExistingServiceDoesNotNeedInstalledBinary(t *testing.T) 
 	require(t, writeStartupRecord(s.Config, record))
 	s.State.Service.StartupID, s.State.Service.PID, s.State.Service.ProcessIdentity = &startupID, identity.PID, identity
 	require(t, s.publishCheckpoint())
-	result, err := StartService(context.Background(), configPath, StartServiceOptions{Executable: filepath.Join(t.TempDir(), "missing.exe")})
+	result, err := testStartService(context.Background(), configPath, StartServiceOptions{Executable: filepath.Join(t.TempDir(), "missing.exe")})
 	if err != nil || result.Status != "connected" {
 		t.Fatalf("existing compatible service needs no launch executable: %+v %v", result, err)
 	}
@@ -276,7 +273,7 @@ func TestLifecycleReviewChildPublishesIdentityBeforePreflight(t *testing.T) {
 	record := reviewStartup(t, c, "starting", nil)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
-	go func() { done <- RunConfiguredService(ctx, c, "manual", record.StartupID, "off") }()
+	go func() { done <- testRunConfiguredService(ctx, c, "manual", record.StartupID, "off") }()
 	defer func() { cancel(); <-done }()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {

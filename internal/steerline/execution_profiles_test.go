@@ -40,7 +40,7 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 		}
 	}
 	write()
-	loaded, err := LoadConfig(path)
+	loaded, err := loadFixtureConfig(path)
 	if err != nil || len(loaded.AvailableExecutionProfiles()) != 3 || loaded.DefaultProfileID() != "local" {
 		t.Fatalf("configured profiles were not loaded: %+v / %v", loaded.ExecutionProfiles, err)
 	}
@@ -108,7 +108,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 		t.Fatalf("selected claim did not persist a workflow: %+v / %v", snapshot, err)
 	}
 	wf, execution := snapshot.WorkflowRuns[0], snapshot.Executions[0]
-	if wf.WorkflowVersion != WorkerFlowVersion || wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !verifyFixedExecutionProfile(*wf.ExecutionProfile) || !slices.Contains(wf.ExecutionProfile.ImplementationDisplay, "Model：chosen-model") || !slices.Contains(wf.ExecutionProfile.ImplementationDisplay, "Reasoning effort：xhigh") || execution.Backend != string(executionapi.BackendLocal) || execution.CurrentStep != "worker" {
+	if wf.WorkflowVersion != WorkerFlowVersion || wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !testVerifyFixedExecutionProfile(*wf.ExecutionProfile) || !slices.Contains(wf.ExecutionProfile.ImplementationDisplay, "Model：chosen-model") || !slices.Contains(wf.ExecutionProfile.ImplementationDisplay, "Reasoning effort：xhigh") || execution.Backend != string(executionapi.BackendLocal) || execution.CurrentStep != "worker" {
 		t.Fatalf("chosen execution route was not fixed in the claim: %+v / %+v", wf, execution)
 	}
 	base.ExecutionProfiles[0].ImplementationConfigs[0].Payload = mustJSON(codexworker.ProfileConfig{Executable: os.Args[0], Model: "later-edit", ReasoningEffort: "xhigh", WindowsSandbox: "elevated"})
@@ -143,12 +143,12 @@ func TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles(t *testi
 	if err := store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if service, err := NewService(base); err == nil {
+	if service, err := newTestService(base); err == nil {
 		service.Close()
 		t.Fatal("automatic dispatch started without a configured profile")
 	}
 	base.DefaultExecutionProfile = ProjectExecutionProfileID
-	service, err := NewService(base)
+	service, err := newTestService(base)
 	if err != nil {
 		t.Fatalf("explicit default did not restore auto mode: %v", err)
 	}
@@ -194,7 +194,7 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 			t.Fatalf("claim task %s with local profile: receipt=%+v err=%v", taskID, receipt, err)
 		}
 	}
-	service, err := NewService(c)
+	service, err := newTestService(c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -205,7 +205,7 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 	edited.ExecutionProfiles = append([]ExecutionProfile(nil), c.ExecutionProfiles...)
 	edited.ExecutionProfiles[0].ImplementationConfigs = cloneImplementationInputs(c.ExecutionProfiles[0].ImplementationConfigs)
 	edited.ExecutionProfiles[0].ImplementationConfigs[0].Payload = mustJSON(codexworker.ProfileConfig{Executable: "codex", Model: "later-project-edit", ReasoningEffort: "high"})
-	reopened, err := NewService(edited)
+	reopened, err := newTestService(edited)
 	if err != nil {
 		t.Fatalf("current-format restart changed the fixed local profiles: %v", err)
 	}

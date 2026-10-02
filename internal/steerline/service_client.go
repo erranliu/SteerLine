@@ -88,9 +88,11 @@ type StartupRecord struct {
 type StartServiceOptions struct {
 	// Executable must be explicitly set by development and tests. Production
 	// callers leave it empty and use the stable installed binary.
-	Executable   string
-	WaitTimeout  time.Duration
-	PollInterval time.Duration
+	Executable      string
+	ApplicationHome string
+	ApplicationBin  string
+	WaitTimeout     time.Duration
+	PollInterval    time.Duration
 }
 
 type ServiceStartResult struct {
@@ -618,7 +620,7 @@ func failStartup(c Config, id string, cause error) error {
 	return errors.Join(cause, writeStartupRecord(c, record))
 }
 
-func windowsServiceWindowStart(ctx context.Context, c Config, absoluteConfig string) (ServiceStartResult, error) {
+func windowsServiceWindowStart(ctx context.Context, c Config, absoluteConfig string, opts StartServiceOptions) (ServiceStartResult, error) {
 	connection := ConnectService(ctx, c)
 	switch connection.State {
 	case ConnectionConnected:
@@ -664,7 +666,7 @@ func windowsServiceWindowStart(ctx context.Context, c Config, absoluteConfig str
 	}
 	result := ServiceStartResult{
 		Status:       "window-required",
-		LauncherPath: filepath.Join(SteerlineHome(), "service-window.bat"),
+		LauncherPath: filepath.Join(opts.ApplicationHome, "service-window.bat"),
 		ConfigPath:   absoluteConfig,
 		Connection:   connection,
 	}
@@ -673,7 +675,7 @@ func windowsServiceWindowStart(ctx context.Context, c Config, absoluteConfig str
 		install string
 	}{
 		{result.LauncherPath, "steerline launchers"},
-		{filepath.Join(SteerlineBinDir(), "steerline.exe"), "steerline install"},
+		{filepath.Join(opts.ApplicationBin, "steerline.exe"), "steerline install"},
 	} {
 		info, statErr := os.Stat(candidate.path)
 		if statErr != nil || info.IsDir() {
@@ -688,14 +690,11 @@ func windowsServiceWindowStart(ctx context.Context, c Config, absoluteConfig str
 	return result, nil
 }
 
-func StartService(ctx context.Context, configPath string, opts StartServiceOptions) (ServiceStartResult, error) {
+func StartService(ctx context.Context, c Config, configPath string, opts StartServiceOptions) (ServiceStartResult, error) {
 	if err := ctx.Err(); err != nil {
 		return ServiceStartResult{}, err
 	}
-	c, err := LoadConfig(configPath)
-	if err != nil {
-		return ServiceStartResult{}, err
-	}
+	var err error
 	if err = c.ResolveIdentity(ctx); err != nil {
 		return ServiceStartResult{}, fmt.Errorf("resolve service target: %w", err)
 	}
@@ -721,7 +720,10 @@ func StartService(ctx context.Context, configPath string, opts StartServiceOptio
 		return ServiceStartResult{}, errors.New("run_dir must be outside the configured repository")
 	}
 	if runtimeGOOSWindows() {
-		return windowsServiceWindowStart(ctx, c, absoluteConfig)
+		if opts.ApplicationHome == "" || opts.ApplicationBin == "" {
+			return ServiceStartResult{}, errors.New("application home and binary directories are required")
+		}
+		return windowsServiceWindowStart(ctx, c, absoluteConfig, opts)
 	}
 	if opts.WaitTimeout <= 0 || opts.WaitTimeout > 30*time.Second {
 		opts.WaitTimeout = 30 * time.Second
@@ -731,7 +733,10 @@ func StartService(ctx context.Context, configPath string, opts StartServiceOptio
 	}
 	executable := opts.Executable
 	if executable == "" {
-		executable = filepath.Join(SteerlineBinDir(), "steerline")
+		if opts.ApplicationBin == "" {
+			return ServiceStartResult{}, errors.New("application binary directory is required")
+		}
+		executable = filepath.Join(opts.ApplicationBin, "steerline")
 		if runtimeGOOSWindows() {
 			executable += ".exe"
 		}
@@ -1065,7 +1070,12 @@ func acquireLaunchLock(ctx context.Context, path string) (*RepoLock, error) {
 
 // RunConfiguredService is the lock-owning service entry point used by the CLI.
 // It records preflight and lock failures under startup_id before returning.
-func RunConfiguredService(ctx context.Context, c Config, mode, startupID, console string) (retErr error) {
+type ServiceFactory func(Config) (*Service, error)
+
+func RunConfiguredService(ctx context.Context, c Config, mode, startupID, console string, construct ServiceFactory) (retErr error) {
+	if construct == nil {
+		return errors.New("application service constructor is required")
+	}
 	if err := requireNativeTaskAuthority(c); err != nil {
 		return err
 	}
@@ -1185,7 +1195,7 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 		return fail(err)
 	}
 	defer runLock.Close()
-	s, err := NewService(c)
+	s, err := construct(c)
 	if err != nil {
 		return fail(err)
 	}

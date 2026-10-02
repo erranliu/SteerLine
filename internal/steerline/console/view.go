@@ -13,6 +13,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/erranliu/SteerLine/internal/steerline"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 var (
@@ -30,10 +31,10 @@ func render(m Model) string {
 	}
 	header := styleHead.Render("SteerLine · 执行控制台")
 	if len(m.projects) == 0 {
-		return header + "\n\n" + renderEmptyProjects() + "\n\nq 退出"
+		return header + "\n\n" + renderEmptyProjects(m.applicationEtc) + "\n\nq 退出"
 	}
 	if m.selected < 0 || m.selected >= len(m.projects) {
-		return header + "\n" + renderEmptyProjects()
+		return header + "\n" + renderEmptyProjects(m.applicationEtc)
 	}
 	state := &m.projects[m.selected]
 	projects := renderProjectStrip(m)
@@ -86,8 +87,8 @@ func render(m Model) string {
 	return strings.Join(lines, "\n")
 }
 
-func renderEmptyProjects() string {
-	return "没有可用项目配置。\n配置目录：" + safeTerminalText(steerline.SteerlineEtcDir()) + "\n建立配置后再次运行 steerline console；可从 examples/config.json 复制并按项目填写。"
+func renderEmptyProjects(configDirectory string) string {
+	return "没有可用项目配置。\n配置目录：" + safeTerminalText(configDirectory) + "\n建立配置后再次运行 steerline console；可从 examples/config.json 复制并按项目填写。"
 }
 
 func renderProjectStrip(m Model) string {
@@ -337,8 +338,8 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 	lines = append(lines, "", "技术信息", "run_id："+safeTerminalText(run.RunID))
 	lines = append(lines, "执行："+safeTerminalText(firstText(run.ExecutionStatus, "unknown"))+" · 交付："+safeTerminalText(firstText(run.FinishTaskStatus, "unknown")))
 	lines = append(lines, renderFixedRunExecutionProfile(state, run)...)
-	if run.Process != nil && run.Process.Kind == "orca" && run.Process.Terminal != "" {
-		lines = append(lines, "Orca 终端："+safeTerminalText(run.Process.Terminal), "在 Orca 中查看：orca terminal switch --terminal "+safeTerminalText(run.Process.Terminal))
+	if run.Process != nil && run.Process.Terminal != "" {
+		lines = append(lines, "宿主终端标识："+safeTerminalText(run.Process.Terminal))
 	}
 	if run.ExecutionID != "" {
 		lines = append(lines, "execution_id："+safeTerminalText(run.ExecutionID))
@@ -761,7 +762,10 @@ func decisionAnswerAvailability(state projectState, row *consoleRow) string {
 	if run.WorkflowVersion != steerline.WorkerFlowVersion || run.ExecutionID == "" || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 		return "问题未绑定当前 native WorkflowRun、Execution 和 attempt；保留原问题并转入只读恢复核验"
 	}
-	if run.Backend == "local" && run.Protocol != "local_process" || run.Backend == "orca" && run.Protocol != "orca_terminal_v2" && run.Protocol != "orca_supervised" || run.Backend != "local" && run.Backend != "orca" {
+	if state.ref.Config.ExecutionDirectory == nil {
+		return "执行目录不可用；不能续跑原问题"
+	}
+	if _, err := state.ref.Config.ExecutionDirectory.ResolveIdentity(steerline.ExecutionRegistrationKey{Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol), Agent: run.Agent}); err != nil {
 		return "原执行后端/协议不支持决策续跑"
 	}
 	connection := state.snapshot.Connection
@@ -1021,8 +1025,8 @@ func serviceWindowInstruction(ref ProjectRef) string {
 	if runtime.GOOS != "windows" {
 		return "steerline start-service -config " + ref.ConfigPath
 	}
-	launcher := filepath.Join(steerline.SteerlineHome(), "service-window.bat")
-	binary := filepath.Join(steerline.SteerlineBinDir(), "steerline.exe")
+	launcher := filepath.Join(ref.ApplicationHome, "service-window.bat")
+	binary := filepath.Join(ref.ApplicationBin, "steerline.exe")
 	if _, err := os.Stat(binary); err != nil {
 		return fmt.Sprintf("服务窗口不可用：缺少 %s；运行 steerline install", binary)
 	}

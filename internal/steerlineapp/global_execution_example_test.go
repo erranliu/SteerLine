@@ -1,4 +1,4 @@
-package steerline
+package steerlineapp
 
 import (
 	"encoding/json"
@@ -44,7 +44,7 @@ func TestFiveGlobalLunaProfilesLoadAndFreeze(t *testing.T) {
 	for i, expected := range want {
 		profile := profiles[i]
 		codex := codexProfileFromInputs(profile.ImplementationConfigs)
-		if profile.ID != expected.id || profile.Host != expected.host || profile.Agent != "codex" || codex.Model != "gpt-6-luna" || codex.ReasoningEffort != expected.effort || !slices.Contains(profile.ImplementationDisplay, "权限：workspace-write") || !verifyFixedExecutionProfile(profile.Freeze()) {
+		if profile.ID != expected.id || profile.Host != expected.host || profile.Agent != "codex" || codex.Model != "gpt-6-luna" || codex.ReasoningEffort != expected.effort || !slices.Contains(profile.ImplementationDisplay, "权限：workspace-write") || !testVerifyFixedExecutionProfile(profile.Freeze()) {
 			t.Fatalf("profile %d = %+v", i, profile)
 		}
 		if profile.Host == "orca" {

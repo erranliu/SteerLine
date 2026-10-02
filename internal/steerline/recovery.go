@@ -111,7 +111,7 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 }
 
 func recoveryService(c Config, runtimeState Runtime) Service {
-	return Service{Config: c, lifecycleResolver: builtinLifecycleResolver{}, State: runtimeState, domain: DomainSnapshot{Tasks: runtimeState.Tasks, WorkflowRuns: runtimeState.WorkflowRuns, Executions: runtimeState.Executions, Attempts: runtimeState.Attempts, Decisions: runtimeState.Decisions, Operations: runtimeState.Operations}, runs: runtimeState.Runs}
+	return Service{Config: c, lifecycleResolver: c.ExecutionDirectory, State: runtimeState, domain: DomainSnapshot{Tasks: runtimeState.Tasks, WorkflowRuns: runtimeState.WorkflowRuns, Executions: runtimeState.Executions, Attempts: runtimeState.Attempts, Decisions: runtimeState.Decisions, Operations: runtimeState.Operations}, runs: runtimeState.Runs}
 }
 
 func (s *Service) inspectRecoveryClaim(ctx context.Context, run *Run, report *RecoveryInspection) {

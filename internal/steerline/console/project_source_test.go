@@ -16,10 +16,10 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()
 	t.Setenv("STEERLINE_HOME", filepath.Join(root, "home"))
-	if err := os.MkdirAll(steerline.SteerlineHome(), 0700); err != nil {
+	if err := os.MkdirAll(os.Getenv("STEERLINE_HOME"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(steerline.GlobalExecutionConfigPath(), []byte(`{"execution_profiles":[{"id":"local","name":"Local Codex","host":"local","agent":"codex","codex":{"executable":"codex"}}]}`), 0600); err != nil {
+	if err := os.WriteFile(filepath.Join(os.Getenv("STEERLINE_HOME"), "execution.json"), []byte(`{"execution_profiles":[{"id":"local","name":"Local Codex","host":"local","agent":"codex","codex":{"executable":"codex"}}]}`), 0600); err != nil {
 		t.Fatal(err)
 	}
 	repo := filepath.Join(root, "repo")
@@ -30,7 +30,7 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 	}
 	configPath := filepath.Join(root, "project.json")
 	writeConsoleTestConfig(t, configPath, repo, "")
-	cfg, err := steerline.LoadConfig(configPath)
+	cfg, err := (consoleFixtureSource{home: os.Getenv("STEERLINE_HOME")}).LoadConfig(configPath)
 	if err != nil {
 		t.Fatal(err)
 	}
