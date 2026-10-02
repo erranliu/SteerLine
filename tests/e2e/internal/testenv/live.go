@@ -1,0 +1,439 @@
+package testenv
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"github.com/erranliu/SteerLine/internal/testprocess"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/native"
+)
+
+func (s *Scenario) NewLiveProject(name, chain string) *Project {
+	s.t.Helper()
+	if chain != "local-codex" && chain != "orca-codex" {
+		s.t.Fatal("unknown native chain")
+	}
+	p := s.NewProject(name)
+	p.Chain = chain
+	windows := "elevated"
+	if chain == "orca-codex" {
+		windows = "unelevated"
+	}
+	fullAccess := strings.HasPrefix(s.ID, "smoke.")
+	authMode := windows
+	if fullAccess {
+		windows, authMode = "", "full-access"
+	}
+	s.Must(native.SeedAuth(s.Run.AuthHome, filepath.Join(p.Home, "codex"), authMode))
+	s.Must(native.TrustProject(filepath.Join(p.Home, "codex"), p.Repo))
+	if strings.HasPrefix(s.ID, "smoke.") {
+		p.enableGitHub()
+	}
+	codex, err := codexworker.NativeExecutable("codex")
+	s.Must(err)
+	publisher, host := "host_service", "local"
+	var orcaConfig any
+	if chain == "orca-codex" {
+		host, publisher = "orca", "worker"
+		command := os.Getenv("ORCA_CLI_COMMAND")
+		if command == "" {
+			command = "orca"
+		}
+		p.OrcaExecutable, err = exec.LookPath(command)
+		s.Must(err)
+		status, err := p.orca(s.Context, "agent", "hooks", "status", "--json")
+		s.Must(err)
+		var hooks struct {
+			Enabled  bool `json:"enabled"`
+			Statuses []struct {
+				Agent, ConfigPath   string
+				ManagedHooksPresent bool
+			} `json:"statuses"`
+		}
+		s.Must(json.Unmarshal(status, &hooks))
+		hookPath := ""
+		for _, h := range hooks.Statuses {
+			if h.Agent == "codex" && h.ManagedHooksPresent {
+				hookPath = h.ConfigPath
+			}
+		}
+		if !hooks.Enabled || hookPath == "" {
+			s.t.Fatal("native Orca tests require its installed Codex transcript hooks")
+		}
+		s.Must(native.SeedOrcaHooks(hookPath, filepath.Join(p.Home, "codex")))
+		// The product still checks native Orca identities and real Codex permissions.
+		shim := filepath.Join(p.Home, "bin", "orca-env.exe")
+		raw, err := os.ReadFile(s.Run.Helper)
+		s.Must(err)
+		s.Must(os.WriteFile(shim, raw, 0700))
+		logDir := filepath.Join(s.Output, name+"-orca")
+		s.Must(os.MkdirAll(logDir, 0700))
+		pwsh, err := exec.LookPath("pwsh")
+		s.Must(err)
+		if strings.Contains(strings.ToLower(pwsh), "windowsapps") {
+			s.t.Fatal("live Orca requires a standalone PowerShell executable for its restricted token")
+		}
+		s.Must(controlled.Write(filepath.Join(p.Home, "orca-env.json"), native.OrcaEnvironment{Executable: p.OrcaExecutable, Home: p.Home, LogDir: logDir, PowerShellDir: filepath.Dir(pwsh)}))
+		// This deadline covers native terminal creation, metadata binding, model
+		// readiness tools and settlement, not one CLI call (bounded separately).
+		orcaConfig = map[string]any{"executable": shim, "shell": "powershell.exe", "wait_timeout": "4m"}
+	}
+	var config map[string]any
+	raw, err := os.ReadFile(p.Config)
+	s.Must(err)
+	s.Must(json.Unmarshal(raw, &config))
+	config["publication_policy"] = map[string]string{"publisher": publisher}
+	config["command_timeout"] = "60s"
+	if fullAccess {
+		config["execution_policy"] = map[string]any{"filesystem": map[string]any{"read_scope": "host", "write_scope": "host", "git_metadata_write": false}, "network": "allow", "escalation": "deny"}
+	}
+	s.Must(controlled.Write(p.Config, config))
+	profile := map[string]any{"id": chain, "name": "Real E2E " + chain, "host": host, "agent": "codex", "model": native.Model, "reasoning_effort": native.Effort, "codex": map[string]any{"executable": codex, "windows_sandbox": windows}}
+	if fullAccess {
+		delete(profile["codex"].(map[string]any), "windows_sandbox")
+	}
+	if orcaConfig != nil {
+		profile["orca"] = orcaConfig
+		profile["codex"].(map[string]any)["args"] = []string{"--no-daemon"}
+	}
+	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"execution_profiles": []any{profile}, "default_execution_profile": chain}))
+	p.Driver.Profile = chain
+
+	if chain == "local-codex" && !fullAccess {
+		probe := exec.Command(codex, "sandbox", "--permission-profile", ":workspace", "-C", p.Repo, "-c", "windows.sandbox=elevated", "-c", "sandbox_workspace_write.network_access=true", "powershell.exe", "-NoProfile", "-Command", "Write-Output STEERLINE_NATIVE_SHELL_READY")
+		probe.Env = p.Driver.Command(s.Context).Env
+		var stdout, stderr strings.Builder
+		probe.Stdout, probe.Stderr = &stdout, &stderr
+		probeCtx, cancel := context.WithTimeout(s.Context, 45*time.Second)
+		probeErr := testprocess.Run(probeCtx, probe)
+		cancel()
+		s.Must(controlled.Write(filepath.Join(s.Output, "native-shell-preflight.json"), map[string]any{"stdout": stdout.String(), "stderr": stderr.String(), "error": fmt.Sprint(probeErr)}))
+		s.Must(probeErr)
+		if !strings.Contains(stdout.String(), "STEERLINE_NATIVE_SHELL_READY") {
+			s.t.Fatal("native shell preflight failed before model request")
+		}
+	}
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "AGENTS.md"), []byte("# Isolated SteerLine E2E fixture\n\nFor a readiness-only Dispatch, run only its exact probe command and report the result; do not inspect business task references. For business work, only implement the bound task. Invoke shell tools with login=false to disable unrelated user shell profiles. Initially HEAD equals the reference commit: confirm with git rev-parse HEAD, then use Get-FileHash directly on docs/spec/task.spec.md and task.plan.md. Read those original files. Do not reconstruct files from git show text or PowerShell pipelines: newline conversion changes their hashes. Do not write to TEMP/TMP; that directory is intentionally outside the allowed write scope. Any scratch work must stay inside this assigned worktree, and must not be staged. No questions or other tasks are needed: the fixture contract specifies the entire output and publication action.\n"), 0600))
+	spec := "# Live delivery fixture\n\nCreate result.txt containing exactly `real model delivery` followed by a newline. Verify the file. Stage only result.txt. Do not modify any other tracked file.\n\n"
+	if chain == "local-codex" {
+		spec += "The host service publishes. End your final reply with the exact STEERLINE_PUBLISH_READY line provided in the task instruction. Do not commit, push, or run publish.ps1.\n"
+	} else {
+		if p.RealPR {
+			script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
+if ((Get-Content -LiteralPath 'result.txt' -Raw).Trim() -cne 'real model delivery') { throw 'result differs' }
+$env:GH_TOKEN = (Get-Content -LiteralPath '%s' -Raw).Trim()
+git add -- result.txt
+git -c user.name=E2E -c user.email=e2e@example.invalid -c commit.gpgsign=false commit -m 'SteerLine real E2E delivery'
+if ($LASTEXITCODE -ne 0) { throw 'commit failed' }
+$branch = git symbolic-ref --short HEAD
+git push origin ('HEAD:refs/heads/' + $branch)
+if ($LASTEXITCODE -ne 0) { throw 'push failed' }
+gh pr create --repo '%s' --base '%s' --head $branch --draft --title 'SteerLine E2E %s' --body 'Isolated native gpt-6-luna medium delivery test. Disposable test branches.'
+if ($LASTEXITCODE -ne 0) { throw 'PR create failed' }
+`, filepath.Join(p.Home, "github-token"), githubRepository, p.BaseBranch, s.ID)
+			s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(script), 0600))
+			spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. It commits, pushes to the real test repository and creates a real GitHub draft PR. Report its returned URL in your final reply.\n"
+		} else {
+			state, err := controlled.Read(p.Provider)
+			s.Must(err)
+			base := strings.TrimSuffix(state.GitURL, "/e2e/project.git")
+			script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
+if ((Get-Content -LiteralPath 'result.txt' -Raw).Trim() -cne 'real model delivery') { throw 'result differs' }
+git add -- result.txt
+if ($LASTEXITCODE -ne 0) { throw 'stage failed' }
+git -c user.name=E2E -c user.email=e2e@example.invalid -c commit.gpgsign=false commit -m 'Real model delivery'
+if ($LASTEXITCODE -ne 0) { throw 'commit failed' }
+$branch = git symbolic-ref --short HEAD
+$head = git rev-parse HEAD
+git push '%s' ('HEAD:refs/heads/' + $branch)
+if ($LASTEXITCODE -ne 0) { throw 'push failed' }
+$body = @{branch=$branch; head=$head} | ConvertTo-Json -Compress
+$receipt = Invoke-RestMethod -Method Post -Uri '%s/__e2e/pull' -ContentType 'application/json' -Body $body
+Write-Output $receipt.url
+`, state.GitURL, base)
+			s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(script), 0600))
+			spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. This fixture script commits and pushes the staged file to the isolated Git server and creates the fixture PR. Report its returned URL in your final reply. Do not call gh or real GitHub.\n"
+		}
+	}
+	spec += "\n## Acceptance\n\nThe committed result.txt equals the specified content and is delivered after the fixture PR merges.\n"
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.spec.md"), []byte(spec), 0600))
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.plan.md"), []byte("# Live fixture plan\n\nRead the bound Spec. Write and verify result.txt, then publish according to its instructions.\n\n## Test plan\n\nVerify result.txt locally; the E2E harness checks native usage, real Git delivery and dependency state.\n"), 0600))
+	p.git(p.Repo, "add", ".")
+	p.git(p.Repo, "commit", "--quiet", "-m", "Pin live task contract")
+	state, err := controlled.Read(p.Provider)
+	s.Must(err)
+	if p.RealPR {
+		p.git(p.Repo, "push", "--quiet", "origin", p.BaseBranch)
+	} else {
+		p.git(p.Repo, "push", "--quiet", state.GitURL, "main")
+	}
+	if chain == "orca-codex" {
+		_, err := p.orca(s.Context, "repo", "add", "--path", p.Repo, "--json")
+		s.Must(err)
+		// Read registration by the exact owned repository path, never display name.
+		p.OrcaRepoID, err = orcaworker.FindRepo(s.Context, p.orca, p.Repo)
+		s.Must(err)
+		p.OrcaSetupID, err = p.findSetup(s.Context)
+		s.Must(err)
+		s.register("orca-repo", p.OrcaRepoID, 0)
+	}
+	return p
+}
+
+func (p *Project) orca(ctx context.Context, args ...string) (json.RawMessage, error) {
+	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	defer cancel()
+	cmd := exec.Command(p.OrcaExecutable, args...)
+	var out, stderr strings.Builder
+	cmd.Stdout, cmd.Stderr = &out, &stderr
+	err := testprocess.Run(ctx, cmd)
+	envelope, parseErr := orcaworker.ParseEnvelope([]byte(out.String()))
+	record := map[string]any{"command": append([]string{p.OrcaExecutable}, args...), "stdout": out.String(), "stderr": stderr.String(), "error": fmt.Sprint(err)}
+	logErr := controlled.Write(filepath.Join(p.Scenario.Output, fmt.Sprintf("orca-call-%d.json", time.Now().UnixNano())), record)
+	return envelope.Result, errors.Join(err, parseErr, logErr)
+}
+func (p *Project) findSetup(ctx context.Context) (string, error) {
+	raw, err := p.orca(ctx, "project", "setups", "--json")
+	if err != nil {
+		return "", err
+	}
+	var listing struct {
+		Setups []struct{ ID, RepoID, Path string } `json:"setups"`
+	}
+	if err := json.Unmarshal(raw, &listing); err != nil {
+		return "", err
+	}
+	for _, setup := range listing.Setups {
+		if setup.RepoID == p.OrcaRepoID && sameLocalPath(setup.Path, p.Repo) {
+			return setup.ID, nil
+		}
+	}
+	return "", errors.New("owned Orca registration setup missing")
+}
+func sameLocalPath(a, b string) bool {
+	return strings.EqualFold(filepath.Clean(filepath.FromSlash(a)), filepath.Clean(filepath.FromSlash(b)))
+}
+
+func (p *Project) cleanupOrca() error {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	if p.OrcaRepoID == "" {
+		id, err := orcaworker.FindRepo(ctx, p.orca, p.Repo)
+		if errors.Is(err, orcaworker.ErrRepoUnavailable) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+		p.OrcaRepoID = id
+	}
+	raw, err := p.orca(ctx, "worktree", "list", "--repo", "id:"+p.OrcaRepoID, "--limit", "1000", "--json")
+	if err != nil {
+		return err
+	}
+	var listing struct {
+		Worktrees []orcaworker.Worktree `json:"worktrees"`
+		Truncated bool                  `json:"truncated"`
+	}
+	if err := json.Unmarshal(raw, &listing); err != nil {
+		return err
+	}
+	if listing.Truncated {
+		return errors.New("owned worktree inventory truncated")
+	}
+	var failures []error
+	for _, w := range listing.Worktrees {
+		if w.RepoID != p.OrcaRepoID || w.ID == "" {
+			failures = append(failures, errors.New("Orca cleanup inventory ownership mismatch"))
+			continue
+		}
+		p.Scenario.register("orca-worktree", w.ID, 0)
+		_, err := p.orca(ctx, "terminal", "close", "--worktree", "id:"+w.ID, "--all", "--json")
+		if err != nil {
+			failures = append(failures, err)
+			continue
+		}
+		if !sameLocalPath(w.Path, p.Repo) {
+			_, err = p.orca(ctx, "worktree", "rm", "--worktree", "id:"+w.ID, "--force", "--json")
+			if err != nil {
+				failures = append(failures, err)
+			}
+		}
+	}
+	// Root coordinator terminals may be outside worktree-list's linked checkouts.
+	_, err = p.orca(ctx, "terminal", "close", "--worktree", "path:"+filepath.ToSlash(p.Repo), "--all", "--json")
+	if err != nil {
+		failures = append(failures, err)
+	}
+	if len(failures) > 0 {
+		return errors.Join(failures...)
+	}
+	setup, err := p.findSetup(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = p.orca(ctx, "project", "setup-delete", "--setup", setup, "--json")
+	return err
+}
+
+func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error) {
+	var u native.Usage
+	if len(snap.Domain.Executions) != 1 || len(snap.Domain.WorkflowRuns) != 1 {
+		return u, errors.New("usage needs one bound execution")
+	}
+	e := snap.Domain.Executions[0]
+	profile := snap.Domain.WorkflowRuns[0].ExecutionProfile
+	if profile == nil || profile.Model != native.Model || profile.ReasoningEffort != native.Effort {
+		return u, errors.New("frozen native model/effort mismatch")
+	}
+	var evidence []byte
+	var err error
+	if p.Chain == "local-codex" {
+		path := filepath.Join(filepath.Dir(p.Database), "runs", e.WorkflowRunID, "turns", e.CurrentCommandID, "appserver.jsonl")
+		raw, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return u, readErr
+		}
+		u, evidence, err = native.AppServerUsage(raw, e.SessionID, e.CurrentTurnID)
+	} else {
+		// Only this project's home is scanned. Exactly one native session must match
+		// the bound workspace; user/global sessions cannot become usage evidence.
+		matches := 0
+		err = filepath.WalkDir(filepath.Join(p.Home, "codex", "sessions"), func(path string, d os.DirEntry, walkErr error) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if d.IsDir() || filepath.Ext(path) != ".jsonl" {
+				return nil
+			}
+			raw, readErr := os.ReadFile(path)
+			if readErr != nil {
+				return readErr
+			}
+			var first struct {
+				Payload struct {
+					Cwd string `json:"cwd"`
+				} `json:"payload"`
+			}
+			line, _, _ := strings.Cut(string(raw), "\n")
+			if json.Unmarshal([]byte(line), &first) != nil || !sameLocalPath(first.Payload.Cwd, e.Workspace.Worktree) {
+				return nil
+			}
+			matches++
+			var parseErr error
+			u, evidence, parseErr = native.RolloutUsage(raw, e.Workspace.Worktree)
+			return parseErr
+		})
+		if err == nil && matches != 1 {
+			err = fmt.Errorf("native rollout matched %d sessions; expected one", matches)
+		}
+	}
+	if err != nil {
+		return u, err
+	}
+	if err := os.WriteFile(filepath.Join(p.Scenario.Output, p.Name+"-"+label+"-usage.jsonl"), evidence, 0600); err != nil {
+		return u, err
+	}
+	if err := controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-"+label+"-usage.json"), u); err != nil {
+		return u, err
+	}
+	return u, nil
+}
+
+// LiveDelivery implements common assertions, not another task state machine.
+// Each top-level test supplies its own ID, chain and isolated environment.
+func LiveDelivery(s *Scenario, chain string, restart bool) {
+	p := s.NewLiveProject("live", chain)
+	p.CreateTasks()
+	p.StartService()
+	p.Claim("a")
+	before := p.WaitPhase("waiting_pr_merge")
+	p.Record("open", before)
+	if before.Helper.PR.State != "open" {
+		s.t.Fatal("native worker did not publish fixture PR")
+	}
+	e := before.Domain.Executions[0]
+	if p.RealPR {
+		if e.PolicyResources == nil || e.PolicyResources.Contract != codexworker.FullAccessPolicyContract || len(e.PolicyResources.WriteRoots) != 0 {
+			s.t.Fatal("L2 live smoke did not bind explicit full-access policy")
+		}
+	}
+	if e.Process == nil || e.Workspace.Worktree == "" || e.TurnNumber != 1 {
+		s.t.Fatal("native execution identity/turn missing")
+	}
+	if chain == "orca-codex" {
+		if e.OrcaNative == nil || len(e.OrcaNative.Turns) != 2 || !e.Environment.Ready || !e.Environment.Preparation.Verified {
+			s.t.Fatal("real Orca readiness/business continuity missing")
+		}
+		for _, turn := range e.OrcaNative.Turns {
+			if !turn.Settled || turn.Outcome != "succeeded" {
+				s.t.Fatal("real Orca turn did not succeed")
+			}
+		}
+	}
+	for _, task := range before.Page.Tasks {
+		if task.TaskID == p.Tasks["b"].ID && (task.DependencyReady || len(task.WorkflowRuns) > 0) {
+			s.t.Fatal("successor released before merge")
+		}
+	}
+	content := ""
+	if p.RealPR {
+		content = p.git(e.Workspace.Worktree, "show", before.Helper.PR.HeadRevision+":result.txt")
+	} else {
+		content = p.git(p.Repo, "--git-dir", p.Remote, "show", before.Helper.PR.HeadRevision+":result.txt")
+	}
+	if content != "real model delivery" {
+		s.t.Fatalf("real native result differs: %q", content)
+	}
+	usage, err := p.NativeUsage(before, "before")
+	s.Must(err)
+	if restart {
+		p.RestartService()
+		after := p.WaitPhase("waiting_pr_merge")
+		p.Record("after-restart", after)
+		a := after.Domain.Executions[0]
+		if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || e.ExecutionID != a.ExecutionID || e.WorkflowRunID != a.WorkflowRunID || e.SessionID != a.SessionID || e.Workspace.Worktree != a.Workspace.Worktree || e.CurrentTurnID != a.CurrentTurnID || e.TurnNumber != a.TurnNumber || len(before.Domain.Attempts) != len(after.Domain.Attempts) {
+			s.t.Fatal("restart replaced execution identity or repeated turn")
+		}
+		afterUsage, err := p.NativeUsage(after, "after-restart")
+		s.Must(err)
+		if usage != afterUsage {
+			s.t.Fatal("restart consumed additional model tokens or replaced session")
+		}
+	}
+	p.Merge()
+	done := p.WaitPhase("completed")
+	p.Record("completed", done)
+	for _, task := range done.Page.Tasks {
+		if task.TaskID == p.Tasks["a"].ID && (task.Status != "closed" || task.Delivery == nil || task.Delivery.SelectedWorkflowRunID != e.WorkflowRunID) {
+			s.t.Fatal("original native delivery missing")
+		}
+		if task.TaskID == p.Tasks["b"].ID && (!task.DependencyReady || task.Status != "open" || len(task.WorkflowRuns) != 0) {
+			s.t.Fatal("successor not ready and unstarted")
+		}
+	}
+	finalUsage, err := p.NativeUsage(done, "final")
+	s.Must(err)
+	if usage != finalUsage {
+		s.t.Fatal("delivery polling consumed additional tokens")
+	}
+	if p.RealPR {
+		if !done.Helper.PR.Merged || done.Helper.PR.State != "merged" {
+			s.t.Fatal("real GitHub PR was not merged")
+		}
+		proof := done.Helper.PR
+		p.RealPRProof = &proof
+	}
+	s.usageVerified = true
+	p.StopService()
+}

@@ -8,6 +8,7 @@ import (
 )
 
 const PolicyContract = "codex-policy-v1:0.159.2:explicit-roots:no-temp:never"
+const FullAccessPolicyContract = "codex-policy-v1:0.159.2:host-write:network-allow:never"
 const PolicyCodexVersion = "codex-cli 0.159.2"
 
 type Permissions struct {
@@ -43,6 +44,12 @@ func CompilePolicy(p executionapi.ExecutionPolicy, goos, host, agent, windowsMod
 	if windowsMode != "" && !ValidWindowsSandbox(windowsMode) {
 		return Permissions{}, fmt.Errorf("codex.windows_sandbox must be elevated or unelevated")
 	}
+	if goos == "windows" && p.Filesystem.WriteScope == "host" && p.Network == "allow" {
+		if windowsMode != "" {
+			return Permissions{}, fmt.Errorf("host write_scope does not use codex.windows_sandbox")
+		}
+		return Permissions{Sandbox: "danger-full-access", NetworkAccess: true, ApprovalPolicy: "never", Contract: FullAccessPolicyContract}, nil
+	}
 	if goos == "windows" && host == "local" && p.Filesystem.WriteScope == "none" && p.Network == "deny" {
 		windowsMode = LocalWindowsSandboxDefault(goos, "read-only", windowsMode)
 		return Permissions{Sandbox: "read-only", WindowsSandbox: windowsMode, ApprovalPolicy: "never", Contract: PolicyContract}, nil
@@ -73,7 +80,10 @@ func VerifyPolicyVersion(version string) error {
 }
 
 func (p Permissions) Args() []string {
-	args := []string{"--config", "sandbox_mode=" + p.Sandbox, "--config", "approval_policy=never", "--config", "windows.sandbox=" + p.WindowsSandbox}
+	args := []string{"--config", "sandbox_mode=" + p.Sandbox, "--config", "approval_policy=never"}
+	if p.WindowsSandbox != "" {
+		args = append(args, "--config", "windows.sandbox="+p.WindowsSandbox)
+	}
 	if !p.NetworkAccess {
 		args = append(args, "--config", `web_search="disabled"`)
 	}

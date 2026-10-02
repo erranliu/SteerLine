@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "digest": "ed99c51940f37b326f16da13942b5b504668363182782b7446282a67259fa3a7",
+  "profile_digest": "0861848debb3ae100ad1a441f09258da53d59dad03ae46bc74e46fffda1afa0d",
+  "native_version": "codex-cli 0.159.2",
+  "contract": "codex-policy-v1:0.159.2:host-write:network-allow:never",
+  "workspace": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2650381655\\smoke.local-codex\\live\\home\\worktrees\\1e58fbfeee7116dcb4c3bb0619502fcb",
+  "write_roots": [],
+  "temporary_roots": [],
+  "settings": {
+    "Executable": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+    "Args": [
+      "--config",
+      "sandbox_mode=danger-full-access",
+      "--config",
+      "approval_policy=never"
+    ],
+    "WorkingDirectory": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2650381655\\smoke.local-codex\\live\\home\\worktrees\\1e58fbfeee7116dcb4c3bb0619502fcb",
+    "EnvironmentRefs": null
+  }
+}

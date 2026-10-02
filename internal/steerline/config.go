@@ -421,8 +421,8 @@ func (c *Config) preflightNative(ctx context.Context) error {
 	}
 	codex := codexProfileSettings(*c)
 	orca := orcaProfileSettings(*c)
-	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() == "orca" && (codex.Profile != "" || c.ExecutionPolicy.Filesystem.WriteScope != "workspace-write") {
-		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "Orca requires workspace-write and no Codex profile"}
+	if c.WorkflowProtocol == WorkerFlowVersion && c.hostName() == "orca" && (codex.Profile != "" || (c.ExecutionPolicy.Filesystem.WriteScope != "workspace" && c.ExecutionPolicy.Filesystem.WriteScope != "host")) {
+		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "Orca requires a supported project policy and no Codex profile"}
 	}
 	if c.hostName() == "local" && c.agentName() != "codex" {
 		return errors.New("local_process currently supports only agent=codex")

@@ -174,7 +174,7 @@ func DecodePolicyResourceEnvelope(envelope executionapi.ImplementationDataEnvelo
 	if err := decoder.Decode(new(any)); err != io.EOF {
 		return PolicyResourcePayload{}, errors.New("permission resource payload has trailing JSON")
 	}
-	if payload.Contract != PolicyContract || VerifyPolicyVersion(payload.NativeVersion) != nil || payload.Settings.Executable == "" {
+	if (payload.Contract != PolicyContract && payload.Contract != FullAccessPolicyContract) || VerifyPolicyVersion(payload.NativeVersion) != nil || payload.Settings.Executable == "" {
 		return PolicyResourcePayload{}, errors.New("permission resource evidence is incomplete or unsupported")
 	}
 	return payload, nil

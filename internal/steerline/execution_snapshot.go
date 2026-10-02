@@ -41,8 +41,12 @@ func verifyPolicyResources(p *contracts.PolicyResources, profileDigest, workspac
 		record := records[0]
 		identity = codexworker.PolicyResourceIdentity{ProjectID: record.ProjectIdentity, ExecutionID: record.ExecutionID, AttemptID: record.CurrentAttemptID, Generation: record.Generation, ConfigDigest: record.ConfigurationDigest}
 	}
-	if _, err := codexworker.DecodePolicyResourceEnvelope(p.ImplementationData, identity); err != nil {
+	decoded, err := codexworker.DecodePolicyResourceEnvelope(p.ImplementationData, identity)
+	if err != nil {
 		return fmt.Errorf("execution policy resource codec rejected its binding: %w", err)
+	}
+	if decoded.Contract == codexworker.FullAccessPolicyContract && len(p.WriteRoots) != 0 {
+		return errors.New("full access policy must not claim bounded writable roots")
 	}
 	return nil
 }

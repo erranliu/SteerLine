@@ -32,6 +32,7 @@ type options struct {
 	level          string
 	suite          string
 	e2eEnv         string
+	scenario       string
 }
 
 type environment struct {
@@ -235,7 +236,8 @@ func parseOptions(args []string) (options, error) {
 	flags.IntVar(&opts.workers, "workers", 1, "complete test suite processes: 1 or 3")
 	flags.StringVar(&opts.level, "level", "", "test level: L1, L2 or L3")
 	flags.StringVar(&opts.suite, "suite", "", "comma-separated L3 suites")
-	flags.StringVar(&opts.e2eEnv, "env", "", "E2E environment: controlled")
+	flags.StringVar(&opts.e2eEnv, "env", "", "E2E environment: controlled, live (L3), gated (L2 default)")
+	flags.StringVar(&opts.scenario, "scenario", "", "comma-separated L3 scenario IDs")
 	if err := flags.Parse(toolArgs); err != nil {
 		return opts, fmt.Errorf("test-feedback options: %w", err)
 	}
@@ -256,11 +258,11 @@ func parseOptions(args []string) (options, error) {
 	}
 	switch opts.level {
 	case "":
-		if seenOptions["suite"] || seenOptions["env"] {
+		if seenOptions["suite"] || seenOptions["env"] || seenOptions["scenario"] {
 			return opts, fmt.Errorf("-suite/-env require -level")
 		}
 	case "L1":
-		if seenOptions["quick"] || seenOptions["suite"] || seenOptions["env"] {
+		if seenOptions["quick"] || seenOptions["suite"] || seenOptions["env"] || seenOptions["scenario"] {
 			return opts, fmt.Errorf("L1 does not accept quick, suite or env")
 		}
 		opts.quick = true
@@ -273,16 +275,16 @@ func parseOptions(args []string) (options, error) {
 		if len(goArgs) > 0 {
 			return opts, fmt.Errorf("E2E does not accept raw Go arguments")
 		}
-		if opts.level == "L2" && seenOptions["suite"] {
+		if opts.level == "L2" && (seenOptions["suite"] || seenOptions["scenario"]) {
 			return opts, fmt.Errorf("L2 has a fixed smoke selection")
 		}
 		if opts.level == "L3" && opts.suite == "" {
 			return opts, fmt.Errorf("L3 requires -suite")
 		}
-		if opts.e2eEnv == "" {
-			opts.e2eEnv = "controlled"
+		if opts.e2eEnv == "" && opts.level == "L2" {
+			opts.e2eEnv = "gated"
 		}
-		if opts.e2eEnv != "controlled" {
+		if opts.e2eEnv != "controlled" && !(opts.level == "L2" && opts.e2eEnv == "gated") && !(opts.level == "L3" && opts.e2eEnv == "live") {
 			return opts, fmt.Errorf("unsupported E2E environment %q", opts.e2eEnv)
 		}
 	default:
