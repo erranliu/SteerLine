@@ -18,6 +18,7 @@ func TestCD65SourceCommitAndHostGate(t *testing.T) {
 	t.Run("failed_live_source_does_not_advance_committed_mapper_or_cursor", TestConversationLiveSourceFailureKeepsGapAndMapperPosition)
 	t.Run("host_fact_becomes_a_center_manual_gate", testCD65HostGateKeepsTrustedActionSeparate)
 	t.Run("active_and_historical_source_budgets_rotate", TestCD65HistoryBudgetRotatesSources)
+	t.Run("discovery_cannot_write_a_different_owner", testCD65DiscoveryRejectsForeignOwner)
 	t.Run("native_source_replacement_retains_attempt_evidence", TestCD64NativeSourceReplacementRetainsEvidence)
 }
 
@@ -174,4 +175,38 @@ func testHistorySource(identity string, ended bool) contracts.ConversationHistor
 		AttemptID: "attempt-" + identity, Source: "fixture-history", SourceRole: contracts.ConversationSourceFallback, SourceSegment: identity, SourceIdentity: identity, SourceEventQuality: IdentityDerived,
 		SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown, Phase: MessagePhaseUnknown, Type: ConversationSession, SourceEventID: "session:" + identity, ReceivedAt: now()}
 	return contracts.ConversationHistorySource{Identity: identity, Event: event, Ended: ended}
+}
+
+type foreignConversationDiscovery struct {
+	contracts.ConversationSourcePort
+	event ConversationEvent
+}
+
+func (p foreignConversationDiscovery) DiscoverHistory(context.Context, contracts.ConversationDiscovery) (contracts.ConversationDiscoveryResult, error) {
+	return contracts.ConversationDiscoveryResult{Writes: []ConversationWrite{{Event: p.event}}}, nil
+}
+func testCD65DiscoveryRejectsForeignOwner(t *testing.T) {
+	store, err := OpenSQLiteStore(t.TempDir() + "/discovery-owner.db")
+	require(t, err)
+	defer store.Close()
+	id, attempt := strings.Repeat("a", 32), strings.Repeat("b", 32)
+	event := testHistorySource("foreign", false).Event
+	event.ProjectID = "other-project"
+	event.ExecutionID = id
+	event.AttemptID = attempt
+	service := &Service{Config: Config{identity: "project", RunDir: t.TempDir()}, domainStore: store, conversationSources: foreignConversationDiscovery{event: event}, runs: []*Run{{RunID: "workflow", ExecutionID: id, AttemptID: attempt, DomainTaskID: "task"}}}
+	if _, err := service.discoverConversationHistory(context.Background()); err == nil {
+		t.Fatal("discovery committed a foreign project's diagnostic")
+	}
+	var count int
+	require(t, store.db.QueryRow(`SELECT COUNT(*) FROM conversation_events`).Scan(&count))
+	if count != 0 {
+		t.Fatal("rejected discovery leaked a write before its owner was checked")
+	}
+	event.ProjectID = "project"
+	event.AttemptID = "unknown-attempt"
+	service.conversationSources = foreignConversationDiscovery{event: event}
+	if _, err := service.discoverConversationHistory(context.Background()); err == nil {
+		t.Fatal("discovery accepted an unowned attempt")
+	}
 }

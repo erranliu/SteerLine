@@ -41,12 +41,44 @@ func (s *Service) discoverConversationHistory(ctx context.Context) ([]contracts.
 	if err != nil {
 		return nil, err
 	}
+	for _, write := range result.Writes {
+		if err = validateDiscoveredConversationOwner(discovery, write.Event); err != nil {
+			return nil, err
+		}
+	}
+	for _, source := range result.Sources {
+		if err = validateDiscoveredConversationOwner(discovery, source.Event); err != nil {
+			return nil, err
+		}
+	}
 	if len(result.Writes) > 0 {
 		if _, err = s.domainStore.CommitConversation(ctx, result.Writes, ConversationCheckpoint{}); err != nil {
 			return nil, err
 		}
 	}
 	return result.Sources, nil
+}
+
+func validateDiscoveredConversationOwner(discovery contracts.ConversationDiscovery, event ConversationEvent) error {
+	if event.ProjectID != discovery.ProjectID {
+		return errors.New("conversation discovery changed its original project")
+	}
+	for _, run := range discovery.Runs {
+		if run.Base.WorkflowID != event.WorkflowID || run.Base.ExecutionID != event.ExecutionID {
+			continue
+		}
+		known := run.Base.AttemptID != "" && run.Base.AttemptID == event.AttemptID
+		for _, attempt := range run.Attempts {
+			known = known || attempt.AttemptID != "" && attempt.AttemptID == event.AttemptID
+		}
+		if !known {
+			return errors.New("conversation discovery changed its original attempt")
+		}
+		expected := run.Base
+		expected.AttemptID = event.AttemptID
+		return validateConversationSourceWrites(expected, []ConversationWrite{{Event: event}})
+	}
+	return errors.New("conversation discovery returned an unknown original execution")
 }
 
 func (s *Service) collectConversationHistoryPage(ctx context.Context, source contracts.ConversationHistorySource) (bool, error) {

@@ -69,3 +69,13 @@ fatal: Could not read from remote repository.
 完全访问环境第一份组合报告 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261002T063652.289809400Z/summary.json` 真实失败（363.0s）。它不再受 sandbox Git 拒绝阻断：失败包含初始宿主状态、准备身份、公开 history 接线/夹具缺口，均需实修，无验收豁免。
 
 后续定向诊断已通过中心全部 CD65（127.727s）、原生外层会话/恢复流程（该组局部成功）、公开历史单用例（17.391s），以及恢复的历史 fixture、来源 position 原归属/未知版本/摘要及 pending-anchor 拒绝、宿主动作与实现编译。诊断时源码仍在修复，不能将它们标作最终 SHA 完整验收。最终 head 的组合 quick/JSON 命中还需完成。
+
+### 最终审核补充
+
+来源发现返回的 sources/诊断 writes 也需在写入前匹配中心给出的 Project/Workflow/Execution/已知 Attempt，不能以仅符合 DTO 形状越过归属核验。新中性故障用例证明被拒绝的发现没有泄漏跨项目写入。
+
+此前 root 的 `TestCodexHistoryRealFailedAcceptance`、`TestCodexHistoryNativeAcceptance`、`TestCodexHistoryRealSourceReplacement` 的原可选开关与正文/raw/能力/重开幂等断言保留在外层 `conversation_native_acceptance_test.go`，通过实现-owned public-history 端口及既有公共 Store/Query 接口读取精确的调用者提供的探针绑定。此次只编译它们，不启用开关、不调用真实产品 CLI或发现用户会话。
+
+旧 `bindLocalCodexHistory` 没有当前产品消费者：当前唯一 native 产品任务流注册 local app-server；`SpawnerFor/LocalSpawner` 只有定义和直接测试使用。原始 JSONL 的当前格式 marker/映射/重放仍保留在实现侧；不添加旧 minimal/exec 产品任务或兼容读取。#66 接手唯一默认装配（含 launcher）和遗留装配/辅助定义的实际消费者审查，#67 接手中心业务规则中余下的协议 fixture 归位和最终零关键字守卫。原 source replacement 的实际 Attempt 提交和准备/业务资格断言保持当前 CD65 命中。
+
+完整组合 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261002T075514.734700900Z/summary.json` 在 clean `f828ba94355d5522f029264703207bed22f590d5` 通过，244.35s：core 6/6、rules 90/90、targeted 28/28，未失败/跳过。后续增加来源发现归属拒绝及保留可选 native 入口后，再对最终提交执行同一组合验收；前一通过记录不冒称后续 SHA。
