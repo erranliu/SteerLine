@@ -1,0 +1,40 @@
+{
+  "cleanup_complete": true,
+  "cleanup_errors": null,
+  "components": {
+    "provider": "github/erranliu/SteerlineTest",
+    "worker": "local-codex"
+  },
+  "context_error": "context deadline exceeded",
+  "finished_at": "2026-10-02T05:37:06.5371283Z",
+  "id": "smoke.local-codex",
+  "passed": false,
+  "real_pr": null,
+  "resources": [
+    {
+      "created_at": "2026-10-02T05:26:59.4667788Z",
+      "kind": "project",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2130082157\\smoke.local-codex\\live",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-02T05:27:00.3382157Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-smoke-rebase185-20261002-132533\\build\\controlled-helper.exe",
+      "pid": 39384
+    },
+    {
+      "created_at": "2026-10-02T05:27:06.7978284Z",
+      "kind": "github-base-branch",
+      "path": "codex/e2e/4d9ec40636754d1a9022fa9fc68d9756/smoke.local-codex/base",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-02T05:27:18.3539113Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-smoke-rebase185-20261002-132533\\build\\steerline.exe",
+      "pid": 27620
+    }
+  ],
+  "usage_verified": false
+}
