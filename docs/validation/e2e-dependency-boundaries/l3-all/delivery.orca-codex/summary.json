@@ -1,0 +1,125 @@
+{
+  "scope": "e2e",
+  "level": "L3",
+  "env": "live",
+  "environment": {
+    "source_commit": "5ebf7044580aa4b9f623f4520b4cba29f5758f5b",
+    "worktree_status": " M docs/spec/e2e-dependency-boundaries.plan.md\n?? docs/validation/e2e-dependency-boundaries/l3-all/controlled/delivery.basic/scenario.json\n?? docs/validation/e2e-dependency-boundaries/l3-all/controlled/recovery.waiting-merge-restart/scenario.json\n?? docs/validation/e2e-dependency-boundaries/l3-all/controlled/summary.json",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native gpt-6-luna/medium; loopback provider"
+  },
+  "selected_scenarios": [
+    {
+      "id": "delivery.orca-codex",
+      "level": "L3",
+      "suite": "delivery",
+      "package": "./tests/e2e/live",
+      "test": "TestDeliveryOrcaCodex",
+      "env": "live",
+      "chain": "orca-codex"
+    }
+  ],
+  "groups": [
+    {
+      "id": "e2e-1",
+      "command": [
+        "go",
+        "test",
+        "-tags=e2e",
+        "-json",
+        "-count=1",
+        "-p=1",
+        "-parallel=1",
+        "-timeout=35m",
+        "-run=^(TestDeliveryOrcaCodex)$",
+        "./tests/e2e/live"
+      ],
+      "assigned_tests": [
+        "TestDeliveryOrcaCodex"
+      ],
+      "assigned_packages": [
+        "./tests/e2e/live"
+      ],
+      "stdout_json_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-all-delivery-orca-20261002-173533\\e2e-1.jsonl",
+      "stderr_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-all-delivery-orca-20261002-173533\\e2e-1.stderr.txt",
+      "wall_seconds": 268.7309154,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "status": "pass",
+            "elapsed_seconds": 267.319
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "name": "TestDeliveryOrcaCodex",
+            "status": "pass",
+            "elapsed_seconds": 266.58
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/live",
+            "name": "TestDeliveryOrcaCodex",
+            "status": "pass",
+            "elapsed_seconds": 266.58
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 267.3147921,
+        "has_test_event_wall": true
+      }
+    }
+  ],
+  "build_sha256": {
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-all-delivery-orca-20261002-173533\\build\\controlled-helper.exe": "50c593cb586a11cbd473cb2cb81f7c46f7506e8aa0e4890e55f435a54c507dc3",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l3-all-delivery-orca-20261002-173533\\build\\steerline.exe": "e40718e582467d964cd80d3e623e7c3290e3b69139d3253844b5824d81fdbb5c"
+  },
+  "preparation_seconds": 4.1720246,
+  "execution_seconds": 268.7637773,
+  "passed": true,
+  "cleanup_complete": true,
+  "errors": null,
+  "started_at": "2026-10-02T09:35:33.7855912Z",
+  "finished_at": "2026-10-02T09:40:07.1295375Z",
+  "coverage": "selected-L3"
+}
