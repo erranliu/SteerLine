@@ -646,6 +646,12 @@ type LifecycleExecutePort interface {
 	Execute(context.Context, LifecycleRequest) (LifecycleReceipt, LifecycleObserver, error)
 }
 
+// LifecyclePreparationOwner optionally retains a native connection between
+// preparation and the committed first turn. Release does not stop the process.
+type LifecyclePreparationOwner interface {
+	ReleasePreparation()
+}
+
 type LifecycleReconcilePort interface {
 	Reconcile(context.Context, LifecycleRequest) (LifecycleReceipt, LifecycleObserver, error)
 }

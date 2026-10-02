@@ -1418,6 +1418,9 @@ func sameLifecycleStrings(a, b []string) bool {
 }
 
 func (s *Service) launchAppServerLifecycle(ctx context.Context, runID string, lifecycle executionapi.LifecyclePort, request executionapi.LifecycleRequest, reconcile bool) {
+	if owner, ok := lifecycle.(executionapi.LifecyclePreparationOwner); ok {
+		defer owner.ReleasePreparation()
+	}
 	var receipt executionapi.LifecycleReceipt
 	var observer executionapi.LifecycleObserver
 	var executeErr error

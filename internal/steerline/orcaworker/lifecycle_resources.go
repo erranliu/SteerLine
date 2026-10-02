@@ -342,7 +342,7 @@ func (l *ExecutionLifecycle) bindAgent(ctx context.Context, request executionapi
 	if process.Terminal == "" {
 		return nativeReceipt(request, executionapi.OperationRejected)
 	}
-	err = VerifyAgentTerminal(ctx, l.client.MetaCall, process, worktree.Path, strings.TrimPrefix(worktree.Branch, "refs/heads/"), "codex")
+	err = AwaitFixedAgentTerminal(ctx, l.client.MetaCall, process, worktree.Path, strings.TrimPrefix(worktree.Branch, "refs/heads/"), "codex", positiveDuration(l.orca.WaitTimeout, 2*time.Minute))
 	if err != nil {
 		receipt.Diagnostic = err.Error()
 		return receipt
