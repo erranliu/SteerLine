@@ -90,7 +90,9 @@ func (p *additionalPort) PreflightLifecycle(_ context.Context, setup executionap
 	return additionalReport(setup.Snapshot.Ref), nil
 }
 func (p *additionalPort) PolicyCapabilities() executionapi.LifecyclePolicyCapabilities {
-	return executionapi.LifecyclePolicyCapabilities{ResumeActiveObservation: true, ActiveTurnFeedback: true}
+	// The injected builder binds a read-only policy envelope with no write
+	// roots. Session creation still needs this original resource receipt.
+	return executionapi.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
 }
 func (p *additionalPort) Next(_ context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.LifecycleCandidate, error) {
 	if snapshot.Workspace.Path == "" {
@@ -157,6 +159,7 @@ func (p *additionalPort) Execute(ctx context.Context, request executionapi.Lifec
 			return receipt, nil, errors.New("fixture answer changed original question")
 		}
 		value.Answers[request.Input.Feedback.QuestionID] = *request.Input.Feedback
+		value.Settled = true
 		receipt.Disposition = executionapi.OperationConfirmed
 		receipt.State = executionapi.LifecycleStateFacts{InputAccepted: true, TurnID: request.Snapshot.Session.CurrentTurnID}
 	default:
@@ -207,6 +210,12 @@ func (p *additionalPort) ObserveLifecycle(_ context.Context, snapshot executiona
 	}
 	if _, exists := value.Inputs[snapshot.Session.CurrentTurnID]; !exists {
 		return executionapi.LifecycleReceipt{}, nil, errors.New("fixture observation has no persistent original input")
+	}
+	if value.Settled {
+		turn := snapshot.Session.CurrentTurnID
+		return executionapi.LifecycleReceipt{Disposition: executionapi.OperationConfirmed, Process: &value.Process,
+			State:        executionapi.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation, TurnID: turn, TurnCompleted: true},
+			TurnEvidence: &executionapi.TurnEvidence{SourcePath: p.ledger.path, SessionID: value.Session, TurnID: turn, CommandID: turn, Started: true, Completed: true, Succeeded: true}}, nil, nil
 	}
 	return executionapi.LifecycleReceipt{Disposition: executionapi.OperationConfirmed, Process: &value.Process, State: executionapi.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation, TurnID: snapshot.Session.CurrentTurnID}}, p.observer(snapshot, value, snapshot.Session.CurrentTurnID), nil
 }
@@ -275,7 +284,7 @@ func (p *additionalPort) observer(snapshot executionapi.LifecycleSnapshot, value
 		for _, fact := range []executionapi.EventFact{{Kind: executionapi.EventStarted, SessionID: value.Session, StartedTurnID: turn}, {Kind: executionapi.EventQuestion, QuestionRoute: &route, Questions: []executionapi.Question{question}}} {
 			ack := make(chan error, 1)
 			select {
-			case o.events <- executionapi.LifecycleEvent{Fact: fact, Persisted: ack}:
+			case o.events <- executionapi.LifecycleEvent{Fact: fact, Kind: string(fact.Kind), Status: "observed", Title: "Fixture " + string(fact.Kind), Persisted: ack}:
 			case <-o.closed:
 				return
 			}
@@ -299,7 +308,7 @@ func (p *additionalPort) observer(snapshot executionapi.LifecycleSnapshot, value
 		}
 		ack := make(chan error, 1)
 		select {
-		case o.events <- executionapi.LifecycleEvent{Fact: executionapi.EventFact{Kind: executionapi.EventCompleted, Completed: true, Matched: true, Outcome: "completed"}, Persisted: ack}:
+		case o.events <- executionapi.LifecycleEvent{Fact: executionapi.EventFact{Kind: executionapi.EventCompleted, Completed: true, Matched: true, Outcome: "completed"}, Kind: "completed", Status: "completed", Title: "Fixture completed", Persisted: ack}:
 		case <-o.closed:
 			return
 		}
