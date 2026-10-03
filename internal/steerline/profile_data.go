@@ -34,10 +34,6 @@ func (c Config) DecodeImplementationConfig(key string) ([]byte, error) {
 	return implementationProfilePayload(c, key)
 }
 
-// ConfigurationProjectIdentity returns the resolved or canonical project key
-// used to bind accepted implementation envelopes.
-func (c Config) ConfigurationProjectIdentity() string { return configurationProjectIdentity(c) }
-
 func validateImplementationProfileData(c Config) error {
 	if c.ExecutionDirectory == nil {
 		return errors.New("execution directory is required")

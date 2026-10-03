@@ -39,7 +39,3 @@ func ClassifyRecovery(f RecoveryFacts) RecoveryDisposition {
 	}
 	return RecoveryUnverified
 }
-
-func (d RecoveryDisposition) MayReplaceWorker() bool {
-	return d == RecoveryInterrupted || d == RecoveryCompleted
-}

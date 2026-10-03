@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -22,7 +23,7 @@ func TestAddNativeTaskPredecessorsIsAtomicIdempotentAndBlocksClaim(t *testing.T)
 	}
 	replayed, err := commands.AddNativeTaskPredecessors(ctx, c, input)
 	require(t, err)
-	if replayed.GraphRevision != receipt.GraphRevision || !sameStrings(replayed.PredecessorIDs, receipt.PredecessorIDs) {
+	if replayed.GraphRevision != receipt.GraphRevision || !slices.Equal(replayed.PredecessorIDs, receipt.PredecessorIDs) {
 		t.Fatalf("addition was not idempotent: %+v / %+v", replayed, receipt)
 	}
 	page, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "102")

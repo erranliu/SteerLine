@@ -1,0 +1,416 @@
+[
+  {
+    "file": "internal/steerline/orcaworker/binding.go",
+    "name": "AwaitAgentTerminal",
+    "kind": "func",
+    "action": "unused",
+    "line": 95,
+    "lines": 24,
+    "sha256": "a1c77b2ebbe6e1e9482cfa31467e7e06acf2608bfc01b1cf3af78f5859497225"
+  },
+  {
+    "file": "internal/steerline/orcaworker/message_identity.go",
+    "name": "MessageIdentity",
+    "kind": "func",
+    "action": "unused",
+    "line": 8,
+    "lines": 18,
+    "sha256": "46031e2ea2758ffcaa953c81cb4f5a4a4f69d1ab9907a8e2c274239b8e7ba003"
+  },
+  {
+    "file": "internal/steerline/orcaworker/saved_receipt.go",
+    "name": "SavedAgentHandle",
+    "kind": "func",
+    "action": "unused",
+    "line": 5,
+    "lines": 18,
+    "sha256": "136362b68c0d3192f822593bac57250603a4b2884ccd2e90adea104ade3ca3e1"
+  },
+  {
+    "file": "internal/steerline/codexworker/history_binding.go",
+    "name": "WriteConversationSourceMarker",
+    "kind": "func",
+    "action": "unused",
+    "line": 106,
+    "lines": 17,
+    "sha256": "bfad0752d3d1c64a7a3e40ccaaf077c3c601404d03cf748e4ee06b5a57856c0e"
+  },
+  {
+    "file": "internal/steerline/recovery.go",
+    "name": "recalculateCurrentReservation",
+    "kind": "func",
+    "action": "unused",
+    "line": 111,
+    "lines": 15,
+    "sha256": "e3f9d0d777f8d9df3e01549a95e593296e5bee6f8f2f100f0de73a9f5f553d27"
+  },
+  {
+    "file": "internal/steerline/activityview/render.go",
+    "name": "statusColor",
+    "kind": "func",
+    "action": "unused",
+    "line": 48,
+    "lines": 13,
+    "sha256": "d52804488192b8b0a7d99b135fc3b417fdf40c1506ec853dfa9ce24a2716dca5"
+  },
+  {
+    "file": "internal/steerline/console/view.go",
+    "name": "ptrString",
+    "kind": "func",
+    "action": "unused",
+    "line": 992,
+    "lines": 9,
+    "sha256": "ef2a2b1f0469383f58aea55477476d610398ca0b0f8d08fc5a2e6d817cc380ca"
+  },
+  {
+    "file": "internal/steerline/service_commit.go",
+    "name": "commitOperation",
+    "kind": "func",
+    "action": "unused",
+    "line": 270,
+    "lines": 9,
+    "sha256": "9310f6dbb25ed365c7ed03cc2cf18af86730b3141109bd440b8c63183634a4f8"
+  },
+  {
+    "file": "internal/steerline/codexworker/policy_resources.go",
+    "name": "ProfileExecutable",
+    "kind": "func",
+    "action": "unused",
+    "line": 70,
+    "lines": 7,
+    "sha256": "7142a884a13ba1a2800dbf837a7f8280aadc1653a9e70b8db23daaf22cda9138"
+  },
+  {
+    "file": "internal/steerline/orcaworker/events.go",
+    "name": "VerifyLiveDispatch",
+    "kind": "func",
+    "action": "unused",
+    "line": 34,
+    "lines": 7,
+    "sha256": "1a48b36497650f11dfb91c460acd76482eb1c3faff8866a468a80053d2f310b9"
+  },
+  {
+    "file": "internal/steerline/service.go",
+    "name": "errorString",
+    "kind": "func",
+    "action": "unused",
+    "line": 432,
+    "lines": 6,
+    "sha256": "87bf82e60987d382cf1e0015154000287b612080018b226b6bddb4316da8f741"
+  },
+  {
+    "file": "internal/steerline/decision.go",
+    "name": "decisionAnswerDigest",
+    "kind": "func",
+    "action": "unused",
+    "line": 442,
+    "lines": 6,
+    "sha256": "08f043e6f710a0c41b80781a08ec59593e9a413c44910c71c18d06c0dd9a93fe"
+  },
+  {
+    "file": "internal/steerline/codexworker/backend.go",
+    "name": "ValidateSession",
+    "kind": "func",
+    "action": "unused",
+    "line": 219,
+    "lines": 6,
+    "sha256": "b474ba14a19f0879bb7e2f70f05498e4dfbb41bb7a77b72f3010480c55e5ee1d"
+  },
+  {
+    "file": "internal/steerline/control_service.go",
+    "name": "findStopRequest",
+    "kind": "func",
+    "action": "unused",
+    "line": 547,
+    "lines": 4,
+    "sha256": "25946cc6e3f80668ffc0f4cbef2f7b26bf2833014541ccccf90fcf5d7834d8ef"
+  },
+  {
+    "file": "internal/steerline/activity.go",
+    "name": "recoverActivitySeq",
+    "kind": "func",
+    "action": "unused",
+    "line": 107,
+    "lines": 7,
+    "sha256": "46b433422f42d73a7f36f2b86df43021d083d841e7c880de3593ee370caa9e8f"
+  },
+  {
+    "file": "internal/steerline/sqlite/sqlite_store_write.go",
+    "name": "isConstraintError",
+    "kind": "func",
+    "action": "unused",
+    "line": 56,
+    "lines": 3,
+    "sha256": "e925c5fdfda2875678209aff433be1c556d68bf7ceae26bcfe009ce98c0ae1c2"
+  },
+  {
+    "file": "internal/steerline/domain.go",
+    "name": "SetTaskStatus",
+    "kind": "func",
+    "action": "unused",
+    "line": 43,
+    "lines": 3,
+    "sha256": "3afb1ee176cc66a3f743ebf96bc5a52b5f182efff3abcaae339496fd3f7f7d06"
+  },
+  {
+    "file": "internal/steerline/workerflow/recovery.go",
+    "name": "MayReplaceWorker",
+    "kind": "func",
+    "action": "unused",
+    "line": 43,
+    "lines": 3,
+    "sha256": "c56f9a45a64958019f671f60ed125cde16afd6e77a20cd5a65c35faaedc514e2"
+  },
+  {
+    "file": "internal/steerline/execution_profiles.go",
+    "name": "effective",
+    "kind": "func",
+    "action": "unused",
+    "line": 278,
+    "lines": 1,
+    "sha256": "baf3b6869c8dc5b8513f9cf0de2550199292529c77607ac784723fa8f461c3c2"
+  },
+  {
+    "file": "internal/steerline/orcaworker/profile_config.go",
+    "name": "ValidateProfileConfig",
+    "kind": "func",
+    "action": "unused",
+    "line": 95,
+    "lines": 1,
+    "sha256": "72a4f1d59f1980051350f7167012c332d1deab614a8aaef6ccb57a823dad47a6"
+  },
+  {
+    "file": "internal/steerline/profile_data.go",
+    "name": "ConfigurationProjectIdentity",
+    "kind": "func",
+    "action": "unused",
+    "line": 37,
+    "lines": 3,
+    "sha256": "83dacf03b688fb1ce83f01af72427142f89236e62416dbab351c3c62acacc227"
+  },
+  {
+    "file": "internal/steerline/native_task_page.go",
+    "name": "canonicalDecimalID",
+    "kind": "func",
+    "action": "unused",
+    "line": 11,
+    "lines": 1,
+    "sha256": "f99ac5ac4fbccb9eb926834deb2199d0f2145e1cf70099ffef7f7e4c36060773"
+  },
+  {
+    "file": "internal/steerline/render.go",
+    "name": "ColorEnabled",
+    "kind": "func",
+    "action": "unused",
+    "line": 31,
+    "lines": 3,
+    "sha256": "238a5374bb4f495a0e7bc922c670efc72566131224bac21f99edc98dfb7c0d1a"
+  },
+  {
+    "file": "internal/steerline/decision.go",
+    "name": "DecisionSummary",
+    "kind": "func",
+    "action": "unused",
+    "line": 429,
+    "lines": 1,
+    "sha256": "acccb9d797530cc72fb2f6509f3205a4504357c6cddf8fffd13e50633f776267"
+  },
+  {
+    "file": "internal/steerline/control_client.go",
+    "name": "NewControlRequestID",
+    "kind": "func",
+    "action": "unused",
+    "line": 96,
+    "lines": 4,
+    "sha256": "a3340ad58c659ace3729cd9c66dc9582c7dbebab9460063eccc86511873c665e"
+  },
+  {
+    "file": "internal/steerline/config.go",
+    "name": "trimBOM",
+    "kind": "func",
+    "action": "unused",
+    "line": 99,
+    "lines": 3,
+    "sha256": "cca202df24402f6cbf20a881d12ba7d9db1ffa69829ce769fb7b3a3fa7c627ea"
+  },
+  {
+    "file": "internal/steerline/codexworker/history_binding.go",
+    "name": "LocalCommandJournalSegment",
+    "kind": "func",
+    "action": "unused",
+    "line": 26,
+    "lines": 1,
+    "sha256": "1fd58e0d0305d2e88e9d72220cd198e362e1650afd674b86c264e6fc8f5c9190"
+  },
+  {
+    "file": "internal/steerline/codexworker/params.go",
+    "name": "stableCommandID",
+    "kind": "func",
+    "action": "deduplicate",
+    "line": 41,
+    "lines": 11,
+    "sha256": "1ff54592c4efb4835a4b53e6df66a1ac3f5c772e2118300509cc3944f876b5c3"
+  },
+  {
+    "file": "internal/steerline/orcaworker/command.go",
+    "name": "stableID",
+    "kind": "func",
+    "action": "deduplicate",
+    "line": 14,
+    "lines": 11,
+    "sha256": "f57c313fba100dabb4d4d85a7bcb420b44e5b0807aa048d61bc8fc6817214abf"
+  },
+  {
+    "file": "internal/steerline/workerflow/prompt.go",
+    "name": "stableID",
+    "kind": "func",
+    "action": "deduplicate",
+    "line": 12,
+    "lines": 11,
+    "sha256": "f57c313fba100dabb4d4d85a7bcb420b44e5b0807aa048d61bc8fc6817214abf"
+  },
+  {
+    "file": "internal/steerlineapp/directory.go",
+    "name": "stableTurnID",
+    "kind": "func",
+    "action": "deduplicate",
+    "line": 142,
+    "lines": 11,
+    "sha256": "85511ee55f0c8ec768931d31d40a92a3d7db94965328208da98f179c51cd2ef1"
+  },
+  {
+    "file": "internal/steerline/conversation_sources.go",
+    "name": "sameConversationCapabilities",
+    "kind": "func",
+    "action": "deduplicate",
+    "line": 185,
+    "lines": 11,
+    "sha256": "4070151aab001057a1df00d77fe23731440a84538a49ebcc98d6e3d1b2c434af"
+  },
+  {
+    "file": "internal/steerline/execution_helpers.go",
+    "name": "sameStrings",
+    "kind": "func",
+    "action": "deduplicate",
+    "line": 120,
+    "lines": 11,
+    "sha256": "846dce7a30230e2eb4e9a2bec2c1f65efd2abe527bb4056e3ef59a16c5b0f189"
+  },
+  {
+    "file": "internal/steerline/worker_lifecycle.go",
+    "name": "sameLifecycleStrings",
+    "kind": "func",
+    "action": "deduplicate",
+    "line": 1423,
+    "lines": 11,
+    "sha256": "59fd7bb5ee9e542aee43d5a3e18686aadf042f3a2010c2f7d13fff67c363ccad"
+  },
+  {
+    "file": "internal/steerline/decision.go",
+    "name": "decisionAnswerSummary",
+    "kind": "func",
+    "action": "deduplicate",
+    "line": 411,
+    "lines": 17,
+    "sha256": "b70bb771dedf99d7973810092d5ba625b56f80d9b8b74722000aed9dc5051faa"
+  },
+  {
+    "file": "internal/steerline/console/presentation.go",
+    "name": "decisionSummary",
+    "kind": "func",
+    "action": "deduplicate",
+    "line": 20,
+    "lines": 17,
+    "sha256": "b024732c878f76c09fa4bce889495fadc778c2b835b237c25f021b1566d49042"
+  },
+  {
+    "file": "internal/steerline/codexworker/history_binding.go",
+    "name": "decodeConversationSourceValue",
+    "kind": "func",
+    "action": "deduplicate",
+    "line": 218,
+    "lines": 12,
+    "sha256": "2dd5a9545e63732d28697e8395396f3b7e30621a01e2c75a56ea1ce539bbd81e"
+  },
+  {
+    "file": "internal/steerline/config.go",
+    "name": "Skill",
+    "kind": "decl",
+    "action": "unused",
+    "line": 20,
+    "lines": 4,
+    "sha256": "fb79b1dc86aa55dcfb10c4d1d5180a0dee279f50d0208b1e0bf7904f6a394bbd"
+  },
+  {
+    "file": "internal/steerline/native_graph_types.go",
+    "name": "TaskGraphNode",
+    "kind": "decl",
+    "action": "unused",
+    "line": 7,
+    "lines": 1,
+    "sha256": "ab196974442583f47ad0d3c427833f2199a72f6f4fd03401602d1ca73a438095"
+  },
+  {
+    "file": "internal/steerline/native_graph_types.go",
+    "name": "TaskGraphEdge",
+    "kind": "decl",
+    "action": "unused",
+    "line": 8,
+    "lines": 1,
+    "sha256": "2aa5681d077270783441a0b8f81bb588a26b603b93acd4fc1f3b1d31116c5fdf"
+  },
+  {
+    "file": "internal/steerline/native_graph_types.go",
+    "name": "TaskGraphBoundaryEdge",
+    "kind": "decl",
+    "action": "unused",
+    "line": 10,
+    "lines": 1,
+    "sha256": "d0277ecba7f22a5f4b0ce90baa3741f9a81ab4f4236af7d9982b55f65a2cafd6"
+  },
+  {
+    "file": "internal/steerline/native_task_page.go",
+    "name": "nativeTaskCursor",
+    "kind": "decl",
+    "action": "unused",
+    "line": 15,
+    "lines": 1,
+    "sha256": "9050f1d9b260c7e967d331cd389eda791840e20a6f6179bac9fb26e12c869e85"
+  },
+  {
+    "file": "internal/steerline/native_task_page.go",
+    "name": "nativeTaskProtocol",
+    "kind": "decl",
+    "action": "unused",
+    "line": 9,
+    "lines": 1,
+    "sha256": "b58303ea94abb65ddfc494687ab725571a17b3008f0eb8e5fa8a4b89a38dfb88"
+  },
+  {
+    "file": "internal/steerline/codexworker/history_binding.go",
+    "name": "ConversationSourceMarkerInput",
+    "kind": "decl",
+    "action": "unused",
+    "line": 70,
+    "lines": 7,
+    "sha256": "99c598f6a47e873c58654ce7ee0635c05c1bfe572b47a0a33bcecaa9cbc67904"
+  },
+  {
+    "file": "internal/steerline/codexworker/history_binding.go",
+    "name": "LocalCommandOutputSource",
+    "kind": "decl",
+    "action": "unused",
+    "line": 20,
+    "lines": 1,
+    "sha256": "87fc81a881a4c9416a4b6770e317f9bbde80179c1adf680a94f4134a8d03f8a1"
+  },
+  {
+    "file": "internal/steerline/activityview/render.go",
+    "name": "ansiGreen",
+    "kind": "decl",
+    "action": "unused",
+    "line": 25,
+    "lines": 1,
+    "sha256": "3dcdb49a4791eea38f1a320d7d886df8ab8f66c502dc8c735652d4635ea08dfc"
+  }
+]

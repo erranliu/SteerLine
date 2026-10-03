@@ -429,13 +429,6 @@ func (s *Service) finishedForRun(run *Run, worker *Worker, err error) error {
 	return s.finishWorkerFlowFor(run, err)
 }
 
-func errorString(err error) string {
-	if err == nil {
-		return ""
-	}
-	return err.Error()
-}
-
 func deref(s *string) string {
 	if s == nil {
 		return ""

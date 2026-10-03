@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/erranliu/SteerLine/internal/steerline/activityview"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -113,7 +114,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 					return errors.New("accepted decision disappeared from its committed execution")
 				}
 				delete(s.workerDecisionWrites, record.DecisionID)
-				s.note(run, "steer", "decision", "answer_saved", "decision answer saved", decisionAnswerSummary(run), decisionAnswerMeta(run))
+				s.note(run, "steer", "decision", "answer_saved", "decision answer saved", activityview.DecisionAnswerSummary(run), decisionAnswerMeta(run))
 				if err = s.commitWorker(run); err != nil {
 					return err
 				}

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
@@ -91,13 +90,8 @@ func DecodeExecutionStateEnvelope(envelope executionapi.ImplementationDataEnvelo
 	if payload := bytes.TrimSpace(envelope.Payload); len(payload) == 0 || payload[0] != '{' {
 		return NativeExecutionState{}, errors.New("native execution state payload must be an object")
 	}
-	decoder := json.NewDecoder(bytes.NewReader(envelope.Payload))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&state); err != nil {
+	if err := executionapi.DecodeStrictJSON(envelope.Payload, &state, "native execution state payload has trailing JSON"); err != nil {
 		return NativeExecutionState{}, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return NativeExecutionState{}, errors.New("native execution state payload has trailing JSON")
 	}
 	if identity.CoordinatorTerminal != "" && state.Coordinator.Terminal != identity.CoordinatorTerminal {
 		return NativeExecutionState{}, errors.New("native coordinator differs from the original execution target")

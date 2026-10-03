@@ -28,10 +28,6 @@ func stdoutColor() bool {
 	return isTerminal(os.Stdout)
 }
 
-// ColorEnabled reports whether ANSI color is appropriate for stdout. Watch and
-// the service console honor NO_COLOR and only color an interactive terminal.
-func ColorEnabled() bool { return stdoutColor() }
-
 func isTerminal(f *os.File) bool {
 	info, e := f.Stat()
 	if e != nil {

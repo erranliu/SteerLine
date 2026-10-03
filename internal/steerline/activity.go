@@ -104,14 +104,6 @@ func OpenActivity(path, runID, taskID string) (*ActivityWriter, error) {
 	return &ActivityWriter{path: path, seq: seq, runID: runID, taskID: taskID, items: items}, nil
 }
 
-// recoverActivitySeq repairs a partial trailing line and returns the highest seq
-// already present. The journal is a derivative file: a read failure costs only
-// ordering, never truth.
-func recoverActivitySeq(path string) (uint64, error) {
-	seq, _, err := recoverActivityState(path)
-	return seq, err
-}
-
 func recoverActivityState(path string) (uint64, map[string]uint64, error) {
 	f, e := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0600)
 	if e != nil {

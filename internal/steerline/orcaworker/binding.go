@@ -4,10 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"path/filepath"
 	"strings"
-	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
@@ -92,30 +90,6 @@ func VerifyCoordinatorTerminal(ctx context.Context, call MetaCall, p executionap
 	return nil
 }
 
-// AwaitAgentTerminal only observes; it never replaces or creates a terminal.
-func AwaitAgentTerminal(ctx context.Context, call MetaCall, handle, path, branch, worktree, agent string, timeout time.Duration, wait bool) error {
-	deadline := time.Now().Add(timeout)
-	for {
-		term, err := ShowTerminal(ctx, call, handle)
-		if err == nil {
-			err = ValidateWorkspaceTerminal(term, path, branch)
-		}
-		if err == nil && (term.WorktreeID != worktree || term.AgentIdentity != agent) {
-			err = &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca started a different worktree or agent"}
-		}
-		if err == nil {
-			return nil
-		}
-		if !wait || time.Now().After(deadline) {
-			return fmt.Errorf("fixed Orca agent did not become identifiable: %w", err)
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Second):
-		}
-	}
-}
 func BindCoordinator(term Terminal, repository, runtime, executable string) (executionapi.ProcessIdentity, error) {
 	if !samePath(filepath.FromSlash(term.WorktreePath), repository) || term.RuntimeID != runtime || term.AgentIdentity != "" {
 		return executionapi.ProcessIdentity{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca coordinator is not the fixed shell on the local runtime/repository"}

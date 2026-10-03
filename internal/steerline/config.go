@@ -17,10 +17,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
-type Skill struct {
-	Path       string `json:"path"`
-	Invocation string `json:"invocation"`
-}
 type Config struct {
 	Persistence             persistence.Factory             `json:"-"`
 	ExecutionDirectory      *ExecutionDirectory             `json:"-"`
@@ -96,9 +92,6 @@ func (c *Config) BindApplicationConfig(directory *ExecutionDirectory, projectPat
 // LegacyCompletionConfig is decoded only as a marker for rejecting old runtime
 // projections; it is never accepted in Config or executed.
 
-// trimBOM removes a leading UTF-8 byte-order mark. Windows tooling (notably
-// PowerShell) prepends one when writing JSON, and encoding/json rejects it.
-func trimBOM(b []byte) []byte         { return contracts.TrimBOM(b) }
 func decode(data []byte, v any) error { return contracts.DecodeJSON(data, v) }
 
 func validateWorkflowConfig(c *Config, _ []byte) error {

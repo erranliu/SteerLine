@@ -408,26 +408,6 @@ func answererName() string {
 	return "unknown"
 }
 
-func decisionAnswerSummary(r *Run) string {
-	if r.Decision == nil {
-		return ""
-	}
-	if r.Decision.OptionID != "" {
-		for _, o := range r.Decision.Request.Options {
-			if o.ID == r.Decision.OptionID {
-				if r.Decision.Note != "" {
-					return r.Decision.OptionID + ": " + o.Label + " — " + r.Decision.Note
-				}
-				return r.Decision.OptionID + ": " + o.Label
-			}
-		}
-		return r.Decision.OptionID
-	}
-	return r.Decision.Note
-}
-
-func DecisionSummary(run *Run) string { return decisionAnswerSummary(run) }
-
 func decisionAnswerMeta(r *Run) map[string]any {
 	if r.Decision == nil {
 		return nil
@@ -437,13 +417,6 @@ func decisionAnswerMeta(r *Run) map[string]any {
 		"option_id":   r.Decision.OptionID,
 		"answered_by": r.Decision.AnsweredBy,
 	}
-}
-
-func decisionAnswerDigest(answer DecisionAnswer) string {
-	return digestValue(struct {
-		OptionID, Note string
-		Answers        map[string][]string
-	}{strings.TrimSpace(answer.OptionID), strings.TrimSpace(answer.Note), answer.Answers})
 }
 
 func (s *Service) requireDecisionReplyCapability(ctx context.Context, run *Run) error {

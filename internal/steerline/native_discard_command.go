@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -208,7 +209,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "the fixed PR binding no longer matches the task's recorded publication")
 	}
 	currentCleanup := uniqueSorted(currentPlan.CleanupPending)
-	if intent.PRURL != currentPlan.PRURL || intent.UncertainPR != currentPlan.UncertainPR || !sameStrings(intent.CleanupPending, currentCleanup) {
+	if intent.PRURL != currentPlan.PRURL || intent.UncertainPR != currentPlan.UncertainPR || !slices.Equal(intent.CleanupPending, currentCleanup) {
 		intent.PRURL = currentPlan.PRURL
 		intent.UncertainPR = currentPlan.UncertainPR
 		intent.CleanupPending = currentCleanup

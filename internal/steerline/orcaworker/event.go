@@ -1,11 +1,9 @@
 package orcaworker
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
@@ -118,13 +116,8 @@ func DecodeQuestionRoute(route executionapi.QuestionRoute, fixed executionapi.Se
 		return QuestionRouteData{}, err
 	}
 	var data QuestionRouteData
-	decoder := json.NewDecoder(bytes.NewReader(route.Payload))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&data); err != nil {
+	if err := executionapi.DecodeStrictJSON(route.Payload, &data, "inbox question route has trailing data"); err != nil {
 		return QuestionRouteData{}, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return QuestionRouteData{}, errors.New("inbox question route has trailing data")
 	}
 	if data.RunID != fixed.Target.OrchestrationRun || data.TaskID != expectedTaskID || data.DispatchID != expectedDispatchID ||
 		data.MessageID != route.QuestionID || data.Terminal != expectedTerminal || data.Terminal == "" {

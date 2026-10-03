@@ -1,13 +1,10 @@
 package codexworker
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
-
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -58,13 +55,8 @@ func DecodeAppServerBindingEnvelope(envelope executionapi.ImplementationDataEnve
 		return AppServerBinding{}, err
 	}
 	var binding AppServerBinding
-	decoder := json.NewDecoder(bytes.NewReader(envelope.Payload))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&binding); err != nil {
+	if err := executionapi.DecodeStrictJSON(envelope.Payload, &binding, "app-server binding payload has trailing JSON"); err != nil {
 		return AppServerBinding{}, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return AppServerBinding{}, errors.New("app-server binding payload has trailing JSON")
 	}
 	if binding.SessionID != "" && !ValidNativeID(binding.SessionID) ||
 		binding.Endpoint == "" && (binding.SessionID == "" || binding.Generation != "") ||

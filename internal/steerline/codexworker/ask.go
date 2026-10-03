@@ -1,11 +1,9 @@
 package codexworker
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"regexp"
 	"strings"
 
@@ -168,13 +166,8 @@ func DecodeQuestionRoute(route executionapi.QuestionRoute, fixed executionapi.Se
 		return AskRouteData{}, err
 	}
 	var data AskRouteData
-	decoder := json.NewDecoder(bytes.NewReader(route.Payload))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&data); err != nil {
+	if err := executionapi.DecodeStrictJSON(route.Payload, &data, "native question route has trailing data"); err != nil {
 		return AskRouteData{}, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return AskRouteData{}, errors.New("native question route has trailing data")
 	}
 	if !ValidNativeID(data.ThreadID) || !ValidNativeID(data.TurnID) || data.ThreadID != fixed.SessionID ||
 		data.TurnID != route.TurnID || data.CallID != route.QuestionID || len(data.RequestID) == 0 || !json.Valid(data.RequestID) {

@@ -275,8 +275,6 @@ func (c Config) acceptedConfigVersion() string {
 	}{c.ExecutionRequirements, c.PublicationPolicy, c.publicationSettings(), c.ExecutionPolicy, c.Repository, c.Branch})
 }
 
-func (p ExecutionProfile) effective() ExecutionProfile { return p }
-
 func (c Config) projectExecutionProfile() ExecutionProfile {
 	inputs := implementationInputsFromData(c.ImplementationData)
 	p := ExecutionProfile{ID: ProjectExecutionProfileID, Name: "项目默认", Host: c.hostName(), Agent: c.agentName(), ImplementationConfigs: inputs}

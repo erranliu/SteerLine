@@ -107,19 +107,3 @@ func validateConfirmationBasis(basis string) (string, error) {
 	}
 	return basis, nil
 }
-
-func (s *Service) recalculateCurrentReservation(settledRunID string) {
-	if s.State.CurrentTask != nil {
-		if current := s.find(*s.State.CurrentTask); current != nil && current.RunID == settledRunID {
-			s.State.CurrentTask = nil
-		}
-	}
-	for _, run := range s.runs {
-		if run != nil && (run.ExecutionStatus == "unknown" || run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.FinishTaskStatus == "waiting_decision") {
-			if s.State.CurrentTask == nil {
-				s.State.CurrentTask = ptr(run.TaskID)
-			}
-		}
-	}
-	s.refreshSlotOccupancy()
-}

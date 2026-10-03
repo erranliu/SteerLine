@@ -6,12 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // ProbeIdentity binds an exact command to one preparation intent, never to a
@@ -21,7 +23,7 @@ type ProbeIdentity = contracts.ProbeIdentity
 type ProbeReceipt = contracts.ProbeReceipt
 
 func probeDirectory(p ProbeIdentity) (string, error) {
-	if !stableID(p.Execution) || !stableID(p.Turn) || !stableID(p.Nonce) || !filepath.IsAbs(p.Worktree) || p.ProfileDigest == "" || p.Runtime == "" || p.Terminal == "" || p.Incarnation == "" {
+	if !executionapi.StableExecutionID(p.Execution) || !executionapi.StableExecutionID(p.Turn) || !executionapi.StableExecutionID(p.Nonce) || !filepath.IsAbs(p.Worktree) || p.ProfileDigest == "" || p.Runtime == "" || p.Terminal == "" || p.Incarnation == "" {
 		return "", errors.New("readiness probe lacks frozen identity")
 	}
 	return filepath.Join(".steerline-readiness", p.Execution, p.Turn), nil

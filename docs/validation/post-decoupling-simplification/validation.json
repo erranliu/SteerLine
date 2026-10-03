@@ -1,0 +1,157 @@
+{
+  "source_sha256": "2a6424de5c0d41ff11bd0e76150950d452c9ad2b0ef463cd53154fdef26b8f78",
+  "runs": [
+    {
+      "run": "json",
+      "summary_path": "bin/post-decoupling-simplification/json/summary.json",
+      "summary_sha256": "6b1b5f8c92003d0aefb6c98bf286cf680a226bfaa2d655b38612d22d32eb4a8b",
+      "complete": true,
+      "passed": true,
+      "wall_seconds": 1.7113422,
+      "groups": [
+        {
+          "id": "json",
+          "package_count": 2,
+          "test_count": 11,
+          "passed_tests": 11,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        }
+      ],
+      "actual_unique_run_pass_pairs": 11,
+      "logs": [
+        {
+          "path": "bin/post-decoupling-simplification/json/go-test.jsonl",
+          "sha256": "f00cd89abef6bca82951bffd9515d0fa4185c3d8ec2d0417dbec7643e200d34b"
+        }
+      ]
+    },
+    {
+      "run": "focused",
+      "summary_path": "bin/post-decoupling-simplification/focused/summary.json",
+      "summary_sha256": "564141771188b918d0722f57c7f9dc66f55e373bc742f0a5696ee3f66ace5d5f",
+      "complete": true,
+      "passed": true,
+      "wall_seconds": 5.1382475,
+      "groups": [
+        {
+          "id": "focused",
+          "package_count": 5,
+          "test_count": 35,
+          "passed_tests": 35,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        }
+      ],
+      "actual_unique_run_pass_pairs": 35,
+      "logs": [
+        {
+          "path": "bin/post-decoupling-simplification/focused/go-test.jsonl",
+          "sha256": "754a0860aeb4d39e3e3bcf769e1267eda1dd05ff56c268f7753efb7c46136567"
+        }
+      ]
+    },
+    {
+      "run": "quick",
+      "summary_path": "bin/post-decoupling-simplification/quick/summary.json",
+      "summary_sha256": "396f1c6974c4ddd63fb50878fd7181eeb5282e0246eaedc6dbca63a46e1bb4d9",
+      "complete": true,
+      "passed": true,
+      "wall_seconds": 272.6900569,
+      "groups": [
+        {
+          "id": "quick-core",
+          "package_count": 1,
+          "test_count": 11,
+          "passed_tests": 11,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-rules",
+          "package_count": 9,
+          "test_count": 138,
+          "passed_tests": 138,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-remote",
+          "package_count": 1,
+          "test_count": 15,
+          "passed_tests": 15,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-codec",
+          "package_count": 1,
+          "test_count": 5,
+          "passed_tests": 5,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-identity",
+          "package_count": 1,
+          "test_count": 3,
+          "passed_tests": 3,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-app",
+          "package_count": 1,
+          "test_count": 6,
+          "passed_tests": 6,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-boundary",
+          "package_count": 1,
+          "test_count": 37,
+          "passed_tests": 37,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        }
+      ],
+      "actual_unique_run_pass_pairs": 215,
+      "logs": [
+        {
+          "path": "bin/post-decoupling-simplification/quick/quick-boundary/test.jsonl",
+          "sha256": "2e085420a52fef26f681fcb0d1a4b49ca60b21f1270efb2d4a384e38872ac60f"
+        },
+        {
+          "path": "bin/post-decoupling-simplification/quick/quick-core/test.jsonl",
+          "sha256": "bf751ae63bbf5ca78017086984d49ec4a4c4172f12b2ce28d783fb141dd04830"
+        },
+        {
+          "path": "bin/post-decoupling-simplification/quick/quick-owner-app/test.jsonl",
+          "sha256": "7e1cde670c43af8ed26464000fa14c5a98e6d59c3746db2288b4cfe12d85f4b3"
+        },
+        {
+          "path": "bin/post-decoupling-simplification/quick/quick-owner-codec/test.jsonl",
+          "sha256": "46b2ef7cd0d6fa4af25d3cb5e981f11eabaf64f7821f007bcbf160c2a1043e48"
+        },
+        {
+          "path": "bin/post-decoupling-simplification/quick/quick-owner-identity/test.jsonl",
+          "sha256": "cf25a78921925c7ad7047470645afc4d128582d866bfcbd9305b71f279cf301f"
+        },
+        {
+          "path": "bin/post-decoupling-simplification/quick/quick-owner-remote/test.jsonl",
+          "sha256": "fa04cf514427a31c21381fd6616af91165b5f5886f4370832953f7c908c8d005"
+        },
+        {
+          "path": "bin/post-decoupling-simplification/quick/quick-rules/test.jsonl",
+          "sha256": "3903757ccf068290a00eb43ee6962186583d6f806bf5de845a0ba59cacfadc9b"
+        }
+      ]
+    }
+  ],
+  "builds": {
+    "windows_amd64": "pass",
+    "linux_amd64_cross_build": "pass"
+  },
+  "diff_check": "pass"
+}

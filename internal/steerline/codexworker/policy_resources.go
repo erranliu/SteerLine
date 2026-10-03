@@ -1,11 +1,9 @@
 package codexworker
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"strings"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -65,14 +63,6 @@ func NewPolicyResourceEnvelope(identity PolicyResourceIdentity, payload PolicyRe
 		ExecutionID: identity.ExecutionID, AttemptID: identity.AttemptID,
 		Generation: identity.Generation, ConfigDigest: identity.ConfigDigest,
 	}, encoded)
-}
-
-func ProfileExecutable(data []executionapi.ImplementationDataEnvelope, identity ProfileConfigIdentity) (string, error) {
-	settings, err := profileConfigFromEnvelopes(data, identity)
-	if err != nil {
-		return "", err
-	}
-	return NativeExecutable(settings.Executable)
 }
 
 func DecodeProfileConfigEnvelope(data []executionapi.ImplementationDataEnvelope, identity ProfileConfigIdentity) (ProfileConfig, error) {
@@ -166,13 +156,8 @@ func DecodePolicyResourceEnvelope(envelope executionapi.ImplementationDataEnvelo
 		return PolicyResourcePayload{}, err
 	}
 	var payload PolicyResourcePayload
-	decoder := json.NewDecoder(bytes.NewReader(envelope.Payload))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&payload); err != nil {
+	if err := executionapi.DecodeStrictJSON(envelope.Payload, &payload, "permission resource payload has trailing JSON"); err != nil {
 		return PolicyResourcePayload{}, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return PolicyResourcePayload{}, errors.New("permission resource payload has trailing JSON")
 	}
 	if (payload.Contract != PolicyContract && payload.Contract != FullAccessPolicyContract) || VerifyPolicyVersion(payload.NativeVersion) != nil || payload.Settings.Executable == "" {
 		return PolicyResourcePayload{}, errors.New("permission resource evidence is incomplete or unsupported")

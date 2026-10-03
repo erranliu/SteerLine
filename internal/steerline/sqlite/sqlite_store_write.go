@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"strings"
 )
 
 type sqliteTx struct {
@@ -52,7 +51,4 @@ func sameOperationRequest(a, b []byte) bool {
 		return false
 	}
 	return bytes.Equal(compactA.Bytes(), compactB.Bytes())
-}
-func isConstraintError(err error) bool {
-	return err != nil && strings.Contains(strings.ToLower(err.Error()), "constraint")
 }

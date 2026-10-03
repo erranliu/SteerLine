@@ -1,10 +1,8 @@
 package orca_remote_worker
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"strings"
 	"time"
 
@@ -72,13 +70,8 @@ type profileConfigWire struct {
 
 func (c *ProfileConfig) UnmarshalJSON(data []byte) error {
 	var wire profileConfigWire
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&wire); err != nil {
+	if err := executionapi.DecodeStrictJSON(data, &wire, "remote profile configuration has trailing JSON"); err != nil {
 		return err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return errors.New("remote profile configuration has trailing JSON")
 	}
 	if wire.RemoteCancelAvailable == nil {
 		return errors.New("remote_cancel_available must be explicitly set to false")
@@ -91,13 +84,8 @@ func (c *ProfileConfig) UnmarshalJSON(data []byte) error {
 
 func DecodeProfileConfig(payload []byte) (ProfileConfig, error) {
 	var config ProfileConfig
-	decoder := json.NewDecoder(bytes.NewReader(payload))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&config); err != nil {
+	if err := executionapi.DecodeStrictJSON(payload, &config, "remote profile configuration has trailing JSON"); err != nil {
 		return ProfileConfig{}, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return ProfileConfig{}, errors.New("remote profile configuration has trailing JSON")
 	}
 	if err := config.Validate(); err != nil {
 		return ProfileConfig{}, err

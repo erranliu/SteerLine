@@ -101,7 +101,7 @@ func NewBuiltinDirectory(processHost executionapi.ManagedProcessHost) (*steerlin
 			BuildPolicyResource:       buildPolicyResource,
 			VerifyPolicyResource:      verifyPolicyResource,
 			LinkedWorktreeWriteArgs:   linkedWorktreeWriteArgs,
-			ValidTurnID:               stableTurnID,
+			ValidTurnID:               executionapi.StableExecutionID,
 			ValidateRef:               validateCatalogRef,
 			CleanupCapabilities:       []string{"start", "observe", "stop", "workspace_inspection", "output_reading"},
 			ValidatePublicationPolicy: validateWorkerPublicationPolicy,
@@ -126,7 +126,7 @@ func NewBuiltinDirectory(processHost executionapi.ManagedProcessHost) (*steerlin
 			BuildPolicyResource:       buildPolicyResource,
 			VerifyPolicyResource:      verifyPolicyResource,
 			LinkedWorktreeWriteArgs:   linkedWorktreeWriteArgs,
-			ValidTurnID:               stableTurnID,
+			ValidTurnID:               executionapi.StableExecutionID,
 			ValidateRef:               validateCatalogRef,
 			CleanupCapabilities:       []string{"start", "observe", "workspace_inspection", "output_reading", "message_inbox", "resource_settlement"},
 			ValidatePublicationPolicy: validateWorkerPublicationPolicy,
@@ -137,18 +137,6 @@ func NewBuiltinDirectory(processHost executionapi.ManagedProcessHost) (*steerlin
 
 func agentFor(c steerline.Config) executionapi.AgentSpec {
 	return executionapi.AgentSpec{Name: c.Agent}
-}
-
-func stableTurnID(value string) bool {
-	if len(value) != 32 {
-		return false
-	}
-	for _, digit := range value {
-		if !(digit >= '0' && digit <= '9' || digit >= 'a' && digit <= 'f') {
-			return false
-		}
-	}
-	return true
 }
 
 func localTarget() executionapi.ExecutionTarget {

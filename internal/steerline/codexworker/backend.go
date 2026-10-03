@@ -73,7 +73,7 @@ func (h *SessionHandle) Detach() executionapi.StopHandle {
 func encode(v any) []byte { b, _ := json.Marshal(v); return append(b, '\n') }
 func (b Backend) PrepareSession(ctx context.Context, fixed Binding, input executionapi.TurnInput) (handle *SessionHandle, receipt Binding, err error) {
 	receipt = fixed
-	if !stableCommandID(input.CommandID) || input.Prompt == "" || b.Config.Workspace == "" || b.Config.Executable == "" || fixed.SessionID != "" && !ValidNativeID(fixed.SessionID) {
+	if !executionapi.StableExecutionID(input.CommandID) || input.Prompt == "" || b.Config.Workspace == "" || b.Config.Executable == "" || fixed.SessionID != "" && !ValidNativeID(fixed.SessionID) {
 		return nil, receipt, errors.New("app-server worker turn lacks its fixed workspace or command")
 	}
 	// Validate native settings before filesystem or process side effects.
@@ -216,12 +216,6 @@ func Interrupt(ctx context.Context, endpoint, threadID, turnID string) error {
 	return client.Call(ctx, "turn/interrupt", map[string]string{"threadId": threadID, "turnId": turnID}, nil)
 }
 func ValidNativeID(id string) bool { return nativeID.MatchString(id) }
-func ValidateSession(session, expected string) error {
-	if !ValidNativeID(session) || expected != "" && session != expected {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "worker event changed the original Codex session"}
-	}
-	return nil
-}
 
 type attachedProcess struct {
 	identity executionapi.ProcessIdentity
