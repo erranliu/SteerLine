@@ -70,3 +70,16 @@ helper 完成当前准备/一次业务轮，真实修改/暂存并输出本机�
 TT1–TT5 的代码、场景、证据及文档可审阅，新增两个级别能够独立选择且共用环境管理。PR 描述列出 package/入口边界、两个场景断言和实测结果，明确 controlled 不构成真机认证。
 
 缺少真实内部接线、资源清理或必要报告时保持未完成，不将演示输出写成通过。本次实现范围为分级入口和受控 E2E 环境；未创建中心任务、执行真实平台验收、部署生产或迁移数据库。
+
+## 9. 测试文档总入口
+
+新增 `docs/testing.md`，从根 README 导航，E2E README 反向链接。按当前 runner 参数和 suites.json 说明 L1、Full/串行、定向、L2/L3、基础设施、编译、独立原生验收及证据；保留 E2E 具体约定的单一维护位置。当前基于已合并 #180 的 main，只改文档，不新增测试环境或业务场景。
+
+### 测试计划
+
+| 级别 | 组/场景 ID | 环境 | 命令 | 时点/通过条件 | 证据 |
+| --- | --- | --- | --- | --- | --- |
+| 文档静态检查 | docs.navigation / docs.commands / docs.scenarios | 本机，无模型 | `python "$env:TEMP/sl-testing-docs-check.py"`；`git diff --check` | 编辑后；相对文件链接有效，命令参数/注册的九项场景一致，三个导航入口双向连通 | PR 验证说明、检查输出 |
+| L1 定向 | runner.selection | 本机，无模型 | `go test ./cmd/test-feedback -run '^TestLevelSelectionsRejectAmbiguity$' -count=1` | 提交前；文档使用的分级选择约束与现有 parser 测试一致 | PR 验证说明、命令输出 |
+
+不运行完整 L1、Full 或 L2/L3：只增加文档导航和现有命令说明，没有改执行、断言、配置或环境能力；无需再次消耗 token 或创建测试 PR。
