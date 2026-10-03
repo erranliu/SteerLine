@@ -1069,5 +1069,12 @@
     "new": "internal/steerline/execution_backend_test.go",
     "owner": "steerline",
     "change": "Actual core capability evidence lookup uses one neutral backend/codec; original explicit agent evidence accepted and changed-default scope refused, with content-bound isolated proof. No native factory or authentication claim."
+  },
+  {
+    "old": "internal/steerline/worker_config_test.go",
+    "test": "TestWorkerFlowConfigRejectsOldProjectGates",
+    "new": "internal/steerlineapp/project_gates_cd67_test.go",
+    "owner": "steerlineapp",
+    "change": "Actual current-format app LoadConfig accepts the valid isolated baseline and rejects each old workflow_definition/project_steps/workspace_dirty_ignore field; no copied core loader."
   }
 ]
