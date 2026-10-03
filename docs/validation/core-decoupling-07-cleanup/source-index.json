@@ -1,5 +1,6 @@
 {
   "scope": "All cmd/internal production Go including every OS/tag, excluding _test.go only",
+  "hash_basis": "Raw working-tree bytes from the recorded Windows candidate, including CRLF; compare canonical Git content when checkout line endings differ",
   "file_count": 293,
   "package_count": 26,
   "project_import_edges": [

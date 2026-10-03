@@ -56,3 +56,11 @@
 守卫实测：直属主包 172 个 Go 文件、完整源码 34 包、Windows/Linux 生产依赖 232/221，0 违规；七个额外 OS/tag/目录/反向依赖负向样本均真实命中并拒绝。Windows/Linux amd64 的 `cmd/steerline`、`cmd/test-feedback`、`cmd/orca-probe` 构建 exit 0；标准 `git diff --check` 与提交 diff check 通过。初始架构文档 EOF 空行已修正；一次关闭 autocrlf 的诊断把 CR 行尾当作 trailing whitespace，未改仓库换行规则，最终按仓库标准规范化 diff 检查通过。后续仅文档归档，Go 源码未变；未声明协调独立复审或已合并。
 
 所有测试显式使用临时 STEERLINE_HOME、隔离 Git/SQLite/协议 mock，无 opt-in/live 开关；没有调用真实用户产品 CLI/业务服务/任务库或 `C:/SteerlineRuntime`，没有恢复或覆盖历史 execution.json、修改 runner/仓库外协调状态。未跑 full/L2/L3/live；本次删除不改变原生启动、权限映射或支持范围。
+
+## 协调独立复审
+
+完整实际 diff、Spec/Plan、各删除项的全 OS/tag 消费者与保留生产调用、原测试断言和架构索引均已独立核对。21 个私有 helper 在原基线均只有自身声明，删除后没有剩余消费者；没有删除可执行测试断言或改变生产规则。独立 AST 核对 293 个文件、26 个目录、61 条依赖边、构建条件及原工作区字节摘要全部一致。摘要含 Windows CRLF，已在索引中明确，其他换行的 checkout 应核对规范 Git 内容。
+
+修正架构图中 TUI/query/数据库访问的直接边，以及 projection 按 Step/AttemptNumber 选候选后再核对 workerflow 非空 CurrentAttemptID 的描述。代码行为不变。问题、位置、实际验证及限制见 [coordinator-review.json](coordinator-review.json)。
+
+协调完全访问验收代码 `616c2199c2455e0ae4f558b0f186b4be455188e5`：恢复后的 quick complete/pass，15 包各一次、144 用例唯一 run/pass、0 fail/skip，238.0s；4 个定向 parent/9 个 parent/subtest complete/pass，38.9s。两份 JSON 的实际包/用例集合均与本目录 test-hits.json 精确一致。Windows/Linux amd64 三个产品入口构建通过；未执行产品程序或 Linux 测试体。此前协调 quick 在 boundary 中途因聊天中断结束，未有完整报告，原日志保留且未当作通过；新报告独立完成，没有豁免失败。后续只修改文档，Go/go.mod/go.sum 未变，无需重复已完成矩阵。PR 仍须最终 head/base、检查和预期 head 合并门禁。

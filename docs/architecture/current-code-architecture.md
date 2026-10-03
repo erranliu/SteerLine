@@ -9,7 +9,7 @@ CLI 和 TUI 通过配置、查询及控制入口访问本机服务；`run` 承�
 ```mermaid
 flowchart LR
     Entry[CLI] --> App[steerlineapp 显式应用组装]
-    Entry --> UI[console 注入来源与控制客户端]
+    App --> UI[console 注入来源与控制客户端]
     App --> Core[steerline 业务用例和唯一写者]
     App --> Impl[具体执行实现与 processhost]
     Core --> Ports[execution 纯值与小端口]
@@ -17,9 +17,12 @@ flowchart LR
     Impl --> Ports
     Impl --> Records
     Core --> DB[(SQLite)]
-    UI --> Query[query + sqlite.Reader]
-    Query --> DB
-    Query --> Projection[projection 纯视图]
+    UI --> Core
+    Core --> Query[query 只读契约与用例]
+    Core --> Reader[sqlite.Reader]
+    Reader --> Query
+    Reader --> DB
+    Reader --> Projection[projection 纯视图]
 ```
 
 图中箭头表达源码依赖或明确标注的数据库访问。运行时中心通过注入端口调用实现。直属主包生产/测试源码和文件名无平台关键字，直接及传递依赖无具体实现、app 或 integration；实现不导入主包。`coreboundary` 检查所有 OS/tag 的源码图及 Windows/Linux 生产依赖，不按目录名排除生成源码。
@@ -38,7 +41,7 @@ flowchart LR
 | `processhost` | OS 进程、身份、句柄及文件操作，由 app 构造，经小端口注入中心/实现；关闭观察不等于杀进程。 |
 | `steerlineintegration` / `testprotocol` | 外层真实应用端口、原生配置和协议 mock 的跨层断言；不导出任意中心写接口。testprotocol 是测试进程 fixture，不是产品依赖。 |
 | `task` / `taskgraph` / `taskview` / `workerflow` | 任务资格/DAG/展示及单 worker 纯规则，保留唯一实现。 |
-| `projection` | 从同一持久快照复制并构建 Runtime/Run，按固定 CurrentAttemptID 选择，无 I/O。 |
+| `projection` | 从同一持久快照复制并构建 Runtime/Run，按当前 Step 和 AttemptNumber 选择候选；workerflow 路径另核对非空 CurrentAttemptID，不匹配时拒绝投影，无 I/O。 |
 | `query` / `sqlite` | 分消费者只读契约及同事务 Reader；中心仍保留开库/薄接线，写事务未搬迁。 |
 | `workspace` / `publication` | 固定 Git 工作区及发布/PR provider 操作和事实；中心决定资格、受理与唯一交付。 |
 | `console` | TUI 输入/导航/视图；当前仍消费中心产品 DTO/query/control，客户端适配与 CLI/TUI 消费迁移分别留 #71/#72。 |

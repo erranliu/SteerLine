@@ -1,0 +1,73 @@
+{
+  "reviewer": "Coordinator independent review",
+  "base": "d8bacbd75994a183c6d54c027abe103d26ae6896",
+  "validated_go_head": "616c2199c2455e0ae4f558b0f186b4be455188e5",
+  "scope": "Complete actual Go diff and Spec/Plan/constraints, all deleted private symbols including all OS/tag/test/CLI/script/embed/protocol consumers, retained production owners, test declaration/constructor assertion mapping, full architecture/source-index and affected final docs.",
+  "production_findings": [],
+  "documentation_fixes": [
+    {
+      "file": "docs/architecture/current-code-architecture.md",
+      "position": "Mermaid architecture diagram",
+      "issue": "Diagram implied direct CLI->console and console->query/database edges; actual app constructs console, console consumes center facade, query uses read ports and sqlite.Reader supplies I/O.",
+      "resolution": "Show actual app/center/query/Reader/projection dependency and database ownership."
+    },
+    {
+      "file": "docs/architecture/current-code-architecture.md",
+      "position": "projection module row",
+      "issue": "CurrentAttemptID is checked after Step/AttemptNumber candidate selection for workerflow, not used to select directly.",
+      "resolution": "Describe the actual candidate selection and nonempty fixed-pointer rejection."
+    }
+  ],
+  "static": {
+    "deleted_helpers": 21,
+    "base_go_occurrences": "Each exactly one declaration; no remaining source caller, interface/reflect/linkname or non-doc script/resource consumer",
+    "source_files": 293,
+    "package_directories": 26,
+    "project_import_edges": 61,
+    "ast_import_checks": "passed exact correspondence",
+    "hash_checks": "293 raw working-tree byte SHA256 matched (includes CRLF)",
+    "build_conditions": "all matched",
+    "documentation_links": "all existing",
+    "windows_product_build": "passed steerline/test-feedback/orca-probe",
+    "linux_amd64_product_build": "passed cross-build same three entries; no Linux test bodies"
+  },
+  "validation": {
+    "fully_accessible": true,
+    "quick": {
+      "complete": true,
+      "passed": true,
+      "packages": 15,
+      "tests": 144,
+      "each_package_once": true,
+      "seconds": 238.0146428
+    },
+    "focused": {
+      "complete": true,
+      "passed": true,
+      "tests": 9,
+      "seconds": 38.8803051,
+      "dirty_scope": "architecture docs only; Go/mod/sum unchanged"
+    },
+    "groups": {
+      "quick-core": 11,
+      "quick-rules": 83,
+      "quick-owner-remote": 15,
+      "quick-owner-codec": 5,
+      "quick-owner-identity": 3,
+      "quick-owner-app": 6,
+      "quick-boundary": 21,
+      "focused": 9
+    },
+    "actual_test_selection": "Exact per-package/per-test JSON run/pass matched archived test-hits.json (quick144 + focused9); each once and no fail/skip.",
+    "raw_quick_report": "C:/Users/lmas1/.codex/task-state/roadmap-runner/task68-coordinator-quick-recovered/summary.json",
+    "raw_focused_report": "C:/Users/lmas1/.codex/task-state/roadmap-runner/task68-coordinator-focused/summary.json",
+    "proof": "C:/Users/lmas1/.codex/task-state/roadmap-runner/task68-coordinator-proof.json",
+    "prior_interruption": "task68-coordinator-quick boundary log ended mid-case with no package pass/final summary; retained, not accepted as complete. Recovered fresh report passed.",
+    "subsequent_changes": "Documentation only; no Go/go.mod/go.sum change, no duplicate completed matrix after doc correction."
+  },
+  "limits": [
+    "No full/L2/L3/live/native permissions/Linux test bodies; isolated temporary STEERLINE_HOME/Git/SQLite/protocol mocks only",
+    "Historical runtime config incident remains recorded in predecessor runner state awaiting human original configuration source; no restoration attempted"
+  ],
+  "merge": "Expected-head platform merge remains required; this record is not a claim of merge"
+}
