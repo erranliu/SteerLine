@@ -57,18 +57,6 @@
 | 60 | 项目发布责任契约 | #58 | [Spec](execution-isolation-07-publish-policy.spec.md) | [Plan](execution-isolation-07-publish-policy.plan.md) |
 | 61 | 执行需求与配置注册收口 | #59、#60 | [Spec](execution-isolation-08-resolution.spec.md) | [Plan](execution-isolation-08-resolution.plan.md) |
 
-## 主包解耦后续清理与存储/客户端
-
-目标：`CORE-IMPLEMENTATION-DECOUPLING`。#63–#67 已交付，#67 PR190 于 2026-10-03 真实合并，历史断言/失败记录保留。#68 清理候选及消费者/验证见 [交付记录](../validation/core-decoupling-07-cleanup/README.md)，等待独立复审及真实合并。以下任务遵守[后续维护共同约束](core-maintenance-constraints.md)，#68 合并后两线可按共享修改归属并行。
-
-| 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
-| --- | --- | --- | --- | --- |
-| 68 | 主包解耦重构后代码清理 | #67 | [Spec](core-decoupling-07-cleanup.spec.md) | [Plan](core-decoupling-07-cleanup.plan.md) |
-| 69 | 中心写入端口收窄 | #68 | [Spec](core-decoupling-08-write-ports.spec.md) | [Plan](core-decoupling-08-write-ports.plan.md) |
-| 70 | SQLite写入实现归包 | #69 | [Spec](core-decoupling-09-sqlite.spec.md) | [Plan](core-decoupling-09-sqlite.plan.md) |
-| 71 | 产品客户端适配层与CLI接入 | #68 | [Spec](core-decoupling-10-client.spec.md) | [Plan](core-decoupling-10-client.plan.md) |
-| 72 | TUI与中心实现解耦 | #71 | [Spec](core-decoupling-11-tui.spec.md) | [Plan](core-decoupling-11-tui.plan.md) |
-
 ## 分级测试基础
 
 [分级测试与共享 E2E 环境 Spec](tiered-e2e-testing.spec.md) / [Plan](tiered-e2e-testing.plan.md)：已实现并通过[最小验证](../validation/tiered-e2e-testing/README.md)，待 PR 评审，未分配 Task ID。首期沿用 L1，新增独立 L2 交付 smoke、L3 等待合并后服务重启场景，共用 controlled 测试项目/任务环境管理；Windows 串行最小实现，不新增真实平台或全量测试门槛。
@@ -78,6 +66,7 @@
 - [执行架构](execution-architecture.spec.md)与[原生任务](native-task-constraints.md)：身份、单写者、当前格式恢复和真实交付；被 #36 替代的旧执行语义不继续要求。
 - [第一阶段](phase1-delivery-constraints.md)：持续会话、多候选、版本与验收交接。
 - [第二阶段](phase2-constraints.md)：受控规划、正式文档、UI 和公共传输。
+- [主包隔离约束](core-decoupling-constraints.md)与[后续维护约束](core-maintenance-constraints.md)：执行实现、存储、产品客户端和单写者的持续边界。
 
 ## 既有实现与历史基线
 
@@ -87,5 +76,17 @@
 - [双执行后端](pr-04a-execution-backends.spec.md)、[会话事件](pr-04b-conversation-events.spec.md)、[服务生命周期](pr-03-service-lifecycle.spec.md)。
 - [旧中心模型](02-execution-model-and-adapter.md)、[旧远端闭环](03-remote-execution-and-viewer.md)、[旧人工决策](pr-05-intervention.spec.md)、[旧控制台](pr-04-console.spec.md)。
 - [Hosting](hosting-spec.md)与[边界说明](../hosting.md)。
+
+### 主包解耦、存储与客户端
+
+目标：`CORE-IMPLEMENTATION-DECOUPLING`。#68–#72 均已交付，以下保留规格、原前置及交付证据，供维护和后续任务复用。既有隔离守卫及支持限制见 [#67 验收记录](../validation/core-decoupling-06-boundary/README.md)，当前模块归属见[代码架构索引](../architecture/current-code-architecture.md)。
+
+| 任务 ID | 任务名称 | 原硬前置 | Spec | Plan | 交付证据 |
+| --- | --- | --- | --- | --- | --- |
+| 68 | 主包解耦重构后代码清理 | #67 | [Spec](core-decoupling-07-cleanup.spec.md) | [Plan](core-decoupling-07-cleanup.plan.md) | [PR191](https://github.com/erranliu/SteerLine/pull/191) · [验收记录](../validation/core-decoupling-07-cleanup/README.md) |
+| 69 | 中心写入端口收窄 | #68 | [Spec](core-decoupling-08-write-ports.spec.md) | [Plan](core-decoupling-08-write-ports.plan.md) | [PR194](https://github.com/erranliu/SteerLine/pull/194) |
+| 70 | SQLite写入实现归包 | #69 | [Spec](core-decoupling-09-sqlite.spec.md) | [Plan](core-decoupling-09-sqlite.plan.md) | [PR197](https://github.com/erranliu/SteerLine/pull/197) · [验收记录](../validation/core-decoupling-09-sqlite/README.md) |
+| 71 | 产品客户端适配层与CLI接入 | #68 | [Spec](core-decoupling-10-client.spec.md) | [Plan](core-decoupling-10-client.plan.md) | [PR195](https://github.com/erranliu/SteerLine/pull/195) · [验收记录](../validation/core-decoupling-10-client/README.md) |
+| 72 | TUI与中心实现解耦 | #71 | [Spec](core-decoupling-11-tui.spec.md) | [Plan](core-decoupling-11-tui.plan.md) | [PR196](https://github.com/erranliu/SteerLine/pull/196) · [验收记录](../validation/core-decoupling-11-tui/README.md) |
 
 [L2/L3 真实执行 Spec](live-tiered-e2e.spec.md) / [Plan](live-tiered-e2e.plan.md)：L2 受控门槛后执行本地 Codex 与 Orca+Codex，使用真实 SteerlineTest GitHub PR；L3 delivery/recovery 按环境和场景独立选择，固定 gpt-6-luna/medium，校验原生 token usage。

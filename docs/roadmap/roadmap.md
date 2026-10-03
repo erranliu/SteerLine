@@ -60,16 +60,3 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 ## 规划约束
 
 [架构约束](architecture-constraints.md) · [控制台约束](console-constraints.md) · [第一阶段交付](phase-1-delivery.md)
-
-## 主包与执行实现解耦
-
-[主包解耦规划](core-implementation-decoupling.md)的剩余范围是中心写入端口、SQLite 实现归包和产品客户端/CLI/TUI 解耦。复用已交付的主包隔离与 [#68 清理基线](../validation/core-decoupling-07-cleanup/README.md)；原隔离断言和支持限制见 [#67 验收记录](../validation/core-decoupling-06-boundary/README.md)，后继持续保持守卫有效。
-
-| 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
-| --- | --- | --- | --- | --- |
-| 69 | 中心写入端口收窄 | 窄提交契约接通命令/worker/任务/DAG/交付/会话，保留原子边界 | #68 | [Spec](../spec/core-decoupling-08-write-ports.spec.md) · [Plan](../spec/core-decoupling-08-write-ports.plan.md) |
-| 70 | SQLite写入实现归包 | 连接/schema/SQL/事务归唯一存储模块，复用只读 Reader | #69 | [Spec](../spec/core-decoupling-09-sqlite.spec.md) · [Plan](../spec/core-decoupling-09-sqlite.plan.md) |
-| 71 | 产品客户端适配层与CLI接入 | 产品纯契约、唯一默认 adapter 和 CLI 产品读取/命令消费者 | #68 | [Spec](../spec/core-decoupling-10-client.spec.md) · [Plan](../spec/core-decoupling-10-client.plan.md) |
-| 72 | TUI与中心实现解耦 | TUI 消费产品接口，删除中心/存储依赖及默认 I/O 薄桥 | #71 | [Spec](../spec/core-decoupling-11-tui.spec.md) · [Plan](../spec/core-decoupling-11-tui.plan.md) |
-
-存储线 #69 → #70 与客户端线 #71 → #72 按各自硬前置推进；#69/#71 所需的 #68 前置能力已具备。并行边界见 [后续维护约束](../spec/core-maintenance-constraints.md)：存储线拥有提交契约/Store/schema，客户端线拥有产品 DTO/CLI/TUI，共享 contracts 形状及组装/quick 段顺序集成。两线保持原子提交、当前格式恢复和 [既有执行隔离约束](../spec/core-decoupling-constraints.md)，不扩展 #45 传输或 UI 范围。规划维护不创建中心任务。
