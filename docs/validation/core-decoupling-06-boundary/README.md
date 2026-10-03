@@ -1,6 +1,6 @@
 # #67 主包隔离守卫与测试归位
 
-当前工作区：`C:/Users/lmas1/.codex/worktrees/2829/SteerLine`，分支 `codex/67-core-boundary`。代码候选 `1347b38` 的规定 quick 已完整通过；其后只修正未纳入 quick 的 Linux CLI 测试读取 helper（不再构造模拟 failed 状态，而检查真实 ConnectService 的 offline/ProcessAbsent），集成包编译通过，未执行 Linux 测试体。最终 PR head 见 Git，源码清单记录最终文件摘要。
+当前工作区：`C:/Users/lmas1/.codex/worktrees/2829/SteerLine`，分支 `codex/67-core-boundary`。最终代码候选 `4782d5947e480dba94e9e9bfc02ada12d8052d3e` 在干净状态完成规定 quick：complete/pass、14 个包各一次、127 个 parent/subtest pass、0 fail/skip。之后仅归档验证文档，Go 源码没有变化。最终 PR head 见 Git，源码清单记录最终文件摘要。
 
 原 f775/51 文件/未通过第三闭环等文字全部归 [历史 checkpoint](history-checkpoints.md)，仅描述当时候选，不能覆盖当前结果。
 
@@ -22,9 +22,9 @@ git diff --check
 
 quick 同一次组合覆盖中心原 claim/delivery 拒绝及原准备未知回执/人工屏障；implementation 的 codec/raw-stream/原身份和原生命令代表；execution/contracts/query/sqlite 等规则；外层两个 CD67 parent、七个负向样本、第三实现、两条支持路径的恢复/提交屏障、remote Protocol 与真实 Claim 拒绝。每个指定包/parent/subtest 都核对 JSON run/terminal，拒绝零命中、skip 与重复包；remote 确定性原用例单独选择，不选可选 live。
 
-本工作区 `bin/cd67/` 保存完整定向报告和诊断：中心环境 six-case 组修复后 5/5、unknown-receipt kernel 1/1、原生 OriginalHost 检测 1/1、实现 qualified process 检测 1/1、zero boundary 完整通过、neutral config/runtime/idle 代表除 missing directory 的已修复诊断外通过、CLI 旧权威与不可见控制台代表通过。初始编译/fixture/错误分类失败报告保留，没有豁免。最终规定组合 `complete=true`、`passed=true`、errors=[]，准备 0.9s、执行 205.0s，127 个 parent/subtest pass、0 fail/skip，14 个包实际完成且各一次。完整 [组合报告](validation-results.json)、[命中事件](test-hits.json)、[边界结果](boundary-checks.json)、[源码清单](source-manifest.json)。Windows `go list -deps ./internal/steerline` 通过且无实现/app/integration，`git diff --check` 通过。
+本工作区 `bin/cd67/` 保存完整定向报告和诊断：中心环境 six-case 组修复后 5/5、unknown-receipt kernel 1/1、原生 OriginalHost 检测 1/1、实现 qualified process 检测 1/1、zero boundary 完整通过、neutral config/runtime/idle 代表除 missing directory 的已修复诊断外通过、CLI 旧权威与不可见控制台代表通过。初始编译/fixture/错误分类失败报告保留，没有豁免。最终规定组合 `complete=true`、`passed=true`、errors=[]，准备 0.9s、执行 201.3s，127 个 parent/subtest pass、0 fail/skip，14 个包实际完成且各一次。完整 [组合报告](validation-results.json)、[命中事件](test-hits.json)、[边界结果](boundary-checks.json)、[源码清单](source-manifest.json)。Windows `go list -deps ./internal/steerline` 通过且无实现/app/integration，`git diff --check` 通过。
 
-首轮 quick `20261003T030238.710450500Z` complete/failed：remote 用例的 helper 未接收真实 BackendError，以及可选 P10 被选入。身份拒绝断言没有删除；修复 helper 接受该实际类型后定向通过，remote 以明确确定性原测试选择并保持 live 条件原样。修复后一次规定完整组合为 `20261003T030829.921758400Z`，候选 clean `1347b387433bc0ebc2d50da0e2db49f764a25128`。
+首轮 quick `20261003T030238.710450500Z` complete/failed：remote 用例的 helper 未接收真实 BackendError，以及可选 P10 被选入。身份拒绝断言没有删除；修复 helper 接受该实际类型后定向通过，remote 以明确确定性原测试选择并保持 live 条件原样。修复后的 `20261003T030829.921758400Z` 在 clean `1347b38` 通过；自查修正 Linux CLI 只读读取 helper 后，对 clean `4782d5947e480dba94e9e9bfc02ada12d8052d3e` 再做规定最终组合 `20261003T032330.963909400Z`，完整通过。最终报告对应该代码 head；其后文档归档不改变 Go 源码。
 
 ROOT 最终 173 个 Go 文件，完整源码包 26 个，Windows/Linux 生产依赖 232/221，0 个违规（原始 JSON 空切片为 null）。两个父入口、七个负向样本、第三实现及五个支持/remote 子入口均有 run/pass。
 

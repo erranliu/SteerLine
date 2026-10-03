@@ -1,5 +1,5 @@
 {
-  "candidate_commit": "1347b387433bc0ebc2d50da0e2db49f764a25128",
+  "candidate_commit": "4782d5947e480dba94e9e9bfc02ada12d8052d3e",
   "totals": {
     "pass": 127,
     "fail": 0,
@@ -595,6 +595,18 @@
     {
       "group": "quick-rules",
       "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestQuestionRouteVersionIdentityDigestAndLimit/purpose",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestQuestionRouteVersionIdentityDigestAndLimit/purpose",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
       "test": "TestQuestionRouteVersionIdentityDigestAndLimit/digest",
       "action": "run"
     },
@@ -614,18 +626,6 @@
       "group": "quick-rules",
       "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
       "test": "TestQuestionRouteVersionIdentityDigestAndLimit/version",
-      "action": "pass"
-    },
-    {
-      "group": "quick-rules",
-      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
-      "test": "TestQuestionRouteVersionIdentityDigestAndLimit/purpose",
-      "action": "run"
-    },
-    {
-      "group": "quick-rules",
-      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
-      "test": "TestQuestionRouteVersionIdentityDigestAndLimit/purpose",
       "action": "pass"
     },
     {

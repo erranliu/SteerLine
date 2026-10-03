@@ -1,6 +1,5 @@
 {
-  "quick_candidate_commit": "1347b387433bc0ebc2d50da0e2db49f764a25128",
-  "post_quick_change": "outer Linux CLI read-only helper; package compiled, Linux bodies not run",
+  "quick_candidate_commit": "4782d5947e480dba94e9e9bfc02ada12d8052d3e",
   "files": [
     {
       "path": "cmd/orca-probe/main.go",
