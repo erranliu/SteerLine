@@ -107,3 +107,9 @@
 原 `TestCM70ReadOnlyOpenPreservesFiles` 改为验证主库字节/大小/SHA 不变、schema/版本/权威及图版本不变、非空 checkpoint/cursor/待处理命令不变，尝试新增/消费命令、推进 checkpoint/cursor 及直接 SQL UPDATE/建表均拒绝。关闭 writer 的现场 WAL 前后必须为空，不追加业务帧；辅助文件大小单独记录。缺库场景补充缺失父目录不创建断言。
 
 批准后执行 `go test -json ./internal/steerline/sqlite -count=1`，原始证据见 `storage-approved.jsonl`（协调 run 同名 `cm70-approved-storage.jsonl`）。全部存储测试通过，无失败或 skip；主库前后 SHA/大小与辅助文件统计见该测试 output 事件。定向通过不替代最终 quick 与最终 SHA 复审。
+
+批准后最终代码提交 `c2d083fe1f6838fc6d04b91dfe809908e5a4f109`，其前置主干整合提交 `69043b81bdfcd909377073aa6770a5dc45302f9f` 只整合 #193 的四个测试文档文件，无生产代码变化。存储定向 35 顶层 / 47 run-pass、0 fail/skip；只读现场主库 319488 字节、SHA 前后相同，WAL 0/0 字节、SHM 0/32768 字节。原失败未覆盖。
+
+协调聊天在该代码提交、干净工作区亲自执行 `go run ./cmd/test-feedback -quick -out <协调 run>/cm70-approved-quick`，结果 `passed=true`、`complete=true`、七组非零命中、0 fail/skip：core 11、rules 128、remote 15、codec 5、identity 3、app 6、boundary 37，共 205 个测试及子测试。原始 JSON/构建及命中证据在协调 run，仓库内保留 `approved-quick-summary.json`。两项协调守卫反例与 `TestCM70ReadOnlyOpenPreservesFiles` 都实际通过；未跑 full/L2/L3 或真实模型。
+
+当前独立复审结合批准前完整实际 diff/生产调用路径审核，重新阅读最新主干增量、当前 Spec/Plan、唯一只读连接/格式校验、应用注入与修复后的守卫，并审阅批准后完整测试差异。没有增加生产读取替代或弱化事务/身份/并发快照；已确认问题由原 `7f6e9c1` 守卫修复及 `c2d083f` 授权验收调整解决。后续只提交本验证文档与 quick 报告，不改生产或测试内容；PR 评论将绑定最终 SHA 与最新主干，合并前重新核对平台 head/base、保护/检查与实际 mergeability。
