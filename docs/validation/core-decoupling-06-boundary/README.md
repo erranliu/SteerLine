@@ -53,6 +53,9 @@
 - 报告 `bin/cd67/source-replacement-owners/summary.json` 保留中心通过、原生诊断失败；修复仅新增的过强“第一次必须 complete”要求后，`bin/cd67/native-source-readonly-original/summary.json` 1/1 pass/complete。`native-launch-public-ports` 为最初编译诊断失败。未重跑两条已通过的 launch 用例。
 - root 原 native launch/source 消费者及无消费者 helper 删除；生命周期消息工具归平台无关 fixture，CD65 现有入口调用中性持久化断言。根包编译通过；剩余 10 个 root 平台文件。
 
+- 真实 readiness smoke 的 `TestWorkerEnvironmentNativeReadinessLive` 归外层，保留原 REPO/COMMIT/CODEX/STATE_ROOT/REPORT opt-in、任务 9001154、已提交 Spec/Plan blob、4 分钟准备预算及受理后 7 分钟结算预算。当前格式由实际 app loader 受理，公开任务/dispatch/Claim/recheck/query 代替旧 private authority/Service 写入；原 readiness/business、结算、不同 Dispatch、原 terminal/incarnation 断言保留，原隔离资源由 checked native close 清理。
+- 根包、集成包仅编译通过；没有执行这条 live 或访问真实 runtime。当前剩余 9 个 root 平台文件。
+
 ## 工作区和源码身份
 
 - 实际工作区：`C:/Users/lmas1/.codex/worktrees/f775/SteerLine`。

@@ -1221,5 +1221,14 @@
     "owner": "steerlineintegration",
     "change": "actual app establishes original business Dispatch; real implementation read-only output port retains original native content, source change, transcript completeness and strict bound state cursor; no Service/Store write adapter",
     "validation": "bin/cd67/native-source-readonly-original/summary.json complete/pass 1/1"
+  },
+  {
+    "old": "internal/steerline/worker_environment_live_test.go",
+    "test": "TestWorkerEnvironmentNativeReadinessLive",
+    "new": "internal/steerlineintegration/readiness_live_cd67_test.go",
+    "owner": "steerlineintegration",
+    "live": "STEERLINE_READINESS_LIVE_REPO + STEERLINE_READINESS_LIVE_COMMIT + STEERLINE_READINESS_LIVE_CODEX; existing STATE_ROOT/REPORT retained",
+    "change": "same pinned smoke task 9001154, source blobs and budgets, actual app LoadConfig/public task/dispatch/Claim/query/recheck; same readiness/business purpose, settlement, distinct Dispatch and original terminal/incarnation assertions; checked cleanup of only original settled fixture resources",
+    "validation": "root/integration compile only; live not enabled"
   }
 ]

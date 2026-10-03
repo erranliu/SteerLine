@@ -730,7 +730,7 @@
       "STEERLINE_READINESS_LIVE_REPORT",
       "STEERLINE_READINESS_LIVE_STATE_ROOT"
     ],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/worker_environment_test.go",
