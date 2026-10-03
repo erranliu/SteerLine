@@ -1151,5 +1151,41 @@
     "owner": "codexworker",
     "change": "original raw bytes/gap/offset/sequence and subsequent native decoding assertions through real implementation codec",
     "validation": "bin/cd67/native-exec-stream-moved/summary.json complete/pass 2/2"
+  },
+  {
+    "old": "internal/steerline/codex_worker_acceptance_live_test.go",
+    "test": "TestAppServerServiceParallelRecoveryLive",
+    "new": "internal/steerlineintegration/worker_recovery_live_cd67_test.go",
+    "owner": "steerlineintegration",
+    "live": "STEERLINE_APP_SERVER_SERVICE_LIVE_LEGACY",
+    "validation": "compile only; live not enabled",
+    "change": "same ask A/B, READY and ACK instructions saved in committed public task contract; synthetic fixture task 8/9 -> 901/902, actual app LoadConfig/Service/query/answer ports; fixed original question/thread/turn/workspace/process and manual successor Attempt assertions preserved; legacy detached survival assertion remains and current managed process receives no fallback"
+  },
+  {
+    "old": "internal/steerline/codex_worker_acceptance_live_test.go",
+    "test": "TestAppServerHostExitHelper",
+    "new": "internal/steerlineintegration/worker_recovery_live_cd67_test.go",
+    "owner": "steerlineintegration",
+    "live": "STEERLINE_APP_SERVER_HOST_EXIT_HELPER + STEERLINE_APP_SERVER_HOST_EXIT_ROOT",
+    "validation": "compile only; live not enabled",
+    "change": "same ask A/B, READY and ACK instructions saved in committed public task contract; synthetic fixture task 8/9 -> 901/902, actual app LoadConfig/Service/query/answer ports; fixed original question/thread/turn/workspace/process and manual successor Attempt assertions preserved; legacy detached survival assertion remains and current managed process receives no fallback"
+  },
+  {
+    "old": "internal/steerline/codex_worker_acceptance_live_test.go",
+    "test": "TestAppServerHostExitRecoveryLive",
+    "new": "internal/steerlineintegration/worker_recovery_live_cd67_test.go",
+    "owner": "steerlineintegration",
+    "live": "STEERLINE_APP_SERVER_SERVICE_LIVE_LEGACY",
+    "validation": "compile only; live not enabled",
+    "change": "same ask A/B, READY and ACK instructions saved in committed public task contract; synthetic fixture task 8/9 -> 901/902, actual app LoadConfig/Service/query/answer ports; fixed original question/thread/turn/workspace/process and manual successor Attempt assertions preserved; legacy detached survival assertion remains and current managed process receives no fallback"
+  },
+  {
+    "old": "internal/steerline/worker_service_recovery_live_test.go",
+    "test": "TestLocalCodexManualRecoveryLive",
+    "new": "internal/steerlineintegration/worker_recovery_live_cd67_test.go",
+    "owner": "steerlineintegration",
+    "live": "STEERLINE_WORKER_RECOVERY_LIVE",
+    "validation": "compile only; live not enabled",
+    "change": "same ask A/B, READY and ACK instructions saved in committed public task contract; synthetic fixture task 8/9 -> 901/902, actual app LoadConfig/Service/query/answer ports; fixed original question/thread/turn/workspace/process and manual successor Attempt assertions preserved; legacy detached survival assertion remains and current managed process receives no fallback"
   }
 ]

@@ -45,6 +45,9 @@
 - 可选 local capability 保留原两个 opt-in 和 `local_process` 原证据范围，应用真实 process host/backend 仅核对固定物理进程/停止，raw JSONL 保留与 1 MiB 读取上限不变。旧 root spawner、未消费 marker 分支和原生 Backend 构造 helper 删除；不宣称这些旧 native exec 证据认证当前 app-server 权限。
 - 两条超长原生 exec 流断言归 `codexworker/exec_stream_cd67_test.go`，test-only 字节流 fixture 调用实际 `DecodeExecLine`/normalizer；`bin/cd67/native-exec-stream-moved/summary.json` 2/2 pass/complete。根包、应用包均仅编译通过。没有启用三条可选 live 入口；当前仍有 13 个 root 平台文件。
 
+- 服务 host-exit/两任务隔离/人工后继代次的四条 live 入口归 `steerlineintegration/worker_recovery_live_cd67_test.go`。保留原 opt-in、gpt-6-luna/low、45 秒命令和各入口时间预算，以及原问题/thread/turn/workspace/process、仅人工建立新 Attempt 的断言。A/B、READY、ACK 原指令成为已提交的正式任务契约，fixture task 8/9 显式映射为外层现有 901/902；输入通过实际 app/Service 受理与公开答案端口。
+- 旧 detached survival opt-in 的原失败断言仍保留；当前 managed Job 不增加分离运行或恢复 fallback。这个历史 opt-in 没有运行，不能声称旧 detached 能力可用。四个入口仅编译，root 原私有启动/答案/事务写 fixture 已删除；当前剩余 11 个 root 平台文件。
+
 ## 工作区和源码身份
 
 - 实际工作区：`C:/Users/lmas1/.codex/worktrees/f775/SteerLine`。

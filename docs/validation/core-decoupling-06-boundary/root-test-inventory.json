@@ -36,7 +36,7 @@
     "live_switches": [
       "STEERLINE_APP_SERVER_SERVICE_LIVE_LEGACY"
     ],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/codex_worker_test.go",
@@ -821,7 +821,7 @@
     "live_switches": [
       "STEERLINE_WORKER_RECOVERY_LIVE"
     ],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/worker_service_test.go",
