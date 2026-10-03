@@ -193,8 +193,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		body, _ := json.Marshal(checkpoint)
-		err = writer.Transact(context.Background(), func(tx steerline.DomainTx) error { return tx.PutProjection(c.Identity(), checkpoint.Revision, body) })
+		_, err = writer.SaveCheckpoint(context.Background(), checkpoint)
 		if closeErr := writer.Close(); err == nil {
 			err = closeErr
 		}
