@@ -87,7 +87,7 @@ func TestAnswerChecksDomainRevisionBeforeCheckpointPublication(t *testing.T) {
 	require(t, err)
 	execution := *service.executionRecord(run)
 	execution.PendingCommandID = newID()
-	require(t, testSQLite(service).transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutExecution(execution) }))
+	require(t, testSQLite(service).transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutExecution(execution) }))
 	after, _, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
 	if !bytes.Equal(before, after) {

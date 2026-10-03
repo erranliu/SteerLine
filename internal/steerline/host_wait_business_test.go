@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 type neutralHostWaitSource struct{ neutralConversationSources }
@@ -23,11 +24,11 @@ func (neutralHostWaitSource) MapConversation(input contracts.ConversationInput) 
 }
 
 func TestHostInputWaitPersistsWithoutBusinessDecision(t *testing.T) {
-	store, err := OpenSQLiteStore(filepath.Join(t.TempDir(), "wait.db"))
+	store, err := openSQLiteFixture(filepath.Join(t.TempDir(), "wait.db"))
 	require(t, err)
 	defer store.Close()
 	run := &Run{RunID: newID(), AttemptID: newID(), ExecutionID: newID(), Agent: "fixture"}
-	service := &Service{Config: Config{identity: "project"}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: neutralHostWaitSource{}}
+	service := &Service{Config: Config{Persistence: sqlite.Factory{}, identity: "project"}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: neutralHostWaitSource{}}
 	source := WorkerEvent{RunID: run.RunID, AttemptID: run.AttemptID, Source: "fixture-host", SourceSegment: "fixture-host-v1:probe", SourceEventID: "host-wait:probe", SourceIdentity: "fixture-original-resource", SourceSeq: 1, InputWait: true}
 	require(t, service.recordConversationEvent(run, source))
 	require(t, service.recordConversationEvent(run, source))

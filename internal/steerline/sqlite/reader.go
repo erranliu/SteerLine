@@ -1,5 +1,5 @@
-// Package sqlite implements bounded SQLite reads for query ports. The center
-// owns database opening, schema creation and atomic business writes.
+// Package sqlite owns connections, current schema, bounded reads and atomic
+// declarative writes. The application injects its ports into center consumers.
 package sqlite
 
 import (

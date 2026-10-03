@@ -3,8 +3,6 @@ package steerline
 import (
 	"context"
 	"encoding/json"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"net/http"
 	"net/http/httptest"
 	"os/exec"
@@ -14,6 +12,9 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 func taskBatchFixture(t *testing.T, c Config, commit string, tasks []TaskBatchTask, edges []TaskBatchEdge) []byte {
@@ -35,7 +36,7 @@ func taskBatchFixture(t *testing.T, c Config, commit string, tasks []TaskBatchTa
 
 func strconvID(v int64) string { return strconv.FormatInt(v, 10) }
 
-func openDAGFixture(t *testing.T) (Config, string, *SQLiteStore) {
+func openDAGFixture(t *testing.T) (Config, string, *sqliteFixture) {
 	t.Helper()
 	c, commit := nativeTaskFixture(t)
 	reader, err := OpenNativeTaskProject(context.Background(), &c)
@@ -45,7 +46,7 @@ func openDAGFixture(t *testing.T) (Config, string, *SQLiteStore) {
 	if err = reader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	store, err := openSQLiteFixture(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -183,7 +184,7 @@ func TestCreateTaskBatchAtomicIdempotentAndQueryable(t *testing.T) {
 		task := rootPage.Tasks[0].TaskRecord
 		task.Status, task.Claimant, task.Version = "in_progress", "worker", task.Version+1
 		mutate(&task)
-		if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.UpdateNativeTaskCAS(task, rootPage.Tasks[0].Version) }); err == nil || !strings.Contains(err.Error(), "contract_mismatch") {
+		if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.UpdateNativeTaskCAS(task, rootPage.Tasks[0].Version) }); err == nil || !strings.Contains(err.Error(), "contract_mismatch") {
 			t.Fatalf("native status update changed fixed task fields: %v", err)
 		}
 	}
@@ -271,7 +272,7 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 	foreignContract := nativeContract(t, c, commit, "foreign-contract-99")
 	otherProject := "other-native-project"
 	created := time.Now().UTC()
-	err := store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+	err := store.transactRecords(ctx, func(domainTx *fixtureTransaction) error {
 		tx := domainTx
 		authority := ProjectTaskAuthority{ProjectIdentity: otherProject, Authority: "native", AuthorityVersion: 1, Repository: foreignContract.Repository, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: created, UpdatedAt: created}
 		if e := tx.PutProjectTaskAuthority(authority); e != nil {
@@ -418,7 +419,7 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 	if err = reader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	store, err := openSQLiteFixture(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -438,7 +439,7 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err = store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+	if err = store.transactRecords(ctx, func(domainTx *fixtureTransaction) error {
 		return domainTx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)
@@ -485,7 +486,7 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 	}
 	alteredWorkflow := page.Tasks[0].WorkflowRuns[0]
 	alteredWorkflow.ExecutionProfile.ExecutionPolicy.Network = "deny"
-	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutWorkflowRun(alteredWorkflow) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
+	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutWorkflowRun(alteredWorkflow) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
 		t.Fatalf("claim workflow gates were edited after reservation: %v", err)
 	}
 	other, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "81")
@@ -509,7 +510,7 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 	if err = store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	reopened, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	reopened, err := openSQLiteFixture(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -538,7 +539,7 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	if err = reader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	store, err := openSQLiteFixture(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -549,7 +550,7 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err = store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+	if err = store.transactRecords(ctx, func(domainTx *fixtureTransaction) error {
 		return domainTx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)
@@ -577,7 +578,7 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	task.Claimant = "worker"
 	task.Version++
 	task.UpdatedAt = created
-	if err = store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+	if err = store.transactRecords(ctx, func(domainTx *fixtureTransaction) error {
 		tx := domainTx
 		if e := tx.PutWorkflowRun(run); e != nil {
 			return e
@@ -625,7 +626,7 @@ func TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation(t *testing.T) {
 	if err = reader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	store, err := openSQLiteFixture(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -636,7 +637,7 @@ func TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation(t *testing.T) {
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
+	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)
@@ -742,7 +743,7 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 	task.Status = "in_progress"
 	task.Claimant = "worker"
 	task.Version++
-	if err = store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+	if err = store.transactRecords(ctx, func(domainTx *fixtureTransaction) error {
 		tx := domainTx
 		if e := tx.PutWorkflowRun(workflow); e != nil {
 			return e
@@ -829,7 +830,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	if err = reader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	store, err := openSQLiteFixture(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -843,15 +844,12 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 		seedPublishedForDiscard(t, ctx, c, store, id, commit, server.URL+"/org/repo/pulls/"+id)
 	}
 	workspacePath := filepath.Join(c.RunDir, "worktrees", "wf-90")
-	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
-		var payload []byte
-		if err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM executions WHERE project_identity=? AND execution_id=?`, c.Identity(), "exec-90").Scan(&payload); err != nil {
+	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error {
+		execution, err := tx.Execution(ctx, c.Identity(), "exec-90", "wf-90")
+		if err != nil {
 			return err
 		}
-		var execution ExecutionRecord
-		if err := json.Unmarshal(payload, &execution); err != nil {
-			return err
-		}
+
 		execution.Target.ID, execution.Target.WorktreeID = c.Identity(), workspacePath
 		execution.Target.Branch, execution.Target.BaseRevision = "fixture/90", commit
 		execution.Workspace.Worktree = workspacePath
@@ -860,16 +858,13 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 		t.Fatal(err)
 	}
 	// An unresolved PR binding cannot be used as permission to discard.
-	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
+	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		for _, id := range []string{"94", "95"} {
-			var body []byte
-			if err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, c.Identity(), "wf-"+id).Scan(&body); err != nil {
+			workflow, err := tx.Workflow(ctx, c.Identity(), "wf-"+id, id)
+			if err != nil {
 				return err
 			}
-			var workflow WorkflowRunRecord
-			if err := json.Unmarshal(body, &workflow); err != nil {
-				return err
-			}
+
 			workflow.PRState = "unknown"
 			if err := tx.PutWorkflowRun(workflow); err != nil {
 				return err
@@ -913,7 +908,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	lateMerge := strings.Repeat("a", 40)
 	lateEvidence, _ := json.Marshal(TaskDeliveryEvidence{PRInstance: server.URL, URL: lateURL, Repository: "org/repo", PRNumber: 90, BaseBranch: c.Branch, State: "merged", Merged: true, MergedAt: mergedAt, MergeCommit: lateMerge})
 	lateDelivery := TaskDeliveryRecord{ProjectIdentity: c.Identity(), TaskID: "90", SelectedWorkflowRunID: "wf-90", PRInstance: server.URL, PRRepository: "org/repo", PRNumber: 90, PRURL: lateURL, MergeCommit: lateMerge, MergedAt: mergedAt, Evidence: lateEvidence}
-	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutTaskDelivery(lateDelivery) }); err == nil || !strings.Contains(err.Error(), "task_discarded") {
+	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutTaskDelivery(lateDelivery) }); err == nil || !strings.Contains(err.Error(), "task_discarded") {
 		t.Fatalf("late merge created a normal delivery for discarded task: %v", err)
 	}
 	verifier := publication.NewClient(c.PR, Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}, duration(c.CommandTimeout))
@@ -1021,7 +1016,7 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	task.Claimant = "worker"
 	task.Version++
 	task.UpdatedAt = created
-	if err = store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+	if err = store.transactRecords(ctx, func(domainTx *fixtureTransaction) error {
 		tx := domainTx
 		if e := tx.PutWorkflowRun(run); e != nil {
 			return e
@@ -1056,7 +1051,7 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	}
 }
 
-func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store *SQLiteStore, taskID, commit, prURL string) {
+func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store *sqliteFixture, taskID, commit, prURL string) {
 	t.Helper()
 	if c.PR.Kind == "gitea" {
 		settings := neutralProfileSettings(c)
@@ -1088,7 +1083,7 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store 
 	task.Claimant = "worker"
 	task.Version++
 	task.UpdatedAt = created
-	if err = store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+	if err = store.transactRecords(ctx, func(domainTx *fixtureTransaction) error {
 		tx := domainTx
 		if e := tx.PutWorkflowRun(run); e != nil {
 			return e

@@ -12,6 +12,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/console"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
 
@@ -73,7 +74,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		fixture := newLifecycleProject(t, "local")
 		ctx := context.Background()
 		createIntegrationTask(t, ctx, fixture, 906)
-		store, err := steerline.OpenSQLiteStore(fixture.config.RunDir + string(os.PathSeparator) + "steerline.db")
+		store, err := sqlite.OpenSQLiteStore(fixture.config.RunDir + string(os.PathSeparator) + "steerline.db")
 		require(t, err)
 		defer store.Close()
 		_, before, err := store.DatabaseVersion(ctx)

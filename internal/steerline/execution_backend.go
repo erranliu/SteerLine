@@ -13,6 +13,7 @@ import (
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
 
 func executionStopperFor(c Config) (executionapi.ExecutionStopper, error) {
@@ -44,7 +45,10 @@ func digestValue(v any) string {
 	return hex.EncodeToString(h[:])
 }
 
-type executionRecords struct{ root string }
+type executionRecords struct {
+	root        string
+	persistence persistence.Factory
+}
 
 // SaveExecutionCapabilityReport persists one already verified, generic report
 // using the center's capability record format.
@@ -52,7 +56,7 @@ func SaveExecutionCapabilityReport(c Config, report executionapi.CapabilityRepor
 	if c.RunDir == "" {
 		return errors.New("run directory is required for a capability report")
 	}
-	records := executionRecords{root: c.RunDir}
+	records := executionRecords{root: c.RunDir, persistence: c.Persistence}
 	if _, err := records.loadCapabilityReport(report); err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -96,29 +100,6 @@ func verifyCapabilityEvidence(value string) error {
 
 func (r executionRecords) capabilityPath(report executionapi.CapabilityReport) string {
 	return filepath.Join(r.root, "execution", "v1", "capabilities", capabilityReportKey(report)+".json")
-}
-
-func stableExecutionID(value string) bool {
-	if len(value) != 32 {
-		return false
-	}
-	for _, c := range value {
-		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
-			return false
-		}
-	}
-	return true
-}
-func stableOperationID(value string) bool {
-	if value == "" || len(value) > 160 {
-		return false
-	}
-	for _, c := range value {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '-' || c == '_') {
-			return false
-		}
-	}
-	return true
 }
 
 func (r executionRecords) saveCapabilityReport(report executionapi.CapabilityReport) error {
@@ -192,7 +173,7 @@ func (s *Service) requireBackendCapabilitiesFor(ctx context.Context, backend exe
 	if err != nil {
 		return executionapi.CapabilityReport{}, err
 	}
-	records := executionRecords{root: s.Config.RunDir}
+	records := executionRecords{root: s.Config.RunDir, persistence: s.Config.Persistence}
 	report, err := records.loadCapabilityReport(probe)
 	if os.IsNotExist(err) {
 		if saveErr := records.saveCapabilityReport(probe); saveErr != nil {
@@ -209,86 +190,6 @@ func (s *Service) requireBackendCapabilitiesFor(ctx context.Context, backend exe
 	}
 	return report, nil
 }
-func validateExecutionRef(ref executionapi.ExecutionRef) error {
-	if ref.Version != executionapi.ExecutionRecordVersion || !stableExecutionID(ref.RunID) || !stableExecutionID(ref.AttemptID) || ref.Backend == "" || ref.Protocol == "" {
-		return errors.New("incomplete execution binding")
-	}
-	if ref.Target.ID == "" || ref.Agent.Name == "" || !commitHash.MatchString(ref.BaseCommit) {
-		return errors.New("execution binding lacks a verified target, agent or workspace")
-	}
-	if ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || ref.External.Kind == "" {
-		return errors.New("execution binding lacks workspace or resource identity")
-	}
-	return nil
-}
-
-func (r executionRecords) loadBinding(run, attempt string) (executionapi.ExecutionRef, error) {
-	if !stableExecutionID(run) || !stableExecutionID(attempt) {
-		return executionapi.ExecutionRef{}, errors.New("invalid execution binding path identity")
-	}
-	b, err := r.readRecord("execution_bindings", run, attempt, "binding")
-	if err != nil {
-		return executionapi.ExecutionRef{}, err
-	}
-	var ref executionapi.ExecutionRef
-	if err = decode(b, &ref); err != nil {
-		return ref, fmt.Errorf("invalid execution binding; preserve it: %w", err)
-	}
-	if ref.Version != executionapi.ExecutionRecordVersion || ref.RunID != run || ref.AttemptID != attempt {
-		return ref, errors.New("execution binding identity/version mismatch")
-	}
-	if err := validateExecutionRef(ref); err != nil {
-		return ref, fmt.Errorf("invalid execution binding; preserve it: %w", err)
-	}
-	return ref, nil
-}
-func validateExecutionOperation(op executionapi.Operation) error {
-	if op.Version != executionapi.ExecutionRecordVersion || !stableOperationID(op.ID) || !stableExecutionID(op.RunID) || !stableExecutionID(op.AttemptID) || len(op.PayloadDigest) != 64 || op.Action == "" || op.Backend == "" || op.Protocol == "" || op.Target.ID == "" {
-		return errors.New("incomplete operation record")
-	}
-	if _, err := hex.DecodeString(op.PayloadDigest); err != nil {
-		return errors.New("invalid operation payload digest")
-	}
-	if op.Action != "start" && op.Action != "stop" && op.Action != "reply" {
-		return errors.New("unsupported execution operation action")
-	}
-	switch op.Status {
-	case executionapi.OperationPending, executionapi.OperationInFlight, executionapi.OperationAccepted, executionapi.OperationConfirmed, executionapi.OperationRejected, executionapi.OperationUnknown:
-	default:
-		return errors.New("invalid operation status")
-	}
-	if op.Ref != nil {
-		if err := validateExecutionRef(*op.Ref); err != nil {
-			return err
-		}
-		if op.Ref.RunID != op.RunID || op.Ref.AttemptID != op.AttemptID || op.Ref.Backend != op.Backend || op.Ref.Protocol != op.Protocol || op.Ref.Target != op.Target {
-			return errors.New("operation ref conflicts with fixed identity")
-		}
-	}
-	return nil
-}
-
-func (r executionRecords) loadOperation(run, attempt, id string) (executionapi.Operation, error) {
-	if !stableExecutionID(run) || !stableExecutionID(attempt) || !stableOperationID(id) {
-		return executionapi.Operation{}, errors.New("invalid operation path identity")
-	}
-	b, err := r.readRecord("execution_operations", run, attempt, id)
-	if err != nil {
-		return executionapi.Operation{}, err
-	}
-	var op executionapi.Operation
-	if err = decode(b, &op); err != nil {
-		return op, fmt.Errorf("invalid operation record; preserve it: %w", err)
-	}
-	if op.Version != executionapi.ExecutionRecordVersion || op.RunID != run || op.AttemptID != attempt || op.ID != id {
-		return op, errors.New("operation identity/version mismatch")
-	}
-	if err := validateExecutionOperation(op); err != nil {
-		return op, fmt.Errorf("invalid operation record; preserve it: %w", err)
-	}
-	return op, nil
-}
-
 func retiredExecutionCapabilityName(name string) bool {
 	return name == "reply_continue" || name == "retry"
 }

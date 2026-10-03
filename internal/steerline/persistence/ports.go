@@ -203,3 +203,5 @@ type Conversations interface {
 	ConversationCapabilityReports(context.Context, execution.BackendKind, execution.ExecutionProtocol, string, int) ([]contracts.ConversationCapabilityReport, error)
 	SaveConversationCapabilityReport(context.Context, contracts.ConversationCapabilityReport) error
 }
+
+var ErrAnswerConflict = errors.New("answer_conflict: this decision already has a different accepted answer")

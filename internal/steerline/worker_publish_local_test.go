@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 func fakeHostGH(args []string) int {
@@ -162,15 +163,15 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	// Simulate a host action completed before its database receipt was saved.
 	originalOperation := *s.operationByKey("local-publish:" + run.RunID + ":" + turnID)
 	originalOperation.Status, originalOperation.Receipt = "in_flight", nil
-	require(t, testSQLite(s).transactSQLite(ctx, func(tx *sqliteTx) error {
-		raw := tx.tx
+	require(t, testSQLite(s).transactRecords(ctx, func(tx *fixtureTransaction) error {
 		if err := tx.UpdateOperation(originalOperation); err != nil {
 			return err
 		}
 
-		_, err := raw.ExecContext(ctx, `UPDATE workflow_runs SET phase=?,payload=? WHERE project_identity=? AND workflow_run_id=?`, beforeWorkflow.Phase, mustJSON(beforeWorkflow), c.Identity(), run.RunID)
-		return err
+		return nil
 	}))
+	_, err = testSQLite(s).db.ExecContext(ctx, `UPDATE workflow_runs SET phase=?,payload=? WHERE project_identity=? AND workflow_run_id=?`, beforeWorkflow.Phase, mustJSON(beforeWorkflow), c.Identity(), run.RunID)
+	require(t, err)
 	require(t, s.refreshNativeSnapshot(ctx))
 	if s.operationByKey(originalOperation.IdempotencyKey).Status != "in_flight" {
 		t.Fatalf("crash fixture did not restore intent: %+v", s.domain.Operations)

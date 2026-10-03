@@ -5,12 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
@@ -47,7 +49,7 @@ func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
 	if _, err = evaluateExecutionRequirements(context.Background(), c); err == nil {
 		t.Fatal("missing token reference accepted")
 	}
-	missing := queryHostRequirementTool(context.Background(), Config{Repository: c.Repository, Git: Command{Executable: filepath.Join(c.Repository, "missing-tool.exe")}}, "git")
+	missing := queryHostRequirementTool(context.Background(), Config{Persistence: sqlite.Factory{}, Repository: c.Repository, Git: Command{Executable: filepath.Join(c.Repository, "missing-tool.exe")}}, "git")
 	if missing.Status != executionapi.RequirementMissing {
 		t.Fatal("missing tool not reported")
 	}
@@ -77,7 +79,7 @@ func TestExecutionRequirementsDoNotUpgradeProbeToVerified(t *testing.T) {
 			report.Capabilities[i].Evidence = evidence + "#sha256=" + fmt.Sprintf("%x", sha256.Sum256([]byte("fixture evidence; not native certification")))
 		}
 	}
-	require(t, (executionRecords{root: c.RunDir}).saveCapabilityReport(report))
+	require(t, (executionRecords{root: c.RunDir, persistence: sqlite.Factory{}}).saveCapabilityReport(report))
 	_, err = evaluateExecutionRequirements(context.Background(), c)
 	require(t, err)
 	require(t, os.WriteFile(evidence, []byte("changed evidence"), 0600))
@@ -145,7 +147,7 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	require(t, err)
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
+	require(t, store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}))
 	options := TaskClaimOptions{TaskID: "8", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, Explicit: true, RequestedBy: "operator"}

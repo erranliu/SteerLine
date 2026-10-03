@@ -18,10 +18,9 @@ func TestWorkerCommitRollsBackRecordsReceiptsEventsAndCheckpoint(t *testing.T) {
 	service.pendingEvents = append(service.pendingEvents, event)
 	service.executionRecord(run).LastEvent = ptr("must roll back")
 	service.setDecisionStatus(run, "superseded")
-	require(t, testSQLite(service).transactSQLite(ctx, func(tx *sqliteTx) error {
-		_, err := tx.tx.ExecContext(ctx, `CREATE TRIGGER fail_worker_checkpoint BEFORE UPDATE ON projection BEGIN SELECT RAISE(ABORT,'checkpoint unavailable'); END`)
-		return err
-	}))
+	_, err = testSQLite(service).db.ExecContext(ctx, `CREATE TRIGGER fail_worker_checkpoint BEFORE UPDATE ON projection BEGIN SELECT RAISE(ABORT,'checkpoint unavailable'); END`)
+	require(t, err)
+
 	// The checkpoint is the final write; its failure must undo the entire intent.
 	_, err = service.startWorkerOperation(run, "start_worker_turn", "worker-test:"+run.ExecutionID, map[string]string{"intent": "original"})
 	if err == nil || !strings.Contains(err.Error(), "checkpoint unavailable") {
@@ -90,7 +89,7 @@ func TestWorkerCommitChecksSettledTaskInsideTransaction(t *testing.T) {
 	task := *nativeTaskRecord(service.domain.Tasks, run.DomainTaskID)
 	discarded, err := discardTaskRecord(task, "concurrent settlement", "operator", newID(), nil, now())
 	require(t, err)
-	require(t, testSQLite(service).transactSQLite(ctx, func(tx *sqliteTx) error { return tx.UpdateNativeTaskCAS(discarded, task.Version) }))
+	require(t, testSQLite(service).transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.UpdateNativeTaskCAS(discarded, task.Version) }))
 	before, revision, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
 	service.setDecisionStatus(run, "reply_accepted")

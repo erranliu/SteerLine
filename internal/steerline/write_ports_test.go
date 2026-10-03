@@ -91,7 +91,7 @@ func TestCM69WorkerCommitRejectsSupersededAttempt(t *testing.T) {
 	next.AttemptID, next.AttemptNumber, next.Status = newID(), old.AttemptNumber+1, "planned"
 	execution := *service.executionRecord(run)
 	execution.CurrentAttemptID = next.AttemptID
-	require(t, db.transactSQLite(ctx, func(tx *sqliteTx) error {
+	require(t, transactFixture(db, ctx, func(tx *fixtureTransaction) error {
 		if err := tx.PutStepAttempt(old); err != nil {
 			return err
 		}
@@ -136,7 +136,7 @@ func TestCM69CleanupReceiptKeepsTaskAndReceiptAtomic(t *testing.T) {
 			execution.Target.ID, execution.Target.WorktreeID = project, workspace
 			execution.Target.Branch, execution.Target.BaseRevision = "fixture/cleanup", execution.Workspace.Base
 			execution.Workspace.Worktree = workspace
-			require(t, db.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutExecution(execution) }))
+			require(t, transactFixture(db, ctx, func(tx *fixtureTransaction) error { return tx.PutExecution(execution) }))
 			commands := CommandService{Store: db, Project: project}
 			task := nativeTaskRecord(service.domain.Tasks, run.TaskID)
 			discarded, err := commands.DiscardNativeTask(ctx, service.Config, task.TaskID, newID(), task.Version, "cleanup fixture", "operator")

@@ -3,12 +3,13 @@ package steerline
 import (
 	"context"
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
@@ -52,7 +53,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
+	if err := store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)

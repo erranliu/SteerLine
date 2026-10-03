@@ -5,16 +5,19 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 // These explicitly gated read-only native probes retain their original switches.
@@ -34,7 +37,7 @@ func TestCodexHistoryRealFailedAcceptance(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	store, err := steerline.OpenSQLiteStore(filepath.Join(t.TempDir(), "failed.db"))
+	store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "failed.db"))
 	require(t, err)
 	defer store.Close()
 	service := &isolatedHistoryCommitFixture{domainStore: store, directory: t.TempDir()}
@@ -86,7 +89,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 			defer cancel()
 			dbPath := filepath.Join(t.TempDir(), "history.db")
-			store, err := steerline.OpenSQLiteStore(dbPath)
+			store, err := sqlite.OpenSQLiteStore(dbPath)
 			require(t, err)
 			service := &isolatedHistoryCommitFixture{domainStore: store, directory: t.TempDir()}
 			if binding.Backend == executionapi.BackendOrca {
@@ -166,7 +169,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 			checkpoint, err := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.Identity())
 			require(t, err)
 			require(t, store.Close())
-			store, err = steerline.OpenSQLiteStore(dbPath)
+			store, err = sqlite.OpenSQLiteStore(dbPath)
 			require(t, err)
 			defer store.Close()
 			service.domainStore = store
@@ -201,7 +204,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 }
 
 type isolatedHistoryCommitFixture struct {
-	domainStore                *steerline.SQLiteStore
+	domainStore                persistence.Connection
 	directory, platformVersion string
 }
 
@@ -262,7 +265,7 @@ func TestCodexHistoryRealSourceReplacement(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	store, err := steerline.OpenSQLiteStore(filepath.Join(t.TempDir(), "replacement.db"))
+	store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "replacement.db"))
 	require(t, err)
 	defer store.Close()
 	service := &isolatedHistoryCommitFixture{domainStore: store, directory: t.TempDir()}

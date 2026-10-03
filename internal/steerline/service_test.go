@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -18,6 +17,8 @@ import (
 	"time"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 // fakeDB is the isolated PR-provider state used by native workflow tests.
@@ -450,7 +451,7 @@ func seedFakeCapabilities(t *testing.T, c Config) {
 		report.Capabilities[i].Status = executionapi.CapabilityVerified
 		report.Capabilities[i].Evidence = evidence
 	}
-	if err := (executionRecords{root: c.RunDir}).saveCapabilityReport(report); err != nil {
+	if err := (executionRecords{root: c.RunDir, persistence: sqlite.Factory{}}).saveCapabilityReport(report); err != nil {
 		t.Fatal(err)
 	}
 }

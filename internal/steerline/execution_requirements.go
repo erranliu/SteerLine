@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"os"
-
 	"slices"
 	"strings"
 
@@ -49,7 +48,7 @@ func evaluateExecutionRequirements(ctx context.Context, c Config) (executionapi.
 			return e, err
 		}
 		// A version probe establishes the lookup key, never verified capability.
-		report, loadErr := (executionRecords{root: c.RunDir}).loadCapabilityReport(key)
+		report, loadErr := (executionRecords{root: c.RunDir, persistence: c.Persistence}).loadCapabilityReport(key)
 		if loadErr != nil {
 			return e, errors.New("required capabilities have no current authenticated report: " + loadErr.Error())
 		}

@@ -37,6 +37,8 @@ var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary/negative_source_fixtures/nested_generated_name_is_not_an_exclusion",
 	"TestCD67CoreBoundary/negative_source_fixtures/top_level_output_name_is_not_an_exclusion",
 	"TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
+	"TestCD67CoreBoundary/negative_source_fixtures/reverse_storage_edge",
+	"TestCD67CoreBoundary/negative_source_fixtures/concrete_storage_edge",
 	"TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
 	"TestCD67AdditionalImplementation",
 	"TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",

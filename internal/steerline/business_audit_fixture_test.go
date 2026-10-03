@@ -2,10 +2,11 @@ package steerline
 
 import (
 	"context"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"os/exec"
 	"testing"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func neutralAuditService(t *testing.T) (*Service, *Run) {
@@ -38,7 +39,7 @@ func neutralAuditServiceWithRequirements(t *testing.T, policy executionapi.Execu
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
+	if err := store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)

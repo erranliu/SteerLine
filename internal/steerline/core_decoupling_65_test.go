@@ -3,8 +3,6 @@ package steerline
 import (
 	"context"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"os/exec"
 	"strconv"
@@ -12,6 +10,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestCD65SourceCommitAndHostGate(t *testing.T) {
@@ -98,11 +100,11 @@ func TestCD65HistoryBudgetRotatesSources(t *testing.T) {
 			time.Sleep(10 * time.Millisecond)
 		}
 	})
-	store, err := OpenSQLiteStore(databasePath)
+	store, err := openSQLiteFixture(databasePath)
 	require(t, err)
 	defer store.Close()
 	port := &testConversationHistoryPort{}
-	service := &Service{Config: Config{identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
+	service := &Service{Config: Config{Persistence: sqlite.Factory{}, identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
 	active := testHistorySource("active", false)
 	historical := make([]contracts.ConversationHistorySource, 5)
 	for i := range historical {
@@ -155,11 +157,11 @@ func TestCD65HistoryBudgetRotatesSources(t *testing.T) {
 
 func TestCD65HistoryCursorCommitsWithItsConversationBatch(t *testing.T) {
 	ctx := context.Background()
-	store, err := OpenSQLiteStore(t.TempDir() + "/history-commit.db")
+	store, err := openSQLiteFixture(t.TempDir() + "/history-commit.db")
 	require(t, err)
 	defer store.Close()
 	port := &testConversationHistoryPort{}
-	service := &Service{Config: Config{identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
+	service := &Service{Config: Config{Persistence: sqlite.Factory{}, identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
 	source := testHistorySource("commit-source", false)
 	_, err = store.db.Exec(`CREATE TRIGGER reject_history_batch BEFORE INSERT ON conversation_events BEGIN SELECT RAISE(FAIL, 'history batch commit failed'); END`)
 	require(t, err)
@@ -203,7 +205,7 @@ func (p foreignConversationDiscovery) DiscoverHistory(context.Context, contracts
 	return contracts.ConversationDiscoveryResult{Writes: []ConversationWrite{{Event: p.event}}}, nil
 }
 func testCD65DiscoveryRejectsForeignOwner(t *testing.T) {
-	store, err := OpenSQLiteStore(t.TempDir() + "/discovery-owner.db")
+	store, err := openSQLiteFixture(t.TempDir() + "/discovery-owner.db")
 	require(t, err)
 	defer store.Close()
 	id, attempt := strings.Repeat("a", 32), strings.Repeat("b", 32)
@@ -211,7 +213,7 @@ func testCD65DiscoveryRejectsForeignOwner(t *testing.T) {
 	event.ProjectID = "other-project"
 	event.ExecutionID = id
 	event.AttemptID = attempt
-	service := &Service{Config: Config{identity: "project", RunDir: t.TempDir()}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: foreignConversationDiscovery{event: event}, runs: []*Run{{RunID: "workflow", ExecutionID: id, AttemptID: attempt, DomainTaskID: "task"}}}
+	service := &Service{Config: Config{Persistence: sqlite.Factory{}, identity: "project", RunDir: t.TempDir()}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: foreignConversationDiscovery{event: event}, runs: []*Run{{RunID: "workflow", ExecutionID: id, AttemptID: attempt, DomainTaskID: "task"}}}
 	if _, err := service.discoverConversationHistory(context.Background()); err == nil {
 		t.Fatal("discovery committed a foreign project's diagnostic")
 	}
@@ -229,7 +231,7 @@ func testCD65DiscoveryRejectsForeignOwner(t *testing.T) {
 }
 
 func TestConversationHistoryMissingInjectedHostReturnsError(t *testing.T) {
-	service := &Service{Config: Config{identity: "project"}, conversationSources: &testConversationHistoryPort{}}
+	service := &Service{Config: Config{Persistence: sqlite.Factory{}, identity: "project"}, conversationSources: &testConversationHistoryPort{}}
 	if _, err := service.collectConversationHistoryPage(context.Background(), testHistorySource("missing-host", false)); err == nil || !strings.Contains(err.Error(), "managed process host") {
 		t.Fatalf("missing host did not fail before reading or writing history: %v", err)
 	}

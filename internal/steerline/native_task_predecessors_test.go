@@ -49,7 +49,7 @@ func TestAddNativeTaskPredecessorsIsAtomicIdempotentAndBlocksClaim(t *testing.T)
 	if graph.GraphRevision != 2 || len(graph.Edges) != 2 {
 		t.Fatalf("invalid additions wrote partial graph: %+v", graph)
 	}
-	reopened, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	reopened, err := openSQLiteFixture(filepath.Join(c.RunDir, "steerline.db"))
 	require(t, err)
 	defer reopened.Close()
 	page, err = (NewQueryService(reopened, c.Identity())).ShowNativeTask(ctx, "102")

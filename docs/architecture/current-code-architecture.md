@@ -1,6 +1,6 @@
 # 当前代码架构与源码索引
 
-核对日期：2026-10-04。集成基线为 #69 PR194 的实际合并 `e81fadaf59d0411af1594be7c5cd6a832c71c29f`，本页同步 #71 客户端交付；下方全 OS 源码统计保留 #68 快照，迁移文件链接指向当前所有者。前版 PR179 的架构快照可从 Git 历史查看；当前文档只链接现存源码。具体删除与验证见 [#68 交付记录](../validation/core-decoupling-07-cleanup/README.md)，#63–#67 历史断言/失败/原生证据仍在各自记录，不重写历史结果。
+核对日期：2026-10-04。集成基线为 #69 PR194 和 #71 PR195 实际合并后的 `6dce3cf1abf293e18bd78f92677c72a3fa2f0210`；本页及下方全 OS 源码索引反映 #70 SQLite 归包工作树。历史删除、断言及原生证据保留在各任务验证记录中，不改写历史结果。
 
 ## 系统与业务权威
 
@@ -20,10 +20,13 @@ flowchart LR
     Core --> Records[contracts 业务 DTO 和封套]
     Impl --> Ports
     Impl --> Records
-    Core --> DB[(SQLite)]
+    App --> DB[(SQLite)]
+    Core --> Persistence[persistence 窄提交端口]
+    DB --> Persistence
     UI --> Core
     Core --> Query[query 只读契约与用例]
-    Core --> Reader[sqlite.Reader]
+    App --> Reader[sqlite.Reader]
+    Core --> Query
     Reader --> Query
     Reader --> DB
     Reader --> Projection[projection 纯视图]
@@ -46,7 +49,8 @@ flowchart LR
 | `steerlineintegration` / `testprotocol` | 外层真实应用端口、原生配置和协议 mock 的跨层断言；不导出任意中心写接口。testprotocol 是测试进程 fixture，不是产品依赖。 |
 | `task` / `taskgraph` / `taskview` / `workerflow` | 任务资格/DAG/展示及单 worker 纯规则，保留唯一实现。 |
 | `projection` | 从同一持久快照复制并构建 Runtime/Run，按当前 Step 和 AttemptNumber 选择候选；workerflow 路径另核对非空 CurrentAttemptID，不匹配时拒绝投影，无 I/O。 |
-| `query` / `sqlite` | 分消费者只读契约及同事务 Reader；中心仍保留开库/薄接线，写事务未搬迁。 |
+| `persistence` | #69 的窄声明提交、纯错误及注入连接工厂；消费者只持有自己的端口，不暴露 SQL/任意事务。 |
+| `query` / `sqlite` | query 拥有只读应用契约；sqlite 是连接、schema 11、SQL、声明提交及读写事务的唯一实现，复用既有 Reader。应用选择并注入 Factory，中心不依赖 SQL/具体存储。 |
 | `workspace` / `publication` | 固定 Git 工作区及发布/PR provider 操作和事实；中心决定资格、受理与唯一交付。 |
 | `clientcontracts` / `steerlineclient` | 纯产品 DTO/小接口与唯一客户端；配置/资源工厂由 app 注入，读取复用 query/projection，变更调用原 CommandService/control。 |
 | `console` | TUI 输入/导航/视图；当前仍消费中心产品 DTO/query/control，客户端 I/O 已归唯一 adapter；仅配置/视图和薄映射留 #72。 |
@@ -82,7 +86,7 @@ sequenceDiagram
 
 客户端按读取/命令范围关闭资源，Close 不停止服务或 worker。变更前固定 request/command ID，超时后查原 ID；control 同 ID 同内容返回原请求，异内容拒绝，不重新发布或换实例。`answer -request-id` 查询原命令；accepted 保持中心受理含义，不声明 worker 已执行。离线查询只打开已存在、当前格式且归属匹配的 native reader，不建库、迁移或准备工作区。
 
-`console/source.go` 暂存桥只负责 DTO/调用映射；日志 I/O、候选输入检查、项目查询和控制已归客户端。配置视图、导航/渲染及中心别名仍待 #72 迁移；#72 删除这些薄桥并直接消费注入的产品小接口。实施/断言映射见 [#71 验证记录](../validation/core-decoupling-10-client/README.md)。本页下方的全 OS 源码统计保持 #68 快照，#71 新模块以上述实际源码为准。
+`console/source.go` 暂存桥只负责 DTO/调用映射；日志 I/O、候选输入检查、项目查询和控制已归客户端。配置视图、导航/渲染及中心别名仍待 #72 迁移；#72 删除这些薄桥并直接消费注入的产品小接口。实施/断言映射见 [#71 验证记录](../validation/core-decoupling-10-client/README.md)。下方源码索引已按 #70 工作树刷新，包括 #71 客户端唯一构造。
 
 ## 会话和客户端读取
 
@@ -109,36 +113,37 @@ sequenceDiagram
 
 ## 全 OS / 构建标签源码索引
 
-以下统计涵盖 cmd/internal 全部生产 `.go`（仅排除 `_test.go`），包括不同 OS/tag；是源码 import 图，不是运行时调用图或支持范围。完整路径、SHA-256、构建条件和 imports 见 [机器索引](../validation/core-decoupling-07-cleanup/source-index.json)。
+以下统计含全部生产 Go 文件（不排除 OS/build tags），不含测试文件；按本次工作树生成。数据库格式、产品 DTO 和平台能力版本保持不变。
 
-共 **26 个包目录、293 个生产 Go 文件、61 条项目内 import 边**。
-
-| 包目录 | 文件数 | 直接项目内依赖 |
-| --- | ---: | --- |
+| 包 | 生产文件数 | 项目内直接依赖 |
+| --- | --- | --- |
 | `cmd/orca-probe` | 1 | 无 |
-| `cmd/steerline` | 1 | `internal/steerline`、`internal/steerlineapp` |
+| `cmd/steerline` | 1 | `internal/steerline`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/task`、`internal/steerline/taskview`、`internal/steerlineapp`、`internal/steerlineclient` |
 | `cmd/test-feedback` | 5 | `internal/testfeedback`、`internal/testprocess` |
 | `internal/coreboundary` | 1 | 无 |
-| `internal/steerline` | 99 | `internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/projection`、`internal/steerline/publication`、`internal/steerline/query`、`internal/steerline/sqlite`、`internal/steerline/task`、`internal/steerline/taskview`、`internal/steerline/workerflow`、`internal/steerline/workspace` |
+| `internal/steerline` | 89 | `internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/persistence`、`internal/steerline/projection`、`internal/steerline/publication`、`internal/steerline/query`、`internal/steerline/task`、`internal/steerline/taskview`、`internal/steerline/workerflow`、`internal/steerline/workspace` |
+| `internal/steerline/clientcontracts` | 2 | `internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/task`、`internal/steerline/taskview` |
 | `internal/steerline/codexapp` | 4 | 无 |
 | `internal/steerline/codexworker` | 30 | `internal/steerline/codexapp`、`internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/workspace` |
-| `internal/steerline/console` | 18 | `internal/steerline`、`internal/steerline/execution` |
-| `internal/steerline/contracts` | 13 | `internal/steerline/execution`、`internal/steerline/task`、`internal/steerline/taskview` |
-| `internal/steerline/execution` | 15 | 无 |
+| `internal/steerline/console` | 17 | `internal/steerline`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerlineclient` |
+| `internal/steerline/contracts` | 17 | `internal/steerline/execution`、`internal/steerline/task`、`internal/steerline/taskview`、`internal/steerline/workerflow` |
+| `internal/steerline/execution` | 16 | 无 |
 | `internal/steerline/orca_remote_worker` | 14 | `internal/steerline/codexworker`、`internal/steerline/execution`、`internal/steerline/orcaworker` |
 | `internal/steerline/orcaworker` | 29 | `internal/steerline/codexworker`、`internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/workspace` |
+| `internal/steerline/persistence` | 3 | `internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/query`、`internal/steerline/task` |
 | `internal/steerline/processhost` | 4 | `internal/steerline/execution` |
 | `internal/steerline/projection` | 3 | `internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/workerflow` |
 | `internal/steerline/publication` | 7 | `internal/steerline/contracts`、`internal/steerline/execution` |
 | `internal/steerline/query` | 6 | `internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/task`、`internal/steerline/taskview` |
-| `internal/steerline/sqlite` | 7 | `internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/projection`、`internal/steerline/query`、`internal/steerline/task` |
+| `internal/steerline/sqlite` | 31 | `internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/persistence`、`internal/steerline/projection`、`internal/steerline/query`、`internal/steerline/task`、`internal/steerline/workerflow` |
 | `internal/steerline/task` | 10 | `internal/steerline/taskgraph` |
 | `internal/steerline/taskgraph` | 1 | 无 |
 | `internal/steerline/taskview` | 3 | `internal/steerline/task`、`internal/steerline/taskgraph` |
 | `internal/steerline/testprotocol` | 4 | 无 |
 | `internal/steerline/workerflow` | 3 | `internal/steerline/execution`、`internal/steerline/task` |
 | `internal/steerline/workspace` | 6 | `internal/steerline/execution` |
-| `internal/steerlineapp` | 5 | `internal/steerline`、`internal/steerline/codexworker`、`internal/steerline/console`、`internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/orca_remote_worker`、`internal/steerline/orcaworker`、`internal/steerline/processhost`、`internal/steerline/publication`、`internal/steerline/workspace` |
+| `internal/steerlineapp` | 6 | `internal/steerline`、`internal/steerline/clientcontracts`、`internal/steerline/codexworker`、`internal/steerline/console`、`internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/orca_remote_worker`、`internal/steerline/orcaworker`、`internal/steerline/persistence`、`internal/steerline/processhost`、`internal/steerline/publication`、`internal/steerline/query`、`internal/steerline/sqlite`、`internal/steerline/task`、`internal/steerline/workspace`、`internal/steerlineclient` |
+| `internal/steerlineclient` | 3 | `internal/steerline`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/query`、`internal/steerline/task`、`internal/steerline/taskview` |
 | `internal/testfeedback` | 1 | 无 |
 | `internal/testprocess` | 3 | 无 |
 
@@ -179,9 +184,9 @@ sequenceDiagram
 - [conversation_replay.go](../../internal/steerline/conversation_replay.go)
 - [conversation_service.go](../../internal/steerline/conversation_service.go)
 - [conversation_sources.go](../../internal/steerline/conversation_sources.go)
-- [conversation_store.go](../../internal/steerline/conversation_store.go)
 - [decision.go](../../internal/steerline/decision.go)
 - [domain.go](../../internal/steerline/domain.go)
+- [domain_snapshot.go](../../internal/steerline/domain_snapshot.go)
 - [execution_backend.go](../../internal/steerline/execution_backend.go)
 - [execution_directory.go](../../internal/steerline/execution_directory.go)
 - [execution_helpers.go](../../internal/steerline/execution_helpers.go)
@@ -196,7 +201,6 @@ sequenceDiagram
 - [journal_reader.go](../../internal/steerline/journal_reader.go)
 - [launchers.go](../../internal/steerline/launchers.go)
 - [model.go](../../internal/steerline/model.go)
-- [sqlite_native_authority.go](../../internal/steerline/sqlite_native_authority.go)
 - [native_batch_command.go](../../internal/steerline/native_batch_command.go)
 - [native_claim_command.go](../../internal/steerline/native_claim_command.go)
 - [native_cleanup.go](../../internal/steerline/native_cleanup.go)
@@ -206,7 +210,6 @@ sequenceDiagram
 - [native_discard_command.go](../../internal/steerline/native_discard_command.go)
 - [native_dispatch_command.go](../../internal/steerline/native_dispatch_command.go)
 - [native_graph_export.go](../../internal/steerline/native_graph_export.go)
-- [sqlite_task_graph.go](../../internal/steerline/sqlite_task_graph.go)
 - [native_graph_types.go](../../internal/steerline/native_graph_types.go)
 - [native_project_open.go](../../internal/steerline/native_project_open.go)
 - [native_readiness_query.go](../../internal/steerline/native_readiness_query.go)
@@ -232,19 +235,10 @@ sequenceDiagram
 - [service_commit.go](../../internal/steerline/service_commit.go)
 - [service_execution_profiles.go](../../internal/steerline/service_execution_profiles.go)
 - [service_workers.go](../../internal/steerline/service_workers.go)
-- [sqlite_store.go](../../internal/steerline/sqlite_store.go)
-- [sqlite_store_checkpoint.go](../../internal/steerline/sqlite_store_checkpoint.go)
-- [sqlite_store_read.go](../../internal/steerline/sqlite_store_read.go)
-- [sqlite_store_schema.go](../../internal/steerline/sqlite_store_schema.go)
-- [sqlite_store_write.go](../../internal/steerline/sqlite_store_write.go)
-- [sqlite_store_write_commands.go](../../internal/steerline/sqlite_store_write_commands.go)
-- [sqlite_store_write_execution.go](../../internal/steerline/sqlite_store_write_execution.go)
-- [sqlite_store_write_native.go](../../internal/steerline/sqlite_store_write_native.go)
 - [state_preflight.go](../../internal/steerline/state_preflight.go)
 - [state_revision.go](../../internal/steerline/state_revision.go)
 - [store.go](../../internal/steerline/store.go)
 - [worker_attachment_store.go](../../internal/steerline/worker_attachment_store.go)
-- [sqlite_worker_commit.go](../../internal/steerline/sqlite_worker_commit.go)
 - [worker_completion.go](../../internal/steerline/worker_completion.go)
 - [worker_environment.go](../../internal/steerline/worker_environment.go)
 - [worker_environment_host.go](../../internal/steerline/worker_environment_host.go)
@@ -265,6 +259,12 @@ sequenceDiagram
 - [worker_state.go](../../internal/steerline/worker_state.go)
 - [worker_types.go](../../internal/steerline/worker_types.go)
 - [workspace_config.go](../../internal/steerline/workspace_config.go)
+- [write_ports.go](../../internal/steerline/write_ports.go)
+
+#### internal/steerline/clientcontracts
+
+- [client.go](../../internal/steerline/clientcontracts/client.go)
+- [observations.go](../../internal/steerline/clientcontracts/observations.go)
 
 #### internal/steerline/codexapp
 
@@ -308,7 +308,6 @@ sequenceDiagram
 
 #### internal/steerline/console
 
-- [activity.go](../../internal/steerlineclient/activity.go)
 - [conversation.go](../../internal/steerline/console/conversation.go)
 - [conversation_anchor.go](../../internal/steerline/console/conversation_anchor.go)
 - [execution_profile.go](../../internal/steerline/console/execution_profile.go)
@@ -330,12 +329,16 @@ sequenceDiagram
 #### internal/steerline/contracts
 
 - [activity.go](../../internal/steerline/contracts/activity.go)
+- [answer_identity.go](../../internal/steerline/contracts/answer_identity.go)
 - [conversation.go](../../internal/steerline/contracts/conversation.go)
+- [conversation_position.go](../../internal/steerline/contracts/conversation_position.go)
 - [conversation_query.go](../../internal/steerline/contracts/conversation_query.go)
 - [decision_content.go](../../internal/steerline/contracts/decision_content.go)
+- [delivery.go](../../internal/steerline/contracts/delivery.go)
 - [environment.go](../../internal/steerline/contracts/environment.go)
 - [execution.go](../../internal/steerline/contracts/execution.go)
 - [json.go](../../internal/steerline/contracts/json.go)
+- [operation_rules.go](../../internal/steerline/contracts/operation_rules.go)
 - [pr.go](../../internal/steerline/contracts/pr.go)
 - [publication.go](../../internal/steerline/contracts/publication.go)
 - [query.go](../../internal/steerline/contracts/query.go)
@@ -357,6 +360,7 @@ sequenceDiagram
 - [policy.go](../../internal/steerline/execution/policy.go)
 - [publication.go](../../internal/steerline/execution/publication.go)
 - [question_route.go](../../internal/steerline/execution/question_route.go)
+- [record_validation.go](../../internal/steerline/execution/record_validation.go)
 - [requirements.go](../../internal/steerline/execution/requirements.go)
 - [session.go](../../internal/steerline/execution/session.go)
 - [workspace.go](../../internal/steerline/execution/workspace.go)
@@ -410,6 +414,12 @@ sequenceDiagram
 - [terminal_protocol.go](../../internal/steerline/orcaworker/terminal_protocol.go)
 - [workspace.go](../../internal/steerline/orcaworker/workspace.go)
 
+#### internal/steerline/persistence
+
+- [connections.go](../../internal/steerline/persistence/connections.go)
+- [errors.go](../../internal/steerline/persistence/errors.go)
+- [ports.go](../../internal/steerline/persistence/ports.go)
+
 #### internal/steerline/processhost
 
 - [host.go](../../internal/steerline/processhost/host.go)
@@ -445,12 +455,36 @@ sequenceDiagram
 #### internal/steerline/sqlite
 
 - [checkpoint.go](../../internal/steerline/sqlite/checkpoint.go)
+- [connections.go](../../internal/steerline/sqlite/connections.go)
 - [conversation.go](../../internal/steerline/sqlite/conversation.go)
+- [conversation_store.go](../../internal/steerline/sqlite/conversation_store.go)
 - [graph.go](../../internal/steerline/sqlite/graph.go)
+- [helpers.go](../../internal/steerline/sqlite/helpers.go)
 - [project.go](../../internal/steerline/sqlite/project.go)
+- [project_view.go](../../internal/steerline/sqlite/project_view.go)
 - [reader.go](../../internal/steerline/sqlite/reader.go)
+- [record_validation.go](../../internal/steerline/sqlite/record_validation.go)
 - [records.go](../../internal/steerline/sqlite/records.go)
+- [runtime_preflight.go](../../internal/steerline/sqlite/runtime_preflight.go)
+- [schema_preflight.go](../../internal/steerline/sqlite/schema_preflight.go)
+- [sqlite_native_authority.go](../../internal/steerline/sqlite/sqlite_native_authority.go)
+- [sqlite_runtime_snapshot.go](../../internal/steerline/sqlite/sqlite_runtime_snapshot.go)
+- [sqlite_store.go](../../internal/steerline/sqlite/sqlite_store.go)
+- [sqlite_store_checkpoint.go](../../internal/steerline/sqlite/sqlite_store_checkpoint.go)
+- [sqlite_store_read.go](../../internal/steerline/sqlite/sqlite_store_read.go)
+- [sqlite_store_schema.go](../../internal/steerline/sqlite/sqlite_store_schema.go)
+- [sqlite_store_write.go](../../internal/steerline/sqlite/sqlite_store_write.go)
+- [sqlite_store_write_commands.go](../../internal/steerline/sqlite/sqlite_store_write_commands.go)
+- [sqlite_store_write_execution.go](../../internal/steerline/sqlite/sqlite_store_write_execution.go)
+- [sqlite_store_write_native.go](../../internal/steerline/sqlite/sqlite_store_write_native.go)
+- [sqlite_task_graph.go](../../internal/steerline/sqlite/sqlite_task_graph.go)
+- [sqlite_task_ports.go](../../internal/steerline/sqlite/sqlite_task_ports.go)
+- [sqlite_worker_commit.go](../../internal/steerline/sqlite/sqlite_worker_commit.go)
+- [sqlite_write_ports.go](../../internal/steerline/sqlite/sqlite_write_ports.go)
+- [state_revision.go](../../internal/steerline/sqlite/state_revision.go)
 - [tasks.go](../../internal/steerline/sqlite/tasks.go)
+- [values.go](../../internal/steerline/sqlite/values.go)
+- [worker_attachment_store.go](../../internal/steerline/sqlite/worker_attachment_store.go)
 
 #### internal/steerline/task
 
@@ -501,9 +535,16 @@ sequenceDiagram
 
 - [app.go](../../internal/steerlineapp/app.go)
 - [capability.go](../../internal/steerlineapp/capability.go)
+- [client.go](../../internal/steerlineapp/client.go)
 - [config.go](../../internal/steerlineapp/config.go)
 - [console.go](../../internal/steerlineapp/console.go)
 - [directory.go](../../internal/steerlineapp/directory.go)
+
+#### internal/steerlineclient
+
+- [activity.go](../../internal/steerlineclient/activity.go)
+- [client.go](../../internal/steerlineclient/client.go)
+- [eligibility.go](../../internal/steerlineclient/eligibility.go)
 
 #### internal/testfeedback
 

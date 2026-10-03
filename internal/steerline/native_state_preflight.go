@@ -3,7 +3,6 @@ package steerline
 import (
 	"context"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"errors"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"strings"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
 
 func validateNativeStateLocation(c Config) error {
@@ -49,34 +49,28 @@ func RepositoryStateKey(identity string) string {
 	return name + "-" + shortHash(canonical(common))[:12]
 }
 
-func cleanupNewNativeDB(path string) {
-	for _, suffix := range []string{"", "-wal", "-shm"} {
-		_ = os.Remove(path + suffix)
+func openBoundNativeStore(ctx context.Context, c Config, path string) (_ persistence.Connection, retErr error) {
+	if c.Persistence == nil {
+		return nil, nativeErr("authority_mismatch", "persistence factory is required")
 	}
-}
-
-func openBoundNativeStore(ctx context.Context, c Config, path string) (_ *SQLiteStore, retErr error) {
-	db, err := OpenSQLiteReader(path)
+	db, err := c.Persistence.OpenReader(path)
 	if err != nil {
-		return nil, nativeErr("unsupported_schema", "existing database is not a readable current SQLite database")
+		return nil, err
 	}
 	defer func() {
 		if retErr != nil {
 			_ = db.Close()
 		}
 	}()
-	if err = validateRetiredWholeRunResultCommands(ctx, db.db); err != nil {
-		return nil, err
-	}
-	if err = validateNativeSQLiteRuntimeProjection(ctx, db.db); err != nil {
+	if err = db.ValidateStoredFormat(ctx); err != nil {
 		return nil, err
 	}
 	authority, err := db.NativeAuthority(ctx, c.Identity())
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, persistence.ErrNotFound) {
 		return nil, nativeErr("authority_mismatch", "database has no native authority for this project; preserve existing state")
 	}
 	if err != nil {
-		return nil, nativeErr("unsupported_schema", "database does not contain the native task schema")
+		return nil, err
 	}
 	target, err := configuredRepositoryTarget(ctx, c)
 	if err != nil {
@@ -85,7 +79,7 @@ func openBoundNativeStore(ctx context.Context, c Config, path string) (_ *SQLite
 	if authority.Authority != "native" || authority.Repository != target || authority.Remote != c.Remote || authority.Branch != c.Branch {
 		return nil, nativeErr("authority_mismatch", "configuration repository, remote or branch differs from persisted native authority")
 	}
-	db.nativeBinding = &authority
+	db.BindAuthority(authority)
 	snapshot, err := db.Query(ctx, c.Identity())
 	if err != nil {
 		return nil, err
@@ -285,7 +279,7 @@ func validateNativeControlTree(runDir string) error {
 				continue
 			}
 			if section.Name() == "requests" {
-				if !stableExecutionID(entry.Name()) || !entry.IsDir() {
+				if !executionapi.StableExecutionID(entry.Name()) || !entry.IsDir() {
 					return nativeErr("authority_mismatch", "native control request has an invalid identity")
 				}
 				dir := filepath.Join(sectionPath, entry.Name())
@@ -308,7 +302,7 @@ func validateNativeControlTree(runDir string) error {
 				}
 				continue
 			}
-			if !strings.HasSuffix(entry.Name(), ".json") || !stableExecutionID(strings.TrimSuffix(entry.Name(), ".json")) || entry.IsDir() {
+			if !strings.HasSuffix(entry.Name(), ".json") || !executionapi.StableExecutionID(strings.TrimSuffix(entry.Name(), ".json")) || entry.IsDir() {
 				return nativeErr("authority_mismatch", "native control receipt has an invalid identity")
 			}
 			data, readErr := readBoundedFile(filepath.Join(sectionPath, entry.Name()), maxControlRequestBytes)
@@ -375,29 +369,6 @@ func validateNativeExecutionArtifacts(root string) error {
 	return nil
 }
 
-func validateNativeSQLiteRuntimeProjection(ctx context.Context, db *sql.DB) error {
-	rows, err := db.QueryContext(ctx, `SELECT payload FROM projection`)
-	if err != nil {
-		return nativeErr("unsupported_schema", "cannot inspect the saved runtime projection without mutation")
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var payload []byte
-		if err = rows.Scan(&payload); err != nil {
-			return nativeErr("unsupported_schema", "cannot read the saved runtime projection without mutation")
-		}
-		var checkpoint ServiceCheckpoint
-		if err = decode(payload, &checkpoint); err != nil || checkpoint.SchemaVersion != WorkerFlowRuntimeSchema || checkpoint.Repository.Identity == "" {
-			return nativeErr("unsupported_schema", "unsupported service checkpoint; preserve the database")
-		}
-
-	}
-	if err = rows.Err(); err != nil {
-		return nativeErr("unsupported_schema", "cannot inspect the saved runtime projection without mutation")
-	}
-	return nil
-}
-
 func validateNativeRunDirectories(root string) error {
 	info, err := os.Lstat(root)
 	if err != nil {
@@ -411,7 +382,7 @@ func validateNativeRunDirectories(root string) error {
 		return err
 	}
 	for _, entry := range entries {
-		if !stableExecutionID(entry.Name()) || !entry.IsDir() {
+		if !executionapi.StableExecutionID(entry.Name()) || !entry.IsDir() {
 			return nativeErr("authority_mismatch", "native run/worktree state contains an unknown identity: "+entry.Name())
 		}
 		childInfo, statErr := os.Lstat(filepath.Join(root, entry.Name()))
@@ -451,7 +422,7 @@ func validateNativeServiceTree(runDir, repository string) error {
 		return err
 	}
 	for _, startup := range startups {
-		if !stableExecutionID(startup.Name()) || !startup.IsDir() {
+		if !executionapi.StableExecutionID(startup.Name()) || !startup.IsDir() {
 			return nativeErr("authority_mismatch", "native startup directory contains an unknown identity: "+startup.Name())
 		}
 		dir := filepath.Join(startupRoot, startup.Name())

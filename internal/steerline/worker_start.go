@@ -181,7 +181,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	// preparation identity; it does not allocate another turn or bypass a gate.
 	resumePreparation := readinessTurn && execution.PendingCommandID == turnID &&
 		execution.PendingTurnID == "" && s.workers[run.RunID] == nil
-	if workflow.WorkflowVersion != WorkerFlowVersion || !stableExecutionID(turnID) ||
+	if workflow.WorkflowVersion != WorkerFlowVersion || !executionapi.StableExecutionID(turnID) ||
 		execution.PendingTurnID != "" || execution.PendingCommandID != "" && !resumePreparation || sessionID != "" && execution.CurrentTurnID != "" && execution.LastStoppedTurnID != execution.CurrentTurnID {
 		return errors.New("worker turn cannot start without one idle original session")
 	}

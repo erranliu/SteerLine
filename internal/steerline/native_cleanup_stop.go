@@ -16,7 +16,7 @@ func (s *Service) stopRunExecution(ctx context.Context, r *Run, worker *Worker) 
 	if configErr != nil {
 		return executionapi.Operation{}, configErr
 	}
-	records := executionRecords{root: config.RunDir}
+	records := executionRecords{root: config.RunDir, persistence: config.Persistence}
 	ref, err := records.loadBinding(r.RunID, r.AttemptID)
 	if err != nil {
 		return executionapi.Operation{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "active execution has no valid fixed binding", Cause: err}
@@ -100,7 +100,7 @@ func (s *Service) confirmExecutionStop(op executionapi.Operation) (bool, error) 
 	if op.ID == "" {
 		return false, errors.New("stop operation is missing")
 	}
-	records := executionRecords{root: config.RunDir}
+	records := executionRecords{root: config.RunDir, persistence: config.Persistence}
 	run := s.localWorkerRun(op.RunID)
 	if run == nil {
 		return false, errors.New("execution stop has no fixed workflow")
@@ -124,7 +124,7 @@ func (s *Service) confirmExecutionStop(op executionapi.Operation) (bool, error) 
 	}
 	ref := op.Ref
 	if ref == nil {
-		loaded, err := (executionRecords{root: config.RunDir}).loadBinding(op.RunID, op.AttemptID)
+		loaded, err := (executionRecords{root: config.RunDir, persistence: config.Persistence}).loadBinding(op.RunID, op.AttemptID)
 		if err != nil {
 			return false, err
 		}

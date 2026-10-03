@@ -1,8 +1,10 @@
 package steerline
 
 import (
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"testing"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion(t *testing.T) {
@@ -16,7 +18,7 @@ func TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion(t *test
 			report.Capabilities[i].Status = executionapi.CapabilityUnsupported
 		}
 	}
-	records := executionRecords{root: t.TempDir()}
+	records := executionRecords{root: t.TempDir(), persistence: sqlite.Factory{}}
 	require(t, records.saveCapabilityReport(report))
 	restored, err := records.loadCapabilityReport(report)
 	require(t, err)

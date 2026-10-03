@@ -1,0 +1,2208 @@
+{
+  "schema_version": 1,
+  "scope": "quick",
+  "phase": "run",
+  "started_at": "2026-10-03T17:13:36.6718089Z",
+  "finished_at": "2026-10-03T17:17:46.0316676Z",
+  "preparation_seconds": 0.9769093,
+  "execution_seconds": 248.3829494,
+  "environment": {
+    "source_commit": "6dce3cf1abf293e18bd78f92677c72a3fa2f0210",
+    "worktree_status": " M cmd/steerline/main.go\n M cmd/steerline/main_test.go\n M cmd/steerline/native_task_test.go\n M cmd/test-feedback/scoped.go\n M docs/architecture/current-code-architecture.md\nMM docs/spec/core-decoupling-09-sqlite.plan.md\n M internal/coreboundary/check.go\n M internal/steerline/activity.go\n M internal/steerline/activity_test.go\n M internal/steerline/business_audit_fixture_test.go\n M internal/steerline/business_fixture_test.go\n M internal/steerline/business_ports_fixture_test.go\nMM internal/steerline/capability_snapshot_business_test.go\n M internal/steerline/command.go\n M internal/steerline/command_processor.go\nMM internal/steerline/config.go\n M internal/steerline/control_client.go\n M internal/steerline/control_native_test.go\n M internal/steerline/control_protocol.go\n M internal/steerline/control_service.go\n M internal/steerline/conversation.go\n M internal/steerline/conversation_fixture_test.go\nMM internal/steerline/conversation_position.go\nMM internal/steerline/conversation_query.go\nMM internal/steerline/conversation_replay.go\nMM internal/steerline/conversation_service.go\n M internal/steerline/conversation_sources.go\nD  internal/steerline/conversation_store.go\nMM internal/steerline/conversation_test.go\n M internal/steerline/core_decoupling_63_audit_test.go\n M internal/steerline/core_decoupling_63_test.go\n M internal/steerline/core_decoupling_64_lifecycle_test.go\n M internal/steerline/core_decoupling_64_review_test.go\nMM internal/steerline/core_decoupling_65_test.go\nMM internal/steerline/core_decoupling_66_test.go\nMM internal/steerline/decision.go\nMM internal/steerline/decision_native_test.go\nMM internal/steerline/domain.go\n M internal/steerline/environment_business_test.go\nMM internal/steerline/execution_acceptance_helpers_test.go\nMM internal/steerline/execution_backend.go\nMM internal/steerline/execution_backend_test.go\nMM internal/steerline/execution_directory.go\n M internal/steerline/execution_helpers.go\nMM internal/steerline/execution_policy_test.go\n M internal/steerline/execution_profiles.go\n M internal/steerline/execution_profiles_test.go\nMM internal/steerline/execution_record_fixture_test.go\n M internal/steerline/execution_registry_test.go\nMM internal/steerline/execution_requirements.go\nMM internal/steerline/execution_requirements_test.go\nMM internal/steerline/execution_resolution_audit_test.go\n M internal/steerline/execution_snapshot.go\nMM internal/steerline/execution_store.go\n M internal/steerline/execution_target_compat_test.go\nMM internal/steerline/fixed_agent_business_test.go\n M internal/steerline/global_execution_test_helpers_test.go\nMM internal/steerline/host_wait_business_test.go\n M internal/steerline/implementation_bindings.go\n M internal/steerline/journal_platform_linux.go\n M internal/steerline/journal_platform_other.go\n M internal/steerline/journal_platform_windows.go\n M internal/steerline/journal_reader.go\n M internal/steerline/journal_reader_test.go\n M internal/steerline/launchers.go\n M internal/steerline/model.go\n M internal/steerline/native_batch_command.go\nMM internal/steerline/native_claim_command.go\n M internal/steerline/native_cleanup.go\nMM internal/steerline/native_cleanup_stop.go\n M internal/steerline/native_contract_files.go\n M internal/steerline/native_dag_commands_test.go\n M internal/steerline/native_delivery_command.go\n M internal/steerline/native_discard_command.go\n M internal/steerline/native_dispatch_command.go\n M internal/steerline/native_graph_export.go\n M internal/steerline/native_graph_query_test.go\n M internal/steerline/native_graph_types.go\nMM internal/steerline/native_project_open.go\n M internal/steerline/native_readiness_query.go\n M internal/steerline/native_repository_target.go\nMM internal/steerline/native_service.go\nMM internal/steerline/native_state_preflight.go\nMM internal/steerline/native_task_audit_test.go\n M internal/steerline/native_task_page.go\n M internal/steerline/native_task_predecessors.go\n M internal/steerline/native_task_predecessors_test.go\nMM internal/steerline/native_tasks_test.go\n M internal/steerline/observation.go\nMM internal/steerline/observation_test.go\nMM internal/steerline/operation.go\nMM internal/steerline/persistence/ports.go\n M internal/steerline/platform_linux.go\n M internal/steerline/platform_linux_test.go\n M internal/steerline/platform_windows.go\n M internal/steerline/platform_windows_test.go\n M internal/steerline/policy_snapshot_business_test.go\n M internal/steerline/pr.go\nMM internal/steerline/pr_test.go\n M internal/steerline/profile_data.go\nMM internal/steerline/project_view.go\nMM internal/steerline/project_view_test.go\n M internal/steerline/publication_policy_test.go\n M internal/steerline/publication_snapshot.go\n M internal/steerline/query_command.go\n M internal/steerline/query_event_batch_test.go\n M internal/steerline/question_route_test_helpers_test.go\n M internal/steerline/readiness_business_test.go\n M internal/steerline/recovery.go\n M internal/steerline/recovery_real_probe_test.go\nMM internal/steerline/recovery_test.go\n M internal/steerline/requirements_fixture_test.go\n M internal/steerline/resource_restart_business_test.go\nMM internal/steerline/runtime_boundary_test.go\n M internal/steerline/runtime_view.go\n M internal/steerline/runtime_view_test.go\nMM internal/steerline/service.go\n M internal/steerline/service_client.go\n M internal/steerline/service_client_test.go\n M internal/steerline/service_commit.go\n M internal/steerline/service_execution_profiles.go\nMM internal/steerline/service_lifecycle_review_test.go\nMM internal/steerline/service_ports_fixture_test.go\nMM internal/steerline/service_test.go\n M internal/steerline/service_workers.go\n M internal/steerline/source_replacement_business_test.go\n M internal/steerline/sqlite/checkpoint.go\n M internal/steerline/sqlite/conversation.go\nMM internal/steerline/sqlite/conversation_test.go\n M internal/steerline/sqlite/graph.go\n M internal/steerline/sqlite/project.go\n M internal/steerline/sqlite/reader.go\nMM internal/steerline/sqlite/reader_test.go\n M internal/steerline/sqlite/records.go\n M internal/steerline/sqlite/tasks.go\nD  internal/steerline/sqlite_native_authority.go\nD  internal/steerline/sqlite_runtime_snapshot.go\nD  internal/steerline/sqlite_store.go\nD  internal/steerline/sqlite_store_checkpoint.go\nD  internal/steerline/sqlite_store_read.go\nD  internal/steerline/sqlite_store_schema.go\nMD internal/steerline/sqlite_store_test.go\nD  internal/steerline/sqlite_store_write.go\nD  internal/steerline/sqlite_store_write_commands.go\nD  internal/steerline/sqlite_store_write_execution.go\nD  internal/steerline/sqlite_store_write_native.go\nD  internal/steerline/sqlite_task_graph.go\nD  internal/steerline/sqlite_task_ports.go\nD  internal/steerline/sqlite_worker_commit.go\nD  internal/steerline/sqlite_write_ports.go\nMM internal/steerline/state_preflight.go\nMM internal/steerline/state_revision.go\nMM internal/steerline/store.go\n M internal/steerline/store_test.go\nMM internal/steerline/worker_attachment_store.go\n M internal/steerline/worker_commit_boundary_test.go\n M internal/steerline/worker_commit_test.go\n M internal/steerline/worker_completion.go\nMM internal/steerline/worker_config_test.go\nMM internal/steerline/worker_context_test.go\n M internal/steerline/worker_delivery_test.go\n M internal/steerline/worker_environment.go\n M internal/steerline/worker_environment_host.go\nMM internal/steerline/worker_events.go\n M internal/steerline/worker_events_cd62_test.go\n M internal/steerline/worker_evidence.go\n M internal/steerline/worker_execution.go\nMM internal/steerline/worker_feedback.go\n M internal/steerline/worker_feedback_phase_test.go\n M internal/steerline/worker_lifecycle.go\n M internal/steerline/worker_lifecycle_async.go\n M internal/steerline/worker_lifecycle_feedback.go\n M internal/steerline/worker_lifecycle_recovery.go\n M internal/steerline/worker_local_test.go\n M internal/steerline/worker_pr.go\n M internal/steerline/worker_pr_binding_test.go\n M internal/steerline/worker_process.go\n M internal/steerline/worker_publish_local.go\n M internal/steerline/worker_publish_local_test.go\n M internal/steerline/worker_receipts_business_test.go\n M internal/steerline/worker_recovery.go\n M internal/steerline/worker_recovery_commit_test.go\n M internal/steerline/worker_recovery_test.go\n M internal/steerline/worker_resume.go\n M internal/steerline/worker_service_test.go\nMM internal/steerline/worker_start.go\nMM internal/steerline/worker_state.go\nMM internal/steerline/worker_state_test.go\n M internal/steerline/worker_types.go\n M internal/steerline/workspace_config.go\n M internal/steerline/workspace_identity_business_test.go\n M internal/steerline/write_ports.go\nMM internal/steerline/write_ports_fixture_test.go\nMM internal/steerline/write_ports_test.go\n M internal/steerlineapp/agent_selection_cd67_test.go\nMM internal/steerlineapp/app.go\n M internal/steerlineapp/capability.go\n M internal/steerlineapp/client.go\n M internal/steerlineapp/client_boundary_test.go\n M internal/steerlineapp/client_profile_test.go\nMM internal/steerlineapp/client_project_test.go\nMM internal/steerlineapp/config.go\n M internal/steerlineapp/config_backend_test.go\n M internal/steerlineapp/config_fixture_test.go\n M internal/steerlineapp/console.go\n M internal/steerlineapp/core_decoupling_66_test.go\n M internal/steerlineapp/directory.go\n M internal/steerlineapp/execution_policy_live_cd67_test.go\n M internal/steerlineapp/full_access_freeze_cd67_test.go\n M internal/steerlineapp/global_execution_config_test.go\n M internal/steerlineapp/global_execution_example_test.go\n M internal/steerlineapp/home_test.go\n M internal/steerlineapp/local_capability_live_cd67_test.go\n M internal/steerlineapp/local_windows_sandbox_cd67_test.go\n M internal/steerlineapp/policy_admission_cd67_test.go\n M internal/steerlineapp/policy_snapshot_cd67_test.go\n M internal/steerlineapp/profile_publication_cd67_test.go\n M internal/steerlineapp/profile_selection_cd67_test.go\n M internal/steerlineapp/project_gates_cd67_test.go\n M internal/steerlineapp/projects_test.go\n M internal/steerlineapp/publication_admission_cd67_test.go\n M internal/steerlineapp/readiness_command_cd67_test.go\n M internal/steerlineapp/registry_identity_cd67_test.go\n M internal/steerlineapp/requirement_tools_cd67_test.go\n M internal/steerlineapp/terminal_preflight_cd67_test.go\n M internal/steerlineintegration/additional_implementation_fixture_test.go\n M internal/steerlineintegration/additional_publication_fixture_test.go\n M internal/steerlineintegration/capability_composition_test.go\n M internal/steerlineintegration/cli_lifecycle_cd67_test.go\n M internal/steerlineintegration/cli_window_windows_cd67_test.go\nMM internal/steerlineintegration/conversation_history_fixture_test.go\nMM internal/steerlineintegration/conversation_native_acceptance_test.go\n M internal/steerlineintegration/core_decoupling_65_test.go\nMM internal/steerlineintegration/core_decoupling_66_test.go\n M internal/steerlineintegration/core_decoupling_67_additional_test.go\n M internal/steerlineintegration/core_decoupling_67_boundary_test.go\nMM internal/steerlineintegration/lifecycle_test.go\n M internal/steerlineintegration/native_environment_cd67_test.go\nMM internal/steerlineintegration/native_profile_fixture_test.go\n M internal/steerlineintegration/normalizer_composition_test.go\n M internal/steerlineintegration/policy_admission_cd67_test.go\n M internal/steerlineintegration/readiness_live_cd67_test.go\n M internal/steerlineintegration/remote_admission_cd67_test.go\n M internal/steerlineintegration/remote_fake_test.go\n M internal/steerlineintegration/remote_protocol_test.go\n M internal/steerlineintegration/requirement_admission_cd67_test.go\n M internal/steerlineintegration/supervised_configuration_cd67_test.go\n M internal/steerlineintegration/worker_codex_live_test.go\n M internal/steerlineintegration/worker_recovery_live_cd67_test.go\n?? docs/validation/core-decoupling-09-sqlite/center.jsonl\n?? docs/validation/core-decoupling-09-sqlite/storage.jsonl\n?? docs/validation/core-decoupling-09-sqlite/wiring.jsonl\n?? internal/steerline/command_persistence_test.go\n?? internal/steerline/contracts/answer_identity.go\n?? internal/steerline/contracts/conversation_position.go\n?? internal/steerline/contracts/delivery.go\n?? internal/steerline/contracts/operation_rules.go\n?? internal/steerline/domain_snapshot.go\n?? internal/steerline/execution/record_validation.go\n?? internal/steerline/persistence/connections.go\n?? internal/steerline/persistence/errors.go\n?? internal/steerline/sqlite/connections.go\n?? internal/steerline/sqlite/conversation_store.go\n?? internal/steerline/sqlite/fixtures_test.go\n?? internal/steerline/sqlite/helpers.go\n?? internal/steerline/sqlite/migrated_conversation_test.go\n?? internal/steerline/sqlite/migrated_native_task_audit_test.go\n?? internal/steerline/sqlite/migrated_project_view_test.go\n?? internal/steerline/sqlite/migrated_sqlite_store_test.go\n?? internal/steerline/sqlite/ownership_test.go\n?? internal/steerline/sqlite/project_view.go\n?? internal/steerline/sqlite/record_validation.go\n?? internal/steerline/sqlite/runtime_preflight.go\n?? internal/steerline/sqlite/schema_ownership_test.go\n?? internal/steerline/sqlite/schema_preflight.go\n?? internal/steerline/sqlite/sqlite_native_authority.go\n?? internal/steerline/sqlite/sqlite_runtime_snapshot.go\n?? internal/steerline/sqlite/sqlite_store.go\n?? internal/steerline/sqlite/sqlite_store_checkpoint.go\n?? internal/steerline/sqlite/sqlite_store_read.go\n?? internal/steerline/sqlite/sqlite_store_schema.go\n?? internal/steerline/sqlite/sqlite_store_write.go\n?? internal/steerline/sqlite/sqlite_store_write_commands.go\n?? internal/steerline/sqlite/sqlite_store_write_execution.go\n?? internal/steerline/sqlite/sqlite_store_write_native.go\n?? internal/steerline/sqlite/sqlite_task_graph.go\n?? internal/steerline/sqlite/sqlite_task_ports.go\n?? internal/steerline/sqlite/sqlite_worker_commit.go\n?? internal/steerline/sqlite/sqlite_write_ports.go\n?? internal/steerline/sqlite/state_revision.go\n?? internal/steerline/sqlite/values.go\n?? internal/steerline/sqlite/worker_attachment_store.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled"
+  },
+  "enumerated_core_tests": [
+    "TestWorkerFlowClaimNeedsNoProjectSteps",
+    "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged",
+    "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt",
+    "TestRestartPreflightRetainsOriginalPolicyRoots",
+    "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion"
+  ],
+  "enumerated_packages": [
+    "github.com/erranliu/SteerLine/internal/steerline",
+    "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+    "github.com/erranliu/SteerLine/internal/steerline/taskview",
+    "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+    "github.com/erranliu/SteerLine/internal/steerline/execution",
+    "github.com/erranliu/SteerLine/internal/steerline/contracts",
+    "github.com/erranliu/SteerLine/internal/steerline/projection",
+    "github.com/erranliu/SteerLine/internal/steerline/query",
+    "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+    "github.com/erranliu/SteerLine/internal/testboundary",
+    "github.com/erranliu/SteerLine/internal/steerlineintegration",
+    "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+    "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+    "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+    "github.com/erranliu/SteerLine/internal/steerlineapp"
+  ],
+  "groups": [
+    {
+      "id": "quick-core",
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=45m",
+        "-p",
+        "1",
+        "-parallel",
+        "1",
+        "-run=^(TestWorkerFlowClaimNeedsNoProjectSteps|TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged|TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt|TestRestartPreflightRetainsOriginalPolicyRoots|TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion)$",
+        "github.com/erranliu/SteerLine/internal/steerline"
+      ],
+      "assigned_tests": [
+        "TestWorkerFlowClaimNeedsNoProjectSteps",
+        "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged",
+        "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt",
+        "TestRestartPreflightRetainsOriginalPolicyRoots",
+        "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion"
+      ],
+      "assigned_packages": [
+        "github.com/erranliu/SteerLine/internal/steerline"
+      ],
+      "stdout_json_log": "docs\\validation\\core-decoupling-09-sqlite\\quick\\quick-core\\test.jsonl",
+      "stderr_log": "docs\\validation\\core-decoupling-09-sqlite\\quick\\quick-core\\stderr.txt",
+      "wall_seconds": 56.8587203,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 11,
+        "passed_tests": 11,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "status": "pass",
+            "elapsed_seconds": 53.687
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestRestartPreflightRetainsOriginalPolicyRoots",
+            "status": "pass",
+            "elapsed_seconds": 25.69
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt",
+            "status": "pass",
+            "elapsed_seconds": 15.52
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestRestartPreflightRetainsOriginalPolicyRoots/full_access",
+            "status": "pass",
+            "elapsed_seconds": 12.89
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestRestartPreflightRetainsOriginalPolicyRoots/workspace",
+            "status": "pass",
+            "elapsed_seconds": 12.8
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestWorkerFlowClaimNeedsNoProjectSteps",
+            "status": "pass",
+            "elapsed_seconds": 6.62
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged",
+            "status": "pass",
+            "elapsed_seconds": 5.46
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_base",
+            "status": "pass",
+            "elapsed_seconds": 0.2
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_repository",
+            "status": "pass",
+            "elapsed_seconds": 0.2
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_task_branch",
+            "status": "pass",
+            "elapsed_seconds": 0.2
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion",
+            "status": "pass",
+            "elapsed_seconds": 0.14
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/closed_unmerged",
+            "status": "pass",
+            "elapsed_seconds": 0.12
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestRestartPreflightRetainsOriginalPolicyRoots",
+            "status": "pass",
+            "elapsed_seconds": 25.69
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt",
+            "status": "pass",
+            "elapsed_seconds": 15.52
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestRestartPreflightRetainsOriginalPolicyRoots/full_access",
+            "status": "pass",
+            "elapsed_seconds": 12.89
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestRestartPreflightRetainsOriginalPolicyRoots/workspace",
+            "status": "pass",
+            "elapsed_seconds": 12.8
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestWorkerFlowClaimNeedsNoProjectSteps",
+            "status": "pass",
+            "elapsed_seconds": 6.62
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged",
+            "status": "pass",
+            "elapsed_seconds": 5.46
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_base",
+            "status": "pass",
+            "elapsed_seconds": 0.2
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_repository",
+            "status": "pass",
+            "elapsed_seconds": 0.2
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_task_branch",
+            "status": "pass",
+            "elapsed_seconds": 0.2
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion",
+            "status": "pass",
+            "elapsed_seconds": 0.14
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline",
+            "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/closed_unmerged",
+            "status": "pass",
+            "elapsed_seconds": 0.12
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 53.686741,
+        "has_test_event_wall": true
+      }
+    },
+    {
+      "id": "quick-rules",
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=45m",
+        "-p",
+        "1",
+        "-parallel",
+        "1",
+        "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "github.com/erranliu/SteerLine/internal/steerline/taskview",
+        "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/projection",
+        "github.com/erranliu/SteerLine/internal/steerline/query",
+        "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+        "github.com/erranliu/SteerLine/internal/testboundary"
+      ],
+      "assigned_packages": [
+        "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+        "github.com/erranliu/SteerLine/internal/steerline/taskview",
+        "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/projection",
+        "github.com/erranliu/SteerLine/internal/steerline/query",
+        "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+        "github.com/erranliu/SteerLine/internal/testboundary"
+      ],
+      "stdout_json_log": "docs\\validation\\core-decoupling-09-sqlite\\quick\\quick-rules\\test.jsonl",
+      "stderr_log": "docs\\validation\\core-decoupling-09-sqlite\\quick\\quick-rules\\stderr.txt",
+      "wall_seconds": 21.2966343,
+      "exit_code": 1,
+      "error": "exit status 1",
+      "summary": {
+        "status": "failed",
+        "passed": false,
+        "complete": true,
+        "command_exit_code": 1,
+        "package_count": 9,
+        "passed_packages": 8,
+        "failed_packages": [
+          "github.com/erranliu/SteerLine/internal/steerline/sqlite"
+        ],
+        "skipped_packages": [],
+        "test_count": 129,
+        "passed_tests": 127,
+        "failed_tests": 1,
+        "skipped_tests": 1,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "status": "fail",
+            "elapsed_seconds": 10.904
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/testboundary",
+            "status": "pass",
+            "elapsed_seconds": 1.587
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+            "status": "pass",
+            "elapsed_seconds": 0.481
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+            "status": "pass",
+            "elapsed_seconds": 0.476
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/projection",
+            "status": "pass",
+            "elapsed_seconds": 0.466
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/contracts",
+            "status": "pass",
+            "elapsed_seconds": 0.464
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "status": "pass",
+            "elapsed_seconds": 0.452
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/taskview",
+            "status": "pass",
+            "elapsed_seconds": 0.43
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+            "status": "pass",
+            "elapsed_seconds": 0.39
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision",
+            "status": "pass",
+            "elapsed_seconds": 2.33
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestSQLiteV5IsRejectedWithoutUpgrade",
+            "status": "pass",
+            "elapsed_seconds": 1.68
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationProcessExitBeforeCommitRecoversAllBoundaries",
+            "status": "pass",
+            "elapsed_seconds": 1.11
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationWriteFailureRollsBackContentAndCursor",
+            "status": "pass",
+            "elapsed_seconds": 0.94
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/testboundary",
+            "name": "TestProductionHasNoTestDependencies",
+            "status": "pass",
+            "elapsed_seconds": 0.76
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationBodyAndRawCorruptionCannotReadAsComplete",
+            "status": "pass",
+            "elapsed_seconds": 0.61
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestSQLiteRejectsParallelExecutionsInOneWorkflow",
+            "status": "pass",
+            "elapsed_seconds": 0.52
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationProcessExitBeforeCommitRecoversAllBoundaries/raw",
+            "status": "pass",
+            "elapsed_seconds": 0.49
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/testboundary",
+            "name": "TestE2EScenariosUseTestAdapters",
+            "status": "pass",
+            "elapsed_seconds": 0.39
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationLongUnicodeFinalIsExactAcrossPages",
+            "status": "pass",
+            "elapsed_seconds": 0.27
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationWriteFailureRollsBackContentAndCursor/conversation_raw",
+            "status": "pass",
+            "elapsed_seconds": 0.24
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestNativeAuditPaginationBoundsAndDatabaseIdentity",
+            "status": "pass",
+            "elapsed_seconds": 0.22
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestNativeAuditQueryRejectsPayloadIdentityDrift",
+            "status": "pass",
+            "elapsed_seconds": 0.2
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationWriteFailureRollsBackContentAndCursor/conversation_current_messages",
+            "status": "pass",
+            "elapsed_seconds": 0.19
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationWriteFailureRollsBackContentAndCursor/conversation_events",
+            "status": "pass",
+            "elapsed_seconds": 0.18
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestProjectViewSharesTransactionAcrossWriterCommit",
+            "status": "pass",
+            "elapsed_seconds": 0.18
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationProcessExitBeforeCommitRecoversAllBoundaries/cursor",
+            "status": "pass",
+            "elapsed_seconds": 0.17
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationWriteFailureRollsBackContentAndCursor/conversation_source_cursors",
+            "status": "pass",
+            "elapsed_seconds": 0.17
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationProcessExitBeforeCommitRecoversAllBoundaries/committed",
+            "status": "pass",
+            "elapsed_seconds": 0.16
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationWriteFailureRollsBackContentAndCursor/conversation_bodies",
+            "status": "pass",
+            "elapsed_seconds": 0.16
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationProcessExitBeforeCommitRecoversAllBoundaries/body",
+            "status": "pass",
+            "elapsed_seconds": 0.15
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestSQLiteV4IsRejectedWithoutUpgrade",
+            "status": "pass",
+            "elapsed_seconds": 0.15
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationProcessExitBeforeCommitRecoversAllBoundaries/event",
+            "status": "pass",
+            "elapsed_seconds": 0.14
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationSQLiteFullRollsBackContentAndCursor",
+            "status": "pass",
+            "elapsed_seconds": 0.13
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestCM70ReadOnlyOpenPreservesFiles",
+            "status": "fail",
+            "elapsed_seconds": 0.12
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestNativeAuditPageDecodesOnlyDirectPredecessors",
+            "status": "pass",
+            "elapsed_seconds": 0.12
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding",
+            "status": "pass",
+            "elapsed_seconds": 0.12
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestCM70WindowsCloseReleasesHandlesAndMissingReaderCannotCreate",
+            "status": "pass",
+            "elapsed_seconds": 0.11
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestNativeAuditDependencyCycleRollsBackAndEdgesAreImmutable",
+            "status": "pass",
+            "elapsed_seconds": 0.11
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestPreflightRejectsRetiredWholeRunResultCommandWithoutMutation",
+            "status": "pass",
+            "elapsed_seconds": 0.11
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestProjectViewKeepsReadOnlySectionsWithoutCheckpointOrSelection",
+            "status": "pass",
+            "elapsed_seconds": 0.11
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestQueryEventCursorAndLargeBodyPaging",
+            "status": "pass",
+            "elapsed_seconds": 0.11
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationLateOldAttemptCannotCrossNewAttempt",
+            "status": "pass",
+            "elapsed_seconds": 0.1
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationReaderKeepsSourceScopeOnReadOnlyConnection",
+            "status": "pass",
+            "elapsed_seconds": 0.1
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestNativeAuditQueryRejectsPayloadIdentityDrift/project_identity",
+            "status": "pass",
+            "elapsed_seconds": 0.1
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestNativeAuditQueryRejectsPayloadIdentityDrift/version",
+            "status": "pass",
+            "elapsed_seconds": 0.1
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestCM70WriterLockHasPureClassificationAndNoCommandWrite",
+            "status": "pass",
+            "elapsed_seconds": 0.09
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestNativeAuditTaskCASComparesInstantsNotTimeRepresentation",
+            "status": "pass",
+            "elapsed_seconds": 0.09
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestOperationIdempotencyKeepsOneDurableIntent",
+            "status": "pass",
+            "elapsed_seconds": 0.08
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationCommitRejectsChangedRawAtSameSourceIdentity",
+            "status": "pass",
+            "elapsed_seconds": 0.07
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationCheckpointPreflightRejectsUnanchoredState",
+            "status": "pass",
+            "elapsed_seconds": 0.06
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestNativeDatabaseInitializesCurrentSchema",
+            "status": "pass",
+            "elapsed_seconds": 0.06
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestCM70StorageFailuresRemainDistinctFromMissingRecords",
+            "status": "pass",
+            "elapsed_seconds": 0.05
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationCommitDoesNotAdvanceCheckpointOnInvalidBody",
+            "status": "pass",
+            "elapsed_seconds": 0.04
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestSQLiteTransactionRollsBackAllDomainWrites",
+            "status": "pass",
+            "elapsed_seconds": 0.04
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestPreflightRejectsUnknownSQLiteSchemaWithoutMutation",
+            "status": "pass",
+            "elapsed_seconds": 0.03
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestSQLiteV3IsRejectedWithoutUpgrade",
+            "status": "pass",
+            "elapsed_seconds": 0.03
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestSchemaOneCenterDatabaseIsRejectedWithoutMutation",
+            "status": "pass",
+            "elapsed_seconds": 0.03
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/contracts",
+            "name": "TestContractDecoderPreservesStrictFieldsAndSingleValue",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestAdapterAndBackendErrorsPreserveCause",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestCD63CodecIdentityAndVersion",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestCD63CodecIdentityAndVersion/formatted_JSON_round_trip",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestCD63CodecIdentityAndVersion/profile_envelope_scope_and_deep_copy",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestCD63CodecIdentityAndVersion/resource_envelope_identity_and_bounds",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestExecutionPolicyRequiresExplicitAuthority",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestExecutionRecordsKeepWireIdentity",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestHostMutationRequiresOneFixedOriginalTarget",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestImplementationDataEnvelopeBindsScopeAndCopiesPayload",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestImplementationDataEnvelopeRejectsBadIdentityVersionAndSize",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestLifecycleCandidateRequiresOneMatchingInput",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestLifecycleCandidateRequiresOneMatchingInput/ambiguous_union",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestLifecycleCandidateRequiresOneMatchingInput/mismatched_action",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestLifecycleCandidateRequiresOneMatchingInput/turn_preparation",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestLifecycleCandidateRequiresOneMatchingInput/unknown_action",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestLifecycleReceiptCloneOwnsImplementationPayloadAndFacts",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestLifecycleRequestRequiresOriginalDurableOperation",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestPRCluesKeepOrderAndDeduplicate",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestQuestionRouteVersionIdentityDigestAndLimit",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestQuestionRouteVersionIdentityDigestAndLimit/digest",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestQuestionRouteVersionIdentityDigestAndLimit/purpose",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestQuestionRouteVersionIdentityDigestAndLimit/version",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/agent",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/agent-version",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/credential-missing",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/credential-site",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/credential-unknown",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/no-evidence",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/not-tested",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/platform-version",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/protocol",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/schema",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/target",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/tool-missing",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/tool-target",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/tool-unknown",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/tool-version",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsMatchBoundEvidence/unsupported",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+            "name": "TestRequirementsRejectUnregisteredAndDuplicateItems",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/projection",
+            "name": "TestBuildOwnsRecordsAndMetadataAcrossRefreshes",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/projection",
+            "name": "TestExecutionProjectionKeepsRemotePathAndWhitespaceSemantics",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/projection",
+            "name": "TestProjectionRejectsBrokenBindingsWithoutReusingOldViews",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/projection",
+            "name": "TestProjectionRetainsDeliveryAndReservationRules",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+            "name": "TestConversationBodyAndRawQueriesUseSeparatePorts",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+            "name": "TestConversationCapabilitiesNeedNoUnrelatedReader",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+            "name": "TestConversationPageBudgetDefersOverflowPayloadDecoding",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+            "name": "TestConversationQueriesUseIndependentEventPortAndBoundCursor",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+            "name": "TestConversationReaderRejectsMissingSourceRole",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+            "name": "TestConversationReaderRejectsPreviousEventFormat",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+            "name": "TestEventQueriesUseOnlyEventReader",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+            "name": "TestReadyQueriesRejectMissingCapabilityAndProject",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+            "name": "TestTaskCursorRemainsStrictWithoutSQLite",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+            "name": "TestTaskQueriesRejectReaderScopeAndCursorDrift",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+            "name": "TestTaskQueriesUseOnlyTaskReader",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationProcessExitMidTransactionHelper",
+            "status": "skip",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestProjectViewRejectsNilReader",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+            "name": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+            "name": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/acyclic_disconnected_graph",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+            "name": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/self_cycle",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+            "name": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/smallest_numeric_cycle_first",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+            "name": "TestProjectDepthLimitAndBoundaryEdgeCap",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+            "name": "TestProjectDepthLimitAndBoundaryEdgeCap/500_edge_cap",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+            "name": "TestProjectDepthLimitAndBoundaryEdgeCap/depth",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+            "name": "TestProjectNeighborhoodKeepsBranchesMergesAndDisconnects",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+            "name": "TestProjectSortsNumericIDsAndReportsNodeLimit",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+            "name": "TestProjectStatusFilterRetainsAnchorAndMarksOmittedBoundary",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+            "name": "TestStableTaskOrderUsesPriorityTimeAndNumericID",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/taskview",
+            "name": "TestGraphViewUsesOneSnapshot",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+            "name": "TestClassifyRecovery",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+            "name": "TestClassifyRecovery/completed_after_exit",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+            "name": "TestClassifyRecovery/dead_descendants_unknown",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+            "name": "TestClassifyRecovery/dead_incomplete",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+            "name": "TestClassifyRecovery/live_question",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+            "name": "TestClassifyRecovery/live_turn",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+            "name": "TestClassifyRecovery/unknown_external_outcome",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+            "name": "TestClassifyRecovery/unreachable",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+            "name": "TestLateTurnCannotChangeCurrentState",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+            "name": "TestTwoTurnsKeepOriginalSessionAndPR",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/testboundary",
+            "name": "TestBoundaryRulesRejectTransitiveLeaksAndDirectImplementationImports",
+            "status": "pass",
+            "elapsed_seconds": 0
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision",
+            "status": "pass",
+            "elapsed_seconds": 2.33
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestSQLiteV5IsRejectedWithoutUpgrade",
+            "status": "pass",
+            "elapsed_seconds": 1.68
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationProcessExitBeforeCommitRecoversAllBoundaries",
+            "status": "pass",
+            "elapsed_seconds": 1.11
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationWriteFailureRollsBackContentAndCursor",
+            "status": "pass",
+            "elapsed_seconds": 0.94
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/testboundary",
+            "name": "TestProductionHasNoTestDependencies",
+            "status": "pass",
+            "elapsed_seconds": 0.76
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationBodyAndRawCorruptionCannotReadAsComplete",
+            "status": "pass",
+            "elapsed_seconds": 0.61
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestSQLiteRejectsParallelExecutionsInOneWorkflow",
+            "status": "pass",
+            "elapsed_seconds": 0.52
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationProcessExitBeforeCommitRecoversAllBoundaries/raw",
+            "status": "pass",
+            "elapsed_seconds": 0.49
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/testboundary",
+            "name": "TestE2EScenariosUseTestAdapters",
+            "status": "pass",
+            "elapsed_seconds": 0.39
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationLongUnicodeFinalIsExactAcrossPages",
+            "status": "pass",
+            "elapsed_seconds": 0.27
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationWriteFailureRollsBackContentAndCursor/conversation_raw",
+            "status": "pass",
+            "elapsed_seconds": 0.24
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestNativeAuditPaginationBoundsAndDatabaseIdentity",
+            "status": "pass",
+            "elapsed_seconds": 0.22
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestNativeAuditQueryRejectsPayloadIdentityDrift",
+            "status": "pass",
+            "elapsed_seconds": 0.2
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationWriteFailureRollsBackContentAndCursor/conversation_current_messages",
+            "status": "pass",
+            "elapsed_seconds": 0.19
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationWriteFailureRollsBackContentAndCursor/conversation_events",
+            "status": "pass",
+            "elapsed_seconds": 0.18
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestProjectViewSharesTransactionAcrossWriterCommit",
+            "status": "pass",
+            "elapsed_seconds": 0.18
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationProcessExitBeforeCommitRecoversAllBoundaries/cursor",
+            "status": "pass",
+            "elapsed_seconds": 0.17
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationWriteFailureRollsBackContentAndCursor/conversation_source_cursors",
+            "status": "pass",
+            "elapsed_seconds": 0.17
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationProcessExitBeforeCommitRecoversAllBoundaries/committed",
+            "status": "pass",
+            "elapsed_seconds": 0.16
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationWriteFailureRollsBackContentAndCursor/conversation_bodies",
+            "status": "pass",
+            "elapsed_seconds": 0.16
+          }
+        ],
+        "failures": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestCM70ReadOnlyOpenPreservesFiles",
+            "status": "fail",
+            "elapsed_seconds": 0.12
+          }
+        ],
+        "skipped": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+            "name": "TestConversationProcessExitMidTransactionHelper",
+            "status": "skip",
+            "elapsed_seconds": 0
+          }
+        ],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 20.2005817,
+        "has_test_event_wall": true
+      }
+    },
+    {
+      "id": "quick-owner-remote",
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=3m",
+        "-p",
+        "1",
+        "-parallel",
+        "1",
+        "-run=^(TestCD63CodecIdentityAndVersion|TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily|TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift|TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch|TestSupervisedOrcaClientRejectsReturnedReplacementWorktree|TestSupervisedRunCoordinatorsAreDistinctAndFenced|TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal|TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall|TestRemoteContinuationRequiresOriginalPeerAndTerminal|TestRemoteWorkspaceKeepsPeerPathAndRuntime|TestRemoteReplyRejectsOversizeWithoutMutation|TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending|TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox|TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID|TestLoadConfigRequiresExplicitRemoteCancellationFalse)$",
+        "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+      ],
+      "assigned_tests": [
+        "TestCD63CodecIdentityAndVersion",
+        "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily",
+        "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift",
+        "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch",
+        "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree",
+        "TestSupervisedRunCoordinatorsAreDistinctAndFenced",
+        "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal",
+        "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall",
+        "TestRemoteContinuationRequiresOriginalPeerAndTerminal",
+        "TestRemoteWorkspaceKeepsPeerPathAndRuntime",
+        "TestRemoteReplyRejectsOversizeWithoutMutation",
+        "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending",
+        "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox",
+        "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID",
+        "TestLoadConfigRequiresExplicitRemoteCancellationFalse"
+      ],
+      "assigned_packages": [
+        "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+      ],
+      "stdout_json_log": "docs\\validation\\core-decoupling-09-sqlite\\quick\\quick-owner-remote\\test.jsonl",
+      "stderr_log": "docs\\validation\\core-decoupling-09-sqlite\\quick\\quick-owner-remote\\stderr.txt",
+      "wall_seconds": 3.1197922,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 15,
+        "passed_tests": 15,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "status": "pass",
+            "elapsed_seconds": 1.488
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily",
+            "status": "pass",
+            "elapsed_seconds": 0.39
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch",
+            "status": "pass",
+            "elapsed_seconds": 0.13
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift",
+            "status": "pass",
+            "elapsed_seconds": 0.13
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree",
+            "status": "pass",
+            "elapsed_seconds": 0.08
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestSupervisedRunCoordinatorsAreDistinctAndFenced",
+            "status": "pass",
+            "elapsed_seconds": 0.07
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal",
+            "status": "pass",
+            "elapsed_seconds": 0.06
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall",
+            "status": "pass",
+            "elapsed_seconds": 0.02
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestCD63CodecIdentityAndVersion",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestLoadConfigRequiresExplicitRemoteCancellationFalse",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestRemoteContinuationRequiresOriginalPeerAndTerminal",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestRemoteReplyRejectsOversizeWithoutMutation",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestRemoteWorkspaceKeepsPeerPathAndRuntime",
+            "status": "pass",
+            "elapsed_seconds": 0
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily",
+            "status": "pass",
+            "elapsed_seconds": 0.39
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch",
+            "status": "pass",
+            "elapsed_seconds": 0.13
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift",
+            "status": "pass",
+            "elapsed_seconds": 0.13
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree",
+            "status": "pass",
+            "elapsed_seconds": 0.08
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestSupervisedRunCoordinatorsAreDistinctAndFenced",
+            "status": "pass",
+            "elapsed_seconds": 0.07
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal",
+            "status": "pass",
+            "elapsed_seconds": 0.06
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall",
+            "status": "pass",
+            "elapsed_seconds": 0.02
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestCD63CodecIdentityAndVersion",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestLoadConfigRequiresExplicitRemoteCancellationFalse",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestRemoteContinuationRequiresOriginalPeerAndTerminal",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestRemoteReplyRejectsOversizeWithoutMutation",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+            "name": "TestRemoteWorkspaceKeepsPeerPathAndRuntime",
+            "status": "pass",
+            "elapsed_seconds": 0
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 1.4880924,
+        "has_test_event_wall": true
+      }
+    },
+    {
+      "id": "quick-owner-codec",
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=3m",
+        "-p",
+        "1",
+        "-parallel",
+        "1",
+        "-run=^(TestCodexNormalizer|TestOversizedWorkerLinePreservesRawOutputAndLaterEvents|TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt)$",
+        "github.com/erranliu/SteerLine/internal/steerline/codexworker"
+      ],
+      "assigned_tests": [
+        "TestCodexNormalizer",
+        "TestOversizedWorkerLinePreservesRawOutputAndLaterEvents",
+        "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt"
+      ],
+      "assigned_packages": [
+        "github.com/erranliu/SteerLine/internal/steerline/codexworker"
+      ],
+      "stdout_json_log": "docs\\validation\\core-decoupling-09-sqlite\\quick\\quick-owner-codec\\test.jsonl",
+      "stderr_log": "docs\\validation\\core-decoupling-09-sqlite\\quick\\quick-owner-codec\\stderr.txt",
+      "wall_seconds": 3.0181058,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 5,
+        "passed_tests": 5,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+            "status": "pass",
+            "elapsed_seconds": 0.795
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+            "name": "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt",
+            "status": "pass",
+            "elapsed_seconds": 0.05
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+            "name": "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt/receipt_saved",
+            "status": "pass",
+            "elapsed_seconds": 0.04
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+            "name": "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt/receipt_lost",
+            "status": "pass",
+            "elapsed_seconds": 0.01
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+            "name": "TestOversizedWorkerLinePreservesRawOutputAndLaterEvents",
+            "status": "pass",
+            "elapsed_seconds": 0.01
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+            "name": "TestCodexNormalizer",
+            "status": "pass",
+            "elapsed_seconds": 0
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+            "name": "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt",
+            "status": "pass",
+            "elapsed_seconds": 0.05
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+            "name": "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt/receipt_saved",
+            "status": "pass",
+            "elapsed_seconds": 0.04
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+            "name": "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt/receipt_lost",
+            "status": "pass",
+            "elapsed_seconds": 0.01
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+            "name": "TestOversizedWorkerLinePreservesRawOutputAndLaterEvents",
+            "status": "pass",
+            "elapsed_seconds": 0.01
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+            "name": "TestCodexNormalizer",
+            "status": "pass",
+            "elapsed_seconds": 0
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 0.7946286,
+        "has_test_event_wall": true
+      }
+    },
+    {
+      "id": "quick-owner-identity",
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=3m",
+        "-p",
+        "1",
+        "-parallel",
+        "1",
+        "-run=^(TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess|TestFixedOrcaAgentTerminalRejectsReplacedIncarnation|TestAgentBindPendingReceiptDoesNotQualifyOriginalHost)$",
+        "github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+      ],
+      "assigned_tests": [
+        "TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess",
+        "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation",
+        "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost"
+      ],
+      "assigned_packages": [
+        "github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+      ],
+      "stdout_json_log": "docs\\validation\\core-decoupling-09-sqlite\\quick\\quick-owner-identity\\test.jsonl",
+      "stderr_log": "docs\\validation\\core-decoupling-09-sqlite\\quick\\quick-owner-identity\\stderr.txt",
+      "wall_seconds": 2.3904907,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 3,
+        "passed_tests": 3,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+            "status": "pass",
+            "elapsed_seconds": 0.619
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+            "name": "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+            "name": "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+            "name": "TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess",
+            "status": "pass",
+            "elapsed_seconds": 0
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+            "name": "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+            "name": "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+            "name": "TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess",
+            "status": "pass",
+            "elapsed_seconds": 0
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 0.6189802,
+        "has_test_event_wall": true
+      }
+    },
+    {
+      "id": "quick-owner-app",
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=3m",
+        "-p",
+        "1",
+        "-parallel",
+        "1",
+        "-run=^(TestReadinessNativeLaunchKeepsDefaultModelAndPermissions|TestFullAccessProfileFreezeSurvivesClaimValidation|TestOrcaPreflightRequiresConfiguredCodexPolicyMapping|TestLocalWindowsSandboxProfileFreezesAndRestores|TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority|TestNativeOrcaAgentSelectionUsesFrozenProfile)$",
+        "github.com/erranliu/SteerLine/internal/steerlineapp"
+      ],
+      "assigned_tests": [
+        "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions",
+        "TestFullAccessProfileFreezeSurvivesClaimValidation",
+        "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping",
+        "TestLocalWindowsSandboxProfileFreezesAndRestores",
+        "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority",
+        "TestNativeOrcaAgentSelectionUsesFrozenProfile"
+      ],
+      "assigned_packages": [
+        "github.com/erranliu/SteerLine/internal/steerlineapp"
+      ],
+      "stdout_json_log": "docs\\validation\\core-decoupling-09-sqlite\\quick\\quick-owner-app\\test.jsonl",
+      "stderr_log": "docs\\validation\\core-decoupling-09-sqlite\\quick\\quick-owner-app\\stderr.txt",
+      "wall_seconds": 2.7338733,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 6,
+        "passed_tests": 6,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+            "status": "pass",
+            "elapsed_seconds": 1.451
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+            "name": "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping",
+            "status": "pass",
+            "elapsed_seconds": 1.24
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+            "name": "TestFullAccessProfileFreezeSurvivesClaimValidation",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+            "name": "TestLocalWindowsSandboxProfileFreezesAndRestores",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+            "name": "TestNativeOrcaAgentSelectionUsesFrozenProfile",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+            "name": "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+            "name": "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions",
+            "status": "pass",
+            "elapsed_seconds": 0
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+            "name": "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping",
+            "status": "pass",
+            "elapsed_seconds": 1.24
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+            "name": "TestFullAccessProfileFreezeSurvivesClaimValidation",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+            "name": "TestLocalWindowsSandboxProfileFreezesAndRestores",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+            "name": "TestNativeOrcaAgentSelectionUsesFrozenProfile",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+            "name": "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority",
+            "status": "pass",
+            "elapsed_seconds": 0
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+            "name": "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions",
+            "status": "pass",
+            "elapsed_seconds": 0
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 1.4510355,
+        "has_test_event_wall": true
+      }
+    },
+    {
+      "id": "quick-boundary",
+      "command": [
+        "go",
+        "test",
+        "-json",
+        "-count=1",
+        "-timeout=10m",
+        "-p",
+        "1",
+        "-parallel",
+        "1",
+        "-run=^(TestCD67CoreBoundary|TestCD67AdditionalImplementation)$",
+        "github.com/erranliu/SteerLine/internal/steerlineintegration"
+      ],
+      "assigned_tests": [
+        "TestCD67CoreBoundary",
+        "TestCD67CoreBoundary/negative_source_fixtures",
+        "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
+        "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
+        "TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
+        "TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
+        "TestCD67CoreBoundary/negative_source_fixtures/nested_generated_name_is_not_an_exclusion",
+        "TestCD67CoreBoundary/negative_source_fixtures/top_level_output_name_is_not_an_exclusion",
+        "TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
+        "TestCD67CoreBoundary/negative_source_fixtures/reverse_storage_edge",
+        "TestCD67CoreBoundary/negative_source_fixtures/concrete_storage_edge",
+        "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+        "TestCD67AdditionalImplementation",
+        "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+        "TestCD67AdditionalImplementation/supported_app_server_receipt_barriers",
+        "TestCD67AdditionalImplementation/supported_terminal_recovery_and_original_identity",
+        "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication",
+        "TestCD67AdditionalImplementation/remote_model_and_cancellation_admission",
+        "TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence"
+      ],
+      "assigned_packages": [
+        "github.com/erranliu/SteerLine/internal/steerlineintegration"
+      ],
+      "stdout_json_log": "docs\\validation\\core-decoupling-09-sqlite\\quick\\quick-boundary\\test.jsonl",
+      "stderr_log": "docs\\validation\\core-decoupling-09-sqlite\\quick\\quick-boundary\\stderr.txt",
+      "wall_seconds": 158.8636455,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 23,
+        "passed_tests": 23,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "status": "pass",
+            "elapsed_seconds": 157.475
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation",
+            "status": "pass",
+            "elapsed_seconds": 155.81
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/supported_terminal_recovery_and_original_identity",
+            "status": "pass",
+            "elapsed_seconds": 99.55
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+            "status": "pass",
+            "elapsed_seconds": 24.34
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/supported_app_server_receipt_barriers",
+            "status": "pass",
+            "elapsed_seconds": 21.66
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
+            "status": "pass",
+            "elapsed_seconds": 5.27
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication",
+            "status": "pass",
+            "elapsed_seconds": 4.8
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/two_turns_and_settlement",
+            "status": "pass",
+            "elapsed_seconds": 2.04
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary",
+            "status": "pass",
+            "elapsed_seconds": 1.44
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+            "status": "pass",
+            "elapsed_seconds": 1.27
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/lost_reply_and_ack",
+            "status": "pass",
+            "elapsed_seconds": 0.95
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/replacement_session_rejected",
+            "status": "pass",
+            "elapsed_seconds": 0.93
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/lost_start_no_resend",
+            "status": "pass",
+            "elapsed_seconds": 0.88
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/remote_model_and_cancellation_admission",
+            "status": "pass",
+            "elapsed_seconds": 0.18
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures",
+            "status": "pass",
+            "elapsed_seconds": 0.17
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
+            "status": "pass",
+            "elapsed_seconds": 0.03
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/nested_generated_name_is_not_an_exclusion",
+            "status": "pass",
+            "elapsed_seconds": 0.03
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/top_level_output_name_is_not_an_exclusion",
+            "status": "pass",
+            "elapsed_seconds": 0.03
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
+            "status": "pass",
+            "elapsed_seconds": 0.02
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
+            "status": "pass",
+            "elapsed_seconds": 0.02
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/concrete_storage_edge",
+            "status": "pass",
+            "elapsed_seconds": 0.01
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
+            "status": "pass",
+            "elapsed_seconds": 0.01
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
+            "status": "pass",
+            "elapsed_seconds": 0.01
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/reverse_storage_edge",
+            "status": "pass",
+            "elapsed_seconds": 0.01
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation",
+            "status": "pass",
+            "elapsed_seconds": 155.81
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/supported_terminal_recovery_and_original_identity",
+            "status": "pass",
+            "elapsed_seconds": 99.55
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+            "status": "pass",
+            "elapsed_seconds": 24.34
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/supported_app_server_receipt_barriers",
+            "status": "pass",
+            "elapsed_seconds": 21.66
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
+            "status": "pass",
+            "elapsed_seconds": 5.27
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication",
+            "status": "pass",
+            "elapsed_seconds": 4.8
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/two_turns_and_settlement",
+            "status": "pass",
+            "elapsed_seconds": 2.04
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary",
+            "status": "pass",
+            "elapsed_seconds": 1.44
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+            "status": "pass",
+            "elapsed_seconds": 1.27
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/lost_reply_and_ack",
+            "status": "pass",
+            "elapsed_seconds": 0.95
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/replacement_session_rejected",
+            "status": "pass",
+            "elapsed_seconds": 0.93
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/lost_start_no_resend",
+            "status": "pass",
+            "elapsed_seconds": 0.88
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67AdditionalImplementation/remote_model_and_cancellation_admission",
+            "status": "pass",
+            "elapsed_seconds": 0.18
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures",
+            "status": "pass",
+            "elapsed_seconds": 0.17
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
+            "status": "pass",
+            "elapsed_seconds": 0.03
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/nested_generated_name_is_not_an_exclusion",
+            "status": "pass",
+            "elapsed_seconds": 0.03
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/top_level_output_name_is_not_an_exclusion",
+            "status": "pass",
+            "elapsed_seconds": 0.03
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
+            "status": "pass",
+            "elapsed_seconds": 0.02
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
+            "status": "pass",
+            "elapsed_seconds": 0.02
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+            "name": "TestCD67CoreBoundary/negative_source_fixtures/concrete_storage_edge",
+            "status": "pass",
+            "elapsed_seconds": 0.01
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 157.4751798,
+        "has_test_event_wall": true
+      }
+    }
+  ],
+  "complete": false,
+  "passed": false,
+  "errors": [
+    "quick-rules: exit status 1",
+    "quick-rules: quick coverage contains skipped tests or packages",
+    "quick-rules: failed "
+  ]
+}

@@ -15,6 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestCodexHistoryNativeFixtures(t *testing.T) {
@@ -32,7 +33,7 @@ func TestCodexHistoryNativeFixtures(t *testing.T) {
 	}
 	for _, sample := range fixture.Samples {
 		t.Run(string(sample.Backend), func(t *testing.T) {
-			store, err := steerline.OpenSQLiteStore(filepath.Join(t.TempDir(), "history.db"))
+			store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "history.db"))
 			require(t, err)
 			defer store.Close()
 			base := steerline.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: sample.Backend, Protocol: executionapi.ProtocolLocalProcess, Agent: "codex", Source: "codex-app-server", SourceSegment: "native", SourceIdentity: "native", SessionID: sample.Thread.ID}
@@ -100,7 +101,7 @@ func TestCodexHistoryRealLocalToolInterleaveFixture(t *testing.T) {
 	base := steerline.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
 	writes, err := codexworker.MapHistoryTurn(base, fixture.Thread.Turns[0], 1)
 	require(t, err)
-	store, err := steerline.OpenSQLiteStore(filepath.Join(t.TempDir(), "history.db"))
+	store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "history.db"))
 	require(t, err)
 	defer store.Close()
 	first, err := store.CommitConversation(context.Background(), writes, steerline.ConversationCheckpoint{})
@@ -170,7 +171,7 @@ func TestCodexHistoryRealFailedTurnFixture(t *testing.T) {
 	if len(writes) != 3 || writes[0].Event.Type != steerline.ConversationTurnStarted || writes[1].Event.Type != steerline.ConversationObservation || writes[2].Event.Type != steerline.ConversationTurnFailed || writes[2].Event.Status != "failed" || writes[2].Event.FinalAvailability != steerline.FinalAbsent {
 		t.Fatalf("real native failure or missing final was misrepresented: %+v", writes)
 	}
-	store, err := steerline.OpenSQLiteStore(filepath.Join(t.TempDir(), "failure.db"))
+	store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "failure.db"))
 	require(t, err)
 	defer store.Close()
 	events, err := store.CommitConversation(context.Background(), writes, steerline.ConversationCheckpoint{})
@@ -233,7 +234,7 @@ func TestCodexHistoryMissingTextDoesNotClaimFinalBody(t *testing.T) {
 	if len(writes) != 3 || writes[1].BodyMode != "complete" || writes[1].Event.FinalAvailability != steerline.FinalAvailable || writes[2].Event.FinalAvailability != steerline.FinalAvailable {
 		t.Fatalf("explicit empty native final was not complete: %+v", writes)
 	}
-	store, err := steerline.OpenSQLiteStore(filepath.Join(t.TempDir(), "history.db"))
+	store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "history.db"))
 	require(t, err)
 	defer store.Close()
 	events, err := store.CommitConversation(context.Background(), writes, steerline.ConversationCheckpoint{})
@@ -245,7 +246,7 @@ func TestCodexHistoryMissingTextDoesNotClaimFinalBody(t *testing.T) {
 
 func TestCodexHistoryCanonicalSourceKeepsRawReadable(t *testing.T) {
 	ctx := context.Background()
-	store, err := steerline.OpenSQLiteStore(filepath.Join(t.TempDir(), "history.db"))
+	store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "history.db"))
 	require(t, err)
 	defer store.Close()
 	raw := conversationTestWrite("bytes:0:4", 1, "complete", []byte("raw reply"), []byte("raw"))

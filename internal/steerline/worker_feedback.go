@@ -98,7 +98,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 		return err
 	}
 	command, err := s.commandStore.CommandByIdempotency(ctx, c.identity, decisionAnswerKey(answer))
-	if err != nil || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID || command.Status != "accepted" || !stableExecutionID(command.CommandID) {
+	if err != nil || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID || command.Status != "accepted" || !executionapi.StableExecutionID(command.CommandID) {
 		return errors.Join(err, errors.New("saved worker feedback has no fixed accepted command identity"))
 	}
 	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {

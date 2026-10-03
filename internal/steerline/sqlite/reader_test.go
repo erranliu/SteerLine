@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
@@ -23,7 +22,7 @@ import (
 func TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "steerline.db")
-	writer, err := steerline.OpenSQLiteStore(path)
+	writer, err := readsqlite.OpenSQLiteStore(path)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -129,21 +129,24 @@ func LoadDatabaseRuntime(c Config) (*Runtime, error) {
 		return nil, err
 	}
 	defer db.Close()
-	return loadRuntimeSnapshot(db, c.Identity(), true)
+	return db.LoadRuntime(c.Identity(), true)
 }
 
 func loadObservedRuntime(c Config) (*Runtime, error) {
+	if c.Persistence == nil {
+		return nil, errors.New("persistence factory is required")
+	}
 	if c.Identity() == "" {
 		if err := c.ResolveIdentity(context.Background()); err != nil {
 			return nil, err
 		}
 	}
-	db, err := OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
+	db, err := c.Persistence.OpenReader(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		return nil, err
 	}
 	defer db.Close()
-	value, err := loadRuntimeSnapshot(db, c.Identity(), false)
+	value, err := db.LoadRuntime(c.Identity(), false)
 	if errors.Is(err, persistence.ErrNotFound) {
 		return nil, nil
 	}

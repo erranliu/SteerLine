@@ -3,13 +3,14 @@ package steerline
 import (
 	"context"
 	"encoding/json"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing.T) {
@@ -45,7 +46,7 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 	claimed.Claimant = "operator"
 	claimed.Version++
 	claimed.UpdatedAt = created
-	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
+	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		if e := tx.UpdateNativeTaskCAS(claimed, task.Version); e != nil {
 			return e
 		}
@@ -103,7 +104,7 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	if err := project.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	store, err := openSQLiteFixture(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +132,7 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	claimed := task
 	claimed.Status, claimed.Claimant, claimed.Version, claimed.UpdatedAt = "in_progress", "operator", task.Version+1, at
-	if err := store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+	if err := store.transactRecords(ctx, func(domainTx *fixtureTransaction) error {
 		tx := domainTx
 		if err := tx.UpdateNativeTaskCAS(claimed, task.Version); err != nil {
 			return err
@@ -209,7 +210,7 @@ func TestWorkerFlowClaimNeedsNoProjectSteps(t *testing.T) {
 	authority := graph.Authority
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
+	if err := store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)

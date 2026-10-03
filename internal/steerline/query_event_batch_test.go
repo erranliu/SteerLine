@@ -3,9 +3,10 @@ package steerline
 import (
 	"context"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/query"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/steerline/query"
 )
 
 type countingEventStore struct {
@@ -31,7 +32,7 @@ func TestQueryEventBatchPagingPreservesByteBoundary(t *testing.T) {
 	project := "event-batch"
 	bodies := []string{strings.Repeat("a", 700<<10), strings.Repeat("b", 500<<10), strings.Repeat("c", MaxEventPageBytes+1), "", "tail"}
 	ids := []int64{}
-	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
+	require(t, store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		for i, body := range bodies {
 			id, err := tx.AppendEvent(DomainEvent{ProjectIdentity: project, ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "batch", ExternalID: fmt.Sprint(i), Type: "message", Payload: []byte(body)})
 			if err != nil {
@@ -80,7 +81,7 @@ func TestQueryEventBatchReadCountAndPageLimit(t *testing.T) {
 	ctx := context.Background()
 	store := openDomainTestStore(t)
 	const project = "event-count"
-	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
+	require(t, store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		for i := 0; i < MaxEventPageSize+1; i++ {
 			if _, err := tx.AppendEvent(DomainEvent{ProjectIdentity: project, ExecutionID: "execution", ExternalSource: "count", ExternalID: fmt.Sprint(i), Type: "message", Payload: []byte("small")}); err != nil {
 				return err
@@ -118,7 +119,7 @@ func TestQueryEventBatchDoesNotPrefetchUnusedLargeBodies(t *testing.T) {
 	const project = "event-payload-budget"
 	body := []byte(strings.Repeat("a", MaxEventPageBytes))
 	ids := []int64{}
-	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
+	require(t, store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		for i := 0; i < 4; i++ {
 			id, err := tx.AppendEvent(DomainEvent{ProjectIdentity: project, ExecutionID: "execution", ExternalSource: "budget", ExternalID: fmt.Sprint(i), Type: "message", Payload: body})
 			if err != nil {

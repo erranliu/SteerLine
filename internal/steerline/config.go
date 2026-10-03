@@ -12,6 +12,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
@@ -21,6 +22,7 @@ type Skill struct {
 	Invocation string `json:"invocation"`
 }
 type Config struct {
+	Persistence             persistence.Factory             `json:"-"`
 	ExecutionDirectory      *ExecutionDirectory             `json:"-"`
 	ProcessHost             executionapi.ManagedProcessHost `json:"-"`
 	WorkspaceBranchPrefix   string                          `json:"-"`

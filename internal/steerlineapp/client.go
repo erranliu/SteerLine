@@ -2,7 +2,6 @@ package steerlineapp
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"path/filepath"
 	"time"
@@ -10,9 +9,9 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
-
 	"github.com/erranliu/SteerLine/internal/steerlineclient"
 )
 
@@ -127,7 +126,7 @@ func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef
 type clientReader struct {
 	query.Service
 	query.ConversationService
-	store   *steerline.SQLiteStore
+	store   persistence.Connection
 	project string
 }
 
@@ -140,7 +139,7 @@ func (r *clientReader) DatabaseVersion(ctx context.Context) (string, uint64, err
 }
 func (r *clientReader) Command(ctx context.Context, id string) (contracts.CommandRecord, error) {
 	v, err := r.store.Command(ctx, r.project, id)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, persistence.ErrNotFound) {
 		return v, errors.Join(api.ErrRecordNotFound, err)
 	}
 	return v, err
@@ -152,7 +151,7 @@ var _ api.Reader = (*clientReader)(nil)
 type clientCommands struct {
 	service steerline.CommandService
 	config  steerline.Config
-	store   *steerline.SQLiteStore
+	store   persistence.Connection
 	lock    *steerline.RepoLock
 }
 

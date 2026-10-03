@@ -96,7 +96,7 @@ type ExecutionRegistration struct {
 }
 
 func (directory *ExecutionDirectory) ValidateRef(ref executionapi.ExecutionRef) error {
-	if err := validateExecutionRef(ref); err != nil {
+	if err := executionapi.ValidateExecutionRef(ref); err != nil {
 		return err
 	}
 	entry, err := directory.ResolveIdentity(ExecutionRegistrationKey{Backend: ref.Backend, Protocol: ref.Protocol, Agent: ref.Agent.Name})

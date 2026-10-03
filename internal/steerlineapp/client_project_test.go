@@ -14,6 +14,7 @@ import (
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/console"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
@@ -47,7 +48,7 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 	if err := reader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	writer, err := steerline.OpenSQLiteStore(filepath.Join(cfg.RunDir, "steerline.db"))
+	writer, err := sqlite.OpenSQLiteStore(filepath.Join(cfg.RunDir, "steerline.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

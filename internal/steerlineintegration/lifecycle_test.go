@@ -20,6 +20,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
@@ -537,7 +538,7 @@ func (r *integrationLifecycleResolver) count(protocol executionapi.ExecutionProt
 type runningIntegrationService struct {
 	service    *steerline.Service
 	config     steerline.Config
-	reader     *steerline.SQLiteStore
+	reader     persistence.Connection
 	queries    steerline.QueryService
 	instanceID string
 	cancel     context.CancelFunc

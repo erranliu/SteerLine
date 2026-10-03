@@ -2,7 +2,6 @@ package steerline
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,17 +11,14 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
 
 // Decision questions and accepted answers are records in the current SQLite
 // authority. Clients append answer_decision commands; the single service writer
 // validates and accepts them before applyDecisions considers continuation.
 
-var ErrAnswerConflict = errors.New("answer_conflict: this decision already has a different accepted answer")
-
-func sameDecisionAnswer(a, b DecisionAnswer) bool {
-	return a.DecisionID == b.DecisionID && a.RunID == b.RunID && a.SourceAttemptID == b.SourceAttemptID && a.ExpectedRecoveryVersion == b.ExpectedRecoveryVersion && strings.TrimSpace(a.OptionID) == strings.TrimSpace(b.OptionID) && strings.TrimSpace(a.Note) == strings.TrimSpace(b.Note) && digestValue(a.Answers) == digestValue(b.Answers)
-}
+var ErrAnswerConflict = persistence.ErrAnswerConflict
 
 func validateDecisionRequest(req *DecisionRequest) error {
 	return contracts.ValidateDecisionRequest(req)
@@ -241,7 +237,7 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 		}
 	}
 	key := decisionAnswerKey(answer)
-	reader, err := OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
+	reader, err := c.Persistence.OpenReader(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		return CommandRecord{}, false, err
 	}
@@ -249,12 +245,12 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 	_ = reader.Close()
 	if lookupErr == nil {
 		var previous DecisionAnswer
-		if existing.Kind != "answer_decision" || existing.TargetID != decisionID || decode(existing.Payload, &previous) != nil || !sameDecisionAnswer(previous, answer) {
+		if existing.Kind != "answer_decision" || existing.TargetID != decisionID || decode(existing.Payload, &previous) != nil || !contracts.SameDecisionAnswer(previous, answer) {
 			return CommandRecord{}, false, errors.New("answer idempotency identity conflicts with a different command")
 		}
 		return existing, false, nil
 	}
-	if !errors.Is(lookupErr, sql.ErrNoRows) {
+	if !errors.Is(lookupErr, persistence.ErrNotFound) {
 		return CommandRecord{}, false, lookupErr
 	}
 	connection := ConnectService(ctx, c)
@@ -300,7 +296,7 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 	}
 	if decisionRecord.Status != "pending" {
 		var saved DecisionAnswer
-		if len(decisionRecord.Answer) == 0 || decode(decisionRecord.Answer, &saved) != nil || !sameDecisionAnswer(saved, answer) {
+		if len(decisionRecord.Answer) == 0 || decode(decisionRecord.Answer, &saved) != nil || !contracts.SameDecisionAnswer(saved, answer) {
 			return CommandRecord{}, false, ErrAnswerConflict
 		}
 		return CommandRecord{}, false, fmt.Errorf("decision is already %s but its original idempotency command is missing", decisionRecord.Status)
@@ -333,7 +329,7 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 	if expectedDecisionVersion == 0 {
 		answer.ExpectedDecisionVersion = version
 	}
-	db, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	db, err := c.Persistence.OpenWriter(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		return CommandRecord{}, false, err
 	}
@@ -464,11 +460,11 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	if run == nil || run.Decision == nil || run.Decision.Status != "pending" {
 		return errors.New("decision is not pending on the current native run")
 	}
-	if run.WorkflowVersion != WorkerFlowVersion || !stableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
+	if run.WorkflowVersion != WorkerFlowVersion || !executionapi.StableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "feedback does not belong to the fixed worker execution"}
 	}
 	if target := run.Decision.Request.HostTarget; target != nil {
-		if target.ExecutionID != run.ExecutionID || !stableExecutionID(target.TurnID) || !stableExecutionID(target.BlockerID) {
+		if target.ExecutionID != run.ExecutionID || !executionapi.StableExecutionID(target.TurnID) || !executionapi.StableExecutionID(target.BlockerID) {
 			return errors.New("host action has an invalid fixed execution target")
 		}
 		return ctx.Err()

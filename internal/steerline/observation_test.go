@@ -31,7 +31,7 @@ func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
 		t.Fatalf("missing state=%s", got.State)
 	}
 	operation := OperationRecord{ProjectIdentity: c.Identity(), OperationID: newID(), IdempotencyKey: newID(), Kind: "test", Status: "pending", PayloadDigest: strings.Repeat("a", 64), Request: []byte(`{}`), CreatedAt: nowTime, UpdatedAt: nowTime}
-	if err = db.transactSQLite(context.Background(), func(tx *sqliteTx) error {
+	if err = transactFixture(db, context.Background(), func(tx *fixtureTransaction) error {
 		_, _, putErr := tx.PutOperation(operation)
 		return putErr
 	}); err != nil {
@@ -96,7 +96,7 @@ func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = db.transactSQLite(context.Background(), func(tx *sqliteTx) error { return tx.PutProjection(c.Identity(), 99, body) }); err != nil {
+	if err = transactFixture(db, context.Background(), func(tx *fixtureTransaction) error { return tx.PutProjection(c.Identity(), 99, body) }); err != nil {
 		t.Fatal(err)
 	}
 	if got := ReadObservationSnapshot(c, clock); got.State != SnapshotUnknownVersion {
