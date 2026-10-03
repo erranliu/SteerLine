@@ -23,6 +23,7 @@ func TestWorkerBindingRollsBackWithItsCheckpoint(t *testing.T) {
 	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.Workspace.Worktree = filepath.Join(t.TempDir(), "worker")
 	execution.Workspace.Branch, execution.Workspace.Base = execution.WorkspaceIntent.Branch, execution.WorkspaceIntent.BaseCommit
+	execution.PolicyResources = neutralPolicyReceipt(s.workflowRecord(run).ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	s.refreshRun(run)
 	ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: neutralProtocol, Target: targetFor(s.Config), Agent: agentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, External: *identity, Generation: "generation"}
 	_, err = s.domainStore.db.Exec(`CREATE TRIGGER reject_binding_checkpoint BEFORE INSERT ON projection BEGIN SELECT RAISE(FAIL,'binding checkpoint failure'); END`)
@@ -54,6 +55,7 @@ func TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding(t *testing.T) {
 	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.Workspace.Worktree = filepath.Join(t.TempDir(), "worker")
 	execution.Workspace.Branch, execution.Workspace.Base = execution.WorkspaceIntent.Branch, execution.WorkspaceIntent.BaseCommit
+	execution.PolicyResources = neutralPolicyReceipt(s.workflowRecord(run).ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	s.refreshRun(run)
 	ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: neutralProtocol, Target: targetFor(s.Config), Agent: agentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, External: *identity, Generation: "generation"}
 	require(t, s.commitWorkerBinding(run, ref))

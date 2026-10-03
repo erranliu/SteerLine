@@ -1,0 +1,24 @@
+[
+  {
+    "raw_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l1-verified189-20261003-000101\\quick-core\\test.jsonl",
+    "top_level_results": {
+      "pass": 2,
+      "fail": 0,
+      "skip": 0
+    },
+    "failures": [],
+    "diagnostics": [],
+    "package_terminals": 1
+  },
+  {
+    "raw_log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l1-verified189-20261003-000101\\quick-rules\\test.jsonl",
+    "top_level_results": {
+      "pass": 55,
+      "fail": 0,
+      "skip": 0
+    },
+    "failures": [],
+    "diagnostics": [],
+    "package_terminals": 10
+  }
+]

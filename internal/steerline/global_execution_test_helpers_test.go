@@ -1,10 +1,25 @@
 package steerline
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"testing"
 )
+
+// Frozen publication fixtures describe the current supported route before a unit
+// test mutates records. They do not reconstruct missing production snapshots.
+func publicationSnapshotFixture(t *testing.T, c Config) FixedExecutionProfile {
+	t.Helper()
+	c = withNeutralProfile(c, neutralProfileSettings(c))
+	require(t, validateWorkflowConfig(&c, nil))
+	require(t, c.bindPublicationTarget(context.Background()))
+	p := c.projectExecutionProfile().Freeze()
+	if !verifyFixedExecutionProfile(p, c.ExecutionDirectory) {
+		t.Fatal("invalid publication snapshot fixture")
+	}
+	return p
+}
 
 func writeGlobalExecutionFixture(t *testing.T, profiles []ExecutionProfile, defaultID string) {
 	t.Helper()

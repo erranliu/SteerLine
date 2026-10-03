@@ -164,7 +164,9 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	projectBytes, globalBytes := []byte(`{"execution_requirements":{"tools":[{"id":"git"}]}}`), []byte(`{"execution_profiles":[]}`)
 	require(t, os.WriteFile(c.policySource, projectBytes, 0600))
 	require(t, os.WriteFile(c.executionConfigPath, globalBytes, 0600))
+	claimProfileSettings := neutralProfileSettings(c)
 	c.configDigest = loadedConfigDigest(projectBytes, globalBytes)
+	setNeutralProfile(t, &c, claimProfileSettings)
 	entry, err := registrationFor(c)
 	require(t, err)
 	fake := entry
@@ -184,6 +186,7 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 		t.Fatal("stale configuration consumed the task")
 	}
 	require(t, os.WriteFile(c.policySource, projectBytes, 0600))
+	c.ExecutionDirectory = neutralDirectoryWithReplacement(t, c.ExecutionDirectory, entry)
 	_, err = commands.ClaimNativeTask(ctx, c, options)
 	require(t, err)
 	s, err := newNeutralService(c)

@@ -14,7 +14,7 @@ func workspacePolicyFixture() executionapi.ExecutionPolicy {
 
 func TestProjectPolicyMissingBoundResourcesAreNotReconstructed(t *testing.T) {
 	c := Config{ExecutionPolicy: workspacePolicyFixture()}
-	e := ExecutionRecord{Generation: "original-generation"}
+	e := ExecutionRecord{Generation: "original-generation", Process: &executionapi.ProcessIdentity{Kind: "local"}}
 	if err := bindPolicyResources(context.Background(), c, &e, "workspace", nil); err == nil || !strings.Contains(err.Error(), "snapshot is missing") {
 		t.Fatalf("missing original resources were reconstructed: %v", err)
 	}

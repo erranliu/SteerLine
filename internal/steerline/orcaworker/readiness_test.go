@@ -281,3 +281,27 @@ func TestReadinessReceiptRejectsStaleAndEscapingFiles(t *testing.T) {
 		_ = os.Remove(path)
 	}
 }
+
+func TestProbeEvidenceAcceptsNativeExecPragmaWithoutChangingCommand(t *testing.T) {
+	command, nonce, digest := "probe-command", "original-nonce", "original-script"
+	input := "// @exec: {\"max_output_tokens\":2000}\nconst r = await tools.exec_command({cmd: \"probe-command\", login: false});\ntext(r);"
+	result := `{"exit_code":0,"output":"SLREADINESS:original-nonce:original-script"}`
+	transcript, _ := json.Marshal(map[string]any{"messages": []any{
+		map[string]any{"id": "call", "source": "transcript", "role": "assistant", "blocks": []any{map[string]any{"type": "tool-call", "name": "exec", "callId": "original-call", "input": input}}},
+		map[string]any{"id": "result", "source": "transcript", "role": "tool", "blocks": []any{map[string]any{"type": "tool-result", "callId": "original-call", "output": result}}},
+	}})
+	evidence, err := ObserveProbe(WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "original-source", Transcript: transcript}, command, nonce, digest, ProbeToolEvidence{})
+	if err != nil || !evidence.Verified {
+		t.Fatalf("native pragma lost tool evidence: %+v / %v", evidence, err)
+	}
+	for _, changed := range []string{
+		strings.Replace(input, `"max_output_tokens":2000`, `"unknown":2000`, 1),
+		strings.Replace(input, `"max_output_tokens":2000`, `"max_output_tokens":"2000"`, 1),
+		strings.Replace(input, "text(r);", "text(fake);", 1),
+		input + ` text({exit_code:0});`,
+	} {
+		if _, ok := commandInvocation("exec", changed); ok {
+			t.Fatalf("altered native wrapper accepted: %s", changed)
+		}
+	}
+}

@@ -1,0 +1,69 @@
+{
+  "cleanup_complete": true,
+  "cleanup_errors": null,
+  "components": {
+    "provider": "github/erranliu/SteerlineTest",
+    "worker": "orca-codex"
+  },
+  "context_error": "<nil>",
+  "finished_at": "2026-10-02T15:06:30.2054465Z",
+  "id": "smoke.orca-codex",
+  "passed": true,
+  "real_pr": {
+    "url": "https://github.com/erranliu/SteerlineTest/pull/44",
+    "repository": "erranliu/SteerlineTest",
+    "base_branch": "codex/e2e/985faa0b0de6441fbbd0ea04979121d8/smoke.orca-codex/base",
+    "head_repository": "erranliu/SteerlineTest",
+    "head_branch": "erranliu/sl-1-c1afac7a4da6f8ae8b3de33d95ac4d01",
+    "head_revision": "6ba2c7a4d3129f69bdf1e03e6a4b2a2a118ec45d",
+    "state": "merged",
+    "merged": true,
+    "merged_at": "2026-10-02T15:05:56Z",
+    "merge_commit": "5e4f3814c4034107527c8cc7f950b661e00e6a70"
+  },
+  "resources": [
+    {
+      "created_at": "2026-10-02T15:00:01.2126275Z",
+      "kind": "project",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-3399100165\\smoke.orca-codex\\live",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-02T15:00:02.4334073Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l2-final189-20261002-225547\\build\\controlled-helper.exe",
+      "pid": 46720
+    },
+    {
+      "created_at": "2026-10-02T15:00:12.3848722Z",
+      "kind": "github-base-branch",
+      "path": "codex/e2e/985faa0b0de6441fbbd0ea04979121d8/smoke.orca-codex/base",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-02T15:00:19.985888Z",
+      "kind": "orca-repo",
+      "path": "b16adae1-ebdd-408a-97ce-f9161da68e45",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-02T15:00:30.3584304Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l2-final189-20261002-225547\\build\\steerline.exe",
+      "pid": 39920
+    },
+    {
+      "created_at": "2026-10-02T15:06:14.838997Z",
+      "kind": "orca-worktree",
+      "path": "b16adae1-ebdd-408a-97ce-f9161da68e45::C:/Users/lmas1/AppData/Local/Temp/steerline-e2e-3399100165/smoke.orca-codex/live/repo",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-02T15:06:16.5444161Z",
+      "kind": "orca-worktree",
+      "path": "b16adae1-ebdd-408a-97ce-f9161da68e45::C:/Users/lmas1/orca/workspaces/repo/sl-1-c1afac7a4da6f8ae8b3de33d95ac4d01",
+      "pid": 0
+    }
+  ],
+  "usage_verified": true
+}

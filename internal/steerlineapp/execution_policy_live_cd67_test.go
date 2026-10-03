@@ -545,7 +545,7 @@ func nativePolicyBackend(t *testing.T, c Config, run *steerline.Run, e *steerlin
 	snapshot := executionapi.LifecycleSnapshot{Ref: executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol, Target: e.Target, Agent: executionapi.AgentSpec{Name: c.Agent}, RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: *run.WorktreePath}, Session: executionapi.SessionContext{ProjectID: c.Identity(), ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, WorkflowRunID: run.RunID, Agent: executionapi.AgentSpec{Name: c.Agent}}, ResourceGeneration: e.Generation, ConfigurationDigest: e.ConfigurationDigest}
 	port, err := entry.Lifecycle(executionapi.LifecycleSetup{Snapshot: snapshot, ProfileData: c.ImplementationData, ProfileID: profile.ID, AcceptedConfigVersion: profile.AcceptedConfigVersion, Policy: c.ExecutionPolicy, ProcessHost: c.ProcessHost, RunDirectory: c.RunDir, RepositoryPath: c.Repository, CommandTimeout: 90 * time.Second, BlockedEnvironment: []string{"GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN"}})
 	require(t, err)
-	actual, ok := port.(codexworker.ExecutionLifecycle)
+	actual, ok := port.(*codexworker.ExecutionLifecycle)
 	if !ok {
 		t.Fatal("native app-server lifecycle type differs")
 	}

@@ -23,6 +23,7 @@ type ExecutionLifecycle struct {
 	Backend        Backend
 	HistoryCommand contracts.Command
 	ProbeLifecycle func(context.Context, executionapi.LifecycleSetup) (executionapi.CapabilityReport, error)
+	prepared       *SessionHandle
 }
 
 func (l ExecutionLifecycle) PolicyCapabilities() executionapi.LifecyclePolicyCapabilities {
@@ -69,7 +70,7 @@ func NewExecutionLifecycle(setup executionapi.LifecycleSetup) (executionapi.Life
 		return nil, err
 	}
 	history := ReaderCommand(contracts.Command{Executable: profile.Executable, Args: append([]string(nil), profile.Args...)}, profile.Profile)
-	return ExecutionLifecycle{setup: setup, Backend: backend, HistoryCommand: history, ProbeLifecycle: func(ctx context.Context, probeSetup executionapi.LifecycleSetup) (executionapi.CapabilityReport, error) {
+	return &ExecutionLifecycle{setup: setup, Backend: backend, HistoryCommand: history, ProbeLifecycle: func(ctx context.Context, probeSetup executionapi.LifecycleSetup) (executionapi.CapabilityReport, error) {
 		probeSetup.ProcessHost = setup.ProcessHost
 		return probeLifecycleCapabilities(ctx, backend, history, probeSetup)
 	}}, nil
@@ -166,7 +167,7 @@ func (l ExecutionLifecycle) Next(_ context.Context, snapshot executionapi.Lifecy
 	return candidate, candidate.Validate()
 }
 
-func (l ExecutionLifecycle) Execute(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (l *ExecutionLifecycle) Execute(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
 	if err := request.Validate(); err != nil {
 		return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationRejected, Diagnostic: err.Error()}, nil, err
 	}
@@ -445,7 +446,18 @@ func (l ExecutionLifecycle) BindRecovery(ctx context.Context, previous, next exe
 	return NewAppServerBindingEnvelope(l.identity(next), seed)
 }
 
-func (l ExecutionLifecycle) prepareSession(ctx context.Context, snapshot executionapi.LifecycleSnapshot, input executionapi.TurnInput) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+// ReleasePreparation closes only an unconsumed preparation connection. The
+// committed process remains owned by the center; a started observer owns its
+// own connection. The launcher calls this even when the receipt is rejected.
+func (l *ExecutionLifecycle) ReleasePreparation() {
+	if l.prepared != nil {
+		l.prepared.Close()
+		l.prepared = nil
+	}
+}
+
+func (l *ExecutionLifecycle) prepareSession(ctx context.Context, snapshot executionapi.LifecycleSnapshot, input executionapi.TurnInput) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+	l.ReleasePreparation()
 	fixed, _, err := l.readBinding(snapshot)
 	if err != nil {
 		return executionapi.LifecycleReceipt{}, nil, err
@@ -482,12 +494,16 @@ func (l ExecutionLifecycle) prepareSession(ctx context.Context, snapshot executi
 		return receipt, nil, err
 	}
 	receipt.EventPath = handle.Paths.JournalPath
-	receipt.Handle = handle.Detach()
+	// An empty native thread has no rollout to resume after disconnect. Keep
+	// its connection until the center commits this receipt and starts its turn.
+	handle.owned = false
+	l.prepared = handle
+	receipt.Handle = handle.process
 	receipt.Disposition = executionapi.OperationConfirmed
 	return receipt, nil, nil
 }
 
-func (l ExecutionLifecycle) startTurn(ctx context.Context, snapshot executionapi.LifecycleSnapshot, input executionapi.TurnInput) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (l *ExecutionLifecycle) startTurn(ctx context.Context, snapshot executionapi.LifecycleSnapshot, input executionapi.TurnInput) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
 	fixed, found, err := l.readBinding(snapshot)
 	if err != nil {
 		return executionapi.LifecycleReceipt{}, nil, err
@@ -495,9 +511,20 @@ func (l ExecutionLifecycle) startTurn(ctx context.Context, snapshot executionapi
 	if !found || fixed.SessionID == "" || fixed.Endpoint == "" || fixed.Generation == "" {
 		return executionapi.LifecycleReceipt{}, nil, errors.New("app-server turn requires its committed original session binding")
 	}
-	handle, binding, err := l.Backend.PrepareSession(ctx, fixed, input)
+	handle := l.prepared
+	l.prepared = nil
+	binding := fixed
+	if handle != nil {
+		defer handle.Close()
+		if !sameBinding(handle.Binding, fixed) {
+			err = errors.New("app-server turn changed its prepared original session binding")
+		}
+	} else {
+		handle, binding, err = l.Backend.PrepareSession(ctx, fixed, input)
+	}
 	if err != nil {
 		receipt := l.bindingReceipt(snapshot, binding)
+		receipt.State.SessionID = binding.SessionID
 		receipt.State.SessionGeneration = binding.Generation
 		receipt.Disposition, receipt.Diagnostic = executionapi.OperationUnknown, err.Error()
 		if binding.Process != nil {
@@ -527,6 +554,11 @@ func (l ExecutionLifecycle) startTurn(ctx context.Context, snapshot executionapi
 	receipt.EventPath = handle.Paths.JournalPath
 	fixedContext := lifecycleSession(snapshot, binding.SessionID, turnID)
 	return receipt, newLifecycleObserver(observer, fixedContext), nil
+}
+
+func sameBinding(a, b Binding) bool {
+	return a.Process != nil && b.Process != nil && *a.Process == *b.Process &&
+		a.Endpoint == b.Endpoint && a.Generation == b.Generation && a.SessionID == b.SessionID
 }
 
 func (l ExecutionLifecycle) writeHistoryBinding(snapshot executionapi.LifecycleSnapshot, binding Binding, handle *SessionHandle) error {

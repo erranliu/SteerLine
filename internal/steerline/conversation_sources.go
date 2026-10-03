@@ -82,6 +82,9 @@ func validateDiscoveredConversationOwner(discovery contracts.ConversationDiscove
 }
 
 func (s *Service) collectConversationHistoryPage(ctx context.Context, source contracts.ConversationHistorySource) (bool, error) {
+	if s.conversationSources == nil || s.Config.ProcessHost == nil {
+		return false, errors.New("conversation source port and managed process host are required")
+	}
 	event := source.Event
 	if event.ProjectID != s.Config.identity || event.ExecutionID == "" || event.AttemptID == "" || event.Source == "" || event.SourceSegment == "" || event.SourceIdentity == "" {
 		return false, errors.New("conversation history source lost its fixed identity")

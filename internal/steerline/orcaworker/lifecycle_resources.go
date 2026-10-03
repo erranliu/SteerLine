@@ -257,6 +257,7 @@ func (l *ExecutionLifecycle) createAgentTerminal(ctx context.Context, request ex
 	}
 	state.AgentBound = bound
 	state.AgentLaunchCommand = wrapped
+	receipt.State.ResourcePending = !bound
 	receipt.State.LaunchCommand = wrapped
 	receipt.OriginalHost = &process
 	if bound {
@@ -299,6 +300,7 @@ func (l *ExecutionLifecycle) reconcileAgentTerminal(ctx context.Context, request
 		return receipt, nil, err
 	}
 	state.AgentBound = bound
+	receipt.State.ResourcePending = !bound
 	command, err := l.agentLaunchCommand(request.Snapshot, worktree.Path)
 	if err != nil {
 		return receipt, nil, err
@@ -349,19 +351,27 @@ func (l *ExecutionLifecycle) bindAgent(ctx context.Context, request executionapi
 		return nativeReceipt(request, executionapi.OperationRejected)
 	}
 	err = VerifyAgentTerminal(ctx, l.client.MetaCall, process, worktree.Path, strings.TrimPrefix(worktree.Branch, "refs/heads/"), "codex")
-	if err != nil {
+	if err != nil && !errors.Is(err, ErrAgentStarting) {
 		receipt.Diagnostic = err.Error()
 		return receipt
 	}
+	bound := err == nil
 	state, _, err := l.readState(request.Snapshot)
 	if err != nil {
 		receipt.Diagnostic = err.Error()
 		return receipt
 	}
-	state.AgentBound = true
-	receipt.Process = &process
+	state.AgentBound = bound
+	receipt.OriginalHost = &process
+	if bound {
+		receipt.Process = &process
+	}
 	receipt.RequestID = process.Incarnation
 	receipt.Disposition = executionapi.OperationConfirmed
+	if !bound {
+		receipt.Disposition = executionapi.OperationAccepted
+		receipt.State.ResourcePending = true
+	}
 	receipt.State.ResourceID = process.Terminal
 	receipt.State.SessionID, receipt.State.SessionGeneration = SessionID(process), process.Incarnation
 	receipt.Implementation, err = l.targetEnvelope(request.Snapshot, request.Snapshot.Ref.Target, process, state)

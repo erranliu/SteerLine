@@ -1,10 +1,12 @@
 package steerlineapp
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -108,5 +110,32 @@ func TestConfigRejectsRetiredBeadsExecutionFields(t *testing.T) {
 	}
 	if _, err = LoadConfig(path); err == nil || !strings.Contains(err.Error(), "unknown field") {
 		t.Fatalf("retired Beads config fields were silently ignored: %v", err)
+	}
+}
+
+func TestTerminalFullAccessProfileKeepsReadinessAndFrozenAuthority(t *testing.T) {
+	t.Setenv("STEERLINE_HOME", t.TempDir())
+	profile := testExecutionProfile(t, "orca", "Orca", "orca", "codex", codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
+	payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "medium"})
+	require(t, err)
+	profile.ImplementationConfigs[0].Payload = payload
+	writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "orca")
+	policy := workspacePolicyFixture()
+	policy.Filesystem.WriteScope, policy.Filesystem.GitMetadataWrite = "host", false
+	path := filepath.Join(t.TempDir(), "project.json")
+	data, err := json.Marshal(map[string]any{"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "execution_policy": policy, "publication_policy": map[string]string{"publisher": "worker"}, "pr": hostPublicationProviderFixture()})
+	require(t, err)
+	require(t, os.WriteFile(path, data, 0600))
+	config, err := LoadConfig(path)
+	require(t, err)
+	require(t, config.ResolveIdentity(context.Background()))
+	selected, accepted, err := config.ResolveExecutionProfile("orca", "")
+	require(t, err)
+	if err := validateTerminalConfig(context.Background(), selected); err != nil || terminalReadinessRequired(selected) != (runtime.GOOS == "windows") {
+		t.Fatalf("full access lost admission or readiness: %v", err)
+	}
+	fixed := accepted.Freeze(config.Identity())
+	if accepted.Digest() != fixed.Digest || selected.CheckFixedProfile(fixed) != nil || fixed.ExecutionPolicy.Filesystem.WriteScope != "host" || codexProfileSettings(selected).WindowsSandbox != "" {
+		t.Fatal("full access changed while selecting and freezing the profile")
 	}
 }

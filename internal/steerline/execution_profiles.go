@@ -165,33 +165,11 @@ func (p ExecutionProfile) DigestFor(projectID string) string {
 	if accepted == "" {
 		accepted = "unaccepted-profile-input"
 	}
-	data, display, err := p.directory.NormalizeProfile(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, accepted)
-	if err != nil {
+	if _, _, err := p.directory.NormalizeProfile(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, accepted); err != nil {
 		return ""
 	}
-	p.RequirementsEvaluation = cloneRequirementsEvaluation(p.RequirementsEvaluation)
-	publication := clonePublicationSettingsValue(p.Publication)
-	return digestValue(struct {
-		ImplementationKey          string
-		ImplementationVersion      string
-		ImplementationData         []executionapi.ImplementationDataEnvelope
-		ImplementationDisplay      []string
-		ExecutionRequirements      executionapi.ExecutionRequirements
-		RequirementsEvaluation     *executionapi.RequirementsEvaluation
-		RequirementsEvidenceDigest string
-		PublicationPolicy          executionapi.PublicationPolicy
-		Publication                contracts.PublicationSettings
-		ExecutionPolicy            executionapi.ExecutionPolicy
-		PolicyDigest               string
-		AcceptedConfigVersion      string
-		PolicySource               string
-		ID                         string
-		Name                       string
-		Host                       string
-		Agent                      string
-	}{profileImplementationKey(p.directory, p.Host, p.Agent), p.directory.Version(), data, display, p.ExecutionRequirements,
-		p.RequirementsEvaluation, requirementsEvidenceDigest(p.RequirementsEvaluation), p.PublicationPolicy, publication,
-		p.ExecutionPolicy, digestValue(p.ExecutionPolicy), accepted, p.PolicySource, p.ID, p.Name, p.Host, p.Agent})
+	// Selection and claim bind the same immutable envelope.
+	return p.Freeze(projectID).Digest
 }
 
 func cloneRequirementsEvaluation(value *executionapi.RequirementsEvaluation) *executionapi.RequirementsEvaluation {

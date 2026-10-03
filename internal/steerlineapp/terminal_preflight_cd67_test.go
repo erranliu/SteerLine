@@ -104,7 +104,7 @@ func TestLocalObservationRejectsReusedPIDIdentity(t *testing.T) {
 	}
 }
 
-func TestOrcaPreflightDoesNotRequireUnusedLocalCodex(t *testing.T) {
+func TestOrcaPreflightRequiresConfiguredCodexPolicyMapping(t *testing.T) {
 	c, _ := nativeTaskFixture(t)
 	stateDir := t.TempDir()
 	missing := filepath.Join(stateDir, "missing-worker.exe")
@@ -118,8 +118,8 @@ func TestOrcaPreflightDoesNotRequireUnusedLocalCodex(t *testing.T) {
 		c = c.ApplyExecutionProfile(profile)
 	}
 	applyProfile(codexworker.ProfileConfig{Executable: missing, WindowsSandbox: "unelevated"})
-	if err := c.Preflight(context.Background(), false); err != nil {
-		t.Fatalf("terminal host preflight executed an unused local worker: %v", err)
+	if err := c.Preflight(context.Background(), false); err == nil || !strings.Contains(err.Error(), "missing-worker.exe") {
+		t.Fatalf("native policy mapping did not require its fixed tool: %v", err)
 	}
 	// A fixed model actually requires the configured local tool. Probe the
 	// production registration so an unrelated profile-format error cannot

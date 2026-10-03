@@ -116,6 +116,7 @@ func TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback(t *testing.T) {
 	workflow, execution := service.workflowRecords(run)
 	execution.CurrentTurnID, execution.CurrentCommandID = "00000000-0000-0000-0000-000000000001", newID()
 	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
+	execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	execution.Status, workflow.Phase = "blocked", "executing"
 	run.ExecutionStatus = "unknown"
 	if err := service.waitWorkerFlow(run, "observation disconnected"); err != nil {
@@ -126,7 +127,9 @@ func TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback(t *testing.T) {
 	}
 	worker := &Worker{cancelObservation: func() {}, observationDone: make(chan struct{})}
 	close(worker.observationDone)
-	if err := service.applyAppServerRecovery(appServerRecoveryResult{runID: run.RunID, execution: *execution, worker: worker}); err != nil {
+	result := appServerRecoveryFixture(t, service, run)
+	result.worker = worker
+	if err := service.applyAppServerRecovery(result); err != nil {
 		t.Fatal(err)
 	}
 	workflow, execution = service.workflowRecords(run)
@@ -139,6 +142,7 @@ func TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback(t *testing.T) {
 func TestAppServerSlowRecoveryLeavesServiceWriterAvailable(t *testing.T) {
 	service, run := neutralAuditService(t)
 	workflow, execution := service.workflowRecords(run)
+	execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	identity, err := currentProcessIdentity()
 	if err != nil {
 		t.Fatal(err)
@@ -262,6 +266,7 @@ func TestRoutedDecisionRequiresAllQuestionIDs(t *testing.T) {
 func TestAppServerStartedEventCommitsOperationReceipt(t *testing.T) {
 	service, run := neutralAuditService(t)
 	_, execution := service.workflowRecords(run)
+	execution.PolicyResources = neutralPolicyReceipt(service.workflowRecord(run).ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	commandID, turnID := newID(), "00000000-0000-0000-0000-000000000001"
 	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.PendingCommandID, execution.PendingTurnID = commandID, turnID

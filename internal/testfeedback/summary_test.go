@@ -111,3 +111,23 @@ func TestParseTreatsProcessFailureWithoutTerminalTestsAsIncomplete(t *testing.T)
 		t.Fatalf("missing process output was accepted: %+v", summary)
 	}
 }
+
+func TestParseToolchainBuildEventsPreservesActualFailures(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		lines := []string{`{"ImportPath":"example/pkg [example/pkg.test]","Action":"build-output","Output":"compiler diagnostic"}`}
+		code, status := 0, "pass"
+		if failed {
+			lines = append(lines, `{"ImportPath":"example/pkg [example/pkg.test]","Action":"build-fail"}`)
+			code, status = 1, "fail"
+		}
+		lines = append(lines, `{"Time":"2026-10-02T00:00:00Z","Action":"start","Package":"example/pkg"}`,
+			`{"Time":"2026-10-02T00:00:01Z","Action":"`+status+`","Package":"example/pkg","Elapsed":1}`, "")
+		summary := Parse([]byte(strings.Join(lines, "\n")), code)
+		if !summary.Complete || summary.Passed == failed || summary.PackageCount != 1 || (len(summary.BuildFailures) > 0) != failed {
+			t.Fatalf("build events changed completion or hid failure: %+v", summary)
+		}
+	}
+	if got := Parse([]byte(`{"Action":"build-output"}`+"\n"), 0); got.Passed || got.Complete {
+		t.Fatal("malformed build event accepted")
+	}
+}

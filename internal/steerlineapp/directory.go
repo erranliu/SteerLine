@@ -224,8 +224,8 @@ func validateTerminalConfig(_ context.Context, c steerline.Config) error {
 	if err != nil {
 		return err
 	}
-	if settings.Profile != "" || c.ExecutionPolicy.Filesystem.WriteScope != "workspace" {
-		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "terminal host requires workspace-write and an empty agent profile"}
+	if settings.Profile != "" || (c.ExecutionPolicy.Filesystem.WriteScope != "workspace" && c.ExecutionPolicy.Filesystem.WriteScope != "host") {
+		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "terminal host requires workspace or host write scope and an empty agent profile"}
 	}
 	return nil
 }
@@ -292,6 +292,9 @@ func preflightLocalConfig(ctx context.Context, c steerline.Config) error {
 }
 
 func preflightTerminalConfig(ctx context.Context, c steerline.Config) error {
+	if _, err := prepareTerminalClaim(ctx, c); err != nil {
+		return err
+	}
 	settings, err := terminalSettings(c)
 	if err != nil {
 		return err
@@ -344,7 +347,7 @@ func prepareTerminalClaim(ctx context.Context, c steerline.Config) (steerline.Cl
 // preflight. Reopening must reject missing readiness evidence before writing.
 func terminalReadinessRequired(c steerline.Config) bool {
 	settings, err := codexSettings(c)
-	return err == nil && runtime.GOOS == "windows" && settings.WindowsSandbox != ""
+	return err == nil && runtime.GOOS == "windows" && (settings.WindowsSandbox != "" || c.ExecutionPolicy.Filesystem.WriteScope == "host")
 }
 
 func prepareSupervisedClaim(ctx context.Context, c steerline.Config) (steerline.ClaimPreparation, error) {

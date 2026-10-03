@@ -149,6 +149,12 @@ func MockAppServerConnection(conn net.Conn, state *AppServerState) {
 			}
 			_ = json.Unmarshal(message.Params, &params)
 			state.mu.Lock()
+			// A newly created empty native thread has no persisted rollout.
+			if message.Method == "thread/resume" && len(state.Turns) == 0 {
+				state.mu.Unlock()
+				response["error"] = map[string]any{"code": -32600, "message": "no rollout found for thread id " + AppServerSession}
+				break
+			}
 			if state.Cwd == "" {
 				state.Cwd = params.Cwd
 			}

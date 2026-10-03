@@ -25,6 +25,7 @@ func TestProjectPolicyRejectsMissingOrOldConfiguration(t *testing.T) {
 		t.Fatalf("missing authority accepted: %v", err)
 	}
 	body["execution_policy"] = workspacePolicyFixture()
+	body["pr"] = hostPublicationProviderFixture()
 	for _, field := range []string{"sandbox", "windows_sandbox"} {
 		body[field] = "workspace-write"
 		write()

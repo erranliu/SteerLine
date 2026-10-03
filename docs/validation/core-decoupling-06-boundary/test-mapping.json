@@ -1055,7 +1055,9 @@
     "test": "TestOrcaPreflightDoesNotRequireUnusedLocalCodex",
     "new": "internal/steerlineapp/terminal_preflight_cd67_test.go",
     "owner": "steerlineapp",
-    "change": "Real builtin directory/backend and process host replace copied test factories; static capability declaration stays unverified; native terminal preflight does not execute unused local tool and actual fixed-model backend rejects the missing tool"
+    "change": "Real builtin directory/backend and process host replace copied test factories; static capability declaration stays unverified; native terminal preflight does not execute unused local tool and actual fixed-model backend rejects the missing tool",
+    "new_test": "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping",
+    "integration_note": "Latest main renamed the assertion to require the fixed native policy tool; actual app preflight now checks PrepareClaim read-only policy probe, retaining missing-tool rejection."
   },
   {
     "old": "internal/steerline/orca_fake_test.go",
@@ -1734,5 +1736,30 @@
     "new_test": "TestWaitForStartupMarksConfirmedEarlyExit",
     "owner": "steerline",
     "change": "core actual waitForStartup still verifies terminal failed result and persistent startup record; outer product CLI separately verifies unchanged pending identity, no ready runtime and real public offline/ProcessAbsent after exact process kill"
+  },
+  {
+    "old": "internal/steerline/execution_policy_test.go",
+    "test": "TestFullAccessProfileFreezeSurvivesClaimValidation",
+    "new": "internal/steerlineapp/full_access_freeze_cd67_test.go",
+    "owner": "steerlineapp",
+    "integration_base": "d71149e",
+    "assertions": "Both actual builtin routes freeze/selection digest match, original host write policy and empty Windows sandbox restored, original directory retained, damaged payload rejected."
+  },
+  {
+    "old": "internal/steerline/orca_resource_restart_test.go",
+    "test": "TestOrcaRestartPreflightRetainsOriginalPolicyRoots",
+    "new": "internal/steerline/resource_restart_business_test.go",
+    "new_test": "TestRestartPreflightRetainsOriginalPolicyRoots",
+    "owner": "steerline",
+    "integration_base": "d71149e",
+    "assertions": "Same center preflight/SQLite current-format validation rejects changed original roots after persistence for workspace and host policies; no native parser or private writer exported."
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "test": "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping",
+    "new": "internal/steerlineapp/terminal_preflight_cd67_test.go",
+    "owner": "steerlineapp",
+    "integration_base": "d71149e",
+    "assertions": "Missing fixed native tool rejected by actual app preflight and model-specific actual backend Probe, with current valid policy/profile inputs."
   }
 ]

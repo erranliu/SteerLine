@@ -15,7 +15,7 @@ func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 	service := Service{
 		Config: config,
 		domain: DomainSnapshot{WorkflowRuns: []WorkflowRunRecord{{ProjectIdentity: configurationProjectIdentity(config), WorkflowRunID: "run", WorkflowVersion: WorkerFlowVersion, Repository: config.Repository, Branch: config.Branch, ConfigDigest: fixed.AcceptedConfigVersion, ExecutionProfile: &fixed}},
-			Executions: []ExecutionRecord{{ProjectIdentity: configurationProjectIdentity(config), ConfigurationDigest: fixed.Digest, CurrentAttemptID: "attempt", ExecutionID: "execution", WorkflowRunID: "run", Agent: "fixture", Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Target: target}},
+			Executions: []ExecutionRecord{{ProjectIdentity: configurationProjectIdentity(config), ConfigurationDigest: fixed.Digest, CurrentAttemptID: run.AttemptID, ExecutionID: "execution", WorkflowRunID: "run", Agent: "fixture", Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Target: target}},
 			Attempts:   []StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}}},
 	}
 	mode, err := service.workerFlowRegistration(run)

@@ -114,7 +114,11 @@ func (p neutralPreparationPort) Execute(ctx context.Context, r executionapi.Life
 // owns every Decision, input intent, business turn and persistence write.
 func neutralPreparationService(t *testing.T, mode string) (*Service, *Run, *neutralPreparationResolver) {
 	t.Helper()
-	s, run := neutralAuditService(t)
+	return neutralPreparationServiceWithPolicy(t, mode, workspacePolicyFixture())
+}
+func neutralPreparationServiceWithPolicy(t *testing.T, mode string, policy executionapi.ExecutionPolicy) (*Service, *Run, *neutralPreparationResolver) {
+	t.Helper()
+	s, run := neutralAuditServiceWithPolicy(t, policy)
 	require(t, prepareWorktreeOnly(context.Background(), s.Config, run))
 	run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(run.WorkspaceIntent.Path), ptr(run.WorkspaceIntent.Branch), ptr(run.WorkspaceIntent.BaseCommit)
 	workflow, e := s.workflowRecords(run)
@@ -124,6 +128,10 @@ func neutralPreparationService(t *testing.T, mode string) (*Service, *Run, *neut
 	e.Process = &executionapi.ProcessIdentity{Kind: "fixture", RuntimeID: "fixture-runtime", Terminal: "fixture-terminal", Incarnation: "fixture-incarnation"}
 	setNeutralBinding(t, e, "fixture-original", e.Process.Incarnation, "fixture-session")
 	e.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, e.Workspace.Worktree, e)
+	if policy.Filesystem.WriteScope == "host" {
+		e.PolicyResources.WriteRoots = nil
+		e.PolicyResources.Digest = policyResourceDigest(*e.PolicyResources)
+	}
 	id := newID()
 	started := now()
 	probe := executionapi.ProbeIdentity{Execution: e.ExecutionID, Turn: id, Nonce: newID(), ProfileDigest: workflow.ExecutionProfile.Digest, Runtime: e.Process.RuntimeID, Terminal: e.Process.Terminal, Incarnation: e.Process.Incarnation, Worktree: e.Workspace.Worktree}

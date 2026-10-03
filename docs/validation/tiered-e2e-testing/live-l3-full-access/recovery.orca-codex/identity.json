@@ -1,0 +1,41 @@
+[
+  {
+    "sample": "open",
+    "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-4018612475\\recovery.orca-codex\\live\\repo\\.git",
+    "database_id": "aa44a929de62315b19dc802a274075f9",
+    "execution_id": "d2670789a8b9c7303ce48a1aede996f7",
+    "workflow_run_id": "86692131db0e7a1ad93cb5f4e1b7e184",
+    "session_id": "orca-terminal:29aeca94-b4a2-45df-bbdf-5de8dac5b15e:term_ef65f74e-992d-4a5c-9c1f-6b7775e348fb:23ece62d-9a1e-4d6c-8059-f1498402dd4e",
+    "turn_id": "0b366cc558376ae103de55dc2f5286e8",
+    "turn_number": 1,
+    "worktree": "C:/Users/lmas1/orca/workspaces/repo/sl-1-86692131db0e7a1ad93cb5f4e1b7e184",
+    "attempt_count": 1,
+    "policy_contract": "codex-policy-v1:0.159.2:host-write:network-allow:never"
+  },
+  {
+    "sample": "after-restart",
+    "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-4018612475\\recovery.orca-codex\\live\\repo\\.git",
+    "database_id": "aa44a929de62315b19dc802a274075f9",
+    "execution_id": "d2670789a8b9c7303ce48a1aede996f7",
+    "workflow_run_id": "86692131db0e7a1ad93cb5f4e1b7e184",
+    "session_id": "orca-terminal:29aeca94-b4a2-45df-bbdf-5de8dac5b15e:term_ef65f74e-992d-4a5c-9c1f-6b7775e348fb:23ece62d-9a1e-4d6c-8059-f1498402dd4e",
+    "turn_id": "0b366cc558376ae103de55dc2f5286e8",
+    "turn_number": 1,
+    "worktree": "C:/Users/lmas1/orca/workspaces/repo/sl-1-86692131db0e7a1ad93cb5f4e1b7e184",
+    "attempt_count": 1,
+    "policy_contract": "codex-policy-v1:0.159.2:host-write:network-allow:never"
+  },
+  {
+    "sample": "completed",
+    "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-4018612475\\recovery.orca-codex\\live\\repo\\.git",
+    "database_id": "aa44a929de62315b19dc802a274075f9",
+    "execution_id": "d2670789a8b9c7303ce48a1aede996f7",
+    "workflow_run_id": "86692131db0e7a1ad93cb5f4e1b7e184",
+    "session_id": "orca-terminal:29aeca94-b4a2-45df-bbdf-5de8dac5b15e:term_ef65f74e-992d-4a5c-9c1f-6b7775e348fb:23ece62d-9a1e-4d6c-8059-f1498402dd4e",
+    "turn_id": "0b366cc558376ae103de55dc2f5286e8",
+    "turn_number": 1,
+    "worktree": "C:/Users/lmas1/orca/workspaces/repo/sl-1-86692131db0e7a1ad93cb5f4e1b7e184",
+    "attempt_count": 1,
+    "policy_contract": "codex-policy-v1:0.159.2:host-write:network-allow:never"
+  }
+]

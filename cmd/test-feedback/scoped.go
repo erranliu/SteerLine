@@ -22,7 +22,7 @@ import (
 
 const corePackage = "github.com/erranliu/SteerLine/internal/steerline"
 
-var quickTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt"}
+var quickTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestRestartPreflightRetainsOriginalPolicyRoots"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/internal/steerlineintegration"
 
@@ -46,15 +46,15 @@ var quickBoundaryAssigned = []string{
 	"TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
 }
 
-var quickRulePackages = []string{corePackage + "/taskgraph", corePackage + "/taskview", corePackage + "/workerflow", corePackage + "/execution", corePackage + "/contracts", corePackage + "/projection", corePackage + "/query", corePackage + "/sqlite"}
+var quickRulePackages = []string{corePackage + "/taskgraph", corePackage + "/taskview", corePackage + "/workerflow", corePackage + "/execution", corePackage + "/contracts", corePackage + "/projection", corePackage + "/query", corePackage + "/sqlite", "github.com/erranliu/SteerLine/internal/testboundary"}
 var quickOwnerCases = []struct {
 	ID, Package string
 	Tests       []string
 }{
 	{"quick-owner-remote", corePackage + "/orca_remote_worker", []string{"TestCD63CodecIdentityAndVersion", "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily", "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift", "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch", "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree", "TestSupervisedRunCoordinatorsAreDistinctAndFenced", "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal", "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall", "TestRemoteContinuationRequiresOriginalPeerAndTerminal", "TestRemoteWorkspaceKeepsPeerPathAndRuntime", "TestRemoteReplyRejectsOversizeWithoutMutation", "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending", "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox", "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID", "TestLoadConfigRequiresExplicitRemoteCancellationFalse"}},
 	{"quick-owner-codec", corePackage + "/codexworker", []string{"TestCodexNormalizer", "TestOversizedWorkerLinePreservesRawOutputAndLaterEvents"}},
-	{"quick-owner-identity", corePackage + "/orcaworker", []string{"TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess", "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation"}},
-	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/steerlineapp", []string{"TestReadinessNativeLaunchKeepsDefaultModelAndPermissions"}},
+	{"quick-owner-identity", corePackage + "/orcaworker", []string{"TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess", "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation", "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost"}},
+	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/steerlineapp", []string{"TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping"}},
 }
 var quickPackages = func() []string {
 	p := append([]string{corePackage}, quickRulePackages...)
