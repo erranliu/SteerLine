@@ -525,7 +525,7 @@
       "stopTestLifecycleMessages"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/orca_worker_observation_test.go",

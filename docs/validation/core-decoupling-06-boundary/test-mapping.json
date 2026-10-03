@@ -1187,5 +1187,39 @@
     "live": "STEERLINE_WORKER_RECOVERY_LIVE",
     "validation": "compile only; live not enabled",
     "change": "same ask A/B, READY and ACK instructions saved in committed public task contract; synthetic fixture task 8/9 -> 901/902, actual app LoadConfig/Service/query/answer ports; fixed original question/thread/turn/workspace/process and manual successor Attempt assertions preserved; legacy detached survival assertion remains and current managed process receives no fallback"
+  },
+  {
+    "old": "internal/steerline/orca_worker_observation_service_test.go",
+    "test": "TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal",
+    "new": "internal/steerlineintegration/native_environment_cd67_test.go",
+    "owner": "steerlineintegration",
+    "change": "actual app LoadConfig/Service/public Claim/recheck/query; same fixed terminal identity, lost launch reply and renamed terminal after restart, gpt-6-luna command and exactly two Dispatches/five bound write roots preserved",
+    "validation": "bin/cd67/native-launch-public-ports-compiled/summary.json: both named launch tests pass; source test failure retained separately"
+  },
+  {
+    "old": "internal/steerline/orca_worker_observation_service_test.go",
+    "test": "TestNativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterRestart",
+    "new": "internal/steerlineintegration/native_environment_cd67_test.go",
+    "owner": "steerlineintegration",
+    "change": "actual app LoadConfig/Service/public Claim/recheck/query; same fixed terminal identity, lost launch reply and renamed terminal after restart, gpt-6-luna command and exactly two Dispatches/five bound write roots preserved",
+    "validation": "bin/cd67/native-launch-public-ports-compiled/summary.json: both named launch tests pass; source test failure retained separately"
+  },
+  {
+    "old": "internal/steerline/orca_worker_observation_service_test.go",
+    "test": "TestCD64NativeSourceReplacementRetainsEvidence",
+    "new": "internal/steerline/source_replacement_business_test.go",
+    "new_test": "TestCD64SourceReplacementRetainsEvidence",
+    "owner": "steerline",
+    "change": "center actual readHostOutput and SQLite commit/query through one neutral output port preserve original Attempt and replacement cursor, with no new Decision/Operation",
+    "validation": "bin/cd67/source-replacement-owners/summary.json: named center assertion pass"
+  },
+  {
+    "old": "internal/steerline/orca_worker_observation_service_test.go",
+    "test": "TestCD64NativeSourceReplacementRetainsEvidence",
+    "new": "internal/steerlineintegration/native_environment_cd67_test.go",
+    "new_test": "TestNativeSourceReplacementRetainsOutputEvidence",
+    "owner": "steerlineintegration",
+    "change": "actual app establishes original business Dispatch; real implementation read-only output port retains original native content, source change, transcript completeness and strict bound state cursor; no Service/Store write adapter",
+    "validation": "bin/cd67/native-source-readonly-original/summary.json complete/pass 1/1"
   }
 ]

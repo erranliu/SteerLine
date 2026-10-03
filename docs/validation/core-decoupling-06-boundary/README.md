@@ -48,6 +48,11 @@
 - 服务 host-exit/两任务隔离/人工后继代次的四条 live 入口归 `steerlineintegration/worker_recovery_live_cd67_test.go`。保留原 opt-in、gpt-6-luna/low、45 秒命令和各入口时间预算，以及原问题/thread/turn/workspace/process、仅人工建立新 Attempt 的断言。A/B、READY、ACK 原指令成为已提交的正式任务契约，fixture task 8/9 显式映射为外层现有 901/902；输入通过实际 app/Service 受理与公开答案端口。
 - 旧 detached survival opt-in 的原失败断言仍保留；当前 managed Job 不增加分离运行或恢复 fallback。这个历史 opt-in 没有运行，不能声称旧 detached 能力可用。四个入口仅编译，root 原私有启动/答案/事务写 fixture 已删除；当前剩余 11 个 root 平台文件。
 
+- 丢失 terminal 创建回执、改名 terminal 后重启的两个原断言经真实 app/公开 Claim/recheck/query 通过：`bin/cd67/native-launch-public-ports-compiled/summary.json` 中两条 pass；同报告的来源测试因等待已结束轮次主动重读而失败，报告 complete/failed，没有豁免。
+- 来源替换按职责拆为真实原生只读输出与中心单写者持久化：`TestNativeSourceReplacementRetainsOutputEvidence` 保留原 Dispatch、transcript 内容、完整性、source_changed 和绑定游标；`TestCD64SourceReplacementRetainsEvidence` 用单一中性 HostOutput port 经实际 SQLite 保存同一 Attempt/新游标，且不创建 Decision/Operation。原生第一次读取允许原来的 bounded/incomplete 事实，完整性仍在替换后的原断言核对。
+- 报告 `bin/cd67/source-replacement-owners/summary.json` 保留中心通过、原生诊断失败；修复仅新增的过强“第一次必须 complete”要求后，`bin/cd67/native-source-readonly-original/summary.json` 1/1 pass/complete。`native-launch-public-ports` 为最初编译诊断失败。未重跑两条已通过的 launch 用例。
+- root 原 native launch/source 消费者及无消费者 helper 删除；生命周期消息工具归平台无关 fixture，CD65 现有入口调用中性持久化断言。根包编译通过；剩余 10 个 root 平台文件。
+
 ## 工作区和源码身份
 
 - 实际工作区：`C:/Users/lmas1/.codex/worktrees/f775/SteerLine`。

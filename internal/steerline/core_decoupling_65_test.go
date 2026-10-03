@@ -18,7 +18,7 @@ func TestCD65SourceCommitAndHostGate(t *testing.T) {
 	t.Run("host_fact_becomes_a_center_manual_gate", testCD65HostGateKeepsTrustedActionSeparate)
 	t.Run("active_and_historical_source_budgets_rotate", TestCD65HistoryBudgetRotatesSources)
 	t.Run("discovery_cannot_write_a_different_owner", testCD65DiscoveryRejectsForeignOwner)
-	t.Run("native_source_replacement_retains_attempt_evidence", TestCD64NativeSourceReplacementRetainsEvidence)
+	t.Run("native_source_replacement_retains_attempt_evidence", TestCD64SourceReplacementRetainsEvidence)
 }
 
 func TestCD65HistoryAndPreparation(t *testing.T) {

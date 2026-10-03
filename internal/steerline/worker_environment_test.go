@@ -437,29 +437,3 @@ func TestManagedOrcaFrozenResourceEvidenceIsVerifiedBeforeInput(t *testing.T) {
 		t.Fatal("changed writable roots were accepted")
 	}
 }
-
-func testManagedLaunchRecovery(t *testing.T, renamed bool) {
-	f := newEnvironmentFixture(t, fakeNativeOrcaState{LoseFixedTerminalOnce: !renamed, RenameFixedAgentAfterCreate: renamed}, "gpt-6-luna")
-	f.prepare(t)
-	if !renamed && f.run.Process != nil {
-		t.Fatal("unknown terminal receipt guessed")
-	}
-	if renamed {
-		require(t, f.service.Close())
-		s, err := newTestService(f.config)
-		require(t, err)
-		f.service, f.run = s, s.find("8154")
-		require(t, s.resumeConfiguredWork(context.Background()))
-	} else {
-		f.recheck(t)
-	}
-	f.poll(t)
-	_, e := f.service.workflowRecords(f.run)
-	state := f.state(t)
-	if !state.FixedAgentTerminalCreated || state.Dispatches != 2 || e.Process == nil || !strings.Contains(state.FixedAgentCommand, "'gpt-6-luna'") {
-		t.Fatalf("original launch was not reconciled: %+v / %+v", state, e)
-	}
-	if state.CreatedWithAgent != "" || len(e.Environment.WriteRoots) != 5 {
-		t.Fatalf("launch evidence missing: %+v", e.Environment)
-	}
-}

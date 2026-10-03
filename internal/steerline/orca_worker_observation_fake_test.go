@@ -1,7 +1,6 @@
 package steerline
 
 import (
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 )
 
@@ -10,8 +9,6 @@ type fakeNativeOrcaState = testprotocol.NativeOrcaState
 func fakeNativeOrca(stateDir string, args []string) int {
 	return testprotocol.FakeNativeOrca(stateDir, args)
 }
-
-func orcaWorkerCaller(c Config) orcaworker.Call { return nativeOrcaClient(c).Call }
 
 func nativeOrcaGeneration(execution *ExecutionRecord) string {
 	if execution == nil {
