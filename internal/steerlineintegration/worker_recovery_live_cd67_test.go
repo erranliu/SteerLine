@@ -189,12 +189,15 @@ func TestAppServerHostExitRecoveryLive(t *testing.T) {
 	if os.Getenv("STEERLINE_APP_SERVER_SERVICE_LIVE_LEGACY") != "1" {
 		t.Skip("historical detached-process acceptance")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
-	defer cancel()
-	receipt := nativeHostExitHelper(t, ctx, t.TempDir())
+	helperCtx, cancelHelper := context.WithTimeout(context.Background(), 8*time.Minute)
+	defer cancelHelper()
+	receipt := nativeHostExitHelper(t, helperCtx, t.TempDir())
 	if nativeLiveProcessState(&receipt.Process) != "matching process still exists" {
 		t.Fatal("app-server did not survive its service process")
 	}
+	// Preserve the original separate helper (8m) and recovery (4m) budgets.
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
 	t.Setenv("STEERLINE_HOME", receipt.Home)
 	config, err := steerlineapp.LoadConfig(receipt.ConfigPath)
 	require(t, err)

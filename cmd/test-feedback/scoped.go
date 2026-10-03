@@ -22,7 +22,7 @@ import (
 
 const corePackage = "github.com/erranliu/SteerLine/internal/steerline"
 
-var quickTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestRestartPreflightRetainsOriginalPolicyRoots"}
+var quickTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/internal/steerlineintegration"
 
@@ -43,6 +43,7 @@ var quickBoundaryAssigned = []string{
 	"TestCD67AdditionalImplementation/supported_app_server_receipt_barriers",
 	"TestCD67AdditionalImplementation/supported_terminal_recovery_and_original_identity",
 	"TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication",
+	"TestCD67AdditionalImplementation/remote_model_and_cancellation_admission",
 	"TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
 }
 
@@ -52,9 +53,9 @@ var quickOwnerCases = []struct {
 	Tests       []string
 }{
 	{"quick-owner-remote", corePackage + "/orca_remote_worker", []string{"TestCD63CodecIdentityAndVersion", "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily", "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift", "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch", "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree", "TestSupervisedRunCoordinatorsAreDistinctAndFenced", "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal", "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall", "TestRemoteContinuationRequiresOriginalPeerAndTerminal", "TestRemoteWorkspaceKeepsPeerPathAndRuntime", "TestRemoteReplyRejectsOversizeWithoutMutation", "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending", "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox", "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID", "TestLoadConfigRequiresExplicitRemoteCancellationFalse"}},
-	{"quick-owner-codec", corePackage + "/codexworker", []string{"TestCodexNormalizer", "TestOversizedWorkerLinePreservesRawOutputAndLaterEvents"}},
+	{"quick-owner-codec", corePackage + "/codexworker", []string{"TestCodexNormalizer", "TestOversizedWorkerLinePreservesRawOutputAndLaterEvents", "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt"}},
 	{"quick-owner-identity", corePackage + "/orcaworker", []string{"TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess", "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation", "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost"}},
-	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/steerlineapp", []string{"TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping"}},
+	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/steerlineapp", []string{"TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestLocalWindowsSandboxProfileFreezesAndRestores", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile"}},
 }
 var quickPackages = func() []string {
 	p := append([]string{corePackage}, quickRulePackages...)

@@ -24,9 +24,16 @@ func TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority(t *testin
 		func(p *FixedExecutionProfile) { p.Version = 1 }, func(p *FixedExecutionProfile) { p.ExecutionPolicy.Network = "deny" }, func(p *FixedExecutionProfile) { p.ImplementationData[0].Payload[0] = '[' }, func(p *FixedExecutionProfile) { p.AcceptedConfigVersion = "edited" }, func(p *FixedExecutionProfile) { p.PolicyDigest = "edited" },
 	} {
 		copy := original
+		copy.ImplementationData = append(copy.ImplementationData[:0:0], original.ImplementationData...)
+		for i := range copy.ImplementationData {
+			copy.ImplementationData[i] = copy.ImplementationData[i].Clone()
+		}
 		mutate(&copy)
 		if testVerifyFixedExecutionProfile(copy) {
 			t.Fatalf("damaged snapshot accepted: %+v", copy)
+		}
+		if !testVerifyFixedExecutionProfile(original) {
+			t.Fatal("damage fixture changed the original snapshot for later cases")
 		}
 	}
 }

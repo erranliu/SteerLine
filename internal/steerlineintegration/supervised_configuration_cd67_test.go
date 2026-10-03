@@ -27,17 +27,19 @@ func TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(t *testing.T) 
 	remoteSettings := nativeRemoteSettings(c)
 	remoteSettings.RemoteCancelAvailable = true
 	orcaSettings := nativeTerminalSettings(c)
-	setNativeImplementationProfiles(t, &c, nativeProfileSettings(c), &orcaSettings, &remoteSettings)
-	if err := c.ValidateProfiles(); err == nil {
-		t.Fatal("remote cancellation was enabled")
+	if _, err := remote.EncodeProfileConfig(remoteSettings); err == nil || !strings.Contains(err.Error(), "fixed unavailable") {
+		t.Fatalf("remote cancellation was enabled by its codec: %v", err)
 	}
 	remoteSettings = nativeRemoteSettings(c)
 	remoteSettings.RemoteCancelAvailable = false
 	remoteSettings.ExpectedCodexVersion = ""
 	orcaSettings = nativeTerminalSettings(c)
+	if _, err := remote.EncodeProfileConfig(remoteSettings); err != nil {
+		t.Fatalf("optional native version pin was required by the codec: %v", err)
+	}
 	setNativeImplementationProfiles(t, &c, nativeProfileSettings(c), &orcaSettings, &remoteSettings)
-	if err := c.ValidateProfiles(); err != nil {
-		t.Fatalf("supervised config unexpectedly requires an exact Codex CLI pin: %v", err)
+	if err := c.ValidateProfiles(); err == nil || !strings.Contains(err.Error(), "enforcement evidence") {
+		t.Fatalf("missing remote permission evidence bypassed actual admission: %v", err)
 	}
 	report, err := (remote.NewBackend(nativeRemoteConfig(c))).Probe(context.Background(), nativeTarget(c), executionapi.AgentSpec{Name: c.Agent})
 	if err != nil {
@@ -73,6 +75,7 @@ func TestSupervisedOrcaExecutionBindingRequiresExactDispatchIdentity(t *testing.
 }
 
 func supervisedAdmissionConfig(t *testing.T) steerline.Config {
+	t.Setenv("STEERLINE_FAKE_SUPERVISED_REMOTE_URL", "https://git.example/owner/repo.git")
 	return builtinFixtureConfig(t, steerline.Config{Host: "orca_supervised", Agent: "codex", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionapi.PublicationPolicy{Publisher: "worker"}, PR: hostPublicationProviderFixture()}, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "must-not-run", Shell: "powershell.exe", WaitTimeout: "5s"}, &remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "term-coordinator", PollInterval: "2s", CapabilityReportVersion: 1})
 }
 func nativeTerminalSettings(c steerline.Config) orcaworker.ProfileConfig {
@@ -104,7 +107,7 @@ func nativeRemoteConfig(c steerline.Config) remote.Config {
 		defer cancel()
 		return exec.CommandContext(ctx, os.Args[0], append([]string{"--fake-supervised"}, args...)...).Output()
 	}})
-	return remote.Config{Repository: c.Repository, ProjectID: c.Identity(), Agent: c.Agent, Model: w.Model, ReasoningEffort: w.ReasoningEffort, Settings: remote.Settings{ConnectionID: r.ConnectionID, EnvironmentID: r.EnvironmentID, RepositorySelector: r.RepositorySelector, CoordinatorTerminal: r.CoordinatorTerminal, PollInterval: r.PollInterval}, Call: client.Raw, Origin: func(context.Context) ([]byte, error) { return []byte("https://git.example/owner/repo.git"), nil }, CommandTimeout: o.WaitTimeout}
+	return remote.Config{Repository: c.Repository, ProjectID: c.Identity(), Agent: c.Agent, Model: w.Model, ReasoningEffort: w.ReasoningEffort, Settings: remote.Settings{ConnectionID: r.ConnectionID, EnvironmentID: r.EnvironmentID, RepositorySelector: r.RepositorySelector, CoordinatorTerminal: r.CoordinatorTerminal, ExpectedCodexVersion: r.ExpectedCodexVersion, PollInterval: r.PollInterval}, Call: client.Raw, Origin: func(context.Context) ([]byte, error) { return []byte("https://git.example/owner/repo.git"), nil }, CommandTimeout: o.WaitTimeout}
 }
 func declaredCapabilityStatus(r executionapi.CapabilityReport, name string) executionapi.CapabilityStatus {
 	for _, c := range r.Capabilities {

@@ -34,6 +34,7 @@ func TestNativeOrcaAgentSelectionUsesFrozenProfile(t *testing.T) {
 		if base.CheckFixedProfile(frozen) != nil {
 			t.Fatal("profile digest changed while freezing")
 		}
+		base.Agent = "opencode" // Mutable defaults cannot redirect the frozen native route.
 		selected := base.ApplyFixedExecutionProfile(frozen)
 		if selected.Agent != agent || (selected.Agent == "codex") != (agent == "codex") {
 			t.Fatalf("Orca agent selection was tied to Codex: %+v", selected)

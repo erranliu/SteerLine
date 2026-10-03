@@ -49,13 +49,23 @@ func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
 		}
 	}
 	orcaConfig := Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Host: "orca", Agent: "codex", Repository: "repo", Branch: "main"}
+	orcaConfig.PublicationPolicy.Publisher = "worker"
 	orcaConfig = bindUnitDirectory(t, orcaConfig)
-	orcaProfile := testExecutionProfile(t, ProjectExecutionProfileID, "Terminal", "orca", "codex", codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
+	orcaProfile := boundProfile(orcaConfig, testExecutionProfile(t, ProjectExecutionProfileID, "Terminal", "orca", "codex", codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "unelevated"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"}))
+	if reason := orcaProfile.StaticUnavailableReason(); reason != "" {
+		t.Fatalf("valid terminal sandbox mapping was rejected: %s", reason)
+	}
+	orcaSettings, err := codexworker.DecodeProfileConfig(orcaProfile.Freeze().ImplementationData[0].Payload)
+	if err != nil || orcaSettings.WindowsSandbox != "unelevated" {
+		t.Fatal("local default changed the original terminal sandbox mapping")
+	}
+	// An absent explicit terminal mapping must fail for that mapping, using
+	// the same valid publication policy as the positive case above.
 	raw, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex"})
 	require(t, err)
 	orcaProfile.ImplementationConfigs[0].Payload = raw
 	orcaProfile = boundProfile(orcaConfig, orcaProfile)
-	orcaSettings, err := codexworker.DecodeProfileConfig(orcaProfile.ImplementationConfigs[0].Payload)
+	orcaSettings, err = codexworker.DecodeProfileConfig(orcaProfile.ImplementationConfigs[0].Payload)
 	if err != nil || orcaSettings.WindowsSandbox != "" {
 		t.Fatal("local default changed Orca path")
 	}

@@ -1,6 +1,7 @@
 package codexworker_test
 
 import (
+	"bytes"
 	"context"
 	"net"
 	"os"
@@ -41,6 +42,16 @@ func TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt(t *testing.T) {
 			require(t, os.MkdirAll(serverDir, 0700))
 			require(t, AtomicWrite(filepath.Join(serverDir, "process.json"), mustJSON(codexworker.ProcessReceipt{Endpoint: endpoint, Generation: "generation", Identity: identity})))
 			command, previous := newID(), newID()
+			previousPath := filepath.Join(runDir, "runs", runID, "turns", previous, "appserver.jsonl")
+			previousData := append(mustJSON(map[string]any{"method": "turn/completed", "params": map[string]any{"threadId": testprotocol.AppServerSession, "turn": map[string]string{"id": first, "status": "completed"}}}), '\n')
+			require(t, os.MkdirAll(filepath.Dir(previousPath), 0700))
+			require(t, AtomicWrite(previousPath, previousData))
+			defer func() {
+				unchanged, readErr := os.ReadFile(previousPath)
+				if readErr != nil || !bytes.Equal(unchanged, previousData) {
+					t.Fatalf("recovery rewrote the persisted preceding turn: %v", readErr)
+				}
+			}()
 			turnDir := filepath.Join(runDir, "runs", runID, "turns", command)
 			require(t, os.MkdirAll(turnDir, 0700))
 			if exists {
@@ -62,9 +73,6 @@ func TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt(t *testing.T) {
 			outcome, err := codexworker.ReadAppServerOutcome(filepath.Join(turnDir, "appserver.jsonl"), testprotocol.AppServerSession, second)
 			if err != nil || !outcome.Completed {
 				t.Fatalf("wrong recovered journal: %+v / %v", outcome, err)
-			}
-			if _, err := os.Stat(filepath.Join(runDir, "runs", runID, "turns", previous, "appserver.jsonl")); !os.IsNotExist(err) {
-				t.Fatalf("recovery rewrote preceding turn: %v", err)
 			}
 		})
 	}

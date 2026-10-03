@@ -618,6 +618,9 @@ func fakeRemoteOrca(dir string, args []string) int {
 }
 
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == "--fake-supervised" {
+		os.Exit(testprotocol.FakeSupervisedOrca(os.Args[2:]))
+	}
 	if os.Getenv("STEERLINE_LIFECYCLE_EXIT_EARLY") == "1" {
 		os.Exit(23)
 	}
