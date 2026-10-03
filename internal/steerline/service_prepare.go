@@ -11,6 +11,25 @@ func PrepareServiceConfig(c Config) (Config, error) {
 	if c.ExecutionDirectory == nil || c.ProcessHost == nil || c.Persistence == nil {
 		return c, errors.New("execution directory, process host and persistence ports are required")
 	}
+	var err error
+	c, err = admitServiceConfig(c)
+	if err != nil {
+		return c, err
+	}
+	if err := preflightNativeStatePath(c); err != nil {
+		return c, err
+	}
+	if err := preflightWorkerFlowState(context.Background(), c); err != nil {
+		return c, err
+	}
+	if e := c.prepareWorktreeRoot(); e != nil {
+		return c, e
+	}
+
+	return c, nil
+}
+
+func admitServiceConfig(c Config) (Config, error) {
 	if err := requireNativeTaskAuthority(c); err != nil {
 		return c, err
 	}
@@ -28,15 +47,6 @@ func PrepareServiceConfig(c Config) (Config, error) {
 	}
 	if err := validateNativeStateLocation(c); err != nil {
 		return c, err
-	}
-	if err := preflightNativeStatePath(c); err != nil {
-		return c, err
-	}
-	if err := preflightWorkerFlowState(context.Background(), c); err != nil {
-		return c, err
-	}
-	if e := c.prepareWorktreeRoot(); e != nil {
-		return c, e
 	}
 
 	return c, nil

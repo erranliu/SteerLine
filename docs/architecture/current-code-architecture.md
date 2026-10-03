@@ -1,6 +1,6 @@
 # 当前代码架构与源码索引
 
-核对日期：2026-10-04。集成基线为 #69 PR194 和 #71 PR195 实际合并后的 `6dce3cf1abf293e18bd78f92677c72a3fa2f0210`；本页及下方全 OS 源码索引反映 #70 SQLite 归包工作树。历史删除、断言及原生证据保留在各任务验证记录中，不改写历史结果。
+核对日期：2026-10-04。集成基线为 #69 PR194、#71 PR195 与 #72 PR196 实际合并后的 `0b5e8b342214e2d286b65b0494bfe5fad2c552d7`；本页及下方全 OS 源码索引反映 #70 SQLite 归包工作树。历史删除、断言及原生证据保留在各任务验证记录中，不改写历史结果。
 
 ## 系统与业务权威
 
@@ -37,7 +37,7 @@ flowchart LR
 
 | 所有者 | 简短职责与源码入口 |
 | --- | --- |
-| `internal/steerline` | Task/Workflow/Execution/Decision/Operation/TaskDelivery 用例、通用协调、提交和恢复。显式 [execution_directory.go](../../internal/steerline/execution_directory.go)、[worker_lifecycle.go](../../internal/steerline/worker_lifecycle.go)、[service_commit.go](../../internal/steerline/service_commit.go)；#69 已通过 [persistence/ports.go](../../internal/steerline/persistence/ports.go) 收窄生产写消费者，唯一 SQL 执行器仍在直属存储文件，整体归包留 #70。 |
+| `internal/steerline` | Task/Workflow/Execution/Decision/Operation/TaskDelivery 用例、通用协调、提交和恢复。显式 [execution_directory.go](../../internal/steerline/execution_directory.go)、[worker_lifecycle.go](../../internal/steerline/worker_lifecycle.go)、[service_commit.go](../../internal/steerline/service_commit.go)；#69 已通过 [persistence/ports.go](../../internal/steerline/persistence/ports.go) 收窄生产写消费者，SQL/连接/schema/原子事务已由 #70 工作树归唯一 sqlite 模块，应用注入实际连接；严格只读辅助文件验收仍待用户决定。 |
 | `execution` | 通用身份、闭集操作、事实/问题/回执、策略/需求、不可变有界封套及小端口；只依赖标准库。[lifecycle.go](../../internal/steerline/execution/lifecycle.go)、[implementation_data.go](../../internal/steerline/execution/implementation_data.go)。 |
 | `contracts` | 业务持久/展示 DTO、会话来源及宿主端口；使用既有 execution/task/taskview 纯值，不解释原生载荷。[records.go](../../internal/steerline/contracts/records.go)、[conversation.go](../../internal/steerline/contracts/conversation.go)、[environment.go](../../internal/steerline/contracts/environment.go)。 |
 | `codexworker` / `codexapp` | 前者拥有原生 codec、配置/命令/权限、生命周期、history/source/mapper；后者拥有 WebSocket/JSON-RPC 和原生问题传输。不给实现 Store 或可写 Service。 |
@@ -96,7 +96,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 
 公开 Runtime/Run 从已提交记录深复制构建，与私有工作 Run 分开。sqlite.Reader 在同一读事务采样任务、Ready、选中任务、记录和 checkpoint；query 复用 projection/task 规则。连接身份失败仍可展示可用只读数据，控制和领取各自重检。领域事件正文有页预算，cursor 只推进到实际返回事件；缺来源终态/final 时不能由界面推断完成。
 
-源码：[conversation_service.go](../../internal/steerline/conversation_service.go)、[conversation_store.go](../../internal/steerline/conversation_store.go)、[project_view.go](../../internal/steerline/project_view.go)、[query/project.go](../../internal/steerline/query/project.go)、[console/source.go](../../internal/steerline/console/source.go)。
+源码：[conversation_service.go](../../internal/steerline/conversation_service.go)、[conversation_store.go](../../internal/steerline/sqlite/conversation_store.go)、[project_view.go](../../internal/steerline/project_view.go)、[query/project.go](../../internal/steerline/query/project.go)、[console/source.go](../../internal/steerline/console/source.go)。
 
 ## 验证映射与后续任务
 
@@ -108,6 +108,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 | 唯一应用构造、产品配置、原 fixed profile 恢复 | app / integration；[#66 映射](../validation/core-decoupling-05-composition/README.md) |
 | 全标签源码/依赖、负向 fixture、第三实现及支持/remote 原路径 | `TestCD67CoreBoundary` / `TestCD67AdditionalImplementation`，quick 固定选择，逐包 parent/subtest JSON run/pass；[#67 映射](../validation/core-decoupling-06-boundary/test-mapping.json) |
 | #68 删除依据、保留入口及受影响代表 | [候选清单](../validation/core-decoupling-07-cleanup/candidate-inventory.json)、[验证记录](../validation/core-decoupling-07-cleanup/README.md)；没有删除/迁移断言，quick 引用仍有效 |
+| #70 唯一存储、事务/CAS/回滚/WAL/关闭与应用注入 | sqlite / persistence / app；[#70 验证记录](../validation/core-decoupling-09-sqlite/README.md)，严格只读文件要求待决，未按整体通过处理。 |
 
 `go run ./cmd/test-feedback -quick` 已包含 15 包的规则/实现/app/CD67 守卫，不另加重复守卫。按 [测试计划](../spec/core-decoupling-07-cleanup.plan.md) 运行必要定向和一次 quick，明确临时 STEERLINE_HOME，仅隔离 Git/SQLite/协议 mock。原生支持和 opt-in live 证据保留，本次未启用。远端权限缺证拒绝不变。
 

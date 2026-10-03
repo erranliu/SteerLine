@@ -1,6 +1,6 @@
 # #70 SQLite 写入实现归包验证
 
-状态：实现已迁移，CM70-2 严格只读文件验收 `needs_user_decision`；不得按整体通过或可合并处理。工作区 `C:/Users/lmas1/.codex/worktrees/e8e1/SteerLine`，分支 `codex/cm70-sqlite-storage`。初始基线 `e81fadaf59d0411af1594be7c5cd6a832c71c29f`，已集成 #71 PR195 的 `6dce3cf1abf293e18bd78f92677c72a3fa2f0210`；执行模型按本次用户指定 `gpt-6.1-sol/high`。仅 #70，不实施 #72。
+状态：实现已迁移，CM70-2 严格只读文件验收 `needs_user_decision`；不得按整体通过或可合并处理。工作区 `C:/Users/lmas1/.codex/worktrees/e8e1/SteerLine`，分支 `codex/cm70-sqlite-storage`。初始基线 `e81fadaf59d0411af1594be7c5cd6a832c71c29f`，已先集成 #71 PR195 的 `6dce3cf1abf293e18bd78f92677c72a3fa2f0210`，发布前再次集成 #72 PR196 的最新 main `0b5e8b342214e2d286b65b0494bfe5fad2c552d7`；执行模型按本次用户指定 `gpt-6.1-sol/high`。仅实施 #70；#72 只消费其已合并交付，不另行实施 UI/产品语义。
 
 ## 实际所有者与生产接线
 
@@ -79,3 +79,9 @@
 `sqlite_store_test.go` 中依赖中心 CommandService/actor 的 first-wins、仲裁、checkpoint 控制断言归 `command_persistence_test.go`；平台/真实应用集成断言继续在外层。核心中性 fixture 仅在 `_test.go` 中以既有窄声明端口准备现场，必要损坏注入用测试自己开的 SQL 连接；无生产测试写接口。`TestConversationProcessExitMidTransactionHelper` 是子进程调度器，现归 TestMain；父 `TestConversationProcessExitBeforeCommitRecoversAllBoundaries/{raw,body,event,cursor,committed}` 的退出码和恢复断言保持。
 
 自查已阅读实际完整 diff、Spec/Plan、应用/客户端唯一构造、全部搬迁事务和消费者。未解决项仅严格只读辅助文件要求；等待用户决定及协调聊天独立复审，不自行合并、启动任务或创建 automation。
+
+## 发布前主干集成
+
+最新 #72 主干在发布前已合并进本分支。共享冲突顺序集成在 architecture、coreboundary、app/client.go 及客户端 ProjectView 测试：保留 #72 的纯 TUI/资源工厂/配置视图，唯一实际连接使用 #70 的纯端口。相对最新 origin/main，console、clientcontracts 和 steerlineclient 没有本任务的产品实现差异；不保留旧 Store 构造，也不要求客户端线补搬迁。
+
+`post-main-guard.jsonl` 再验全标签及 Windows/Linux 的中心、console 图和两个新增存储负向场景；`post-main-wiring.jsonl` 再验实际 CLI 批次校验/创建/废弃、ProjectView、零/部分/显式项目配置及 CM72 注入/退出资源语义。`post-main-quick/summary.json` 记录集成后的最后一次既有 quick，原严格只读断言仍未获授权变更，必须如实保留失败。主干整合后重新阅读共同 Spec/Plan、实际生产构造与冲突 diff；未发现第二接线或公开产品 DTO/语义变更。

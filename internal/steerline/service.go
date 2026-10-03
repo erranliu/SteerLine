@@ -77,6 +77,11 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionapi.L
 	}
 	c.ExecutionDirectory = directory
 	c.ProcessHost = processHost
+	var admissionErr error
+	c, admissionErr = admitServiceConfig(c)
+	if admissionErr != nil {
+		return nil, admissionErr
+	}
 	defer func() {
 		if retErr != nil {
 			_ = db.Close()
