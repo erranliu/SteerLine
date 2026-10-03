@@ -82,7 +82,17 @@ func TestMain(m *testing.M) {
 		mockAppServerMain()
 		os.Exit(0)
 	}
+	home, err := os.MkdirTemp("", "steerline-core-fixture-")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.Setenv("STEERLINE_HOME", home); err != nil {
+		panic(err)
+	}
 	code := m.Run()
+	if relative, err := filepath.Rel(os.TempDir(), home); err == nil && !filepath.IsAbs(relative) && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		_ = os.RemoveAll(home)
+	}
 	if testArtifactsDir != "" {
 		_ = os.RemoveAll(testArtifactsDir)
 	}

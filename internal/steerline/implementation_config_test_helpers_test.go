@@ -133,15 +133,6 @@ func setTestCodexProfile(t *testing.T, config *Config, codex codexworker.Profile
 	setTestImplementationProfiles(t, config, codex, orca)
 }
 
-func setTestOrcaProfile(t *testing.T, config *Config, orca orcaworker.ProfileConfig) {
-	t.Helper()
-	codex := codexProfileSettings(*config)
-	if codex.Executable == "" {
-		codex.Executable = "codex"
-	}
-	setTestImplementationProfiles(t, config, codex, &orca)
-}
-
 func setTestCodexBinding(t *testing.T, record *ExecutionRecord, endpoint, generation, sessionID string) {
 	t.Helper()
 	if record.ProjectIdentity == "" {
@@ -174,28 +165,6 @@ func setTestCodexBinding(t *testing.T, record *ExecutionRecord, endpoint, genera
 		t.Fatal(err)
 	}
 	record.SessionID, record.SessionGeneration = sessionID, generation
-}
-
-func setTestOrcaState(t *testing.T, record *ExecutionRecord, state *implementationExecutionView) {
-	t.Helper()
-	if record.ProjectIdentity == "" {
-		record.ProjectIdentity = "test-project"
-	}
-	if record.ExecutionID == "" {
-		record.ExecutionID = "test-execution"
-	}
-	if record.CurrentAttemptID == "" {
-		record.CurrentAttemptID = "test-attempt"
-	}
-	if record.ConfigurationDigest == "" {
-		record.ConfigurationDigest = "test-config-digest"
-	}
-	if record.Generation == "" {
-		record.Generation = newID()
-	}
-	if err := storeOrcaExecutionState(record, state); err != nil {
-		t.Fatal(err)
-	}
 }
 
 func testOrcaState(t *testing.T, record *ExecutionRecord) *implementationExecutionView {

@@ -7,62 +7,18 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
-	"errors"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // Helpers retained only for contract/native acceptance fixtures. Recovery and
 // protocol helpers delegate to production adapters; the legacy process output
 // reader remains a test utility and is not an app-server production route.
-func reattachAppServerWorker(ctx context.Context, c Config, run *Run, e *ExecutionRecord) (*Worker, bool, error) {
-	if run == nil || e == nil || run.WorktreePath == nil {
-		return nil, false, errors.New("app-server recovery lacks execution/workspace")
-	}
-	settings := codexProfileSettings(c)
-	command := codexworker.ReaderCommand(Command{Executable: settings.Executable, Args: settings.Args}, settings.Profile)
-	lifecycle := codexworker.ExecutionLifecycle{Backend: codexBackend(c, run), HistoryCommand: contracts.Command{Executable: command.Executable, Args: append([]string(nil), command.Args...)}}
-	session := executionapi.SessionContext{
-		ProjectID: e.ProjectIdentity, TaskID: run.TaskID, WorkflowRunID: run.RunID,
-		ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Agent: executionapi.AgentSpec{Name: run.Agent},
-		Target: e.Target, SessionID: e.SessionID, Generation: e.SessionGeneration,
-		CurrentTurnID: e.CurrentTurnID, PendingTurnID: e.PendingTurnID,
-		CurrentCommandID: e.CurrentCommandID, PendingCommandID: e.PendingCommandID,
-	}
-	ref := executionapi.ExecutionRef{
-		Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal,
-		Protocol: executionapi.ProtocolLocalCodexAppServer, Target: e.Target, Agent: executionapi.AgentSpec{Name: run.Agent},
-		RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: e.Workspace.Worktree,
-		WorkspaceBranch: e.Workspace.Branch, BaseCommit: e.Workspace.Base, Generation: e.Generation,
-	}
-	if e.Process != nil {
-		ref.External = *e.Process
-	}
-	snapshot := executionapi.LifecycleSnapshot{
-		Ref: ref, Session: session, ConfigurationDigest: e.ConfigurationDigest, ResourceGeneration: e.Generation,
-		Implementation: cloneImplementationData(e.ImplementationData),
-		Workspace:      executionapi.WorkspaceIntent{Path: e.Workspace.Worktree, Branch: e.Workspace.Branch, BaseCommit: e.Workspace.Base},
-	}
-	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
-		route := run.Decision.Request.QuestionRoute.Clone()
-		snapshot.QuestionRoute = &route
-		snapshot.KnownQuestionIDs = append(snapshot.KnownQuestionIDs, route.QuestionID)
-	}
-	receipt, observer, err := lifecycle.ObserveLifecycle(ctx, snapshot)
-	if mergeErr := mergeLifecycleExecutionReceipt(e, receipt); mergeErr != nil && err == nil {
-		err = mergeErr
-	}
-	if e.PendingCommandID != "" && receipt.State.TurnID != "" {
-		e.PendingTurnID = receipt.State.TurnID
-	}
-	return workerFromLifecycle(run.RunID, run.AttemptID, observer), receipt.State.TurnCompleted, err
-}
 
 func (s *Service) requireBackendCapabilities(ctx context.Context, backend executionapi.ExecutionProbe, names ...string) (executionapi.CapabilityReport, error) {
 	return s.requireBackendCapabilitiesFor(ctx, backend, targetFor(s.Config), agentFor(s.Config), names...)
@@ -180,9 +136,6 @@ func readOutputPrefix(f *os.File, offset int64) (string, error) {
 	_, _ = hash.Write(first)
 	_, _ = hash.Write(last)
 	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-func inspectBoundOrcaTerminal(ctx context.Context, c Config, identity executionapi.ProcessIdentity) (orcaTerminal, error) {
-	return nativeOrcaClient(c).InspectBoundTerminal(ctx, targetFor(c), identity)
 }
 
 func appServerDirectory(c Config, run *Run) string {

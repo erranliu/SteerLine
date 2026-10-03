@@ -39,7 +39,7 @@ func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
 	t.Setenv("GH_TOKEN", "secret-host-token")
 	t.Setenv("CUSTOM_HOST_TOKEN", "secret-custom-token")
 	fixed.PR.TokenEnv = "CUSTOM_HOST_TOKEN"
-	worker := codexBackend(fixed, f.run).Config.Environment([]string{"GH_TOKEN=secret-host-token", "CUSTOM_HOST_TOKEN=secret-custom-token", "PATH=ordinary"})
+	worker := workerProcessEnvironment(fixed, f.run, []string{"GH_TOKEN=secret-host-token", "CUSTOM_HOST_TOKEN=secret-custom-token", "PATH=ordinary"})
 	if strings.Contains(strings.Join(worker, "\n"), "secret-") || strings.Contains(string(data), "secret-") {
 		t.Fatal("host credentials leaked into worker/snapshot")
 	}
@@ -48,12 +48,12 @@ func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
 	}
 	copy := original
 	copy.Publication.Provider.TokenEnv = "edited"
-	if testVerifyFixedExecutionProfile(copy) {
+	if neutralVerifyFixedExecutionProfile(copy) {
 		t.Fatal("changed auth reference accepted")
 	}
 	copy = original
 	copy.Version = 2
-	if testVerifyFixedExecutionProfile(copy) {
+	if neutralVerifyFixedExecutionProfile(copy) {
 		t.Fatal("old snapshot accepted")
 	}
 }
@@ -102,7 +102,3 @@ func TestPublicationOriginalProviderAfterRestartAndRemoteDrift(t *testing.T) {
 		t.Fatalf("query/close/recovery repeated create: %q %v", count, err)
 	}
 }
-
-
-
-

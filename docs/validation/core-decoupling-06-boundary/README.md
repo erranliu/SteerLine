@@ -1,101 +1,111 @@
-# #67 ä¸»åŒ…éš”ç¦»å®ˆå«ä¸æµ‹è¯•å½’ä½ï¼šå—é™æ‰§è¡Œäº¤æ¥
+# #67 Ö÷°ü¸ôÀëÊØÎÀÓë²âÊÔ¹éÎ»£ºÊÜÏŞÖ´ĞĞ½»½Ó
 
-è®°å½•æ—¥æœŸï¼š2026-10-02ã€‚ä¾æ® [Spec](../../spec/core-decoupling-06-boundary.spec.md)ã€[Plan](../../spec/core-decoupling-06-boundary.plan.md)ã€[å…±åŒçº¦æŸ](../../spec/core-decoupling-constraints.md)ã€‚
+¼ÇÂ¼ÈÕÆÚ£º2026-10-02¡£ÒÀ¾İ [Spec](../../spec/core-decoupling-06-boundary.spec.md)¡¢[Plan](../../spec/core-decoupling-06-boundary.plan.md)¡¢[¹²Í¬Ô¼Êø](../../spec/core-decoupling-constraints.md)¡£
 
-**çŠ¶æ€ï¼š#67 æœªå®Œæˆï¼Œä¸èƒ½åˆå¹¶ï¼›ä»éœ€å®Œæˆ root æµ‹è¯•å½’ä½ã€quick æ¥å…¥ã€å®Œæ•´æ˜ å°„ä¸æœ€ç»ˆç»„åˆéªŒæ”¶ã€‚ç¬¬ä¸‰ä¸­æ€§å®ç°çš„åŸè¾“å…¥/é‡å¯äººå·¥ç¡®è®¤/å”¯ä¸€äº¤ä»˜åŠèµ„æºç»“ç®—é—­ç¯å·²åœ¨åè°ƒçš„å®Œå…¨è®¿é—®ç¯å¢ƒå®šå‘é€šè¿‡ï¼Œä½†ä¸ä»£æ›¿ #67 æ•´ä½“äº¤ä»˜ã€‚**
+**×´Ì¬£º#67 Î´Íê³É£¬²»ÄÜºÏ²¢£»ÈÔĞèÍê³É root ²âÊÔ¹éÎ»¡¢quick ½ÓÈë¡¢ÍêÕûÓ³ÉäÓë×îÖÕ×éºÏÑéÊÕ¡£µÚÈıÖĞĞÔÊµÏÖµÄÔ­ÊäÈë/ÖØÆôÈË¹¤È·ÈÏ/Î¨Ò»½»¸¶¼°×ÊÔ´½áËã±Õ»·ÒÑÔÚĞ­µ÷µÄÍêÈ«·ÃÎÊ»·¾³¶¨ÏòÍ¨¹ı£¬µ«²»´úÌæ #67 ÕûÌå½»¸¶¡£**
 
-## åè°ƒæ¥ç®¡çš„é˜¶æ®µè®°å½•
+## Ğ­µ÷½Ó¹ÜµÄ½×¶Î¼ÇÂ¼
 
-2026-10-02 22:57 UTCï¼šæ‰§è¡Œ turn å› ä¸Šä¸‹æ–‡çª—å£è€—å°½å¤±è´¥ï¼Œå¹³å°å·²ç¡®è®¤åœæ­¢ï¼›åè°ƒåœ¨åŒä¸€ f775 å·¥ä½œåŒºæ¥ç®¡ï¼Œä¿ç•™å…¨éƒ¨ä¿®æ”¹ï¼Œæ²¡æœ‰æ›¿æ¢æ‰§è¡ŒèŠå¤©æˆ–å¢åŠ å¹¶å‘å†™è€…ã€‚æ‰§è¡Œè€…æœªå®Œæˆçš„è¿ç§»ä¿å­˜ä¸ºæœ¬åœ°é˜¶æ®µ commit `604cbc0`ã€‚æœ¬èŠ‚ä¹‹åçš„é¦–æ¬¡å·¥ä½œåŒºèº«ä»½ã€æºç æ‘˜è¦å’Œæƒé™é™åˆ¶å‡ä¸ºå†å²å¿«ç…§ï¼Œä¸ä»£è¡¨å½“å‰å€™é€‰ã€‚
+2026-10-02 22:57 UTC£ºÖ´ĞĞ turn ÒòÉÏÏÂÎÄ´°¿ÚºÄ¾¡Ê§°Ü£¬Æ½Ì¨ÒÑÈ·ÈÏÍ£Ö¹£»Ğ­µ÷ÔÚÍ¬Ò» f775 ¹¤×÷Çø½Ó¹Ü£¬±£ÁôÈ«²¿ĞŞ¸Ä£¬Ã»ÓĞÌæ»»Ö´ĞĞÁÄÌì»òÔö¼Ó²¢·¢Ğ´Õß¡£Ö´ĞĞÕßÎ´Íê³ÉµÄÇ¨ÒÆ±£´æÎª±¾µØ½×¶Î commit `604cbc0`¡£±¾½ÚÖ®ºóµÄÊ×´Î¹¤×÷ÇøÉí·İ¡¢Ô´ÂëÕªÒªºÍÈ¨ÏŞÏŞÖÆ¾ùÎªÀúÊ·¿ìÕÕ£¬²»´ú±íµ±Ç°ºòÑ¡¡£
 
-- åŸç”Ÿæ³¨å†Œ agent çš„å†»ç»“æµ‹è¯•è¿åˆ°åº”ç”¨åŒ…ï¼Œä½¿ç”¨çœŸå®ç›®å½•ï¼›é€šç”¨â€œä¸¤ç§æ˜¾å¼ agent å‡ä¿æŒåŸå›ºå®šé€‰æ‹©â€æ–­è¨€ç”±ä¸»åŒ…å•ä¸€ä¸­æ€§å®ç°æ‰¿æ¥ã€‚çœŸå®ç›®å½•ä¸æ³¨å†Œçš„ agent ä»æ‹’ç»ï¼Œä¸å®£ç§°æ‰©å¤§åŸç”Ÿæ”¯æŒã€‚ä¸¤ä¸ªå®šå‘å‘½åç”¨ä¾‹é€šè¿‡ã€‚
-- ç¬¬ä¸‰å®ç°å…ˆç»‘å®šæœ€ç»ˆéš”ç¦» providerï¼Œå†é€šè¿‡å…¬å¼€å…¥å£å»ºç«‹ä»»åŠ¡æƒå¨ï¼Œä¿®å¤åŸ fixture æ›´æ”¹ä»“åº“èº«ä»½åçš„ `authority_mismatch`ã€‚
-- åˆ›å»ºä¼šè¯å›æ‰§è¡¥é½ç‰ˆæœ¬åŒ–åŸèµ„æºç»‘å®šå°å¥—ï¼Œä¿å­˜åŸ sessionã€generationã€process å’Œ targetï¼›é‡å¯è§‚å¯ŸéªŒè¯å°å¥—ä¸å®é™…å›ºå®šèº«ä»½ï¼Œä¿ç•™ SQLite ä¸€è‡´æ€§æ ¡éªŒã€‚ç¼ºå¤±å°å¥—æ›¾å¯¼è‡´çœŸå®äº¤ä»˜äº‹åŠ¡æŠ¥ `contract_mismatch`ï¼Œå·²ä¿®å¤ fixtureã€‚
-- åˆå¹¶åç»å…¬å¼€ä»»åŠ¡è¯¦æƒ…æŸ¥è¯¢æ ¸å¯¹å…³é—­å’Œæƒå¨äº¤ä»˜ï¼Œä¿ç•™åŸ selected workflowã€PR å’Œ merge commitã€ä»…ä¸€æ¬¡è¾“å…¥/ç­”æ¡ˆã€å”¯ä¸€ TaskDelivery ä¸ä»…ä¸€æ¬¡èµ„æºç»“ç®—æ–­è¨€ã€‚
-- å®šå‘æŠ¥å‘Šï¼š`C:/Users/lmas1/.codex/task-state/roadmap-runner/task67-third-original-binding/summary.json`ï¼Œ2 ä¸ª parent/subtest å…¨é€šè¿‡ã€0 fail/skipã€completeï¼Œ29.650 ç§’ã€‚æµ‹è¯•åŸºäº dirty `604cbc0` åŠ ä¸Šè¿°ä¿®å¤ï¼›ä¸æ˜¯å®Œæ•´ #67 çš„å·²å®¡æ ¸ headã€‚æ­¤å‰å¤±è´¥æŠ¥å‘ŠåŒç›®å½• `task67-third-positive-parent604cbc0`ã€`task67-third-provider-bound`ã€`task67-third-task-detail`ã€`task67-third-delivery-diagnostic`ã€`task67-third-delivery-error` ä¿ç•™ï¼Œä¸è±å…å¤±è´¥ã€‚
+- Ô­Éú×¢²á agent µÄ¶³½á²âÊÔÇ¨µ½Ó¦ÓÃ°ü£¬Ê¹ÓÃÕæÊµÄ¿Â¼£»Í¨ÓÃ¡°Á½ÖÖÏÔÊ½ agent ¾ù±£³ÖÔ­¹Ì¶¨Ñ¡Ôñ¡±¶ÏÑÔÓÉÖ÷°üµ¥Ò»ÖĞĞÔÊµÏÖ³Ğ½Ó¡£ÕæÊµÄ¿Â¼²»×¢²áµÄ agent ÈÔ¾Ü¾ø£¬²»Ğû³ÆÀ©´óÔ­ÉúÖ§³Ö¡£Á½¸ö¶¨ÏòÃüÃûÓÃÀıÍ¨¹ı¡£
+- µÚÈıÊµÏÖÏÈ°ó¶¨×îÖÕ¸ôÀë provider£¬ÔÙÍ¨¹ı¹«¿ªÈë¿Ú½¨Á¢ÈÎÎñÈ¨Íş£¬ĞŞ¸´Ô­ fixture ¸ü¸Ä²Ö¿âÉí·İºóµÄ `authority_mismatch`¡£
+- ´´½¨»á»°»ØÖ´²¹Æë°æ±¾»¯Ô­×ÊÔ´°ó¶¨·âÌ×£¬±£´æÔ­ session¡¢generation¡¢process ºÍ target£»ÖØÆô¹Û²ìÑéÖ¤·âÌ×ÓëÊµ¼Ê¹Ì¶¨Éí·İ£¬±£Áô SQLite Ò»ÖÂĞÔĞ£Ñé¡£È±Ê§·âÌ×Ôøµ¼ÖÂÕæÊµ½»¸¶ÊÂÎñ±¨ `contract_mismatch`£¬ÒÑĞŞ¸´ fixture¡£
+- ºÏ²¢ºó¾­¹«¿ªÈÎÎñÏêÇé²éÑ¯ºË¶Ô¹Ø±ÕºÍÈ¨Íş½»¸¶£¬±£ÁôÔ­ selected workflow¡¢PR ºÍ merge commit¡¢½öÒ»´ÎÊäÈë/´ğ°¸¡¢Î¨Ò» TaskDelivery Óë½öÒ»´Î×ÊÔ´½áËã¶ÏÑÔ¡£
+- ¶¨Ïò±¨¸æ£º`C:/Users/lmas1/.codex/task-state/roadmap-runner/task67-third-original-binding/summary.json`£¬2 ¸ö parent/subtest È«Í¨¹ı¡¢0 fail/skip¡¢complete£¬29.650 Ãë¡£²âÊÔ»ùÓÚ dirty `604cbc0` ¼ÓÉÏÊöĞŞ¸´£»²»ÊÇÍêÕû #67 µÄÒÑÉóºË head¡£´ËÇ°Ê§°Ü±¨¸æÍ¬Ä¿Â¼ `task67-third-positive-parent604cbc0`¡¢`task67-third-provider-bound`¡¢`task67-third-task-detail`¡¢`task67-third-delivery-diagnostic`¡¢`task67-third-delivery-error` ±£Áô£¬²»»íÃâÊ§°Ü¡£
 
-å½“å‰å·²è·ç”¨æˆ·æˆæƒåœ¨ #67 çœŸå®äº¤ä»˜åç»§ç»­ #68â€“#72ï¼›ä¸‹è¿°é¦–æ¬¡é™åˆ¶â€œä¸å¯åŠ¨ #68â€è¡¨ç¤ºå‰ç½®æœªäº¤ä»˜å‰ä¸å¯åŠ¨ï¼Œä¸è¡¨ç¤ºæ–°çš„æ€»èŒƒå›´æ­¢äº #67ã€‚
+µ±Ç°ÒÑ»ñÓÃ»§ÊÚÈ¨ÔÚ #67 ÕæÊµ½»¸¶ºó¼ÌĞø #68¨C#72£»ÏÂÊöÊ×´ÎÏŞÖÆ¡°²»Æô¶¯ #68¡±±íÊ¾Ç°ÖÃÎ´½»¸¶Ç°²»Æô¶¯£¬²»±íÊ¾ĞÂµÄ×Ü·¶Î§Ö¹ÓÚ #67¡£
 
-### åŸç”Ÿ backend ä¸ host-wait å½’ä½é˜¶æ®µ
+### Ô­Éú backend Óë host-wait ¹éÎ»½×¶Î
 
-- Terminal exit/å›ºå®š incarnation/è¿æ¥ã€åœæ­¢æœªçŸ¥ç»“æœã€ä¸åŒèµ„æºåœæ­¢ä¸å—æ…¢è§‚å¯Ÿé˜»å¡ã€åŒèµ„æºè§‚å¯Ÿä¸é‡å å…± 6 ä¸ªåŸæ–­è¨€ç§»è‡³ `orcaworker/terminal_backend_cd67_test.go`ï¼Œé€šè¿‡å®é™…å®ç° backendã€‚åè®® fixture åªæ‹¥æœ‰éš”ç¦»ç»ˆç«¯æ–‡ä»¶ï¼Œä¸å«ä¸­å¿ƒ SQLite å†™è€…ï¼›æ— æ¶ˆè´¹è€…çš„æ—§â€œç ´å stop å›æ‰§â€æ•°æ®åº“å†™ hook å·²åˆ é™¤ã€‚
-- çœŸå® host-wait æ¢æµ‹ä¿ç•™ `STEERLINE_ORCA_HOST_WAIT_PROBE` åŸ opt-inï¼Œå½’å®ç°åŒ…å¹¶è°ƒç”¨å®é™… conversation mapperï¼›ä¸­å¿ƒæŒä¹…åŒ–/å»é‡/ä¸äº§ç”Ÿ business Decision çš„æ–­è¨€å½’ `host_wait_business_test.go`ï¼Œä½¿ç”¨ä¸­æ€§ source portã€‚Live å¼€å…³æœªå¯ç”¨ï¼Œä¸å®£ç§°åŸç”Ÿè®¤è¯ã€‚
-- åŸç”Ÿ preflightã€ä¸¤æ¡é»˜è®¤ backend çš„é™æ€èƒ½åŠ›å£°æ˜ã€çœŸå®è¿›ç¨‹ PID åˆ›å»ºèº«ä»½æ‹’ç»å½’åº”ç”¨åŒ…ï¼Œé€šè¿‡å®é™…å†…ç½®ç›®å½•ä¸ process hostï¼›ä¸­å¿ƒåŸ agent èƒ½åŠ›è¯æ®ä½œç”¨åŸŸåŠç»‘å®š/æ“ä½œè®°å½•æ–­è¨€ä½¿ç”¨å•ä¸€ä¸­æ€§ backendã€‚
-- é˜¶æ®µ JSON æŠ¥å‘Šå‡ completeï¼š`task67-terminal-backend-moved` 6/6ã€`task67-app-preflight-backends-fixed` 3/3ã€`task67-neutral-capability-scope` 4/4ï¼Œä½äºåè°ƒçš„ `C:/Users/lmas1/.codex/task-state/roadmap-runner/`ã€‚è¿™äº›æ˜¯å®šå‘å½’ä½æ£€æŸ¥ï¼Œä¸æ˜¯ #67 æœ€ç»ˆ quick éªŒæ”¶ã€‚
-- ä¿®å¤åº”ç”¨ fixture çš„é»˜è®¤è·¯å¾„éš”ç¦»ï¼š`nativeTaskFixture` è®¾ç½®ä¸´æ—¶ `STEERLINE_HOME`ï¼Œåº”ç”¨ TestMain çš„é»˜è®¤é…ç½®/çŠ¶æ€ä¹Ÿå½’ç”Ÿæˆçš„éš”ç¦» homeï¼›å½“å‰æ ¼å¼çš„ Git/æ—¶é—´é¢„ç®—/ä»»åŠ¡ç±»å‹ç”± fixture æ˜¾å¼æä¾›ã€‚é¦–æ¬¡æœªéš”ç¦»è°ƒç”¨æ›¾æ”¹å†™ `C:/SteerlineRuntime/execution.json`ï¼Œå·²é€šçŸ¥ç”¨æˆ·å¹¶åœ¨ run çŠ¶æ€è®°å½•ï¼›ç°æœ‰å†å²å¤‡ä»½æ ¼å¼è¿‡æ—§ä¸”æœªè¯å®ä¸åŸæ–‡ä»¶ç›¸åŒï¼ŒåŸé…ç½®æ¢å¤ç­‰å¾…å‡†ç¡®æ¥æºï¼Œä¸èƒ½ä»¥é˜¶æ®µä»£ç é€šè¿‡æ©ç›–æ­¤é—®é¢˜ã€‚
+- Terminal exit/¹Ì¶¨ incarnation/Á¬½Ó¡¢Í£Ö¹Î´Öª½á¹û¡¢²»Í¬×ÊÔ´Í£Ö¹²»ÊÜÂı¹Û²ì×èÈû¡¢Í¬×ÊÔ´¹Û²ì²»ÖØµş¹² 6 ¸öÔ­¶ÏÑÔÒÆÖÁ `orcaworker/terminal_backend_cd67_test.go`£¬Í¨¹ıÊµ¼ÊÊµÏÖ backend¡£Ğ­Òé fixture Ö»ÓµÓĞ¸ôÀëÖÕ¶ËÎÄ¼ş£¬²»º¬ÖĞĞÄ SQLite Ğ´Õß£»ÎŞÏû·ÑÕßµÄ¾É¡°ÆÆ»µ stop »ØÖ´¡±Êı¾İ¿âĞ´ hook ÒÑÉ¾³ı¡£
+- ÕæÊµ host-wait Ì½²â±£Áô `STEERLINE_ORCA_HOST_WAIT_PROBE` Ô­ opt-in£¬¹éÊµÏÖ°ü²¢µ÷ÓÃÊµ¼Ê conversation mapper£»ÖĞĞÄ³Ö¾Ã»¯/È¥ÖØ/²»²úÉú business Decision µÄ¶ÏÑÔ¹é `host_wait_business_test.go`£¬Ê¹ÓÃÖĞĞÔ source port¡£Live ¿ª¹ØÎ´ÆôÓÃ£¬²»Ğû³ÆÔ­ÉúÈÏÖ¤¡£
+- Ô­Éú preflight¡¢Á½ÌõÄ¬ÈÏ backend µÄ¾²Ì¬ÄÜÁ¦ÉùÃ÷¡¢ÕæÊµ½ø³Ì PID ´´½¨Éí·İ¾Ü¾ø¹éÓ¦ÓÃ°ü£¬Í¨¹ıÊµ¼ÊÄÚÖÃÄ¿Â¼Óë process host£»ÖĞĞÄÔ­ agent ÄÜÁ¦Ö¤¾İ×÷ÓÃÓò¼°°ó¶¨/²Ù×÷¼ÇÂ¼¶ÏÑÔÊ¹ÓÃµ¥Ò»ÖĞĞÔ backend¡£
+- ½×¶Î JSON ±¨¸æ¾ù complete£º`task67-terminal-backend-moved` 6/6¡¢`task67-app-preflight-backends-fixed` 3/3¡¢`task67-neutral-capability-scope` 4/4£¬Î»ÓÚĞ­µ÷µÄ `C:/Users/lmas1/.codex/task-state/roadmap-runner/`¡£ÕâĞ©ÊÇ¶¨Ïò¹éÎ»¼ì²é£¬²»ÊÇ #67 ×îÖÕ quick ÑéÊÕ¡£
+- ĞŞ¸´Ó¦ÓÃ fixture µÄÄ¬ÈÏÂ·¾¶¸ôÀë£º`nativeTaskFixture` ÉèÖÃÁÙÊ± `STEERLINE_HOME`£¬Ó¦ÓÃ TestMain µÄÄ¬ÈÏÅäÖÃ/×´Ì¬Ò²¹éÉú³ÉµÄ¸ôÀë home£»µ±Ç°¸ñÊ½µÄ Git/Ê±¼äÔ¤Ëã/ÈÎÎñÀàĞÍÓÉ fixture ÏÔÊ½Ìá¹©¡£Ê×´ÎÎ´¸ôÀëµ÷ÓÃÔø¸ÄĞ´ `C:/SteerlineRuntime/execution.json`£¬ÒÑÍ¨ÖªÓÃ»§²¢ÔÚ run ×´Ì¬¼ÇÂ¼£»ÏÖÓĞÀúÊ·±¸·İ¸ñÊ½¹ı¾ÉÇÒÎ´Ö¤ÊµÓëÔ­ÎÄ¼şÏàÍ¬£¬Ô­ÅäÖÃ»Ö¸´µÈ´ı×¼È·À´Ô´£¬²»ÄÜÒÔ½×¶Î´úÂëÍ¨¹ıÑÚ¸Ç´ËÎÊÌâ¡£
 
-å½“å‰ä»éœ€å¤„ç†å…¶ä½™ 21 ä¸ª root å¹³å°æ–‡æœ¬æ–‡ä»¶ã€æœ€ç»ˆå·¥å‚/dispatcher åˆ é™¤ã€å®Œæ•´æ˜ å°„ã€quick ä¸å®Œæ•´å¤å®¡ï¼›ä¸æå‰åˆå¹¶æˆ–å¯åŠ¨ #68ã€‚
+µ±Ç°ÈÔĞè´¦ÀíÆäÓà 21 ¸ö root Æ½Ì¨ÎÄ±¾ÎÄ¼ş¡¢×îÖÕ¹¤³§/dispatcher É¾³ı¡¢ÍêÕûÓ³Éä¡¢quick ÓëÍêÕû¸´Éó£»²»ÌáÇ°ºÏ²¢»òÆô¶¯ #68¡£
 
-## å·¥ä½œåŒºå’Œæºç èº«ä»½
+### ÍĞ¹Ü worktree Ğø×ö½×¶Î£¨2026-10-03£©
 
-- å®é™…å·¥ä½œåŒºï¼š`C:/Users/lmas1/.codex/worktrees/f775/SteerLine`ã€‚
-- HEAD / `origin/main`ï¼š`a670e9d1510dfdfd04c1aeb032addd23a0d45941`ï¼Œ#66 åˆå¹¶æäº¤ï¼›å¼€å§‹æ—¶å·¥ä½œåŒºå¹²å‡€ã€‚
-- detached HEADï¼›é¦–æ¬¡åˆ›å»º `codex/67-core-boundary` åˆ†æ”¯è¢« `C:/Project/SteerLine/.git/refs/heads/codex/67-core-boundary.lock: Permission denied` é˜»æ–­ã€‚æ²¡æœ‰å†æ¬¡æ“ä½œ refsï¼Œæ²¡æœ‰æäº¤ã€æ¨é€æˆ– PRã€‚
-- å½“å‰ Go æºç é›†åˆ SHA256ï¼š`f08ee646fc1b128c9dc214bfa73a4daeb9f74e77657c57e3f3c3126bd908912a`ï¼Œ465 ä¸ªæ–‡ä»¶ï¼ˆå…¨éƒ¨ç°å­˜é¡¹ç›® Go æ–‡ä»¶åŠ go.mod/go.sumï¼‰ã€‚ç®—æ³•åŠé€æ–‡ä»¶æ‘˜è¦è§ [source-manifest.json](source-manifest.json)ã€‚è¿™æ˜¯æœªæäº¤æºç æ‘˜è¦ï¼Œä¸æ˜¯ commitã€‚
-- åŸå§‹æŠ¥å‘Šã€è¿ç§»è„šæœ¬å’Œå·¥ä½œåŒº Go cache ä¿å­˜åœ¨å¿½ç•¥ç›®å½• `bin/cd67/`ã€`bin/go-cache/`ã€‚æŠ¥å‘Šå¯¹åº”ä¸Šè¿° Go æºç ï¼›æ­¤ååªè¿½åŠ éªŒæ”¶æ–‡æ¡£ï¼Œä¸æ”¹å˜ Go å†…å®¹ã€‚
+Ö´ĞĞÄ¿Â¼Îª `C:/Users/lmas1/.codex/worktrees/2829/SteerLine`£¬·ÖÖ§°ó¶¨Îª `codex/67-core-boundary`£¬Ğø×öÆğµã `7e2cb9a`¡£ÒÔÏÂ½öÎª½×¶Î½á¹û£¬#67 ÈÔÎ´Íê³É£º
 
-## å·²å®æ–½å†…å®¹ä¸æ‰€æœ‰è€…
+- ÖĞĞÄ·¢²¼Æ¾¾İ¹ıÂËÖ±½ÓÑéÖ¤ `workerProcessEnvironment`£¬¹Ì¶¨ÅäÖÃÕªÒªÓë°æ±¾¾Ü¾øÊ¹ÓÃÖĞĞÔÄ¿Â¼¡£
+- Ê×´Î·´À¡µÄÈıÖÖĞÎÊ½¼ÌĞø±£ÁôÔ­È«ÎÄ¡¢Î¨Ò»»á»°¡¢²¿·ÖÌá½» HEAD¡¢¹Ì¶¨Éí·İ¡¢Î´Öª·¢ËÍ²»ÖØ·¢¶ÏÑÔ£»ÓÉÒÑÓĞµ¥Ò»ÖĞĞÔÉúÃüÖÜÆÚ¶Ë¿ÚÊµ¼Ê½ÓÊÕÊäÈë£¬³Ö¾ÃÍê³É»ØÖ´°ó¶¨Ô­ process/target/execution/attempt/generation£¬²¢Ö»¶Á¶ÔÕË¡£
+- É¾³ıÎŞÏû·ÑÕßµÄ¸´ÖÆÄ¿Â¼Ìæ»»¡¢Ô­ÉúÅäÖÃ/»Ö¸´/Éí·İ helper£»Ô­Éú²ú¶ÏÑÔÃ»ÓĞÉ¾³ı¡£
+- ¸ù°ü TestMain ÎªÕı³£²âÊÔÔËĞĞÉèÖÃ¶ÀÁ¢ÁÙÊ± `STEERLINE_HOME`£»Ğ­Òé×Ó½ø³ÌÈÔ¼Ì³ĞÆä²âÊÔ¸¸½ø³Ì»·¾³¡£
+- ¶¨Ïò±¨¸æÎ»ÓÚ±¾ worktree ºöÂÔÄ¿Â¼ `bin/cd67/`£º`neutral-service` ÖĞ·¢²¼Á½ÌõÍ¨¹ı¡¢Ê×´Î·´À¡Ê§°Ü£»`neutral-service-repaired` Îª±àÒëÕï¶ÏÊ§°Ü£»`neutral-service-repaired2` ±£ÁôÈ±Ê§½ÓÊÕÊäÈë²úÎïµÄÊ§°Ü£»ĞŞ¸´ºó `neutral-service-single` 2/2 pass¡¢`neutral-service-other-cases` 5/5 pass£¨ÓàÏÂÁ½ÖÖ·´À¡¡¢ÊÂÎñ owner¡¢¾É·şÎñ´ğ°¸£©£»²¹ÆëÍê³É»ØÖ´Éí·İºó `neutral-service-fixed-identity` 2/2 pass¡£Í¨¹ı±¨¸æ¾ù complete¡¢0 fail/skip£»ÊÇ½×¶Î dirty ºòÑ¡£¬²»ÄÜ×÷Îª×îÖÕ #67 head Ö¤Ã÷¡£
 
-`internal/coreboundary/check.go` ä½äºä¸­å¿ƒä¹‹å¤–ï¼›æ— è§†æ„å»ºæ ‡ç­¾æ‰«æå…¨éƒ¨ç›´å± Go æ–‡ä»¶å/æ–‡æœ¬ï¼ˆåŒ…æ‹¬ testsï¼‰ï¼Œè§£æå…¨éƒ¨é¡¹ç›®ç”Ÿäº§æºç å›¾å¹¶åŠ å…¥ root æµ‹è¯• import è¾¹ï¼Œæ£€æŸ¥ä¸­å¿ƒ/execution/contracts ç»ä»»æ„ helper çš„ä¼ é€’ç¦ç”¨ä¾èµ–ä»¥åŠå…·ä½“å®ç°åå‘ä¸­å¿ƒä¾èµ–ã€‚å¦è¿è¡Œ Windows/Linux çš„å®é™…ç”Ÿäº§ `go list -deps -json`ã€‚ç›´å±ç›®å½•æ— ä¾‹å¤–åå•ï¼›ç‰ˆæœ¬æœªçŸ¥ã€go list å¤±è´¥å’Œç©ºæ‰«æä¸èƒ½è§†ä½œé€šè¿‡ã€‚
+## ¹¤×÷ÇøºÍÔ´ÂëÉí·İ
 
-`TestCD67CoreBoundary` åœ¨å¤–å±‚é›†æˆåŒ…ã€‚5 ä¸ªè´Ÿå‘ fixture å·²å®é™…è¯æ˜å¤§å°å†™å…³é”®è¯ã€å…¶ä»– OS æ–‡ä»¶å/æ–‡æœ¬ã€é¢å¤–æ„å»ºæ ‡ç­¾ä¸‹ç›´æ¥ app importã€helper ä¼ é€’ integration importã€å…·ä½“å®ç°ç» helper åå‘ core import å‡è¢«æ‹’ç»ã€‚
+- Êµ¼Ê¹¤×÷Çø£º`C:/Users/lmas1/.codex/worktrees/f775/SteerLine`¡£
+- HEAD / `origin/main`£º`a670e9d1510dfdfd04c1aeb032addd23a0d45941`£¬#66 ºÏ²¢Ìá½»£»¿ªÊ¼Ê±¹¤×÷Çø¸É¾»¡£
+- detached HEAD£»Ê×´Î´´½¨ `codex/67-core-boundary` ·ÖÖ§±» `C:/Project/SteerLine/.git/refs/heads/codex/67-core-boundary.lock: Permission denied` ×è¶Ï¡£Ã»ÓĞÔÙ´Î²Ù×÷ refs£¬Ã»ÓĞÌá½»¡¢ÍÆËÍ»ò PR¡£
+- µ±Ç° Go Ô´Âë¼¯ºÏ SHA256£º`f08ee646fc1b128c9dc214bfa73a4daeb9f74e77657c57e3f3c3126bd908912a`£¬465 ¸öÎÄ¼ş£¨È«²¿ÏÖ´æÏîÄ¿ Go ÎÄ¼ş¼° go.mod/go.sum£©¡£Ëã·¨¼°ÖğÎÄ¼şÕªÒª¼û [source-manifest.json](source-manifest.json)¡£ÕâÊÇÎ´Ìá½»Ô´ÂëÕªÒª£¬²»ÊÇ commit¡£
+- Ô­Ê¼±¨¸æ¡¢Ç¨ÒÆ½Å±¾ºÍ¹¤×÷Çø Go cache ±£´æÔÚºöÂÔÄ¿Â¼ `bin/cd67/`¡¢`bin/go-cache/`¡£±¨¸æ¶ÔÓ¦ÉÏÊö Go Ô´Âë£»´ËºóÖ»×·¼ÓÑéÊÕÎÄµµ£¬²»¸Ä±ä Go ÄÚÈİ¡£
 
-6 ä¸ªæ—§å…¥å£æŒ‰å®é™…èŒè´£è¿ç§»ï¼Œè§ [test-mapping.json](test-mapping.json)ï¼š
+## ÒÑÊµÊ©ÄÚÈİÓëËùÓĞÕß
 
-| æ—§ä½ç½®ä¸å…¥å£ | æ–°æ‰€æœ‰è€…/ä½ç½® | éªŒè¯çŠ¶æ€ |
+`internal/coreboundary/check.go` Î»ÓÚÖĞĞÄÖ®Íâ£»ÎŞÊÓ¹¹½¨±êÇ©É¨ÃèÈ«²¿Ö±Êô Go ÎÄ¼şÃû/ÎÄ±¾£¨°üÀ¨ tests£©£¬½âÎöÈ«²¿ÏîÄ¿Éú²úÔ´ÂëÍ¼²¢¼ÓÈë root ²âÊÔ import ±ß£¬¼ì²éÖĞĞÄ/execution/contracts ¾­ÈÎÒâ helper µÄ´«µİ½ûÓÃÒÀÀµÒÔ¼°¾ßÌåÊµÏÖ·´ÏòÖĞĞÄÒÀÀµ¡£ÁíÔËĞĞ Windows/Linux µÄÊµ¼ÊÉú²ú `go list -deps -json`¡£Ö±ÊôÄ¿Â¼ÎŞÀıÍâÃûµ¥£»°æ±¾Î´Öª¡¢go list Ê§°ÜºÍ¿ÕÉ¨Ãè²»ÄÜÊÓ×÷Í¨¹ı¡£
+
+`TestCD67CoreBoundary` ÔÚÍâ²ã¼¯³É°ü¡£5 ¸ö¸ºÏò fixture ÒÑÊµ¼ÊÖ¤Ã÷´óĞ¡Ğ´¹Ø¼ü´Ê¡¢ÆäËû OS ÎÄ¼şÃû/ÎÄ±¾¡¢¶îÍâ¹¹½¨±êÇ©ÏÂÖ±½Ó app import¡¢helper ´«µİ integration import¡¢¾ßÌåÊµÏÖ¾­ helper ·´Ïò core import ¾ù±»¾Ü¾ø¡£
+
+6 ¸ö¾ÉÈë¿Ú°´Êµ¼ÊÖ°ÔğÇ¨ÒÆ£¬¼û [test-mapping.json](test-mapping.json)£º
+
+| ¾ÉÎ»ÖÃÓëÈë¿Ú | ĞÂËùÓĞÕß/Î»ÖÃ | ÑéÖ¤×´Ì¬ |
 | --- | --- | --- |
-| activity / TestCodexNormalizer | codexworker/normalizer_cd67_test.go | åŸæ–­è¨€ run/pass |
-| activity / TestDetectNormalizer | steerlineintegration/normalizer_composition_test.go | å…¬å…± normalizer ç»„åˆï¼ŒåŸæ–­è¨€ run/pass |
-| worker_local / TestWorkerTurnFindsPRBeforeFinalMessage | codexworker/outcome_cd67_test.go | åŸ journal/PR æ–­è¨€ run/pass |
-| orca_worker_observation / TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity | orcaworker/identity_cd67_test.go | åŸèº«ä»½æ–­è¨€ run/pass |
-| orca_worker_observation / TestFixedOrcaAgentTerminalRejectsReplacedIncarnation | orcaworker/identity_cd67_test.go | åŸ incarnation æ‹’ç»æ–­è¨€ run/passï¼›åªå»æ‰æ— ä¸šåŠ¡ç”¨é€”çš„ä¸­å¿ƒ Receipt DTO åŒ…è£… |
-| worker_codex_live / TestCodexAppServerNativeQuestionLive | steerlineintegration/worker_codex_live_test.go | ä¿ç•™å®Œæ•´æ–­è¨€åŠ STEERLINE_CODEX_APP_SERVER_LIVE opt-inï¼›æœªè¿è¡Œ live |
+| activity / TestCodexNormalizer | codexworker/normalizer_cd67_test.go | Ô­¶ÏÑÔ run/pass |
+| activity / TestDetectNormalizer | steerlineintegration/normalizer_composition_test.go | ¹«¹² normalizer ×éºÏ£¬Ô­¶ÏÑÔ run/pass |
+| worker_local / TestWorkerTurnFindsPRBeforeFinalMessage | codexworker/outcome_cd67_test.go | Ô­ journal/PR ¶ÏÑÔ run/pass |
+| orca_worker_observation / TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity | orcaworker/identity_cd67_test.go | Ô­Éí·İ¶ÏÑÔ run/pass |
+| orca_worker_observation / TestFixedOrcaAgentTerminalRejectsReplacedIncarnation | orcaworker/identity_cd67_test.go | Ô­ incarnation ¾Ü¾ø¶ÏÑÔ run/pass£»Ö»È¥µôÎŞÒµÎñÓÃÍ¾µÄÖĞĞÄ Receipt DTO °ü×° |
+| worker_codex_live / TestCodexAppServerNativeQuestionLive | steerlineintegration/worker_codex_live_test.go | ±£ÁôÍêÕû¶ÏÑÔ¼° STEERLINE_CODEX_APP_SERVER_LIVE opt-in£»Î´ÔËĞĞ live |
 
-ä¸­å¿ƒ activity æ–‡ä»¶ä¸­ä¸å­˜å‚¨ round-trip æœ‰å…³çš„æ¥æºæ•°æ®æ”¹ä¸ºä¸­æ€§ fixtureï¼›åŸå…·ä½“ normalizer/detection æ–­è¨€å·²è¿èµ°ã€‚åˆ é™¤çš„ç›´å±æ–‡ä»¶ä»… `worker_codex_live_test.go`ï¼Œç”±å¤–å±‚å®Œæ•´æ‰¿æ¥ã€‚
+ÖĞĞÄ activity ÎÄ¼şÖĞÓë´æ´¢ round-trip ÓĞ¹ØµÄÀ´Ô´Êı¾İ¸ÄÎªÖĞĞÔ fixture£»Ô­¾ßÌå normalizer/detection ¶ÏÑÔÒÑÇ¨×ß¡£É¾³ıµÄÖ±ÊôÎÄ¼ş½ö `worker_codex_live_test.go`£¬ÓÉÍâ²ãÍêÕû³Ğ½Ó¡£
 
-app æ–°å¢ `NewServiceWithPorts`ï¼Œæ³¨å…¥ç°æœ‰ç›®å½•ã€ç”Ÿå‘½å‘¨æœŸå’Œ ConversationSourcePortï¼›åŸé»˜è®¤å…¥å£ä»æ„é€ åŸæ¥æºã€‚æ²¡æœ‰å‘æµ‹è¯•å¯¼å‡º Service ç§æœ‰å†™è€…ã€Store/Runtime æ›¿ä»£æ¥å£ï¼Œä¹Ÿæ²¡æœ‰ä¿®æ”¹ä»»ä½• root ç”Ÿäº§æ–‡ä»¶ã€‚
+app ĞÂÔö `NewServiceWithPorts`£¬×¢ÈëÏÖÓĞÄ¿Â¼¡¢ÉúÃüÖÜÆÚºÍ ConversationSourcePort£»Ô­Ä¬ÈÏÈë¿ÚÈÔ¹¹ÔìÔ­À´Ô´¡£Ã»ÓĞÏò²âÊÔµ¼³ö Service Ë½ÓĞĞ´Õß¡¢Store/Runtime Ìæ´ú½Ó¿Ú£¬Ò²Ã»ÓĞĞŞ¸ÄÈÎºÎ root Éú²úÎÄ¼ş¡£
 
-ç¬¬ä¸‰å®ç°ä½äºå¤–å±‚ `_test.go`ï¼š`additional_implementation_fixture_test.go` å’Œ `core_decoupling_67_additional_test.go`ã€‚å·²ç¼–è¯‘çš„å€™é€‰é€šè¿‡ `LoadConfigWithDirectory`ã€æ­£å¼ app æ„é€ ã€å…¬å…± Claim/æŸ¥è¯¢/ç­”æ¡ˆå…¥å£æ¥çº¿ï¼›éš”ç¦» ledger ä¿å­˜åŸè¾“å…¥/å›æ‰§ï¼Œé‡æ–°æ„é€ ç›®å½•/æ¥æº/æœåŠ¡åæ ¸å¯¹åŸèº«ä»½å’Œäººå·¥é—¨æ§›ã€‚å®ƒåªå£°æ˜ç¦»çº¿åªè¯» fake èƒ½åŠ›ï¼Œå·¥å…·æŸ¥è¯¢è¿”å› unknownã€å–æ¶ˆ/æ›¿æ¢ä¼šè¯æ˜ç¡®æ‹’ç»ï¼Œä¸äº§ç”ŸåŸç”Ÿæƒé™è®¤è¯ã€‚**é—­ç¯åœ¨ Git fixture åˆå§‹åŒ–é˜¶æ®µè¢«é˜»æ–­ï¼Œæ‰€æœ‰åç»­ä¸šåŠ¡æ–­è¨€æœªå®é™…æ‰§è¡Œï¼›è¿™äº›ä»£ç è¿˜éœ€è¦ç‹¬ç«‹å®¡æŸ¥ã€å®é™…è°ƒè¯•å’Œè¡¥å…¨ï¼Œä¸èƒ½è§†ä¸º CD67-2 è¾¾æ ‡ã€‚å°¤å…¶ TaskDelivery çš„æ­£å‘å”¯ä¸€äº¤ä»˜ä¸ç»“ç®—è¯æ˜å°šæœªäº¤ä»˜ã€‚**
+µÚÈıÊµÏÖÎ»ÓÚÍâ²ã `_test.go`£º`additional_implementation_fixture_test.go` ºÍ `core_decoupling_67_additional_test.go`¡£ÒÑ±àÒëµÄºòÑ¡Í¨¹ı `LoadConfigWithDirectory`¡¢ÕıÊ½ app ¹¹Ôì¡¢¹«¹² Claim/²éÑ¯/´ğ°¸Èë¿Ú½ÓÏß£»¸ôÀë ledger ±£´æÔ­ÊäÈë/»ØÖ´£¬ÖØĞÂ¹¹ÔìÄ¿Â¼/À´Ô´/·şÎñºóºË¶ÔÔ­Éí·İºÍÈË¹¤ÃÅ¼÷¡£ËüÖ»ÉùÃ÷ÀëÏßÖ»¶Á fake ÄÜÁ¦£¬¹¤¾ß²éÑ¯·µ»Ø unknown¡¢È¡Ïû/Ìæ»»»á»°Ã÷È·¾Ü¾ø£¬²»²úÉúÔ­ÉúÈ¨ÏŞÈÏÖ¤¡£**±Õ»·ÔÚ Git fixture ³õÊ¼»¯½×¶Î±»×è¶Ï£¬ËùÓĞºóĞøÒµÎñ¶ÏÑÔÎ´Êµ¼ÊÖ´ĞĞ£»ÕâĞ©´úÂë»¹ĞèÒª¶ÀÁ¢Éó²é¡¢Êµ¼Êµ÷ÊÔºÍ²¹È«£¬²»ÄÜÊÓÎª CD67-2 ´ï±ê¡£ÓÈÆä TaskDelivery µÄÕıÏòÎ¨Ò»½»¸¶Óë½áËãÖ¤Ã÷ÉĞÎ´½»¸¶¡£**
 
-`TestCD67AdditionalImplementation` å·²ç»„åˆç¬¬ä¸‰å®ç°ã€æ—¢æœ‰ app-server ä¸¤é˜¶æ®µæäº¤ã€terminal åŸèº«ä»½æ¢å¤ä»¥åŠ remote Protocol ä»£è¡¨å…¥å£ã€‚å®ƒå°šæœªåŠ å…¥ quick çš„é»˜è®¤è¦†ç›–ï¼ŒçœŸå® remote Claim æ‹’ç»ä»éœ€çº³å…¥åŒä¸€æœ€å°å…¥å£ï¼Œä¸èƒ½æŠŠåè®® fake å½“ä½œæƒé™è®¤è¯ã€‚
+`TestCD67AdditionalImplementation` ÒÑ×éºÏµÚÈıÊµÏÖ¡¢¼ÈÓĞ app-server Á½½×¶ÎÌá½»¡¢terminal Ô­Éí·İ»Ö¸´ÒÔ¼° remote Protocol ´ú±íÈë¿Ú¡£ËüÉĞÎ´¼ÓÈë quick µÄÄ¬ÈÏ¸²¸Ç£¬ÕæÊµ remote Claim ¾Ü¾øÈÔĞèÄÉÈëÍ¬Ò»×îĞ¡Èë¿Ú£¬²»ÄÜ°ÑĞ­Òé fake µ±×÷È¨ÏŞÈÏÖ¤¡£
 
-## å®é™…æœ€å°éªŒè¯
+## Êµ¼Ê×îĞ¡ÑéÖ¤
 
-ä½¿ç”¨å·¥ä½œåŒºå†… `GOCACHE=.../bin/go-cache`ã€‚é»˜è®¤ Go cache é¦–æ¬¡å†™å…¥è¢«æ‹’ç»åï¼Œæ”¹ç”¨å·²æœ‰å¯å†™å·¥ä½œåŒº cacheï¼›æ²¡æœ‰è°ƒæ•´ sandbox æˆ–æƒé™ã€‚
+Ê¹ÓÃ¹¤×÷ÇøÄÚ `GOCACHE=.../bin/go-cache`¡£Ä¬ÈÏ Go cache Ê×´ÎĞ´Èë±»¾Ü¾øºó£¬¸ÄÓÃÒÑÓĞ¿ÉĞ´¹¤×÷Çø cache£»Ã»ÓĞµ÷Õû sandbox »òÈ¨ÏŞ¡£
 
-å®šå‘è¯Šæ–­ï¼š
+¶¨ÏòÕï¶Ï£º
 
 ```powershell
 go run ./cmd/test-feedback -out bin/cd67/initial-focused -- -p 1 -parallel 1 ./internal/steerlineintegration ./internal/steerline/codexworker ./internal/steerline/orcaworker -count=1 -run '^(TestCD67CoreBoundary|TestCD67AdditionalImplementation|TestCodexNormalizer|TestWorkerTurnFindsPRBeforeFinalMessage|TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity|TestFixedOrcaAgentTerminalRejectsReplacedIncarnation|TestDetectNormalizer)$/(negative_source_fixtures|neutral_fixed_input_restart_and_fresh_manual_answer)$'
 ```
 
-å®é™…æŠ¥å‘Š `bin/cd67/initial-focused/summary.json`ï¼š**complete=trueã€passed=falseï¼Œ3 åŒ…ï¼Œ12 pass / 2 fail / 0 skipï¼ˆå« parent/subtestï¼‰**ï¼Œ5.390 ç§’ã€‚äº”ä¸ªè¿å…¥çš„é live å…¥å£åŠè´Ÿå‘å®ˆå« parent/å„æ ·æœ¬å‡æœ‰å®é™… run/passï¼›ç¬¬ä¸‰å®ç° parent/å­ç”¨ä¾‹ failã€‚å¤±è´¥åœ¨éš”ç¦»ä¸´æ—¶ Git pushï¼š
+Êµ¼Ê±¨¸æ `bin/cd67/initial-focused/summary.json`£º**complete=true¡¢passed=false£¬3 °ü£¬12 pass / 2 fail / 0 skip£¨º¬ parent/subtest£©**£¬5.390 Ãë¡£Îå¸öÇ¨ÈëµÄ·Ç live Èë¿Ú¼°¸ºÏòÊØÎÀ parent/¸÷Ñù±¾¾ùÓĞÊµ¼Ê run/pass£»µÚÈıÊµÏÖ parent/×ÓÓÃÀı fail¡£Ê§°ÜÔÚ¸ôÀëÁÙÊ± Git push£º
 
 ```text
 sh.exe: *** fatal error - couldn't create signal pipe, Win32 error 5
 fatal: Could not read from remote repository.
 ```
 
-æ²¡æœ‰é‡è¯•è¯¥ fixtureï¼Œä¹Ÿæ²¡æœ‰æ”¹ä¸ºå¿½ç•¥ã€ä¿®æ”¹æ–­è¨€ã€å˜æ›´å‡†å…¥æˆ–ä¼ªé€ æˆæƒã€‚ä¸¤æ¡å·²æ”¯æŒæ¢å¤å’Œ remote Protocol å­ç”¨ä¾‹åœ¨æœ¬å®šå‘é€‰æ‹©ä¸­æœªè¿è¡Œï¼ŒåŸå…ˆ #66 è¯æ®ä¸è®¤è¯æœ¬æºç ã€‚
+Ã»ÓĞÖØÊÔ¸Ã fixture£¬Ò²Ã»ÓĞ¸ÄÎªºöÂÔ¡¢ĞŞ¸Ä¶ÏÑÔ¡¢±ä¸ü×¼Èë»òÎ±ÔìÊÚÈ¨¡£Á½ÌõÒÑÖ§³Ö»Ö¸´ºÍ remote Protocol ×ÓÓÃÀıÔÚ±¾¶¨ÏòÑ¡ÔñÖĞÎ´ÔËĞĞ£¬Ô­ÏÈ #66 Ö¤¾İ²»ÈÏÖ¤±¾Ô´Âë¡£
 
-æœ€ç»ˆæºç å®ˆå«è¯Šæ–­ï¼š
+×îÖÕÔ´ÂëÊØÎÀÕï¶Ï£º
 
 ```powershell
 go run ./cmd/test-feedback -out bin/cd67/boundary-current -- ./internal/steerlineintegration -count=1 -run '^TestCD67CoreBoundary$/^repository_all_tags_and_production_graphs$'
 ```
 
-å®é™…æŠ¥å‘Š `bin/cd67/boundary-current/summary.json`ï¼š**complete=trueã€passed=falseï¼Œ0 pass / 2 fail / 0 skip**ï¼Œ10.455 ç§’ã€‚æ£€æŸ¥è¦†ç›– root 180 ä¸ª Go æ–‡ä»¶ã€26 ä¸ªé¡¹ç›®æºç åŒ…ã€Windows 232/Linux 221 ä¸ªç”Ÿäº§ä¾èµ–ã€‚ç”Ÿäº§ç¦ç”¨ä¾èµ–ä¸ºé›¶ï¼›å½“å‰ **51 ä¸ªç›´å±æµ‹è¯•/fixture ä»æœ‰å¹³å°æ–‡æœ¬ã€4 æ¡æµ‹è¯•ç›´æ¥å®ç° import è¶Šç•Œ**ï¼Œå®ˆå«å¦‚å®æ‹’ç»ã€‚è§ [boundary-checks.json](boundary-checks.json)ã€‚å¼€å§‹æ—¶å®é™… baseline ç›˜ç‚¹ä¸º 53 ä¸ªå¹³å°æµ‹è¯•/fixture æ–‡ä»¶ï¼ˆæ—©æœŸè¿›åº¦æ¶ˆæ¯ä¸­ 56 çš„äººå·¥è®¡æ•°å·²ç”±å®Œæ•´æ¸…ç‚¹çº æ­£ï¼‰ã€‚
+Êµ¼Ê±¨¸æ `bin/cd67/boundary-current/summary.json`£º**complete=true¡¢passed=false£¬0 pass / 2 fail / 0 skip**£¬10.455 Ãë¡£¼ì²é¸²¸Ç root 180 ¸ö Go ÎÄ¼ş¡¢26 ¸öÏîÄ¿Ô´Âë°ü¡¢Windows 232/Linux 221 ¸öÉú²úÒÀÀµ¡£Éú²ú½ûÓÃÒÀÀµÎªÁã£»µ±Ç° **51 ¸öÖ±Êô²âÊÔ/fixture ÈÔÓĞÆ½Ì¨ÎÄ±¾¡¢4 Ìõ²âÊÔÖ±½ÓÊµÏÖ import Ô½½ç**£¬ÊØÎÀÈçÊµ¾Ü¾ø¡£¼û [boundary-checks.json](boundary-checks.json)¡£¿ªÊ¼Ê±Êµ¼Ê baseline ÅÌµãÎª 53 ¸öÆ½Ì¨²âÊÔ/fixture ÎÄ¼ş£¨ÔçÆÚ½ø¶ÈÏûÏ¢ÖĞ 56 µÄÈË¹¤¼ÆÊıÒÑÓÉÍêÕûÇåµã¾ÀÕı£©¡£
 
-Windows å—å½±å“ root/app/integration/ä¸¤ä¸ªå®ç°åŒ…åŠ guard å·²é€šè¿‡ä»…ç¼–è¯‘ï¼›Windows/Linux `go build ./cmd/steerline ./cmd/test-feedback` é€šè¿‡ï¼›`git -c core.autocrlf=false diff --check` é€šè¿‡ã€‚Linux æµ‹è¯•ç¼–è¯‘é¦–æ¬¡é”™è¯¯åœ°ä½¿ç”¨ `-exec go`ï¼ŒåŒ…è£…å™¨è¿”å› unknown commandï¼Œä¿ç•™ä¸ºå¤±è´¥è¯Šæ–­ï¼›æ­£ç¡®çº¯ç¼–è¯‘ä½¿ç”¨ `GOOS=linux go test -c -o bin/cd67/linux-compile/`ã€‚æœªæ‰§è¡Œ Linux æµ‹è¯•ä½“ã€‚
+Windows ÊÜÓ°Ïì root/app/integration/Á½¸öÊµÏÖ°ü¼° guard ÒÑÍ¨¹ı½ö±àÒë£»Windows/Linux `go build ./cmd/steerline ./cmd/test-feedback` Í¨¹ı£»`git -c core.autocrlf=false diff --check` Í¨¹ı¡£Linux ²âÊÔ±àÒëÊ×´Î´íÎóµØÊ¹ÓÃ `-exec go`£¬°ü×°Æ÷·µ»Ø unknown command£¬±£ÁôÎªÊ§°ÜÕï¶Ï£»ÕıÈ·´¿±àÒëÊ¹ÓÃ `GOOS=linux go test -c -o bin/cd67/linux-compile/`¡£Î´Ö´ĞĞ Linux ²âÊÔÌå¡£
 
-å„åŒ…ã€parent/subtest å®é™…äº‹ä»¶è§ [test-hits.json](test-hits.json)ï¼ŒæŠ¥å‘Šæ‘˜è¦åŠåŸå§‹æ—¥å¿—å“ˆå¸Œè§ [validation-results.json](validation-results.json)ã€‚è¿™äº›å®šå‘æ£€æŸ¥ä¸æ›¿ä»£è§„å®šç»„åˆã€‚ç”±äº fixture åŠ root éš”ç¦»ä»å¤±è´¥ï¼Œæ²¡æœ‰è¿è¡Œ quick/full æˆ–é‡å¤å¹³å°çŸ©é˜µï¼Œä¹Ÿæ²¡æœ‰è°ƒç”¨çœŸå®äº§å“ CLIã€ä¸šåŠ¡æœåŠ¡æˆ–ä»»åŠ¡æ•°æ®åº“ã€‚
+¸÷°ü¡¢parent/subtest Êµ¼ÊÊÂ¼ş¼û [test-hits.json](test-hits.json)£¬±¨¸æÕªÒª¼°Ô­Ê¼ÈÕÖ¾¹şÏ£¼û [validation-results.json](validation-results.json)¡£ÕâĞ©¶¨Ïò¼ì²é²»Ìæ´ú¹æ¶¨×éºÏ¡£ÓÉÓÚ fixture ¼° root ¸ôÀëÈÔÊ§°Ü£¬Ã»ÓĞÔËĞĞ quick/full »òÖØ¸´Æ½Ì¨¾ØÕó£¬Ò²Ã»ÓĞµ÷ÓÃÕæÊµ²úÆ· CLI¡¢ÒµÎñ·şÎñ»òÈÎÎñÊı¾İ¿â¡£
 
-## å¿…é¡»ç»§ç»­å®Œæˆçš„ #67 èŒƒå›´
+## ±ØĞë¼ÌĞøÍê³ÉµÄ #67 ·¶Î§
 
-[root-test-inventory.json](root-test-inventory.json) æ¸…ç‚¹å…¨éƒ¨åŸå¹³å°ç›´å±æ–‡ä»¶ã€å…¥å£/è¾…åŠ©å’Œ live/evidence å¼€å…³ï¼Œå¹¶æ ‡è®°å½“å‰å‰©ä½™ï¼›è¿™æ˜¯å®Œæ•´è¾“å…¥ç›˜ç‚¹ï¼Œä¸æ˜¯å®Œæˆæ˜ å°„ã€‚å‰©ä½™ 51 ä¸ªæ–‡ä»¶éœ€è¦æŒ‰ä¸šåŠ¡/åŸç”Ÿ/è·¨å±‚æ‹†åˆ†ï¼Œä¿ç•™å·²ç¼–è¯‘åŸæ–­è¨€å’Œ opt-in å·¥å…·/ç‰ˆæœ¬/è¯æ®è¦æ±‚ã€‚
+[root-test-inventory.json](root-test-inventory.json) ÇåµãÈ«²¿Ô­Æ½Ì¨Ö±ÊôÎÄ¼ş¡¢Èë¿Ú/¸¨ÖúºÍ live/evidence ¿ª¹Ø£¬²¢±ê¼Çµ±Ç°Ê£Óà£»ÕâÊÇÍêÕûÊäÈëÅÌµã£¬²»ÊÇÍê³ÉÓ³Éä¡£Ê£Óà 51 ¸öÎÄ¼şĞèÒª°´ÒµÎñ/Ô­Éú/¿ç²ã²ğ·Ö£¬±£ÁôÒÑ±àÒëÔ­¶ÏÑÔºÍ opt-in ¹¤¾ß/°æ±¾/Ö¤¾İÒªÇó¡£
 
-ä¼˜å…ˆæ‹†é™¤ `core_decoupling_66_test_helpers_test.go` ä¸­å¤åˆ¶çš„ä¸‰ä¸ªå…·ä½“å¹³å°å·¥å‚ï¼›ä¸­å¿ƒç”¨ä¸€ä»½ä¸­æ€§ fake è¦†ç›– Decision/intent/receipt/åŸè¾“å…¥/äººå·¥é—¨æ§›/å”¯ä¸€äº¤ä»˜ï¼ŒåŸç”Ÿå‘½ä»¤ä¸ codec å½’å®ç°ï¼Œè·¨å±‚ä¸ live ç»æ­£å¼ app/å…¬å…±ç«¯å£å½’å¤–å±‚ã€‚`linked_workspace_fixture_test.go`ã€`process_fixture_test.go`ã€`requirements_fixture_test.go` ä»éœ€å®Œæˆæ‰€æœ‰è€…å½’ä½ï¼›ä¸èƒ½é ç»Ÿä¸€æ›¿æ¢åç§°æˆ–å¤åˆ¶å¦ä¸€å¥—å·¥å‚è¾¾æ ‡ã€‚
+ÓÅÏÈ²ğ³ı `core_decoupling_66_test_helpers_test.go` ÖĞ¸´ÖÆµÄÈı¸ö¾ßÌåÆ½Ì¨¹¤³§£»ÖĞĞÄÓÃÒ»·İÖĞĞÔ fake ¸²¸Ç Decision/intent/receipt/Ô­ÊäÈë/ÈË¹¤ÃÅ¼÷/Î¨Ò»½»¸¶£¬Ô­ÉúÃüÁîÓë codec ¹éÊµÏÖ£¬¿ç²ãÓë live ¾­ÕıÊ½ app/¹«¹²¶Ë¿Ú¹éÍâ²ã¡£`linked_workspace_fixture_test.go`¡¢`process_fixture_test.go`¡¢`requirements_fixture_test.go` ÈÔĞèÍê³ÉËùÓĞÕß¹éÎ»£»²»ÄÜ¿¿Í³Ò»Ìæ»»Ãû³Æ»ò¸´ÖÆÁíÒ»Ì×¹¤³§´ï±ê¡£
 
-å®Œå…¨è®¿é—®ç»­åšè€…é¡»å…ˆæ ¸å¯¹æœ¬å·¥ä½œåŒºå’Œæºæ‘˜è¦ï¼Œå®¡æŸ¥å¹¶è°ƒè¯•ç¬¬ä¸‰å®ç°ï¼Œå®Œæˆå‰©ä½™è¿ç§»ã€å»é‡/æ—§åˆ°æ–°æ˜ å°„ã€guard/ç¬¬ä¸‰å®ç°/remote Claim æ‹’ç»çš„ quick æ¥å…¥ï¼›ç„¶ååªè¿è¡Œä¸€æ¬¡ç¨³å®šçš„è§„å®šæœ€å°ç»„åˆï¼Œæ ¸å¯¹æ‰€æœ‰åŒ…ä¸ parent/subtest run/pass/completeï¼Œæ„å»ºäº§å“å¹¶æ›´æ–°æœ€ç»ˆæ‰€æœ‰è€…æ–‡æ¡£ã€‚å½“å‰ä»£ç ä¿ç•™å¤±è´¥å’Œæœªé€šè¿‡é¡¹ï¼Œä¸èƒ½ç”¨ exit=0ã€æ­£åˆ™é›¶å‘½ä¸­æˆ–ç”Ÿäº§ä¾èµ–æ¸…é›¶æ›¿ä»£å…¨éƒ¨éªŒæ”¶ã€‚
+ÍêÈ«·ÃÎÊĞø×öÕßĞëÏÈºË¶Ô±¾¹¤×÷ÇøºÍÔ´ÕªÒª£¬Éó²é²¢µ÷ÊÔµÚÈıÊµÏÖ£¬Íê³ÉÊ£ÓàÇ¨ÒÆ¡¢È¥ÖØ/¾Éµ½ĞÂÓ³Éä¡¢guard/µÚÈıÊµÏÖ/remote Claim ¾Ü¾øµÄ quick ½ÓÈë£»È»ºóÖ»ÔËĞĞÒ»´ÎÎÈ¶¨µÄ¹æ¶¨×îĞ¡×éºÏ£¬ºË¶ÔËùÓĞ°üÓë parent/subtest run/pass/complete£¬¹¹½¨²úÆ·²¢¸üĞÂ×îÖÕËùÓĞÕßÎÄµµ¡£µ±Ç°´úÂë±£ÁôÊ§°ÜºÍÎ´Í¨¹ıÏî£¬²»ÄÜÓÃ exit=0¡¢ÕıÔòÁãÃüÖĞ»òÉú²úÒÀÀµÇåÁãÌæ´úÈ«²¿ÑéÊÕ¡£
 
-å…¨éƒ¨å®ç°å®Œæˆåï¼Œæ‰å»ºç«‹åˆ†æ”¯ã€æäº¤ã€æ¨é€å’Œå¯åˆå¹¶ PRï¼Œäº¤åè°ƒç‹¬ç«‹å¤å®¡/äº²è‡ªä¿®å¤ï¼›æ‰§è¡Œè€…ä¸è‡ªè¡Œåˆå¹¶ã€‚remote åŸç”Ÿæƒé™è¯æ®ç¼ºå£ä¿æŒåŸæ”¯æŒé™åˆ¶ã€‚æœ¬è½®æ²¡æœ‰ä¿®æ”¹æŒä¹…ç‰ˆæœ¬ã€æ—§æ ¼å¼ç­–ç•¥ã€å‡†å¤‡è®°å½•æ‹’ç»æˆ–é¦–ä¸ªèµ„æºæ“ä½œå‰çš„ Git æˆæƒæ£€æŸ¥ã€‚
+È«²¿ÊµÏÖÍê³Éºó£¬²Å½¨Á¢·ÖÖ§¡¢Ìá½»¡¢ÍÆËÍºÍ¿ÉºÏ²¢ PR£¬½»Ğ­µ÷¶ÀÁ¢¸´Éó/Ç××ÔĞŞ¸´£»Ö´ĞĞÕß²»×ÔĞĞºÏ²¢¡£remote Ô­ÉúÈ¨ÏŞÖ¤¾İÈ±¿Ú±£³ÖÔ­Ö§³ÖÏŞÖÆ¡£±¾ÂÖÃ»ÓĞĞŞ¸Ä³Ö¾Ã°æ±¾¡¢¾É¸ñÊ½²ßÂÔ¡¢×¼±¸¼ÇÂ¼¾Ü¾ø»òÊ×¸ö×ÊÔ´²Ù×÷Ç°µÄ Git ÊÚÈ¨¼ì²é¡£

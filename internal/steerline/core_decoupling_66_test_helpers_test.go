@@ -39,8 +39,6 @@ func testImplementationDirectory(t *testing.T) *ExecutionDirectory {
 	return directory
 }
 
-func testExecutionDirectory(t *testing.T) *ExecutionDirectory { return testImplementationDirectory(t) }
-
 func mustTestDirectory() (*ExecutionDirectory, error) {
 	testDirectoryOnce.Do(func() { sharedTestDirectory, sharedTestDirectoryError = newTestDirectory() })
 	return sharedTestDirectory, sharedTestDirectoryError
@@ -147,23 +145,6 @@ func newTestDirectory() (*ExecutionDirectory, error) {
 	return NewExecutionDirectory("builtin-execution-v2", testImplementationCodecs(), entries)
 }
 
-func testDirectoryWithReplacement(t *testing.T, directory *ExecutionDirectory, replacement ExecutionRegistration) *ExecutionDirectory {
-	t.Helper()
-	entries := make([]ExecutionRegistration, 0, len(directory.entries))
-	for key, entry := range directory.entries {
-		if key == replacement.Key {
-			entries = append(entries, replacement)
-		} else {
-			entries = append(entries, entry)
-		}
-	}
-	clone, err := NewExecutionDirectory(directory.Version(), testImplementationCodecs(), entries)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return clone
-}
-
 type testProcessHost struct{}
 
 type localManagedProcessHost = testProcessHost
@@ -179,14 +160,6 @@ func orcaQuestionID(decision *DecisionState) string {
 		return ""
 	}
 	return decision.Request.QuestionRoute.QuestionID
-}
-
-func probeSupervisedOrcaTarget(ctx context.Context, c Config) (remote.PreflightResult, error) {
-	if err := validateImplementationProfileData(c); err != nil {
-		return remote.PreflightResult{}, err
-	}
-	result, err := remote.Preflight(ctx, remoteWorkerConfig(c))
-	return result, remoteWorkerError(err)
 }
 
 func (testProcessHost) StartManaged(command *exec.Cmd) (executionapi.StopHandle, error) {
@@ -320,20 +293,6 @@ func remoteProfileSettings(c Config) remote.ProfileConfig {
 		return remote.ProfileConfig{}
 	}
 	return value
-}
-
-func codexProfileFromInputs(inputs []executionapi.ImplementationConfigInput) codexworker.ProfileConfig {
-	for _, input := range inputs {
-		if input.ImplementationKey == codexworker.ProfileCodecKey {
-			profile, _ := codexworker.DecodeProfileConfig(input.Payload)
-			return profile
-		}
-	}
-	return codexworker.ProfileConfig{}
-}
-
-func (c Config) needsCodexExecutable() bool {
-	return c.Host == "local" || c.Host == "orca" && c.Agent == "codex"
 }
 
 func validatePublication(providerPolicy executionapi.PublicationPolicy, provider publication.Config, local bool) error {
@@ -494,9 +453,7 @@ func inspectTestWorkspace(ctx context.Context, c Config, ref executionapi.Execut
 }
 
 func nativeOrcaClient(c Config) orcaworker.Client { return orcaworker.New(nativeOrcaConfig(c)) }
-func nativeOrcaFixedAgentTitle(executionID string) string {
-	return orcaworker.FixedAgentTitle(executionID)
-}
+
 func nativeOrcaFixedAgentCommand(c Config) (string, error) { return nativeOrcaCommand(c, "", nil) }
 func nativeOrcaCommand(c Config, path string, roots []string) (string, error) {
 	worker, terminal := codexProfileSettings(c), orcaProfileSettings(c)
@@ -531,16 +488,6 @@ func remoteWorkerConfig(c Config) remote.Config {
 	return config
 }
 
-func remoteWorkerClient(c Config) remote.Client { return remote.New(remoteWorkerConfig(c)) }
-func remoteWorkerError(err error) error {
-	var value *remote.Error
-	if errors.As(err, &value) {
-		return &executionapi.BackendError{Code: executionapi.BackendErrorCode(value.Code), Diagnostic: value.Diagnostic, Cause: value.Cause}
-	}
-	return err
-}
-func remoteWorkerRef(ref executionapi.ExecutionRef) remote.Ref { return remote.FromExecutionRef(ref) }
-
 const maxSupervisedMessageBytes = remote.MaxMessageBytes
 
 func testHomePath() string {
@@ -550,19 +497,8 @@ func testHomePath() string {
 	return filepath.Join(os.TempDir(), "steerline-test")
 }
 
-func configTestRepository(t *testing.T) string {
-	t.Helper()
-	repository := t.TempDir()
-	out, err := exec.Command("git", "init", "--quiet", "-b", "main", repository).CombinedOutput()
-	if err != nil {
-		t.Fatalf("isolated config repository: %v: %s", err, out)
-	}
-	return repository
-}
-
 func fixtureHome() string      { return testHomePath() }
 func fixtureBinDir() string    { return filepath.Join(testHomePath(), "bin") }
-func fixtureEtcDir() string    { return filepath.Join(testHomePath(), "etc") }
 func fixtureStateRoot() string { return filepath.Join(testHomePath(), "state") }
 func fixtureGlobalExecutionConfigPath() string {
 	return filepath.Join(testHomePath(), "execution.json")

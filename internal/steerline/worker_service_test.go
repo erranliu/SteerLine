@@ -26,10 +26,9 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 }
 
 func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openPR bool) {
-	t.Setenv("STEERLINE_WORKER_FLOW_MOCK", "1")
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
-	c.WorkflowProtocol, c.Host, c.Agent = WorkerFlowVersion, "local", "codex"
+	c.WorkflowProtocol, c.Host, c.Agent = WorkerFlowVersion, "local", "fixture"
 	c.Claimant = "operator"
 	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	if err := c.prepareWorktreeRoot(); err != nil {
@@ -77,7 +76,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	}
 	preparationConfig := service.Config
 	if openPR {
-		service.Config.Host = "orca" // Initial preparation uses the run's fixed host.
+		service.Config.Host = "other-host" // Initial preparation uses the run's fixed host.
 	}
 	err = service.prepareWorkerFlow(ctx, *task, run)
 	service.Config = preparationConfig
@@ -197,7 +196,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	}
 	selectedConfig := service.Config
 	if openPR {
-		service.Config.Host = "orca" // A different dispatch selection cannot reroute this local run.
+		service.Config.Host = "other-host" // A different dispatch selection cannot reroute this local run.
 	}
 	err = service.applyWorkerFlowDecision(ctx, run)
 	service.Config = selectedConfig
@@ -218,7 +217,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	} else {
 		finishTurn("waiting_decision")
 	}
-	events, err := os.ReadFile(filepath.Join(feedbackDir, "appserver.jsonl"))
+	events, err := os.ReadFile(filepath.Join(feedbackDir, "fixture-input.json"))
 	if err != nil {
 		t.Fatal(err)
 	}

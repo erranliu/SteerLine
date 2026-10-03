@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -52,6 +53,15 @@ func (b neutralBackend) StopExecution(ctx context.Context, ref executionapi.Exec
 }
 
 type neutralLifecycle struct{ setup executionapi.LifecycleSetup }
+
+type neutralCompletionReceipt struct {
+	Evidence           executionapi.TurnEvidence
+	Process            executionapi.ProcessIdentity
+	Target             executionapi.ExecutionTarget
+	ExecutionID        string
+	AttemptID          string
+	ResourceGeneration string
+}
 
 func (p *neutralLifecycle) PolicyCapabilities() executionapi.LifecyclePolicyCapabilities {
 	return executionapi.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
@@ -106,7 +116,21 @@ func (p *neutralLifecycle) Execute(ctx context.Context, r executionapi.Lifecycle
 		receipt.Disposition = executionapi.OperationAccepted
 		receipt.State.TurnID = r.Input.Turn.CommandID
 		receipt.State.InputAccepted, receipt.State.TurnStarted = true, true
-		return receipt, newNeutralObserver(process, session, r.Input.Turn.CommandID), nil
+		// Record only the value actually delivered to this single-step port.
+		// Both the received text and serialized request retain the exact original input.
+		path := filepath.Join(p.setup.RunDirectory, "runs", r.Operation.RunID, "turns", r.Input.Turn.CommandID, "fixture-input.json")
+		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+			return receipt, nil, err
+		}
+		if err := os.WriteFile(filepath.Join(filepath.Dir(path), "prompt.txt"), []byte(r.Input.Turn.Prompt), 0600); err != nil {
+			return receipt, nil, err
+		}
+		if err := os.WriteFile(path, mustJSON(r.Input.Turn.Prompt), 0600); err != nil {
+			return receipt, nil, err
+		}
+		return receipt, newNeutralObserver(process, session, r.Input.Turn.CommandID, func() error {
+			return os.WriteFile(filepath.Join(filepath.Dir(path), "fixture-completed.json"), mustJSON(neutralCompletionReceipt{Evidence: executionapi.TurnEvidence{SessionID: session, TurnID: r.Input.Turn.CommandID, CommandID: r.Input.Turn.CommandID, Started: true, Completed: true, Succeeded: true, LastMessage: "neutral turn completed"}, Process: process, Target: r.Snapshot.Ref.Target, ExecutionID: r.Snapshot.Session.ExecutionID, AttemptID: r.Snapshot.Session.AttemptID, ResourceGeneration: r.Snapshot.ResourceGeneration}), 0600)
+		}), nil
 	case executionapi.LifecycleDeliverFeedback:
 		receipt.Disposition = executionapi.OperationConfirmed
 		receipt.State.InputAccepted = true
@@ -119,6 +143,20 @@ func (p *neutralLifecycle) Reconcile(_ context.Context, r executionapi.Lifecycle
 	return executionapi.LifecycleReceipt{Operation: r.Operation, Disposition: executionapi.OperationUnknown}, nil, nil
 }
 func (p *neutralLifecycle) ObserveLifecycle(_ context.Context, s executionapi.LifecycleSnapshot) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+	path := filepath.Join(p.setup.RunDirectory, "runs", s.Ref.RunID, "turns", s.Session.CurrentCommandID, "fixture-completed.json")
+	if data, err := os.ReadFile(path); err == nil {
+		var saved neutralCompletionReceipt
+		if err := decode(data, &saved); err != nil {
+			return executionapi.LifecycleReceipt{}, nil, err
+		}
+		evidence := saved.Evidence
+		if saved.Process != s.Ref.External || saved.Target != s.Ref.Target || saved.ExecutionID != s.Session.ExecutionID || saved.AttemptID != s.Session.AttemptID || saved.ResourceGeneration != s.ResourceGeneration || evidence.SessionID != s.Session.SessionID || evidence.TurnID != s.Session.CurrentTurnID || evidence.CommandID != s.Session.CurrentCommandID {
+			return executionapi.LifecycleReceipt{}, nil, errors.New("original fixture completion identity differs")
+		}
+		return executionapi.LifecycleReceipt{Disposition: executionapi.OperationConfirmed, Process: &s.Ref.External, TurnEvidence: &evidence, State: executionapi.LifecycleStateFacts{SessionID: evidence.SessionID, SessionGeneration: s.Session.Generation, TurnID: evidence.TurnID, TurnCompleted: true}}, nil, nil
+	} else if !os.IsNotExist(err) {
+		return executionapi.LifecycleReceipt{}, nil, err
+	}
 	receipt := executionapi.LifecycleReceipt{Disposition: executionapi.OperationConfirmed, Process: &s.Ref.External, State: executionapi.LifecycleStateFacts{SessionID: s.Session.SessionID, SessionGeneration: s.Session.Generation, TurnID: s.Session.CurrentTurnID, TurnCompleted: s.Session.CurrentTurnID != "" && s.Session.CurrentTurnID == s.Session.LastStoppedTurnID}}
 	if receipt.State.TurnCompleted {
 		return receipt, nil, nil
@@ -162,7 +200,7 @@ type neutralObserver struct {
 	handle neutralHandle
 }
 
-func newNeutralObserver(identity executionapi.ProcessIdentity, session, turn string) *neutralObserver {
+func newNeutralObserver(identity executionapi.ProcessIdentity, session, turn string, completed ...func() error) *neutralObserver {
 	o := &neutralObserver{events: make(chan executionapi.LifecycleEvent, 2), done: make(chan error, 1), stop: make(chan struct{}), handle: neutralHandle{identity}}
 	go func() {
 		defer close(o.events)
@@ -182,6 +220,10 @@ func newNeutralObserver(identity executionapi.ProcessIdentity, session, turn str
 			case <-o.stop:
 				return
 			}
+		}
+		if len(completed) > 0 {
+			o.done <- completed[0]()
+			return
 		}
 		o.done <- nil
 	}()

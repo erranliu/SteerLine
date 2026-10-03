@@ -1076,5 +1076,40 @@
     "new": "internal/steerlineapp/project_gates_cd67_test.go",
     "owner": "steerlineapp",
     "change": "Actual current-format app LoadConfig accepts the valid isolated baseline and rejects each old workflow_definition/project_steps/workspace_dirty_ignore field; no copied core loader."
+  },
+  {
+    "old": "internal/steerline/worker_service_test.go",
+    "test": "TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace",
+    "new": "internal/steerline/worker_service_test.go",
+    "owner": "steerline",
+    "change": "center single-step neutral lifecycle; exact received text and serialized input, persisted original completion identity, partial HEAD, same session and unknown input remain asserted"
+  },
+  {
+    "old": "internal/steerline/worker_service_test.go",
+    "test": "TestServiceRecoveryGateRequiresTransactionalOwner",
+    "new": "internal/steerline/worker_service_test.go",
+    "owner": "steerline",
+    "change": "unchanged center ownership/recovery gate assertions"
+  },
+  {
+    "old": "internal/steerline/worker_service_test.go",
+    "test": "TestRestartDoesNotSendPreviouslyAcceptedFeedback",
+    "new": "internal/steerline/worker_service_test.go",
+    "owner": "steerline",
+    "change": "unchanged center prior-service answer and PR-phase assertions"
+  },
+  {
+    "old": "internal/steerline/publication_policy_test.go",
+    "test": "TestPublicationPolicyFrozenConfigurationAndCredentials",
+    "new": "internal/steerline/publication_policy_test.go",
+    "owner": "steerline",
+    "change": "center workerProcessEnvironment and neutral fixed profile verification; original credential/reference/version rejection preserved"
+  },
+  {
+    "old": "internal/steerline/publication_policy_test.go",
+    "test": "TestPublicationOriginalProviderAfterRestartAndRemoteDrift",
+    "new": "internal/steerline/publication_policy_test.go",
+    "owner": "steerline",
+    "change": "original fixed provider/query/close after restart and remote drift preserved"
   }
 ]
