@@ -495,48 +495,6 @@ func TestRefreshTicksDoNotStackSlowProjectReads(t *testing.T) {
 	}
 }
 
-func TestProjectSnapshotReuseRequiresSameLiveIdentityAndDatabaseVersion(t *testing.T) {
-	now := time.Now()
-	ref := testProject("alpha")
-	process := &executionapi.ProcessIdentity{PID: 42}
-	runtime := &steerline.Runtime{Repository: steerline.Repository{Identity: ref.Identity}, Service: steerline.ServiceState{ProcessIdentity: process}, HeartbeatAt: now}
-	previous := ProjectSnapshot{
-		SelectedTaskID: "14", FullReadAt: now,
-		Connection:  steerline.ServiceConnection{State: steerline.ConnectionConnected, Snapshot: steerline.ObservationSnapshot{Runtime: runtime}},
-		Observation: steerline.ObservationSnapshot{Runtime: runtime, FreshnessLimit: 15 * time.Second},
-		NativeTasks: &steerline.NativeTaskPage{ProjectID: ref.Identity, DatabaseID: "database", DatabaseRevision: 7},
-		Tasks:       &steerline.TaskSnapshot{}, Domain: &steerline.DomainSnapshot{},
-	}
-	probe := func(*executionapi.ProcessIdentity) steerline.ProcessProbe {
-		return steerline.ProcessProbe{State: steerline.ProcessMatches}
-	}
-	version := func(context.Context, string) (string, uint64, error) { return "database", 7, nil }
-	if !reusableProjectSnapshot(context.Background(), ref, "14", previous, probe, version) {
-		t.Fatal("unchanged verified project was fully reloaded")
-	}
-	for _, changed := range []struct {
-		name     string
-		selected string
-		snapshot ProjectSnapshot
-		probe    func(*executionapi.ProcessIdentity) steerline.ProcessProbe
-		version  func(context.Context, string) (string, uint64, error)
-	}{
-		{name: "selection changed", selected: "15", snapshot: previous, probe: probe, version: version},
-		{name: "database revision changed", selected: "14", snapshot: previous, probe: probe, version: func(context.Context, string) (string, uint64, error) { return "database", 8, nil }},
-		{name: "process exited", selected: "14", snapshot: previous, probe: func(*executionapi.ProcessIdentity) steerline.ProcessProbe {
-			return steerline.ProcessProbe{State: steerline.ProcessAbsent}
-		}, version: version},
-		{name: "database probe failed", selected: "14", snapshot: previous, probe: probe, version: func(context.Context, string) (string, uint64, error) { return "", 0, errors.New("unavailable") }},
-		{name: "full check expired", selected: "14", snapshot: func() ProjectSnapshot { old := previous; old.FullReadAt = now.Add(-6 * time.Second); return old }(), probe: probe, version: version},
-	} {
-		t.Run(changed.name, func(t *testing.T) {
-			if reusableProjectSnapshot(context.Background(), ref, changed.selected, changed.snapshot, changed.probe, changed.version) {
-				t.Fatal("stale or mismatched project snapshot was reused")
-			}
-		})
-	}
-}
-
 func TestFailedRefreshKeepsLastGoodReadOnlyDataAndCurrentError(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("alpha")
@@ -1285,22 +1243,6 @@ func TestNativeTaskViewKeepsOffPageSelectionAndEscapesText(t *testing.T) {
 	}
 	if querySource.selected != "501" {
 		t.Fatalf("native run detail query used task %q", querySource.selected)
-	}
-}
-
-func TestNativeCandidateSnapshotKeepsDispatchOrderBeyondDetailPage(t *testing.T) {
-	now := time.Now().UTC()
-	ref := testProject("native")
-	ref.Config.TaskAuthority = "native"
-	ref.Config.ExecutableTypes = []string{"task"}
-	connection := readySnapshot(ref, now).Connection
-	ready := steerline.NativeReadyTaskSnapshot{SampledAt: now}
-	for i := 501; i >= 1; i-- {
-		ready.Tasks = append(ready.Tasks, steerline.TaskRecord{TaskID: fmt.Sprint(i), Title: "ready", Type: "task", Status: "open"})
-	}
-	snapshot := nativeCandidateSnapshot(ref, connection, ready)
-	if len(snapshot.Tasks) != 501 || snapshot.Tasks[0].TaskID != "501" || snapshot.Tasks[500].TaskID != "1" {
-		t.Fatalf("ready candidates were truncated or reordered by task ID: %d", len(snapshot.Tasks))
 	}
 }
 

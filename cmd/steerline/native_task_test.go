@@ -13,9 +13,12 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
@@ -62,7 +65,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	}
 	commit := strings.TrimSpace(string(head))
 	configPath := filepath.Join(t.TempDir(), "native.json")
-	configJSON, _ := json.Marshal(map[string]any{"repository": repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion, "executable_types": []string{"task"}, "execution_policy": executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}, "publication_policy": executionapi.PublicationPolicy{Publisher: executionapi.PublisherHostService}, "pr": map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "org/repo", "query": map[string]any{"executable": "gh"}}})
+	configJSON, _ := json.Marshal(map[string]any{"claimant": "cli-fixture", "repository": repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion, "executable_types": []string{"task"}, "execution_policy": executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}, "publication_policy": executionapi.PublicationPolicy{Publisher: executionapi.PublisherHostService}, "pr": map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "org/repo", "query": map[string]any{"executable": "gh"}}})
 	if err = os.WriteFile(configPath, configJSON, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -172,6 +175,125 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	if _, callErr = captureTaskCLI(t, []string{"export", "-config", configPath, "-format", "json", "-output", filepath.Join(c.RunDir, "steerline.db-wal"), "-overwrite"}); callErr == nil || !strings.Contains(callErr.Error(), "cannot replace native task state") {
 		t.Fatalf("export targeted a SQLite state file: %v", callErr)
 	}
+	t.Run("CM71 control keeps original request and client close preserves service", func(t *testing.T) {
+		// Construct the real service identity/checkpoint without dispatching a
+		// worker. CLI publication and receipt queries use production file I/O.
+		service, err := steerlineapp.NewService(c)
+		if err != nil {
+			t.Fatal(err)
+		}
+		state := service.State
+		state.Service.Mode, state.Service.Ready = "scheduler", true
+		at := time.Now().UTC()
+		checkpoint := contracts.ServiceCheckpoint{SchemaVersion: state.SchemaVersion, Revision: state.Revision, UpdatedAt: at, HeartbeatAt: at, Service: state.Service, Repository: state.Repository}
+		if err = service.Close(); err != nil {
+			t.Fatal(err)
+		}
+		writer, err := steerline.OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, err = writer.SaveCheckpoint(context.Background(), checkpoint)
+		if closeErr := writer.Close(); err == nil {
+			err = closeErr
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		capture := func(args []string) ([]byte, error) {
+			oldArgs := os.Args
+			os.Args = append([]string{"steerline"}, args...)
+			defer func() { os.Args = oldArgs }()
+			oldOut := os.Stdout
+			read, write, err := os.Pipe()
+			if err != nil {
+				t.Fatal(err)
+			}
+			os.Stdout = write
+			err = run()
+			_ = write.Close()
+			os.Stdout = oldOut
+			output, readErr := io.ReadAll(read)
+			_ = read.Close()
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			return output, err
+		}
+		output, err := capture([]string{"control", "-config", configPath, "-action", "set_dispatch_mode", "-mode", "manual", "-by", "operator"})
+		if err != nil {
+			t.Fatalf("real CLI control: %s / %v", output, err)
+		}
+		fields := strings.Fields(string(output))
+		if len(fields) != 2 || fields[0] != "request_id" {
+			t.Fatalf("request output changed: %s", output)
+		}
+		id := fields[1]
+		client, err := steerlineapp.OpenClient(context.Background(), configPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req, err := client.Request(context.Background(), id)
+		if err != nil || req.InstanceID != state.Service.InstanceID || req.RepositoryIdentity != c.Identity() || req.ExpectedControlRevision != state.Control.Revision {
+			t.Fatalf("fixed request target: %+v / %v", req, err)
+		}
+		input := api.ControlInput{Action: api.SetDispatchMode, Payload: api.ControlPayload{Mode: "manual"}, RequestID: id, RequestedBy: "operator", InstanceID: req.InstanceID, ExpectedRevision: &req.ExpectedControlRevision}
+		if _, err = client.SubmitControl(context.Background(), input); err != nil {
+			t.Fatalf("immutable request replay: %v", err)
+		}
+		input.Payload.Mode = "auto"
+		if _, err = client.SubmitControl(context.Background(), input); err == nil {
+			t.Fatal("same ID different content accepted")
+		}
+		raw, err := os.ReadFile(filepath.Join(c.RunDir, "control", "requests", id, "request.json"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		digest := sha256.Sum256(raw)
+		receipt := api.ControlReceipt{Version: 1, RequestID: id, RequestDigest: hex.EncodeToString(digest[:]), InstanceID: req.InstanceID, Action: req.Action, Status: "indeterminate", Code: "outcome_unknown"}
+		receiptBody, _ := json.Marshal(receipt)
+		receiptDir := filepath.Join(c.RunDir, "control", "receipts")
+		if err = os.MkdirAll(receiptDir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(filepath.Join(receiptDir, id+".json"), receiptBody, 0600); err != nil {
+			t.Fatal(err)
+		}
+		output, err = capture([]string{"control", "-config", configPath, "-request-id", id})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var queried api.ControlReceipt
+		if err = json.Unmarshal(output, &queried); err != nil || queried.RequestID != id || queried.Status != "indeterminate" {
+			t.Fatalf("unknown CLI receipt became success or changed ID: %s / %v", output, err)
+		}
+		if err = client.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if connection := steerline.ConnectService(context.Background(), c); connection.State != steerline.ConnectionConnected {
+			t.Fatalf("client close changed service identity/lifetime: %+v", connection)
+		}
+		unchanged, err := os.ReadFile(filepath.Join(c.RunDir, "control", "requests", id, "request.json"))
+		if err != nil || !bytes.Equal(raw, unchanged) {
+			t.Fatal("replay/close replaced original request")
+		}
+		// Even a self-consistent receipt copied into this project's directory
+		// must not become a current-project result when its request is foreign.
+		req.RepositoryIdentity = "foreign-project"
+		foreign, _ := json.Marshal(req)
+		foreignDigest := sha256.Sum256(foreign)
+		receipt.RequestDigest = hex.EncodeToString(foreignDigest[:])
+		receiptBody, _ = json.Marshal(receipt)
+		if err = os.WriteFile(filepath.Join(c.RunDir, "control", "requests", id, "request.json"), foreign, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(filepath.Join(receiptDir, id+".json"), receiptBody, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = capture([]string{"control", "-config", configPath, "-request-id", id}); err == nil || !strings.Contains(err.Error(), "project identity") {
+			t.Fatalf("foreign receipt was shown under current project: %v", err)
+		}
+	})
 }
 
 func captureTaskCLI(t *testing.T, args []string) ([]byte, error) {

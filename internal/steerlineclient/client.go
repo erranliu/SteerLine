@@ -1,0 +1,526 @@
+// Package steerlineclient owns the single product adapter. Concrete resource
+// construction is injected by the application; it never imports SQL or app wiring.
+package steerlineclient
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"time"
+
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/query"
+	"github.com/erranliu/SteerLine/internal/steerline/task"
+	"github.com/erranliu/SteerLine/internal/steerline/taskview"
+)
+
+var _ api.Client = (*Client)(nil)
+
+type Client struct {
+	mu        sync.RWMutex
+	resources api.Resources
+	closed    bool
+	closeErr  error
+}
+
+func Open(ctx context.Context, ref api.ProjectRef, factory api.Factory) (*Client, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	if factory == nil {
+		return nil, &api.Error{Kind: api.Unavailable, Cause: errors.New("product client resource factory is required")}
+	}
+	r, err := factory(ctx, ref)
+	if err != nil {
+		return nil, classify(err)
+	}
+	if r.Project.Identity == "" || r.Project.ConfigPath == "" || r.Project.RunDir == "" ||
+		(ref.Identity != "" && ref.Identity != r.Project.Identity) || (ref.RunDir != "" && ref.RunDir != r.Project.RunDir) ||
+		(ref.ConfigPath != "" && ref.ConfigPath != r.Project.ConfigPath) {
+		if r.Close != nil {
+			_ = r.Close()
+		}
+		return nil, &api.Error{Kind: api.IdentityConflict, Cause: errors.New("product client project identity or configuration does not match")}
+	}
+	r.ExecutableTypes = append([]string(nil), r.ExecutableTypes...)
+	return &Client{resources: r}, nil
+}
+func (c *Client) Project() api.ProjectRef { return c.resources.Project }
+func (c *Client) Close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if !c.closed {
+		c.closed = true
+		if c.resources.Close != nil {
+			c.closeErr = c.resources.Close()
+		}
+	}
+	return c.closeErr
+}
+func (c *Client) begin(ctx context.Context) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	c.mu.RLock()
+	if c.closed {
+		c.mu.RUnlock()
+		return &api.Error{Kind: api.Closed, Cause: errors.New("product client is closed")}
+	}
+	return nil
+}
+func classify(err error) error {
+	if err == nil {
+		return nil
+	}
+	var existing *api.Error
+	if errors.As(err, &existing) {
+		return err
+	}
+	kind := api.ReadFailed
+	var te *task.Error
+	switch {
+	case errors.Is(err, api.ErrRecordNotFound):
+		kind = api.UnknownRecord
+	case os.IsNotExist(err):
+		kind = api.MissingDatabase
+	case errors.As(err, &te) && te.Code == "task_not_found":
+		kind = api.UnknownRecord
+	case errors.As(err, &te) && te.Code == "authority_mismatch":
+		kind = api.IdentityConflict
+	case strings.Contains(err.Error(), "schema") || strings.Contains(err.Error(), "unsupported") || strings.Contains(err.Error(), "older configurations"):
+		kind = api.IncompatibleFormat
+	case strings.Contains(err.Error(), "identity") || strings.Contains(err.Error(), "does not match"):
+		kind = api.IdentityConflict
+	}
+	return &api.Error{Kind: kind, Cause: err}
+}
+
+func read[T any](ctx context.Context, c *Client, fn func(api.Reader) (T, error)) (result T, err error) {
+	if err = c.begin(ctx); err != nil {
+		return result, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.OpenReader == nil {
+		return result, errors.New("product reader is unavailable")
+	}
+	r, err := c.resources.OpenReader(ctx)
+	if err != nil {
+		return result, classify(err)
+	}
+	defer func() { err = classify(errors.Join(err, r.Close())) }()
+	return fn(r)
+}
+func command[T any](ctx context.Context, c *Client, mutation bool, fn func(api.TaskCommands) (T, error)) (result T, err error) {
+	if err = c.begin(ctx); err != nil {
+		return result, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.OpenCommands == nil {
+		return result, errors.New("product commands are unavailable")
+	}
+	r, err := c.resources.OpenCommands(ctx, mutation)
+	if err != nil {
+		return result, classify(err)
+	}
+	defer func() { err = errors.Join(err, r.Close()) }()
+	return fn(r)
+}
+func (c *Client) ShowTask(ctx context.Context, id string) (contracts.NativeTaskPage, error) {
+	return read(ctx, c, func(r api.Reader) (contracts.NativeTaskPage, error) { return r.ShowNativeTask(ctx, id) })
+}
+func (c *Client) ListTasks(ctx context.Context, cursor string, limit int) (contracts.NativeTaskPage, error) {
+	return read(ctx, c, func(r api.Reader) (contracts.NativeTaskPage, error) { return r.ListNativeTasks(ctx, cursor, limit) })
+}
+func (c *Client) TaskGraph(ctx context.Context, cursor string, limit int) (taskview.Page, error) {
+	return read(ctx, c, func(r api.Reader) (taskview.Page, error) { return r.TaskGraph(ctx, cursor, limit) })
+}
+func (c *Client) QueryTaskGraph(ctx context.Context, filter taskview.Filter) (taskview.Page, error) {
+	if filter.ProjectID != "" && filter.ProjectID != c.Project().Identity {
+		return taskview.Page{}, &api.Error{Kind: api.IdentityConflict, Cause: errors.New("task graph belongs to another project")}
+	}
+	filter.ProjectID = c.Project().Identity
+	return read(ctx, c, func(r api.Reader) (taskview.Page, error) { return r.QueryTaskGraph(ctx, filter) })
+}
+func (c *Client) ValidateTaskBatch(ctx context.Context, payload []byte) (task.TaskBatchValidation, error) {
+	return command(ctx, c, false, func(r api.TaskCommands) (task.TaskBatchValidation, error) { return r.Validate(ctx, payload) })
+}
+func (c *Client) CreateTaskBatch(ctx context.Context, in api.CreateInput) (task.TaskBatchReceipt, error) {
+	return command(ctx, c, true, func(r api.TaskCommands) (task.TaskBatchReceipt, error) { return r.Create(ctx, in) })
+}
+func (c *Client) DiscardTask(ctx context.Context, in api.DiscardInput) (task.TaskDiscardReceipt, error) {
+	return command(ctx, c, true, func(r api.TaskCommands) (task.TaskDiscardReceipt, error) { return r.Discard(ctx, in) })
+}
+func (c *Client) AddPredecessors(ctx context.Context, in task.TaskPredecessorAddInput) (task.TaskPredecessorAddReceipt, error) {
+	return command(ctx, c, true, func(r api.TaskCommands) (task.TaskPredecessorAddReceipt, error) { return r.AddPredecessors(ctx, in) })
+}
+func (c *Client) Conversation(ctx context.Context, filter contracts.ConversationFilter, cursor string) (contracts.ConversationPage, error) {
+	return read(ctx, c, func(r api.Reader) (contracts.ConversationPage, error) {
+		return r.ReadConversation(ctx, filter, cursor, query.MaxEventPageSize)
+	})
+}
+func (c *Client) Body(ctx context.Context, body contracts.ConversationBodyRef, offset int64, limit int) (contracts.ConversationBodyPage, error) {
+	return read(ctx, c, func(r api.Reader) (contracts.ConversationBodyPage, error) {
+		return r.ReadMessageBody(ctx, body, offset, limit)
+	})
+}
+func (c *Client) Raw(ctx context.Context, raw contracts.ConversationRawRef, offset int64, limit int) (contracts.ConversationRawPage, error) {
+	return read(ctx, c, func(r api.Reader) (contracts.ConversationRawPage, error) { return r.ReadRaw(ctx, raw, offset, limit) })
+}
+func (c *Client) Capabilities(ctx context.Context, f api.CapabilityFilter) ([]contracts.ConversationCapabilityReport, error) {
+	return read(ctx, c, func(r api.Reader) ([]contracts.ConversationCapabilityReport, error) {
+		reports, err := r.ReadCapabilities(ctx, f.Backend, f.Protocol, f.TargetID, 100)
+		if err != nil {
+			return nil, err
+		}
+		filtered := make([]contracts.ConversationCapabilityReport, 0, len(reports))
+		for _, v := range reports {
+			if f.ExecutionID != "" && v.ExecutionID != f.ExecutionID || f.AttemptID != "" && v.AttemptID != f.AttemptID || f.Source != "" && v.Source != f.Source || f.SourceIdentity != "" && v.SourceIdentity != f.SourceIdentity {
+				continue
+			}
+			filtered = append(filtered, v)
+		}
+		return filtered, nil
+	})
+}
+func (c *Client) Command(ctx context.Context, id string) (contracts.CommandRecord, error) {
+	return read(ctx, c, func(r api.Reader) (contracts.CommandRecord, error) { return r.Command(ctx, id) })
+}
+func (c *Client) WaitCommand(ctx context.Context, id string, timeout time.Duration) (contracts.CommandRecord, error) {
+	waitCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+	t := time.NewTicker(150 * time.Millisecond)
+	defer t.Stop()
+	for {
+		if waitCtx.Err() != nil {
+			return contracts.CommandRecord{}, fmt.Errorf("command %s remains unconfirmed; query this same command ID later", id)
+		}
+		r, err := c.Command(waitCtx, id)
+		if err == nil && (r.Status == "accepted" || r.Status == "rejected" || r.Status == "failed" || r.Status == "indeterminate") {
+			return r, nil
+		}
+		if waitCtx.Err() != nil {
+			continue
+		}
+		if err != nil && !errors.Is(err, api.ErrRecordNotFound) && !os.IsNotExist(err) {
+			return contracts.CommandRecord{}, err
+		}
+		select {
+		case <-waitCtx.Done():
+		case <-t.C:
+		}
+	}
+}
+func NewRequestID() string {
+	var b [16]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(b[:])
+}
+func (c *Client) SubmitControl(ctx context.Context, in api.ControlInput) (api.ControlRequest, error) {
+	if err := c.begin(ctx); err != nil {
+		return api.ControlRequest{}, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.Control == nil {
+		return api.ControlRequest{}, errors.New("control is unavailable")
+	}
+	if in.RequestID == "" {
+		return api.ControlRequest{}, errors.New("control requires a stable request ID before submission")
+	}
+	if in.RequestedBy == "" {
+		in.RequestedBy = c.resources.DefaultRequestedBy
+	}
+	old, err := c.resources.Control.Request(ctx, in.RequestID)
+	if err == nil {
+		var payload api.ControlPayload
+		if old == nil || old.RepositoryIdentity != c.Project().Identity || old.Action != string(in.Action) || contracts.DecodeJSON(old.Payload, &payload) != nil && len(old.Payload) != 0 || payload != in.Payload || old.RequestedBy != in.RequestedBy || in.InstanceID != "" && old.InstanceID != in.InstanceID || in.ExpectedRevision != nil && old.ExpectedControlRevision != *in.ExpectedRevision {
+			return api.ControlRequest{}, errors.New("request ID conflict: immutable request has different content or identity")
+		}
+		return *old, nil
+	}
+	if !os.IsNotExist(err) {
+		return api.ControlRequest{}, err
+	}
+	return c.resources.Control.Submit(ctx, in)
+}
+func (c *Client) Receipt(ctx context.Context, id string) (*api.ControlReceipt, error) {
+	if err := c.begin(ctx); err != nil {
+		return nil, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.Control == nil {
+		return nil, errors.New("control is unavailable")
+	}
+	return c.resources.Control.Receipt(ctx, id)
+}
+func (c *Client) Request(ctx context.Context, id string) (*api.ControlRequest, error) {
+	if err := c.begin(ctx); err != nil {
+		return nil, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.Control == nil {
+		return nil, errors.New("control is unavailable")
+	}
+	return c.resources.Control.Request(ctx, id)
+}
+func (c *Client) WaitControl(ctx context.Context, id string, poll time.Duration) (*api.ControlReceipt, error) {
+	if err := c.begin(ctx); err != nil {
+		return nil, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.Control == nil {
+		return nil, errors.New("control is unavailable")
+	}
+	if poll <= 0 {
+		poll = 100 * time.Millisecond
+	}
+	ticker := time.NewTicker(poll)
+	defer ticker.Stop()
+	for {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		receipt, err := c.resources.Control.Receipt(ctx, id)
+		if err == nil && receipt.Status != "applying" {
+			return receipt, nil
+		}
+		if err != nil && !os.IsNotExist(err) {
+			return nil, err
+		}
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-ticker.C:
+		}
+	}
+}
+func (c *Client) StopService(ctx context.Context, by string, timeout time.Duration) (api.ServiceStopResult, error) {
+	if err := c.begin(ctx); err != nil {
+		return api.ServiceStopResult{}, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.Control == nil {
+		return api.ServiceStopResult{}, errors.New("control is unavailable")
+	}
+	return c.resources.Control.Stop(ctx, by, timeout)
+}
+func (c *Client) DecisionEligibility(ctx context.Context, run *contracts.Run) error {
+	if err := c.begin(ctx); err != nil {
+		return err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.Decision == nil {
+		return errors.New("decision commands are unavailable")
+	}
+	return c.resources.Decision.Eligibility(ctx, run)
+}
+func (c *Client) SubmitDecision(ctx context.Context, in api.DecisionInput) (contracts.CommandRecord, bool, error) {
+	if err := c.begin(ctx); err != nil {
+		return contracts.CommandRecord{}, false, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.Decision == nil {
+		return contracts.CommandRecord{}, false, errors.New("decision commands are unavailable")
+	}
+	if in.CommandID == "" {
+		return contracts.CommandRecord{}, false, errors.New("decision requires a stable command ID before submission")
+	}
+	if in.RequestedBy == "" {
+		in.RequestedBy = c.resources.DefaultRequestedBy
+	}
+	return c.resources.Decision.Submit(ctx, in)
+}
+func (c *Client) Answer(ctx context.Context, in api.AnswerInput) (contracts.CommandRecord, bool, error) {
+	if err := c.begin(ctx); err != nil {
+		return contracts.CommandRecord{}, false, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.Decision == nil {
+		return contracts.CommandRecord{}, false, errors.New("decision commands are unavailable")
+	}
+	if in.CommandID == "" {
+		return contracts.CommandRecord{}, false, errors.New("answer requires a stable command ID before submission")
+	}
+	if in.RequestedBy == "" {
+		in.RequestedBy = c.resources.DefaultRequestedBy
+	}
+	return c.resources.Decision.Answer(ctx, in)
+}
+func (c *Client) TaskSnapshot(ctx context.Context) (*contracts.TaskSnapshot, error) {
+	if err := c.begin(ctx); err != nil {
+		return nil, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.TaskSnapshot == nil {
+		return nil, errors.New("task snapshot is unavailable")
+	}
+	return c.resources.TaskSnapshot(ctx)
+}
+func (c *Client) StartTaskPayload(ctx context.Context, taskID, profileID string) (api.ControlPayload, error) {
+	if err := c.begin(ctx); err != nil {
+		return api.ControlPayload{}, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.ResolveStartTask == nil {
+		return api.ControlPayload{}, errors.New("execution profile resolver is unavailable")
+	}
+	return c.resources.ResolveStartTask(ctx, taskID, profileID)
+}
+
+func (c *Client) ReadProject(ctx context.Context, selected string, previous api.ProjectSnapshot) api.ProjectSnapshot {
+	result := api.ProjectSnapshot{SelectedTaskID: selected, CandidateFreshnessLimit: c.resources.CandidateFreshnessLimit}
+	if err := c.begin(ctx); err != nil {
+		result.TaskError = err.Error()
+		result.DomainError = err.Error()
+		return result
+	}
+	defer c.mu.RUnlock()
+	r := c.resources
+	if r.OpenReader == nil || r.Connect == nil || r.Observe == nil {
+		result.TaskError = "project reader is unavailable"
+		result.DomainError = result.TaskError
+		return result
+	}
+	reader, err := r.OpenReader(ctx)
+	if err != nil {
+		result.Connection = r.Connect(ctx, nil)
+		result.Observation = result.Connection.Snapshot
+		result.TaskError = classify(err).Error()
+		result.NativeTaskError = result.TaskError
+		result.DomainError = result.TaskError
+		return result
+	}
+	if r.ProbeProcess != nil && ReusableProjectSnapshot(ctx, r.Project, selected, previous, r.ProbeProcess, func(ctx context.Context, _ string) (string, uint64, error) { return reader.DatabaseVersion(ctx) }) &&
+		r.Connect(ctx, &previous.Observation).State == api.ConnectionConnected {
+		if err := reader.Close(); err == nil {
+			return previous
+		} else {
+			result.TaskError = err.Error()
+			result.DomainError = err.Error()
+			return result
+		}
+	}
+	view, err := reader.ReadProjectView(ctx, selected, 500)
+	err = errors.Join(err, reader.Close())
+	if err != nil {
+		result.Connection = r.Connect(ctx, nil)
+		result.Observation = result.Connection.Snapshot
+		result.TaskError = err.Error()
+		result.NativeTaskError = result.TaskError
+		result.DomainError = result.TaskError
+		return result
+	}
+	result.Observation = r.Observe(view.Runtime, view.RuntimeError, view.SampledAt)
+	result.Connection = r.Connect(ctx, &result.Observation)
+	result.Observation = result.Connection.Snapshot
+	result.NativeTasks, result.SelectedNative, result.Domain = view.Tasks, view.SelectedTask, view.Domain
+	if view.TaskError != nil {
+		result.TaskError = view.TaskError.Error()
+		if view.Tasks == nil {
+			result.NativeTaskError = result.TaskError
+		}
+	}
+	if view.Ready != nil {
+		result.Tasks = NativeCandidates(r.Project.Identity, r.ExecutableTypes, result.Connection, *view.Ready)
+	}
+	if view.SelectedTaskError != nil {
+		result.NativeTaskError = view.SelectedTaskError.Error()
+	}
+	if view.DomainError != nil {
+		result.DomainError = view.DomainError.Error()
+	}
+	if result.TaskError == "" && result.NativeTaskError == "" && result.DomainError == "" {
+		result.FullReadAt = view.SampledAt
+	}
+	return result
+}
+func NativeCandidates(identity string, types []string, connection api.ServiceConnection, page contracts.NativeReadyTaskSnapshot) *contracts.TaskSnapshot {
+	at := page.SampledAt
+	s := &contracts.TaskSnapshot{Version: 1, RepositoryIdentity: identity, QueriedAt: at, LastSuccessAt: &at, Tasks: []contracts.TaskCandidate{}}
+	if connection.State == api.ConnectionConnected && connection.CanControl && connection.Snapshot.Runtime != nil {
+		s.InstanceID = connection.Snapshot.Runtime.Service.InstanceID
+	}
+	for _, t := range page.Tasks {
+		allowed := false
+		for _, kind := range types {
+			if kind == t.Type {
+				allowed = true
+				break
+			}
+		}
+		if t.Status == "open" && allowed {
+			s.Tasks = append(s.Tasks, contracts.TaskCandidate{TaskID: t.TaskID, Title: t.Title, Type: t.Type})
+		}
+	}
+	return s
+}
+func ReusableProjectSnapshot(ctx context.Context, ref api.ProjectRef, selected string, previous api.ProjectSnapshot, probe func(*execution.ProcessIdentity) api.ProcessProbe, version func(context.Context, string) (string, uint64, error)) bool {
+	age := time.Since(previous.FullReadAt)
+	if previous.FullReadAt.IsZero() || age < 0 || age >= 5*time.Second || previous.SelectedTaskID != selected || previous.Connection.State != api.ConnectionConnected || previous.NativeTasks == nil || previous.Tasks == nil || previous.Domain == nil || previous.Observation.Runtime == nil || previous.TaskError != "" || previous.NativeTaskError != "" || previous.DomainError != "" {
+		return false
+	}
+	if previous.NativeTasks.ProjectID != ref.Identity || previous.NativeTasks.DatabaseID == "" || previous.NativeTasks.DatabaseRevision == 0 {
+		return false
+	}
+	rt := previous.Connection.Snapshot.Runtime
+	if rt == nil || rt.Repository.Identity != ref.Identity || rt.Service.ProcessIdentity == nil || probe(rt.Service.ProcessIdentity).State != api.ProcessMatches {
+		return false
+	}
+	if previous.Observation.FreshnessLimit > 0 && time.Since(previous.Observation.Runtime.HeartbeatAt) >= previous.Observation.FreshnessLimit {
+		return false
+	}
+	id, rev, err := version(ctx, filepath.Join(ref.RunDir, "steerline.db"))
+	return err == nil && id == previous.NativeTasks.DatabaseID && rev == previous.NativeTasks.DatabaseRevision
+}
+func (c *Client) Activity(ctx context.Context, runID, executionID, attemptID, currentPath string, cursor api.JournalCursor) (api.LogBatch, error) {
+	if strings.TrimSpace(runID) == "" || strings.TrimSpace(executionID) == "" || strings.TrimSpace(attemptID) == "" {
+		return api.LogBatch{}, errors.New("activity query identity is missing")
+	}
+	domain, err := read(ctx, c, func(r api.Reader) (contracts.DomainSnapshot, error) { return r.Domain(ctx) })
+	if err != nil {
+		return api.LogBatch{}, err
+	}
+	matched := false
+	for _, e := range domain.Executions {
+		if e.ExecutionID == executionID && e.WorkflowRunID == runID {
+			matched = true
+			break
+		}
+	}
+	if !matched {
+		return api.LogBatch{}, errors.New("activity execution does not belong to the requested run")
+	}
+	path := ""
+	for _, a := range domain.Attempts {
+		if a.ExecutionID == executionID && a.AttemptID == attemptID {
+			path = a.EventPath
+			break
+		}
+	}
+	if path == "" {
+		return api.LogBatch{}, fmt.Errorf("attempt %s has no queryable activity record", attemptID)
+	}
+	if !filepath.IsAbs(path) {
+		path = filepath.Join(c.Project().RunDir, path)
+	}
+	if currentPath != "" && filepath.Clean(currentPath) != filepath.Clean(path) {
+		return api.LogBatch{}, errors.New("activity path does not match the fixed attempt")
+	}
+	if err := c.begin(ctx); err != nil {
+		return api.LogBatch{}, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.ReadLog == nil {
+		return api.LogBatch{}, errors.New("activity reader is unavailable")
+	}
+	return c.resources.ReadLog(path, cursor)
+}

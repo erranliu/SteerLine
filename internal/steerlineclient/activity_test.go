@@ -1,4 +1,4 @@
-package console
+package steerlineclient
 
 import (
 	"encoding/json"
@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 )
 
 func TestConsoleSourceFallbackNormalizerAndLateActivitySwitch(t *testing.T) {
@@ -16,7 +18,7 @@ func TestConsoleSourceFallbackNormalizerAndLateActivitySwitch(t *testing.T) {
 	if err := os.WriteFile(logPath, []byte(`{"type":"session","version":1,"session_id":"p"}`+"\n"+`not-json`+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	source := newFileSource(steerline.Config{}, (consoleFixtureSource{}).NormalizerSelector)
+	source := NewLogReader(testNormalizer)
 	fallback, err := source.ReadLog(logPath, steerline.JournalCursor{})
 	if err != nil {
 		t.Fatal(err)
@@ -51,7 +53,7 @@ func TestConsoleSourceDiagnosesBadActivityAndKeepsFollowingValidLine(t *testing.
 	if err := os.WriteFile(activityPath, []byte("{bad json}\nnull\n"+`{"v":1,"seq":1,"kind":"claim"}`+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	batch, err := newFileSource(steerline.Config{}, (consoleFixtureSource{}).NormalizerSelector).ReadLog(logPath, steerline.JournalCursor{})
+	batch, err := NewLogReader(testNormalizer).ReadLog(logPath, steerline.JournalCursor{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +68,7 @@ func TestConsoleSourceInvalidSequenceCannotEraseValidEvents(t *testing.T) {
 	if err := os.WriteFile(steerline.ActivityPath(logPath), []byte(body), 0600); err != nil {
 		t.Fatal(err)
 	}
-	batch, err := newFileSource(steerline.Config{}, (consoleFixtureSource{}).NormalizerSelector).ReadLog(logPath, steerline.JournalCursor{})
+	batch, err := NewLogReader(testNormalizer).ReadLog(logPath, steerline.JournalCursor{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +79,7 @@ func TestConsoleSourceInvalidSequenceCannotEraseValidEvents(t *testing.T) {
 
 func TestConsoleSourceFreshReplayResetsNormalizer(t *testing.T) {
 	logPath := filepath.Join(t.TempDir(), "events.jsonl")
-	source := newFileSource(steerline.Config{}, (consoleFixtureSource{}).NormalizerSelector)
+	source := NewLogReader(testNormalizer)
 	if err := os.WriteFile(logPath, []byte("{\"type\":\"thread.started\",\"thread_id\":\"old\"}\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -95,4 +97,8 @@ func TestConsoleSourceFreshReplayResetsNormalizer(t *testing.T) {
 	if len(batch.Activity) != 1 || batch.Activity[0].Source != "pi" || batch.Activity[0].Kind != "session" {
 		t.Fatalf("fresh replay reused another reader's normalizer: %+v", batch.Activity)
 	}
+}
+
+func testNormalizer(first []byte) api.LogNormalizer {
+	return steerline.DetectNormalizer(first, steerline.NewPiNormalizer(), codexworker.NewNormalizer())
 }

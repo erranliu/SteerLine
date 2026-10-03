@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -17,6 +16,11 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/steerline/task"
+	"github.com/erranliu/SteerLine/internal/steerline/taskview"
+	"github.com/erranliu/SteerLine/internal/steerlineclient"
 
 	steerlineapp "github.com/erranliu/SteerLine/internal/steerlineapp"
 )
@@ -103,16 +107,24 @@ func run() error {
 	if command == "projects" {
 		return runProjects(*proj, *action)
 	}
-	loadConfig := steerlineapp.LoadConfig
-	if command == "tasks" || command == "control" && *requestID != "" {
-		loadConfig = steerlineapp.LoadQueryConfig
-	}
-	c, e := loadConfig(*config)
-	if e != nil {
-		return e
-	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
+	var c steerline.Config
+	var product api.Client
+	var e error
+	switch command {
+	case "tasks", "control", "stop", "answer", "stop-service":
+		product, e = steerlineapp.OpenClient(ctx, *config)
+		if e != nil {
+			return e
+		}
+		defer product.Close()
+	default:
+		c, e = steerlineapp.LoadConfig(*config)
+		if e != nil {
+			return e
+		}
+	}
 	if command == "certify-backend" {
 		if strings.TrimSpace(*evidence) == "" {
 			return fmt.Errorf("certify-backend requires -evidence")
@@ -142,7 +154,7 @@ func run() error {
 		return nil
 	}
 	if command == "stop-service" {
-		result, err := steerline.StopService(ctx, c, *by, 30*time.Second)
+		result, err := product.StopService(ctx, *by, 30*time.Second)
 		if err != nil {
 			return err
 		}
@@ -154,13 +166,15 @@ func run() error {
 		return nil
 	}
 	if command == "stop" {
-		request, err := steerline.SubmitControl(c, "stop_service", nil, *by)
+		id := steerlineclient.NewRequestID()
+		request, err := product.SubmitControl(ctx, api.ControlInput{Action: api.StopService, RequestID: id, RequestedBy: *by})
 		if err != nil {
+			fmt.Println("request_id", id)
 			return err
 		}
 		fmt.Println("request_id", request.RequestID)
 		if *waitReceipt {
-			receipt, waitErr := steerline.WaitControlReceipt(ctx, c, request.RequestID, 100*time.Millisecond)
+			receipt, waitErr := product.WaitControl(ctx, request.RequestID, 100*time.Millisecond)
 			if waitErr != nil {
 				return waitErr
 			}
@@ -178,9 +192,9 @@ func run() error {
 			if *waitReceipt {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 				defer cancel()
-				r, err = steerline.WaitControlReceipt(ctx, c, *requestID, 100*time.Millisecond)
+				r, err = product.WaitControl(ctx, *requestID, 100*time.Millisecond)
 			} else {
-				r, err = steerline.ReadVerifiedControlReceipt(c, *requestID)
+				r, err = product.Receipt(ctx, *requestID)
 			}
 			if err != nil {
 				return err
@@ -192,7 +206,7 @@ func run() error {
 		if *action == "" {
 			return fmt.Errorf("control requires -action or -request-id")
 		}
-		var payload any
+		var payload api.ControlPayload
 		switch *action {
 		case "start_task":
 			if *taskID == "" {
@@ -201,7 +215,7 @@ func run() error {
 			if *controlMode != "" {
 				return fmt.Errorf("start_task does not accept -mode")
 			}
-			payload, e = startTaskControlPayload(ctx, &c, *taskID, *executionProfile)
+			payload, e = product.StartTaskPayload(ctx, *taskID, *executionProfile)
 			if e != nil {
 				return e
 			}
@@ -215,7 +229,7 @@ func run() error {
 			if *taskID != "" {
 				return fmt.Errorf("set_dispatch_mode does not accept -task-id")
 			}
-			payload = map[string]string{"mode": *controlMode}
+			payload = api.ControlPayload{Mode: *controlMode}
 		case "pause_dispatch", "resume_dispatch", "stop_service":
 			if *taskID != "" || *controlMode != "" {
 				return fmt.Errorf("%s does not accept task or mode parameters", *action)
@@ -223,15 +237,17 @@ func run() error {
 		default:
 			return fmt.Errorf("unsupported control action %q", *action)
 		}
-		req, err := steerline.SubmitControl(c, *action, payload, *by)
+		id := steerlineclient.NewRequestID()
+		req, err := product.SubmitControl(ctx, api.ControlInput{Action: api.ControlAction(*action), Payload: payload, RequestID: id, RequestedBy: *by})
 		if err != nil {
+			fmt.Println("request_id", id)
 			return err
 		}
 		fmt.Println("request_id", req.RequestID)
 		if *waitReceipt {
 			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 			defer cancel()
-			r, err := steerline.WaitControlReceipt(ctx, c, req.RequestID, 100*time.Millisecond)
+			r, err := product.WaitControl(ctx, req.RequestID, 100*time.Millisecond)
 			if err != nil {
 				return err
 			}
@@ -241,7 +257,7 @@ func run() error {
 		return nil
 	}
 	if command == "tasks" {
-		snapshot, err := steerline.ReadTaskSnapshot(c)
+		snapshot, err := product.TaskSnapshot(ctx)
 		if err != nil {
 			return err
 		}
@@ -253,13 +269,31 @@ func run() error {
 		return nil
 	}
 	if command == "answer" {
-		request, _, err := steerline.SubmitDecisionAnswer(ctx, c, steerline.AnswerOptions{RunID: *runID, DecisionID: *decisionID, Option: *option, Note: *note, By: *by})
+		if *requestID != "" {
+			if *runID != "" || *decisionID != "" || *option != "" || *note != "" {
+				return errors.New("-request-id cannot be combined with a new answer")
+			}
+			var result contracts.CommandRecord
+			var err error
+			if *waitReceipt {
+				result, err = product.WaitCommand(ctx, *requestID, 2*time.Minute)
+			} else {
+				result, err = product.Command(ctx, *requestID)
+			}
+			if err != nil {
+				return err
+			}
+			return json.NewEncoder(os.Stdout).Encode(result)
+		}
+		id := steerlineclient.NewRequestID()
+		request, _, err := product.Answer(ctx, api.AnswerInput{RunID: *runID, DecisionID: *decisionID, Option: *option, Note: *note, RequestedBy: *by, CommandID: id})
 		if err != nil {
+			fmt.Println("command_id", id)
 			return err
 		}
 		fmt.Println("command_id", request.CommandID)
 		if *waitReceipt {
-			result, err := waitServiceCommand(ctx, c, request.CommandID, 2*time.Minute)
+			result, err := product.WaitCommand(ctx, request.CommandID, 2*time.Minute)
 			if err != nil {
 				return err
 			}
@@ -291,58 +325,6 @@ func run() error {
 		return nil
 	}
 	return fmt.Errorf("unsupported command %q", command)
-}
-
-func startTaskControlPayload(ctx context.Context, c *steerline.Config, taskID, profileID string) (map[string]string, error) {
-	if profileID == "" {
-		return nil, errors.New("start_task requires -execution-profile")
-	}
-	if err := c.ResolveIdentity(ctx); err != nil {
-		return nil, err
-	}
-	_, profile, err := c.ResolveExecutionProfile(profileID, "")
-	if err != nil {
-		return nil, err
-	}
-	return map[string]string{"task_id": taskID, "execution_profile_id": profile.ID, "execution_profile_digest": profile.Digest()}, nil
-}
-
-func waitServiceCommand(ctx context.Context, c steerline.Config, commandID string, timeout time.Duration) (steerline.CommandRecord, error) {
-	if err := c.ResolveIdentity(ctx); err != nil {
-		return steerline.CommandRecord{}, fmt.Errorf("resolve project identity for command receipt: %w", err)
-	}
-	waitCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	ticker := time.NewTicker(150 * time.Millisecond)
-	defer ticker.Stop()
-	unconfirmed := func() (steerline.CommandRecord, error) {
-		return steerline.CommandRecord{}, fmt.Errorf("command %s remains unconfirmed; query this same command ID later", commandID)
-	}
-	for {
-		if waitCtx.Err() != nil {
-			return unconfirmed()
-		}
-		reader, openErr := steerline.OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
-		if openErr != nil {
-			return steerline.CommandRecord{}, openErr
-		}
-		current, readErr := reader.Command(waitCtx, c.Identity(), commandID)
-		_ = reader.Close()
-		if readErr == nil && (current.Status == "accepted" || current.Status == "rejected" || current.Status == "failed" || current.Status == "indeterminate") {
-			return current, nil
-		}
-		if waitCtx.Err() != nil {
-			return unconfirmed()
-		}
-		if readErr != nil && !errors.Is(readErr, sql.ErrNoRows) && !os.IsNotExist(readErr) {
-			return steerline.CommandRecord{}, readErr
-		}
-		select {
-		case <-waitCtx.Done():
-			return unconfirmed()
-		case <-ticker.C:
-		}
-	}
 }
 
 func runConsoleCommand(args []string) error {
@@ -436,7 +418,7 @@ func runNativeTaskCommand(args []string) error {
 		if *taskID == "" {
 			return errors.New("task show requires -task-id")
 		}
-		if err := steerline.ValidateNativeTaskID(*taskID); err != nil {
+		if err := task.ValidateID(*taskID); err != nil {
 			return err
 		}
 		if *cursor != "" {
@@ -464,20 +446,20 @@ func runNativeTaskCommand(args []string) error {
 		if *taskID == "" || *requestID == "" || *expectedVersion == 0 || strings.TrimSpace(*reason) == "" {
 			return errors.New("task discard requires -task-id, -request-id, -expected-version and -reason")
 		}
-		if err := steerline.ValidateNativeTaskID(*taskID); err != nil {
+		if err := task.ValidateID(*taskID); err != nil {
 			return err
 		}
 		if *file != "" || *cursor != "" || *expectedAuthority != 0 {
 			return errors.New("task discard does not accept -file, -cursor or -expected-authority-version")
 		}
-		if err := steerline.ValidateNativeTaskID(*taskID); err != nil {
+		if err := task.ValidateID(*taskID); err != nil {
 			return err
 		}
 	case "add-predecessors":
 		if *taskID == "" || strings.TrimSpace(*predecessors) == "" || *requestID == "" || *expectedVersion == 0 || !graphRevisionWasSet || strings.TrimSpace(*reason) == "" || strings.TrimSpace(*by) == "" {
 			return errors.New("task add-predecessors requires -task-id, -predecessors, -request-id, -expected-version, -expected-graph-revision, -reason and -by")
 		}
-		if err := steerline.ValidateNativeTaskID(*taskID); err != nil {
+		if err := task.ValidateID(*taskID); err != nil {
 			return err
 		}
 	case "graph":
@@ -497,62 +479,28 @@ func runNativeTaskCommand(args []string) error {
 	default:
 		return fmt.Errorf("unsupported task command %q", subcommand)
 	}
-	loadConfig := steerlineapp.LoadConfig
-	readOnly := subcommand == "show" || subcommand == "list" || subcommand == "graph" || subcommand == "export"
-	if readOnly {
-		loadConfig = steerlineapp.LoadQueryConfig
-	}
-	c, err := loadConfig(*config)
+	ctx := context.Background()
+	opened, err := steerlineapp.OpenClient(ctx, *config)
+	var product interface {
+		api.Lifecycle
+		api.TaskClient
+	} = opened
 	if err != nil {
 		return err
 	}
-	if c.TaskAuthority != "native" {
-		return errors.New("authority_mismatch: task commands require task_authority=native in the configuration")
-	}
-	var store *steerline.SQLiteStore
-	if readOnly {
-		store, err = steerline.OpenNativeTaskReader(context.Background(), &c)
-	} else {
-		store, err = steerline.OpenNativeTaskProject(context.Background(), &c)
-	}
-	if err != nil {
-		return err
-	}
-	if subcommand == "create" || subcommand == "discard" || subcommand == "add-predecessors" {
-		if err = store.Close(); err != nil {
-			return err
-		}
-		lock, lockErr := steerline.LockRepository(c.Identity())
-		if lockErr != nil {
-			return lockErr
-		}
-		defer lock.Close()
-		store, err = steerline.OpenNativeTaskCommandStore(context.Background(), &c)
-		if err != nil {
-			return err
-		}
-	}
-	defer store.Close()
-	var commands steerline.CommandService
-	if !readOnly {
-		commands, err = steerlineapp.NewCommandService(store, c)
-		if err != nil {
-			return err
-		}
-	}
-	query := steerline.NewQueryService(store, c.Identity())
-	var result steerline.NativeTaskPage
+	defer product.Close()
+	var result contracts.NativeTaskPage
 	switch subcommand {
 	case "show":
-		result, err = query.ShowNativeTask(context.Background(), *taskID)
+		result, err = product.ShowTask(ctx, *taskID)
 	case "list":
-		result, err = query.ListNativeTasks(context.Background(), *cursor, *limit)
+		result, err = product.ListTasks(ctx, *cursor, *limit)
 	case "validate":
 		payload, readErr := os.ReadFile(*file)
 		if readErr != nil {
 			return readErr
 		}
-		validation, validateErr := commands.ValidateTaskBatch(context.Background(), c, payload)
+		validation, validateErr := product.ValidateTaskBatch(ctx, payload)
 		if validateErr != nil {
 			return validateErr
 		}
@@ -568,13 +516,13 @@ func runNativeTaskCommand(args []string) error {
 		if readErr != nil {
 			return readErr
 		}
-		receipt, createErr := commands.CreateTaskBatch(context.Background(), c, payload, *requestID, *expectedAuthority, *by)
+		receipt, createErr := product.CreateTaskBatch(ctx, api.CreateInput{Payload: payload, RequestID: *requestID, ExpectedAuthorityVersion: *expectedAuthority, RequestedBy: *by})
 		if createErr != nil {
 			return createErr
 		}
 		return json.NewEncoder(os.Stdout).Encode(receipt)
 	case "discard":
-		receipt, discardErr := commands.DiscardNativeTask(context.Background(), c, *taskID, *requestID, *expectedVersion, *reason, *by)
+		receipt, discardErr := product.DiscardTask(ctx, api.DiscardInput{TaskID: *taskID, RequestID: *requestID, ExpectedVersion: *expectedVersion, Reason: *reason, RequestedBy: *by})
 		if discardErr != nil {
 			return discardErr
 		}
@@ -584,26 +532,26 @@ func runNativeTaskCommand(args []string) error {
 		for i := range ids {
 			ids[i] = strings.TrimSpace(ids[i])
 		}
-		receipt, addErr := commands.AddNativeTaskPredecessors(context.Background(), c, steerline.TaskPredecessorAddInput{TaskID: *taskID, PredecessorIDs: ids, RequestID: *requestID, ExpectedTaskVersion: *expectedVersion, ExpectedGraphRevision: *expectedGraphRevision, Reason: *reason, RequestedBy: *by})
+		receipt, addErr := product.AddPredecessors(ctx, task.TaskPredecessorAddInput{TaskID: *taskID, PredecessorIDs: ids, RequestID: *requestID, ExpectedTaskVersion: *expectedVersion, ExpectedGraphRevision: *expectedGraphRevision, Reason: *reason, RequestedBy: *by})
 		if addErr != nil {
 			return addErr
 		}
 		return json.NewEncoder(os.Stdout).Encode(receipt)
 	case "graph":
 		if *taskID == "" && *status == "" && *direction == "" && *depth == 1 && (cursorWasSet || limitWasSet) {
-			graph, graphErr := query.TaskGraph(context.Background(), *cursor, *limit)
+			graph, graphErr := product.TaskGraph(ctx, *cursor, *limit)
 			if graphErr != nil {
 				return graphErr
 			}
 			return json.NewEncoder(os.Stdout).Encode(graph)
 		}
-		graph, graphErr := query.QueryTaskGraph(context.Background(), steerline.TaskGraphFilter{ProjectID: c.Identity(), Status: *status, CenterTaskID: *taskID, Direction: *direction, Depth: *depth, Limit: effectiveLimit})
+		graph, graphErr := product.QueryTaskGraph(ctx, taskview.Filter{Status: *status, CenterTaskID: *taskID, Direction: *direction, Depth: *depth, Limit: effectiveLimit})
 		if graphErr != nil {
 			return graphErr
 		}
 		return json.NewEncoder(os.Stdout).Encode(graph)
 	case "export":
-		graph, graphErr := query.QueryTaskGraph(context.Background(), steerline.TaskGraphFilter{ProjectID: c.Identity(), Status: *status, CenterTaskID: *taskID, Direction: *direction, Depth: *depth, Limit: effectiveLimit})
+		graph, graphErr := product.QueryTaskGraph(ctx, taskview.Filter{Status: *status, CenterTaskID: *taskID, Direction: *direction, Depth: *depth, Limit: effectiveLimit})
 		if graphErr != nil {
 			return graphErr
 		}
@@ -611,7 +559,7 @@ func runNativeTaskCommand(args []string) error {
 		if pathErr != nil {
 			return pathErr
 		}
-		if taskExportTargetsNativeState(destination, c.RunDir) {
+		if taskExportTargetsNativeState(destination, product.Project().RunDir) {
 			return errors.New("task export output cannot replace native task state files")
 		}
 		receipt, exportErr := steerline.WriteTaskGraphExport(destination, graph, *overwrite)

@@ -11,59 +11,36 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/workspace"
-
+	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
-type ProcessProbeState string
-
-const (
-	ProcessAbsent  ProcessProbeState = "absent"
-	ProcessMatches ProcessProbeState = "matches"
-	ProcessReused  ProcessProbeState = "pid-reused"
-	ProcessUnknown ProcessProbeState = "unknown"
-)
-
-type ProcessProbe struct {
-	State  ProcessProbeState `json:"state"`
-	Reason string            `json:"reason,omitempty"`
-}
+type ProcessProbeState = clientcontracts.ProcessProbeState
+type ProcessProbe = clientcontracts.ProcessProbe
 
 var errLockBusy = errors.New("service lock is held")
 var errDetachUnsupported = errors.New("host Job Object prevents independent service lifetime")
 
-type ServiceConnectionState string
+type ServiceConnectionState = clientcontracts.ServiceConnectionState
+type ServiceConnection = clientcontracts.ServiceConnection
 
 const (
-	ConnectionNoRecord      ServiceConnectionState = "no-record"
-	ConnectionCorrupt       ServiceConnectionState = "corrupt"
-	ConnectionOffline       ServiceConnectionState = "offline"
-	ConnectionUnknown       ServiceConnectionState = "alive-unknown"
-	ConnectionIdentityError ServiceConnectionState = "identity-error"
-	ConnectionInitializing  ServiceConnectionState = "initializing"
-	ConnectionStale         ServiceConnectionState = "stale"
-	ConnectionIncompatible  ServiceConnectionState = "incompatible"
-	ConnectionConfigChanged ServiceConnectionState = "config-changed"
-	ConnectionConnected     ServiceConnectionState = "connected"
+	ConnectionNoRecord      = clientcontracts.ConnectionNoRecord
+	ConnectionCorrupt       = clientcontracts.ConnectionCorrupt
+	ConnectionOffline       = clientcontracts.ConnectionOffline
+	ConnectionUnknown       = clientcontracts.ConnectionUnknown
+	ConnectionIdentityError = clientcontracts.ConnectionIdentityError
+	ConnectionInitializing  = clientcontracts.ConnectionInitializing
+	ConnectionStale         = clientcontracts.ConnectionStale
+	ConnectionIncompatible  = clientcontracts.ConnectionIncompatible
+	ConnectionConfigChanged = clientcontracts.ConnectionConfigChanged
+	ConnectionConnected     = clientcontracts.ConnectionConnected
+	ProcessAbsent           = clientcontracts.ProcessAbsent
+	ProcessMatches          = clientcontracts.ProcessMatches
+	ProcessReused           = clientcontracts.ProcessReused
+	ProcessUnknown          = clientcontracts.ProcessUnknown
 )
-
-// ServiceConnection keeps the snapshot, heartbeat, process identity, config
-// match and protocol result separate so callers can present actionable detail.
-type ServiceConnection struct {
-	Snapshot        ObservationSnapshot    `json:"snapshot"`
-	Process         ProcessProbe           `json:"process"`
-	State           ServiceConnectionState `json:"state"`
-	IdentityMatched bool                   `json:"identity_matched"`
-	ConfigMatched   bool                   `json:"config_matched"`
-	Protocol        int                    `json:"control_protocol"`
-	Capabilities    []string               `json:"capabilities"`
-	CanControl      bool                   `json:"can_control"`
-	CanStop         bool                   `json:"can_stop"`
-	CanStart        bool                   `json:"can_start"`
-	StartupID       string                 `json:"startup_id,omitempty"`
-	Diagnostic      string                 `json:"diagnostic,omitempty"`
-}
 
 // StartupRecord binds a startup attempt to the service process and its target
 // configuration. It is diagnostic evidence, not runtime or task state.
@@ -105,15 +82,7 @@ type ServiceStartResult struct {
 	Error        string            `json:"error,omitempty"`
 }
 
-type ServiceStopResult struct {
-	Status        string          `json:"status"` // stopped, stopping, pending, rejected, failed
-	RequestID     string          `json:"request_id"`
-	InstanceID    string          `json:"instance_id"`
-	Receipt       *ControlReceipt `json:"receipt,omitempty"`
-	ProcessExited bool            `json:"process_exited"`
-	LocksReleased bool            `json:"locks_released"`
-	Diagnostic    string          `json:"diagnostic,omitempty"`
-}
+type ServiceStopResult = clientcontracts.ServiceStopResult
 
 func startupPath(runDir, id string) (string, error) {
 	if !controlIDPattern.MatchString(id) {

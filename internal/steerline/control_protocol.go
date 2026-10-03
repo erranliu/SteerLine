@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
@@ -21,28 +22,8 @@ const maxControlRequestBytes = 3 << 20
 
 var controlIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
-type ControlRequest struct {
-	ProtocolVersion         int             `json:"protocol_version"`
-	RequestID               string          `json:"request_id"`
-	RepositoryIdentity      string          `json:"repository_identity"`
-	InstanceID              string          `json:"instance_id"`
-	Action                  string          `json:"action"`
-	ExpectedControlRevision uint64          `json:"expected_control_revision,omitempty"`
-	RunID                   string          `json:"run_id,omitempty"`
-	DecisionID              string          `json:"decision_id,omitempty"`
-	ExpectedRunRevision     uint64          `json:"expected_run_revision,omitempty"`
-	Payload                 json.RawMessage `json:"payload,omitempty"`
-	RequestedBy             string          `json:"requested_by"`
-	CreatedAt               time.Time       `json:"created_at"`
-	ExpiresAt               time.Time       `json:"expires_at"`
-}
-
-type ControlPayload struct {
-	TaskID                 string `json:"task_id,omitempty"`
-	Mode                   string `json:"mode,omitempty"`
-	ExecutionProfileID     string `json:"execution_profile_id,omitempty"`
-	ExecutionProfileDigest string `json:"execution_profile_digest,omitempty"`
-}
+type ControlRequest = clientcontracts.ControlRequest
+type ControlPayload = clientcontracts.ControlPayload
 
 func controlRequestPath(runDir, id string) string {
 	return filepath.Join(runDir, "control", "requests", id, "request.json")
