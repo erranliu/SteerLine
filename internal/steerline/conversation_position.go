@@ -8,41 +8,15 @@ import (
 	"io"
 	"os"
 
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
 
 // conversationJournalPosition is the committed source position. The two short
 // anchors detect a same-file rewrite before any saved position is reused.
-type conversationJournalPosition struct {
-	Version      int    `json:"v"`
-	ByteOffset   int64  `json:"byte_offset"`
-	SourceSeq    uint64 `json:"source_seq"`
-	Generation   uint64 `json:"generation"`
-	FileID       string `json:"file_id"`
-	FileSize     int64  `json:"file_size"`
-	ModifiedNS   int64  `json:"modified_ns"`
-	HeaderLength int    `json:"header_length,omitempty"`
-	HeaderHash   string `json:"header_hash,omitempty"`
-	AnchorOffset int64  `json:"anchor_offset,omitempty"`
-	AnchorLength int    `json:"anchor_length,omitempty"`
-	AnchorHash   string `json:"anchor_hash,omitempty"`
-}
+type conversationJournalPosition = contracts.ConversationJournalPosition
 
-func decodeConversationJournalPosition(checkpoint ConversationCheckpoint) (conversationJournalPosition, error) {
-	var position conversationJournalPosition
-	if err := json.Unmarshal([]byte(checkpoint.Cursor), &position); err != nil {
-		return position, err
-	}
-	if position.Version != 2 || position.ByteOffset < 0 || position.FileID == "" || position.FileID != checkpoint.SourceIdentity || position.Generation == 0 || position.SourceSeq != checkpoint.LocalSeq || position.HeaderLength < 0 || position.HeaderLength > journalAnchorSize || position.AnchorLength < 0 || position.AnchorLength > journalAnchorSize || position.AnchorOffset < 0 || position.FileSize < position.ByteOffset || position.ModifiedNS == 0 {
-		return position, errors.New("unsupported or invalid conversation source checkpoint; preserve source and database for manual recovery")
-	}
-	if position.ByteOffset > 0 && (position.AnchorLength == 0 || position.AnchorHash == "" || position.HeaderLength == 0 || position.HeaderHash == "") {
-		return position, errors.New("conversation checkpoint lacks durable source anchors")
-	}
-	return position, nil
-}
-
-func (p conversationJournalPosition) journalCursor(path string) JournalCursor {
+func journalCursorOf(p conversationJournalPosition, path string) JournalCursor {
 	return JournalCursor{Path: path, FileID: p.FileID, Generation: p.Generation, Offset: p.ByteOffset, ScanOffset: p.ByteOffset, HeaderLength: p.HeaderLength, HeaderHash: p.HeaderHash, AnchorOffset: p.AnchorOffset, AnchorLength: p.AnchorLength, AnchorHash: p.AnchorHash, Initialized: true}
 }
 
@@ -53,7 +27,7 @@ func currentConversationJournalPosition(ctx context.Context, store persistence.C
 	var previous *conversationJournalPosition
 	checkpoint, err := store.ConversationCheckpoint(ctx, project, execution, attempt, source, segment)
 	if err == nil {
-		position, decodeErr := decodeConversationJournalPosition(checkpoint)
+		position, decodeErr := contracts.DecodeConversationJournalPosition(checkpoint)
 		if decodeErr != nil {
 			return conversationJournalPosition{}, decodeErr
 		}

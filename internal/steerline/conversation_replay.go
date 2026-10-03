@@ -48,7 +48,7 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 		runSource := contracts.ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath),
 			WorkerFlow: run.WorkflowVersion == WorkerFlowVersion, Process: conversationProcessSnapshot(run.Process)}
 		for _, attempt := range s.domain.Attempts {
-			if attempt.ExecutionID != run.ExecutionID || attempt.EventPath == "" || !stableExecutionID(attempt.AttemptID) {
+			if attempt.ExecutionID != run.ExecutionID || attempt.EventPath == "" || !executionapi.StableExecutionID(attempt.AttemptID) {
 				continue
 			}
 			ended := attempt.AttemptID != run.AttemptID || run.EndedAt != nil
@@ -175,11 +175,11 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 		}
 	}
 	if matching != nil {
-		position, decodeErr := decodeConversationJournalPosition(*matching)
+		position, decodeErr := contracts.DecodeConversationJournalPosition(*matching)
 		if decodeErr != nil {
 			return decodeErr
 		}
-		readCursor = position.journalCursor(source.Path)
+		readCursor = journalCursorOf(position, source.Path)
 		if stat, statErr := os.Stat(source.Path); statErr == nil && stat.Size() == position.FileSize && stat.ModTime().UnixNano() != position.ModifiedNS && position.ByteOffset > 0 {
 			// Same-size rewrites can preserve both byte anchors. Force the
 			// existing journal reset path to open a visible source_changed segment.

@@ -2,8 +2,6 @@ package steerline
 
 import (
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"path/filepath"
 	"strings"
@@ -21,12 +19,12 @@ func requireNativeAuditCode(t *testing.T, err error, code string) {
 
 // Storage fixtures deliberately bypass the future DAG command/PR verification
 // pipeline. Their records test persistence and query boundaries only.
-func nativeAuditRecords(t *testing.T, store *SQLiteStore, a ProjectTaskAuthority) []TaskRecord {
+func nativeAuditRecords(t *testing.T, store *sqliteFixture, a ProjectTaskAuthority) []TaskRecord {
 	t.Helper()
 	created := time.Now().UTC()
 	ref := FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
 	tasks := []TaskRecord{}
-	err := store.transactSQLite(context.Background(), func(tx *sqliteTx) error {
+	err := store.transactRecords(context.Background(), func(tx *fixtureTransaction) error {
 		if err := tx.PutTaskBatch(TaskBatchRecord{BatchID: "audit-batch", ProjectIdentity: a.ProjectIdentity, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("c", 64), CommandID: "audit-command", CreatedAt: created, TaskIDs: map[string]string{"a": "2", "b": "10", "c": "99"}}, a.AuthorityVersion, a.GraphRevision); err != nil {
 			return err
 		}
@@ -52,54 +50,12 @@ func nativeAuditRecords(t *testing.T, store *SQLiteStore, a ProjectTaskAuthority
 	return tasks
 }
 
-func nativeAuditStore(t *testing.T) (*SQLiteStore, string, []TaskRecord) {
+func nativeAuditStore(t *testing.T) (*sqliteFixture, string, []TaskRecord) {
 	t.Helper()
 	s := openDomainTestStore(t)
 	a := ProjectTaskAuthority{ProjectIdentity: "audit-project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
-	require(t, s.transactSQLite(context.Background(), func(tx *sqliteTx) error { return tx.PutProjectTaskAuthority(a) }))
+	require(t, s.transactRecords(context.Background(), func(tx *fixtureTransaction) error { return tx.PutProjectTaskAuthority(a) }))
 	return s, a.ProjectIdentity, nativeAuditRecords(t, s, a)
-}
-
-func TestNativeAuditPaginationBoundsAndDatabaseIdentity(t *testing.T) {
-	ctx := context.Background()
-	s, project, _ := nativeAuditStore(t)
-	q := NewQueryService(s, project)
-	first, err := q.ListNativeTasks(ctx, "", 1)
-	require(t, err)
-	if first.Tasks[0].TaskID != "2" || first.NextCursor == "" || first.Capabilities.StartupBlockers != "provided" {
-		t.Fatalf("invalid page: %+v", first)
-	}
-	second, err := q.ListNativeTasks(ctx, first.NextCursor, 1)
-	require(t, err)
-	if second.Tasks[0].TaskID != "10" {
-		t.Fatal("numeric pagination order changed")
-	}
-	for _, offset := range []int{-1, int(^uint(0) >> 1)} {
-		_, err = s.NativeTaskPage(ctx, project, "", "", 0, offset, 500)
-		requireNativeAuditCode(t, err, "cursor_invalidated")
-	}
-	raw, err := base64.RawURLEncoding.DecodeString(first.NextCursor)
-	require(t, err)
-	var cursor nativeTaskCursor
-	require(t, json.Unmarshal(raw, &cursor))
-	cursor.Offset = int(^uint(0) >> 1)
-	raw, err = json.Marshal(cursor)
-	require(t, err)
-	_, err = q.ListNativeTasks(ctx, base64.RawURLEncoding.EncodeToString(raw), 500)
-	requireNativeAuditCode(t, err, "cursor_invalidated")
-	other, _, _ := nativeAuditStore(t)
-	_, err = (NewQueryService(other, project)).ListNativeTasks(ctx, first.NextCursor, 1)
-	requireNativeAuditCode(t, err, "cursor_invalidated")
-	// Corruption outside the requested page must not cause a full-project decode.
-	_, err = s.db.Exec(`UPDATE tasks SET payload='invalid JSON' WHERE task_id='99'`)
-	require(t, err)
-	_, err = q.ListNativeTasks(ctx, "", 1)
-	require(t, err)
-	// The extra row used only to detect a next page must remain undecoded too.
-	_, err = s.db.Exec(`UPDATE tasks SET payload='invalid JSON' WHERE task_id='10'`)
-	require(t, err)
-	_, err = q.ListNativeTasks(ctx, "", 1)
-	require(t, err)
 }
 
 func TestNativeAuditPageBatchesRelationsAcrossPageBoundary(t *testing.T) {
@@ -125,31 +81,13 @@ func TestNativeAuditPageBatchesRelationsAcrossPageBoundary(t *testing.T) {
 	}
 }
 
-func TestNativeAuditPageDecodesOnlyDirectPredecessors(t *testing.T) {
-	ctx := context.Background()
-	store, project, _ := nativeAuditStore(t)
-	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if err := tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "2", SuccessorID: "10"}); err != nil {
-			return err
-		}
-		return tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "10", SuccessorID: "99"})
-	}))
-	_, err := store.db.ExecContext(ctx, `UPDATE tasks SET payload='invalid JSON' WHERE project_identity=? AND task_id='2'`, project)
-	require(t, err)
-	page, err := (NewQueryService(store, project)).ShowNativeTask(ctx, "99")
-	require(t, err)
-	if len(page.Tasks) != 1 || len(page.Tasks[0].UnmetPredecessors) != 1 || page.Tasks[0].UnmetPredecessors[0].TaskID != "10" {
-		t.Fatalf("task detail lost its direct predecessor: %+v", page.Tasks)
-	}
-}
-
 func TestNativeAuditReadersCoexistWithWriter(t *testing.T) {
 	ctx := context.Background()
 	c, _ := nativeTaskFixture(t)
 	reader, err := OpenNativeTaskProject(ctx, &c)
 	require(t, err)
 	require(t, reader.Close())
-	writer, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	writer, err := openSQLiteFixture(filepath.Join(c.RunDir, "steerline.db"))
 	require(t, err)
 	defer writer.Close()
 	a, err := writer.NativeAuthority(ctx, c.Identity())
@@ -178,47 +116,26 @@ func TestNativeAuditSchemaDefinitionMustMatchVersionStamp(t *testing.T) {
 	s, _, _ := nativeAuditStore(t)
 	_, err := s.db.Exec(`DROP TRIGGER task_dependencies_no_cycle`)
 	require(t, err)
-	requireNativeAuditCode(t, validateDatabaseSchema(ctx, s.db), "unsupported_schema")
+	requireNativeAuditCode(t, func() error {
+		_, err := openSQLiteReaderFixture(func() string {
+			var seq int
+			var name, path string
+			require(t, s.db.QueryRow("PRAGMA database_list").Scan(&seq, &name, &path))
+			return path
+		}())
+		return err
+	}(), "unsupported_schema")
 	c, _ := nativeTaskFixture(t)
 	reader, err := OpenNativeTaskProject(ctx, &c)
 	require(t, err)
 	require(t, reader.Close())
-	writer, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+	writer, err := openSQLiteFixture(filepath.Join(c.RunDir, "steerline.db"))
 	require(t, err)
 	_, err = writer.db.Exec(`DROP TABLE task_deliveries`)
 	require(t, err)
 	require(t, writer.Close())
 	_, err = OpenNativeTaskProject(ctx, &c)
 	requireNativeAuditCode(t, err, "unsupported_schema")
-}
-
-func TestNativeAuditDependencyCycleRollsBackAndEdgesAreImmutable(t *testing.T) {
-	ctx := context.Background()
-	s, project, _ := nativeAuditStore(t)
-	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		for _, edge := range [][2]string{{"2", "10"}, {"10", "99"}, {"99", "2"}} {
-			if err := tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: project, PredecessorID: edge[0], SuccessorID: edge[1]}); err != nil {
-				return err
-			}
-		}
-		return nil
-	})
-	if err == nil || !strings.Contains(err.Error(), "dependency_cycle") {
-		t.Fatalf("cycle was accepted: %v", err)
-	}
-	var count int
-	require(t, s.db.QueryRow(`SELECT COUNT(*) FROM task_dependencies`).Scan(&count))
-	if count != 0 {
-		t.Fatal("failed dependency transaction left partial edges")
-	}
-	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		return tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "2", SuccessorID: "10"})
-	}))
-	for _, query := range []string{`DELETE FROM task_dependencies`, `UPDATE task_dependencies SET successor_id='99'`} {
-		if _, err = s.db.Exec(query); err == nil {
-			t.Fatal("immutable dependency was changed")
-		}
-	}
 }
 
 func TestNativeAuditContractRolesAndFixedReferenceVersions(t *testing.T) {
@@ -253,31 +170,5 @@ func TestNativeAuditContractRolesAndFixedReferenceVersions(t *testing.T) {
 		if sameRepositoryTarget(base.Repository, bad) {
 			t.Fatal("remote URL identity was weakened")
 		}
-	}
-}
-
-func TestNativeAuditTaskCASComparesInstantsNotTimeRepresentation(t *testing.T) {
-	s, _, tasks := nativeAuditStore(t)
-	task := tasks[0]
-	task.CreatedAt = task.CreatedAt.In(time.FixedZone("UTC+8", 8*60*60))
-	task.Version++
-	task.Status = "in_progress"
-	task.Claimant = "auditor"
-	require(t, s.transactSQLite(context.Background(), func(tx *sqliteTx) error { return tx.UpdateNativeTaskCAS(task, 1) }))
-}
-
-func TestNativeAuditQueryRejectsPayloadIdentityDrift(t *testing.T) {
-	for _, field := range []string{"project_identity", "version"} {
-		t.Run(field, func(t *testing.T) {
-			s, project, _ := nativeAuditStore(t)
-			var value any = "another-project"
-			if field == "version" {
-				value = 99
-			}
-			_, err := s.db.Exec(`UPDATE tasks SET payload=json_set(payload,?,?) WHERE task_id='2'`, "$."+field, value)
-			require(t, err)
-			_, err = (NewQueryService(s, project)).ShowNativeTask(context.Background(), "2")
-			requireNativeAuditCode(t, err, "contract_mismatch")
-		})
 	}
 }

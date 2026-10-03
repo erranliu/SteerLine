@@ -236,7 +236,21 @@ func newNeutralService(c Config) (*Service, error) {
 	if c.ExecutionDirectory == nil {
 		c = withNeutralProfile(c, neutralSettings{Executable: os.Args[0]})
 	}
-	return NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, testProcessHost{})
+	c.ProcessHost = testProcessHost{}
+	var err error
+	c, err = PrepareServiceConfig(c)
+	if err != nil {
+		return nil, err
+	}
+	db, err := OpenNativeTaskCommandStore(context.Background(), &c)
+	if err != nil {
+		return nil, err
+	}
+	service, err := NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, db)
+	if err != nil {
+		_ = db.Close()
+	}
+	return service, err
 }
 
 func neutralVerifyFixedExecutionProfile(p FixedExecutionProfile) bool {

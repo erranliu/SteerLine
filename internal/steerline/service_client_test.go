@@ -30,7 +30,7 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 		t.Helper()
 		b, e := json.Marshal(runtimeCheckpoint(value))
 		require(t, e)
-		require(t, testSQLite(s).transactSQLite(context.Background(), func(tx *sqliteTx) error {
+		require(t, testSQLite(s).transactRecords(context.Background(), func(tx *fixtureTransaction) error {
 			return tx.PutProjection(c.Identity(), value.Revision, b)
 		}))
 	}

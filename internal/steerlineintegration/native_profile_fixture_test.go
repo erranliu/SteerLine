@@ -3,7 +3,6 @@ package steerlineintegration
 import (
 	"context"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
 	"testing"
 	"time"
@@ -14,6 +13,8 @@ import (
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
 
@@ -113,7 +114,7 @@ func setNativeProfile(t *testing.T, c *steerline.Config, w codexworker.ProfileCo
 	}
 	setNativeImplementationProfiles(t, c, w, o, r...)
 }
-func nativeAdmissionFixture(t *testing.T) (steerline.Config, string, *steerline.SQLiteStore) {
+func nativeAdmissionFixture(t *testing.T) (steerline.Config, string, persistence.Connection) {
 	t.Helper()
 	f := newLifecycleProject(t, "local")
 	store, err := steerline.OpenNativeTaskCommandStore(context.Background(), &f.config)

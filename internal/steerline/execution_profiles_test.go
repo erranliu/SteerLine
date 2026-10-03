@@ -3,13 +3,14 @@ package steerline
 import (
 	"context"
 	"encoding/json"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
@@ -27,7 +28,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	if err = reader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := OpenSQLiteStore(filepath.Join(base.RunDir, "steerline.db"))
+	store, err := openSQLiteFixture(filepath.Join(base.RunDir, "steerline.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -42,7 +43,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
+	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)
@@ -82,7 +83,7 @@ func TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles(t *testi
 	if err = reader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	store, err := OpenSQLiteStore(filepath.Join(base.RunDir, "steerline.db"))
+	store, err := openSQLiteFixture(filepath.Join(base.RunDir, "steerline.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -132,7 +133,7 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
+	if err := store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)

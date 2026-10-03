@@ -22,6 +22,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/console"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 	"github.com/erranliu/SteerLine/internal/steerlineclient"
 )
@@ -192,7 +193,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 		if err = service.Close(); err != nil {
 			t.Fatal(err)
 		}
-		writer, err := steerline.OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+		writer, err := sqlite.OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
 		if err != nil {
 			t.Fatal(err)
 		}

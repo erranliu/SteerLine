@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"time"
@@ -9,7 +10,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
 
-func OpenNativeTaskProject(ctx context.Context, c *Config) (*SQLiteStore, error) {
+func OpenNativeTaskProject(ctx context.Context, c *Config) (persistence.Connection, error) {
 	if c == nil {
 		return nil, nativeErr("authority_mismatch", "native project configuration is required")
 	}
@@ -18,6 +19,9 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*SQLiteStore, error)
 	}
 	if err := validateWorkflowConfig(c, nil); err != nil {
 		return nil, err
+	}
+	if c.Persistence == nil {
+		return nil, nativeErr("authority_mismatch", "persistence factory is required")
 	}
 	if err := validateNativeStateLocation(*c); err != nil {
 		return nil, err
@@ -55,12 +59,8 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*SQLiteStore, error)
 	if err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(c.RunDir, 0700); err != nil {
-		return nil, err
-	}
-	db, err := OpenSQLiteStore(path)
+	db, err := c.Persistence.OpenWriter(path)
 	if err != nil {
-		cleanupNewNativeDB(path)
 		return nil, err
 	}
 	authority := ProjectTaskAuthority{ProjectIdentity: c.Identity(), Authority: "native", AuthorityVersion: 1, GraphRevision: 0, Repository: targetRepository, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
@@ -68,7 +68,6 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*SQLiteStore, error)
 	err = initializer.InitializeProject(ctx, authority)
 	if err != nil {
 		_ = db.Close()
-		cleanupNewNativeDB(path)
 		return nil, err
 	}
 	if err = db.Close(); err != nil {
@@ -79,8 +78,8 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*SQLiteStore, error)
 
 // OpenNativeTaskReader opens an existing native authority without creating
 // project state. Every read is bound to the configured repository and target.
-func OpenNativeTaskReader(ctx context.Context, c *Config) (*SQLiteStore, error) {
-	if c == nil || requireNativeTaskAuthority(*c) != nil {
+func OpenNativeTaskReader(ctx context.Context, c *Config) (persistence.Connection, error) {
+	if c == nil || c.Persistence == nil || requireNativeTaskAuthority(*c) != nil {
 		return nil, nativeErr("authority_mismatch", "native task reader requires task_authority=native")
 	}
 	if err := validateNativeStateLocation(*c); err != nil {
@@ -99,12 +98,15 @@ func OpenNativeTaskReader(ctx context.Context, c *Config) (*SQLiteStore, error) 
 // OpenNativeTaskCommandStore opens the repository's existing native database
 // for a bounded command. The caller must hold the repository identity lock,
 // and the project must already have been initialized and bound.
-func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*SQLiteStore, error) {
+func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (persistence.Connection, error) {
 	if c == nil || requireNativeTaskAuthority(*c) != nil {
 		return nil, nativeErr("authority_mismatch", "native task command requires task_authority=native")
 	}
 	if err := validateWorkflowConfig(c, nil); err != nil {
 		return nil, err
+	}
+	if c.Persistence == nil {
+		return nil, nativeErr("authority_mismatch", "persistence factory is required")
 	}
 	if err := validateNativeStateLocation(*c); err != nil {
 		return nil, err
@@ -118,20 +120,31 @@ func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*SQLiteStore, e
 		return nil, err
 	}
 	_ = reader.Close()
-	writer, err := OpenSQLiteStore(path)
+	writer, err := c.Persistence.OpenWriter(path)
 	if err != nil {
 		return nil, err
 	}
 	authority, err := writer.NativeAuthority(ctx, c.Identity())
-	if err != nil || authority.Authority != "native" || authority.Remote != c.Remote || authority.Branch != c.Branch {
+	if err != nil {
+		_ = writer.Close()
+		if errors.Is(err, persistence.ErrNotFound) {
+			return nil, nativeErr("authority_mismatch", "native project binding changed before command admission")
+		}
+		return nil, err
+	}
+	if authority.Authority != "native" || authority.Remote != c.Remote || authority.Branch != c.Branch {
 		_ = writer.Close()
 		return nil, nativeErr("authority_mismatch", "native project binding changed before command admission")
 	}
 	target, err := configuredRepositoryTarget(ctx, *c)
-	if err != nil || !sameRepositoryTarget(authority.Repository, target) {
+	if err != nil {
+		_ = writer.Close()
+		return nil, err
+	}
+	if !sameRepositoryTarget(authority.Repository, target) {
 		_ = writer.Close()
 		return nil, nativeErr("authority_mismatch", "repository target differs from the persisted native project")
 	}
-	writer.nativeBinding = &authority
+	writer.BindAuthority(authority)
 	return writer, nil
 }

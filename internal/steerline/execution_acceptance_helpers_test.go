@@ -29,7 +29,7 @@ type localOutputCursor struct {
 }
 
 func (b localExecutionBackend) ReadOutput(ctx context.Context, ref executionapi.ExecutionRef, cursor string, limit int) (executionapi.OutputBatch, error) {
-	if ref.Backend != executionapi.BackendLocal || ref.Protocol != executionapi.ProtocolLocalProcess || ref.Target != targetFor(b.config) || !stableExecutionID(ref.RunID) || !stableExecutionID(ref.AttemptID) {
+	if ref.Backend != executionapi.BackendLocal || ref.Protocol != executionapi.ProtocolLocalProcess || ref.Target != targetFor(b.config) || !executionapi.StableExecutionID(ref.RunID) || !executionapi.StableExecutionID(ref.AttemptID) {
 		return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "output ref does not match the fixed local execution"}
 	}
 	if limit <= 0 || limit > 1<<20 {

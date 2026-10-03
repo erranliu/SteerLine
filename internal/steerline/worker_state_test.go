@@ -2,9 +2,11 @@ package steerline
 
 import (
 	"errors"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"testing"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges(t *testing.T) {
@@ -51,7 +53,7 @@ func TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges(t *testing.T) {
 	}
 	mergedAt := time.Now().UTC()
 	delivery := TaskDeliveryRecord{TaskID: "8", SelectedWorkflowRunID: "wf-8", PRURL: "pr-9", MergeCommit: "merge-9", MergedAt: mergedAt}
-	if err := MarkWorkerDeliveryCommitted(TaskRecord{TaskID: "8", Status: "closed"}, &wf, delivery); err != nil || wf.Phase != "completed" {
+	if err := contracts.MarkWorkerDeliveryCommitted(TaskRecord{TaskID: "8", Status: "closed"}, &wf, delivery); err != nil || wf.Phase != "completed" {
 		t.Fatalf("committed delivery did not complete: phase=%s error=%v", wf.Phase, err)
 	}
 	if err := BeginWorkerTurn(&wf, &exec, "session-8", "turn-4"); err == nil {

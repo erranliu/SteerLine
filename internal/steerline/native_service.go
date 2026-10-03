@@ -306,7 +306,7 @@ func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupIt
 	if err != nil || !confirmed {
 		return errors.Join(err, &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "native stop operation is not confirmed"})
 	}
-	records := executionRecords{root: s.Config.RunDir}
+	records := executionRecords{root: s.Config.RunDir, persistence: s.Config.Persistence}
 	persisted, err := records.loadOperation(op.RunID, op.AttemptID, op.ID)
 	if err != nil || persisted.Status != executionapi.OperationConfirmed {
 		return errors.Join(err, nativeErr("outcome_unknown", "confirmed stop was not durably recorded"))
@@ -365,7 +365,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	if attempt == nil {
 		return nativeErr("outcome_unknown", "discarded task has no active local step attempt")
 	}
-	ref, err := (executionRecords{root: s.Config.RunDir}).loadBinding(workflowRunID, attempt.AttemptID)
+	ref, err := (executionRecords{root: s.Config.RunDir, persistence: s.Config.Persistence}).loadBinding(workflowRunID, attempt.AttemptID)
 	if err != nil {
 		return err
 	}
@@ -380,7 +380,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 		Grace  string
 	}{"fixed_local_execution_stop", s.Config.ShutdownGrace}
 	op := executionapi.Operation{Version: executionapi.ExecutionRecordVersion, ID: opID, RunID: workflowRunID, AttemptID: attempt.AttemptID, Backend: executionapi.BackendLocal, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: executionapi.OperationConfirmed, StartedAt: now(), UpdatedAt: now(), Diagnostic: observation.Diagnostic, Ref: &ref}
-	records := executionRecords{root: s.Config.RunDir}
+	records := executionRecords{root: s.Config.RunDir, persistence: s.Config.Persistence}
 	expectedOperation := ""
 	if old, loadErr := records.loadOperation(workflowRunID, attempt.AttemptID, opID); loadErr == nil {
 		expectedOperation = recordFingerprint(old)

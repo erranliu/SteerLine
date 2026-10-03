@@ -9,7 +9,9 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/processhost"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func NewProcessHost(timeout time.Duration) executionapi.ManagedProcessHost {
@@ -34,7 +36,22 @@ func NewServiceWithPorts(config steerline.Config, resolver executionapi.Lifecycl
 	if config.ExecutionDirectory == nil || config.ProcessHost == nil {
 		return nil, errors.New("application configuration is missing its execution directory or process host")
 	}
-	return steerline.NewService(config, config.ExecutionDirectory, resolver, sources, config.ProcessHost)
+	config.Persistence = sqlite.Factory{}
+	var err error
+	config, err = steerline.PrepareServiceConfig(config)
+	if err != nil {
+		return nil, err
+	}
+	connection, err := steerline.OpenNativeTaskCommandStore(context.Background(), &config)
+	if err != nil {
+		return nil, err
+	}
+	service, err := steerline.NewService(config, config.ExecutionDirectory, resolver, sources, config.ProcessHost, connection)
+	if err != nil {
+		_ = connection.Close()
+	}
+	return service, err
+
 }
 
 func StartService(ctx context.Context, configPath string, options steerline.StartServiceOptions) (steerline.ServiceStartResult, error) {
@@ -58,7 +75,7 @@ func StartConfiguredService(ctx context.Context, config steerline.Config, config
 	return steerline.StartService(ctx, config, configPath, options)
 }
 
-func NewCommandService(store *steerline.SQLiteStore, config steerline.Config) (steerline.CommandService, error) {
+func NewCommandService(store persistence.CommandStore, config steerline.Config) (steerline.CommandService, error) {
 	if store == nil || config.Identity() == "" || config.ExecutionDirectory == nil {
 		return steerline.CommandService{}, errors.New("command construction requires a store, fixed project and execution directory")
 	}

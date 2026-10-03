@@ -12,7 +12,7 @@ import (
 	"time"
 )
 
-func seedNativeGraphForView(t *testing.T, c Config, commit string, store *SQLiteStore, count int, edges []TaskDependencyRecord) {
+func seedNativeGraphForView(t *testing.T, c Config, commit string, store *sqliteFixture, count int, edges []TaskDependencyRecord) {
 	t.Helper()
 	base := nativeContract(t, c, commit, "fixture-contract")
 	created := time.Now().UTC()
@@ -21,7 +21,7 @@ func seedNativeGraphForView(t *testing.T, c Config, commit string, store *SQLite
 		id := strconv.Itoa(i)
 		mapping["k"+id] = id
 	}
-	err := store.transactSQLite(context.Background(), func(tx *sqliteTx) error {
+	err := store.transactRecords(context.Background(), func(tx *fixtureTransaction) error {
 		batch := TaskBatchRecord{ProjectIdentity: c.Identity(), BatchID: "view-fixture", SchemaVersion: taskBatchSchemaVersion, PayloadDigest: strings.Repeat("a", 64), CommandID: "view-fixture-command", TaskIDs: mapping, CreatedAt: created}
 		if err := tx.PutTaskBatch(batch, 1, 0); err != nil {
 			return err

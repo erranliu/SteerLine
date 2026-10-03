@@ -2,10 +2,12 @@ package steerline
 
 import (
 	"context"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"strings"
 	"testing"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
@@ -33,7 +35,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 	})
 	t.Run("service_entries_reject_missing_catalog_before_target", func(t *testing.T) {
 		state := t.TempDir() + "/absent"
-		config := Config{TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: "must-not-be-read", RunDir: state, Git: Command{Executable: "must-not-be-called"}}
+		config := Config{Persistence: sqlite.Factory{}, TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: "must-not-be-read", RunDir: state, Git: Command{Executable: "must-not-be-called"}}
 		if _, err := StartService(context.Background(), config, "unused.json", StartServiceOptions{}); err == nil || !strings.Contains(err.Error(), "directory") {
 			t.Fatalf("start reached target without directory: %v", err)
 		}
@@ -48,7 +50,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 
 func TestCD66CandidateResourceIdentityAndCommitRollback(t *testing.T) {
 	t.Run("missing_workspace_root_has_no_core_default", func(t *testing.T) {
-		c := Config{Repository: "must-not-be-read", identity: "project", RunDir: t.TempDir()}
+		c := Config{Persistence: sqlite.Factory{}, Repository: "must-not-be-read", identity: "project", RunDir: t.TempDir()}
 		if err := c.prepareWorktreeRoot(); err == nil || !strings.Contains(err.Error(), "explicit worktree_root") {
 			t.Fatalf("missing app path acquired a core default: %v", err)
 		}

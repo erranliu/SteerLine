@@ -69,43 +69,18 @@ type Service struct {
 
 // NewService constructs a service from one explicit, immutable implementation
 // directory and its conversation source port. Lifecycle operations receive
-// only execution values and already-persisted operation intents.
-func NewService(c Config, directory *ExecutionDirectory, resolver executionapi.LifecycleResolver, conversationSources contracts.ConversationSourcePort, processHost executionapi.ManagedProcessHost) (_ *Service, retErr error) {
-	if directory == nil || resolver == nil || conversationSources == nil || processHost == nil {
-		return nil, errors.New("execution directory, conversation source and process host ports are required")
+// only execution values and already-persisted operation intents. The application
+// calls PrepareServiceConfig before opening and transferring the connection.
+func NewService(c Config, directory *ExecutionDirectory, resolver executionapi.LifecycleResolver, conversationSources contracts.ConversationSourcePort, processHost executionapi.ManagedProcessHost, db persistence.Connection) (_ *Service, retErr error) {
+	if directory == nil || resolver == nil || conversationSources == nil || processHost == nil || c.Persistence == nil || db == nil {
+		return nil, errors.New("execution directory, conversation source, process host and persistence ports are required")
 	}
 	c.ExecutionDirectory = directory
 	c.ProcessHost = processHost
-	if err := requireNativeTaskAuthority(c); err != nil {
-		return nil, err
-	}
-	if c.WorkflowProtocol != WorkerFlowVersion {
-		return nil, nativeErr("unsupported_schema", "only worker-flow-v1 may start a service; preserve older execution state")
-	}
-	if err := validateWorkflowConfig(&c, nil); err != nil {
-		return nil, err
-	}
-	if err := validateExecutionProfiles(c); err != nil {
-		return nil, err
-	}
-	if err := c.ResolveIdentity(context.Background()); err != nil {
-		return nil, err
-	}
-	if err := validateNativeStateLocation(c); err != nil {
-		return nil, err
-	}
-	if err := preflightNativeStatePath(c); err != nil {
-		return nil, err
-	}
-	if err := preflightWorkerFlowState(context.Background(), c); err != nil {
-		return nil, err
-	}
-	if e := c.prepareWorktreeRoot(); e != nil {
-		return nil, e
-	}
-	db, e := OpenNativeTaskCommandStore(context.Background(), &c)
-	if e != nil {
-		return nil, e
+	var admissionErr error
+	c, admissionErr = admitServiceConfig(c)
+	if admissionErr != nil {
+		return nil, admissionErr
 	}
 	defer func() {
 		if retErr != nil {
@@ -113,7 +88,7 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionapi.L
 		}
 	}()
 	s := &Service{Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: db, commandStore: db, conversationStore: db, closeStore: db.Close, store: &Store{Domain: db, Project: c.identity}, activities: map[string]*ActivityWriter{}, workers: map[string]*Worker{}, ownedProcesses: map[string]executionapi.StopHandle{}}
-	old, e := loadRuntimeSnapshot(db, c.identity, false)
+	old, e := db.LoadRuntime(c.identity, false)
 	if errors.Is(e, persistence.ErrNotFound) {
 		old, e = nil, nil
 	}
@@ -281,7 +256,7 @@ func (s *Service) recordActivity(r *Run, ev ActivityEvent) {
 		return
 	}
 	domainTask, executionID := r.DomainTaskID, r.ExecutionID
-	if domainTask == "" || executionID == "" || !stableExecutionID(r.RunID) || !stableExecutionID(r.AttemptID) {
+	if domainTask == "" || executionID == "" || !executionapi.StableExecutionID(r.RunID) || !executionapi.StableExecutionID(r.AttemptID) {
 		s.setError(nativeErr("unsupported_schema", "native activity lacks its fixed task, run, execution or attempt identity"))
 		return
 	}
@@ -511,7 +486,7 @@ func ackWorkerEventPersistence(ev WorkerEvent, err error) {
 }
 
 func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
-	if !stableExecutionID(ev.RunID) || !stableExecutionID(ev.AttemptID) || ev.Activity.Kind == "" {
+	if !executionapi.StableExecutionID(ev.RunID) || !executionapi.StableExecutionID(ev.AttemptID) || ev.Activity.Kind == "" {
 		if ev.Persisted != nil {
 			return errors.New("conversation source identity is incomplete")
 		}

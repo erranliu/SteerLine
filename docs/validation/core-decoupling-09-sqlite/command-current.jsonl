@@ -1,0 +1,12 @@
+{"Time":"2026-10-04T02:08:00.383246+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerline"}
+{"Time":"2026-10-04T02:08:00.573829+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestCommandIdempotencyAndDecisionVersionArbitration"}
+{"Time":"2026-10-04T02:08:00.573829+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestCommandIdempotencyAndDecisionVersionArbitration","Output":"=== RUN   TestCommandIdempotencyAndDecisionVersionArbitration\n"}
+{"Time":"2026-10-04T02:08:00.6364562+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestCommandIdempotencyAndDecisionVersionArbitration","Output":"--- PASS: TestCommandIdempotencyAndDecisionVersionArbitration (0.06s)\n"}
+{"Time":"2026-10-04T02:08:00.6364562+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestCommandIdempotencyAndDecisionVersionArbitration","Elapsed":0.06}
+{"Time":"2026-10-04T02:08:00.6364562+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional"}
+{"Time":"2026-10-04T02:08:00.6364562+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional","Output":"=== RUN   TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional\n"}
+{"Time":"2026-10-04T02:08:00.7408925+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional","Output":"--- PASS: TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional (0.10s)\n"}
+{"Time":"2026-10-04T02:08:00.7414034+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional","Elapsed":0.1}
+{"Time":"2026-10-04T02:08:00.7435172+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Output":"PASS\n"}
+{"Time":"2026-10-04T02:08:00.7468323+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerline\t0.363s\n"}
+{"Time":"2026-10-04T02:08:00.7468323+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerline","Elapsed":0.364}

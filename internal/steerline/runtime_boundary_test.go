@@ -2,10 +2,12 @@ package steerline
 
 import (
 	"context"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"path/filepath"
 	"testing"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 type recordedStopProcess struct {
@@ -31,7 +33,7 @@ func TestWorkerBindingRollsBackWithItsCheckpoint(t *testing.T) {
 	if err := s.commitWorkerBinding(run, ref); err == nil {
 		t.Fatal("binding committed without its checkpoint")
 	}
-	if _, err := (executionRecords{root: s.Config.RunDir}).loadBinding(run.RunID, run.AttemptID); !os.IsNotExist(err) {
+	if _, err := (executionRecords{root: s.Config.RunDir, persistence: sqlite.Factory{}}).loadBinding(run.RunID, run.AttemptID); !os.IsNotExist(err) {
 		t.Fatalf("failed worker receipt left a binding: %v", err)
 	}
 	snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
@@ -59,7 +61,7 @@ func TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding(t *testing.T) {
 	s.refreshRun(run)
 	ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: neutralProtocol, Target: targetFor(s.Config), Agent: agentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, External: *identity, Generation: "generation"}
 	require(t, s.commitWorkerBinding(run, ref))
-	records := executionRecords{root: s.Config.RunDir}
+	records := executionRecords{root: s.Config.RunDir, persistence: sqlite.Factory{}}
 	process := &recordedStopProcess{identity: *identity, beforeKill: func() {
 		op, err := records.loadOperation(run.RunID, run.AttemptID, "stop-"+run.AttemptID)
 		require(t, err)

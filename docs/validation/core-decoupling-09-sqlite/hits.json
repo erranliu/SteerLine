@@ -1,0 +1,195 @@
+{
+  "center-current.jsonl": {
+    "run": 24,
+    "pass": 24,
+    "fail": 0,
+    "skip": 0,
+    "failures": []
+  },
+  "storage-current.jsonl": {
+    "run": 35,
+    "pass": 34,
+    "fail": 1,
+    "skip": 0,
+    "failures": [
+      "TestCM70ReadOnlyOpenPreservesFiles"
+    ]
+  },
+  "wiring.jsonl": {
+    "run": 6,
+    "pass": 5,
+    "fail": 1,
+    "skip": 0,
+    "failures": [
+      "TestCD66ExplicitCatalogAndEntrypoints/missing_directory_and_ports_reject_before_state",
+      "TestCD66ExplicitCatalogAndEntrypoints"
+    ]
+  },
+  "app-current.jsonl": {
+    "run": 2,
+    "pass": 2,
+    "fail": 0,
+    "skip": 0,
+    "failures": []
+  },
+  "attachment-final.jsonl": {
+    "run": 4,
+    "pass": 4,
+    "fail": 0,
+    "skip": 0,
+    "failures": []
+  },
+  "guard-final.jsonl": {
+    "run": 1,
+    "pass": 1,
+    "fail": 0,
+    "skip": 0,
+    "failures": []
+  },
+  "initialization-current.jsonl": {
+    "run": 3,
+    "pass": 3,
+    "fail": 0,
+    "skip": 0,
+    "failures": []
+  },
+  "owner-recheck.jsonl": {
+    "run": 8,
+    "pass": 8,
+    "fail": 0,
+    "skip": 0,
+    "failures": []
+  },
+  "command-current.jsonl": {
+    "run": 2,
+    "pass": 2,
+    "fail": 0,
+    "skip": 0,
+    "failures": []
+  },
+  "quick-reviewed": {
+    "complete": false,
+    "passed": false,
+    "errors": [
+      "quick-rules: exit status 1",
+      "quick-rules: failed "
+    ],
+    "groups": [
+      {
+        "id": "quick-core",
+        "exit_code": 0,
+        "tests": 11,
+        "skipped": 0
+      },
+      {
+        "id": "quick-rules",
+        "exit_code": 1,
+        "tests": 128,
+        "skipped": 0
+      },
+      {
+        "id": "quick-owner-remote",
+        "exit_code": 0,
+        "tests": 15,
+        "skipped": 0
+      },
+      {
+        "id": "quick-owner-codec",
+        "exit_code": 0,
+        "tests": 5,
+        "skipped": 0
+      },
+      {
+        "id": "quick-owner-identity",
+        "exit_code": 0,
+        "tests": 3,
+        "skipped": 0
+      },
+      {
+        "id": "quick-owner-app",
+        "exit_code": 0,
+        "tests": 6,
+        "skipped": 0
+      },
+      {
+        "id": "quick-boundary",
+        "exit_code": 0,
+        "tests": 23,
+        "skipped": 0
+      }
+    ]
+  },
+  "post-main-wiring.jsonl": {
+    "run": 5,
+    "pass": 5,
+    "fail": 0,
+    "skip": 0,
+    "failures": []
+  },
+  "post-main-guard.jsonl": {
+    "run": 1,
+    "pass": 1,
+    "fail": 0,
+    "skip": 0,
+    "failures": []
+  },
+  "admission-current.jsonl": {
+    "run": 5,
+    "pass": 5,
+    "fail": 0,
+    "skip": 0,
+    "failures": []
+  },
+  "post-main-quick": {
+    "complete": false,
+    "passed": false,
+    "errors": [
+      "quick-rules: exit status 1",
+      "quick-rules: failed "
+    ],
+    "groups": [
+      {
+        "id": "quick-core",
+        "exit_code": 0,
+        "tests": 11,
+        "skipped": 0
+      },
+      {
+        "id": "quick-rules",
+        "exit_code": 1,
+        "tests": 128,
+        "skipped": 0
+      },
+      {
+        "id": "quick-owner-remote",
+        "exit_code": 0,
+        "tests": 15,
+        "skipped": 0
+      },
+      {
+        "id": "quick-owner-codec",
+        "exit_code": 0,
+        "tests": 5,
+        "skipped": 0
+      },
+      {
+        "id": "quick-owner-identity",
+        "exit_code": 0,
+        "tests": 3,
+        "skipped": 0
+      },
+      {
+        "id": "quick-owner-app",
+        "exit_code": 0,
+        "tests": 6,
+        "skipped": 0
+      },
+      {
+        "id": "quick-boundary",
+        "exit_code": 0,
+        "tests": 35,
+        "skipped": 0
+      }
+    ]
+  }
+}

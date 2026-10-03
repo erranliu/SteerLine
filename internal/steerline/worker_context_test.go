@@ -2,9 +2,11 @@ package steerline
 
 import (
 	"bytes"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"testing"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestWorkerFlowContextKeepsFixedRunAndCopiesConfig(t *testing.T) {
@@ -73,6 +75,6 @@ func TestWorkerFlowContextsDoNotExchangeExecutionProfiles(t *testing.T) {
 }
 
 func workerContextConfigFixture() Config {
-	config := Config{Repository: "repo", Branch: "main", Remote: "origin", publicationRemoteURL: "https://github.com/owner/repo.git", Host: "local", Agent: "fixture", WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Git: Command{Executable: "git"}}
+	config := Config{Persistence: sqlite.Factory{}, Repository: "repo", Branch: "main", Remote: "origin", publicationRemoteURL: "https://github.com/owner/repo.git", Host: "local", Agent: "fixture", WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Git: Command{Executable: "git"}}
 	return withNeutralProfile(config, neutralSettings{Executable: os.Args[0]})
 }

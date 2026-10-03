@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	taskdomain "github.com/erranliu/SteerLine/internal/steerline/task"
 )
@@ -52,10 +53,10 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err := ValidateNativeTaskID(options.TaskID); err != nil {
 		return TaskClaimReceipt{}, err
 	}
-	if !controlIDPattern.MatchString(options.RequestID) || options.ExpectedTaskVersion == 0 || options.ExpectedAuthorityVersion == 0 || options.WorkflowRunID != "" && !stableExecutionID(options.WorkflowRunID) {
+	if !controlIDPattern.MatchString(options.RequestID) || options.ExpectedTaskVersion == 0 || options.ExpectedAuthorityVersion == 0 || options.WorkflowRunID != "" && !executionapi.StableExecutionID(options.WorkflowRunID) {
 		return TaskClaimReceipt{}, nativeErr("invalid_batch", "claim requires request ID and current task/project versions")
 	}
-	if options.ServiceInstanceID != "" && !stableExecutionID(options.ServiceInstanceID) {
+	if options.ServiceInstanceID != "" && !executionapi.StableExecutionID(options.ServiceInstanceID) {
 		return TaskClaimReceipt{}, nativeErr("invalid_batch", "claim service instance identity is invalid")
 	}
 	if options.ExecutionProfile != nil && !options.ExecutionProfile.MatchesConfig(config) {

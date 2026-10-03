@@ -63,6 +63,7 @@ func consoleForbidden(pkg string) bool {
 func ScanSource(root string) (Report, error) {
 	report := Report{Dependencies: map[string]int{}}
 	graph := map[string][]string{}
+	productionGraph := map[string][]string{}
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -112,6 +113,12 @@ func ScanSource(root string) (Report, error) {
 				return err
 			}
 			graph[pkg] = append(graph[pkg], value)
+			if !strings.HasSuffix(entry.Name(), "_test.go") {
+				productionGraph[pkg] = append(productionGraph[pkg], value)
+			}
+			if pkg == core && !strings.HasSuffix(entry.Name(), "_test.go") && (value == "database/sql" || value == core+"/sqlite" || strings.HasPrefix(value, "modernc.org/sqlite")) {
+				report.Violations = append(report.Violations, "concrete storage dependency: "+filepath.ToSlash(path)+" -> "+value)
+			}
 		}
 		return nil
 	})
@@ -121,6 +128,23 @@ func ScanSource(root string) (Report, error) {
 	report.SourcePackages = len(graph)
 	for pkg := range graph {
 		sort.Strings(graph[pkg])
+	}
+	for pkg := range productionGraph {
+		sort.Strings(productionGraph[pkg])
+	}
+	visitGraph(productionGraph, core, func(path []string) {
+		last := path[len(path)-1]
+		if last == "database/sql" || last == core+"/sqlite" || strings.HasPrefix(last, core+"/sqlite/") || strings.HasPrefix(last, "modernc.org/sqlite") {
+			report.Violations = append(report.Violations, "concrete storage dependency: "+strings.Join(path, " -> "))
+		}
+	})
+	for _, seed := range []string{core + "/sqlite", core + "/persistence"} {
+		visitGraph(graph, seed, func(path []string) {
+			last := path[len(path)-1]
+			if last == core || forbidden(last) || last == module+"/internal/steerlineclient" || strings.HasPrefix(last, module+"/internal/steerlineclient/") || last == core+"/console" || strings.HasPrefix(last, core+"/console/") {
+				report.Violations = append(report.Violations, "reverse storage dependency: "+strings.Join(path, " -> "))
+			}
+		})
 	}
 	for _, seed := range []string{core, core + "/execution", core + "/contracts"} {
 		visitGraph(graph, seed, func(path []string) {
@@ -211,7 +235,7 @@ func Check(ctx context.Context, root string) (Report, error) {
 					graphName += "-console"
 				}
 				report.Dependencies[graphName]++
-				bad := forbidden(pkg.ImportPath)
+				bad := forbidden(pkg.ImportPath) || pkg.ImportPath == core+"/sqlite" || pkg.ImportPath == "database/sql" || strings.HasPrefix(pkg.ImportPath, "modernc.org/sqlite")
 				if consoleGraph {
 					bad = consoleForbidden(pkg.ImportPath)
 				}

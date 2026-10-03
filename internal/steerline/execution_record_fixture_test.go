@@ -12,7 +12,7 @@ import (
 
 // These helpers seed typed binding/operation rows explicitly in test fixtures.
 func (r executionRecords) saveBinding(ref executionapi.ExecutionRef) error {
-	if err := validateExecutionRef(ref); err != nil {
+	if err := executionapi.ValidateExecutionRef(ref); err != nil {
 		return err
 	}
 	ref.WorkspacePath = canonical(ref.WorkspacePath)
@@ -32,7 +32,7 @@ func (r executionRecords) saveBinding(ref executionapi.ExecutionRef) error {
 	return r.writeRecord("execution_bindings", ref.RunID, ref.AttemptID, "binding", b)
 }
 func (r executionRecords) saveOperation(op executionapi.Operation) error {
-	if err := validateExecutionOperation(op); err != nil {
+	if err := executionapi.ValidateExecutionOperation(op); err != nil {
 		return err
 	}
 	if old, err := r.loadOperation(op.RunID, op.AttemptID, op.ID); err == nil {
@@ -49,13 +49,11 @@ func (r executionRecords) saveOperation(op executionapi.Operation) error {
 	return r.writeRecord("execution_operations", op.RunID, op.AttemptID, op.ID, b)
 }
 func (r executionRecords) writeRecord(table, run, attempt, id string, payload []byte) error {
-	s, err := OpenSQLiteStore(filepath.Join(r.root, "steerline.db"))
+	s, err := openSQLiteFixture(filepath.Join(r.root, "steerline.db"))
 	if err != nil {
 		return err
 	}
 	defer s.Close()
-	return s.transactSQLite(context.Background(), func(tx *sqliteTx) error {
-		_, err := tx.tx.ExecContext(tx.ctx, "INSERT INTO "+table+"(run_id,attempt_id,record_id,payload) VALUES(?,?,?,?) ON CONFLICT(run_id,attempt_id,record_id) DO UPDATE SET payload=excluded.payload", run, attempt, id, payload)
-		return err
-	})
+	_, err = s.db.ExecContext(context.Background(), "INSERT INTO "+table+"(run_id,attempt_id,record_id,payload) VALUES(?,?,?,?) ON CONFLICT(run_id,attempt_id,record_id) DO UPDATE SET payload=excluded.payload", run, attempt, id, payload)
+	return err
 }

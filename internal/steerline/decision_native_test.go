@@ -2,18 +2,19 @@ package steerline
 
 import (
 	"context"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestDecisionSubmissionRequiresNativeAuthorityBeforeStateAccess(t *testing.T) {
 	runDir := filepath.Join(t.TempDir(), "state")
-	c := Config{RunDir: runDir}
+	c := Config{Persistence: sqlite.Factory{}, RunDir: runDir}
 	if _, _, err := SubmitAnswerDecision(context.Background(), c, "run", "decision", "yes", "", "operator", 1, 1, "instance", newID()); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
 		t.Fatalf("direct answer command bypassed explicit native authority: %v", err)
 	}

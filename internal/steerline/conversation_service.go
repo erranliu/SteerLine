@@ -14,14 +14,14 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) error {
 	if run == nil || len(source.Raw) == 0 && !source.SourceGap && !source.InputWait || s.conversationStore == nil {
 		return nil
 	}
-	if !stableExecutionID(run.ExecutionID) {
+	if !executionapi.StableExecutionID(run.ExecutionID) {
 		return nativeErr("contract_mismatch", "conversation event has no fixed execution identity")
 	}
 	attemptID := source.AttemptID
 	if attemptID == "" {
 		attemptID = run.AttemptID
 	}
-	if !stableExecutionID(attemptID) {
+	if !executionapi.StableExecutionID(attemptID) {
 		return nativeErr("contract_mismatch", "conversation event has no fixed attempt identity")
 	}
 	base := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID,

@@ -10,10 +10,10 @@ func TestRuntimeCorruptionNotOverwritten(t *testing.T) {
 	f := newFixture(t)
 	s := f.service(t)
 	require(t, s.Close())
-	db, err := OpenSQLiteStore(filepath.Join(f.c.RunDir, "steerline.db"))
+	db, err := openSQLiteFixture(filepath.Join(f.c.RunDir, "steerline.db"))
 	require(t, err)
 	defer db.Close()
-	require(t, db.transactSQLite(context.Background(), func(tx *sqliteTx) error {
+	require(t, transactFixture(db, context.Background(), func(tx *fixtureTransaction) error {
 		return tx.PutProjection(f.c.Identity(), 99, []byte("truncated{"))
 	}))
 	if _, e := newTestService(f.c); e == nil {

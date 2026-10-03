@@ -3,14 +3,16 @@ package steerline
 import (
 	"context"
 	"errors"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
-	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 type testProcessHost struct{}
@@ -101,7 +103,7 @@ func fixtureRepositoryStateKey(c Config) (string, error) {
 }
 
 func loadFixtureConfig(path string) (Config, error) {
-	c := Config{Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
+	c := Config{Persistence: sqlite.Factory{}, Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
 	projectPath, err := filepath.Abs(path)
 	if err != nil {
 		return c, err

@@ -4,18 +4,20 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestUnregisteredWorkerFlowConfigurationCannotClaim(t *testing.T) {
 	for _, host := range []string{"unregistered-a", "unregistered-b"} {
 		t.Run(host, func(t *testing.T) {
-			c := Config{ExecutionDirectory: neutralExecutionDirectory(t), WorkflowProtocol: WorkerFlowVersion, Host: host, Agent: "fixture"}
+			c := Config{Persistence: sqlite.Factory{}, ExecutionDirectory: neutralExecutionDirectory(t), WorkflowProtocol: WorkerFlowVersion, Host: host, Agent: "fixture"}
 			err := requireWorkerFlowCapabilities(context.Background(), c)
 			var backend *executionapi.BackendError
 			if !errors.As(err, &backend) || backend.Code != executionapi.BackendUnsupported {
@@ -32,7 +34,7 @@ func TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.transactSQLite(context.Background(), func(tx *sqliteTx) error {
+	if err := store.transactRecords(context.Background(), func(tx *fixtureTransaction) error {
 		return tx.PutProjection(c.Identity(), 1, payload)
 	}); err != nil {
 		t.Fatal(err)
@@ -101,7 +103,7 @@ func TestWorkerFlowRejectsOldLocalExecutionProtocol(t *testing.T) {
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
+	if err := store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)
@@ -110,7 +112,7 @@ func TestWorkerFlowRejectsOldLocalExecutionProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader, err := OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
+	reader, err := openSQLiteReaderFixture(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +131,7 @@ func TestWorkerFlowRejectsOldLocalExecutionProtocol(t *testing.T) {
 		t.Fatal("claimed execution is missing")
 	}
 	old.Protocol = string(executionapi.ProtocolLocalProcess)
-	if err := store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutExecution(old) }); err != nil {
+	if err := store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutExecution(old) }); err != nil {
 		t.Fatal(err)
 	}
 	workspaceRoot := filepath.Join(c.RunDir, "worktrees")

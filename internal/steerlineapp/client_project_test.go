@@ -3,6 +3,7 @@ package steerlineapp
 import (
 	"context"
 	"database/sql"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,7 +48,7 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 	if err := reader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	writer, err := steerline.OpenSQLiteStore(filepath.Join(cfg.RunDir, "steerline.db"))
+	writer, err := sqlite.OpenSQLiteStore(filepath.Join(cfg.RunDir, "steerline.db"))
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -3,14 +3,9 @@ package steerline
 import (
 	"errors"
 	"fmt"
-)
 
-var allowedOperationTransitions = map[string]map[string]bool{
-	"pending":         {"in_flight": true, "rejected": true},
-	"in_flight":       {"accepted": true, "confirmed": true, "rejected": true, "outcome_unknown": true},
-	"accepted":        {"confirmed": true, "rejected": true, "outcome_unknown": true},
-	"outcome_unknown": {"accepted": true, "confirmed": true, "rejected": true},
-}
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+)
 
 func TransitionOperation(op *OperationRecord, next string, requestID string, receipt []byte, reason string) error {
 	if op == nil {
@@ -19,7 +14,7 @@ func TransitionOperation(op *OperationRecord, next string, requestID string, rec
 	if op.Status == next {
 		return nil
 	}
-	if !allowedOperationTransitions[op.Status][next] {
+	if !contracts.OperationTransitionAllowed(op.Status, next) {
 		return fmt.Errorf("operation transition %s -> %s is not allowed", op.Status, next)
 	}
 	op.Status = next

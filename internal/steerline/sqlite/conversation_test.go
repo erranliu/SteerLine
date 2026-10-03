@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
@@ -19,7 +18,7 @@ import (
 func TestConversationReaderKeepsSourceScopeOnReadOnlyConnection(t *testing.T) {
 	ctx := context.Background()
 	path := filepath.Join(t.TempDir(), "steerline.db")
-	writer, err := steerline.OpenSQLiteStore(path)
+	writer, err := readsqlite.OpenSQLiteStore(path)
 	if err != nil {
 		t.Fatal(err)
 	}

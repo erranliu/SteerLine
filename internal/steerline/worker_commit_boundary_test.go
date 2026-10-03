@@ -3,9 +3,10 @@ package steerline
 import (
 	"context"
 	"errors"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"path/filepath"
 	"testing"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
@@ -77,7 +78,7 @@ func TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure(t *testing.T) {
 			if stage == "stale" {
 				current := *s.executionRecord(run)
 				current.LastEvent = ptr("concurrent writer")
-				require(t, testSQLite(s).transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutExecution(current) }))
+				require(t, testSQLite(s).transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutExecution(current) }))
 			} else if stage == "event" {
 				_, err := testSQLite(s).db.ExecContext(ctx, `CREATE TRIGGER reject_worker_event BEFORE INSERT ON events BEGIN SELECT RAISE(FAIL, 'event failure'); END`)
 				require(t, err)

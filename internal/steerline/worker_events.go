@@ -16,7 +16,7 @@ func (s *Service) recordWorkerTurnStarted(run *Run, workflow *WorkflowRunRecord,
 	if !fresh && execution.CurrentTurnID == turnID && execution.LastStoppedTurnID != turnID {
 		commandID = execution.CurrentCommandID
 	}
-	if !stableExecutionID(commandID) || turnID == "" || fresh && execution.PendingTurnID != turnID {
+	if !executionapi.StableExecutionID(commandID) || turnID == "" || fresh && execution.PendingTurnID != turnID {
 		return "", errors.New("turn start lacks its fixed input command or verified receipt")
 	}
 	var operation *OperationRecord

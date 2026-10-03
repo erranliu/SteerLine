@@ -2,11 +2,13 @@ package steerline
 
 import (
 	"context"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
+
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
@@ -22,7 +24,7 @@ func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
 }
 
 func TestResolutionAuditRegistrationRejectsBaseTargetDrift(t *testing.T) {
-	c := withNeutralProfile(Config{ExecutionPolicy: workspacePolicyFixture()}, neutralSettings{Executable: "fixture-agent", Target: executionapi.ExecutionTarget{ID: "fixture:peer", ConnectionID: "peer", ExternalRuntime: "original"}})
+	c := withNeutralProfile(Config{Persistence: sqlite.Factory{}, ExecutionPolicy: workspacePolicyFixture()}, neutralSettings{Executable: "fixture-agent", Target: executionapi.ExecutionTarget{ID: "fixture:peer", ConnectionID: "peer", ExternalRuntime: "original"}})
 	target := targetFor(c)
 	run := &Run{Host: c.Host, Agent: c.Agent, Backend: "fixture", Protocol: string(neutralProtocol), Target: target}
 	record := &ExecutionRecord{Agent: c.Agent, Backend: run.Backend, Protocol: run.Protocol, Target: target}

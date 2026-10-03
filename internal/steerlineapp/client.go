@@ -2,9 +2,9 @@ package steerlineapp
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -158,7 +158,7 @@ func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef
 type clientReader struct {
 	query.Service
 	query.ConversationService
-	store   *steerline.SQLiteStore
+	store   persistence.Connection
 	project string
 }
 
@@ -171,7 +171,7 @@ func (r *clientReader) DatabaseVersion(ctx context.Context) (string, uint64, err
 }
 func (r *clientReader) Command(ctx context.Context, id string) (contracts.CommandRecord, error) {
 	v, err := r.store.Command(ctx, r.project, id)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, persistence.ErrNotFound) {
 		return v, errors.Join(api.ErrRecordNotFound, err)
 	}
 	return v, err
@@ -183,7 +183,7 @@ var _ api.Reader = (*clientReader)(nil)
 type clientCommands struct {
 	service steerline.CommandService
 	config  steerline.Config
-	store   *steerline.SQLiteStore
+	store   persistence.Connection
 	lock    *steerline.RepoLock
 }
 

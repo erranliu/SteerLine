@@ -18,6 +18,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
@@ -59,7 +60,7 @@ func LoadConfigWithDirectory(path string, directory *steerline.ExecutionDirector
 	return loadConfig(path, directory, host, true)
 }
 func loadConfig(path string, directory *steerline.ExecutionDirectory, processHost executionapi.ManagedProcessHost, requireSupport bool) (steerline.Config, error) {
-	config := steerline.Config{Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s",
+	config := steerline.Config{Persistence: sqlite.Factory{}, Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s",
 		Git: steerline.Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
 	projectPath, err := filepath.Abs(path)
 	if err != nil {
