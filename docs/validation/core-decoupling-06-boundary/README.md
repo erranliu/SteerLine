@@ -35,4 +35,3 @@ ROOT 最终 174 个 Go 文件，完整源码包 34 个，Windows/Linux 生产依
 未启用任何可选 live/P10/原生权限采集；这些入口保留原 opt-in、工具、版本、原问题/身份及证据条件。旧 detached survival opt-in 的失败断言保留，当前 managed worker 不新增 detached fallback。Windows/Linux 依赖图已检验，Linux 测试体未执行。remote 仍缺原生权限落实证据，真实 Claim 在准入前拒绝；协议 mock 和第三 fake 不构成权限或双机认证。
 
 所有本次测试使用隔离 Git/SQLite/协议 mock 与临时 STEERLINE_HOME；只调用隔离测试构建的 CLI 和临时数据库，未调用真实产品业务 CLI/任务数据库，未写真实 runtime，未修改仓库外 runner 状态/技能/automation。先前默认 runtime 配置事件及恢复来源要求仅属于历史记录，不能在此任务猜测或覆盖原配置。
-
