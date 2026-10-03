@@ -36,6 +36,11 @@
 - 根包 TestMain 为正常测试运行设置独立临时 `STEERLINE_HOME`；协议子进程仍继承其测试父进程环境。
 - 定向报告位于本 worktree 忽略目录 `bin/cd67/`：`neutral-service` 中发布两条通过、首次反馈失败；`neutral-service-repaired` 为编译诊断失败；`neutral-service-repaired2` 保留缺失接收输入产物的失败；修复后 `neutral-service-single` 2/2 pass、`neutral-service-other-cases` 5/5 pass（余下两种反馈、事务 owner、旧服务答案）；补齐完成回执身份后 `neutral-service-fixed-identity` 2/2 pass。通过报告均 complete、0 fail/skip；是阶段 dirty 候选，不能作为最终 #67 head 证明。
 
+- 第二个续做阶段删除 root remote 复制工厂、codec 输入/helper 和无消费者 dispatcher；原远端断言仍归 `orca_remote_worker` 与外层协议 fixture。当前实时 root 平台文件为 18 个，仍需归位。
+- `quick` 默认接入外层两个 #67 入口；显式指定同一集成包时复用该次执行，核对父用例、七个负向守卫样本、原输入/两条支持路径/remote Protocol/真实 Claim 拒绝子用例各一次 run/terminal，缺失或重复均拒绝。没有运行最终 quick。
+- 守卫除 `.git` 元数据外不按目录名排除源码；顶层 `bin` helper 的额外标签传递依赖拒绝样本通过。报告 `bin/cd67/guard-no-directory-exclusions/summary.json` complete/pass，包含 parent 与全部七个负向样本。
+- 真实公开 Claim 的 remote 强制准入拒绝已纳入 `TestCD67AdditionalImplementation`；定向 `bin/cd67/remote-claim-required/summary.json` 2/2 pass/complete，不调用真实执行工具，也不认证权限。根包仅编译通过；`cmd/test-feedback` 缺失/重复/截断/必需子用例覆盖定向测试通过。
+
 ## 工作区和源码身份
 
 - 实际工作区：`C:/Users/lmas1/.codex/worktrees/f775/SteerLine`。

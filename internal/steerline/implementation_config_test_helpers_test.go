@@ -5,11 +5,10 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
-func testExecutionProfile(t *testing.T, id, name, host, agent string, codex codexworker.ProfileConfig, orca *orcaworker.ProfileConfig, remoteSettings ...*remote.ProfileConfig) ExecutionProfile {
+func testExecutionProfile(t *testing.T, id, name, host, agent string, codex codexworker.ProfileConfig, orca *orcaworker.ProfileConfig) ExecutionProfile {
 	t.Helper()
 	profile := ExecutionProfile{directory: testImplementationDirectory(t), ID: id, Name: name, Host: host, Agent: agent}
 	codexPayload, err := codexworker.EncodeProfileConfig(codex)
@@ -27,32 +26,15 @@ func testExecutionProfile(t *testing.T, id, name, host, agent string, codex code
 		}
 		profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionapi.ImplementationConfigInput{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
 	}
-	if host == "orca_supervised" {
-		if len(remoteSettings) == 0 || remoteSettings[0] == nil {
-			t.Fatal("supervised profile requires remote codec input")
-		}
-		payload, err := remote.EncodeProfileConfig(*remoteSettings[0])
-		if err != nil {
-			t.Fatal(err)
-		}
-		profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionapi.ImplementationConfigInput{ImplementationKey: remote.ProfileCodecKey, CodecVersion: 1, Payload: payload})
-	}
 	return profile
 }
 
-func setTestImplementationProfiles(t *testing.T, config *Config, codex codexworker.ProfileConfig, orca *orcaworker.ProfileConfig, remoteSettings ...*remote.ProfileConfig) {
+func setTestImplementationProfiles(t *testing.T, config *Config, codex codexworker.ProfileConfig, orca *orcaworker.ProfileConfig) {
 	t.Helper()
-	if config.Host == "orca_supervised" && len(remoteSettings) == 0 {
-		settings := remoteProfileSettings(*config)
-		if settings.ConnectionID == "" {
-			settings = remote.ProfileConfig{ConnectionID: "test-connection", EnvironmentID: "test-environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1}
-		}
-		remoteSettings = []*remote.ProfileConfig{&settings}
-	}
-	*config = withTestImplementationProfiles(*config, codex, orca, remoteSettings...)
+	*config = withTestImplementationProfiles(*config, codex, orca)
 }
 
-func withTestImplementationProfiles(config Config, codex codexworker.ProfileConfig, orca *orcaworker.ProfileConfig, remoteSettings ...*remote.ProfileConfig) Config {
+func withTestImplementationProfiles(config Config, codex codexworker.ProfileConfig, orca *orcaworker.ProfileConfig) Config {
 	config = testConfigWithDirectory(config)
 	if config.configDigest == "" {
 		config.configDigest = "test-accepted-config-v2"
@@ -90,23 +72,6 @@ func withTestImplementationProfiles(config Config, codex codexworker.ProfileConf
 			CodecVersion: 1, Purpose: executionapi.ImplementationConfigPurpose,
 			ImplementationKey: orcaworker.ProfileCodecKey, ProjectID: projectID,
 			ProfileID: profileID, AcceptedConfigVersion: config.configDigest,
-		}, payload)
-		if err != nil {
-			panic(err)
-		}
-		data = append(data, envelope)
-	}
-	if config.Host == "orca_supervised" {
-		if len(remoteSettings) == 0 || remoteSettings[0] == nil {
-			panic("supervised test profile requires remote codec input")
-		}
-		payload, err := remote.EncodeProfileConfig(*remoteSettings[0])
-		if err != nil {
-			panic(err)
-		}
-		envelope, err := executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{
-			CodecVersion: 1, Purpose: executionapi.ImplementationConfigPurpose, ImplementationKey: remote.ProfileCodecKey,
-			ProjectID: projectID, ProfileID: profileID, AcceptedConfigVersion: config.configDigest,
 		}, payload)
 		if err != nil {
 			panic(err)

@@ -19,7 +19,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 
@@ -52,16 +51,12 @@ func testImplementationCodecs() []ImplementationProfileCodec {
 		{Key: orcaworker.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, _ executionapi.ExecutionPolicy, host, _ string) ([]byte, []string, error) {
 			return orcaworker.NormalizeProfilePayload(payload, host)
 		}},
-		{Key: remote.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, _ executionapi.ExecutionPolicy, _, _ string) ([]byte, []string, error) {
-			return remote.NormalizeProfilePayload(payload)
-		}},
 	}
 }
 
 func newTestDirectory() (*ExecutionDirectory, error) {
 	local := ExecutionRegistrationKey{Backend: executionapi.BackendLocal, Agent: "codex", Protocol: executionapi.ProtocolLocalCodexAppServer}
 	terminal := ExecutionRegistrationKey{Backend: executionapi.BackendOrca, Agent: "codex", Protocol: executionapi.ProtocolOrcaTerminalV2}
-	supervised := ExecutionRegistrationKey{Backend: executionapi.BackendOrca, Agent: "codex", Protocol: executionapi.ProtocolOrcaSupervised}
 	entries := []ExecutionRegistration{
 		{
 			Key: local, ProfileKey: "local/local_codex_app_server_v1/codex", WorkspaceBranchPrefix: "codex", LocalWorkspace: true,
@@ -115,32 +110,6 @@ func newTestDirectory() (*ExecutionDirectory, error) {
 			CleanupCapabilities:       []string{"start", "observe", "stop", "workspace_inspection", "output_reading"},
 			ValidatePublicationPolicy: testWorkerPublicationPolicy,
 		},
-		{
-			Key: supervised, ProfileKey: "orca/orca_supervised/codex", WorkspaceBranchPrefix: "codex",
-			ProfileCodecKeys: []string{codexworker.ProfileCodecKey, orcaworker.ProfileCodecKey, remote.ProfileCodecKey}, QuestionCodecKey: orcaworker.QuestionRouteImplementationKey,
-			QuestionCodecVersion: 1, Host: "orca_supervised",
-			Backend: func(c Config) executionapi.ExecutionBackend { return remote.NewBackend(remoteWorkerConfig(c)) },
-			Target:  func(c Config) executionapi.ExecutionTarget { return testSupervisedTarget(c) },
-			ProbeRequirements: func(ctx context.Context, c Config) (executionapi.CapabilityReport, error) {
-				return remote.NewBackend(remoteWorkerConfig(c)).Probe(ctx, testSupervisedTarget(c), agentFor(c))
-			},
-			QueryTool: queryRemoteRequirementTool,
-			Lifecycle: remote.NewExecutionLifecycle,
-			ValidateProfileSelection: func(policy executionapi.ExecutionPolicy, agent string, payloads map[string][]byte) error {
-				return remote.ValidateProfileSelection(policy, agent, payloads[codexworker.ProfileCodecKey], payloads[orcaworker.ProfileCodecKey], payloads[remote.ProfileCodecKey])
-			},
-			ValidateConfig:            func(context.Context, Config) error { return nil },
-			Preflight:                 func(context.Context, Config) error { return nil },
-			PrepareClaim:              testPrepareClaim,
-			ReadinessRequired:         func(Config) bool { return false },
-			BuildPolicyResource:       testBuildPolicyResource,
-			VerifyPolicyResource:      testVerifyPolicyResource,
-			LinkedWorktreeWriteArgs:   codexLinkedWorktreeWriteArgs,
-			ValidTurnID:               testStableTurnID,
-			ValidateRef:               validateCatalogRef,
-			CleanupCapabilities:       []string{"start", "observe", "workspace_inspection", "output_reading", "message_inbox", "resource_settlement"},
-			ValidatePublicationPolicy: testWorkerPublicationPolicy,
-		},
 	}
 	return NewExecutionDirectory("builtin-execution-v2", testImplementationCodecs(), entries)
 }
@@ -148,10 +117,6 @@ func newTestDirectory() (*ExecutionDirectory, error) {
 type testProcessHost struct{}
 
 type localManagedProcessHost = testProcessHost
-type orcaTerminal = orcaworker.Terminal
-type orcaTerminalExitCause = orcaworker.TerminalExitCause
-type supervisedStartReceipt = remote.StartReceipt
-type supervisedPreflight = remote.PreflightResult
 
 func NewCodexNormalizer() Normalizer { return codexworker.NewNormalizer() }
 
@@ -251,14 +216,6 @@ func testTerminalTarget(c Config) executionapi.ExecutionTarget {
 	}{settings.Executable, settings.Args})[:24]}
 }
 
-func testSupervisedTarget(c Config) executionapi.ExecutionTarget {
-	settings := remoteProfileSettings(c)
-	if settings.ConnectionID == "" {
-		return executionapi.ExecutionTarget{}
-	}
-	return executionapi.ExecutionTarget{ID: "orca-supervised:" + settings.ConnectionID, ConnectionID: settings.ConnectionID, ExternalRuntime: settings.EnvironmentID}
-}
-
 func codexProfileSettings(c Config) codexworker.ProfileConfig {
 	payload, err := c.DecodeImplementationConfig(codexworker.ProfileCodecKey)
 	if err != nil {
@@ -279,18 +236,6 @@ func orcaProfileSettings(c Config) orcaworker.ProfileConfig {
 	value, err := orcaworker.DecodeProfileConfig(payload)
 	if err != nil {
 		return orcaworker.ProfileConfig{}
-	}
-	return value
-}
-
-func remoteProfileSettings(c Config) remote.ProfileConfig {
-	payload, err := c.DecodeImplementationConfig(remote.ProfileCodecKey)
-	if err != nil {
-		return remote.ProfileConfig{}
-	}
-	value, err := remote.DecodeProfileConfig(payload)
-	if err != nil {
-		return remote.ProfileConfig{}
 	}
 	return value
 }
@@ -478,18 +423,6 @@ func nativeOrcaCommand(c Config, path string, roots []string) (string, error) {
 	return orcaworker.WrapAgentCommand(command, terminal.Shell)
 }
 
-func remoteWorkerConfig(c Config) remote.Config {
-	worker, settings := codexProfileSettings(c), remoteProfileSettings(c)
-	terminalClient := nativeOrcaClient(c)
-	config := remote.Config{Repository: c.Repository, ProjectID: c.Identity(), Agent: c.Agent, Model: worker.Model, ReasoningEffort: worker.ReasoningEffort, CommandTimeout: c.CommandTimeout, Call: terminalClient.Raw, Origin: func(ctx context.Context) ([]byte, error) {
-		return (Runner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, c.Git, "remote", "get-url", c.Remote)
-	}}
-	config.Settings = remote.Settings{ConnectionID: settings.ConnectionID, EnvironmentID: settings.EnvironmentID, RepositorySelector: settings.RepositorySelector, CoordinatorTerminal: settings.CoordinatorTerminal, ExpectedCodexVersion: settings.ExpectedCodexVersion, PollInterval: settings.PollInterval}
-	return config
-}
-
-const maxSupervisedMessageBytes = remote.MaxMessageBytes
-
 func testHomePath() string {
 	if value := strings.TrimSpace(os.Getenv("STEERLINE_HOME")); value != "" {
 		return filepath.Clean(value)
@@ -633,10 +566,6 @@ func validateCatalogRef(ref executionapi.ExecutionRef) error {
 	case executionapi.ProtocolOrcaTerminalV2:
 		if ref.Backend != executionapi.BackendOrca || ref.External.Kind != "orca" || ref.External.Terminal == "" || ref.External.RuntimeID == "" || ref.External.Incarnation == "" {
 			return errors.New("terminal resource lacks its fixed runtime/terminal/incarnation")
-		}
-	case executionapi.ProtocolOrcaSupervised:
-		if ref.Backend != executionapi.BackendOrca || ref.External.Kind != "orca_supervised" || ref.External.RuntimeID == "" || ref.External.OrchestrationRun == "" || ref.External.Task == "" || ref.External.Dispatch == "" || ref.External.ExecutionHost == "" || ref.External.WorktreeID == "" {
-			return errors.New("supervised resource lacks its fixed run/task/dispatch/host/worktree")
 		}
 	default:
 		return errors.New("unsupported resource protocol")

@@ -23,7 +23,30 @@ import (
 const corePackage = "github.com/erranliu/SteerLine/internal/steerline"
 
 var quickTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged"}
-var quickPackages = []string{corePackage, corePackage + "/taskgraph", corePackage + "/taskview", corePackage + "/workerflow", corePackage + "/execution", corePackage + "/contracts", corePackage + "/projection", corePackage + "/query", corePackage + "/sqlite", corePackage + "/orca_remote_worker"}
+
+const boundaryPackage = "github.com/erranliu/SteerLine/internal/steerlineintegration"
+
+var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImplementation"}
+var quickBoundaryAssigned = []string{
+	"TestCD67CoreBoundary",
+	"TestCD67CoreBoundary/negative_source_fixtures",
+	"TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
+	"TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
+	"TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
+	"TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
+	"TestCD67CoreBoundary/negative_source_fixtures/nested_generated_name_is_not_an_exclusion",
+	"TestCD67CoreBoundary/negative_source_fixtures/top_level_output_name_is_not_an_exclusion",
+	"TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
+	"TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+	"TestCD67AdditionalImplementation",
+	"TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+	"TestCD67AdditionalImplementation/supported_app_server_receipt_barriers",
+	"TestCD67AdditionalImplementation/supported_terminal_recovery_and_original_identity",
+	"TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication",
+	"TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
+}
+
+var quickPackages = []string{corePackage, corePackage + "/taskgraph", corePackage + "/taskview", corePackage + "/workerflow", corePackage + "/execution", corePackage + "/contracts", corePackage + "/projection", corePackage + "/query", corePackage + "/sqlite", corePackage + "/orca_remote_worker", boundaryPackage}
 
 //go:embed testdata/core-test-weights.json
 var weightFile embed.FS
@@ -103,8 +126,18 @@ func runScoped(opts options) int {
 		report.CoreTests = append([]string(nil), quickTests...)
 		args := []string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1", "-run=" + exactPattern(quickTests), corePackage}
 		report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-core", "", args, quickTests, []string{corePackage}, false))
-		args = append([]string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1"}, quickPackages[1:]...)
-		report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-rules", "", args, nil, quickPackages[1:], false))
+		args = append([]string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1"}, quickPackages[1:len(quickPackages)-1]...)
+		report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-rules", "", args, nil, quickPackages[1:len(quickPackages)-1], false))
+		boundarySelected := false
+		for _, arg := range opts.goTestArgs {
+			if arg == "./internal/steerlineintegration" || arg == boundaryPackage {
+				boundarySelected = true
+			}
+		}
+		if !boundarySelected {
+			args = []string{"go", "test", "-json", "-count=1", "-timeout=10m", "-p", "1", "-parallel", "1", "-run=" + exactPattern(quickBoundaryTests), boundaryPackage}
+			report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-boundary", "", args, quickBoundaryAssigned, []string{boundaryPackage}, false))
+		}
 		if len(opts.goTestArgs) > 0 {
 			args = append([]string{"go", "test"}, opts.goTestArgs...)
 			if !hasJSONFlag(args) {
@@ -113,7 +146,11 @@ func runScoped(opts options) int {
 			if flagValue(args, "-count", "") == "" {
 				args = append(args, "-count=1")
 			}
-			report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-targeted", "", args, nil, nil, false))
+			if boundarySelected {
+				report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-boundary", "", args, quickBoundaryAssigned, []string{boundaryPackage}, false))
+			} else {
+				report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-targeted", "", args, nil, nil, false))
+			}
 		}
 	} else {
 		weights, e := loadWeights()
@@ -434,7 +471,11 @@ func checkScopedCoverage(report scopedReport) []string {
 		}
 		if len(group.Assigned) > 0 {
 			for _, name := range group.Assigned {
-				key := corePackage + "\x00" + name
+				pkg := corePackage
+				if group.ID == "quick-boundary" {
+					pkg = boundaryPackage
+				}
+				key := pkg + "\x00" + name
 				if runs[key] != 1 || terminals[key] != 1 {
 					failures = append(failures, fmt.Sprintf("%s: missing assigned test %s", group.ID, name))
 				}
@@ -448,11 +489,14 @@ func checkScopedCoverage(report scopedReport) []string {
 				}
 			}
 		}
+		if group.ID == "quick-boundary" && (packages[boundaryPackage] != 1 || len(packages) != 1) {
+			failures = append(failures, "quick-boundary: package set differs")
+		}
 		for pkg, count := range packages {
 			if count != 1 {
 				failures = append(failures, fmt.Sprintf("%s: package %s has %d terminal events", group.ID, pkg, count))
 			}
-			if group.ID == "other-packages" || group.ID == "quick-core" || group.ID == "quick-rules" {
+			if group.ID == "other-packages" || group.ID == "quick-core" || group.ID == "quick-rules" || group.ID == "quick-boundary" {
 				seenPackages[pkg] += count
 			}
 		}

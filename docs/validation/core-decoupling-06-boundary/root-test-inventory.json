@@ -23,7 +23,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/codex_worker_acceptance_live_test.go",
@@ -61,7 +61,7 @@
       "testAppServerAnswerRecoveryPersistsBeforeNextQuestion"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/conversation_test.go",
@@ -86,7 +86,7 @@
       "conversationTestCheckpoint"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/core_decoupling_63_audit_test.go",
@@ -96,7 +96,7 @@
       "testCD63BindingCodecIsolation"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/core_decoupling_65_test.go",
@@ -112,7 +112,7 @@
       "testCD65DiscoveryRejectsForeignOwner"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/core_decoupling_66_test.go",
@@ -122,7 +122,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/core_decoupling_66_test_helpers_test.go",
@@ -206,7 +206,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/execution_policy_live_test.go",
@@ -245,7 +245,7 @@
       "policyResourceReceiptFixture"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/execution_profiles_test.go",
@@ -259,7 +259,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/execution_registry_test.go",
@@ -273,7 +273,7 @@
       "feedbackIdentityMismatch"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/execution_requirements_test.go",
@@ -291,7 +291,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/execution_resolution_audit_test.go",
@@ -305,7 +305,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/global_execution_test_helpers_test.go",
@@ -361,7 +361,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/native_dag_commands_test.go",
@@ -389,7 +389,7 @@
       "seedPublishedForDiscard"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/native_tasks_test.go",
@@ -419,7 +419,7 @@
       "seedExecutionProfileTasks"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/orca_fake_test.go",
@@ -448,7 +448,7 @@
     "live_switches": [
       "STEERLINE_FAKE_ORCA_CLOSE_STAYS_LIVE"
     ],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/orca_supervised_p10_real_test.go",
@@ -472,7 +472,7 @@
       "STEERLINE_REAL_P10_WORKFLOW_RUN_ID",
       "STEERLINE_REAL_P10_WORKTREE_ID"
     ],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/orca_supervised_test.go",
@@ -500,7 +500,7 @@
     "live_switches": [
       "STEERLINE_FAKE_REOPEN_TERMINAL_LIVE"
     ],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/orca_worker_observation_fake_test.go",
@@ -536,7 +536,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/process_fixture_test.go",
@@ -560,7 +560,7 @@
       "mixedPublicationProfiles"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/publication_policy_test.go",
@@ -576,7 +576,7 @@
       "hostPublicationProviderFixture"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/question_route_test_helpers_test.go",
@@ -586,7 +586,7 @@
       "simpleQuestionRoute"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/runtime_boundary_test.go",
@@ -596,7 +596,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/service_test.go",
@@ -654,7 +654,7 @@
       "seedNativeDecision"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/worker_codex_live_test.go",
@@ -679,7 +679,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/worker_config_test.go",
@@ -704,7 +704,7 @@
       "workerContextConfigFixture"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/worker_delivery_test.go",
@@ -715,7 +715,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/worker_environment_live_test.go",
@@ -777,7 +777,7 @@
       "nativeOrcaAnswerText"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/worker_feedback_phase_test.go",
@@ -786,7 +786,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/worker_local_test.go",
@@ -801,7 +801,7 @@
       "mockAppServerConnection"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/worker_recovery_test.go",
@@ -810,7 +810,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/worker_service_recovery_live_test.go",
@@ -834,7 +834,7 @@
       "testWorkerFlowServiceFirstFeedback"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/worker_state_test.go",
@@ -846,6 +846,6 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   }
 ]

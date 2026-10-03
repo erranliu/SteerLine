@@ -121,7 +121,7 @@ func TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents(t *testing.T) {
 				t.Fatal(err)
 			}
 			var rulesRaw []byte
-			for _, pkg := range quickPackages[1:] {
+			for _, pkg := range quickPackages[1 : len(quickPackages)-1] {
 				rulesRaw = append(rulesRaw, packageEvent("start", pkg)...)
 				rulesRaw = append(rulesRaw, packageEvent("pass", pkg)...)
 			}
@@ -130,8 +130,20 @@ func TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents(t *testing.T) {
 				t.Fatal(err)
 			}
 			group := scopedGroup{ID: "quick-core", Assigned: []string{"TestA"}, Packages: []string{corePackage}, StdoutLog: path, Summary: testfeedback.Parse([]byte(tc.events), 0)}
-			rules := scopedGroup{ID: "quick-rules", Packages: quickPackages[1:], StdoutLog: rulesPath, Summary: testfeedback.Parse(rulesRaw, 0)}
-			report := scopedReport{Scope: "quick", Groups: []scopedGroup{group, rules}, AllPackages: quickPackages}
+			rules := scopedGroup{ID: "quick-rules", Packages: quickPackages[1 : len(quickPackages)-1], StdoutLog: rulesPath, Summary: testfeedback.Parse(rulesRaw, 0)}
+			var boundaryRaw []byte
+			boundaryRaw = append(boundaryRaw, packageEvent("start", boundaryPackage)...)
+			for _, name := range quickBoundaryAssigned {
+				boundaryRaw = append(boundaryRaw, []byte(strings.ReplaceAll(event("run", name), corePackage, boundaryPackage))...)
+				boundaryRaw = append(boundaryRaw, []byte(strings.ReplaceAll(event("pass", name), corePackage, boundaryPackage))...)
+			}
+			boundaryRaw = append(boundaryRaw, packageEvent("pass", boundaryPackage)...)
+			boundaryPath := filepath.Join(root, "boundary.jsonl")
+			if err := os.WriteFile(boundaryPath, boundaryRaw, 0600); err != nil {
+				t.Fatal(err)
+			}
+			boundary := scopedGroup{ID: "quick-boundary", Assigned: quickBoundaryAssigned, Packages: []string{boundaryPackage}, StdoutLog: boundaryPath, Summary: testfeedback.Parse(boundaryRaw, 0)}
+			report := scopedReport{Scope: "quick", Groups: []scopedGroup{group, rules, boundary}, AllPackages: quickPackages}
 			problems := checkScopedCoverage(report)
 			if tc.wantPass && len(problems) != 0 {
 				t.Fatalf("complete stream added errors: %v", problems)
@@ -191,4 +203,47 @@ func eventsFor(run, terminal, pkgTerminal string) string {
 		stream += event(pkgTerminal, "")
 	}
 	return stream
+}
+
+func TestQuickBoundaryCoverageRequiresEachAssignedEntry(t *testing.T) {
+	for _, tc := range []struct {
+		name, omitted string
+		duplicate     bool
+		wantFailure   bool
+	}{
+		{name: "complete"},
+		{name: "missing_parent", omitted: "TestCD67CoreBoundary", wantFailure: true},
+		{name: "missing_recovery_gate", omitted: "TestCD67AdditionalImplementation/supported_terminal_recovery_and_original_identity", wantFailure: true},
+		{name: "missing_claim_rejection", omitted: "TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence", wantFailure: true},
+		{name: "duplicate", duplicate: true, wantFailure: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := packageEvent("start", boundaryPackage)
+			for _, name := range quickBoundaryAssigned {
+				if name == tc.omitted {
+					continue
+				}
+				raw += strings.ReplaceAll(event("run", name)+event("pass", name), corePackage, boundaryPackage)
+			}
+			if tc.duplicate {
+				raw += strings.ReplaceAll(event("run", quickBoundaryTests[0])+event("pass", quickBoundaryTests[0]), corePackage, boundaryPackage)
+			}
+			raw += packageEvent("pass", boundaryPackage)
+			path := filepath.Join(t.TempDir(), "boundary.jsonl")
+			if err := os.WriteFile(path, []byte(raw), 0600); err != nil {
+				t.Fatal(err)
+			}
+			group := scopedGroup{ID: "quick-boundary", Assigned: quickBoundaryAssigned, Packages: []string{boundaryPackage}, StdoutLog: path, Summary: testfeedback.Parse([]byte(raw), 0)}
+			problems := checkScopedCoverage(scopedReport{Scope: "quick", Groups: []scopedGroup{group}})
+			boundaryFailure := false
+			for _, problem := range problems {
+				if strings.HasPrefix(problem, "quick-boundary:") {
+					boundaryFailure = true
+				}
+			}
+			if boundaryFailure != tc.wantFailure {
+				t.Fatalf("boundary coverage failure=%t, want %t: %v", boundaryFailure, tc.wantFailure, problems)
+			}
+		})
+	}
 }
