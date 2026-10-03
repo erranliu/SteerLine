@@ -2,32 +2,33 @@ package console
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
-	"fmt"
-	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerlineclient"
 )
 
 // ProjectRef is the identity of a console view. ConfigPath and RunDir are both
 // part of the key so two configs for one repository keep separate view state.
 type ProjectRef struct {
-	Key                string
-	Name               string
-	ConfigPath         string
-	Config             steerline.Config
-	NormalizerSelector func([]byte) steerline.Normalizer
-	ApplicationHome    string
-	ApplicationBin     string
-	Identity           string
-	RunDir             string
-	Error              string
-	Conflict           string
+	Key             string
+	Name            string
+	ConfigPath      string
+	Config          steerline.Config
+	ApplicationHome string
+	ApplicationBin  string
+	Identity        string
+	RunDir          string
+	Error           string
+	Conflict        string
 }
 
 type ProjectConfigFile struct {
@@ -41,23 +42,11 @@ type ProjectConfigFile struct {
 type ConfigSource interface {
 	ConfigFiles() ([]ProjectConfigFile, error)
 	LoadConfig(string) (steerline.Config, error)
-	NormalizerSelector([]byte) steerline.Normalizer
 	ApplicationPaths() (home, bin, etc string)
 }
 
-type ProjectSnapshot struct {
-	SelectedTaskID  string
-	FullReadAt      time.Time
-	Connection      steerline.ServiceConnection
-	Observation     steerline.ObservationSnapshot
-	Tasks           *steerline.TaskSnapshot
-	TaskError       string
-	NativeTasks     *steerline.NativeTaskPage
-	SelectedNative  *steerline.NativeTaskDetail
-	NativeTaskError string
-	Domain          *steerline.DomainSnapshot
-	DomainError     string
-}
+type ProjectSnapshot = api.ProjectSnapshot
+type LogBatch = api.LogBatch
 
 type QuerySource interface {
 	ReadProject(context.Context, ProjectRef, string, ProjectSnapshot) ProjectSnapshot
@@ -79,307 +68,95 @@ type DecisionCommandClient interface {
 	DecisionCommand(context.Context, ProjectRef, string) (steerline.CommandRecord, error)
 }
 
-type FileQuerySource struct{}
+// These bridges only map the not-yet-migrated TUI to the product client.
+// #72 deletes them and ProjectRef.Config together.
+type FileQuerySource struct{ Factory api.Factory }
+type FileControlClient struct{ Factory api.Factory }
 
-func (FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selectedTaskID string, previous ProjectSnapshot) ProjectSnapshot {
-	if reusableProjectSnapshot(ctx, ref, selectedTaskID, previous, steerline.ProbeServiceProcess, readProjectDatabaseVersion) {
-		return previous
-	}
-	result := ProjectSnapshot{SelectedTaskID: selectedTaskID}
+func productRef(ref ProjectRef) api.ProjectRef {
+	return api.ProjectRef{Key: ref.Key, Name: ref.Name, ConfigPath: ref.ConfigPath, Identity: ref.Identity, RunDir: ref.RunDir}
+}
+func withClient[T any](ctx context.Context, ref ProjectRef, factory api.Factory, fn func(api.Client) (T, error)) (result T, err error) {
 	if ref.Error != "" {
-		result.TaskError, result.DomainError = ref.Error, ref.Error
-		return result
+		return result, errors.New(ref.Error)
 	}
-	c := ref.Config
-	if c.TaskAuthority != "native" {
-		result.TaskError = "task_authority=native is required"
-		result.DomainError = result.TaskError
-		return result
-	}
-	if err := c.ResolveIdentity(ctx); err != nil {
-		result.TaskError = "resolve repository identity: " + err.Error()
-		result.Connection = steerline.ServiceConnection{State: steerline.ConnectionIdentityError, Diagnostic: result.TaskError}
-		return result
-	}
-	store, err := steerline.OpenNativeTaskReader(ctx, &c)
+	client, err := steerlineclient.Open(ctx, productRef(ref), factory)
 	if err != nil {
-		result.Connection = steerline.ConnectService(ctx, c)
-		result.Observation = result.Connection.Snapshot
-		if os.IsNotExist(err) {
-			err = errors.New("native task database does not exist; the console remains read-only")
-		}
-		result.NativeTaskError, result.TaskError, result.DomainError = err.Error(), err.Error(), err.Error()
-		return result
+		return result, err
 	}
-	defer store.Close()
-	view, err := (steerline.NewQueryService(store, c.Identity())).ReadProjectView(ctx, selectedTaskID, 500)
+	defer func() { err = errors.Join(err, client.Close()) }()
+	return fn(client)
+}
+func (f FileQuerySource) ReadProject(ctx context.Context, ref ProjectRef, selected string, previous ProjectSnapshot) ProjectSnapshot {
+	result, err := withClient(ctx, ref, f.Factory, func(c api.Client) (ProjectSnapshot, error) {
+		return c.ReadProject(ctx, selected, previous), nil
+	})
 	if err != nil {
-		result.Connection = steerline.ConnectService(ctx, c)
-		result.Observation = result.Connection.Snapshot
-		result.NativeTaskError, result.TaskError, result.DomainError = err.Error(), err.Error(), err.Error()
-		return result
-	}
-	result.Observation = steerline.ObserveRuntimeSnapshot(c, view.Runtime, view.RuntimeError, view.SampledAt)
-	result.Connection = steerline.ConnectServiceFromSnapshot(ctx, c, result.Observation)
-	result.Observation = result.Connection.Snapshot
-	result.NativeTasks, result.SelectedNative, result.Domain = view.Tasks, view.SelectedTask, view.Domain
-	if view.TaskError != nil {
-		result.TaskError = view.TaskError.Error()
-		if view.Tasks == nil {
-			result.NativeTaskError = result.TaskError
-		}
-	}
-	if view.Ready != nil {
-		result.Tasks = nativeCandidateSnapshot(ref, result.Connection, *view.Ready)
-	}
-	if view.SelectedTaskError != nil {
-		result.NativeTaskError = view.SelectedTaskError.Error()
-	}
-	if view.DomainError != nil {
-		result.DomainError = view.DomainError.Error()
-	}
-	if result.TaskError == "" && result.NativeTaskError == "" && result.DomainError == "" {
-		result.FullReadAt = view.SampledAt
+		return ProjectSnapshot{SelectedTaskID: selected, TaskError: err.Error(), DomainError: err.Error()}
 	}
 	return result
 }
-
-func reusableProjectSnapshot(ctx context.Context, ref ProjectRef, selectedTaskID string, previous ProjectSnapshot,
-	probeProcess func(*executionapi.ProcessIdentity) steerline.ProcessProbe,
-	probeVersion func(context.Context, string) (string, uint64, error)) bool {
-	age := time.Since(previous.FullReadAt)
-	if previous.FullReadAt.IsZero() || age < 0 || age >= 5*time.Second ||
-		previous.SelectedTaskID != selectedTaskID || previous.Connection.State != steerline.ConnectionConnected ||
-		previous.NativeTasks == nil || previous.Tasks == nil || previous.Domain == nil ||
-		previous.Observation.Runtime == nil || previous.TaskError != "" || previous.NativeTaskError != "" || previous.DomainError != "" {
-		return false
-	}
-	if previous.NativeTasks.ProjectID != ref.Identity || previous.NativeTasks.DatabaseID == "" || previous.NativeTasks.DatabaseRevision == 0 {
-		return false
-	}
-	runtime := previous.Connection.Snapshot.Runtime
-	if runtime == nil || runtime.Repository.Identity != ref.Identity || runtime.Service.ProcessIdentity == nil ||
-		probeProcess(runtime.Service.ProcessIdentity).State != steerline.ProcessMatches {
-		return false
-	}
-	if previous.Observation.FreshnessLimit > 0 && time.Since(previous.Observation.Runtime.HeartbeatAt) >= previous.Observation.FreshnessLimit {
-		return false
-	}
-	id, revision, err := probeVersion(ctx, filepath.Join(ref.RunDir, "steerline.db"))
-	return err == nil && id == previous.NativeTasks.DatabaseID && revision == previous.NativeTasks.DatabaseRevision
+func (f FileQuerySource) ReadActivity(ctx context.Context, ref ProjectRef, runID, executionID, attemptID, path string, cursor steerline.JournalCursor) (LogBatch, error) {
+	return withClient(ctx, ref, f.Factory, func(c api.Client) (LogBatch, error) {
+		return c.Activity(ctx, runID, executionID, attemptID, path, cursor)
+	})
 }
-
-func readProjectDatabaseVersion(ctx context.Context, path string) (string, uint64, error) {
-	reader, err := steerline.OpenSQLiteReader(path)
-	if err != nil {
-		return "", 0, err
-	}
-	defer reader.Close()
-	return reader.DatabaseVersion(ctx)
+func (f FileQuerySource) ReadConversation(ctx context.Context, ref ProjectRef, filter steerline.ConversationFilter, cursor string) (steerline.ConversationPage, error) {
+	return withClient(ctx, ref, f.Factory, func(c api.Client) (steerline.ConversationPage, error) {
+		return c.Conversation(ctx, filter, cursor)
+	})
 }
-
-func nativeCandidateSnapshot(ref ProjectRef, connection steerline.ServiceConnection, page steerline.NativeReadyTaskSnapshot) *steerline.TaskSnapshot {
-	queried := page.SampledAt
-	snapshot := &steerline.TaskSnapshot{Version: 1, RepositoryIdentity: ref.Identity, QueriedAt: queried, LastSuccessAt: &queried, Tasks: []steerline.TaskCandidate{}}
-	if connection.State == steerline.ConnectionConnected && connection.CanControl && connection.Snapshot.Runtime != nil {
-		snapshot.InstanceID = connection.Snapshot.Runtime.Service.InstanceID
-	}
-	for _, task := range page.Tasks {
-		if task.Status != "open" || !nativeTaskTypeExecutable(ref.Config.ExecutableTypes, task.Type) {
-			continue
-		}
-		snapshot.Tasks = append(snapshot.Tasks, steerline.TaskCandidate{TaskID: task.TaskID, Title: task.Title, Type: task.Type})
-	}
-	return snapshot
+func (f FileQuerySource) ReadBody(ctx context.Context, ref ProjectRef, body steerline.ConversationBodyRef, offset int64, limit int) (steerline.ConversationBodyPage, error) {
+	return withClient(ctx, ref, f.Factory, func(c api.Client) (steerline.ConversationBodyPage, error) {
+		return c.Body(ctx, body, offset, limit)
+	})
 }
-
-func nativeTaskTypeExecutable(types []string, taskType string) bool {
-	for _, candidate := range types {
-		if candidate == taskType {
-			return true
-		}
-	}
-	return false
+func (f FileQuerySource) ReadCapabilities(ctx context.Context, ref ProjectRef, backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, targetID, executionID, attemptID, source, sourceIdentity string) ([]steerline.ConversationCapabilityReport, error) {
+	return withClient(ctx, ref, f.Factory, func(c api.Client) ([]steerline.ConversationCapabilityReport, error) {
+		return c.Capabilities(ctx, api.CapabilityFilter{Backend: backend, Protocol: protocol, TargetID: targetID, ExecutionID: executionID, AttemptID: attemptID, Source: source, SourceIdentity: sourceIdentity})
+	})
 }
-
-func (FileQuerySource) ReadActivity(ctx context.Context, ref ProjectRef, runID, executionID, attemptID, currentPath string, cursor steerline.JournalCursor) (LogBatch, error) {
-	path := currentPath
-	if path == "" {
-		store, err := steerline.OpenSQLiteReader(filepath.Join(ref.RunDir, "steerline.db"))
+func (f FileControlClient) Submit(ctx context.Context, ref ProjectRef, action string, payload any, id, instance string, revision *uint64) (steerline.ControlRequest, error) {
+	var p api.ControlPayload
+	if payload != nil {
+		raw, err := json.Marshal(payload)
 		if err != nil {
-			return LogBatch{}, err
+			return steerline.ControlRequest{}, err
 		}
-		domain, err := store.Query(ctx, ref.Identity)
-		_ = store.Close()
-		if err != nil {
-			return LogBatch{}, err
-		}
-		for _, attempt := range domain.Attempts {
-			if attempt.ExecutionID == executionID && attempt.AttemptID == attemptID {
-				path = attempt.EventPath
-				break
-			}
-		}
-		if path == "" {
-			return LogBatch{}, fmt.Errorf("attempt %s has no queryable activity record", attemptID)
-		}
-		if !filepath.IsAbs(path) {
-			path = filepath.Join(ref.RunDir, path)
+		if err = contracts.DecodeJSON(raw, &p); err != nil {
+			return steerline.ControlRequest{}, err
 		}
 	}
-	if strings.TrimSpace(runID) == "" || strings.TrimSpace(path) == "" {
-		return LogBatch{}, errors.New("activity query identity or record path is missing")
-	}
-	return newFileSource(ref.Config, ref.NormalizerSelector).ReadLog(path, cursor)
+	return withClient(ctx, ref, f.Factory, func(c api.Client) (steerline.ControlRequest, error) {
+		return c.SubmitControl(ctx, api.ControlInput{Action: api.ControlAction(action), Payload: p, RequestID: id, RequestedBy: "", InstanceID: instance, ExpectedRevision: revision})
+	})
 }
-
-func (FileQuerySource) ReadConversation(ctx context.Context, ref ProjectRef, filter steerline.ConversationFilter, cursor string) (steerline.ConversationPage, error) {
-	if ref.Error != "" {
-		return steerline.ConversationPage{}, errors.New(ref.Error)
-	}
-	store, err := steerline.OpenSQLiteReader(filepath.Join(ref.RunDir, "steerline.db"))
-	if err != nil {
-		return steerline.ConversationPage{}, err
-	}
-	defer store.Close()
-	query := steerline.NewConversationQueryService(store, ref.Identity)
-	return query.ReadConversation(ctx, filter, cursor, steerline.MaxEventPageSize)
+func (f FileControlClient) Receipt(ctx context.Context, ref ProjectRef, id string) (*steerline.ControlReceipt, error) {
+	return withClient(ctx, ref, f.Factory, func(c api.Client) (*steerline.ControlReceipt, error) { return c.Receipt(ctx, id) })
 }
-
-func (FileQuerySource) ReadBody(ctx context.Context, ref ProjectRef, body steerline.ConversationBodyRef, offset int64, limit int) (steerline.ConversationBodyPage, error) {
-	store, err := steerline.OpenSQLiteReader(filepath.Join(ref.RunDir, "steerline.db"))
-	if err != nil {
-		return steerline.ConversationBodyPage{}, err
-	}
-	defer store.Close()
-	return steerline.NewConversationQueryService(store, ref.Identity).ReadMessageBody(ctx, body, offset, limit)
+func (f FileControlClient) Request(ctx context.Context, ref ProjectRef, id string) (*steerline.ControlRequest, error) {
+	return withClient(ctx, ref, f.Factory, func(c api.Client) (*steerline.ControlRequest, error) { return c.Request(ctx, id) })
 }
-
-func (FileQuerySource) ReadCapabilities(ctx context.Context, ref ProjectRef, backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, targetID, executionID, attemptID, source, sourceIdentity string) ([]steerline.ConversationCapabilityReport, error) {
-	store, err := steerline.OpenSQLiteReader(filepath.Join(ref.RunDir, "steerline.db"))
-	if err != nil {
-		return nil, err
-	}
-	defer store.Close()
-	reports, err := steerline.NewConversationQueryService(store, ref.Identity).ReadCapabilities(ctx, backend, protocol, targetID, 100)
-	if err != nil {
-		return nil, err
-	}
-	filtered := make([]steerline.ConversationCapabilityReport, 0, len(reports))
-	for _, report := range reports {
-		if executionID != "" && report.ExecutionID != executionID {
-			continue
-		}
-		if attemptID != "" && report.AttemptID != attemptID {
-			continue
-		}
-		if source != "" && report.Source != source {
-			continue
-		}
-		if sourceIdentity != "" && report.SourceIdentity != sourceIdentity {
-			continue
-		}
-		filtered = append(filtered, report)
-	}
-	return filtered, nil
+func (f FileControlClient) DecisionEligibility(ctx context.Context, ref ProjectRef, run *steerline.Run) error {
+	_, err := withClient(ctx, ref, f.Factory, func(c api.Client) (struct{}, error) { return struct{}{}, c.DecisionEligibility(ctx, run) })
+	return err
 }
-
-type FileControlClient struct{}
-
-func (FileControlClient) DecisionEligibility(ctx context.Context, ref ProjectRef, run *steerline.Run) error {
-	if err := ctx.Err(); err != nil {
-		return err
+func (f FileControlClient) SubmitDecision(ctx context.Context, ref ProjectRef, answer steerline.DecisionAnswer, by, id string) (steerline.CommandRecord, bool, error) {
+	type result struct {
+		Record steerline.CommandRecord
+		Fresh  bool
 	}
-	if ref.Error != "" {
-		return errors.New(ref.Error)
-	}
-	return steerline.DecisionReplyEligibility(ctx, ref.Config, run)
+	r, err := withClient(ctx, ref, f.Factory, func(c api.Client) (result, error) {
+		v, fresh, err := c.SubmitDecision(ctx, api.DecisionInput{Answer: answer, RequestedBy: by, CommandID: id})
+		return result{v, fresh}, err
+	})
+	return r.Record, r.Fresh, err
 }
-
-func (FileControlClient) Submit(ctx context.Context, ref ProjectRef, action string, payload any, requestID, instance string, revision *uint64) (steerline.ControlRequest, error) {
-	if err := ctx.Err(); err != nil {
-		return steerline.ControlRequest{}, err
-	}
-	if ref.Error != "" {
-		return steerline.ControlRequest{}, errors.New(ref.Error)
-	}
-	return steerline.SubmitControlTargeted(ref.Config, action, payload, steerline.DefaultRequestedBy(), requestID, instance, revision)
+func (f FileControlClient) DecisionCommand(ctx context.Context, ref ProjectRef, id string) (steerline.CommandRecord, error) {
+	return withClient(ctx, ref, f.Factory, func(c api.Client) (steerline.CommandRecord, error) { return c.Command(ctx, id) })
 }
-
-func (FileControlClient) Receipt(ctx context.Context, ref ProjectRef, requestID string) (*steerline.ControlReceipt, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	return steerline.ReadVerifiedControlReceipt(ref.Config, requestID)
-}
-
-func (FileControlClient) Request(ctx context.Context, ref ProjectRef, requestID string) (*steerline.ControlRequest, error) {
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-	return steerline.ReadControlRequest(ref.Config, requestID)
-}
-
-func (FileControlClient) SubmitDecision(ctx context.Context, ref ProjectRef, answer steerline.DecisionAnswer, requestedBy, commandID string) (steerline.CommandRecord, bool, error) {
-	if err := ctx.Err(); err != nil {
-		return steerline.CommandRecord{}, false, err
-	}
-	if ref.Error != "" {
-		return steerline.CommandRecord{}, false, errors.New(ref.Error)
-	}
-	return steerline.SubmitAnswerDecision(ctx, ref.Config, answer.RunID, answer.DecisionID, answer.OptionID, answer.Note, requestedBy, answer.ExpectedDecisionVersion, answer.ExpectedRunRevision, answer.ServiceInstanceID, commandID)
-}
-
-func (FileControlClient) DecisionCommand(ctx context.Context, ref ProjectRef, commandID string) (steerline.CommandRecord, error) {
-	if err := ctx.Err(); err != nil {
-		return steerline.CommandRecord{}, err
-	}
-	db, err := steerline.OpenSQLiteReader(filepath.Join(ref.RunDir, "steerline.db"))
-	if err != nil {
-		return steerline.CommandRecord{}, err
-	}
-	defer db.Close()
-	return db.Command(ctx, ref.Identity, commandID)
-}
-
 func candidateFreshness(ref ProjectRef, snapshot ProjectSnapshot, now time.Time) (bool, string) {
-	if snapshot.Tasks == nil {
-		if snapshot.TaskError != "" {
-			return false, snapshot.TaskError
-		}
-		return false, "任务候选快照不可用"
-	}
-	if snapshot.TaskError != "" {
-		return false, snapshot.TaskError
-	}
-	if snapshot.Connection.State != steerline.ConnectionConnected || !snapshot.Connection.CanControl {
-		return false, firstText(snapshot.Connection.Diagnostic, "服务未连接；缓存任务不能作为启动许可")
-	}
-	controlRuntime := snapshot.Connection.Snapshot.Runtime
-	if controlRuntime == nil || controlRuntime.Service.InstanceID == "" {
-		return false, "缺少当前服务实例身份"
-	}
-	if snapshot.Tasks.InstanceID != controlRuntime.Service.InstanceID || viewCanonical(snapshot.Tasks.RepositoryIdentity) != viewCanonical(ref.Identity) || viewCanonical(controlRuntime.Repository.Identity) != viewCanonical(ref.Identity) {
-		return false, "候选缓存属于其他服务实例或仓库"
-	}
-	if snapshot.Tasks.LastSuccessAt == nil || snapshot.Tasks.LastSuccessAt.IsZero() {
-		return false, "候选查询尚无成功记录"
-	}
-	if snapshot.Tasks.QueriedAt.After(now.Add(time.Minute)) || snapshot.Tasks.LastSuccessAt.After(now.Add(time.Minute)) {
-		return false, "候选快照时间位于未来"
-	}
-	poll := 0 * time.Second
-	if d, err := time.ParseDuration(ref.Config.TaskPoll); err == nil && d > 0 {
-		poll = d
-	}
-	limit := 30 * time.Second
-	if poll*3 > limit {
-		limit = poll * 3
-	}
-	if now.Sub(snapshot.Tasks.LastSuccessAt.UTC()) > limit {
-		return false, fmt.Sprintf("候选缓存已过期（上次成功 %s）", snapshot.Tasks.LastSuccessAt.Local().Format("15:04:05"))
-	}
-	return true, ""
+	return steerlineclient.CandidateFreshness(ref.Identity, snapshot, now)
 }
 
 func absoluteViewKey(configPath, runDir string) (string, error) {

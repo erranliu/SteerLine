@@ -186,6 +186,7 @@ func ReadDecisionAnswer(r *Run) (DecisionAnswer, error) {
 
 // AnswerOptions is the CLI entry point for answering a pending decision.
 type AnswerOptions struct {
+	CommandID       string
 	RunID           string
 	DecisionID      string
 	Option          string
@@ -396,7 +397,7 @@ func SubmitDecisionAnswer(ctx context.Context, c Config, o AnswerOptions) (Comma
 	if o.By == "" {
 		o.By = answererName()
 	}
-	return SubmitAnswerDecision(ctx, c, runID, o.DecisionID, o.Option, o.Note, o.By, o.ExpectedVersion, 0, "", "")
+	return SubmitAnswerDecision(ctx, c, runID, o.DecisionID, o.Option, o.Note, o.By, o.ExpectedVersion, 0, "", o.CommandID)
 }
 
 // AnswererName resolves the default "answered by" identity from the environment.

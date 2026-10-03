@@ -1,4 +1,4 @@
-package console
+package steerlineclient
 
 import (
 	"errors"
@@ -8,33 +8,25 @@ import (
 	"sync"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 )
 
-type LogBatch struct {
-	Cursor      steerline.JournalCursor
-	Reset       bool
-	Activity    []steerline.ActivityEvent
-	Diagnostics []string
-}
+type LogBatch = clientcontracts.LogBatch
 
-// fileSource reads the activity journal.
-type fileSource struct {
-	cfg              steerline.Config
-	selectNormalizer func([]byte) steerline.Normalizer
+// LogReader reads the activity journal.
+type LogReader struct {
+	selectNormalizer func([]byte) clientcontracts.LogNormalizer
 
 	mu          sync.Mutex
-	normalizers map[string]steerline.Normalizer
+	normalizers map[string]clientcontracts.LogNormalizer
 }
 
-func newFileSource(c steerline.Config, selectors ...func([]byte) steerline.Normalizer) *fileSource {
-	var selector func([]byte) steerline.Normalizer
-	if len(selectors) > 0 {
-		selector = selectors[0]
-	}
-	return &fileSource{cfg: c, selectNormalizer: selector, normalizers: make(map[string]steerline.Normalizer)}
+// NewLogReader selects raw normalization supplied by application composition.
+func NewLogReader(selector func([]byte) clientcontracts.LogNormalizer) *LogReader {
+	return &LogReader{selectNormalizer: selector, normalizers: make(map[string]clientcontracts.LogNormalizer)}
 }
 
-func (f *fileSource) ReadLog(logPath string, cursor steerline.JournalCursor) (LogBatch, error) {
+func (f *LogReader) ReadLog(logPath string, cursor clientcontracts.JournalCursor) (LogBatch, error) {
 	if strings.TrimSpace(logPath) == "" {
 		return LogBatch{}, fmt.Errorf("empty run log path")
 	}
@@ -82,7 +74,7 @@ func (f *fileSource) ReadLog(logPath string, cursor steerline.JournalCursor) (Lo
 	return batch, nil
 }
 
-func (f *fileSource) normalizerFor(path string, cursor steerline.JournalCursor, firstRecord []byte, reset bool) steerline.Normalizer {
+func (f *LogReader) normalizerFor(path string, cursor clientcontracts.JournalCursor, firstRecord []byte, reset bool) clientcontracts.LogNormalizer {
 	key := fmt.Sprintf("%s|%s|%d", path, cursor.FileID, cursor.Generation)
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -107,20 +99,20 @@ func (f *fileSource) normalizerFor(path string, cursor steerline.JournalCursor, 
 	}
 	n := f.detect(first)
 	if len(f.normalizers) >= 64 {
-		f.normalizers = make(map[string]steerline.Normalizer)
+		f.normalizers = make(map[string]clientcontracts.LogNormalizer)
 	}
 	f.normalizers[key] = n
 	return n
 }
 
-func (f *fileSource) detect(first []byte) steerline.Normalizer {
+func (f *LogReader) detect(first []byte) clientcontracts.LogNormalizer {
 	if f.selectNormalizer != nil {
 		return f.selectNormalizer(first)
 	}
 	return nil
 }
 
-func (f *fileSource) storeNormalizer(path string, cursor steerline.JournalCursor, normalizer steerline.Normalizer) {
+func (f *LogReader) storeNormalizer(path string, cursor clientcontracts.JournalCursor, normalizer clientcontracts.LogNormalizer) {
 	if normalizer == nil {
 		return
 	}
@@ -128,7 +120,7 @@ func (f *fileSource) storeNormalizer(path string, cursor steerline.JournalCursor
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	if len(f.normalizers) >= 64 {
-		f.normalizers = make(map[string]steerline.Normalizer)
+		f.normalizers = make(map[string]clientcontracts.LogNormalizer)
 	}
 	f.normalizers[key] = normalizer
 }

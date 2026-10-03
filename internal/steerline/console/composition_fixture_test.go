@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/processhost"
@@ -91,9 +90,6 @@ type consoleFixtureSource struct{ home string }
 
 func (s consoleFixtureSource) ApplicationPaths() (string, string, string) {
 	return s.home, filepath.Join(s.home, "bin"), filepath.Join(s.home, "etc")
-}
-func (s consoleFixtureSource) NormalizerSelector(first []byte) steerline.Normalizer {
-	return steerline.DetectNormalizer(first, steerline.NewPiNormalizer(), codexworker.NewNormalizer())
 }
 func (s consoleFixtureSource) ConfigFiles() ([]ProjectConfigFile, error) {
 	entries, err := os.ReadDir(filepath.Join(s.home, "etc"))

@@ -1,6 +1,6 @@
 # 当前代码架构与源码索引
 
-核对日期：2026-10-03。基线为 #67 PR190 的实际合并 `d8bacbd75994a183c6d54c027abe103d26ae6896`，本页同步 #68 清理候选。前版 PR179 的架构快照可从 Git 历史查看；当前文档只链接现存源码。具体删除与验证见 [#68 交付记录](../validation/core-decoupling-07-cleanup/README.md)，#63–#67 历史断言/失败/原生证据仍在各自记录，不重写历史结果。
+核对日期：2026-10-04。基线为 #68 PR191 的实际合并 `184e1e06d217b243e5655f4f9b7c233e4c80f579`，本页同步 #71 客户端交付；下方全 OS 源码统计保留 #68 快照。前版 PR179 的架构快照可从 Git 历史查看；当前文档只链接现存源码。具体删除与验证见 [#68 交付记录](../validation/core-decoupling-07-cleanup/README.md)，#63–#67 历史断言/失败/原生证据仍在各自记录，不重写历史结果。
 
 ## 系统与业务权威
 
@@ -10,6 +10,10 @@ CLI 和 TUI 通过配置、查询及控制入口访问本机服务；`run` 承�
 flowchart LR
     Entry[CLI] --> App[steerlineapp 显式应用组装]
     App --> UI[console 注入来源与控制客户端]
+    App --> Client[steerlineclient 唯一产品适配]
+    Entry --> Client
+    UI --> Client
+    Client --> Product[clientcontracts 纯值与小接口]
     App --> Core[steerline 业务用例和唯一写者]
     App --> Impl[具体执行实现与 processhost]
     Core --> Ports[execution 纯值与小端口]
@@ -44,7 +48,8 @@ flowchart LR
 | `projection` | 从同一持久快照复制并构建 Runtime/Run，按当前 Step 和 AttemptNumber 选择候选；workerflow 路径另核对非空 CurrentAttemptID，不匹配时拒绝投影，无 I/O。 |
 | `query` / `sqlite` | 分消费者只读契约及同事务 Reader；中心仍保留开库/薄接线，写事务未搬迁。 |
 | `workspace` / `publication` | 固定 Git 工作区及发布/PR provider 操作和事实；中心决定资格、受理与唯一交付。 |
-| `console` | TUI 输入/导航/视图；当前仍消费中心产品 DTO/query/control，客户端适配与 CLI/TUI 消费迁移分别留 #71/#72。 |
+| `clientcontracts` / `steerlineclient` | 纯产品 DTO/小接口与唯一客户端；配置/资源工厂由 app 注入，读取复用 query/projection，变更调用原 CommandService/control。 |
+| `console` | TUI 输入/导航/视图；当前仍消费中心产品 DTO/query/control，客户端 I/O 已归唯一 adapter；仅配置/视图和薄映射留 #72。 |
 | `coreboundary` / `testboundary` / `testfeedback` | 执行隔离守卫、E2E 测试依赖守卫及 Go JSON 报告；产品不依赖测试 fixture 或 runner。 |
 
 ## 固定配置、提交与恢复
@@ -71,6 +76,14 @@ sequenceDiagram
 
 源码：[service_commit.go](../../internal/steerline/service_commit.go)、[worker_attachment_store.go](../../internal/steerline/worker_attachment_store.go)、[worker_lifecycle_async.go](../../internal/steerline/worker_lifecycle_async.go)、[worker_lifecycle_recovery.go](../../internal/steerline/worker_lifecycle_recovery.go)、[state_preflight.go](../../internal/steerline/state_preflight.go)、[native_delivery_command.go](../../internal/steerline/native_delivery_command.go)。
 
+## 产品客户端（#71）
+
+产品纯契约由 [clientcontracts/client.go](../../internal/steerline/clientcontracts/client.go) 和 [observations.go](../../internal/steerline/clientcontracts/observations.go) 拥有，复用 contracts/execution/task/taskview；不依赖中心、存储、平台或应用组装。CLI 产品入口消费这些小接口，唯一 [steerlineclient](../../internal/steerlineclient/client.go) 接受外部纯资源工厂；[steerlineapp/client.go](../../internal/steerlineapp/client.go) 绑定配置/身份，构造原 QueryService、ConversationQueryService、CommandService 与文件 control 端口。没有第二条 SQL、投影、分页或业务提交实现。
+
+客户端按读取/命令范围关闭资源，Close 不停止服务或 worker。变更前固定 request/command ID，超时后查原 ID；control 同 ID 同内容返回原请求，异内容拒绝，不重新发布或换实例。`answer -request-id` 查询原命令；accepted 保持中心受理含义，不声明 worker 已执行。离线查询只打开已存在、当前格式且归属匹配的 native reader，不建库、迁移或准备工作区。
+
+`console/source.go` 暂存桥只负责 DTO/调用映射；日志 I/O、候选输入检查、项目查询和控制已归客户端。配置视图、导航/渲染及中心别名仍待 #72 迁移；#72 删除这些薄桥并直接消费注入的产品小接口。实施/断言映射见 [#71 验证记录](../validation/core-decoupling-10-client/README.md)。本页下方的全 OS 源码统计保持 #68 快照，#71 新模块以上述实际源码为准。
+
 ## 会话和客户端读取
 
 中心按预算轮转来源，使用实现提供的 source/mapper 端口；mapper 从已提交事件重建，失败候选 mapper/cursor 丢弃。来源归属 Project/Workflow/Execution/Attempt 必须匹配中心请求。会话事件、正文版本和 source cursor 用独立原子事务，不混入 heartbeat；正文/raw 不累计进实现封套。
@@ -92,7 +105,7 @@ sequenceDiagram
 
 `go run ./cmd/test-feedback -quick` 已包含 15 包的规则/实现/app/CD67 守卫，不另加重复守卫。按 [测试计划](../spec/core-decoupling-07-cleanup.plan.md) 运行必要定向和一次 quick，明确临时 STEERLINE_HOME，仅隔离 Git/SQLite/协议 mock。原生支持和 opt-in live 证据保留，本次未启用。远端权限缺证拒绝不变。
 
-#67 已于 2026-10-03 实际合并；#68 清理候选待独立复审和真实合并后，#69/#71 才能开工。#69 收窄全部真实写消费者，#70 搬唯一 SQL 实现；#71 接公共产品 DTO/adapter/CLI，#72 迁 TUI。共享 contracts/组装/quick 顺序集成。没有新平台、remote 权限、兼容层或插件系统。
+#67/#68 已于 2026-10-03 实际合并，#69/#71 的基线具备；本页同步 #71 实施交付，等待独立复审。#69 收窄全部真实写消费者，#70 搬唯一 SQL 实现；#71 接公共产品 DTO/adapter/CLI，#72 迁 TUI。共享 contracts/组装/quick 顺序集成。没有新平台、remote 权限、兼容层或插件系统。
 
 ## 全 OS / 构建标签源码索引
 

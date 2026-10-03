@@ -224,7 +224,7 @@ func LoadProjects(configPath string, source ConfigSource) ([]ProjectRef, error) 
 			return []ProjectRef{invalidProjectRef(name, absolute, loadErr)}, nil
 		}
 		home, bin, _ := source.ApplicationPaths()
-		refs = append(refs, makeProjectRef(name, absolute, config, source.NormalizerSelector, home, bin))
+		refs = append(refs, makeProjectRef(name, absolute, config, home, bin))
 	} else {
 		projects, err := source.ConfigFiles()
 		if err != nil {
@@ -242,7 +242,7 @@ func LoadProjects(configPath string, source ConfigSource) ([]ProjectRef, error) 
 				continue
 			}
 			home, bin, _ := source.ApplicationPaths()
-			refs = append(refs, makeProjectRef(project.Name, path, config, source.NormalizerSelector, home, bin))
+			refs = append(refs, makeProjectRef(project.Name, path, config, home, bin))
 		}
 	}
 	identityNames := map[string][]string{}
@@ -269,7 +269,7 @@ func invalidProjectRef(name, path string, configErr error) ProjectRef {
 	return ProjectRef{Key: key, Name: name, ConfigPath: path, Error: configErr.Error()}
 }
 
-func makeProjectRef(name, path string, config steerline.Config, selectNormalizer func([]byte) steerline.Normalizer, home, bin string) ProjectRef {
+func makeProjectRef(name, path string, config steerline.Config, home, bin string) ProjectRef {
 	absoluteRunDir, _ := filepath.Abs(config.RunDir)
 	configPath, _ := filepath.Abs(path)
 	key, _ := absoluteViewKey(configPath, absoluteRunDir)
@@ -278,7 +278,7 @@ func makeProjectRef(name, path string, config steerline.Config, selectNormalizer
 		return ProjectRef{Key: key, Name: name, ConfigPath: configPath, Config: config, RunDir: absoluteRunDir, Error: "resolve repository identity: " + err.Error()}
 	}
 	identity = config.Identity()
-	return ProjectRef{Key: key, Name: name, ConfigPath: configPath, Config: config, NormalizerSelector: selectNormalizer, ApplicationHome: home, ApplicationBin: bin, Identity: identity, RunDir: absoluteRunDir}
+	return ProjectRef{Key: key, Name: name, ConfigPath: configPath, Config: config, ApplicationHome: home, ApplicationBin: bin, Identity: identity, RunDir: absoluteRunDir}
 }
 
 func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, error) {

@@ -8,7 +8,7 @@ import (
 )
 
 func ConsoleOptions(runID string) console.Options {
-	return console.Options{RunID: runID, Query: console.FileQuerySource{}, Control: console.FileControlClient{}, ApplicationHome: HomeDir(), ApplicationBin: BinDir(), ApplicationEtc: EtcDir()}
+	return console.Options{RunID: runID, Query: console.FileQuerySource{Factory: ClientResources}, Control: console.FileControlClient{Factory: ClientResources}, ApplicationHome: HomeDir(), ApplicationBin: BinDir(), ApplicationEtc: EtcDir()}
 }
 
 func RunConsole(ctx context.Context, configPath, runID string) error {
@@ -41,7 +41,7 @@ func (ConsoleConfigSource) ApplicationPaths() (string, string, string) {
 	return HomeDir(), BinDir(), EtcDir()
 }
 
-func (ConsoleConfigSource) NormalizerSelector(first []byte) steerline.Normalizer {
+func selectLogNormalizer(first []byte) steerline.Normalizer {
 	normalizer := steerline.NewPiNormalizer()
 	if normalizer.Detect(first) {
 		return normalizer

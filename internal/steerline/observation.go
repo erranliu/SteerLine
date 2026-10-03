@@ -6,30 +6,20 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 )
 
-type SnapshotState string
+type SnapshotState = clientcontracts.SnapshotState
+type ObservationSnapshot = clientcontracts.ObservationSnapshot
 
 const (
-	SnapshotNone           SnapshotState = "none"
-	SnapshotValid          SnapshotState = "valid"
-	SnapshotStale          SnapshotState = "stale"
-	SnapshotReadFailed     SnapshotState = "read-failed"
-	SnapshotUnknownVersion SnapshotState = "unknown-version"
+	SnapshotNone           = clientcontracts.SnapshotNone
+	SnapshotValid          = clientcontracts.SnapshotValid
+	SnapshotStale          = clientcontracts.SnapshotStale
+	SnapshotReadFailed     = clientcontracts.SnapshotReadFailed
+	SnapshotUnknownVersion = clientcontracts.SnapshotUnknownVersion
 )
-
-// ObservationSnapshot carries runtime data and the independent read/freshness
-// state. Runtime.Service.Status remains the last service report; this type does
-// not infer process liveness from a PID.
-type ObservationSnapshot struct {
-	Runtime        *Runtime
-	State          SnapshotState
-	SampledAt      time.Time
-	HeartbeatAge   time.Duration
-	FreshnessLimit time.Duration
-	ClockSkew      bool
-	Error          string
-}
 
 // ReadObservationSnapshot reads the committed SQLite service checkpoint.
 // nowFn keeps freshness and future-heartbeat behavior testable.
