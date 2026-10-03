@@ -19,7 +19,7 @@
 | `queryNativeRequirementTool` | 无消费者的测试 unknown 转发；中性目录仍消费 queryHost/queryRemote，app 持有原生查询。没有删除无认证拒绝。 |
 | `sanitizeName` | app 配置中未用名字规范化副本；产品状态路径继续由 `repositoryStateKey` → `steerline.RepositoryStateKey` 生成，shortHash/配置入口不变。 |
 | `remoteWorkerError` | 组装中未用错误转换副本；`orca_remote_worker/backend.go:backendError` 由实际 Backend 方法消费，仍转换原错误/原因。 |
-| `fixtureOriginalResource` | 无调用的直接造 Execution 绑定 fixture，零断言；外层 `newLifecycleProject`/builtinFixtureConfig 及真实 receipt 提交链保留。 |
+| `fixtureOriginalResource` | 无调用的直接造 Execution 绑定 fixture；内部唯一 `require(t, err)` 是无人执行的封套构造检查，没有测试覆盖依赖它；外层 `newLifecycleProject`/builtinFixtureConfig 及真实 receipt 提交链保留。 |
 | `settledEvidence` | 未用转发方法；`lifecycle_observation.go:Observe` 直接调用 `nativeTurnEvidence`，原 TaskDelivery/结算事实不变。 |
 | `parseTerminalFromSaved` | 未用 receipt 解析副本；createAgentTerminal 用 `ParseFixedAgentTerminalReceipt`，reconcileAgentTerminal 用 `savedNativePayload` + `FixedAgentTerminal` + 原终端 list 与 process/incarnation 校验。没有删除未知结果对账或原身份拒绝。 |
 
@@ -40,7 +40,7 @@
 
 ## 断言归属与最小验证
 
-无测试函数或断言删除/迁移，旧到新映射为原路径 → 原路径；删除的三个测试辅助没有消费者/断言。#63–#67 的原 [断言映射](../core-decoupling-06-boundary/test-mapping.json) 和 [fixture 映射](../core-decoupling-06-boundary/fixture-mapping.json) 保留为当时的历史清单，当前 21 项删除由本记录补充，不回写历史。
+无测试函数或断言删除/迁移，旧到新映射为原路径 → 原路径；删除的三组四个测试 helper 均无消费者；其中 fixtureOriginalResource 的唯一 `require(t, err)` 无执行入口，封套构造/身份拒绝仍由现存 codec 与真实 receipt 链验证，其余三项不含断言。#63–#67 的原 [断言映射](../core-decoupling-06-boundary/test-mapping.json) 和 [fixture 映射](../core-decoupling-06-boundary/fixture-mapping.json) 保留为当时的历史清单，当前 21 项删除由本记录补充，不回写历史。
 
 | 受影响职责 | 保留断言与实际选择 |
 | --- | --- |
@@ -50,5 +50,9 @@
 | 全标签隔离与产品接线 | quick `TestCD67CoreBoundary` 及全部七个负向样本，第三实现与支持/remote 子例；不重复独立矩阵 |
 
 首轮 `bin/cd68/focused` 编译失败：`worker_lifecycle_async.go` 遗留未用 execution import，0 tests；修正后用新报告目录重跑，原失败保留。最终结果、代码候选 SHA、报告摘要/JSON 命中、构建和 diff 结果归 [validation-results.json](validation-results.json)、[test-hits.json](test-hits.json)。
+
+最终代码候选 `55357397f7dac9997a75006760fe991f28f510ff` 的一次既有 quick 在干净工作树上 **complete/pass**：15 包各一次、144 个 parent/subtest 均有唯一 run/pass、0 fail/skip、errors=[]，执行 226.0s。修正后定向 **9/9 parent/subtest pass**（4 个顶层用例），50.2s。逐组命令、实际包/用例、stdout/stderr SHA-256 均已归档，没有用总数推断命中。
+
+守卫实测：直属主包 172 个 Go 文件、完整源码 34 包、Windows/Linux 生产依赖 232/221，0 违规；七个额外 OS/tag/目录/反向依赖负向样本均真实命中并拒绝。Windows/Linux amd64 的 `cmd/steerline`、`cmd/test-feedback`、`cmd/orca-probe` 构建 exit 0；标准 `git diff --check` 与提交 diff check 通过。初始架构文档 EOF 空行已修正；一次关闭 autocrlf 的诊断把 CR 行尾当作 trailing whitespace，未改仓库换行规则，最终按仓库标准规范化 diff 检查通过。后续仅文档归档，Go 源码未变；未声明协调独立复审或已合并。
 
 所有测试显式使用临时 STEERLINE_HOME、隔离 Git/SQLite/协议 mock，无 opt-in/live 开关；没有调用真实用户产品 CLI/业务服务/任务库或 `C:/SteerlineRuntime`，没有恢复或覆盖历史 execution.json、修改 runner/仓库外协调状态。未跑 full/L2/L3/live；本次删除不改变原生启动、权限映射或支持范围。

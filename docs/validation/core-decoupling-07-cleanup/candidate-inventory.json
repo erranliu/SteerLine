@@ -438,7 +438,7 @@
       "original_body_sha256": "d6111f72aa84b91208000d9abe2f1d492e9d7c3c13a1fe2cb22e468abc0d3a9c",
       "original_responsibility": "未用的直接生成 Execution 绑定 fixture",
       "final_unique_owner": "newLifecycleProject / builtinFixtureConfig / 真实 receipt 提交",
-      "retained_consumers_and_assertions": "无断言或调用；外层公开配置/Claim/Run 路径保留，CD67",
+      "retained_consumers_and_assertions": "无消费者；唯一 require(t,err) 检查 NewAppServerBindingEnvelope 构造错误，从未被测试执行。codexworker/profile_config_cd63_test.go 与 binding_isolation_cd67_test.go 现存封套身份/endpoint/重复绑定断言保持；quick CD67 真实 app-server receipt 创建/恢复链保持。",
       "consumers": {
         "production": [],
         "tests": [],
@@ -447,7 +447,17 @@
         "embedded_resources": [],
         "reflection_or_protocol": []
       },
-      "deletion_basis": "私有符号，全 tracked Go 文本只有自身声明；无函数值注册、接口方法、字符串分派或 linkname。已人工核对最终所有者及真实产品调用链，删除不改变输入/输出、恢复或协议。"
+      "deletion_basis": "私有符号，全 tracked Go 文本只有自身声明；无函数值注册、接口方法、字符串分派或 linkname。已人工核对最终所有者及真实产品调用链，删除不改变输入/输出、恢复或协议。",
+      "assertion_mapping": {
+        "removed_check": "require(t, err) after NewAppServerBindingEnvelope",
+        "coverage_before": "unreachable helper; zero callers in every OS/tag/test",
+        "coverage_after": "unchanged test entries and original codec/receipt assertions; no executable assertion removed",
+        "retained_paths": [
+          "internal/steerline/codexworker/profile_config_cd63_test.go",
+          "internal/steerline/codexworker/binding_isolation_cd67_test.go",
+          "internal/steerlineintegration/lifecycle_test.go"
+        ]
+      }
     },
     {
       "path": "internal/steerline/orcaworker/lifecycle_observation.go",
