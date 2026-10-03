@@ -10,7 +10,6 @@ SteerLine 现阶段的产品目标是：以 roadmap 为核心的自动化软件�
 - [roadmap.md](roadmap.md) 是近期与后续推进的主入口，只把尚待交付的任务列在活动清单；已结项任务的回执留在 `docs/validation/`，必要时作为后继依赖链接。
 - [execution-map.md](execution-map.md) 直接列出已规划且尚未交付的执行 Spec、各自的开工与交付前置，以及跨 Spec 的接口交接、共享冲突和并行条件。每项任务与独立 Spec/Plan 同时进入活动 roadmap，不等到开始实现才补关系。
 - Roadmap 可以由多个文档组成，主文档负责组织和链接。
-- [core-implementation-decoupling.md](core-implementation-decoupling.md) 明确主包与执行实现解耦、重构后清理及存储/客户端两条线的任务交接和隔离验收。
 - 长期约束、局部系统约束通常放在独立文档中，主文档只链接相关约束，不重复展开。
 - 主文档不维护文档形成、提交、PR 创建或合并情况，不设置这些状态列、提交 SHA、合并清单或基线核对记录。规划内容的增删体现项目进展，无需记录维护动作本身。
 
@@ -91,3 +90,4 @@ python scripts/roadmap_task_id.py check
 
 - [架构约束](architecture-constraints.md)：双执行路径、业务权威、执行身份、远端边界与后续扩展。
 - [控制台约束](console-constraints.md)：生命周期、会话展示、人工决策和能力差异。
+- [主包隔离约束](../spec/core-decoupling-constraints.md)与[后续维护约束](../spec/core-maintenance-constraints.md)：执行实现、存储和产品客户端边界；当前归属见[代码架构索引](../architecture/current-code-architecture.md)。
