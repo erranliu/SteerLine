@@ -1,6 +1,6 @@
 # #70 SQLite 写入实现归包验证
 
-状态：实现已迁移，CM70-2 严格只读文件验收 `needs_user_decision`；不得按整体通过或可合并处理。工作区 `C:/Users/lmas1/.codex/worktrees/e8e1/SteerLine`，分支 `codex/cm70-sqlite-storage`。初始基线 `e81fadaf59d0411af1594be7c5cd6a832c71c29f`，已先集成 #71 PR195 的 `6dce3cf1abf293e18bd78f92677c72a3fa2f0210`，发布前再次集成 #72 PR196 的最新 main `0b5e8b342214e2d286b65b0494bfe5fad2c552d7`；执行模型按本次用户指定 `gpt-6.1-sol/high`。仅实施 #70；#72 只消费其已合并交付，不另行实施 UI/产品语义。
+状态：实现已迁移；2026-10-04 用户已批准 CM70-2 的有限 SQLite 辅助文件调整，存储定向复验通过，最终 quick 与合并门禁结果见本文末尾的批准后记录。原严格文件不变的失败日志保留，不改报通过。工作区 `C:/Users/lmas1/.codex/worktrees/e8e1/SteerLine`，分支 `codex/cm70-sqlite-storage`。初始基线 `e81fadaf59d0411af1594be7c5cd6a832c71c29f`，已先集成 #71 PR195 的 `6dce3cf1abf293e18bd78f92677c72a3fa2f0210`，再集成 #72 PR196 的 `0b5e8b342214e2d286b65b0494bfe5fad2c552d7`，批准后整合 #193 测试文档主干 `5db65c7369d30aa676e5c36ba7e306070b6b4b87`；执行模型按本次用户指定 `gpt-6.1-sol/high`。仅实施 #70；#72 只消费其已合并交付，不另行实施 UI/产品语义。
 
 ## 实际所有者与生产接线
 
@@ -22,7 +22,7 @@
 
 应用连接构造涉及 `steerlineapp/app.go`、`config.go`、`client.go`，以及中心 `NewService` 的纯连接参数和准备接线。测试入口仅更新 #67 新的存储反向依赖/中心 SQL import 两个负向场景的 quick 命中清单。console/产品契约归客户端线，本文未替它实施 #72。
 
-## 命令、命中与结论
+## 批准前命令、命中与结论（历史失败保留）
 
 精确顶层/子场景命中和失败清单见 `hits.json`，原始 Go JSON 日志均保留。没有使用零命中或 skip 代替验收。
 
@@ -34,7 +34,7 @@
 - 稳定接线的 `go run ./cmd/test-feedback -quick -out docs/validation/core-decoupling-09-sqlite/quick-reviewed`：其余六组通过，quick-rules 仅因严格只读文件断言失败，完整入口未通过。前两次诊断 quick 日志保留：首次暴露迁入的子进程 helper skip；helper 已改为 TestMain 调度，原五个退出边界断言不变，后两次无 skip。后续初始化/错误分类只做受影响定向复验。
 - `git diff --check` 通过。未跑 full、L2/L3 或真实模型/平台认证；本项未改变启动、权限及原生支持矩阵。
 
-## 严格只读失败及待决边界
+## 批准前严格只读失败及待决边界（历史）
 
 合法 WAL 主库在最后一个 writer 关闭后没有辅助文件，既有 `mode=ro` + `query_only(1)` 读取会新增 0B WAL 与 32KiB SHM。主库及业务版本未变，变更能力拒绝；但原 CM70-2 要求“只读前后无文件/业务写入”，严格文件集合断言失败。首次/最终失败保留，Spec 和该断言没有修改，不声明例外已获授权。
 
@@ -88,7 +88,7 @@
 
 集成后最小接线全通过，`post-main-quick` 七组均非零命中：core 11、rules 128、remote 15、codec 5、identity 3、app 6、boundary 35，均无 skip；仅 rules 中严格只读文件断言失败，整体仍失败。最后自查保留了 `NewService` 内不可绕开的中心受理校验（与 PrepareServiceConfig 共用），不让应用承担业务准入；`admission-current.jsonl` 复验非 native 拒绝、实际提交及应用构造。原始完整数据和结论见更新后的 `hits.json`。
 
-## 协调聊天复审（验收仍待决）
+## 批准前协调聊天复审（历史待决记录）
 
 2026-10-04 协调聊天确认执行聊天已停写、工作区干净，原草稿 head f8c2fc0 与 PR/分支身份一致，已集成 #72 的 0b5e8b3 主干。已核对构造/受理/恢复责任、迁入 SQL/当前 schema、声明提交/CAS/固定身份、附件/回执/checkpoint、命令/任务交付、会话内容/cursor 和同快照读取；存储仍使用唯一 Reader 与原事务。29 项迁移测试的原失败断言文字逐项对照均保留，审计记录保存于协调 run。
 
@@ -99,3 +99,11 @@
 **CM70-2 的辅助文件决定仍未获批准，整体验收失败，草稿不得合并。** 未重复运行已知会在该断言失败的 full/quick，不将部分通过写作整体通过。后续用户决定或候选源码变化会使当前复审失效，须基于最终 SHA 重新验证及评论。
 
 协调证据位于 `C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-core-decoupling-20261003-01a10252`：cm70-coordinator-atomic-wiring.jsonl、cm70-coordinator-boundary-fixed.jsonl、cm70-coordinator-quick-selection.jsonl、cm70-boundary-negative-before.jsonl、cm70-coordinator-readonly-still-fails.jsonl，以及 moved-sql/moved-test-assertion 审计 JSON。git diff --check 通过；未更改 Spec 的原验收语义。
+
+## 用户批准后的验收调整与复验
+
+2026-10-04 本协调聊天先呈交只读辅助文件调整草案，用户原句“确认”。仅允许 SQLite 自身为读取与并发协调创建/维护 WAL/SHM，继续禁止主库/schema/业务写入、版本/checkpoint/cursor 推进和命令消费。缺库不得创建文件或目录，保留原 WAL 同快照、旧格式拒绝和 Windows 关闭断言；不使用 immutable/nolock 或复制 Reader。批准原句、完整边界与 CAS 状态保存在协调 run 的 `cm70-approval-patch.json`，Spec/Plan 已同步。
+
+原 `TestCM70ReadOnlyOpenPreservesFiles` 改为验证主库字节/大小/SHA 不变、schema/版本/权威及图版本不变、非空 checkpoint/cursor/待处理命令不变，尝试新增/消费命令、推进 checkpoint/cursor 及直接 SQL UPDATE/建表均拒绝。关闭 writer 的现场 WAL 前后必须为空，不追加业务帧；辅助文件大小单独记录。缺库场景补充缺失父目录不创建断言。
+
+批准后执行 `go test -json ./internal/steerline/sqlite -count=1`，原始证据见 `storage-approved.jsonl`（协调 run 同名 `cm70-approved-storage.jsonl`）。全部存储测试通过，无失败或 skip；主库前后 SHA/大小与辅助文件统计见该测试 output 事件。定向通过不替代最终 quick 与最终 SHA 复审。
