@@ -87,3 +87,15 @@
 `post-main-guard.jsonl` 再验全标签及 Windows/Linux 的中心、console 图和两个新增存储负向场景；`post-main-wiring.jsonl` 再验实际 CLI 批次校验/创建/废弃、ProjectView、零/部分/显式项目配置及 CM72 注入/退出资源语义。`post-main-quick/summary.json` 记录集成后的最后一次既有 quick，原严格只读断言仍未获授权变更，必须如实保留失败。主干整合后重新阅读共同 Spec/Plan、实际生产构造与冲突 diff；未发现第二接线或公开产品 DTO/语义变更。
 
 集成后最小接线全通过，`post-main-quick` 七组均非零命中：core 11、rules 128、remote 15、codec 5、identity 3、app 6、boundary 35，均无 skip；仅 rules 中严格只读文件断言失败，整体仍失败。最后自查保留了 `NewService` 内不可绕开的中心受理校验（与 PrepareServiceConfig 共用），不让应用承担业务准入；`admission-current.jsonl` 复验非 native 拒绝、实际提交及应用构造。原始完整数据和结论见更新后的 `hits.json`。
+
+## 协调聊天复审（验收仍待决）
+
+2026-10-04 协调聊天确认执行聊天已停写、工作区干净，原草稿 head f8c2fc0 与 PR/分支身份一致，已集成 #72 的 0b5e8b3 主干。已核对构造/受理/恢复责任、迁入 SQL/当前 schema、声明提交/CAS/固定身份、附件/回执/checkpoint、命令/任务交付、会话内容/cursor 和同快照读取；存储仍使用唯一 Reader 与原事务。29 项迁移测试的原失败断言文字逐项对照均保留，审计记录保存于协调 run。
+
+发现两个全标签依赖漏检并在 `7f6e9c1fa3a07ba8fd38fe703fadcbf2039fb940` 修复：中心经 helper 传递导入存储，以及存储导入客户端子包。两个负向样本先实际失败；加入单独生产源码图（避免把合法同包 SQL 测试 fixture 当生产依赖）和客户端/console 子包前缀拒绝后，完整 CoreBoundary 26 run/pass、0 fail/skip。两个新入口同时加入 quick mandatory-entry，并验证 runner 的缺失/重复/截断与分支强制命中检查。
+
+协调聊天亲自验证 15 个原子/幂等/唯一交付/cursor/Windows 关闭/错误/实际 CLI-TUI 接线顶层用例，31 run/pass、0 fail/skip；完整守卫与 quick selection 检查通过。直接执行原严格 `TestCM70ReadOnlyOpenPreservesFiles` 仍退出 1，原文件集合断言未改。
+
+**CM70-2 的辅助文件决定仍未获批准，整体验收失败，草稿不得合并。** 未重复运行已知会在该断言失败的 full/quick，不将部分通过写作整体通过。后续用户决定或候选源码变化会使当前复审失效，须基于最终 SHA 重新验证及评论。
+
+协调证据位于 `C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-core-decoupling-20261003-01a10252`：cm70-coordinator-atomic-wiring.jsonl、cm70-coordinator-boundary-fixed.jsonl、cm70-coordinator-quick-selection.jsonl、cm70-boundary-negative-before.jsonl、cm70-coordinator-readonly-still-fails.jsonl，以及 moved-sql/moved-test-assertion 审计 JSON。git diff --check 通过；未更改 Spec 的原验收语义。
