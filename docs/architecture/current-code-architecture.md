@@ -1,6 +1,6 @@
 # 当前代码架构与源码索引
 
-核对日期：2026-10-04。集成基线为 #69 PR194 的实际合并 `e81fadaf59d0411af1594be7c5cd6a832c71c29f`，本页同步 #71 客户端交付；下方全 OS 源码统计保留 #68 快照，迁移文件链接指向当前所有者。前版 PR179 的架构快照可从 Git 历史查看；当前文档只链接现存源码。具体删除与验证见 [#68 交付记录](../validation/core-decoupling-07-cleanup/README.md)，#63–#67 历史断言/失败/原生证据仍在各自记录，不重写历史结果。
+核对日期：2026-10-04。集成基线为 #71 PR195（包含 #69 PR194）的实际主干 `6dce3cf1abf293e18bd78f92677c72a3fa2f0210`，本页同步 #72 TUI 交付；下方全 OS 源码统计保留 #68 快照，迁移文件链接指向当前所有者。前版 PR179 的架构快照可从 Git 历史查看；当前文档只链接现存源码。具体删除与验证见 [#68 交付记录](../validation/core-decoupling-07-cleanup/README.md)，#63–#67 历史断言/失败/原生证据仍在各自记录，不重写历史结果。
 
 ## 系统与业务权威
 
@@ -9,10 +9,10 @@ CLI 和 TUI 通过配置、查询及控制入口访问本机服务；`run` 承�
 ```mermaid
 flowchart LR
     Entry[CLI] --> App[steerlineapp 显式应用组装]
-    App --> UI[console 注入来源与控制客户端]
+    App --> UI[console 注入项目产品客户端]
     App --> Client[steerlineclient 唯一产品适配]
     Entry --> Client
-    UI --> Client
+    UI --> Product
     Client --> Product[clientcontracts 纯值与小接口]
     App --> Core[steerline 业务用例和唯一写者]
     App --> Impl[具体执行实现与 processhost]
@@ -21,7 +21,6 @@ flowchart LR
     Impl --> Ports
     Impl --> Records
     Core --> DB[(SQLite)]
-    UI --> Core
     Core --> Query[query 只读契约与用例]
     Core --> Reader[sqlite.Reader]
     Reader --> Query
@@ -49,7 +48,8 @@ flowchart LR
 | `query` / `sqlite` | 分消费者只读契约及同事务 Reader；中心仍保留开库/薄接线，写事务未搬迁。 |
 | `workspace` / `publication` | 固定 Git 工作区及发布/PR provider 操作和事实；中心决定资格、受理与唯一交付。 |
 | `clientcontracts` / `steerlineclient` | 纯产品 DTO/小接口与唯一客户端；配置/资源工厂由 app 注入，读取复用 query/projection，变更调用原 CommandService/control。 |
-| `console` | TUI 输入/导航/视图；当前仍消费中心产品 DTO/query/control，客户端 I/O 已归唯一 adapter；仅配置/视图和薄映射留 #72。 |
+| `console` | TUI 输入/导航/视图和独立偏好；按项目消费注入的 `clientcontracts.ConsoleClient`。全 OS/tag 生产与测试不依赖中心、存储、平台、adapter 或 app。 |
+| `activityview` | 唯一纯活动格式化；CLI/中心入口和 console 共用 [render.go](../../internal/steerline/activityview/render.go)，没有产品 I/O。 |
 | `coreboundary` / `testboundary` / `testfeedback` | 执行隔离守卫、E2E 测试依赖守卫及 Go JSON 报告；产品不依赖测试 fixture 或 runner。 |
 
 ## 固定配置、提交与恢复
@@ -82,7 +82,9 @@ sequenceDiagram
 
 客户端按读取/命令范围关闭资源，Close 不停止服务或 worker。变更前固定 request/command ID，超时后查原 ID；control 同 ID 同内容返回原请求，异内容拒绝，不重新发布或换实例。`answer -request-id` 查询原命令；accepted 保持中心受理含义，不声明 worker 已执行。离线查询只打开已存在、当前格式且归属匹配的 native reader，不建库、迁移或准备工作区。
 
-`console/source.go` 暂存桥只负责 DTO/调用映射；日志 I/O、候选输入检查、项目查询和控制已归客户端。配置视图、导航/渲染及中心别名仍待 #72 迁移；#72 删除这些薄桥并直接消费注入的产品小接口。实施/断言映射见 [#71 验证记录](../validation/core-decoupling-10-client/README.md)。本页下方的全 OS 源码统计保持 #68 快照，#71 新模块以上述实际源码为准。
+[steerlineapp/console.go](../../internal/steerlineapp/console.go) 的 `PrepareConsole` 在 UI 外读取配置/身份、构造每项目唯一 #71 adapter 并注入 UI；CLI 与 TUI 使用同一 `openProjectClient` 构造。`console/source.go` 只保留产品纯类型名称，FileQuerySource/FileControlClient、ConfigSource、Config 字段、productRef/withClient/candidateFreshness 映射及全部默认产品 I/O 已删除。方案使用 [presentation.go](../../internal/steerline/clientcontracts/presentation.go) 的非秘密描述、固定摘要和支持原因；候选/自动派发输入检查由产品端口提供，决策展示由同次项目快照的资格原因提供，提交仍由中心重检。
+
+console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读锚点、折叠、原请求及按配置路径/状态目录隔离的偏好。偏好 OS 锁与原子文件写入归 UI；恢复核验通过 [RecoveryQueries](../../internal/steerline/clientcontracts/recovery.go) 调用原中心只读核验，游标编码复用原 query。`Model.Close` 和外层退出清理只释放 UI/client 资源，不提交 stop。依赖守卫在既有 #67/quick 内同时检查 console 全源码、测试、helper 与 Windows/Linux 生产图。实际接线与断言映射见 [#72 验证记录](../validation/core-decoupling-11-tui/README.md)。
 
 ## 会话和客户端读取
 
@@ -105,7 +107,7 @@ sequenceDiagram
 
 `go run ./cmd/test-feedback -quick` 已包含 15 包的规则/实现/app/CD67 守卫，不另加重复守卫。按 [测试计划](../spec/core-decoupling-07-cleanup.plan.md) 运行必要定向和一次 quick，明确临时 STEERLINE_HOME，仅隔离 Git/SQLite/协议 mock。原生支持和 opt-in live 证据保留，本次未启用。远端权限缺证拒绝不变。
 
-#67/#68/#69 已实际合并；本页同步 #71 实施交付并集成 #69 的写端口。#70 搬唯一 SQL 实现；#71 接公共产品 DTO/adapter/CLI，#72 迁 TUI。共享 contracts/组装/quick 顺序集成。没有新平台、remote 权限、兼容层或插件系统。
+#67/#68/#69/#71 已实际合并；本页同步 #72 实施交付并保持 #69 的写端口。#70 搬唯一 SQL 实现；#71/#72 已接通公共产品 DTO/adapter/CLI/TUI。共享 contracts/组装/quick 顺序集成。没有新平台、remote 权限、兼容层或插件系统。
 
 ## 全 OS / 构建标签源码索引
 

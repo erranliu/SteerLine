@@ -38,6 +38,8 @@ var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary/negative_source_fixtures/top_level_output_name_is_not_an_exclusion",
 	"TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
 	"TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+	"TestCD67CoreBoundary/console_negative_all_tags_production_and_tests",
+	"TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/transitive_test_helper",
 	"TestCD67AdditionalImplementation",
 	"TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
 	"TestCD67AdditionalImplementation/supported_app_server_receipt_barriers",

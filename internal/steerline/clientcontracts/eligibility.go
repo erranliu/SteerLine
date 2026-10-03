@@ -1,8 +1,7 @@
-package steerlineclient
+package clientcontracts
 
 import (
 	"fmt"
-	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -11,7 +10,7 @@ import (
 
 // CandidateFreshness is a display/input guard, not center authorization. The
 // command service still rechecks the fixed identity, current generation and version.
-func CandidateFreshness(identity string, snapshot api.ProjectSnapshot, now time.Time) (bool, string) {
+func CandidateFreshness(identity string, snapshot ProjectSnapshot, now time.Time) (bool, string) {
 	if snapshot.Tasks == nil {
 		if snapshot.TaskError != "" {
 			return false, snapshot.TaskError
@@ -21,7 +20,7 @@ func CandidateFreshness(identity string, snapshot api.ProjectSnapshot, now time.
 	if snapshot.TaskError != "" {
 		return false, snapshot.TaskError
 	}
-	if snapshot.Connection.State != api.ConnectionConnected || !snapshot.Connection.CanControl {
+	if snapshot.Connection.State != ConnectionConnected || !snapshot.Connection.CanControl {
 		return false, connectionDiagnostic(snapshot.Connection.Diagnostic)
 	}
 	controlRuntime := snapshot.Connection.Snapshot.Runtime
@@ -59,4 +58,50 @@ func connectionDiagnostic(value string) string {
 		return value
 	}
 	return "服务未连接；缓存任务不能作为启动许可"
+}
+
+const ExecutionConfigChanged = "服务与控制台加载的执行配置不同；重开控制台并核对服务配置"
+
+func ExecutionConfigMismatch(ref ProjectRef, snapshot ProjectSnapshot) bool {
+	rt := snapshot.Connection.Snapshot.Runtime
+	return rt != nil && ref.Presentation.ConfigDigest != "" && rt.Service.ConfigDigest != ref.Presentation.ConfigDigest
+}
+
+// StartTaskReason is the sole product input guard, never command authorization.
+// The center still rechecks identity, versions and actual task eligibility.
+func StartTaskReason(ref ProjectRef, snapshot ProjectSnapshot, now time.Time) string {
+	if valid, reason := CandidateFreshness(ref.Identity, snapshot, now); !valid {
+		return reason
+	}
+	if ExecutionConfigMismatch(ref, snapshot) {
+		return ExecutionConfigChanged
+	}
+	if ref.Conflict != "" {
+		return ref.Conflict
+	}
+	rt := snapshot.Connection.Snapshot.Runtime
+	if rt == nil {
+		return "缺少当前服务快照"
+	}
+	if rt.Control.DispatchMode != "manual" {
+		return "开始任务要求手动派发模式"
+	}
+	if rt.Control.DispatchPaused {
+		return "派发已暂停，请先恢复派发"
+	}
+	for _, capability := range rt.Service.Capabilities {
+		if capability == "start_task" {
+			return ""
+		}
+	}
+	return "服务未声明 start_task 能力"
+}
+func AutoDispatchReason(ref ProjectRef, snapshot ProjectSnapshot) string {
+	if ref.Presentation.DefaultProfileID == "" {
+		return "自动派发需要在全局配置中指定 default_execution_profile"
+	}
+	if ExecutionConfigMismatch(ref, snapshot) {
+		return "不能切换自动派发：" + ExecutionConfigChanged
+	}
+	return ""
 }

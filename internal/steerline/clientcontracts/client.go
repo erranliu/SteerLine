@@ -14,11 +14,14 @@ import (
 // ProjectRef binds a view to both its config and state location. It contains
 // only public identity, never a configuration object or a writable runtime.
 type ProjectRef struct {
-	Key, Name, ConfigPath, Identity, RunDir string
+	Key, Name, ConfigPath, Identity, RunDir          string
+	ApplicationHome, ApplicationBin, Error, Conflict string
+	Presentation                                     ProjectPresentation
 }
 
 type ProjectSnapshot struct {
 	CandidateFreshnessLimit time.Duration
+	DecisionReasons         map[string]string
 	SelectedTaskID          string
 	FullReadAt              time.Time
 	Connection              ServiceConnection
@@ -163,6 +166,7 @@ type Resources struct {
 	Project                 ProjectRef
 	ExecutableTypes         []string
 	DefaultRequestedBy      string
+	DefaultAnswerer         string
 	CandidateFreshnessLimit time.Duration
 	OpenReader              func(context.Context) (Reader, error)
 	OpenCommands            func(context.Context, bool) (TaskCommands, error)
@@ -173,6 +177,8 @@ type Resources struct {
 	Decision                DecisionPort
 	TaskSnapshot            func(context.Context) (*contracts.TaskSnapshot, error)
 	ResolveStartTask        func(context.Context, string, string) (ControlPayload, error)
+	InspectRecovery         func(context.Context, string) (RecoveryInspection, error)
+	DecisionAvailability    func(context.Context, *contracts.Run) string
 	ReadLog                 func(string, JournalCursor) (LogBatch, error)
 	Close                   func() error
 }
@@ -202,6 +208,7 @@ type ConversationQueries interface {
 	Conversation(context.Context, contracts.ConversationFilter, string) (contracts.ConversationPage, error)
 	Body(context.Context, contracts.ConversationBodyRef, int64, int) (contracts.ConversationBodyPage, error)
 	Raw(context.Context, contracts.ConversationRawRef, int64, int) (contracts.ConversationRawPage, error)
+	CursorAfter(contracts.ConversationFilter, int64) (string, error)
 	Capabilities(context.Context, CapabilityFilter) ([]contracts.ConversationCapabilityReport, error)
 }
 type Controls interface {
@@ -219,7 +226,31 @@ type Decisions interface {
 	Command(context.Context, string) (contracts.CommandRecord, error)
 	WaitCommand(context.Context, string, time.Duration) (contracts.CommandRecord, error)
 }
+type RecoveryQueries interface {
+	InspectRecovery(context.Context, string) (RecoveryInspection, error)
+}
+
+// InputChecks reports product input availability; center submission remains authoritative.
+type InputChecks interface {
+	CandidateAvailability(ProjectSnapshot, time.Time) (bool, string)
+	StartTaskAvailability(ProjectSnapshot, time.Time) string
+	AutoDispatchAvailability(ProjectSnapshot) string
+}
+
+// ConsoleClient groups the small, pure ports used by a single project view.
+type ConsoleClient interface {
+	InputChecks
+	Lifecycle
+	ProjectQueries
+	ConversationQueries
+	Controls
+	Decisions
+	RecoveryQueries
+}
+
 type Client interface {
+	InputChecks
+	RecoveryQueries
 	Lifecycle
 	TaskClient
 	ProjectQueries

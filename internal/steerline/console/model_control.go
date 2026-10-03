@@ -5,7 +5,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/erranliu/SteerLine/internal/steerline"
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func (m Model) startSelected() (tea.Model, tea.Cmd) {
@@ -18,30 +19,13 @@ func (m Model) startSelected() (tea.Model, tea.Cmd) {
 		m.status = "请选择 Ready 候选后再开始"
 		return m, nil
 	}
-	valid, reason := candidateFreshness(state.ref, state.snapshot, m.clock.Now())
-	if !valid {
+	if reason := candidateActionReason(*state, m.clock.Now()); reason != "" {
 		m.status = "不能开始：" + reason
 		return m, nil
 	}
-	if executionConfigMismatch(state.ref, state.snapshot) {
-		m.status = "不能开始：" + executionConfigChanged
-		return m, nil
-	}
 	runtimeState := state.snapshot.Connection.Snapshot.Runtime
-	if runtimeState == nil {
-		m.status = "不能开始：缺少当前服务控制快照"
-		return m, nil
-	}
-	if state.ref.Conflict != "" {
-		m.status = state.ref.Conflict
-		return m, nil
-	}
-	if runtimeState.Control.DispatchMode != "manual" {
-		m.status = "开始任务要求手动派发模式"
-		return m, nil
-	}
-	if runtimeState.Control.DispatchPaused {
-		m.status = "派发已暂停，先恢复派发"
+	if len(state.ref.Presentation.Profiles) == 0 {
+		m.status = "没有可用的执行方案"
 		return m, nil
 	}
 	for _, action := range state.actions {
@@ -64,12 +48,8 @@ func (m Model) toggleMode() (tea.Model, tea.Cmd) {
 		mode = "auto"
 	}
 	if mode == "auto" {
-		if m.projects[m.selected].ref.Config.DefaultProfileID() == "" {
-			m.status = "自动派发需要在全局配置中指定 default_execution_profile"
-			return m, nil
-		}
-		if executionConfigMismatch(m.projects[m.selected].ref, m.projects[m.selected].snapshot) {
-			m.status = "不能切换自动派发：" + executionConfigChanged
+		if reason := m.projects[m.selected].client.AutoDispatchAvailability(m.projects[m.selected].snapshot); reason != "" {
+			m.status = reason
 			return m, nil
 		}
 		m.status = "确认前请留意：切到 auto 后服务可能领取 Ready 任务"
@@ -92,7 +72,7 @@ func (m Model) prepareStop() (tea.Model, tea.Cmd) {
 		m.status = "服务实例身份不可用，不能停止"
 		return m, nil
 	}
-	m.confirm = &confirmAction{projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, revision: runtimeState.Control.Revision, action: "stop_service", requestID: steerline.NewControlRequestID()}
+	m.confirm = &confirmAction{projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, revision: runtimeState.Control.Revision, action: "stop_service", requestID: newRequestID()}
 	return m, nil
 }
 
@@ -117,12 +97,12 @@ func (m Model) inspectSelectedRecovery() (tea.Model, tea.Cmd) {
 	ref, runID, ctx := state.ref, row.run.RunID, m.ctx
 	m.status = "正在只读核验运行、工作目录、领取和 PR 身份"
 	return m, func() tea.Msg {
-		report, err := steerline.InspectRecovery(ctx, ref.Config, runID)
+		report, err := state.client.InspectRecovery(ctx, runID)
 		return recoveryInspectionMsg{projectKey: ref.Key, identity: ref.Identity, runID: runID, generation: generation, report: report, err: err}
 	}
 }
 
-func (m *Model) readyControlTarget() (*projectState, *steerline.Runtime) {
+func (m *Model) readyControlTarget() (*projectState, *contracts.Runtime) {
 	if m.selected < 0 || m.selected >= len(m.projects) {
 		m.status = "没有项目"
 		return nil, nil
@@ -130,7 +110,7 @@ func (m *Model) readyControlTarget() (*projectState, *steerline.Runtime) {
 	state := &m.projects[m.selected]
 	connection := state.snapshot.Connection
 	runtimeState := connection.Snapshot.Runtime
-	if state.ref.Error != "" || state.ref.Conflict != "" || runtimeState == nil || !connection.CanControl || connection.State != steerline.ConnectionConnected {
+	if state.ref.Error != "" || state.ref.Conflict != "" || runtimeState == nil || !connection.CanControl || connection.State != api.ConnectionConnected {
 		m.status = "服务未就绪，不能提交控制指令：" + firstText(connection.Diagnostic, string(connection.State), "未知状态")
 		return state, nil
 	}
@@ -141,7 +121,7 @@ func (m Model) createAction(action, taskID string) (tea.Model, tea.Cmd) {
 	return m.createActionWithProfile(action, taskID, nil)
 }
 
-func (m Model) createActionWithProfile(action, taskID string, profile *steerline.ExecutionProfile) (tea.Model, tea.Cmd) {
+func (m Model) createActionWithProfile(action, taskID string, profile *api.ExecutionProfileSummary) (tea.Model, tea.Cmd) {
 	state, runtimeState := m.readyControlTarget()
 	if runtimeState == nil {
 		return m, nil
@@ -161,26 +141,29 @@ func (m Model) createActionWithProfile(action, taskID string, profile *steerline
 		}
 	}
 	if action == "start_task" {
-		valid, reason := candidateFreshness(state.ref, state.snapshot, m.clock.Now())
-		if !valid {
+		if reason := candidateActionReason(*state, m.clock.Now()); reason != "" {
 			m.status = "候选已不可操作：" + reason
 			return m, nil
 		}
 		if profile == nil {
-			first := state.ref.Config.AvailableExecutionProfiles()[0]
+			if len(state.ref.Presentation.Profiles) == 0 {
+				m.status = "没有可用的执行方案"
+				return m, nil
+			}
+			first := state.ref.Presentation.Profiles[0]
 			profile = &first
 		}
-		if _, _, err := state.ref.Config.ResolveExecutionProfile(profile.ID, profile.Digest()); err != nil {
-			m.status = "执行配置不可用：" + err.Error()
+		if reason := profile.UnavailableReason; reason != "" {
+			m.status = "执行配置不可用：" + reason
 			return m, nil
 		}
 	}
-	requestID := steerline.NewControlRequestID()
+	requestID := newRequestID()
 	instance := runtimeState.Service.InstanceID
 	revision := runtimeState.Control.Revision
 	newAction := &actionState{RequestID: requestID, Action: action, TaskID: taskID, Status: "submitting", Message: "准备提交", TargetInstance: instance, UpdatedAt: m.clock.Now()}
 	if profile != nil {
-		newAction.ExecutionProfileID, newAction.ExecutionProfileDigest = profile.ID, profile.Digest()
+		newAction.ExecutionProfileID, newAction.ExecutionProfileDigest = profile.ID, profile.Digest
 	}
 	state.actions[requestID] = newAction
 	state.view.Outstanding[requestID] = "task:" + taskID
@@ -250,7 +233,7 @@ func (m Model) createActionWithID(index int, action, taskID, requestID, instance
 	return m, m.submitControl(index, action, taskID, requestID, instance, revision)
 }
 
-func hasCapability(runtimeState *steerline.Runtime, action string) bool {
+func hasCapability(runtimeState *contracts.Runtime, action string) bool {
 	for _, capability := range runtimeState.Service.Capabilities {
 		if capability == action {
 			return true
@@ -259,29 +242,9 @@ func hasCapability(runtimeState *steerline.Runtime, action string) bool {
 	return false
 }
 
-func candidateActionReason(ref ProjectRef, snapshot ProjectSnapshot, now time.Time) string {
-	valid, reason := candidateFreshness(ref, snapshot, now)
-	if !valid {
-		return reason
+func candidateActionReason(state projectState, now time.Time) string {
+	if state.client == nil {
+		return firstText(state.ref.Error, "产品输入资格尚未核验")
 	}
-	if executionConfigMismatch(ref, snapshot) {
-		return executionConfigChanged
-	}
-	if ref.Conflict != "" {
-		return ref.Conflict
-	}
-	runtimeState := snapshot.Connection.Snapshot.Runtime
-	if runtimeState == nil {
-		return "缺少当前服务快照"
-	}
-	if runtimeState.Control.DispatchMode != "manual" {
-		return "开始任务要求手动派发模式"
-	}
-	if runtimeState.Control.DispatchPaused {
-		return "派发已暂停，请先恢复派发"
-	}
-	if !hasCapability(runtimeState, "start_task") {
-		return "服务未声明 start_task 能力"
-	}
-	return ""
+	return state.client.StartTaskAvailability(state.snapshot, now)
 }

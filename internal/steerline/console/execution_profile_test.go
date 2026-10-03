@@ -1,52 +1,19 @@
 package console
 
 import (
-	"encoding/json"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline"
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 )
 
 func TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("STEERLINE_HOME", home)
-	global, err := json.Marshal(map[string]any{"execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "codex": map[string]string{"executable": "codex"}}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(os.Getenv("STEERLINE_HOME"), "execution.json"), global, 0600); err != nil {
-		t.Fatal(err)
-	}
-	repo := filepath.Join(t.TempDir(), "repo")
-	if err := os.MkdirAll(repo, 0700); err != nil {
-		t.Fatal(err)
-	}
-	if out, err := exec.Command("git", "init", "--quiet", repo).CombinedOutput(); err != nil {
-		t.Fatalf("git init: %v: %s", err, out)
-	}
-	path := filepath.Join(t.TempDir(), "project.json")
-	data, err := json.Marshal(map[string]any{"publication_policy": map[string]string{"publisher": "host_service"}, "execution_policy": map[string]any{"filesystem": map[string]any{"read_scope": "host", "write_scope": "workspace", "git_metadata_write": true}, "network": "allow", "escalation": "deny"}, "repository": repo, "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(path, data, 0600); err != nil {
-		t.Fatal(err)
-	}
-	cfg, err := (consoleFixtureSource{home: os.Getenv("STEERLINE_HOME")}).LoadConfig(path)
-	if err != nil || cfg.LoadedConfigDigest() == "" {
-		t.Fatalf("loaded config has no digest: %v", err)
-	}
 	ref := testProject("native")
-	ref.Config, ref.ConfigPath = cfg, path
 	ref.Identity = "identity"
 	now := time.Now().UTC()
 	snapshot := readySnapshot(ref, now)
-	snapshot.Connection.Snapshot.Runtime.Service.ConfigDigest = cfg.LoadedConfigDigest()
+	snapshot.Connection.Snapshot.Runtime.Service.ConfigDigest = ref.Presentation.ConfigDigest
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	mainDetail := strings.Join(renderDetail(m, m.projects[0], m.selectedRow(0), 120, 100), "\n")
 	if strings.Contains(mainDetail, "Agent：") || strings.Contains(mainDetail, "执行配置：") {
@@ -60,13 +27,13 @@ func TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart(t 
 		}
 	}
 	snapshot.Connection.Snapshot.Runtime.Service.ConfigDigest = "different-loaded-config"
-	if !executionConfigMismatch(ref, snapshot) || !strings.Contains(candidateActionReason(ref, snapshot, now), "配置不同") {
+	if !executionConfigMismatch(ref, snapshot) || !strings.Contains(api.StartTaskReason(ref, snapshot, now), "配置不同") {
 		t.Fatal("a mismatched service config remained startable")
 	}
 	m = modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	updated, cmd := m.startSelected()
 	m = updated.(Model)
-	if cmd != nil || m.control.(*testControlClient).calls != 0 || !strings.Contains(m.status, "不能开始") {
+	if cmd != nil || m.projects[0].client.(*testClient).control.calls != 0 || !strings.Contains(m.status, "不能开始") {
 		t.Fatalf("mismatched config submitted a task: %q", m.status)
 	}
 	m.profileChoice = &executionProfileChoice{taskID: "task-B"}
@@ -82,14 +49,14 @@ func TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart(t 
 
 func TestOrcaExecutionProfilesNameAgentModelEffortAndRemoteTarget(t *testing.T) {
 	for _, sample := range []struct {
-		config steerline.Config
+		config api.ExecutionProfileSummary
 		want   []string
 	}{
-		{config: steerline.Config{TaskAuthority: "native", Host: "orca", Agent: "pi", ImplementationDisplay: []string{"Model：由所选 agent 决定", "Reasoning effort：不适用"}}, want: []string{"orca", "Agent：pi", "Model：由所选 agent 决定", "Reasoning effort：不适用"}},
-		{config: steerline.Config{TaskAuthority: "native", Host: "orca", Agent: "codex", ImplementationDisplay: []string{"Model：chosen-model", "Reasoning effort：xhigh"}}, want: []string{"orca", "Agent：codex", "Model：chosen-model", "Reasoning effort：xhigh"}},
-		{config: steerline.Config{TaskAuthority: "native", Host: "orca_supervised", Agent: "codex", ImplementationDisplay: []string{"Model：remote-model", "Reasoning effort：high", "目标环境：remote-env", "连接：fixed-connection"}}, want: []string{"orca_supervised", "Model：remote-model", "Reasoning effort：high", "目标环境：remote-env", "连接：fixed-connection"}},
+		{config: api.ExecutionProfileSummary{Host: "orca", Agent: "pi", ImplementationDisplay: []string{"Model：由所选 agent 决定", "Reasoning effort：不适用"}}, want: []string{"orca", "Agent：pi", "Model：由所选 agent 决定", "Reasoning effort：不适用"}},
+		{config: api.ExecutionProfileSummary{Host: "orca", Agent: "codex", ImplementationDisplay: []string{"Model：chosen-model", "Reasoning effort：xhigh"}}, want: []string{"orca", "Agent：codex", "Model：chosen-model", "Reasoning effort：xhigh"}},
+		{config: api.ExecutionProfileSummary{Host: "orca_supervised", Agent: "codex", ImplementationDisplay: []string{"Model：remote-model", "Reasoning effort：high", "目标环境：remote-env", "连接：fixed-connection"}}, want: []string{"orca_supervised", "Model：remote-model", "Reasoning effort：high", "目标环境：remote-env", "连接：fixed-connection"}},
 	} {
-		ref := ProjectRef{Config: consoleFixtureConfig(sample.config, "fixture")}
+		ref := ProjectRef{Presentation: api.ProjectPresentation{Profiles: []api.ExecutionProfileSummary{sample.config}}}
 		m := Model{width: 120, profileChoice: &executionProfileChoice{taskID: "task"}}
 		shown := renderExecutionProfileChoice(m, projectState{ref: ref}, 40)
 		for _, want := range sample.want {

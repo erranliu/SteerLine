@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func allSessionLines(state projectState, row *consoleRow, width int) []string {
@@ -50,7 +50,7 @@ func captureSessionAnchor(state *projectState, row *consoleRow, width int) {
 	state.view.ReadItem = ""
 	state.view.ReadRevision = 0
 	itemLine := -1
-	events := append(append([]steerline.ConversationEvent(nil), group.Process...), group.Finals...)
+	events := append(append([]contracts.ConversationEvent(nil), group.Process...), group.Finals...)
 	for _, event := range events {
 		needle := "[" + itemToken(event) + "]"
 		for lineIndex := headerLine; lineIndex <= top && lineIndex < len(lines); lineIndex++ {
@@ -103,7 +103,7 @@ func restoreSessionAnchor(state *projectState, row *consoleRow, width int) bool 
 	if state.view.ReadItem != "" {
 		foundItem := false
 		itemVisible := false
-		events := append(append([]steerline.ConversationEvent(nil), group.Process...), group.Finals...)
+		events := append(append([]contracts.ConversationEvent(nil), group.Process...), group.Finals...)
 		for _, event := range events {
 			if sessionItemAnchorKey(event) != state.view.ReadItem {
 				continue
@@ -148,24 +148,24 @@ func shortStableToken(prefix, value string) string {
 
 func groupToken(groupID string) string { return shortStableToken("g:", groupID) }
 
-func itemToken(event steerline.ConversationEvent) string {
+func itemToken(event contracts.ConversationEvent) string {
 	return shortStableToken("i:", conversationItemKey(event))
 }
 
-func sessionItemAnchorKey(event steerline.ConversationEvent) string {
+func sessionItemAnchorKey(event contracts.ConversationEvent) string {
 	if event.Body != nil {
 		return "body:" + event.Body.ItemKey
 	}
 	if event.ItemKey != "" {
 		return "item:" + event.ItemKey
 	}
-	if event.ItemID != "" && (event.ItemQuality == steerline.IdentityNative || event.ItemQuality == steerline.IdentityDerived) {
+	if event.ItemID != "" && (event.ItemQuality == contracts.IdentityNative || event.ItemQuality == contracts.IdentityDerived) {
 		return "item:" + event.ItemID
 	}
 	return conversationItemKey(event)
 }
 
-func conversationItemKey(event steerline.ConversationEvent) string {
+func conversationItemKey(event contracts.ConversationEvent) string {
 	if event.Body != nil {
 		return fmt.Sprintf("%s\x00%s\x00%s\x00%d", event.ExecutionID, event.AttemptID, event.Body.ItemKey, event.Body.Revision)
 	}

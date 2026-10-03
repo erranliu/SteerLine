@@ -19,7 +19,12 @@ func (m Model) handleExecutionProfileChoice(key tea.KeyMsg) (tea.Model, tea.Cmd)
 		return m, nil
 	}
 	state := &m.projects[index]
-	profiles := state.ref.Config.AvailableExecutionProfiles()
+	profiles := state.ref.Presentation.Profiles
+	if len(profiles) == 0 {
+		m.profileChoice = nil
+		m.status = "没有可用的执行方案"
+		return m, nil
+	}
 	switch key.String() {
 	case "esc", "q":
 		m.profileChoice = nil
@@ -36,7 +41,7 @@ func (m Model) handleExecutionProfileChoice(key tea.KeyMsg) (tea.Model, tea.Cmd)
 			return m, nil
 		}
 		profile := profiles[choice.index]
-		if reason := profile.StaticUnavailableReason(); reason != "" {
+		if reason := profile.UnavailableReason; reason != "" {
 			m.status = reason
 			return m, nil
 		}
@@ -47,14 +52,9 @@ func (m Model) handleExecutionProfileChoice(key tea.KeyMsg) (tea.Model, tea.Cmd)
 			m.status = "任务或服务状态已变化；请刷新后重新选择执行配置"
 			return m, m.readProject(index)
 		}
-		if reason := candidateActionReason(state.ref, state.snapshot, m.clock.Now()); reason != "" {
+		if reason := candidateActionReason(*state, m.clock.Now()); reason != "" {
 			m.profileChoice = nil
 			m.status = "不能开始：" + reason
-			return m, nil
-		}
-		if _, _, err := state.ref.Config.ResolveExecutionProfile(profile.ID, profile.Digest()); err != nil {
-			m.profileChoice = nil
-			m.status = "执行配置已变化：" + err.Error()
 			return m, nil
 		}
 		m.profileChoice = nil
@@ -68,7 +68,10 @@ func renderExecutionProfileChoice(m Model, state projectState, height int) strin
 	if choice == nil {
 		return ""
 	}
-	profiles := state.ref.Config.AvailableExecutionProfiles()
+	profiles := state.ref.Presentation.Profiles
+	if choice.index < 0 || choice.index >= len(profiles) {
+		return "执行方案不可用；请刷新"
+	}
 	lines := []string{"开始任务 " + safeTerminalInlineText(choice.taskID) + " · 选择已配置的执行方案", ""}
 	visible := max(1, height-13)
 	start := max(0, choice.index-visible/2)
@@ -83,7 +86,7 @@ func renderExecutionProfileChoice(m Model, state projectState, height int) strin
 			marker = "› "
 		}
 		line := marker + safeTerminalInlineText(profile.Name) + " [" + safeTerminalInlineText(profile.ID) + "]"
-		if profile.StaticUnavailableReason() != "" {
+		if profile.UnavailableReason != "" {
 			line += " · 不可用"
 		}
 		lines = append(lines, line)
@@ -95,7 +98,7 @@ func renderExecutionProfileChoice(m Model, state projectState, height int) strin
 	for _, field := range profile.ImplementationDisplay {
 		lines = append(lines, "  实现设置："+safeTerminalInlineText(field))
 	}
-	if reason := profile.StaticUnavailableReason(); reason != "" {
+	if reason := profile.UnavailableReason; reason != "" {
 		lines = append(lines, "  不可用："+safeTerminalText(reason))
 	}
 	if executionConfigMismatch(state.ref, state.snapshot) {

@@ -5,21 +5,21 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestNativeTaskAndItsRunShareOneListRow(t *testing.T) {
 	now := time.Date(2026, 9, 27, 10, 0, 0, 0, time.UTC)
 	ref := testProject("native")
-	ref.Config.TaskAuthority = "native"
+	ref.Presentation.TaskAuthority = "native"
 	snapshot := readySnapshot(ref, now)
-	snapshot.Tasks.Tasks = []steerline.TaskCandidate{{TaskID: "102", Title: "Native branch A"}}
-	run := &steerline.Run{RunID: strings.Repeat("a", 32), TaskID: "102", DomainTaskID: "102", Title: "Native branch A", TaskStatus: "in_progress", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &executionapi.ProcessIdentity{Kind: "orca", Terminal: "term-native-102"}}
-	snapshot.Observation.Runtime.Runs = []*steerline.Run{run}
-	snapshot.NativeTasks = &steerline.NativeTaskPage{Tasks: []steerline.NativeTaskDetail{
-		{TaskRecord: steerline.TaskRecord{TaskID: "102", Title: "Native branch A", Status: "in_progress"}, Successors: []string{"104"}},
-		{TaskRecord: steerline.TaskRecord{TaskID: "103", Title: "Native branch B", Status: "open"}},
+	snapshot.Tasks.Tasks = []contracts.TaskCandidate{{TaskID: "102", Title: "Native branch A"}}
+	run := &contracts.Run{RunID: strings.Repeat("a", 32), TaskID: "102", DomainTaskID: "102", Title: "Native branch A", TaskStatus: "in_progress", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &executionapi.ProcessIdentity{Kind: "orca", Terminal: "term-native-102"}}
+	snapshot.Observation.Runtime.Runs = []*contracts.Run{run}
+	snapshot.NativeTasks = &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{
+		{TaskRecord: contracts.TaskRecord{TaskID: "102", Title: "Native branch A", Status: "in_progress"}, Successors: []string{"104"}},
+		{TaskRecord: contracts.TaskRecord{TaskID: "103", Title: "Native branch B", Status: "open"}},
 	}}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "task:102"

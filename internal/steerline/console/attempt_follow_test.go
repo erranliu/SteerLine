@@ -8,16 +8,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline"
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func TestConsoleFollowsCurrentAttemptUntilHistoryIsSelected(t *testing.T) {
-	run := &steerline.Run{TaskID: "task", DomainTaskID: "task", RunID: "run", ExecutionID: "execution", AttemptID: "first"}
+	run := &contracts.Run{TaskID: "task", DomainTaskID: "task", RunID: "run", ExecutionID: "execution", AttemptID: "first"}
 	state := projectState{
 		selectedKey: "run:run",
 		snapshot: ProjectSnapshot{
-			Observation: steerline.ObservationSnapshot{Runtime: &steerline.Runtime{Runs: []*steerline.Run{run}}},
-			NativeTasks: &steerline.NativeTaskPage{Tasks: []steerline.NativeTaskDetail{{TaskRecord: steerline.TaskRecord{TaskID: "task"}}}},
+			Observation: api.ObservationSnapshot{Runtime: &contracts.Runtime{Runs: []*contracts.Run{run}}},
+			NativeTasks: &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{{TaskRecord: contracts.TaskRecord{TaskID: "task"}}}},
 		},
 	}
 	m := Model{projects: []projectState{state}}
@@ -31,7 +32,7 @@ func TestConsoleFollowsCurrentAttemptUntilHistoryIsSelected(t *testing.T) {
 		t.Fatal("new current attempt did not replace the followed activity and detail")
 	}
 	created := time.Now().UTC()
-	m.projects[0].snapshot.Domain = &steerline.DomainSnapshot{Attempts: []steerline.StepAttemptRecord{
+	m.projects[0].snapshot.Domain = &contracts.DomainSnapshot{Attempts: []contracts.StepAttemptRecord{
 		{ExecutionID: "execution", AttemptID: "first", AttemptNumber: 1, CreatedAt: created},
 		{ExecutionID: "execution", AttemptID: "second", AttemptNumber: 2, CreatedAt: created.Add(time.Second)},
 	}}
@@ -63,7 +64,7 @@ func TestConsoleRestoresOnlyExplicitHistoryAttemptPin(t *testing.T) {
 				t.Fatal(err)
 			}
 			profile.close()
-			model, err := NewModel(context.Background(), []ProjectRef{ref}, Options{ApplicationHome: os.Getenv("STEERLINE_HOME")})
+			model, err := NewModel(context.Background(), []ProjectRef{ref}, Options{ApplicationHome: os.Getenv("STEERLINE_HOME"), Clients: map[string]api.ConsoleClient{ref.Key: &testClient{ref: ref}}})
 			if err != nil {
 				t.Fatal(err)
 			}

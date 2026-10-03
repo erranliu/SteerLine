@@ -4,15 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
+	"os"
 	"path/filepath"
+	"runtime"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
-
 	"github.com/erranliu/SteerLine/internal/steerlineclient"
 )
 
@@ -21,7 +24,11 @@ func OpenClient(ctx context.Context, path string) (*steerlineclient.Client, erro
 	if err != nil {
 		return nil, err
 	}
-	return steerlineclient.Open(ctx, api.ProjectRef{ConfigPath: abs}, ClientResources)
+	return openProjectClient(ctx, api.ProjectRef{ConfigPath: abs})
+}
+
+func openProjectClient(ctx context.Context, ref api.ProjectRef) (*steerlineclient.Client, error) {
+	return steerlineclient.Open(ctx, ref, ClientResources)
 }
 
 // ClientResources is the application construction seam. It binds one immutable
@@ -44,6 +51,9 @@ func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef
 	ref.ConfigPath = abs
 	ref.Identity = c.Identity()
 	ref.RunDir = c.RunDir
+	ref.Presentation = projectPresentation(c)
+	ref.ApplicationHome, ref.ApplicationBin = HomeDir(), BinDir()
+	ref.Presentation.ServiceInstruction = clientServiceInstruction(ref)
 	if ref.Key == "" {
 		ref.Key = ref.ConfigPath + "\x00" + ref.RunDir
 	}
@@ -53,7 +63,7 @@ func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef
 		freshness = poll * 3
 	}
 	return api.Resources{
-		Project: ref, CandidateFreshnessLimit: freshness, DefaultRequestedBy: steerline.DefaultRequestedBy(), ExecutableTypes: append([]string(nil), c.ExecutableTypes...),
+		Project: ref, CandidateFreshnessLimit: freshness, DefaultRequestedBy: steerline.DefaultRequestedBy(), DefaultAnswerer: steerline.AnswererName(), ExecutableTypes: append([]string(nil), c.ExecutableTypes...),
 		OpenReader: func(ctx context.Context) (api.Reader, error) {
 			cfg := c
 			s, err := steerline.OpenNativeTaskReader(ctx, &cfg)
@@ -119,6 +129,27 @@ func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef
 				return api.ControlPayload{}, err
 			}
 			return api.ControlPayload{TaskID: id, ExecutionProfileID: p.ID, ExecutionProfileDigest: p.Digest()}, nil
+		},
+		InspectRecovery: func(ctx context.Context, id string) (api.RecoveryInspection, error) {
+			return steerline.InspectRecovery(ctx, c, id)
+		},
+		DecisionAvailability: func(ctx context.Context, run *contracts.Run) string {
+			if run == nil || run.Decision == nil {
+				return "当前没有待回答的问题"
+			}
+			if run.Decision.RequestPath != "" || run.Decision.AnswerPath != "" {
+				return "问题绑定了已移除的 sidecar-answer 格式；保留状态并转入人工恢复，不导入答案文件"
+			}
+			if err := steerline.DecisionReplyEligibility(ctx, c, run); err != nil {
+				return err.Error()
+			}
+			if c.ExecutionDirectory == nil {
+				return "执行目录不可用；不能续跑原问题"
+			}
+			if _, err := c.ExecutionDirectory.ResolveIdentity(steerline.ExecutionRegistrationKey{Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol), Agent: run.Agent}); err != nil {
+				return "原执行后端/协议不支持决策续跑"
+			}
+			return ""
 		},
 		ReadLog: logs.ReadLog,
 	}, nil
@@ -222,4 +253,35 @@ func (r clientDecision) Submit(ctx context.Context, in api.DecisionInput) (contr
 }
 func (r clientDecision) Answer(ctx context.Context, in api.AnswerInput) (contracts.CommandRecord, bool, error) {
 	return steerline.SubmitDecisionAnswer(ctx, r.config, steerline.AnswerOptions{RunID: in.RunID, DecisionID: in.DecisionID, Option: in.Option, Note: in.Note, By: in.RequestedBy, ExpectedVersion: in.ExpectedVersion, CommandID: in.CommandID})
+}
+
+// projectPresentation exposes only accepted non-secret display fields and fixed
+// profile digests. Configuration compilation stays with the original owner.
+func projectPresentation(c steerline.Config) api.ProjectPresentation {
+	result := api.ProjectPresentation{NativeWorkflow: c.WorkflowProtocol == steerline.WorkerFlowVersion, ConfigDigest: c.LoadedConfigDigest(), TaskAuthority: c.TaskAuthority, WorkflowProtocol: c.WorkflowProtocol, ShutdownGrace: c.ShutdownGrace, DefaultProfileID: c.DefaultProfileID()}
+	for _, p := range c.AvailableExecutionProfiles() {
+		reason := p.StaticUnavailableReason()
+		if reason == "" {
+			if _, _, err := c.ResolveExecutionProfile(p.ID, p.Digest()); err != nil {
+				reason = err.Error()
+			}
+		}
+		result.Profiles = append(result.Profiles, api.ExecutionProfileSummary{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Digest: p.Digest(), AcceptedConfigVersion: p.AcceptedConfigVersion, UnavailableReason: reason, ExecutionPolicy: p.ExecutionPolicy, PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ImplementationDisplay: append([]string(nil), p.ImplementationDisplay...)})
+	}
+	return result
+}
+
+func clientServiceInstruction(ref api.ProjectRef) string {
+	if runtime.GOOS != "windows" {
+		return "steerline start-service -config " + ref.ConfigPath
+	}
+	launcher := filepath.Join(ref.ApplicationHome, "service-window.bat")
+	binary := filepath.Join(ref.ApplicationBin, "steerline.exe")
+	if _, err := os.Stat(binary); err != nil {
+		return fmt.Sprintf("服务窗口不可用：缺少 %s；运行 steerline install", binary)
+	}
+	if _, err := os.Stat(launcher); err != nil {
+		return fmt.Sprintf("服务窗口不可用：缺少 %s；运行 steerline launchers", launcher)
+	}
+	return launcher
 }
