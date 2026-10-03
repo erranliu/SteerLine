@@ -3,29 +3,12 @@ package steerline
 import (
 	"context"
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 )
-
-func TestProjectPublicationPolicyRequiredBeforeRepositoryProbe(t *testing.T) {
-	for _, policy := range []any{nil, map[string]string{}, map[string]string{"publisher": "automatic"}} {
-		path := filepath.Join(t.TempDir(), "project.json")
-		raw, err := json.Marshal(map[string]any{"publication_policy": policy, "execution_policy": workspacePolicyFixture(), "repository": "must-not-be-probed", "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "git": map[string]string{"executable": "must-not-be-called"}})
-		require(t, err)
-		require(t, os.WriteFile(path, raw, 0600))
-		_, err = loadFixtureConfig(path)
-		if err == nil || !strings.Contains(err.Error(), "publication_policy.publisher") {
-			t.Fatalf("missing/invalid policy reached repository probe: %v", err)
-		}
-	}
-}
 
 func executionPublicationFixture() executionapi.PublicationPolicy {
 	return executionapi.PublicationPolicy{Publisher: "host_service"}
@@ -56,7 +39,7 @@ func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
 	t.Setenv("GH_TOKEN", "secret-host-token")
 	t.Setenv("CUSTOM_HOST_TOKEN", "secret-custom-token")
 	fixed.PR.TokenEnv = "CUSTOM_HOST_TOKEN"
-	worker := codexBackend(fixed, f.run).Config.Environment([]string{"GH_TOKEN=secret-host-token", "CUSTOM_HOST_TOKEN=secret-custom-token", "PATH=ordinary"})
+	worker := workerProcessEnvironment(fixed, f.run, []string{"GH_TOKEN=secret-host-token", "CUSTOM_HOST_TOKEN=secret-custom-token", "PATH=ordinary"})
 	if strings.Contains(strings.Join(worker, "\n"), "secret-") || strings.Contains(string(data), "secret-") {
 		t.Fatal("host credentials leaked into worker/snapshot")
 	}
@@ -65,12 +48,12 @@ func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
 	}
 	copy := original
 	copy.Publication.Provider.TokenEnv = "edited"
-	if testVerifyFixedExecutionProfile(copy) {
+	if neutralVerifyFixedExecutionProfile(copy) {
 		t.Fatal("changed auth reference accepted")
 	}
 	copy = original
 	copy.Version = 2
-	if testVerifyFixedExecutionProfile(copy) {
+	if neutralVerifyFixedExecutionProfile(copy) {
 		t.Fatal("old snapshot accepted")
 	}
 }
@@ -117,52 +100,5 @@ func TestPublicationOriginalProviderAfterRestartAndRemoteDrift(t *testing.T) {
 	}
 	if count, err := os.ReadFile(os.Getenv("STEERLINE_TEST_HOST_GH_FILE") + ".creates"); err != nil || string(count) != "x" {
 		t.Fatalf("query/close/recovery repeated create: %q %v", count, err)
-	}
-}
-
-func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
-	c := Config{WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionapi.PublicationPolicy{Publisher: "worker"}, PR: publication.Config{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}, Host: "orca_supervised", Agent: "codex"}
-	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}, &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote-env", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1})
-	entry, err := registrationFor(c)
-	if err != nil || entry.ValidatePublicationPolicy(c.PublicationPolicy, c.PR) != nil {
-		t.Fatal("existing remote worker publication was removed")
-	}
-	if reason := c.projectExecutionProfile().StaticUnavailableReason(); !strings.Contains(reason, "requested execution_policy") {
-		t.Fatalf("remote permission evidence gate lost: %s", reason)
-	}
-	c.Host = "local"
-	c.PublicationPolicy.Publisher = "host_service"
-	c.PR = hostPublicationProviderFixture()
-	c.ExecutionPolicy.Network = "deny"
-	settings := codexProfileSettings(c)
-	settings.Args = []string{"--search"}
-	setTestCodexProfile(t, &c, settings)
-	if err := validateWorkflowConfig(&c, nil); err == nil || !strings.Contains(err.Error(), "live web search") {
-		t.Fatalf("publication bypassed network deny: %v", err)
-	}
-}
-
-func TestRemotePublicationClaimRequiresPermissionEvidence(t *testing.T) {
-	c, _, store := openDAGFixture(t)
-	c.Host, c.Agent = "orca_supervised", "codex"
-	c.PublicationPolicy.Publisher = executionapi.PublisherWorker
-	c.PR = publication.Config{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}
-	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "must-not-be-called", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}, &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote-env", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", ExpectedCodexVersion: "0.159.2", PollInterval: "1s", CapabilityReportVersion: 1})
-	// Missing enforcement evidence must reject before Git, version, or remote
-	// probes, even though this route's existing worker publication is supported.
-	c.Git.Executable = "must-not-be-called"
-	entry, err := registrationFor(c)
-	require(t, err)
-	require(t, entry.ValidatePublicationPolicy(c.PublicationPolicy, c.PR))
-	before, err := store.Query(context.Background(), c.Identity())
-	require(t, err)
-	_, err = (CommandService{Store: store, Project: c.Identity()}).ClaimNativeTask(context.Background(), c, TaskClaimOptions{TaskID: "60", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1})
-	if err == nil || !strings.Contains(err.Error(), "enforcement evidence") || strings.Contains(err.Error(), "must-not-be-called") {
-		t.Fatalf("remote publication bypassed its permission admission gate: %v", err)
-	}
-	after, queryErr := store.Query(context.Background(), c.Identity())
-	require(t, queryErr)
-	if digestValue(before.WorkflowRuns) != digestValue(after.WorkflowRuns) || digestValue(before.Executions) != digestValue(after.Executions) || digestValue(before.Operations) != digestValue(after.Operations) {
-		t.Fatal("rejected remote policy wrote claim or operation state")
 	}
 }

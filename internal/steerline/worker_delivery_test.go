@@ -3,15 +3,13 @@ package steerline
 import (
 	"context"
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
-
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing.T) {
@@ -38,10 +36,10 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 	created := time.Now().UTC()
 	url := "https://git.example/o/r/pulls/8"
 	wf := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: created, UpdatedAt: created}
-	fixed := c.projectExecutionProfile().Freeze(configurationProjectIdentity(c))
+	fixed := c.projectExecutionProfile().Freeze(c.Identity())
 	wf.ExecutionProfile, wf.ConfigDigest = &fixed, fixed.AcceptedConfigVersion
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, CurrentAttemptID: "attempt-8", ConfigurationDigest: wf.ExecutionProfile.Digest, WorkflowRunID: wf.WorkflowRunID, Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Status: "idle", Workspace: WorkspaceEvidence{Branch: "codex/task-8", Dirty: true}, CreatedAt: created, UpdatedAt: created}
-	setTestCodexBinding(t, &execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, CurrentAttemptID: "attempt-8", ConfigurationDigest: wf.ExecutionProfile.Digest, WorkflowRunID: wf.WorkflowRunID, Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "idle", Workspace: WorkspaceEvidence{Branch: "fixture/task-8", Dirty: true}, CreatedAt: created, UpdatedAt: created}
+	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	claimed := task
 	claimed.Status = "in_progress"
 	claimed.Claimant = "operator"
@@ -93,12 +91,9 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 		t.Fatalf("set isolated remote: %v: %s", err, out)
 	}
 	c.Git = Command{Executable: "git"}
-	settings := codexProfileSettings(c)
-	c.Host = "orca"
-	settings.WindowsSandbox = "unelevated"
-	orcaSettings := orcaworker.ProfileConfig{Executable: "orca", Shell: "pwsh.exe", WaitTimeout: "30s"}
-	setTestImplementationProfiles(t, &c, settings, &orcaSettings)
+	settings := neutralProfileSettings(c)
 	c.PublicationPolicy.Publisher = "worker"
+	setNeutralProfile(t, &c, settings)
 	c.WorkflowProtocol = WorkerFlowVersion
 	c.PR = publication.Config{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo", Query: Command{Executable: "gh"}}
 	project, err := OpenNativeTaskProject(ctx, &c)
@@ -128,12 +123,12 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	wf := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: "8", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: at, UpdatedAt: at}
 	require(t, c.bindPublicationTarget(ctx))
 	fixed := c.projectExecutionProfile().Freeze()
-	if !testVerifyFixedExecutionProfile(fixed) {
+	if !neutralVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("delivery fixture did not freeze a valid execution profile")
 	}
 	wf.ExecutionProfile, wf.ConfigDigest = &fixed, fixed.AcceptedConfigVersion
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, CurrentAttemptID: "attempt-8", ConfigurationDigest: wf.ExecutionProfile.Digest, WorkflowRunID: wf.WorkflowRunID, Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Status: "idle", Workspace: WorkspaceEvidence{Branch: "codex/task-8"}, CreatedAt: at, UpdatedAt: at}
-	setTestCodexBinding(t, &execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, CurrentAttemptID: "attempt-8", ConfigurationDigest: wf.ExecutionProfile.Digest, WorkflowRunID: wf.WorkflowRunID, Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "idle", Workspace: WorkspaceEvidence{Branch: "fixture/task-8"}, CreatedAt: at, UpdatedAt: at}
+	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	claimed := task
 	claimed.Status, claimed.Claimant, claimed.Version, claimed.UpdatedAt = "in_progress", "operator", task.Version+1, at
 	if err := store.Transact(ctx, func(domainTx DomainTx) error {
@@ -149,10 +144,10 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 		t.Fatal(err)
 	}
 	mergedAt, mergeCommit := at.Add(time.Minute), commit
-	good := PRInfo{URL: url, Repository: "org/repo", BaseBranch: "main", HeadRepository: "org/repo", HeadBranch: "codex/task-8", HeadRevision: commit, State: "merged", Merged: true, MergedAt: &mergedAt, MergeCommit: &mergeCommit}
+	good := PRInfo{URL: url, Repository: "org/repo", BaseBranch: "main", HeadRepository: "org/repo", HeadBranch: "fixture/task-8", HeadRevision: commit, State: "merged", Merged: true, MergedAt: &mergedAt, MergeCommit: &mergeCommit}
 	verifier := &fixedTaskDeliveryVerifier{info: good}
 	for name, alter := range map[string]func(*PRInfo){
-		"wrong task branch": func(info *PRInfo) { info.HeadBranch = "codex/task-9" },
+		"wrong task branch": func(info *PRInfo) { info.HeadBranch = "fixture/task-9" },
 		"wrong repository":  func(info *PRInfo) { info.Repository = "other/repo" },
 		"wrong base":        func(info *PRInfo) { info.BaseBranch = "develop" },
 		"closed unmerged": func(info *PRInfo) {

@@ -7,6 +7,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/processhost"
 )
@@ -24,10 +25,15 @@ func NewService(config steerline.Config) (*steerline.Service, error) {
 // NewServiceWithLifecycleResolver permits an explicit decorator around the
 // same catalog's lifecycle ports, while preserving all other app wiring.
 func NewServiceWithLifecycleResolver(config steerline.Config, resolver executionapi.LifecycleResolver) (*steerline.Service, error) {
+	return NewServiceWithPorts(config, resolver, codexworker.NewConversationAdapter())
+}
+
+// NewServiceWithPorts composes explicitly supplied execution and history ports
+// with the directory already accepted by this application instance.
+func NewServiceWithPorts(config steerline.Config, resolver executionapi.LifecycleResolver, sources contracts.ConversationSourcePort) (*steerline.Service, error) {
 	if config.ExecutionDirectory == nil || config.ProcessHost == nil {
 		return nil, errors.New("application configuration is missing its execution directory or process host")
 	}
-	sources := codexworker.NewConversationAdapter()
 	return steerline.NewService(config, config.ExecutionDirectory, resolver, sources, config.ProcessHost)
 }
 

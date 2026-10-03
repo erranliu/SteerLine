@@ -1,0 +1,1331 @@
+[
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "helper": "fmtBool",
+    "current_consumers": [
+      "internal/steerline/worker_receipts_business_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "helper": "appServerAuditService",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "helper": "appServerAuditServiceWithPolicy",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "helper": "appServerAuditServiceWithRequirements",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "helper": "testAppServerAnswerRecoveryPersistsBeforeNextQuestion",
+    "current_consumers": [
+      "internal/steerline/worker_events_cd62_test.go",
+      "internal/steerline/worker_receipts_business_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "helper": "conversationTestWrite",
+    "current_consumers": [
+      "internal/steerline/conversation_test.go",
+      "internal/steerlineintegration/conversation_history_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "helper": "conversationTestCheckpoint",
+    "current_consumers": [
+      "internal/steerline/conversation_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_63_audit_test.go",
+    "helper": "testCD63RecoverySeedResources",
+    "current_consumers": [
+      "internal/steerline/core_decoupling_63_audit_test.go",
+      "internal/steerline/core_decoupling_63_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_63_audit_test.go",
+    "helper": "testCD63BindingCodecIsolation",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_65_test.go",
+    "helper": "testCD65HostGateKeepsTrustedActionSeparate",
+    "current_consumers": [
+      "internal/steerline/core_decoupling_65_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_65_test.go",
+    "helper": "testHistorySource",
+    "current_consumers": [
+      "internal/steerline/core_decoupling_65_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_65_test.go",
+    "helper": "testCD65DiscoveryRejectsForeignOwner",
+    "current_consumers": [
+      "internal/steerline/core_decoupling_65_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testImplementationDirectory",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testExecutionDirectory",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "mustTestDirectory",
+    "current_consumers": [
+      "internal/steerline/service_ports_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testImplementationCodecs",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "newTestDirectory",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testDirectoryWithReplacement",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "orcaQuestionID",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "probeSupervisedOrcaTarget",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testConfigWithDirectory",
+    "current_consumers": [
+      "internal/steerline/service_ports_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "newTestService",
+    "current_consumers": [
+      "internal/steerline/native_tasks_test.go",
+      "internal/steerline/pr_test.go",
+      "internal/steerline/publication_policy_test.go",
+      "internal/steerline/service_lifecycle_review_test.go",
+      "internal/steerline/service_ports_fixture_test.go",
+      "internal/steerline/service_test.go",
+      "internal/steerline/worker_config_test.go",
+      "internal/steerline/worker_service_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testPrepareClaim",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testVerifyFixedExecutionProfile",
+    "current_consumers": [
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/execution_policy_live_cd67_test.go",
+      "internal/steerlineapp/global_execution_example_test.go",
+      "internal/steerlineapp/local_windows_sandbox_cd67_test.go",
+      "internal/steerlineapp/policy_snapshot_cd67_test.go",
+      "internal/steerlineapp/profile_publication_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testLocalTarget",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testTerminalTarget",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testSupervisedTarget",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "codexProfileSettings",
+    "current_consumers": [
+      "internal/steerlineapp/config_backend_test.go",
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/global_execution_config_test.go",
+      "internal/steerlineapp/local_windows_sandbox_cd67_test.go",
+      "internal/steerlineapp/policy_snapshot_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "orcaProfileSettings",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "remoteProfileSettings",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "codexProfileFromInputs",
+    "current_consumers": [
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/global_execution_example_test.go",
+      "internal/steerlineapp/profile_publication_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "validatePublication",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testLocalPublicationPolicy",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testWorkerPublicationPolicy",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testStableTurnID",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testBuildPolicyResource",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testVerifyPolicyResource",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "nativeOrcaConfig",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "inspectTestWorkspace",
+    "current_consumers": [
+      "internal/steerline/business_ports_fixture_test.go",
+      "internal/steerline/readiness_business_test.go",
+      "internal/steerline/service_ports_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "nativeOrcaClient",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "nativeOrcaFixedAgentTitle",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "nativeOrcaFixedAgentCommand",
+    "current_consumers": [
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/global_execution_example_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "nativeOrcaCommand",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "remoteWorkerConfig",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "remoteWorkerClient",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "remoteWorkerError",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "remoteWorkerRef",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testHomePath",
+    "current_consumers": [
+      "internal/steerline/service_ports_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "configTestRepository",
+    "current_consumers": [
+      "internal/steerlineapp/config_backend_test.go",
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/global_execution_config_test.go",
+      "internal/steerlineapp/global_execution_example_test.go",
+      "internal/steerlineapp/policy_admission_cd67_test.go",
+      "internal/steerlineapp/profile_publication_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "fixtureHome",
+    "current_consumers": [
+      "internal/steerline/platform_windows_test.go",
+      "internal/steerline/service_ports_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "fixtureBinDir",
+    "current_consumers": [
+      "internal/steerline/service_ports_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "fixtureEtcDir",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "fixtureStateRoot",
+    "current_consumers": [
+      "internal/steerline/business_fixture_test.go",
+      "internal/steerline/native_tasks_test.go",
+      "internal/steerline/service_ports_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "fixtureGlobalExecutionConfigPath",
+    "current_consumers": [
+      "internal/steerline/execution_requirements_test.go",
+      "internal/steerline/global_execution_test_helpers_test.go",
+      "internal/steerline/service_ports_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "fixtureRepositoryStateKey",
+    "current_consumers": [
+      "internal/steerline/native_tasks_test.go",
+      "internal/steerline/service_ports_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "loadFixtureConfig",
+    "current_consumers": [
+      "internal/steerline/platform_windows_test.go",
+      "internal/steerline/recovery_real_probe_test.go",
+      "internal/steerline/service_client_test.go",
+      "internal/steerline/service_ports_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testStartService",
+    "current_consumers": [
+      "internal/steerline/platform_windows_test.go",
+      "internal/steerline/service_client_test.go",
+      "internal/steerline/service_lifecycle_review_test.go",
+      "internal/steerline/service_ports_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "testRunConfiguredService",
+    "current_consumers": [
+      "internal/steerline/service_lifecycle_review_test.go",
+      "internal/steerline/service_ports_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "helper": "validateCatalogRef",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/execution_acceptance_helpers_test.go",
+    "helper": "reattachAppServerWorker",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/execution_acceptance_helpers_test.go",
+    "helper": "readOutputPrefix",
+    "current_consumers": [
+      "internal/steerline/execution_acceptance_helpers_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/execution_acceptance_helpers_test.go",
+    "helper": "inspectBoundOrcaTerminal",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/execution_acceptance_helpers_test.go",
+    "helper": "appServerDirectory",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/execution_acceptance_helpers_test.go",
+    "helper": "codexBackend",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/execution_policy_live_test.go",
+    "helper": "findPolicyNativeJournal",
+    "current_consumers": [
+      "internal/steerlineapp/execution_policy_live_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/execution_policy_live_test.go",
+    "helper": "policyNativeToolProof",
+    "current_consumers": [
+      "internal/steerlineapp/execution_policy_live_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/execution_policy_live_test.go",
+    "helper": "policyNativeEvents",
+    "current_consumers": [
+      "internal/steerlineapp/execution_policy_live_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/execution_policy_test.go",
+    "helper": "workspacePolicyFixture",
+    "current_consumers": [
+      "internal/steerline/business_audit_fixture_test.go",
+      "internal/steerline/execution_policy_test.go",
+      "internal/steerline/execution_resolution_audit_test.go",
+      "internal/steerline/fixed_agent_business_test.go",
+      "internal/steerline/native_tasks_test.go",
+      "internal/steerline/worker_context_test.go",
+      "internal/steerlineapp/agent_selection_cd67_test.go",
+      "internal/steerlineapp/config_backend_test.go",
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/execution_policy_live_cd67_test.go",
+      "internal/steerlineapp/global_execution_config_test.go",
+      "internal/steerlineapp/global_execution_example_test.go",
+      "internal/steerlineapp/local_windows_sandbox_cd67_test.go",
+      "internal/steerlineapp/policy_admission_cd67_test.go",
+      "internal/steerlineapp/policy_snapshot_cd67_test.go",
+      "internal/steerlineapp/profile_publication_cd67_test.go",
+      "internal/steerlineapp/profile_selection_cd67_test.go",
+      "internal/steerlineapp/projects_test.go",
+      "internal/steerlineapp/publication_admission_cd67_test.go",
+      "internal/steerlineapp/readiness_command_cd67_test.go",
+      "internal/steerlineintegration/native_profile_fixture_test.go",
+      "internal/steerlineintegration/readiness_live_cd67_test.go",
+      "internal/steerlineintegration/remote_admission_cd67_test.go",
+      "internal/steerlineintegration/supervised_configuration_cd67_test.go",
+      "internal/steerline/codexworker/binding_isolation_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/execution_policy_test.go",
+    "helper": "policyResourceReceiptFixture",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/execution_registry_test.go",
+    "helper": "feedbackIdentityMismatch",
+    "current_consumers": [
+      "internal/steerline/execution_registry_test.go",
+      "internal/steerline/worker_feedback_phase_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/global_execution_test_helpers_test.go",
+    "helper": "writeGlobalExecutionFixture",
+    "current_consumers": [
+      "internal/steerline/global_execution_test_helpers_test.go",
+      "internal/steerline/service_client_test.go",
+      "internal/steerlineapp/config_backend_test.go",
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/policy_admission_cd67_test.go",
+      "internal/steerlineapp/profile_selection_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/global_execution_test_helpers_test.go",
+    "helper": "localGlobalExecutionFixture",
+    "current_consumers": [
+      "internal/steerline/execution_requirements_test.go",
+      "internal/steerline/global_execution_test_helpers_test.go",
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/home_test.go",
+      "internal/steerlineapp/projects_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/global_execution_test_helpers_test.go",
+    "helper": "projectConfigJSON",
+    "current_consumers": [
+      "internal/steerline/global_execution_test_helpers_test.go",
+      "internal/steerline/service_client_test.go",
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/home_test.go",
+      "internal/steerlineapp/projects_test.go",
+      "internal/steerlineapp/project_gates_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/implementation_config_test_helpers_test.go",
+    "helper": "testExecutionProfile",
+    "current_consumers": [
+      "internal/steerlineapp/agent_selection_cd67_test.go",
+      "internal/steerlineapp/config_backend_test.go",
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/global_execution_config_test.go",
+      "internal/steerlineapp/local_windows_sandbox_cd67_test.go",
+      "internal/steerlineapp/policy_admission_cd67_test.go",
+      "internal/steerlineapp/profile_selection_cd67_test.go",
+      "internal/steerlineapp/terminal_preflight_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/implementation_config_test_helpers_test.go",
+    "helper": "setTestImplementationProfiles",
+    "current_consumers": [
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/execution_policy_live_cd67_test.go",
+      "internal/steerlineapp/readiness_command_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/implementation_config_test_helpers_test.go",
+    "helper": "withTestImplementationProfiles",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/implementation_config_test_helpers_test.go",
+    "helper": "setTestCodexProfile",
+    "current_consumers": [
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/local_capability_live_cd67_test.go",
+      "internal/steerlineapp/local_windows_sandbox_cd67_test.go",
+      "internal/steerlineapp/policy_snapshot_cd67_test.go",
+      "internal/steerlineapp/requirement_tools_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/implementation_config_test_helpers_test.go",
+    "helper": "setTestOrcaProfile",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/implementation_config_test_helpers_test.go",
+    "helper": "setTestCodexBinding",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/implementation_config_test_helpers_test.go",
+    "helper": "setTestOrcaState",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/implementation_config_test_helpers_test.go",
+    "helper": "testOrcaState",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/linked_workspace_fixture_test.go",
+    "helper": "codexLinkedWorktreeWriteArgs",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "helper": "taskBatchFixture",
+    "current_consumers": [
+      "internal/steerline/business_audit_fixture_test.go",
+      "internal/steerline/execution_profiles_test.go",
+      "internal/steerline/execution_requirements_test.go",
+      "internal/steerline/native_dag_commands_test.go",
+      "internal/steerline/native_task_predecessors_test.go",
+      "internal/steerline/worker_config_test.go",
+      "internal/steerline/worker_delivery_test.go",
+      "internal/steerline/worker_service_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "helper": "strconvID",
+    "current_consumers": [
+      "internal/steerline/native_dag_commands_test.go",
+      "internal/steerline/native_tasks_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "helper": "openDAGFixture",
+    "current_consumers": [
+      "internal/steerline/business_audit_fixture_test.go",
+      "internal/steerline/execution_profiles_test.go",
+      "internal/steerline/execution_requirements_test.go",
+      "internal/steerline/native_dag_commands_test.go",
+      "internal/steerline/native_graph_query_test.go",
+      "internal/steerline/native_task_audit_test.go",
+      "internal/steerline/native_task_predecessors_test.go",
+      "internal/steerline/worker_config_test.go",
+      "internal/steerline/worker_delivery_test.go",
+      "internal/steerline/worker_service_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "helper": "batchTasks",
+    "current_consumers": [
+      "internal/steerline/business_audit_fixture_test.go",
+      "internal/steerline/execution_profiles_test.go",
+      "internal/steerline/execution_requirements_test.go",
+      "internal/steerline/native_dag_commands_test.go",
+      "internal/steerline/native_task_predecessors_test.go",
+      "internal/steerline/worker_config_test.go",
+      "internal/steerline/worker_delivery_test.go",
+      "internal/steerline/worker_service_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "helper": "hasTaskIssue",
+    "current_consumers": [
+      "internal/steerline/native_dag_commands_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "helper": "hasString",
+    "current_consumers": [
+      "internal/steerline/native_dag_commands_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/native_dag_commands_test.go",
+    "helper": "seedPublishedForDiscard",
+    "current_consumers": [
+      "internal/steerline/native_dag_commands_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "helper": "prepareNativeSeed",
+    "current_consumers": [
+      "internal/steerline/native_tasks_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "helper": "nativeTaskFixture",
+    "current_consumers": [
+      "internal/steerline/execution_profiles_test.go",
+      "internal/steerline/native_dag_commands_test.go",
+      "internal/steerline/native_graph_query_test.go",
+      "internal/steerline/native_tasks_test.go",
+      "internal/steerline/native_task_audit_test.go",
+      "internal/steerline/observation_test.go",
+      "internal/steerline/service_test.go",
+      "internal/steerline/worker_config_test.go",
+      "internal/steerline/worker_delivery_test.go",
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/home_test.go",
+      "internal/steerlineapp/profile_selection_cd67_test.go",
+      "internal/steerlineapp/project_gates_cd67_test.go",
+      "internal/steerlineapp/terminal_preflight_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "helper": "nativeRef",
+    "current_consumers": [
+      "internal/steerline/native_tasks_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "helper": "nativeContract",
+    "current_consumers": [
+      "internal/steerline/native_dag_commands_test.go",
+      "internal/steerline/native_graph_query_test.go",
+      "internal/steerline/native_tasks_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/native_tasks_test.go",
+    "helper": "seedExecutionProfileTasks",
+    "current_consumers": [
+      "internal/steerline/native_tasks_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "helper": "fakeOrcaStatePath",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "helper": "writeFakeOrcaState",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "helper": "readFakeOrcaState",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "helper": "fakeOrcaOK",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "helper": "fakeOrcaErr",
+    "current_consumers": [
+      "internal/steerlineintegration/remote_fake_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "helper": "fakeOrca",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "helper": "fakeOrcaTerminalCreate",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "helper": "fakeOrcaRemove",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "helper": "fakeOrcaShow",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "helper": "fakeOrcaRead",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "helper": "orcaTestConfig",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "helper": "fakeSupervisedEnvelope",
+    "current_consumers": [
+      "internal/steerlineintegration/remote_fake_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "helper": "fakeSupervisedOrca",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "helper": "supervisedFixtureConfig",
+    "current_consumers": [
+      "internal/steerline/orca_remote_worker/original_protocol_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "helper": "supervisedConfigForFixture",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "helper": "supervisedPromptTestRef",
+    "current_consumers": [
+      "internal/steerline/orca_remote_worker/original_protocol_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/orca_supervised_test.go",
+    "helper": "isBackendError",
+    "current_consumers": [
+      "internal/steerlineintegration/remote_protocol_test.go",
+      "internal/steerline/orca_remote_worker/original_protocol_cd67_test.go",
+      "internal/steerline/orca_remote_worker/p10_live_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/orca_worker_observation_fake_test.go",
+    "helper": "fakeNativeOrca",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_worker_observation_fake_test.go",
+    "helper": "orcaWorkerCaller",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_worker_observation_fake_test.go",
+    "helper": "nativeOrcaGeneration",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/orca_worker_observation_service_test.go",
+    "helper": "enableTestLifecycleMessages",
+    "current_consumers": [
+      "internal/steerline/lifecycle_messages_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/orca_worker_observation_service_test.go",
+    "helper": "stopTestLifecycleMessages",
+    "current_consumers": [
+      "internal/steerline/lifecycle_messages_fixture_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/process_fixture_test.go",
+    "helper": "streamWorkerEvents",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/process_fixture_test.go",
+    "helper": "streamWorkerEventsWithEmit",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/process_fixture_test.go",
+    "helper": "emitWorkerLine",
+    "current_consumers": [
+      "internal/steerline/codexworker/exec_stream_fixture_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/profile_publication_test.go",
+    "helper": "mixedPublicationProfiles",
+    "current_consumers": [
+      "internal/steerlineapp/profile_publication_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/publication_policy_test.go",
+    "helper": "executionPublicationFixture",
+    "current_consumers": [
+      "internal/steerline/fixed_agent_business_test.go",
+      "internal/steerline/native_tasks_test.go",
+      "internal/steerline/publication_policy_test.go",
+      "internal/steerline/worker_context_test.go",
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/local_windows_sandbox_cd67_test.go",
+      "internal/steerlineapp/policy_admission_cd67_test.go",
+      "internal/steerlineapp/policy_snapshot_cd67_test.go",
+      "internal/steerlineapp/profile_selection_cd67_test.go",
+      "internal/steerlineapp/projects_test.go",
+      "internal/steerlineintegration/native_profile_fixture_test.go",
+      "internal/steerlineintegration/requirement_admission_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/publication_policy_test.go",
+    "helper": "hostPublicationProviderFixture",
+    "current_consumers": [
+      "internal/steerline/fixed_agent_business_test.go",
+      "internal/steerline/native_tasks_test.go",
+      "internal/steerline/publication_policy_test.go",
+      "internal/steerline/worker_context_test.go",
+      "internal/steerlineapp/config_backend_test.go",
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/global_execution_config_test.go",
+      "internal/steerlineapp/global_execution_example_test.go",
+      "internal/steerlineapp/local_windows_sandbox_cd67_test.go",
+      "internal/steerlineapp/policy_admission_cd67_test.go",
+      "internal/steerlineapp/policy_snapshot_cd67_test.go",
+      "internal/steerlineapp/profile_publication_cd67_test.go",
+      "internal/steerlineapp/profile_selection_cd67_test.go",
+      "internal/steerlineapp/projects_test.go",
+      "internal/steerlineintegration/native_profile_fixture_test.go",
+      "internal/steerlineintegration/remote_admission_cd67_test.go",
+      "internal/steerlineintegration/supervised_configuration_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/question_route_test_helpers_test.go",
+    "helper": "codexDecisionFixture",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/question_route_test_helpers_test.go",
+    "helper": "simpleQuestionRoute",
+    "current_consumers": [
+      "internal/steerline/business_fixture_test.go",
+      "internal/steerline/question_route_test_helpers_test.go",
+      "internal/steerline/worker_events_cd62_test.go",
+      "internal/steerline/worker_receipts_business_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/service_test.go",
+    "helper": "sharedTestArtifactsDir",
+    "current_consumers": [
+      "internal/steerline/native_tasks_test.go",
+      "internal/steerline/service_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/service_test.go",
+    "helper": "newFixture",
+    "current_consumers": [
+      "internal/steerline/platform_windows_test.go",
+      "internal/steerline/pr_test.go",
+      "internal/steerline/service_client_test.go",
+      "internal/steerline/service_lifecycle_review_test.go",
+      "internal/steerline/service_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/service_test.go",
+    "helper": "controlReviewService",
+    "current_consumers": [
+      "internal/steerline/project_view_test.go",
+      "internal/steerline/service_client_test.go",
+      "internal/steerline/service_lifecycle_review_test.go",
+      "internal/steerline/service_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/service_test.go",
+    "helper": "readFake",
+    "current_consumers": [
+      "internal/steerline/service_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/service_test.go",
+    "helper": "writeFake",
+    "current_consumers": [
+      "internal/steerline/service_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/service_test.go",
+    "helper": "arg",
+    "current_consumers": [
+      "internal/steerline/service_test.go",
+      "internal/steerlineapp/terminal_preflight_cd67_test.go",
+      "internal/steerlineintegration/remote_fake_test.go",
+      "internal/steerline/orcaworker/terminal_backend_cd67_test.go",
+      "internal/steerline/orca_remote_worker/original_protocol_cd67_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/service_test.go",
+    "helper": "fakeMain",
+    "current_consumers": [
+      "internal/steerline/service_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/service_test.go",
+    "helper": "require",
+    "current_consumers": [
+      "internal/steerline/business_audit_fixture_test.go",
+      "internal/steerline/business_fixture_test.go",
+      "internal/steerline/capability_snapshot_business_test.go",
+      "internal/steerline/conversation_test.go",
+      "internal/steerline/core_decoupling_63_audit_test.go",
+      "internal/steerline/core_decoupling_64_review_test.go",
+      "internal/steerline/core_decoupling_65_test.go",
+      "internal/steerline/core_decoupling_66_test.go",
+      "internal/steerline/environment_business_test.go",
+      "internal/steerline/execution_backend_test.go",
+      "internal/steerline/execution_policy_test.go",
+      "internal/steerline/execution_registry_test.go",
+      "internal/steerline/execution_requirements_test.go",
+      "internal/steerline/execution_resolution_audit_test.go",
+      "internal/steerline/fixed_agent_business_test.go",
+      "internal/steerline/host_wait_business_test.go",
+      "internal/steerline/native_dag_commands_test.go",
+      "internal/steerline/native_tasks_test.go",
+      "internal/steerline/native_task_audit_test.go",
+      "internal/steerline/native_task_predecessors_test.go",
+      "internal/steerline/platform_windows_test.go",
+      "internal/steerline/project_view_test.go",
+      "internal/steerline/pr_test.go",
+      "internal/steerline/publication_policy_test.go",
+      "internal/steerline/query_event_batch_test.go",
+      "internal/steerline/readiness_business_test.go",
+      "internal/steerline/runtime_boundary_test.go",
+      "internal/steerline/runtime_view_test.go",
+      "internal/steerline/service_client_test.go",
+      "internal/steerline/service_lifecycle_review_test.go",
+      "internal/steerline/service_test.go",
+      "internal/steerline/source_replacement_business_test.go",
+      "internal/steerline/sqlite_store_test.go",
+      "internal/steerline/worker_commit_boundary_test.go",
+      "internal/steerline/worker_commit_test.go",
+      "internal/steerline/worker_delivery_test.go",
+      "internal/steerline/worker_events_cd62_test.go",
+      "internal/steerline/worker_feedback_phase_test.go",
+      "internal/steerline/worker_publish_local_test.go",
+      "internal/steerline/worker_receipts_business_test.go",
+      "internal/steerline/worker_recovery_commit_test.go",
+      "internal/steerline/worker_recovery_test.go",
+      "internal/steerline/worker_service_test.go",
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/execution_policy_live_cd67_test.go",
+      "internal/steerlineapp/local_capability_live_cd67_test.go",
+      "internal/steerlineapp/local_windows_sandbox_cd67_test.go",
+      "internal/steerlineapp/policy_admission_cd67_test.go",
+      "internal/steerlineapp/profile_publication_cd67_test.go",
+      "internal/steerlineapp/project_gates_cd67_test.go",
+      "internal/steerlineapp/publication_admission_cd67_test.go",
+      "internal/steerlineapp/readiness_command_cd67_test.go",
+      "internal/steerlineapp/registry_identity_cd67_test.go",
+      "internal/steerlineapp/terminal_preflight_cd67_test.go",
+      "internal/steerlineintegration/capability_composition_test.go",
+      "internal/steerlineintegration/cli_lifecycle_cd67_test.go",
+      "internal/steerlineintegration/conversation_history_fixture_test.go",
+      "internal/steerlineintegration/conversation_native_acceptance_test.go",
+      "internal/steerlineintegration/core_decoupling_65_test.go",
+      "internal/steerlineintegration/core_decoupling_66_test.go",
+      "internal/steerlineintegration/core_decoupling_67_additional_test.go",
+      "internal/steerlineintegration/core_decoupling_67_boundary_test.go",
+      "internal/steerlineintegration/lifecycle_test.go",
+      "internal/steerlineintegration/native_environment_cd67_test.go",
+      "internal/steerlineintegration/native_profile_fixture_test.go",
+      "internal/steerlineintegration/policy_admission_cd67_test.go",
+      "internal/steerlineintegration/readiness_live_cd67_test.go",
+      "internal/steerlineintegration/remote_admission_cd67_test.go",
+      "internal/steerlineintegration/remote_protocol_test.go",
+      "internal/steerlineintegration/supervised_configuration_cd67_test.go",
+      "internal/steerlineintegration/worker_recovery_live_cd67_test.go",
+      "internal/steerline/codexworker/binding_isolation_cd67_test.go",
+      "internal/steerline/codexworker/linked_workspace_cd67_test.go",
+      "internal/steerline/codexworker/reattach_receipt_cd67_test.go",
+      "internal/steerline/orcaworker/host_wait_live_cd67_test.go",
+      "internal/steerline/publication/pr_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/service_test.go",
+    "helper": "fixtureGit",
+    "current_consumers": [
+      "internal/steerline/service_test.go",
+      "internal/steerlineapp/config_fixture_test.go",
+      "internal/steerlineapp/home_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/service_test.go",
+    "helper": "seedFakeCapabilities",
+    "current_consumers": [
+      "internal/steerline/service_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "helper": "openDomainTestStore",
+    "current_consumers": [
+      "internal/steerline/native_task_audit_test.go",
+      "internal/steerline/query_event_batch_test.go",
+      "internal/steerline/sqlite_store_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "helper": "assertOldSQLiteRejectedUnchanged",
+    "current_consumers": [
+      "internal/steerline/sqlite_store_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/sqlite_store_test.go",
+    "helper": "seedNativeDecision",
+    "current_consumers": [
+      "internal/steerline/sqlite_store_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/worker_context_test.go",
+    "helper": "workerContextConfigFixture",
+    "current_consumers": [
+      "internal/steerline/capability_snapshot_business_test.go",
+      "internal/steerline/core_decoupling_66_test.go",
+      "internal/steerline/execution_backend_test.go",
+      "internal/steerline/execution_registry_test.go",
+      "internal/steerline/execution_requirements_test.go",
+      "internal/steerline/execution_resolution_audit_test.go",
+      "internal/steerline/policy_snapshot_business_test.go",
+      "internal/steerline/worker_context_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test.go",
+    "helper": "newEnvironmentFixture",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test.go",
+    "helper": "driveTestLifecycleWorker",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test.go",
+    "helper": "testManagedLaunchRecovery",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test_helpers_test.go",
+    "helper": "orcaStateIdentity",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test_helpers_test.go",
+    "helper": "decodeOrcaExecutionState",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test_helpers_test.go",
+    "helper": "storeOrcaExecutionState",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test_helpers_test.go",
+    "helper": "nativeOrcaCurrentTurn",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test_helpers_test.go",
+    "helper": "persistNativeOrcaTurn",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test_helpers_test.go",
+    "helper": "workerOrcaTerminalIdentity",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/worker_events_cd62_test.go",
+    "helper": "nativeOrcaAnswerText",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/worker_local_test.go",
+    "helper": "mockAppServerStdio",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/worker_local_test.go",
+    "helper": "mockAppServerMain",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/worker_local_test.go",
+    "helper": "mockAppServerConnection",
+    "current_consumers": [],
+    "status": "removed; no remaining consumer (protocol assertion owner retained in test-mapping)"
+  },
+  {
+    "old": "internal/steerline/worker_service_test.go",
+    "helper": "testWorkerFlowServiceFirstFeedback",
+    "current_consumers": [
+      "internal/steerline/worker_service_test.go"
+    ],
+    "status": "retained/replaced under scoped owner; see assertion mapping"
+  }
+]

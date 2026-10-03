@@ -2,11 +2,10 @@ package steerline
 
 import (
 	"encoding/json"
-	"strings"
-	"testing"
-
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/projection"
+	"strings"
+	"testing"
 )
 
 func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
@@ -27,10 +26,10 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 		}
 	})
 	t.Run("opaque_started_turn_and_gap", func(t *testing.T) {
-		s, run := appServerAuditService(t)
+		s, run := neutralAuditService(t)
 		workflow, record := s.workflowRecords(run)
 		commandID := newID()
-		record.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, record.Workspace.Worktree, record)
+		record.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, record.Workspace.Worktree, record)
 		record.PendingCommandID, record.PendingTurnID = commandID, "opaque-turn"
 		s.refreshRun(run)
 		_, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+record.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
@@ -67,8 +66,8 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 	}
 	run := &Run{RunID: identity.WorkflowRunID, ExecutionID: identity.ExecutionID, AttemptID: identity.AttemptID}
 	execution := &ExecutionRecord{ProjectIdentity: identity.ProjectID, WorkflowRunID: identity.WorkflowRunID, ExecutionID: identity.ExecutionID,
-		CurrentAttemptID: identity.AttemptID, Generation: identity.Generation, CurrentTurnID: identity.TurnID, Protocol: string(executionapi.ProtocolLocalCodexAppServer)}
-	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", identity.Generation, workerFlowMockSession)
+		CurrentAttemptID: identity.AttemptID, Generation: identity.Generation, CurrentTurnID: identity.TurnID, Protocol: string(neutralProtocol)}
+	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", identity.Generation, workerFlowMockSession)
 	if err := validateQuestionRouteForRun(run, execution, &route, []executionapi.Question{question}, route.ImplementationKey, route.CodecVersion); err != nil {
 		t.Fatalf("center rejected a fixed generic question route: %v", err)
 	}
@@ -82,7 +81,7 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 	if err := normalizeNativeDecisionAnswer(&answerRequest, &answer); err != nil {
 		t.Fatal(err)
 	}
-	if got := nativeOrcaAnswerText(answer, answerRequest); got != "Yes\n\nKeep going" {
+	if got := routedAnswerText(answer, answerRequest); got != "Yes\n\nKeep going" {
 		t.Fatalf("common route did not preserve the answer text: %q", got)
 	}
 	conflict := question
@@ -120,7 +119,7 @@ func TestCD62QuestionReceiptBarrier(t *testing.T) {
 	t.Run("TestAppServerAnswerRecoveryPersistsBeforeNextQuestion", testAppServerAnswerRecoveryPersistsBeforeNextQuestion)
 }
 
-func nativeOrcaAnswerText(answer DecisionAnswer, request DecisionRequest) string {
+func routedAnswerText(answer DecisionAnswer, request DecisionRequest) string {
 	if request.QuestionRoute == nil {
 		return workerFeedbackText(answer, request)
 	}

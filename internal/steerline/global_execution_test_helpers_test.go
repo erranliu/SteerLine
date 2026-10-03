@@ -5,23 +5,13 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
-
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 )
 
 // Frozen publication fixtures describe the current supported route before a unit
 // test mutates records. They do not reconstruct missing production snapshots.
 func publicationSnapshotFixture(t *testing.T, c Config) FixedExecutionProfile {
 	t.Helper()
-	if c.PR.Kind == "gitea" {
-		c.Host, c.Agent = "orca", "codex"
-		c.PublicationPolicy.Publisher = "worker"
-		codex := codexProfileSettings(c)
-		codex.WindowsSandbox = "unelevated"
-		orca := orcaProfileSettings(c)
-		orca.Shell, orca.WaitTimeout = "powershell.exe", "1m"
-		setTestImplementationProfiles(t, &c, codex, &orca)
-	}
+	c = withNeutralProfile(c, neutralProfileSettings(c))
 	require(t, validateWorkflowConfig(&c, nil))
 	require(t, c.bindPublicationTarget(context.Background()))
 	p := c.projectExecutionProfile().Freeze()
@@ -44,7 +34,7 @@ func writeGlobalExecutionFixture(t *testing.T, profiles []ExecutionProfile, defa
 
 func localGlobalExecutionFixture(t *testing.T) {
 	t.Helper()
-	writeGlobalExecutionFixture(t, []ExecutionProfile{testExecutionProfile(t, "local", "Local Codex", "local", "codex", codexworker.ProfileConfig{Executable: "codex"}, nil)}, "local")
+	writeGlobalExecutionFixture(t, []ExecutionProfile{neutralProfile(t, "local", "Local fixture", neutralSettings{Executable: os.Args[0]})}, "local")
 }
 
 func projectConfigJSON(t *testing.T, c Config) []byte {
@@ -57,7 +47,7 @@ func projectConfigJSON(t *testing.T, c Config) []byte {
 	if err := json.Unmarshal(data, &fields); err != nil {
 		t.Fatal(err)
 	}
-	for _, field := range []string{"host", "agent", "model", "reasoning_effort", "sandbox", "profile", "codex", "orca", "execution_profiles", "default_execution_profile"} {
+	for _, field := range []string{"host", "agent", "model", "reasoning_effort", "sandbox", "profile", "execution_profiles", "default_execution_profile"} {
 		delete(fields, field)
 	}
 	data, err = json.Marshal(fields)

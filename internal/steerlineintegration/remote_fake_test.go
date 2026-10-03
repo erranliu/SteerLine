@@ -47,6 +47,11 @@ func fakePublicationGit(args []string) int {
 		return 2
 	}
 	if len(args) >= 4 && args[0] == "git" && args[1] == "remote" && args[2] == "get-url" {
+		if delay := os.Getenv("STEERLINE_CLI_PREFLIGHT_DELAY"); delay != "" {
+			if d, err := time.ParseDuration(delay); err == nil {
+				time.Sleep(d)
+			}
+		}
 		fmt.Println(os.Getenv("STEERLINE_TEST_REMOTE_URL"))
 		return 0
 	}
@@ -613,6 +618,12 @@ func fakeRemoteOrca(dir string, args []string) int {
 }
 
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == "--fake-supervised" {
+		os.Exit(testprotocol.FakeSupervisedOrca(os.Args[2:]))
+	}
+	if os.Getenv("STEERLINE_LIFECYCLE_EXIT_EARLY") == "1" {
+		os.Exit(23)
+	}
 	if len(os.Args) > 2 && os.Args[1] == "--fake-remote" {
 		os.Exit(fakeRemoteOrca(os.Args[2], os.Args[3:]))
 	}

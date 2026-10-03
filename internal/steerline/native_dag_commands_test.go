@@ -3,8 +3,7 @@ package steerline
 import (
 	"context"
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"net/http"
 	"net/http/httptest"
@@ -15,8 +14,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func taskBatchFixture(t *testing.T, c Config, commit string, tasks []TaskBatchTask, edges []TaskBatchEdge) []byte {
@@ -569,8 +566,8 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	task := page.Tasks[0].TaskRecord
 	created := time.Now().UTC()
 	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-120", TaskID: "120", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-120", PRURL: "https://forge.invalid/org/repo/pulls/120", PRState: "merged", CreatedAt: created, UpdatedAt: created}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-120", CurrentAttemptID: "attempt-120", WorkflowRunID: "wf-120", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Status: "succeeded", CurrentStep: "worker", Workspace: WorkspaceEvidence{Branch: "codex/task-120"}, CreatedAt: created, UpdatedAt: created}
-	setTestCodexBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", workerFlowMockSession)
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-120", CurrentAttemptID: "attempt-120", WorkflowRunID: "wf-120", Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "succeeded", CurrentStep: "worker", Workspace: WorkspaceEvidence{Branch: "fixture/task-120"}, CreatedAt: created, UpdatedAt: created}
+	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", workerFlowMockSession)
 	mergeCommit := strings.Repeat("f", 40)
 	mergedAt := created.Add(-time.Minute)
 	prURL := "https://forge.invalid/org/repo/pulls/120"
@@ -816,11 +813,11 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	c, commit := nativeTaskFixture(t)
 	remoteURL := server.URL + "/org/repo.git"
 	c.PR = publication.Config{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
-	c.Host, c.Agent = "orca", "codex"
+	c.Host, c.Agent = "local", "fixture"
 	c.PublicationPolicy.Publisher = "worker"
 	c.globalExecution = false
 	c.ExecutionProfiles, c.DefaultExecutionProfile = nil, ""
-	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "unelevated"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
+	setNeutralProfile(t, &c, neutralSettings{Executable: "fixture-agent"})
 	c.Git = Command{Executable: "git"}
 	if out, err := exec.Command("git", "-C", c.Repository, "remote", "set-url", "origin", remoteURL).CombinedOutput(); err != nil {
 		t.Fatalf("set fixture remote: %v: %s", err, out)
@@ -856,7 +853,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 			return err
 		}
 		execution.Target.ID, execution.Target.WorktreeID = c.Identity(), workspacePath
-		execution.Target.Branch, execution.Target.BaseRevision = "codex/90", commit
+		execution.Target.Branch, execution.Target.BaseRevision = "fixture/90", commit
 		execution.Workspace.Worktree = workspacePath
 		return tx.PutExecution(execution)
 	}); err != nil {
@@ -890,7 +887,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	if open.Status != "discarded" || !hasString(open.CleanupPending, "pull_request_close:"+server.URL+"/org/repo/pulls/90") || !hasString(open.CleanupPending, cleanupItem) {
 		t.Fatalf("open PR and workspace cleanup were hidden: %+v", open)
 	}
-	partialCleanup := NativeWorkspaceCleanupReceipt{WorkflowRunID: "wf-90", ExecutionID: "exec-90", Repository: c.Identity(), Worktree: workspacePath, Branch: "codex/90", BaseCommit: commit, WorktreeGone: true, ObservedAt: time.Now().UTC()}
+	partialCleanup := NativeWorkspaceCleanupReceipt{WorkflowRunID: "wf-90", ExecutionID: "exec-90", Repository: c.Identity(), Worktree: workspacePath, Branch: "fixture/90", BaseCommit: commit, WorktreeGone: true, ObservedAt: time.Now().UTC()}
 	partialJSON, _ := json.Marshal(partialCleanup)
 	cleanupRequestID := digestValue(struct{ TaskID, Item string }{"90", cleanupItem})[:32]
 	cleanupPage, queryErr := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "90")
@@ -1012,7 +1009,7 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	task := page.Tasks[0].TaskRecord
 	contract := page.Tasks[0].Contract
 	created := time.Now().UTC()
-	workspace := WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-72", Branch: "codex/72", Base: commit, Head: commit, VerifiedAt: created}
+	workspace := WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-72", Branch: "fixture/72", Base: commit, Head: commit, VerifiedAt: created}
 	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-72", TaskID: "72", WorkflowVersion: WorkerFlowVersion, Phase: "executing", SelectedResult: "exec-72", CreatedAt: created, UpdatedAt: created}
 	require(t, c.bindPublicationTarget(ctx))
 	fixed := c.projectExecutionProfile().Freeze()
@@ -1062,14 +1059,13 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store *SQLiteStore, taskID, commit, prURL string) {
 	t.Helper()
 	if c.PR.Kind == "gitea" {
-		codex := codexProfileSettings(c)
-		c.Host, c.PublicationPolicy.Publisher = "orca", "worker"
-		codex.WindowsSandbox = "unelevated"
-		setTestImplementationProfiles(t, &c, codex, &orcaworker.ProfileConfig{Executable: codex.Executable, Shell: "pwsh.exe", WaitTimeout: "30s"})
+		settings := neutralProfileSettings(c)
+		c.PublicationPolicy.Publisher = "worker"
+		setNeutralProfile(t, &c, settings)
 	}
 	require(t, c.bindPublicationTarget(ctx))
 	fixed := c.projectExecutionProfile().Freeze()
-	if !testVerifyFixedExecutionProfile(fixed) {
+	if !neutralVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("published discard fixture has no valid frozen profile")
 	}
 	page, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, taskID)
@@ -1080,18 +1076,14 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store 
 	created := time.Now().UTC()
 	runID := "wf-" + taskID
 	executionID := "exec-" + taskID
-	workspace := WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-" + taskID, Branch: "codex/" + taskID, Base: commit, Head: commit, VerifiedAt: created}
+	workspace := WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-" + taskID, Branch: "fixture/" + taskID, Base: commit, Head: commit, VerifiedAt: created}
 	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: runID, TaskID: taskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: executionID, PRURL: prURL, PRState: "open", CreatedAt: created, UpdatedAt: created}
 	run.ExecutionProfile, run.ConfigDigest, run.Repository, run.Branch = &fixed, fixed.AcceptedConfigVersion, c.Repository, c.Branch
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: executionID, CurrentAttemptID: "attempt-" + taskID, WorkflowRunID: runID, Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Status: "idle", CurrentStep: "worker", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
+	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: executionID, CurrentAttemptID: "attempt-" + taskID, WorkflowRunID: runID, Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "idle", CurrentStep: "worker", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
 	execution.ConfigurationDigest = fixed.Digest
-	if c.Host == "orca" {
-		execution.Backend, execution.Protocol = string(executionapi.BackendOrca), string(executionapi.ProtocolOrcaTerminalV2)
-		execution.Process = &executionapi.ProcessIdentity{Kind: "orca-native", Terminal: "agent-" + taskID, RuntimeID: "runtime", Incarnation: "original"}
-		setTestOrcaState(t, &execution, &implementationExecutionView{RepositoryID: "repo"})
-	} else {
-		setTestCodexBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", workerFlowMockSession)
-	}
+	setNeutralBinding(t, &execution, "fixture-endpoint", "fixture-generation", workerFlowMockSession)
+	execution.Process = &executionapi.ProcessIdentity{Kind: "fixture", RuntimeID: "fixture-runtime", Incarnation: "original"}
+
 	task.Status = "in_progress"
 	task.Claimant = "worker"
 	task.Version++

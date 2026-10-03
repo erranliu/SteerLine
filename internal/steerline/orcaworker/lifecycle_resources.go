@@ -259,7 +259,10 @@ func (l *ExecutionLifecycle) createAgentTerminal(ctx context.Context, request ex
 	state.AgentLaunchCommand = wrapped
 	receipt.State.ResourcePending = !bound
 	receipt.State.LaunchCommand = wrapped
-	receipt.Process = &process
+	receipt.OriginalHost = &process
+	if bound {
+		receipt.Process = &process
+	}
 	receipt.State.ResourceID = process.Terminal
 	receipt.State.SessionID, receipt.State.SessionGeneration = SessionID(process), process.Incarnation
 	receipt.RequestID = result.RuntimeID
@@ -308,7 +311,10 @@ func (l *ExecutionLifecycle) reconcileAgentTerminal(ctx context.Context, request
 	}
 	state.AgentLaunchCommand = wrapper
 	receipt.State.LaunchCommand = wrapper
-	receipt.Process = &process
+	receipt.OriginalHost = &process
+	if bound {
+		receipt.Process = &process
+	}
 	receipt.RequestID, receipt.Disposition = process.RuntimeID, executionapi.OperationAccepted
 	receipt.State.SessionID, receipt.State.SessionGeneration = SessionID(process), process.Incarnation
 	receipt.State.ResourceID = process.Terminal
@@ -356,7 +362,10 @@ func (l *ExecutionLifecycle) bindAgent(ctx context.Context, request executionapi
 		return receipt
 	}
 	state.AgentBound = bound
-	receipt.Process = &process
+	receipt.OriginalHost = &process
+	if bound {
+		receipt.Process = &process
+	}
 	receipt.RequestID = process.Incarnation
 	receipt.Disposition = executionapi.OperationConfirmed
 	if !bound {

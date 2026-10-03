@@ -5,16 +5,12 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
@@ -55,27 +51,9 @@ func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
 	if missing.Status != executionapi.RequirementMissing {
 		t.Fatal("missing tool not reported")
 	}
-	c.Git = Command{Executable: os.Args[0]} // Codex version is not a Git version.
+	c.Git = Command{Executable: os.Args[0]} // Fixture output is not a Git version.
 	if got := queryHostRequirementTool(context.Background(), c, "git"); got.Status != executionapi.RequirementUnknown || got.Version != "" {
 		t.Fatal("unparsed version became present", got)
-	}
-}
-
-func TestExecutionRequirementsCannotInferOtherTargetEnvironment(t *testing.T) {
-	for _, host := range []string{"orca", "orca_supervised"} {
-		c := Config{Host: host, Agent: "codex"}
-		orca := &orcaworker.ProfileConfig{Executable: "must-not-run", Shell: "cmd.exe", WaitTimeout: "1m"}
-		if host == "orca_supervised" {
-			remoteSettings := &remote.ProfileConfig{ConnectionID: "connection", EnvironmentID: "remote", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1}
-			setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex"}, orca, remoteSettings)
-		} else {
-			setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex"}, orca)
-		}
-		c.ExecutionRequirements.Tools = []executionapi.ToolRequirement{{ID: "go"}}
-		e, err := evaluateExecutionRequirements(context.Background(), c)
-		if err == nil || len(e.Tools) != 1 || e.Tools[0].Status != executionapi.RequirementUnknown || e.Tools[0].Target != targetFor(c) {
-			t.Fatalf("center environment proved another target: %+v %v", e, err)
-		}
 	}
 }
 
@@ -118,7 +96,7 @@ func TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal(t *testing.T) {
 	c.requirementsEvaluation = &e
 	profile := c.projectExecutionProfile()
 	fixed := profile.Freeze()
-	if !testVerifyFixedExecutionProfile(fixed) {
+	if !neutralVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("valid evaluated snapshot rejected")
 	}
 	profile.ExecutionRequirements.Tools[0].ID = "go"
@@ -140,12 +118,12 @@ func TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal(t *testing.T) {
 	}
 	tampered := fixed
 	tampered.Version = 3
-	if testVerifyFixedExecutionProfile(tampered) {
+	if neutralVerifyFixedExecutionProfile(tampered) {
 		t.Fatal("old execution snapshot accepted")
 	}
 	tampered = fixed
 	tampered.RequirementsEvidenceDigest = "other"
-	if testVerifyFixedExecutionProfile(tampered) {
+	if neutralVerifyFixedExecutionProfile(tampered) {
 		t.Fatal("evidence digest drift accepted")
 	}
 }
@@ -186,9 +164,9 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	projectBytes, globalBytes := []byte(`{"execution_requirements":{"tools":[{"id":"git"}]}}`), []byte(`{"execution_profiles":[]}`)
 	require(t, os.WriteFile(c.policySource, projectBytes, 0600))
 	require(t, os.WriteFile(c.executionConfigPath, globalBytes, 0600))
-	claimProfileSettings := codexProfileSettings(c)
+	claimProfileSettings := neutralProfileSettings(c)
 	c.configDigest = loadedConfigDigest(projectBytes, globalBytes)
-	setTestCodexProfile(t, &c, claimProfileSettings)
+	setNeutralProfile(t, &c, claimProfileSettings)
 	entry, err := registrationFor(c)
 	require(t, err)
 	fake := entry
@@ -197,7 +175,7 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 		require(t, os.WriteFile(c.policySource, append(projectBytes, ' '), 0600))
 		return e
 	}
-	c.ExecutionDirectory = testDirectoryWithReplacement(t, c.ExecutionDirectory, fake)
+	c.ExecutionDirectory = neutralDirectoryWithReplacement(t, c.ExecutionDirectory, fake)
 	_, err = commands.ClaimNativeTask(ctx, c, options)
 	if !isNativeErrorCode(err, "stale_profile") {
 		t.Fatalf("configuration changed during evaluation but claim was accepted: %v", err)
@@ -208,10 +186,10 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 		t.Fatal("stale configuration consumed the task")
 	}
 	require(t, os.WriteFile(c.policySource, projectBytes, 0600))
-	c.ExecutionDirectory = testDirectoryWithReplacement(t, c.ExecutionDirectory, entry)
+	c.ExecutionDirectory = neutralDirectoryWithReplacement(t, c.ExecutionDirectory, entry)
 	_, err = commands.ClaimNativeTask(ctx, c, options)
 	require(t, err)
-	s, err := newTestService(c)
+	s, err := newNeutralService(c)
 	require(t, err)
 	defer s.Close()
 	run := s.find("8")
@@ -263,10 +241,10 @@ func TestExecutionRegistryRejectsDuplicatesAndRequiresLifecyclePorts(t *testing.
 	c := workerContextConfigFixture()
 	entry, err := registrationFor(c)
 	require(t, err)
-	if _, err = NewExecutionDirectory(c.ExecutionDirectory.Version(), testImplementationCodecs(), []ExecutionRegistration{entry, entry}); err == nil {
+	if _, err = NewExecutionDirectory(c.ExecutionDirectory.Version(), neutralCodecs(), []ExecutionRegistration{entry, entry}); err == nil {
 		t.Fatal("duplicate key accepted")
 	}
-	for _, cfg := range []Config{{ExecutionDirectory: c.ExecutionDirectory, Host: "unknown", Agent: "codex"}, {ExecutionDirectory: c.ExecutionDirectory, Host: "local", Agent: "unknown"}} {
+	for _, cfg := range []Config{{ExecutionDirectory: c.ExecutionDirectory, Host: "unknown", Agent: "fixture"}, {ExecutionDirectory: c.ExecutionDirectory, Host: "local", Agent: "unknown"}} {
 		if _, err = registrationFor(cfg); err == nil {
 			t.Fatal("unknown combination accepted")
 		}
@@ -278,65 +256,7 @@ func TestExecutionRegistryRejectsDuplicatesAndRequiresLifecyclePorts(t *testing.
 	}
 	incomplete := entry
 	incomplete.Lifecycle = nil
-	if _, err = NewExecutionDirectory(c.ExecutionDirectory.Version(), testImplementationCodecs(), []ExecutionRegistration{incomplete}); err == nil {
+	if _, err = NewExecutionDirectory(c.ExecutionDirectory.Version(), neutralCodecs(), []ExecutionRegistration{incomplete}); err == nil {
 		t.Fatal("registration without a lifecycle port was accepted")
-	}
-}
-
-func TestRequirementVersionParsers(t *testing.T) {
-	for _, tc := range []struct{ id, output, version string }{
-		{"git", "git version 2.51.0.windows.1", "2.51.0.windows.1"},
-		{"go", "go version go1.26.4 windows/amd64", "1.26.4"},
-		{"python", "Python 3.13.1", "3.13.1"},
-		{"git", "codex-cli 0.159.2", ""}, {"go", "unknown", ""}, {"python", "Python version unknown", ""},
-	} {
-		matches := requirementToolPatterns[tc.id].FindStringSubmatch(tc.output)
-		version := ""
-		if len(matches) == 2 {
-			version = matches[1]
-		}
-		if version != tc.version {
-			t.Fatalf("%s parser: %q => %q", tc.id, tc.output, version)
-		}
-	}
-}
-
-func TestEmptyExecutionRequirementsKeepMandatoryChecks(t *testing.T) {
-	c := workerContextConfigFixture()
-	codex := codexProfileSettings(c)
-	codex.Executable = "must-not-be-called"
-	setTestCodexProfile(t, &c, codex)
-	c.PublicationPolicy.Publisher = executionapi.PublisherWorker
-	if err := requireWorkerFlowCapabilities(context.Background(), c); err == nil || !strings.Contains(err.Error(), "publication_policy") {
-		t.Fatalf("empty requirements bypassed publisher check: %v", err)
-	}
-	c.PublicationPolicy = executionPublicationFixture()
-	if err := requireWorkerFlowCapabilities(context.Background(), c); err == nil {
-		t.Fatal("empty requirements bypassed mandatory CLI preflight")
-	}
-	c.Host = "orca_supervised"
-	c.PublicationPolicy.Publisher = executionapi.PublisherWorker
-	orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}
-	remoteSettings := &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1}
-	codex = codexProfileSettings(c)
-	codex.Model, codex.ReasoningEffort = "gpt-6-luna", "medium"
-	codex.Profile, codex.WindowsSandbox = "", ""
-	setTestImplementationProfiles(t, &c, codex, orca, remoteSettings)
-	if err := requireWorkerFlowCapabilities(context.Background(), c); err == nil || !strings.Contains(err.Error(), "enforcement evidence") {
-		t.Fatalf("empty requirements bypassed remote policy: %v", err)
-	}
-}
-
-func TestRequirementToolsUseWorkerEnvironment(t *testing.T) {
-	c := workerContextConfigFixture()
-	c.Repository = t.TempDir()
-	c.PR.TokenEnv = "PATH"
-	// A service PATH that is excluded from the actual worker must not prove a
-	// target tool exists. No query may use the service PATH as a substitute.
-	for _, id := range []string{"go", "python"} {
-		e := queryHostRequirementTool(context.Background(), c, id)
-		if e.Status != executionapi.RequirementMissing {
-			t.Fatalf("service environment proved %s after worker PATH removal: %+v", id, e)
-		}
 	}
 }

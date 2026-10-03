@@ -11,7 +11,7 @@ import (
 )
 
 func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
-	service, run := appServerAuditService(t)
+	service, run := neutralAuditService(t)
 	cmd := exec.Command(os.Args[0], "--fake", "sleep")
 	owned, err := startProcess(cmd)
 	require(t, err)
@@ -22,9 +22,9 @@ func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
 		t.Fatal("isolated worker tree did not exit")
 	}
 	workflow, execution := service.workflowRecords(run)
-	execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
+	execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	execution.Process = &identity
-	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
+	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	execution.CurrentTurnID = "00000000-0000-0000-0000-000000000001"
 	execution.CurrentCommandID, execution.TurnNumber = newID(), 1
 	execution.Status, workflow.Phase = "active", "executing"

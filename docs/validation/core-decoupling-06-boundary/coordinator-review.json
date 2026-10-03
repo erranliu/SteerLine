@@ -1,0 +1,60 @@
+{
+  "code_head": "e489e5b4b93867ec45886895cac870541ed046b8",
+  "base_commit": "d71149ecf17190bccbbbfb710b8fc0abf5db4833",
+  "reviewer": "coordination chat 01a0f453-42a7-7231-99e6-36bad30a6b99",
+  "scope": "Independent actual diff, Spec/Plan/constraints, production consumers, all mapped test declaration differences and helper/deletion owners, latest-main integration; not executor self-review. #63 historical exception is separate.",
+  "method": {
+    "test_declaration_pairs_reviewed": 147,
+    "exact_unchanged_test_bodies": 79,
+    "extra_same_path_declaration_changes_reviewed": 44,
+    "new_helper_review": "Single neutral directory/lifecycle and value facts, actual builtin native directory, no private center writer exports, isolated protocol ledgers; original side effects and opt-in evidence retained."
+  },
+  "fix_commits": [
+    "8d58fdeb3d938e2d63bcf04448ad4fceb96b1e4b",
+    "3e0b4552385533723e6a9e21694f21c155e04740",
+    "e489e5b4b93867ec45886895cac870541ed046b8"
+  ],
+  "validation": {
+    "complete": true,
+    "passed": true,
+    "test_count": 144,
+    "package_count": 15,
+    "groups": [
+      {
+        "id": "quick-core",
+        "actual_test_count": 11
+      },
+      {
+        "id": "quick-rules",
+        "actual_test_count": 83
+      },
+      {
+        "id": "quick-owner-remote",
+        "actual_test_count": 15
+      },
+      {
+        "id": "quick-owner-codec",
+        "actual_test_count": 5
+      },
+      {
+        "id": "quick-owner-identity",
+        "actual_test_count": 3
+      },
+      {
+        "id": "quick-owner-app",
+        "actual_test_count": 6
+      },
+      {
+        "id": "quick-boundary",
+        "actual_test_count": 21
+      }
+    ],
+    "execution_seconds": 216.0630129,
+    "fully_accessible": true
+  },
+  "limitations": [
+    "Optional native live/P10/permission evidence not enabled; Linux bodies not executed",
+    "Remote permission evidence missing; real Claim still rejected before mutation",
+    "Historical default-runtime fixture incident is retained in runner state; original config restoration source still awaiting human information, no guessed restoration"
+  ]
+}

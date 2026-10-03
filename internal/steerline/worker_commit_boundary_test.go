@@ -3,11 +3,9 @@ package steerline
 import (
 	"context"
 	"errors"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"path/filepath"
 	"testing"
-
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
@@ -112,14 +110,14 @@ func TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure(t *testing.T) {
 }
 
 func TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver(t *testing.T) {
-	s, run := appServerAuditService(t)
+	s, run := neutralAuditService(t)
 	commandID, turnID := newID(), "00000000-0000-0000-0000-000000000001"
 	execution := s.executionRecord(run)
 	workflow, _ := s.workflowRecords(run)
 	execution.Workspace.Worktree = run.WorkspaceIntent.Path
-	execution.PolicyResources = policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
+	execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	execution.PendingCommandID = commandID
-	setTestCodexBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
+	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	opID, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
 	require(t, err)
 	baseline := recordFingerprint(*snapshotOperation(&s.committed, opID))
@@ -149,7 +147,7 @@ func TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver(t *test
 }
 
 func TestAppServerFailedPreparationKeepsPartialSessionBinding(t *testing.T) {
-	s, run := appServerAuditService(t)
+	s, run := neutralAuditService(t)
 	commandID := newID()
 	execution := s.executionRecord(run)
 	workflow, _ := s.workflowRecords(run)
@@ -158,7 +156,7 @@ func TestAppServerFailedPreparationKeepsPartialSessionBinding(t *testing.T) {
 	execution.ConfigurationDigest = workflow.ExecutionProfile.Digest
 	execution.PendingCommandID = commandID
 	input := executionapi.TurnInput{CommandID: commandID, Prompt: "original saved prompt"}
-	resource := policyResourceReceiptFixture(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
+	resource := neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	execution.PolicyResources = resource
 	s.refreshRun(run)
 	opID, err := s.startWorkerOperation(run, "prepare_worker_session", "worker-session:"+run.ExecutionID+":"+commandID, &input)
@@ -167,7 +165,7 @@ func TestAppServerFailedPreparationKeepsPartialSessionBinding(t *testing.T) {
 	require(t, err)
 	partial := *s.executionRecord(run)
 	partial.Process = identity
-	setTestCodexBinding(t, &partial, "ws://127.0.0.1:12345", "partial-generation", workerFlowMockSession)
+	setNeutralBinding(t, &partial, "ws://127.0.0.1:12345", "partial-generation", workerFlowMockSession)
 	lifeSnapshot, err := lifecycleSnapshot(run, workflow, execution, s.workflowAttempt(run, run.AttemptID), &input)
 	require(t, err)
 	operation := s.operationByKey("worker-session:" + run.ExecutionID + ":" + commandID)
@@ -180,11 +178,8 @@ func TestAppServerFailedPreparationKeepsPartialSessionBinding(t *testing.T) {
 	snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
 	require(t, err)
 	got := snapshot.Executions[0]
-	bindingIdentity := func(record *ExecutionRecord) codexworker.AppServerBindingIdentity {
-		return codexworker.AppServerBindingIdentity{ProjectID: record.ProjectIdentity, ExecutionID: record.ExecutionID, AttemptID: record.CurrentAttemptID, Generation: record.Generation, ConfigDigest: record.ConfigurationDigest}
-	}
-	gotBinding, bindingErr := codexworker.DecodeAppServerBindingEnvelope(got.ImplementationData[0], bindingIdentity(&got))
-	partialBinding, partialBindingErr := codexworker.DecodeAppServerBindingEnvelope(partial.ImplementationData[0], bindingIdentity(&partial))
+	gotBinding, bindingErr := decodeNeutralBinding(got.ImplementationData[0], &got)
+	partialBinding, partialBindingErr := decodeNeutralBinding(partial.ImplementationData[0], &partial)
 	if bindingErr != nil || partialBindingErr != nil || got.Process == nil || *got.Process != *identity || gotBinding.Endpoint != partialBinding.Endpoint || gotBinding.Generation != partialBinding.Generation || got.SessionID != partial.SessionID {
 		t.Fatalf("partial native binding was discarded: %+v", got)
 	}

@@ -8,6 +8,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,9 +16,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 var nativeSeedOnce sync.Once
@@ -72,7 +70,7 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 	}
 	commit := nativeSeedCommit
 	c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: repo, Remote: "origin", Branch: "main", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "10s", ShutdownGrace: "10s", ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Git: Command{Executable: "git"}}
-	setTestCodexProfile(t, &c, codexworker.ProfileConfig{Executable: os.Args[0]})
+	setNeutralProfile(t, &c, neutralSettings{Executable: os.Args[0]})
 	key, err := fixtureRepositoryStateKey(c)
 	if err != nil {
 		t.Fatal(err)
@@ -418,8 +416,8 @@ func TestNativeTaskCASGuardsAndDeliveryProjection(t *testing.T) {
 		t.Fatal("unverified delivery closed a task")
 	}
 	run := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-7", TaskID: "7", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-7", PRURL: "https://forge.invalid/org/repo/pulls/4", CreatedAt: created, UpdatedAt: created}
-	execution := ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-7", CurrentAttemptID: "attempt-7", WorkflowRunID: "wf-7", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Workspace: WorkspaceEvidence{Branch: "codex/task-7"}, Status: "succeeded", CurrentStep: "waiting_pr_merge", CreatedAt: created, UpdatedAt: created}
-	setTestCodexBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", workerFlowMockSession)
+	execution := ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-7", CurrentAttemptID: "attempt-7", WorkflowRunID: "wf-7", Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Workspace: WorkspaceEvidence{Branch: "fixture/task-7"}, Status: "succeeded", CurrentStep: "waiting_pr_merge", CreatedAt: created, UpdatedAt: created}
+	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", workerFlowMockSession)
 	err = store.Transact(ctx, func(tx DomainTx) error {
 		if err := tx.PutWorkflowRun(run); err != nil {
 			return err

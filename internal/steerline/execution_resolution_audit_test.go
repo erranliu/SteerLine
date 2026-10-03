@@ -2,15 +2,11 @@ package steerline
 
 import (
 	"context"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
-
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
@@ -26,10 +22,9 @@ func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
 }
 
 func TestResolutionAuditRegistrationRejectsBaseTargetDrift(t *testing.T) {
-	c := Config{Host: "orca_supervised", Agent: "codex"}
-	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex", Model: "model", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}, &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "original", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1})
+	c := withNeutralProfile(Config{ExecutionPolicy: workspacePolicyFixture()}, neutralSettings{Executable: "fixture-agent", Target: executionapi.ExecutionTarget{ID: "fixture:peer", ConnectionID: "peer", ExternalRuntime: "original"}})
 	target := targetFor(c)
-	run := &Run{Host: c.Host, Agent: c.Agent, Backend: "orca", Protocol: string(executionapi.ProtocolOrcaSupervised), Target: target}
+	run := &Run{Host: c.Host, Agent: c.Agent, Backend: "fixture", Protocol: string(neutralProtocol), Target: target}
 	record := &ExecutionRecord{Agent: c.Agent, Backend: run.Backend, Protocol: run.Protocol, Target: target}
 	for _, field := range []string{"connection", "runtime"} {
 		r, e := *run, *record
@@ -47,7 +42,7 @@ func TestResolutionAuditRegistrationRejectsBaseTargetDrift(t *testing.T) {
 }
 
 func TestResolutionAuditRestoresOriginalWorkspaceRoot(t *testing.T) {
-	s, run := appServerAuditService(t)
+	s, run := neutralAuditService(t)
 	want := filepath.Dir(run.WorkspaceIntent.Path)
 	s.baseConfig.WorktreeRoot = filepath.Join(t.TempDir(), "new-root")
 	c, err := s.executionConfigForRun(run)
@@ -65,7 +60,7 @@ func TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents(t *testing.T) {
 	tokenEnv := "STEERLINE_AUDIT_TOKEN"
 	t.Setenv(tokenEnv, "reference-present")
 	r := executionapi.ExecutionRequirements{Credentials: []executionapi.CredentialRequirement{{ID: "pr.token_env", Site: "service"}}}
-	s, run := appServerAuditServiceWithRequirements(t, workspacePolicyFixture(), r, tokenEnv)
+	s, run := neutralAuditServiceWithRequirements(t, workspacePolicyFixture(), r, tokenEnv)
 	t.Setenv(tokenEnv, "")
 	entry, err := s.workerFlowRegistration(run)
 	require(t, err)
@@ -82,7 +77,7 @@ func TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents(t *testing.T) {
 		t.Fatal("requirement check overwrote original native liveness")
 	}
 	before := len(s.domain.Operations)
-	if _, err = s.startWorkerOperation(run, "orca_native_task", "audit-new-intent", struct{}{}); err == nil {
+	if _, err = s.startWorkerOperation(run, "start_worker_turn", "audit-new-intent", struct{}{}); err == nil {
 		t.Fatal("missing reference allowed new native intent")
 	}
 	if len(s.domain.Operations) != before {
@@ -102,13 +97,13 @@ func TestResolutionAuditEvidenceCannotChangeUnderOriginalProfileDigest(t *testin
 	changed.CheckedAt = changed.CheckedAt.Add(time.Second)
 	fixed.RequirementsEvaluation = &changed
 	fixed.RequirementsEvidenceDigest = requirementsEvidenceDigest(&changed)
-	if testVerifyFixedExecutionProfile(fixed) {
+	if neutralVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("evidence replacement retained original full profile digest")
 	}
 }
 
 func TestResolutionAuditWorkerCommitCannotReplaceSnapshot(t *testing.T) {
-	s, run := appServerAuditService(t)
+	s, run := neutralAuditService(t)
 	before, err := s.domainStore.Query(context.Background(), s.Config.Identity())
 	require(t, err)
 	workflow := s.workflowRecord(run)

@@ -29,6 +29,7 @@ import (
 // the public runtime/task query APIs. The Codex and Orca executables are protocol
 // fixtures implemented by this test binary; no product CLI or user project is used.
 func TestCD64OriginalSessionReconciliation(t *testing.T) {
+	t.Run("remote_admission_stays_blocked", TestRemotePublicationClaimRequiresPermissionEvidence)
 	t.Run("app_server_two_turns", testIntegratedAppServerTwoTurns)
 	t.Run("native_original_session_manual_gate", testIntegratedNativeOriginalSessionGate)
 	t.Run("remote_protocol_original_assertions", testCD64RemoteProtocolAssertions)
@@ -298,6 +299,11 @@ type integrationFixture struct {
 }
 
 func newLifecycleProject(t *testing.T, host string) integrationFixture {
+	return newLifecycleProjectBase(t, host, true)
+}
+
+// Some catalog fixtures bind their final provider before opening authority.
+func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) integrationFixture {
 	t.Helper()
 	root := t.TempDir()
 	t.Setenv("STEERLINE_INTEGRATION_HISTORY_FILE", filepath.Join(root, "app-server-history.json"))
@@ -370,9 +376,11 @@ func newLifecycleProject(t *testing.T, host string) integrationFixture {
 	config, err := steerlineapp.LoadConfig(configPath)
 	require(t, err)
 	config.Claimant = "integration"
-	project, err := steerline.OpenNativeTaskProject(context.Background(), &config)
-	require(t, err)
-	require(t, project.Close())
+	if openAuthority {
+		project, err := steerline.OpenNativeTaskProject(context.Background(), &config)
+		require(t, err)
+		require(t, project.Close())
+	}
 	return integrationFixture{config: config, configPath: configPath, repository: repository, bareRemote: bare, remoteURL: remoteURL, commit: commit, nativeStateDir: stateDir}
 }
 
@@ -539,11 +547,21 @@ type runningIntegrationService struct {
 }
 
 func startIntegrationService(t *testing.T, parent context.Context, config steerline.Config, resolver executionapi.LifecycleResolver) *runningIntegrationService {
+	return startIntegrationServiceWithSources(t, parent, config, resolver, nil)
+}
+
+func startIntegrationServiceWithSources(t *testing.T, parent context.Context, config steerline.Config, resolver executionapi.LifecycleResolver, sources contracts.ConversationSourcePort) *runningIntegrationService {
 	t.Helper()
 	if decorated, ok := resolver.(*integrationLifecycleResolver); ok {
 		decorated.directory = config.ExecutionDirectory
 	}
-	service, err := steerlineapp.NewServiceWithLifecycleResolver(config, resolver)
+	var service *steerline.Service
+	var err error
+	if sources == nil {
+		service, err = steerlineapp.NewServiceWithLifecycleResolver(config, resolver)
+	} else {
+		service, err = steerlineapp.NewServiceWithPorts(config, resolver, sources)
+	}
 	require(t, err)
 	reader, err := steerline.OpenNativeTaskReader(parent, &config)
 	require(t, err)

@@ -349,6 +349,7 @@ type LifecycleReceipt struct {
 	Disposition    OperationStatus              `json:"disposition"`
 	RequestID      string                       `json:"request_id,omitempty"`
 	Diagnostic     string                       `json:"diagnostic,omitempty"`
+	OriginalHost   *ProcessIdentity             `json:"original_host,omitempty"`
 	Process        *ProcessIdentity             `json:"process,omitempty"`
 	Target         *ExecutionTarget             `json:"target,omitempty"`
 	Workspace      *WorkspaceInspection         `json:"workspace,omitempty"`
@@ -383,6 +384,10 @@ type LifecycleStateFacts struct {
 }
 
 func (receipt LifecycleReceipt) Clone() LifecycleReceipt {
+	if receipt.OriginalHost != nil {
+		original := *receipt.OriginalHost
+		receipt.OriginalHost = &original
+	}
 	receipt.Operation.ResidualResources = append([]string(nil), receipt.Operation.ResidualResources...)
 	receipt.Operation.Request = append([]byte(nil), receipt.Operation.Request...)
 	receipt.Operation.Receipt = append([]byte(nil), receipt.Operation.Receipt...)

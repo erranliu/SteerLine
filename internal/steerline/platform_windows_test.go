@@ -232,21 +232,6 @@ func TestWindowsServiceWindowMissingConfigIsLiteral(t *testing.T) {
 	}
 }
 
-func TestWindowsServiceWindowRejectsMissingConsole(t *testing.T) {
-	f := newFixture(t)
-	config, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
-	serviceExe := buildServiceLifecycleCLI(t)
-	cmd := exec.Command(serviceExe, "run", "-config", configPath, "-dispatch", "manual", "-console", "summary", "-service-window")
-	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_NO_WINDOW, HideWindow: true}
-	output, err := cmd.CombinedOutput()
-	if err == nil || !strings.Contains(string(output), "requires a visible Windows console") {
-		t.Fatalf("service-window accepted a hidden process: %v\n%s", err, output)
-	}
-	if _, err := os.Stat(filepath.Join(config.RunDir, "service")); !os.IsNotExist(err) {
-		t.Fatalf("hidden service-window wrote startup state: %v", err)
-	}
-}
-
 func TestWindowsPendingStartupPreservesMismatchClassification(t *testing.T) {
 	for _, kind := range []string{"config", "repository-path"} {
 		t.Run(kind, func(t *testing.T) {
@@ -332,75 +317,4 @@ func TestWindowsConsoleCtrlCHelper(t *testing.T) {
 		t.Fatalf("send Ctrl+C to service console: %v", callErr)
 	}
 	time.Sleep(300 * time.Millisecond)
-}
-
-func launchWindowsVisibleServiceWindow(t *testing.T, config Config, configPath string) (uint64, string, ServiceConnection) {
-	t.Helper()
-	serviceExe := buildServiceLifecycleCLI(t)
-	home := t.TempDir()
-	require(t, os.MkdirAll(filepath.Join(home, "bin"), 0700))
-	data, err := os.ReadFile(serviceExe)
-	require(t, err)
-	require(t, os.WriteFile(filepath.Join(home, "bin", "steerline.exe"), data, 0700))
-	t.Setenv("STEERLINE_HOME", home)
-	_, err = InstallLaunchers(fixtureHome())
-	require(t, err)
-	testExe, err := os.Executable()
-	require(t, err)
-	probePath := filepath.Join(t.TempDir(), "console-probe.json")
-	scriptPath := filepath.Join(t.TempDir(), "open-service-window.cmd")
-	script := fmt.Sprintf("@echo off\r\nchcp 65001 >nul 2>&1\r\nset \"STEERLINE_WINDOW_PROBE_PATH=%s\"\r\n\"%s\" -test.run=TestWindowsServiceWindowProbeHelper >nul 2>&1\r\ncall \"%s\" \"%s\"\r\n", probePath, testExe, filepath.Join(home, "service-window.bat"), configPath)
-	require(t, os.WriteFile(scriptPath, []byte(script), 0600))
-	taskName := "SteerLineWindowAcceptance-" + newID()
-	var window uint64
-	t.Cleanup(func() {
-		connection := ConnectService(context.Background(), config)
-		if connection.CanStop {
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			_, _ = StopService(ctx, config, "window-test-cleanup", 12*time.Second)
-			cancel()
-		}
-		if window != 0 && windowExistsForTests(window) {
-			_ = closeConsoleWindowForTests(window)
-		}
-		_ = exec.Command("schtasks.exe", "/End", "/TN", taskName).Run()
-		_ = exec.Command("schtasks.exe", "/Delete", "/TN", taskName, "/F").Run()
-	})
-	cmdExe, err := exec.LookPath("cmd.exe")
-	require(t, err)
-	launchDate := time.Date(2099, time.December, 31, 23, 59, 0, 0, time.Local)
-	action := fmt.Sprintf("\"%s\" /d /c \"%s\"", cmdExe, scriptPath)
-	createOutput, err := exec.Command("schtasks.exe", "/Create", "/TN", taskName, "/TR", action, "/SC", "ONCE", "/SD", launchDate.Format("2006/01/02"), "/ST", launchDate.Format("15:04"), "/IT", "/F").CombinedOutput()
-	if err != nil {
-		t.Skipf("cannot create temporary interactive service-window task: %v (%s)", err, createOutput)
-	}
-	runOutput, err := exec.Command("schtasks.exe", "/Run", "/TN", taskName).CombinedOutput()
-	if err != nil {
-		t.Fatalf("run temporary service-window task: %v (%s)", err, runOutput)
-	}
-	deadline := time.Now().Add(35 * time.Second)
-	var probe windowsServiceWindowProbe
-	for time.Now().Before(deadline) {
-		if b, e := os.ReadFile(probePath); e == nil && json.Unmarshal(b, &probe) == nil {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	window = probe.ConsoleWindow
-	if !probe.TTY || window == 0 || !windowExistsForTests(window) || !windowVisibleForTests(window) {
-		t.Fatalf("launcher did not open a real visible TTY: %+v", probe)
-	}
-	var connection ServiceConnection
-	for time.Now().Before(deadline) {
-		connection = ConnectService(context.Background(), config)
-		if connection.State == ConnectionConnected {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	if connection.State != ConnectionConnected {
-		taskOutput, _ := exec.Command("schtasks.exe", "/Query", "/TN", taskName, "/FO", "LIST", "/V").CombinedOutput()
-		t.Fatalf("visible service window did not connect: %+v\ntask:\n%s", connection, taskOutput)
-	}
-	return window, testExe, connection
 }

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -60,27 +60,17 @@ func TestMain(m *testing.M) {
 			os.Exit(fakeMain(os.Args[i+1:]))
 		}
 	}
-	if len(os.Args) > 1 && os.Args[1] == "--version" {
-		fmt.Println("codex-cli 0.159.2")
-		os.Exit(0)
+	home, err := os.MkdirTemp("", "steerline-core-fixture-")
+	if err != nil {
+		panic(err)
 	}
-	if len(os.Args) > 1 && os.Args[1] == "--help" {
-		fmt.Println("--strict-config --sandbox --ask-for-approval never --config")
-		os.Exit(0)
-	}
-	if strings.Contains(strings.Join(os.Args[1:], " "), "app-server") && !strings.HasPrefix(os.Args[1], "-test") {
-		if strings.Contains(strings.Join(os.Args[1:], " "), "--help") {
-			fmt.Println("app-server --listen")
-			os.Exit(0)
-		}
-		if strings.Contains(strings.Join(os.Args[1:], " "), "--stdio") {
-			mockAppServerStdio()
-			os.Exit(0)
-		}
-		mockAppServerMain()
-		os.Exit(0)
+	if err := os.Setenv("STEERLINE_HOME", home); err != nil {
+		panic(err)
 	}
 	code := m.Run()
+	if relative, err := filepath.Rel(os.TempDir(), home); err == nil && !filepath.IsAbs(relative) && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
+		_ = os.RemoveAll(home)
+	}
 	if testArtifactsDir != "" {
 		_ = os.RemoveAll(testArtifactsDir)
 	}
@@ -167,15 +157,13 @@ func newFixture(t *testing.T) *fixture {
 	f.c.Remote, f.c.Branch = "origin", "main"
 	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", remotePath)
 	f.c.Git = Command{Executable: executable, Args: []string{"--fake", "git-proxy", git}}
-	if output, err := exec.Command("git", "-C", f.c.Repository, "remote", "set-url", "origin", "https://github.com/owner/repo.git").CombinedOutput(); err != nil {
+	if output, err := exec.Command("git", "-C", f.c.Repository, "remote", "set-url", "origin", f.server.URL+"/owner/repo.git").CombinedOutput(); err != nil {
 		t.Fatalf("set native fixture remote: %v: %s", err, output)
 	}
 	f.c.Claimant = "native-fixture"
 	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll, f.c.CommandTimeout, f.c.ShutdownGrace = "100ms", "100ms", "100ms", "5s", "1s"
-	f.c.PR = hostPublicationProviderFixture()
-	f.c.PR.Query = Command{Executable: executable, Args: []string{"--fake", "fixture-pr", f.db, "{number}"}}
-	t.Setenv("STEERLINE_TEST_HOST_GH_FILE", f.db+".gh")
-	setTestCodexProfile(t, &f.c, codexworker.ProfileConfig{Executable: executable})
+	f.c.PR = publication.Config{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}
+	setNeutralProfile(t, &f.c, neutralSettings{Executable: executable})
 	f.c.WorkflowProtocol = WorkerFlowVersion
 	if err = f.c.ResolveIdentity(context.Background()); err != nil {
 		t.Fatal(err)
@@ -325,37 +313,12 @@ func fakeMain(args []string) int {
 		return 2
 	}
 	switch args[0] {
-	case "fixture-pr":
-		db := readFake(args[1])
-		state := db.PRState
-		if state == "" {
-			state = "open"
-		}
-		info := PRInfo{URL: "https://github.com/owner/repo/pull/" + args[2], Repository: "owner/repo", BaseBranch: "main", HeadRepository: "owner/repo", HeadBranch: "fixture", HeadRevision: db.PRHeadRevision, State: state, Merged: db.PRMerged, MergedAt: db.PRMergedAt}
-		if db.PRMergeCommit != "" {
-			info.MergeCommit = &db.PRMergeCommit
-		}
-		if err := json.NewEncoder(os.Stdout).Encode(info); err != nil {
-			return 1
-		}
-		return 0
 	case "publication-git":
 		if len(args) > 3 && args[2] == "remote" && args[3] == "get-url" {
 			fmt.Println("https://github.com/owner/repo.git")
 			return 0
 		}
-		gitArgs := append([]string(nil), args[2:]...)
-		if len(gitArgs) > 0 && (gitArgs[0] == "fetch" || gitArgs[0] == "push" || gitArgs[0] == "ls-remote") {
-			if remote := os.Getenv("STEERLINE_FAKE_GIT_FETCH_REMOTE"); remote != "" {
-				for i := 1; i < len(gitArgs); i++ {
-					if gitArgs[i] == "origin" {
-						gitArgs[i] = remote
-						break
-					}
-				}
-			}
-		}
-		cmd := exec.Command(args[1], gitArgs...)
+		cmd := exec.Command(args[1], args[2:]...)
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 		if err := cmd.Run(); err != nil {
 			if e, ok := err.(*exec.ExitError); ok {
@@ -366,7 +329,7 @@ func fakeMain(args []string) int {
 		return 0
 	case "git-proxy":
 		gitArgs := append([]string(nil), args[2:]...)
-		if len(gitArgs) > 0 && (gitArgs[0] == "fetch" || gitArgs[0] == "push" || gitArgs[0] == "ls-remote") {
+		if len(gitArgs) > 0 && gitArgs[0] == "fetch" {
 			if remote := os.Getenv("STEERLINE_FAKE_GIT_FETCH_REMOTE"); remote != "" {
 				for i := 1; i < len(gitArgs); i++ {
 					if gitArgs[i] == "origin" {
@@ -386,12 +349,6 @@ func fakeMain(args []string) int {
 			return 1
 		}
 		return 0
-	case "orca":
-		return fakeOrca(args[1], args[2:])
-	case "orca-supervised":
-		return fakeSupervisedOrca(args[1:])
-	case "orca-native":
-		return fakeNativeOrca(args[1], args[2:])
 	case "publish-control":
 		if len(args) != 3 {
 			return 2
@@ -425,11 +382,6 @@ func fakeMain(args []string) int {
 		info := PRInfo{URL: args[2], Repository: args[3], BaseBranch: "main", HeadRevision: db.PRHeadRevision, State: "closed_unmerged"}
 		_ = json.NewEncoder(os.Stdout).Encode(info)
 		return 0
-	case "codex":
-		if len(args) > 1 && args[1] == "--version" {
-			fmt.Println("fake-codex/1")
-			return 0
-		}
 	case "sleep":
 		time.Sleep(time.Hour)
 		return 0
@@ -484,17 +436,8 @@ func seedFakeCapabilities(t *testing.T, c Config) {
 	}
 	evidence := path + "#sha256=" + hex.EncodeToString(sum[:])
 	backend, protocol := backendFor(c).Identity()
-	version := "fake-codex/1"
-	if backend == executionapi.BackendOrca {
-		version = "fake-orca/1"
-	}
+	version := "fixture-version-1"
 	report := capabilityReport(backend, protocol, targetFor(c), agentFor(c), version)
-	if backend == executionapi.BackendOrca && c.needsCodexExecutable() {
-		settings := codexProfileSettings(c)
-		out, err := (Runner{Dir: c.Repository, Timeout: 5 * time.Second}).Output(context.Background(), Command{Executable: settings.Executable, Args: settings.Args}, "--version")
-		require(t, err)
-		report.AgentVersion = strings.TrimSpace(string(out))
-	}
 	for i := range report.Capabilities {
 		name := report.Capabilities[i].Name
 		if name == "output_turns" || name == "output_final_answer" {

@@ -292,6 +292,9 @@ func preflightLocalConfig(ctx context.Context, c steerline.Config) error {
 }
 
 func preflightTerminalConfig(ctx context.Context, c steerline.Config) error {
+	if _, err := prepareTerminalClaim(ctx, c); err != nil {
+		return err
+	}
 	settings, err := terminalSettings(c)
 	if err != nil {
 		return err

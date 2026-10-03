@@ -3,6 +3,8 @@ package steerline
 import (
 	"context"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"os/exec"
 	"strconv"
@@ -10,9 +12,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestCD65SourceCommitAndHostGate(t *testing.T) {
@@ -20,7 +19,7 @@ func TestCD65SourceCommitAndHostGate(t *testing.T) {
 	t.Run("host_fact_becomes_a_center_manual_gate", testCD65HostGateKeepsTrustedActionSeparate)
 	t.Run("active_and_historical_source_budgets_rotate", TestCD65HistoryBudgetRotatesSources)
 	t.Run("discovery_cannot_write_a_different_owner", testCD65DiscoveryRejectsForeignOwner)
-	t.Run("native_source_replacement_retains_attempt_evidence", TestCD64NativeSourceReplacementRetainsEvidence)
+	t.Run("native_source_replacement_retains_attempt_evidence", TestCD64SourceReplacementRetainsEvidence)
 }
 
 func TestCD65HistoryAndPreparation(t *testing.T) {
@@ -45,7 +44,7 @@ func testCD65HostGateKeepsTrustedActionSeparate(t *testing.T) {
 			t.Fatalf("host action was not expressed as a trusted center option: %+v", option)
 		}
 	}
-	process := executionapi.ProcessIdentity{Kind: "orca", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "generation"}
+	process := executionapi.ProcessIdentity{Kind: "fixture", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "generation"}
 	authorization := &executionapi.HostActionAuthorization{ExecutionID: "execution", AttemptID: "attempt", TurnID: "turn", DecisionID: decision.ID, BlockerID: "blocker", DecisionVersion: decision.Version}
 	if err := (executionapi.HostActionInput{Kind: executionapi.HostOpenOriginal, Process: &process, Authorization: authorization}).Validate(); err != nil {
 		t.Fatalf("original host action was not accepted by its durable value contract: %v", err)

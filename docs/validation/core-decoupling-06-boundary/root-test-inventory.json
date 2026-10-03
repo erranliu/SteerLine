@@ -1,0 +1,851 @@
+[
+  {
+    "path": "internal/steerline/activity_test.go",
+    "tests": [
+      "TestActivityWriterDeduplicatesItemAcrossReopen",
+      "TestDetectNormalizer",
+      "TestCodexNormalizer",
+      "TestPiNormalizer",
+      "TestActivityWriterRoundTrip",
+      "TestOpenActivityCreatesRunDir",
+      "TestActivityWriterAppendRecoversSeq",
+      "TestActivityJournalIsPerRun",
+      "TestRenderActivity"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/codex_git_sandbox_test.go",
+    "tests": [
+      "TestCodexLinkedWorktreeWriteArgsOnlyGrantsFixedGitPaths"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/codex_worker_acceptance_live_test.go",
+    "tests": [
+      "TestAppServerServiceParallelRecoveryLive",
+      "TestAppServerHostExitHelper",
+      "TestAppServerHostExitRecoveryLive"
+    ],
+    "helpers": [],
+    "live_switches": [
+      "STEERLINE_APP_SERVER_SERVICE_LIVE_LEGACY"
+    ],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/codex_worker_test.go",
+    "tests": [
+      "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt",
+      "TestAppServerStartReplayPreservesNativeSavedAnswer",
+      "TestAppServerRejectedEventReleasesObserver",
+      "TestAppServerRecoveryDoesNotRaceInFlightLaunch",
+      "TestAppServerLateReplyCannotModifyTerminalTask",
+      "TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback",
+      "TestAppServerSlowRecoveryLeavesServiceWriterAvailable",
+      "TestAppServerOutcomeUsesNativeTurnAndEarlierPRItem",
+      "TestRoutedDecisionRequiresAllQuestionIDs",
+      "TestMockAppServerThreadAndTurnContract",
+      "TestAppServerStartedEventCommitsOperationReceipt"
+    ],
+    "helpers": [
+      "fmtBool",
+      "appServerAuditService",
+      "appServerAuditServiceWithPolicy",
+      "appServerAuditServiceWithRequirements",
+      "testAppServerAnswerRecoveryPersistsBeforeNextQuestion"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/conversation_test.go",
+    "tests": [
+      "TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision",
+      "TestConversationCommitDoesNotAdvanceCheckpointOnInvalidBody",
+      "TestConversationBodyAndRawCorruptionCannotReadAsComplete",
+      "TestConversationLongUnicodeFinalIsExactAcrossPages",
+      "TestConversationWriteFailureRollsBackContentAndCursor",
+      "TestConversationSQLiteFullRollsBackContentAndCursor",
+      "TestConversationLateOldAttemptCannotCrossNewAttempt",
+      "TestConversationProcessExitMidTransactionHelper",
+      "TestConversationProcessExitBeforeCommitRecoversAllBoundaries",
+      "TestConversationCommitRejectsChangedRawAtSameSourceIdentity",
+      "TestConversationCheckpointPreflightRejectsUnanchoredState",
+      "TestConversationLiveSourceFailureKeepsGapAndMapperPosition",
+      "TestConversationChangedLiveBytesCannotBindOrCheckpoint",
+      "TestConversationJournalReplayIsBoundedAndIdempotent"
+    ],
+    "helpers": [
+      "conversationTestWrite",
+      "conversationTestCheckpoint"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/core_decoupling_63_audit_test.go",
+    "tests": [],
+    "helpers": [
+      "testCD63RecoverySeedResources",
+      "testCD63BindingCodecIsolation"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/core_decoupling_65_test.go",
+    "tests": [
+      "TestCD65SourceCommitAndHostGate",
+      "TestCD65HistoryAndPreparation",
+      "TestCD65HistoryBudgetRotatesSources",
+      "TestCD65HistoryCursorCommitsWithItsConversationBatch"
+    ],
+    "helpers": [
+      "testCD65HostGateKeepsTrustedActionSeparate",
+      "testHistorySource",
+      "testCD65DiscoveryRejectsForeignOwner"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/core_decoupling_66_test.go",
+    "tests": [
+      "TestCD66ExplicitCatalogAndEntrypoints",
+      "TestCD66CandidateResourceIdentityAndCommitRollback"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/core_decoupling_66_test_helpers_test.go",
+    "tests": [],
+    "helpers": [
+      "testImplementationDirectory",
+      "testExecutionDirectory",
+      "mustTestDirectory",
+      "testImplementationCodecs",
+      "newTestDirectory",
+      "testDirectoryWithReplacement",
+      "orcaQuestionID",
+      "probeSupervisedOrcaTarget",
+      "testConfigWithDirectory",
+      "newTestService",
+      "testPrepareClaim",
+      "testVerifyFixedExecutionProfile",
+      "testLocalTarget",
+      "testTerminalTarget",
+      "testSupervisedTarget",
+      "codexProfileSettings",
+      "orcaProfileSettings",
+      "remoteProfileSettings",
+      "codexProfileFromInputs",
+      "validatePublication",
+      "testLocalPublicationPolicy",
+      "testWorkerPublicationPolicy",
+      "testStableTurnID",
+      "testBuildPolicyResource",
+      "testVerifyPolicyResource",
+      "nativeOrcaConfig",
+      "inspectTestWorkspace",
+      "nativeOrcaClient",
+      "nativeOrcaFixedAgentTitle",
+      "nativeOrcaFixedAgentCommand",
+      "nativeOrcaCommand",
+      "remoteWorkerConfig",
+      "remoteWorkerClient",
+      "remoteWorkerError",
+      "remoteWorkerRef",
+      "testHomePath",
+      "configTestRepository",
+      "fixtureHome",
+      "fixtureBinDir",
+      "fixtureEtcDir",
+      "fixtureStateRoot",
+      "fixtureGlobalExecutionConfigPath",
+      "fixtureRepositoryStateKey",
+      "loadFixtureConfig",
+      "testStartService",
+      "testRunConfiguredService",
+      "validateCatalogRef"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/execution_acceptance_helpers_test.go",
+    "tests": [],
+    "helpers": [
+      "reattachAppServerWorker",
+      "readOutputPrefix",
+      "inspectBoundOrcaTerminal",
+      "appServerDirectory",
+      "codexBackend"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/execution_backend_test.go",
+    "tests": [
+      "TestExecutionRecordsPinBindingsAndOperations",
+      "TestExecutionBackendCommonCapabilityContract",
+      "TestCapabilityReportRejectsRetiredWholeRunActions",
+      "TestNativeCapabilityCheckKeepsFixedAgent",
+      "TestLocalObservationRejectsReusedPIDIdentity",
+      "TestLocalReadOutputUsesBoundedExecutionCursor",
+      "TestOperationRecordRejectsCorruptionBeforeUse",
+      "TestOrcaObservationRejectsReplacedIncarnationAndConnection"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/execution_policy_live_test.go",
+    "tests": [
+      "TestExecutionPolicyNativeToolsLive",
+      "TestExecutionPolicyNativeToolsCollectLive"
+    ],
+    "helpers": [
+      "findPolicyNativeJournal",
+      "policyNativeToolProof",
+      "policyNativeEvents"
+    ],
+    "live_switches": [
+      "STEERLINE_POLICY_LIVE_CODEX",
+      "STEERLINE_POLICY_LIVE_COLLECT",
+      "STEERLINE_POLICY_LIVE_HOST",
+      "STEERLINE_POLICY_LIVE_NATIVE_HOME",
+      "STEERLINE_POLICY_LIVE_REPO",
+      "STEERLINE_POLICY_LIVE_REPORT"
+    ],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/execution_policy_test.go",
+    "tests": [
+      "TestProjectPolicyRejectsMissingOrOldConfiguration",
+      "TestProjectPolicyClaimRejectsStaticConflictsBeforeNativeQuery",
+      "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority",
+      "TestProjectPolicyNativeReportsRetainOriginalSnapshotDigests",
+      "TestProjectPolicyRejectsGlobalConflictsBeforeRepositoryProbe",
+      "TestProjectPolicyMissingBoundResourcesAreNotReconstructed",
+      "TestAppServerLaunchMessagePersistsPolicyResources"
+    ],
+    "helpers": [
+      "workspacePolicyFixture",
+      "policyResourceReceiptFixture"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/execution_profiles_test.go",
+    "tests": [
+      "TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets",
+      "TestNativeClaimPersistsChosenExecutionProfile",
+      "TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles",
+      "TestWorkerFlowClaimsFreezeIndependentLocalProfiles",
+      "TestStartPayloadRequiresCompleteExecutionProfileSelection",
+      "TestUnsupportedLocalAgentProfileIsMarkedUnavailable"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/execution_registry_test.go",
+    "tests": [
+      "TestWorkerFlowAdapterUsesFixedProtocol",
+      "TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent",
+      "TestWorkerFlowModeUsesFixedExecutionIdentity",
+      "TestEveryRegisteredExecutionUsesTheLifecyclePort"
+    ],
+    "helpers": [
+      "feedbackIdentityMismatch"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/execution_requirements_test.go",
+    "tests": [
+      "TestExecutionRequirementsExistenceAndNonSecretEvidence",
+      "TestExecutionRequirementsCannotInferOtherTargetEnvironment",
+      "TestExecutionRequirementsDoNotUpgradeProbeToVerified",
+      "TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal",
+      "TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot",
+      "TestClaimRechecksAcceptedConfigFiles",
+      "TestExecutionRegistryRejectsDuplicatesAndRequiresLifecyclePorts",
+      "TestRequirementVersionParsers",
+      "TestEmptyExecutionRequirementsKeepMandatoryChecks",
+      "TestRequirementToolsUseWorkerEnvironment"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/execution_resolution_audit_test.go",
+    "tests": [
+      "TestResolutionAuditProfilesDoNotAliasProjectValues",
+      "TestResolutionAuditRegistrationRejectsBaseTargetDrift",
+      "TestResolutionAuditRestoresOriginalWorkspaceRoot",
+      "TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents",
+      "TestResolutionAuditEvidenceCannotChangeUnderOriginalProfileDigest",
+      "TestResolutionAuditWorkerCommitCannotReplaceSnapshot"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/global_execution_test_helpers_test.go",
+    "tests": [],
+    "helpers": [
+      "writeGlobalExecutionFixture",
+      "localGlobalExecutionFixture",
+      "projectConfigJSON"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/implementation_config_test_helpers_test.go",
+    "tests": [],
+    "helpers": [
+      "testExecutionProfile",
+      "setTestImplementationProfiles",
+      "withTestImplementationProfiles",
+      "setTestCodexProfile",
+      "setTestOrcaProfile",
+      "setTestCodexBinding",
+      "setTestOrcaState",
+      "testOrcaState"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/linked_workspace_fixture_test.go",
+    "tests": [],
+    "helpers": [
+      "codexLinkedWorktreeWriteArgs"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/local_capability_live_test.go",
+    "tests": [
+      "TestLiveLocalCapabilityEvidence"
+    ],
+    "helpers": [],
+    "live_switches": [
+      "STEERLINE_LOCAL_CAPABILITY_EVIDENCE_OUT"
+    ],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/local_windows_sandbox_test.go",
+    "tests": [
+      "TestLocalWindowsSandboxProfileFreezesAndRestores"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/native_dag_commands_test.go",
+    "tests": [
+      "TestTaskBatchStrictDecodeAndDeterministicCyclePath",
+      "TestCreateTaskBatchAtomicIdempotentAndQueryable",
+      "TestCreateTaskBatchRollsBackEveryWriteWhenEdgeInsertFails",
+      "TestNativeCommandsRejectConfigurationBindingDriftBeforeSideEffects",
+      "TestTaskBatchRejectsDuplicateAndCrossProjectDependencies",
+      "TestTaskDependencyStateRequiresEveryPredecessorDelivery",
+      "TestNativeClaimAllowsManualParallelButKeepsAutoSlot",
+      "TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge",
+      "TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation",
+      "TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof",
+      "TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent",
+      "TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity"
+    ],
+    "helpers": [
+      "taskBatchFixture",
+      "strconvID",
+      "openDAGFixture",
+      "batchTasks",
+      "hasTaskIssue",
+      "hasString",
+      "seedPublishedForDiscard"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/native_tasks_test.go",
+    "tests": [
+      "TestNativeFixtureSeedAndCopiesAreIndependent",
+      "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding",
+      "TestNativePreflightAllowsItsEmptyRunLockFile",
+      "TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation",
+      "TestNativeTaskCASGuardsAndDeliveryProjection",
+      "TestNativeDiscardCASKeepsAuditAndNeverReusesID",
+      "TestTaskContractPinsCommittedBlobsAndRejectsInvalidReferences",
+      "TestAcceptanceHeadingRecognizesChineseAndEnglish",
+      "TestTaskContractRejectsCommittedSymlinkReferences",
+      "TestNativeInitializationRejectsBeadsStateAndCustomDatabaseFork",
+      "TestNativeInitializationRefusesExistingBeadsTaskDatabase",
+      "TestNewServiceRejectsNonNativeAuthorityBeforeCreatingState",
+      "TestNativeStoreRejectsRetiredSQLiteRunProjectionBeforeAuthorityOpen",
+      "TestNativeDatabaseInitializesCurrentSchema",
+      "TestSchemaOneCenterDatabaseIsRejectedWithoutMutation",
+      "TestNativeCursorErrorHasStableCode"
+    ],
+    "helpers": [
+      "prepareNativeSeed",
+      "nativeTaskFixture",
+      "nativeRef",
+      "nativeContract",
+      "seedExecutionProfileTasks"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/orca_fake_test.go",
+    "tests": [
+      "TestOrcaTerminalExitCauseConfirmsCommandExit",
+      "TestOrcaNativeHostWait",
+      "TestOrcaPreflightDoesNotRequireUnusedLocalCodex",
+      "TestOrcaStopExecutionConfirmsFixedTerminalExit",
+      "TestOrcaStopFailureDoesNotConfirmExit",
+      "TestSlowOrcaObservationDoesNotBlockOtherRefStop",
+      "TestOrcaSameRefObservationsDoNotOverlapOrLeakGate"
+    ],
+    "helpers": [
+      "fakeOrcaStatePath",
+      "writeFakeOrcaState",
+      "readFakeOrcaState",
+      "fakeOrcaOK",
+      "fakeOrcaErr",
+      "fakeOrca",
+      "fakeOrcaTerminalCreate",
+      "fakeOrcaRemove",
+      "fakeOrcaShow",
+      "fakeOrcaRead",
+      "orcaTestConfig"
+    ],
+    "live_switches": [
+      "STEERLINE_FAKE_ORCA_CLOSE_STAYS_LIVE"
+    ],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/orca_supervised_p10_real_test.go",
+    "tests": [
+      "TestSupervisedOrcaRealP10ReplyGate"
+    ],
+    "helpers": [],
+    "live_switches": [
+      "STEERLINE_REAL_P10_BOUNDED_REPLY",
+      "STEERLINE_REAL_P10_CENTER_RUNTIME_ID",
+      "STEERLINE_REAL_P10_CONNECTION_ID",
+      "STEERLINE_REAL_P10_COORDINATOR_TERMINAL",
+      "STEERLINE_REAL_P10_DISPATCH_ID",
+      "STEERLINE_REAL_P10_ENVIRONMENT_ID",
+      "STEERLINE_REAL_P10_QUESTION_ID",
+      "STEERLINE_REAL_P10_REPLY_PROBE",
+      "STEERLINE_REAL_P10_REPOSITORY_SELECTOR",
+      "STEERLINE_REAL_P10_RUN_ID",
+      "STEERLINE_REAL_P10_SEND_BOUNDED_REPLY",
+      "STEERLINE_REAL_P10_TASK_ID",
+      "STEERLINE_REAL_P10_WORKFLOW_RUN_ID",
+      "STEERLINE_REAL_P10_WORKTREE_ID"
+    ],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/orca_supervised_test.go",
+    "tests": [
+      "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily",
+      "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift",
+      "TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported",
+      "TestSupervisedOrcaExecutionBindingRequiresExactDispatchIdentity",
+      "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch",
+      "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree",
+      "TestSupervisedRunCoordinatorsAreDistinctAndFenced",
+      "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal",
+      "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall",
+      "TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath",
+      "TestLoadConfigRequiresExplicitRemoteCancellationFalse"
+    ],
+    "helpers": [
+      "fakeSupervisedEnvelope",
+      "fakeSupervisedOrca",
+      "supervisedFixtureConfig",
+      "supervisedConfigForFixture",
+      "supervisedPromptTestRef",
+      "isBackendError"
+    ],
+    "live_switches": [
+      "STEERLINE_FAKE_REOPEN_TERMINAL_LIVE"
+    ],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/orca_worker_observation_fake_test.go",
+    "tests": [],
+    "helpers": [
+      "fakeNativeOrca",
+      "orcaWorkerCaller",
+      "nativeOrcaGeneration"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/orca_worker_observation_service_test.go",
+    "tests": [
+      "TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal",
+      "TestNativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterRestart",
+      "TestCD64NativeSourceReplacementRetainsEvidence"
+    ],
+    "helpers": [
+      "enableTestLifecycleMessages",
+      "stopTestLifecycleMessages"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/orca_worker_observation_test.go",
+    "tests": [
+      "TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity",
+      "TestNativeOrcaAgentSelectionUsesFrozenProfile",
+      "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/process_fixture_test.go",
+    "tests": [],
+    "helpers": [
+      "streamWorkerEvents",
+      "streamWorkerEventsWithEmit",
+      "emitWorkerLine"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/profile_publication_test.go",
+    "tests": [
+      "TestProfileSelectionDigestMatchesServicePreflight",
+      "TestProfilePublicationMixedRoutesAndFrozenResponsibility",
+      "TestProfilePublicationRequiresExplicitProjectAndProfilePolicies"
+    ],
+    "helpers": [
+      "mixedPublicationProfiles"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/publication_policy_test.go",
+    "tests": [
+      "TestProjectPublicationPolicyRequiredBeforeRepositoryProbe",
+      "TestPublicationPolicyFrozenConfigurationAndCredentials",
+      "TestPublicationOriginalProviderAfterRestartAndRemoteDrift",
+      "TestPublicationAndPermissionChecksRemainCombined",
+      "TestRemotePublicationClaimRequiresPermissionEvidence"
+    ],
+    "helpers": [
+      "executionPublicationFixture",
+      "hostPublicationProviderFixture"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/question_route_test_helpers_test.go",
+    "tests": [],
+    "helpers": [
+      "codexDecisionFixture",
+      "simpleQuestionRoute"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/runtime_boundary_test.go",
+    "tests": [
+      "TestWorkerBindingRollsBackWithItsCheckpoint",
+      "TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/service_test.go",
+    "tests": [
+      "TestProjectRuntimeOmitsSettledDiscardedRuns",
+      "TestMain",
+      "TestIdleServiceDoesNotPublishOnNoOpPolls"
+    ],
+    "helpers": [
+      "sharedTestArtifactsDir",
+      "newFixture",
+      "controlReviewService",
+      "readFake",
+      "writeFake",
+      "arg",
+      "fakeMain",
+      "require",
+      "fixtureGit",
+      "seedFakeCapabilities"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/spawner_test.go",
+    "tests": [
+      "TestOversizedWorkerLinePreservesRawOutputAndLaterEvents",
+      "TestWorkerLineBeyondRawRecordLimitCreatesGap"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/sqlite_store_test.go",
+    "tests": [
+      "TestCheckpointDoesNotSynthesizeControlOperations",
+      "TestSQLiteV3IsRejectedWithoutUpgrade",
+      "TestSQLiteV4IsRejectedWithoutUpgrade",
+      "TestSQLiteV5IsRejectedWithoutUpgrade",
+      "TestSQLiteRejectsParallelExecutionsInOneWorkflow",
+      "TestSQLiteTransactionRollsBackAllDomainWrites",
+      "TestCommandIdempotencyAndDecisionVersionArbitration",
+      "TestPreflightRejectsUnknownSQLiteSchemaWithoutMutation",
+      "TestPreflightRejectsRetiredWholeRunResultCommandWithoutMutation",
+      "TestQueryEventCursorAndLargeBodyPaging",
+      "TestOperationIdempotencyKeepsOneDurableIntent",
+      "TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional",
+      "TestDecisionAnswerCommandClientProcess",
+      "TestDecisionAnswerSeparateClientProcessesUseOneFirstWinsCommand"
+    ],
+    "helpers": [
+      "openDomainTestStore",
+      "assertOldSQLiteRejectedUnchanged",
+      "seedNativeDecision"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_codex_live_test.go",
+    "tests": [
+      "TestCodexAppServerNativeQuestionLive"
+    ],
+    "helpers": [],
+    "live_switches": [
+      "STEERLINE_CODEX_APP_SERVER_LIVE"
+    ],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_commit_boundary_test.go",
+    "tests": [
+      "TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint",
+      "TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure",
+      "TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver",
+      "TestAppServerFailedPreparationKeepsPartialSessionBinding",
+      "TestWorkerCommitRejectsSavedAnswerRegression",
+      "TestWorkerIntentIsDurableBeforeDispatchAndFailurePreventsDispatch"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_config_test.go",
+    "tests": [
+      "TestWorkerFlowConfigRejectsOldProjectGates",
+      "TestUnsupportedOrcaWorkerFlowConfigurationCannotClaim",
+      "TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation",
+      "TestFreshWorkerFlowRuntimeUsesDistinctFormat",
+      "TestWorkerFlowRejectsOldLocalExecutionProtocol"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_context_test.go",
+    "tests": [
+      "TestWorkerFlowContextKeepsFixedRunAndCopiesConfig",
+      "TestWorkerFlowContextsDoNotExchangeExecutionProfiles"
+    ],
+    "helpers": [
+      "workerContextConfigFixture"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_delivery_test.go",
+    "tests": [
+      "TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor",
+      "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged",
+      "TestWorkerFlowClaimNeedsNoProjectSteps"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_environment_live_test.go",
+    "tests": [
+      "TestWorkerEnvironmentNativeReadinessLive"
+    ],
+    "helpers": [],
+    "live_switches": [
+      "STEERLINE_READINESS_LIVE_CODEX",
+      "STEERLINE_READINESS_LIVE_COMMIT",
+      "STEERLINE_READINESS_LIVE_REPO",
+      "STEERLINE_READINESS_LIVE_REPORT",
+      "STEERLINE_READINESS_LIVE_STATE_ROOT"
+    ],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_environment_test.go",
+    "tests": [
+      "TestWorkerEnvironmentER1ProbeAndSettlementGate",
+      "TestWorkerEnvironmentWaitsForOriginalAgentDetection",
+      "TestWorkerEnvironmentUnidentifiedAgentKeepsOriginalDeadline",
+      "TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR",
+      "TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch",
+      "TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput",
+      "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt",
+      "TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll",
+      "TestManagedOrcaFrozenResourceEvidenceIsVerifiedBeforeInput"
+    ],
+    "helpers": [
+      "newEnvironmentFixture",
+      "driveTestLifecycleWorker",
+      "testManagedLaunchRecovery"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_environment_test_helpers_test.go",
+    "tests": [],
+    "helpers": [
+      "orcaStateIdentity",
+      "decodeOrcaExecutionState",
+      "storeOrcaExecutionState",
+      "nativeOrcaCurrentTurn",
+      "persistNativeOrcaTurn",
+      "workerOrcaTerminalIdentity"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_events_cd62_test.go",
+    "tests": [
+      "TestCD62NativeFactsAndQuestionRoute",
+      "TestCD62QuestionReceiptBarrier"
+    ],
+    "helpers": [
+      "nativeOrcaAnswerText"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_feedback_phase_test.go",
+    "tests": [
+      "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_local_test.go",
+    "tests": [
+      "TestWorkerFlowPromptIncludesFixedWorkflowRunID",
+      "TestWorkerTurnFindsPRBeforeFinalMessage",
+      "TestWorkerFlowMockCodexHelper"
+    ],
+    "helpers": [
+      "mockAppServerStdio",
+      "mockAppServerMain",
+      "mockAppServerConnection"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_recovery_test.go",
+    "tests": [
+      "TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_service_recovery_live_test.go",
+    "tests": [
+      "TestLocalCodexManualRecoveryLive"
+    ],
+    "helpers": [],
+    "live_switches": [
+      "STEERLINE_WORKER_RECOVERY_LIVE"
+    ],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_service_test.go",
+    "tests": [
+      "TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace",
+      "TestServiceRecoveryGateRequiresTransactionalOwner",
+      "TestRestartDoesNotSendPreviouslyAcceptedFeedback"
+    ],
+    "helpers": [
+      "testWorkerFlowServiceFirstFeedback"
+    ],
+    "live_switches": [],
+    "pending_platform_content": false
+  },
+  {
+    "path": "internal/steerline/worker_state_test.go",
+    "tests": [
+      "TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges",
+      "TestWorkerFlowRejectsReplacementsAndLateTurns",
+      "TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults",
+      "TestWorkerFeedbackKeepsOptionAndAdditionalText"
+    ],
+    "helpers": [],
+    "live_switches": [],
+    "pending_platform_content": false
+  }
+]

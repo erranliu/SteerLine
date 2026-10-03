@@ -158,7 +158,7 @@ func mustEncodeOrca(config ProfileConfig) []byte {
 	return value
 }
 
-func (l *ExecutionLifecycle) Next(_ context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.LifecycleCandidate, error) {
+func (l *ExecutionLifecycle) Next(ctx context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.LifecycleCandidate, error) {
 	if err := l.validateSnapshot(snapshot); err != nil {
 		return executionapi.LifecycleCandidate{}, err
 	}
@@ -192,6 +192,21 @@ func (l *ExecutionLifecycle) Next(_ context.Context, snapshot executionapi.Lifec
 		return executionapi.LifecycleCandidate{}, errors.New("native Orca workspace receipt has no Worktree identity")
 	}
 	if !state.AgentBound {
+		if snapshot.Ref.External.Terminal != "" {
+			terminal, err := ShowTerminal(ctx, l.client.MetaCall, snapshot.Ref.External.Terminal)
+			if err != nil {
+				return executionapi.LifecycleCandidate{}, err
+			}
+			if terminal.Handle != snapshot.Ref.External.Terminal || terminal.RuntimeID != snapshot.Ref.External.RuntimeID || terminal.IncarnationID != snapshot.Ref.External.Incarnation || terminal.WorktreeID != snapshot.Ref.Target.WorktreeID {
+				return executionapi.LifecycleCandidate{}, errors.New("original starting terminal identity changed")
+			}
+			if terminal.AgentIdentity == "" {
+				return executionapi.LifecycleCandidate{Done: true}, nil
+			}
+			if terminal.AgentIdentity != "codex" {
+				return executionapi.LifecycleCandidate{}, errors.New("original starting terminal detected another agent")
+			}
+		}
 		purpose := "agent-bind"
 		if snapshot.Ref.External.Terminal == "" {
 			purpose = "agent-terminal"
