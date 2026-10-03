@@ -68,6 +68,8 @@ flowchart TD
 
 ## 顺序与交接
 
+2026-10-03：#67 PR190 完成主包生产/测试清零、完整依赖守卫与测试归位，协调独立复审修复并整合最新主干；完全访问最终组合15包/144用例 complete/pass。最终审核与真实合并记录见 [交付记录](../validation/core-decoupling-06-boundary/README.md)，#68 仍须等待 PR190 平台确认整体合并，不能以本段文字提前开工。
+
 2026-10-02：#67 已从 #66 实际合并提交开始盘点并实施部分测试迁移及外层守卫。受限执行的隔离 Git fixture 和分支 refs 写入被阻断；最终守卫仍拒绝 51 个平台测试/fixture 文件及测试 import 越界，任务未完成。续做输入、源码摘要和真实失败记录见 [#67 受限执行交接](../validation/core-decoupling-06-boundary/README.md)。#67 继续保留在活动表；此记录不满足 #68 开工条件。
 
 2026-10-02：#65 已合并；#66 外层组装与主包生产隔离已实现并独立复审修复，完全访问组合 core 6/rules 90/targeted 22 全通过，见[交付与复审记录](../validation/core-decoupling-05-composition/README.md)。本 PR 真实合并后才启动 #67；活动表保留剩余任务。
