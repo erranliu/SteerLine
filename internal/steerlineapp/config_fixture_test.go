@@ -131,13 +131,15 @@ func fixtureGit(t *testing.T, repo string, args ...string) string {
 }
 func nativeTaskFixture(t *testing.T) (Config, string) {
 	t.Helper()
+	t.Setenv("STEERLINE_HOME", t.TempDir())
 	repo := configTestRepository(t)
 	require(t, os.WriteFile(filepath.Join(repo, "base.txt"), []byte("fixture"), 0600))
 	fixtureGit(t, repo, "add", ".")
 	fixtureGit(t, repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture")
 	fixtureGit(t, repo, "remote", "add", "origin", "https://github.com/owner/repo.git")
 	localGlobalExecutionFixture(t)
-	c := Config{Repository: repo, Remote: "origin", Branch: "main", TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
+	c := Config{Repository: repo, Remote: "origin", Branch: "main", Git: Command{Executable: "git"}, CommandTimeout: "5s", TaskPoll: "1s", PRPoll: "1s", Heartbeat: "1s", ShutdownGrace: "1s", TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
+	c.ExecutableTypes = []string{"task"}
 	path := filepath.Join(t.TempDir(), "project.json")
 	require(t, os.WriteFile(path, projectConfigJSON(t, c), 0600))
 	c, err := LoadConfig(path)

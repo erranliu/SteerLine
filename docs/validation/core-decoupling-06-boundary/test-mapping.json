@@ -969,5 +969,105 @@
     "new_test": "TestFixedProfileRetainsSelectedAgent",
     "owner": "steerline",
     "change": "Both registered neutral agent identities keep their original fixed selection after default-agent changes; actual directory resolution and frozen digest checked. One codec and lifecycle implementation serves both identities."
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "test": "TestOrcaTerminalExitCauseConfirmsCommandExit",
+    "new": "internal/steerline/orcaworker/terminal_backend_cd67_test.go",
+    "owner": "orcaworker_test",
+    "change": "Original terminal identity/stop/cancellation and observation concurrency assertions use actual implementation backend with protocol-only executable fixture; no core factory or center DB writer"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "test": "TestOrcaStopExecutionConfirmsFixedTerminalExit",
+    "new": "internal/steerline/orcaworker/terminal_backend_cd67_test.go",
+    "owner": "orcaworker_test",
+    "change": "Original terminal identity/stop/cancellation and observation concurrency assertions use actual implementation backend with protocol-only executable fixture; no core factory or center DB writer"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "test": "TestOrcaStopFailureDoesNotConfirmExit",
+    "new": "internal/steerline/orcaworker/terminal_backend_cd67_test.go",
+    "owner": "orcaworker_test",
+    "change": "Original terminal identity/stop/cancellation and observation concurrency assertions use actual implementation backend with protocol-only executable fixture; no core factory or center DB writer"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "test": "TestSlowOrcaObservationDoesNotBlockOtherRefStop",
+    "new": "internal/steerline/orcaworker/terminal_backend_cd67_test.go",
+    "owner": "orcaworker_test",
+    "change": "Original terminal identity/stop/cancellation and observation concurrency assertions use actual implementation backend with protocol-only executable fixture; no core factory or center DB writer"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "test": "TestOrcaSameRefObservationsDoNotOverlapOrLeakGate",
+    "new": "internal/steerline/orcaworker/terminal_backend_cd67_test.go",
+    "owner": "orcaworker_test",
+    "change": "Original terminal identity/stop/cancellation and observation concurrency assertions use actual implementation backend with protocol-only executable fixture; no core factory or center DB writer"
+  },
+  {
+    "old": "internal/steerline/execution_backend_test.go",
+    "test": "TestOrcaObservationRejectsReplacedIncarnationAndConnection",
+    "new": "internal/steerline/orcaworker/terminal_backend_cd67_test.go",
+    "owner": "orcaworker_test",
+    "change": "Original process incarnation and configured target mismatch rejection retained on implementation public backend"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "helper": "STEERLINE_FAKE_ORCA_BREAK_STOP_RECEIPT",
+    "new": null,
+    "owner": "deleted unused protocol-to-center write hook",
+    "change": "Exact repository search finds only the hook declaration; no runtime or test/script/config consumer. Existing core transaction failure assertions retained; no native fixture writes center SQLite."
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "test": "TestOrcaNativeHostWait",
+    "new": "internal/steerline/orcaworker/host_wait_live_cd67_test.go",
+    "owner": "orcaworker_test",
+    "live": "STEERLINE_ORCA_HOST_WAIT_PROBE",
+    "change": "Exact original terminal runtime/incarnation and real wait source/time required; actual implementation conversation mapper retains host-origin/non-business classification. No center write interface."
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "test": "TestOrcaNativeHostWait",
+    "new": "internal/steerline/host_wait_business_test.go",
+    "new_test": "TestHostInputWaitPersistsWithoutBusinessDecision",
+    "owner": "steerline",
+    "change": "Original SQLite conversation persistence/classification assertions retained with neutral source port and stable current-format execution identities; repeated source remains deduplicated."
+  },
+  {
+    "old": "internal/steerline/execution_backend_test.go",
+    "test": "TestExecutionBackendCommonCapabilityContract",
+    "new": "internal/steerlineapp/terminal_preflight_cd67_test.go",
+    "owner": "steerlineapp",
+    "change": "Real builtin directory/backend and process host replace copied test factories; static capability declaration stays unverified; native terminal preflight does not execute unused local tool and actual fixed-model backend rejects the missing tool"
+  },
+  {
+    "old": "internal/steerline/execution_backend_test.go",
+    "test": "TestLocalObservationRejectsReusedPIDIdentity",
+    "new": "internal/steerlineapp/terminal_preflight_cd67_test.go",
+    "owner": "steerlineapp",
+    "change": "Real builtin directory/backend and process host replace copied test factories; static capability declaration stays unverified; native terminal preflight does not execute unused local tool and actual fixed-model backend rejects the missing tool"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "test": "TestOrcaPreflightDoesNotRequireUnusedLocalCodex",
+    "new": "internal/steerlineapp/terminal_preflight_cd67_test.go",
+    "owner": "steerlineapp",
+    "change": "Real builtin directory/backend and process host replace copied test factories; static capability declaration stays unverified; native terminal preflight does not execute unused local tool and actual fixed-model backend rejects the missing tool"
+  },
+  {
+    "old": "internal/steerline/orca_fake_test.go",
+    "helper": "orcaTestConfig / copied stop handle / root wire mock forwarding",
+    "new": null,
+    "owner": "deleted after native backend/host-wait/preflight tests moved",
+    "change": "No remaining consumer of copied core native configuration or state helpers; protocol bytes are owned by testprotocol, with final root dispatcher removal still required."
+  },
+  {
+    "old": "internal/steerline/execution_backend_test.go",
+    "test": "TestNativeCapabilityCheckKeepsFixedAgent",
+    "new": "internal/steerline/execution_backend_test.go",
+    "owner": "steerline",
+    "change": "Actual core capability evidence lookup uses one neutral backend/codec; original explicit agent evidence accepted and changed-default scope refused, with content-bound isolated proof. No native factory or authentication claim."
   }
 ]

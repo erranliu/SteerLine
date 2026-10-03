@@ -16,6 +16,16 @@
 
 当前已获用户授权在 #67 真实交付后继续 #68–#72；下述首次限制“不启动 #68”表示前置未交付前不启动，不表示新的总范围止于 #67。
 
+### 原生 backend 与 host-wait 归位阶段
+
+- Terminal exit/固定 incarnation/连接、停止未知结果、不同资源停止不受慢观察阻塞、同资源观察不重叠共 6 个原断言移至 `orcaworker/terminal_backend_cd67_test.go`，通过实际实现 backend。协议 fixture 只拥有隔离终端文件，不含中心 SQLite 写者；无消费者的旧“破坏 stop 回执”数据库写 hook 已删除。
+- 真实 host-wait 探测保留 `STEERLINE_ORCA_HOST_WAIT_PROBE` 原 opt-in，归实现包并调用实际 conversation mapper；中心持久化/去重/不产生 business Decision 的断言归 `host_wait_business_test.go`，使用中性 source port。Live 开关未启用，不宣称原生认证。
+- 原生 preflight、两条默认 backend 的静态能力声明、真实进程 PID 创建身份拒绝归应用包，通过实际内置目录与 process host；中心原 agent 能力证据作用域及绑定/操作记录断言使用单一中性 backend。
+- 阶段 JSON 报告均 complete：`task67-terminal-backend-moved` 6/6、`task67-app-preflight-backends-fixed` 3/3、`task67-neutral-capability-scope` 4/4，位于协调的 `C:/Users/lmas1/.codex/task-state/roadmap-runner/`。这些是定向归位检查，不是 #67 最终 quick 验收。
+- 修复应用 fixture 的默认路径隔离：`nativeTaskFixture` 设置临时 `STEERLINE_HOME`，应用 TestMain 的默认配置/状态也归生成的隔离 home；当前格式的 Git/时间预算/任务类型由 fixture 显式提供。首次未隔离调用曾改写 `C:/SteerlineRuntime/execution.json`，已通知用户并在 run 状态记录；现有历史备份格式过旧且未证实与原文件相同，原配置恢复等待准确来源，不能以阶段代码通过掩盖此问题。
+
+当前仍需处理其余 21 个 root 平台文本文件、最终工厂/dispatcher 删除、完整映射、quick 与完整复审；不提前合并或启动 #68。
+
 ## 工作区和源码身份
 
 - 实际工作区：`C:/Users/lmas1/.codex/worktrees/f775/SteerLine`。

@@ -19,6 +19,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 )
 
 // fakeDB is the isolated PR-provider state used by native workflow tests.
@@ -361,7 +362,7 @@ func fakeMain(args []string) int {
 		}
 		return 0
 	case "orca":
-		return fakeOrca(args[1], args[2:])
+		return testprotocol.FakeTerminal(args[1], args[2:])
 	case "orca-supervised":
 		return fakeSupervisedOrca(args[1:])
 	case "orca-native":
