@@ -1,0 +1,4052 @@
+{
+  "scope": "All cmd/internal production Go including every OS/tag, excluding _test.go only",
+  "hash_basis": "Raw working-tree bytes from the recorded Windows candidate, including CRLF; compare canonical Git content when checkout line endings differ",
+  "file_count": 293,
+  "package_count": 26,
+  "project_import_edges": [
+    [
+      "cmd/steerline",
+      "internal/steerline"
+    ],
+    [
+      "cmd/steerline",
+      "internal/steerlineapp"
+    ],
+    [
+      "cmd/test-feedback",
+      "internal/testfeedback"
+    ],
+    [
+      "cmd/test-feedback",
+      "internal/testprocess"
+    ],
+    [
+      "internal/steerline",
+      "internal/steerline/contracts"
+    ],
+    [
+      "internal/steerline",
+      "internal/steerline/execution"
+    ],
+    [
+      "internal/steerline",
+      "internal/steerline/projection"
+    ],
+    [
+      "internal/steerline",
+      "internal/steerline/publication"
+    ],
+    [
+      "internal/steerline",
+      "internal/steerline/query"
+    ],
+    [
+      "internal/steerline",
+      "internal/steerline/sqlite"
+    ],
+    [
+      "internal/steerline",
+      "internal/steerline/task"
+    ],
+    [
+      "internal/steerline",
+      "internal/steerline/taskview"
+    ],
+    [
+      "internal/steerline",
+      "internal/steerline/workerflow"
+    ],
+    [
+      "internal/steerline",
+      "internal/steerline/workspace"
+    ],
+    [
+      "internal/steerline/codexworker",
+      "internal/steerline/codexapp"
+    ],
+    [
+      "internal/steerline/codexworker",
+      "internal/steerline/contracts"
+    ],
+    [
+      "internal/steerline/codexworker",
+      "internal/steerline/execution"
+    ],
+    [
+      "internal/steerline/codexworker",
+      "internal/steerline/workspace"
+    ],
+    [
+      "internal/steerline/console",
+      "internal/steerline"
+    ],
+    [
+      "internal/steerline/console",
+      "internal/steerline/execution"
+    ],
+    [
+      "internal/steerline/contracts",
+      "internal/steerline/execution"
+    ],
+    [
+      "internal/steerline/contracts",
+      "internal/steerline/task"
+    ],
+    [
+      "internal/steerline/contracts",
+      "internal/steerline/taskview"
+    ],
+    [
+      "internal/steerline/orca_remote_worker",
+      "internal/steerline/codexworker"
+    ],
+    [
+      "internal/steerline/orca_remote_worker",
+      "internal/steerline/execution"
+    ],
+    [
+      "internal/steerline/orca_remote_worker",
+      "internal/steerline/orcaworker"
+    ],
+    [
+      "internal/steerline/orcaworker",
+      "internal/steerline/codexworker"
+    ],
+    [
+      "internal/steerline/orcaworker",
+      "internal/steerline/contracts"
+    ],
+    [
+      "internal/steerline/orcaworker",
+      "internal/steerline/execution"
+    ],
+    [
+      "internal/steerline/orcaworker",
+      "internal/steerline/workspace"
+    ],
+    [
+      "internal/steerline/processhost",
+      "internal/steerline/execution"
+    ],
+    [
+      "internal/steerline/projection",
+      "internal/steerline/contracts"
+    ],
+    [
+      "internal/steerline/projection",
+      "internal/steerline/execution"
+    ],
+    [
+      "internal/steerline/projection",
+      "internal/steerline/workerflow"
+    ],
+    [
+      "internal/steerline/publication",
+      "internal/steerline/contracts"
+    ],
+    [
+      "internal/steerline/publication",
+      "internal/steerline/execution"
+    ],
+    [
+      "internal/steerline/query",
+      "internal/steerline/contracts"
+    ],
+    [
+      "internal/steerline/query",
+      "internal/steerline/execution"
+    ],
+    [
+      "internal/steerline/query",
+      "internal/steerline/task"
+    ],
+    [
+      "internal/steerline/query",
+      "internal/steerline/taskview"
+    ],
+    [
+      "internal/steerline/sqlite",
+      "internal/steerline/contracts"
+    ],
+    [
+      "internal/steerline/sqlite",
+      "internal/steerline/execution"
+    ],
+    [
+      "internal/steerline/sqlite",
+      "internal/steerline/projection"
+    ],
+    [
+      "internal/steerline/sqlite",
+      "internal/steerline/query"
+    ],
+    [
+      "internal/steerline/sqlite",
+      "internal/steerline/task"
+    ],
+    [
+      "internal/steerline/task",
+      "internal/steerline/taskgraph"
+    ],
+    [
+      "internal/steerline/taskview",
+      "internal/steerline/task"
+    ],
+    [
+      "internal/steerline/taskview",
+      "internal/steerline/taskgraph"
+    ],
+    [
+      "internal/steerline/workerflow",
+      "internal/steerline/execution"
+    ],
+    [
+      "internal/steerline/workerflow",
+      "internal/steerline/task"
+    ],
+    [
+      "internal/steerline/workspace",
+      "internal/steerline/execution"
+    ],
+    [
+      "internal/steerlineapp",
+      "internal/steerline"
+    ],
+    [
+      "internal/steerlineapp",
+      "internal/steerline/codexworker"
+    ],
+    [
+      "internal/steerlineapp",
+      "internal/steerline/console"
+    ],
+    [
+      "internal/steerlineapp",
+      "internal/steerline/contracts"
+    ],
+    [
+      "internal/steerlineapp",
+      "internal/steerline/execution"
+    ],
+    [
+      "internal/steerlineapp",
+      "internal/steerline/orca_remote_worker"
+    ],
+    [
+      "internal/steerlineapp",
+      "internal/steerline/orcaworker"
+    ],
+    [
+      "internal/steerlineapp",
+      "internal/steerline/processhost"
+    ],
+    [
+      "internal/steerlineapp",
+      "internal/steerline/publication"
+    ],
+    [
+      "internal/steerlineapp",
+      "internal/steerline/workspace"
+    ]
+  ],
+  "files": [
+    {
+      "path": "cmd/orca-probe/main.go",
+      "sha256": "bea9cf07eb339d1404a638ef8d87fcfc9157c0bac2e782b50f1e0d6ffbf2a39c",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "flag",
+        "fmt",
+        "io",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "regexp",
+        "runtime",
+        "sort",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "cmd/steerline/main.go",
+      "sha256": "326a48485b3a9876fde0a21f7e6b0deb7e8eb59b71716910d6ed51d822e37ad8",
+      "build_conditions": [],
+      "imports": [
+        "bufio",
+        "context",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "flag",
+        "fmt",
+        "os",
+        "os/exec",
+        "os/signal",
+        "path/filepath",
+        "strings",
+        "syscall",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline",
+        "github.com/erranliu/SteerLine/internal/steerlineapp"
+      ]
+    },
+    {
+      "path": "cmd/test-feedback/e2e.go",
+      "sha256": "b60b60a916d1349705af10993c45b4deaf90dc14a41d3f3e755ea80e63a4574e",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "os",
+        "os/exec",
+        "os/signal",
+        "path/filepath",
+        "regexp",
+        "runtime",
+        "sort",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/testfeedback"
+      ]
+    },
+    {
+      "path": "cmd/test-feedback/main.go",
+      "sha256": "81a63692eb46a3b13aca4464b72a3e312f749894cf6497f6055f1d12748e0cf5",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "errors",
+        "flag",
+        "fmt",
+        "io",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "runtime",
+        "sort",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/testfeedback"
+      ]
+    },
+    {
+      "path": "cmd/test-feedback/process_unix.go",
+      "sha256": "e07db50e4a00881bff1475f48a6920e4e545f43ed09363502f0b5cacb35bbc69",
+      "build_conditions": [
+        "//go:build !windows"
+      ],
+      "imports": [
+        "context",
+        "github.com/erranliu/SteerLine/internal/testprocess",
+        "os/exec"
+      ]
+    },
+    {
+      "path": "cmd/test-feedback/process_windows.go",
+      "sha256": "f08723112bf773f50b8a73fb50646853d402ccca3ccc0652659f167507cac394",
+      "build_conditions": [
+        "//go:build windows"
+      ],
+      "imports": [
+        "context",
+        "github.com/erranliu/SteerLine/internal/testprocess",
+        "os/exec"
+      ]
+    },
+    {
+      "path": "cmd/test-feedback/scoped.go",
+      "sha256": "64765d99ec4b90bd19cef537fb7c2f5c5457be29a948c2b33311047c9d701623",
+      "build_conditions": [],
+      "imports": [
+        "bufio",
+        "context",
+        "embed",
+        "encoding/json",
+        "fmt",
+        "io",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "regexp",
+        "runtime",
+        "sort",
+        "strings",
+        "sync",
+        "time",
+        "github.com/erranliu/SteerLine/internal/testfeedback"
+      ]
+    },
+    {
+      "path": "internal/coreboundary/check.go",
+      "sha256": "c666ded86e6aa93e46455caa4ae0d4b96cd0d8525b85ab91dea796fbe44371ca",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "fmt",
+        "go/parser",
+        "go/token",
+        "io/fs",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "regexp",
+        "sort",
+        "strconv",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/activity.go",
+      "sha256": "89983df6ebef17c8ede7cd17b4021bbf0b6fbded9011fcf65f3f46df727babe8",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io",
+        "os",
+        "path/filepath",
+        "strings",
+        "sync",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexapp/ask.go",
+      "sha256": "84b8b7149a102e2343ecf91e408bef167b165064486b1bba8b1024286541b503",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexapp/client.go",
+      "sha256": "e4aac14bb7debd9d9d8056cde5f34501219653ed0f72e1bce2aa219a5a1551e1",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "sync"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexapp/doc.go",
+      "sha256": "481e68ebe0f8374f767d2819518fb9845ff5d8069dac7b9c8b74ecfe4269a212",
+      "build_conditions": [],
+      "imports": []
+    },
+    {
+      "path": "internal/steerline/codexapp/transport.go",
+      "sha256": "1874a55d8074b559e06f85a6f54a1f97e4f09910875e7fd74d7387c8857015dc",
+      "build_conditions": [],
+      "imports": [
+        "bufio",
+        "context",
+        "crypto/rand",
+        "crypto/sha1",
+        "encoding/base64",
+        "encoding/binary",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io",
+        "net",
+        "net/http",
+        "net/url",
+        "strconv",
+        "strings",
+        "sync",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/activity.go",
+      "sha256": "3f56234caea57a2e59817d3d606bccf77da36581857dbaa25f5c2d10952bcbed",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/ask.go",
+      "sha256": "5adf26cb84c38f2324759e55f4f1ee5be9c023fc8eeca3147375c70a1e1231a6",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io",
+        "regexp",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/codexapp",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/ask_journal.go",
+      "sha256": "b4afc3eb34c702fb381c40b799df7d63f90a4bba34733d3f05c73369b0c4f302",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "errors",
+        "io",
+        "os",
+        "github.com/erranliu/SteerLine/internal/steerline/codexapp",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/backend.go",
+      "sha256": "4c11ad21abf8ec9cc5162f622091a66b3fd0a931bb863d551c642a84e2d37827",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "runtime",
+        "slices",
+        "sync",
+        "github.com/erranliu/SteerLine/internal/steerline/codexapp",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/capability.go",
+      "sha256": "166754266338f9f2f4c8f6f17d672cb6803d1a0ece582ab4da2d0c1b5cedbf26",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "os",
+        "os/exec",
+        "strings",
+        "errors",
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/command.go",
+      "sha256": "c56a07875d017585fed8a1c66289785ea6ab1772e5a044c13d9444b81507883d",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "fmt",
+        "runtime",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/config.go",
+      "sha256": "18c589060888364eefec68b04f02d66150b8dc343034de9d0823ed3d22655c08",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/connection.go",
+      "sha256": "c69c79c2d29077de30c8698bf150e78f185c2ae7fc8a088549e2d428ffc8c878",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "path/filepath",
+        "runtime",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/codexapp",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/conversation.go",
+      "sha256": "4b5a6d9ecc355f11de620282183c2440eef458b1eda1eb44146de88c912346d0",
+      "build_conditions": [],
+      "imports": [
+        "crypto/rand",
+        "encoding/hex",
+        "encoding/json",
+        "fmt",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/conversation_adapter.go",
+      "sha256": "28c12af2299504896c7eded0ff3e1f12ea100769d61ba28cd6cad8e46dde2020",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/doc.go",
+      "sha256": "230c1d61f725738bdc5030c94e63870f88ab80be6a198d61e4eb82cddb2da162",
+      "build_conditions": [],
+      "imports": []
+    },
+    {
+      "path": "internal/steerline/codexworker/event_fact.go",
+      "sha256": "7f802a58b289a1520870f89736f07ccb865b391832798f525bb5c1877c8f9109",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/codexapp",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/executable.go",
+      "sha256": "b3760e7a593a2be94da23abcd343745090fae7f25054300611346a35258d9b9a",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "fmt",
+        "io",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "runtime",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/execution_binding.go",
+      "sha256": "f6cb4453cae9452fe029d27cf93fff3e96ffd4c52ceb2e567e257d0787d8bcc5",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "errors",
+        "io",
+        "github.com/erranliu/SteerLine/internal/steerline/codexapp",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/history.go",
+      "sha256": "254d4365cb484199cd16905808e7d1f70d946a62d9b9f463747e81207ed6718f",
+      "build_conditions": [],
+      "imports": [
+        "bufio",
+        "context",
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "runtime",
+        "strings",
+        "sync",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/history_binding.go",
+      "sha256": "8bd9196ea5107071088c5429faf3063743bdac8c21273642d1a95c2c9ec61511",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "errors",
+        "io",
+        "os",
+        "path/filepath",
+        "strconv",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/intent.go",
+      "sha256": "4e6a068f584bea7e20701f1a48cee2cf36f78051234c57adbf839a221b9d0dfa",
+      "build_conditions": [],
+      "imports": []
+    },
+    {
+      "path": "internal/steerline/codexworker/journal.go",
+      "sha256": "47ded0fda55147e55f44177a1e667bfd86f158dfef55b921d01bad283c1dca4d",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "os",
+        "path/filepath"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/launch.go",
+      "sha256": "d173c75284071b0e6672a4a42e98d7ebb7fd23ef078f1e7dfdcfb4fd23f8ec66",
+      "build_conditions": [],
+      "imports": [
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "net",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "runtime"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/lifecycle.go",
+      "sha256": "5ebb211d1d51fd315170aefbaf626c9d3dda9084d6b161b3e99288870dad3a6b",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "os/exec",
+        "path/filepath",
+        "runtime",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/workspace"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/native_params.go",
+      "sha256": "d3f32bd0b7de95a9973711e41c1859ffc1b80017c6440138fe461925c977c808",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/observe.go",
+      "sha256": "99ff7ae752b4aeafa63a961909e25e5d96475ef34fe34a195c0d526cdd5010c1",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "os",
+        "github.com/erranliu/SteerLine/internal/steerline/codexapp"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/outcome.go",
+      "sha256": "5f8190d43456fbf9e51fe909100875df64d042deba8e83bf91e144aa1478df22",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "errors",
+        "os",
+        "github.com/erranliu/SteerLine/internal/steerline/codexapp",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/params.go",
+      "sha256": "9734720394654bf2cd5e527e8ddf6f73bff4332835bd895bc58f96fd2c959bde",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/permissions.go",
+      "sha256": "96b54bb985ce7c8ba2971953fe25d19d730d4f74c4ef5f797c6d8521d23c0c5f",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "fmt",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/policy.go",
+      "sha256": "530509afe8eaa099e09028f6d14512b0cdd1eec8b6743b86c17aa71f494d2397",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/policy_resources.go",
+      "sha256": "08fd6f411df44b579dc7ffd816331adab3a8ee40d1824ff3a4b1cec0c280fe53",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "encoding/json",
+        "errors",
+        "io",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/profile_config.go",
+      "sha256": "85158ad7aeaa88ec62827aac8b5af690b873738ab2fb8d826c00aefb2857613b",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "errors",
+        "io",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/recovery.go",
+      "sha256": "3391d84793c81588801524a6c5435454fcdd4dd1b83c3bb13cad1992760db4c4",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "os",
+        "path/filepath",
+        "github.com/erranliu/SteerLine/internal/steerline/codexapp"
+      ]
+    },
+    {
+      "path": "internal/steerline/codexworker/session_launcher.go",
+      "sha256": "148a3182c72b908554320486f3a52e6e89097ebd19055567d670709138c48a0a",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/command.go",
+      "sha256": "29c0699c65249ac512f3b5b4f3c3ec4f4c11332c1b4fb938ad289176456a2370",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "fmt",
+        "os/exec",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/command_processor.go",
+      "sha256": "f072b0cda9e4e2da3d863bc8178ee26f6182cd203aa587bd1f27ed65d8f9c426",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/config.go",
+      "sha256": "ce2f84d751a80041960beb753bdaaa58c53af4b6a7e43bdc25e7af16dfa8b57b",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/publication",
+        "github.com/erranliu/SteerLine/internal/steerline/workspace"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/activity_source.go",
+      "sha256": "df37d035b95a9a4dc7cec48ed4d3f463ad5c292258de9d3bfd167f2b1cac4348",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "fmt",
+        "os",
+        "strings",
+        "sync",
+        "github.com/erranliu/SteerLine/internal/steerline"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/conversation.go",
+      "sha256": "b40a2f0a9fe00f0171b7a90a0e3939b71de28a698eece5d1c9deb8e6bc9b82fa",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/conversation_anchor.go",
+      "sha256": "6fedb6d7d765f669a76685721f919a3991653e4e20e8a0b3140a57c0b4464a90",
+      "build_conditions": [],
+      "imports": [
+        "crypto/sha256",
+        "encoding/hex",
+        "fmt",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/execution_profile.go",
+      "sha256": "a8a1e657c1eb41f4bb69485ea75c949ad5537a64a7b6e0eeb5ca3fdcdfe10b21",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/model.go",
+      "sha256": "2238079d893650d5b634421a5422ba1b3986adfa446d434def6a47ecc1b95a22",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "path/filepath",
+        "runtime",
+        "sort",
+        "strings",
+        "time",
+        "github.com/charmbracelet/bubbletea",
+        "github.com/erranliu/SteerLine/internal/steerline"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/model_control.go",
+      "sha256": "00c2043aece0ce7b9f62072dd4c2c9518e2776b4166feb674c699dce54ebb6f5",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "time",
+        "github.com/charmbracelet/bubbletea",
+        "github.com/erranliu/SteerLine/internal/steerline"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/model_keys.go",
+      "sha256": "97137e7cead68cefec446bca57c311b519e91b4e6d39554850e6f454537ebdda",
+      "build_conditions": [],
+      "imports": [
+        "strings",
+        "time",
+        "github.com/charmbracelet/bubbletea"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/model_navigation.go",
+      "sha256": "80fb21a2cacf9d559ee28ecf4457175c59ca7e2e0b5a081a399e8b4e8639c57c",
+      "build_conditions": [],
+      "imports": [
+        "sort",
+        "time",
+        "unicode/utf8",
+        "github.com/charmbracelet/bubbletea",
+        "github.com/erranliu/SteerLine/internal/steerline"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/model_update_actions.go",
+      "sha256": "968796da4e89e1fb6ec04bb9ebcdcf6fba35c631d6d701d69129058e0b3d0f94",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "strings",
+        "time",
+        "github.com/charmbracelet/bubbletea"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/model_update_conversation.go",
+      "sha256": "f84db78f9db92d7602f93069200a1bb31738b300f7d26ea45657033fb2b56fd6",
+      "build_conditions": [],
+      "imports": [
+        "sort",
+        "github.com/charmbracelet/bubbletea",
+        "github.com/erranliu/SteerLine/internal/steerline"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/model_update_project.go",
+      "sha256": "2516889a048bcabbb39105f96c178a59073a217a8b24a1318e4fc434a3d6477b",
+      "build_conditions": [],
+      "imports": [
+        "strconv",
+        "strings",
+        "time",
+        "github.com/charmbracelet/bubbletea"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/preferences.go",
+      "sha256": "a1702b0f2dbda3754c9104fd10219da455c90421c21bf630f8f8e5131a024f3b",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "errors",
+        "io",
+        "os",
+        "path/filepath",
+        "regexp",
+        "sort",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/profile_choice.go",
+      "sha256": "195f05022c16cbb64d43c845eda881f094ada5b5986568fb86cdf081e254c75e",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "strings",
+        "github.com/charmbracelet/bubbletea"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/source.go",
+      "sha256": "d068b725b770a1f410c549c7aa87fbe15f991ef47ac1d704b42fbf7870acd1ed",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "os",
+        "path/filepath",
+        "runtime",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/view.go",
+      "sha256": "509d407911a05b5d9171adfa9eb03939957f3dce23d702ace49016c43994a8b3",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "fmt",
+        "os",
+        "path/filepath",
+        "runtime",
+        "sort",
+        "strconv",
+        "strings",
+        "time",
+        "github.com/charmbracelet/lipgloss",
+        "github.com/erranliu/SteerLine/internal/steerline",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/view_conversation.go",
+      "sha256": "dd7c5767b3dc888f2052536ea6ee4b4ff0ad1338214c370ac363d12c54384deb",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/view_tasks.go",
+      "sha256": "8195c9ed9c94c3907ece3ea729befc8cc21ae7acf55d28cf185384ef9bc4343c",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline"
+      ]
+    },
+    {
+      "path": "internal/steerline/console/view_text.go",
+      "sha256": "0a57a4be3c0a6e240eac514397be92e7dcd1a213914ea12a8f7eef66938e5820",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "strings",
+        "unicode",
+        "github.com/charmbracelet/lipgloss",
+        "github.com/charmbracelet/x/ansi"
+      ]
+    },
+    {
+      "path": "internal/steerline/contracts/activity.go",
+      "sha256": "a4abacd15544545bbe2362d93e335941011df83da3ae6e413686660b451b6730",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/contracts/conversation.go",
+      "sha256": "bddecb9356ffaa1fc17d51daab7345115d4942232df43a2fe1466accccc5822d",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "os/exec",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/contracts/conversation_query.go",
+      "sha256": "0263c7ef012c7ba4479d0eb134ad3aa97f1fd92f412b6eb76c31f3520f9f34c2",
+      "build_conditions": [],
+      "imports": []
+    },
+    {
+      "path": "internal/steerline/contracts/decision_content.go",
+      "sha256": "571ede84fd18e4590af614b86692b8f2d9438665a5195941959788e66247241a",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "fmt",
+        "strings",
+        "unicode/utf8",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/contracts/environment.go",
+      "sha256": "9c523b07f5d08b38f203dd3f6fb656c2dbbb2c1efd453744404cb6723bea6c8d",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/contracts/execution.go",
+      "sha256": "b736f8ff37a062396d38d60dfe8ad6802892c4e91591acbf64339681d32be0f1",
+      "build_conditions": [],
+      "imports": [
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/contracts/json.go",
+      "sha256": "2708d945ebee637782744a52d88d890cdf4feec2eca3dd86a6f58752ab74a9dc",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "errors",
+        "io"
+      ]
+    },
+    {
+      "path": "internal/steerline/contracts/pr.go",
+      "sha256": "092b61d2c464ff9ffff850df9c451bab3a2360c18c26c4b95aa3f31c56fd0fcd",
+      "build_conditions": [],
+      "imports": [
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/contracts/publication.go",
+      "sha256": "1bd7029cae0cc804279cb8804dccca3fd90361e0595e7be72b2164c0d59d7c7a",
+      "build_conditions": [],
+      "imports": []
+    },
+    {
+      "path": "internal/steerline/contracts/query.go",
+      "sha256": "b889e9ce28fbcb5ed6266e87e53964e4bdd42469c5e993ca855079ecbd634768",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/task",
+        "github.com/erranliu/SteerLine/internal/steerline/taskview"
+      ]
+    },
+    {
+      "path": "internal/steerline/contracts/records.go",
+      "sha256": "c1b985a4faba38a830f77eb2c80cabda45f1cc49105074d8fc9bd2d162f4941e",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "errors",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/contracts/runtime.go",
+      "sha256": "0679cefd0c7be31a4bfb862375023e5838fb48a66650ec60ea882e24d4a4319e",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/contracts/snapshot.go",
+      "sha256": "612d98bd598662c07f03805747d4232301763df3184b886b8cce4d601a264c36",
+      "build_conditions": [],
+      "imports": []
+    },
+    {
+      "path": "internal/steerline/control_client.go",
+      "sha256": "7c276e9ca6f9da12f5c85db2ef37eebf3690d0fccf8cb4c7fd9b1210d03722c2",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/sha256",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "os",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/control_protocol.go",
+      "sha256": "8d66049c9752bcd210a01161638ce1d137c14cdc2b0e277d8d516c17dd884711",
+      "build_conditions": [],
+      "imports": [
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io",
+        "os",
+        "path/filepath",
+        "regexp",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts"
+      ]
+    },
+    {
+      "path": "internal/steerline/control_service.go",
+      "sha256": "c31b92650ebf9be047adbe5c342c5daae2a7564bc7e819fd3d00b5c42e61926d",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io",
+        "os",
+        "path/filepath",
+        "sort",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/conversation.go",
+      "sha256": "3b43e4a3a5fca3d2fbd2c87375b0c53c1814d55cb47390feec417da1e8231456",
+      "build_conditions": [],
+      "imports": [
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "fmt",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts"
+      ]
+    },
+    {
+      "path": "internal/steerline/conversation_position.go",
+      "sha256": "01a95cd94fe91d8f9cf971fff6af1faf092b75d61de1396022fff82a179ca55a",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io",
+        "os",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/conversation_query.go",
+      "sha256": "39b72c6333825ddfabb2ae77c1e89b64c7b44873041bf18fe4427eb1600d6126",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/query"
+      ]
+    },
+    {
+      "path": "internal/steerline/conversation_replay.go",
+      "sha256": "53a9114cde32a4feda80e9ba2a930774351cab83d2b2032bb60126e2330505bf",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io",
+        "os",
+        "path/filepath",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/conversation_service.go",
+      "sha256": "dabff4edba9567f18192f58289813eecd5ea9e2de411e28db4430713a4ff74dc",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "errors",
+        "path/filepath",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/conversation_sources.go",
+      "sha256": "a17139066798e9b697c20021fe4fcd5a465074833de68022d2a389ccb447e42c",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "errors",
+        "fmt",
+        "path/filepath",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/conversation_store.go",
+      "sha256": "7369696edd406d58bf4662e70b8df7d9a9f0c9eee84c376742f26f7dae0b9ade",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/sha256",
+        "database/sql",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "strings",
+        "time",
+        "unicode/utf8",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/decision.go",
+      "sha256": "dc222bdf8aa58349e350f7e28ba55462d0c1a91193d42c85bc964f7188c75e68",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "os",
+        "path/filepath",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/domain.go",
+      "sha256": "4e7613c3b9e95cfd2a7f0a9011894325665d72012c04d9d87a3bcff8f83d338e",
+      "build_conditions": [],
+      "imports": [
+        "regexp",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/task",
+        "github.com/erranliu/SteerLine/internal/steerline/workerflow"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution/backend.go",
+      "sha256": "70889187ceebe1b0815e3e0d2ffbafbc1e74fa18a64a6f89dad838f17c8e5711",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "os/exec"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution/capability.go",
+      "sha256": "d806dbbe1c326ca398ce5a13d2b63d799d43e53171bc41b9a48646125a41ca81",
+      "build_conditions": [],
+      "imports": [
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution/errors.go",
+      "sha256": "ce1fa7360849b9cc23dc0256f9fc04348170309518cbfc181a330fcf982aea13",
+      "build_conditions": [],
+      "imports": [
+        "errors"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution/event.go",
+      "sha256": "d9c10a25d521ee6b61428b798d75d742f2307348b235af7acfe36f598e431a6c",
+      "build_conditions": [],
+      "imports": [
+        "reflect",
+        "regexp",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution/host.go",
+      "sha256": "b67c2e593d1bb0a32cd21a81294594da1018f863a62e39ccaac6ac12f818dd3c",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "path/filepath"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution/implementation_config_input.go",
+      "sha256": "e5e8787fcbd0b3e2eccc9ee5a74dd365d66e5b8a88aa67901c93026c93e21ee1",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "errors",
+        "io"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution/implementation_data.go",
+      "sha256": "443133ecbf8c68ee2195402a3321d693003680b830dd1675fc297fff131948ad",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution/lifecycle.go",
+      "sha256": "359c5d5ea8f8fde4f1e1d5e7f31d60943fad3f1ce8a75234cb17eb9ffb4d019b",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution/operation.go",
+      "sha256": "2b7bde2db77eeb4227050eae50a07e7131c441df8673ba80b027d22bf34acc83",
+      "build_conditions": [],
+      "imports": [
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution/policy.go",
+      "sha256": "bead74035a2039b7ffefd5c73b14ae1a34d42feb460fcb7688b94eb38adbaca8",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "errors"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution/publication.go",
+      "sha256": "743ab05dca018f2cef6e2d9a65454e06adb427116e80dbf94868448491ff0551",
+      "build_conditions": [],
+      "imports": [
+        "errors"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution/question_route.go",
+      "sha256": "9788793a0006dbb508e212f5a5d91e250dddb22487cbf04057dea6820be4c343",
+      "build_conditions": [],
+      "imports": []
+    },
+    {
+      "path": "internal/steerline/execution/requirements.go",
+      "sha256": "c9c57e797e68de092662d76cb27d92aed6cbe15727638166cd1078a2c717f95f",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "slices",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution/session.go",
+      "sha256": "5777987ca0897d0ea138ea392de95a04062b77602c4424d145fc307fac599084",
+      "build_conditions": [],
+      "imports": []
+    },
+    {
+      "path": "internal/steerline/execution/workspace.go",
+      "sha256": "4ce16465e6fc0618c7c96f6c40d7a23d45767e53e2226050334e161f281bc4af",
+      "build_conditions": [],
+      "imports": [
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution_backend.go",
+      "sha256": "f2a3fd3e9d0cc9d851da023b46199bb785ddd3f0cba7a058336f06ee205f808e",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "os",
+        "path/filepath",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution_directory.go",
+      "sha256": "42b75d312214249bf2cef4d8a4b385babd21ba0824b51fb37f7b3168b2fd1b4e",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "slices",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/publication"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution_helpers.go",
+      "sha256": "9ba69904827cf2a6833dc9f5f84d0181257f4e3a2f981a2cb7e1527550114c50",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/workspace"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution_profiles.go",
+      "sha256": "0e92fb55d074b0fe55a95d2dc35dfe5192b75ad8d93ba2c48be8c6183e698d43",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "fmt",
+        "regexp",
+        "slices",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/publication"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution_requirements.go",
+      "sha256": "db557387a6865e7efc15976f6aac8015f161119d194bc2c15084e3c042735a3e",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/sha256",
+        "encoding/hex",
+        "errors",
+        "os",
+        "slices",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution_snapshot.go",
+      "sha256": "14b6591b470264b6a43da23e3f04d7b3f3ce3049585052342f38984f53032202",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "reflect",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts"
+      ]
+    },
+    {
+      "path": "internal/steerline/execution_store.go",
+      "sha256": "b5eb438cfd1526f489c409021bc3466135650b14cf8585a7b4f8134c18f2305c",
+      "build_conditions": [],
+      "imports": [
+        "database/sql",
+        "errors",
+        "os",
+        "path/filepath"
+      ]
+    },
+    {
+      "path": "internal/steerline/implementation_bindings.go",
+      "sha256": "5b48f483071722192ee06a8e607aeb0dea3d68fcb70fb789c6a75f47bb143e20",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/journal_platform_linux.go",
+      "sha256": "87d63c60fa68a0a6e8f27001745584d7f44d0246b8e912da5eef0d8156d2de0c",
+      "build_conditions": [
+        "//go:build linux"
+      ],
+      "imports": [
+        "fmt",
+        "os",
+        "syscall"
+      ]
+    },
+    {
+      "path": "internal/steerline/journal_platform_other.go",
+      "sha256": "e0151de96d0b24bfc242355470c20771204ad25d39f4d759d5e3853396dabddb",
+      "build_conditions": [
+        "//go:build !windows && !linux"
+      ],
+      "imports": [
+        "fmt",
+        "os"
+      ]
+    },
+    {
+      "path": "internal/steerline/journal_platform_windows.go",
+      "sha256": "d237c07c971eb3666928e35b1e5c2b56beba15e2e10d946f7346a9ffc78fa81f",
+      "build_conditions": [
+        "//go:build windows"
+      ],
+      "imports": [
+        "fmt",
+        "os",
+        "path/filepath",
+        "golang.org/x/sys/windows"
+      ]
+    },
+    {
+      "path": "internal/steerline/journal_reader.go",
+      "sha256": "2bbcd59d91ff091ec36d99e9d452890cff8a8e42f523d8f962984ec4f2b8ff03",
+      "build_conditions": [],
+      "imports": [
+        "bufio",
+        "bytes",
+        "crypto/sha256",
+        "errors",
+        "fmt",
+        "io",
+        "os",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/launchers.go",
+      "sha256": "f446b97cc5cf200dc49ba893f1e8371ff5627d1bdd16ff3ed7525a95aae92f07",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "embed",
+        "errors",
+        "io/fs",
+        "os",
+        "path/filepath",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/model.go",
+      "sha256": "a331f9f84eba9e273b5734e6f218d5fe1ec440962d3e09adb3089e27be56a5a0",
+      "build_conditions": [],
+      "imports": [
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_authority.go",
+      "sha256": "a823722cf34f54ebbbcb7f85d6f9221bc56fccd65b70de562c3dc6e26c8d4556",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_batch_command.go",
+      "sha256": "9e6effaaca9204495f7f53997842652d71b8e265fee7a529cf48a30452ec9766",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_claim_command.go",
+      "sha256": "413e61df4060dfa80f476b5b5246661a1e805bfeee2a202575d8088a9a0faf27",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_cleanup.go",
+      "sha256": "aa640a71bb35aa28fdb4e40b5f4e661c646c76fb417d56a0632a54748cdd45c1",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "os",
+        "path/filepath",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_cleanup_stop.go",
+      "sha256": "ed125dff0fbdc498411fb41e87c0e97a77f2bb66d85f550a4ce29ac244382cd8",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "os",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_contract_files.go",
+      "sha256": "fa3c58f72e4d35cac3cf3bbf46a6ab2e3850bb9aa78e6e04ee2ec0b471d54dd5",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "crypto/sha256",
+        "encoding/hex",
+        "regexp",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_delivery_command.go",
+      "sha256": "36646b6b0cc602e8c5984cbaf48fad43b0632aad8a24b1906367b31a08fe8864",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/publication",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_discard_command.go",
+      "sha256": "7e925d8c876634b6b8ce08dc10189a265d67a51a0f79d7f251305692333b0823",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "encoding/json",
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/publication",
+        "sort",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_dispatch_command.go",
+      "sha256": "14bf81be5e6e70e73da6383dc8907022dc80cf6d7462dd6d5dcd5653bb077c1a",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_graph_export.go",
+      "sha256": "a69bf88e82436eb9c9c62017965c919fa7b6e6ff69be5f2cedf2c15bd22ea1d2",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "errors",
+        "os",
+        "path/filepath",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/taskview"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_graph_snapshot.go",
+      "sha256": "4978d620dc42d4e780b32746660e1534f33c0eaa8ec708a0b78344b08b80c1ea",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/query",
+        "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_graph_types.go",
+      "sha256": "ce54d16d50e1db540b52f7c95b14132d2f5f8a6c2bc66a494534279aad48d631",
+      "build_conditions": [],
+      "imports": [
+        "github.com/erranliu/SteerLine/internal/steerline/taskview"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_project_open.go",
+      "sha256": "622e4aaff4386f66a7af3d3233e8afe0ca58bdd0cea502820f7e6b856528ba66",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "os",
+        "path/filepath",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_readiness_query.go",
+      "sha256": "86ee0dfba1906dbff199cd4d7114483eaf972eb2a171bc93688e2c77219cd0dc",
+      "build_conditions": [],
+      "imports": [
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_repository_target.go",
+      "sha256": "9cf1b84899d1e3a2baebd4ae4e63af80f224eaa7027062b0fe7046e1ae6ca376",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "github.com/erranliu/SteerLine/internal/steerline/publication",
+        "net/url",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_service.go",
+      "sha256": "418a62c5a8df31d4ac908804285143c48c56da6baa5bc0a0938a8da61d90ecba",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "os",
+        "path/filepath",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/projection",
+        "github.com/erranliu/SteerLine/internal/steerline/publication",
+        "github.com/erranliu/SteerLine/internal/steerline/workspace"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_state_preflight.go",
+      "sha256": "4ce725e3d7440bd693069e2b1b45e4f21b3fb068d4d00c5a2c64fda302d52120",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/sha256",
+        "database/sql",
+        "encoding/hex",
+        "errors",
+        "os",
+        "path/filepath",
+        "regexp",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_task_page.go",
+      "sha256": "3bbc35f6c4f3389eb55f708dca9650f80de8f518929b3d8c52d22a50bea785f8",
+      "build_conditions": [],
+      "imports": [
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/query",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/native_task_predecessors.go",
+      "sha256": "f19b10590efbd08fde4b49471b3bc45c2b6f133633e92de4e30f0d0a52d515fd",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/observation.go",
+      "sha256": "2ff2a1ef97001e50c93f61c433c55466a428aa539e0ae058fd91d6a7e9be4b91",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "os",
+        "path/filepath",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/operation.go",
+      "sha256": "0b7d4989532678ad6a563d4985bb3dfcb67e610449ecd59fae979905020a747c",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "fmt"
+      ]
+    },
+    {
+      "path": "internal/steerline/orca_remote_worker/backend.go",
+      "sha256": "52a90c60875350e0fb9902e557fbf2d5bb0c3be31bd36c3db12b1aca78aaa7d0",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orca_remote_worker/config.go",
+      "sha256": "b7a6db520c05ab191caa818ebade13c0c83e3d9ee5c403091ac72bd40536d7e0",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/orca_remote_worker/intent.go",
+      "sha256": "609d04c1b4af1cd6793b3eebd7ec8f428da758b7413c5ed1c5ef26cb50697b44",
+      "build_conditions": [],
+      "imports": []
+    },
+    {
+      "path": "internal/steerline/orca_remote_worker/lifecycle.go",
+      "sha256": "d501277242bcc34621fa7da780e88b51e78e9ee77e5ae5aaa8baa4c19c25a2cb",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+      ]
+    },
+    {
+      "path": "internal/steerline/orca_remote_worker/messaging.go",
+      "sha256": "a3ccd4df69e46760708b212947a7da59afab5d3e6b824eee16096bb6f980b32b",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "strconv",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orca_remote_worker/observation.go",
+      "sha256": "46579c411aae46b6192ff7d359b66cef36d6c06ddf7ea0b43f7c0d0604c69f7f",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orca_remote_worker/policy.go",
+      "sha256": "ebca4f8fde06fe9bd68410baf5a3293e9b4c8e47bea28e4631ede7d17eb08666",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orca_remote_worker/preflight.go",
+      "sha256": "525d868220352c4c866de2c0811cf0ea96ad0c85fb1a671098b610ccb04b7235",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orca_remote_worker/profile_config.go",
+      "sha256": "640bdd9b13273990d4e44ea5237bc01036d4f59005a9556f1948ca9a87a69230",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "errors",
+        "io",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+      ]
+    },
+    {
+      "path": "internal/steerline/orca_remote_worker/run.go",
+      "sha256": "4b23f385d7bf5c680a4199602f261f4be23c4419ac876b4ccee285ad0a1142eb",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orca_remote_worker/start.go",
+      "sha256": "793a0e9c699e2566244cb091c78a888b90ce0894a088e0e59a7774b23be87845",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orca_remote_worker/types.go",
+      "sha256": "49a19bce56a3abd9725c4180e8b93119349b1ce1ca31b847bcbcdbb72b7681fa",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "regexp",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+      ]
+    },
+    {
+      "path": "internal/steerline/orca_remote_worker/version.go",
+      "sha256": "7bd7e41d2e7a301c5b37c7a5c670ce9e45beb2dd9eddd3c97cf36e462c967d6a",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "regexp",
+        "strconv",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/orca_remote_worker/worker.go",
+      "sha256": "fed3d4c1766b93536fa0c4f5b5fec2651ccb91b3906b4dde4aec40f84aaaa374",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/backend.go",
+      "sha256": "7fe9a61a3875b93849446515ec62ac4f77f5b97178ee01b443de2998046579a1",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/binding.go",
+      "sha256": "def9c1459cc7c1e1698509f27a6b5cb9521cdd48a47eaabd4682ecde0f4abc0d",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "path/filepath",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/client.go",
+      "sha256": "65b3772bc06a0c4916e379905ba83ad57a18319a4ed7f27e5f5f2cd79a7a3252",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "os/exec",
+        "strings",
+        "sync",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/command.go",
+      "sha256": "d94d45951fa003421d63a20e07595f5a66d2dc7ccd6719b7af451152a47c5e2a",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/config.go",
+      "sha256": "06f14f1ed2cf6d1777e64be7827cdf74e0d5aa224fa195b7bd1c13747856b373",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/dispatch_submit.go",
+      "sha256": "7ec9f0ef1d2c96f71e1f14e8c1da8c52d98613a45dbcee483625449338d8fd20",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "strconv",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/environment.go",
+      "sha256": "faa696fd869d189d0f72784bbaa8ca7936b416fed80998a90c446cace16e0f42",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/event.go",
+      "sha256": "31cbaed4d17975aee122079631662188de05aedf2925a08545200932d0264e6f",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/events.go",
+      "sha256": "7c9f2cbf6f6da939ac8758de0aa3b63065894a0929f719a9fca668e4bcef6c42",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/execution_state.go",
+      "sha256": "30c30bb3d74df01e021fe9a5dc76363bcb5090f682e3a2f6fc2bc69b8a3a2cdf",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "errors",
+        "io",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/host.go",
+      "sha256": "8d792e92f37109c8ee7bc8c8a40717588d1248ffa4b02205fb89523aba6655e0",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/rand",
+        "crypto/sha256",
+        "encoding/hex",
+        "errors",
+        "fmt",
+        "os",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/intent.go",
+      "sha256": "fc328f7238566a1e89d5d03932793fa23fc37f66da653488c38ca4b25d8ad737",
+      "build_conditions": [],
+      "imports": []
+    },
+    {
+      "path": "internal/steerline/orcaworker/inventory.go",
+      "sha256": "816808216f53df674935cdc2307dfcba5e4610d0f628a3ff3bfa315f1001ed0c",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "path/filepath",
+        "runtime",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/lifecycle.go",
+      "sha256": "3abdec102b595a56f125acd389234808b0c250187c4eacf845f6b4afd5ff7122",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "runtime",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/workspace"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/lifecycle_observation.go",
+      "sha256": "2e08eb88d80c3430d44ea338ed0ee121162678ca7536a967d32e8982a30e67ea",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/lifecycle_resources.go",
+      "sha256": "c729653402cb8ae3740dca3c4dac47b1163c7e5eb616e9c2671e8d87d6e9fa3a",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "path/filepath",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/lifecycle_turns.go",
+      "sha256": "f3d33522191e28b886a254c6dfc3863098cf0a45215a2a2219f888b3d84b8838",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/message.go",
+      "sha256": "0a7d92fc33098d3930966ccb2ec84b2efb2c54833b27d376059dde4aa356c48c",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "errors",
+        "fmt",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/message_identity.go",
+      "sha256": "c698d8aa1a3b8e57acba2d19b41ebf5e2cb97acd36b68eeaa619b45e6f2b3603",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/mutation.go",
+      "sha256": "ac19d891b6768452dab83b3579db80427e1aaac63e1e81749479dea7df63d6a0",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "path/filepath",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/orchestration.go",
+      "sha256": "50edb4abf7b4e9a33ff90fe1e987528dae71cb715acda81860fd408b64b97a57",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/output.go",
+      "sha256": "058c349950c75ca5c24593254f72fc713b93dee74db9fc86e10f890e55fa0d54",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/profile_config.go",
+      "sha256": "5cbfd4cdf2d0146b6504df9f5c870feaa500b0be12f6af17869f5b1d5864c1f5",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "errors",
+        "io",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/readiness.go",
+      "sha256": "af94e66f8748dd3a5679fab849baee3fdca6025c7f71b11d3e08d460957c66fe",
+      "build_conditions": [],
+      "imports": [
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "io",
+        "os",
+        "path/filepath",
+        "regexp",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/relay.go",
+      "sha256": "6c116c6240332d275f030ca44930a1d635536eadbbc812ce74db45adb339b0a2",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io",
+        "os",
+        "path/filepath",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/saved_receipt.go",
+      "sha256": "17c18e4935c0b31b36ee410dcb81fd1e44e41f83d4a422a5d184033ae9b7d4ec",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/terminal.go",
+      "sha256": "74f3917bca491ae9af868d5ad255dcaa21aadd6e9b0e3c2eb7507b4ca5009cd9",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/terminal_protocol.go",
+      "sha256": "d9df26f8f3c797c9fb30feaa007bc0772a190976da486e3fdda061df9b9ccedb",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors"
+      ]
+    },
+    {
+      "path": "internal/steerline/orcaworker/workspace.go",
+      "sha256": "42d954885c4c7ba8c051104466e37b66adec89dfca0433b8071f7dde50cfbbdf",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "path/filepath",
+        "strconv",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/platform_linux.go",
+      "sha256": "da4286b72766425955b2aa11d4a2b4f454e519d7928228b6d6c2ebc5b21b881f",
+      "build_conditions": [
+        "//go:build linux"
+      ],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "strconv",
+        "strings",
+        "syscall",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/platform_windows.go",
+      "sha256": "ab0558e733637bde2c11ee141de4d614748e6b562f3ee2b9a2fa82e74b99c19c",
+      "build_conditions": [
+        "//go:build windows"
+      ],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "io",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "strings",
+        "sync",
+        "syscall",
+        "time",
+        "unsafe",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "golang.org/x/sys/windows"
+      ]
+    },
+    {
+      "path": "internal/steerline/pr.go",
+      "sha256": "de910ddd90cecb7c4243f7b1f5c8a0253f685cb1518e14e4463d8c0917536eb6",
+      "build_conditions": [],
+      "imports": [
+        "github.com/erranliu/SteerLine/internal/steerline/contracts"
+      ]
+    },
+    {
+      "path": "internal/steerline/processhost/host.go",
+      "sha256": "d7e92b993576360762a5ddecc2bce950fa174692dd03f1e41d55dd3411471922",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "crypto/rand",
+        "encoding/hex",
+        "errors",
+        "fmt",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/processhost/process_other.go",
+      "sha256": "4e16159579ccfaee52a825daa5d50a850222eeb2051370890285c02bbca5f0c2",
+      "build_conditions": [
+        "//go:build !windows && !linux"
+      ],
+      "imports": [
+        "errors",
+        "os",
+        "os/exec",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/processhost/process_unix.go",
+      "sha256": "437025c71c213a5708e3b543d652b04e4b34f3ea64c7fbe82505ed3eb879536f",
+      "build_conditions": [
+        "//go:build linux"
+      ],
+      "imports": [
+        "errors",
+        "fmt",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "strconv",
+        "strings",
+        "syscall",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/processhost/process_windows.go",
+      "sha256": "db7b7d7c9a0245305668dc3d6e855f2a28491d8212aa4aec1db92ee749283ec2",
+      "build_conditions": [
+        "//go:build windows"
+      ],
+      "imports": [
+        "errors",
+        "fmt",
+        "os/exec",
+        "path/filepath",
+        "strings",
+        "sync",
+        "syscall",
+        "time",
+        "unsafe",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "golang.org/x/sys/windows"
+      ]
+    },
+    {
+      "path": "internal/steerline/profile_data.go",
+      "sha256": "f52c4f2a56b7cb1384e1f4d8216c3c9dafe2d20fc6b3f6d1e96eee7723a0e922",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/project_view.go",
+      "sha256": "22b9f06d963d864fd49313e28437884b64f83afe256faeec446190a35c526282",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts"
+      ]
+    },
+    {
+      "path": "internal/steerline/projection/run.go",
+      "sha256": "84aac7b2d24d522e010a47c9a632f7bdedafcbf2d53e5aa510a76a1aeda4faef",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/workerflow"
+      ]
+    },
+    {
+      "path": "internal/steerline/projection/runtime.go",
+      "sha256": "e928e9089df4dde6948f55b3030a19fdd95cb1439b8db239edf5d754cbef97bc",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts"
+      ]
+    },
+    {
+      "path": "internal/steerline/projection/selectors.go",
+      "sha256": "52df58649dba58d72c5b3091e6b68712bbb6013fe30bba170706fc9c5f061f96",
+      "build_conditions": [],
+      "imports": [
+        "github.com/erranliu/SteerLine/internal/steerline/contracts"
+      ]
+    },
+    {
+      "path": "internal/steerline/publication/command.go",
+      "sha256": "7dde117341c6268572148a0eab0c223b8de2d3ce67ad71f819cbdf5f31832f8f",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "os",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/publication/gitea.go",
+      "sha256": "4c735f88df651b61fc9095aa86ea40e671c495e93b15b173de7b005d6be173a5",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "io",
+        "net/http",
+        "os",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/publication/policy.go",
+      "sha256": "0446cc5cecd16b74d74d29598f14eeaa4e2da33e1e2d06a0d5b5e597399c9fe3",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "net/url",
+        "reflect",
+        "regexp",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/publication/pr.go",
+      "sha256": "66d6c4b67f85b3e69a0b260738c64c6fac2f09d848e01251dbacb67c77b71932",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "net/url",
+        "regexp",
+        "strconv",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/publication/provider.go",
+      "sha256": "6c1b49730a5303e6b0d5cd5fe2789a6d221fd8399fdf689d40cf83aae425b78a",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "io",
+        "net/http",
+        "os",
+        "strconv",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/publication/publish.go",
+      "sha256": "f51274e3361e1a2e51f860d37650b308746fa9a0339c5bb9a56d1b827dcbfda2",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/publication/request.go",
+      "sha256": "53f2336a1ba361aac2f3ebcc985a6d7d916027e7d34299d6b70769e927fa2a95",
+      "build_conditions": [],
+      "imports": [
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "path/filepath",
+        "regexp",
+        "runtime",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/publication_snapshot.go",
+      "sha256": "f73e8bb4eaeb11f55bd0477e35b5355ed533378f6298e6e391cf23f37e28ac2c",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/publication",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/query/conversation.go",
+      "sha256": "9ea459751f89e7af1f8d864af09c41eed96b780915918e86404c3f367f4d9b49",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/sha256",
+        "encoding/base64",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "unicode/utf8",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/query/conversation_ports.go",
+      "sha256": "72cee56027e2afd78b8c02ee58bcd1bda76926b81de12456555805703842ea1b",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/query/events.go",
+      "sha256": "56560630c765d3d874e2bece3648a884b3dc28eb37103a0e17105d446cae12fc",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/base64",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts"
+      ]
+    },
+    {
+      "path": "internal/steerline/query/ports.go",
+      "sha256": "070e8d0e1b5944dc8cbec0a9a796a6dda5f878d80e2189d2f02c210c02e18841",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/query/project.go",
+      "sha256": "5e5601836cefb4e9469d04735dad855b3de15dc4ddb2650ad8cd54a6386ba43d",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts"
+      ]
+    },
+    {
+      "path": "internal/steerline/query/tasks.go",
+      "sha256": "445666c2db37ccd5d5d8d9987c5fa7bb40c38fdfd511d892148524560b314548",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/base64",
+        "encoding/json",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/task",
+        "github.com/erranliu/SteerLine/internal/steerline/taskview"
+      ]
+    },
+    {
+      "path": "internal/steerline/query_command.go",
+      "sha256": "9e5566848ad8e66966a9835e886d3ac9ab3254aec10016f0cb9b1dca20ad80d5",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/query"
+      ]
+    },
+    {
+      "path": "internal/steerline/recovery.go",
+      "sha256": "64983b21f5e44f39ab44e32bf503b5ac343e2eb27df9f34c41cf651587060bbf",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "strings",
+        "time",
+        "unicode/utf8",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/render.go",
+      "sha256": "a29a773a4af1fc6af9fe2a7e6cb2d5cd7ce1e099eeda561682e6159b72d78bc9",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "os",
+        "sort",
+        "strings",
+        "github.com/mattn/go-runewidth"
+      ]
+    },
+    {
+      "path": "internal/steerline/runtime_view.go",
+      "sha256": "03088737f39994072abe9fa7a344155ddc216780264baccde94ded5860f681fe",
+      "build_conditions": [],
+      "imports": [
+        "github.com/erranliu/SteerLine/internal/steerline/projection"
+      ]
+    },
+    {
+      "path": "internal/steerline/service.go",
+      "sha256": "63d7b156227525cf6c4aa03741f3026840f72ec19d85f52b2331126c13809d6e",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io",
+        "os",
+        "path/filepath",
+        "sync",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/service_client.go",
+      "sha256": "9d0e79f5553c211bf73397f98fcfde6def4a31d954a48b5d90eb7f510f968aad",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/workspace",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/service_commit.go",
+      "sha256": "1ea1adfa025714065e671bb7282df9c332b658c8e3cefd5fc11ec6b849e0b180",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/projection"
+      ]
+    },
+    {
+      "path": "internal/steerline/service_execution_profiles.go",
+      "sha256": "bf4cc955b8f73745e28cc5761f1a549c7e787f3c3c6e75040ad3e613ccea3ae7",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "fmt",
+        "path/filepath",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/service_workers.go",
+      "sha256": "3c505ead9e7f47b4fcf63c3eee854b2e6902724983329b2e1d34d2c9aa52e306",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite/checkpoint.go",
+      "sha256": "275ef65d6b12bba95df9fa16880a41271b0ef799b19220af1c205c7b7fcf9459",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "errors",
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite/conversation.go",
+      "sha256": "1069b3350173304b6987fefc375de18a06798038214d078212b4f7a6f616591b",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/query"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite/graph.go",
+      "sha256": "813bfa500e782a6b8ba7c9e71276122d934267a4b2902f0dd3b2f5cba917c628",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite/project.go",
+      "sha256": "6122d520c59b8e70cb4fdba80589c1afa2a1d8c9f5cd96e32c4816d0c263d44e",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "errors",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/projection",
+        "github.com/erranliu/SteerLine/internal/steerline/query",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite/reader.go",
+      "sha256": "f10856e30fe8057b14175e775928f4965f09a11ad21b6c52e7be574aff53dc9b",
+      "build_conditions": [],
+      "imports": [
+        "database/sql",
+        "github.com/erranliu/SteerLine/internal/steerline/query",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite/records.go",
+      "sha256": "81074c8832e721f578796e71bb48179c957ed99cb1e24d4cca94efadf0b21442",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/query"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite/tasks.go",
+      "sha256": "c0b68cbb575593bdfb9bd69ecbaf788227e5b33b92975cd3a4365912fce7032a",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "regexp",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/query",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite_store.go",
+      "sha256": "eaee2bb9a4be47cc292875c9ec6b81b2e72fd89ad6c0cdcdce0f08f4aeb9bd30",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "errors",
+        "fmt",
+        "net/url",
+        "os",
+        "path/filepath",
+        "runtime",
+        "modernc.org/sqlite",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/query"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite_store_checkpoint.go",
+      "sha256": "a63773dbc196e1a79fa20de39cc3992bf5a536b4c16d9313a1f6aed7458eccda",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/sha256",
+        "database/sql",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite_store_read.go",
+      "sha256": "8716e578d298b888320725e4fc752afae2b649cc3558e1cfc4a0530ed736e0b6",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "github.com/erranliu/SteerLine/internal/steerline/sqlite"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite_store_schema.go",
+      "sha256": "d2fbc8093d3a7d2258eff644e122b4ecff7a2b2d538e854982913d282e6c326c",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "fmt",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/sqlite"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite_store_write.go",
+      "sha256": "a7e4004b80730fe230163cffd4789b5019dea9e409c5f0eaae5167975ba1c332",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite_store_write_commands.go",
+      "sha256": "4265d89069be8caed914b71a1512283aadc0cc66eee80a7417b7ca9a47970d47",
+      "build_conditions": [],
+      "imports": [
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite_store_write_execution.go",
+      "sha256": "431eca53cd37991739a3b5673ef2c2505b2c4c8ef61b12582653e270e4d7c622",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "fmt"
+      ]
+    },
+    {
+      "path": "internal/steerline/sqlite_store_write_native.go",
+      "sha256": "f63bd8b4fb4b128a4352b907941bf160042e43c6506aada73fe22d20fd9bd335",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/state_preflight.go",
+      "sha256": "4566b3a5b257fd006f6d6d1349922cee0a4b1107fbf6157d215fbe537cea2736",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "database/sql",
+        "fmt",
+        "os",
+        "path/filepath",
+        "slices",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/state_revision.go",
+      "sha256": "73ccfd1dbfc98cb6504a520569295ea938a411b6a74a4edaea079a47d977616b",
+      "build_conditions": [],
+      "imports": [
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/store.go",
+      "sha256": "0929e5798c80e660b5a8d010b229f82431597c928be5bddcc3c62b27a550d612",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/rand",
+        "crypto/sha256",
+        "database/sql",
+        "encoding/hex",
+        "errors",
+        "fmt",
+        "os",
+        "path/filepath",
+        "sync",
+        "github.com/erranliu/SteerLine/internal/steerline/projection",
+        "github.com/erranliu/SteerLine/internal/steerline/sqlite"
+      ]
+    },
+    {
+      "path": "internal/steerline/task/batch.go",
+      "sha256": "8f643c43ae1cdf216a826afb0b41a68f28ae0ee82dd1607b42e25ea3ebf4d909",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "fmt",
+        "io",
+        "strconv",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/taskgraph"
+      ]
+    },
+    {
+      "path": "internal/steerline/task/command_plan.go",
+      "sha256": "74156a7eb49b65681ea22289a80b11526979f6013b1628303ce9197780484a21",
+      "build_conditions": [],
+      "imports": [
+        "strconv",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/task/contract.go",
+      "sha256": "0da0466a0044cc1210af193e2bac3708b5fb560d238720e180b1d43052bbc5c1",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "io",
+        "path",
+        "path/filepath",
+        "regexp",
+        "strconv",
+        "strings",
+        "unicode/utf8"
+      ]
+    },
+    {
+      "path": "internal/steerline/task/delivery.go",
+      "sha256": "84d8bfcb9af27f9740db6db8cf857439f1aaecc66747c8a26cb7a46f2e45bad3",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json"
+      ]
+    },
+    {
+      "path": "internal/steerline/task/delivery_gate.go",
+      "sha256": "3e6a3a0417caa4bc1dde15a480879aede3880d0111147ac0ac74c6c182ef316f",
+      "build_conditions": [],
+      "imports": []
+    },
+    {
+      "path": "internal/steerline/task/model.go",
+      "sha256": "4f1972eb8b3ef548d3cc32f8b908ed61d48cc7a31d53e2170fe58e6efeef5b64",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/task/predecessors.go",
+      "sha256": "d18b8cb55fbb8a6c53a14c608f1e32e51ba3efc46e3b0bd1c8d5554dd9121364",
+      "build_conditions": [],
+      "imports": [
+        "sort"
+      ]
+    },
+    {
+      "path": "internal/steerline/task/readiness.go",
+      "sha256": "95e0b784ce94bf150e9e4f27eb12676940e6d2da02b3e689284bd0b982fab341",
+      "build_conditions": [],
+      "imports": [
+        "github.com/erranliu/SteerLine/internal/steerline/taskgraph"
+      ]
+    },
+    {
+      "path": "internal/steerline/task/receipts.go",
+      "sha256": "333286e2f9d804b37b1c83826289029b338611d089e7fa41de2739504706a6ca",
+      "build_conditions": [],
+      "imports": []
+    },
+    {
+      "path": "internal/steerline/task/status.go",
+      "sha256": "5f4ebf88b32331234ac976e3fb61b1b498177c07590ec49dc84001551e04ba6f",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "fmt",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/taskgraph/taskgraph.go",
+      "sha256": "bdd1080a0c1ac540f5113ff95e4e0261dcd6b705f09e1f11a600d5e379cee144",
+      "build_conditions": [],
+      "imports": [
+        "sort",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/taskview/model.go",
+      "sha256": "91998c96773eb553328402a9e09b35679dbcfe92ed7b8fecc767a58a7c0d3a5f",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/json",
+        "fmt",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/taskview/page.go",
+      "sha256": "e4ae549407ed3cd4d58b9ad45918f22ec2175370031f851c588b3dbf097a7ef3",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "encoding/base64",
+        "encoding/json",
+        "io",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/taskview/project.go",
+      "sha256": "73154819ea404118d2c78f06bd7bdf855509eb847b2f6fb3a1a2b42a245b04ed",
+      "build_conditions": [],
+      "imports": [
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/task",
+        "github.com/erranliu/SteerLine/internal/steerline/taskgraph"
+      ]
+    },
+    {
+      "path": "internal/steerline/testprotocol/appserver.go",
+      "sha256": "423a51fdcbf5a8c21fb56555be5d9d14154bd1ba8615248fff765b421ad12c09",
+      "build_conditions": [],
+      "imports": [
+        "bufio",
+        "crypto/sha1",
+        "encoding/base64",
+        "encoding/binary",
+        "encoding/json",
+        "fmt",
+        "io",
+        "net",
+        "net/http",
+        "net/url",
+        "os",
+        "sync"
+      ]
+    },
+    {
+      "path": "internal/steerline/testprotocol/native_orca.go",
+      "sha256": "92b50eaf3e25ec5adf09fc69b72ff41e9508072b7c319091302cd7bc61ead580",
+      "build_conditions": [],
+      "imports": [
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "fmt",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "runtime",
+        "slices",
+        "strconv",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/testprotocol/supervised.go",
+      "sha256": "ee251935d5ca3ee51572d937ad56edc88166967e0231d989cbedf83baa87db3b",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "fmt",
+        "os",
+        "path/filepath",
+        "regexp",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/testprotocol/terminal.go",
+      "sha256": "b1f810952563f643c416dc13a59a224710d93d9b716b94e1ce441b80aed58936",
+      "build_conditions": [],
+      "imports": [
+        "encoding/json",
+        "fmt",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "regexp",
+        "runtime",
+        "strconv",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_attachment_store.go",
+      "sha256": "147deab8e085adae3939ab3f8c65dc969347fca03c60e5a9af99509c8b1765e8",
+      "build_conditions": [],
+      "imports": [
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_commit.go",
+      "sha256": "9a58e50afbe84715d14f54d9fe973e00c77be18e4a35a5ac6458f715213a1dc7",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "database/sql",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_completion.go",
+      "sha256": "3a75d763bb1fa0d9ebb684ff7b250a2759d59fdf9ce4fb89b81d2ef1c8da44d7",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/publication"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_environment.go",
+      "sha256": "b486538beccebf29fa8d50498524e670a8b48890aaac20deccbc65d398076912",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_environment_host.go",
+      "sha256": "34469967988b3f7450ebb5ac605a597f7198f407709fbba6b64cf4d45842953a",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "reflect",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_events.go",
+      "sha256": "069848ca56fcdf1377d3d09e53f1261804b1a25188b7355edd3c6a158061ca04",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_evidence.go",
+      "sha256": "5b57c08f04386575bac6bb229ab11315832e598b7372508987ef28beebd126fb",
+      "build_conditions": [],
+      "imports": [
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_execution.go",
+      "sha256": "5f620a0f4591651bcd5f41f082c3f1448e888d5c215a65227f59119dd7f2f00a",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_feedback.go",
+      "sha256": "42628b5604428102c771005ec30595c96cb04e3142ef8728a89e0a824616d21e",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_lifecycle.go",
+      "sha256": "edd5b49d5394df1ec414fa01fb3cfb5e8c235d7931d176c7a1bd4b61840e69e2",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_lifecycle_async.go",
+      "sha256": "74e9306d28e58d6b19383d7017daecd98b448a59e58727080b352425a8022755",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_lifecycle_feedback.go",
+      "sha256": "0a42ddf1d70416d4f0bb08acc1c18dadad09df06a7a4fe56b773d525a4c30079",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_lifecycle_recovery.go",
+      "sha256": "63f0a8b56a215985b32a4681c0a0aa8bbe383ce6ca35105b7aa6bdc6f904364b",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "sync",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/workerflow"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_pr.go",
+      "sha256": "f1ce09909f1582c24e8182ff84b1b4ab4743cce7f8bbed0102552da669c69a14",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/publication",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_process.go",
+      "sha256": "0e7526c73b90adb1bc386bf1f3677bae15a85e92f53d6e43f64def6540faebf8",
+      "build_conditions": [],
+      "imports": [
+        "os",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_publish_local.go",
+      "sha256": "2a79d15962448059093febbffba0075550166907ea3bd370789293f348759205",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/publication"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_recovery.go",
+      "sha256": "f258ad695ec63d12b80bbc345b5c0d7a3b860509aa7d44cd2fab3511e3ecae89",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "encoding/json",
+        "errors",
+        "os",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/workerflow"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_resume.go",
+      "sha256": "86bb0e8b1223d6bea841dbb1c611185f26c6a26dba8b796062a6e623d2075f65",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "os"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_start.go",
+      "sha256": "257515b863aa195690c80bd6df4199cd672d3ef8e31e852e59079cf491bd33a2",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/publication",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/workerflow"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_state.go",
+      "sha256": "fe0e2bf4c7f0d50c49317085d195cb54941fcce0a7a9204f6e09938363e1e0cf",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "github.com/erranliu/SteerLine/internal/steerline/publication",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/workerflow"
+      ]
+    },
+    {
+      "path": "internal/steerline/worker_types.go",
+      "sha256": "fb7f208cb23dd9f8a686179cfdd4cb825c3625e6a792f920680324c61f642697",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/workerflow/prompt.go",
+      "sha256": "b9ebfcf5755e7f3b569042488d7450405bc9c314ea18565211388b03a528746f",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "fmt",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/task"
+      ]
+    },
+    {
+      "path": "internal/steerline/workerflow/recovery.go",
+      "sha256": "782df99a85dbb168d90ade7dadda8ee3a69576b8a3a147fe247a05e0b4f8a567",
+      "build_conditions": [],
+      "imports": []
+    },
+    {
+      "path": "internal/steerline/workerflow/state.go",
+      "sha256": "c1f95d73cbc5b199fd23df6c518502e68d724c7429a2d47fd6a71d0f3915ac03",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "fmt",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/steerline/workspace/cleanup.go",
+      "sha256": "d4e1bcce2b7e5f3e541151a34c3cf29b6ba07fb57b697ba310a3762ca4149725",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "os",
+        "path/filepath",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/workspace/git.go",
+      "sha256": "a1bda91d1cfa6cc53b69c0388ac98301c7c567315845ff4c0adef1c76e02a3d4",
+      "build_conditions": [],
+      "imports": [
+        "bytes",
+        "context",
+        "errors",
+        "fmt",
+        "os/exec",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/workspace/inspect.go",
+      "sha256": "91c97d8502bceb030b0dfd73101d3a6e0c67995aae69103758cd5c8df28444fc",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "os",
+        "path/filepath",
+        "regexp",
+        "runtime",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/workspace/lifecycle.go",
+      "sha256": "d2226b24d1945e5940a0ba3dafa6cb5a149f980c72868d1aeb1e89ca4cbd05a2",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/workspace/prepare.go",
+      "sha256": "80d6022bcf843d40bd78ff711fd726a90307ebc4476a3c49f172fa503a3ca6e0",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "os",
+        "path/filepath",
+        "strings",
+        "github.com/erranliu/SteerLine/internal/steerline/execution"
+      ]
+    },
+    {
+      "path": "internal/steerline/workspace/resources.go",
+      "sha256": "4679cb948595a7e2b28341547bce08d2dccf1010223f2598b17a837fc6f3d05f",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "fmt",
+        "path/filepath",
+        "strings"
+      ]
+    },
+    {
+      "path": "internal/steerline/workspace_config.go",
+      "sha256": "fce9cccb046c5295517a970197f8121c39b87f99e3be660f19b05b4172e2731b",
+      "build_conditions": [],
+      "imports": [
+        "errors",
+        "os/exec",
+        "path/filepath",
+        "regexp",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/workspace"
+      ]
+    },
+    {
+      "path": "internal/steerlineapp/app.go",
+      "sha256": "9ec6d8bea439e06ae75ce6f5f30e85dc8fca95829676f9817f04f365fbedcf2e",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "errors",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline",
+        "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/processhost"
+      ]
+    },
+    {
+      "path": "internal/steerlineapp/capability.go",
+      "sha256": "cf46414012af3625ac96b44d2fae6b14868c2464803268b2f90129d34b260d2f",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "os",
+        "path/filepath",
+        "runtime",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+      ]
+    },
+    {
+      "path": "internal/steerlineapp/config.go",
+      "sha256": "3e9245cda80bc0781bc60f80c1367e49675f6043494b4820725af219a61e355f",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/sha256",
+        "encoding/hex",
+        "errors",
+        "fmt",
+        "os",
+        "path/filepath",
+        "regexp",
+        "runtime",
+        "sort",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline",
+        "github.com/erranliu/SteerLine/internal/steerline/contracts",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/publication",
+        "github.com/erranliu/SteerLine/internal/steerline/workspace"
+      ]
+    },
+    {
+      "path": "internal/steerlineapp/console.go",
+      "sha256": "d1c8b0decd70f01ed1488338a145890e217deecf0a925d353dc88b3d30b10cf7",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "github.com/erranliu/SteerLine/internal/steerline",
+        "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+        "github.com/erranliu/SteerLine/internal/steerline/console"
+      ]
+    },
+    {
+      "path": "internal/steerlineapp/directory.go",
+      "sha256": "b597e0df6c9ed45e55a97843b65c4d069237ec32cf3ee165420f71e1e31fd957",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "crypto/sha256",
+        "encoding/hex",
+        "encoding/json",
+        "errors",
+        "fmt",
+        "os",
+        "os/exec",
+        "path/filepath",
+        "regexp",
+        "runtime",
+        "strings",
+        "time",
+        "github.com/erranliu/SteerLine/internal/steerline",
+        "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+        "github.com/erranliu/SteerLine/internal/steerline/execution",
+        "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+        "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+        "github.com/erranliu/SteerLine/internal/steerline/publication",
+        "github.com/erranliu/SteerLine/internal/steerline/workspace"
+      ]
+    },
+    {
+      "path": "internal/testfeedback/summary.go",
+      "sha256": "40f0bec4ae4165651c83216a4ad6f6bc6049479860ca6aa9fb63f2ea0c689bb1",
+      "build_conditions": [],
+      "imports": [
+        "bufio",
+        "bytes",
+        "encoding/json",
+        "fmt",
+        "sort",
+        "strings",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/testprocess/process.go",
+      "sha256": "8f26fb06b30c20579ccae3dce8cce826a46271a840dde62d9d70b3c32679503c",
+      "build_conditions": [],
+      "imports": [
+        "context",
+        "os/exec",
+        "sync",
+        "time"
+      ]
+    },
+    {
+      "path": "internal/testprocess/process_unix.go",
+      "sha256": "1594e75ffd35138ddb3411850f6858d75fe51d731aeb8ada9b26838f84aa7543",
+      "build_conditions": [
+        "//go:build !windows"
+      ],
+      "imports": [
+        "os/exec",
+        "syscall"
+      ]
+    },
+    {
+      "path": "internal/testprocess/process_windows.go",
+      "sha256": "7a6c14c0989c6f240619fd014afba214a6bc4c07de6fd717dc30f4d1340a7019",
+      "build_conditions": [
+        "//go:build windows"
+      ],
+      "imports": [
+        "fmt",
+        "os/exec",
+        "sync",
+        "syscall",
+        "unsafe",
+        "golang.org/x/sys/windows"
+      ]
+    }
+  ]
+}

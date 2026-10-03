@@ -57,28 +57,6 @@ func latestNativeWorkflow(records []WorkflowRunRecord, taskID string) *WorkflowR
 	return projection.LatestWorkflow(records, taskID)
 }
 
-func latestWorkflowExecution(records []ExecutionRecord, workflowID string) *ExecutionRecord {
-	return projection.LatestExecution(records, workflowID)
-}
-
-func latestCurrentNativeAttempt(records []StepAttemptRecord, execution *ExecutionRecord) *StepAttemptRecord {
-	return projection.CurrentAttempt(records, execution)
-}
-
-func latestNativeExecutionAttempt(attempts []StepAttemptRecord, executionID string) *StepAttemptRecord {
-	var latest *StepAttemptRecord
-	for i := range attempts {
-		attempt := &attempts[i]
-		if attempt.ExecutionID != executionID {
-			continue
-		}
-		if latest == nil || attempt.CreatedAt.After(latest.CreatedAt) || attempt.CreatedAt.Equal(latest.CreatedAt) && attempt.AttemptID > latest.AttemptID {
-			latest = attempt
-		}
-	}
-	return latest
-}
-
 func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 	var cleanupErr error
 	for i := range s.domain.Tasks {

@@ -30,9 +30,6 @@ func queryHostRequirementTool(_ context.Context, c Config, id string) executiona
 func queryRemoteRequirementTool(_ context.Context, c Config, id string) executionapi.RequirementEvidence {
 	return executionapi.RequirementEvidence{ID: id, Site: "target", Target: targetFor(c), Status: executionapi.RequirementUnknown, Source: "neutral:unavailable-target-tool", CheckedAt: now()}
 }
-func queryNativeRequirementTool(ctx context.Context, c Config, id string) executionapi.RequirementEvidence {
-	return queryRemoteRequirementTool(ctx, c, id)
-}
 func capabilityReport(backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, target executionapi.ExecutionTarget, agent executionapi.AgentSpec, version string) executionapi.CapabilityReport {
 	names := []string{"start", "observe", "stop", "detach_observation", "operation_reconciliation", "workspace_inspection", "output_reading", "output_turns", "output_final_answer", "resource_settlement"}
 	caps := make([]executionapi.Capability, 0, len(names))

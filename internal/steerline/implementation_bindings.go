@@ -6,24 +6,6 @@ import (
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
-func implementationEnvelope(record *ExecutionRecord, key string) (executionapi.ImplementationDataEnvelope, bool, error) {
-	if record == nil {
-		return executionapi.ImplementationDataEnvelope{}, false, errors.New("execution record is required for implementation binding")
-	}
-	var found executionapi.ImplementationDataEnvelope
-	count := 0
-	for _, envelope := range record.ImplementationData {
-		if envelope.ImplementationKey == key {
-			found = envelope.Clone()
-			count++
-		}
-	}
-	if count > 1 {
-		return executionapi.ImplementationDataEnvelope{}, false, errors.New("execution contains duplicate implementation binding envelopes")
-	}
-	return found, count == 1, nil
-}
-
 func putImplementationEnvelope(record *ExecutionRecord, envelope executionapi.ImplementationDataEnvelope) error {
 	if record == nil {
 		return errors.New("execution record is required for implementation binding")

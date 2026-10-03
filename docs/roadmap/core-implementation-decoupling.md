@@ -8,22 +8,22 @@
 
 ## 范围与关键缺口
 
-通用事件/问题、配置/原生绑定封套、来源/mapper/宿主端口及外层唯一构造已经接通；主包生产源码与依赖清零。剩余平台测试/fixture 和最终结构守卫归 #67。后续写消费者仍依赖具体 Store/宽事务接口，TUI 仍混合产品读取与默认 I/O，需要在执行隔离收口后继续解耦。
+通用事件/问题、配置/原生绑定封套、来源/mapper/宿主端口及外层唯一构造已经接通；#67 已完成主包生产/测试清零、依赖守卫和平台测试归位并真实合并。后续写消费者仍依赖具体 Store/宽事务接口，TUI 仍混合产品读取与默认 I/O，需要按 #69–#72 继续解耦。
 
 需要同时解决类型、调用、存储载荷、工厂和测试归属。仅改文件名、把整个 Service 接口传入子包、在 contracts 中保存另一份原生业务状态，均不能完成目标。中心继续拥有唯一业务写者、intent/receipt 提交屏障、人工恢复门槛和 TaskDelivery；平台实现不获得这些写权限。
 
 #65–#67 不搬迁 Store/SQLite 写层；#68 清理完成后，由 #69/#70 单独收窄写端口并迁移存储实现，#71/#72 建立产品客户端适配并切换 CLI/TUI。整个目标不引入插件系统、不扩展平台支持或 remote 权限证据。remote 仍按现有能力明确拒绝不支持的请求，其协议回归与真实准入验收分别表达。
 
-## 现有文件的迁移归属
+## 已交付消费者的当前归属
 
-以下路径相对于 `internal/steerline/`，只列剩余消费者；生命周期删除/断言归属见[验收记录](../validation/core-decoupling-03-lifecycle/README.md)。
+以下按 #63–#67 实际交付后的职责列当前位置；旧文件删除/断言归属保留在各阶段验收记录，不能将旧路径再列为待迁移消费者。完整当前源码见 [架构索引](../architecture/current-code-architecture.md)。
 
-| 剩余消费者 | 迁移任务 | 中心保留 |
+| 当前消费者/所有者 | 已交付任务 | 中心保留 |
 | --- | --- | --- |
-| `codex_conversation.go`、`codex_history_port.go`、`conversation_*` | #65 来源/读取/mapper/采集构造 | 预算、正文/来源事务与 checkpoint |
-| `worker_environment_orca.go`、`implementation_bindings.go`、`worker_environment.go` 及准备输出采集 | #65 宿主证据/工具、准备文件、open-terminal 与原生视图 | 授权、nonce/deadline、人工门槛与消费 |
-| `orca_worker_prepare.go` 剩余命令编译、`orca.go`、`orca_remote_adapter.go`、Config/Profile/registry 与产品入口 | #66 唯一默认工厂与应用组合；#65 接走宿主调用 | 通用端口/快照/事务 |
-| 剩余平台 fixture/测试 | #67 随真实入口归位与守卫 | 一份中性业务矩阵 |
+| `codexworker` 的来源/读取/mapper；contracts 来源端口 | #65，旧 history/conversation 平台文件已删除 | `conversation_*` 的预算、正文/来源事务与 checkpoint |
+| `orcaworker` 宿主证据/工具、准备文件、open-terminal；execution/contracts 纯值端口 | #65，旧宿主原生视图已删除 | `worker_environment*` 的授权、nonce/deadline、人工门槛与消费；通用 implementation envelope 校验 |
+| `steerlineapp` 唯一内置目录、配置默认值/具体工厂与产品入口 | #66，原注册/平台构造文件已删除 | 显式目录、通用 Config/Profile/快照/事务 |
+| 实现单元测试、app/integration 平台 fixture、coreboundary 守卫 | #67，平台消费者和测试已归位 | 一份中性业务矩阵 |
 
 最终扫描全部直属文件及依赖，不能仅按删除清单判断完成。
 
@@ -59,7 +59,6 @@ flowchart TD
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 67 | 主包隔离守卫与测试归位 | 主包源码/测试清零、依赖守卫、第三实现接线和最小完整回归 | #66 | [Spec](../spec/core-decoupling-06-boundary.spec.md) · [Plan](../spec/core-decoupling-06-boundary.plan.md) |
 | 68 | 主包解耦重构后代码清理 | 按最终调用关系删除死代码/重复规则/无用辅助，同步模块及验证索引 | #67 | [Spec](../spec/core-decoupling-07-cleanup.spec.md) · [Plan](../spec/core-decoupling-07-cleanup.plan.md) |
 | 69 | 中心写入端口收窄 | 命令、worker、任务/DAG/交付及会话的窄提交接口接通真实消费者 | #68 | [Spec](../spec/core-decoupling-08-write-ports.spec.md) · [Plan](../spec/core-decoupling-08-write-ports.plan.md) |
 | 70 | SQLite写入实现归包 | 连接/schema/SQL/事务执行归唯一存储模块，复用既有只读 Reader | #69 | [Spec](../spec/core-decoupling-09-sqlite.spec.md) · [Plan](../spec/core-decoupling-09-sqlite.plan.md) |
@@ -68,7 +67,9 @@ flowchart TD
 
 ## 顺序与交接
 
-2026-10-03：#67 PR190 完成主包生产/测试清零、完整依赖守卫与测试归位，协调独立复审修复并整合最新主干；完全访问最终组合15包/144用例 complete/pass。最终审核与真实合并记录见 [交付记录](../validation/core-decoupling-06-boundary/README.md)，#68 仍须等待 PR190 平台确认整体合并，不能以本段文字提前开工。
+2026-10-03：#67 [PR190](https://github.com/erranliu/SteerLine/pull/190) 平台确认于 `2026-10-03T05:16:14Z` 真实合并，merge `d8bacbd75994a183c6d54c027abe103d26ae6896`、最终 head `f77724a066afd0c43b7fda28c9bbabf77954a9b8`。主包生产/测试清零、完整依赖守卫和测试归位已交付；完全访问最终组合15包/144用例 complete/pass。保留 [交付记录](../validation/core-decoupling-06-boundary/README.md)及历史失败，不再列入活动任务。
+
+2026-10-03：#68 从上述最新 main 建立清理候选，删除 21 个确认无人消费的私有辅助，未删除断言，更新当前架构/源码/验证映射。见 [清理记录](../validation/core-decoupling-07-cleanup/README.md)。仍等待本 PR 的独立复审及真实合并；#69/#71 未开工。
 
 2026-10-02：#67 已从 #66 实际合并提交开始盘点并实施部分测试迁移及外层守卫。受限执行的隔离 Git fixture 和分支 refs 写入被阻断；最终守卫仍拒绝 51 个平台测试/fixture 文件及测试 import 越界，任务未完成。续做输入、源码摘要和真实失败记录见 [#67 受限执行交接](../validation/core-decoupling-06-boundary/README.md)。#67 继续保留在活动表；此记录不满足 #68 开工条件。
 

@@ -701,16 +701,3 @@ func nativeCallError(err error) error {
 	}
 	return err
 }
-
-func parseTerminalFromSaved(payload []byte, worktreeID, title string) (Terminal, error) {
-	if len(payload) == 0 {
-		return Terminal{}, errors.New("saved Orca terminal receipt is missing")
-	}
-	var envelope struct {
-		Terminal Terminal `json:"terminal"`
-	}
-	if err := json.Unmarshal(payload, &envelope); err != nil || envelope.Terminal.Handle == "" || envelope.Terminal.WorktreeID != worktreeID || envelope.Terminal.Title != title {
-		return Terminal{}, errors.Join(err, errors.New("saved Orca terminal receipt differs from its fixed intent"))
-	}
-	return envelope.Terminal, nil
-}

@@ -85,28 +85,6 @@ func fixtureBoundProfile(c steerline.Config) steerline.ExecutionProfile {
 	}
 	panic("fixture profile was not projected")
 }
-func fixtureOriginalResource(t *testing.T, e *steerline.ExecutionRecord, endpoint, generation, session string) {
-	t.Helper()
-	if e.ProjectIdentity == "" {
-		e.ProjectIdentity = "fixture-project"
-	}
-	if e.ExecutionID == "" {
-		e.ExecutionID = "fixture-execution"
-	}
-	if e.CurrentAttemptID == "" {
-		e.CurrentAttemptID = "fixture-attempt"
-	}
-	if e.ConfigurationDigest == "" {
-		e.ConfigurationDigest = "fixture-config"
-	}
-	if e.Generation == "" {
-		e.Generation = "fixture-generation"
-	}
-	envelope, err := codexworker.NewAppServerBindingEnvelope(codexworker.AppServerBindingIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, codexworker.AppServerBinding{Endpoint: endpoint, Generation: generation, SessionID: session})
-	require(t, err)
-	e.ImplementationData = []executionapi.ImplementationDataEnvelope{envelope}
-	e.SessionID, e.SessionGeneration = session, generation
-}
 
 func workspacePolicyFixture() executionapi.ExecutionPolicy {
 	return executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
