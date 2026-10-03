@@ -3,17 +3,15 @@ package console
 import (
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/activityview"
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 var (
@@ -158,7 +156,7 @@ func renderStatusLine(m Model, state projectState) string {
 			parts = append(parts, fmt.Sprintf("%s %d", item.label, item.count))
 		}
 	}
-	if state.snapshot.Connection.State != steerline.ConnectionConnected && !state.snapshot.Observation.SampledAt.IsZero() {
+	if state.snapshot.Connection.State != api.ConnectionConnected && !state.snapshot.Observation.SampledAt.IsZero() {
 		parts = append(parts, "采样于 "+sampleTime(state.snapshot))
 	}
 	if m.status != "" {
@@ -253,7 +251,7 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
 	if row.kind == rowReady {
-		valid, _ := candidateFreshness(state.ref, state.snapshot, m.clock.Now())
+		valid, _ := state.client.CandidateAvailability(state.snapshot, m.clock.Now())
 		stateText := "Ready 候选"
 		if !valid {
 			stateText = "候选缓存 · 禁止开始"
@@ -267,7 +265,7 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
 	run := row.run
-	if state.snapshot.Connection.State == steerline.ConnectionOffline || state.snapshot.Connection.State == steerline.ConnectionNoRecord {
+	if state.snapshot.Connection.State == api.ConnectionOffline || state.snapshot.Connection.State == api.ConnectionNoRecord {
 		lines = append(lines, "服务入口："+safeTerminalText(serviceWindowInstruction(state.ref)), "配置："+safeTerminalText(state.ref.ConfigPath))
 	}
 	lines = append(lines, "任务 "+safeTerminalInlineText(run.TaskID)+" · "+safeTerminalInlineText(run.Title))
@@ -296,7 +294,7 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 	if run.Summary != nil && *run.Summary != "" {
 		lines = append(lines, "摘要："+safeTerminalText(*run.Summary))
 	}
-	if state.snapshot.Connection.State != steerline.ConnectionConnected {
+	if state.snapshot.Connection.State != api.ConnectionConnected {
 		lines = append(lines, "采样于 "+sampleTime(state.snapshot))
 	}
 	if verified := executionVerifiedAt(state, run); verified != "未知" && verified != "—" {
@@ -322,11 +320,11 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 		if full {
 			lines = append(lines, renderDecisionIdentity(state, run, m.clock.Now())...)
 		}
-		lines = append(lines, "决策阶段："+decisionStatusLabel(run.Decision.Status), "当前答案："+safeTerminalText(steerline.DecisionSummary(run)))
+		lines = append(lines, "决策阶段："+decisionStatusLabel(run.Decision.Status), "当前答案："+safeTerminalText(decisionSummary(run)))
 	} else if run.FinishTaskStatus == "waiting_decision" {
 		lines = append(lines, "待决策状态存在，但当前 decision_id/问题记录缺失或尚未同步；答案通道未启用。")
 	}
-	if state.ref.Config.TaskAuthority == "native" {
+	if state.ref.Presentation.TaskAuthority == "native" {
 		if task := nativeDetailForTask(state, firstText(run.DomainTaskID, run.TaskID)); task != nil {
 			lines = append(lines, "", "任务关系")
 			lines = append(lines, renderNativeTaskRelations(state, *task)...)
@@ -362,7 +360,7 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 	return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 }
 
-func nativeDetailForTask(state projectState, taskID string) *steerline.NativeTaskDetail {
+func nativeDetailForTask(state projectState, taskID string) *contracts.NativeTaskDetail {
 	if state.snapshot.SelectedNative != nil && state.snapshot.SelectedNative.TaskID == taskID {
 		return state.snapshot.SelectedNative
 	}
@@ -376,7 +374,7 @@ func nativeDetailForTask(state projectState, taskID string) *steerline.NativeTas
 	return nil
 }
 
-func renderNativeTaskDetail(state projectState, task steerline.NativeTaskDetail) []string {
+func renderNativeTaskDetail(state projectState, task contracts.NativeTaskDetail) []string {
 	lines := []string{
 		"任务 " + safeTerminalInlineText(task.TaskID) + " · " + safeTerminalInlineText(task.Title),
 		"状态：" + safeTerminalText(task.Status),
@@ -384,9 +382,9 @@ func renderNativeTaskDetail(state projectState, task steerline.NativeTaskDetail)
 	return append(lines, renderNativeTaskRelations(state, task)...)
 }
 
-func renderNativeTaskRelations(state projectState, task steerline.NativeTaskDetail) []string {
+func renderNativeTaskRelations(state projectState, task contracts.NativeTaskDetail) []string {
 	var lines []string
-	if state.snapshot.Connection.State == steerline.ConnectionOffline || state.snapshot.Connection.State == steerline.ConnectionNoRecord {
+	if state.snapshot.Connection.State == api.ConnectionOffline || state.snapshot.Connection.State == api.ConnectionNoRecord {
 		lines = append(lines, "离线只读快照 · 采样于 "+sampleTime(state.snapshot))
 	}
 	if state.snapshot.NativeTaskError != "" {
@@ -496,7 +494,7 @@ func renderControlAvailability(state projectState, row *consoleRow, now time.Tim
 		return []string{"控制不可用：" + safeTerminalText(state.ref.Conflict)}
 	}
 	if row != nil && row.kind == rowReady {
-		reason := candidateActionReason(state.ref, state.snapshot, now)
+		reason := candidateActionReason(state, now)
 		if reason == "" {
 			lines = append(lines, "操作：s 选择执行方案并开始任务 "+safeTerminalText(row.taskID))
 		} else {
@@ -528,7 +526,7 @@ func displayActionReason(reason string) string {
 const timeLayout = "2006-01-02 15:04:05"
 
 func renderEmptySelection(state projectState) []string {
-	if state.snapshot.Connection.State == steerline.ConnectionOffline || state.snapshot.Connection.State == steerline.ConnectionNoRecord {
+	if state.snapshot.Connection.State == api.ConnectionOffline || state.snapshot.Connection.State == api.ConnectionNoRecord {
 		return []string{"服务离线 · 可以查看已有 runs 与日志", "服务入口：" + safeTerminalText(serviceWindowInstruction(state.ref)), "配置路径：" + safeTerminalText(state.ref.ConfigPath), terminalCapabilities()}
 	}
 	if state.snapshot.Connection.Diagnostic != "" {
@@ -564,7 +562,7 @@ func renderActivity(state projectState, row *consoleRow, width, height int) []st
 			event.Detail = safeTerminalText(event.Detail)
 			event.Status = safeTerminalText(event.Status)
 			event.Meta = safeActivityMetadata(event.Meta)
-			rendered := steerline.RenderActivity(event, steerline.RenderOptions{MaxColumns: width})
+			rendered := activityview.RenderActivity(event, activityview.RenderOptions{MaxColumns: width})
 			lines = append(lines, strings.Split(rendered, "\n")...)
 		}
 	}
@@ -638,7 +636,7 @@ func renderDecisionHistory(state projectState, row *consoleRow, width, height in
 		lines = append(lines, "SQLite 决策历史不可用："+safeTerminalText(state.snapshot.DomainError))
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
-	records := make([]steerline.DecisionRecord, 0)
+	records := make([]contracts.DecisionRecord, 0)
 	for _, record := range state.snapshot.Domain.Decisions {
 		if record.WorkflowRunID == run.RunID {
 			records = append(records, record)
@@ -654,7 +652,7 @@ func renderDecisionHistory(state projectState, row *consoleRow, width, height in
 		lines = append(lines, "当前 run 没有持久化决策记录。")
 	}
 	for _, record := range records {
-		var request steerline.DecisionRequest
+		var request contracts.DecisionRequest
 		if err := json.Unmarshal(record.Request, &request); err != nil {
 			lines = append(lines, "", "decision_id："+safeTerminalText(record.DecisionID), "问题记录格式未知；原记录保留，未猜测或导入。")
 			continue
@@ -676,7 +674,7 @@ func renderDecisionHistory(state projectState, row *consoleRow, width, height in
 			lines = append(lines, fmt.Sprintf("选项 %d · %s：%s%s", i+1, safeTerminalText(option.ID), safeTerminalText(option.Label), recommended), "  详情："+safeTerminalText(option.Detail))
 		}
 		if len(record.Answer) > 0 {
-			var answer steerline.DecisionAnswer
+			var answer contracts.DecisionAnswer
 			if err := json.Unmarshal(record.Answer, &answer); err == nil {
 				lines = append(lines, "答案 · option_id："+safeTerminalText(displayDash(answer.OptionID))+" · by："+safeTerminalText(answer.AnsweredBy), "补充说明："+safeTerminalText(answer.Note))
 			}
@@ -731,7 +729,7 @@ func renderRecoveryInspection(m Model, state projectState, width, height int) []
 	return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 }
 
-func renderDecisionIdentity(state projectState, run *steerline.Run, now time.Time) []string {
+func renderDecisionIdentity(state projectState, run *contracts.Run, now time.Time) []string {
 	if run == nil || run.Decision == nil {
 		return nil
 	}
@@ -755,37 +753,17 @@ func decisionAnswerAvailability(state projectState, row *consoleRow) string {
 	if row == nil || row.run == nil || row.run.Decision == nil || row.run.Decision.Status != "pending" {
 		return "当前没有待回答的问题"
 	}
-	run := row.run
-	if run.Decision.RequestPath != "" || run.Decision.AnswerPath != "" {
-		return "问题绑定了已移除的 sidecar-answer 格式；保留状态并转入人工恢复，不导入答案文件"
+	reason, ok := state.snapshot.DecisionReasons[row.run.RunID]
+	if !ok {
+		return "决策资格尚未核验；请刷新"
 	}
-	if run.WorkflowVersion != steerline.WorkerFlowVersion || run.ExecutionID == "" || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
-		return "问题未绑定当前 native WorkflowRun、Execution 和 attempt；保留原问题并转入只读恢复核验"
-	}
-	if state.ref.Config.ExecutionDirectory == nil {
-		return "执行目录不可用；不能续跑原问题"
-	}
-	if _, err := state.ref.Config.ExecutionDirectory.ResolveIdentity(steerline.ExecutionRegistrationKey{Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol), Agent: run.Agent}); err != nil {
-		return "原执行后端/协议不支持决策续跑"
-	}
-	connection := state.snapshot.Connection
-	if connection.State != steerline.ConnectionConnected || !connection.CanControl {
-		return "服务离线或未就绪；答案不会写入，恢复服务后再通过同一命令提交"
-	}
-	runtimeState := connection.Snapshot.Runtime
-	if !hasCapability(runtimeState, "answer_decision") {
-		return "服务未声明 answer_decision 能力"
-	}
-	if run.WorkflowVersion == steerline.WorkerFlowVersion {
-		return "提交后核对原会话接收与工作轮次开始"
-	}
-	return "提交后先确认答案送达；应用状态仍须等待原执行的绑定证明核验"
+	return reason
 }
 
 func decisionAnswerStatusLines(state projectState, row *consoleRow) []string {
 	reason := decisionAnswerAvailability(state, row)
 	if strings.HasPrefix(reason, "提交后") {
-		if row != nil && row.run != nil && row.run.WorkflowVersion == steerline.WorkerFlowVersion {
+		if row != nil && row.run != nil && state.ref.Presentation.NativeWorkflow {
 			return []string{"a 核验原会话身份并打开回答草稿 · " + reason, "显式提交后分别显示答案保存、发送回执与原会话轮次开始。"}
 		}
 		return []string{"a 核验固定后端能力并打开回答草稿 · " + reason, "显式提交后仍分别核验答案接受、后端送达、轮次启动和答案应用。"}
@@ -797,7 +775,7 @@ func renderStopConfirmation(m Model, state projectState, height int) string {
 	if m.confirm == nil {
 		return ""
 	}
-	grace := state.ref.Config.ShutdownGrace
+	grace := state.ref.Presentation.ShutdownGrace
 	if grace == "" {
 		grace = "配置的宽限时间"
 	}
@@ -906,14 +884,14 @@ func renderFooter(m Model, state projectState) string {
 	}
 	parts := []string{"←→ 项目", "Tab 列表/动态", "1–7 筛选", "↑↓ 选择/滚动", "d 详情"}
 	row := m.selectedRow(m.selected)
-	if row != nil && row.kind == rowReady && candidateActionReason(state.ref, state.snapshot, m.clock.Now()) == "" {
+	if row != nil && row.kind == rowReady && candidateActionReason(state, m.clock.Now()) == "" {
 		parts = append(parts, "s 选方案")
 	}
 	if row != nil && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" && strings.HasPrefix(decisionAnswerAvailability(state, row), "提交后") {
 		parts = append(parts, "a 回答")
 	}
 	connection := state.snapshot.Connection
-	if rt := connection.Snapshot.Runtime; rt != nil && connection.State == steerline.ConnectionConnected && connection.CanControl {
+	if rt := connection.Snapshot.Runtime; rt != nil && connection.State == api.ConnectionConnected && connection.CanControl {
 		if hasCapability(rt, "set_dispatch_mode") {
 			parts = append(parts, "m 模式")
 		}
@@ -927,7 +905,7 @@ func renderFooter(m Model, state projectState) string {
 
 func renderHelp(state projectState) []string {
 	lines := []string{"快捷键", "", "←/→  切换项目", "Tab  在任务列表与任务动态间切换", "↑/↓  选择任务或滚动动态", "d/Enter  打开完整只读详情；Esc 返回", "q    退出控制台；服务继续运行"}
-	if state.ref.Config.WorkflowProtocol == steerline.WorkerFlowVersion {
+	if state.ref.Presentation.NativeWorkflow {
 		return append(lines,
 			"", "任务与服务", "1 全部 · 2 Ready · 3 进行中", "4 待决策 · 5 待合并", "6 需处理 · 7 历史", "s    选择已配置方案并开始 Ready 任务", "m    切换手动/自动派发", "x    停止服务（需确认）",
 			"", "运行与会话", "A/c/f  活动 / 会话 / 最终回复", "a    回答当前待决策问题", "v/u    决策历史 / 执行核验", ", / .  选择轮次", "e / =  折叠 / 保持展开", "y / n  更多会话 / 下一条最终回复")
@@ -1001,14 +979,14 @@ func allActivityLines(state projectState, row *consoleRow, width int) []string {
 	return renderActivity(state, row, width, 1<<20)
 }
 
-func activityEventLineCount(event steerline.ActivityEvent, width int) int {
+func activityEventLineCount(event contracts.ActivityEvent, width int) int {
 	if width < 1 {
 		width = 1
 	}
 	event.Title = safeTerminalText(event.Title)
 	event.Detail = safeTerminalText(event.Detail)
 	event.Status = safeTerminalText(event.Status)
-	return max(1, len(strings.Split(steerline.RenderActivity(event, steerline.RenderOptions{MaxColumns: width}), "\n")))
+	return max(1, len(strings.Split(activityview.RenderActivity(event, activityview.RenderOptions{MaxColumns: width}), "\n")))
 }
 
 func ptrString(value *string) string {
@@ -1021,20 +999,7 @@ func ptrString(value *string) string {
 	return *value
 }
 
-func serviceWindowInstruction(ref ProjectRef) string {
-	if runtime.GOOS != "windows" {
-		return "steerline start-service -config " + ref.ConfigPath
-	}
-	launcher := filepath.Join(ref.ApplicationHome, "service-window.bat")
-	binary := filepath.Join(ref.ApplicationBin, "steerline.exe")
-	if _, err := os.Stat(binary); err != nil {
-		return fmt.Sprintf("服务窗口不可用：缺少 %s；运行 steerline install", binary)
-	}
-	if _, err := os.Stat(launcher); err != nil {
-		return fmt.Sprintf("服务窗口不可用：缺少 %s；运行 steerline launchers", launcher)
-	}
-	return launcher
-}
+func serviceWindowInstruction(ref ProjectRef) string { return ref.Presentation.ServiceInstruction }
 
 func ptrTime(value *time.Time) string {
 	if value == nil || value.IsZero() {
@@ -1048,13 +1013,13 @@ func sampleTime(snapshot ProjectSnapshot) string {
 		return "未知"
 	}
 	suffix := ""
-	if snapshot.Observation.State == steerline.SnapshotStale || snapshot.Observation.State == steerline.SnapshotReadFailed || snapshot.Observation.State == steerline.SnapshotUnknownVersion {
+	if snapshot.Observation.State == api.SnapshotStale || snapshot.Observation.State == api.SnapshotReadFailed || snapshot.Observation.State == api.SnapshotUnknownVersion {
 		suffix = " · 缓存/未验证"
 	}
 	return snapshot.Observation.SampledAt.Local().Format(timeLayout) + suffix
 }
 
-func executionVerifiedAt(state projectState, run *steerline.Run) string {
+func executionVerifiedAt(state projectState, run *contracts.Run) string {
 	if run == nil || state.snapshot.Domain == nil || run.ExecutionID == "" {
 		return "未知"
 	}
@@ -1066,7 +1031,7 @@ func executionVerifiedAt(state projectState, run *steerline.Run) string {
 	return "未知"
 }
 
-func selectedAttempt(state projectState, run *steerline.Run) string {
+func selectedAttempt(state projectState, run *contracts.Run) string {
 	if state.attemptID != "" {
 		return state.attemptID
 	}

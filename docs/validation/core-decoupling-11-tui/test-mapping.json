@@ -1,0 +1,350 @@
+[
+  {
+    "test": "TestBackgroundDecisionRejectionDoesNotOpenAnotherProjectsDraft",
+    "old": "internal/steerline/console/layout_test.go",
+    "new": "internal/steerline/console/layout_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestBackgroundProjectBodyResponseStaysWithItsProject",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestBodyPagingUsesExactUTF8SafePageOffsets",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestBodyResponseIsBoundToGenerationAndRevision",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestCandidateCacheMustMatchCurrentConnectionInstance",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestClosedTaskWithUncertainExecutionStillNeedsAttention",
+    "old": "internal/steerline/console/layout_test.go",
+    "new": "internal/steerline/console/layout_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestColumnsAlignWithChineseAndLongTaskTitles",
+    "old": "internal/steerline/console/layout_test.go",
+    "new": "internal/steerline/console/layout_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestCompletedTaskShowsHistoricalExecutionInFourColumns",
+    "old": "internal/steerline/console/layout_test.go",
+    "new": "internal/steerline/console/layout_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestConfirmedStopCannotCreateASecondOutstandingRequest",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestConsoleFollowsCurrentAttemptUntilHistoryIsSelected",
+    "old": "internal/steerline/console/attempt_follow_test.go",
+    "new": "internal/steerline/console/attempt_follow_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestConsoleOffersWorkerFlowDecisionWithoutRecoveryActions",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestConsoleRestoresOnlyExplicitHistoryAttemptPin",
+    "old": "internal/steerline/console/attempt_follow_test.go",
+    "new": "internal/steerline/console/attempt_follow_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestConsoleTextEscapesTerminalControlCharacters",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestControlRequestIDFromErrorRemainsQueryOnly",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestDecisionAnswerDraftSurvivesStaleRevisionAndLengthRejection",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestDefinitiveStaleSubmissionDoesNotRemainOutstanding",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestEmptyRunningFilterExplainsWhyNativeTasksAreHidden",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestEnterOnlyOpensDetailAndStartKeepsOneRequestID",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart",
+    "old": "internal/steerline/console/execution_profile_test.go",
+    "new": "internal/steerline/console/execution_profile_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestFailedRefreshKeepsLastGoodReadOnlyDataAndCurrentError",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestFinalPhaseDoesNotPromoteNonMessageEvents",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestFoldReducerUsesExplicitTurnAndPreservesManualIntent",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestHelpAndCompactLayoutFitNarrowAndWideScreens",
+    "old": "internal/steerline/console/layout_test.go",
+    "new": "internal/steerline/console/layout_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestLateFinalReclassifiesSameItemAndOlderRevisionCannotOverwrite",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestLoadProjectsSupportsZeroPartialAndExplicitConfigs",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerlineapp/console_projects_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestLongExecutionProfileListKeepsSelectionVisible",
+    "old": "internal/steerline/console/profile_choice_test.go",
+    "new": "internal/steerline/console/profile_choice_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestLongTaskListKeepsSelectedRowInsideViewport",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestNarrowConsoleKeepsDetailAndSelectionEntryReachable",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestNativeTaskAndItsRunShareOneListRow",
+    "old": "internal/steerline/console/native_row_test.go",
+    "new": "internal/steerline/console/native_row_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestNativeTaskDetailKeepsBlockersWithoutPlanOrHashes",
+    "old": "internal/steerline/console/layout_test.go",
+    "new": "internal/steerline/console/layout_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestNativeTaskViewKeepsOffPageSelectionAndEscapesText",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestOpenTaskDisplaysAsBlockedWithoutChangingPendingExecution",
+    "old": "internal/steerline/console/layout_test.go",
+    "new": "internal/steerline/console/layout_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestOrcaExecutionProfilesNameAgentModelEffortAndRemoteTarget",
+    "old": "internal/steerline/console/execution_profile_test.go",
+    "new": "internal/steerline/console/execution_profile_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestPanelScrollHeightMatchesWrappedFooter",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestPendingDecisionPreviewHidesRunIdentity",
+    "old": "internal/steerline/console/layout_test.go",
+    "new": "internal/steerline/console/layout_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestProjectResponseCannotUpdateNewProjectView",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestProjectSwitchKeepsCurrentIdentityVisibleAndBackgroundNoticeIsolated",
+    "old": "internal/steerline/console/layout_test.go",
+    "new": "internal/steerline/console/layout_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestReadyStartChoosesConfiguredProfileAndBindsRequest",
+    "old": "internal/steerline/console/profile_choice_test.go",
+    "new": "internal/steerline/console/profile_choice_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestReconciliationRejectsChangedRequestPayload",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestRefreshTicksDoNotStackSlowProjectReads",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestRunDetailUsesItsFixedProfileAfterProjectConfigChanges",
+    "old": "internal/steerline/console/profile_choice_test.go",
+    "new": "internal/steerline/console/profile_choice_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestRunStatusKeepsBusinessExecutionAndUnknownAxesSeparate",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestSessionScrollAnchorMovesToGroupHeaderWhenAutoFoldHidesItem",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestStableTurnKeysSeparateSameItemIDsAndUnknownTurnDoesNotFold",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestStartDisablesStaleCandidatesAndAllowsManualParallel",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestStartIsNotPublishedWhenRequestIdentityCannotBePersisted",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestTaskDetailOnlyShowsItsOwnControlReceipt",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestTaskPreviewKeepsOneIdentityAndShowsFixedExecutionPlan",
+    "old": "internal/steerline/console/layout_test.go",
+    "new": "internal/steerline/console/layout_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestTaskSelectionAndTwoFocusRegions",
+    "old": "internal/steerline/console/layout_test.go",
+    "new": "internal/steerline/console/layout_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestUnavailableControlActionKeepsItsReasonInReturnedModel",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestUnicodeLongErrorFitsNarrowAndWidePanels",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestViewFileKeepsRequestIdentityWithoutCachingReceiptText",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestViewPreferencesCorruptionIsLocalToViewFile",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestViewPreferencesRejectInvalidOffsetsAndActionIdentity",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestViewProfileContainmentRejectsSiblingPaths",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  },
+  {
+    "test": "TestViewProfilesSeparateLiveWindowsAndRecoverAfterClose",
+    "old": "internal/steerline/console/console_test.go",
+    "new": "internal/steerline/console/console_test.go",
+    "run_pass_count": 1
+  }
+]

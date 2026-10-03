@@ -15,12 +15,15 @@ import (
 	"testing"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/console"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	"github.com/erranliu/SteerLine/internal/steerlineclient"
 )
 
 func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T) {
@@ -267,6 +270,58 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 		if err = json.Unmarshal(output, &queried); err != nil || queried.RequestID != id || queried.Status != "indeterminate" {
 			t.Fatalf("unknown CLI receipt became success or changed ID: %s / %v", output, err)
 		}
+
+		t.Run("CM72 actual console shares product adapter and original receipt", func(t *testing.T) {
+			refs, options, err := steerlineapp.PrepareConsole(context.Background(), configPath, "")
+			if err != nil || len(refs) != 1 || len(options.Clients) != 1 {
+				t.Fatalf("console construction: %+v / %v", refs, err)
+			}
+			tuiClient := options.Clients[refs[0].Key]
+			if _, ok := tuiClient.(*steerlineclient.Client); !ok {
+				t.Fatal("TUI uses another client implementation")
+			}
+			cliProfile := client.Project().Presentation
+			profiles := refs[0].Presentation.Profiles
+			if len(profiles) == 0 || len(profiles) != len(cliProfile.Profiles) || profiles[0].Digest == "" || profiles[0].Digest != cliProfile.Profiles[0].Digest || refs[0].Presentation.ConfigDigest != c.LoadedConfigDigest() {
+				t.Fatal("CLI and TUI adopted different accepted profiles")
+			}
+			if result, err := tuiClient.Receipt(context.Background(), id); err != nil || result.Status != "indeterminate" || result.RequestID != id {
+				t.Fatalf("TUI changed original CLI receipt: %+v / %v", result, err)
+			}
+			if snapshot := tuiClient.ReadProject(context.Background(), "70", api.ProjectSnapshot{}); snapshot.Connection.State != api.ConnectionConnected || snapshot.DomainError != "" {
+				t.Fatalf("actual console failed reading project: %+v", snapshot)
+			}
+
+			detached := tuiClient.Project()
+			detached.Presentation.Profiles[0].Digest = "consumer-mutated"
+			detached.Presentation.Profiles[0].ImplementationDisplay[0] = "consumer-mutated"
+			if actual := tuiClient.Project(); actual.Presentation.Profiles[0].Digest != profiles[0].Digest || actual.Presentation.Profiles[0].ImplementationDisplay[0] == "consumer-mutated" {
+				t.Fatal("view mutated accepted profile")
+			}
+			if _, err := tuiClient.InspectRecovery(context.Background(), "missing-run"); err == nil || !strings.Contains(err.Error(), "not found") {
+				t.Fatalf("actual recovery read port missing: %v", err)
+			}
+			model, err := console.NewModel(context.Background(), refs, options)
+			if err != nil {
+				t.Fatal(err)
+			}
+			updated, cmd := model.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+			if cmd == nil {
+				t.Fatal("TUI q did not exit")
+			}
+			if _, ok := cmd().(tea.QuitMsg); !ok {
+				t.Fatal("TUI q invoked a service action")
+			}
+			if err := updated.(console.Model).Close(); err != nil {
+				t.Fatal(err)
+			}
+			if connection := steerline.ConnectService(context.Background(), c); connection.State != steerline.ConnectionConnected {
+				t.Fatalf("TUI exit stopped service: %+v", connection)
+			}
+			if _, err := tuiClient.Request(context.Background(), id); err == nil {
+				t.Fatal("closed UI client retained resources")
+			}
+		})
 		if err = client.Close(); err != nil {
 			t.Fatal(err)
 		}

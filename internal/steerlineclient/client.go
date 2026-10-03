@@ -50,10 +50,11 @@ func Open(ctx context.Context, ref api.ProjectRef, factory api.Factory) (*Client
 		}
 		return nil, &api.Error{Kind: api.IdentityConflict, Cause: errors.New("product client project identity or configuration does not match")}
 	}
+	r.Project = api.CloneProjectRef(r.Project)
 	r.ExecutableTypes = append([]string(nil), r.ExecutableTypes...)
 	return &Client{resources: r}, nil
 }
-func (c *Client) Project() api.ProjectRef { return c.resources.Project }
+func (c *Client) Project() api.ProjectRef { return api.CloneProjectRef(c.resources.Project) }
 func (c *Client) Close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -335,7 +336,13 @@ func (c *Client) SubmitDecision(ctx context.Context, in api.DecisionInput) (cont
 		return contracts.CommandRecord{}, false, errors.New("decision requires a stable command ID before submission")
 	}
 	if in.RequestedBy == "" {
-		in.RequestedBy = c.resources.DefaultRequestedBy
+		in.RequestedBy = c.resources.DefaultAnswerer
+		if in.RequestedBy == "" {
+			in.RequestedBy = c.resources.DefaultRequestedBy
+		}
+	}
+	if in.Answer.AnsweredBy == "" {
+		in.Answer.AnsweredBy = in.RequestedBy
 	}
 	return c.resources.Decision.Submit(ctx, in)
 }
@@ -422,6 +429,35 @@ func (c *Client) ReadProject(ctx context.Context, selected string, previous api.
 	result.Observation = r.Observe(view.Runtime, view.RuntimeError, view.SampledAt)
 	result.Connection = r.Connect(ctx, &result.Observation)
 	result.Observation = result.Connection.Snapshot
+	result.DecisionReasons = map[string]string{}
+	if r.DecisionAvailability != nil && result.Observation.Runtime != nil {
+		for _, run := range result.Observation.Runtime.Runs {
+			if run != nil && run.Decision != nil {
+				reason := r.DecisionAvailability(ctx, run)
+				if reason == "" && (result.Connection.State != api.ConnectionConnected || !result.Connection.CanControl) {
+					reason = "服务离线或未就绪；答案不会写入，恢复服务后再通过同一命令提交"
+				}
+				if reason == "" && result.Connection.Snapshot.Runtime == nil {
+					reason = "缺少当前服务实例快照"
+				}
+				if reason == "" {
+					found := false
+					for _, capability := range result.Connection.Snapshot.Runtime.Service.Capabilities {
+						if capability == "answer_decision" {
+							found = true
+						}
+					}
+					if !found {
+						reason = "服务未声明 answer_decision 能力"
+					}
+				}
+				if reason == "" {
+					reason = "提交后核对原会话接收与工作轮次开始"
+				}
+				result.DecisionReasons[run.RunID] = reason
+			}
+		}
+	}
 	result.NativeTasks, result.SelectedNative, result.Domain = view.Tasks, view.SelectedTask, view.Domain
 	if view.TaskError != nil {
 		result.TaskError = view.TaskError.Error()
@@ -523,4 +559,44 @@ func (c *Client) Activity(ctx context.Context, runID, executionID, attemptID, cu
 		return api.LogBatch{}, errors.New("activity reader is unavailable")
 	}
 	return c.resources.ReadLog(path, cursor)
+}
+
+func (c *Client) CursorAfter(filter contracts.ConversationFilter, after int64) (string, error) {
+	if err := c.begin(context.Background()); err != nil {
+		return "", err
+	}
+	defer c.mu.RUnlock()
+	return query.ConversationCursorAfter(c.Project().Identity, filter, after)
+}
+func (c *Client) InspectRecovery(ctx context.Context, id string) (api.RecoveryInspection, error) {
+	if err := c.begin(ctx); err != nil {
+		return api.RecoveryInspection{}, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.InspectRecovery == nil {
+		return api.RecoveryInspection{}, errors.New("recovery inspector is unavailable")
+	}
+	return c.resources.InspectRecovery(ctx, id)
+}
+
+func (c *Client) CandidateAvailability(snapshot api.ProjectSnapshot, now time.Time) (bool, string) {
+	if err := c.begin(context.Background()); err != nil {
+		return false, err.Error()
+	}
+	defer c.mu.RUnlock()
+	return api.CandidateFreshness(c.resources.Project.Identity, snapshot, now)
+}
+func (c *Client) StartTaskAvailability(snapshot api.ProjectSnapshot, now time.Time) string {
+	if err := c.begin(context.Background()); err != nil {
+		return err.Error()
+	}
+	defer c.mu.RUnlock()
+	return api.StartTaskReason(c.resources.Project, snapshot, now)
+}
+func (c *Client) AutoDispatchAvailability(snapshot api.ProjectSnapshot) string {
+	if err := c.begin(context.Background()); err != nil {
+		return err.Error()
+	}
+	defer c.mu.RUnlock()
+	return api.AutoDispatchReason(c.resources.Project, snapshot)
 }

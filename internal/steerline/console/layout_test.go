@@ -8,14 +8,14 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func TestTaskSelectionAndTwoFocusRegions(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("alpha")
 	snapshot := readySnapshot(ref, now)
-	snapshot.Tasks.Tasks = append(snapshot.Tasks.Tasks, steerline.TaskCandidate{TaskID: "task-C", Title: "Build C"})
+	snapshot.Tasks.Tasks = append(snapshot.Tasks.Tasks, contracts.TaskCandidate{TaskID: "task-C", Title: "Build C"})
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.width, m.height = 120, 40
 	view := m.View()
@@ -98,9 +98,9 @@ func TestCompletedTaskShowsHistoricalExecutionInFourColumns(t *testing.T) {
 	ref := testProject("steer")
 	snapshot := readySnapshot(ref, now)
 	snapshot.Tasks = nil
-	run := &steerline.Run{TaskID: "3", RunID: "run-3", Title: "人工决策与恢复闭环", TaskStatus: "closed", ExecutionStatus: "failed", FinishTaskStatus: "blocked", EndedAt: &now}
-	snapshot.Observation.Runtime.Runs = []*steerline.Run{run}
-	snapshot.NativeTasks = &steerline.NativeTaskPage{Tasks: []steerline.NativeTaskDetail{{TaskRecord: steerline.TaskRecord{TaskID: "3", Title: run.Title, Status: "closed"}}}}
+	run := &contracts.Run{TaskID: "3", RunID: "run-3", Title: "人工决策与恢复闭环", TaskStatus: "closed", ExecutionStatus: "failed", FinishTaskStatus: "blocked", EndedAt: &now}
+	snapshot.Observation.Runtime.Runs = []*contracts.Run{run}
+	snapshot.NativeTasks = &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{{TaskRecord: contracts.TaskRecord{TaskID: "3", Title: run.Title, Status: "closed"}}}}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "run:run-3"
 	m.width = 100
@@ -145,14 +145,14 @@ func TestCompletedTaskShowsHistoricalExecutionInFourColumns(t *testing.T) {
 func TestTaskPreviewKeepsOneIdentityAndShowsFixedExecutionPlan(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("native")
-	ref.Config.TaskAuthority = "native"
+	ref.Presentation.TaskAuthority = "native"
 	snapshot := readySnapshot(ref, now)
 	snapshot.Tasks = nil
-	run := &steerline.Run{TaskID: "102", DomainTaskID: "102", RunID: "run-102", Title: "进行中的任务", TaskStatus: "in_progress", ExecutionStatus: "running"}
-	snapshot.Observation.Runtime.Runs = []*steerline.Run{run}
-	snapshot.NativeTasks = &steerline.NativeTaskPage{Tasks: []steerline.NativeTaskDetail{{TaskRecord: steerline.TaskRecord{TaskID: "102", Title: run.Title, Status: "in_progress"}, Successors: []string{"104"}}}}
-	fixed := steerline.FixedExecutionProfile{ID: "orca-local", Name: "本机执行", Host: "orca", Agent: "codex", ImplementationDisplay: []string{"Model：gpt-6-luna", "Reasoning effort：xhigh"}}
-	snapshot.Domain = &steerline.DomainSnapshot{WorkflowRuns: []steerline.WorkflowRunRecord{{WorkflowRunID: run.RunID, ExecutionProfile: &fixed}}}
+	run := &contracts.Run{TaskID: "102", DomainTaskID: "102", RunID: "run-102", Title: "进行中的任务", TaskStatus: "in_progress", ExecutionStatus: "running"}
+	snapshot.Observation.Runtime.Runs = []*contracts.Run{run}
+	snapshot.NativeTasks = &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{{TaskRecord: contracts.TaskRecord{TaskID: "102", Title: run.Title, Status: "in_progress"}, Successors: []string{"104"}}}}
+	fixed := contracts.FixedExecutionProfile{ID: "orca-local", Name: "本机执行", Host: "orca", Agent: "codex", ImplementationDisplay: []string{"Model：gpt-6-luna", "Reasoning effort：xhigh"}}
+	snapshot.Domain = &contracts.DomainSnapshot{WorkflowRuns: []contracts.WorkflowRunRecord{{WorkflowRunID: run.RunID, ExecutionProfile: &fixed}}}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "run:" + run.RunID
 	row := m.selectedRow(0)
@@ -177,7 +177,7 @@ func TestTaskPreviewKeepsOneIdentityAndShowsFixedExecutionPlan(t *testing.T) {
 }
 
 func TestOpenTaskDisplaysAsBlockedWithoutChangingPendingExecution(t *testing.T) {
-	if displayTaskStatus("open") != "阻塞" || displayExecutionStatus(&steerline.Run{ExecutionStatus: "pending"}) != "待开始" {
+	if displayTaskStatus("open") != "阻塞" || displayExecutionStatus(&contracts.Run{ExecutionStatus: "pending"}) != "待开始" {
 		t.Fatal("task and execution statuses were conflated")
 	}
 }
@@ -198,7 +198,7 @@ func TestPendingDecisionPreviewHidesRunIdentity(t *testing.T) {
 
 func TestClosedTaskWithUncertainExecutionStillNeedsAttention(t *testing.T) {
 	now := time.Now().UTC()
-	run := &steerline.Run{TaskStatus: "closed", ExecutionStatus: "unknown", FinishTaskStatus: "blocked"}
+	run := &contracts.Run{TaskStatus: "closed", ExecutionStatus: "unknown", FinishTaskStatus: "blocked"}
 	if !runNeedsAttention(run) || !filterAllows(5, rowRun, run) || filterAllows(6, rowRun, run) {
 		t.Fatal("unknown execution disappeared from attention")
 	}
@@ -214,9 +214,9 @@ func TestClosedTaskWithUncertainExecutionStillNeedsAttention(t *testing.T) {
 }
 
 func TestNativeTaskDetailKeepsBlockersWithoutPlanOrHashes(t *testing.T) {
-	task := steerline.NativeTaskDetail{
-		TaskRecord:   steerline.TaskRecord{TaskID: "12", Title: "中文任务", Status: "open"},
-		Predecessors: []steerline.TaskDependencyStatus{{TaskID: "9", Status: "discarded", Blocker: "discarded_predecessor"}},
+	task := contracts.NativeTaskDetail{
+		TaskRecord:   contracts.TaskRecord{TaskID: "12", Title: "中文任务", Status: "open"},
+		Predecessors: []contracts.TaskDependencyStatus{{TaskID: "9", Status: "discarded", Blocker: "discarded_predecessor"}},
 	}
 	task.Contract.SpecRef.Path = "docs/spec/task.spec.md"
 	task.Contract.SpecRef.SHA256 = "secret-document-hash"

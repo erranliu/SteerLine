@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline"
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
-const executionConfigChanged = "服务与控制台加载的执行配置不同；重开控制台并核对服务配置"
+const executionConfigChanged = api.ExecutionConfigChanged
 
 func renderRequirementsEvaluation(e *executionapi.RequirementsEvaluation, label string) []string {
 	if e == nil {
@@ -29,12 +30,10 @@ func renderRequirementsEvaluation(e *executionapi.RequirementsEvaluation, label 
 }
 
 func executionConfigMismatch(ref ProjectRef, snapshot ProjectSnapshot) bool {
-	runtime := snapshot.Connection.Snapshot.Runtime
-	return runtime != nil && ref.Config.LoadedConfigDigest() != "" &&
-		runtime.Service.ConfigDigest != ref.Config.LoadedConfigDigest()
+	return api.ExecutionConfigMismatch(ref, snapshot)
 }
 
-func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []string {
+func renderFixedRunExecutionProfile(state projectState, run *contracts.Run) []string {
 	fixed := fixedRunExecutionProfile(state, run)
 	if fixed == nil {
 		return nil
@@ -46,7 +45,7 @@ func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []st
 	lines = append(lines, "发布责任："+safeTerminalInlineText(fixed.PublicationPolicy.Publisher), "冻结发布目标："+safeTerminalInlineText(fixed.Publication.Provider.Kind)+" · "+safeTerminalInlineText(fixed.Publication.Provider.BaseURL)+"/"+safeTerminalInlineText(fixed.Publication.Provider.Repository)+" · base "+safeTerminalInlineText(fixed.Publication.BaseBranch), "Git remote："+safeTerminalInlineText(fixed.Publication.Remote)+" · "+safeTerminalInlineText(fixed.Publication.RemoteURL), "发布工具："+safeTerminalInlineText(fixed.Publication.Git.Executable)+" · query "+safeTerminalInlineText(fixed.Publication.Provider.Query.Executable)+" · close "+safeTerminalInlineText(fixed.Publication.Provider.Close.Executable), "认证引用："+safeTerminalInlineText(strings.Join(fixed.Publication.AuthenticationRefs, ", ")))
 	for _, tool := range []struct {
 		name    string
-		command steerline.Command
+		command contracts.Command
 	}{{"Git", fixed.Publication.Git}, {"Query", fixed.Publication.Provider.Query}, {"Create", fixed.Publication.Create}, {"Close", fixed.Publication.Provider.Close}} {
 		description := tool.command.Executable + " " + strings.Join(tool.command.Args, " ")
 		if tool.command.Executable == "" {
@@ -106,7 +105,7 @@ func renderFixedRunExecutionProfile(state projectState, run *steerline.Run) []st
 	return lines
 }
 
-func renderRunExecutionProfileSummary(state projectState, run *steerline.Run) []string {
+func renderRunExecutionProfileSummary(state projectState, run *contracts.Run) []string {
 	fixed := fixedRunExecutionProfile(state, run)
 	if fixed == nil {
 		return nil
@@ -114,11 +113,11 @@ func renderRunExecutionProfileSummary(state projectState, run *steerline.Run) []
 	return []string{"执行方案：" + safeTerminalInlineText(fixed.Host) + " · " + safeTerminalInlineText(fixed.Agent) + " · " + safeTerminalInlineText(strings.Join(fixed.ImplementationDisplay, " · "))}
 }
 
-func fixedRunExecutionProfile(state projectState, run *steerline.Run) *steerline.FixedExecutionProfile {
+func fixedRunExecutionProfile(state projectState, run *contracts.Run) *contracts.FixedExecutionProfile {
 	if run == nil {
 		return nil
 	}
-	workflows := []steerline.WorkflowRunRecord(nil)
+	workflows := []contracts.WorkflowRunRecord(nil)
 	if state.snapshot.Domain != nil {
 		workflows = state.snapshot.Domain.WorkflowRuns
 	}

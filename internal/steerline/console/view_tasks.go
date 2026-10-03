@@ -7,12 +7,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline"
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func projectCounts(state projectState, now time.Time) (ready, cached, running, decision, merge, attention int) {
 	if state.snapshot.Tasks != nil {
-		if valid, _ := candidateFreshness(state.ref, state.snapshot, now); valid {
+		if valid, _ := state.client.CandidateAvailability(state.snapshot, now); valid {
 			ready = len(state.snapshot.Tasks.Tasks)
 		} else {
 			cached = len(state.snapshot.Tasks.Tasks)
@@ -68,7 +69,7 @@ func renderRows(m Model, state projectState, width, height int) []string {
 		switch {
 		case !state.snapshotLoaded:
 			out = append(out, "正在读取项目快照…")
-		case snapshot.Connection.State == steerline.ConnectionOffline || snapshot.Connection.State == steerline.ConnectionNoRecord:
+		case snapshot.Connection.State == api.ConnectionOffline || snapshot.Connection.State == api.ConnectionNoRecord:
 			out = append(out, "服务离线；已有运行和日志仍可查看。")
 			out = append(out, "服务入口："+safeTerminalText(serviceWindowInstruction(state.ref)))
 			out = append(out, "配置："+safeTerminalText(state.ref.ConfigPath))
@@ -102,7 +103,7 @@ func renderRows(m Model, state projectState, width, height int) []string {
 	for _, row := range visible {
 		taskStatus := rowTaskStatus(row)
 		if row.kind == rowReady {
-			if valid, _ := candidateFreshness(state.ref, state.snapshot, m.clock.Now()); valid {
+			if valid, _ := state.client.CandidateAvailability(state.snapshot, m.clock.Now()); valid {
 				taskStatus = "可开始"
 			} else {
 				taskStatus = "缓存"
@@ -156,7 +157,7 @@ func rowExecutionStatus(row consoleRow) string {
 	return displayExecutionStatus(row.run)
 }
 
-func displayExecutionStatus(run *steerline.Run) string {
+func displayExecutionStatus(run *contracts.Run) string {
 	if run == nil {
 		return "—"
 	}
@@ -245,7 +246,7 @@ func contentWindow(rows []consoleRow, selected string, size int) []consoleRow {
 	return rows[start:end]
 }
 
-func runStatus(run *steerline.Run) string {
+func runStatus(run *contracts.Run) string {
 	if run == nil {
 		return "unknown"
 	}
@@ -276,7 +277,7 @@ func runStatus(run *steerline.Run) string {
 	return firstText(run.ExecutionStatus, "unknown")
 }
 
-func taskNextAction(run *steerline.Run) string {
+func taskNextAction(run *contracts.Run) string {
 	switch {
 	case run == nil:
 		return "无"
@@ -291,7 +292,7 @@ func taskNextAction(run *steerline.Run) string {
 	}
 }
 
-func runNeedsAttention(run *steerline.Run) bool {
+func runNeedsAttention(run *contracts.Run) bool {
 	if run == nil {
 		return false
 	}
@@ -304,7 +305,7 @@ func runNeedsAttention(run *steerline.Run) bool {
 	return run.FinishTaskStatus == "waiting_decision" || run.ExecutionStatus == "unknown" || run.ExecutionStatus == "failed" || run.ExecutionStatus == "blocked" || run.FinishTaskStatus == "blocked" || (run.Error != nil && strings.TrimSpace(*run.Error) != "") || (run.PR.QueryError != nil && strings.TrimSpace(*run.PR.QueryError) != "")
 }
 
-func historicalFailedRun(run *steerline.Run) bool {
+func historicalFailedRun(run *contracts.Run) bool {
 	return run != nil &&
 		run.TaskStatus == "closed" && run.EndedAt != nil &&
 		(run.ExecutionStatus == "failed" || run.ExecutionStatus == "blocked") &&
