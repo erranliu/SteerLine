@@ -46,3 +46,15 @@
 ## 自查与交接
 
 已自行读取完整实际 diff、Spec/Plan、消费者及生产路径；自查修复窗口提示残留文件探测、错项目注入、无效配置待查请求和产品摘要共享 slice。配置/支持原因依然由原实现所有者计算，不解析原生封套、不暴露写者。测试后只补验证文档，生产与测试源码保持验证时版本。无已知未解决问题。一个实现 PR，提交推送后停止写入，等待协调聊天独立复审；不合并、不启动其他任务或 automation。
+
+## 协调聊天独立复审
+
+2026-10-04 协调聊天核对本项 Spec/Plan、完整实际 diff、产品注入/CLI/TUI/恢复/游标/原请求/偏好与退出路径，以及测试迁移。原 console 失败断言文字对照表保存在本 run 的 cm72-test-assertion-message-audit.json；配置枚举的六项随同名测试迁入 app，配置/身份的 UI fixture 改为中性纯值，真实 app/profile/CLI 接线仍核对实际受理摘要。
+
+发现并在 `01e20a8cc452c672a9c1c6cf8f5300c86deeb680` 修复：不启用构建标签下的 console 直接 SQLite 驱动导入可逃过源码守卫。已加入 modernc.org/sqlite 及子路径禁用，现有生产/测试负向 fixture 增加同一驱动样本；新增反例先实际失败，修复后完整 CoreBoundary 通过，不放宽旧 #67 规则。
+
+协调聊天实际验证：UI/client 69 顶层 / 83 run-pass；app/CLI/既有接线与守卫 9 顶层 / 44 run-pass；修复后完整 CoreBoundary 1 顶层 / 22 run-pass，均 0 fail/skip。最终 quick 7 组 complete/passed、156 run-pass，0 fail/skip，源码为上述修复 commit；之后仅更新文档。
+
+首次 quick 的终端恢复场景业务断言已完成，但 Windows 临时目录清理因 SQLite 文件占用失败。Service/SQLite/原 lifecycle 测试不在本项改动范围，已核对正常停止及句柄关闭路径；独立运行原场景业务和清理全部通过，随后完整 quick 全部通过。首次文件占用来源未确认，原失败和诊断日志保留；没有改动清理断言、忽略失败或授予例外。
+
+精确命令/原始 JSON/最终 quick 位于 `C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-core-decoupling-20261003-01a10252` 的 cm72-coordinator-*.jsonl、cm72-terminal-cleanup-diagnostic.jsonl、cm72-reviewed-quick/（首轮失败）与 cm72-reviewed-quick-final/（最终通过）。git diff --check、修改文档的本地链接检查通过；无已授权验收例外。

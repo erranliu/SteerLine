@@ -107,7 +107,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 
 `go run ./cmd/test-feedback -quick` 已包含 15 包的规则/实现/app/CD67 守卫，不另加重复守卫。按 [测试计划](../spec/core-decoupling-07-cleanup.plan.md) 运行必要定向和一次 quick，明确临时 STEERLINE_HOME，仅隔离 Git/SQLite/协议 mock。原生支持和 opt-in live 证据保留，本次未启用。远端权限缺证拒绝不变。
 
-#67/#68/#69 已实际合并；本页同步 #71 实施交付并集成 #69 的写端口。#70 搬唯一 SQL 实现；#71/#72 已接通公共产品 DTO/adapter/CLI/TUI。共享 contracts/组装/quick 顺序集成。没有新平台、remote 权限、兼容层或插件系统。
+#67/#68/#69/#71 已实际合并；本页同步 #72 实施交付并保持 #69 的写端口。#70 搬唯一 SQL 实现；#71/#72 已接通公共产品 DTO/adapter/CLI/TUI。共享 contracts/组装/quick 顺序集成。没有新平台、remote 权限、兼容层或插件系统。
 
 ## 全 OS / 构建标签源码索引
 
