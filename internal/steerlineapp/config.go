@@ -248,10 +248,6 @@ func canonicalPath(value string) string {
 	return path
 }
 
-func sanitizeName(value string) string {
-	return strings.Trim(regexp.MustCompile(`[^a-zA-Z0-9._-]+`).ReplaceAllString(value, "-"), "-.")
-}
-
 func loadedConfigDigest(project, global []byte) string {
 	digest := sha256.New()
 	_, _ = digest.Write(project)

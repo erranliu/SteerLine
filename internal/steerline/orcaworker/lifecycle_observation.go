@@ -401,8 +401,4 @@ func (o *nativeLifecycleObserver) Close(ctx context.Context) error {
 	}
 }
 
-func (l *ExecutionLifecycle) settledEvidence(snapshot executionapi.LifecycleSnapshot, turn NativeTurnState) *executionapi.TurnEvidence {
-	return nativeTurnEvidence(snapshot, turn)
-}
-
 var _ executionapi.LifecycleObserver = (*nativeLifecycleObserver)(nil)

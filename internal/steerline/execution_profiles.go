@@ -180,15 +180,6 @@ func cloneRequirementsEvaluation(value *executionapi.RequirementsEvaluation) *ex
 	return &copy
 }
 
-func clonePublicationSettingsValue(value contracts.PublicationSettings) contracts.PublicationSettings {
-	value.Provider.Query.Args = slices.Clone(value.Provider.Query.Args)
-	value.Provider.Close.Args = slices.Clone(value.Provider.Close.Args)
-	value.Git.Args = slices.Clone(value.Git.Args)
-	value.Create.Args = slices.Clone(value.Create.Args)
-	value.AuthenticationRefs = slices.Clone(value.AuthenticationRefs)
-	return value
-}
-
 func (p ExecutionProfile) MatchesConfig(c Config) bool {
 	actual := c.projectExecutionProfile()
 	actual.ID, actual.Name = p.ID, p.Name

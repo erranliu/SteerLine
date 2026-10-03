@@ -59,7 +59,7 @@
 
 ## 主包解耦后续清理与存储/客户端
 
-目标：`CORE-IMPLEMENTATION-DECOUPLING`。#64–#67 的既有范围继续按各自独立规格交付；以下任务遵守[后续维护共同约束](core-maintenance-constraints.md)，#68 后两线可按共享修改归属并行。
+目标：`CORE-IMPLEMENTATION-DECOUPLING`。#63–#67 已交付，#67 PR190 于 2026-10-03 真实合并，历史断言/失败记录保留。#68 清理候选及消费者/验证见 [交付记录](../validation/core-decoupling-07-cleanup/README.md)，等待独立复审及真实合并。以下任务遵守[后续维护共同约束](core-maintenance-constraints.md)，#68 合并后两线可按共享修改归属并行。
 
 | 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |

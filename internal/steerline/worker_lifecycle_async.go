@@ -3,13 +3,7 @@ package steerline
 import (
 	"context"
 	"errors"
-
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
-
-func appServerAskDecision(run *Run, questions []executionapi.Question, route executionapi.QuestionRoute) (*DecisionState, error) {
-	return WriteDecisionRequest(run, decisionRequestFromEventFact(executionapi.EventFact{Questions: questions, QuestionRoute: &route}))
-}
 
 func workerProcessEnvironment(c Config, run *Run, base []string) []string {
 	blocked := append(c.publicationSettings().AuthenticationRefs, "BEADS_*", "BD_*", "GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_*", "GIT_CONFIG_VALUE_*")

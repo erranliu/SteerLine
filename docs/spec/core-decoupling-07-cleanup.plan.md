@@ -16,3 +16,17 @@ CM68-1 对应删除清单、全部源码条件消费者审查及产品构建；C
 在实施时按实际改动选择少量现有用例，记录每个所选入口实际命中，不重复 #67 完整扩展性验证或全量测试。quick 已包含守卫时不再另跑重复组；未包含则用现有定向追加方式接入。运行 git diff --check。
 
 PR 提供删除项及依据、唯一所有者、旧到新断言映射和实际验证结果；无真实删除候选的类别如实说明，不制造删除数量。向 #69/#71 交接一致基线与模块修改归属。规划阶段不运行上述代码验证，不创建中心任务。
+
+## 测试计划
+
+实施起点：`d8bacbd75994a183c6d54c027abe103d26ae6896`，平台确认 #67 PR190 已真实合并。删除项固定在 [候选清单](../validation/core-decoupling-07-cleanup/candidate-inventory.json)，消费者、保留项和断言归属见 [交付记录](../validation/core-decoupling-07-cleanup/README.md)。不新增场景或测试环境能力。
+
+| 级别 / 组或场景 ID | 环境、命令 | 时点 | 通过条件 / 证据 |
+| --- | --- | --- | --- |
+| L1 定向：中心 receipt/intent/rollback、配置复制 | Windows；隔离 Git/SQLite，中性 fake；`go run ./cmd/test-feedback -out bin/cd68/focused -- -p 1 -parallel 1 ./internal/steerline -count=1 -run '^(TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver\|TestWorkerIntentIsDurableBeforeDispatchAndFailurePreventsDispatch\|TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure\|TestWorkerFlowContextsDoNotExchangeExecutionProfiles)$'` | 清理稳定后、quick 前 | 包及各 parent 有 JSON run/pass，complete/pass，0 fail/skip；`bin/cd68/focused/summary.json`，归档命中至交付目录 |
+| L1 既有 quick：中心、纯规则、实现、应用、CD67 守卫 | 同上；协议 mock；`go run ./cmd/test-feedback -quick -out bin/cd68/quick` | 最终代码候选上一次 | 15 包各一次，指定 parent/subtest 实际命中，complete/pass、0 fail/skip；`bin/cd68/quick/summary.json`。quick 已含完整 #67 守卫，不重复独立跑守卫或第三实现矩阵 |
+| 静态 CM68-1 / CM68-3、产品构建 | 全 tracked OS/tag Go、脚本、嵌入资源、协议与反射消费者；`go build ./cmd/steerline ./cmd/test-feedback ./cmd/orca-probe`；Windows 与 Linux 产品交叉构建；`git diff --check` | 删除前审查，提交前复核 | 无遗失消费者/协议入口、无前置边界缺口；构建 exit 0、diff 无错误；交付目录 `validation-results.json` 与源码/import 索引 |
+
+每条测试命令显式将 `STEERLINE_HOME` 指向本次临时目录；不启用原生/live 开关，不调用真实项目服务/用户 CLI/任务库或 `C:/SteerlineRuntime`。测试只使用自身临时现场，不恢复或覆盖历史配置。task/readiness 与 projection 代表已由 quick 覆盖；原生身份、未知回执、人工门槛、旧格式拒绝、权限拒绝和唯一 TaskDelivery 复用 CD67 既有组合。仅删除未调用 helper，没有测试断言删除或迁移。
+
+未选 full/L2/L3/live：本次不改变业务行为、启动/权限映射或环境能力；无需真实模型、账号、新平台或完整故障矩阵。

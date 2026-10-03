@@ -5,11 +5,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
-func nativeStartupBlockers(record TaskRecord, graph taskGraphSnapshot) []string {
-	_, delivered := graph.Deliveries[record.TaskID]
-	return task.StartupBlockers(record.Status, delivered, graph.Authority.DispatchPaused, graph.Authority.DispatchMode, graph.ExecutionSlotBusy)
-}
-
 func nativeDeliveryInconsistent(record TaskRecord, graph taskGraphSnapshot) bool {
 	_, delivered := graph.Deliveries[record.TaskID]
 	return task.DeliveryInconsistent(record.Status, delivered)

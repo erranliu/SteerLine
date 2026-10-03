@@ -3,7 +3,6 @@ package steerline
 import (
 	"context"
 	"errors"
-	"fmt"
 	"reflect"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
@@ -131,12 +130,4 @@ func (s *Service) verifyHostExecutionEvidence(ctx context.Context, run *Run, exe
 		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "host process is not managed by its original execution"}
 	}
 	return nil
-}
-
-func hostFact(reason, confidence, source, detail, turn string) contracts.HostFact {
-	return contracts.HostFact{Reason: reason, Confidence: confidence, Source: source, Detail: detail, Turn: turn}
-}
-
-func (s *Service) hostActionFailure(action executionapi.HostActionInput, err error) error {
-	return fmt.Errorf("host action %s: %w", action.Kind, err)
 }

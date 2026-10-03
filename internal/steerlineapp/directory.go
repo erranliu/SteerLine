@@ -669,14 +669,6 @@ func (backend localExecutionBackend) validateRef(ref executionapi.ExecutionRef) 
 	return nil
 }
 
-func remoteWorkerError(err error) error {
-	var remoteErr *remote.Error
-	if errors.As(err, &remoteErr) {
-		return &executionapi.BackendError{Code: executionapi.BackendErrorCode(remoteErr.Code), Diagnostic: remoteErr.Diagnostic, Cause: remoteErr.Cause}
-	}
-	return err
-}
-
 func inspectBoundWorkspace(ctx context.Context, c steerline.Config, ref executionapi.ExecutionRef, processHost executionapi.ManagedProcessHost) (executionapi.WorkspaceInspection, error) {
 	if ref.Incomplete || ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || !regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`).MatchString(ref.BaseCommit) {
 		return executionapi.WorkspaceInspection{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "workspace ref is incomplete"}
