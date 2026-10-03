@@ -1619,7 +1619,7 @@
     "test": "TestUnsupportedOrcaWorkerFlowConfigurationCannotClaim",
     "new": "internal/steerline/worker_config_test.go",
     "owner": "steerline",
-    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts",
+    "change": "unregistered selection with a real neutral directory retains typed BackendUnsupported rejection before external claim; actual supported/unsupported platform configuration and remote Claim refusal remain in app/integration owners",
     "new_test": "TestUnregisteredWorkerFlowConfigurationCannotClaim"
   },
   {
@@ -1648,49 +1648,49 @@
     "test": "TestWorkerEnvironmentWaitsForOriginalAgentDetection",
     "new": "internal/steerlineintegration/native_environment_cd67_test.go",
     "owner": "steerlineintegration",
-    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+    "change": "original unqualified process nil assertion and zero-input wait preserved through OriginalHost; accepted original agent-terminal operation is retained, agent-bind commits qualification once; actual app public flow keeps nonce/deadline/physical identity"
   },
   {
     "old": "internal/steerline/worker_environment_test.go",
     "test": "TestWorkerEnvironmentUnidentifiedAgentKeepsOriginalDeadline",
     "new": "internal/steerline/environment_business_test.go",
     "owner": "steerline",
-    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+    "change": "same center deadline/host-wait/deferred original question and whitespace/PR precedence/manual restart gate/unknown original intent-receipt/recheck-new-fault assertions through the existing neutral lifecycle and bounded host facts; native protocol parsing removed"
   },
   {
     "old": "internal/steerline/worker_environment_test.go",
     "test": "TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR",
     "new": "internal/steerline/environment_business_test.go",
     "owner": "steerline",
-    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+    "change": "same center deadline/host-wait/deferred original question and whitespace/PR precedence/manual restart gate/unknown original intent-receipt/recheck-new-fault assertions through the existing neutral lifecycle and bounded host facts; native protocol parsing removed"
   },
   {
     "old": "internal/steerline/worker_environment_test.go",
     "test": "TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch",
     "new": "internal/steerline/environment_business_test.go",
     "owner": "steerline",
-    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+    "change": "same center deadline/host-wait/deferred original question and whitespace/PR precedence/manual restart gate/unknown original intent-receipt/recheck-new-fault assertions through the existing neutral lifecycle and bounded host facts; native protocol parsing removed"
   },
   {
     "old": "internal/steerline/worker_environment_test.go",
     "test": "TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput",
     "new": "internal/steerline/environment_business_test.go",
     "owner": "steerline",
-    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+    "change": "same center deadline/host-wait/deferred original question and whitespace/PR precedence/manual restart gate/unknown original intent-receipt/recheck-new-fault assertions through the existing neutral lifecycle and bounded host facts; native protocol parsing removed"
   },
   {
     "old": "internal/steerline/worker_environment_test.go",
     "test": "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt",
     "new": "internal/steerline/environment_business_test.go",
     "owner": "steerline",
-    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+    "change": "same center deadline/host-wait/deferred original question and whitespace/PR precedence/manual restart gate/unknown original intent-receipt/recheck-new-fault assertions through the existing neutral lifecycle and bounded host facts; native protocol parsing removed"
   },
   {
     "old": "internal/steerline/worker_environment_test.go",
     "test": "TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll",
     "new": "internal/steerline/environment_business_test.go",
     "owner": "steerline",
-    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+    "change": "same center deadline/host-wait/deferred original question and whitespace/PR precedence/manual restart gate/unknown original intent-receipt/recheck-new-fault assertions through the existing neutral lifecycle and bounded host facts; native protocol parsing removed"
   },
   {
     "old": "internal/steerline/worker_local_test.go",
@@ -1726,5 +1726,13 @@
     "new": "internal/steerlineintegration/cli_window_windows_cd67_test.go",
     "owner": "steerlineintegration",
     "change": "real product CLI plus actual app loader; original process/startup/log/no-write assertions retained, isolated fixture only; original Windows skip/visible-console conditions preserved"
+  },
+  {
+    "old": "internal/steerline/service_client_test.go",
+    "test": "TestStartServiceReportsPreflightFailureAndPendingHandshake/timeout keeps startup identity and does not repeat launch",
+    "new": "internal/steerline/service_client_test.go",
+    "new_test": "TestWaitForStartupMarksConfirmedEarlyExit",
+    "owner": "steerline",
+    "change": "core actual waitForStartup still verifies terminal failed result and persistent startup record; outer product CLI separately verifies unchanged pending identity, no ready runtime and real public offline/ProcessAbsent after exact process kill"
   }
 ]

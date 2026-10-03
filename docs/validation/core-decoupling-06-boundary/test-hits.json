@@ -1,194 +1,1550 @@
-[
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67AdditionalImplementation",
-    "action": "run"
+{
+  "candidate_commit": "1347b387433bc0ebc2d50da0e2db49f764a25128",
+  "totals": {
+    "pass": 127,
+    "fail": 0,
+    "skip": 0
   },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
-    "action": "run"
+  "packages": {
+    "github.com/erranliu/SteerLine/internal/steerline": "pass",
+    "github.com/erranliu/SteerLine/internal/steerline/taskgraph": "pass",
+    "github.com/erranliu/SteerLine/internal/steerline/taskview": "pass",
+    "github.com/erranliu/SteerLine/internal/steerline/workerflow": "pass",
+    "github.com/erranliu/SteerLine/internal/steerline/execution": "pass",
+    "github.com/erranliu/SteerLine/internal/steerline/contracts": "pass",
+    "github.com/erranliu/SteerLine/internal/steerline/projection": "pass",
+    "github.com/erranliu/SteerLine/internal/steerline/query": "pass",
+    "github.com/erranliu/SteerLine/internal/steerline/sqlite": "pass",
+    "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker": "pass",
+    "github.com/erranliu/SteerLine/internal/steerline/codexworker": "pass",
+    "github.com/erranliu/SteerLine/internal/steerline/orcaworker": "pass",
+    "github.com/erranliu/SteerLine/internal/steerlineapp": "pass",
+    "github.com/erranliu/SteerLine/internal/steerlineintegration": "pass"
   },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
-    "action": "fail"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67AdditionalImplementation",
-    "action": "fail"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary",
-    "action": "run"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary/negative_source_fixtures",
-    "action": "run"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
-    "action": "run"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
-    "action": "pass"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
-    "action": "run"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
-    "action": "pass"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
-    "action": "run"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
-    "action": "pass"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
-    "action": "run"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
-    "action": "pass"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
-    "action": "run"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
-    "action": "pass"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary/negative_source_fixtures",
-    "action": "pass"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary",
-    "action": "pass"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestDetectNormalizer",
-    "action": "run"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestDetectNormalizer",
-    "action": "pass"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
-    "test": "TestCodexNormalizer",
-    "action": "run"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
-    "test": "TestCodexNormalizer",
-    "action": "pass"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
-    "test": "TestWorkerTurnFindsPRBeforeFinalMessage",
-    "action": "run"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
-    "test": "TestWorkerTurnFindsPRBeforeFinalMessage",
-    "action": "pass"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
-    "test": "TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity",
-    "action": "run"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
-    "test": "TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity",
-    "action": "pass"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
-    "test": "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation",
-    "action": "run"
-  },
-  {
-    "report": "initial-focused",
-    "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
-    "test": "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation",
-    "action": "pass"
-  },
-  {
-    "report": "boundary-current",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary",
-    "action": "run"
-  },
-  {
-    "report": "boundary-current",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
-    "action": "run"
-  },
-  {
-    "report": "boundary-current",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
-    "action": "fail"
-  },
-  {
-    "report": "boundary-current",
-    "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
-    "test": "TestCD67CoreBoundary",
-    "action": "fail"
-  }
-]
+  "events": [
+    {
+      "group": "quick-core",
+      "package": "github.com/erranliu/SteerLine/internal/steerline",
+      "test": "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt",
+      "action": "run"
+    },
+    {
+      "group": "quick-core",
+      "package": "github.com/erranliu/SteerLine/internal/steerline",
+      "test": "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt",
+      "action": "pass"
+    },
+    {
+      "group": "quick-core",
+      "package": "github.com/erranliu/SteerLine/internal/steerline",
+      "test": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged",
+      "action": "run"
+    },
+    {
+      "group": "quick-core",
+      "package": "github.com/erranliu/SteerLine/internal/steerline",
+      "test": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_task_branch",
+      "action": "run"
+    },
+    {
+      "group": "quick-core",
+      "package": "github.com/erranliu/SteerLine/internal/steerline",
+      "test": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_task_branch",
+      "action": "pass"
+    },
+    {
+      "group": "quick-core",
+      "package": "github.com/erranliu/SteerLine/internal/steerline",
+      "test": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_repository",
+      "action": "run"
+    },
+    {
+      "group": "quick-core",
+      "package": "github.com/erranliu/SteerLine/internal/steerline",
+      "test": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_repository",
+      "action": "pass"
+    },
+    {
+      "group": "quick-core",
+      "package": "github.com/erranliu/SteerLine/internal/steerline",
+      "test": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_base",
+      "action": "run"
+    },
+    {
+      "group": "quick-core",
+      "package": "github.com/erranliu/SteerLine/internal/steerline",
+      "test": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_base",
+      "action": "pass"
+    },
+    {
+      "group": "quick-core",
+      "package": "github.com/erranliu/SteerLine/internal/steerline",
+      "test": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/closed_unmerged",
+      "action": "run"
+    },
+    {
+      "group": "quick-core",
+      "package": "github.com/erranliu/SteerLine/internal/steerline",
+      "test": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/closed_unmerged",
+      "action": "pass"
+    },
+    {
+      "group": "quick-core",
+      "package": "github.com/erranliu/SteerLine/internal/steerline",
+      "test": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged",
+      "action": "pass"
+    },
+    {
+      "group": "quick-core",
+      "package": "github.com/erranliu/SteerLine/internal/steerline",
+      "test": "TestWorkerFlowClaimNeedsNoProjectSteps",
+      "action": "run"
+    },
+    {
+      "group": "quick-core",
+      "package": "github.com/erranliu/SteerLine/internal/steerline",
+      "test": "TestWorkerFlowClaimNeedsNoProjectSteps",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/smallest_numeric_cycle_first",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/smallest_numeric_cycle_first",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/self_cycle",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/self_cycle",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/acyclic_disconnected_graph",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint/acyclic_disconnected_graph",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestStableTaskOrderUsesPriorityTimeAndNumericID",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestStableTaskOrderUsesPriorityTimeAndNumericID",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestProjectNeighborhoodKeepsBranchesMergesAndDisconnects",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestProjectNeighborhoodKeepsBranchesMergesAndDisconnects",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestProjectSortsNumericIDsAndReportsNodeLimit",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestProjectSortsNumericIDsAndReportsNodeLimit",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestProjectStatusFilterRetainsAnchorAndMarksOmittedBoundary",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestProjectStatusFilterRetainsAnchorAndMarksOmittedBoundary",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestProjectDepthLimitAndBoundaryEdgeCap",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestProjectDepthLimitAndBoundaryEdgeCap/depth",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestProjectDepthLimitAndBoundaryEdgeCap/depth",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestProjectDepthLimitAndBoundaryEdgeCap/500_edge_cap",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestProjectDepthLimitAndBoundaryEdgeCap/500_edge_cap",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskgraph",
+      "test": "TestProjectDepthLimitAndBoundaryEdgeCap",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskview",
+      "test": "TestGraphViewUsesOneSnapshot",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/taskview",
+      "test": "TestGraphViewUsesOneSnapshot",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery/live_turn",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery/live_turn",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery/live_question",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery/live_question",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery/completed_after_exit",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery/completed_after_exit",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery/dead_incomplete",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery/dead_incomplete",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery/dead_descendants_unknown",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery/dead_descendants_unknown",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery/unreachable",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery/unreachable",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery/unknown_external_outcome",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery/unknown_external_outcome",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestClassifyRecovery",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestTwoTurnsKeepOriginalSessionAndPR",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestTwoTurnsKeepOriginalSessionAndPR",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestLateTurnCannotChangeCurrentState",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/workerflow",
+      "test": "TestLateTurnCannotChangeCurrentState",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestExecutionRecordsKeepWireIdentity",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestExecutionRecordsKeepWireIdentity",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestAdapterAndBackendErrorsPreserveCause",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestAdapterAndBackendErrorsPreserveCause",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestPRCluesKeepOrderAndDeduplicate",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestPRCluesKeepOrderAndDeduplicate",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestCD63CodecIdentityAndVersion",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestCD63CodecIdentityAndVersion/profile_envelope_scope_and_deep_copy",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestCD63CodecIdentityAndVersion/profile_envelope_scope_and_deep_copy",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestCD63CodecIdentityAndVersion/resource_envelope_identity_and_bounds",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestCD63CodecIdentityAndVersion/resource_envelope_identity_and_bounds",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestCD63CodecIdentityAndVersion/formatted_JSON_round_trip",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestCD63CodecIdentityAndVersion/formatted_JSON_round_trip",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestCD63CodecIdentityAndVersion",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestImplementationDataEnvelopeBindsScopeAndCopiesPayload",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestImplementationDataEnvelopeBindsScopeAndCopiesPayload",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestImplementationDataEnvelopeRejectsBadIdentityVersionAndSize",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestImplementationDataEnvelopeRejectsBadIdentityVersionAndSize",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestHostMutationRequiresOneFixedOriginalTarget",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestHostMutationRequiresOneFixedOriginalTarget",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestLifecycleCandidateRequiresOneMatchingInput",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestLifecycleCandidateRequiresOneMatchingInput/turn_preparation",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestLifecycleCandidateRequiresOneMatchingInput/turn_preparation",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestLifecycleCandidateRequiresOneMatchingInput/mismatched_action",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestLifecycleCandidateRequiresOneMatchingInput/mismatched_action",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestLifecycleCandidateRequiresOneMatchingInput/ambiguous_union",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestLifecycleCandidateRequiresOneMatchingInput/ambiguous_union",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestLifecycleCandidateRequiresOneMatchingInput/unknown_action",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestLifecycleCandidateRequiresOneMatchingInput/unknown_action",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestLifecycleCandidateRequiresOneMatchingInput",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestLifecycleRequestRequiresOriginalDurableOperation",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestLifecycleRequestRequiresOriginalDurableOperation",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestLifecycleReceiptCloneOwnsImplementationPayloadAndFacts",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestLifecycleReceiptCloneOwnsImplementationPayloadAndFacts",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestExecutionPolicyRequiresExplicitAuthority",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestExecutionPolicyRequiresExplicitAuthority",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestQuestionRouteVersionIdentityDigestAndLimit",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestQuestionRouteVersionIdentityDigestAndLimit/digest",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestQuestionRouteVersionIdentityDigestAndLimit/digest",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestQuestionRouteVersionIdentityDigestAndLimit/version",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestQuestionRouteVersionIdentityDigestAndLimit/version",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestQuestionRouteVersionIdentityDigestAndLimit/purpose",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestQuestionRouteVersionIdentityDigestAndLimit/purpose",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestQuestionRouteVersionIdentityDigestAndLimit",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/target",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/target",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/agent",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/agent",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/protocol",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/protocol",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/schema",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/schema",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/platform-version",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/platform-version",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/agent-version",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/agent-version",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/unsupported",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/unsupported",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/not-tested",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/not-tested",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/no-evidence",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/no-evidence",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/tool-missing",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/tool-missing",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/tool-unknown",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/tool-unknown",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/tool-version",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/tool-version",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/tool-target",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/tool-target",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/credential-missing",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/credential-missing",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/credential-unknown",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/credential-unknown",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/credential-site",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence/credential-site",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsMatchBoundEvidence",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsRejectUnregisteredAndDuplicateItems",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/execution",
+      "test": "TestRequirementsRejectUnregisteredAndDuplicateItems",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/contracts",
+      "test": "TestContractDecoderPreservesStrictFieldsAndSingleValue",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/contracts",
+      "test": "TestContractDecoderPreservesStrictFieldsAndSingleValue",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/projection",
+      "test": "TestBuildOwnsRecordsAndMetadataAcrossRefreshes",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/projection",
+      "test": "TestBuildOwnsRecordsAndMetadataAcrossRefreshes",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/projection",
+      "test": "TestProjectionRejectsBrokenBindingsWithoutReusingOldViews",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/projection",
+      "test": "TestProjectionRejectsBrokenBindingsWithoutReusingOldViews",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/projection",
+      "test": "TestProjectionRetainsDeliveryAndReservationRules",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/projection",
+      "test": "TestProjectionRetainsDeliveryAndReservationRules",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/projection",
+      "test": "TestExecutionProjectionKeepsRemotePathAndWhitespaceSemantics",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/projection",
+      "test": "TestExecutionProjectionKeepsRemotePathAndWhitespaceSemantics",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestConversationQueriesUseIndependentEventPortAndBoundCursor",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestConversationQueriesUseIndependentEventPortAndBoundCursor",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestConversationPageBudgetDefersOverflowPayloadDecoding",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestConversationPageBudgetDefersOverflowPayloadDecoding",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestConversationReaderRejectsPreviousEventFormat",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestConversationReaderRejectsPreviousEventFormat",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestConversationReaderRejectsMissingSourceRole",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestConversationReaderRejectsMissingSourceRole",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestConversationBodyAndRawQueriesUseSeparatePorts",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestConversationBodyAndRawQueriesUseSeparatePorts",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestConversationCapabilitiesNeedNoUnrelatedReader",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestConversationCapabilitiesNeedNoUnrelatedReader",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestTaskQueriesUseOnlyTaskReader",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestTaskQueriesUseOnlyTaskReader",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestReadyQueriesRejectMissingCapabilityAndProject",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestReadyQueriesRejectMissingCapabilityAndProject",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestTaskCursorRemainsStrictWithoutSQLite",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestTaskCursorRemainsStrictWithoutSQLite",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestTaskQueriesRejectReaderScopeAndCursorDrift",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestTaskQueriesRejectReaderScopeAndCursorDrift",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestEventQueriesUseOnlyEventReader",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/query",
+      "test": "TestEventQueriesUseOnlyEventReader",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+      "test": "TestConversationReaderKeepsSourceScopeOnReadOnlyConnection",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+      "test": "TestConversationReaderKeepsSourceScopeOnReadOnlyConnection",
+      "action": "pass"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+      "test": "TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding",
+      "action": "run"
+    },
+    {
+      "group": "quick-rules",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+      "test": "TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestLoadConfigRequiresExplicitRemoteCancellationFalse",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestLoadConfigRequiresExplicitRemoteCancellationFalse",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestCD63CodecIdentityAndVersion",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestCD63CodecIdentityAndVersion",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestRemoteContinuationRequiresOriginalPeerAndTerminal",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestRemoteContinuationRequiresOriginalPeerAndTerminal",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestRemoteWorkspaceKeepsPeerPathAndRuntime",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestRemoteWorkspaceKeepsPeerPathAndRuntime",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestRemoteReplyRejectsOversizeWithoutMutation",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestRemoteReplyRejectsOversizeWithoutMutation",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestSupervisedRunCoordinatorsAreDistinctAndFenced",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestSupervisedRunCoordinatorsAreDistinctAndFenced",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-remote",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+      "test": "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-codec",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+      "test": "TestCodexNormalizer",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-codec",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+      "test": "TestCodexNormalizer",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-codec",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+      "test": "TestOversizedWorkerLinePreservesRawOutputAndLaterEvents",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-codec",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+      "test": "TestOversizedWorkerLinePreservesRawOutputAndLaterEvents",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-identity",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+      "test": "TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-identity",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+      "test": "TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-identity",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+      "test": "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-identity",
+      "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+      "test": "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation",
+      "action": "pass"
+    },
+    {
+      "group": "quick-owner-app",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+      "test": "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions",
+      "action": "run"
+    },
+    {
+      "group": "quick-owner-app",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+      "test": "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/supported_app_server_receipt_barriers",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/supported_app_server_receipt_barriers",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/supported_terminal_recovery_and_original_identity",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/supported_terminal_recovery_and_original_identity",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/two_turns_and_settlement",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/two_turns_and_settlement",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/lost_start_no_resend",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/lost_start_no_resend",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/lost_reply_and_ack",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/lost_reply_and_ack",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/replacement_session_rejected",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/replacement_session_rejected",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67AdditionalImplementation",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures/nested_generated_name_is_not_an_exclusion",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures/nested_generated_name_is_not_an_exclusion",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures/top_level_output_name_is_not_an_exclusion",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures/top_level_output_name_is_not_an_exclusion",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/negative_source_fixtures",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+      "action": "run"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+      "action": "pass"
+    },
+    {
+      "group": "quick-boundary",
+      "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+      "test": "TestCD67CoreBoundary",
+      "action": "pass"
+    }
+  ]
+}

@@ -126,9 +126,9 @@ func TestStartServiceReportsPreflightFailureAndPendingHandshake(t *testing.T) {
 			t.Fatal(err)
 		}
 		pendingIdentity = nil
-		observed, err := observeCLIStartupExit(t, config, result.StartupID, result.LogPath, 3*time.Second)
-		if err != nil || observed.Status != "failed" {
-			t.Fatalf("killed startup was not observed as failed: %+v %v", observed, err)
+		observed, err := observeCLIStartupExit(config, result.StartupID, 3*time.Second)
+		if err != nil || observed.CanControl || observed.State != steerline.ConnectionOffline || observed.Process.State != steerline.ProcessAbsent {
+			t.Fatalf("killed startup was not observed as offline: %+v %v", observed, err)
 		}
 	})
 
@@ -232,19 +232,14 @@ func terminateCLIProcess(identity *executionapi.ProcessIdentity) error {
 	}
 	return p.Kill()
 }
-func observeCLIStartupExit(t *testing.T, c steerline.Config, id, log string, budget time.Duration) (steerline.ServiceStartResult, error) {
-	t.Helper()
+func observeCLIStartupExit(c steerline.Config, id string, budget time.Duration) (steerline.ServiceConnection, error) {
 	deadline := time.Now().Add(budget)
 	for time.Now().Before(deadline) {
 		connection := steerline.ConnectService(context.Background(), c)
-		record, err := readCLIStartupRecord(c, id)
-		if err != nil {
-			return steerline.ServiceStartResult{}, err
-		}
-		if record.ProcessIdentity != nil && steerlineapp.NewProcessHost(time.Second).InspectProcess(record.ProcessIdentity) == "process absent" {
-			return steerline.ServiceStartResult{Status: "failed", StartupID: id, LogPath: log, Connection: connection}, nil
+		if connection.StartupID == id && connection.Process.State == steerline.ProcessAbsent {
+			return connection, nil
 		}
 		time.Sleep(30 * time.Millisecond)
 	}
-	return steerline.ServiceStartResult{}, fmt.Errorf("original pending process exit was not proven")
+	return steerline.ServiceConnection{}, fmt.Errorf("original pending process exit was not proven")
 }
