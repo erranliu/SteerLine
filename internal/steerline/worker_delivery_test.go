@@ -24,12 +24,12 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 	if _, err = commands.CreateTaskBatch(ctx, c, input, strings.Repeat("a", 32), validation.AuthorityVersion, "operator"); err != nil {
 		t.Fatal(err)
 	}
-	graph, err := store.taskGraphSnapshot(ctx, c.Identity())
+	graph, err := store.TaskGraphSnapshot(ctx, c.Identity())
 	if err != nil {
 		t.Fatal(err)
 	}
 	task := graph.ByID["8"]
-	contract, err := nativeContractForTask(ctx, store, c.Identity(), task)
+	contract, err := store.TaskContract(ctx, c.Identity(), task)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,8 +45,8 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 	claimed.Claimant = "operator"
 	claimed.Version++
 	claimed.UpdatedAt = created
-	if err = store.Transact(ctx, func(tx DomainTx) error {
-		if e := tx.(*sqliteTx).UpdateNativeTaskCAS(claimed, task.Version); e != nil {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
+		if e := tx.UpdateNativeTaskCAS(claimed, task.Version); e != nil {
 			return e
 		}
 		if e := tx.PutWorkflowRun(wf); e != nil {
@@ -113,7 +113,7 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	if _, err := commands.CreateTaskBatch(ctx, c, input, strings.Repeat("8", 32), 1, "operator"); err != nil {
 		t.Fatal(err)
 	}
-	graph, err := store.taskGraphSnapshot(ctx, c.Identity())
+	graph, err := store.TaskGraphSnapshot(ctx, c.Identity())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,8 +131,8 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	claimed := task
 	claimed.Status, claimed.Claimant, claimed.Version, claimed.UpdatedAt = "in_progress", "operator", task.Version+1, at
-	if err := store.Transact(ctx, func(domainTx DomainTx) error {
-		tx := domainTx.(*sqliteTx)
+	if err := store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+		tx := domainTx
 		if err := tx.UpdateNativeTaskCAS(claimed, task.Version); err != nil {
 			return err
 		}
@@ -202,15 +202,15 @@ func TestWorkerFlowClaimNeedsNoProjectSteps(t *testing.T) {
 	if _, err = commands.CreateTaskBatch(ctx, c, input, strings.Repeat("b", 32), validation.AuthorityVersion, "operator"); err != nil {
 		t.Fatal(err)
 	}
-	graph, err := store.taskGraphSnapshot(ctx, c.Identity())
+	graph, err := store.TaskGraphSnapshot(ctx, c.Identity())
 	if err != nil {
 		t.Fatal(err)
 	}
 	authority := graph.Authority
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err := store.Transact(ctx, func(tx DomainTx) error {
-		return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+	if err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
+		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)
 	}

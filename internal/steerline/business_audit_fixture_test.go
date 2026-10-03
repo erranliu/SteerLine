@@ -32,14 +32,14 @@ func neutralAuditServiceWithRequirements(t *testing.T, policy executionapi.Execu
 	if _, err := commands.CreateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(8), nil), newID(), 1, "operator"); err != nil {
 		t.Fatal(err)
 	}
-	authority, err := store.nativeAuthority(ctx, c.Identity())
+	authority, err := store.NativeAuthority(ctx, c.Identity())
 	if err != nil {
 		t.Fatal(err)
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err := store.Transact(ctx, func(tx DomainTx) error {
-		return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+	if err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
+		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)
 	}

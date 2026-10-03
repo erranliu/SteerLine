@@ -67,7 +67,7 @@ func ReadTaskSnapshot(c Config) (*TaskSnapshot, error) {
 		return nil, err
 	}
 	defer store.Close()
-	authority, err := store.nativeAuthority(context.Background(), c.identity)
+	authority, err := store.NativeAuthority(context.Background(), c.identity)
 	if err != nil {
 		return nil, err
 	}

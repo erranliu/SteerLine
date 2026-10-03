@@ -10,7 +10,7 @@ import (
 func TestWorkerCommitRollsBackRecordsReceiptsEventsAndCheckpoint(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
-	before, revision, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
+	before, revision, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
 	original, err := copyDomainSnapshot(service.committed)
 	require(t, err)
@@ -18,8 +18,8 @@ func TestWorkerCommitRollsBackRecordsReceiptsEventsAndCheckpoint(t *testing.T) {
 	service.pendingEvents = append(service.pendingEvents, event)
 	service.executionRecord(run).LastEvent = ptr("must roll back")
 	service.setDecisionStatus(run, "superseded")
-	require(t, service.domainStore.Transact(ctx, func(tx DomainTx) error {
-		_, err := tx.(*sqliteTx).tx.ExecContext(ctx, `CREATE TRIGGER fail_worker_checkpoint BEFORE UPDATE ON projection BEGIN SELECT RAISE(ABORT,'checkpoint unavailable'); END`)
+	require(t, testSQLite(service).transactSQLite(ctx, func(tx *sqliteTx) error {
+		_, err := tx.tx.ExecContext(ctx, `CREATE TRIGGER fail_worker_checkpoint BEFORE UPDATE ON projection BEGIN SELECT RAISE(ABORT,'checkpoint unavailable'); END`)
 		return err
 	}))
 	// The checkpoint is the final write; its failure must undo the entire intent.
@@ -27,7 +27,7 @@ func TestWorkerCommitRollsBackRecordsReceiptsEventsAndCheckpoint(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "checkpoint unavailable") {
 		t.Fatalf("checkpoint fault was not injected: %v", err)
 	}
-	after, nextRevision, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
+	after, nextRevision, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
 	durable, err := service.domainStore.Query(ctx, service.Config.Identity())
 	require(t, err)
@@ -90,14 +90,14 @@ func TestWorkerCommitChecksSettledTaskInsideTransaction(t *testing.T) {
 	task := *nativeTaskRecord(service.domain.Tasks, run.DomainTaskID)
 	discarded, err := discardTaskRecord(task, "concurrent settlement", "operator", newID(), nil, now())
 	require(t, err)
-	require(t, service.domainStore.Transact(ctx, func(tx DomainTx) error { return tx.UpdateNativeTaskCAS(discarded, task.Version) }))
-	before, revision, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
+	require(t, testSQLite(service).transactSQLite(ctx, func(tx *sqliteTx) error { return tx.UpdateNativeTaskCAS(discarded, task.Version) }))
+	before, revision, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
 	service.setDecisionStatus(run, "reply_accepted")
 	if err := service.commitWorker(run); !isNativeErrorCode(err, "task_not_active") {
 		t.Fatalf("settled task resumed from stale actor state: %v", err)
 	}
-	after, nextRevision, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
+	after, nextRevision, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
 	if revision != nextRevision || !bytes.Equal(before, after) {
 		t.Fatal("settled-task rejection advanced the checkpoint")

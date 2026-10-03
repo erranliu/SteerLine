@@ -32,7 +32,7 @@ func TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := store.Transact(context.Background(), func(tx DomainTx) error {
+	if err := store.transactSQLite(context.Background(), func(tx *sqliteTx) error {
 		return tx.PutProjection(c.Identity(), 1, payload)
 	}); err != nil {
 		t.Fatal(err)
@@ -95,14 +95,14 @@ func TestWorkerFlowRejectsOldLocalExecutionProtocol(t *testing.T) {
 	if _, err := commands.CreateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(8), nil), strings.Repeat("c", 32), 1, "operator"); err != nil {
 		t.Fatal(err)
 	}
-	authority, err := store.nativeAuthority(ctx, c.Identity())
+	authority, err := store.NativeAuthority(ctx, c.Identity())
 	if err != nil {
 		t.Fatal(err)
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err := store.Transact(ctx, func(tx DomainTx) error {
-		return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+	if err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
+		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -129,7 +129,7 @@ func TestWorkerFlowRejectsOldLocalExecutionProtocol(t *testing.T) {
 		t.Fatal("claimed execution is missing")
 	}
 	old.Protocol = string(executionapi.ProtocolLocalProcess)
-	if err := store.Transact(ctx, func(tx DomainTx) error { return tx.PutExecution(old) }); err != nil {
+	if err := store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutExecution(old) }); err != nil {
 		t.Fatal(err)
 	}
 	workspaceRoot := filepath.Join(c.RunDir, "worktrees")

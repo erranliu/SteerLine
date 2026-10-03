@@ -36,7 +36,7 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
 			return nativeErr("unsupported_schema", "unsupported workflow version")
 		}
 	}
-	authority, err := s.domainStore.nativeAuthority(ctx, s.Config.identity)
+	authority, err := s.domainStore.NativeAuthority(ctx, s.Config.identity)
 	if err != nil {
 		return err
 	}
@@ -242,7 +242,7 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task TaskRecord,
 	evidence := NativePRCleanupReceipt{WorkflowRunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, AttemptID: attempt.AttemptID, PRURL: info.URL, Repository: info.Repository, BaseBranch: info.BaseBranch, HeadRevision: info.HeadRevision, State: info.State, Merged: info.Merged, ObservedAt: now()}
 	data, _ := json.Marshal(evidence)
 	requestID := digestValue(struct{ TaskID, Item string }{task.TaskID, cleanupItem})[:32]
-	_, err = (CommandService{Store: s.domainStore, Project: s.Config.identity}).RecordNativeCleanupReceipt(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
+	_, err = (CommandService{Store: s.commandStore, Project: s.Config.identity}).RecordNativeCleanupReceipt(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
 	return err
 }
 func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task TaskRecord, cleanupItem string) error {
@@ -291,10 +291,10 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task Task
 	data, _ := json.Marshal(receipt)
 	requestID := digestValue(struct{ TaskID, Item string }{task.TaskID, cleanupItem})[:32]
 	if err != nil {
-		progressErr := (CommandService{Store: s.domainStore, Project: s.Config.identity}).RecordNativeWorkspaceCleanupProgress(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
+		progressErr := (CommandService{Store: s.commandStore, Project: s.Config.identity}).RecordNativeWorkspaceCleanupProgress(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
 		return errors.Join(err, progressErr)
 	}
-	_, err = (CommandService{Store: s.domainStore, Project: s.Config.identity}).RecordNativeCleanupReceipt(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
+	_, err = (CommandService{Store: s.commandStore, Project: s.Config.identity}).RecordNativeCleanupReceipt(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
 	return err
 }
 
@@ -330,7 +330,7 @@ func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupIt
 	}
 	data, _ := json.Marshal(evidence)
 	requestID := digestValue(struct{ TaskID, Item, OperationID string }{taskID, cleanupItem, op.ID})[:32]
-	_, err = (CommandService{Store: s.domainStore, Project: s.Config.identity}).RecordNativeCleanupReceipt(ctx, taskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
+	_, err = (CommandService{Store: s.commandStore, Project: s.Config.identity}).RecordNativeCleanupReceipt(ctx, taskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
 	return err
 }
 
@@ -471,7 +471,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if s.targetTask != "" && s.targetTask != task.TaskID {
 			continue
 		}
-		authority, authErr := s.domainStore.nativeAuthority(ctx, c.identity)
+		authority, authErr := s.domainStore.NativeAuthority(ctx, c.identity)
 		if authErr != nil {
 			return authErr
 		}
@@ -483,7 +483,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if s.reservedRunID != "" {
 			workflowRunID = s.reservedRunID
 		}
-		receipt, claimErr := (CommandService{Store: s.domainStore, Project: c.identity}).ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: task.TaskID, RequestID: requestID, ExpectedTaskVersion: task.Version, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: c.Claimant, Explicit: s.explicitDispatch, WorkflowRunID: workflowRunID, ExecutionProfile: s.dispatchProfile, ServiceInstanceID: s.State.Service.InstanceID})
+		receipt, claimErr := (CommandService{Store: s.commandStore, Project: c.identity}).ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: task.TaskID, RequestID: requestID, ExpectedTaskVersion: task.Version, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: c.Claimant, Explicit: s.explicitDispatch, WorkflowRunID: workflowRunID, ExecutionProfile: s.dispatchProfile, ServiceInstanceID: s.State.Service.InstanceID})
 		if claimErr != nil {
 			if isNativeErrorCode(claimErr, "task_not_ready", "stale_version", "slot_busy", "dispatch_paused", "wrong_mode", "task_discarded") {
 				if s.targetTask != "" {
@@ -575,7 +575,7 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 	if err != nil {
 		return err
 	}
-	receipt, err := (CommandService{Store: s.domainStore, Project: fixed.config.identity}).CompleteNativeTask(ctx, fixed.config, task.TaskID, task.Version, workflow.WorkflowRunID, publicationClient(fixed.config))
+	receipt, err := (CommandService{Store: s.commandStore, Project: fixed.config.identity}).CompleteNativeTask(ctx, fixed.config, task.TaskID, task.Version, workflow.WorkflowRunID, publicationClient(fixed.config))
 	if err != nil {
 		return err
 	}

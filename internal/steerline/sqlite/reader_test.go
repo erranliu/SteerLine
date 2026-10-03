@@ -14,6 +14,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
 	readsqlite "github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
@@ -30,10 +31,10 @@ func TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding(t *testing.T) {
 	authority := task.ProjectTaskAuthority{ProjectIdentity: "project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
 	at := time.Now().UTC()
 	large := []byte(strings.Repeat("x", query.MaxEventPageBytes))
-	err = writer.Transact(ctx, func(tx steerline.DomainTx) error {
-		if err := tx.PutProjectTaskAuthority(authority); err != nil {
-			return err
-		}
+	if err = writer.InitializeProject(ctx, authority); err != nil {
+		t.Fatal(err)
+	}
+	err = writer.TransactTaskBatch(ctx, func(tx persistence.BatchTx) error {
 		if err := tx.PutTaskBatch(task.TaskBatchRecord{ProjectIdentity: "project", BatchID: "batch", SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("a", 64), CommandID: "command", TaskIDs: map[string]string{"a": "1", "b": "2"}, CreatedAt: at}, 1, 0); err != nil {
 			return err
 		}

@@ -7,46 +7,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
-// recordWrite declares one record and the exact value read before computing it.
-// A nil Before declares creation. It is never populated by scanning Runtime.
-type recordWrite[T any] struct {
-	Before *T
-	After  T
-}
-
-// workerCommit is the bounded write set of one worker transition. Operations
-// and events may also be committed independently by their service owners.
-type workerCommit struct {
-	Binding            *executionapi.ExecutionRef
-	ExecutionOperation *recordWrite[executionapi.Operation]
-	Project            string
-	TaskID             string
-	WorkflowID         string
-	ExecutionID        string
-	AttemptID          string
-	ControlRevision    uint64
-	AuthorityRevision  uint64
-	ExpectedAttemptID  string
-	Workflow           *recordWrite[WorkflowRunRecord]
-	Execution          *recordWrite[ExecutionRecord]
-	Attempt            *recordWrite[StepAttemptRecord]
-	RetiredAttempt     *recordWrite[StepAttemptRecord]
-	Decisions          []recordWrite[DecisionRecord]
-	Operations         []recordWrite[OperationRecord]
-	Events             []DomainEvent
-	Checkpoint         ServiceCheckpoint
-}
-
-type workerCommitResult struct {
-	ControlRevision uint64
-	Checkpoint      ServiceCheckpoint
-}
-
-func (s *SQLiteStore) commitWorker(ctx context.Context, request workerCommit) (workerCommitResult, error) {
+func (s *SQLiteStore) CommitWorker(ctx context.Context, request workerCommit) (workerCommitResult, error) {
 	var result workerCommitResult
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if request.Project == "" || request.Checkpoint.Repository.Identity != request.Project {

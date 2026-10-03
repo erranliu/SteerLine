@@ -60,7 +60,7 @@ func (s *Service) recordWorkerTurnStarted(run *Run, workflow *WorkflowRunRecord,
 				if json.Unmarshal(deferred.Request, &request) != nil || json.Unmarshal(deferred.Answer, &answer) != nil || request.QuestionRoute != nil || request.HostTarget != nil {
 					continue
 				}
-				command, err := s.domainStore.CommandByIdempotency(context.Background(), s.Config.identity, decisionAnswerKey(answer))
+				command, err := s.commandStore.CommandByIdempotency(context.Background(), s.Config.identity, decisionAnswerKey(answer))
 				if err == nil && command.CommandID == commandID && command.Status == "accepted" && command.TargetID == deferred.DecisionID {
 					deferred.Status, deferred.Version, deferred.UpdatedAt = "reply_accepted", deferred.Version+1, now()
 					s.markWorkerDecisionWrite(deferred.DecisionID)

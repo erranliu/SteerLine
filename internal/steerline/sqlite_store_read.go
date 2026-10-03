@@ -21,15 +21,12 @@ func (s *SQLiteStore) Query(ctx context.Context, project string) (DomainSnapshot
 type queryContext = sqlite.QueryContext
 type commandRowQuerier = sqlite.CommandRowQuerier
 
-func readNativeCommandByKey(ctx context.Context, q commandRowQuerier, project, key string) (CommandRecord, bool, error) {
-	return sqlite.ReadCommandByKey(ctx, q, project, key)
-}
-func (s *SQLiteStore) lookupNativeCommand(ctx context.Context, project, key string) (CommandRecord, bool, error) {
-	return readNativeCommandByKey(ctx, s.db, project, key)
+func (s *SQLiteStore) LookupCommand(ctx context.Context, project, key string) (CommandRecord, bool, error) {
+	return sqlite.ReadCommandByKey(ctx, s.db, project, key)
 }
 
-func (t *sqliteTx) lookupNativeCommand(ctx context.Context, project, key string) (CommandRecord, bool, error) {
-	return readNativeCommandByKey(ctx, t.tx, project, key)
+func (t *sqliteTx) LookupCommand(ctx context.Context, project, key string) (CommandRecord, bool, error) {
+	return sqlite.ReadCommandByKey(ctx, t.tx, project, key)
 }
 
 func querySnapshot(ctx context.Context, db queryContext, project string) (DomainSnapshot, error) {
@@ -44,14 +41,16 @@ func (s *SQLiteStore) EventPayload(ctx context.Context, project string, id, offs
 func (s *SQLiteStore) Commands(ctx context.Context, project, status string, limit int) ([]CommandRecord, error) {
 	return s.reader().Commands(ctx, project, status, limit)
 }
-func (s *SQLiteStore) serviceCommands(ctx context.Context, project, status string, limit int) ([]CommandRecord, error) {
+func (s *SQLiteStore) ServiceCommands(ctx context.Context, project, status string, limit int) ([]CommandRecord, error) {
 	return s.reader().CommandsFiltered(ctx, project, status, limit, []string{"answer_decision", "retry_run", "mark_stopped", "resolve_command"})
 }
 func (s *SQLiteStore) Command(ctx context.Context, project, id string) (CommandRecord, error) {
-	return s.reader().Command(ctx, project, id)
+	v, err := s.reader().Command(ctx, project, id)
+	return v, persistenceError(err)
 }
 func (s *SQLiteStore) CommandByIdempotency(ctx context.Context, project, key string) (CommandRecord, error) {
-	return s.reader().CommandByIdempotency(ctx, project, key)
+	v, err := s.reader().CommandByIdempotency(ctx, project, key)
+	return v, persistenceError(err)
 }
 func (s *SQLiteStore) NativeTaskPage(ctx context.Context, project, id, databaseID string, revision uint64, offset, limit int) (NativeTaskPage, error) {
 	return s.reader().NativeTaskPage(ctx, project, id, databaseID, revision, offset, limit)

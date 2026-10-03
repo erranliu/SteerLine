@@ -36,14 +36,14 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	if _, err = commands.CreateTaskBatch(ctx, base, taskBatchFixture(t, base, commit, batchTasks(501), nil), strings.Repeat("1", 32), 1, "planner"); err != nil {
 		t.Fatal(err)
 	}
-	authority, err := store.nativeAuthority(ctx, base.Identity())
+	authority, err := store.NativeAuthority(ctx, base.Identity())
 	if err != nil {
 		t.Fatal(err)
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err = store.Transact(ctx, func(tx DomainTx) error {
-		return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
+		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -126,14 +126,14 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 	if _, err := commands.CreateTaskBatch(ctx, c, input, strings.Repeat("d", 32), validation.AuthorityVersion, "operator"); err != nil {
 		t.Fatal(err)
 	}
-	authority, err := store.nativeAuthority(ctx, c.Identity())
+	authority, err := store.NativeAuthority(ctx, c.Identity())
 	if err != nil {
 		t.Fatal(err)
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err := store.Transact(ctx, func(tx DomainTx) error {
-		return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+	if err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
+		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)
 	}

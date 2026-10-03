@@ -12,7 +12,7 @@ func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
 	s, run := waitingDecisionService(t)
 	t.Cleanup(func() { _ = s.Close() })
 	ctx := context.Background()
-	before, _, err := s.domainStore.LoadProjection(ctx, s.Config.identity)
+	before, _, err := testSQLite(s).LoadProjection(ctx, s.Config.identity)
 	require(t, err)
 	var old ServiceCheckpoint
 	require(t, decode(before, &old))
@@ -40,7 +40,7 @@ func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
 	if len(events) == 0 {
 		t.Fatal("worker event was not persisted")
 	}
-	after, _, err := s.domainStore.LoadProjection(ctx, s.Config.identity)
+	after, _, err := testSQLite(s).LoadProjection(ctx, s.Config.identity)
 	require(t, err)
 	var checkpoint ServiceCheckpoint
 	require(t, decode(after, &checkpoint))
@@ -70,26 +70,26 @@ func TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure(t *testing.T) {
 			s, run := waitingDecisionService(t)
 			t.Cleanup(func() { _ = s.Close() })
 			ctx := context.Background()
-			before, _, err := s.domainStore.LoadProjection(ctx, s.Config.identity)
+			before, _, err := testSQLite(s).LoadProjection(ctx, s.Config.identity)
 			require(t, err)
 			s.executionRecord(run).LastEvent = ptr("must roll back")
 			s.note(run, "steer", "worker", "observed", "must roll back", "", nil)
 			if stage == "stale" {
 				current := *s.executionRecord(run)
 				current.LastEvent = ptr("concurrent writer")
-				require(t, s.domainStore.Transact(ctx, func(tx DomainTx) error { return tx.PutExecution(current) }))
+				require(t, testSQLite(s).transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutExecution(current) }))
 			} else if stage == "event" {
-				_, err := s.domainStore.db.ExecContext(ctx, `CREATE TRIGGER reject_worker_event BEFORE INSERT ON events BEGIN SELECT RAISE(FAIL, 'event failure'); END`)
+				_, err := testSQLite(s).db.ExecContext(ctx, `CREATE TRIGGER reject_worker_event BEFORE INSERT ON events BEGIN SELECT RAISE(FAIL, 'event failure'); END`)
 				require(t, err)
 			} else {
-				_, err := s.domainStore.db.ExecContext(ctx, `CREATE TRIGGER reject_worker_checkpoint BEFORE UPDATE ON projection BEGIN SELECT RAISE(FAIL, 'checkpoint failure'); END`)
+				_, err := testSQLite(s).db.ExecContext(ctx, `CREATE TRIGGER reject_worker_checkpoint BEFORE UPDATE ON projection BEGIN SELECT RAISE(FAIL, 'checkpoint failure'); END`)
 				require(t, err)
 			}
 			commitErr := s.commitWorker(run)
 			if commitErr == nil {
 				t.Fatal("worker commit unexpectedly succeeded")
 			}
-			after, _, err := s.domainStore.LoadProjection(ctx, s.Config.identity)
+			after, _, err := testSQLite(s).LoadProjection(ctx, s.Config.identity)
 			require(t, err)
 			if string(after) != string(before) {
 				t.Fatal("failed worker commit advanced checkpoint")
@@ -121,7 +121,7 @@ func TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver(t *test
 	opID, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
 	require(t, err)
 	baseline := recordFingerprint(*snapshotOperation(&s.committed, opID))
-	_, err = s.domainStore.db.Exec(`CREATE TRIGGER reject_worker_receipt_event BEFORE INSERT ON events BEGIN SELECT RAISE(FAIL, 'receipt event failure'); END`)
+	_, err = testSQLite(s).db.Exec(`CREATE TRIGGER reject_worker_receipt_event BEFORE INSERT ON events BEGIN SELECT RAISE(FAIL, 'receipt event failure'); END`)
 	require(t, err)
 	identity, err := currentProcessIdentity()
 	require(t, err)
@@ -227,7 +227,7 @@ func TestWorkerIntentIsDurableBeforeDispatchAndFailurePreventsDispatch(t *testin
 			ctx := context.Background()
 			key := "worker-turn:" + run.ExecutionID + ":" + newID()
 			if fail {
-				_, err := s.domainStore.db.ExecContext(ctx, `CREATE TRIGGER reject_worker_intent BEFORE UPDATE ON projection BEGIN SELECT RAISE(FAIL, 'checkpoint failure'); END`)
+				_, err := testSQLite(s).db.ExecContext(ctx, `CREATE TRIGGER reject_worker_intent BEFORE UPDATE ON projection BEGIN SELECT RAISE(FAIL, 'checkpoint failure'); END`)
 				require(t, err)
 			}
 			calls := 0

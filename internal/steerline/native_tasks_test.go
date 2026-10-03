@@ -174,7 +174,7 @@ func TestNativeProjectInitializesOnceAndRejectsMismatchedBinding(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	authority, err := reader.nativeAuthority(context.Background(), c.Identity())
+	authority, err := reader.NativeAuthority(context.Background(), c.Identity())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -194,10 +194,10 @@ func TestNativeProjectInitializesOnceAndRejectsMismatchedBinding(t *testing.T) {
 	next := authority
 	next.AuthorityVersion = 2
 	next.UpdatedAt = authority.UpdatedAt.Add(time.Minute)
-	if openErr = writable.Transact(context.Background(), func(tx DomainTx) error { return tx.UpdateProjectTaskAuthorityCAS(next, 1) }); openErr != nil {
+	if openErr = writable.transactSQLite(context.Background(), func(tx *sqliteTx) error { return tx.UpdateProjectTaskAuthorityCAS(next, 1) }); openErr != nil {
 		t.Fatal(openErr)
 	}
-	if openErr = writable.Transact(context.Background(), func(tx DomainTx) error { return tx.UpdateProjectTaskAuthorityCAS(next, 1) }); openErr == nil || !strings.Contains(openErr.Error(), "stale_version") {
+	if openErr = writable.transactSQLite(context.Background(), func(tx *sqliteTx) error { return tx.UpdateProjectTaskAuthorityCAS(next, 1) }); openErr == nil || !strings.Contains(openErr.Error(), "stale_version") {
 		t.Fatalf("stale project authority CAS was accepted: %v", openErr)
 	}
 	_ = writable.Close()
@@ -264,14 +264,14 @@ func TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation(t *testing.T) {
 	batchDigest := strings.Repeat("a", 64)
 	created := time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)
 	staleBatch := TaskBatchRecord{BatchID: "stale-batch", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("f", 64), CreatedAt: created, CommandID: "stale-command", TaskIDs: map[string]string{"stale": "99"}}
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutTaskBatch(staleBatch, 2, 0) }); err == nil || !strings.Contains(err.Error(), "stale_version") {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutTaskBatch(staleBatch, 2, 0) }); err == nil || !strings.Contains(err.Error(), "stale_version") {
 		t.Fatalf("stale project authority created a batch: %v", err)
 	}
 	var staleCount int
 	if err = store.db.QueryRow(`SELECT COUNT(*) FROM task_batches WHERE project_identity=? AND batch_id=?`, project, "stale-batch").Scan(&staleCount); err != nil || staleCount != 0 {
 		t.Fatalf("stale batch transaction left partial state: count=%d err=%v", staleCount, err)
 	}
-	err = store.Transact(ctx, func(tx DomainTx) error {
+	err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if err := tx.PutTaskBatch(TaskBatchRecord{BatchID: "batch-1", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: batchDigest, CreatedAt: created, CommandID: "command-1", TaskIDs: map[string]string{"two": "2", "ten": "10"}}, 1, 0); err != nil {
 			return err
 		}
@@ -309,7 +309,7 @@ func TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	replayedBatch := TaskBatchRecord{BatchID: "batch-1", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: batchDigest, CreatedAt: created, CommandID: "command-1", TaskIDs: map[string]string{"two": "2", "ten": "10"}}
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutTaskBatch(replayedBatch, 1, 0) }); err != nil {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutTaskBatch(replayedBatch, 1, 0) }); err != nil {
 		t.Fatalf("identical batch retry was not idempotent: %v", err)
 	}
 	query := NewQueryService(store, project)
@@ -338,11 +338,11 @@ func TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation(t *testing.T) {
 		t.Fatalf("bad task detail: %+v", show)
 	}
 	duplicate := TaskRecord{ProjectIdentity: project, TaskID: "2", BatchID: "batch-1", Title: "replacement", Type: "task", ContractID: "contract-2", Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutTask(duplicate) }); err == nil {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutTask(duplicate) }); err == nil {
 		t.Fatal("duplicate numeric task ID was accepted")
 	}
 	// Any committed center write changes the database revision and invalidates a continuation cursor.
-	if err = store.Transact(ctx, func(tx DomainTx) error {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		_, err := tx.AdvanceTaskGraphRevision(project, first.AuthorityVersion, first.GraphRevision)
 		return err
 	}); err != nil {
@@ -385,7 +385,7 @@ func TestNativeTaskCASGuardsAndDeliveryProjection(t *testing.T) {
 	contract := nativeContract(t, c, commit, "contract-1")
 	created := time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)
 	task := TaskRecord{ProjectIdentity: project, TaskID: "7", BatchID: "batch-7", Title: "task", Type: "task", Priority: 2, ContractID: contract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
-	err = store.Transact(ctx, func(tx DomainTx) error {
+	err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if err := tx.PutTaskBatch(TaskBatchRecord{BatchID: "batch-7", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("b", 64), CreatedAt: created, CommandID: "cmd-7", TaskIDs: map[string]string{"seven": "7"}}, 1, 0); err != nil {
 			return err
 		}
@@ -402,23 +402,23 @@ func TestNativeTaskCASGuardsAndDeliveryProjection(t *testing.T) {
 	claimed.Claimant = "agent"
 	claimed.Version = 2
 	claimed.UpdatedAt = created.Add(time.Minute)
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.UpdateNativeTaskCAS(claimed, 1) }); err != nil {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.UpdateNativeTaskCAS(claimed, 1) }); err != nil {
 		t.Fatal(err)
 	}
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.UpdateNativeTaskCAS(claimed, 1) }); err == nil || !strings.Contains(err.Error(), "stale_version") {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.UpdateNativeTaskCAS(claimed, 1) }); err == nil || !strings.Contains(err.Error(), "stale_version") {
 		t.Fatalf("stale task update was accepted: %v", err)
 	}
 	closed := claimed
 	closed.Status = "closed"
 	closed.Version = 3
 	closed.UpdatedAt = created.Add(2 * time.Minute)
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.UpdateNativeTaskCAS(closed, 2) }); err == nil {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.UpdateNativeTaskCAS(closed, 2) }); err == nil {
 		t.Fatal("unverified delivery closed a task")
 	}
 	run := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-7", TaskID: "7", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-7", PRURL: "https://forge.invalid/org/repo/pulls/4", CreatedAt: created, UpdatedAt: created}
 	execution := ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-7", CurrentAttemptID: "attempt-7", WorkflowRunID: "wf-7", Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Workspace: WorkspaceEvidence{Branch: "fixture/task-7"}, Status: "succeeded", CurrentStep: "waiting_pr_merge", CreatedAt: created, UpdatedAt: created}
 	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", workerFlowMockSession)
-	err = store.Transact(ctx, func(tx DomainTx) error {
+	err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if err := tx.PutWorkflowRun(run); err != nil {
 			return err
 		}
@@ -432,7 +432,7 @@ func TestNativeTaskCASGuardsAndDeliveryProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err = store.Transact(ctx, func(tx DomainTx) error {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if err := tx.PutTaskDelivery(delivery); err != nil {
 			return err
 		}
@@ -447,7 +447,7 @@ func TestNativeTaskCASGuardsAndDeliveryProjection(t *testing.T) {
 	if page.Tasks[0].Status != "closed" || page.Tasks[0].Delivery == nil || page.Tasks[0].Delivery.MergeCommit != delivery.MergeCommit || len(page.Tasks[0].WorkflowRuns) != 1 {
 		t.Fatalf("delivery/run association did not project: %+v", page.Tasks[0])
 	}
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutTaskDelivery(delivery) }); err != nil {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutTaskDelivery(delivery) }); err != nil {
 		t.Fatalf("same verified delivery was not idempotent after restart boundary: %v", err)
 	}
 	if err = store.Close(); err != nil {
@@ -484,7 +484,7 @@ func TestNativeDiscardCASKeepsAuditAndNeverReusesID(t *testing.T) {
 	contract := nativeContract(t, c, commit, "contract-4")
 	created := time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)
 	task := TaskRecord{ProjectIdentity: project, TaskID: "4", BatchID: "batch-4", Title: "discard me", Type: "task", Priority: 2, ContractID: contract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
-	if err = store.Transact(ctx, func(tx DomainTx) error {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if err := tx.PutTaskBatch(TaskBatchRecord{BatchID: "batch-4", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("4", 64), CreatedAt: created, CommandID: "cmd-4", TaskIDs: map[string]string{"four": "4"}}, 1, 0); err != nil {
 			return err
 		}
@@ -502,7 +502,7 @@ func TestNativeDiscardCASKeepsAuditAndNeverReusesID(t *testing.T) {
 	discarded.DiscardReason = "superseded by explicit follow-up"
 	discarded.DiscardedBy = "fixture"
 	discarded.DiscardRequestID = strings.Repeat("a", 32)
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.UpdateNativeTaskCAS(discarded, 1) }); err != nil {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.UpdateNativeTaskCAS(discarded, 1) }); err != nil {
 		t.Fatal(err)
 	}
 	reopened := discarded
@@ -513,12 +513,12 @@ func TestNativeDiscardCASKeepsAuditAndNeverReusesID(t *testing.T) {
 	reopened.DiscardedBy = ""
 	reopened.DiscardRequestID = ""
 	reopened.CleanupPending = nil
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.UpdateNativeTaskCAS(reopened, 2) }); err == nil || !strings.Contains(err.Error(), "stale_version") {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.UpdateNativeTaskCAS(reopened, 2) }); err == nil || !strings.Contains(err.Error(), "stale_version") {
 		t.Fatalf("discarded task was reopened: %v", err)
 	}
 	replacement := task
 	replacement.Title = "new identity"
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutTask(replacement) }); err == nil {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutTask(replacement) }); err == nil {
 		t.Fatal("discarded task ID was reused")
 	}
 	page, err := (NewQueryService(store, project)).ShowNativeTask(ctx, "4")
@@ -682,7 +682,7 @@ func TestNativeInitializationRefusesExistingBeadsTaskDatabase(t *testing.T) {
 		t.Fatal(err)
 	}
 	old := TaskRecord{ProjectIdentity: "legacy-project", TaskID: "legacy:one", Source: "beads", Status: "open", Version: 1, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutTask(old) }); err != nil {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutTask(old) }); err != nil {
 		t.Fatal(err)
 	}
 	if err = store.Close(); err != nil {
@@ -849,7 +849,7 @@ func seedExecutionProfileTasks(t *testing.T, c Config, store *SQLiteStore, paylo
 	if err := json.Unmarshal(payload, &batch); err != nil {
 		return TaskBatchReceipt{}, err
 	}
-	authority, err := store.nativeAuthority(context.Background(), c.Identity())
+	authority, err := store.NativeAuthority(context.Background(), c.Identity())
 	if err != nil {
 		return TaskBatchReceipt{}, err
 	}
@@ -859,7 +859,7 @@ func seedExecutionProfileTasks(t *testing.T, c Config, store *SQLiteStore, paylo
 	for _, v := range batch.Tasks {
 		mapping[v.LocalKey] = strconvID(v.TaskID)
 	}
-	err = store.Transact(context.Background(), func(tx DomainTx) error {
+	err = store.transactSQLite(context.Background(), func(tx *sqliteTx) error {
 		if err := tx.PutTaskBatch(TaskBatchRecord{ProjectIdentity: c.Identity(), BatchID: batchID, SchemaVersion: taskBatchSchemaVersion, PayloadDigest: digestCanonical(payload), CommandID: "fixture-" + batchID, CreatedAt: stamp, TaskIDs: mapping}, authority.AuthorityVersion, authority.GraphRevision); err != nil {
 			return err
 		}

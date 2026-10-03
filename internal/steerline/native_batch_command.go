@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
@@ -36,7 +37,7 @@ func (c CommandService) ValidateTaskBatch(ctx context.Context, config Config, da
 	if c.Store == nil || c.Project == "" || config.Identity() != c.Project || batch.ProjectID != c.Project {
 		return TaskBatchValidation{}, nativeErr("authority_mismatch", "batch project_id, command target and configured project must match")
 	}
-	snapshot, err := taskGraphFromStore(ctx, c.Store, c.Project)
+	snapshot, err := c.Store.TaskGraphSnapshot(ctx, c.Project)
 	if err != nil {
 		return TaskBatchValidation{}, err
 	}
@@ -83,7 +84,7 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 	if strings.TrimSpace(requestedBy) == "" {
 		requestedBy = DefaultRequestedBy()
 	}
-	if existing, found, e := sqlite.lookupNativeCommand(ctx, c.Project, requestID); e != nil {
+	if existing, found, e := sqlite.LookupCommand(ctx, c.Project, requestID); e != nil {
 		return TaskBatchReceipt{}, e
 	} else if found {
 		return replayTaskBatch(existing, canonicalPayload, batch.ProjectID, requestedBy)
@@ -100,8 +101,8 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 	}
 	payloadDigest := digestCanonical(canonicalPayload)
 	var receipt TaskBatchReceipt
-	err = c.Store.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if old, found, e := tx.lookupNativeCommand(ctx, c.Project, requestID); e != nil {
+	err = c.Store.TransactTaskBatch(ctx, func(tx persistence.BatchTx) error {
+		if old, found, e := tx.LookupCommand(ctx, c.Project, requestID); e != nil {
 			return e
 		} else if found {
 			r, e := replayTaskBatch(old, canonicalPayload, batch.ProjectID, requestedBy)
@@ -111,7 +112,7 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 			receipt = r
 			return taskBatchReplay{Receipt: r}
 		}
-		graph, e := taskGraphSnapshotTx(ctx, tx, c.Project)
+		graph, e := tx.TaskGraphSnapshot(ctx, c.Project)
 		if e != nil {
 			return e
 		}

@@ -3,12 +3,12 @@ package steerline
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
@@ -66,10 +66,10 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 	}
 	if previous, lookupErr := store.CommandByIdempotency(ctx, c.Project, input.RequestID); lookupErr == nil {
 		return replay(previous)
-	} else if !errors.Is(lookupErr, sql.ErrNoRows) {
+	} else if !errors.Is(lookupErr, persistence.ErrNotFound) {
 		return empty, lookupErr
 	}
-	authority, err := store.nativeAuthority(ctx, c.Project)
+	authority, err := store.NativeAuthority(ctx, c.Project)
 	if err != nil {
 		return empty, err
 	}
@@ -77,8 +77,8 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 		return empty, err
 	}
 	var receipt TaskPredecessorAddReceipt
-	err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if previous, found, lookupErr := tx.lookupNativeCommand(ctx, c.Project, input.RequestID); lookupErr != nil {
+	err = store.TransactPredecessors(ctx, func(tx persistence.PredecessorTx) error {
+		if previous, found, lookupErr := tx.LookupCommand(ctx, c.Project, input.RequestID); lookupErr != nil {
 			return lookupErr
 		} else if found {
 			var replayErr error
@@ -88,7 +88,7 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 			}
 			return taskBatchReplay{}
 		}
-		graph, e := taskGraphSnapshotTx(ctx, tx, c.Project)
+		graph, e := tx.TaskGraphSnapshot(ctx, c.Project)
 		if e != nil {
 			return e
 		}
@@ -120,7 +120,7 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 		nextTask := task
 		nextTask.Version++
 		nextTask.UpdatedAt = stamp
-		if e = tx.bumpNativeOpenTaskVersionCAS(nextTask, task.Version); e != nil {
+		if e = tx.BumpOpenTaskVersionCAS(nextTask, task.Version); e != nil {
 			return e
 		}
 		graphRevision, e := tx.AdvanceTaskGraphRevision(c.Project, graph.Authority.AuthorityVersion, graph.Authority.GraphRevision)
@@ -146,44 +146,4 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 		return receipt, nil
 	}
 	return receipt, err
-}
-
-func (t *sqliteTx) bumpNativeOpenTaskVersionCAS(next TaskRecord, expectedVersion uint64) error {
-	if next.Status != "open" || next.Claimant != "" || next.Version != expectedVersion+1 {
-		return nativeErr("contract_mismatch", "predecessor addition requires an unclaimed open task")
-	}
-	var oldPayload []byte
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM tasks WHERE project_identity=? AND task_id=? AND status='open' AND version=?`, next.ProjectIdentity, next.TaskID, expectedVersion).Scan(&oldPayload); err != nil {
-		return nativeErr("stale_version", "task changed before predecessor addition")
-	}
-	var old TaskRecord
-	if err := json.Unmarshal(oldPayload, &old); err != nil {
-		return err
-	}
-	old.Version, old.UpdatedAt = next.Version, next.UpdatedAt
-	if !sameTaskRecord(old, next) {
-		return nativeErr("contract_mismatch", "predecessor addition cannot alter the task contract or identity")
-	}
-	var active, delivered int
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM workflow_runs WHERE project_identity=? AND task_id=? AND phase NOT IN ('completed','abandoned')`, next.ProjectIdentity, next.TaskID).Scan(&active); err != nil {
-		return err
-	}
-	if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=?`, next.ProjectIdentity, next.TaskID).Scan(&delivered); err != nil {
-		return err
-	}
-	if active != 0 || delivered != 0 {
-		return nativeErr("inconsistent_delivery", "open task still has an active workflow or delivery")
-	}
-	body, err := json.Marshal(next)
-	if err != nil {
-		return err
-	}
-	result, err := t.tx.ExecContext(t.ctx, `UPDATE tasks SET version=?,payload=? WHERE project_identity=? AND task_id=? AND status='open' AND version=?`, next.Version, body, next.ProjectIdentity, next.TaskID, expectedVersion)
-	return requireIdentityWrite(result, err, "stale_version: task changed before predecessor addition")
-}
-
-func sameTaskRecord(a, b TaskRecord) bool {
-	x, _ := json.Marshal(a)
-	y, _ := json.Marshal(b)
-	return bytes.Equal(x, y)
 }

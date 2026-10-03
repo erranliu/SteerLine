@@ -5,11 +5,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
@@ -67,7 +68,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	if err != nil {
 		return TaskDiscardReceipt{}, err
 	}
-	if old, found, e := sqlite.lookupNativeCommand(ctx, c.Project, requestID); e != nil {
+	if old, found, e := sqlite.LookupCommand(ctx, c.Project, requestID); e != nil {
 		return TaskDiscardReceipt{}, e
 	} else if found {
 		if old.Kind != "discard_task" || old.TargetID != taskID || old.ExpectedVersion != expectedVersion || old.RequestedBy != requestedBy || !bytes.Equal(old.Payload, canonicalRequest) {
@@ -92,7 +93,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 			return TaskDiscardReceipt{}, err
 		}
 	}
-	authority, err := sqlite.nativeAuthority(ctx, c.Project)
+	authority, err := sqlite.NativeAuthority(ctx, c.Project)
 	if err != nil {
 		return TaskDiscardReceipt{}, err
 	}
@@ -110,8 +111,8 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	intentBytes, _ := json.Marshal(intent)
 	canonicalIntent, _ := CanonicalJSON(intentBytes)
 	var staged OperationRecord
-	err = sqlite.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if old, found, e := tx.lookupNativeCommand(ctx, c.Project, requestID); e != nil {
+	err = sqlite.TransactDiscardIntent(ctx, func(tx persistence.DiscardIntentTx) error {
+		if old, found, e := tx.LookupCommand(ctx, c.Project, requestID); e != nil {
 			return e
 		} else if found {
 			if old.Kind != "discard_task" || old.TargetID != taskID || old.ExpectedVersion != expectedVersion || old.RequestedBy != requestedBy || !bytes.Equal(old.Payload, canonicalRequest) {
@@ -119,17 +120,16 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 			}
 			return taskBatchReplay{Receipt: TaskBatchReceipt{RequestID: requestID, Status: "accepted"}}
 		}
-		var oldPayload []byte
-		var status string
-		var version uint64
-		if e := tx.tx.QueryRowContext(ctx, `SELECT payload,status,version FROM tasks WHERE project_identity=? AND task_id=?`, c.Project, taskID).Scan(&oldPayload, &status, &version); e != nil {
+		current, e := tx.Task(ctx, c.Project, taskID)
+		if e != nil {
 			return nativeErr("task_not_found", "native task was not found")
 		}
+		status, version := current.Status, current.Version
 		if version != expectedVersion {
 			return nativeErr("stale_version", fmt.Sprintf("expected task version %d, found %d", expectedVersion, version))
 		}
-		var deliveries int
-		if e := tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=?`, c.Project, taskID).Scan(&deliveries); e != nil {
+		deliveries, e := tx.DeliveryCount(ctx, c.Project, taskID)
+		if e != nil {
 			return e
 		}
 		if deliveries > 0 {
@@ -140,7 +140,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		}
 		command := CommandRecord{ProjectIdentity: c.Project, CommandID: requestID, Kind: "discard_task", TargetID: taskID, ExpectedVersion: expectedVersion, IdempotencyKey: requestID, RequestedBy: requestedBy, Payload: canonicalRequest, Status: "in_flight", CreatedAt: time.Now().UTC()}
 		var created bool
-		command, created, e := tx.EnqueueCommand(command)
+		command, created, e = tx.EnqueueCommand(command)
 		if e != nil {
 			return nativeErr("idempotency_conflict", e.Error())
 		}
@@ -157,7 +157,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		return e
 	})
 	if replay, ok := err.(taskBatchReplay); ok && replay.Receipt.Status == "accepted" {
-		old, found, e := sqlite.lookupNativeCommand(ctx, c.Project, requestID)
+		old, found, e := sqlite.LookupCommand(ctx, c.Project, requestID)
 		if e != nil {
 			return TaskDiscardReceipt{}, e
 		}
@@ -171,7 +171,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 			}
 			return saved, nil
 		}
-		staged, e = lookupOperation(ctx, sqlite, c.Project, requestID)
+		staged, e = sqlite.Operation(ctx, c.Project, requestID)
 		if e != nil {
 			return TaskDiscardReceipt{}, e
 		}
@@ -182,7 +182,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		return TaskDiscardReceipt{}, err
 	}
 	if staged.OperationID == "" {
-		staged, err = lookupOperation(ctx, sqlite, c.Project, requestID)
+		staged, err = sqlite.Operation(ctx, c.Project, requestID)
 		if err != nil {
 			return TaskDiscardReceipt{}, err
 		}
@@ -240,7 +240,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	return c.commitDiscard(ctx, sqlite, requestID, staged, intent, prInfo, config.PR.Repository)
 }
 
-func updateDiscardIntentReceipt(ctx context.Context, s *SQLiteStore, op *OperationRecord, intent taskDiscardIntent) error {
+func updateDiscardIntentReceipt(ctx context.Context, s persistence.CommandStore, op *OperationRecord, intent taskDiscardIntent) error {
 	data, err := json.Marshal(intent)
 	if err != nil {
 		return err
@@ -249,14 +249,14 @@ func updateDiscardIntentReceipt(ctx context.Context, s *SQLiteStore, op *Operati
 	next.Receipt = data
 	next.Status = "pending"
 	next.UpdatedAt = time.Now().UTC()
-	if err = s.Transact(ctx, func(domainTx DomainTx) error { return domainTx.UpdateOperation(next) }); err != nil {
+	if err = s.UpdateDiscardReceipt(ctx, next); err != nil {
 		return err
 	}
 	*op = next
 	return nil
 }
 
-func taskDiscardPlanFromStore(ctx context.Context, s *SQLiteStore, project, taskID string) (taskDiscardPlan, TaskRecord, error) {
+func taskDiscardPlanFromStore(ctx context.Context, s persistence.CommandStore, project, taskID string) (taskDiscardPlan, TaskRecord, error) {
 	snapshot, err := s.Query(ctx, project)
 	if err != nil {
 		return taskDiscardPlan{}, TaskRecord{}, err
@@ -342,26 +342,13 @@ func uniqueSorted(values []string) []string {
 	return out
 }
 
-func lookupOperation(ctx context.Context, s *SQLiteStore, project, id string) (OperationRecord, error) {
-	var body []byte
-	err := s.db.QueryRowContext(ctx, `SELECT payload FROM operations WHERE project_identity=? AND operation_id=?`, project, id).Scan(&body)
-	if err != nil {
-		return OperationRecord{}, err
-	}
-	var op OperationRecord
-	if err = json.Unmarshal(body, &op); err != nil {
-		return op, err
-	}
-	return op, nil
-}
-
-func persistDiscardPending(ctx context.Context, s *SQLiteStore, project, requestID string, op OperationRecord, intent taskDiscardIntent, code, message string) (TaskDiscardReceipt, error) {
+func persistDiscardPending(ctx context.Context, s persistence.CommandStore, project, requestID string, op OperationRecord, intent taskDiscardIntent, code, message string) (TaskDiscardReceipt, error) {
 	receipt := TaskDiscardReceipt{RequestID: requestID, TaskID: intent.TaskID, Status: "pending_verification", Code: code, Message: message, CleanupPending: uniqueSorted(intent.CleanupPending)}
 	checkpoint, err := json.Marshal(intent)
 	if err != nil {
 		return TaskDiscardReceipt{}, err
 	}
-	err = s.transactSQLite(ctx, func(tx *sqliteTx) error {
+	err = s.TransactDiscardPending(ctx, func(tx persistence.DiscardPendingTx) error {
 		op.Status = "outcome_unknown"
 		op.Receipt = checkpoint
 		op.UnknownReason = message
@@ -381,10 +368,10 @@ func persistDiscardPending(ctx context.Context, s *SQLiteStore, project, request
 	return receipt, err
 }
 
-func (c CommandService) commitDiscard(ctx context.Context, s *SQLiteStore, requestID string, op OperationRecord, intent taskDiscardIntent, info *PRInfo, expectedPRRepository string) (TaskDiscardReceipt, error) {
+func (c CommandService) commitDiscard(ctx context.Context, s persistence.CommandStore, requestID string, op OperationRecord, intent taskDiscardIntent, info *PRInfo, expectedPRRepository string) (TaskDiscardReceipt, error) {
 	var receipt TaskDiscardReceipt
-	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		graph, e := taskGraphSnapshotTx(ctx, tx, c.Project)
+	err := s.TransactDiscard(ctx, func(tx persistence.DiscardTx) error {
+		graph, e := tx.TaskGraphSnapshot(ctx, c.Project)
 		if e != nil {
 			return e
 		}
@@ -395,8 +382,8 @@ func (c CommandService) commitDiscard(ctx context.Context, s *SQLiteStore, reque
 		if task.Version != intent.ExpectedVersion {
 			return nativeErr("stale_version", fmt.Sprintf("expected task version %d, found %d", intent.ExpectedVersion, task.Version))
 		}
-		var deliveries int
-		if e = tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=?`, c.Project, intent.TaskID).Scan(&deliveries); e != nil {
+		deliveries, e := tx.DeliveryCount(ctx, c.Project, intent.TaskID)
+		if e != nil {
 			return e
 		}
 		if deliveries > 0 {
@@ -451,7 +438,7 @@ func (c CommandService) commitDiscard(ctx context.Context, s *SQLiteStore, reque
 	return receipt, err
 }
 
-func finishDiscardCommand(tx *sqliteTx, op OperationRecord, requestID string, receipt TaskDiscardReceipt, status string, confirmed bool) error {
+func finishDiscardCommand(tx persistence.DiscardPendingTx, op OperationRecord, requestID string, receipt TaskDiscardReceipt, status string, confirmed bool) error {
 	receiptBytes, err := json.Marshal(receipt)
 	if err != nil {
 		return err
@@ -472,8 +459,10 @@ func finishDiscardCommand(tx *sqliteTx, op OperationRecord, requestID string, re
 	return nil
 }
 
-func taskDiscardPlanTx(ctx context.Context, tx *sqliteTx, project, taskID string) (taskDiscardPlan, TaskRecord, error) {
-	snapshot, err := querySnapshot(ctx, tx.tx, project)
+func taskDiscardPlanTx(ctx context.Context, tx interface {
+	Query(context.Context, string) (DomainSnapshot, error)
+}, project, taskID string) (taskDiscardPlan, TaskRecord, error) {
+	snapshot, err := tx.Query(ctx, project)
 	if err != nil {
 		return taskDiscardPlan{}, TaskRecord{}, err
 	}

@@ -71,7 +71,7 @@ func openBoundNativeStore(ctx context.Context, c Config, path string) (_ *SQLite
 	if err = validateNativeSQLiteRuntimeProjection(ctx, db.db); err != nil {
 		return nil, err
 	}
-	authority, err := db.nativeAuthority(ctx, c.Identity())
+	authority, err := db.NativeAuthority(ctx, c.Identity())
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nativeErr("authority_mismatch", "database has no native authority for this project; preserve existing state")
 	}

@@ -46,14 +46,14 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if _, err = commands.CreateTaskBatch(ctx, c, input, strings.Repeat("d", 32), validation.AuthorityVersion, "operator"); err != nil {
 		t.Fatal(err)
 	}
-	authority, err := store.nativeAuthority(ctx, c.Identity())
+	authority, err := store.NativeAuthority(ctx, c.Identity())
 	if err != nil {
 		t.Fatal(err)
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err := store.Transact(ctx, func(tx DomainTx) error {
-		return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+	if err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
+		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -176,11 +176,11 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err != nil {
 		t.Fatal(err)
 	}
-	command, _, err := (CommandService{Store: service.domainStore, Project: c.Identity()}).AnswerDecisionWithID(ctx, strings.Repeat("1", 32), answer.DecisionID, run.Decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, payload)
+	command, _, err := (CommandService{Store: service.commandStore, Project: c.Identity()}).AnswerDecisionWithID(ctx, strings.Repeat("1", 32), answer.DecisionID, run.Decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, payload)
 	if err != nil {
 		t.Fatal(err)
 	}
-	record, _, err := (CommandService{Store: service.domainStore, Project: c.Identity()}).AcceptAnswer(ctx, command, answer)
+	record, _, err := (CommandService{Store: service.commandStore, Project: c.Identity()}).AcceptAnswer(ctx, command, answer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -242,11 +242,11 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err != nil {
 		t.Fatal(err)
 	}
-	uncertainCommand, _, err := (CommandService{Store: service.domainStore, Project: c.Identity()}).AnswerDecisionWithID(ctx, strings.Repeat("2", 32), uncertain.DecisionID, run.Decision.Version, decisionAnswerKey(uncertain), uncertain.AnsweredBy, uncertainPayload)
+	uncertainCommand, _, err := (CommandService{Store: service.commandStore, Project: c.Identity()}).AnswerDecisionWithID(ctx, strings.Repeat("2", 32), uncertain.DecisionID, run.Decision.Version, decisionAnswerKey(uncertain), uncertain.AnsweredBy, uncertainPayload)
 	if err != nil {
 		t.Fatal(err)
 	}
-	uncertainRecord, _, err := (CommandService{Store: service.domainStore, Project: c.Identity()}).AcceptAnswer(ctx, uncertainCommand, uncertain)
+	uncertainRecord, _, err := (CommandService{Store: service.commandStore, Project: c.Identity()}).AcceptAnswer(ctx, uncertainCommand, uncertain)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -293,7 +293,7 @@ func TestRestartDoesNotSendPreviouslyAcceptedFeedback(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	defer service.Close()
 	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "saved before stop", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
-	commands := CommandService{Store: service.domainStore, Project: service.Config.identity}
+	commands := CommandService{Store: service.commandStore, Project: service.Config.identity}
 	command, _, err := commands.AnswerDecisionWithID(context.Background(), newID(), answer.DecisionID, answer.ExpectedDecisionVersion, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 	if err != nil {
 		t.Fatal(err)

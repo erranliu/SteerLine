@@ -42,7 +42,7 @@ func TestRuntimeViewCannotWriteBusinessState(t *testing.T) {
 	if run.FinishTaskStatus != "waiting_decision" || run.ExecutionStatus != "succeeded" || run.Decision.Status != "pending" || run.PR.URL != nil || *run.WorkspaceIntent != originalIntent || run.ControlRevision != revision {
 		t.Fatalf("view became authority or diagnostic changed revision: %+v", run)
 	}
-	payload, _, err := service.domainStore.LoadProjection(context.Background(), service.Config.Identity())
+	payload, _, err := testSQLite(service).LoadProjection(context.Background(), service.Config.Identity())
 	require(t, err)
 	for _, key := range []string{`"runs"`, `"executions"`, `"workflow_runs"`, `"dispatch_mode"`, `"slot_occupied"`} {
 		if bytes.Contains(payload, []byte(key)) {
@@ -79,16 +79,16 @@ func TestActorProjectionReusesPrivatePointersWithoutPublishingCandidates(t *test
 func TestAnswerChecksDomainRevisionBeforeCheckpointPublication(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
-	commands := CommandService{Store: service.domainStore, Project: service.Config.Identity()}
+	commands := CommandService{Store: service.commandStore, Project: service.Config.Identity()}
 	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "continue", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	command, _, err := commands.AnswerDecision(ctx, answer.DecisionID, answer.ExpectedDecisionVersion, newID(), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
-	before, _, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
+	before, _, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
 	execution := *service.executionRecord(run)
 	execution.PendingCommandID = newID()
-	require(t, service.domainStore.Transact(ctx, func(tx DomainTx) error { return tx.PutExecution(execution) }))
-	after, _, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
+	require(t, testSQLite(service).transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutExecution(execution) }))
+	after, _, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
 	if !bytes.Equal(before, after) {
 		t.Fatal("domain update rewrote checkpoint")
@@ -112,7 +112,7 @@ func TestAnswerChecksDomainRevisionBeforeCheckpointPublication(t *testing.T) {
 func TestPublicationPreservesExternallyAcceptedDecision(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
-	commands := CommandService{Store: service.domainStore, Project: service.Config.Identity()}
+	commands := CommandService{Store: service.commandStore, Project: service.Config.Identity()}
 	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "keep this answer", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	command, _, err := commands.AnswerDecision(ctx, answer.DecisionID, answer.ExpectedDecisionVersion, newID(), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
@@ -130,20 +130,20 @@ func TestPublicationPreservesExternallyAcceptedDecision(t *testing.T) {
 func TestWorkerCommitRejectsConflictingDecisionAtomically(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
-	commands := CommandService{Store: service.domainStore, Project: service.Config.Identity()}
+	commands := CommandService{Store: service.commandStore, Project: service.Config.Identity()}
 	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "committed answer", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	command, _, err := commands.AnswerDecision(ctx, answer.DecisionID, answer.ExpectedDecisionVersion, newID(), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
 	_, _, err = commands.AcceptAnswer(ctx, command, answer)
 	require(t, err)
-	before, revision, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
+	before, revision, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
 	service.setDecisionStatus(run, "superseded")
 	service.executionRecord(run).LastEvent = ptr("must roll back")
 	if err = service.commitWorker(run); err == nil || !strings.Contains(err.Error(), "stale_revision") {
 		t.Fatalf("conflicting publication was not rejected: %v", err)
 	}
-	after, nextRevision, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
+	after, nextRevision, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
 	loaded, err := LoadDatabaseRuntime(service.Config)
 	require(t, err)
@@ -154,7 +154,7 @@ func TestWorkerCommitRejectsConflictingDecisionAtomically(t *testing.T) {
 
 func TestObservationReportsMissingAuthorityAsCorruption(t *testing.T) {
 	service, _ := waitingDecisionService(t)
-	_, err := service.domainStore.db.Exec(`DELETE FROM project_task_authorities WHERE project_identity=?`, service.Config.Identity())
+	_, err := testSQLite(service).db.Exec(`DELETE FROM project_task_authorities WHERE project_identity=?`, service.Config.Identity())
 	require(t, err)
 	value, err := loadObservedRuntime(service.Config)
 	if err == nil || value != nil {
@@ -179,7 +179,7 @@ func TestRuntimeViewRejectsInvalidWorkerAttempts(t *testing.T) {
 func TestWorkerCommitPreservesExternallyAcceptedDecision(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
-	commands := CommandService{Store: service.domainStore, Project: service.Config.Identity()}
+	commands := CommandService{Store: service.commandStore, Project: service.Config.Identity()}
 	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "keep this answer", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	command, _, err := commands.AnswerDecision(ctx, answer.DecisionID, answer.ExpectedDecisionVersion, newID(), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)

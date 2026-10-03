@@ -21,7 +21,7 @@ func seedNativeGraphForView(t *testing.T, c Config, commit string, store *SQLite
 		id := strconv.Itoa(i)
 		mapping["k"+id] = id
 	}
-	err := store.Transact(context.Background(), func(tx DomainTx) error {
+	err := store.transactSQLite(context.Background(), func(tx *sqliteTx) error {
 		batch := TaskBatchRecord{ProjectIdentity: c.Identity(), BatchID: "view-fixture", SchemaVersion: taskBatchSchemaVersion, PayloadDigest: strings.Repeat("a", 64), CommandID: "view-fixture-command", TaskIDs: mapping, CreatedAt: created}
 		if err := tx.PutTaskBatch(batch, 1, 0); err != nil {
 			return err

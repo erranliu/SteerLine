@@ -11,7 +11,7 @@ import (
 )
 
 func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) error {
-	if run == nil || len(source.Raw) == 0 && !source.SourceGap && !source.InputWait || s.domainStore == nil {
+	if run == nil || len(source.Raw) == 0 && !source.SourceGap && !source.InputWait || s.conversationStore == nil {
 		return nil
 	}
 	if !stableExecutionID(run.ExecutionID) {
@@ -44,7 +44,7 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) error {
 		segment = s.conversationSources.JournalSegment(base.Backend, base.Protocol, source.SourceIdentity)
 	}
 	if journalSource != "" && segment != "" {
-		snapshot, snapshotErr := s.domainStore.ConversationMapperSnapshot(context.Background(), s.Config.identity, run.ExecutionID, attemptID, journalSource, segment)
+		snapshot, snapshotErr := s.conversationStore.ConversationMapperSnapshot(context.Background(), s.Config.identity, run.ExecutionID, attemptID, journalSource, segment)
 		if snapshotErr != nil {
 			return snapshotErr
 		}
@@ -90,7 +90,7 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) error {
 		if generationErr != nil {
 			return generationErr
 		}
-		position, positionErr := currentConversationJournalPosition(context.Background(), s.domainStore, s.Config.identity, run.ExecutionID, attemptID, event.Source, event.SourceSegment, generation, path, source.SourceIdentity, source.SourceOffset+source.SourceLength, source.SourceSeq)
+		position, positionErr := currentConversationJournalPosition(context.Background(), s.conversationStore, s.Config.identity, run.ExecutionID, attemptID, event.Source, event.SourceSegment, generation, path, source.SourceIdentity, source.SourceOffset+source.SourceLength, source.SourceSeq)
 		if positionErr == nil && !source.SourceGap && len(source.Raw) > 0 {
 			positionErr = verifyConversationSourceBytes(path, source.SourceIdentity, source.SourceOffset, source.SourceLength, source.Raw)
 		}
@@ -100,7 +100,7 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) error {
 			gap.SourceEventID = "source-unavailable:" + event.SourceEventID
 			gap.Diagnostic = positionErr.Error()
 			gap.SessionQuality, gap.TurnQuality, gap.ItemQuality = IdentityUnknown, IdentityUnknown, IdentityUnknown
-			if _, gapErr := s.domainStore.CommitConversation(context.Background(), []ConversationWrite{{Event: gap, Raw: append([]byte(nil), source.Raw...)}}, ConversationCheckpoint{}); gapErr != nil {
+			if _, gapErr := s.conversationStore.CommitConversation(context.Background(), []ConversationWrite{{Event: gap, Raw: append([]byte(nil), source.Raw...)}}, ConversationCheckpoint{}); gapErr != nil {
 				return errors.Join(positionErr, gapErr)
 			}
 			return positionErr
@@ -111,7 +111,7 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) error {
 		}
 		checkpoint.SourceIdentity, checkpoint.Generation, checkpoint.LocalSeq, checkpoint.AllowReplay = source.SourceIdentity, source.SourceIdentity, source.SourceSeq, true
 	}
-	_, err = s.domainStore.CommitConversation(context.Background(), batch.Writes, checkpoint)
+	_, err = s.conversationStore.CommitConversation(context.Background(), batch.Writes, checkpoint)
 	return err
 }
 

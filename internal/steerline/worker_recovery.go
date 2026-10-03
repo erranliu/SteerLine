@@ -226,7 +226,7 @@ func (s *Service) startManuallyRecoveredInitialWorker(ctx context.Context, run *
 	if task == nil {
 		return errors.New("fixed task is unavailable")
 	}
-	contract, err := nativeContractForTask(ctx, s.domainStore, fixed.config.identity, *task)
+	contract, err := s.commandStore.TaskContract(ctx, fixed.config.identity, *task)
 	if err != nil {
 		return err
 	}

@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
 
 // TaskClaimReceipt records reservation, not worker start. The existing
@@ -49,12 +51,12 @@ func (c CommandService) SetNativeDispatchState(ctx context.Context, update Nativ
 	if err != nil {
 		return ProjectTaskAuthority{}, err
 	}
-	if old, found, lookupErr := sqlite.lookupNativeCommand(ctx, c.Project, update.RequestID); lookupErr != nil {
+	if old, found, lookupErr := sqlite.LookupCommand(ctx, c.Project, update.RequestID); lookupErr != nil {
 		return ProjectTaskAuthority{}, lookupErr
 	} else if found {
 		return replayNativeDispatchState(old, requestPayload, c.Project, update.RequestedBy)
 	}
-	graph, err := sqlite.taskGraphSnapshot(ctx, c.Project)
+	graph, err := sqlite.TaskGraphSnapshot(ctx, c.Project)
 	if err != nil {
 		return ProjectTaskAuthority{}, err
 	}
@@ -71,8 +73,8 @@ func (c CommandService) SetNativeDispatchState(ctx context.Context, update Nativ
 	}
 	next.UpdatedAt = time.Now().UTC()
 	var result ProjectTaskAuthority
-	err = sqlite.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if old, found, lookupErr := tx.lookupNativeCommand(ctx, c.Project, update.RequestID); lookupErr != nil {
+	err = sqlite.TransactDispatch(ctx, func(tx persistence.DispatchTx) error {
+		if old, found, lookupErr := tx.LookupCommand(ctx, c.Project, update.RequestID); lookupErr != nil {
 			return lookupErr
 		} else if found {
 			value, replayErr := replayNativeDispatchState(old, requestPayload, c.Project, update.RequestedBy)
@@ -82,7 +84,7 @@ func (c CommandService) SetNativeDispatchState(ctx context.Context, update Nativ
 			result = value
 			return taskBatchReplay{Receipt: TaskBatchReceipt{RequestID: update.RequestID, Status: "accepted"}}
 		}
-		current, readErr := taskGraphSnapshotTx(ctx, tx, c.Project)
+		current, readErr := tx.TaskGraphSnapshot(ctx, c.Project)
 		if readErr != nil {
 			return readErr
 		}

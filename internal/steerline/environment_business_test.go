@@ -18,11 +18,11 @@ func answerNeutralEnvironment(t *testing.T, s *Service, run *Run, option, note s
 	s.State.Service.Ready = true
 	require(t, s.publishCheckpoint())
 	answer := DecisionAnswer{DecisionID: decision.ID, RunID: run.RunID, OptionID: option, Note: note, AnsweredBy: "operator", ExpectedDecisionVersion: decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: s.State.Service.InstanceID, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: run.RecoveryVersion}
-	commands := CommandService{Store: s.domainStore, Project: s.Config.Identity()}
+	commands := CommandService{Store: s.commandStore, Project: s.Config.Identity()}
 	command, _, err := commands.AnswerDecisionWithID(context.Background(), newID(), decision.ID, decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
 	require(t, s.processCommandsAndDecisions(context.Background()))
-	saved, err := s.domainStore.CommandByIdempotency(context.Background(), s.Config.Identity(), command.IdempotencyKey)
+	saved, err := testSQLite(s).CommandByIdempotency(context.Background(), s.Config.Identity(), command.IdempotencyKey)
 	require(t, err)
 	if saved.Status != "accepted" {
 		t.Fatalf("host action rejected: %s / %s", saved.Status, saved.Result)

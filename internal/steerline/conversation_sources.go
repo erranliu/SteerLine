@@ -2,7 +2,6 @@ package steerline
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
 
 func (s *Service) discoverConversationHistory(ctx context.Context) ([]contracts.ConversationHistorySource, error) {
@@ -52,7 +52,7 @@ func (s *Service) discoverConversationHistory(ctx context.Context) ([]contracts.
 		}
 	}
 	if len(result.Writes) > 0 {
-		if _, err = s.domainStore.CommitConversation(ctx, result.Writes, ConversationCheckpoint{}); err != nil {
+		if _, err = s.conversationStore.CommitConversation(ctx, result.Writes, ConversationCheckpoint{}); err != nil {
 			return nil, err
 		}
 	}
@@ -90,14 +90,14 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 		return false, errors.New("conversation history source lost its fixed identity")
 	}
 	previousCursor := ""
-	checkpoint, err := s.domainStore.ConversationCheckpoint(ctx, event.ProjectID, event.ExecutionID, event.AttemptID, event.Source, event.SourceSegment)
+	checkpoint, err := s.conversationStore.ConversationCheckpoint(ctx, event.ProjectID, event.ExecutionID, event.AttemptID, event.Source, event.SourceSegment)
 	hadCheckpoint := err == nil
 	if err == nil {
 		if len(checkpoint.Cursor) > MaxEventPageBytes {
 			return false, errors.New("persisted conversation source cursor exceeds the read budget")
 		}
 		previousCursor = checkpoint.Cursor
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	} else if !errors.Is(err, persistence.ErrNotFound) {
 		return false, err
 	}
 	platformVersion := ""
@@ -137,19 +137,19 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 		Generation: event.SessionID, Cursor: batch.Cursor, LocalSeq: batch.Sequence}
 	writes := batch.Writes
 	for len(writes) > 128 {
-		if _, err = s.domainStore.CommitConversation(ctx, writes[:128], ConversationCheckpoint{}); err != nil {
+		if _, err = s.conversationStore.CommitConversation(ctx, writes[:128], ConversationCheckpoint{}); err != nil {
 			return false, err
 		}
 		writes = writes[128:]
 	}
 	if len(writes) > 0 || batch.Cursor != previousCursor {
-		if _, err = s.domainStore.CommitConversation(ctx, writes, newCheckpoint); err != nil {
+		if _, err = s.conversationStore.CommitConversation(ctx, writes, newCheckpoint); err != nil {
 			return false, err
 		}
 	}
 	if batch.Capabilities != nil {
 		report := *batch.Capabilities
-		reports, reportErr := s.domainStore.ConversationCapabilityReports(ctx, report.Backend, report.Protocol, report.Target.ID, 100)
+		reports, reportErr := s.conversationStore.ConversationCapabilityReports(ctx, report.Backend, report.Protocol, report.Target.ID, 100)
 		if reportErr != nil {
 			return false, reportErr
 		}
@@ -175,7 +175,7 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 				return !batch.More && batch.Settled, nil
 			}
 		}
-		if err = s.domainStore.SaveConversationCapabilityReport(ctx, report); err != nil {
+		if err = s.conversationStore.SaveConversationCapabilityReport(ctx, report); err != nil {
 			return false, err
 		}
 	}
@@ -246,7 +246,7 @@ func (s *Service) runConversationHistoryCollector(ctx context.Context, requests 
 					event.Type, event.Status = ConversationGap, "source_unavailable"
 					event.SourceEventID = "read-error:" + source.Identity
 					event.Diagnostic = readErr.Error()
-					_, _ = s.domainStore.CommitConversation(ctx, []ConversationWrite{{Event: event}}, ConversationCheckpoint{})
+					_, _ = s.conversationStore.CommitConversation(ctx, []ConversationWrite{{Event: event}}, ConversationCheckpoint{})
 					select {
 					case errorsOut <- fmt.Errorf("conversation history: %w", readErr):
 					default:
