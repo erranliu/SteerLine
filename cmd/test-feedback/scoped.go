@@ -39,6 +39,8 @@ var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
 	"TestCD67CoreBoundary/negative_source_fixtures/reverse_storage_edge",
 	"TestCD67CoreBoundary/negative_source_fixtures/concrete_storage_edge",
+	"TestCD67CoreBoundary/negative_source_fixtures/transitive_storage_edge",
+	"TestCD67CoreBoundary/negative_source_fixtures/reverse_client_subpackage",
 	"TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
 	"TestCD67CoreBoundary/console_negative_all_tags_production_and_tests",
 	"TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/transitive_test_helper",

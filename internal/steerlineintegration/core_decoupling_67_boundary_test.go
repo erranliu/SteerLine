@@ -27,6 +27,8 @@ func TestCD67CoreBoundary(t *testing.T) {
 			{name: "reverse_implementation_edge", filename: "neutral.go", source: "package steerline\n", implementation: "package codexworker\nimport _ \"github.com/erranliu/SteerLine/internal/helper\"\n", helper: "package helper\nimport _ \"github.com/erranliu/SteerLine/internal/steerline\"\n", want: "reverse dependency"},
 			{name: "reverse_storage_edge", filename: "neutral.go", source: "package steerline\n", helperPath: "internal/steerline/sqlite/edge_freebsd.go", helper: "package sqlite\nimport _ \"github.com/erranliu/SteerLine/internal/steerline\"\n", want: "reverse storage dependency"},
 			{name: "concrete_storage_edge", filename: "neutral_freebsd.go", source: "package steerline\nimport _ \"database/sql\"\n", want: "concrete storage dependency"},
+			{name: "transitive_storage_edge", filename: "neutral_plan9.go", source: "//go:build never_enabled\n\npackage steerline\nimport _ \"github.com/erranliu/SteerLine/internal/helper\"\n", helper: "//go:build never_enabled\n\npackage helper\nimport _ \"github.com/erranliu/SteerLine/internal/steerline/sqlite\"\n", want: "concrete storage dependency"},
+			{name: "reverse_client_subpackage", filename: "sqlite/neutral_plan9.go", source: "//go:build never_enabled\n\npackage sqlite\nimport _ \"github.com/erranliu/SteerLine/internal/steerlineclient/nested\"\n", want: "reverse storage dependency"},
 		} {
 			t.Run(fixture.name, func(t *testing.T) {
 				root := t.TempDir()

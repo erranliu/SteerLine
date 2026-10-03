@@ -20,6 +20,7 @@
 | L1 定向：实际应用构造与 #67 隔离守卫 CM70-1/3 | `go test -json ./internal/steerlineapp ./internal/steerlineintegration -run 'TestCD66\|TestCD67\|TestFileQuerySourceReadsCombinedProjectView' -count=1` | 构造完成及最新 main 集成后；实际连接由应用注入，Windows/Linux 依赖及全源码守卫通过，命中非零 | `wiring.jsonl` |
 | L1 固定 quick + 受影响定向组 | `go run ./cmd/test-feedback -quick` | 稳定后一次；既有 quick 命中通过，构建与测试证据完整 | `quick/summary.json` 与原始日志 |
 | 静态检查 | `git diff --check`、全构建条件 SQL/依赖/构造扫描 | 自查、提交前；中心无 SQL/具体连接，存储无反向依赖；唯一生产接线 | `README.md` |
+| L1 协调复审守卫：`negative_source_fixtures/transitive_storage_edge`、`negative_source_fixtures/reverse_client_subpackage` | `go test -json ./internal/steerlineintegration -run '^TestCD67CoreBoundary$' -count=1`；`go test -json ./cmd/test-feedback -run '^Test(QuickBoundaryCoverageRequiresEachAssignedEntry|ScopedCoverageRejectsMissingDuplicateAndTruncatedEvents)$' -count=1` | 修复确认的全标签传递/子包漏检后；新增反例先失败，修复后全守卫与 mandatory-entry 检查通过，原严格只读断言保持失败/待决 | 协调 run 的 `cm70-boundary-negative-before.jsonl`、`cm70-coordinator-boundary-fixed.jsonl`、`cm70-coordinator-quick-selection.jsonl` |
 
 未选 L2/L3/full：本项只迁移既有存储职责，未改变真实执行启动、权限或平台认证；既有受控事务断言和实际应用构造足以验证受影响边界。若发现接线缺口，仅补必要场景；不扩展测试环境能力或重复故障矩阵。发布前核对并集成最新 origin/main，客户端线唯一构造如已合并须共同验证。
 
