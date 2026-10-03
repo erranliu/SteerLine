@@ -47,7 +47,7 @@ func forbidden(pkg string) bool {
 }
 
 func consoleForbidden(pkg string) bool {
-	if pkg == core || pkg == "database/sql" || forbidden(pkg) {
+	if pkg == core || pkg == "database/sql" || pkg == "modernc.org/sqlite" || strings.HasPrefix(pkg, "modernc.org/sqlite/") || forbidden(pkg) {
 		return true
 	}
 	for _, p := range []string{core + "/sqlite", core + "/persistence", core + "/query", core + "/projection", core + "/workspace", core + "/publication", module + "/internal/steerlineclient"} {

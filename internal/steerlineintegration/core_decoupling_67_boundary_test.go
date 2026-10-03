@@ -54,7 +54,7 @@ func TestCD67CoreBoundary(t *testing.T) {
 	})
 
 	t.Run("console_negative_all_tags_production_and_tests", func(t *testing.T) {
-		for _, dependency := range []string{"github.com/erranliu/SteerLine/internal/steerline", "database/sql", "github.com/erranliu/SteerLine/internal/steerline/sqlite", "github.com/erranliu/SteerLine/internal/steerline/persistence", "github.com/erranliu/SteerLine/internal/steerline/codexworker", "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker", "github.com/erranliu/SteerLine/internal/steerline/processhost", "github.com/erranliu/SteerLine/internal/steerlineclient", "github.com/erranliu/SteerLine/internal/steerlineapp"} {
+		for _, dependency := range []string{"github.com/erranliu/SteerLine/internal/steerline", "database/sql", "modernc.org/sqlite", "github.com/erranliu/SteerLine/internal/steerline/sqlite", "github.com/erranliu/SteerLine/internal/steerline/persistence", "github.com/erranliu/SteerLine/internal/steerline/codexworker", "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker", "github.com/erranliu/SteerLine/internal/steerline/processhost", "github.com/erranliu/SteerLine/internal/steerlineclient", "github.com/erranliu/SteerLine/internal/steerlineapp"} {
 			t.Run(dependency, func(t *testing.T) {
 				for _, file := range []string{"edge_plan9.go", "edge_linux_test.go"} {
 					root := t.TempDir()
