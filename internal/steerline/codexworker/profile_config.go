@@ -1,10 +1,8 @@
 package codexworker
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"strings"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -71,13 +69,8 @@ type ProfileConfig struct {
 
 func DecodeProfileConfig(payload []byte) (ProfileConfig, error) {
 	var config ProfileConfig
-	decoder := json.NewDecoder(bytes.NewReader(payload))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&config); err != nil {
+	if err := executionapi.DecodeStrictJSON(payload, &config, "Codex profile configuration has trailing JSON"); err != nil {
 		return ProfileConfig{}, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return ProfileConfig{}, errors.New("Codex profile configuration has trailing JSON")
 	}
 	return config, nil
 }

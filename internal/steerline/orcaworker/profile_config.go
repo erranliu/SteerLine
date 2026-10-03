@@ -1,10 +1,8 @@
 package orcaworker
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
-	"io"
 	"strings"
 	"time"
 
@@ -67,13 +65,8 @@ type ProfileConfig struct {
 
 func DecodeProfileConfig(payload []byte) (ProfileConfig, error) {
 	var config ProfileConfig
-	decoder := json.NewDecoder(bytes.NewReader(payload))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&config); err != nil {
+	if err := executionapi.DecodeStrictJSON(payload, &config, "Orca profile configuration has trailing JSON"); err != nil {
 		return ProfileConfig{}, err
-	}
-	if err := decoder.Decode(new(any)); err != io.EOF {
-		return ProfileConfig{}, errors.New("Orca profile configuration has trailing JSON")
 	}
 	return config, nil
 }
@@ -91,8 +84,6 @@ func (c ProfileConfig) Validate() error {
 	}
 	return nil
 }
-
-func ValidateProfileConfig(c ProfileConfig) error { return c.Validate() }
 
 func ValidateLocalTargetArgs(args []string) error {
 	for _, arg := range args {

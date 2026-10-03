@@ -544,11 +544,6 @@ func (s *Service) recoverControlOperation() error {
 	return s.publishCheckpoint()
 }
 
-func findStopRequest(c Config, instanceID string) (*ControlRequest, string) {
-	req, digest, _ := findStopRequestCached(c, instanceID, nil)
-	return req, digest
-}
-
 func findStopRequestCached(c Config, instanceID string, seen map[string]bool) (*ControlRequest, string, time.Time) {
 	root := filepath.Join(c.RunDir, "control", "requests")
 	entries, err := os.ReadDir(root)

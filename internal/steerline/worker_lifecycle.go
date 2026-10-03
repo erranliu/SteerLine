@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
@@ -778,7 +779,7 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *Run, lifecycle 
 		if !resourceStep && !turnStep {
 			break
 		}
-		if candidate.Input.Turn != nil && (candidate.Input.Turn.CommandID != input.CommandID || candidate.Input.Turn.Prompt != input.Prompt || !sameLifecycleStrings(candidate.Input.Turn.LinkedWorktreeArgs, input.LinkedWorktreeArgs)) {
+		if candidate.Input.Turn != nil && (candidate.Input.Turn.CommandID != input.CommandID || candidate.Input.Turn.Prompt != input.Prompt || !slices.Equal(candidate.Input.Turn.LinkedWorktreeArgs, input.LinkedWorktreeArgs)) {
 			return errors.New("lifecycle planner changed the saved business input or resource grant")
 		}
 		if err := s.executeLifecycleStep(ctx, run, lifecycle, candidate); err != nil {
@@ -792,7 +793,7 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *Run, lifecycle 
 		}
 	}
 	if candidate.Input.Turn == nil || candidate.Input.Turn.CommandID != input.CommandID || candidate.Input.Turn.Prompt != input.Prompt ||
-		!sameLifecycleStrings(candidate.Input.Turn.LinkedWorktreeArgs, input.LinkedWorktreeArgs) {
+		!slices.Equal(candidate.Input.Turn.LinkedWorktreeArgs, input.LinkedWorktreeArgs) {
 		return errors.New("lifecycle planner changed the saved business input or resource grant")
 	}
 	switch candidate.Action {
@@ -1418,18 +1419,6 @@ func (s *Service) acknowledgeLifecycleDelivery(run *Run, deliveryID string) erro
 		return s.waitWorkerFlow(run, "Original Delivery acknowledgement needs reconciliation: "+diagnostic)
 	}
 	return nil
-}
-
-func sameLifecycleStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func (s *Service) launchAppServerLifecycle(ctx context.Context, runID string, lifecycle executionapi.LifecyclePort, request executionapi.LifecycleRequest, reconcile bool) {

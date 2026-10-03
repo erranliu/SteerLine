@@ -75,7 +75,7 @@ func decodeHistoryPosition(binding HistoryBinding, raw string) (codexHistoryCurs
 	if len(raw) > maxConversationCursorBytes {
 		return codexHistoryCursor{}, errors.New("persisted history source cursor exceeds the read budget")
 	}
-	if err := decodeConversationSourceValue([]byte(raw), &value); err != nil {
+	if err := executionapi.DecodeStrictJSON([]byte(raw), &value, "conversation source binding has trailing data"); err != nil {
 		return codexHistoryCursor{}, err
 	}
 	digest := value.Digest
@@ -202,7 +202,7 @@ func (a *ConversationAdapter) LiveJournalPath(ctx context.Context, request contr
 				continue
 			}
 			var marker ConversationSourceMarker
-			if decodeConversationSourceValue(markerData, &marker) == nil && marker.Validate() == nil && marker.SourceIdentity == request.SourceIdentity &&
+			if executionapi.DecodeStrictJSON(markerData, &marker, "conversation source binding has trailing data") == nil && marker.Validate() == nil && marker.SourceIdentity == request.SourceIdentity &&
 				marker.WorkflowID == request.WorkflowID && marker.ExecutionID == request.ExecutionID && marker.AttemptID == request.AttemptID {
 				return filepath.Join(dir, "events.jsonl"), nil
 			}
@@ -373,7 +373,7 @@ func (a *ConversationAdapter) DiscoverJournals(ctx context.Context, discovery co
 				continue
 			}
 			var marker ConversationSourceMarker
-			if err := decodeConversationSourceValue(markerData, &marker); err != nil {
+			if err := executionapi.DecodeStrictJSON(markerData, &marker, "conversation source binding has trailing data"); err != nil {
 				source.Diagnostic = fmt.Sprintf("source marker is invalid: %v", err)
 			} else if err = marker.Validate(); err != nil {
 				source.Diagnostic = err.Error()

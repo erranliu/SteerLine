@@ -117,18 +117,6 @@ func prepareWorktree(ctx context.Context, c Config, run *Run) (workspace.Prepara
 
 func mustJSON(value any) []byte { data, _ := json.Marshal(value); return data }
 
-func sameStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func (s *Service) executionRecord(run *Run) *ExecutionRecord {
 	_, execution := s.workflowRecords(run)
 	return execution

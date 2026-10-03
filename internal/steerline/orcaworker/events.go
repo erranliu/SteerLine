@@ -31,13 +31,6 @@ func Settlement(ctx context.Context, call MetaCall, identity DispatchIdentity, o
 	}
 	return outcome, nil
 }
-func VerifyLiveDispatch(ctx context.Context, call MetaCall, identity DispatchIdentity) error {
-	status, err := VerifyActiveDispatch(ctx, call, identity)
-	if errors.Is(err, ErrActiveDispatchIdentity) || err == nil && status != "dispatched" {
-		return errors.New("stopped-center Orca Dispatch could not be verified as still active")
-	}
-	return err
-}
 func DeliveryAcknowledged(ctx context.Context, call MetaCall, coordinator, runtime, runID, deliveryID string) (bool, error) {
 	v, err := ReadDelivery(ctx, call, coordinator, runtime, runID)
 	if err != nil {

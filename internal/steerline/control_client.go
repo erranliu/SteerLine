@@ -93,11 +93,6 @@ func SubmitControl(c Config, action string, payload any, requestedBy string) (Co
 	return SubmitControlWithID(c, action, payload, requestedBy, newID())
 }
 
-// NewControlRequestID allocates the stable identity a client can show before it
-// publishes a side-effecting request. A timeout can then be resolved by reading
-// that same request and receipt instead of creating a replacement request.
-func NewControlRequestID() string { return newID() }
-
 // SubmitControlWithID publishes a control action under a caller-allocated ID.
 // The ID is immutable: reusing it with different content is rejected by the
 // request inbox rather than silently replacing the original action.

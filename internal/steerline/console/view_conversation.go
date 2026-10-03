@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/activityview"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
@@ -81,7 +82,7 @@ func renderSession(state projectState, row *consoleRow, width, height int, now t
 		lines = append(lines, decisionAnswerStatusLines(state, row)...)
 	} else if row.run.Decision != nil {
 		lines = append(lines, renderDecisionIdentity(state, row.run, now)...)
-		lines = append(lines, "决策阶段："+decisionStatusLabel(row.run.Decision.Status), "当前答案："+safeTerminalText(decisionSummary(row.run)))
+		lines = append(lines, "决策阶段："+decisionStatusLabel(row.run.Decision.Status), "当前答案："+safeTerminalText(activityview.DecisionAnswerSummary(row.run)))
 	}
 	if state.conversationMore {
 		lines = append(lines, "还有更多会话记录 · 按 y 加载下一页")

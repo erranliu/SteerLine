@@ -267,16 +267,6 @@ func (s *Service) commitEvents() error {
 	return s.commitDeclared(workerCommit{Project: s.Config.identity, Events: append([]DomainEvent(nil), s.pendingEvents...), Checkpoint: runtimeCheckpoint(s.State)})
 }
 
-func (s *Service) commitOperation(id string) error {
-	operation := snapshotOperation(&s.domain, id)
-	if operation == nil {
-		return errors.New("operation commitment has no original intent")
-	}
-	return s.commitDeclared(workerCommit{Project: operation.ProjectIdentity,
-		Operations: []recordWrite[OperationRecord]{{Before: snapshotOperation(&s.committed, id), After: *operation}},
-		Checkpoint: runtimeCheckpoint(s.State)})
-}
-
 func (s *Service) stageWorkerOperation(run *Run, id, next, requestID string, receipt []byte, reason string) error {
 	if run == nil {
 		return errors.New("worker operation has no fixed run")

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
@@ -171,7 +172,7 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 					}
 				}
 			}
-			if sameConversationCapabilities(report.Capabilities, previous.Capabilities) {
+			if slices.Equal(report.Capabilities, previous.Capabilities) {
 				return !batch.More && batch.Settled, nil
 			}
 		}
@@ -180,18 +181,6 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 		}
 	}
 	return !batch.More && batch.Settled, nil
-}
-
-func sameConversationCapabilities(a, b []ConversationCapability) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 func (s *Service) runConversationHistoryCollector(ctx context.Context, requests <-chan []contracts.ConversationHistorySource, errorsOut chan<- error) {

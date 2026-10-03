@@ -4,7 +4,6 @@ import (
 	"regexp"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
@@ -39,7 +38,3 @@ type WorkerPreparation = contracts.WorkerPreparation
 type WorkerHostBlocker = contracts.WorkerHostBlocker
 
 var revisionPattern = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
-
-func SetTaskStatus(record *TaskRecord, next string, mergedPR bool) error {
-	return task.SetStatus(record, next, mergedPR, now())
-}

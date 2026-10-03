@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type Recovery struct {
@@ -55,7 +56,7 @@ func (b Backend) Reattach(ctx context.Context, fixed Binding, commandID, turnID 
 	if !ValidNativeID(fixed.SessionID) {
 		return result, errors.New("original app-server thread identity is unverified")
 	}
-	if !stableCommandID(commandID) {
+	if !executionapi.StableExecutionID(commandID) {
 		return result, errors.New("original app-server command identity is unverified")
 	}
 	dir := filepath.Join(b.Config.RunDir, "runs", b.Config.RunID, "turns", commandID)
@@ -146,7 +147,7 @@ func (b Backend) Recover(ctx context.Context, fixed Binding, commandID, turnID s
 	result, err := b.Reattach(ctx, fixed, commandID, turnID, knownCalls)
 	if err != nil && b.ManagedProcessAbsent(result.Binding) {
 		result.Dead = true
-		if stableCommandID(commandID) && ValidNativeID(result.Binding.SessionID) && ValidNativeID(result.TurnID) {
+		if executionapi.StableExecutionID(commandID) && ValidNativeID(result.Binding.SessionID) && ValidNativeID(result.TurnID) {
 			path := filepath.Join(b.Config.RunDir, "runs", b.Config.RunID, "turns", commandID, "appserver.jsonl")
 			if outcome, readErr := ReadAppServerOutcome(path, result.Binding.SessionID, result.TurnID); readErr == nil && outcome.Completed {
 				result.Completed = true

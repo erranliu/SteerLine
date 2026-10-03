@@ -22,7 +22,6 @@ const (
 	ansiReset   = "\x1b[0m"
 	ansiDim     = "\x1b[2m"
 	ansiRed     = "\x1b[31m"
-	ansiGreen   = "\x1b[32m"
 	ansiYellow  = "\x1b[33m"
 	ansiBlue    = "\x1b[34m"
 	ansiMagenta = "\x1b[35m"
@@ -43,20 +42,6 @@ func statusMark(status string) string {
 		return "."
 	}
 	return "?"
-}
-
-func statusColor(status string) string {
-	switch status {
-	case "completed":
-		return ansiGreen
-	case "failed":
-		return ansiRed
-	case "pending":
-		return ansiMagenta
-	case "started", "running":
-		return ansiYellow
-	}
-	return ansiDim
 }
 
 func kindColor(kind string) string {

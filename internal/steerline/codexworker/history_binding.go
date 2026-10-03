@@ -1,7 +1,6 @@
 package codexworker
 
 import (
-	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -17,13 +16,10 @@ import (
 
 const ConversationSourceMarkerName = "conversation-source.v1.json"
 const ConversationJSONLSource = "codex-jsonl"
-const LocalCommandOutputSource = "local-command-output"
 
 func LocalProcessJournalSegment(identity string) string {
 	return JournalSegment(executionapi.BackendLocal, executionapi.ProtocolLocalProcess, identity)
 }
-
-func LocalCommandJournalSegment(identity string) string { return "local-command-v1:" + identity }
 
 func JournalSource(backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol) string {
 	if backend == executionapi.BackendLocal && (protocol == executionapi.ProtocolLocalProcess || protocol == executionapi.ProtocolLocalCodexAppServer) ||
@@ -67,14 +63,6 @@ func JournalGeneration(fileIdentity, segment string) (uint64, error) {
 	return generation, nil
 }
 
-type ConversationSourceMarkerInput struct {
-	ProjectID, WorkflowID, ExecutionID, AttemptID string
-	Agent, TargetID, SourceIdentity               string
-	ReaderCommand                                 contracts.Command
-	CodexHome                                     string
-	CreatedAt                                     time.Time
-}
-
 type ConversationSourceMarker struct {
 	Version        int                            `json:"v"`
 	ProjectID      string                         `json:"project_id"`
@@ -101,24 +89,6 @@ func (m ConversationSourceMarker) Validate() error {
 		return errors.New("conversation source marker is incomplete or unsupported")
 	}
 	return nil
-}
-
-func WriteConversationSourceMarker(path string, input ConversationSourceMarkerInput, writeAtomic func(string, []byte) error) error {
-	marker := ConversationSourceMarker{Version: 1, ProjectID: input.ProjectID, WorkflowID: input.WorkflowID, ExecutionID: input.ExecutionID, AttemptID: input.AttemptID,
-		Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Agent: input.Agent, TargetID: input.TargetID, Source: ConversationJSONLSource,
-		SourceSegment: LocalProcessJournalSegment(input.SourceIdentity), SourceIdentity: input.SourceIdentity, RecordName: "events.jsonl",
-		CreatedAt: input.CreatedAt, ReaderCommand: input.ReaderCommand, CodexHome: input.CodexHome}
-	if marker.CreatedAt.IsZero() {
-		marker.CreatedAt = time.Now().UTC()
-	}
-	if err := marker.Validate(); err != nil {
-		return err
-	}
-	data, err := json.Marshal(marker)
-	if err != nil {
-		return err
-	}
-	return writeAtomic(path, append(data, '\n'))
 }
 
 type HistoryBinding struct {
@@ -186,7 +156,7 @@ func ReadHistoryBinding(path string) (HistoryBinding, error) {
 	if err != nil {
 		return b, err
 	}
-	if err = decodeConversationSourceValue(raw, &b); err != nil {
+	if err = executionapi.DecodeStrictJSON(raw, &b, "conversation source binding has trailing data"); err != nil {
 		return b, err
 	}
 	return b, b.Validate()
@@ -213,17 +183,4 @@ func readConversationSourceFile(path string) ([]byte, error) {
 		return nil, errors.New("conversation source binding exceeds 64 KiB")
 	}
 	return raw, nil
-}
-
-func decodeConversationSourceValue(raw []byte, value any) error {
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(value); err != nil {
-		return err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
-		return errors.New("conversation source binding has trailing data")
-	}
-	return nil
 }

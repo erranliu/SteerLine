@@ -21,7 +21,7 @@ type TurnParamsInput struct {
 }
 
 func TurnParams(ctx context.Context, input TurnParamsInput, linkedWorktreeArgs func(context.Context, string) ([]string, error)) (map[string]any, error) {
-	if !nativeID.MatchString(input.ThreadID) || !stableCommandID(input.CommandID) || input.Worktree == "" || input.Prompt == "" {
+	if !nativeID.MatchString(input.ThreadID) || !executionapi.StableExecutionID(input.CommandID) || input.Worktree == "" || input.Prompt == "" {
 		return nil, errors.New("Codex app-server turn lacks a fixed thread, command or input")
 	}
 	var roots []string
@@ -36,16 +36,4 @@ func TurnParams(ctx context.Context, input TurnParamsInput, linkedWorktreeArgs f
 		}
 	}
 	return TurnStartParams(input.Worktree, input.ThreadID, input.CommandID, input.Prompt, input.Sandbox, input.Model, input.ReasoningEffort, roots)
-}
-
-func stableCommandID(value string) bool {
-	if len(value) != 32 {
-		return false
-	}
-	for _, c := range value {
-		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
-			return false
-		}
-	}
-	return true
 }

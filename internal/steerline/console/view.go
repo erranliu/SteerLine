@@ -320,7 +320,7 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 		if full {
 			lines = append(lines, renderDecisionIdentity(state, run, m.clock.Now())...)
 		}
-		lines = append(lines, "决策阶段："+decisionStatusLabel(run.Decision.Status), "当前答案："+safeTerminalText(decisionSummary(run)))
+		lines = append(lines, "决策阶段："+decisionStatusLabel(run.Decision.Status), "当前答案："+safeTerminalText(activityview.DecisionAnswerSummary(run)))
 	} else if run.FinishTaskStatus == "waiting_decision" {
 		lines = append(lines, "待决策状态存在，但当前 decision_id/问题记录缺失或尚未同步；答案通道未启用。")
 	}
@@ -987,16 +987,6 @@ func activityEventLineCount(event contracts.ActivityEvent, width int) int {
 	event.Detail = safeTerminalText(event.Detail)
 	event.Status = safeTerminalText(event.Status)
 	return max(1, len(strings.Split(activityview.RenderActivity(event, activityview.RenderOptions{MaxColumns: width}), "\n")))
-}
-
-func ptrString(value *string) string {
-	if value == nil {
-		return "—"
-	}
-	if *value == "" {
-		return "—"
-	}
-	return *value
 }
 
 func serviceWindowInstruction(ref ProjectRef) string { return ref.Presentation.ServiceInstruction }

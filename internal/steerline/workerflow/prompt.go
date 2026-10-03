@@ -9,20 +9,8 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
-func stableID(value string) bool {
-	if len(value) != 32 {
-		return false
-	}
-	for _, c := range value {
-		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
-			return false
-		}
-	}
-	return true
-}
-
 func Prompt(task task.TaskRecord, contract task.TaskContract, workflowRunID string, policy executionapi.PublicationPolicy) (string, error) {
-	if task.TaskID == "" || task.Title == "" || contract.ContractID == "" || contract.SpecRef.Path == "" || contract.PlanRef.Path == "" || !stableID(workflowRunID) {
+	if task.TaskID == "" || task.Title == "" || contract.ContractID == "" || contract.SpecRef.Path == "" || contract.PlanRef.Path == "" || !executionapi.StableExecutionID(workflowRunID) {
 		return "", errors.New("worker instruction requires a fixed task, Spec, Plan and workflow run")
 	}
 	if err := policy.Validate(); err != nil {
