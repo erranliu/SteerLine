@@ -6,7 +6,7 @@ import (
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func (m Model) cycleAttempt(next bool) (tea.Model, tea.Cmd) {
@@ -16,7 +16,7 @@ func (m Model) cycleAttempt(next bool) (tea.Model, tea.Cmd) {
 		m.status = "没有可切换的执行尝试"
 		return m, nil
 	}
-	attempts := make([]steerline.StepAttemptRecord, 0)
+	attempts := make([]contracts.StepAttemptRecord, 0)
 	seenAttempts := map[string]bool{}
 	maxAttemptNumber := 0
 	for _, attempt := range state.snapshot.Domain.Attempts {
@@ -40,7 +40,7 @@ func (m Model) cycleAttempt(next bool) (tea.Model, tea.Cmd) {
 			if row.run.StartedAt != nil {
 				created = *row.run.StartedAt
 			}
-			attempts = append(attempts, steerline.StepAttemptRecord{ExecutionID: row.run.ExecutionID, AttemptID: row.run.AttemptID, AttemptNumber: maxAttemptNumber + 1, CreatedAt: created})
+			attempts = append(attempts, contracts.StepAttemptRecord{ExecutionID: row.run.ExecutionID, AttemptID: row.run.AttemptID, AttemptNumber: maxAttemptNumber + 1, CreatedAt: created})
 		}
 	}
 	sort.SliceStable(attempts, func(i, j int) bool {
@@ -116,7 +116,7 @@ func (m Model) toggleGroup() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func turnGroupIDForBody(events []steerline.ConversationEvent, bodyKey string) string {
+func turnGroupIDForBody(events []contracts.ConversationEvent, bodyKey string) string {
 	for _, event := range events {
 		if event.Body != nil && conversationItemKey(event) == bodyKey {
 			return turnGroupID(event)
@@ -173,7 +173,7 @@ func (m Model) keepGroupOpen() (tea.Model, tea.Cmd) {
 func (m Model) openProcessBody() (tea.Model, tea.Cmd) {
 	state := &m.projects[m.selected]
 	view, _ := BuildConversationView(state.conversationEvents, state.view.Groups)
-	var events []steerline.ConversationEvent
+	var events []contracts.ConversationEvent
 	for _, group := range view.Groups {
 		if Folded(group, state.view.Groups[group.ID]) {
 			continue
@@ -223,7 +223,7 @@ func (m Model) nextFinal() (tea.Model, tea.Cmd) {
 		m.status = "没有最终回复"
 		return m, nil
 	}
-	var finals []steerline.ConversationEvent
+	var finals []contracts.ConversationEvent
 	for _, group := range view.Groups {
 		finals = append(finals, group.Finals...)
 	}
@@ -383,7 +383,7 @@ func (m Model) scrollExpandedDetail(delta int) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) readBodyByRef(index int, body steerline.ConversationBodyRef, offset int64, eventKey string) tea.Cmd {
+func (m Model) readBodyByRef(index int, body contracts.ConversationBodyRef, offset int64, eventKey string) tea.Cmd {
 	state := &m.projects[index]
 	if state.bodyBusy {
 		return nil
@@ -391,14 +391,14 @@ func (m Model) readBodyByRef(index int, body steerline.ConversationBodyRef, offs
 	state.bodyBusy = true
 	state.bodyGeneration++
 	generation := state.bodyGeneration
-	ref, query, ctx := state.ref, m.query, m.ctx
+	ref, query, ctx := state.ref, state.client, m.ctx
 	return func() tea.Msg {
-		page, err := query.ReadBody(ctx, ref, body, offset, 64<<10)
+		page, err := query.Body(ctx, body, offset, 64<<10)
 		return bodyMsg{projectKey: ref.Key, identity: ref.Identity, eventKey: eventKey, generation: generation, body: body, offset: offset, page: page, err: err}
 	}
 }
 
-func validBodyPage(ref steerline.ConversationBodyRef, requestedOffset int64, page steerline.ConversationBodyPage) bool {
+func validBodyPage(ref contracts.ConversationBodyRef, requestedOffset int64, page contracts.ConversationBodyPage) bool {
 	if page.ItemKey != ref.ItemKey || page.Revision != ref.Revision || page.Offset != requestedOffset || page.TotalBytes != ref.Bytes || page.SHA256 != ref.SHA256 || page.Completeness != ref.Completeness || !utf8.Valid(page.Data) {
 		return false
 	}
@@ -408,11 +408,11 @@ func validBodyPage(ref steerline.ConversationBodyRef, requestedOffset int64, pag
 	return page.Complete == (page.NextOffset >= page.TotalBytes)
 }
 
-func findBodyEvent(events []steerline.ConversationEvent, itemKey string, revision int64) (steerline.ConversationEvent, bool) {
+func findBodyEvent(events []contracts.ConversationEvent, itemKey string, revision int64) (contracts.ConversationEvent, bool) {
 	for _, event := range events {
 		if event.Body != nil && event.Body.ItemKey == itemKey && event.Body.Revision == revision {
 			return event, true
 		}
 	}
-	return steerline.ConversationEvent{}, false
+	return contracts.ConversationEvent{}, false
 }

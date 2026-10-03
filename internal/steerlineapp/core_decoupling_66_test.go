@@ -55,8 +55,17 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Run("missing_directory_and_ports_reject_before_state", func(t *testing.T) {
-		options := ConsoleOptions("focused-run")
-		if options.Query == nil || options.Control == nil || options.RunID != "focused-run" || options.ApplicationHome != HomeDir() {
+		t.Setenv("STEERLINE_HOME", t.TempDir())
+		_, options, err := PrepareConsole(context.Background(), "", "focused-run")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			for _, c := range options.Clients {
+				_ = c.Close()
+			}
+		}()
+		if options.Clients == nil || options.RunID != "focused-run" || options.ApplicationHome != HomeDir() {
 			t.Fatal("console entry retained hidden default sources or paths")
 		}
 		if _, err := NewCommandService(nil, steerline.Config{}); err == nil {

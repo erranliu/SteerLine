@@ -4,7 +4,7 @@ import (
 	"sort"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func (m Model) updateConversation(msg conversationMsg) (tea.Model, tea.Cmd) {
@@ -22,7 +22,7 @@ func (m Model) updateConversation(msg conversationMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if msg.mode == "head" {
-		state.conversationEvents = append([]steerline.ConversationEvent(nil), msg.page.Events...)
+		state.conversationEvents = append([]contracts.ConversationEvent(nil), msg.page.Events...)
 	} else {
 		seen := map[int64]bool{}
 		for _, event := range state.conversationEvents {
@@ -60,7 +60,7 @@ func (m Model) updateConversation(msg conversationMsg) (tea.Model, tea.Cmd) {
 	}
 	if len(state.conversationEvents) > 0 {
 		latest := state.conversationEvents[len(state.conversationEvents)-1].EventID
-		if cursor, err := steerline.ConversationCursorAfter(state.ref.Identity, state.conversationFilter, latest); err == nil {
+		if cursor, err := state.client.CursorAfter(state.conversationFilter, latest); err == nil {
 			state.conversationTailCursor = cursor
 		}
 	}

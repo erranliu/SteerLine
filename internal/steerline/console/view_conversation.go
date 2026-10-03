@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -51,11 +51,11 @@ func renderSession(state projectState, row *consoleRow, width, height int, now t
 			}
 			if group.EndStatus != "" {
 				switch group.FinalState {
-				case steerline.FinalPending:
+				case contracts.FinalPending:
 					lines = append(lines, "最终回复待同步")
-				case steerline.FinalAbsent:
+				case contracts.FinalAbsent:
 					lines = append(lines, "本轮已结束，未识别到最终回复")
-				case steerline.FinalUnknown:
+				case contracts.FinalUnknown:
 					lines = append(lines, "最终回复状态未知")
 				}
 				reason := group.EndReason
@@ -81,7 +81,7 @@ func renderSession(state projectState, row *consoleRow, width, height int, now t
 		lines = append(lines, decisionAnswerStatusLines(state, row)...)
 	} else if row.run.Decision != nil {
 		lines = append(lines, renderDecisionIdentity(state, row.run, now)...)
-		lines = append(lines, "决策阶段："+decisionStatusLabel(row.run.Decision.Status), "当前答案："+safeTerminalText(steerline.DecisionSummary(row.run)))
+		lines = append(lines, "决策阶段："+decisionStatusLabel(row.run.Decision.Status), "当前答案："+safeTerminalText(decisionSummary(row.run)))
 	}
 	if state.conversationMore {
 		lines = append(lines, "还有更多会话记录 · 按 y 加载下一页")
@@ -119,7 +119,7 @@ func renderSession(state projectState, row *consoleRow, width, height int, now t
 	return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 }
 
-func renderConversationEvent(event steerline.ConversationEvent, width int) []string {
+func renderConversationEvent(event contracts.ConversationEvent, width int) []string {
 	identity := firstText(event.ItemID, event.SourceEventID, string(event.Type))
 	phase := string(event.Phase)
 	status := event.Status
@@ -136,7 +136,7 @@ func renderConversationEvent(event steerline.ConversationEvent, width int) []str
 	return []string{line}
 }
 
-func renderFinalEventLine(state projectState, event steerline.ConversationEvent) string {
+func renderFinalEventLine(state projectState, event contracts.ConversationEvent) string {
 	key := conversationItemKey(event)
 	line := "  [" + itemToken(event) + "] final_answer · " + safeTerminalText(firstText(event.ItemID, event.SourceEventID)) + " · 正文缺失"
 	if event.Body != nil {
@@ -172,7 +172,7 @@ func renderFinal(state projectState, row *consoleRow, width, height int) []strin
 	if state.bodyMore {
 		lines = append(lines, "正文尚有后续 · > 下一页 · < 上一页")
 	}
-	if state.bodyRef.Completeness != steerline.BodyComplete {
+	if state.bodyRef.Completeness != contracts.BodyComplete {
 		lines = append(lines, "正文完整性："+safeTerminalText(string(state.bodyRef.Completeness)))
 	}
 	return scrollLines(wrapLines(lines, width), state.detailScroll, height)

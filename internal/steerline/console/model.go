@@ -6,14 +6,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"path/filepath"
 	"runtime"
 	"sort"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/erranliu/SteerLine/internal/steerline"
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type Clock interface {
@@ -28,8 +28,7 @@ func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) 
 
 type Options struct {
 	RunID           string
-	Query           QuerySource
-	Control         ControlClient
+	Clients         map[string]api.ConsoleClient
 	Clock           Clock
 	ApplicationHome string
 	ApplicationBin  string
@@ -49,9 +48,9 @@ type consoleRow struct {
 	kind      rowKind
 	taskID    string
 	title     string
-	run       *steerline.Run
-	candidate *steerline.TaskCandidate
-	native    *steerline.NativeTaskDetail
+	run       *contracts.Run
+	candidate *contracts.TaskCandidate
+	native    *contracts.NativeTaskDetail
 }
 
 type actionState struct {
@@ -90,8 +89,9 @@ type decisionAnswerDialog struct {
 }
 
 type projectState struct {
-	ref  ProjectRef
-	view ProjectView
+	client api.ConsoleClient
+	ref    ProjectRef
+	view   ProjectView
 
 	snapshot       ProjectSnapshot
 	snapshotLoaded bool
@@ -109,28 +109,28 @@ type projectState struct {
 	actions map[string]*actionState
 
 	activityKey        string
-	activityCursor     steerline.JournalCursor
-	activityEvents     []steerline.ActivityEvent
+	activityCursor     api.JournalCursor
+	activityEvents     []contracts.ActivityEvent
 	activityError      string
 	activityInFlight   bool
 	activityGeneration uint64
 
 	conversationKey        string
-	conversationFilter     steerline.ConversationFilter
+	conversationFilter     contracts.ConversationFilter
 	conversationCursor     string
 	conversationTailCursor string
-	conversationEvents     []steerline.ConversationEvent
+	conversationEvents     []contracts.ConversationEvent
 	conversationMore       bool
 	conversationTailMore   bool
 	conversationError      string
 	conversationInFlight   bool
 	conversationGeneration uint64
-	capabilities           []steerline.ConversationCapabilityReport
+	capabilities           []contracts.ConversationCapabilityReport
 	capabilityError        string
 	capabilityInFlight     bool
 	capabilityGeneration   uint64
 
-	bodyRef            *steerline.ConversationBodyRef
+	bodyRef            *contracts.ConversationBodyRef
 	bodyOffset         int64
 	bodyViewOffset     int64
 	bodyPages          []int64
@@ -146,7 +146,7 @@ type projectState struct {
 	logScroll          int
 
 	recoveryRunID        string
-	recoveryReport       *steerline.RecoveryInspection
+	recoveryReport       *api.RecoveryInspection
 	recoveryError        string
 	recoveryBusy         bool
 	recoveryGeneration   uint64
@@ -178,9 +178,8 @@ type executionProfileChoice struct {
 }
 
 type Model struct {
-	ctx            context.Context
-	query          QuerySource
-	control        ControlClient
+	ctx context.Context
+
 	clock          Clock
 	projects       []projectState
 	selected       int
@@ -206,96 +205,35 @@ type Model struct {
 	runFocus string
 }
 
-// LoadProjects reads either one explicit config or all configs under etc.
-// Invalid project files stay in the list so their errors remain visible.
-func LoadProjects(configPath string, source ConfigSource) ([]ProjectRef, error) {
-	if source == nil {
-		return nil, errors.New("application config source is required")
-	}
-	var refs []ProjectRef
-	if strings.TrimSpace(configPath) != "" {
-		absolute, err := filepath.Abs(configPath)
-		if err != nil {
-			return nil, err
+func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, error) {
+	seen := map[string]bool{}
+	for _, ref := range refs {
+		if seen[ref.Key] {
+			return Model{}, errors.New("duplicate project view key")
 		}
-		config, loadErr := source.LoadConfig(absolute)
-		name := strings.TrimSuffix(filepath.Base(absolute), filepath.Ext(absolute))
-		if loadErr != nil {
-			return []ProjectRef{invalidProjectRef(name, absolute, loadErr)}, nil
-		}
-		home, bin, _ := source.ApplicationPaths()
-		refs = append(refs, makeProjectRef(name, absolute, config, home, bin))
-	} else {
-		projects, err := source.ConfigFiles()
-		if err != nil {
-			return nil, err
-		}
-		for _, project := range projects {
-			path, _ := filepath.Abs(project.Path)
-			if project.Err != nil {
-				refs = append(refs, invalidProjectRef(project.Name, path, project.Err))
-				continue
-			}
-			config, loadErr := source.LoadConfig(path)
-			if loadErr != nil {
-				refs = append(refs, invalidProjectRef(project.Name, path, loadErr))
-				continue
-			}
-			home, bin, _ := source.ApplicationPaths()
-			refs = append(refs, makeProjectRef(project.Name, path, config, home, bin))
-		}
-	}
-	identityNames := map[string][]string{}
-	for i := range refs {
-		if refs[i].Identity != "" {
-			key := viewCanonical(refs[i].Identity)
-			identityNames[key] = append(identityNames[key], refs[i].Name)
-		}
-	}
-	for i := range refs {
-		if refs[i].Identity == "" {
+		seen[ref.Key] = true
+		if ref.Error != "" {
 			continue
 		}
-		names := identityNames[viewCanonical(refs[i].Identity)]
-		if len(names) > 1 {
-			refs[i].Conflict = "同仓库配置关联/冲突：" + strings.Join(names, ", ") + "；共享单仓库服务锁，控制操作已禁用"
+		client := options.Clients[ref.Key]
+		if client == nil {
+			return Model{}, fmt.Errorf("project %s requires an injected product client", ref.Name)
+		}
+		actual := client.Project()
+		if actual.ConfigPath != ref.ConfigPath || actual.Identity != ref.Identity || actual.RunDir != ref.RunDir {
+			return Model{}, errors.New("injected client belongs to another project view")
 		}
 	}
-	return refs, nil
-}
 
-func invalidProjectRef(name, path string, configErr error) ProjectRef {
-	key, _ := absoluteViewKey(path, "")
-	return ProjectRef{Key: key, Name: name, ConfigPath: path, Error: configErr.Error()}
-}
-
-func makeProjectRef(name, path string, config steerline.Config, home, bin string) ProjectRef {
-	absoluteRunDir, _ := filepath.Abs(config.RunDir)
-	configPath, _ := filepath.Abs(path)
-	key, _ := absoluteViewKey(configPath, absoluteRunDir)
-	identity := ""
-	if err := config.ResolveIdentity(context.Background()); err != nil {
-		return ProjectRef{Key: key, Name: name, ConfigPath: configPath, Config: config, RunDir: absoluteRunDir, Error: "resolve repository identity: " + err.Error()}
-	}
-	identity = config.Identity()
-	return ProjectRef{Key: key, Name: name, ConfigPath: configPath, Config: config, ApplicationHome: home, ApplicationBin: bin, Identity: identity, RunDir: absoluteRunDir}
-}
-
-func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, error) {
 	profile, prefs, diagnostic, err := acquireViewProfile(options.ApplicationHome)
 	if err != nil {
 		return Model{}, err
 	}
-	if options.Query == nil {
-		options.Query = FileQuerySource{}
-	}
-	if options.Control == nil {
-		options.Control = FileControlClient{}
-	}
+
 	if options.Clock == nil {
 		options.Clock = realClock{}
 	}
-	m := Model{ctx: ctx, query: options.Query, control: options.Control, clock: options.Clock, profile: profile, prefs: prefs, prefsErr: diagnostic, runFocus: options.RunID, selected: -1, applicationEtc: options.ApplicationEtc}
+	m := Model{ctx: ctx, clock: options.Clock, profile: profile, prefs: prefs, prefsErr: diagnostic, runFocus: options.RunID, selected: -1, applicationEtc: options.ApplicationEtc}
 	for _, ref := range refs {
 		view, exists := prefs.Projects[ref.Key]
 		if !exists {
@@ -314,7 +252,7 @@ func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, e
 		if view.AttemptPinned {
 			attemptID = view.AttemptID
 		}
-		state := projectState{ref: ref, view: view, selectedKey: view.SelectedKey, selectionHold: view.SelectionPending, filter: filterIndex(view.Filter), panel: panelIndex(view.Panel), attemptID: attemptID, detailScroll: view.DetailScroll, logScroll: view.LogScroll, actions: map[string]*actionState{}}
+		state := projectState{client: options.Clients[ref.Key], ref: ref, view: view, selectedKey: view.SelectedKey, selectionHold: view.SelectionPending, filter: filterIndex(view.Filter), panel: panelIndex(view.Panel), attemptID: attemptID, detailScroll: view.DetailScroll, logScroll: view.LogScroll, actions: map[string]*actionState{}}
 		state.bodyKind = view.BodyKind
 		state.bodyPages = append([]int64(nil), view.BodyPages...)
 		for requestID, saved := range view.Actions {
@@ -344,14 +282,26 @@ func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, e
 	return m, nil
 }
 
-func Run(ctx context.Context, refs []ProjectRef, options Options) error {
+func Run(ctx context.Context, refs []ProjectRef, options Options) (err error) {
 	m, err := NewModel(ctx, refs, options)
 	if err != nil {
 		return err
 	}
-	defer m.profile.close()
+	defer func() { err = errors.Join(err, m.Close()) }()
 	p := tea.NewProgram(m, tea.WithAltScreen(), tea.WithContext(ctx))
 	_, err = p.Run()
+	return err
+}
+
+// Close releases only UI/client resources; it never sends a stop command.
+func (m Model) Close() error {
+	m.profile.close()
+	var err error
+	for _, state := range m.projects {
+		if state.client != nil {
+			err = errors.Join(err, state.client.Close())
+		}
+	}
 	return err
 }
 
@@ -382,10 +332,13 @@ func (m Model) readProject(index int) tea.Cmd {
 	m.projects[index].refreshID++
 	id := m.projects[index].refreshID
 	m.projects[index].refreshing = true
-	query := m.query
+	query := m.projects[index].client
 	ctx := m.ctx
 	return func() tea.Msg {
-		return projectMsg{key: ref.Key, identity: ref.Identity, generation: generation, requestID: id, snapshot: query.ReadProject(ctx, ref, selectedTaskID, previous)}
+		if query == nil {
+			return projectMsg{key: ref.Key, identity: ref.Identity, generation: generation, requestID: id, snapshot: ProjectSnapshot{TaskError: ref.Error, DomainError: ref.Error}}
+		}
+		return projectMsg{key: ref.Key, identity: ref.Identity, generation: generation, requestID: id, snapshot: query.ReadProject(ctx, selectedTaskID, previous)}
 	}
 }
 
@@ -398,15 +351,15 @@ func (m Model) readActivity(index int, runID, executionID, attemptID, path, key 
 	generation := state.activityGeneration
 	state.activityInFlight = true
 	base := state.activityCursor
-	query, ctx, ref := m.query, m.ctx, state.ref
+	query, ctx, ref := state.client, m.ctx, state.ref
 	return func() tea.Msg {
-		batch, err := query.ReadActivity(ctx, ref, runID, executionID, attemptID, path, base)
+		batch, err := query.Activity(ctx, runID, executionID, attemptID, path, base)
 		return activityResultMsg{projectKey: ref.Key, identity: ref.Identity, key: key, generation: generation, base: base, batchActivity: batch.Activity, next: batch.Cursor, reset: batch.Reset, diagnostics: batch.Diagnostics, err: err}
 	}
 }
 
 func selectedNativeTaskID(state projectState) string {
-	if state.ref.Config.TaskAuthority != "native" {
+	if state.ref.Presentation.TaskAuthority != "native" {
 		return ""
 	}
 	if strings.HasPrefix(state.selectedKey, "task:") {
@@ -431,14 +384,14 @@ func (m Model) readConversation(index int, cursor, key, mode string) tea.Cmd {
 	state.conversationGeneration++
 	generation := state.conversationGeneration
 	state.conversationInFlight = true
-	query, ctx, ref, filter := m.query, m.ctx, state.ref, state.conversationFilter
+	query, ctx, ref, filter := state.client, m.ctx, state.ref, state.conversationFilter
 	return func() tea.Msg {
-		page, err := query.ReadConversation(ctx, ref, filter, cursor)
+		page, err := query.Conversation(ctx, filter, cursor)
 		return conversationMsg{projectKey: ref.Key, identity: ref.Identity, key: key, generation: generation, cursor: cursor, mode: mode, page: page, err: err}
 	}
 }
 
-func (m Model) readCapabilities(index int, events []steerline.ConversationEvent, key string) tea.Cmd {
+func (m Model) readCapabilities(index int, events []contracts.ConversationEvent, key string) tea.Cmd {
 	state := &m.projects[index]
 	if state.capabilityInFlight {
 		return nil
@@ -446,11 +399,11 @@ func (m Model) readCapabilities(index int, events []steerline.ConversationEvent,
 	state.capabilityInFlight = true
 	state.capabilityGeneration++
 	generation := state.capabilityGeneration
-	query, ctx, ref := m.query, m.ctx, state.ref
-	events = append([]steerline.ConversationEvent(nil), events...)
+	query, ctx, ref := state.client, m.ctx, state.ref
+	events = append([]contracts.ConversationEvent(nil), events...)
 	return func() tea.Msg {
 		seen := map[string]bool{}
-		var reports []steerline.ConversationCapabilityReport
+		var reports []contracts.ConversationCapabilityReport
 		var queryErrors []error
 		for _, event := range events {
 			if event.Backend == "" || event.Protocol == "" || event.TargetID == "" {
@@ -461,7 +414,7 @@ func (m Model) readCapabilities(index int, events []steerline.ConversationEvent,
 				continue
 			}
 			seen[targetKey] = true
-			current, err := query.ReadCapabilities(ctx, ref, event.Backend, event.Protocol, event.TargetID, event.ExecutionID, event.AttemptID, event.Source, event.SourceIdentity)
+			current, err := query.Capabilities(ctx, api.CapabilityFilter{Backend: event.Backend, Protocol: event.Protocol, TargetID: event.TargetID, ExecutionID: event.ExecutionID, AttemptID: event.AttemptID, Source: event.Source, SourceIdentity: event.SourceIdentity})
 			if err != nil {
 				queryErrors = append(queryErrors, err)
 				continue
@@ -472,7 +425,7 @@ func (m Model) readCapabilities(index int, events []steerline.ConversationEvent,
 	}
 }
 
-func (m Model) readBody(index int, event steerline.ConversationEvent, offset int64) tea.Cmd {
+func (m Model) readBody(index int, event contracts.ConversationEvent, offset int64) tea.Cmd {
 	state := &m.projects[index]
 	if event.Body == nil || state.bodyBusy {
 		return nil
@@ -480,9 +433,9 @@ func (m Model) readBody(index int, event steerline.ConversationEvent, offset int
 	state.bodyBusy = true
 	state.bodyGeneration++
 	generation := state.bodyGeneration
-	ref, body, query, ctx := state.ref, *event.Body, m.query, m.ctx
+	ref, body, query, ctx := state.ref, *event.Body, state.client, m.ctx
 	return func() tea.Msg {
-		page, err := query.ReadBody(ctx, ref, body, offset, 64<<10)
+		page, err := query.Body(ctx, body, offset, 64<<10)
 		return bodyMsg{projectKey: ref.Key, identity: ref.Identity, eventKey: conversationItemKey(event), generation: generation, body: body, offset: offset, page: page, err: err}
 	}
 }
@@ -490,22 +443,22 @@ func (m Model) readBody(index int, event steerline.ConversationEvent, offset int
 func (m Model) submitControl(index int, action, taskID, requestID string, instance string, revision uint64) tea.Cmd {
 	state := &m.projects[index]
 	ref := state.ref
-	payload := any(nil)
+	payload := api.ControlPayload{}
 	switch action {
 	case "start_task":
 		profile := state.actions[requestID]
 		if profile != nil && profile.ExecutionProfileID != "" {
-			payload = map[string]string{"task_id": taskID, "execution_profile_id": profile.ExecutionProfileID, "execution_profile_digest": profile.ExecutionProfileDigest}
+			payload = api.ControlPayload{TaskID: taskID, ExecutionProfileID: profile.ExecutionProfileID, ExecutionProfileDigest: profile.ExecutionProfileDigest}
 		} else {
-			payload = map[string]string{"task_id": taskID}
+			payload = api.ControlPayload{TaskID: taskID}
 		}
 	case "set_dispatch_mode":
-		payload = map[string]string{"mode": taskID}
+		payload = api.ControlPayload{Mode: taskID}
 	}
-	query := m.control
+	query := state.client
 	ctx := m.ctx
 	return func() tea.Msg {
-		request, err := query.Submit(ctx, ref, action, payload, requestID, instance, &revision)
+		request, err := query.SubmitControl(ctx, api.ControlInput{Action: api.ControlAction(action), Payload: payload, RequestID: requestID, InstanceID: instance, ExpectedRevision: &revision})
 		return actionSubmittedMsg{projectKey: ref.Key, identity: ref.Identity, instance: instance, requestID: requestID, taskID: taskID, action: action, request: request, err: err}
 	}
 }
@@ -513,16 +466,22 @@ func (m Model) submitControl(index int, action, taskID, requestID string, instan
 func (m Model) pollAction(index int, action *actionState) tea.Cmd {
 	state := &m.projects[index]
 	ref := state.ref
-	query := m.control
+	query := state.client
 	ctx := m.ctx
 	requestID := action.RequestID
+	if query == nil {
+		return func() tea.Msg {
+			return actionReceiptMsg{projectKey: ref.Key, identity: ref.Identity, requestID: requestID, err: errors.New(firstText(ref.Error, "product client is unavailable"))}
+		}
+	}
 	if action.Action == "answer_decision" {
-		decisionQuery, ok := query.(DecisionCommandClient)
+		decisionQuery := query
+		ok := query != nil
 		return func() tea.Msg {
 			if !ok {
 				return actionReceiptMsg{projectKey: ref.Key, identity: ref.Identity, requestID: requestID, err: errors.New("decision command query is unavailable")}
 			}
-			command, err := decisionQuery.DecisionCommand(ctx, ref, requestID)
+			command, err := decisionQuery.Command(ctx, requestID)
 			if err != nil {
 				return actionReceiptMsg{projectKey: ref.Key, identity: ref.Identity, requestID: requestID, err: err}
 			}
@@ -530,11 +489,11 @@ func (m Model) pollAction(index int, action *actionState) tea.Cmd {
 		}
 	}
 	return func() tea.Msg {
-		receipt, err := query.Receipt(ctx, ref, requestID)
+		receipt, err := query.Receipt(ctx, requestID)
 		if err == nil {
 			return actionReceiptMsg{projectKey: ref.Key, identity: ref.Identity, requestID: requestID, receipt: receipt}
 		}
-		request, requestErr := query.Request(ctx, ref, requestID)
+		request, requestErr := query.Request(ctx, requestID)
 		return actionReceiptMsg{projectKey: ref.Key, identity: ref.Identity, requestID: requestID, request: request, err: errors.Join(err, requestErr)}
 	}
 }
@@ -548,9 +507,9 @@ type projectMsg struct {
 type activityResultMsg struct {
 	projectKey, identity, key string
 	generation                uint64
-	base                      steerline.JournalCursor
-	batchActivity             []steerline.ActivityEvent
-	next                      steerline.JournalCursor
+	base                      api.JournalCursor
+	batchActivity             []contracts.ActivityEvent
+	next                      api.JournalCursor
 	reset                     bool
 	diagnostics               []string
 	err                       error
@@ -560,40 +519,41 @@ type conversationMsg struct {
 	generation                uint64
 	cursor                    string
 	mode                      string
-	page                      steerline.ConversationPage
+	page                      contracts.ConversationPage
 	err                       error
 }
 type capabilityMsg struct {
 	projectKey, identity, key string
 	generation                uint64
-	reports                   []steerline.ConversationCapabilityReport
+	reports                   []contracts.ConversationCapabilityReport
 	err                       error
 }
 type bodyMsg struct {
 	projectKey, identity, eventKey string
 	generation                     uint64
-	body                           steerline.ConversationBodyRef
+	body                           contracts.ConversationBodyRef
 	offset                         int64
-	page                           steerline.ConversationBodyPage
+	page                           contracts.ConversationBodyPage
 	err                            error
 }
 type actionSubmittedMsg struct {
 	projectKey, identity, instance, requestID, taskID, action string
-	request                                                   steerline.ControlRequest
-	command                                                   *steerline.CommandRecord
+	request                                                   api.ControlRequest
+	command                                                   *contracts.CommandRecord
 	err                                                       error
 }
 
-func (m Model) submitDecisionCommand(index int, answer steerline.DecisionAnswer, requestedBy, commandID string) tea.Cmd {
+func (m Model) submitDecisionCommand(index int, answer contracts.DecisionAnswer, requestedBy, commandID string) tea.Cmd {
 	state := &m.projects[index]
 	ref := state.ref
-	query, ok := m.control.(DecisionCommandClient)
+	query := state.client
+	ok := query != nil
 	ctx := m.ctx
 	return func() tea.Msg {
 		if !ok {
 			return actionSubmittedMsg{projectKey: ref.Key, identity: ref.Identity, instance: answer.ServiceInstanceID, requestID: commandID, taskID: "", action: "answer_decision", err: errors.New("decision command submission is unavailable")}
 		}
-		command, _, err := query.SubmitDecision(ctx, ref, answer, requestedBy, commandID)
+		command, _, err := query.SubmitDecision(ctx, api.DecisionInput{Answer: answer, RequestedBy: requestedBy, CommandID: commandID})
 		message := actionSubmittedMsg{projectKey: ref.Key, identity: ref.Identity, instance: answer.ServiceInstanceID, requestID: commandID, taskID: answer.RunID, action: "answer_decision", err: err}
 		if err == nil {
 			message.command = &command
@@ -617,12 +577,13 @@ func (m Model) answerSelectedDecision() (tea.Model, tea.Cmd) {
 		m.status = reason
 		return m, nil
 	}
-	eligibility, ok := m.control.(DecisionCommandClient)
+	eligibility := state.client
+	ok := eligibility != nil
 	if !ok {
 		m.status = "当前控制客户端不支持决策资格核验"
 		return m, nil
 	}
-	if err := eligibility.DecisionEligibility(m.ctx, state.ref, row.run); err != nil {
+	if err := eligibility.DecisionEligibility(m.ctx, row.run); err != nil {
 		m.status = "回答资格核验失败：" + err.Error()
 		return m, nil
 	}
@@ -660,7 +621,7 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
 	}
 	state := &m.projects[index]
 	runtimeState := state.snapshot.Connection.Snapshot.Runtime
-	var run *steerline.Run
+	var run *contracts.Run
 	if runtimeState != nil {
 		for _, candidate := range runtimeState.Runs {
 			if candidate != nil && candidate.RunID == dialog.runID {
@@ -695,8 +656,8 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
 		dialog.error = "自定义答复需要填写非空说明"
 		return m, nil
 	}
-	requestID := steerline.NewControlRequestID()
-	answer := steerline.DecisionAnswer{DecisionID: dialog.decisionID, RunID: dialog.runID, OptionID: optionID, Note: note, AnsweredBy: steerline.AnswererName(), ExpectedDecisionVersion: dialog.decisionVersion, ExpectedRunRevision: dialog.runRevision, ServiceInstanceID: dialog.instance}
+	requestID := newRequestID()
+	answer := contracts.DecisionAnswer{DecisionID: dialog.decisionID, RunID: dialog.runID, OptionID: optionID, Note: note, ExpectedDecisionVersion: dialog.decisionVersion, ExpectedRunRevision: dialog.runRevision, ServiceInstanceID: dialog.instance}
 	action := &actionState{RequestID: requestID, Action: "answer_decision", TaskID: run.TaskID, RunID: run.RunID, DecisionID: dialog.decisionID, DecisionDraftOptionID: optionID, DecisionDraftNote: string(dialog.note), DecisionRevision: dialog.runRevision, DecisionVersion: dialog.decisionVersion, Status: "submitting", Message: "保存 command_id 并提交答案", TargetInstance: dialog.instance, UpdatedAt: m.clock.Now()}
 	state.actions[requestID] = action
 	state.view.Outstanding[requestID] = "decision:" + run.RunID
@@ -708,20 +669,20 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
 	}
 	m.answer = nil
 	m.status = "答案命令已发布；command_id=" + requestID
-	return m, m.submitDecisionCommand(index, answer, answer.AnsweredBy, requestID)
+	return m, m.submitDecisionCommand(index, answer, "", requestID)
 }
 
 type actionReceiptMsg struct {
 	projectKey, identity, requestID string
-	receipt                         *steerline.ControlReceipt
-	request                         *steerline.ControlRequest
-	command                         *steerline.CommandRecord
+	receipt                         *api.ControlReceipt
+	request                         *api.ControlRequest
+	command                         *contracts.CommandRecord
 	err                             error
 }
 type recoveryInspectionMsg struct {
 	projectKey, identity, runID string
 	generation                  uint64
-	report                      steerline.RecoveryInspection
+	report                      api.RecoveryInspection
 	err                         error
 }
 
@@ -736,7 +697,7 @@ func remapDecisionActionID(state *projectState, action *actionState, oldID, newI
 	state.view.Outstanding[newID] = "decision:" + action.RunID
 }
 
-func applyDecisionCommandResult(state *projectState, action *actionState, command *steerline.CommandRecord, commandErr error) (refresh, reopen bool) {
+func applyDecisionCommandResult(state *projectState, action *actionState, command *contracts.CommandRecord, commandErr error) (refresh, reopen bool) {
 	if state == nil || action == nil {
 		return false, false
 	}
@@ -784,7 +745,7 @@ func applyDecisionCommandResult(state *projectState, action *actionState, comman
 	return false, false
 }
 
-func decisionRequestFor(state projectState, runID, decisionID string) (steerline.DecisionRequest, bool) {
+func decisionRequestFor(state projectState, runID, decisionID string) (contracts.DecisionRequest, bool) {
 	if runtimeState := state.snapshot.Connection.Snapshot.Runtime; runtimeState != nil {
 		for _, run := range runtimeState.Runs {
 			if run != nil && run.RunID == runID && run.Decision != nil && run.Decision.ID == decisionID {
@@ -802,14 +763,14 @@ func decisionRequestFor(state projectState, runID, decisionID string) (steerline
 	if state.snapshot.Domain != nil {
 		for _, record := range state.snapshot.Domain.Decisions {
 			if record.DecisionID == decisionID && record.WorkflowRunID == runID {
-				var request steerline.DecisionRequest
+				var request contracts.DecisionRequest
 				if json.Unmarshal(record.Request, &request) == nil {
 					return request, true
 				}
 			}
 		}
 	}
-	return steerline.DecisionRequest{}, false
+	return contracts.DecisionRequest{}, false
 }
 
 func (m *Model) reopenDecisionDraft(index int, action *actionState) {
@@ -863,7 +824,7 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func controlRequestMatchesAction(request *steerline.ControlRequest, action *actionState, repositoryIdentity string) bool {
+func controlRequestMatchesAction(request *api.ControlRequest, action *actionState, repositoryIdentity string) bool {
 	if request == nil || action == nil || request.RequestID != action.RequestID || request.Action != action.Action || request.InstanceID != action.TargetInstance || viewCanonical(request.RepositoryIdentity) != viewCanonical(repositoryIdentity) {
 		return false
 	}
@@ -927,7 +888,7 @@ func (m Model) rows(index int) []consoleRow {
 	}
 	state := &m.projects[index]
 	var rows []consoleRow
-	runsByTask := map[string]*steerline.Run{}
+	runsByTask := map[string]*contracts.Run{}
 	if runtime := state.snapshot.Observation.Runtime; runtime != nil {
 		for _, run := range runtime.Runs {
 			if run != nil {
@@ -936,7 +897,7 @@ func (m Model) rows(index int) []consoleRow {
 		}
 	}
 	shownRuns := map[string]bool{}
-	nativeByID := map[string]*steerline.NativeTaskDetail{}
+	nativeByID := map[string]*contracts.NativeTaskDetail{}
 	if state.snapshot.NativeTasks != nil {
 		for i := range state.snapshot.NativeTasks.Tasks {
 			detail := &state.snapshot.NativeTasks.Tasks[i]
@@ -947,7 +908,7 @@ func (m Model) rows(index int) []consoleRow {
 		detail := state.snapshot.SelectedNative
 		nativeByID[detail.TaskID] = detail
 	}
-	appendRun := func(run *steerline.Run) {
+	appendRun := func(run *contracts.Run) {
 		rows = append(rows, consoleRow{key: "run:" + run.RunID, kind: rowRun, taskID: run.TaskID, title: run.Title, run: run, native: nativeByID[firstText(run.DomainTaskID, run.TaskID)]})
 		shownRuns[run.RunID] = true
 	}
@@ -998,7 +959,7 @@ func (m Model) rows(index int) []consoleRow {
 	return rows
 }
 
-func filterAllows(filter int, kind rowKind, run *steerline.Run) bool {
+func filterAllows(filter int, kind rowKind, run *contracts.Run) bool {
 	if filter == 0 {
 		return true
 	}
@@ -1151,7 +1112,7 @@ func (m Model) refreshSelectedLogs(index int) (Model, tea.Cmd) {
 	}
 	activityKey := strings.Join([]string{run.RunID, run.ExecutionID, attemptID, activityPath}, "\x00")
 	if state.activityKey != activityKey {
-		state.activityKey, state.activityCursor = activityKey, steerline.JournalCursor{}
+		state.activityKey, state.activityCursor = activityKey, api.JournalCursor{}
 		state.activityEvents, state.activityError = nil, ""
 		state.activityGeneration++
 	}
@@ -1159,7 +1120,7 @@ func (m Model) refreshSelectedLogs(index int) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	if state.conversationKey != conversationKey {
 		state.conversationKey = conversationKey
-		state.conversationFilter = steerline.ConversationFilter{WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: attemptID}
+		state.conversationFilter = contracts.ConversationFilter{WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: attemptID}
 		state.conversationCursor, state.conversationTailCursor, state.conversationMore, state.conversationTailMore = "", "", false, false
 		state.conversationEvents, state.conversationError = nil, ""
 		state.capabilityError = ""
@@ -1377,7 +1338,7 @@ func (m Model) changeFilter(filter int) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string { return render(m) }
 
-func sameCursor(a, b steerline.JournalCursor) bool {
+func sameCursor(a, b api.JournalCursor) bool {
 	return a.Path == b.Path && a.FileID == b.FileID && a.Generation == b.Generation && a.Offset == b.Offset && a.ScanOffset == b.ScanOffset && a.LastSeq == b.LastSeq && a.HaveSeq == b.HaveSeq && a.FallbackSeq == b.FallbackSeq && a.Dropping == b.Dropping && a.SkipUntilNewline == b.SkipUntilNewline && a.AnchorOffset == b.AnchorOffset && a.AnchorLength == b.AnchorLength && a.AnchorHash == b.AnchorHash && a.HeaderLength == b.HeaderLength && a.HeaderHash == b.HeaderHash && a.Initialized == b.Initialized && bytes.Equal(a.Pending, b.Pending)
 }
 
@@ -1407,10 +1368,10 @@ func projectStatus(ref ProjectRef, snapshot ProjectSnapshot) string {
 	if ref.Conflict != "" {
 		return "关联冲突"
 	}
-	if snapshot.Connection.State == steerline.ConnectionConnected {
+	if snapshot.Connection.State == api.ConnectionConnected {
 		return "已连接"
 	}
-	if snapshot.Connection.State == steerline.ConnectionOffline || snapshot.Connection.State == steerline.ConnectionNoRecord {
+	if snapshot.Connection.State == api.ConnectionOffline || snapshot.Connection.State == api.ConnectionNoRecord {
 		return "离线"
 	}
 	if snapshot.Connection.State == "" {

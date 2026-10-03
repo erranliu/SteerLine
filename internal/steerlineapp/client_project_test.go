@@ -3,6 +3,7 @@ package steerlineapp
 import (
 	"context"
 	"database/sql"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,9 +13,8 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
-	"github.com/erranliu/SteerLine/internal/steerline/console"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
+	"github.com/erranliu/SteerLine/internal/steerlineclient"
 )
 
 func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
@@ -79,7 +79,7 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ref := console.ProjectRef{Key: "project", ConfigPath: configPath, Config: cfg, Identity: cfg.Identity(), RunDir: cfg.RunDir}
+	ref := api.ProjectRef{Key: "project", ConfigPath: configPath, Identity: cfg.Identity(), RunDir: cfg.RunDir}
 	factory := func(ctx context.Context, ref api.ProjectRef) (api.Resources, error) {
 		copy := cfg
 		copy.RunDir = ref.RunDir
@@ -89,7 +89,12 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot := (console.FileQuerySource{Factory: factory}).ReadProject(ctx, ref, "10", console.ProjectSnapshot{})
+	client, err := steerlineclient.Open(ctx, ref, factory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	snapshot := client.ReadProject(ctx, "10", api.ProjectSnapshot{})
 	if snapshot.TaskError != "" || snapshot.NativeTaskError != "" || snapshot.DomainError != "" || snapshot.FullReadAt.IsZero() ||
 		snapshot.NativeTasks == nil || len(snapshot.NativeTasks.Tasks) != 2 || snapshot.NativeTasks.DatabaseRevision != revision || snapshot.NativeTasks.DatabaseID != id ||
 		snapshot.SelectedNative == nil || snapshot.SelectedNative.TaskID != "10" || snapshot.SelectedNative.DependencyReady ||
@@ -102,7 +107,7 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 	if err != nil || nextID != id || nextRevision != revision {
 		t.Fatal("read-only console refresh modified the database")
 	}
-	missing := (console.FileQuerySource{Factory: factory}).ReadProject(ctx, ref, "99", console.ProjectSnapshot{})
+	missing := client.ReadProject(ctx, "99", api.ProjectSnapshot{})
 	if missing.NativeTaskError == "" || !missing.FullReadAt.IsZero() || missing.NativeTasks == nil || missing.Tasks == nil || missing.Domain == nil {
 		t.Fatal("missing selection discarded read-only data or made the refresh reusable")
 	}
@@ -120,15 +125,19 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 	if closeErr != nil {
 		t.Fatal(closeErr)
 	}
-	corrupt := (console.FileQuerySource{Factory: factory}).ReadProject(ctx, ref, "2", console.ProjectSnapshot{})
+	corrupt := client.ReadProject(ctx, "2", api.ProjectSnapshot{})
 	if corrupt.Connection.State != steerline.ConnectionCorrupt || corrupt.Connection.CanStart || corrupt.Connection.CanControl ||
 		corrupt.Observation.Runtime != nil || corrupt.TaskError == "" || !corrupt.FullReadAt.IsZero() {
 		t.Fatal("reader preflight admitted a corrupt service checkpoint")
 	}
 	absent := ref
-	absent.Config.RunDir = filepath.Join(root, "missing")
-	absent.RunDir = absent.Config.RunDir
-	failed := (console.FileQuerySource{Factory: factory}).ReadProject(ctx, absent, "", console.ProjectSnapshot{})
+	absent.RunDir = filepath.Join(root, "missing")
+	absentClient, err := steerlineclient.Open(ctx, absent, factory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer absentClient.Close()
+	failed := absentClient.ReadProject(ctx, "", api.ProjectSnapshot{})
 	if failed.TaskError == "" || failed.DomainError == "" || !failed.FullReadAt.IsZero() {
 		t.Fatal("missing database was shown as a successful refresh")
 	}

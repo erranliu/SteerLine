@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,7 +13,8 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/erranliu/SteerLine/internal/steerline"
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -26,121 +26,58 @@ func (c *testClock) After(time.Duration) <-chan time.Time { return make(chan tim
 type testQuerySource struct {
 	snapshot ProjectSnapshot
 	activity LogBatch
-	page     steerline.ConversationPage
-	body     steerline.ConversationBodyPage
+	page     contracts.ConversationPage
+	body     contracts.ConversationBodyPage
 	selected string
-}
-
-func (q *testQuerySource) ReadProject(_ context.Context, _ ProjectRef, selected string, _ ProjectSnapshot) ProjectSnapshot {
-	q.selected = selected
-	return q.snapshot
-}
-func (q *testQuerySource) ReadActivity(context.Context, ProjectRef, string, string, string, string, steerline.JournalCursor) (LogBatch, error) {
-	return q.activity, nil
-}
-func (q *testQuerySource) ReadConversation(context.Context, ProjectRef, steerline.ConversationFilter, string) (steerline.ConversationPage, error) {
-	return q.page, nil
-}
-func (q *testQuerySource) ReadBody(context.Context, ProjectRef, steerline.ConversationBodyRef, int64, int) (steerline.ConversationBodyPage, error) {
-	return q.body, nil
-}
-func (q *testQuerySource) ReadCapabilities(context.Context, ProjectRef, executionapi.BackendKind, executionapi.ExecutionProtocol, string, string, string, string, string) ([]steerline.ConversationCapabilityReport, error) {
-	return nil, nil
 }
 
 type testControlClient struct {
 	calls           int
 	receipts        int
 	requests        int
-	request         steerline.ControlRequest
+	request         api.ControlRequest
 	err             error
 	instance        string
 	revision        *uint64
 	decisionCalls   int
-	decisionAnswer  steerline.DecisionAnswer
-	decisionCommand steerline.CommandRecord
+	decisionAnswer  contracts.DecisionAnswer
+	decisionCommand contracts.CommandRecord
 	decisionErr     error
 	eligibilityErr  error
 }
 
-func (c *testControlClient) Submit(_ context.Context, _ ProjectRef, action string, payload any, requestID, instance string, revision *uint64) (steerline.ControlRequest, error) {
-	c.calls++
-	c.instance, c.revision = instance, revision
-	if c.err != nil {
-		return steerline.ControlRequest{}, c.err
-	}
-	var raw json.RawMessage
-	if payload != nil {
-		raw, _ = json.Marshal(payload)
-	}
-	c.request = steerline.ControlRequest{RequestID: requestID, Action: action, Payload: raw, InstanceID: instance}
-	return c.request, nil
-}
-func (c *testControlClient) Receipt(context.Context, ProjectRef, string) (*steerline.ControlReceipt, error) {
-	c.receipts++
-	return nil, os.ErrNotExist
-}
-func (c *testControlClient) Request(context.Context, ProjectRef, string) (*steerline.ControlRequest, error) {
-	c.requests++
-	return nil, os.ErrNotExist
-}
-func (c *testControlClient) SubmitDecision(_ context.Context, ref ProjectRef, answer steerline.DecisionAnswer, requestedBy, commandID string) (steerline.CommandRecord, bool, error) {
-	c.decisionCalls++
-	c.decisionAnswer = answer
-	if c.decisionErr != nil {
-		return steerline.CommandRecord{}, false, c.decisionErr
-	}
-	c.decisionCommand = steerline.CommandRecord{ProjectIdentity: ref.Identity, CommandID: commandID, Kind: "answer_decision", TargetID: answer.DecisionID, RequestedBy: requestedBy, Status: "pending"}
-	return c.decisionCommand, true, nil
-}
-func (c *testControlClient) DecisionCommand(context.Context, ProjectRef, string) (steerline.CommandRecord, error) {
-	c.receipts++
-	return c.decisionCommand, nil
-}
-func (c *testControlClient) SubmitServiceAction(_ context.Context, ref ProjectRef, kind, targetID, requestedBy string, revision uint64, commandID string, payload any) (steerline.CommandRecord, bool, error) {
-	c.decisionCalls++
-	if c.decisionErr != nil {
-		return steerline.CommandRecord{}, false, c.decisionErr
-	}
-	data, _ := json.Marshal(payload)
-	c.decisionCommand = steerline.CommandRecord{ProjectIdentity: ref.Identity, CommandID: commandID, Kind: kind, TargetID: targetID, RequestedBy: requestedBy, ExpectedVersion: revision, Payload: data, Status: "pending"}
-	return c.decisionCommand, true, nil
-}
-func (c *testControlClient) DecisionEligibility(context.Context, ProjectRef, *steerline.Run) error {
-	return c.eligibilityErr
-}
-
 func testProject(key string) ProjectRef {
-	return ProjectRef{Key: key, Name: key, ConfigPath: "/tmp/" + key + ".json", RunDir: "/tmp/" + key + "-state", Identity: "/repo/" + key, Config: consoleFixtureConfig(steerline.Config{TaskPoll: "1s", ShutdownGrace: "10s"}, "/tmp/"+key+".json")}
+	return ProjectRef{Key: key, Name: key, ConfigPath: "/tmp/" + key + ".json", RunDir: "/tmp/" + key + "-state", Identity: "/repo/" + key, Presentation: fixturePresentation()}
 }
 
 func readySnapshot(ref ProjectRef, now time.Time) ProjectSnapshot {
 	last := now.Add(-time.Second)
-	runtime := &steerline.Runtime{
-		SchemaVersion: steerline.WorkerFlowRuntimeSchema,
-		Repository:    steerline.Repository{Identity: ref.Identity},
-		Service:       steerline.ServiceState{ConfigDigest: ref.Config.LoadedConfigDigest(), InstanceID: "instance-" + ref.Name, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}},
-		Control:       steerline.ControlState{DispatchMode: "manual", Revision: 7},
-		Runs:          []*steerline.Run{},
+	runtime := &contracts.Runtime{
+		SchemaVersion: contracts.WorkerFlowRuntimeSchema,
+		Repository:    contracts.Repository{Identity: ref.Identity},
+		Service:       contracts.ServiceState{ConfigDigest: ref.Presentation.ConfigDigest, InstanceID: "instance-" + ref.Name, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}},
+		Control:       contracts.ControlState{DispatchMode: "manual", Revision: 7},
+		Runs:          []*contracts.Run{},
 	}
-	obs := steerline.ObservationSnapshot{Runtime: runtime, State: steerline.SnapshotValid, SampledAt: now}
+	obs := api.ObservationSnapshot{Runtime: runtime, State: api.SnapshotValid, SampledAt: now}
 	return ProjectSnapshot{
-		Connection:  steerline.ServiceConnection{State: steerline.ConnectionConnected, CanControl: true, CanStop: true, IdentityMatched: true, Snapshot: obs},
-		Observation: obs,
-		Tasks:       &steerline.TaskSnapshot{Version: 1, InstanceID: runtime.Service.InstanceID, RepositoryIdentity: ref.Identity, QueriedAt: now, LastSuccessAt: &last, Tasks: []steerline.TaskCandidate{{TaskID: "task-B", Title: "Build B"}}},
+		Connection:      api.ServiceConnection{State: api.ConnectionConnected, CanControl: true, CanStop: true, IdentityMatched: true, Snapshot: obs},
+		Observation:     obs,
+		DecisionReasons: map[string]string{},
+		Tasks:           &contracts.TaskSnapshot{Version: 1, InstanceID: runtime.Service.InstanceID, RepositoryIdentity: ref.Identity, QueriedAt: now, LastSuccessAt: &last, Tasks: []contracts.TaskCandidate{{TaskID: "task-B", Title: "Build B"}}},
 	}
 }
 
 func modelForTest(refs []ProjectRef, snapshots []ProjectSnapshot, control *testControlClient, now time.Time) Model {
 	clock := &testClock{now: now}
-	m := Model{ctx: context.Background(), query: &testQuerySource{}, control: control, clock: clock, selected: 0, width: 120, height: 40, profile: nil, prefs: emptyViewFile()}
+	m := Model{ctx: context.Background(), clock: clock, selected: 0, width: 120, height: 40, profile: nil, prefs: emptyViewFile()}
 	for i, ref := range refs {
-		m.projects = append(m.projects, projectState{ref: ref, snapshot: snapshots[i], snapshotLoaded: true, selectedKey: "task:task-B", view: ProjectView{Follow: true, Groups: map[string]FoldChoice{}, Outstanding: map[string]string{}, Actions: map[string]SavedAction{}}, actions: map[string]*actionState{}})
+		m.projects = append(m.projects, projectState{client: &testClient{query: &testQuerySource{}, control: control, ref: ref}, ref: ref, snapshot: snapshots[i], snapshotLoaded: true, selectedKey: "task:task-B", view: ProjectView{Follow: true, Groups: map[string]FoldChoice{}, Outstanding: map[string]string{}, Actions: map[string]SavedAction{}}, actions: map[string]*actionState{}})
 	}
 	return m
 }
 
-func decisionSnapshot(ref ProjectRef, now time.Time) (ProjectSnapshot, *steerline.Run) {
+func decisionSnapshot(ref ProjectRef, now time.Time) (ProjectSnapshot, *contracts.Run) {
 	snapshot := readySnapshot(ref, now)
 	runtime := snapshot.Connection.Snapshot.Runtime
 	runtime.Service.Capabilities = append(runtime.Service.Capabilities, "answer_decision")
@@ -148,8 +85,9 @@ func decisionSnapshot(ref ProjectRef, now time.Time) (ProjectSnapshot, *steerlin
 	for i := range options {
 		options[i] = executionapi.DecisionOption{ID: fmt.Sprintf("o%d", i), Label: fmt.Sprintf("选项 %d", i+1), Detail: fmt.Sprintf("详细说明 %02d：完整内容", i+1)}
 	}
-	run := &steerline.Run{TaskID: "task-decision", RunID: "0123456789abcdef0123456789abcdef", AttemptID: "fedcba9876543210fedcba9876543210", ControlRevision: 9, WorkflowVersion: steerline.WorkerFlowVersion, ExecutionID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Host: "local", Agent: "codex", Backend: "local", Protocol: "local_process", FinishTaskStatus: "waiting_decision", ExecutionStatus: "succeeded", Decision: &steerline.DecisionState{ID: "decision-0123456789abcdef0123456789ab", AttemptID: "fedcba9876543210fedcba9876543210", Version: 3, Status: "pending", Request: steerline.DecisionRequest{Question: strings.Repeat("问题", 24), Context: "背景第一行\n背景第二行", Options: options, Recommended: "o10", AllowFreeText: true}}}
-	runtime.Runs = []*steerline.Run{run}
+	run := &contracts.Run{TaskID: "task-decision", RunID: "0123456789abcdef0123456789abcdef", AttemptID: "fedcba9876543210fedcba9876543210", ControlRevision: 9, WorkflowVersion: fixtureWorkflowVersion, ExecutionID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Host: "local", Agent: "codex", Backend: "local", Protocol: "local_process", FinishTaskStatus: "waiting_decision", ExecutionStatus: "succeeded", Decision: &contracts.DecisionState{ID: "decision-0123456789abcdef0123456789ab", AttemptID: "fedcba9876543210fedcba9876543210", Version: 3, Status: "pending", Request: contracts.DecisionRequest{Question: strings.Repeat("问题", 24), Context: "背景第一行\n背景第二行", Options: options, Recommended: "o10", AllowFreeText: true}}}
+	runtime.Runs = []*contracts.Run{run}
+	snapshot.DecisionReasons[run.RunID] = "提交后核对原会话接收与工作轮次开始"
 	snapshot.Connection.Snapshot.Runtime = runtime
 	snapshot.Observation.Runtime = runtime
 	return snapshot, run
@@ -268,9 +206,9 @@ func TestDecisionAnswerDraftSurvivesStaleRevisionAndLengthRejection(t *testing.T
 func TestConsoleOffersWorkerFlowDecisionWithoutRecoveryActions(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("worker-flow-decision")
-	ref.Config.WorkflowProtocol = steerline.WorkerFlowVersion
+	ref.Presentation.WorkflowProtocol = fixtureWorkflowVersion
 	snapshot, run := decisionSnapshot(ref, now)
-	run.WorkflowVersion, run.Backend, run.Protocol, run.Host = steerline.WorkerFlowVersion, "local", "local_process", "local"
+	run.WorkflowVersion, run.Backend, run.Protocol, run.Host = fixtureWorkflowVersion, "local", "local_process", "local"
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "run:" + run.RunID
 	updated, cmd := m.answerSelectedDecision()
@@ -390,7 +328,7 @@ func TestCandidateCacheMustMatchCurrentConnectionInstance(t *testing.T) {
 	current := *snapshot.Connection.Snapshot.Runtime
 	current.Service.InstanceID = "new-instance"
 	snapshot.Connection.Snapshot.Runtime = &current
-	if valid, reason := candidateFreshness(ref, snapshot, now); valid || !strings.Contains(reason, "其他服务实例") {
+	if valid, reason := api.CandidateFreshness(ref.Identity, snapshot, now); valid || !strings.Contains(reason, "其他服务实例") {
 		t.Fatalf("old candidate cache became actionable against a new service: valid=%v reason=%q", valid, reason)
 	}
 }
@@ -399,7 +337,7 @@ func TestUnavailableControlActionKeepsItsReasonInReturnedModel(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("alpha")
 	snapshot := readySnapshot(ref, now)
-	snapshot.Connection = steerline.ServiceConnection{State: steerline.ConnectionOffline, Diagnostic: "service window is closed"}
+	snapshot.Connection = api.ServiceConnection{State: api.ConnectionOffline, Diagnostic: "service window is closed"}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	updated, cmd := m.toggleMode()
 	m = updated.(Model)
@@ -453,7 +391,7 @@ func TestProjectResponseCannotUpdateNewProjectView(t *testing.T) {
 	previousSample := now.Add(-time.Hour)
 	m.projects[0].snapshot.Observation.SampledAt = previousSample
 	m.projects[0].refreshID = 1
-	old := projectMsg{key: a.Key, identity: a.Identity, generation: m.generation, requestID: 1, snapshot: ProjectSnapshot{Observation: steerline.ObservationSnapshot{State: steerline.SnapshotReadFailed, SampledAt: now}}}
+	old := projectMsg{key: a.Key, identity: a.Identity, generation: m.generation, requestID: 1, snapshot: ProjectSnapshot{Observation: api.ObservationSnapshot{State: api.SnapshotReadFailed, SampledAt: now}}}
 	updated, _ := m.moveProject(1)
 	m = updated.(Model)
 	updated, _ = m.Update(old)
@@ -499,39 +437,39 @@ func TestFailedRefreshKeepsLastGoodReadOnlyDataAndCurrentError(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("alpha")
 	previous := readySnapshot(ref, now.Add(-time.Minute))
-	domain := &steerline.DomainSnapshot{ProjectIdentity: ref.Identity, Executions: []steerline.ExecutionRecord{{ExecutionID: "execution-old"}}}
+	domain := &contracts.DomainSnapshot{ProjectIdentity: ref.Identity, Executions: []contracts.ExecutionRecord{{ExecutionID: "execution-old"}}}
 	previous.Domain = domain
-	next := ProjectSnapshot{Connection: steerline.ServiceConnection{State: steerline.ConnectionCorrupt, Diagnostic: "runtime schema is unsupported"}, Observation: steerline.ObservationSnapshot{State: steerline.SnapshotUnknownVersion, SampledAt: now, Error: "runtime schema is unsupported"}, TaskError: "candidate cache belongs to another instance", DomainError: "database read failed"}
+	next := ProjectSnapshot{Connection: api.ServiceConnection{State: api.ConnectionCorrupt, Diagnostic: "runtime schema is unsupported"}, Observation: api.ObservationSnapshot{State: api.SnapshotUnknownVersion, SampledAt: now, Error: "runtime schema is unsupported"}, TaskError: "candidate cache belongs to another instance", DomainError: "database read failed"}
 	got := preserveLastGood(previous, next)
 	if got.Observation.Runtime != previous.Observation.Runtime || !got.Observation.SampledAt.Equal(previous.Observation.SampledAt) || got.Tasks != previous.Tasks || got.Domain != domain {
 		t.Fatal("failed refresh erased the last successful read-only snapshot")
 	}
-	if got.Connection.State != steerline.ConnectionCorrupt || got.TaskError == "" || got.DomainError == "" {
+	if got.Connection.State != api.ConnectionCorrupt || got.TaskError == "" || got.DomainError == "" {
 		t.Fatalf("current read errors or control state were hidden: %+v", got)
 	}
-	if valid, _ := candidateFreshness(ref, got, now); valid {
+	if valid, _ := api.CandidateFreshness(ref.Identity, got, now); valid {
 		t.Fatal("cached candidates remained actionable after a query error")
 	}
 }
 
 func TestFoldReducerUsesExplicitTurnAndPreservesManualIntent(t *testing.T) {
-	turn := steerline.ConversationEvent{Version: steerline.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "codex-app-server", SourceSegment: "segment", SessionID: "s", SessionQuality: steerline.IdentityNative, TurnID: "turn-1", TurnQuality: steerline.IdentityNative, Type: steerline.ConversationTurnStarted, Phase: steerline.MessagePhaseUnknown, FinalAvailability: steerline.FinalPending}
+	turn := contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "codex-app-server", SourceSegment: "segment", SessionID: "s", SessionQuality: contracts.IdentityNative, TurnID: "turn-1", TurnQuality: contracts.IdentityNative, Type: contracts.ConversationTurnStarted, Phase: contracts.MessagePhaseUnknown, FinalAvailability: contracts.FinalPending}
 	commentary := turn
 	commentary.EventID = 2
-	commentary.Type = steerline.ConversationMessageDelta
+	commentary.Type = contracts.ConversationMessageDelta
 	commentary.ItemID = "same"
-	commentary.ItemQuality = steerline.IdentityNative
-	commentary.Phase = steerline.MessagePhaseCommentary
+	commentary.ItemQuality = contracts.IdentityNative
+	commentary.Phase = contracts.MessagePhaseCommentary
 	completedMessage := commentary
 	completedMessage.EventID = 3
-	completedMessage.Type = steerline.ConversationMessageComplete
+	completedMessage.Type = contracts.ConversationMessageComplete
 	ended := turn
 	ended.EventID = 4
-	ended.Type = steerline.ConversationTurnFailed
+	ended.Type = contracts.ConversationTurnFailed
 	ended.Status = "failed"
 	ended.Diagnostic = "worker exit 23"
 	choices := map[string]FoldChoice{}
-	view, changed := BuildConversationView([]steerline.ConversationEvent{turn, commentary, completedMessage, ended}, choices)
+	view, changed := BuildConversationView([]contracts.ConversationEvent{turn, commentary, completedMessage, ended}, choices)
 	if !changed || len(view.Groups) != 1 {
 		t.Fatalf("expected one explicit turn group: %+v", view)
 	}
@@ -539,89 +477,89 @@ func TestFoldReducerUsesExplicitTurnAndPreservesManualIntent(t *testing.T) {
 	if Folded(group, choices[group.ID]) == false || choices[group.ID].AutoProcessed == false {
 		t.Fatal("failed turn should auto fold once")
 	}
-	if len(group.Process) != 2 || group.Process[1].Type != steerline.ConversationMessageComplete || len(group.Finals) != 0 {
+	if len(group.Process) != 2 || group.Process[1].Type != contracts.ConversationMessageComplete || len(group.Finals) != 0 {
 		t.Fatalf("message completion must not become final or end boundary: %+v", group)
 	}
 	open := false
 	choices[group.ID] = FoldChoice{AutoProcessed: true, Manual: &open}
 	lateFinal := turn
 	lateFinal.EventID = 5
-	lateFinal.Type = steerline.ConversationMessageComplete
+	lateFinal.Type = contracts.ConversationMessageComplete
 	lateFinal.ItemID = "same"
-	lateFinal.Phase = steerline.MessagePhaseFinalAnswer
-	lateFinal.Body = &steerline.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "final-1", Revision: 1, Bytes: 30, Completeness: steerline.BodyComplete}
-	view, changed = BuildConversationView([]steerline.ConversationEvent{turn, commentary, completedMessage, ended, lateFinal}, choices)
+	lateFinal.Phase = contracts.MessagePhaseFinalAnswer
+	lateFinal.Body = &contracts.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "final-1", Revision: 1, Bytes: 30, Completeness: contracts.BodyComplete}
+	view, changed = BuildConversationView([]contracts.ConversationEvent{turn, commentary, completedMessage, ended, lateFinal}, choices)
 	if changed || len(view.Groups[0].Finals) != 1 || Folded(view.Groups[0], choices[group.ID]) {
 		t.Fatal("late final must retain its turn and manual expansion")
 	}
-	if view.Groups[0].FinalState != steerline.FinalAvailable {
+	if view.Groups[0].FinalState != contracts.FinalAvailable {
 		t.Fatalf("final availability was lost: %s", view.Groups[0].FinalState)
 	}
 }
 
 func TestLateFinalReclassifiesSameItemAndOlderRevisionCannotOverwrite(t *testing.T) {
-	base := steerline.ConversationEvent{Version: steerline.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "codex-app-server", SourceSegment: "segment", SessionID: "s", SessionQuality: steerline.IdentityNative, TurnID: "turn", TurnQuality: steerline.IdentityNative, ItemID: "item", ItemKey: "stable-item", ItemQuality: steerline.IdentityNative, SourceEventQuality: steerline.IdentityNative, Type: steerline.ConversationMessageSnapshot, Phase: steerline.MessagePhaseUnknown}
+	base := contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "codex-app-server", SourceSegment: "segment", SessionID: "s", SessionQuality: contracts.IdentityNative, TurnID: "turn", TurnQuality: contracts.IdentityNative, ItemID: "item", ItemKey: "stable-item", ItemQuality: contracts.IdentityNative, SourceEventQuality: contracts.IdentityNative, Type: contracts.ConversationMessageSnapshot, Phase: contracts.MessagePhaseUnknown}
 	process := base
 	process.EventID = 2
 	process.SourceRevision = 2
-	process.Body = &steerline.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "stable-item", Revision: 2, Bytes: 12, Completeness: steerline.BodyPartial}
+	process.Body = &contracts.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "stable-item", Revision: 2, Bytes: 12, Completeness: contracts.BodyPartial}
 	older := base
 	older.EventID = 3
 	older.SourceRevision = 1
-	older.Body = &steerline.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "stable-item", Revision: 1, Bytes: 5, Completeness: steerline.BodyPartial}
+	older.Body = &contracts.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "stable-item", Revision: 1, Bytes: 5, Completeness: contracts.BodyPartial}
 	final := base
 	final.EventID = 4
 	final.SourceRevision = 3
-	final.Type = steerline.ConversationMessageComplete
-	final.Phase = steerline.MessagePhaseFinalAnswer
-	final.Body = &steerline.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "stable-item", Revision: 3, Bytes: 20, Completeness: steerline.BodyComplete}
-	view, _ := BuildConversationView([]steerline.ConversationEvent{process, older, final}, map[string]FoldChoice{})
+	final.Type = contracts.ConversationMessageComplete
+	final.Phase = contracts.MessagePhaseFinalAnswer
+	final.Body = &contracts.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "stable-item", Revision: 3, Bytes: 20, Completeness: contracts.BodyComplete}
+	view, _ := BuildConversationView([]contracts.ConversationEvent{process, older, final}, map[string]FoldChoice{})
 	if len(view.Groups) != 1 || len(view.Groups[0].Process) != 0 || len(view.Groups[0].Finals) != 1 {
 		t.Fatalf("late final did not reclassify the stable item: %+v", view.Groups)
 	}
 	if view.Groups[0].Finals[0].Body.Revision != 3 {
 		t.Fatalf("older revision overwrote final body: %+v", view.Groups[0].Finals[0])
 	}
-	processOnly, _ := BuildConversationView([]steerline.ConversationEvent{process, older}, map[string]FoldChoice{})
+	processOnly, _ := BuildConversationView([]contracts.ConversationEvent{process, older}, map[string]FoldChoice{})
 	if len(processOnly.Groups[0].Process) != 1 || processOnly.Groups[0].Process[0].Body.Revision != 2 {
 		t.Fatalf("late older process revision overwrote newer state: %+v", processOnly.Groups[0].Process)
 	}
 	newerProcess := process
 	newerProcess.EventID = 5
 	newerProcess.SourceRevision = 4
-	newerProcess.Body = &steerline.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "stable-item", Revision: 4, Bytes: 24, Completeness: steerline.BodyPartial}
-	staleFinal, _ := BuildConversationView([]steerline.ConversationEvent{newerProcess, final}, map[string]FoldChoice{})
-	if len(staleFinal.Groups[0].Process) != 1 || len(staleFinal.Groups[0].Finals) != 0 || staleFinal.Groups[0].Process[0].Body.Revision != 4 || staleFinal.Groups[0].FinalState == steerline.FinalAvailable {
+	newerProcess.Body = &contracts.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "stable-item", Revision: 4, Bytes: 24, Completeness: contracts.BodyPartial}
+	staleFinal, _ := BuildConversationView([]contracts.ConversationEvent{newerProcess, final}, map[string]FoldChoice{})
+	if len(staleFinal.Groups[0].Process) != 1 || len(staleFinal.Groups[0].Finals) != 0 || staleFinal.Groups[0].Process[0].Body.Revision != 4 || staleFinal.Groups[0].FinalState == contracts.FinalAvailable {
 		t.Fatalf("older final reclassified a newer process revision: %+v", staleFinal.Groups[0])
 	}
 }
 
 func TestFinalPhaseDoesNotPromoteNonMessageEvents(t *testing.T) {
-	event := steerline.ConversationEvent{Version: steerline.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "source", SourceSegment: "segment", SessionID: "session", SessionQuality: steerline.IdentityNative, TurnID: "turn", TurnQuality: steerline.IdentityNative, ItemID: "tool", ItemKey: "tool-key", ItemQuality: steerline.IdentityNative, SourceEventQuality: steerline.IdentityNative, Type: steerline.ConversationToolCompleted, Phase: steerline.MessagePhaseFinalAnswer}
-	view, _ := BuildConversationView([]steerline.ConversationEvent{event}, map[string]FoldChoice{})
+	event := contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "source", SourceSegment: "segment", SessionID: "session", SessionQuality: contracts.IdentityNative, TurnID: "turn", TurnQuality: contracts.IdentityNative, ItemID: "tool", ItemKey: "tool-key", ItemQuality: contracts.IdentityNative, SourceEventQuality: contracts.IdentityNative, Type: contracts.ConversationToolCompleted, Phase: contracts.MessagePhaseFinalAnswer}
+	view, _ := BuildConversationView([]contracts.ConversationEvent{event}, map[string]FoldChoice{})
 	if len(view.Groups) != 1 || len(view.Groups[0].Finals) != 0 || len(view.Groups[0].Process) != 1 {
 		t.Fatalf("non-message event was presented as a final reply: %+v", view.Groups)
 	}
 }
 
 func TestSessionScrollAnchorMovesToGroupHeaderWhenAutoFoldHidesItem(t *testing.T) {
-	base := steerline.ConversationEvent{Version: steerline.ConversationVersion, ProjectID: "p", TaskID: "task", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Source: "codex-app-server", SourceSegment: "segment", SessionID: "session", SessionQuality: steerline.IdentityNative, TurnID: "turn", TurnQuality: steerline.IdentityNative, Phase: steerline.MessagePhaseUnknown}
+	base := contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: "p", TaskID: "task", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Source: "codex-app-server", SourceSegment: "segment", SessionID: "session", SessionQuality: contracts.IdentityNative, TurnID: "turn", TurnQuality: contracts.IdentityNative, Phase: contracts.MessagePhaseUnknown}
 	started := base
-	started.Type = steerline.ConversationTurnStarted
+	started.Type = contracts.ConversationTurnStarted
 	message := base
 	message.EventID = 2
-	message.Type = steerline.ConversationMessageComplete
+	message.Type = contracts.ConversationMessageComplete
 	message.ItemID = "item"
 	message.ItemKey = "item-key"
-	message.ItemQuality = steerline.IdentityNative
-	message.Phase = steerline.MessagePhaseCommentary
-	message.Body = &steerline.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "body-key", Revision: 1, Bytes: 120, Completeness: steerline.BodyComplete}
+	message.ItemQuality = contracts.IdentityNative
+	message.Phase = contracts.MessagePhaseCommentary
+	message.Body = &contracts.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "body-key", Revision: 1, Bytes: 120, Completeness: contracts.BodyComplete}
 	completed := base
 	completed.EventID = 3
-	completed.Type = steerline.ConversationTurnCompleted
+	completed.Type = contracts.ConversationTurnCompleted
 	completed.Status = "completed"
-	state := projectState{view: ProjectView{Groups: map[string]FoldChoice{}}, conversationEvents: []steerline.ConversationEvent{started, message}, detailScroll: 0}
-	run := &steerline.Run{RunID: "workflow", TaskID: "task", ExecutionID: "execution", AttemptID: "attempt", ExecutionStatus: "running"}
+	state := projectState{view: ProjectView{Groups: map[string]FoldChoice{}}, conversationEvents: []contracts.ConversationEvent{started, message}, detailScroll: 0}
+	run := &contracts.Run{RunID: "workflow", TaskID: "task", ExecutionID: "execution", AttemptID: "attempt", ExecutionStatus: "running"}
 	row := &consoleRow{kind: rowRun, run: run}
 	view, _ := BuildConversationView(state.conversationEvents, state.view.Groups)
 	lines := allSessionLines(state, row, 90)
@@ -688,33 +626,33 @@ func TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript(t *testing.T) {
 	}
 	for _, sample := range fixture.Samples {
 		t.Run(sample.Backend, func(t *testing.T) {
-			var events []steerline.ConversationEvent
+			var events []contracts.ConversationEvent
 			for turnIndex, turn := range sample.Thread.Turns {
 				startTime := time.Unix(turn.StartedAt, 0).UTC()
 				endTime := time.Unix(turn.CompletedAt, 0).UTC()
-				base := steerline.ConversationEvent{Version: steerline.ConversationVersion, ProjectID: "native-project", WorkflowID: "native-workflow", ExecutionID: "native-execution", AttemptID: "native-attempt", Backend: executionapi.BackendKind(sample.Backend), Protocol: executionapi.ExecutionProtocol(sample.Protocol), Agent: "codex", TargetID: "native-target", Source: sample.Source, SourceSegment: "native-segment", SourceIdentity: "native-source", SessionID: sample.Thread.ID, SessionQuality: steerline.IdentityNative, TurnID: turn.ID, TurnQuality: steerline.IdentityNative, Phase: steerline.MessagePhaseUnknown, OccurredAt: &startTime, ReceivedAt: startTime}
+				base := contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: "native-project", WorkflowID: "native-workflow", ExecutionID: "native-execution", AttemptID: "native-attempt", Backend: executionapi.BackendKind(sample.Backend), Protocol: executionapi.ExecutionProtocol(sample.Protocol), Agent: "codex", TargetID: "native-target", Source: sample.Source, SourceSegment: "native-segment", SourceIdentity: "native-source", SessionID: sample.Thread.ID, SessionQuality: contracts.IdentityNative, TurnID: turn.ID, TurnQuality: contracts.IdentityNative, Phase: contracts.MessagePhaseUnknown, OccurredAt: &startTime, ReceivedAt: startTime}
 				started := base
 				started.EventID = int64(len(events) + 1)
-				started.Type = steerline.ConversationTurnStarted
+				started.Type = contracts.ConversationTurnStarted
 				events = append(events, started)
 				for itemIndex, item := range turn.Items {
 					event := base
 					event.EventID = int64(len(events) + 1)
 					event.ItemID = item.ID
 					event.ItemKey = fmt.Sprintf("item-%d-%d", turnIndex, itemIndex)
-					event.ItemQuality = steerline.IdentityNative
+					event.ItemQuality = contracts.IdentityNative
 					event.SourceEventID = "fixture:" + item.ID
-					event.SourceEventQuality = steerline.IdentityNative
+					event.SourceEventQuality = contracts.IdentityNative
 					switch item.Type {
 					case "agentMessage":
-						event.Type = steerline.ConversationMessageComplete
-						event.Phase = steerline.MessagePhase(item.Phase)
-						event.Body = &steerline.ConversationBodyRef{ExecutionID: event.ExecutionID, AttemptID: event.AttemptID, ItemKey: event.ItemKey, Revision: 1, Bytes: int64(len(item.Text)), Completeness: steerline.BodyComplete}
+						event.Type = contracts.ConversationMessageComplete
+						event.Phase = contracts.MessagePhase(item.Phase)
+						event.Body = &contracts.ConversationBodyRef{ExecutionID: event.ExecutionID, AttemptID: event.AttemptID, ItemKey: event.ItemKey, Revision: 1, Bytes: int64(len(item.Text)), Completeness: contracts.BodyComplete}
 					case "commandExecution":
-						event.Type = steerline.ConversationToolCompleted
+						event.Type = contracts.ConversationToolCompleted
 						event.Status = item.Status
 					case "reasoning":
-						event.Type = steerline.ConversationObservation
+						event.Type = contracts.ConversationObservation
 					default:
 						continue
 					}
@@ -722,9 +660,9 @@ func TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript(t *testing.T) {
 				}
 				ended := base
 				ended.EventID = int64(len(events) + 1)
-				ended.Type = steerline.ConversationTurnCompleted
+				ended.Type = contracts.ConversationTurnCompleted
 				ended.Status = turn.Status
-				ended.FinalAvailability = steerline.FinalAvailable
+				ended.FinalAvailability = contracts.FinalAvailable
 				ended.OccurredAt = &endTime
 				events = append(events, ended)
 			}
@@ -740,10 +678,10 @@ func TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript(t *testing.T) {
 				}
 				finals += len(group.Finals)
 				for _, event := range group.Process {
-					if event.Phase == steerline.MessagePhaseCommentary {
+					if event.Phase == contracts.MessagePhaseCommentary {
 						commentary++
 					}
-					if event.Type == steerline.ConversationToolCompleted {
+					if event.Type == contracts.ConversationToolCompleted {
 						tools++
 					}
 				}
@@ -755,7 +693,7 @@ func TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript(t *testing.T) {
 				t.Fatalf("Orca tool activity lost: %d", tools)
 			}
 			state := projectState{view: ProjectView{Groups: choices, Follow: true}, conversationEvents: events}
-			run := &steerline.Run{RunID: "native-workflow", TaskID: "native-task", ExecutionID: "native-execution", AttemptID: "native-attempt", Backend: sample.Backend, Protocol: sample.Protocol}
+			run := &contracts.Run{RunID: "native-workflow", TaskID: "native-task", ExecutionID: "native-execution", AttemptID: "native-attempt", Backend: sample.Backend, Protocol: sample.Protocol}
 			row := &consoleRow{kind: rowRun, run: run}
 			for _, width := range []int{80, 170} {
 				rendered := strings.Join(renderSession(state, row, width, 24, time.Now()), "\n")
@@ -768,21 +706,21 @@ func TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript(t *testing.T) {
 }
 
 func TestStableTurnKeysSeparateSameItemIDsAndUnknownTurnDoesNotFold(t *testing.T) {
-	base := steerline.ConversationEvent{Version: steerline.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "source", SourceSegment: "seg", SessionID: "session", SessionQuality: steerline.IdentityNative, ItemID: "same", ItemQuality: steerline.IdentityNative, Phase: steerline.MessagePhaseUnknown}
+	base := contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "source", SourceSegment: "seg", SessionID: "session", SessionQuality: contracts.IdentityNative, ItemID: "same", ItemQuality: contracts.IdentityNative, Phase: contracts.MessagePhaseUnknown}
 	a := base
 	a.TurnID = "turn-a"
-	a.TurnQuality = steerline.IdentityNative
-	a.Type = steerline.ConversationTurnStarted
+	a.TurnQuality = contracts.IdentityNative
+	a.Type = contracts.ConversationTurnStarted
 	b := base
 	b.TurnID = "turn-b"
-	b.TurnQuality = steerline.IdentityNative
-	b.Type = steerline.ConversationTurnStarted
+	b.TurnQuality = contracts.IdentityNative
+	b.Type = contracts.ConversationTurnStarted
 	unknown := base
 	unknown.TurnID = ""
-	unknown.TurnQuality = steerline.IdentityUnknown
-	unknown.Type = steerline.ConversationTurnFailed
+	unknown.TurnQuality = contracts.IdentityUnknown
+	unknown.Type = contracts.ConversationTurnFailed
 	choices := map[string]FoldChoice{}
-	view, _ := BuildConversationView([]steerline.ConversationEvent{a, b, unknown}, choices)
+	view, _ := BuildConversationView([]contracts.ConversationEvent{a, b, unknown}, choices)
 	if len(view.Groups) != 3 {
 		t.Fatalf("turn IDs and unknown scope must remain distinct: %d", len(view.Groups))
 	}
@@ -795,15 +733,15 @@ func TestStableTurnKeysSeparateSameItemIDsAndUnknownTurnDoesNotFold(t *testing.T
 
 func TestRunStatusKeepsBusinessExecutionAndUnknownAxesSeparate(t *testing.T) {
 	cases := []struct {
-		run  *steerline.Run
+		run  *contracts.Run
 		want string
 	}{
-		{&steerline.Run{ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision"}, "待决策"},
-		{&steerline.Run{ExecutionStatus: "running", FinishTaskStatus: "waiting_pr_merge"}, "待合并"},
-		{&steerline.Run{ExecutionStatus: "unknown", FinishTaskStatus: "completed"}, "需处理"},
-		{&steerline.Run{ExecutionStatus: "failed", FinishTaskStatus: "completed"}, "需处理"},
-		{&steerline.Run{ExecutionStatus: "succeeded", FinishTaskStatus: "completed", PR: steerline.PRState{QueryError: stringPointer("provider unavailable")}}, "需处理"},
-		{&steerline.Run{ExecutionStatus: "succeeded", FinishTaskStatus: "completed"}, "completed"},
+		{&contracts.Run{ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision"}, "待决策"},
+		{&contracts.Run{ExecutionStatus: "running", FinishTaskStatus: "waiting_pr_merge"}, "待合并"},
+		{&contracts.Run{ExecutionStatus: "unknown", FinishTaskStatus: "completed"}, "需处理"},
+		{&contracts.Run{ExecutionStatus: "failed", FinishTaskStatus: "completed"}, "需处理"},
+		{&contracts.Run{ExecutionStatus: "succeeded", FinishTaskStatus: "completed", PR: contracts.PRState{QueryError: stringPointer("provider unavailable")}}, "需处理"},
+		{&contracts.Run{ExecutionStatus: "succeeded", FinishTaskStatus: "completed"}, "completed"},
 	}
 	for _, tc := range cases {
 		if got := runStatus(tc.run); !strings.HasPrefix(got, tc.want) {
@@ -940,7 +878,7 @@ func TestBodyPagingUsesExactUTF8SafePageOffsets(t *testing.T) {
 	ref := testProject("alpha")
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, now)}, &testControlClient{}, now)
 	state := &m.projects[0]
-	state.bodyRef = &steerline.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "body", Revision: 1, Bytes: 200000, Completeness: steerline.BodyComplete}
+	state.bodyRef = &contracts.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "body", Revision: 1, Bytes: 200000, Completeness: contracts.BodyComplete}
 	state.bodyEvent = "body-event"
 	state.bodyPages = []int64{0, 65533}
 	state.bodyViewOffset = 65533
@@ -964,23 +902,23 @@ func TestBodyResponseIsBoundToGenerationAndRevision(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("alpha")
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, now)}, &testControlClient{}, now)
-	oldRef := steerline.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "same", Revision: 1, SHA256: "old", Bytes: 3, Completeness: steerline.BodyComplete}
+	oldRef := contracts.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "same", Revision: 1, SHA256: "old", Bytes: 3, Completeness: contracts.BodyComplete}
 	newRef := oldRef
 	newRef.Revision, newRef.SHA256 = 2, "new"
 	state := &m.projects[0]
 	state.bodyRef, state.bodyEvent, state.bodyGeneration, state.bodyBusy = &newRef, "same-event", 2, true
-	updated, _ := m.Update(bodyMsg{projectKey: ref.Key, identity: ref.Identity, eventKey: "same-event", generation: 1, body: oldRef, page: steerline.ConversationBodyPage{Data: []byte("old")}})
+	updated, _ := m.Update(bodyMsg{projectKey: ref.Key, identity: ref.Identity, eventKey: "same-event", generation: 1, body: oldRef, page: contracts.ConversationBodyPage{Data: []byte("old")}})
 	m = updated.(Model)
 	if m.projects[0].bodyText != "" || !m.projects[0].bodyBusy {
 		t.Fatal("stale body response changed the active revision")
 	}
-	updated, _ = m.Update(bodyMsg{projectKey: ref.Key, identity: ref.Identity, eventKey: "same-event", generation: 2, body: newRef, page: steerline.ConversationBodyPage{ItemKey: "same", Revision: 2, Offset: 0, NextOffset: 3, TotalBytes: 3, SHA256: "new", Completeness: steerline.BodyComplete, Complete: true, Data: []byte("new")}})
+	updated, _ = m.Update(bodyMsg{projectKey: ref.Key, identity: ref.Identity, eventKey: "same-event", generation: 2, body: newRef, page: contracts.ConversationBodyPage{ItemKey: "same", Revision: 2, Offset: 0, NextOffset: 3, TotalBytes: 3, SHA256: "new", Completeness: contracts.BodyComplete, Complete: true, Data: []byte("new")}})
 	m = updated.(Model)
 	if m.projects[0].bodyText != "new" || m.projects[0].bodyBusy {
 		t.Fatal("matching body response was not accepted")
 	}
 	m.projects[0].bodyGeneration, m.projects[0].bodyBusy, m.projects[0].bodyText = 3, true, ""
-	updated, _ = m.Update(bodyMsg{projectKey: ref.Key, identity: ref.Identity, eventKey: "same-event", generation: 3, body: newRef, page: steerline.ConversationBodyPage{ItemKey: "same", Revision: 1, Offset: 0, NextOffset: 3, TotalBytes: 3, SHA256: "new", Completeness: steerline.BodyComplete, Complete: true, Data: []byte("bad")}})
+	updated, _ = m.Update(bodyMsg{projectKey: ref.Key, identity: ref.Identity, eventKey: "same-event", generation: 3, body: newRef, page: contracts.ConversationBodyPage{ItemKey: "same", Revision: 1, Offset: 0, NextOffset: 3, TotalBytes: 3, SHA256: "new", Completeness: contracts.BodyComplete, Complete: true, Data: []byte("bad")}})
 	m = updated.(Model)
 	if m.projects[0].bodyError == "" || m.projects[0].bodyText != "" {
 		t.Fatal("mismatched body page was rendered")
@@ -991,10 +929,10 @@ func TestBackgroundProjectBodyResponseStaysWithItsProject(t *testing.T) {
 	now := time.Now().UTC()
 	a, b := testProject("a"), testProject("b")
 	m := modelForTest([]ProjectRef{a, b}, []ProjectSnapshot{readySnapshot(a, now), readySnapshot(b, now)}, &testControlClient{}, now)
-	ref := steerline.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "body", Revision: 1, SHA256: "digest", Bytes: 4, Completeness: steerline.BodyComplete}
+	ref := contracts.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "body", Revision: 1, SHA256: "digest", Bytes: 4, Completeness: contracts.BodyComplete}
 	m.projects[0].bodyRef, m.projects[0].bodyEvent, m.projects[0].bodyGeneration, m.projects[0].bodyBusy = &ref, "event", 1, true
 	m.selected = 1
-	page := steerline.ConversationBodyPage{ItemKey: "body", Revision: 1, Offset: 0, NextOffset: 4, TotalBytes: 4, SHA256: "digest", Completeness: steerline.BodyComplete, Complete: true, Data: []byte("text")}
+	page := contracts.ConversationBodyPage{ItemKey: "body", Revision: 1, Offset: 0, NextOffset: 4, TotalBytes: 4, SHA256: "digest", Completeness: contracts.BodyComplete, Complete: true, Data: []byte("text")}
 	updated, _ := m.Update(bodyMsg{projectKey: a.Key, identity: a.Identity, eventKey: "event", generation: 1, body: ref, page: page})
 	m = updated.(Model)
 	if m.projects[0].bodyText != "text" || m.projects[0].bodyBusy || m.projects[1].bodyText != "" {
@@ -1014,71 +952,12 @@ func TestViewFileKeepsRequestIdentityWithoutCachingReceiptText(t *testing.T) {
 	}
 }
 
-func TestLoadProjectsSupportsZeroPartialAndExplicitConfigs(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("STEERLINE_HOME", home)
-	global, err := json.Marshal(map[string]any{"execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "codex": map[string]string{"executable": "codex"}}}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(os.Getenv("STEERLINE_HOME"), "execution.json"), global, 0600); err != nil {
-		t.Fatal(err)
-	}
-	projects, err := LoadProjects("", consoleFixtureSource{home: home})
-	if err != nil || len(projects) != 0 {
-		t.Fatalf("empty config directory: %+v %v", projects, err)
-	}
-	etc := filepath.Join(home, "etc")
-	if err = os.MkdirAll(etc, 0700); err != nil {
-		t.Fatal(err)
-	}
-	repo := filepath.Join(t.TempDir(), "repo")
-	if err = os.MkdirAll(repo, 0700); err != nil {
-		t.Fatal(err)
-	}
-	if out, initErr := exec.Command("git", "init", repo).CombinedOutput(); initErr != nil {
-		t.Fatalf("git init: %v: %s", initErr, out)
-	}
-	validConfig := filepath.Join(etc, "alpha.json")
-	writeConsoleTestConfig(t, validConfig, repo, filepath.Join(home, "state-alpha"))
-	if err = os.WriteFile(filepath.Join(etc, "broken.json"), []byte("not-json"), 0600); err != nil {
-		t.Fatal(err)
-	}
-	projects, err = LoadProjects("", consoleFixtureSource{home: home})
-	if err != nil || len(projects) != 2 {
-		t.Fatalf("partial config directory: %+v %v", projects, err)
-	}
-	if projects[0].Name != "alpha" || projects[0].Error != "" || projects[0].Identity == "" {
-		t.Fatalf("valid project not usable: %+v", projects[0])
-	}
-	if projects[1].Name != "broken" || projects[1].Error == "" || !strings.HasSuffix(projects[1].Key, "\x00") {
-		t.Fatalf("broken config row was not retained: %+v", projects[1])
-	}
-	external := filepath.Join(t.TempDir(), "outside.json")
-	writeConsoleTestConfig(t, external, repo, filepath.Join(home, "state-explicit"))
-	explicit, err := LoadProjects(external, consoleFixtureSource{home: home})
-	if err != nil || len(explicit) != 1 || explicit[0].ConfigPath != external || explicit[0].Identity == "" {
-		t.Fatalf("explicit config outside etc was not selected: %+v %v", explicit, err)
-	}
-}
-
-func writeConsoleTestConfig(t *testing.T, path, repository, runDir string) {
-	t.Helper()
-	data, err := json.Marshal(map[string]any{"publication_policy": executionapi.PublicationPolicy{Publisher: executionapi.PublisherHostService}, "pr": map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "Org/Repo", "query": map[string]any{"executable": "gh"}}, "execution_policy": map[string]any{"filesystem": map[string]any{"read_scope": "host", "write_scope": "workspace", "git_metadata_write": true}, "network": "allow", "escalation": "deny"}, "repository": repository, "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(path, data, 0600); err != nil {
-		t.Fatal(err)
-	}
-}
-
 func TestConsoleTextEscapesTerminalControlCharacters(t *testing.T) {
 	got := safeTerminalText("hello\x1b[2J\x00world\n")
 	if strings.ContainsRune(got, '\x1b') || !strings.Contains(got, "␛") || !strings.Contains(got, "\\u0000") {
 		t.Fatalf("unsafe terminal text: %q", got)
 	}
-	state := projectState{view: ProjectView{Follow: true}, activityEvents: []steerline.ActivityEvent{{Kind: "bad\x1b[2J", ItemID: "item\x00", Status: "failed", Meta: map[string]any{"exit_code": "\x1b[2J"}}}}
+	state := projectState{view: ProjectView{Follow: true}, activityEvents: []contracts.ActivityEvent{{Kind: "bad\x1b[2J", ItemID: "item\x00", Status: "failed", Meta: map[string]any{"exit_code": "\x1b[2J"}}}}
 	rendered := strings.Join(renderActivity(state, nil, 80, 10), "\n")
 	if strings.ContainsRune(rendered, '\x1b') || strings.Contains(rendered, "bad\u001b") {
 		t.Fatalf("activity metadata reached terminal unsanitized: %q", rendered)
@@ -1141,7 +1020,7 @@ func TestLongTaskListKeepsSelectedRowInsideViewport(t *testing.T) {
 	snapshot := readySnapshot(ref, now)
 	snapshot.Tasks.Tasks = nil
 	for i := 0; i < 50; i++ {
-		snapshot.Tasks.Tasks = append(snapshot.Tasks.Tasks, steerline.TaskCandidate{TaskID: fmt.Sprintf("task-%02d", i), Title: "candidate"})
+		snapshot.Tasks.Tasks = append(snapshot.Tasks.Tasks, contracts.TaskCandidate{TaskID: fmt.Sprintf("task-%02d", i), Title: "candidate"})
 	}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "task:task-40"
@@ -1156,7 +1035,7 @@ func TestEmptyRunningFilterExplainsWhyNativeTasksAreHidden(t *testing.T) {
 	ref := testProject("native")
 	snapshot := readySnapshot(ref, now)
 	snapshot.Tasks.Tasks = nil
-	snapshot.NativeTasks = &steerline.NativeTaskPage{Tasks: []steerline.NativeTaskDetail{{TaskRecord: steerline.TaskRecord{TaskID: "103", Title: "Waiting for merge", Status: "in_progress"}}}}
+	snapshot.NativeTasks = &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{{TaskRecord: contracts.TaskRecord{TaskID: "103", Title: "Waiting for merge", Status: "in_progress"}}}}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].filter = 2
 	empty := strings.Join(renderRows(m, m.projects[0], 80, 8), "\n")
@@ -1176,15 +1055,14 @@ func TestEmptyRunningFilterExplainsWhyNativeTasksAreHidden(t *testing.T) {
 func TestNativeTaskViewKeepsOffPageSelectionAndEscapesText(t *testing.T) {
 	now := time.Date(2026, 9, 25, 1, 0, 0, 0, time.UTC)
 	ref := testProject("native")
-	ref.Config.TaskAuthority = "native"
-	ref.Config.ExecutableTypes = []string{"task"}
+	ref.Presentation.TaskAuthority = "native"
 	snapshot := readySnapshot(ref, now)
 	snapshot.Tasks.Tasks = nil
 	for i := 1; i <= 501; i++ {
-		snapshot.Tasks.Tasks = append(snapshot.Tasks.Tasks, steerline.TaskCandidate{TaskID: fmt.Sprint(i), Title: "candidate"})
+		snapshot.Tasks.Tasks = append(snapshot.Tasks.Tasks, contracts.TaskCandidate{TaskID: fmt.Sprint(i), Title: "candidate"})
 	}
-	snapshot.NativeTasks = &steerline.NativeTaskPage{SampledAt: now, HasMore: true, Tasks: []steerline.NativeTaskDetail{{TaskRecord: steerline.TaskRecord{TaskID: "1", Title: "first", Status: "open"}}}}
-	snapshot.SelectedNative = &steerline.NativeTaskDetail{TaskRecord: steerline.TaskRecord{TaskID: "501", Title: "中文标题\x1b[2J\n伪造按钮\u202e<script>", Status: "open"}, Predecessors: []steerline.TaskDependencyStatus{{TaskID: "1", Status: "discarded", Blocker: "discarded_predecessor"}}}
+	snapshot.NativeTasks = &contracts.NativeTaskPage{SampledAt: now, HasMore: true, Tasks: []contracts.NativeTaskDetail{{TaskRecord: contracts.TaskRecord{TaskID: "1", Title: "first", Status: "open"}}}}
+	snapshot.SelectedNative = &contracts.NativeTaskDetail{TaskRecord: contracts.TaskRecord{TaskID: "501", Title: "中文标题\x1b[2J\n伪造按钮\u202e<script>", Status: "open"}, Predecessors: []contracts.TaskDependencyStatus{{TaskID: "1", Status: "discarded", Blocker: "discarded_predecessor"}}}
 	snapshot.NativeTaskError = "只读取前 500 个任务；剩余任务不在此快照中"
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "task:501"
@@ -1211,20 +1089,20 @@ func TestNativeTaskViewKeepsOffPageSelectionAndEscapesText(t *testing.T) {
 		t.Fatalf("refresh lost the stable task selection: %q", m.projects[0].selectedKey)
 	}
 	m.projects[0].refreshID = 2
-	updated, _ = m.Update(projectMsg{key: ref.Key, identity: ref.Identity, requestID: 2, snapshot: ProjectSnapshot{Connection: steerline.ServiceConnection{State: steerline.ConnectionOffline}, NativeTaskError: "database unavailable"}})
+	updated, _ = m.Update(projectMsg{key: ref.Key, identity: ref.Identity, requestID: 2, snapshot: ProjectSnapshot{Connection: api.ServiceConnection{State: api.ConnectionOffline}, NativeTaskError: "database unavailable"}})
 	m = updated.(Model)
 	if m.projects[0].selectedKey != "task:501" || m.selectedRow(0) == nil || m.selectedRow(0).native == nil {
 		t.Fatal("offline refresh lost the selected task's last readable detail")
 	}
 	up := m.projects[0]
-	if valid, _ := candidateFreshness(ref, up.snapshot, now); valid {
+	if valid, _ := api.CandidateFreshness(ref.Identity, up.snapshot, now); valid {
 		t.Fatal("offline Ready data became a start permit")
 	}
 	if !strings.Contains(strings.Join(renderNativeTaskDetail(up, *snapshot.SelectedNative), "\n"), "离线只读快照") {
 		t.Fatal("offline native detail lost its sample label")
 	}
 	runSnapshot := snapshot
-	runSnapshot.Observation.Runtime.Runs = []*steerline.Run{{RunID: "run-501", TaskID: "501", DomainTaskID: "501", TaskStatus: "in_progress", ExecutionStatus: "running"}}
+	runSnapshot.Observation.Runtime.Runs = []*contracts.Run{{RunID: "run-501", TaskID: "501", DomainTaskID: "501", TaskStatus: "in_progress", ExecutionStatus: "running"}}
 	m.projects[0].snapshot = runSnapshot
 	m.projects[0].selectedKey = "run:run-501"
 	if selectedNativeTaskID(m.projects[0]) != "501" {
@@ -1235,7 +1113,7 @@ func TestNativeTaskViewKeepsOffPageSelectionAndEscapesText(t *testing.T) {
 		t.Fatalf("selected native run lost its task relationship: %q", runDetail)
 	}
 	querySource := &testQuerySource{snapshot: runSnapshot}
-	m.query = querySource
+	m.projects[0].client.(*testClient).query = querySource
 	if cmd := m.readProject(0); cmd == nil {
 		t.Fatal("native run refresh did not request its task detail")
 	} else {
@@ -1253,7 +1131,7 @@ func TestUnicodeLongErrorFitsNarrowAndWidePanels(t *testing.T) {
 	snapshot := readySnapshot(ref, now)
 	longError := strings.Repeat("错误🙂路径过长，", 40) + "\x1b[2J"
 	snapshot.Tasks.Tasks = nil
-	snapshot.Observation.Runtime.Runs = []*steerline.Run{{TaskID: "任务-一", RunID: "run-unicode", ExecutionID: "execution-unicode", AttemptID: "attempt-unicode", Title: strings.Repeat("中文标题🙂", 30), ExecutionStatus: "failed", FinishTaskStatus: "blocked", Error: &longError}}
+	snapshot.Observation.Runtime.Runs = []*contracts.Run{{TaskID: "任务-一", RunID: "run-unicode", ExecutionID: "execution-unicode", AttemptID: "attempt-unicode", Title: strings.Repeat("中文标题🙂", 30), ExecutionStatus: "failed", FinishTaskStatus: "blocked", Error: &longError}}
 	snapshot.Connection.Snapshot.Runtime = snapshot.Observation.Runtime
 	for _, width := range []int{80, 170} {
 		m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
@@ -1309,7 +1187,7 @@ func TestReconciliationRejectsChangedRequestPayload(t *testing.T) {
 	requestID := "0123456789abcdef0123456789abcdef"
 	m.projects[0].actions[requestID] = &actionState{RequestID: requestID, Action: "start_task", TaskID: "task-B", Status: "indeterminate", TargetInstance: "instance-alpha", UpdatedAt: now}
 	wrongPayload, _ := json.Marshal(map[string]string{"task_id": "task-A"})
-	request := &steerline.ControlRequest{ProtocolVersion: 1, RequestID: requestID, RepositoryIdentity: ref.Identity, InstanceID: "instance-alpha", Action: "start_task", Payload: wrongPayload}
+	request := &api.ControlRequest{ProtocolVersion: 1, RequestID: requestID, RepositoryIdentity: ref.Identity, InstanceID: "instance-alpha", Action: "start_task", Payload: wrongPayload}
 	updated, _ := m.Update(actionReceiptMsg{projectKey: ref.Key, identity: ref.Identity, requestID: requestID, request: request})
 	m = updated.(Model)
 	action := m.projects[0].actions[requestID]

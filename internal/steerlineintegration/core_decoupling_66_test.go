@@ -10,7 +10,6 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/console"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
@@ -115,9 +114,9 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		if view.SelectedTask == nil {
 			t.Fatal("offline query lost the persisted selected task")
 		}
-		refs, err := console.LoadProjects(fixture.configPath, steerlineapp.ConsoleConfigSource{})
+		refs, err := steerlineapp.LoadConsoleProjects(fixture.configPath)
 		require(t, err)
-		if len(refs) != 1 || refs[0].Error != "" || refs[0].Config.AvailableExecutionProfiles()[0].StaticUnavailableReason() == "" {
+		if len(refs) != 1 || refs[0].Error != "" || refs[0].Presentation.Profiles[0].UnavailableReason == "" {
 			t.Fatalf("console failed to show unknown support: %+v", refs)
 		}
 		if _, err := steerline.OpenNativeTaskCommandStore(ctx, &config); err == nil {

@@ -10,8 +10,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	"github.com/erranliu/SteerLine/internal/steerline"
 )
 
 const viewFileVersion = 1
@@ -81,7 +79,7 @@ func emptyViewFile() ViewFile {
 // most recently used profile and restores its own view choices.
 type viewProfile struct {
 	dir  string
-	lock *steerline.RepoLock
+	lock *viewLock
 }
 
 func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
@@ -116,7 +114,7 @@ func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
 		if resolveErr != nil || !insideViewRoot(resolvedRoot, resolvedDir) {
 			continue
 		}
-		lock, lockErr := steerline.LockRepository(dir)
+		lock, lockErr := lockView(dir)
 		if lockErr != nil {
 			continue
 		}
@@ -134,7 +132,7 @@ func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
 		available = append(available, candidate{profile: &viewProfile{dir: dir, lock: lock}, view: view, stamp: stamp, diagnostic: diagnostic})
 	}
 	if len(available) == 0 {
-		id := steerline.NewControlRequestID()
+		id := newRequestID()
 		dir := filepath.Join(root, id)
 		if err = os.MkdirAll(dir, 0700); err != nil {
 			return nil, ViewFile{}, "", err
@@ -143,7 +141,7 @@ func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
 		if resolveErr != nil || !insideViewRoot(resolvedRoot, resolvedDir) {
 			return nil, ViewFile{}, "", errors.New("view profile directory resolves outside its managed root")
 		}
-		lock, lockErr := steerline.LockRepository(dir)
+		lock, lockErr := lockView(dir)
 		if lockErr != nil {
 			return nil, ViewFile{}, "", lockErr
 		}
@@ -304,5 +302,5 @@ func writeViewFile(path string, view ViewFile) error {
 	if len(data) > maxViewFileBytes {
 		return errors.New("view preferences exceed size limit")
 	}
-	return steerline.AtomicWrite(path, append(data, '\n'))
+	return writeViewAtomic(path, append(data, '\n'))
 }

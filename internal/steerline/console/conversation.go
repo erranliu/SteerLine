@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type TurnGroup struct {
@@ -17,29 +17,29 @@ type TurnGroup struct {
 	SourceSegment string
 	SessionID     string
 	TurnID        string
-	Events        []steerline.ConversationEvent
-	Process       []steerline.ConversationEvent
-	Finals        []steerline.ConversationEvent
-	Warnings      []steerline.ConversationEvent
+	Events        []contracts.ConversationEvent
+	Process       []contracts.ConversationEvent
+	Finals        []contracts.ConversationEvent
+	Warnings      []contracts.ConversationEvent
 	EndStatus     string
 	EndReason     string
-	FinalState    steerline.FinalAvailability
+	FinalState    contracts.FinalAvailability
 	Precise       bool
 }
 
 type ConversationView struct {
 	Groups    []TurnGroup
-	Summaries []steerline.ConversationEvent
-	Warnings  []steerline.ConversationEvent
+	Summaries []contracts.ConversationEvent
+	Warnings  []contracts.ConversationEvent
 	Source    string
 	Reason    string
 }
 
-func BuildConversationView(events []steerline.ConversationEvent, choices map[string]FoldChoice) (ConversationView, bool) {
-	view := ConversationView{Groups: []TurnGroup{}, Summaries: []steerline.ConversationEvent{}, Warnings: []steerline.ConversationEvent{}}
+func BuildConversationView(events []contracts.ConversationEvent, choices map[string]FoldChoice) (ConversationView, bool) {
+	view := ConversationView{Groups: []TurnGroup{}, Summaries: []contracts.ConversationEvent{}, Warnings: []contracts.ConversationEvent{}}
 	byID := map[string]int{}
 	for _, event := range events {
-		if event.Type == steerline.ConversationExecutionResult {
+		if event.Type == contracts.ConversationExecutionResult {
 			view.Summaries = append(view.Summaries, event)
 			continue
 		}
@@ -54,26 +54,26 @@ func BuildConversationView(events []steerline.ConversationEvent, choices map[str
 			view.Groups = append(view.Groups, TurnGroup{
 				ID: id, ProjectID: event.ProjectID, ExecutionID: event.ExecutionID, AttemptID: event.AttemptID,
 				Source: event.Source, SourceSegment: event.SourceSegment, SessionID: event.SessionID, TurnID: event.TurnID,
-				Events: []steerline.ConversationEvent{}, Process: []steerline.ConversationEvent{}, Finals: []steerline.ConversationEvent{},
-				Warnings: []steerline.ConversationEvent{}, FinalState: steerline.FinalUnknown,
+				Events: []contracts.ConversationEvent{}, Process: []contracts.ConversationEvent{}, Finals: []contracts.ConversationEvent{},
+				Warnings: []contracts.ConversationEvent{}, FinalState: contracts.FinalUnknown,
 			})
 		}
 		group := &view.Groups[index]
 		group.Events = append(group.Events, event)
-		if event.Type == steerline.ConversationTurnStarted {
-			group.Precise = group.Precise || event.TurnID != "" && (event.TurnQuality == steerline.IdentityNative || event.TurnQuality == steerline.IdentityDerived)
+		if event.Type == contracts.ConversationTurnStarted {
+			group.Precise = group.Precise || event.TurnID != "" && (event.TurnQuality == contracts.IdentityNative || event.TurnQuality == contracts.IdentityDerived)
 			if event.FinalAvailability != "" {
 				group.FinalState = event.FinalAvailability
 			}
 		}
-		if event.Type == steerline.ConversationTurnCompleted || event.Type == steerline.ConversationTurnFailed || event.Type == steerline.ConversationTurnCancelled {
+		if event.Type == contracts.ConversationTurnCompleted || event.Type == contracts.ConversationTurnFailed || event.Type == contracts.ConversationTurnCancelled {
 			group.EndStatus = string(event.Type)
 			group.EndReason = firstText(event.Diagnostic, event.Status, attributeString(event.Attributes, "reason"))
 			if event.FinalAvailability != "" {
 				group.FinalState = event.FinalAvailability
 			}
 		}
-		if event.Phase == steerline.MessagePhaseFinalAnswer && isMessageEvent(event) {
+		if event.Phase == contracts.MessagePhaseFinalAnswer && isMessageEvent(event) {
 			if conversationItemCanReplace(group.Process, event) {
 				removeConversationItem(&group.Process, event)
 				upsertConversationItem(&group.Finals, event)
@@ -92,8 +92,8 @@ func BuildConversationView(events []steerline.ConversationEvent, choices map[str
 	for i := range view.Groups {
 		group := &view.Groups[i]
 		for _, final := range group.Finals {
-			if final.Body != nil && final.Body.Completeness != steerline.BodyMissing {
-				group.FinalState = steerline.FinalAvailable
+			if final.Body != nil && final.Body.Completeness != contracts.BodyMissing {
+				group.FinalState = contracts.FinalAvailable
 				break
 			}
 		}
@@ -110,7 +110,7 @@ func BuildConversationView(events []steerline.ConversationEvent, choices map[str
 	return view, changed
 }
 
-func upsertConversationItem(items *[]steerline.ConversationEvent, event steerline.ConversationEvent) {
+func upsertConversationItem(items *[]contracts.ConversationEvent, event contracts.ConversationEvent) {
 	key := stableConversationItemKey(event)
 	if key == "" {
 		*items = append(*items, event)
@@ -129,7 +129,7 @@ func upsertConversationItem(items *[]steerline.ConversationEvent, event steerlin
 	*items = append(*items, event)
 }
 
-func removeConversationItem(items *[]steerline.ConversationEvent, event steerline.ConversationEvent) {
+func removeConversationItem(items *[]contracts.ConversationEvent, event contracts.ConversationEvent) {
 	key := stableConversationItemKey(event)
 	if key == "" {
 		return
@@ -145,7 +145,7 @@ func removeConversationItem(items *[]steerline.ConversationEvent, event steerlin
 	*items = kept
 }
 
-func conversationItemCanReplace(items []steerline.ConversationEvent, event steerline.ConversationEvent) bool {
+func conversationItemCanReplace(items []contracts.ConversationEvent, event contracts.ConversationEvent) bool {
 	key := stableConversationItemKey(event)
 	if key == "" {
 		return true
@@ -159,7 +159,7 @@ func conversationItemCanReplace(items []steerline.ConversationEvent, event steer
 	return true
 }
 
-func conversationEventNotOlder(next, previous steerline.ConversationEvent) bool {
+func conversationEventNotOlder(next, previous contracts.ConversationEvent) bool {
 	if next.SourceRevision > 0 && previous.SourceRevision > 0 && next.SourceRevision != previous.SourceRevision {
 		return next.SourceRevision > previous.SourceRevision
 	}
@@ -172,56 +172,56 @@ func conversationEventNotOlder(next, previous steerline.ConversationEvent) bool 
 	return true
 }
 
-func stableConversationItemKey(event steerline.ConversationEvent) string {
+func stableConversationItemKey(event contracts.ConversationEvent) string {
 	if event.ItemKey != "" {
 		return event.ItemKey
 	}
-	if event.ItemID != "" && (event.ItemQuality == steerline.IdentityNative || event.ItemQuality == steerline.IdentityDerived) {
+	if event.ItemID != "" && (event.ItemQuality == contracts.IdentityNative || event.ItemQuality == contracts.IdentityDerived) {
 		return "item:" + event.ItemID
 	}
 	return ""
 }
 
-func conversationItemCategory(event steerline.ConversationEvent) string {
+func conversationItemCategory(event contracts.ConversationEvent) string {
 	switch event.Type {
-	case steerline.ConversationMessageDelta, steerline.ConversationMessageSnapshot, steerline.ConversationMessageComplete:
+	case contracts.ConversationMessageDelta, contracts.ConversationMessageSnapshot, contracts.ConversationMessageComplete:
 		return "message"
-	case steerline.ConversationToolStarted, steerline.ConversationToolDelta, steerline.ConversationToolCompleted:
+	case contracts.ConversationToolStarted, contracts.ConversationToolDelta, contracts.ConversationToolCompleted:
 		return "tool"
 	default:
 		return string(event.Type)
 	}
 }
 
-func turnGroupID(event steerline.ConversationEvent) string {
+func turnGroupID(event contracts.ConversationEvent) string {
 	return strings.Join([]string{
 		event.ProjectID, event.ExecutionID, event.AttemptID, event.Source,
 		event.SourceSegment, event.SessionID, event.TurnID,
 	}, "\x00")
 }
 
-func isProcessEvent(event steerline.ConversationEvent) bool {
+func isProcessEvent(event contracts.ConversationEvent) bool {
 	switch event.Type {
-	case steerline.ConversationTurnStarted, steerline.ConversationMessageDelta, steerline.ConversationMessageSnapshot,
-		steerline.ConversationMessageComplete, steerline.ConversationToolStarted, steerline.ConversationToolDelta,
-		steerline.ConversationToolCompleted, steerline.ConversationUnknown, steerline.ConversationObservation:
+	case contracts.ConversationTurnStarted, contracts.ConversationMessageDelta, contracts.ConversationMessageSnapshot,
+		contracts.ConversationMessageComplete, contracts.ConversationToolStarted, contracts.ConversationToolDelta,
+		contracts.ConversationToolCompleted, contracts.ConversationUnknown, contracts.ConversationObservation:
 		return true
 	default:
 		return false
 	}
 }
 
-func isMessageEvent(event steerline.ConversationEvent) bool {
+func isMessageEvent(event contracts.ConversationEvent) bool {
 	switch event.Type {
-	case steerline.ConversationMessageDelta, steerline.ConversationMessageSnapshot, steerline.ConversationMessageComplete:
+	case contracts.ConversationMessageDelta, contracts.ConversationMessageSnapshot, contracts.ConversationMessageComplete:
 		return true
 	default:
 		return false
 	}
 }
 
-func isConversationWarning(event steerline.ConversationEvent) bool {
-	return event.Type == steerline.ConversationGap || event.Type == steerline.ConversationInputWait || event.Diagnostic != "" || event.Status == "error" || event.Status == "failed"
+func isConversationWarning(event contracts.ConversationEvent) bool {
+	return event.Type == contracts.ConversationGap || event.Type == contracts.ConversationInputWait || event.Diagnostic != "" || event.Status == "error" || event.Status == "failed"
 }
 
 func Folded(group TurnGroup, choice FoldChoice) bool {
@@ -254,11 +254,11 @@ func SetKeepExpanded(choices map[string]FoldChoice, group TurnGroup, keep bool) 
 
 func statusLabel(group TurnGroup) string {
 	switch group.EndStatus {
-	case string(steerline.ConversationTurnCompleted):
+	case string(contracts.ConversationTurnCompleted):
 		return "completed"
-	case string(steerline.ConversationTurnFailed):
+	case string(contracts.ConversationTurnFailed):
 		return "failed"
-	case string(steerline.ConversationTurnCancelled):
+	case string(contracts.ConversationTurnCancelled):
 		return "cancelled"
 	default:
 		return "active"
@@ -291,16 +291,16 @@ func groupDuration(group TurnGroup) string {
 func groupHeading(group TurnGroup, choice FoldChoice) string {
 	warningCount, errorCount := 0, 0
 	for _, event := range group.Warnings {
-		if event.Type == steerline.ConversationGap || event.Type == steerline.ConversationInputWait {
+		if event.Type == contracts.ConversationGap || event.Type == contracts.ConversationInputWait {
 			warningCount++
 		}
-		if event.Status == "error" || event.Status == "failed" || event.Type == steerline.ConversationTurnFailed || event.Type == steerline.ConversationTurnCancelled {
+		if event.Status == "error" || event.Status == "failed" || event.Type == contracts.ConversationTurnFailed || event.Type == contracts.ConversationTurnCancelled {
 			errorCount++
 		}
 	}
 	final := string(group.FinalState)
 	if final == "" {
-		final = string(steerline.FinalUnknown)
+		final = string(contracts.FinalUnknown)
 	}
 	if Folded(group, choice) {
 		return fmt.Sprintf("▸ [%s] %s · %s · %s · %d 项 · 警告 %d/错误 %d · final %s", groupToken(group.ID), statusLabel(group), groupDuration(group), group.TurnID, len(group.Process), warningCount, errorCount, final)
