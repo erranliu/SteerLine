@@ -1027,3 +1027,12 @@ PR #178 的混合发布责任已由 #63 保留。PR #182 保留 #179 的唯一�
 | 源文件 |
 | --- |
 | [summary.go](../../internal/testfeedback/summary.go) |
+
+
+### #67 执行边界与测试所有者
+
+主包直属生产和测试只依赖通用执行、contracts、query/sqlite、workspace/publication 等中心契约；主包没有具体平台名称、配置编译或默认实现工厂。中心测试通过单一中性目录和有界事实端口验证原输入、事务、人工恢复及交付。原生 codec/命令/身份与真实应用接线分别由实现包和 `steerlineapp`/`steerlineintegration` 所有。
+
+`internal/coreboundary` 扫描全部构建标签及直属测试/文件名，并遍历完整源码 import 图与 Windows/Linux 生产依赖；除 Git 元数据外不以目录名排除源码。quick 的中心最小组合、实现代表和外层 CD67 入口均要求真实 JSON run/terminal 命中，拒绝零命中、跳过和重复执行。
+
+未识别的外部宿主身份通过 `LifecycleReceipt.OriginalHost` 固定，仍与合格执行 process 区分；检测 agent 前不授权输入、不重置原准备预算。实现只读检测原宿主，检测成功后提交资格回执，再允许下一步。第三中性实现只证明目录接线、原输入对账与中心唯一交付，不能认证原生权限；remote 缺失权限落实证据时 Claim 仍拒绝。

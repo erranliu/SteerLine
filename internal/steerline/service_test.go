@@ -17,7 +17,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -60,26 +59,6 @@ func TestMain(m *testing.M) {
 		if arg == "--fake" {
 			os.Exit(fakeMain(os.Args[i+1:]))
 		}
-	}
-	if len(os.Args) > 1 && os.Args[1] == "--version" {
-		fmt.Println("codex-cli 0.159.2")
-		os.Exit(0)
-	}
-	if len(os.Args) > 1 && os.Args[1] == "--help" {
-		fmt.Println("--strict-config --sandbox --ask-for-approval never --config")
-		os.Exit(0)
-	}
-	if strings.Contains(strings.Join(os.Args[1:], " "), "app-server") && !strings.HasPrefix(os.Args[1], "-test") {
-		if strings.Contains(strings.Join(os.Args[1:], " "), "--help") {
-			fmt.Println("app-server --listen")
-			os.Exit(0)
-		}
-		if strings.Contains(strings.Join(os.Args[1:], " "), "--stdio") {
-			mockAppServerStdio()
-			os.Exit(0)
-		}
-		mockAppServerMain()
-		os.Exit(0)
 	}
 	home, err := os.MkdirTemp("", "steerline-core-fixture-")
 	if err != nil {
@@ -184,7 +163,7 @@ func newFixture(t *testing.T) *fixture {
 	f.c.Claimant = "native-fixture"
 	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll, f.c.CommandTimeout, f.c.ShutdownGrace = "100ms", "100ms", "100ms", "5s", "1s"
 	f.c.PR = publication.Config{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}
-	setTestCodexProfile(t, &f.c, codexworker.ProfileConfig{Executable: executable})
+	setNeutralProfile(t, &f.c, neutralSettings{Executable: executable})
 	f.c.WorkflowProtocol = WorkerFlowVersion
 	if err = f.c.ResolveIdentity(context.Background()); err != nil {
 		t.Fatal(err)
@@ -370,8 +349,6 @@ func fakeMain(args []string) int {
 			return 1
 		}
 		return 0
-	case "orca-native":
-		return fakeNativeOrca(args[1], args[2:])
 	case "publish-control":
 		if len(args) != 3 {
 			return 2
@@ -405,11 +382,6 @@ func fakeMain(args []string) int {
 		info := PRInfo{URL: args[2], Repository: args[3], BaseBranch: "main", HeadRevision: db.PRHeadRevision, State: "closed_unmerged"}
 		_ = json.NewEncoder(os.Stdout).Encode(info)
 		return 0
-	case "codex":
-		if len(args) > 1 && args[1] == "--version" {
-			fmt.Println("fake-codex/1")
-			return 0
-		}
 	case "sleep":
 		time.Sleep(time.Hour)
 		return 0
@@ -464,10 +436,7 @@ func seedFakeCapabilities(t *testing.T, c Config) {
 	}
 	evidence := path + "#sha256=" + hex.EncodeToString(sum[:])
 	backend, protocol := backendFor(c).Identity()
-	version := "fake-codex/1"
-	if backend == executionapi.BackendOrca {
-		version = "fake-orca/1"
-	}
+	version := "fixture-version-1"
 	report := capabilityReport(backend, protocol, targetFor(c), agentFor(c), version)
 	for i := range report.Capabilities {
 		name := report.Capabilities[i].Name

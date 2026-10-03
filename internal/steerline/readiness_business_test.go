@@ -1,17 +1,28 @@
 package steerline
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"sync"
 	"testing"
 	"time"
 )
 
 type neutralPreparationResolver struct {
-	mode   string
-	turn   contracts.HostTurnFacts
-	inputs []string
+	mode            string
+	turn            contracts.HostTurnFacts
+	inputs          []string
+	fact            contracts.HostFact
+	feedback        []string
+	questionPending bool
+	newFault        bool
+	loseReceipt     bool
+	originalRequest *executionapi.LifecycleRequest
+	originalReceipt executionapi.LifecycleReceipt
+	reconciles      int
 }
 type neutralPreparationPort struct {
 	neutralOutputPort
@@ -25,13 +36,71 @@ func (p neutralPreparationPort) CurrentTurn(executionapi.LifecycleSnapshot) (*co
 	turn := p.resolver.turn
 	return &turn, nil
 }
+func (p neutralPreparationPort) ObserveHost(context.Context, executionapi.ProcessIdentity) (contracts.HostFact, error) {
+	return p.resolver.fact, nil
+}
+func (p neutralPreparationPort) ObserveLifecycle(_ context.Context, s executionapi.LifecycleSnapshot) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+	receipt := executionapi.LifecycleReceipt{Disposition: executionapi.OperationConfirmed, Process: &s.Ref.External, State: executionapi.LifecycleStateFacts{SessionID: s.Session.SessionID, SessionGeneration: s.Session.Generation, TurnID: p.resolver.turn.TurnID, TurnCompleted: p.resolver.turn.Settled, QuestionPending: p.resolver.questionPending}}
+	if p.resolver.newFault {
+		p.resolver.fact = contracts.HostFact{Reason: "tool_initialization_failed", Confidence: "confirmed", Source: "fixture-new-tool-failure", Turn: p.resolver.turn.TurnID}
+		receipt.State.TurnCompleted = true
+		p.resolver.turn.Settled = true
+		p.resolver.turn.Outcome = "succeeded"
+	}
+	if receipt.State.TurnCompleted {
+		receipt.TurnEvidence = &executionapi.TurnEvidence{Started: true, Completed: true, Succeeded: true, SessionID: s.Session.SessionID, TurnID: p.resolver.turn.TurnID, CommandID: p.resolver.turn.TurnID}
+	}
+	if !receipt.State.TurnCompleted {
+		return receipt, newNeutralHoldObserver(s.Ref.External), nil
+	}
+	return receipt, nil, nil
+}
+func (p neutralPreparationPort) ReadWorkerOutput(ctx context.Context, s executionapi.LifecycleSnapshot, input contracts.HostReadInput) (contracts.HostOutput, executionapi.ImplementationDataEnvelope, error) {
+	output, envelope, err := p.neutralOutputPort.ReadWorkerOutput(ctx, s, input)
+	if p.resolver.newFault {
+		fact := p.resolver.fact
+		output.Fact = &fact
+	}
+	return output, envelope, err
+}
 func (p neutralPreparationPort) ReadProbe(id contracts.ProbeIdentity, digest string) (*contracts.ProbeReceipt, error) {
 	if p.resolver.mode == "missing_receipt" {
 		return nil, nil
 	}
 	return &contracts.ProbeReceipt{ProbeIdentity: id, InputSHA256: digest, GitHead: "fixture-committed-head", Read: true, Write: true, Delete: true}, nil
 }
+func (p neutralPreparationPort) Reconcile(_ context.Context, r executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+	if p.resolver.originalRequest == nil {
+		return p.LifecyclePort.Reconcile(context.Background(), r)
+	}
+	original := p.resolver.originalRequest
+	if original.Operation.ID != r.Operation.ID || original.Operation.PayloadDigest != r.Operation.PayloadDigest || !bytes.Equal(original.Operation.Request, r.Operation.Request) || original.Snapshot.Ref != r.Snapshot.Ref {
+		return executionapi.LifecycleReceipt{}, nil, errors.New("fixture reconcile changed original operation")
+	}
+	p.resolver.reconciles++
+	receipt := p.resolver.originalReceipt.Clone()
+	receipt.Operation = r.Operation
+	receipt.Disposition = executionapi.OperationConfirmed
+	return receipt, nil, nil
+}
 func (p neutralPreparationPort) Execute(ctx context.Context, r executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+	if p.resolver.loseReceipt && r.Operation.Action == string(executionapi.LifecyclePrepareSession) {
+		receipt, observer, err := p.LifecyclePort.Execute(ctx, r)
+		if err != nil {
+			return receipt, observer, err
+		}
+		original := r.Clone()
+		p.resolver.originalRequest = &original
+		p.resolver.originalReceipt = receipt.Clone()
+		receipt.Disposition = executionapi.OperationUnknown
+		receipt.RequestID = "fixture-original-request"
+		p.resolver.loseReceipt = false
+		return receipt, observer, nil
+	}
+	if r.Input.Feedback != nil {
+		p.resolver.feedback = append(p.resolver.feedback, r.Input.Feedback.Message)
+		return executionapi.LifecycleReceipt{Operation: r.Operation, Disposition: executionapi.OperationConfirmed, State: executionapi.LifecycleStateFacts{InputAccepted: true, TurnID: r.Snapshot.Session.CurrentTurnID}}, nil, nil
+	}
 	if r.Input.Host != nil {
 		return executionapi.LifecycleReceipt{Operation: r.Operation, Disposition: executionapi.OperationConfirmed}, nil, nil
 	}
@@ -117,4 +186,22 @@ func TestManagedFrozenResourceEvidenceIsVerifiedBeforeInput(t *testing.T) {
 	if err := s.verifyHostExecutionEvidence(context.Background(), run, e); err == nil {
 		t.Fatal("changed writable roots were accepted")
 	}
+}
+
+type neutralHoldObserver struct {
+	events chan executionapi.LifecycleEvent
+	done   chan error
+	handle neutralHandle
+	once   sync.Once
+}
+
+func newNeutralHoldObserver(process executionapi.ProcessIdentity) *neutralHoldObserver {
+	return &neutralHoldObserver{events: make(chan executionapi.LifecycleEvent), done: make(chan error, 1), handle: neutralHandle{identity: process}}
+}
+func (o *neutralHoldObserver) Events() <-chan executionapi.LifecycleEvent { return o.events }
+func (o *neutralHoldObserver) Done() <-chan error                         { return o.done }
+func (o *neutralHoldObserver) StopHandle() executionapi.StopHandle        { return o.handle }
+func (o *neutralHoldObserver) Close(context.Context) error {
+	o.once.Do(func() { close(o.events); close(o.done) })
+	return nil
 }

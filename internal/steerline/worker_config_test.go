@@ -12,14 +12,14 @@ import (
 	"testing"
 )
 
-func TestUnsupportedOrcaWorkerFlowConfigurationCannotClaim(t *testing.T) {
-	for _, host := range []string{"orca", "orca_supervised"} {
+func TestUnregisteredWorkerFlowConfigurationCannotClaim(t *testing.T) {
+	for _, host := range []string{"unregistered-a", "unregistered-b"} {
 		t.Run(host, func(t *testing.T) {
-			c := Config{WorkflowProtocol: WorkerFlowVersion, Host: host, Agent: "codex"}
+			c := Config{ExecutionDirectory: neutralExecutionDirectory(t), WorkflowProtocol: WorkerFlowVersion, Host: host, Agent: "fixture"}
 			err := requireWorkerFlowCapabilities(context.Background(), c)
 			var backend *executionapi.BackendError
 			if !errors.As(err, &backend) || backend.Code != executionapi.BackendUnsupported {
-				t.Fatalf("unsupported Orca configuration reached an external claim path: %v", err)
+				t.Fatalf("unregistered configuration reached an external claim path: %v", err)
 			}
 		})
 	}
@@ -87,7 +87,7 @@ func TestFreshWorkerFlowRuntimeUsesDistinctFormat(t *testing.T) {
 func TestWorkerFlowRejectsOldLocalExecutionProtocol(t *testing.T) {
 	c, commit, store := openDAGFixture(t)
 	ctx := context.Background()
-	c.WorkflowProtocol, c.Host, c.Agent, c.Claimant = WorkerFlowVersion, "local", "codex", "operator"
+	c.WorkflowProtocol, c.Host, c.Agent, c.Claimant = WorkerFlowVersion, "local", "fixture", "operator"
 	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
 		t.Fatalf("push fixture base: %v: %s", err, out)
 	}

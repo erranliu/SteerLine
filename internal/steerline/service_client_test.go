@@ -8,9 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -245,156 +243,6 @@ func TestStartupIDAndOutputPathValidation(t *testing.T) {
 	}
 }
 
-func TestStartServiceSerializesSameConfig(t *testing.T) {
-	if runtimeGOOSWindows() {
-		t.Skip("Windows service-window uniqueness is verified through service locks")
-	}
-	if !detachedChildSupported(t) {
-		t.Skip("this host keeps child processes in a Job Object and rejects breakaway")
-	}
-	f := newFixture(t)
-	config, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
-	serviceExe := buildServiceLifecycleCLI(t)
-	t.Cleanup(func() {
-		connection := ConnectService(context.Background(), config)
-		if connection.CanStop {
-			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-			defer cancel()
-			_, _ = StopService(ctx, config, "test-cleanup", 12*time.Second)
-		}
-	})
-	opts := StartServiceOptions{Executable: serviceExe, WaitTimeout: 20 * time.Second, PollInterval: 30 * time.Millisecond}
-	type outcome struct {
-		result ServiceStartResult
-		err    error
-	}
-	starts := make(chan outcome, 2)
-	for range 2 {
-		go func() {
-			result, err := testStartService(context.Background(), configPath, opts)
-			starts <- outcome{result, err}
-		}()
-	}
-	first, second := <-starts, <-starts
-	if first.err != nil || second.err != nil || first.result.Status != "connected" || second.result.Status != "connected" {
-		t.Fatalf("concurrent starts: first=%+v/%v second=%+v/%v", first.result, first.err, second.result, second.err)
-	}
-	firstID := first.result.Connection.Snapshot.Runtime.Service.InstanceID
-	secondID := second.result.Connection.Snapshot.Runtime.Service.InstanceID
-	if firstID == "" || firstID != secondID {
-		t.Fatalf("same config started different instances: %q, %q", firstID, secondID)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	defer cancel()
-	stopped, err := StopService(ctx, config, "lifecycle-test", 12*time.Second)
-	if err != nil || stopped.Status != "stopped" {
-		t.Fatalf("stop concurrent winner: %+v %v", stopped, err)
-	}
-}
-
-func TestStartServiceReportsPreflightFailureAndPendingHandshake(t *testing.T) {
-	if runtimeGOOSWindows() {
-		t.Skip("Windows service-window diagnostics use foreground startup records")
-	}
-	if !detachedChildSupported(t) {
-		t.Skip("this Windows host keeps child processes in a Job Object and rejects breakaway")
-	}
-	t.Run("preflight failure is logged", func(t *testing.T) {
-		f := newFixture(t)
-		f.c.PR.Repository = "wrong/repository"
-		config, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
-		result, err := testStartService(context.Background(), configPath, StartServiceOptions{Executable: buildServiceLifecycleCLI(t), WaitTimeout: 15 * time.Second})
-		if err != nil || result.Status != "failed" || !strings.Contains(result.Error, "does not match Git remote") {
-			t.Fatalf("preflight result=%+v err=%v", result, err)
-		}
-		if result.StartupID == "" || result.LogPath == "" {
-			t.Fatalf("preflight failure lacks startup identity/log: %+v", result)
-		}
-		record, readErr := readStartupRecord(config, result.StartupID)
-		if readErr != nil || record.Status != "failed" || !strings.Contains(record.Error, "does not match Git remote") {
-			t.Fatalf("preflight startup record=%+v err=%v", record, readErr)
-		}
-		log, readErr := os.ReadFile(result.LogPath)
-		require(t, readErr)
-		if !strings.Contains(string(log), "does not match Git remote") {
-			t.Fatalf("preflight diagnostic missing from log: %s", log)
-		}
-	})
-
-	t.Run("timeout keeps startup identity and does not repeat launch", func(t *testing.T) {
-		var pendingIdentity *executionapi.ProcessIdentity
-		t.Cleanup(func() {
-			if pendingIdentity != nil {
-				_ = terminatePendingTestProcess(pendingIdentity)
-			}
-		})
-		f := newFixture(t)
-		t.Setenv("STEERLINE_FAKE_PR_DELAY", "2s")
-		config, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
-		serviceExe := buildServiceLifecycleCLI(t)
-		result, err := testStartService(context.Background(), configPath, StartServiceOptions{Executable: serviceExe, WaitTimeout: 350 * time.Millisecond, PollInterval: 25 * time.Millisecond})
-		if err != nil || result.Status != "pending" || result.StartupID == "" {
-			t.Fatalf("pending startup result=%+v err=%v", result, err)
-		}
-		again, err := testStartService(context.Background(), configPath, StartServiceOptions{Executable: serviceExe, WaitTimeout: 350 * time.Millisecond, PollInterval: 25 * time.Millisecond})
-		if err != nil || again.Status != "pending" || again.StartupID != result.StartupID {
-			t.Fatalf("repeat observation changed startup attempt: first=%+v second=%+v err=%v", result, again, err)
-		}
-		record, err := readStartupRecord(config, result.StartupID)
-		require(t, err)
-		pendingIdentity = record.ProcessIdentity
-		if record.Status != "starting" || record.ProcessIdentity == nil || probeProcess(record.ProcessIdentity).State != ProcessMatches {
-			t.Fatalf("pending startup lost process identity: %+v", record)
-		}
-		if got := ReadObservationSnapshot(config, nil); got.State != SnapshotNone {
-			t.Fatalf("preflight delay unexpectedly published a runtime: %+v", got)
-		}
-		if err := terminatePendingTestProcess(record.ProcessIdentity); err != nil {
-			t.Fatal(err)
-		}
-		pendingIdentity = nil
-		observed, err := waitForStartup(context.Background(), config, result.StartupID, result.LogPath, StartServiceOptions{WaitTimeout: 3 * time.Second})
-		if err != nil || observed.Status != "failed" {
-			t.Fatalf("killed startup was not observed as failed: %+v %v", observed, err)
-		}
-	})
-
-	t.Run("early process exit is not reported as online", func(t *testing.T) {
-		t.Setenv("STEERLINE_LIFECYCLE_EXIT_EARLY", "1")
-		f := newFixture(t)
-		config, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
-		testExe, err := os.Executable()
-		require(t, err)
-		result, err := testStartService(context.Background(), configPath, StartServiceOptions{Executable: testExe, WaitTimeout: 2 * time.Second, PollInterval: 30 * time.Millisecond})
-		if err != nil || result.Status != "failed" || result.StartupID == "" {
-			t.Fatalf("early-exit result=%+v err=%v", result, err)
-		}
-		if result.Connection.State == ConnectionConnected || result.Connection.CanControl {
-			t.Fatalf("early exit was reported as connected: %+v", result)
-		}
-		if record, e := readStartupRecord(config, result.StartupID); e != nil || record.Status != "failed" {
-			t.Fatalf("early exit startup record=%+v err=%v", record, e)
-		}
-	})
-}
-
-func TestRunCommandRejectsLegacyTaskAuthorityBeforeWritingState(t *testing.T) {
-	f := newFixture(t)
-	config := f.c
-	config.TaskAuthority = "beads"
-	data, err := json.Marshal(config)
-	require(t, err)
-	configPath := filepath.Join(t.TempDir(), "legacy-config.json")
-	require(t, os.WriteFile(configPath, data, 0600))
-	output, runErr := exec.Command(buildServiceLifecycleCLI(t), "run", "-config", configPath, "-dispatch", "manual", "-console", "off").CombinedOutput()
-	if runErr == nil || !strings.Contains(string(output), "task_authority") {
-		t.Fatalf("legacy task authority was accepted: err=%v output=%s", runErr, output)
-	}
-	if _, err := os.Stat(filepath.Join(f.c.RunDir, "steerline.db")); !os.IsNotExist(err) {
-		t.Fatalf("rejected legacy config initialized a native database: %v", err)
-	}
-}
-
 func lifecycleConfigFile(t *testing.T, f *fixture, runDir string) (Config, string) {
 	t.Helper()
 	c := f.c
@@ -415,36 +263,6 @@ func lifecycleConfigFile(t *testing.T, f *fixture, runDir string) (Config, strin
 	require(t, loaded.ResolveIdentity(context.Background()))
 	return loaded, configPath
 }
-
-func buildServiceLifecycleCLI(t *testing.T) string {
-	t.Helper()
-	lifecycleCLIBuildOnce.Do(func() {
-		root, err := sharedTestArtifactsDir()
-		if err != nil {
-			lifecycleCLIBuildErr = err
-			return
-		}
-		name := "steerline-lifecycle"
-		if runtime.GOOS == "windows" {
-			name += ".exe"
-		}
-		lifecycleCLIPath = filepath.Join(root, name)
-		cmd := exec.Command("go", "build", "-o", lifecycleCLIPath, "../../cmd/steerline")
-		if output, buildErr := cmd.CombinedOutput(); buildErr != nil {
-			lifecycleCLIBuildErr = fmt.Errorf("%w: %s", buildErr, output)
-		}
-	})
-	if lifecycleCLIBuildErr != nil {
-		t.Fatalf("build shared service lifecycle CLI: %v", lifecycleCLIBuildErr)
-	}
-	return lifecycleCLIPath
-}
-
-var (
-	lifecycleCLIBuildOnce sync.Once
-	lifecycleCLIPath      string
-	lifecycleCLIBuildErr  error
-)
 
 func terminatePendingTestProcess(identity *executionapi.ProcessIdentity) error {
 	if identity == nil || probeProcess(identity).State != ProcessMatches {

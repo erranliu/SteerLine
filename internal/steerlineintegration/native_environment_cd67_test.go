@@ -153,3 +153,63 @@ func TestNativeSourceReplacementRetainsOutputEvidence(t *testing.T) {
 		t.Fatal("source replacement lost original native content, completeness, Dispatch or cursor")
 	}
 }
+
+func TestWorkerEnvironmentWaitsForOriginalAgentDetection(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	f := newLifecycleProject(t, "orca")
+	require(t, testprotocol.WriteNativeOrcaState(f.nativeStateDir, testprotocol.NativeOrcaState{EnvironmentMode: true, BusinessActive: true, HoldFixedAgentIdentity: true, ReadinessMode: "hold"}))
+	createIntegrationTask(t, ctx, f, 901)
+	service := startIntegrationService(t, ctx, f.config, f.config.ExecutionDirectory)
+	defer service.stop(t)
+	claimIntegrationTask(t, ctx, f, 901, service.instanceID)
+	waiting := waitIntegrationRun(t, ctx, service, f.config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+		return run.TaskID == "901" && e.Environment != nil && e.Environment.OriginalTerminal != nil
+	})
+	env := waiting.execution.Environment
+	if env.Blocker != nil || waiting.execution.Process != nil || env.Ready {
+		t.Fatalf("unidentified startup became blocker or ready agent: process=%+v environment=%+v", waiting.execution.Process, env)
+	}
+	deadline, nonce, terminal := env.Preparation.Deadline, env.Preparation.Nonce, *env.OriginalTerminal
+	var launchID, launchKey, launchDigest string
+	for _, op := range waiting.runtime.Operations {
+		var resource executionapi.ResourceIntent
+		if op.Kind == string(executionapi.LifecycleCreateResource) && json.Unmarshal(op.Request, &resource) == nil && resource.Purpose == "agent-terminal" && op.Status == "accepted" {
+			launchID, launchKey, launchDigest = op.OperationID, op.IdempotencyKey, op.PayloadDigest
+		}
+	}
+	accepted := launchID != ""
+	state, err := testprotocol.ReadNativeOrcaState(f.nativeStateDir)
+	require(t, err)
+	if !accepted || state.Dispatches != 0 {
+		t.Fatal("startup receipt lost or input sent before original identification")
+	}
+	// Additional public actor passes observe only the original launch.
+	time.Sleep(1200 * time.Millisecond)
+	view, err := service.queries.ReadProjectView(ctx, "901", 100)
+	require(t, err)
+	for _, e := range view.Runtime.Executions {
+		if e.ExecutionID == waiting.execution.ExecutionID && (e.Environment.Blocker != nil || !e.Environment.Preparation.Deadline.Equal(deadline) || e.Environment.Preparation.Nonce != nonce || *e.Environment.OriginalTerminal != terminal) {
+			t.Fatal("waiting reset original preparation or replaced terminal")
+		}
+	}
+	require(t, testprotocol.UpdateNativeOrcaState(f.nativeStateDir, func(state *testprotocol.NativeOrcaState) { state.HoldFixedAgentIdentity = false }))
+	resumed := waitIntegrationRun(t, ctx, service, f.config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+		state, err := testprotocol.ReadNativeOrcaState(f.nativeStateDir)
+		require(t, err)
+		return run.TaskID == "901" && e.Process != nil && state.Dispatches == 1
+	})
+	confirmed, originalRetained := false, false
+	for _, op := range resumed.runtime.Operations {
+		var resource executionapi.ResourceIntent
+		if op.OperationID == launchID && op.IdempotencyKey == launchKey && op.PayloadDigest == launchDigest && op.Status == "accepted" {
+			originalRetained = true
+		}
+		if op.Kind == string(executionapi.LifecycleCreateResource) && json.Unmarshal(op.Request, &resource) == nil && resource.Purpose == "agent-bind" && op.Status == "confirmed" {
+			confirmed = true
+		}
+	}
+	if !confirmed || !originalRetained || resumed.execution.Process.Terminal != terminal.Terminal || resumed.execution.Process.Incarnation != terminal.Incarnation || resumed.execution.Environment.Preparation.Nonce != nonce || !resumed.execution.Environment.Preparation.Deadline.Equal(deadline) {
+		t.Fatal("identification did not resume same launch/intent/budget exactly once")
+	}
+}

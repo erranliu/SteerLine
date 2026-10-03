@@ -22,7 +22,7 @@ import (
 
 const corePackage = "github.com/erranliu/SteerLine/internal/steerline"
 
-var quickTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged"}
+var quickTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/internal/steerlineintegration"
 
@@ -46,7 +46,23 @@ var quickBoundaryAssigned = []string{
 	"TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
 }
 
-var quickPackages = []string{corePackage, corePackage + "/taskgraph", corePackage + "/taskview", corePackage + "/workerflow", corePackage + "/execution", corePackage + "/contracts", corePackage + "/projection", corePackage + "/query", corePackage + "/sqlite", corePackage + "/orca_remote_worker", boundaryPackage}
+var quickRulePackages = []string{corePackage + "/taskgraph", corePackage + "/taskview", corePackage + "/workerflow", corePackage + "/execution", corePackage + "/contracts", corePackage + "/projection", corePackage + "/query", corePackage + "/sqlite", corePackage + "/orca_remote_worker"}
+var quickOwnerCases = []struct {
+	ID, Package string
+	Tests       []string
+}{
+	{"quick-owner-codec", corePackage + "/codexworker", []string{"TestCodexNormalizer", "TestOversizedWorkerLinePreservesRawOutputAndLaterEvents"}},
+	{"quick-owner-identity", corePackage + "/orcaworker", []string{"TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess", "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation"}},
+	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/steerlineapp", []string{"TestReadinessNativeLaunchKeepsDefaultModelAndPermissions"}},
+}
+var quickPackages = func() []string {
+	p := append([]string{corePackage}, quickRulePackages...)
+	p = append(p, boundaryPackage)
+	for _, owner := range quickOwnerCases {
+		p = append(p, owner.Package)
+	}
+	return p
+}()
 
 //go:embed testdata/core-test-weights.json
 var weightFile embed.FS
@@ -126,8 +142,12 @@ func runScoped(opts options) int {
 		report.CoreTests = append([]string(nil), quickTests...)
 		args := []string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1", "-run=" + exactPattern(quickTests), corePackage}
 		report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-core", "", args, quickTests, []string{corePackage}, false))
-		args = append([]string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1"}, quickPackages[1:len(quickPackages)-1]...)
-		report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-rules", "", args, nil, quickPackages[1:len(quickPackages)-1], false))
+		args = append([]string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1"}, quickRulePackages...)
+		report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-rules", "", args, nil, quickRulePackages, false))
+		for _, owner := range quickOwnerCases {
+			args = []string{"go", "test", "-json", "-count=1", "-timeout=3m", "-p", "1", "-parallel", "1", "-run=" + exactPattern(owner.Tests), owner.Package}
+			report.Groups = append(report.Groups, runGroup(ctx, opts.out, owner.ID, "", args, owner.Tests, []string{owner.Package}, false))
+		}
 		boundarySelected := false
 		for _, arg := range opts.goTestArgs {
 			if arg == "./internal/steerlineintegration" || arg == boundaryPackage {
@@ -472,8 +492,8 @@ func checkScopedCoverage(report scopedReport) []string {
 		if len(group.Assigned) > 0 {
 			for _, name := range group.Assigned {
 				pkg := corePackage
-				if group.ID == "quick-boundary" {
-					pkg = boundaryPackage
+				if len(group.Packages) == 1 {
+					pkg = group.Packages[0]
 				}
 				key := pkg + "\x00" + name
 				if runs[key] != 1 || terminals[key] != 1 {
@@ -496,7 +516,7 @@ func checkScopedCoverage(report scopedReport) []string {
 			if count != 1 {
 				failures = append(failures, fmt.Sprintf("%s: package %s has %d terminal events", group.ID, pkg, count))
 			}
-			if group.ID == "other-packages" || group.ID == "quick-core" || group.ID == "quick-rules" || group.ID == "quick-boundary" {
+			if group.ID == "other-packages" || group.ID == "quick-core" || group.ID == "quick-rules" || (group.ID == "quick-boundary" || strings.HasPrefix(group.ID, "quick-owner-")) {
 				seenPackages[pkg] += count
 			}
 		}

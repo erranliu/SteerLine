@@ -177,7 +177,7 @@
       "validateCatalogRef"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/execution_acceptance_helpers_test.go",
@@ -316,7 +316,7 @@
       "projectConfigJSON"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/implementation_config_test_helpers_test.go",
@@ -332,7 +332,7 @@
       "testOrcaState"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/linked_workspace_fixture_test.go",
@@ -341,7 +341,7 @@
       "codexLinkedWorktreeWriteArgs"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/local_capability_live_test.go",
@@ -511,7 +511,7 @@
       "nativeOrcaGeneration"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/orca_worker_observation_service_test.go",
@@ -618,7 +618,7 @@
       "seedFakeCapabilities"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/spawner_test.go",
@@ -692,7 +692,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/worker_context_test.go",
@@ -751,7 +751,7 @@
       "testManagedLaunchRecovery"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/worker_environment_test_helpers_test.go",
@@ -765,7 +765,7 @@
       "workerOrcaTerminalIdentity"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/worker_events_cd62_test.go",

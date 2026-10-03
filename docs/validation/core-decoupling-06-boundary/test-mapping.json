@@ -820,7 +820,7 @@
   },
   {
     "old": "internal/steerline/execution_registry_test.go",
-    "test": "TestWorkerFlowModeUsesFixedExecutionIdentity/{local,orca,orca_supervised}",
+    "test": "TestWorkerFlowModeUsesFixedExecutionIdentity",
     "new": "internal/steerlineapp/registry_identity_cd67_test.go",
     "owner": "steerlineapp",
     "change": "native catalog vectors retained without duplicating central state machine"
@@ -829,7 +829,8 @@
     "old": "internal/steerline/core_decoupling_63_audit_test.go",
     "test": "testCD63BindingCodecIsolation",
     "new": "internal/steerline/codexworker/binding_isolation_cd67_test.go",
-    "owner": "codexworker_test"
+    "owner": "codexworker_test",
+    "new_test": "TestCD63BindingCodecIsolation"
   },
   {
     "old": "internal/steerline/worker_local_test.go",
@@ -1248,5 +1249,482 @@
     "owner": "steerline",
     "change": "same center verifyHostExecutionEvidence rejection after bound writable-root expansion, through single neutral policy resource envelope",
     "validation": "bin/cd67/neutral-readiness-bound-roots/summary.json complete/pass 1/1"
+  },
+  {
+    "old": "internal/steerline/activity_test.go",
+    "test": "TestActivityWriterDeduplicatesItemAcrossReopen",
+    "new": "internal/steerline/activity_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/activity_test.go",
+    "test": "TestPiNormalizer",
+    "new": "internal/steerline/activity_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/activity_test.go",
+    "test": "TestActivityWriterRoundTrip",
+    "new": "internal/steerline/activity_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/activity_test.go",
+    "test": "TestOpenActivityCreatesRunDir",
+    "new": "internal/steerline/activity_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/activity_test.go",
+    "test": "TestActivityWriterAppendRecoversSeq",
+    "new": "internal/steerline/activity_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/activity_test.go",
+    "test": "TestActivityJournalIsPerRun",
+    "new": "internal/steerline/activity_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/activity_test.go",
+    "test": "TestRenderActivity",
+    "new": "internal/steerline/activity_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "test": "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt",
+    "new": "internal/steerline/codexworker/reattach_receipt_cd67_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "test": "TestAppServerStartReplayPreservesNativeSavedAnswer",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "test": "TestAppServerRejectedEventReleasesObserver",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "test": "TestAppServerRecoveryDoesNotRaceInFlightLaunch",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "test": "TestAppServerLateReplyCannotModifyTerminalTask",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "test": "TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "test": "TestAppServerSlowRecoveryLeavesServiceWriterAvailable",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "test": "TestRoutedDecisionRequiresAllQuestionIDs",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/codex_worker_test.go",
+    "test": "TestAppServerStartedEventCommitsOperationReceipt",
+    "new": "internal/steerline/worker_receipts_business_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "test": "TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision",
+    "new": "internal/steerline/conversation_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "test": "TestConversationCommitDoesNotAdvanceCheckpointOnInvalidBody",
+    "new": "internal/steerline/conversation_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "test": "TestConversationBodyAndRawCorruptionCannotReadAsComplete",
+    "new": "internal/steerline/conversation_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "test": "TestConversationLongUnicodeFinalIsExactAcrossPages",
+    "new": "internal/steerline/conversation_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "test": "TestConversationWriteFailureRollsBackContentAndCursor",
+    "new": "internal/steerline/conversation_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "test": "TestConversationSQLiteFullRollsBackContentAndCursor",
+    "new": "internal/steerline/conversation_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "test": "TestConversationLateOldAttemptCannotCrossNewAttempt",
+    "new": "internal/steerline/conversation_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "test": "TestConversationProcessExitMidTransactionHelper",
+    "new": "internal/steerline/conversation_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "test": "TestConversationProcessExitBeforeCommitRecoversAllBoundaries",
+    "new": "internal/steerline/conversation_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "test": "TestConversationCommitRejectsChangedRawAtSameSourceIdentity",
+    "new": "internal/steerline/conversation_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "test": "TestConversationCheckpointPreflightRejectsUnanchoredState",
+    "new": "internal/steerline/conversation_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "test": "TestConversationLiveSourceFailureKeepsGapAndMapperPosition",
+    "new": "internal/steerline/conversation_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "test": "TestConversationChangedLiveBytesCannotBindOrCheckpoint",
+    "new": "internal/steerline/conversation_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/conversation_test.go",
+    "test": "TestConversationJournalReplayIsBoundedAndIdempotent",
+    "new": "internal/steerline/conversation_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_backend_test.go",
+    "test": "TestExecutionRecordsPinBindingsAndOperations",
+    "new": "internal/steerline/execution_backend_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_backend_test.go",
+    "test": "TestCapabilityReportRejectsRetiredWholeRunActions",
+    "new": "internal/steerline/execution_backend_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_backend_test.go",
+    "test": "TestLocalReadOutputUsesBoundedExecutionCursor",
+    "new": "internal/steerline/execution_backend_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_backend_test.go",
+    "test": "TestOperationRecordRejectsCorruptionBeforeUse",
+    "new": "internal/steerline/execution_backend_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_policy_test.go",
+    "test": "TestProjectPolicyMissingBoundResourcesAreNotReconstructed",
+    "new": "internal/steerline/execution_policy_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_policy_test.go",
+    "test": "TestAppServerLaunchMessagePersistsPolicyResources",
+    "new": "internal/steerline/execution_policy_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_profiles_test.go",
+    "test": "TestNativeClaimPersistsChosenExecutionProfile",
+    "new": "internal/steerline/execution_profiles_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_profiles_test.go",
+    "test": "TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles",
+    "new": "internal/steerline/execution_profiles_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_profiles_test.go",
+    "test": "TestWorkerFlowClaimsFreezeIndependentLocalProfiles",
+    "new": "internal/steerline/execution_profiles_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_profiles_test.go",
+    "test": "TestStartPayloadRequiresCompleteExecutionProfileSelection",
+    "new": "internal/steerline/execution_profiles_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_registry_test.go",
+    "test": "TestWorkerFlowAdapterUsesFixedProtocol",
+    "new": "internal/steerline/execution_registry_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_registry_test.go",
+    "test": "TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent",
+    "new": "internal/steerline/execution_registry_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_registry_test.go",
+    "test": "TestEveryRegisteredExecutionUsesTheLifecyclePort",
+    "new": "internal/steerline/execution_registry_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_requirements_test.go",
+    "test": "TestExecutionRequirementsExistenceAndNonSecretEvidence",
+    "new": "internal/steerline/execution_requirements_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_requirements_test.go",
+    "test": "TestExecutionRequirementsDoNotUpgradeProbeToVerified",
+    "new": "internal/steerline/execution_requirements_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_requirements_test.go",
+    "test": "TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal",
+    "new": "internal/steerline/execution_requirements_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_requirements_test.go",
+    "test": "TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot",
+    "new": "internal/steerline/execution_requirements_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_requirements_test.go",
+    "test": "TestClaimRechecksAcceptedConfigFiles",
+    "new": "internal/steerline/execution_requirements_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/execution_requirements_test.go",
+    "test": "TestExecutionRegistryRejectsDuplicatesAndRequiresLifecyclePorts",
+    "new": "internal/steerline/execution_requirements_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/service_test.go",
+    "test": "TestProjectRuntimeOmitsSettledDiscardedRuns",
+    "new": "internal/steerline/service_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/service_test.go",
+    "test": "TestMain",
+    "new": "internal/steerline/service_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/service_test.go",
+    "test": "TestIdleServiceDoesNotPublishOnNoOpPolls",
+    "new": "internal/steerline/service_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/worker_config_test.go",
+    "test": "TestUnsupportedOrcaWorkerFlowConfigurationCannotClaim",
+    "new": "internal/steerline/worker_config_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts",
+    "new_test": "TestUnregisteredWorkerFlowConfigurationCannotClaim"
+  },
+  {
+    "old": "internal/steerline/worker_config_test.go",
+    "test": "TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation",
+    "new": "internal/steerline/worker_config_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/worker_config_test.go",
+    "test": "TestFreshWorkerFlowRuntimeUsesDistinctFormat",
+    "new": "internal/steerline/worker_config_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/worker_config_test.go",
+    "test": "TestWorkerFlowRejectsOldLocalExecutionProtocol",
+    "new": "internal/steerline/worker_config_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test.go",
+    "test": "TestWorkerEnvironmentWaitsForOriginalAgentDetection",
+    "new": "internal/steerlineintegration/native_environment_cd67_test.go",
+    "owner": "steerlineintegration",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test.go",
+    "test": "TestWorkerEnvironmentUnidentifiedAgentKeepsOriginalDeadline",
+    "new": "internal/steerline/environment_business_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test.go",
+    "test": "TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR",
+    "new": "internal/steerline/environment_business_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test.go",
+    "test": "TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch",
+    "new": "internal/steerline/environment_business_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test.go",
+    "test": "TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput",
+    "new": "internal/steerline/environment_business_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test.go",
+    "test": "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt",
+    "new": "internal/steerline/environment_business_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/worker_environment_test.go",
+    "test": "TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll",
+    "new": "internal/steerline/environment_business_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/worker_local_test.go",
+    "test": "TestWorkerFlowPromptIncludesFixedWorkflowRunID",
+    "new": "internal/steerline/worker_local_test.go",
+    "owner": "steerline",
+    "change": "assertions retained under final owner; core business uses single neutral directory and scoped facts"
+  },
+  {
+    "old": "internal/steerline/service_client_test.go",
+    "test": "TestStartServiceSerializesSameConfig",
+    "new": "internal/steerlineintegration/cli_lifecycle_cd67_test.go",
+    "owner": "steerlineintegration",
+    "change": "real product CLI plus actual app loader; original process/startup/log/no-write assertions retained, isolated fixture only; original Windows skip/visible-console conditions preserved"
+  },
+  {
+    "old": "internal/steerline/service_client_test.go",
+    "test": "TestStartServiceReportsPreflightFailureAndPendingHandshake",
+    "new": "internal/steerlineintegration/cli_lifecycle_cd67_test.go",
+    "owner": "steerlineintegration",
+    "change": "real product CLI plus actual app loader; original process/startup/log/no-write assertions retained, isolated fixture only; original Windows skip/visible-console conditions preserved"
+  },
+  {
+    "old": "internal/steerline/service_client_test.go",
+    "test": "TestRunCommandRejectsLegacyTaskAuthorityBeforeWritingState",
+    "new": "internal/steerlineintegration/cli_lifecycle_cd67_test.go",
+    "owner": "steerlineintegration",
+    "change": "real product CLI plus actual app loader; original process/startup/log/no-write assertions retained, isolated fixture only; original Windows skip/visible-console conditions preserved"
+  },
+  {
+    "old": "internal/steerline/platform_windows_test.go",
+    "test": "TestWindowsServiceWindowRejectsMissingConsole",
+    "new": "internal/steerlineintegration/cli_window_windows_cd67_test.go",
+    "owner": "steerlineintegration",
+    "change": "real product CLI plus actual app loader; original process/startup/log/no-write assertions retained, isolated fixture only; original Windows skip/visible-console conditions preserved"
   }
 ]

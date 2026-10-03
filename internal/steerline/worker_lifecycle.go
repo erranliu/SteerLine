@@ -375,6 +375,9 @@ func lifecycleSnapshot(run *Run, workflow *WorkflowRunRecord, execution *Executi
 	if execution.Environment != nil && execution.Environment.OriginalTerminal != nil {
 		identity := *execution.Environment.OriginalTerminal
 		snapshot.OriginalHost = &identity
+		if snapshot.Ref.External.Kind == "" {
+			snapshot.Ref.External = identity
+		}
 	}
 	if run.Decision != nil && run.Decision.Request.HostTarget != nil && execution.Environment != nil && execution.Environment.Blocker != nil {
 		target := run.Decision.Request.HostTarget
@@ -627,6 +630,14 @@ func mergeLifecycleExecutionCandidate(execution *ExecutionRecord, receipt execut
 		}
 		execution.Target.WorktreeID = receipt.State.WorktreeID
 	}
+	if receipt.OriginalHost != nil && execution.Environment != nil {
+		original := *receipt.OriginalHost
+		if execution.Environment.OriginalTerminal != nil && !sameExecutionSessionProcess(*execution.Environment.OriginalTerminal, original) {
+			return ErrWorkerTurnStale
+		}
+		execution.Environment.OriginalTerminal = &original
+		execution.Environment.Runtime = original.RuntimeID
+	}
 	if receipt.Process != nil {
 		if execution.Process != nil && *execution.Process != *receipt.Process && !sameExecutionSessionProcess(*execution.Process, *receipt.Process) {
 			return ErrWorkerTurnStale
@@ -669,7 +680,7 @@ func mergeLifecycleExecutionCandidate(execution *ExecutionRecord, receipt execut
 			return err
 		}
 	}
-	if execution.Environment != nil && execution.Process != nil && execution.PolicyResources != nil && receipt.State.LaunchCommand != "" {
+	if execution.Environment != nil && execution.Environment.OriginalTerminal != nil && execution.PolicyResources != nil && receipt.State.LaunchCommand != "" {
 		execution.Environment.LaunchCommand = receipt.State.LaunchCommand
 		execution.Environment.WriteRoots = append([]string(nil), execution.PolicyResources.WriteRoots...)
 	}

@@ -2,9 +2,7 @@ package steerline
 
 import (
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
-	"net"
 	"strings"
 	"testing"
 )
@@ -24,12 +22,4 @@ func TestWorkerFlowPromptIncludesFixedWorkflowRunID(t *testing.T) {
 	if _, err := workerflow.Prompt(task, contract, "", executionapi.PublicationPolicy{Publisher: "worker"}); err == nil {
 		t.Fatal("worker prompt accepted a missing workflow run ID")
 	}
-}
-
-type mockAppServerState = testprotocol.AppServerState
-
-func mockAppServerStdio() { testprotocol.MockAppServerStdio() }
-func mockAppServerMain()  { testprotocol.MockAppServerMain() }
-func mockAppServerConnection(c net.Conn, s *mockAppServerState) {
-	testprotocol.MockAppServerConnection(c, s)
 }

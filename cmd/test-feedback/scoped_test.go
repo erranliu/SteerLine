@@ -121,7 +121,7 @@ func TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents(t *testing.T) {
 				t.Fatal(err)
 			}
 			var rulesRaw []byte
-			for _, pkg := range quickPackages[1 : len(quickPackages)-1] {
+			for _, pkg := range quickRulePackages {
 				rulesRaw = append(rulesRaw, packageEvent("start", pkg)...)
 				rulesRaw = append(rulesRaw, packageEvent("pass", pkg)...)
 			}
@@ -130,7 +130,7 @@ func TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents(t *testing.T) {
 				t.Fatal(err)
 			}
 			group := scopedGroup{ID: "quick-core", Assigned: []string{"TestA"}, Packages: []string{corePackage}, StdoutLog: path, Summary: testfeedback.Parse([]byte(tc.events), 0)}
-			rules := scopedGroup{ID: "quick-rules", Packages: quickPackages[1 : len(quickPackages)-1], StdoutLog: rulesPath, Summary: testfeedback.Parse(rulesRaw, 0)}
+			rules := scopedGroup{ID: "quick-rules", Packages: quickRulePackages, StdoutLog: rulesPath, Summary: testfeedback.Parse(rulesRaw, 0)}
 			var boundaryRaw []byte
 			boundaryRaw = append(boundaryRaw, packageEvent("start", boundaryPackage)...)
 			for _, name := range quickBoundaryAssigned {
@@ -143,7 +143,7 @@ func TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents(t *testing.T) {
 				t.Fatal(err)
 			}
 			boundary := scopedGroup{ID: "quick-boundary", Assigned: quickBoundaryAssigned, Packages: []string{boundaryPackage}, StdoutLog: boundaryPath, Summary: testfeedback.Parse(boundaryRaw, 0)}
-			report := scopedReport{Scope: "quick", Groups: []scopedGroup{group, rules, boundary}, AllPackages: quickPackages}
+			report := scopedReport{Scope: "quick", Groups: append([]scopedGroup{group, rules, boundary}, syntheticQuickOwners(t, root)...), AllPackages: quickPackages}
 			problems := checkScopedCoverage(report)
 			if tc.wantPass && len(problems) != 0 {
 				t.Fatalf("complete stream added errors: %v", problems)
@@ -246,4 +246,22 @@ func TestQuickBoundaryCoverageRequiresEachAssignedEntry(t *testing.T) {
 			}
 		})
 	}
+}
+
+func syntheticQuickOwners(t *testing.T, root string) []scopedGroup {
+	t.Helper()
+	var groups []scopedGroup
+	for _, owner := range quickOwnerCases {
+		raw := packageEvent("start", owner.Package)
+		for _, name := range owner.Tests {
+			raw += strings.ReplaceAll(event("run", name)+event("pass", name), corePackage, owner.Package)
+		}
+		raw += packageEvent("pass", owner.Package)
+		path := filepath.Join(root, owner.ID+".jsonl")
+		if err := os.WriteFile(path, []byte(raw), 0600); err != nil {
+			t.Fatal(err)
+		}
+		groups = append(groups, scopedGroup{ID: owner.ID, Assigned: owner.Tests, Packages: []string{owner.Package}, StdoutLog: path, Summary: testfeedback.Parse([]byte(raw), 0)})
+	}
+	return groups
 }

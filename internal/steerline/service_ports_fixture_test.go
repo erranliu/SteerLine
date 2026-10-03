@@ -1,0 +1,213 @@
+package steerline
+
+import (
+	"context"
+	"errors"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
+	"time"
+)
+
+type testProcessHost struct{}
+
+func mustTestDirectory() (*ExecutionDirectory, error) { return newNeutralDirectory() }
+func testConfigWithDirectory(c Config) Config {
+	if c.ExecutionDirectory == nil {
+		c = withNeutralProfile(c, neutralSettings{Executable: os.Args[0]})
+	}
+	c.ProcessHost = testProcessHost{}
+	if c.WorktreeRoot == "" && c.RunDir != "" {
+		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
+	}
+	if c.StateRoot == "" {
+		c.StateRoot = fixtureStateRoot()
+	}
+	if c.RepositoryStateKey == "" && c.Identity() != "" {
+		c.RepositoryStateKey = RepositoryStateKey(c.Identity())
+	}
+	return c
+}
+func newTestService(c Config) (*Service, error) { return newNeutralService(testConfigWithDirectory(c)) }
+
+// Only the generic bounded raw output test uses this fixture.
+type localExecutionBackend struct{ config Config }
+
+func (testProcessHost) StartManaged(command *exec.Cmd) (executionapi.StopHandle, error) {
+	return startProcess(command)
+}
+
+func (testProcessHost) InspectProcess(identity *executionapi.ProcessIdentity) string {
+	return inspectProcess(identity)
+}
+
+func (testProcessHost) NewProcessGeneration() string { return newID() }
+
+func (testProcessHost) WriteExecutionFile(path string, value []byte) error {
+	return AtomicWrite(path, value)
+}
+
+func (testProcessHost) OutputCommand(ctx context.Context, command executionapi.LaunchCommand) ([]byte, error) {
+	return (Runner{Dir: command.WorkingDirectory, Timeout: 30 * time.Second}).Output(ctx, Command{Executable: command.Executable, Args: command.Args})
+}
+
+func inspectTestWorkspace(ctx context.Context, c Config, ref executionapi.ExecutionRef) (executionapi.WorkspaceInspection, error) {
+	if ref.Incomplete || ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || !commitHash.MatchString(ref.BaseCommit) {
+		return executionapi.WorkspaceInspection{}, errors.New("workspace ref is incomplete")
+	}
+	if c.Identity() == "" {
+		if err := c.ResolveIdentity(ctx); err != nil {
+			return executionapi.WorkspaceInspection{}, err
+		}
+	}
+	repository, err := workspaceRepository(c)
+	if err != nil {
+		return executionapi.WorkspaceInspection{}, err
+	}
+	inspection, err := workspace.Inspect(ctx, workspaceGit(c), repository, &executionapi.WorkspaceIntent{Path: ref.WorkspacePath, Branch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit})
+	if err != nil {
+		return executionapi.WorkspaceInspection{}, err
+	}
+	return executionapi.WorkspaceInspection{Repository: inspection.Repository, Worktree: inspection.Worktree, Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, CheckedAt: inspection.CheckedAt}, nil
+}
+
+func testHomePath() string {
+	if value := strings.TrimSpace(os.Getenv("STEERLINE_HOME")); value != "" {
+		return filepath.Clean(value)
+	}
+	return filepath.Join(os.TempDir(), "steerline-test")
+}
+
+func fixtureHome() string { return testHomePath() }
+
+func fixtureBinDir() string { return filepath.Join(testHomePath(), "bin") }
+
+func fixtureStateRoot() string { return filepath.Join(testHomePath(), "state") }
+
+func fixtureGlobalExecutionConfigPath() string {
+	return filepath.Join(testHomePath(), "execution.json")
+}
+
+func fixtureRepositoryStateKey(c Config) (string, error) {
+	repository, err := workspace.ResolveRepository(context.Background(), workspaceGit(testConfigWithDirectory(c)), c.Repository)
+	if err != nil {
+		return "", err
+	}
+	return RepositoryStateKey(repository.CommonDir), nil
+}
+
+func loadFixtureConfig(path string) (Config, error) {
+	c := Config{Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
+	projectPath, err := filepath.Abs(path)
+	if err != nil {
+		return c, err
+	}
+	projectBytes, err := os.ReadFile(projectPath)
+	if err != nil {
+		return c, err
+	}
+	if err := decode(projectBytes, &c); err != nil {
+		return c, err
+	}
+	if c.TaskAuthority != "native" {
+		return c, errors.New("task_authority must be explicitly set to native; Beads is not supported")
+	}
+	if c.WorkflowProtocol != WorkerFlowVersion {
+		return c, errors.New("workflow_protocol must be worker-flow-v1")
+	}
+	if err := c.ExecutionPolicy.Validate(); err != nil {
+		return c, err
+	}
+	if err := c.ExecutionRequirements.Validate(); err != nil {
+		return c, err
+	}
+	if err := publication.ValidateNonSecret(c.PR, c.Git); err != nil {
+		return c, err
+	}
+	if c.Host != "" || c.Agent != "" || len(c.ExecutionProfiles) != 0 || c.DefaultExecutionProfile != "" {
+		return c, errors.New("execution profiles belong in global execution config")
+	}
+	globalPath := fixtureGlobalExecutionConfigPath()
+	globalBytes, err := os.ReadFile(globalPath)
+	if err != nil {
+		return c, err
+	}
+	var global struct {
+		Version           int                `json:"version"`
+		ExecutionProfiles []ExecutionProfile `json:"execution_profiles"`
+		DefaultProfile    string             `json:"default_execution_profile"`
+	}
+	if err := decode(globalBytes, &global); err != nil {
+		return c, err
+	}
+	if global.Version != 2 || len(global.ExecutionProfiles) == 0 {
+		return c, errors.New("global execution config version or profiles are invalid")
+	}
+	directory, err := mustTestDirectory()
+	if err != nil {
+		return c, err
+	}
+	c.ExecutionDirectory, c.ProcessHost, c.StateRoot = directory, testProcessHost{}, fixtureStateRoot()
+	c.ExecutionProfiles, c.DefaultExecutionProfile = global.ExecutionProfiles, global.DefaultProfile
+	c.BindApplicationConfig(directory, projectPath, globalPath, loadedConfigDigest(projectBytes, globalBytes), true)
+	base := filepath.Dir(projectPath)
+	if c.Repository == "" || c.Branch == "" {
+		return c, errors.New("repository and branch are required")
+	}
+	if !filepath.IsAbs(c.Repository) {
+		c.Repository = filepath.Join(base, c.Repository)
+	}
+	key, err := fixtureRepositoryStateKey(c)
+	if err != nil {
+		return c, err
+	}
+	c.RepositoryStateKey = key
+	if c.RunDir == "" {
+		c.RunDir = filepath.Join(c.StateRoot, key)
+	} else if !filepath.IsAbs(c.RunDir) {
+		c.RunDir = filepath.Join(base, c.RunDir)
+	}
+	if c.WorktreeRoot == "" {
+		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
+	} else if !filepath.IsAbs(c.WorktreeRoot) {
+		c.WorktreeRoot = filepath.Join(base, c.WorktreeRoot)
+	}
+	if err := validateExecutionProfiles(c); err != nil {
+		return c, err
+	}
+	initial := global.ExecutionProfiles[0]
+	if global.DefaultProfile != "" {
+		for _, profile := range global.ExecutionProfiles {
+			if profile.ID == global.DefaultProfile {
+				initial = profile
+			}
+		}
+	}
+	c = c.ApplyExecutionProfile(initial)
+	if err := c.ValidateApplicationPaths(); err != nil {
+		return c, err
+	}
+	return c, nil
+}
+
+func testStartService(ctx context.Context, configPath string, options StartServiceOptions) (ServiceStartResult, error) {
+	config, err := loadFixtureConfig(configPath)
+	if err != nil {
+		return ServiceStartResult{}, err
+	}
+	if options.ApplicationHome == "" {
+		options.ApplicationHome = fixtureHome()
+	}
+	if options.ApplicationBin == "" {
+		options.ApplicationBin = fixtureBinDir()
+	}
+	return StartService(ctx, config, configPath, options)
+}
+
+func testRunConfiguredService(ctx context.Context, config Config, mode, startupID, console string) error {
+	return RunConfiguredService(ctx, testConfigWithDirectory(config), mode, startupID, console, newTestService)
+}
