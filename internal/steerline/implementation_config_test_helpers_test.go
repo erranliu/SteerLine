@@ -117,7 +117,9 @@ func withTestImplementationProfiles(config Config, codex codexworker.ProfileConf
 	config.ImplementationDisplay = nil
 	config.selectedProfileID = profileID
 	profile := config.projectExecutionProfile()
-	config.ImplementationData = cloneImplementationData(profile.ImplementationData)
+	if len(profile.ImplementationData) > 0 {
+		config.ImplementationData = cloneImplementationData(profile.ImplementationData)
+	}
 	config.ImplementationDisplay = append([]string(nil), profile.ImplementationDisplay...)
 	config.fixedProfileDigest = profile.DigestFor(projectID)
 	return config

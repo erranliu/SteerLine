@@ -1,0 +1,51 @@
+{
+  "cleanup_complete": true,
+  "cleanup_errors": null,
+  "components": {
+    "provider": "github/erranliu/SteerlineTest",
+    "worker": "local-codex"
+  },
+  "context_error": "\u003cnil\u003e",
+  "finished_at": "2026-10-02T00:57:23.117407Z",
+  "id": "smoke.local-codex",
+  "passed": true,
+  "real_pr": {
+    "url": "https://github.com/erranliu/SteerlineTest/pull/32",
+    "repository": "erranliu/SteerlineTest",
+    "base_branch": "codex/e2e/322efcb7dd204e02a1e3652108d243ea/smoke.local-codex/base",
+    "head_repository": "erranliu/SteerlineTest",
+    "head_branch": "codex/1-1e58fbfeee71",
+    "head_revision": "71c8a9b73e5d24d3e0a7c303ed7d0959013a26bc",
+    "state": "merged",
+    "merged": true,
+    "merged_at": "2026-10-02T00:57:02Z",
+    "merge_commit": "174561322a752d3885f58ed421e9d21302ed8715"
+  },
+  "resources": [
+    {
+      "created_at": "2026-10-02T00:55:18.6357679Z",
+      "kind": "project",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2650381655\\smoke.local-codex\\live",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-02T00:55:19.6577382Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-live-l2-full-access-fixed-20261002-085403\\build\\controlled-helper.exe",
+      "pid": 31676
+    },
+    {
+      "created_at": "2026-10-02T00:55:25.7102658Z",
+      "kind": "github-base-branch",
+      "path": "codex/e2e/322efcb7dd204e02a1e3652108d243ea/smoke.local-codex/base",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-02T00:55:35.8146492Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-live-l2-full-access-fixed-20261002-085403\\build\\steerline.exe",
+      "pid": 32260
+    }
+  ],
+  "usage_verified": true
+}

@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -81,11 +82,28 @@ func (p *testConversationHistoryPort) ReadHistory(_ context.Context, request con
 }
 
 func TestCD65HistoryBudgetRotatesSources(t *testing.T) {
-	store, err := OpenSQLiteStore(t.TempDir() + "/history-budget.db")
+	databasePath := t.TempDir() + "/history-budget.db"
+	// Close the collector/store first; tolerate only a short Windows close
+	// handoff on this fixture-owned file before TempDir removes its parent.
+	t.Cleanup(func() {
+		deadline := time.Now().Add(2 * time.Second)
+		for {
+			err := os.Remove(databasePath)
+			if err == nil || os.IsNotExist(err) {
+				return
+			}
+			if time.Now().After(deadline) {
+				t.Errorf("fixture database cleanup: %v", err)
+				return
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	})
+	store, err := OpenSQLiteStore(databasePath)
 	require(t, err)
 	defer store.Close()
 	port := &testConversationHistoryPort{}
-	service := &Service{Config: Config{identity: "project"}, domainStore: store, conversationSources: port}
+	service := &Service{Config: Config{identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, conversationSources: port}
 	active := testHistorySource("active", false)
 	historical := make([]contracts.ConversationHistorySource, 5)
 	for i := range historical {
@@ -142,7 +160,7 @@ func TestCD65HistoryCursorCommitsWithItsConversationBatch(t *testing.T) {
 	require(t, err)
 	defer store.Close()
 	port := &testConversationHistoryPort{}
-	service := &Service{Config: Config{identity: "project"}, domainStore: store, conversationSources: port}
+	service := &Service{Config: Config{identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, conversationSources: port}
 	source := testHistorySource("commit-source", false)
 	_, err = store.db.Exec(`CREATE TRIGGER reject_history_batch BEFORE INSERT ON conversation_events BEGIN SELECT RAISE(FAIL, 'history batch commit failed'); END`)
 	require(t, err)
@@ -208,5 +226,12 @@ func testCD65DiscoveryRejectsForeignOwner(t *testing.T) {
 	service.conversationSources = foreignConversationDiscovery{event: event}
 	if _, err := service.discoverConversationHistory(context.Background()); err == nil {
 		t.Fatal("discovery accepted an unowned attempt")
+	}
+}
+
+func TestConversationHistoryMissingInjectedHostReturnsError(t *testing.T) {
+	service := &Service{Config: Config{identity: "project"}, conversationSources: &testConversationHistoryPort{}}
+	if _, err := service.collectConversationHistoryPage(context.Background(), testHistorySource("missing-host", false)); err == nil || !strings.Contains(err.Error(), "managed process host") {
+		t.Fatalf("missing host did not fail before reading or writing history: %v", err)
 	}
 }

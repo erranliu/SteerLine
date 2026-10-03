@@ -186,7 +186,9 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	projectBytes, globalBytes := []byte(`{"execution_requirements":{"tools":[{"id":"git"}]}}`), []byte(`{"execution_profiles":[]}`)
 	require(t, os.WriteFile(c.policySource, projectBytes, 0600))
 	require(t, os.WriteFile(c.executionConfigPath, globalBytes, 0600))
+	claimProfileSettings := codexProfileSettings(c)
 	c.configDigest = loadedConfigDigest(projectBytes, globalBytes)
+	setTestCodexProfile(t, &c, claimProfileSettings)
 	entry, err := registrationFor(c)
 	require(t, err)
 	fake := entry
@@ -206,6 +208,7 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 		t.Fatal("stale configuration consumed the task")
 	}
 	require(t, os.WriteFile(c.policySource, projectBytes, 0600))
+	c.ExecutionDirectory = testDirectoryWithReplacement(t, c.ExecutionDirectory, entry)
 	_, err = commands.ClaimNativeTask(ctx, c, options)
 	require(t, err)
 	s, err := newTestService(c)
@@ -315,7 +318,10 @@ func TestEmptyExecutionRequirementsKeepMandatoryChecks(t *testing.T) {
 	c.PublicationPolicy.Publisher = executionapi.PublisherWorker
 	orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}
 	remoteSettings := &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1}
-	setTestImplementationProfiles(t, &c, codexProfileSettings(c), orca, remoteSettings)
+	codex = codexProfileSettings(c)
+	codex.Model, codex.ReasoningEffort = "gpt-6-luna", "medium"
+	codex.Profile, codex.WindowsSandbox = "", ""
+	setTestImplementationProfiles(t, &c, codex, orca, remoteSettings)
 	if err := requireWorkerFlowCapabilities(context.Background(), c); err == nil || !strings.Contains(err.Error(), "enforcement evidence") {
 		t.Fatalf("empty requirements bypassed remote policy: %v", err)
 	}

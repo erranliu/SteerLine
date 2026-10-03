@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 )
@@ -25,9 +27,14 @@ type environmentFixture struct {
 }
 
 func newEnvironmentFixture(t *testing.T, state fakeNativeOrcaState, model string) *environmentFixture {
+	return newEnvironmentFixtureWithPolicy(t, state, model, false)
+}
+
+func newEnvironmentFixtureWithPolicy(t *testing.T, state fakeNativeOrcaState, model string, fullAccess bool) *environmentFixture {
 	t.Helper()
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
+	c.CommandTimeout = "30s"
 	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
 		t.Fatalf("fixture base: %v: %s", err, out)
 	}
@@ -45,7 +52,12 @@ func newEnvironmentFixture(t *testing.T, state fakeNativeOrcaState, model string
 	if model != "" {
 		effort = "high"
 	}
-	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: exe, WindowsSandbox: "unelevated", Model: model, ReasoningEffort: effort}, &orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca-native", stateDir}, Shell: "powershell.exe", WaitTimeout: "2m"})
+	windowsSandbox := "unelevated"
+	if fullAccess {
+		c.ExecutionPolicy.Filesystem.WriteScope, c.ExecutionPolicy.Filesystem.GitMetadataWrite = "host", false
+		windowsSandbox = ""
+	}
+	setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: exe, WindowsSandbox: windowsSandbox, Model: model, ReasoningEffort: effort}, &orcaworker.ProfileConfig{Executable: exe, Args: []string{"--fake", "orca-native", stateDir}, Shell: "powershell.exe", WaitTimeout: "2m"})
 	commands := CommandService{Store: store, Project: c.Identity()}
 	input := taskBatchFixture(t, c, commit, batchTasks(8154), nil)
 	validation, err := commands.ValidateTaskBatch(ctx, c, input)
@@ -89,7 +101,10 @@ func driveTestLifecycleWorker(service *Service, run *Run) error {
 	if err := service.observeWorkerEnvironment(context.Background(), run); err != nil {
 		return err
 	}
-	if service.workers[run.RunID] == nil {
+	initialTurn := nativeOrcaCurrentTurn(service.executionRecord(run))
+	// A resource-only observer would occupy the actor before its first Task
+	// and Dispatch exist. Resume observation only for an accepted turn.
+	if service.workers[run.RunID] == nil && initialTurn != nil && initialTurn.DispatchID != "" {
 		lifecycle, _, err := service.lifecycleForRun(run)
 		if err != nil {
 			return err
@@ -98,15 +113,34 @@ func driveTestLifecycleWorker(service *Service, run *Run) error {
 			return err
 		}
 	}
-	for i := 0; i < 20; i++ {
+	deadline := time.Now().Add(45 * time.Second)
+	observedPolls := 0
+	for time.Now().Before(deadline) {
 		service.drainWorkerMessages()
 		_, execution := service.workflowRecords(run)
+		pendingTurn := nativeOrcaCurrentTurn(execution)
+		if execution.Environment != nil && !execution.Environment.Ready && execution.Environment.Blocker == nil && (pendingTurn == nil || pendingTurn.DispatchID == "") {
+			if err := service.advanceWorkerPreparation(context.Background(), run); err != nil {
+				return err
+			}
+		} else if err := service.resumeConfiguredWork(context.Background()); err != nil {
+			return err
+		}
+		_, execution = service.workflowRecords(run)
 		if turn := nativeOrcaCurrentTurn(execution); turn != nil && turn.Purpose == "readiness" && !turn.Settled {
 			if err := service.readNativeOrcaOutput(context.Background(), run, execution, turn); err != nil && execution.Environment.Blocker == nil {
 				return err
 			}
 		}
 		turn := nativeOrcaCurrentTurn(execution)
+		// Async resource steps must accept the original Dispatch before the
+		// observation budget starts; slow parallel fixtures are not absence.
+		if turn != nil && turn.DispatchID != "" {
+			observedPolls++
+		}
+		if observedPolls >= 20 {
+			return nil
+		}
 		if execution.Environment != nil && (execution.Environment.Ready || execution.Environment.Blocker != nil && (turn == nil || turn.Purpose != "readiness" || execution.Environment.Preparation.Verified || turn.Settled && turn.Outcome == "failed")) {
 			return nil
 		}
@@ -115,6 +149,10 @@ func driveTestLifecycleWorker(service *Service, run *Run) error {
 		}
 	}
 	service.drainWorkerMessages()
+	if nativeOrcaCurrentTurn(service.executionRecord(run)) == nil {
+		e := service.executionRecord(run)
+		return fmt.Errorf("fixture pending: worker=%t current=%q pending=%q ready=%t blocker=%v error=%q", service.workers[run.RunID] != nil, e.CurrentTurnID, e.PendingCommandID, e.Environment.Ready, e.Environment.Blocker != nil, deref(e.Error))
+	}
 	return nil
 }
 func (f *environmentFixture) state(t *testing.T) fakeNativeOrcaState {
@@ -166,7 +204,7 @@ func TestWorkerEnvironmentER1ProbeAndSettlementGate(t *testing.T) {
 			if mode == "success" {
 				stateData := testOrcaState(t, e)
 				if state.Dispatches != 2 || !e.Environment.Ready || e.TurnNumber != 0 || e.CurrentTurnID != "" || len(stateData.Turns) != 2 || stateData.Turns[0].Purpose != "readiness" {
-					t.Fatalf("preparation leaked business state or failed: wf=%+v execution=%+v state=%+v", wf, e, state)
+					t.Fatalf("preparation incomplete: phase=%s dispatches=%d number=%d current=%q ready=%t verified=%t evidence=%+v error=%q", wf.Phase, state.Dispatches, e.TurnNumber, e.CurrentTurnID, e.Environment.Ready, e.Environment.Preparation.Verified, e.Environment.Preparation.Evidence, deref(e.Error))
 				}
 				f.poll(t)
 				if e.TurnNumber != 1 {
@@ -197,13 +235,19 @@ func TestWorkerEnvironmentWaitsForOriginalAgentDetection(t *testing.T) {
 	f.prepare(t)
 	_, execution := f.service.workflowRecords(f.run)
 	env := execution.Environment
-	if env.Blocker != nil || execution.Process != nil || env.OriginalTerminal == nil || env.Ready {
+	if env.Blocker != nil || execution.Process == nil || env.OriginalTerminal == nil || *execution.Process != *env.OriginalTerminal || env.Ready {
 		t.Fatalf("unidentified startup became a blocker or a ready agent: %+v", env)
 	}
 	deadline, nonce := env.Preparation.Deadline, env.Preparation.Nonce
 	terminal := *env.OriginalTerminal
-	key := "orca-native-agent-terminal:" + execution.ExecutionID
-	op := f.service.operationByKey(key)
+	var op *OperationRecord
+	for i := range f.service.domain.Operations {
+		candidate := &f.service.domain.Operations[i]
+		var input executionapi.ResourceIntent
+		if candidate.Kind == string(executionapi.LifecycleCreateResource) && json.Unmarshal(candidate.Request, &input) == nil && input.Purpose == "agent-terminal" {
+			op = candidate
+		}
+	}
 	if op == nil || op.Status != "accepted" || f.state(t).Dispatches != 0 {
 		t.Fatal("startup receipt lost or input sent before agent identification")
 	}
@@ -214,7 +258,7 @@ func TestWorkerEnvironmentWaitsForOriginalAgentDetection(t *testing.T) {
 	}
 	f.update(t, func(state *fakeNativeOrcaState) { state.HoldFixedAgentIdentity = false })
 	require(t, f.service.advanceWorkerPreparation(context.Background(), f.run))
-	if execution.Process == nil || execution.Process.Terminal != terminal.Terminal || execution.Process.Incarnation != terminal.Incarnation || f.service.operationByKey(key).Status != "confirmed" || f.state(t).Dispatches != 1 {
+	if execution.Process == nil || execution.Process.Terminal != terminal.Terminal || execution.Process.Incarnation != terminal.Incarnation || !testOrcaState(t, execution).AgentBound || f.state(t).Dispatches != 1 {
 		t.Fatal("agent identification did not resume the same launch exactly once")
 	}
 }
@@ -274,6 +318,11 @@ func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 	}
 	f.update(t, func(s *fakeNativeOrcaState) { s.HostWait = nil; s.InboxUnavailable = false })
 	f.recheck(t)
+	deadline := time.Now().Add(45 * time.Second)
+	for f.state(t).Sends == 0 && time.Now().Before(deadline) {
+		f.poll(t)
+		time.Sleep(10 * time.Millisecond)
+	}
 	wf, e = f.service.workflowRecords(f.run)
 	if state := f.state(t); state.Sends != 1 || state.SendBody != note || len(e.Environment.DeferredFeedback) != 0 || f.run.Decision == nil || orcaQuestionID(f.run.Decision) != "original-question" {
 		t.Fatalf("deferred feedback lost original text or question: sends=%d body=%q queue=%+v decision=%+v event=%q turn=%+v", state.Sends, state.SendBody, e.Environment.DeferredFeedback, f.run.Decision, deref(e.LastEvent), nativeOrcaCurrentTurn(e))
@@ -294,7 +343,11 @@ func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 func TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch(t *testing.T) {
 	f := newEnvironmentFixture(t, fakeNativeOrcaState{ReadinessMode: "hold"}, "")
 	f.prepare(t)
+	f.poll(t)
 	_, e := f.service.workflowRecords(f.run)
+	if e.Process == nil || nativeOrcaCurrentTurn(e) == nil {
+		t.Fatalf("readiness fixture has no original dispatch: execution=%+v error=%v environment=%+v", e, e.Error, e.Environment)
+	}
 	original := *e.Process
 	turn := nativeOrcaCurrentTurn(e)
 	originalDispatch := turn.DispatchID
@@ -316,6 +369,7 @@ func TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch(t *testing.T) {
 	}
 	f.update(t, func(s *fakeNativeOrcaState) { s.AgentIncarnation = "replacement" })
 	f.poll(t)
+	_, e = f.service.workflowRecords(f.run)
 	if e.Environment.Blocker == nil || e.Environment.Blocker.Fact.Reason != "identity_mismatch" {
 		t.Fatal("replacement identity was accepted")
 	}
@@ -414,6 +468,7 @@ func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 func TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll(t *testing.T) {
 	f := newEnvironmentFixture(t, fakeNativeOrcaState{ReadinessMode: "hold"}, "")
 	f.prepare(t)
+	f.poll(t)
 	f.update(t, func(state *fakeNativeOrcaState) {
 		state.HostWait = json.RawMessage(`{"kind":"approval","source":"structured"}`)
 	})
@@ -422,6 +477,7 @@ func TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll(t *testing.T) {
 	oldBlocker := e.Environment.Blocker.ID
 	f.update(t, func(state *fakeNativeOrcaState) { state.HostWait = nil; state.ReadinessMode = "tool_failure" })
 	f.recheck(t)
+	f.poll(t)
 	e = f.service.executionRecord(f.run)
 	if e.Environment.Blocker == nil || e.Environment.Blocker.ID == oldBlocker || e.Environment.Blocker.Fact.Reason != "tool_initialization_failed" || f.run.Decision == nil || f.run.Decision.Status != "pending" || f.state(t).Dispatches != 1 {
 		t.Fatalf("old recheck cleared newer fault: %+v / %+v", e.Environment, f.run.Decision)
@@ -442,13 +498,18 @@ func testManagedLaunchRecovery(t *testing.T, renamed bool) {
 	f := newEnvironmentFixture(t, fakeNativeOrcaState{LoseFixedTerminalOnce: !renamed, RenameFixedAgentAfterCreate: renamed}, "gpt-6-luna")
 	f.prepare(t)
 	if !renamed && f.run.Process != nil {
-		t.Fatal("unknown terminal receipt guessed")
+		e := f.service.executionRecord(f.run)
+		if e.Environment.OriginalTerminal == nil || *f.run.Process != *e.Environment.OriginalTerminal || !testOrcaState(t, e).AgentBound {
+			t.Fatal("unknown terminal receipt guessed")
+		}
 	}
 	if renamed {
+		stopTestLifecycleMessages(f.service, f.workerCancel)
 		require(t, f.service.Close())
 		s, err := newTestService(f.config)
 		require(t, err)
 		f.service, f.run = s, s.find("8154")
+		f.workerCancel = enableTestLifecycleMessages(s)
 		require(t, s.resumeConfiguredWork(context.Background()))
 	} else {
 		f.recheck(t)

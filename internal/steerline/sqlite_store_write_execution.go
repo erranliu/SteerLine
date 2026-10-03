@@ -83,10 +83,11 @@ func nativeWorkflowPin(v WorkflowRunRecord) ([]byte, error) {
 		WorkflowVersion   string
 		ConfigDigest      string
 		ProfileDigest     string
+		Profile           *FixedExecutionProfile
 		ImplementationKey string
 		Repository        string
 		Branch            string
-	}{v.WorkflowVersion, v.ConfigDigest, profileDigest, implementationKey, v.Repository, v.Branch})
+	}{v.WorkflowVersion, v.ConfigDigest, profileDigest, v.ExecutionProfile, implementationKey, v.Repository, v.Branch})
 }
 func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
 	if v.ProjectIdentity == "" || v.ExecutionID == "" || v.WorkflowRunID == "" || v.Status == "" {

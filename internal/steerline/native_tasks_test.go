@@ -740,7 +740,7 @@ func TestNativeStoreRejectsRetiredSQLiteRunProjectionBeforeAuthorityOpen(t *test
 	if err = store.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err = openBoundNativeStore(ctx, c, path); err == nil || !strings.Contains(err.Error(), "unsupported schema") {
+	if _, err = openBoundNativeStore(ctx, c, path); !isNativeErrorCode(err, "unsupported_schema") {
 		t.Fatalf("SQLite projection with a retired result binding was opened: %v", err)
 	}
 	reader, err := OpenSQLiteReader(path)

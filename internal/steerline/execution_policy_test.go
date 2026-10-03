@@ -12,10 +12,45 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func workspacePolicyFixture() executionapi.ExecutionPolicy {
 	return executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
+}
+
+func TestFullAccessProfileFreezeSurvivesClaimValidation(t *testing.T) {
+	for _, host := range []string{"local", "orca"} {
+		policy := workspacePolicyFixture()
+		policy.Filesystem.WriteScope, policy.Filesystem.GitMetadataWrite = "host", false
+		c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: policy, Repository: "repository", Branch: "main", Host: host, Agent: "codex"}
+		if host == "orca" {
+			c.PublicationPolicy.Publisher = "worker"
+		}
+		if host == "orca" {
+			setTestImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
+		} else {
+			setTestCodexProfile(t, &c, codexworker.ProfileConfig{Executable: "codex"})
+		}
+		original := c.projectExecutionProfile().Freeze(configurationProjectIdentity(c))
+		if c.projectExecutionProfile().DigestFor(configurationProjectIdentity(c)) != original.Digest {
+			t.Fatal("selection digest differs from its unchanged frozen envelope")
+		}
+		if !verifyFixedExecutionProfile(original, c.ExecutionDirectory) {
+			t.Fatalf("%s full-access snapshot rejected at claim: %+v", host, original)
+		}
+		restored := c.ApplyFixedExecutionProfile(original)
+		if restored.ExecutionDirectory != c.ExecutionDirectory {
+			t.Fatal("frozen profile lost its injected execution directory")
+		}
+		if restored.ExecutionPolicy.Filesystem.WriteScope != "host" || codexProfileSettings(restored).WindowsSandbox != "" {
+			t.Fatal("frozen full-access authority was not restored")
+		}
+		original.ImplementationData[0].Payload[0] = '['
+		if verifyFixedExecutionProfile(original, c.ExecutionDirectory) {
+			t.Fatal("full-access snapshot accepted a changed Windows sandbox mode")
+		}
+	}
 }
 
 func TestProjectPolicyRejectsMissingOrOldConfiguration(t *testing.T) {
@@ -34,6 +69,7 @@ func TestProjectPolicyRejectsMissingOrOldConfiguration(t *testing.T) {
 		t.Fatalf("missing authority accepted: %v", err)
 	}
 	body["execution_policy"] = workspacePolicyFixture()
+	body["pr"] = hostPublicationProviderFixture()
 	for _, field := range []string{"sandbox", "windows_sandbox"} {
 		body[field] = "workspace-write"
 		write()
@@ -149,7 +185,7 @@ func TestProjectPolicyRejectsGlobalConflictsBeforeRepositoryProbe(t *testing.T) 
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	writeGlobalExecutionFixture(t, []ExecutionProfile{testExecutionProfile(t, "local", "Local", "local", "codex", codexworker.ProfileConfig{Executable: "codex", Args: []string{"--config", "sandbox_mode=danger-full-access"}}, nil)}, "local")
 	path := filepath.Join(t.TempDir(), "project.json")
-	raw, err := json.Marshal(map[string]any{"execution_policy": workspacePolicyFixture(), "repository": t.TempDir(), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "git": map[string]string{"executable": "must-never-be-called"}})
+	raw, err := json.Marshal(map[string]any{"publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": t.TempDir(), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "git": map[string]string{"executable": "must-never-be-called"}})
 	require(t, err)
 	require(t, os.WriteFile(path, raw, 0600))
 	_, err = loadFixtureConfig(path)
@@ -160,7 +196,7 @@ func TestProjectPolicyRejectsGlobalConflictsBeforeRepositoryProbe(t *testing.T) 
 
 func TestProjectPolicyMissingBoundResourcesAreNotReconstructed(t *testing.T) {
 	c := Config{ExecutionPolicy: workspacePolicyFixture()}
-	e := ExecutionRecord{Generation: "original-generation"}
+	e := ExecutionRecord{Generation: "original-generation", Process: &executionapi.ProcessIdentity{Kind: "local"}}
 	if err := bindPolicyResources(context.Background(), c, &e, "workspace", nil); err == nil || !strings.Contains(err.Error(), "snapshot is missing") {
 		t.Fatalf("missing original resources were reconstructed: %v", err)
 	}

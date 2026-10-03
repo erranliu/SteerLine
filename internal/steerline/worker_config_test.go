@@ -18,7 +18,7 @@ func TestWorkerFlowConfigRejectsOldProjectGates(t *testing.T) {
 	localGlobalExecutionFixture(t)
 	base := map[string]any{
 		"task_authority": "native", "repository": c.Repository, "branch": "main", "run_dir": c.RunDir,
-		"workflow_protocol": WorkerFlowVersion,
+		"workflow_protocol": WorkerFlowVersion, "execution_policy": workspacePolicyFixture(), "publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(),
 	}
 	write := func(value map[string]any) (Config, error) {
 		t.Helper()
@@ -57,7 +57,9 @@ func TestWorkerFlowConfigRejectsOldProjectGates(t *testing.T) {
 func TestUnsupportedOrcaWorkerFlowConfigurationCannotClaim(t *testing.T) {
 	for _, host := range []string{"orca", "orca_supervised"} {
 		t.Run(host, func(t *testing.T) {
-			c := Config{WorkflowProtocol: WorkerFlowVersion, Host: host, Agent: "codex"}
+			// The target is rejected by registration before any platform probe.
+			c := Config{WorkflowProtocol: WorkerFlowVersion, Host: host, Agent: "unregistered-agent", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
+			c = testConfigWithDirectory(c)
 			err := requireWorkerFlowCapabilities(context.Background(), c)
 			var backend *executionapi.BackendError
 			if !errors.As(err, &backend) || backend.Code != executionapi.BackendUnsupported {

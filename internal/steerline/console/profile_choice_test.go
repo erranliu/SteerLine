@@ -27,6 +27,10 @@ func TestReadyStartChoosesConfiguredProfileAndBindsRequest(t *testing.T) {
 	ref.Config.ExecutionPolicy = executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace"}, Network: "deny", Escalation: "deny"}
 	other := consoleLocalProfile("local-strong", "本地 Codex 高强度", "chosen-model", "xhigh")
 	ref.Config.ExecutionProfiles = []steerline.ExecutionProfile{other}
+	_, _, err := ref.Config.ResolveExecutionProfile(other.ID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
 	control := &testControlClient{}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, now)}, control, now)
 	m.profile = &viewProfile{dir: t.TempDir()}

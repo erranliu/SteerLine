@@ -69,6 +69,10 @@
 | 71 | 产品客户端适配层与CLI接入 | #68 | [Spec](core-decoupling-10-client.spec.md) | [Plan](core-decoupling-10-client.plan.md) |
 | 72 | TUI与中心实现解耦 | #71 | [Spec](core-decoupling-11-tui.spec.md) | [Plan](core-decoupling-11-tui.plan.md) |
 
+## 分级测试基础
+
+[分级测试与共享 E2E 环境 Spec](tiered-e2e-testing.spec.md) / [Plan](tiered-e2e-testing.plan.md)：已实现并通过[最小验证](../validation/tiered-e2e-testing/README.md)，待 PR 评审，未分配 Task ID。首期沿用 L1，新增独立 L2 交付 smoke、L3 等待合并后服务重启场景，共用 controlled 测试项目/任务环境管理；Windows 串行最小实现，不新增真实平台或全量测试门槛。
+
 ## 共同约束
 
 - [执行架构](execution-architecture.spec.md)与[原生任务](native-task-constraints.md)：身份、单写者、当前格式恢复和真实交付；被 #36 替代的旧执行语义不继续要求。
@@ -83,3 +87,5 @@
 - [双执行后端](pr-04a-execution-backends.spec.md)、[会话事件](pr-04b-conversation-events.spec.md)、[服务生命周期](pr-03-service-lifecycle.spec.md)。
 - [旧中心模型](02-execution-model-and-adapter.md)、[旧远端闭环](03-remote-execution-and-viewer.md)、[旧人工决策](pr-05-intervention.spec.md)、[旧控制台](pr-04-console.spec.md)。
 - [Hosting](hosting-spec.md)与[边界说明](../hosting.md)。
+
+[L2/L3 真实执行 Spec](live-tiered-e2e.spec.md) / [Plan](live-tiered-e2e.plan.md)：L2 受控门槛后执行本地 Codex 与 Orca+Codex，使用真实 SteerlineTest GitHub PR；L3 delivery/recovery 按环境和场景独立选择，固定 gpt-6-luna/medium，校验原生 token usage。

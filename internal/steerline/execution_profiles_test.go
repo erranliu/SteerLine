@@ -40,7 +40,7 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 		}
 	}
 	write()
-	loaded, err := loadFixtureConfig(path)
+	loaded, err := loadQueryFixtureConfig(path)
 	if err != nil || len(loaded.AvailableExecutionProfiles()) != 3 || loaded.DefaultProfileID() != "local" {
 		t.Fatalf("configured profiles were not loaded: %+v / %v", loaded.ExecutionProfiles, err)
 	}
@@ -237,8 +237,8 @@ func TestStartPayloadRequiresCompleteExecutionProfileSelection(t *testing.T) {
 }
 
 func TestUnsupportedLocalAgentProfileIsMarkedUnavailable(t *testing.T) {
-	profile := ExecutionProfile{ID: "local-pi", Name: "Local Pi", Host: "local", Agent: "pi"}
-	if reason := profile.StaticUnavailableReason(); !strings.Contains(reason, "codex") {
+	profile := ExecutionProfile{directory: testExecutionDirectory(t), ID: "local-pi", Name: "Local Pi", Host: "local", Agent: "pi"}
+	if reason := profile.StaticUnavailableReason(); !strings.Contains(reason, "unsupported:") || !strings.Contains(reason, "host=local agent=pi") {
 		t.Fatalf("unsupported native agent was shown as selectable: %q", reason)
 	}
 }

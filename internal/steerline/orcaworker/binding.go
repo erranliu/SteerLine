@@ -69,11 +69,18 @@ func VerifyAgentTerminal(ctx context.Context, call MetaCall, p executionapi.Proc
 	if err := ValidateWorkspaceTerminal(term, path, branch); err != nil {
 		return err
 	}
-	if term.RuntimeID != p.RuntimeID || term.IncarnationID != p.Incarnation || term.WorktreeID != p.WorktreeID || term.AgentIdentity != agent {
+	if term.Handle != p.Terminal || term.RuntimeID != p.RuntimeID || term.IncarnationID != p.Incarnation || term.WorktreeID != p.WorktreeID {
+		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original Orca agent terminal or agent has changed"}
+	}
+	if term.AgentIdentity == "" && !term.Exited() && term.Connected && !term.Orphaned {
+		return ErrAgentStarting
+	}
+	if term.AgentIdentity != agent {
 		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original Orca agent terminal or agent has changed"}
 	}
 	return nil
 }
+
 func VerifyCoordinatorTerminal(ctx context.Context, call MetaCall, p executionapi.ProcessIdentity, repository string) error {
 	term, err := ShowTerminal(ctx, call, p.Terminal)
 	if err != nil {

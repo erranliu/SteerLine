@@ -203,6 +203,13 @@ func mockAppServerConnection(conn net.Conn, state *mockAppServerState) {
 			}
 			_ = json.Unmarshal(message.Params, &params)
 			state.mu.Lock()
+			// Match native Codex: an empty thread has no persisted rollout.
+			// This catches prepare/disconnect/resume before the first turn.
+			if message.Method == "thread/resume" && len(state.turns) == 0 {
+				state.mu.Unlock()
+				response["error"] = map[string]any{"code": -32600, "message": "no rollout found for thread id " + workerFlowMockSession}
+				break
+			}
 			if state.cwd == "" {
 				state.cwd = params.Cwd
 			}

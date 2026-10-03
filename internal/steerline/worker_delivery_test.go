@@ -38,6 +38,8 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 	created := time.Now().UTC()
 	url := "https://git.example/o/r/pulls/8"
 	wf := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: created, UpdatedAt: created}
+	fixed := c.projectExecutionProfile().Freeze(configurationProjectIdentity(c))
+	wf.ExecutionProfile, wf.ConfigDigest = &fixed, fixed.AcceptedConfigVersion
 	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, CurrentAttemptID: "attempt-8", ConfigurationDigest: wf.ExecutionProfile.Digest, WorkflowRunID: wf.WorkflowRunID, Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Status: "idle", Workspace: WorkspaceEvidence{Branch: "codex/task-8", Dirty: true}, CreatedAt: created, UpdatedAt: created}
 	setTestCodexBinding(t, &execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	claimed := task

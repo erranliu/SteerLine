@@ -41,12 +41,15 @@ func verifyPolicyResources(c Config, p *contracts.PolicyResources, profileDigest
 	if err := entry.VerifyPolicyResource(p.ImplementationData, identity); err != nil {
 		return fmt.Errorf("execution policy resource codec rejected its binding: %w", err)
 	}
+	if c.ExecutionPolicy.Filesystem.WriteScope == "host" && len(p.WriteRoots) != 0 {
+		return errors.New("full access policy must not claim bounded writable roots")
+	}
 	return nil
 }
 
 func bindPolicyResources(ctx context.Context, c Config, e *ExecutionRecord, workspace string, linkedArgs []string) error {
 	manualRestart := awaitingRecoveryResources(e)
-	if e.PolicyResources == nil && e.Process != nil && !manualRestart {
+	if e.PolicyResources == nil && (e.Process != nil || e.SessionID != "") && !manualRestart {
 		return errors.New("original execution policy resource snapshot is missing; preserve the external session")
 	}
 	if err := validateWorkflowConfig(&c, nil); err != nil {

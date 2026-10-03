@@ -1079,6 +1079,9 @@ func acquireLaunchLock(ctx context.Context, path string) (*RepoLock, error) {
 type ServiceFactory func(Config) (*Service, error)
 
 func RunConfiguredService(ctx context.Context, c Config, mode, startupID, console string, construct ServiceFactory) (retErr error) {
+	if err := requireNativeTaskAuthority(c); err != nil {
+		return err
+	}
 	if construct == nil {
 		return errors.New("application service constructor is required")
 	}

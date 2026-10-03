@@ -1,0 +1,34 @@
+{
+  "cleanup_complete": true,
+  "cleanup_errors": null,
+  "components": {
+    "provider": "controlled",
+    "worker": "controlled"
+  },
+  "context_error": "<nil>",
+  "finished_at": "2026-10-02T14:57:41.6441252Z",
+  "id": "smoke.delivery",
+  "passed": true,
+  "real_pr": null,
+  "resources": [
+    {
+      "created_at": "2026-10-02T14:56:02.5505719Z",
+      "kind": "project",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-3399100165\\smoke.delivery\\delivery",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-02T14:56:03.9326199Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l2-final189-20261002-225547\\build\\controlled-helper.exe",
+      "pid": 9688
+    },
+    {
+      "created_at": "2026-10-02T14:56:28.5404597Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-l2-final189-20261002-225547\\build\\steerline.exe",
+      "pid": 33404
+    }
+  ],
+  "usage_verified": false
+}

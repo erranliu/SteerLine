@@ -77,7 +77,7 @@ func TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead(t *test
 	for _, args := range [][]string{
 		{"init", "--quiet", "-b", "main", repo},
 		{"init", "--quiet", "--bare", remote},
-		{"-C", repo, "remote", "add", "origin", remote},
+		{"-C", repo, "remote", "add", "origin", "https://github.com/owner/repo.git"},
 	} {
 		if output, err := exec.Command("git", args...).CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v: %s", args, err, output)

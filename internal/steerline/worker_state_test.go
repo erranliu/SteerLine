@@ -5,7 +5,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
@@ -98,7 +97,7 @@ func TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults(t *testing.T) 
 	if err != nil || prURL != wf.PRURL {
 		t.Fatalf("workflow requires an obsolete step result: prURL=%q error=%v", prURL, err)
 	}
-	removeImplementationEnvelope(&exec, codexworker.ExecutionBindingCodecKey)
+	exec.SessionID, exec.SessionGeneration = "", ""
 	if _, err := validateNativeDeliveryGates(task, contract, wf, exec); err == nil {
 		t.Fatal("accepted delivery without a bound worker session")
 	}

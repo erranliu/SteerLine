@@ -160,7 +160,7 @@ func TestTaskPreviewKeepsOneIdentityAndShowsFixedExecutionPlan(t *testing.T) {
 		t.Fatal("running task was not selected")
 	}
 	preview := strings.Join(renderDetailPreview(m, m.projects[0], row, 120, 100), "\n")
-	for _, want := range []string{"执行方案：Orca 本机终端 · codex · gpt-6-luna · xhigh", "任务关系", "后继任务：104"} {
+	for _, want := range []string{"执行方案：orca · codex · Model：gpt-6-luna · Reasoning effort：xhigh", "任务关系", "后继任务：104"} {
 		if !strings.Contains(preview, want) {
 			t.Fatalf("task preview lost %q: %s", want, preview)
 		}

@@ -1,0 +1,41 @@
+[
+  {
+    "sample": "open",
+    "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-3216770291\\recovery.local-codex\\live\\repo\\.git",
+    "database_id": "bbb3744c5316a05381aee186a2a2b5f7",
+    "execution_id": "95b2dc0c1ab1cae8a9b4eed88e2ff907",
+    "workflow_run_id": "a36f061a491802afdbda0928c4d2303a",
+    "session_id": "01a0fa4e-03c2-7301-b9a1-fec095cd6fe1",
+    "turn_id": "01a0fa4e-1266-7c52-a73a-daceb14035d2",
+    "turn_number": 1,
+    "worktree": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-3216770291\\recovery.local-codex\\live\\home\\worktrees\\a36f061a491802afdbda0928c4d2303a",
+    "attempt_count": 1,
+    "policy_contract": "codex-policy-v1:0.159.2:host-write:network-allow:never"
+  },
+  {
+    "sample": "after-restart",
+    "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-3216770291\\recovery.local-codex\\live\\repo\\.git",
+    "database_id": "bbb3744c5316a05381aee186a2a2b5f7",
+    "execution_id": "95b2dc0c1ab1cae8a9b4eed88e2ff907",
+    "workflow_run_id": "a36f061a491802afdbda0928c4d2303a",
+    "session_id": "01a0fa4e-03c2-7301-b9a1-fec095cd6fe1",
+    "turn_id": "01a0fa4e-1266-7c52-a73a-daceb14035d2",
+    "turn_number": 1,
+    "worktree": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-3216770291\\recovery.local-codex\\live\\home\\worktrees\\a36f061a491802afdbda0928c4d2303a",
+    "attempt_count": 1,
+    "policy_contract": "codex-policy-v1:0.159.2:host-write:network-allow:never"
+  },
+  {
+    "sample": "completed",
+    "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-3216770291\\recovery.local-codex\\live\\repo\\.git",
+    "database_id": "bbb3744c5316a05381aee186a2a2b5f7",
+    "execution_id": "95b2dc0c1ab1cae8a9b4eed88e2ff907",
+    "workflow_run_id": "a36f061a491802afdbda0928c4d2303a",
+    "session_id": "01a0fa4e-03c2-7301-b9a1-fec095cd6fe1",
+    "turn_id": "01a0fa4e-1266-7c52-a73a-daceb14035d2",
+    "turn_number": 1,
+    "worktree": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-3216770291\\recovery.local-codex\\live\\home\\worktrees\\a36f061a491802afdbda0928c4d2303a",
+    "attempt_count": 1,
+    "policy_contract": "codex-policy-v1:0.159.2:host-write:network-allow:never"
+  }
+]

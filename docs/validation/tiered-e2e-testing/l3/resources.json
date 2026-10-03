@@ -1,0 +1,26 @@
+[
+  {
+    "created_at": "2026-10-01T03:02:29.762963Z",
+    "kind": "project",
+    "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-436179475\\recovery.waiting-merge-restart\\recovery",
+    "pid": 0
+  },
+  {
+    "created_at": "2026-10-01T03:02:30.62668Z",
+    "kind": "process",
+    "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\controlled-helper.exe",
+    "pid": 7828
+  },
+  {
+    "created_at": "2026-10-01T03:02:46.8377031Z",
+    "kind": "process",
+    "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\steerline.exe",
+    "pid": 30580
+  },
+  {
+    "created_at": "2026-10-01T03:03:27.674552Z",
+    "kind": "process",
+    "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-test-feedback\\20261001T030225.133702400Z\\build\\steerline.exe",
+    "pid": 39508
+  }
+]
