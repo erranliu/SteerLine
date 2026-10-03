@@ -72,12 +72,10 @@ flowchart LR
 
 ## 主包与执行实现解耦
 
-目标：`CORE-IMPLEMENTATION-DECOUPLING`。详情见[目标规划](core-implementation-decoupling.md)，执行要求见[共同约束](../spec/core-decoupling-constraints.md)。既有 #61 的纯需求/注册基础可直接消费；不等待 remote 权限证据补齐，也不解除其现行拒绝。
+目标：`CORE-IMPLEMENTATION-DECOUPLING`。详情见 [目标规划](core-implementation-decoupling.md)，执行要求见 [后续维护约束](../spec/core-maintenance-constraints.md)。既有主包生产/测试隔离、唯一应用构造和 [#68 清理基线](../validation/core-decoupling-07-cleanup/README.md)作为后继前置，不再列为实施任务；[#67 守卫及支持限制](../validation/core-decoupling-06-boundary/README.md)继续适用，remote 权限缺证拒绝不变。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 67 | 主包隔离守卫与测试归位 | 主包测试清零、结构守卫与外层第三实现闭环 | #66 | [Spec](../spec/core-decoupling-06-boundary.spec.md) · [Plan](../spec/core-decoupling-06-boundary.plan.md) |
-| 68 | 主包解耦重构后代码清理 | 最终调用关系下的死代码/重复规则/无用辅助清理与索引同步 | #67 | [Spec](../spec/core-decoupling-07-cleanup.spec.md) · [Plan](../spec/core-decoupling-07-cleanup.plan.md) |
 | 69 | 中心写入端口收窄 | 窄提交契约接通命令/worker/任务/DAG/交付/会话，保留原子边界 | #68 | [Spec](../spec/core-decoupling-08-write-ports.spec.md) · [Plan](../spec/core-decoupling-08-write-ports.plan.md) |
 | 70 | SQLite写入实现归包 | 连接/schema/SQL/事务归唯一存储模块，复用只读 Reader | #69 | [Spec](../spec/core-decoupling-09-sqlite.spec.md) · [Plan](../spec/core-decoupling-09-sqlite.plan.md) |
 | 71 | 产品客户端适配层与CLI接入 | 产品纯契约、唯一默认 adapter 和 CLI 产品读取/命令消费者 | #68 | [Spec](../spec/core-decoupling-10-client.spec.md) · [Plan](../spec/core-decoupling-10-client.plan.md) |
@@ -85,32 +83,16 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    Foundation["既有 #61 基础"] --> E62["#62 通用事件与路由接口"]
-    E62 --> C63["已交付 #63 配置与绑定封套"]
-    C63 --> C64["已交付生命周期端口"]
-    C64 --> C65["#65 采集与宿主"]
-    C65 --> C66["#66 外层组装"]
-    C66 --> C67["#67 测试与守卫"]
-    C67 --> C68["#68 重构后清理"]
-    C68 --> S69["#69 写入端口"] --> S70["#70 SQLite 归包"]
-    C68 --> P71["#71 客户端与 CLI"] --> P72["#72 TUI 解耦"]
+    Foundation["已交付 #68 清理基线与隔离守卫"] --> S69["#69 写入端口"] --> S70["#70 SQLite 归包"]
+    Foundation --> P71["#71 客户端与 CLI"] --> P72["#72 TUI 解耦"]
 ```
 
 | 交接 | 接口前置与开工条件 | 共享修改及集成要求 |
 | --- | --- | --- |
-| #62 → #63 | 通用事件/问题、可信路由封套及唯一原生 codec 已交付 | WorkerEvent/Decision/contracts 形状串行，#63 复用路由 codec，不造第二份 |
-| #64 → #65 | 单步 intent/receipt 和只读对账端口已交付 | actor/workerMessages/消费屏障唯一，宿主与采集不取得业务写权 |
-| #65 → #66 | 通用采集、宿主端口与 Service 字段已交付 | 客户端/mapper/native 状态归实现，外层只组合，不搬走中心事务 |
-| #66 → #67 | 所有产品入口显式注入，主包生产清零 | #67 迁剩余平台测试和加守卫，不承担生产消费者搬迁 |
-| #67 → #68 | 生产/测试隔离及构造链实际完整，守卫有效 | 清理最终可删残留，不补 #65–#67 应完成的迁移；保留恢复/拒绝证据与实际断言 |
-| #68 → #69/#71 | 一致基线、唯一调用链和模块归属 | 写入端口/Store 归 #69，产品 DTO/CLI/adapter 归 #71；不同时改共享 contracts 形状 |
+| #68 → #69/#71 | 已交付的一致基线、唯一调用链和模块归属 | 写入端口/Store 归 #69，产品 DTO/CLI/adapter 归 #71；不同时改共享 contracts 形状 |
 | #69 → #70 | 全部写消费者已使用窄端口和固定提交声明 | SQL/连接/schema 唯一迁移，原事务和 query Reader 不变；客户端不依赖具体存储 |
 | #71 → #72 | 实际 CLI 消费的产品纯契约、唯一 adapter 和暂存桥清单 | TUI 切换消费者并删除桥，不另建 I/O；模型/渲染不解释平台配置或写资格 |
 
-#65–#68 按硬前置串行整体交付后开工，一项一个实现 PR。#65 使用已交付配置/绑定封套和[生命周期端口](../validation/core-decoupling-03-lifecycle/README.md)，不重建副作用协调。可以提前只读盘点、审阅接口和准备 fixture；不能把接口草案或包内实验当作提前领取资格。前述串行阶段共享 execution/contracts、Service 和恢复入口，不按文件不同允许并行实施。旧到新测试路径映射随职责迁移交付，quick 不得因名称变化漏跑或重复矩阵。
+存储 #69 → #70 与客户端 #71 → #72 可按所有者边界并行，各自仍等待未完成的硬前置，一项一个实现 PR。可以提前只读盘点、审阅接口和准备 fixture；接口草案或包内实验不解除开工门槛。两线通过稳定应用 Query/Command 接口隔离，不存在存储先完成才允许客户端开工的隐含边。共享类型形状和应用组装、守卫/quick 构造段指定所有者并顺序集成；冲突未解决时暂停共享改动，不能用双实现或任意写入口绕过。
 
-2026-10-02：#65 已合并；#66 外层组装与主包生产隔离已实现并独立复审修复，完全访问组合 core 6/rules 90/targeted 22 全通过，见[交付与复审记录](../validation/core-decoupling-05-composition/README.md)。本 PR 真实合并后才启动 #67；活动表保留剩余任务。
-
-#68 后按[后续维护约束](../spec/core-maintenance-constraints.md)并行存储 #69 → #70 与客户端 #71 → #72，各自仍等待硬前置。写端口/中心提交/SQL/schema 的修改由存储线负责；产品 DTO/CLI/adapter/TUI 由客户端线负责。两线通过稳定应用 Query/Command 接口隔离，不存在存储先完成才允许客户端开工的隐含边。共享类型形状和应用组装、守卫/quick 构造段必须指定所有者并顺序集成；冲突未解决时暂停该共享改动，不能用双实现或任意写入口绕过。
-
-与多候选/本机 API/版本隔离工作同时进行时，涉及 Config、ExecutionRecord、Service、恢复、事件/问题、CLI 或 query 构造入口的修改需串行集成；既有任务的固定 Spec 不被本表自动修改。API 消费通用业务端口，新实现适配和组装不进入产品 UI。中心 DAG 不因本次规划文件变化自动建任务或改边。
+保持 [执行隔离约束](../spec/core-decoupling-constraints.md)、原子提交、当前格式恢复和旧到新断言映射，quick 不因迁包漏跑或形成重复矩阵。与多候选/本机 API/版本隔离工作同时进行时，Config、ExecutionRecord、Service、恢复、事件/问题、CLI 或 query 构造入口的修改需串行集成，既有任务固定 Spec 不被本表自动修改。规划维护不修改中心 DAG。
