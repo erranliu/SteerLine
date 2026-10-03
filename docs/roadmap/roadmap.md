@@ -63,19 +63,13 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 ## 主包与执行实现解耦
 
-2026-10-02：#65 已合并；#66 外层组装与主包生产隔离已实现并独立复审修复，完全访问组合 core 6/rules 90/targeted 22 全通过，见[交付与复审记录](../validation/core-decoupling-05-composition/README.md)。本 PR 真实合并后才启动 #67；活动表保留剩余任务。
-
-[主包解耦规划](core-implementation-decoupling.md)继续完成通用业务与具体实现的边界。#63 的配置和原生绑定契约已交付，任务身份及验收依据保留在其 Spec/Plan；本活动清单从 #67 继续。既有执行策略、工作区、发布和需求契约作为基础复用，不再列入活动实施清单；剩余原生验收限制见[既有验收记录](../validation/execution-isolation-cleanup/README.md)。本目标严格要求主包直属生产/测试文件名与源码无平台关键字，且没有具体实现的直接或传递依赖，不能靠改名或转移可写 Service 达标。
+[主包解耦规划](core-implementation-decoupling.md)的剩余范围是中心写入端口、SQLite 实现归包和产品客户端/CLI/TUI 解耦。复用已交付的主包隔离与 [#68 清理基线](../validation/core-decoupling-07-cleanup/README.md)；原隔离断言和支持限制见 [#67 验收记录](../validation/core-decoupling-06-boundary/README.md)，后继持续保持守卫有效。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 67 | 主包隔离守卫与测试归位 | 主包测试清零、结构守卫与外层第三实现闭环 | #66 | [Spec](../spec/core-decoupling-06-boundary.spec.md) · [Plan](../spec/core-decoupling-06-boundary.plan.md) |
-| 68 | 主包解耦重构后代码清理 | 最终调用关系下的死代码/重复规则/无用辅助清理与索引同步 | #67 | [Spec](../spec/core-decoupling-07-cleanup.spec.md) · [Plan](../spec/core-decoupling-07-cleanup.plan.md) |
 | 69 | 中心写入端口收窄 | 窄提交契约接通命令/worker/任务/DAG/交付/会话，保留原子边界 | #68 | [Spec](../spec/core-decoupling-08-write-ports.spec.md) · [Plan](../spec/core-decoupling-08-write-ports.plan.md) |
 | 70 | SQLite写入实现归包 | 连接/schema/SQL/事务归唯一存储模块，复用只读 Reader | #69 | [Spec](../spec/core-decoupling-09-sqlite.spec.md) · [Plan](../spec/core-decoupling-09-sqlite.plan.md) |
 | 71 | 产品客户端适配层与CLI接入 | 产品纯契约、唯一默认 adapter 和 CLI 产品读取/命令消费者 | #68 | [Spec](../spec/core-decoupling-10-client.spec.md) · [Plan](../spec/core-decoupling-10-client.plan.md) |
 | 72 | TUI与中心实现解耦 | TUI 消费产品接口，删除中心/存储依赖及默认 I/O 薄桥 | #71 | [Spec](../spec/core-decoupling-11-tui.spec.md) · [Plan](../spec/core-decoupling-11-tui.plan.md) |
 
-先按 #65 → #66 → #67 → #68 串行交付，再分为可并行的存储 #69 → #70 与客户端 #71 → #72。#65 消费[生命周期端口](../validation/core-decoupling-03-lifecycle/README.md)，#61 的需求基础及 #65–#67 共同要求见[约束](../spec/core-decoupling-constraints.md)。每阶段迁移完整消费者并当场删除对应原实现，#66 完成生产清零，#67 只负责测试归位和边界守卫；#68 不接收这些前置应完成的删除。
-
-#68–#72 的范围及共享修改见[后续维护约束](../spec/core-maintenance-constraints.md)。存储线拥有提交契约/Store/schema，客户端线拥有产品 DTO/CLI/TUI；共享 contracts 形状及组装/quick 段顺序集成。两线均保持原子提交和当前格式恢复，完整实现只在各自硬前置整体交付后开始，不扩展 #45 传输或 UI 范围，也不通过规划变化创建中心任务。
+存储线 #69 → #70 与客户端线 #71 → #72 按各自硬前置推进；#69/#71 所需的 #68 前置能力已具备。并行边界见 [后续维护约束](../spec/core-maintenance-constraints.md)：存储线拥有提交契约/Store/schema，客户端线拥有产品 DTO/CLI/TUI，共享 contracts 形状及组装/quick 段顺序集成。两线保持原子提交、当前格式恢复和 [既有执行隔离约束](../spec/core-decoupling-constraints.md)，不扩展 #45 传输或 UI 范围。规划维护不创建中心任务。
