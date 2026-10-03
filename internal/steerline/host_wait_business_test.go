@@ -27,7 +27,7 @@ func TestHostInputWaitPersistsWithoutBusinessDecision(t *testing.T) {
 	require(t, err)
 	defer store.Close()
 	run := &Run{RunID: newID(), AttemptID: newID(), ExecutionID: newID(), Agent: "fixture"}
-	service := &Service{Config: Config{identity: "project"}, domainStore: store, conversationSources: neutralHostWaitSource{}}
+	service := &Service{Config: Config{identity: "project"}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: neutralHostWaitSource{}}
 	source := WorkerEvent{RunID: run.RunID, AttemptID: run.AttemptID, Source: "fixture-host", SourceSegment: "fixture-host-v1:probe", SourceEventID: "host-wait:probe", SourceIdentity: "fixture-original-resource", SourceSeq: 1, InputWait: true}
 	require(t, service.recordConversationEvent(run, source))
 	require(t, service.recordConversationEvent(run, source))

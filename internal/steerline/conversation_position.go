@@ -2,13 +2,13 @@ package steerline
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"strings"
+
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
 
 // conversationJournalPosition is the committed source position. The two short
@@ -46,7 +46,7 @@ func (p conversationJournalPosition) journalCursor(path string) JournalCursor {
 	return JournalCursor{Path: path, FileID: p.FileID, Generation: p.Generation, Offset: p.ByteOffset, ScanOffset: p.ByteOffset, HeaderLength: p.HeaderLength, HeaderHash: p.HeaderHash, AnchorOffset: p.AnchorOffset, AnchorLength: p.AnchorLength, AnchorHash: p.AnchorHash, Initialized: true}
 }
 
-func currentConversationJournalPosition(ctx context.Context, store *SQLiteStore, project, execution, attempt, source, segment string, generation uint64, path, fileID string, offset int64, seq uint64) (conversationJournalPosition, error) {
+func currentConversationJournalPosition(ctx context.Context, store persistence.Conversations, project, execution, attempt, source, segment string, generation uint64, path, fileID string, offset int64, seq uint64) (conversationJournalPosition, error) {
 	if generation == 0 {
 		return conversationJournalPosition{}, errors.New("conversation source generation is invalid")
 	}
@@ -58,7 +58,7 @@ func currentConversationJournalPosition(ctx context.Context, store *SQLiteStore,
 			return conversationJournalPosition{}, decodeErr
 		}
 		previous = &position
-	} else if !errors.Is(err, sql.ErrNoRows) {
+	} else if !errors.Is(err, persistence.ErrNotFound) {
 		return conversationJournalPosition{}, err
 	}
 	return readConversationJournalPosition(path, fileID, offset, seq, generation, previous)
@@ -145,35 +145,4 @@ func checkConversationPositionAnchors(f *os.File, p conversationJournalPosition)
 func marshalConversationJournalPosition(p conversationJournalPosition) (string, error) {
 	b, err := json.Marshal(p)
 	return string(b), err
-}
-
-func (s *SQLiteStore) ValidateConversationCheckpointFormat(ctx context.Context, project string, sources []string) error {
-	if len(sources) == 0 {
-		return nil
-	}
-	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(sources)), ",")
-	args := make([]any, 0, len(sources)+1)
-	args = append(args, project)
-	for _, source := range sources {
-		if source == "" {
-			return errors.New("conversation checkpoint source is empty")
-		}
-		args = append(args, source)
-	}
-	query := `SELECT execution_id,attempt_id,source_segment,source_identity,cursor,local_seq FROM conversation_source_cursors WHERE project_identity=? AND source IN (` + placeholders + `)`
-	rows, err := s.db.QueryContext(ctx, query, args...)
-	if err != nil {
-		return err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var cp ConversationCheckpoint
-		if err := rows.Scan(&cp.ExecutionID, &cp.AttemptID, &cp.SourceSegment, &cp.SourceIdentity, &cp.Cursor, &cp.LocalSeq); err != nil {
-			return err
-		}
-		if _, err := decodeConversationJournalPosition(cp); err != nil {
-			return fmt.Errorf("unsupported conversation checkpoint %s/%s: %w; preserve state and inspect external execution before recovery", cp.ExecutionID, cp.AttemptID, err)
-		}
-	}
-	return rows.Err()
 }

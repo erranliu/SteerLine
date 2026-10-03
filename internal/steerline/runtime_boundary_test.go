@@ -26,7 +26,7 @@ func TestWorkerBindingRollsBackWithItsCheckpoint(t *testing.T) {
 	execution.PolicyResources = neutralPolicyReceipt(s.workflowRecord(run).ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	s.refreshRun(run)
 	ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: neutralProtocol, Target: targetFor(s.Config), Agent: agentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, External: *identity, Generation: "generation"}
-	_, err = s.domainStore.db.Exec(`CREATE TRIGGER reject_binding_checkpoint BEFORE INSERT ON projection BEGIN SELECT RAISE(FAIL,'binding checkpoint failure'); END`)
+	_, err = testSQLite(s).db.Exec(`CREATE TRIGGER reject_binding_checkpoint BEFORE INSERT ON projection BEGIN SELECT RAISE(FAIL,'binding checkpoint failure'); END`)
 	require(t, err)
 	if err := s.commitWorkerBinding(run, ref); err == nil {
 		t.Fatal("binding committed without its checkpoint")

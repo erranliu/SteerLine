@@ -13,7 +13,7 @@ func TestRuntimeCorruptionNotOverwritten(t *testing.T) {
 	db, err := OpenSQLiteStore(filepath.Join(f.c.RunDir, "steerline.db"))
 	require(t, err)
 	defer db.Close()
-	require(t, db.Transact(context.Background(), func(tx DomainTx) error {
+	require(t, db.transactSQLite(context.Background(), func(tx *sqliteTx) error {
 		return tx.PutProjection(f.c.Identity(), 99, []byte("truncated{"))
 	}))
 	if _, e := newTestService(f.c); e == nil {

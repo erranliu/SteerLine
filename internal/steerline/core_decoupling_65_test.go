@@ -102,7 +102,7 @@ func TestCD65HistoryBudgetRotatesSources(t *testing.T) {
 	require(t, err)
 	defer store.Close()
 	port := &testConversationHistoryPort{}
-	service := &Service{Config: Config{identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, conversationSources: port}
+	service := &Service{Config: Config{identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
 	active := testHistorySource("active", false)
 	historical := make([]contracts.ConversationHistorySource, 5)
 	for i := range historical {
@@ -159,7 +159,7 @@ func TestCD65HistoryCursorCommitsWithItsConversationBatch(t *testing.T) {
 	require(t, err)
 	defer store.Close()
 	port := &testConversationHistoryPort{}
-	service := &Service{Config: Config{identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, conversationSources: port}
+	service := &Service{Config: Config{identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
 	source := testHistorySource("commit-source", false)
 	_, err = store.db.Exec(`CREATE TRIGGER reject_history_batch BEFORE INSERT ON conversation_events BEGIN SELECT RAISE(FAIL, 'history batch commit failed'); END`)
 	require(t, err)
@@ -211,7 +211,7 @@ func testCD65DiscoveryRejectsForeignOwner(t *testing.T) {
 	event.ProjectID = "other-project"
 	event.ExecutionID = id
 	event.AttemptID = attempt
-	service := &Service{Config: Config{identity: "project", RunDir: t.TempDir()}, domainStore: store, conversationSources: foreignConversationDiscovery{event: event}, runs: []*Run{{RunID: "workflow", ExecutionID: id, AttemptID: attempt, DomainTaskID: "task"}}}
+	service := &Service{Config: Config{identity: "project", RunDir: t.TempDir()}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: foreignConversationDiscovery{event: event}, runs: []*Run{{RunID: "workflow", ExecutionID: id, AttemptID: attempt, DomainTaskID: "task"}}}
 	if _, err := service.discoverConversationHistory(context.Background()); err == nil {
 		t.Fatal("discovery committed a foreign project's diagnostic")
 	}

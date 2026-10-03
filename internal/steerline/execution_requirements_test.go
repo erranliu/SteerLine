@@ -141,19 +141,19 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	commands := CommandService{Store: store, Project: c.Identity()}
 	_, err = commands.CreateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(8), nil), newID(), 1, "operator")
 	require(t, err)
-	authority, err := store.nativeAuthority(ctx, c.Identity())
+	authority, err := store.NativeAuthority(ctx, c.Identity())
 	require(t, err)
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	require(t, store.Transact(ctx, func(tx DomainTx) error {
-		return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
+		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}))
 	options := TaskClaimOptions{TaskID: "8", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, Explicit: true, RequestedBy: "operator"}
 	t.Setenv(c.PR.TokenEnv, "")
 	if _, err = commands.ClaimNativeTask(ctx, c, options); err == nil {
 		t.Fatal("missing required reference claimed task")
 	}
-	graph, err := store.taskGraphSnapshot(ctx, c.Identity())
+	graph, err := store.TaskGraphSnapshot(ctx, c.Identity())
 	require(t, err)
 	if graph.ByID["8"].Status != "open" {
 		t.Fatal("failed evaluation consumed task")
@@ -180,7 +180,7 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	if !isNativeErrorCode(err, "stale_profile") {
 		t.Fatalf("configuration changed during evaluation but claim was accepted: %v", err)
 	}
-	graph, err = store.taskGraphSnapshot(ctx, c.Identity())
+	graph, err = store.TaskGraphSnapshot(ctx, c.Identity())
 	require(t, err)
 	if graph.ByID["8"].Status != "open" {
 		t.Fatal("stale configuration consumed the task")

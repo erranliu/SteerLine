@@ -127,7 +127,7 @@ func TestLocalPublicationIntentMustCommitBeforeHostAction(t *testing.T) {
 	f := newLocalWorkerPublicationFixture(t)
 	t.Cleanup(func() { _ = f.s.Close() })
 	workflow, execution := f.s.workflowRecords(f.run)
-	_, err := f.s.domainStore.db.ExecContext(f.ctx, `CREATE TRIGGER reject_publication_intent BEFORE UPDATE ON projection BEGIN SELECT RAISE(ABORT, 'publication intent checkpoint failure'); END`)
+	_, err := testSQLite(f.s).db.ExecContext(f.ctx, `CREATE TRIGGER reject_publication_intent BEFORE UPDATE ON projection BEGIN SELECT RAISE(ABORT, 'publication intent checkpoint failure'); END`)
 	require(t, err)
 	if _, err = f.s.publishLocalWorkerRun(f.ctx, f.run, workflow, execution, f.turnID); err == nil || !strings.Contains(err.Error(), "publication intent checkpoint failure") {
 		t.Fatalf("publication intent fault was not injected: %v", err)
@@ -162,8 +162,8 @@ func TestLocalWorkerPublishUsesHostGitAndExactPR(t *testing.T) {
 	// Simulate a host action completed before its database receipt was saved.
 	originalOperation := *s.operationByKey("local-publish:" + run.RunID + ":" + turnID)
 	originalOperation.Status, originalOperation.Receipt = "in_flight", nil
-	require(t, s.domainStore.Transact(ctx, func(tx DomainTx) error {
-		raw := tx.(*sqliteTx).tx
+	require(t, testSQLite(s).transactSQLite(ctx, func(tx *sqliteTx) error {
+		raw := tx.tx
 		if err := tx.UpdateOperation(originalOperation); err != nil {
 			return err
 		}

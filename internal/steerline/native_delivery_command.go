@@ -2,14 +2,14 @@ package steerline
 
 import (
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	taskdomain "github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
@@ -38,7 +38,7 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	if expectedTaskVersion == 0 || workflowRunID == "" {
 		return TaskDeliveryReceipt{}, nativeErr("immutable_task", "delivery requires task version and workflow identity")
 	}
-	graph, err := sqlite.taskGraphSnapshot(ctx, c.Project)
+	graph, err := sqlite.TaskGraphSnapshot(ctx, c.Project)
 	if err != nil {
 		return TaskDeliveryReceipt{}, err
 	}
@@ -95,7 +95,7 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	if err != nil {
 		return TaskDeliveryReceipt{}, err
 	}
-	contract, err := nativeContractForTask(ctx, sqlite, c.Project, task)
+	contract, err := sqlite.TaskContract(ctx, c.Project, task)
 	if err != nil {
 		return TaskDeliveryReceipt{}, err
 	}
@@ -139,12 +139,12 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 
 // recordDiscardedMergeConflict keeps a late platform merge as audit evidence
 // without converting a discarded task into a normal delivery.
-func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s *SQLiteStore, config Config, task TaskRecord, workflowRunID string, verifier TaskDeliveryVerifier, authority ProjectTaskAuthority) error {
-	var owned int
-	if err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_runs WHERE project_identity=? AND workflow_run_id=? AND task_id=?`, c.Project, workflowRunID, task.TaskID).Scan(&owned); err != nil {
+func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s persistence.CommandStore, config Config, task TaskRecord, workflowRunID string, verifier TaskDeliveryVerifier, authority ProjectTaskAuthority) error {
+	owned, err := s.WorkflowOwned(ctx, c.Project, workflowRunID, task.TaskID)
+	if err != nil {
 		return err
 	}
-	if owned != 1 {
+	if !owned {
 		return nativeErr("task_discarded", "discarded task cannot be completed by an unrelated workflow")
 	}
 	plan, current, err := taskDiscardPlanFromStore(ctx, s, c.Project, task.TaskID)
@@ -185,8 +185,8 @@ func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s *SQL
 	if err != nil {
 		return err
 	}
-	err = s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		graph, e := taskGraphSnapshotTx(ctx, tx, c.Project)
+	err = s.TransactDelivery(ctx, func(tx persistence.DeliveryTx) error {
+		graph, e := tx.TaskGraphSnapshot(ctx, c.Project)
 		if e != nil {
 			return e
 		}
@@ -253,10 +253,10 @@ func validateNativeDeliveryGates(record TaskRecord, contract TaskContract, workf
 	}, WorkerFlowVersion)
 }
 
-func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore, expectedAuthorityVersion uint64, task TaskRecord, workflow WorkflowRunRecord, execution ExecutionRecord, contract TaskContract, prURL string, delivery TaskDeliveryRecord) (TaskDeliveryReceipt, error) {
+func (c CommandService) commitNativeDelivery(ctx context.Context, s persistence.CommandStore, expectedAuthorityVersion uint64, task TaskRecord, workflow WorkflowRunRecord, execution ExecutionRecord, contract TaskContract, prURL string, delivery TaskDeliveryRecord) (TaskDeliveryReceipt, error) {
 	var receipt TaskDeliveryReceipt
-	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		graph, err := taskGraphSnapshotTx(ctx, tx, c.Project)
+	err := s.TransactDelivery(ctx, func(tx persistence.DeliveryTx) error {
+		graph, err := tx.TaskGraphSnapshot(ctx, c.Project)
 		if err != nil {
 			return err
 		}
@@ -267,25 +267,15 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 		if !ok {
 			return nativeErr("task_not_found", "native task was not found")
 		}
-		var existingRun string
-		var existingMerge string
-		err = tx.tx.QueryRowContext(ctx, `SELECT selected_workflow_run_id,merge_commit FROM task_deliveries WHERE project_identity=? AND task_id=?`, c.Project, task.TaskID).Scan(&existingRun, &existingMerge)
-		if err == nil {
+		if record, found := graph.Deliveries[task.TaskID]; found {
 			if current.Status != "closed" {
 				return nativeErr("inconsistent_delivery", "task has a delivery without closed state")
 			}
-			if existingRun == workflow.WorkflowRunID && existingMerge == delivery.MergeCommit {
-				var record TaskDeliveryRecord
-				if e := scanTaskDelivery(tx.tx, c.Project, task.TaskID, &record); e != nil {
-					return e
-				}
-				receipt = TaskDeliveryReceipt{TaskID: task.TaskID, TaskVersion: current.Version, WorkflowRunID: existingRun, GraphRevision: graph.Authority.GraphRevision, Status: "closed", Delivery: record}
+			if record.SelectedWorkflowRunID == workflow.WorkflowRunID && record.MergeCommit == delivery.MergeCommit {
+				receipt = TaskDeliveryReceipt{TaskID: task.TaskID, TaskVersion: current.Version, WorkflowRunID: record.SelectedWorkflowRunID, GraphRevision: graph.Authority.GraphRevision, Status: "closed", Delivery: record}
 				return taskDeliveryReplay{Receipt: receipt}
 			}
 			return nativeErr("inconsistent_delivery", "task already has a different authoritative delivery")
-		}
-		if !errors.Is(err, sql.ErrNoRows) {
-			return err
 		}
 		if current.Status == "closed" {
 			return nativeErr("inconsistent_delivery", "closed task has no delivery record")
@@ -296,23 +286,15 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 		if current.Status != "in_progress" || current.Version != task.Version {
 			return nativeErr("stale_version", "task state changed during PR verification")
 		}
-		var runBody []byte
-		if err = tx.tx.QueryRowContext(ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=? AND task_id=?`, c.Project, workflow.WorkflowRunID, task.TaskID).Scan(&runBody); err != nil {
+		currentWorkflow, err := tx.Workflow(ctx, c.Project, workflow.WorkflowRunID, task.TaskID)
+		if err != nil {
 			return nativeErr("immutable_task", "selected workflow run changed during PR verification")
 		}
-		var currentWorkflow WorkflowRunRecord
-		if err = json.Unmarshal(runBody, &currentWorkflow); err != nil {
-			return err
-		}
-		var execBody []byte
-		if err = tx.tx.QueryRowContext(ctx, `SELECT payload FROM executions WHERE project_identity=? AND execution_id=? AND workflow_run_id=?`, c.Project, execution.ExecutionID, workflow.WorkflowRunID).Scan(&execBody); err != nil {
+		currentExecution, err := tx.Execution(ctx, c.Project, execution.ExecutionID, workflow.WorkflowRunID)
+		if err != nil {
 			return nativeErr("inconsistent_delivery", "selected execution changed during PR verification")
 		}
-		var currentExecution ExecutionRecord
-		if err = json.Unmarshal(execBody, &currentExecution); err != nil {
-			return err
-		}
-		currentContract, err := nativeContractForTaskTx(ctx, tx, c.Project, current)
+		currentContract, err := tx.TaskContract(ctx, c.Project, current)
 		if err != nil {
 			return err
 		}
@@ -335,8 +317,8 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 		if discardPlan.UncertainPR || discardPlan.PRURL != prURL {
 			return nativeErr("merge_state_unknown", "task publication became unresolved during PR verification")
 		}
-		var reused int
-		if err = tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_runs WHERE project_identity=? AND task_id<>? AND json_extract(payload,'$.pr_url')=?`, c.Project, task.TaskID, delivery.PRURL).Scan(&reused); err != nil {
+		reused, err := tx.PRBindingsOnOtherTasks(ctx, c.Project, task.TaskID, delivery.PRURL)
+		if err != nil {
 			return err
 		}
 		if reused > 0 {
@@ -370,40 +352,3 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s *SQLiteStore
 type taskDeliveryReplay struct{ Receipt TaskDeliveryReceipt }
 
 func (e taskDeliveryReplay) Error() string { return "task delivery already committed" }
-
-func nativeContractForTaskTx(ctx context.Context, tx *sqliteTx, project string, task TaskRecord) (TaskContract, error) {
-	var body []byte
-	var digest string
-	err := tx.tx.QueryRowContext(ctx, `SELECT digest,payload FROM task_contracts WHERE project_identity=? AND contract_id=? AND task_id=?`, project, task.ContractID, task.TaskID).Scan(&digest, &body)
-	if err != nil {
-		return TaskContract{}, nativeErr("contract_mismatch", "native task has no matching fixed contract")
-	}
-	var contract TaskContract
-	if err = json.Unmarshal(body, &contract); err != nil {
-		return contract, err
-	}
-	if contract.Digest != digest {
-		return contract, nativeErr("contract_mismatch", "fixed task contract digest differs from its stored row")
-	}
-	if err = ValidateTaskContract(contract); err != nil {
-		return contract, err
-	}
-	return contract, nil
-}
-
-func scanTaskDelivery(db interface {
-	QueryRowContext(context.Context, string, ...any) *sql.Row
-}, project, taskID string, delivery *TaskDeliveryRecord) error {
-	var merged, recorded string
-	err := db.QueryRowContext(context.Background(), `SELECT task_id,selected_workflow_run_id,pr_instance,pr_repository,pr_number,pr_url,merge_commit,merged_at,recorded_at,evidence FROM task_deliveries WHERE project_identity=? AND task_id=?`, project, taskID).Scan(&delivery.TaskID, &delivery.SelectedWorkflowRunID, &delivery.PRInstance, &delivery.PRRepository, &delivery.PRNumber, &delivery.PRURL, &delivery.MergeCommit, &merged, &recorded, &delivery.Evidence)
-	if err != nil {
-		return err
-	}
-	delivery.ProjectIdentity = project
-	delivery.MergedAt, err = time.Parse(time.RFC3339Nano, merged)
-	if err != nil {
-		return err
-	}
-	delivery.RecordedAt, err = time.Parse(time.RFC3339Nano, recorded)
-	return err
-}

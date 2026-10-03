@@ -10,13 +10,13 @@ import (
 )
 
 func (s *Service) processPendingCommands(ctx context.Context) error {
-	if s.domainStore == nil {
+	if s.commandStore == nil {
 		return nil
 	}
-	service := CommandService{Store: s.domainStore, Project: s.Config.identity}
+	service := CommandService{Store: s.commandStore, Project: s.Config.identity}
 	// Process saved answers before new work; reject retired recovery commands.
 	for _, status := range []string{"in_flight", "pending"} {
-		commands, err := s.domainStore.serviceCommands(ctx, s.Config.identity, status, 200)
+		commands, err := s.commandStore.ServiceCommands(ctx, s.Config.identity, status, 200)
 		if err != nil {
 			return err
 		}

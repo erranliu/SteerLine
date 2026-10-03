@@ -3,7 +3,6 @@ package steerline
 import (
 	"bytes"
 	"context"
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,6 +14,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
 
 type Service struct {
@@ -32,7 +32,10 @@ type Service struct {
 	pendingOperations    map[string]string
 	workerDecisionWrites map[string]bool
 	store                *Store
-	domainStore          *SQLiteStore
+	domainStore          centerReader
+	commandStore         persistence.CommandStore
+	conversationStore    persistence.Conversations
+	closeStore           func() error
 	// workers owns live observers by authoritative workflow run ID.
 	workers             map[string]*Worker
 	ownedProcesses      map[string]executionapi.StopHandle
@@ -109,16 +112,16 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionapi.L
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: db, store: &Store{Domain: db, Project: c.identity}, activities: map[string]*ActivityWriter{}, workers: map[string]*Worker{}, ownedProcesses: map[string]executionapi.StopHandle{}}
+	s := &Service{Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: db, commandStore: db, conversationStore: db, closeStore: db.Close, store: &Store{Domain: db, Project: c.identity}, activities: map[string]*ActivityWriter{}, workers: map[string]*Worker{}, ownedProcesses: map[string]executionapi.StopHandle{}}
 	old, e := loadRuntimeSnapshot(db, c.identity, false)
-	if errors.Is(e, sql.ErrNoRows) {
+	if errors.Is(e, persistence.ErrNotFound) {
 		old, e = nil, nil
 	}
 	if e != nil {
 		return nil, e
 	}
 	s.State = Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
-	authority, authErr := db.nativeAuthority(context.Background(), c.identity)
+	authority, authErr := db.NativeAuthority(context.Background(), c.identity)
 	if authErr != nil {
 		return nil, authErr
 	}
@@ -174,10 +177,10 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionapi.L
 }
 
 func (s *Service) Close() error {
-	if s == nil || s.domainStore == nil {
+	if s == nil || s.closeStore == nil {
 		return nil
 	}
-	return s.domainStore.Close()
+	return s.closeStore()
 }
 
 func (s *Service) publishCheckpoint() error {

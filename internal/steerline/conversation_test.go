@@ -482,7 +482,7 @@ func TestConversationLiveSourceFailureKeepsGapAndMapperPosition(t *testing.T) {
 	executionID, taskID := newID(), "501"
 	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "fixture", Target: executionapi.ExecutionTarget{ID: "local"}, LogPath: &path}
 	port := neutralJournalPort{}
-	s := &Service{Config: Config{RunDir: root, identity: "project"}, conversationSources: port, domainStore: store, State: Runtime{}, runs: []*Run{run}}
+	s := &Service{Config: Config{RunDir: root, identity: "project"}, conversationSources: port, domainStore: store, commandStore: store, conversationStore: store, State: Runtime{}, runs: []*Run{run}}
 	sourceName := port.JournalSource(executionapi.BackendLocal, executionapi.ProtocolLocalProcess)
 	segment := port.JournalSegment(executionapi.BackendLocal, executionapi.ProtocolLocalProcess, fileID)
 	first := WorkerEvent{RunID: runID, AttemptID: runID, Source: sourceName, SourceSegment: segment, SourceIdentity: fileID, SourceSeq: 1, SourceOffset: 0, SourceLength: int64(len(firstRaw)), Raw: firstRaw}
@@ -535,7 +535,7 @@ func TestConversationChangedLiveBytesCannotBindOrCheckpoint(t *testing.T) {
 	require(t, err)
 	defer store.Close()
 	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "fixture", Target: executionapi.ExecutionTarget{ID: "local"}, WorktreePath: &root, LogPath: &path}
-	service := &Service{Config: Config{RunDir: root, identity: "project"}, conversationSources: port, domainStore: store}
+	service := &Service{Config: Config{RunDir: root, identity: "project"}, conversationSources: port, domainStore: store, commandStore: store, conversationStore: store}
 	source := WorkerEvent{RunID: runID, AttemptID: runID, Source: sourceName, SourceSegment: segment, SourceIdentity: fileID, SourceSeq: 1, SourceOffset: 0, SourceLength: int64(len(forged)), Raw: forged, Session: forgedSession}
 	if err = service.recordConversationEvent(run, source); err == nil || !strings.Contains(err.Error(), "source bytes changed") {
 		t.Fatalf("rewritten source bytes were accepted: %v", err)
@@ -586,7 +586,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	}
 	defer store.Close()
 	serviceConfig := Config{RunDir: projectRoot, identity: "project"}
-	service := &Service{Config: serviceConfig, conversationSources: neutralJournalPort{}, domainStore: store, State: Runtime{}, domain: DomainSnapshot{Attempts: []StepAttemptRecord{{ProjectIdentity: "project", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: path, Status: "succeeded"}}}, runs: []*Run{{TaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "fixture", Target: executionapi.ExecutionTarget{ID: "local-test"}, WorktreePath: &projectRoot, LogPath: &path, EndedAt: ptr(time.Now().UTC())}}}
+	service := &Service{Config: serviceConfig, conversationSources: neutralJournalPort{}, domainStore: store, commandStore: store, conversationStore: store, State: Runtime{}, domain: DomainSnapshot{Attempts: []StepAttemptRecord{{ProjectIdentity: "project", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: path, Status: "succeeded"}}}, runs: []*Run{{TaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "fixture", Target: executionapi.ExecutionTarget{ID: "local-test"}, WorktreePath: &projectRoot, LogPath: &path, EndedAt: ptr(time.Now().UTC())}}}
 	oldRunID := newID()
 	oldRoot := filepath.Join(projectRoot, "runs", oldRunID)
 	if err = os.MkdirAll(oldRoot, 0700); err != nil {

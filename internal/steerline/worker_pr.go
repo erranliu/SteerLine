@@ -3,9 +3,9 @@ package steerline
 import (
 	"context"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 // A verified open PR does not require input, but the original session remains
@@ -45,7 +45,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskReco
 		if workflow.PRURL == "" {
 			return nil
 		}
-		_, err := (CommandService{Store: s.domainStore, Project: c.identity}).CompleteNativeTask(ctx, c, task.TaskID, task.Version, workflow.WorkflowRunID, publicationClient(c))
+		_, err := (CommandService{Store: s.commandStore, Project: c.identity}).CompleteNativeTask(ctx, c, task.TaskID, task.Version, workflow.WorkflowRunID, publicationClient(c))
 		if isNativeErrorCode(err, "task_discarded") {
 			return nil
 		}

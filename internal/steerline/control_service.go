@@ -392,7 +392,7 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 	}
 	switch req.Action {
 	case "set_dispatch_mode", "pause_dispatch", "resume_dispatch":
-		authority, err := s.domainStore.nativeAuthority(ctx, s.Config.identity)
+		authority, err := s.domainStore.NativeAuthority(ctx, s.Config.identity)
 		if err != nil {
 			return err
 		}
@@ -407,7 +407,7 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 			paused := false
 			update.Paused = &paused
 		}
-		updated, err := (CommandService{Store: s.domainStore, Project: s.Config.identity}).SetNativeDispatchState(ctx, update)
+		updated, err := (CommandService{Store: s.commandStore, Project: s.Config.identity}).SetNativeDispatchState(ctx, update)
 		if err != nil {
 			return err
 		}
