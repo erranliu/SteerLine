@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -149,46 +148,6 @@ func (f *environmentFixture) answer(t *testing.T, option, note string) {
 	require(t, err)
 	if saved.Status != "accepted" {
 		t.Fatalf("host action was not accepted: %s / %s", saved.Status, saved.Result)
-	}
-}
-
-func TestWorkerEnvironmentER1ProbeAndSettlementGate(t *testing.T) {
-	for _, mode := range []string{"success", "tool_failure", "oral", "missing_receipt", "failed_settlement"} {
-		t.Run(mode, func(t *testing.T) {
-			f := newEnvironmentFixture(t, fakeNativeOrcaState{ReadinessMode: mode}, "")
-			f.prepare(t)
-			if execution := f.service.executionRecord(f.run); testOrcaState(t, execution) == nil {
-				t.Fatalf("resource preparation did not bind the native worker: %+v", execution.Environment.Blocker)
-			}
-			f.poll(t)
-			wf, e := f.service.workflowRecords(f.run)
-			state := f.state(t)
-			if mode == "success" {
-				stateData := testOrcaState(t, e)
-				if state.Dispatches != 2 || !e.Environment.Ready || e.TurnNumber != 0 || e.CurrentTurnID != "" || len(stateData.Turns) != 2 || stateData.Turns[0].Purpose != "readiness" {
-					t.Fatalf("preparation leaked business state or failed: wf=%+v execution=%+v state=%+v", wf, e, state)
-				}
-				f.poll(t)
-				if e.TurnNumber != 1 {
-					t.Fatalf("business start not independently observed: %+v", e)
-				}
-			} else {
-				if state.Dispatches != 1 || e.Environment.Ready || e.TurnNumber != 0 {
-					t.Fatalf("failed readiness dispatched business: %+v / %+v", e, state)
-				}
-				if mode == "tool_failure" || mode == "failed_settlement" {
-					if wf.Phase != "waiting_decision" || e.Environment.Blocker == nil {
-						t.Fatalf("failure had no decision: %+v / %+v", wf, e)
-					}
-				}
-			}
-			if !strings.Contains(state.FixedAgentCommand, "'approval_policy=never'") || !strings.Contains(state.FixedAgentCommand, "'windows.sandbox=unelevated'") || state.CreatedWithAgent != "" {
-				t.Fatalf("managed permissions missing: %+v", state)
-			}
-			if strings.Contains(state.FixedAgentCommand, "'--model'") {
-				t.Fatal("default model replaced")
-			}
-		})
 	}
 }
 
@@ -425,15 +384,5 @@ func TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll(t *testing.T) {
 	e = f.service.executionRecord(f.run)
 	if e.Environment.Blocker == nil || e.Environment.Blocker.ID == oldBlocker || e.Environment.Blocker.Fact.Reason != "tool_initialization_failed" || f.run.Decision == nil || f.run.Decision.Status != "pending" || f.state(t).Dispatches != 1 {
 		t.Fatalf("old recheck cleared newer fault: %+v / %+v", e.Environment, f.run.Decision)
-	}
-}
-
-func TestManagedOrcaFrozenResourceEvidenceIsVerifiedBeforeInput(t *testing.T) {
-	f := newEnvironmentFixture(t, fakeNativeOrcaState{ReadinessMode: "hold"}, "")
-	f.prepare(t)
-	e := f.service.executionRecord(f.run)
-	e.Environment.WriteRoots = append(e.Environment.WriteRoots, "C:/")
-	if err := f.service.verifyHostExecutionEvidence(context.Background(), f.run, e); err == nil {
-		t.Fatal("changed writable roots were accepted")
 	}
 }

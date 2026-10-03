@@ -56,6 +56,10 @@
 - 真实 readiness smoke 的 `TestWorkerEnvironmentNativeReadinessLive` 归外层，保留原 REPO/COMMIT/CODEX/STATE_ROOT/REPORT opt-in、任务 9001154、已提交 Spec/Plan blob、4 分钟准备预算及受理后 7 分钟结算预算。当前格式由实际 app loader 受理，公开任务/dispatch/Claim/recheck/query 代替旧 private authority/Service 写入；原 readiness/business、结算、不同 Dispatch、原 terminal/incarnation 断言保留，原隔离资源由 checked native close 清理。
 - 根包、集成包仅编译通过；没有执行这条 live 或访问真实 runtime。当前剩余 9 个 root 平台文件。
 
+- 中心 ER1 五种原 readiness 情形归 `readiness_business_test.go`，以已观察的通用 probe/settlement 事实验证真实中心门槛。成功准备之后只提交一个独立业务输入，started 事实到达才增加业务 TurnNumber；tool_failure/oral/missing_receipt/failed_settlement 不派发业务，确认失败仍产生中心 Decision。原生工具块/receipt 解析仍归既有 `orcaworker/readiness_test.go`；默认模型和 approval/sandbox 原命令断言经实际应用 command builder 归 `readiness_command_cd67_test.go`，只去重重复五次的命令检查。
+- 同一中性资源封套承接 writable roots 被扩张时的原中心拒绝断言。`neutral-readiness-seeded-workspace` 2/2、`neutral-readiness-other-facts` 5/5、`neutral-readiness-bound-roots` 1/1、`native-readiness-default-command` 1/1 均 complete/pass，位于 `bin/cd67/`；`neutral-readiness-facts` 的初始编译失败和 `neutral-readiness-facts-compiled` 的未正确绑定 workspace 失败保留。工作区之外未写入 runner 状态或真实 runtime。
+- 仍需完成剩余原生 readiness/host/restart 消费者、根包服务默认工厂和实际 CLI 消费者归位，删除最后的具体 helper，并完成完整 diff/fixture 映射与规定 quick。当前仍为 9 个 root 平台文件，不能把这些阶段通过视为 #67 验收，尚未推送或提出 PR。
+
 ## 工作区和源码身份
 
 - 实际工作区：`C:/Users/lmas1/.codex/worktrees/f775/SteerLine`。
