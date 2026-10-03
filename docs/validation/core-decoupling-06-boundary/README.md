@@ -41,6 +41,10 @@
 - 守卫除 `.git` 元数据外不按目录名排除源码；顶层 `bin` helper 的额外标签传递依赖拒绝样本通过。报告 `bin/cd67/guard-no-directory-exclusions/summary.json` complete/pass，包含 parent 与全部七个负向样本。
 - 真实公开 Claim 的 remote 强制准入拒绝已纳入 `TestCD67AdditionalImplementation`；定向 `bin/cd67/remote-claim-required/summary.json` 2/2 pass/complete，不调用真实执行工具，也不认证权限。根包仅编译通过；`cmd/test-feedback` 缺失/重复/截断/必需子用例覆盖定向测试通过。
 
+- 原权限工具 native/live 两个入口归应用包，通过实际目录、资源 codec/命令及生命周期构造。原宿主读取、workspace 读写删除、Git index/ref/reflog、nonce、原终端身份、工具 marker/native shell proof、只读收集和清理断言保留；接受报告 DTO 固定 Project/Execution/Attempt/generation/config，未获得中心写者。
+- 可选 local capability 保留原两个 opt-in 和 `local_process` 原证据范围，应用真实 process host/backend 仅核对固定物理进程/停止，raw JSONL 保留与 1 MiB 读取上限不变。旧 root spawner、未消费 marker 分支和原生 Backend 构造 helper 删除；不宣称这些旧 native exec 证据认证当前 app-server 权限。
+- 两条超长原生 exec 流断言归 `codexworker/exec_stream_cd67_test.go`，test-only 字节流 fixture 调用实际 `DecodeExecLine`/normalizer；`bin/cd67/native-exec-stream-moved/summary.json` 2/2 pass/complete。根包、应用包均仅编译通过。没有启用三条可选 live 入口；当前仍有 13 个 root 平台文件。
+
 ## 工作区和源码身份
 
 - 实际工作区：`C:/Users/lmas1/.codex/worktrees/f775/SteerLine`。

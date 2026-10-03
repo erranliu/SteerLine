@@ -98,40 +98,6 @@ func setTestCodexProfile(t *testing.T, config *Config, codex codexworker.Profile
 	setTestImplementationProfiles(t, config, codex, orca)
 }
 
-func setTestCodexBinding(t *testing.T, record *ExecutionRecord, endpoint, generation, sessionID string) {
-	t.Helper()
-	if record.ProjectIdentity == "" {
-		record.ProjectIdentity = "test-project"
-	}
-	if record.ExecutionID == "" {
-		record.ExecutionID = "test-execution"
-	}
-	if record.CurrentAttemptID == "" {
-		record.CurrentAttemptID = "test-attempt"
-	}
-	if record.ConfigurationDigest == "" {
-		record.ConfigurationDigest = "test-config-digest"
-	}
-	if record.Generation == "" {
-		record.Generation = "test-resource-generation"
-	}
-	envelope, err := codexworker.NewAppServerBindingEnvelope(codexworker.AppServerBindingIdentity{
-		ProjectID: record.ProjectIdentity, ExecutionID: record.ExecutionID, AttemptID: record.CurrentAttemptID,
-		Generation: record.Generation, ConfigDigest: record.ConfigurationDigest,
-	}, codexworker.AppServerBinding{Endpoint: endpoint, Generation: generation, SessionID: sessionID})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if record.Process != nil {
-		process := *record.Process
-		record.Process = &process
-	}
-	if err := putImplementationEnvelope(record, envelope); err != nil {
-		t.Fatal(err)
-	}
-	record.SessionID, record.SessionGeneration = sessionID, generation
-}
-
 func testOrcaState(t *testing.T, record *ExecutionRecord) *implementationExecutionView {
 	t.Helper()
 	state, err := decodeOrcaExecutionState(record)

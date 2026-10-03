@@ -1111,5 +1111,45 @@
     "new": "internal/steerline/publication_policy_test.go",
     "owner": "steerline",
     "change": "original fixed provider/query/close after restart and remote drift preserved"
+  },
+  {
+    "old": "internal/steerline/execution_policy_live_test.go",
+    "test": "TestExecutionPolicyNativeToolsLive",
+    "new": "internal/steerlineapp/execution_policy_live_cd67_test.go",
+    "owner": "steerlineapp",
+    "live": "STEERLINE_POLICY_LIVE_HOST + STEERLINE_POLICY_LIVE_CODEX + STEERLINE_POLICY_LIVE_REPORT",
+    "validation": "compile only; original live opt-in not enabled"
+  },
+  {
+    "old": "internal/steerline/execution_policy_live_test.go",
+    "test": "TestExecutionPolicyNativeToolsCollectLive",
+    "new": "internal/steerlineapp/execution_policy_live_cd67_test.go",
+    "owner": "steerlineapp",
+    "live": "STEERLINE_POLICY_LIVE_COLLECT",
+    "validation": "compile only; original live opt-in not enabled"
+  },
+  {
+    "old": "internal/steerline/local_capability_live_test.go",
+    "test": "TestLiveLocalCapabilityEvidence",
+    "new": "internal/steerlineapp/local_capability_live_cd67_test.go",
+    "owner": "steerlineapp",
+    "live": "STEERLINE_LOCAL_CAPABILITY_EVIDENCE_OUT + STEERLINE_LOCAL_CAPABILITY_CODEX",
+    "validation": "compile only; original live opt-in not enabled"
+  },
+  {
+    "old": "internal/steerline/spawner_test.go",
+    "test": "TestOversizedWorkerLinePreservesRawOutputAndLaterEvents",
+    "new": "internal/steerline/codexworker/exec_stream_cd67_test.go",
+    "owner": "codexworker",
+    "change": "original raw bytes/gap/offset/sequence and subsequent native decoding assertions through real implementation codec",
+    "validation": "bin/cd67/native-exec-stream-moved/summary.json complete/pass 2/2"
+  },
+  {
+    "old": "internal/steerline/spawner_test.go",
+    "test": "TestWorkerLineBeyondRawRecordLimitCreatesGap",
+    "new": "internal/steerline/codexworker/exec_stream_cd67_test.go",
+    "owner": "codexworker",
+    "change": "original raw bytes/gap/offset/sequence and subsequent native decoding assertions through real implementation codec",
+    "validation": "bin/cd67/native-exec-stream-moved/summary.json complete/pass 2/2"
   }
 ]

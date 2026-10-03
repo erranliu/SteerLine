@@ -1,12 +1,22 @@
-package steerline
+package steerlineapp
 
 import (
+	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
+	"regexp"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -30,6 +40,7 @@ func TestExecutionPolicyNativeToolsLive(t *testing.T) {
 	defer cancel()
 	root, err := os.MkdirTemp("", "steerline-policy59-"+host+"-")
 	require(t, err)
+	t.Setenv("STEERLINE_HOME", filepath.Join(root, "home"))
 	source, err := filepath.Abs("../..")
 	require(t, err)
 	repository := filepath.Join(root, "repo")
@@ -50,7 +61,7 @@ func TestExecutionPolicyNativeToolsLive(t *testing.T) {
 	} else {
 		git(source, "clone", "--quiet", "--local", "--no-hardlinks", source, repository)
 	}
-	c := Config{ExecutionPolicy: workspacePolicyFixture(), policySource: "acceptance:explicit-policy59", WorkflowProtocol: WorkerFlowVersion, Repository: repository, RunDir: filepath.Join(root, "state"), CommandTimeout: "90s", Git: Command{Executable: "git"}, Host: host, Agent: "codex"}
+	c := Config{ExecutionPolicy: workspacePolicyFixture(), WorkflowProtocol: WorkerFlowVersion, Repository: repository, RunDir: filepath.Join(root, "state"), CommandTimeout: "90s", Git: Command{Executable: "git"}, Host: host, Agent: "codex"}
 	codex := codexworker.ProfileConfig{Executable: executable}
 	orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "4m"}
 	if host == "orca" {
@@ -58,27 +69,23 @@ func TestExecutionPolicyNativeToolsLive(t *testing.T) {
 	} else {
 		orca = nil
 	}
-	c.configDigest = digestValue(struct {
-		Policy executionapi.ExecutionPolicy
-		Host   string
-	}{c.ExecutionPolicy, host})
 	setTestImplementationProfiles(t, &c, codex, orca)
-	require(t, validateWorkflowConfig(&c, nil))
+	require(t, c.ValidateProfiles())
 	require(t, c.ResolveIdentity(ctx))
-	profile := c.projectExecutionProfile().Freeze(c.identity)
+	profile := unitProjectProfile(c).Freeze(c.Identity())
 	c = c.ApplyFixedExecutionProfile(profile)
-	e := ExecutionRecord{ExecutionID: newID(), WorkflowRunID: newID(), Target: targetFor(c)}
-	run := &Run{RunID: e.WorkflowRunID, ExecutionID: e.ExecutionID, AttemptID: newID()}
+	e := steerline.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: nativePolicyID(), WorkflowRunID: nativePolicyID(), CurrentAttemptID: nativePolicyID(), Generation: nativePolicyID(), ConfigurationDigest: profile.Digest, Target: nativePolicyTarget(c)}
+	run := &steerline.Run{RunID: e.WorkflowRunID, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID}
 	path := filepath.Join(root, "linked")
 	var terminal orcaworker.Terminal
 	var runtimeID string
-	client := nativeOrcaClient(c)
+	client := orcaworker.New(nativeTerminalConfig(c, nativePolicyTarget(c)))
 	if host == "local" {
 		git(repository, "worktree", "add", "--quiet", "-b", "policy59-local", path, "HEAD")
 	} else {
 		_, err := client.MetaCall(ctx, "repo", "add", "--path", repository, "--json")
 		require(t, err)
-		repoID, err := orcaworker.FindRepo(ctx, orcaWorkerCaller(c), repository)
+		repoID, err := orcaworker.FindRepo(ctx, client.Call, repository)
 		require(t, err)
 		base := git(repository, "rev-parse", "HEAD")
 		name := "policy59-" + e.ExecutionID[:12]
@@ -87,14 +94,14 @@ func TestExecutionPolicyNativeToolsLive(t *testing.T) {
 		worktree, err := orcaworker.ParseFixedWorktreeReceipt(raw, name, repoID, base)
 		require(t, err)
 		path = filepath.FromSlash(worktree.Path)
-		e.Workspace = WorkspaceEvidence{Repository: c.identity, Worktree: path, Branch: strings.TrimPrefix(worktree.Branch, "refs/heads/")}
-		writeArgs, err := codexLinkedWorktreeWriteArgs(ctx, c, path)
+		e.Workspace = steerline.WorkspaceEvidence{Repository: c.Identity(), Worktree: path, Branch: strings.TrimPrefix(worktree.Branch, "refs/heads/")}
+		writeArgs, err := linkedWorktreeWriteArgs(ctx, c, path)
 		require(t, err)
-		require(t, bindPolicyResources(ctx, c, &e, path, writeArgs))
-		command, err := nativeOrcaCommand(c, path, e.PolicyResources.WriteRoots[1:])
+		require(t, bindNativePolicyProbeResources(ctx, c, &e, path, writeArgs))
+		command, err := managedTerminalCommand(c, path, e.PolicyResources.WriteRoots[1:])
 		require(t, err)
 		title := "policy59-" + e.ExecutionID
-		raw, err = orcaworker.CreateFixedAgentTerminal(ctx, client.MetaCall, worktree.ID, title, orcaProfileSettings(c).Shell, command)
+		raw, err = orcaworker.CreateFixedAgentTerminal(ctx, client.MetaCall, worktree.ID, title, mustTerminalSettings(c).Shell, command)
 		require(t, err)
 		terminal, err = orcaworker.ParseFixedAgentTerminalReceipt(raw, worktree.ID, title)
 		require(t, err)
@@ -104,12 +111,12 @@ func TestExecutionPolicyNativeToolsLive(t *testing.T) {
 	t.Logf("isolated native resources: %s / %s", root, path)
 	run.WorktreePath = &path
 	e.Workspace.Worktree = path
-	writeArgs, err := codexLinkedWorktreeWriteArgs(ctx, c, path)
+	writeArgs, err := linkedWorktreeWriteArgs(ctx, c, path)
 	require(t, err)
-	require(t, bindPolicyResources(ctx, c, &e, path, writeArgs))
+	require(t, bindNativePolicyProbeResources(ctx, c, &e, path, writeArgs))
 	script := filepath.Join(path, "policy59-probe.ps1")
 	resultFile := filepath.Join(path, "policy59-result.json")
-	nonce := newID()
+	nonce := nativePolicyID()
 	scriptBody := fmt.Sprintf(`$ErrorActionPreference='Stop'
 $hostRead=(Get-Content -LiteralPath "$env:SystemRoot/System32/drivers/etc/hosts" -Raw).Length -ge 0
 $tempFile=Join-Path (Get-Location) 'policy59-data.tmp'
@@ -139,11 +146,11 @@ Write-Output ('SLPOLICY59:%s:' + ($result | ConvertTo-Json -Compress))
 	var nativeTurn string
 	var sendReceipt json.RawMessage
 	if host == "local" {
-		backend := codexBackend(c, run)
-		input := executionapi.TurnInput{CommandID: newID(), Prompt: prompt}
+		backend := nativePolicyBackend(t, c, run, &e, profile)
+		input := executionapi.TurnInput{CommandID: nativePolicyID(), Prompt: prompt}
 		session, binding, err := backend.PrepareSession(ctx, codexworker.Binding{}, input)
 		if binding.Endpoint != "" || binding.SessionID != "" {
-			setTestCodexBinding(t, &e, binding.Endpoint, binding.Generation, binding.SessionID)
+			setNativePolicyBinding(t, &e, binding.Endpoint, binding.Generation, binding.SessionID)
 			e.Process = binding.Process
 		}
 		require(t, err)
@@ -160,7 +167,7 @@ Write-Output ('SLPOLICY59:%s:' + ($result | ConvertTo-Json -Compress))
 		// The production input qualifier checks the current rendered composer and
 		// original terminal/incarnation, rather than the CLI's stream idle heuristic.
 		for {
-			fact, canSend, err := orcaworker.InspectAgentInput(ctx, client.MetaCall, workerOrcaTerminalIdentity(*e.Process))
+			fact, canSend, err := orcaworker.InspectAgentInput(ctx, client.MetaCall, orcaworker.TerminalIdentity{Kind: e.Process.Kind, Handle: e.Process.Terminal, RuntimeID: e.Process.RuntimeID, Incarnation: e.Process.Incarnation})
 			require(t, err)
 			if canSend {
 				break
@@ -184,7 +191,7 @@ Write-Output ('SLPOLICY59:%s:' + ($result | ConvertTo-Json -Compress))
 		}
 		require(t, ctx.Err())
 		for {
-			_, idle, err := orcaworker.InspectAgentInput(ctx, client.MetaCall, workerOrcaTerminalIdentity(*e.Process))
+			_, idle, err := orcaworker.InspectAgentInput(ctx, client.MetaCall, orcaworker.TerminalIdentity{Kind: e.Process.Kind, Handle: e.Process.Terminal, RuntimeID: e.Process.RuntimeID, Incarnation: e.Process.Incarnation})
 			require(t, err)
 			if idle {
 				break
@@ -216,8 +223,8 @@ Write-Output ('SLPOLICY59:%s:' + ($result | ConvertTo-Json -Compress))
 		Blob     string `json:"blob"`
 		Status   string `json:"status"`
 	}
-	require(t, decode(raw, &result))
-	if !commitHash.MatchString(result.Blob) || result.Nonce != nonce || !result.HostRead || !result.Read || !result.Write || !result.Delete || !result.Index || !result.Refs || result.Status != "" || canonical(result.Common) != c.identity {
+	require(t, contracts.DecodeJSON(raw, &result))
+	if !nativePolicyCommit.MatchString(result.Blob) || result.Nonce != nonce || !result.HostRead || !result.Read || !result.Write || !result.Delete || !result.Index || !result.Refs || result.Status != "" || nativePolicyCanonical(result.Common) != c.Identity() {
 		t.Fatalf("native tool checks failed: %s", raw)
 	}
 	records, err := os.ReadFile(journalPath)
@@ -226,7 +233,7 @@ Write-Output ('SLPOLICY59:%s:' + ($result | ConvertTo-Json -Compress))
 		t.Fatal("result has no original native tool evidence")
 	}
 	// Save only bounded native evidence for this new session, never unrelated history.
-	evidence := map[string]any{"captured_at": now(), "scope": "new policy mapping; isolated native tools; no readiness receipt or business dispatch", "profile": profile, "execution": e, "turn_id": nativeTurn, "send_receipt": sendReceipt, "result": json.RawMessage(trimBOM(raw)), "state_root": root, "journal_path": journalPath, "native_events": policyNativeEvents(records, nonce)}
+	evidence := map[string]any{"captured_at": time.Now().UTC(), "scope": "new policy mapping; isolated native tools; no readiness receipt or business dispatch", "profile": profile, "execution": e, "turn_id": nativeTurn, "send_receipt": sendReceipt, "result": json.RawMessage(nativePolicyTrimBOM(raw)), "state_root": root, "journal_path": journalPath, "native_events": policyNativeEvents(records, nonce)}
 	data, err := json.MarshalIndent(evidence, "", "  ")
 	require(t, err)
 	require(t, os.WriteFile(reportPath, data, 0600))
@@ -234,7 +241,7 @@ Write-Output ('SLPOLICY59:%s:' + ($result | ConvertTo-Json -Compress))
 	require(t, os.Remove(script))
 	require(t, os.Remove(resultFile))
 	// The blob exists only in this no-hardlinks acceptance clone; delete this exact object.
-	object := filepath.Join(c.identity, "objects", result.Blob[:2], result.Blob[2:])
+	object := filepath.Join(c.Identity(), "objects", result.Blob[:2], result.Blob[2:])
 	require(t, os.Remove(object))
 	if git(path, "status", "--porcelain") != "" {
 		t.Fatal("acceptance worktree not clean")
@@ -271,7 +278,7 @@ func findPolicyNativeJournal(t *testing.T, workspace string) string {
 				Cwd string `json:"cwd"`
 			} `json:"payload"`
 		}
-		if json.Unmarshal([]byte(line), &meta) == nil && canonical(meta.Payload.Cwd) == canonical(workspace) {
+		if json.Unmarshal([]byte(line), &meta) == nil && nativePolicyCanonical(meta.Payload.Cwd) == nativePolicyCanonical(workspace) {
 			if found != "" {
 				return fmt.Errorf("multiple native sessions for isolated workspace")
 			}
@@ -295,22 +302,24 @@ func TestExecutionPolicyNativeToolsCollectLive(t *testing.T) {
 	raw, err := os.ReadFile(reportPath)
 	require(t, err)
 	var saved struct {
-		Execution ExecutionRecord       `json:"execution"`
-		Profile   FixedExecutionProfile `json:"profile"`
-		StateRoot string                `json:"state_root"`
-		Scope     string                `json:"scope"`
+		Execution steerline.ExecutionRecord `json:"execution"`
+		Profile   FixedExecutionProfile     `json:"profile"`
+		StateRoot string                    `json:"state_root"`
+		Scope     string                    `json:"scope"`
 	}
-	require(t, decode(raw, &saved))
+	require(t, contracts.DecodeJSON(raw, &saved))
 	if saved.Scope != "in-progress native policy check" || !testVerifyFixedExecutionProfile(saved.Profile) {
 		t.Fatal("not an original incomplete native check")
 	}
 	e := saved.Execution
-	require(t, verifyPolicyResources(testConfigWithDirectory(Config{}).ApplyFixedExecutionProfile(saved.Profile), e.PolicyResources, saved.Profile.Digest, e.Workspace.Worktree))
-	c := testConfigWithDirectory(Config{Repository: filepath.Dir(e.Workspace.Repository), identity: e.Workspace.Repository, CommandTimeout: "90s"}).ApplyFixedExecutionProfile(saved.Profile)
-	client := nativeOrcaClient(c)
+	c := bindUnitDirectory(t, Config{Repository: filepath.Dir(e.Workspace.Repository), CommandTimeout: "90s", Git: Command{Executable: "git"}})
+	require(t, c.ResolveIdentity(context.Background()))
+	c = c.ApplyFixedExecutionProfile(saved.Profile)
+	require(t, verifyNativePolicyProbeResources(c, &e, saved.Profile.Digest, e.Workspace.Worktree))
+	client := orcaworker.New(nativeTerminalConfig(c, nativePolicyTarget(c)))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
-	fact, idle, err := orcaworker.InspectAgentInput(ctx, client.MetaCall, workerOrcaTerminalIdentity(*e.Process))
+	fact, idle, err := orcaworker.InspectAgentInput(ctx, client.MetaCall, orcaworker.TerminalIdentity{Kind: e.Process.Kind, Handle: e.Process.Terminal, RuntimeID: e.Process.RuntimeID, Incarnation: e.Process.Incarnation})
 	require(t, err)
 	if !idle || fact.Runtime != e.Process.RuntimeID || fact.Incarnation != e.Process.Incarnation {
 		t.Fatalf("original session not verified: %+v", fact)
@@ -319,10 +328,10 @@ func TestExecutionPolicyNativeToolsCollectLive(t *testing.T) {
 	resultRaw, err := os.ReadFile(resultPath)
 	require(t, err)
 	var result map[string]any
-	require(t, json.Unmarshal(trimBOM(resultRaw), &result))
+	require(t, json.Unmarshal(nativePolicyTrimBOM(resultRaw), &result))
 	nonce, _ := result["nonce"].(string)
 	blob, _ := result["blob"].(string)
-	if !stableExecutionID(nonce) || !commitHash.MatchString(blob) || canonical(fmt.Sprint(result["git_common"])) != c.identity || result["status"] != "" {
+	if !regexp.MustCompile(`^[0-9a-f]{32}$`).MatchString(nonce) || !nativePolicyCommit.MatchString(blob) || nativePolicyCanonical(fmt.Sprint(result["git_common"])) != c.Identity() || result["status"] != "" {
 		t.Fatal("tool result differs from original workspace")
 	}
 	for _, key := range []string{"host_read", "workspace_read", "workspace_write", "delete", "git_index_write", "git_ref_log_write"} {
@@ -343,7 +352,7 @@ func TestExecutionPolicyNativeToolsCollectLive(t *testing.T) {
 		} `json:"payload"`
 	}
 	require(t, json.Unmarshal([]byte(first), &meta))
-	envelope, ok, err := implementationEnvelope(&e, codexworker.ExecutionBindingCodecKey)
+	envelope, ok, err := nativePolicyBindingEnvelope(&e)
 	require(t, err)
 	if !ok {
 		t.Fatal("saved native execution lost its app-server binding envelope")
@@ -354,8 +363,8 @@ func TestExecutionPolicyNativeToolsCollectLive(t *testing.T) {
 	})
 	require(t, err)
 	binding.SessionID = meta.Payload.ID
-	setTestCodexBinding(t, &e, binding.Endpoint, binding.Generation, binding.SessionID)
-	evidence := map[string]any{"captured_at": now(), "scope": "new policy mapping; original persisted snapshot; native tool collection only; no resend or readiness receipt", "profile": saved.Profile, "execution": e, "result": result, "state_root": saved.StateRoot, "journal_path": journal, "native_events": policyNativeEvents(events, nonce)}
+	setNativePolicyBinding(t, &e, binding.Endpoint, binding.Generation, binding.SessionID)
+	evidence := map[string]any{"captured_at": time.Now().UTC(), "scope": "new policy mapping; original persisted snapshot; native tool collection only; no resend or readiness receipt", "profile": saved.Profile, "execution": e, "result": result, "state_root": saved.StateRoot, "journal_path": journal, "native_events": policyNativeEvents(events, nonce)}
 	data, err := json.MarshalIndent(evidence, "", "  ")
 	require(t, err)
 	require(t, os.WriteFile(reportPath, data, 0600))
@@ -369,7 +378,7 @@ func TestExecutionPolicyNativeToolsCollectLive(t *testing.T) {
 	git("update-ref", "-d", "refs/steerline-policy59/"+nonce)
 	require(t, os.Remove(filepath.Join(e.Workspace.Worktree, "policy59-probe.ps1")))
 	require(t, os.Remove(resultPath))
-	require(t, os.Remove(filepath.Join(c.identity, "objects", blob[:2], blob[2:])))
+	require(t, os.Remove(filepath.Join(c.Identity(), "objects", blob[:2], blob[2:])))
 	_, err = client.MetaCall(ctx, "terminal", "close", "--terminal", e.Process.Terminal, "--json")
 	require(t, err)
 	t.Logf("original new-policy tool evidence collected without resend: %s", reportPath)
@@ -424,4 +433,121 @@ func policyNativeEvents(data []byte, nonce string) []json.RawMessage {
 		}
 	}
 	return out
+}
+
+var nativePolicyCommit = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
+
+func nativePolicyID() string {
+	var value [16]byte
+	if _, err := rand.Read(value[:]); err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(value[:])
+}
+func nativePolicyCanonical(path string) string {
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return path
+	}
+	if runtime.GOOS == "windows" {
+		return strings.ToLower(filepath.Clean(absolute))
+	}
+	return filepath.Clean(absolute)
+}
+func nativePolicyTrimBOM(raw []byte) []byte { return bytes.TrimPrefix(raw, []byte{0xef, 0xbb, 0xbf}) }
+func nativePolicyTarget(c Config) executionapi.ExecutionTarget {
+	entry, err := c.ExecutionDirectory.Resolve(c)
+	if err != nil {
+		panic(err)
+	}
+	return entry.Target(c)
+}
+
+// These helpers construct only an acceptance report DTO. They receive neither
+// a Service nor a Store, and invoke the actual catalog's resource codec.
+func nativePolicyResourceDigest(resources contracts.PolicyResources) string {
+	resources.Digest = ""
+	sum := sha256.Sum256(mustJSON(resources))
+	return hex.EncodeToString(sum[:])
+}
+func bindNativePolicyProbeResources(ctx context.Context, c Config, e *steerline.ExecutionRecord, path string, linked []string) error {
+	entry, err := c.ExecutionDirectory.Resolve(c)
+	if err != nil {
+		return err
+	}
+	if len(c.ImplementationData) == 0 {
+		return errors.New("accepted native profile data missing")
+	}
+	profile := c.ImplementationData[0]
+	id := steerline.PolicyResourceIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}
+	value, err := entry.BuildPolicyResource(ctx, steerline.PolicyResourceBuildRequest{ProfileData: c.ImplementationData, ProjectID: c.Identity(), ProfileID: profile.ProfileID, AcceptedConfigVersion: profile.AcceptedConfigVersion, Resource: id, Policy: c.ExecutionPolicy, Host: c.Host, Agent: c.Agent, Workspace: path, LinkedWorktreeArgs: linked, RepositoryPath: c.Repository, CommandTimeout: 90 * time.Second})
+	if err != nil {
+		return err
+	}
+	if err := entry.VerifyPolicyResource(value.Envelope, id); err != nil {
+		return err
+	}
+	resources := contracts.PolicyResources{Version: 3, ProfileDigest: e.ConfigurationDigest, Workspace: path, WriteRoots: append([]string(nil), value.WriteRoots...), TemporaryRoots: []string{}, ImplementationData: value.Envelope.Clone()}
+	resources.Digest = nativePolicyResourceDigest(resources)
+	if e.PolicyResources != nil && !reflect.DeepEqual(*e.PolicyResources, resources) {
+		return errors.New("original native acceptance resources changed")
+	}
+	e.PolicyResources = &resources
+	return nil
+}
+func verifyNativePolicyProbeResources(c Config, e *steerline.ExecutionRecord, digest, path string) error {
+	r := e.PolicyResources
+	if r == nil || r.Version != 3 || r.Digest != nativePolicyResourceDigest(*r) || r.ProfileDigest != digest || r.Workspace != path || len(r.TemporaryRoots) != 0 || r.ImplementationData.ConfigDigest != digest {
+		return errors.New("original acceptance resource snapshot differs")
+	}
+	entry, err := c.ExecutionDirectory.Resolve(c)
+	if err != nil {
+		return err
+	}
+	return entry.VerifyPolicyResource(r.ImplementationData, steerline.PolicyResourceIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest})
+}
+func setNativePolicyBinding(t *testing.T, e *steerline.ExecutionRecord, endpoint, generation, session string) {
+	t.Helper()
+	envelope, err := codexworker.NewAppServerBindingEnvelope(codexworker.AppServerBindingIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, codexworker.AppServerBinding{Endpoint: endpoint, Generation: generation, SessionID: session})
+	require(t, err)
+	found := false
+	for i := range e.ImplementationData {
+		if e.ImplementationData[i].ImplementationKey == envelope.ImplementationKey {
+			if found {
+				t.Fatal("duplicate native binding envelope")
+			}
+			e.ImplementationData[i] = envelope.Clone()
+			found = true
+		}
+	}
+	if !found {
+		e.ImplementationData = append(e.ImplementationData, envelope.Clone())
+	}
+	e.SessionID, e.SessionGeneration = session, generation
+}
+func nativePolicyBindingEnvelope(e *steerline.ExecutionRecord) (executionapi.ImplementationDataEnvelope, bool, error) {
+	var value executionapi.ImplementationDataEnvelope
+	found := false
+	for _, envelope := range e.ImplementationData {
+		if envelope.ImplementationKey == codexworker.ExecutionBindingCodecKey {
+			if found {
+				return value, false, errors.New("duplicate native binding envelope")
+			}
+			value, found = envelope.Clone(), true
+		}
+	}
+	return value, found, nil
+}
+func nativePolicyBackend(t *testing.T, c Config, run *steerline.Run, e *steerline.ExecutionRecord, profile FixedExecutionProfile) codexworker.Backend {
+	t.Helper()
+	entry, err := c.ExecutionDirectory.Resolve(c)
+	require(t, err)
+	snapshot := executionapi.LifecycleSnapshot{Ref: executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol, Target: e.Target, Agent: executionapi.AgentSpec{Name: c.Agent}, RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: *run.WorktreePath}, Session: executionapi.SessionContext{ProjectID: c.Identity(), ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, WorkflowRunID: run.RunID, Agent: executionapi.AgentSpec{Name: c.Agent}}, ResourceGeneration: e.Generation, ConfigurationDigest: e.ConfigurationDigest}
+	port, err := entry.Lifecycle(executionapi.LifecycleSetup{Snapshot: snapshot, ProfileData: c.ImplementationData, ProfileID: profile.ID, AcceptedConfigVersion: profile.AcceptedConfigVersion, Policy: c.ExecutionPolicy, ProcessHost: c.ProcessHost, RunDirectory: c.RunDir, RepositoryPath: c.Repository, CommandTimeout: 90 * time.Second, BlockedEnvironment: []string{"GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN"}})
+	require(t, err)
+	actual, ok := port.(codexworker.ExecutionLifecycle)
+	if !ok {
+		t.Fatal("native app-server lifecycle type differs")
+	}
+	return actual.Backend
 }

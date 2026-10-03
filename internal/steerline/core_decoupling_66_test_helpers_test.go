@@ -116,10 +116,6 @@ func newTestDirectory() (*ExecutionDirectory, error) {
 
 type testProcessHost struct{}
 
-type localManagedProcessHost = testProcessHost
-
-func NewCodexNormalizer() Normalizer { return codexworker.NewNormalizer() }
-
 func orcaQuestionID(decision *DecisionState) string {
 	if decision == nil || decision.Request.QuestionRoute == nil {
 		return ""
@@ -196,11 +192,6 @@ func testPrepareClaim(ctx context.Context, c Config) (ClaimPreparation, error) {
 		return ClaimPreparation{RequiresReadiness: true, WaitTimeout: positiveDuration(orcaProfileSettings(c).WaitTimeout, 2*time.Minute)}, nil
 	}
 	return ClaimPreparation{}, nil
-}
-
-func testVerifyFixedExecutionProfile(profile FixedExecutionProfile) bool {
-	directory, err := mustTestDirectory()
-	return err == nil && verifyFixedExecutionProfile(profile, directory)
 }
 
 func testLocalTarget() executionapi.ExecutionTarget {

@@ -10,15 +10,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
-// Helpers retained only for contract/native acceptance fixtures. Recovery and
-// protocol helpers delegate to production adapters; the legacy process output
-// reader remains a test utility and is not an app-server production route.
+// The bounded raw output reader is a test utility for generic process evidence.
 
 func (s *Service) requireBackendCapabilities(ctx context.Context, backend executionapi.ExecutionProbe, names ...string) (executionapi.CapabilityReport, error) {
 	return s.requireBackendCapabilitiesFor(ctx, backend, targetFor(s.Config), agentFor(s.Config), names...)
@@ -136,19 +132,4 @@ func readOutputPrefix(f *os.File, offset int64) (string, error) {
 	_, _ = hash.Write(first)
 	_, _ = hash.Write(last)
 	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
-func appServerDirectory(c Config, run *Run) string {
-	if run.DomainAttemptNumber > 1 {
-		return filepath.Join(c.RunDir, "runs", run.RunID, "attempts", run.AttemptID, "app-server")
-	}
-	return filepath.Join(c.RunDir, "runs", run.RunID, "app-server")
-}
-
-func codexBackend(c Config, run *Run) codexworker.Backend {
-	settings := codexProfileSettings(c)
-	permissions, _ := codexworker.CompilePolicy(c.ExecutionPolicy, runtime.GOOS, c.hostName(), c.agentName(), settings.WindowsSandbox, settings.Profile, settings.Args)
-	return codexworker.Backend{Config: codexworker.Config{Policy: c.ExecutionPolicy, Executable: settings.Executable, Args: settings.Args, Profile: settings.Profile, Sandbox: permissions.Sandbox, WindowsSandbox: settings.WindowsSandbox, Model: settings.Model, ReasoningEffort: settings.ReasoningEffort, Workspace: deref(run.WorktreePath), RunDir: c.RunDir, RunID: run.RunID, ServerDir: appServerDirectory(c, run), Environment: func(base []string) []string {
-		return workerProcessEnvironment(c, run, base)
-	}}, Process: codexworker.ProcessPort{Start: localManagedProcessHost{}.StartManaged, Inspect: inspectProcess, NewGeneration: newID, WriteAtomic: AtomicWrite}}
 }

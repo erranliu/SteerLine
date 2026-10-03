@@ -190,7 +190,7 @@
       "codexBackend"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/execution_backend_test.go",
@@ -227,7 +227,7 @@
       "STEERLINE_POLICY_LIVE_REPO",
       "STEERLINE_POLICY_LIVE_REPORT"
     ],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/execution_policy_test.go",
@@ -352,7 +352,7 @@
     "live_switches": [
       "STEERLINE_LOCAL_CAPABILITY_EVIDENCE_OUT"
     ],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/local_windows_sandbox_test.go",
@@ -547,7 +547,7 @@
       "emitWorkerLine"
     ],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/profile_publication_test.go",
@@ -628,7 +628,7 @@
     ],
     "helpers": [],
     "live_switches": [],
-    "pending_platform_content": true
+    "pending_platform_content": false
   },
   {
     "path": "internal/steerline/sqlite_store_test.go",
