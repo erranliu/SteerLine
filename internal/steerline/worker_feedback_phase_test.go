@@ -15,7 +15,7 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	require(t, service.commitWorker(run))
 	decision := service.decisionRecord(run)
 	answer := DecisionAnswer{DecisionID: decision.DecisionID, RunID: run.RunID, Note: "continue", AnsweredBy: "operator", AnsweredAt: now(), ExpectedDecisionVersion: decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
-	commands := CommandService{Store: service.domainStore, Project: service.Config.identity}
+	commands := CommandService{Store: service.commandStore, Project: service.Config.identity}
 	command, _, err := commands.AnswerDecisionWithID(ctx, newID(), decision.DecisionID, decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
 	_, _, err = commands.AcceptAnswer(ctx, command, answer)
@@ -24,7 +24,7 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	workflow, execution = service.workflowRecords(run)
 	decision = service.decisionRecord(run)
 	expectedWorkflow, expectedExecution, expectedDecision := *workflow, *execution, *decision
-	checkpoint, _, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
+	checkpoint, _, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
 	_, beforeRevision, err := service.domainStore.DatabaseVersion(ctx)
 	require(t, err)
@@ -48,7 +48,7 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	attempt := *service.workflowAttempt(run, run.AttemptID)
 	request := workerCommit{Project: service.Config.Identity(), TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, ControlRevision: expectedWorkflow.ControlRevision,
 		Workflow: &recordWrite[WorkflowRunRecord]{Before: &expectedWorkflow, After: nextWorkflow}, Execution: &recordWrite[ExecutionRecord]{Before: &expectedExecution, After: expectedExecution}, Attempt: &recordWrite[StepAttemptRecord]{Before: &attempt, After: attempt}, Decisions: []recordWrite[DecisionRecord]{{Before: &expectedDecision, After: expectedDecision}}, Checkpoint: runtimeCheckpoint(service.State)}
-	result, err := service.domainStore.commitWorker(ctx, request)
+	result, err := testSQLite(service).CommitWorker(ctx, request)
 	committed := nextWorkflow
 	committed.ControlRevision = result.ControlRevision
 	require(t, err)
@@ -60,7 +60,7 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	if len(loaded.WorkflowRuns) != 1 || loaded.WorkflowRuns[0].Phase != "waiting_decision" || loaded.Runs[0].Decision.Status != "answer_saved" {
 		t.Fatalf("coherent read missed the committed feedback phase: %+v", loaded.Runs)
 	}
-	afterCheckpoint, _, err := service.domainStore.LoadProjection(ctx, service.Config.Identity())
+	afterCheckpoint, _, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
 	if bytes.Equal(checkpoint, afterCheckpoint) {
 		t.Fatal("feedback phase did not publish its checkpoint atomically")
@@ -71,7 +71,7 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 		t.Fatalf("feedback phase commit advanced database revision %d -> %d", beforeRevision, committedRevision)
 	}
 
-	_, err = service.domainStore.commitWorker(ctx, request)
+	_, err = testSQLite(service).CommitWorker(ctx, request)
 	if !isNativeErrorCode(err, "stale_revision") {
 		t.Fatalf("stale feedback transition was accepted: %v", err)
 	}

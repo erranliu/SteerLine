@@ -153,7 +153,7 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 func testCD64InboxCommitBeforeAck(t *testing.T) {
 	s, run := waitingDecisionService(t)
 	t.Cleanup(func() { _ = s.Close() })
-	_, err := s.domainStore.db.Exec(`CREATE TRIGGER reject_delivery_checkpoint BEFORE UPDATE ON projection BEGIN SELECT RAISE(FAIL, 'delivery commit failed'); END`)
+	_, err := testSQLite(s).db.Exec(`CREATE TRIGGER reject_delivery_checkpoint BEFORE UPDATE ON projection BEGIN SELECT RAISE(FAIL, 'delivery commit failed'); END`)
 	require(t, err)
 	// An ack requires resolving an implementation. No resolver may be reached
 	// after a failed content/consumption transaction.

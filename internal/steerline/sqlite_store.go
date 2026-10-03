@@ -10,44 +10,9 @@ import (
 	"path/filepath"
 	"runtime"
 
-	_ "modernc.org/sqlite"
-
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/query"
+	_ "modernc.org/sqlite"
 )
-
-type DomainTx interface {
-	PutTask(TaskRecord) error
-	PutWorkflowRun(WorkflowRunRecord) error
-	PutExecution(ExecutionRecord) error
-	PutStepAttempt(StepAttemptRecord) error
-	PutDecision(DecisionRecord) error
-	AppendEvent(DomainEvent) (int64, error)
-	PutOperation(OperationRecord) (OperationRecord, bool, error)
-	UpdateOperation(OperationRecord) error
-	EnqueueCommand(CommandRecord) (CommandRecord, bool, error)
-	UpdateCommand(CommandRecord) error
-	AcceptDecisionAnswer(CommandRecord, DecisionAnswer) (DecisionRecord, bool, error)
-	PutProjection(project string, revision uint64, payload []byte) error
-	PutProjectTaskAuthority(ProjectTaskAuthority) error
-	UpdateProjectTaskAuthorityCAS(ProjectTaskAuthority, uint64) error
-	PutTaskContract(string, string, TaskContract) error
-	PutTaskBatch(TaskBatchRecord, uint64, uint64) error
-	PutTaskDependency(TaskDependencyRecord) error
-	PutTaskDelivery(TaskDeliveryRecord) error
-	UpdateNativeTaskCAS(TaskRecord, uint64) error
-	AdvanceTaskGraphRevision(string, uint64, uint64) (uint64, error)
-}
-
-type DomainStore interface {
-	query.Store
-	Close() error
-	Transact(context.Context, func(DomainTx) error) error
-	LoadProjection(context.Context, string) ([]byte, uint64, error)
-	Commands(context.Context, string, string, int) ([]CommandRecord, error)
-	Command(context.Context, string, string) (CommandRecord, error)
-	CommandByIdempotency(context.Context, string, string) (CommandRecord, error)
-}
 
 type SQLiteStore struct {
 	db            *sql.DB
@@ -131,15 +96,7 @@ func openSQLiteInspector(path string) (*SQLiteStore, error) {
 
 func (s *SQLiteStore) Close() error { return s.db.Close() }
 
-func (s *SQLiteStore) Transact(ctx context.Context, fn func(DomainTx) error) error {
-	if fn == nil {
-		return s.transactSQLite(ctx, nil)
-	}
-	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return fn(tx) })
-}
-
-// transactSQLite gives center-owned writes the concrete transaction they need.
-// Transact retains the DomainStore contract for callers using only DomainTx.
+// transactSQLite is private to the unique SQLite executor.
 func (s *SQLiteStore) transactSQLite(ctx context.Context, fn func(*sqliteTx) error) error {
 	if s.readOnly {
 		return errors.New("SQLite reader is read-only")

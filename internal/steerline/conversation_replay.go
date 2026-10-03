@@ -152,7 +152,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 	}
 	mapper := s.conversationSources.RestoreMapper(contracts.ConversationMapperSnapshot{})
 	var sourceSeq uint64
-	checkpoints, err := s.domainStore.ConversationSourceCheckpoints(ctx, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource)
+	checkpoints, err := s.conversationStore.ConversationSourceCheckpoints(ctx, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource)
 	if err != nil {
 		return err
 	}
@@ -186,7 +186,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 			readCursor.HeaderHash = "modified-since-checkpoint"
 		}
 		sourceSeq = position.SourceSeq
-		snapshot, snapshotErr := s.domainStore.ConversationMapperSnapshot(ctx, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource, segment)
+		snapshot, snapshotErr := s.conversationStore.ConversationMapperSnapshot(ctx, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource, segment)
 		if snapshotErr != nil {
 			return snapshotErr
 		}
@@ -218,7 +218,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 			return positionErr
 		}
 		checkpoint := ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: gap.Source, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: checkpointCursor, UpdatedAt: now()}
-		if _, err = s.domainStore.CommitConversation(ctx, []ConversationWrite{{Event: gap}}, checkpoint); err != nil {
+		if _, err = s.conversationStore.CommitConversation(ctx, []ConversationWrite{{Event: gap}}, checkpoint); err != nil {
 			return err
 		}
 	}
@@ -263,7 +263,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 				return positionErr
 			}
 			checkpoint := ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: gap.Source, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: checkpointCursor, UpdatedAt: now()}
-			if _, err = s.domainStore.CommitConversation(ctx, []ConversationWrite{{Event: gap}}, checkpoint); err != nil {
+			if _, err = s.conversationStore.CommitConversation(ctx, []ConversationWrite{{Event: gap}}, checkpoint); err != nil {
 				return err
 			}
 		}
@@ -298,7 +298,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 			writes = append(writes, mapped)
 		}
 		if len(writes) > 0 {
-			position, positionErr := currentConversationJournalPosition(ctx, s.domainStore, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource, segment, batch.Cursor.Generation, source.Path, source.FileID, batch.Cursor.Offset, sourceSeq)
+			position, positionErr := currentConversationJournalPosition(ctx, s.conversationStore, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource, segment, batch.Cursor.Generation, source.Path, source.FileID, batch.Cursor.Offset, sourceSeq)
 			if positionErr != nil {
 				return positionErr
 			}
@@ -307,7 +307,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 				return positionErr
 			}
 			checkpoint := ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: journalSource, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: checkpointCursor, LocalSeq: sourceSeq, AllowReplay: true, UpdatedAt: now()}
-			if _, err = s.domainStore.CommitConversation(ctx, writes, checkpoint); err != nil {
+			if _, err = s.conversationStore.CommitConversation(ctx, writes, checkpoint); err != nil {
 				return err
 			}
 		}
@@ -338,7 +338,7 @@ func (s *Service) replayConversationTail(ctx context.Context, source conversatio
 	if err != nil {
 		return err
 	}
-	position, err := currentConversationJournalPosition(ctx, s.domainStore, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource, segment, positionGeneration, source.Path, source.FileID, end, sequence)
+	position, err := currentConversationJournalPosition(ctx, s.conversationStore, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource, segment, positionGeneration, source.Path, source.FileID, end, sequence)
 	if err != nil {
 		return err
 	}
@@ -360,7 +360,7 @@ func (s *Service) replayConversationTail(ctx context.Context, source conversatio
 			Evidence: map[string]string{"source_record": "events.jsonl", "byte_start": fmt.Sprint(start), "byte_end": fmt.Sprint(end), "replay": "true", "unterminated_final_record": "true"},
 		}
 		checkpoint := ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: event.Source, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: string(cursor), LocalSeq: sequence, AllowReplay: true, UpdatedAt: now()}
-		_, err := s.domainStore.CommitConversation(ctx, []ConversationWrite{{Event: event, Raw: raw}}, checkpoint)
+		_, err := s.conversationStore.CommitConversation(ctx, []ConversationWrite{{Event: event, Raw: raw}}, checkpoint)
 		return err
 	}
 	base := ConversationEvent{
@@ -375,7 +375,7 @@ func (s *Service) replayConversationTail(ctx context.Context, source conversatio
 	}
 	write := mapper.MapRecord(base, raw)
 	checkpoint := ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: journalSource, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: string(cursor), LocalSeq: sequence, AllowReplay: true, UpdatedAt: now()}
-	_, err = s.domainStore.CommitConversation(ctx, []ConversationWrite{write}, checkpoint)
+	_, err = s.conversationStore.CommitConversation(ctx, []ConversationWrite{write}, checkpoint)
 	return err
 }
 
@@ -388,7 +388,7 @@ func (s *Service) replayConversationTailGap(ctx context.Context, source conversa
 	if err != nil {
 		return err
 	}
-	position, err := currentConversationJournalPosition(ctx, s.domainStore, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource, segment, positionGeneration, source.Path, source.FileID, end, sequence)
+	position, err := currentConversationJournalPosition(ctx, s.conversationStore, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource, segment, positionGeneration, source.Path, source.FileID, end, sequence)
 	if err != nil {
 		return err
 	}
@@ -408,6 +408,6 @@ func (s *Service) replayConversationTailGap(ctx context.Context, source conversa
 		Evidence: map[string]string{"source_record": "events.jsonl", "byte_start": fmt.Sprint(start), "byte_end": fmt.Sprint(end), "replay": "true"},
 	}
 	checkpoint := ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: event.Source, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: string(cursor), LocalSeq: sequence, AllowReplay: true, UpdatedAt: now()}
-	_, err = s.domainStore.CommitConversation(ctx, []ConversationWrite{{Event: event}}, checkpoint)
+	_, err = s.conversationStore.CommitConversation(ctx, []ConversationWrite{{Event: event}}, checkpoint)
 	return err
 }

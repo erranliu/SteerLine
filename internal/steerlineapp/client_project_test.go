@@ -2,6 +2,7 @@ package steerlineapp
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/console"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
 
 func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
@@ -51,7 +53,7 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 	}
 	defer writer.Close()
 	at := time.Now().UTC()
-	err = writer.Transact(ctx, func(tx steerline.DomainTx) error {
+	err = writer.TransactTaskBatch(ctx, func(tx persistence.BatchTx) error {
 		if err := tx.PutTaskBatch(steerline.TaskBatchRecord{ProjectIdentity: cfg.Identity(), BatchID: "source-batch", SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("a", 64), CommandID: "source-command", TaskIDs: map[string]string{"a": "2", "b": "10"}, CreatedAt: at}, 1, 0); err != nil {
 			return err
 		}
@@ -103,10 +105,19 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 	if missing.NativeTaskError == "" || !missing.FullReadAt.IsZero() || missing.NativeTasks == nil || missing.Tasks == nil || missing.Domain == nil {
 		t.Fatal("missing selection discarded read-only data or made the refresh reusable")
 	}
-	if err := writer.Transact(ctx, func(tx steerline.DomainTx) error {
-		return tx.PutProjection(cfg.Identity(), 1, []byte("invalid JSON"))
-	}); err != nil {
+	// Corruption is a test-only direct database mutation; no product writer
+	// accepts an arbitrary checkpoint payload.
+	corruptDB, err := sql.Open("sqlite", filepath.Join(cfg.RunDir, "steerline.db"))
+	if err != nil {
 		t.Fatal(err)
+	}
+	_, err = corruptDB.ExecContext(ctx, `INSERT INTO projection(project_identity,revision,payload,updated_at) VALUES(?,?,?,?)`, cfg.Identity(), 1, []byte("invalid JSON"), at.Format(time.RFC3339Nano))
+	closeErr := corruptDB.Close()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if closeErr != nil {
+		t.Fatal(closeErr)
 	}
 	corrupt := (console.FileQuerySource{Factory: factory}).ReadProject(ctx, ref, "2", console.ProjectSnapshot{})
 	if corrupt.Connection.State != steerline.ConnectionCorrupt || corrupt.Connection.CanStart || corrupt.Connection.CanControl ||

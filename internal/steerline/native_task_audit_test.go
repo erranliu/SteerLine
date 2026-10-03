@@ -26,7 +26,7 @@ func nativeAuditRecords(t *testing.T, store *SQLiteStore, a ProjectTaskAuthority
 	created := time.Now().UTC()
 	ref := FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
 	tasks := []TaskRecord{}
-	err := store.Transact(context.Background(), func(tx DomainTx) error {
+	err := store.transactSQLite(context.Background(), func(tx *sqliteTx) error {
 		if err := tx.PutTaskBatch(TaskBatchRecord{BatchID: "audit-batch", ProjectIdentity: a.ProjectIdentity, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("c", 64), CommandID: "audit-command", CreatedAt: created, TaskIDs: map[string]string{"a": "2", "b": "10", "c": "99"}}, a.AuthorityVersion, a.GraphRevision); err != nil {
 			return err
 		}
@@ -56,7 +56,7 @@ func nativeAuditStore(t *testing.T) (*SQLiteStore, string, []TaskRecord) {
 	t.Helper()
 	s := openDomainTestStore(t)
 	a := ProjectTaskAuthority{ProjectIdentity: "audit-project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
-	require(t, s.Transact(context.Background(), func(tx DomainTx) error { return tx.PutProjectTaskAuthority(a) }))
+	require(t, s.transactSQLite(context.Background(), func(tx *sqliteTx) error { return tx.PutProjectTaskAuthority(a) }))
 	return s, a.ProjectIdentity, nativeAuditRecords(t, s, a)
 }
 
@@ -128,7 +128,7 @@ func TestNativeAuditPageBatchesRelationsAcrossPageBoundary(t *testing.T) {
 func TestNativeAuditPageDecodesOnlyDirectPredecessors(t *testing.T) {
 	ctx := context.Background()
 	store, project, _ := nativeAuditStore(t)
-	require(t, store.Transact(ctx, func(tx DomainTx) error {
+	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if err := tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "2", SuccessorID: "10"}); err != nil {
 			return err
 		}
@@ -152,7 +152,7 @@ func TestNativeAuditReadersCoexistWithWriter(t *testing.T) {
 	writer, err := OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
 	require(t, err)
 	defer writer.Close()
-	a, err := writer.nativeAuthority(ctx, c.Identity())
+	a, err := writer.NativeAuthority(ctx, c.Identity())
 	require(t, err)
 	nativeAuditRecords(t, writer, a)
 	lock, err := LockRepository(c.Identity())
@@ -195,7 +195,7 @@ func TestNativeAuditSchemaDefinitionMustMatchVersionStamp(t *testing.T) {
 func TestNativeAuditDependencyCycleRollsBackAndEdgesAreImmutable(t *testing.T) {
 	ctx := context.Background()
 	s, project, _ := nativeAuditStore(t)
-	err := s.Transact(ctx, func(tx DomainTx) error {
+	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		for _, edge := range [][2]string{{"2", "10"}, {"10", "99"}, {"99", "2"}} {
 			if err := tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: project, PredecessorID: edge[0], SuccessorID: edge[1]}); err != nil {
 				return err
@@ -211,7 +211,7 @@ func TestNativeAuditDependencyCycleRollsBackAndEdgesAreImmutable(t *testing.T) {
 	if count != 0 {
 		t.Fatal("failed dependency transaction left partial edges")
 	}
-	require(t, s.Transact(ctx, func(tx DomainTx) error {
+	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		return tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "2", SuccessorID: "10"})
 	}))
 	for _, query := range []string{`DELETE FROM task_dependencies`, `UPDATE task_dependencies SET successor_id='99'`} {
@@ -263,7 +263,7 @@ func TestNativeAuditTaskCASComparesInstantsNotTimeRepresentation(t *testing.T) {
 	task.Version++
 	task.Status = "in_progress"
 	task.Claimant = "auditor"
-	require(t, s.Transact(context.Background(), func(tx DomainTx) error { return tx.UpdateNativeTaskCAS(task, 1) }))
+	require(t, s.transactSQLite(context.Background(), func(tx *sqliteTx) error { return tx.UpdateNativeTaskCAS(task, 1) }))
 }
 
 func TestNativeAuditQueryRejectsPayloadIdentityDrift(t *testing.T) {

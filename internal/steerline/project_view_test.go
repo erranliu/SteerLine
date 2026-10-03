@@ -53,7 +53,7 @@ func TestProjectViewSharesTransactionAcrossWriterCommit(t *testing.T) {
 	// records and heartbeat metadata. No sleeps or scheduler timing are needed.
 	page, err := reader.nativeTaskPageTx(ctx, tx, project, "", "", 0, 0, 1)
 	require(t, err)
-	authority, err := writer.nativeAuthority(ctx, project)
+	authority, err := writer.NativeAuthority(ctx, project)
 	require(t, err)
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
@@ -63,7 +63,7 @@ func TestProjectViewSharesTransactionAcrossWriterCommit(t *testing.T) {
 	checkpoint.HeartbeatAt = now()
 	body, err := json.Marshal(checkpoint)
 	require(t, err)
-	require(t, writer.Transact(ctx, func(tx DomainTx) error {
+	require(t, writer.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if err := tx.UpdateNativeTaskCAS(claimed, 1); err != nil {
 			return err
 		}
@@ -117,7 +117,7 @@ func TestProjectViewKeepsReadOnlySectionsWithoutCheckpointOrSelection(t *testing
 	if _, err := query.ReadProjectView(ctx, "", 1); err != nil {
 		t.Fatal(err)
 	}
-	require(t, store.Transact(ctx, func(tx DomainTx) error { return tx.PutProjection(project, 1, []byte("invalid JSON")) }))
+	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutProjection(project, 1, []byte("invalid JSON")) }))
 	corrupt, err := query.ReadProjectView(ctx, "", 1)
 	require(t, err)
 	if corrupt.RuntimeError == nil || corrupt.Runtime != nil || corrupt.Tasks == nil || corrupt.Ready == nil || corrupt.Domain == nil {
@@ -134,7 +134,7 @@ func TestProjectViewKeepsReadOnlySectionsWithoutCheckpointOrSelection(t *testing
 func TestProjectViewConnectionUsesSampledRuntime(t *testing.T) {
 	ctx := context.Background()
 	service := controlReviewService(t)
-	view, err := (NewQueryService(service.domainStore, service.Config.Identity())).ReadProjectView(ctx, "", 500)
+	view, err := (NewQueryService(testSQLite(service), service.Config.Identity())).ReadProjectView(ctx, "", 500)
 	require(t, err)
 	requireProjectView(t, view)
 	observation := ObserveRuntimeSnapshot(service.Config, view.Runtime, view.RuntimeError, view.SampledAt)
@@ -159,7 +159,7 @@ func TestProjectViewConnectionUsesSampledRuntime(t *testing.T) {
 func TestProjectViewConnectionRechecksHeartbeatAtUse(t *testing.T) {
 	ctx := context.Background()
 	service := controlReviewService(t)
-	view, err := (NewQueryService(service.domainStore, service.Config.Identity())).ReadProjectView(ctx, "", 500)
+	view, err := (NewQueryService(testSQLite(service), service.Config.Identity())).ReadProjectView(ctx, "", 500)
 	require(t, err)
 	requireProjectView(t, view)
 	for _, test := range []struct {

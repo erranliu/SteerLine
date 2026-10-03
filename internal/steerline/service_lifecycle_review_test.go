@@ -135,7 +135,7 @@ func TestLifecycleReviewStartedProcessEarlyExit(t *testing.T) {
 
 func removeRuntimeProjection(t *testing.T, s *Service) {
 	t.Helper()
-	_, err := s.domainStore.db.Exec(`DELETE FROM projection WHERE project_identity=?`, s.Config.Identity())
+	_, err := testSQLite(s).db.Exec(`DELETE FROM projection WHERE project_identity=?`, s.Config.Identity())
 	require(t, err)
 }
 

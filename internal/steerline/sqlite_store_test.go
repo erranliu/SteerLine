@@ -140,7 +140,7 @@ func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {
 	ctx := context.Background()
 	s := openDomainTestStore(t)
 	project := "repo:test"
-	err := s.Transact(ctx, func(tx DomainTx) error {
+	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "17", Status: "in_progress", Version: 1}); err != nil {
 			return err
 		}
@@ -160,7 +160,7 @@ func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = s.Transact(ctx, func(tx DomainTx) error {
+	err = s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		return tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-b", WorkflowRunID: "wf-1", Status: "active", CurrentStep: "verify"})
 	})
 	if err == nil {
@@ -179,7 +179,7 @@ func TestSQLiteTransactionRollsBackAllDomainWrites(t *testing.T) {
 	ctx := context.Background()
 	s := openDomainTestStore(t)
 	project := "repo:rollback"
-	err := s.Transact(ctx, func(tx DomainTx) error {
+	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "task-a", Status: "open", Version: 1}); err != nil {
 			return err
 		}
@@ -204,7 +204,7 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 	request := DecisionRequest{Question: "choose", AllowFreeText: true}
 	run := &Run{TaskID: "task", RunID: "wf", DomainTaskID: "task", ExecutionID: "exec", AttemptID: "attempt", ControlRevision: 5, Host: "unregistered", Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), WorkflowVersion: "legacy-v1", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &DecisionState{ID: "decision", AttemptID: "attempt", Version: 1, Status: "pending", Request: request}}
 	projection := ServiceCheckpoint{SchemaVersion: WorkerFlowRuntimeSchema, Revision: 1, Repository: Repository{Identity: project}, Service: ServiceState{InstanceID: "service", Status: "running", Ready: true}}
-	err := s.Transact(ctx, func(tx DomainTx) error {
+	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "task", Status: "in_progress", Version: 1}); err != nil {
 			return err
 		}
@@ -302,7 +302,7 @@ func TestPreflightRejectsRetiredWholeRunResultCommandWithoutMutation(t *testing.
 	require(t, err)
 	commandID, idempotencyKey := newID(), newID()
 	command := CommandRecord{ProjectIdentity: "repo:retired-result", CommandID: commandID, Kind: "accept_result", TargetID: "retired-run", ExpectedVersion: 1, IdempotencyKey: idempotencyKey, RequestedBy: "operator", Payload: []byte(`{}`), Status: "pending", CreatedAt: now()}
-	err = store.Transact(ctx, func(tx DomainTx) error {
+	err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		_, _, enqueueErr := tx.EnqueueCommand(command)
 		return enqueueErr
 	})
@@ -331,7 +331,7 @@ func TestQueryEventCursorAndLargeBodyPaging(t *testing.T) {
 		body[i] = byte(i % 251)
 	}
 	var firstID int64
-	err := store.Transact(ctx, func(tx DomainTx) error {
+	err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		var err error
 		firstID, err = tx.AppendEvent(DomainEvent{ProjectIdentity: project, ExecutionID: "exec", AttemptID: "attempt", ExternalSource: "test", ExternalID: "1", Type: "conversation.message", Payload: body})
 		if err != nil {
@@ -396,7 +396,7 @@ func TestOperationIdempotencyKeepsOneDurableIntent(t *testing.T) {
 	request := []byte(`{"attempt_id":"attempt-1"}`)
 	digest := operationDigest(request)
 	base := OperationRecord{ProjectIdentity: project, OperationID: "operation-1", IdempotencyKey: "start:attempt-1", Kind: "start_execution", Status: "pending", PayloadDigest: digest, Request: request}
-	err := store.Transact(ctx, func(tx DomainTx) error {
+	err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		_, created, err := tx.PutOperation(base)
 		if err == nil && !created {
 			t.Fatal("initial operation was not created")
@@ -408,7 +408,7 @@ func TestOperationIdempotencyKeepsOneDurableIntent(t *testing.T) {
 	}
 	updated := base
 	updated.Status = "in_flight"
-	err = store.Transact(ctx, func(tx DomainTx) error {
+	err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		_, created, err := tx.PutOperation(updated)
 		if err == nil && created {
 			t.Fatal("retry created a second operation")
@@ -421,7 +421,7 @@ func TestOperationIdempotencyKeepsOneDurableIntent(t *testing.T) {
 	conflict := base
 	conflict.Request = []byte(`{"attempt_id":"other"}`)
 	conflict.PayloadDigest = operationDigest(conflict.Request)
-	err = store.Transact(ctx, func(tx DomainTx) error { _, _, err := tx.PutOperation(conflict); return err })
+	err = store.transactSQLite(ctx, func(tx *sqliteTx) error { _, _, err := tx.PutOperation(conflict); return err })
 	if err == nil {
 		t.Fatal("same idempotency key with a different payload was accepted")
 	}
@@ -592,8 +592,8 @@ func seedNativeDecision(t *testing.T, db *SQLiteStore, project, runID, decisionI
 	ctx := context.Background()
 	nowTime := now()
 	request := DecisionRequest{Question: "Choose", Options: []executionapi.DecisionOption{{ID: "yes", Label: "Yes"}, {ID: "no", Label: "No"}}}
-	err := db.Transact(ctx, func(tx DomainTx) error {
-		raw := tx.(*sqliteTx).tx
+	err := db.transactSQLite(ctx, func(tx *sqliteTx) error {
+		raw := tx.tx
 		if err := tx.PutProjectTaskAuthority(ProjectTaskAuthority{ProjectIdentity: project, Authority: "native", AuthorityVersion: 1, Repository: "repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true, CreatedAt: nowTime, UpdatedAt: nowTime}); err != nil {
 			return err
 		}

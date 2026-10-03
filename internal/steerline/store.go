@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
-	"database/sql"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -12,8 +11,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/erranliu/SteerLine/internal/steerline/projection"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
 
 func newID() string {
@@ -55,7 +53,7 @@ func atomicWriteWith(path string, data []byte, write func(*os.File, []byte) erro
 // runtime store.
 type Store struct {
 	mu      sync.Mutex
-	Domain  *SQLiteStore
+	Domain  persistence.WorkerMetadata
 	Project string
 	failure error
 }
@@ -69,7 +67,7 @@ func (s *Store) commitWorker(request workerCommit) (workerCommitResult, error) {
 	if s.Domain == nil {
 		return workerCommitResult{}, errors.New("worker commitment requires a durable store")
 	}
-	result, err := s.Domain.commitWorker(context.Background(), request)
+	result, err := s.Domain.CommitWorker(context.Background(), request)
 	var conflict *NativeTaskError
 	if err != nil && !errors.As(err, &conflict) {
 		s.failure = fmt.Errorf("critical worker persistence: %w", err)
@@ -106,9 +104,7 @@ func (s *Store) Heartbeat() error {
 	if s.failure != nil || s.Domain == nil {
 		return s.failure
 	}
-	if err := s.Domain.transactSQLite(context.Background(), func(tx *sqliteTx) error {
-		return tx.heartbeatProjection(s.Project)
-	}); err != nil {
+	if err := s.Domain.Heartbeat(context.Background(), s.Project); err != nil {
 		s.failure = fmt.Errorf("database projection heartbeat failed: %w", err)
 		return s.failure
 	}
@@ -148,39 +144,8 @@ func loadObservedRuntime(c Config) (*Runtime, error) {
 	}
 	defer db.Close()
 	value, err := loadRuntimeSnapshot(db, c.Identity(), false)
-	if errors.Is(err, sql.ErrNoRows) {
+	if errors.Is(err, persistence.ErrNotFound) {
 		return nil, nil
 	}
 	return value, err
-}
-
-func loadRuntimeSnapshot(db *SQLiteStore, project string, requireIdentity bool) (*Runtime, error) {
-	ctx := context.Background()
-	tx, err := db.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
-	if err != nil {
-		return nil, err
-	}
-	defer tx.Rollback()
-	state, err := readRuntimeCheckpointTx(ctx, tx, project, requireIdentity)
-	if err != nil {
-		return nil, err
-	}
-	snapshot, err := querySnapshot(ctx, tx, project)
-	if err != nil {
-		return nil, err
-	}
-	if err = tx.Commit(); err != nil {
-		return nil, err
-	}
-	view, err := projection.Build(snapshot, projection.MetadataOf(*state))
-	if err != nil {
-		return nil, err
-	}
-	return &view, nil
-}
-
-// readRuntimeCheckpointTx reads only service metadata; callers hydrate it with
-// domain records from the same transaction before exposing a Runtime.
-func readRuntimeCheckpointTx(ctx context.Context, tx *sql.Tx, project string, requireIdentity bool) (*Runtime, error) {
-	return sqlite.ReadRuntimeCheckpointTx(ctx, tx, project, requireIdentity)
 }

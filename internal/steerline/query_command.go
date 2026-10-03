@@ -7,11 +7,12 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
 )
 
 type CommandService struct {
-	Store   *SQLiteStore
+	Store   persistence.CommandStore
 	Project string
 }
 
@@ -20,10 +21,7 @@ func (c CommandService) Submit(ctx context.Context, command CommandRecord) (Comm
 		return command, false, errors.New("command service store and project identity are required")
 	}
 	command.ProjectIdentity = c.Project
-	var result CommandRecord
-	var created bool
-	err := c.Store.Transact(ctx, func(tx DomainTx) error { var err error; result, created, err = tx.EnqueueCommand(command); return err })
-	return result, created, err
+	return c.Store.EnqueueCommand(ctx, command)
 }
 
 func (c CommandService) AnswerDecision(ctx context.Context, decisionID string, expectedVersion uint64, idempotencyKey, requestedBy string, answer []byte) (CommandRecord, bool, error) {
@@ -72,14 +70,7 @@ func (c CommandService) AcceptAnswer(ctx context.Context, command CommandRecord,
 		return DecisionRecord{}, false, errors.New("accepted decision command identity is incomplete")
 	}
 	command.ProjectIdentity = c.Project
-	var record DecisionRecord
-	var alreadyAccepted bool
-	err := c.Store.Transact(ctx, func(tx DomainTx) error {
-		var err error
-		record, alreadyAccepted, err = tx.AcceptDecisionAnswer(command, answer)
-		return err
-	})
-	return record, alreadyAccepted, err
+	return c.Store.AcceptDecisionAnswer(ctx, command, answer)
 }
 
 func decisionAnswerKey(answer DecisionAnswer) string {
@@ -105,7 +96,7 @@ func (c CommandService) Complete(ctx context.Context, command CommandRecord, res
 	command.ProjectIdentity = c.Project
 	command.Result = append([]byte(nil), result...)
 	command.Status = "completed"
-	return c.Store.Transact(ctx, func(tx DomainTx) error { return tx.UpdateCommand(command) })
+	return c.Store.UpdateCommand(ctx, command)
 }
 
 func (c CommandService) SetStatus(ctx context.Context, command CommandRecord, status string, result []byte) error {
@@ -115,7 +106,7 @@ func (c CommandService) SetStatus(ctx context.Context, command CommandRecord, st
 	command.ProjectIdentity = c.Project
 	command.Status = status
 	command.Result = append([]byte(nil), result...)
-	return c.Store.Transact(ctx, func(tx DomainTx) error { return tx.UpdateCommand(command) })
+	return c.Store.UpdateCommand(ctx, command)
 }
 
 type QueryService = query.Service

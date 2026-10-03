@@ -237,7 +237,7 @@ func (s *SQLiteStore) ConversationCheckpoint(ctx context.Context, project, execu
 	var updated string
 	err := s.db.QueryRowContext(ctx, `SELECT project_identity,execution_id,attempt_id,source,source_segment,source_identity,generation,cursor,local_seq,updated_at FROM conversation_source_cursors WHERE project_identity=? AND execution_id=? AND attempt_id=? AND source=? AND source_segment=?`, project, execution, attempt, source, segment).Scan(&checkpoint.ProjectID, &checkpoint.ExecutionID, &checkpoint.AttemptID, &checkpoint.Source, &checkpoint.SourceSegment, &checkpoint.SourceIdentity, &checkpoint.Generation, &checkpoint.Cursor, &checkpoint.LocalSeq, &updated)
 	if err != nil {
-		return ConversationCheckpoint{}, err
+		return ConversationCheckpoint{}, persistenceError(err)
 	}
 	checkpoint.UpdatedAt, _ = time.Parse(time.RFC3339Nano, updated)
 	return checkpoint, nil
@@ -336,4 +336,35 @@ func (s *SQLiteStore) SaveConversationCapabilityReport(ctx context.Context, repo
 	}
 	_, err = s.db.ExecContext(ctx, `INSERT INTO conversation_capability_reports(backend,protocol,agent,agent_version,platform_version,target_id,checked_at,payload) VALUES(?,?,?,?,?,?,?,?)`, report.Backend, report.Protocol, report.Agent, report.AgentVersion, report.PlatformVersion, report.Target.ID, report.CheckedAt.UTC().Format(time.RFC3339Nano), payload)
 	return err
+}
+
+func (s *SQLiteStore) ValidateConversationCheckpointFormat(ctx context.Context, project string, sources []string) error {
+	if len(sources) == 0 {
+		return nil
+	}
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(sources)), ",")
+	args := make([]any, 0, len(sources)+1)
+	args = append(args, project)
+	for _, source := range sources {
+		if source == "" {
+			return errors.New("conversation checkpoint source is empty")
+		}
+		args = append(args, source)
+	}
+	query := `SELECT execution_id,attempt_id,source_segment,source_identity,cursor,local_seq FROM conversation_source_cursors WHERE project_identity=? AND source IN (` + placeholders + `)`
+	rows, err := s.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var cp ConversationCheckpoint
+		if err := rows.Scan(&cp.ExecutionID, &cp.AttemptID, &cp.SourceSegment, &cp.SourceIdentity, &cp.Cursor, &cp.LocalSeq); err != nil {
+			return err
+		}
+		if _, err := decodeConversationJournalPosition(cp); err != nil {
+			return fmt.Errorf("unsupported conversation checkpoint %s/%s: %w; preserve state and inspect external execution before recovery", cp.ExecutionID, cp.AttemptID, err)
+		}
+	}
+	return rows.Err()
 }

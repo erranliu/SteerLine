@@ -3,9 +3,9 @@ package steerline
 import (
 	"context"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
@@ -151,7 +151,7 @@ func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task TaskRecor
 		return err
 	}
 	c := fixed.config
-	contract, err := nativeContractForTask(ctx, s.domainStore, c.identity, task)
+	contract, err := s.commandStore.TaskContract(ctx, c.identity, task)
 	if err != nil {
 		return s.waitWorkerFlow(run, "Fixed task contract is unavailable: "+err.Error())
 	}

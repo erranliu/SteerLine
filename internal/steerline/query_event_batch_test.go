@@ -3,19 +3,20 @@ package steerline
 import (
 	"context"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline/query"
 	"strings"
 	"testing"
 )
 
 type countingEventStore struct {
-	DomainStore
+	query.Store
 	calls               int
 	maxPayloadBytesRead int
 }
 
 func (s *countingEventStore) Events(ctx context.Context, project, execution, attempt string, after int64, limit, payloadBudget int) ([]DomainEvent, error) {
 	s.calls++
-	events, err := s.DomainStore.Events(ctx, project, execution, attempt, after, limit, payloadBudget)
+	events, err := s.Store.Events(ctx, project, execution, attempt, after, limit, payloadBudget)
 	bytes := 0
 	for _, event := range events {
 		bytes += len(event.Payload)
@@ -30,7 +31,7 @@ func TestQueryEventBatchPagingPreservesByteBoundary(t *testing.T) {
 	project := "event-batch"
 	bodies := []string{strings.Repeat("a", 700<<10), strings.Repeat("b", 500<<10), strings.Repeat("c", MaxEventPageBytes+1), "", "tail"}
 	ids := []int64{}
-	require(t, store.Transact(ctx, func(tx DomainTx) error {
+	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		for i, body := range bodies {
 			id, err := tx.AppendEvent(DomainEvent{ProjectIdentity: project, ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "batch", ExternalID: fmt.Sprint(i), Type: "message", Payload: []byte(body)})
 			if err != nil {
@@ -46,7 +47,7 @@ func TestQueryEventBatchPagingPreservesByteBoundary(t *testing.T) {
 		_, err := tx.AppendEvent(DomainEvent{ProjectIdentity: "other-project", ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "batch", ExternalID: "other", Type: "message", Payload: []byte("wrong project")})
 		return err
 	}))
-	counted := &countingEventStore{DomainStore: store}
+	counted := &countingEventStore{Store: store}
 	query := NewQueryService(counted, project)
 	filter := EventFilter{ExecutionID: "execution", AttemptID: "attempt"}
 	first, err := query.ReadEvents(ctx, filter, "", 200)
@@ -79,7 +80,7 @@ func TestQueryEventBatchReadCountAndPageLimit(t *testing.T) {
 	ctx := context.Background()
 	store := openDomainTestStore(t)
 	const project = "event-count"
-	require(t, store.Transact(ctx, func(tx DomainTx) error {
+	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		for i := 0; i < MaxEventPageSize+1; i++ {
 			if _, err := tx.AppendEvent(DomainEvent{ProjectIdentity: project, ExecutionID: "execution", ExternalSource: "count", ExternalID: fmt.Sprint(i), Type: "message", Payload: []byte("small")}); err != nil {
 				return err
@@ -89,7 +90,7 @@ func TestQueryEventBatchReadCountAndPageLimit(t *testing.T) {
 	}))
 	for _, limit := range []int{0, 1, eventReadBatchSize, eventReadBatchSize + 1, MaxEventPageSize + 1} {
 		t.Run(fmt.Sprint(limit), func(t *testing.T) {
-			counted := &countingEventStore{DomainStore: store}
+			counted := &countingEventStore{Store: store}
 			query := NewQueryService(counted, project)
 			page, err := query.ReadEvents(ctx, EventFilter{ExecutionID: "execution"}, "", limit)
 			require(t, err)
@@ -117,7 +118,7 @@ func TestQueryEventBatchDoesNotPrefetchUnusedLargeBodies(t *testing.T) {
 	const project = "event-payload-budget"
 	body := []byte(strings.Repeat("a", MaxEventPageBytes))
 	ids := []int64{}
-	require(t, store.Transact(ctx, func(tx DomainTx) error {
+	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		for i := 0; i < 4; i++ {
 			id, err := tx.AppendEvent(DomainEvent{ProjectIdentity: project, ExecutionID: "execution", ExternalSource: "budget", ExternalID: fmt.Sprint(i), Type: "message", Payload: body})
 			if err != nil {
@@ -127,7 +128,7 @@ func TestQueryEventBatchDoesNotPrefetchUnusedLargeBodies(t *testing.T) {
 		}
 		return nil
 	}))
-	counted := &countingEventStore{DomainStore: store}
+	counted := &countingEventStore{Store: store}
 	query := NewQueryService(counted, project)
 	cursor := ""
 	for i, id := range ids {

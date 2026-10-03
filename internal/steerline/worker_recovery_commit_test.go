@@ -26,7 +26,7 @@ func TestWorkerRecoveryAttemptCommitsAtomically(t *testing.T) {
 			service.setRunDecision(run, nil)
 			service.refreshRun(run)
 			if fail {
-				_, err := service.domainStore.db.Exec("CREATE TRIGGER reject_recovery_checkpoint BEFORE UPDATE ON projection BEGIN SELECT RAISE(FAIL, 'recovery checkpoint failure'); END")
+				_, err := testSQLite(service).db.Exec("CREATE TRIGGER reject_recovery_checkpoint BEFORE UPDATE ON projection BEGIN SELECT RAISE(FAIL, 'recovery checkpoint failure'); END")
 				require(t, err)
 			}
 			err := service.commitWorker(run)

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	taskdomain "github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
@@ -80,7 +81,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err != nil {
 		return TaskClaimReceipt{}, err
 	}
-	if old, found, e := sqlite.lookupNativeCommand(ctx, c.Project, options.RequestID); e != nil {
+	if old, found, e := sqlite.LookupCommand(ctx, c.Project, options.RequestID); e != nil {
 		return TaskClaimReceipt{}, e
 	} else if found {
 		return replayTaskClaim(old, requestPayload, options.TaskID, options.RequestedBy)
@@ -107,7 +108,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		p := config.bindProjectPolicy(*options.ExecutionProfile)
 		options.ExecutionProfile = &p
 	}
-	graph, err := sqlite.taskGraphSnapshot(ctx, c.Project)
+	graph, err := sqlite.TaskGraphSnapshot(ctx, c.Project)
 	if err != nil {
 		return TaskClaimReceipt{}, err
 	}
@@ -150,7 +151,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if !allowed[task.Type] {
 		return TaskClaimReceipt{}, nativeErr("task_not_ready", "task type is not executable in this project")
 	}
-	contract, err := nativeContractForTask(ctx, sqlite, c.Project, task)
+	contract, err := sqlite.TaskContract(ctx, c.Project, task)
 	if err != nil {
 		return TaskClaimReceipt{}, err
 	}
@@ -217,8 +218,8 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	}
 	operationRequest, _ := json.Marshal(map[string]any{"task_id": task.TaskID, "task_version": options.ExpectedTaskVersion, "authority_version": options.ExpectedAuthorityVersion, "workflow_run_id": workflowRunID, "execution_id": executionID, "attempt_id": attemptID, "base_commit": base, "predecessor_merge_commits": predecessorMerges, "requested_by": options.RequestedBy})
 	var receipt TaskClaimReceipt
-	err = sqlite.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if old, found, e := tx.lookupNativeCommand(ctx, c.Project, options.RequestID); e != nil {
+	err = sqlite.TransactClaim(ctx, func(tx persistence.ClaimTx) error {
+		if old, found, e := tx.LookupCommand(ctx, c.Project, options.RequestID); e != nil {
 			return e
 		} else if found {
 			r, e := replayTaskClaim(old, requestPayload, options.TaskID, options.RequestedBy)
@@ -234,7 +235,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		if !verifyFixedExecutionProfile(*wfr.ExecutionProfile, config.ExecutionDirectory) {
 			return nativeErr("stale_profile", "claim snapshot changed after evaluation")
 		}
-		current, e := taskGraphSnapshotTx(ctx, tx, c.Project)
+		current, e := tx.TaskGraphSnapshot(ctx, c.Project)
 		if e != nil {
 			return e
 		}
@@ -269,8 +270,8 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 				return nativeErr("base_missing_delivery", "predecessor delivery identity changed during claim preflight")
 			}
 		}
-		var occupied int
-		if e = tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM executions e JOIN workflow_runs w ON w.project_identity=e.project_identity AND w.workflow_run_id=e.workflow_run_id WHERE e.project_identity=? AND e.status IN ('pending','active','waiting_decision','blocked')`, c.Project).Scan(&occupied); e != nil {
+		occupied, e := tx.OccupiedExecutions(ctx, c.Project)
+		if e != nil {
 			return e
 		}
 		if occupied > 0 && !options.Explicit {
@@ -354,24 +355,4 @@ func acquireNativeBase(ctx context.Context, c Config) (string, error) {
 		return "", errors.New("remote branch did not resolve to a full commit")
 	}
 	return base, nil
-}
-
-func nativeContractForTask(ctx context.Context, s *SQLiteStore, project string, task TaskRecord) (TaskContract, error) {
-	var body []byte
-	var digest string
-	err := s.db.QueryRowContext(ctx, `SELECT digest,payload FROM task_contracts WHERE project_identity=? AND contract_id=? AND task_id=?`, project, task.ContractID, task.TaskID).Scan(&digest, &body)
-	if err != nil {
-		return TaskContract{}, nativeErr("contract_mismatch", "native task has no matching fixed contract")
-	}
-	var contract TaskContract
-	if err = json.Unmarshal(body, &contract); err != nil {
-		return contract, err
-	}
-	if contract.Digest != digest {
-		return contract, nativeErr("contract_mismatch", "fixed task contract digest differs from its stored row")
-	}
-	if err = ValidateTaskContract(contract); err != nil {
-		return contract, err
-	}
-	return contract, nil
 }

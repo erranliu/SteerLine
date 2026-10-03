@@ -76,7 +76,7 @@ func TestTaskBatchStrictDecodeAndDeterministicCyclePath(t *testing.T) {
 	c, commit, store := openDAGFixture(t)
 	tasks := batchTasks(2, 3)
 	edges := []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k2"}, Successor: TaskBatchReference{LocalKey: "k3"}}, {Predecessor: TaskBatchReference{LocalKey: "k3"}, Successor: TaskBatchReference{LocalKey: "k2"}}}
-	beforeGraph, err := store.taskGraphSnapshot(context.Background(), c.Identity())
+	beforeGraph, err := store.TaskGraphSnapshot(context.Background(), c.Identity())
 	require(t, err)
 	payload := taskBatchFixture(t, c, commit, tasks, edges)
 	validation, err := (CommandService{Store: store, Project: c.Identity()}).ValidateTaskBatch(context.Background(), c, payload)
@@ -89,7 +89,7 @@ func TestTaskBatchStrictDecodeAndDeterministicCyclePath(t *testing.T) {
 	if len(validation.Issues) == 0 || validation.Issues[len(validation.Issues)-1].Code != "dependency_cycle" {
 		t.Fatalf("cycle issue missing: %+v", validation.Issues)
 	}
-	afterGraph, err := store.taskGraphSnapshot(context.Background(), c.Identity())
+	afterGraph, err := store.TaskGraphSnapshot(context.Background(), c.Identity())
 	require(t, err)
 	if beforeGraph.DatabaseRevision != afterGraph.DatabaseRevision || beforeGraph.Authority.GraphRevision != afterGraph.Authority.GraphRevision || len(beforeGraph.Tasks) != len(afterGraph.Tasks) || len(beforeGraph.Edges) != len(afterGraph.Edges) {
 		t.Fatal("rejected cycle validation mutated center state")
@@ -183,7 +183,7 @@ func TestCreateTaskBatchAtomicIdempotentAndQueryable(t *testing.T) {
 		task := rootPage.Tasks[0].TaskRecord
 		task.Status, task.Claimant, task.Version = "in_progress", "worker", task.Version+1
 		mutate(&task)
-		if err = store.Transact(ctx, func(tx DomainTx) error { return tx.UpdateNativeTaskCAS(task, rootPage.Tasks[0].Version) }); err == nil || !strings.Contains(err.Error(), "contract_mismatch") {
+		if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.UpdateNativeTaskCAS(task, rootPage.Tasks[0].Version) }); err == nil || !strings.Contains(err.Error(), "contract_mismatch") {
 			t.Fatalf("native status update changed fixed task fields: %v", err)
 		}
 	}
@@ -271,8 +271,8 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 	foreignContract := nativeContract(t, c, commit, "foreign-contract-99")
 	otherProject := "other-native-project"
 	created := time.Now().UTC()
-	err := store.Transact(ctx, func(domainTx DomainTx) error {
-		tx := domainTx.(*sqliteTx)
+	err := store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+		tx := domainTx
 		authority := ProjectTaskAuthority{ProjectIdentity: otherProject, Authority: "native", AuthorityVersion: 1, Repository: foreignContract.Repository, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: created, UpdatedAt: created}
 		if e := tx.PutProjectTaskAuthority(authority); e != nil {
 			return e
@@ -305,7 +305,7 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 		if err != nil {
 			return TaskBatchValidation{}, err
 		}
-		graph, err := store.taskGraphSnapshot(ctx, c.Identity())
+		graph, err := store.TaskGraphSnapshot(ctx, c.Identity())
 		if err != nil {
 			return TaskBatchValidation{}, err
 		}
@@ -432,14 +432,14 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 	if _, err = commands.ClaimNativeTask(ctx, c, options); err == nil || !strings.Contains(err.Error(), "dispatch_paused") {
 		t.Fatalf("paused project admitted a claim: %v", err)
 	}
-	authority, err := store.nativeAuthority(ctx, c.Identity())
+	authority, err := store.NativeAuthority(ctx, c.Identity())
 	if err != nil {
 		t.Fatal(err)
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err = store.Transact(ctx, func(domainTx DomainTx) error {
-		return domainTx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+	if err = store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+		return domainTx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -485,7 +485,7 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 	}
 	alteredWorkflow := page.Tasks[0].WorkflowRuns[0]
 	alteredWorkflow.ExecutionProfile.ExecutionPolicy.Network = "deny"
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutWorkflowRun(alteredWorkflow) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutWorkflowRun(alteredWorkflow) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
 		t.Fatalf("claim workflow gates were edited after reservation: %v", err)
 	}
 	other, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, "81")
@@ -543,14 +543,14 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	authority, err := store.nativeAuthority(ctx, c.Identity())
+	authority, err := store.NativeAuthority(ctx, c.Identity())
 	if err != nil {
 		t.Fatal(err)
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err = store.Transact(ctx, func(domainTx DomainTx) error {
-		return domainTx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+	if err = store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+		return domainTx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -577,8 +577,8 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	task.Claimant = "worker"
 	task.Version++
 	task.UpdatedAt = created
-	if err = store.Transact(ctx, func(domainTx DomainTx) error {
-		tx := domainTx.(*sqliteTx)
+	if err = store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+		tx := domainTx
 		if e := tx.PutWorkflowRun(run); e != nil {
 			return e
 		}
@@ -630,14 +630,14 @@ func TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	authority, err := store.nativeAuthority(ctx, c.Identity())
+	authority, err := store.NativeAuthority(ctx, c.Identity())
 	if err != nil {
 		t.Fatal(err)
 	}
 	authority.AuthorityVersion++
 	authority.DispatchPaused = false
-	if err = store.Transact(ctx, func(tx DomainTx) error {
-		return tx.(*sqliteTx).UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
+		return tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1)
 	}); err != nil {
 		t.Fatal(err)
 	}
@@ -742,8 +742,8 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 	task.Status = "in_progress"
 	task.Claimant = "worker"
 	task.Version++
-	if err = store.Transact(ctx, func(domainTx DomainTx) error {
-		tx := domainTx.(*sqliteTx)
+	if err = store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+		tx := domainTx
 		if e := tx.PutWorkflowRun(workflow); e != nil {
 			return e
 		}
@@ -843,9 +843,9 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 		seedPublishedForDiscard(t, ctx, c, store, id, commit, server.URL+"/org/repo/pulls/"+id)
 	}
 	workspacePath := filepath.Join(c.RunDir, "worktrees", "wf-90")
-	if err = store.Transact(ctx, func(tx DomainTx) error {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		var payload []byte
-		if err := tx.(*sqliteTx).tx.QueryRowContext(ctx, `SELECT payload FROM executions WHERE project_identity=? AND execution_id=?`, c.Identity(), "exec-90").Scan(&payload); err != nil {
+		if err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM executions WHERE project_identity=? AND execution_id=?`, c.Identity(), "exec-90").Scan(&payload); err != nil {
 			return err
 		}
 		var execution ExecutionRecord
@@ -860,10 +860,10 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 		t.Fatal(err)
 	}
 	// An unresolved PR binding cannot be used as permission to discard.
-	if err = store.Transact(ctx, func(tx DomainTx) error {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		for _, id := range []string{"94", "95"} {
 			var body []byte
-			if err := tx.(*sqliteTx).tx.QueryRowContext(ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, c.Identity(), "wf-"+id).Scan(&body); err != nil {
+			if err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, c.Identity(), "wf-"+id).Scan(&body); err != nil {
 				return err
 			}
 			var workflow WorkflowRunRecord
@@ -913,7 +913,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	lateMerge := strings.Repeat("a", 40)
 	lateEvidence, _ := json.Marshal(TaskDeliveryEvidence{PRInstance: server.URL, URL: lateURL, Repository: "org/repo", PRNumber: 90, BaseBranch: c.Branch, State: "merged", Merged: true, MergedAt: mergedAt, MergeCommit: lateMerge})
 	lateDelivery := TaskDeliveryRecord{ProjectIdentity: c.Identity(), TaskID: "90", SelectedWorkflowRunID: "wf-90", PRInstance: server.URL, PRRepository: "org/repo", PRNumber: 90, PRURL: lateURL, MergeCommit: lateMerge, MergedAt: mergedAt, Evidence: lateEvidence}
-	if err = store.Transact(ctx, func(tx DomainTx) error { return tx.PutTaskDelivery(lateDelivery) }); err == nil || !strings.Contains(err.Error(), "task_discarded") {
+	if err = store.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.PutTaskDelivery(lateDelivery) }); err == nil || !strings.Contains(err.Error(), "task_discarded") {
 		t.Fatalf("late merge created a normal delivery for discarded task: %v", err)
 	}
 	verifier := publication.NewClient(c.PR, Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}, duration(c.CommandTimeout))
@@ -974,7 +974,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	if err != nil || incompleteReceipt.Status != "pending_verification" || incompleteReceipt.Code != "merge_state_unknown" {
 		t.Fatalf("unresolved PR binding was treated as conclusive: %+v / %v", incompleteReceipt, err)
 	}
-	operation, err := lookupOperation(ctx, store, c.Identity(), strings.Repeat("4", 32))
+	operation, err := store.Operation(ctx, c.Identity(), strings.Repeat("4", 32))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1021,8 +1021,8 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	task.Claimant = "worker"
 	task.Version++
 	task.UpdatedAt = created
-	if err = store.Transact(ctx, func(domainTx DomainTx) error {
-		tx := domainTx.(*sqliteTx)
+	if err = store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+		tx := domainTx
 		if e := tx.PutWorkflowRun(run); e != nil {
 			return e
 		}
@@ -1088,8 +1088,8 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store 
 	task.Claimant = "worker"
 	task.Version++
 	task.UpdatedAt = created
-	if err = store.Transact(ctx, func(domainTx DomainTx) error {
-		tx := domainTx.(*sqliteTx)
+	if err = store.transactSQLite(ctx, func(domainTx *sqliteTx) error {
+		tx := domainTx
 		if e := tx.PutWorkflowRun(run); e != nil {
 			return e
 		}
