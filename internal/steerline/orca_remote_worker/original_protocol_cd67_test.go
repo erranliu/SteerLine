@@ -217,5 +217,9 @@ func newID() string {
 func identityError(err error) error { return err }
 func isBackendError(err error, code executionapi.BackendErrorCode) bool {
 	var e *remote.Error
-	return errors.As(err, &e) && e.Code == code
+	if errors.As(err, &e) {
+		return e.Code == code
+	}
+	var backend *executionapi.BackendError
+	return errors.As(err, &backend) && backend.Code == code
 }
