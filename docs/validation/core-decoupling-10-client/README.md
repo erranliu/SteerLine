@@ -45,3 +45,19 @@ CM71-2 的真实 CLI 子用例在正式 Service 构造的进程身份和 SQLite 
 早期定向失败先诊断后修复：profile 测试比较了未解析身份的旧配置副本；新增真实 CLI control 夹具缺失 claimant，中心正确拒绝 identity-error。分别修正夹具身份解析与显式 claimant，保留原摘要/身份断言后通过。自查补上回执的项目归属校验和缓存复用前的当前配置连接校验。
 
 未选 L2/L3/full：未改变执行、交付、恢复或原生权限映射；所选 query/control/CLI、现有 quick 与 #67 足以覆盖本次客户端边界。完整 Spec/Plan、实际 diff 与受影响生产调用路径已自查，无已知未解决问题；PR 不合并，等待协调聊天独立复审。
+
+## 协调聊天独立复审与并行集成
+
+2026-10-04 将 #69 PR194 的已合并主干 `e81fadaf59d0411af1594be7c5cd6a832c71c29f` 集成到本 PR（集成 commit `fc5c6cc1c7c69a5965b09aea11b63c0e6ce3c376`）。移动后的项目快照测试保留 #69 的 BatchTx 和测试本地损坏数据库 fixture，也保留 #71 的注入工厂及全部原断言。
+
+集成验证发现新 CLI control 夹具仍调用已删除 DomainTx，导致编译失败；协调聊天在 `2f2cdc34801c8286f3dd435fad7a3d996515ec51` 改用既有 Metadata.SaveCheckpoint，未改身份/版本、原请求、未知回执、外项目拒绝或关闭断言。架构文档同步真实集成基线及当前存储/日志所有者，333 个本地链接均存在。
+
+协调聊天亲自读取 Spec/Plan、实际 diff、产品契约、CLI/adapter/app/console 路径、资源关闭、错误/回执归属及测试迁移映射。修复后实际验证：
+
+- `go test -json ./internal/steerlineclient -count=1`：11 顶层 / 21 run-pass。
+- `go test -json ./cmd/steerline ./internal/steerlineapp -run 'Test(NativeTaskBatchCLI|CLIExecutionProfile|CM71|FileQuerySource)' -count=1`：5 顶层 / 9 run-pass。
+- `go test -json ./internal/steerlineintegration -run '^TestCD67CoreBoundary$' -count=1`：1 顶层 / 10 run-pass。
+- 集成稳定后一次 `go run ./cmd/test-feedback -quick -out C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-core-decoupling-20261003-01a10252/cm71-final-quick`：7 组 complete/passed，非零命中，0 fail/skip。
+- `git diff --check` 通过。上述验证后仅更新文档，生产与测试源码保持测试时版本。
+
+原始失败、修复后 JSON、quick 报告及 PR 审核/合并门禁证据保存在本 run `C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-core-decoupling-20261003-01a10252`，历史执行聊天的验证记录仍保留。无验收例外；未新增 L2/L3/full。

@@ -1,6 +1,6 @@
 # 当前代码架构与源码索引
 
-核对日期：2026-10-04。基线为 #68 PR191 的实际合并 `184e1e06d217b243e5655f4f9b7c233e4c80f579`，本页同步 #71 客户端交付；下方全 OS 源码统计保留 #68 快照。前版 PR179 的架构快照可从 Git 历史查看；当前文档只链接现存源码。具体删除与验证见 [#68 交付记录](../validation/core-decoupling-07-cleanup/README.md)，#63–#67 历史断言/失败/原生证据仍在各自记录，不重写历史结果。
+核对日期：2026-10-04。集成基线为 #69 PR194 的实际合并 `e81fadaf59d0411af1594be7c5cd6a832c71c29f`，本页同步 #71 客户端交付；下方全 OS 源码统计保留 #68 快照，迁移文件链接指向当前所有者。前版 PR179 的架构快照可从 Git 历史查看；当前文档只链接现存源码。具体删除与验证见 [#68 交付记录](../validation/core-decoupling-07-cleanup/README.md)，#63–#67 历史断言/失败/原生证据仍在各自记录，不重写历史结果。
 
 ## 系统与业务权威
 
@@ -35,7 +35,7 @@ flowchart LR
 
 | 所有者 | 简短职责与源码入口 |
 | --- | --- |
-| `internal/steerline` | Task/Workflow/Execution/Decision/Operation/TaskDelivery 用例、通用协调、提交和恢复。显式 [execution_directory.go](../../internal/steerline/execution_directory.go)、[worker_lifecycle.go](../../internal/steerline/worker_lifecycle.go)、[worker_commit.go](../../internal/steerline/worker_commit.go)；SQLite 写实现仍在直属 `sqlite_store*`，留 #69/#70 收窄与归包。 |
+| `internal/steerline` | Task/Workflow/Execution/Decision/Operation/TaskDelivery 用例、通用协调、提交和恢复。显式 [execution_directory.go](../../internal/steerline/execution_directory.go)、[worker_lifecycle.go](../../internal/steerline/worker_lifecycle.go)、[service_commit.go](../../internal/steerline/service_commit.go)；#69 已通过 [persistence/ports.go](../../internal/steerline/persistence/ports.go) 收窄生产写消费者，唯一 SQL 执行器仍在直属存储文件，整体归包留 #70。 |
 | `execution` | 通用身份、闭集操作、事实/问题/回执、策略/需求、不可变有界封套及小端口；只依赖标准库。[lifecycle.go](../../internal/steerline/execution/lifecycle.go)、[implementation_data.go](../../internal/steerline/execution/implementation_data.go)。 |
 | `contracts` | 业务持久/展示 DTO、会话来源及宿主端口；使用既有 execution/task/taskview 纯值，不解释原生载荷。[records.go](../../internal/steerline/contracts/records.go)、[conversation.go](../../internal/steerline/contracts/conversation.go)、[environment.go](../../internal/steerline/contracts/environment.go)。 |
 | `codexworker` / `codexapp` | 前者拥有原生 codec、配置/命令/权限、生命周期、history/source/mapper；后者拥有 WebSocket/JSON-RPC 和原生问题传输。不给实现 Store 或可写 Service。 |
@@ -105,7 +105,7 @@ sequenceDiagram
 
 `go run ./cmd/test-feedback -quick` 已包含 15 包的规则/实现/app/CD67 守卫，不另加重复守卫。按 [测试计划](../spec/core-decoupling-07-cleanup.plan.md) 运行必要定向和一次 quick，明确临时 STEERLINE_HOME，仅隔离 Git/SQLite/协议 mock。原生支持和 opt-in live 证据保留，本次未启用。远端权限缺证拒绝不变。
 
-#67/#68 已于 2026-10-03 实际合并，#69/#71 的基线具备；本页同步 #71 实施交付，等待独立复审。#69 收窄全部真实写消费者，#70 搬唯一 SQL 实现；#71 接公共产品 DTO/adapter/CLI，#72 迁 TUI。共享 contracts/组装/quick 顺序集成。没有新平台、remote 权限、兼容层或插件系统。
+#67/#68/#69 已实际合并；本页同步 #71 实施交付并集成 #69 的写端口。#70 搬唯一 SQL 实现；#71 接公共产品 DTO/adapter/CLI，#72 迁 TUI。共享 contracts/组装/quick 顺序集成。没有新平台、remote 权限、兼容层或插件系统。
 
 ## 全 OS / 构建标签源码索引
 
@@ -196,7 +196,7 @@ sequenceDiagram
 - [journal_reader.go](../../internal/steerline/journal_reader.go)
 - [launchers.go](../../internal/steerline/launchers.go)
 - [model.go](../../internal/steerline/model.go)
-- [native_authority.go](../../internal/steerline/native_authority.go)
+- [sqlite_native_authority.go](../../internal/steerline/sqlite_native_authority.go)
 - [native_batch_command.go](../../internal/steerline/native_batch_command.go)
 - [native_claim_command.go](../../internal/steerline/native_claim_command.go)
 - [native_cleanup.go](../../internal/steerline/native_cleanup.go)
@@ -206,7 +206,7 @@ sequenceDiagram
 - [native_discard_command.go](../../internal/steerline/native_discard_command.go)
 - [native_dispatch_command.go](../../internal/steerline/native_dispatch_command.go)
 - [native_graph_export.go](../../internal/steerline/native_graph_export.go)
-- [native_graph_snapshot.go](../../internal/steerline/native_graph_snapshot.go)
+- [sqlite_task_graph.go](../../internal/steerline/sqlite_task_graph.go)
 - [native_graph_types.go](../../internal/steerline/native_graph_types.go)
 - [native_project_open.go](../../internal/steerline/native_project_open.go)
 - [native_readiness_query.go](../../internal/steerline/native_readiness_query.go)
@@ -244,7 +244,7 @@ sequenceDiagram
 - [state_revision.go](../../internal/steerline/state_revision.go)
 - [store.go](../../internal/steerline/store.go)
 - [worker_attachment_store.go](../../internal/steerline/worker_attachment_store.go)
-- [worker_commit.go](../../internal/steerline/worker_commit.go)
+- [sqlite_worker_commit.go](../../internal/steerline/sqlite_worker_commit.go)
 - [worker_completion.go](../../internal/steerline/worker_completion.go)
 - [worker_environment.go](../../internal/steerline/worker_environment.go)
 - [worker_environment_host.go](../../internal/steerline/worker_environment_host.go)
@@ -308,7 +308,7 @@ sequenceDiagram
 
 #### internal/steerline/console
 
-- [activity_source.go](../../internal/steerline/console/activity_source.go)
+- [activity.go](../../internal/steerlineclient/activity.go)
 - [conversation.go](../../internal/steerline/console/conversation.go)
 - [conversation_anchor.go](../../internal/steerline/console/conversation_anchor.go)
 - [execution_profile.go](../../internal/steerline/console/execution_profile.go)
