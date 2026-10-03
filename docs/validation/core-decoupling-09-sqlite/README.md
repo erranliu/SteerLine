@@ -85,3 +85,5 @@
 最新 #72 主干在发布前已合并进本分支。共享冲突顺序集成在 architecture、coreboundary、app/client.go 及客户端 ProjectView 测试：保留 #72 的纯 TUI/资源工厂/配置视图，唯一实际连接使用 #70 的纯端口。相对最新 origin/main，console、clientcontracts 和 steerlineclient 没有本任务的产品实现差异；不保留旧 Store 构造，也不要求客户端线补搬迁。
 
 `post-main-guard.jsonl` 再验全标签及 Windows/Linux 的中心、console 图和两个新增存储负向场景；`post-main-wiring.jsonl` 再验实际 CLI 批次校验/创建/废弃、ProjectView、零/部分/显式项目配置及 CM72 注入/退出资源语义。`post-main-quick/summary.json` 记录集成后的最后一次既有 quick，原严格只读断言仍未获授权变更，必须如实保留失败。主干整合后重新阅读共同 Spec/Plan、实际生产构造与冲突 diff；未发现第二接线或公开产品 DTO/语义变更。
+
+集成后最小接线全通过，`post-main-quick` 七组均非零命中：core 11、rules 128、remote 15、codec 5、identity 3、app 6、boundary 35，均无 skip；仅 rules 中严格只读文件断言失败，整体仍失败。最后自查保留了 `NewService` 内不可绕开的中心受理校验（与 PrepareServiceConfig 共用），不让应用承担业务准入；`admission-current.jsonl` 复验非 native 拒绝、实际提交及应用构造。原始完整数据和结论见更新后的 `hits.json`。
