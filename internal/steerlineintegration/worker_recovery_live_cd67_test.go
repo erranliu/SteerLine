@@ -32,7 +32,7 @@ type appServerHostExitReceipt struct {
 
 func newNativeLiveRecoveryProject(t *testing.T) integrationFixture {
 	t.Helper()
-	f := newLifecycleProject(t, "local")
+	f := newLifecycleProjectBase(t, "local", false)
 	var global map[string]json.RawMessage
 	raw, err := os.ReadFile(steerlineapp.GlobalExecutionConfigPath())
 	require(t, err)
@@ -46,9 +46,14 @@ func newNativeLiveRecoveryProject(t *testing.T) integrationFixture {
 	var project map[string]json.RawMessage
 	require(t, json.Unmarshal(projectRaw, &project))
 	project["command_timeout"] = mustJSON("45s")
+	project["execution_policy"] = mustJSON(workspacePolicyFixture())
 	require(t, os.WriteFile(f.configPath, mustJSON(project), 0600))
 	f.config, err = steerlineapp.LoadConfig(f.configPath)
 	require(t, err)
+	// Bind authority only after the original native policy/model is final.
+	store, err := steerline.OpenNativeTaskProject(context.Background(), &f.config)
+	require(t, err)
+	require(t, store.Close())
 	return f
 }
 
