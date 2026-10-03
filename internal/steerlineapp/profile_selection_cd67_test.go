@@ -3,6 +3,7 @@ package steerlineapp
 import (
 	"encoding/json"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"os"
@@ -21,8 +22,13 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 	localOrca := testExecutionProfile(t, "orca-local", "Orca 本机", "orca", "codex", codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "unelevated"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "15m"})
 	remoteOrca := testExecutionProfile(t, "orca-remote", "Orca 远程", "orca_supervised", "codex", codexworker.ProfileConfig{Executable: "codex", Model: "chosen-model", ReasoningEffort: "xhigh"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}, &remote.ProfileConfig{ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "5s", CapabilityReportVersion: 1})
 	local := testExecutionProfile(t, "local", "本地", "local", "codex", codexworker.ProfileConfig{Executable: "codex"}, nil)
+	hostPolicy := executionapi.PublicationPolicy{Publisher: executionapi.PublisherHostService}
+	workerPolicy := executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}
+	local.ConfiguredPublicationPolicy = &hostPolicy
+	localOrca.ConfiguredPublicationPolicy = &workerPolicy
+	remoteOrca.ConfiguredPublicationPolicy = &workerPolicy
 	writeGlobalExecutionFixture(t, []ExecutionProfile{local, localOrca, remoteOrca}, "local")
-	input := map[string]any{"publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": base.Repository, "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion}
+	input := map[string]any{"publication_policy": executionapi.PublicationPolicy{Publisher: PublisherExecutionProfile}, "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": base.Repository, "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion}
 	path := filepath.Join(t.TempDir(), "config.json")
 	write := func() {
 		t.Helper()
@@ -35,15 +41,15 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 		}
 	}
 	write()
-	loaded, err := LoadConfig(path)
+	loaded, err := LoadQueryConfig(path)
 	if err != nil || len(loaded.AvailableExecutionProfiles()) != 3 || loaded.DefaultProfileID() != "local" {
 		t.Fatalf("configured profiles were not loaded: %+v / %v", loaded.ExecutionProfiles, err)
 	}
 	for _, profile := range loaded.AvailableExecutionProfiles() {
 		selected, chosen, err := loaded.ResolveExecutionProfile(profile.ID, profile.Digest())
-		if profile.Host != "local" {
-			if err == nil || !strings.Contains(err.Error(), "publication_policy") {
-				t.Fatalf("unproven remote policy was accepted: %v", err)
+		if profile.Host == "orca_supervised" {
+			if err == nil || !strings.Contains(err.Error(), "remote worker-start enforcement evidence") || profile.StaticUnavailableReason() == "" {
+				t.Fatalf("unverified remote enforcement was accepted: %v", err)
 			}
 			continue
 		}

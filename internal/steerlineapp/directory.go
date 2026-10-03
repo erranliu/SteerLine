@@ -265,9 +265,9 @@ func preflightLocalConfig(ctx context.Context, c steerline.Config) error {
 		Output: func(ctx context.Context, executable string, args []string) ([]byte, error) {
 			return runner.Output(ctx, steerline.Command{Executable: executable, Args: args})
 		},
-		HistoryAvailable: func(ctx context.Context) bool {
+		CheckHistory: func(ctx context.Context) error {
 			historyCommand := codexworker.ReaderCommand(command, settings.Profile)
-			return codexworker.HistoryAvailable(ctx, historyCommand, c.Repository, c.ProcessHost.StartManaged)
+			return codexworker.CheckHistory(ctx, historyCommand, c.Repository, c.ProcessHost.StartManaged)
 		},
 		StartManaged: func(command *exec.Cmd) (func(), error) {
 			owned, err := c.ProcessHost.StartManaged(command)

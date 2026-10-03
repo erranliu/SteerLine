@@ -1,0 +1,380 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "-tags=e2e",
+    "./tests/e2e/internal/...",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-03T16:05:30.2336916Z",
+  "finished_at": "2026-10-03T16:06:27.1510821Z",
+  "wall_seconds": 56.9173905,
+  "environment": {
+    "source_commit": "184e1e06d217b243e5655f4f9b7c233e4c80f579",
+    "worktree_status": " M internal/steerline/business_audit_fixture_test.go\n M internal/steerline/codexworker/capability.go\n M internal/steerline/codexworker/capability_test.go\n M internal/steerline/codexworker/history.go\n M internal/steerline/codexworker/lifecycle.go\n M internal/steerline/config.go\n M internal/steerline/service_lifecycle_review_test.go\n M internal/steerlineapp/directory.go\n M internal/steerlineapp/profile_publication_cd67_test.go\n M internal/steerlineapp/profile_selection_cd67_test.go\n M internal/steerlineapp/terminal_preflight_cd67_test.go\n M internal/steerlineintegration/native_environment_cd67_test.go\n M tests/e2e/internal/controlled/state.go\n M tests/e2e/internal/testenv/live.go\n?? docs/validation/all-tests-2026-10-03/README.md\n?? tests/e2e/internal/controlled/state_replace_other.go\n?? tests/e2e/internal/controlled/state_replace_windows.go\n?? tests/e2e/internal/controlled/state_replace_windows_test.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 5,
+    "passed_packages": 5,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 26,
+    "passed_tests": 25,
+    "failed_tests": 0,
+    "skipped_tests": 1,
+    "packages": [
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/testenv",
+        "status": "pass",
+        "elapsed_seconds": 54.768
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "status": "pass",
+        "elapsed_seconds": 1.143
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/controlled",
+        "status": "pass",
+        "elapsed_seconds": 0.929
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "status": "pass",
+        "elapsed_seconds": 0.837
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "status": "pass",
+        "elapsed_seconds": 0.818
+      }
+    ],
+    "tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/testenv",
+        "name": "TestTwoProjectsIsolateTasksGitAndCleanup",
+        "status": "pass",
+        "elapsed_seconds": 53.36
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/controlled",
+        "name": "TestWritePreservesSnapshotUntilWindowsReaderReleases",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/testenv",
+        "name": "TestPartialPreparationCleanupKeepsEvidence",
+        "status": "pass",
+        "elapsed_seconds": 0.05
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/controlled",
+        "name": "TestEmptyThreadCannotResumeUntilItHasATurn",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "name": "TestSandboxReadinessRejectsMissingAndStaleState",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "name": "TestUnprovisionedHomeModesNeedOnlyAuthentication",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "name": "TestUnprovisionedHomeModesNeedOnlyAuthentication/unelevated",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestProjectEnvironmentRejectsInheritedRuntimeAndTestSwitches",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestExecutionEvidencePreservesBoundIdentityAndAuthority",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestExecutionEvidencePreservesBoundIdentityAndAuthority/attempt",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestExecutionEvidencePreservesBoundIdentityAndAuthority/config",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestExecutionEvidencePreservesBoundIdentityAndAuthority/execution",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestExecutionEvidencePreservesBoundIdentityAndAuthority/generation",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestExecutionEvidencePreservesBoundIdentityAndAuthority/project",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestOrcaEvidenceRequiresOriginalRuntimeAndSucceededPreparation",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestOrcaEvidenceRequiresOriginalRuntimeAndSucceededPreparation/failed-turn",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestOrcaEvidenceRequiresOriginalRuntimeAndSucceededPreparation/generation",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestOrcaEvidenceRequiresOriginalRuntimeAndSucceededPreparation/missing-preparation",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestOrcaEvidenceRequiresOriginalRuntimeAndSucceededPreparation/runtime",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestOrcaEvidenceRequiresOriginalRuntimeAndSucceededPreparation/unverified",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "name": "TestAppServerUsageBindsIdentityAndDoesNotSumCumulativeUpdates",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "name": "TestOrcaInventoryPreservesOwnershipAndRejectsIncompleteEvidence",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "name": "TestRolloutUsageRequiresOwnedCwdAndPinnedModelEffort",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "name": "TestSandboxReadinessExistingAccounts",
+        "status": "skip",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "name": "TestUnprovisionedHomeModesNeedOnlyAuthentication/full-access",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "name": "TestWorkerConfigsPreserveNativeModelAndChainSettings",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "slowest_tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/testenv",
+        "name": "TestTwoProjectsIsolateTasksGitAndCleanup",
+        "status": "pass",
+        "elapsed_seconds": 53.36
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/controlled",
+        "name": "TestWritePreservesSnapshotUntilWindowsReaderReleases",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/testenv",
+        "name": "TestPartialPreparationCleanupKeepsEvidence",
+        "status": "pass",
+        "elapsed_seconds": 0.05
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/controlled",
+        "name": "TestEmptyThreadCannotResumeUntilItHasATurn",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "name": "TestSandboxReadinessRejectsMissingAndStaleState",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "name": "TestUnprovisionedHomeModesNeedOnlyAuthentication",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "name": "TestUnprovisionedHomeModesNeedOnlyAuthentication/unelevated",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+        "name": "TestProjectEnvironmentRejectsInheritedRuntimeAndTestSwitches",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestExecutionEvidencePreservesBoundIdentityAndAuthority",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestExecutionEvidencePreservesBoundIdentityAndAuthority/attempt",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestExecutionEvidencePreservesBoundIdentityAndAuthority/config",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestExecutionEvidencePreservesBoundIdentityAndAuthority/execution",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestExecutionEvidencePreservesBoundIdentityAndAuthority/generation",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestExecutionEvidencePreservesBoundIdentityAndAuthority/project",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestOrcaEvidenceRequiresOriginalRuntimeAndSucceededPreparation",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestOrcaEvidenceRequiresOriginalRuntimeAndSucceededPreparation/failed-turn",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestOrcaEvidenceRequiresOriginalRuntimeAndSucceededPreparation/generation",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestOrcaEvidenceRequiresOriginalRuntimeAndSucceededPreparation/missing-preparation",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestOrcaEvidenceRequiresOriginalRuntimeAndSucceededPreparation/runtime",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+        "name": "TestOrcaEvidenceRequiresOriginalRuntimeAndSucceededPreparation/unverified",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "failures": [],
+    "skipped": [
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+        "name": "TestSandboxReadinessExistingAccounts",
+        "status": "skip",
+        "elapsed_seconds": 0
+      }
+    ],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 55.2147191,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/test-feedback/runs/20261003T160530Z/go-test.jsonl",
+  "stderr_log": "docs/validation/test-feedback/runs/20261003T160530Z/go-test.stderr.txt"
+}

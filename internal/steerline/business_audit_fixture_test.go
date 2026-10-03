@@ -77,15 +77,19 @@ type neutralReceiptPort struct {
 	resolver neutralReceiptResolver
 }
 
-func (p neutralReceiptPort) ObserveLifecycle(ctx context.Context, s executionapi.LifecycleSnapshot) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (p neutralReceiptPort) PolicyCapabilities() executionapi.LifecyclePolicyCapabilities {
+	capabilities := p.LifecyclePort.PolicyCapabilities()
+	if p.resolver.entered != nil {
+		capabilities.ResumeActiveObservation = false
+	}
+	return capabilities
+}
+func (p neutralReceiptPort) Reconcile(ctx context.Context, r executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
 	if p.resolver.entered != nil {
 		close(p.resolver.entered)
 		<-ctx.Done()
 		return executionapi.LifecycleReceipt{Disposition: executionapi.OperationUnknown}, nil, ctx.Err()
 	}
-	return p.LifecyclePort.ObserveLifecycle(ctx, s)
-}
-func (p neutralReceiptPort) Reconcile(_ context.Context, r executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
 	if p.resolver.confirmedAnswer {
 		return executionapi.LifecycleReceipt{Operation: r.Operation, Disposition: executionapi.OperationConfirmed, State: executionapi.LifecycleStateFacts{InputAccepted: true, TurnID: r.Snapshot.Session.CurrentTurnID}}, nil, nil
 	}

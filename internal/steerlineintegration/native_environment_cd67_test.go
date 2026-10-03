@@ -74,7 +74,16 @@ func testIntegratedManagedLaunch(t *testing.T, renamed bool) {
 			return run.TaskID == "901" && e.Environment != nil && e.Environment.Blocker != nil && run.Decision != nil && run.Decision.Status == "pending"
 		})
 		if uncertain.run.Process != nil {
-			t.Fatal("unknown terminal receipt guessed")
+			// The read-only reconciliation may already have recovered the original
+			// terminal before this public snapshot. It still needs the explicit
+			// environment recheck and must never bind a replacement resource.
+			state, err := testprotocol.ReadNativeOrcaState(f.nativeStateDir)
+			require(t, err)
+			env := uncertain.execution.Environment
+			process := uncertain.run.Process
+			if !state.FixedAgentTerminalCreated || env.Ready || env.OriginalTerminal == nil || process.Terminal != "term-agent" || process.RuntimeID != "fake-runtime" || process.Incarnation != "inc-agent" || process.WorktreeID != "fake-repo::"+strings.ReplaceAll(state.Path, "\\", "/") || *env.OriginalTerminal != *process {
+				t.Fatal("lost receipt bound an unverified or replacement terminal")
+			}
 		}
 		submitIntegrationAnswerOption(t, ctx, f.config, uncertain.run, "recheck_environment")
 	} else {

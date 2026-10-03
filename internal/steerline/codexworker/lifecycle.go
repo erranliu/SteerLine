@@ -112,13 +112,13 @@ func probeLifecycleCapabilities(ctx context.Context, backend Backend, history co
 		Output: func(ctx context.Context, executable string, args []string) ([]byte, error) {
 			return setup.ProcessHost.OutputCommand(ctx, executionapi.LaunchCommand{Executable: executable, Args: append([]string(nil), args...), WorkingDirectory: setup.RepositoryPath})
 		},
-		HistoryAvailable: func(ctx context.Context) bool {
+		CheckHistory: func(ctx context.Context) error {
 			client, err := OpenHistory(ctx, history, setup.RepositoryPath, "", setup.ProcessHost.StartManaged)
 			if err != nil {
-				return false
+				return err
 			}
 			client.Close()
-			return true
+			return nil
 		},
 		StartManaged: func(command *exec.Cmd) (func(), error) {
 			process, err := setup.ProcessHost.StartManaged(command)

@@ -20,6 +20,7 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 		t.Skip("current execution policy mappings require Windows")
 	}
 	t.Setenv("STEERLINE_HOME", t.TempDir())
+	t.Setenv("STEERLINE_APP_SERVER_FIXTURE", "1")
 	repository := configTestRepository(t)
 	if output, err := exec.Command("git", "-C", repository, "remote", "add", "origin", "https://github.com/owner/repo.git").CombinedOutput(); err != nil {
 		t.Fatalf("configure fixture remote: %v: %s", err, output)
@@ -35,10 +36,12 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 	global, err := json.Marshal(map[string]any{"version": 2, "default_execution_profile": "local", "execution_profiles": profiles})
 	require(t, err)
 	require(t, os.WriteFile(GlobalExecutionConfigPath(), global, 0600))
+	provider := hostPublicationProviderFixture()
+	provider.Close = Command{Executable: "gh", Args: []string{"pr", "close", "{pr_url}", "--repo", "{repository}"}}
 	project, err := json.Marshal(map[string]any{
 		"repository": repository, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion,
 		"git": Command{Executable: "git"}, "execution_policy": workspacePolicyFixture(),
-		"publication_policy": map[string]string{"publisher": PublisherExecutionProfile}, "pr": hostPublicationProviderFixture(),
+		"publication_policy": map[string]string{"publisher": PublisherExecutionProfile}, "pr": provider,
 	})
 	require(t, err)
 	path := filepath.Join(t.TempDir(), "project.json")
