@@ -26,6 +26,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -404,7 +405,7 @@ func createIntegrationTask(t *testing.T, ctx context.Context, fixture integratio
 	contract.Digest = digest
 	store, err := steerline.OpenNativeTaskCommandStore(ctx, &fixture.config)
 	require(t, err)
-	commands := steerline.CommandService{Store: store, Project: fixture.config.Identity()}
+	commands := steerline.NewCommandService(store, fixture.config.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})
 	queries := steerline.NewQueryService(store, fixture.config.Identity())
 	authority, err := queries.ReadyNativeTaskSnapshot(ctx)
 	require(t, err)
@@ -438,7 +439,7 @@ func claimIntegrationTask(t *testing.T, ctx context.Context, fixture integration
 	t.Helper()
 	store, err := steerline.OpenNativeTaskCommandStore(ctx, &fixture.config)
 	require(t, err)
-	commands := steerline.CommandService{Store: store, Project: fixture.config.Identity()}
+	commands := steerline.NewCommandService(store, fixture.config.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})
 	page, err := steerline.NewQueryService(store, fixture.config.Identity()).ShowNativeTask(ctx, fmt.Sprint(taskID))
 	require(t, err)
 	profiles := fixture.config.AvailableExecutionProfiles()

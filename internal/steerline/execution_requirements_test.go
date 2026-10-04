@@ -140,7 +140,7 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	if err != nil {
 		t.Fatalf("fixture push: %s %v", out, err)
 	}
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	_, err = commands.CreateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(8), nil), newID(), 1, "operator")
 	require(t, err)
 	authority, err := store.NativeAuthority(ctx, c.Identity())

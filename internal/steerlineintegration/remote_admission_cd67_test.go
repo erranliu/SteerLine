@@ -12,6 +12,7 @@ import (
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	taskapp "github.com/erranliu/SteerLine/internal/task"
 )
 
 func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
@@ -50,7 +51,7 @@ func TestRemotePublicationClaimRequiresPermissionEvidence(t *testing.T) {
 	require(t, entry.ValidatePublicationPolicy(c.PublicationPolicy, c.PR))
 	before, err := store.Query(context.Background(), c.Identity())
 	require(t, err)
-	_, err = (steerline.CommandService{Store: store, Project: c.Identity()}).ClaimNativeTask(context.Background(), c, steerline.TaskClaimOptions{TaskID: "60", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1})
+	_, err = (steerline.NewCommandService(store, c.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})).ClaimNativeTask(context.Background(), c, steerline.TaskClaimOptions{TaskID: "60", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1})
 	if err == nil || !strings.Contains(err.Error(), "enforcement evidence") || strings.Contains(err.Error(), "must-not-be-called") {
 		t.Fatalf("remote publication bypassed its permission admission gate: %v", err)
 	}

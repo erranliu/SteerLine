@@ -9,8 +9,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	taskview "github.com/erranliu/SteerLine/internal/steerline/taskview"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -65,7 +64,7 @@ type operationTx interface {
 }
 
 type graphTx interface {
-	TaskGraphSnapshot(context.Context, string) (task.Snapshot, error)
+	TaskGraphSnapshot(context.Context, string) (taskview.Snapshot, error)
 }
 
 type workflowTx interface {
@@ -82,18 +81,6 @@ type BatchTx interface {
 	PutTaskDependency(taskmodel.TaskDependencyRecord) error
 }
 
-type ClaimTx interface {
-	commandTx
-	operationTx
-	graphTx
-	Query(context.Context, string) (contracts.DomainSnapshot, error)
-	OccupiedExecutions(context.Context, string) (int, error)
-	UpdateNativeTaskCAS(taskmodel.TaskRecord, uint64) error
-	PutWorkflowRun(executionmodel.WorkflowRunRecord) error
-	PutExecution(executionmodel.ExecutionRecord) error
-	PutStepAttempt(executionmodel.StepAttemptRecord) error
-}
-
 type CandidateTx interface {
 	commandTx
 	operationTx
@@ -108,7 +95,7 @@ type DispatchTx interface {
 	commandTx
 	operationTx
 	graphTx
-	UpdateProjectTaskAuthorityCAS(tasklegacy.ProjectTaskAuthority, uint64) error
+	UpdateProjectTaskAuthorityCAS(executionmodel.ProjectTaskAuthority, uint64) error
 }
 
 type PredecessorTx interface {
@@ -133,22 +120,10 @@ type DiscardPendingTx interface {
 	AppendEvent(storageports.DomainEvent) (int64, error)
 }
 
-type DiscardTx interface {
-	DiscardPendingTx
-	graphTx
-	Query(context.Context, string) (contracts.DomainSnapshot, error)
-	DeliveryCount(context.Context, string, string) (int, error)
-	UpdateNativeTaskCAS(taskmodel.TaskRecord, uint64) error
-}
-
-type DeliveryTx interface {
+type DeliveryAuditTx interface {
 	graphTx
 	workflowTx
 	Query(context.Context, string) (contracts.DomainSnapshot, error)
-	TaskContract(context.Context, string, taskmodel.TaskRecord) (taskmodel.TaskContract, error)
-	PRBindingsOnOtherTasks(context.Context, string, string, string) (int, error)
-	PutTaskDelivery(task.TaskDeliveryRecord) error
-	UpdateNativeTaskCAS(taskmodel.TaskRecord, uint64) error
 	AppendEvent(storageports.DomainEvent) (int64, error)
 }
 
@@ -163,7 +138,7 @@ type CleanupTx interface {
 	operationTx
 	workflowTx
 	Task(context.Context, string, string) (taskmodel.TaskRecord, error)
-	NativeAuthority(context.Context, string) (tasklegacy.ProjectTaskAuthority, error)
+	NativeAuthority(context.Context, string) (executionmodel.ProjectTaskAuthority, error)
 	UpdateDiscardedTaskCAS(taskmodel.TaskRecord, uint64) error
 	AdvanceTaskGraphRevision(string, uint64, uint64) (uint64, error)
 	PutWorkflowRun(executionmodel.WorkflowRunRecord) error
@@ -172,22 +147,24 @@ type CleanupTx interface {
 }
 
 type Tasks interface {
+	TaskSnapshot(context.Context, string) (taskmodel.Snapshot, error)
+	storageports.Results
+	storageports.Claims
+	storageports.Discards
 	Query(context.Context, string) (contracts.DomainSnapshot, error)
-	TaskGraphSnapshot(context.Context, string) (task.Snapshot, error)
-	NativeAuthority(context.Context, string) (tasklegacy.ProjectTaskAuthority, error)
+	TaskGraphSnapshot(context.Context, string) (taskview.Snapshot, error)
+	NativeAuthority(context.Context, string) (executionmodel.ProjectTaskAuthority, error)
 	TaskContract(context.Context, string, taskmodel.TaskRecord) (taskmodel.TaskContract, error)
 	Operation(context.Context, string, string) (executionmodel.OperationRecord, error)
 	WorkflowOwned(context.Context, string, string, string) (bool, error)
 	UpdateDiscardReceipt(context.Context, executionmodel.OperationRecord) error
 	TransactTaskBatch(context.Context, func(BatchTx) error) error
-	TransactClaim(context.Context, func(ClaimTx) error) error
 	TransactCandidate(context.Context, func(CandidateTx) error) error
 	TransactDispatch(context.Context, func(DispatchTx) error) error
 	TransactPredecessors(context.Context, func(PredecessorTx) error) error
 	TransactDiscardIntent(context.Context, func(DiscardIntentTx) error) error
 	TransactDiscardPending(context.Context, func(DiscardPendingTx) error) error
-	TransactDiscard(context.Context, func(DiscardTx) error) error
-	TransactDelivery(context.Context, func(DeliveryTx) error) error
+	TransactDeliveryAudit(context.Context, func(DeliveryAuditTx) error) error
 	TransactCleanupProgress(context.Context, func(CleanupProgressTx) error) error
 	TransactCleanup(context.Context, func(CleanupTx) error) error
 }
@@ -201,7 +178,7 @@ type CommandStore interface {
 
 type CenterReader interface {
 	Query(context.Context, string) (contracts.DomainSnapshot, error)
-	NativeAuthority(context.Context, string) (tasklegacy.ProjectTaskAuthority, error)
+	NativeAuthority(context.Context, string) (executionmodel.ProjectTaskAuthority, error)
 	DatabaseVersion(context.Context) (string, uint64, error)
 }
 
@@ -216,5 +193,5 @@ type Conversations interface {
 }
 
 type Projects interface {
-	InitializeProject(context.Context, tasklegacy.ProjectTaskAuthority) error
+	InitializeProject(context.Context, executionmodel.ProjectTaskAuthority) error
 }

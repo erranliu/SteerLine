@@ -81,7 +81,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		if _, err := NewService(c); err == nil {
 			t.Fatal("app constructed an implicit catalog")
 		}
-		if _, err := steerline.NewService(c, nil, nil, nil, nil, nil); err == nil {
+		if _, err := steerline.NewService(c, nil, nil, nil, nil, nil, nil, nil); err == nil {
 			t.Fatal("core accepted missing ports")
 		}
 		if _, err := steerline.OpenNativeTaskProject(context.Background(), &c); err == nil || !strings.Contains(err.Error(), "directory") {

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -22,7 +22,7 @@ func requireNativeAuditCode(t *testing.T, err error, code string) {
 
 // Storage fixtures deliberately bypass the future DAG command/PR verification
 // pipeline. Their records test persistence and query boundaries only.
-func nativeAuditRecords(t *testing.T, store *sqliteFixture, a tasklegacy.ProjectTaskAuthority) []taskmodel.TaskRecord {
+func nativeAuditRecords(t *testing.T, store *sqliteFixture, a executionmodel.ProjectTaskAuthority) []taskmodel.TaskRecord {
 	t.Helper()
 	created := time.Now().UTC()
 	ref := taskmodel.FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
@@ -56,7 +56,7 @@ func nativeAuditRecords(t *testing.T, store *sqliteFixture, a tasklegacy.Project
 func nativeAuditStore(t *testing.T) (*sqliteFixture, string, []taskmodel.TaskRecord) {
 	t.Helper()
 	s := openDomainTestStore(t)
-	a := tasklegacy.ProjectTaskAuthority{ProjectIdentity: "audit-project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
+	a := executionmodel.ProjectTaskAuthority{ProjectIdentity: "audit-project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
 	require(t, s.transactRecords(context.Background(), func(tx *fixtureTransaction) error { return tx.PutProjectTaskAuthority(a) }))
 	return s, a.ProjectIdentity, nativeAuditRecords(t, s, a)
 }

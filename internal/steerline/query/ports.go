@@ -6,7 +6,7 @@ import (
 	"context"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
+	taskview "github.com/erranliu/SteerLine/internal/steerline/taskview"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -21,7 +21,7 @@ type EventReader interface {
 
 type TaskReader interface {
 	NativeTaskPage(context.Context, string, string, string, uint64, int, int) (contracts.NativeTaskPage, error)
-	TaskGraphSnapshot(context.Context, string) (task.Snapshot, error)
+	TaskGraphSnapshot(context.Context, string) (taskview.Snapshot, error)
 }
 
 type ProjectReader interface {

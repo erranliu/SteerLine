@@ -7,8 +7,7 @@ import (
 	"errors"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
-	"github.com/erranliu/SteerLine/internal/steerline/taskview"
+	taskview "github.com/erranliu/SteerLine/internal/steerline/taskview"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -139,18 +138,18 @@ func (q Service) ReadyNativeTaskSnapshot(ctx context.Context) (contracts.NativeR
 	return ReadySnapshot(graph), nil
 }
 
-func (q Service) readTaskGraph(ctx context.Context) (task.Snapshot, error) {
+func (q Service) readTaskGraph(ctx context.Context) (taskview.Snapshot, error) {
 	snapshot, err := q.Tasks.TaskGraphSnapshot(ctx, q.Project)
 	if err != nil {
-		return task.Snapshot{}, err
+		return taskview.Snapshot{}, err
 	}
 	if snapshot.Authority.ProjectIdentity != q.Project {
-		return task.Snapshot{}, nativeErr("authority_mismatch", "task graph belongs to another project")
+		return taskview.Snapshot{}, nativeErr("authority_mismatch", "task graph belongs to another project")
 	}
 	return snapshot, nil
 }
 
-func ReadySnapshot(graph task.Snapshot) contracts.NativeReadyTaskSnapshot {
+func ReadySnapshot(graph taskview.Snapshot) contracts.NativeReadyTaskSnapshot {
 	return contracts.NativeReadyTaskSnapshot{ProjectID: graph.Authority.ProjectIdentity, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, DatabaseID: graph.DatabaseID, DatabaseRevision: graph.DatabaseRevision, SampledAt: graph.SampledAt, Tasks: taskmodel.ReadyTasks(graph.TaskGraph())}
 }
 

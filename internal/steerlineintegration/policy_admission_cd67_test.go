@@ -11,11 +11,12 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
+	taskapp "github.com/erranliu/SteerLine/internal/task"
 )
 
 func TestProjectPolicyClaimRejectsStaticConflictsBeforeNativeQuery(t *testing.T) {
 	c, _, store := nativeAdmissionFixture(t)
-	commands := steerline.CommandService{Store: store, Project: c.Identity()}
+	commands := steerline.NewCommandService(store, c.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})
 	codex := nativeProfileSettings(c)
 	codex.Executable = filepath.Join(t.TempDir(), "must-never-be-called.exe")
 	setNativeProfile(t, &c, codex)

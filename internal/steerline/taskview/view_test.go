@@ -5,8 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/task"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -17,12 +16,12 @@ func TestGraphViewUsesOneSnapshot(t *testing.T) {
 		{TaskID: "2", Title: "ready", Status: "open"},
 		{TaskID: "3", Title: "other", Status: "open"},
 	}
-	snapshot := task.Snapshot{
-		Authority:  tasklegacy.ProjectTaskAuthority{AuthorityVersion: 2, GraphRevision: 3},
+	snapshot := Snapshot{
+		Authority:  executionmodel.ProjectTaskAuthority{AuthorityVersion: 2, GraphRevision: 3},
 		DatabaseID: strings.Repeat("a", 32), DatabaseRevision: 4, SampledAt: at,
 		Tasks: records, ByID: map[string]taskmodel.TaskRecord{"1": records[0], "2": records[1], "3": records[2]},
 		Edges:      []taskmodel.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "2"}},
-		Deliveries: map[string]task.TaskDeliveryRecord{"1": {TaskID: "1"}},
+		Deliveries: map[string]executionmodel.TaskDeliveryRecord{"1": {TaskID: "1"}},
 	}
 	filter, err := NormalizeFilter("project", Filter{CenterTaskID: "1", Direction: "downstream", Depth: 1})
 	if err != nil {

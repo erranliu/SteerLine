@@ -7,16 +7,15 @@ import (
 	"errors"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
-	taskrules "github.com/erranliu/SteerLine/internal/steerline/task"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	taskview "github.com/erranliu/SteerLine/internal/steerline/taskview"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func (s Reader) TaskGraphSnapshot(ctx context.Context, project string) (taskrules.Snapshot, error) {
+func (s Reader) TaskGraphSnapshot(ctx context.Context, project string) (taskview.Snapshot, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		return taskrules.Snapshot{}, err
+		return taskview.Snapshot{}, err
 	}
 	defer tx.Rollback()
 	out, err := s.TaskGraphSnapshotTx(ctx, tx, project)
@@ -26,12 +25,12 @@ func (s Reader) TaskGraphSnapshot(ctx context.Context, project string) (taskrule
 	return out, tx.Commit()
 }
 
-func (s Reader) TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string) (taskrules.Snapshot, error) {
+func (s Reader) TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string) (taskview.Snapshot, error) {
 	return TaskGraphSnapshotTx(ctx, tx, project, s.nativeBinding)
 }
 
-func TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string, binding *tasklegacy.ProjectTaskAuthority) (taskrules.Snapshot, error) {
-	out := taskrules.Snapshot{ByID: map[string]taskmodel.TaskRecord{}, RepositoryTaskIDs: map[string]bool{}, ContractIDs: map[string]bool{}, Deliveries: map[string]contracts.TaskDeliveryRecord{}, SampledAt: time.Now().UTC()}
+func TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string, binding *executionmodel.ProjectTaskAuthority) (taskview.Snapshot, error) {
+	out := taskview.Snapshot{ByID: map[string]taskmodel.TaskRecord{}, RepositoryTaskIDs: map[string]bool{}, ContractIDs: map[string]bool{}, Deliveries: map[string]executionmodel.TaskDeliveryRecord{}, SampledAt: time.Now().UTC()}
 	if project == "" {
 		return out, nativeErr("authority_mismatch", "project identity is required")
 	}
@@ -148,7 +147,7 @@ func TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string, bindin
 		return out, err
 	}
 	for rows.Next() {
-		var d contracts.TaskDeliveryRecord
+		var d executionmodel.TaskDeliveryRecord
 		var merged, recorded string
 		d.ProjectIdentity = project
 		if err = rows.Scan(&d.TaskID, &d.SelectedWorkflowRunID, &d.PRInstance, &d.PRRepository, &d.PRNumber, &d.PRURL, &d.MergeCommit, &merged, &recorded, &d.Evidence); err != nil {
@@ -165,7 +164,7 @@ func TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string, bindin
 			rows.Close()
 			return out, nativeErr("contract_mismatch", "invalid delivery recording timestamp")
 		}
-		if err = taskrules.ValidateDelivery(d, out.Authority.Branch); err != nil {
+		if err = executionmodel.ValidateDelivery(d, out.Authority.Branch); err != nil {
 			rows.Close()
 			return out, err
 		}

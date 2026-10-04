@@ -32,8 +32,10 @@ func TestCM69PurePortDependencies(t *testing.T) {
 			}
 			// CM70's application-owned Connection composes the existing query
 			// read contracts. Keep that exception out of the narrow write ports.
+			// taskview replaces the old task.Snapshot value owner; coreboundary now
+			// enforces that this projection only imports standard library and pure models.
 			connectionReadPort := file.Name() == "connections.go" && path == base+"query"
-			if path == "database/sql" || strings.Contains(path, ".") && path != base+"contracts" && path != "github.com/erranliu/SteerLine/internal/execution/backend" && path != "github.com/erranliu/SteerLine/internal/execution/model" && path != "github.com/erranliu/SteerLine/internal/storage/ports" && path != "github.com/erranliu/SteerLine/internal/task/model" && path != base+"task" && !connectionReadPort {
+			if path == "database/sql" || strings.Contains(path, ".") && path != base+"contracts" && path != "github.com/erranliu/SteerLine/internal/execution/backend" && path != "github.com/erranliu/SteerLine/internal/execution/model" && path != "github.com/erranliu/SteerLine/internal/storage/ports" && path != "github.com/erranliu/SteerLine/internal/task/model" && path != base+"taskview" && !connectionReadPort {
 				t.Errorf("port depends on non-value owner: %s", path)
 			}
 		}

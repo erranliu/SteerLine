@@ -475,7 +475,7 @@ func (s *Service) applyControlAction(ctx context.Context, req productapi.Control
 			paused := false
 			update.Paused = &paused
 		}
-		updated, err := (CommandService{Store: s.commandStore, Project: s.Config.identity}).SetNativeDispatchState(ctx, update)
+		updated, err := (s.commandService(s.Config.identity)).SetNativeDispatchState(ctx, update)
 		if err != nil {
 			return err
 		}

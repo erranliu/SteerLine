@@ -11,7 +11,6 @@ import (
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -24,19 +23,19 @@ type NativeDispatchUpdate struct {
 	RequestedBy              string
 }
 
-func (c CommandService) SetNativeDispatchState(ctx context.Context, update NativeDispatchUpdate) (tasklegacy.ProjectTaskAuthority, error) {
+func (c CommandService) SetNativeDispatchState(ctx context.Context, update NativeDispatchUpdate) (executionmodel.ProjectTaskAuthority, error) {
 	sqlite := c.Store
 	if sqlite == nil || c.Project == "" {
-		return tasklegacy.ProjectTaskAuthority{}, nativeErr("authority_mismatch", "dispatch control requires the center SQLite project")
+		return executionmodel.ProjectTaskAuthority{}, nativeErr("authority_mismatch", "dispatch control requires the center SQLite project")
 	}
 	if !controlIDPattern.MatchString(update.RequestID) || update.ExpectedAuthorityVersion == 0 {
-		return tasklegacy.ProjectTaskAuthority{}, nativeErr("invalid_batch", "dispatch control requires request ID and sampled authority version")
+		return executionmodel.ProjectTaskAuthority{}, nativeErr("invalid_batch", "dispatch control requires request ID and sampled authority version")
 	}
 	if update.Mode == nil && update.Paused == nil {
-		return tasklegacy.ProjectTaskAuthority{}, nativeErr("invalid_batch", "dispatch control must change mode or pause state")
+		return executionmodel.ProjectTaskAuthority{}, nativeErr("invalid_batch", "dispatch control must change mode or pause state")
 	}
 	if update.Mode != nil && *update.Mode != "manual" && *update.Mode != "auto" {
-		return tasklegacy.ProjectTaskAuthority{}, nativeErr("invalid_batch", "dispatch mode must be auto or manual")
+		return executionmodel.ProjectTaskAuthority{}, nativeErr("invalid_batch", "dispatch mode must be auto or manual")
 	}
 	if strings.TrimSpace(update.RequestedBy) == "" {
 		update.RequestedBy = DefaultRequestedBy()
@@ -47,23 +46,23 @@ func (c CommandService) SetNativeDispatchState(ctx context.Context, update Nativ
 		RequestedBy string  `json:"requested_by"`
 	}{update.Mode, update.Paused, update.RequestedBy})
 	if err != nil {
-		return tasklegacy.ProjectTaskAuthority{}, err
+		return executionmodel.ProjectTaskAuthority{}, err
 	}
 	requestPayload, err := taskmodel.CanonicalJSON(requestBytes)
 	if err != nil {
-		return tasklegacy.ProjectTaskAuthority{}, err
+		return executionmodel.ProjectTaskAuthority{}, err
 	}
 	if old, found, lookupErr := sqlite.LookupCommand(ctx, c.Project, update.RequestID); lookupErr != nil {
-		return tasklegacy.ProjectTaskAuthority{}, lookupErr
+		return executionmodel.ProjectTaskAuthority{}, lookupErr
 	} else if found {
 		return replayNativeDispatchState(old, requestPayload, c.Project, update.RequestedBy)
 	}
 	graph, err := sqlite.TaskGraphSnapshot(ctx, c.Project)
 	if err != nil {
-		return tasklegacy.ProjectTaskAuthority{}, err
+		return executionmodel.ProjectTaskAuthority{}, err
 	}
 	if graph.Authority.AuthorityVersion != update.ExpectedAuthorityVersion {
-		return tasklegacy.ProjectTaskAuthority{}, nativeErr("stale_version", fmt.Sprintf("expected authority version %d, found %d", update.ExpectedAuthorityVersion, graph.Authority.AuthorityVersion))
+		return executionmodel.ProjectTaskAuthority{}, nativeErr("stale_version", fmt.Sprintf("expected authority version %d, found %d", update.ExpectedAuthorityVersion, graph.Authority.AuthorityVersion))
 	}
 	next := graph.Authority
 	next.AuthorityVersion++
@@ -74,7 +73,7 @@ func (c CommandService) SetNativeDispatchState(ctx context.Context, update Nativ
 		next.DispatchPaused = *update.Paused
 	}
 	next.UpdatedAt = time.Now().UTC()
-	var result tasklegacy.ProjectTaskAuthority
+	var result executionmodel.ProjectTaskAuthority
 	err = sqlite.TransactDispatch(ctx, func(tx persistence.DispatchTx) error {
 		if old, found, lookupErr := tx.LookupCommand(ctx, c.Project, update.RequestID); lookupErr != nil {
 			return lookupErr
@@ -126,13 +125,13 @@ func (c CommandService) SetNativeDispatchState(ctx context.Context, update Nativ
 	return result, err
 }
 
-func replayNativeDispatchState(old storageports.CommandRecord, requestPayload []byte, project, requestedBy string) (tasklegacy.ProjectTaskAuthority, error) {
+func replayNativeDispatchState(old storageports.CommandRecord, requestPayload []byte, project, requestedBy string) (executionmodel.ProjectTaskAuthority, error) {
 	if old.ProjectIdentity != project || old.Kind != "set_dispatch_state" || old.IdempotencyKey == "" || old.RequestedBy != requestedBy || !bytes.Equal(old.Payload, requestPayload) || old.Status != "accepted" || len(old.Result) == 0 {
-		return tasklegacy.ProjectTaskAuthority{}, nativeErr("idempotency_conflict", "dispatch request ID was used for a different command")
+		return executionmodel.ProjectTaskAuthority{}, nativeErr("idempotency_conflict", "dispatch request ID was used for a different command")
 	}
-	var result tasklegacy.ProjectTaskAuthority
+	var result executionmodel.ProjectTaskAuthority
 	if err := decode(old.Result, &result); err != nil || result.ProjectIdentity != project {
-		return tasklegacy.ProjectTaskAuthority{}, nativeErr("unsupported_schema", "saved dispatch command receipt is invalid")
+		return executionmodel.ProjectTaskAuthority{}, nativeErr("unsupported_schema", "saved dispatch command receipt is invalid")
 	}
 	return result, nil
 }

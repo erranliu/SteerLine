@@ -1,0 +1,2976 @@
+{
+  "fields": [
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "Persistence",
+      "Signature": "persistence.Factory",
+      "Line": 10,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "ExecutionDirectory",
+      "Signature": "*ExecutionDirectory",
+      "Line": 11,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "ProcessHost",
+      "Signature": "executionbackend.ManagedProcessHost",
+      "Line": 12,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "WorkspaceBranchPrefix",
+      "Signature": "string",
+      "Line": 13,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "StateRoot",
+      "Signature": "string",
+      "Line": 14,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "RepositoryStateKey",
+      "Signature": "string",
+      "Line": 15,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "fixedProfileDigest",
+      "Signature": "string",
+      "Line": 16,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "frozenExecutionConfig",
+      "Signature": "bool",
+      "Line": 17,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "requirementsEvaluation",
+      "Signature": "*executionbackend.RequirementsEvaluation",
+      "Line": 18,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "executionConfigPath",
+      "Signature": "string",
+      "Line": 19,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "publicationRemoteURL",
+      "Signature": "string",
+      "Line": 20,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "selectedProfileID",
+      "Signature": "string",
+      "Line": 21,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "PublicationPolicy",
+      "Signature": "executionbackend.PublicationPolicy",
+      "Line": 22,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "ExecutionPolicy",
+      "Signature": "executionbackend.ExecutionPolicy",
+      "Line": 23,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "ExecutionRequirements",
+      "Signature": "executionbackend.ExecutionRequirements",
+      "Line": 24,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "policySource",
+      "Signature": "string",
+      "Line": 25,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "Repository",
+      "Signature": "string",
+      "Line": 26,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "TaskAuthority",
+      "Signature": "string",
+      "Line": 27,
+      "migration_owner": 75,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "Remote",
+      "Signature": "string",
+      "Line": 28,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "Branch",
+      "Signature": "string",
+      "Line": 29,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "RunDir",
+      "Signature": "string",
+      "Line": 30,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "WorktreeRoot",
+      "Signature": "string",
+      "Line": 31,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "Claimant",
+      "Signature": "string",
+      "Line": 32,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "Git",
+      "Signature": "executionbackend.Command",
+      "Line": 33,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "ImplementationData",
+      "Signature": "[]executionbackend.ImplementationDataEnvelope",
+      "Line": 34,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "ImplementationDisplay",
+      "Signature": "[]string",
+      "Line": 35,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "WorkflowProtocol",
+      "Signature": "string",
+      "Line": 36,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "ExecutableTypes",
+      "Signature": "[]string",
+      "Line": 37,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "TaskPoll",
+      "Signature": "string",
+      "Line": 38,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "PRPoll",
+      "Signature": "string",
+      "Line": 39,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "Heartbeat",
+      "Signature": "string",
+      "Line": 40,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "CommandTimeout",
+      "Signature": "string",
+      "Line": 41,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "ShutdownGrace",
+      "Signature": "string",
+      "Line": 42,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "Agent",
+      "Signature": "string",
+      "Line": 43,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "Host",
+      "Signature": "string",
+      "Line": 44,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "ExecutionProfiles",
+      "Signature": "[]ExecutionProfile",
+      "Line": 45,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "DefaultExecutionProfile",
+      "Signature": "string",
+      "Line": 46,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "StallTimeout",
+      "Signature": "string",
+      "Line": 47,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "PR",
+      "Signature": "publication.Config",
+      "Line": 48,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "identity",
+      "Signature": "string",
+      "Line": 49,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "workerEnv",
+      "Signature": "map[string]string",
+      "Line": 50,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "configDigest",
+      "Signature": "string",
+      "Line": 51,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/application_config_types.go",
+      "Type": "Config",
+      "Name": "globalExecution",
+      "Signature": "bool",
+      "Line": 52,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/command_boundary.go",
+      "Type": "CommandService",
+      "Name": "Store",
+      "Signature": "persistence.CommandStore",
+      "Line": 26,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/command_boundary.go",
+      "Type": "CommandService",
+      "Name": "Project",
+      "Signature": "string",
+      "Line": 27,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/command_boundary.go",
+      "Type": "CommandService",
+      "Name": "Work",
+      "Signature": "TaskWorkPort",
+      "Line": 28,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/command_boundary.go",
+      "Type": "CommandService",
+      "Name": "taskResults",
+      "Signature": "TaskResultPort",
+      "Line": 29,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "taskWork",
+      "Signature": "TaskWorkPort",
+      "Line": 17,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "taskResults",
+      "Signature": "TaskResultPort",
+      "Line": 18,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "Config",
+      "Signature": "Config",
+      "Line": 19,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "baseConfig",
+      "Signature": "Config",
+      "Line": 20,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "lifecycleResolver",
+      "Signature": "executionbackend.LifecycleResolver",
+      "Line": 21,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "conversationSources",
+      "Signature": "contracts.ConversationSourcePort",
+      "Line": 22,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "dispatchConfig",
+      "Signature": "*Config",
+      "Line": 23,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "dispatchProfile",
+      "Signature": "*ExecutionProfile",
+      "Line": 24,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "State",
+      "Signature": "Runtime",
+      "Line": 25,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "domain",
+      "Signature": "DomainSnapshot",
+      "Line": 26,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "committed",
+      "Signature": "DomainSnapshot",
+      "Line": 27,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "runs",
+      "Signature": "[]*Run",
+      "Line": 28,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "pendingEvents",
+      "Signature": "[]storageports.DomainEvent",
+      "Line": 29,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "pendingOperations",
+      "Signature": "map[string]string",
+      "Line": 30,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "workerDecisionWrites",
+      "Signature": "map[string]bool",
+      "Line": 31,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "store",
+      "Signature": "*Store",
+      "Line": 32,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "domainStore",
+      "Signature": "centerReader",
+      "Line": 33,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "commandStore",
+      "Signature": "persistence.CommandStore",
+      "Line": 34,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "conversationStore",
+      "Signature": "persistence.Conversations",
+      "Line": 35,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "closeStore",
+      "Signature": "func() error",
+      "Line": 36,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "workers",
+      "Signature": "map[string]*Worker",
+      "Line": 38,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "ownedProcesses",
+      "Signature": "map[string]executionbackend.StopHandle",
+      "Line": 39,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "lifecycleEffects",
+      "Signature": "map[string]pendingLifecycleEffect",
+      "Line": 40,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "lifecycleMessages",
+      "Signature": "map[string][]workerMessage",
+      "Line": 41,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "appServerRecovering",
+      "Signature": "map[string]bool",
+      "Line": 42,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "workerMessages",
+      "Signature": "chan workerMessage",
+      "Line": 43,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "runContext",
+      "Signature": "context.Context",
+      "Line": 44,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "forwarders",
+      "Signature": "sync.WaitGroup",
+      "Line": 45,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "forwardMu",
+      "Signature": "sync.Mutex",
+      "Line": 46,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "forwardedDone",
+      "Signature": "[]workerMessage",
+      "Line": 47,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "conversationReplayRequests",
+      "Signature": "chan []conversationJournalSource",
+      "Line": 48,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "conversationReplayErrors",
+      "Signature": "chan error",
+      "Line": 49,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "Console",
+      "Signature": "string",
+      "Line": 51,
+      "migration_owner": 77,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "consoleOut",
+      "Signature": "io.Writer",
+      "Line": 52,
+      "migration_owner": 77,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "consoleSequence",
+      "Signature": "uint64",
+      "Line": 53,
+      "migration_owner": 77,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "controlSeen",
+      "Signature": "map[string]string",
+      "Line": 54,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "stopControl",
+      "Signature": "*productapi.ControlRequest",
+      "Line": 55,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "stopAcceptedAt",
+      "Signature": "*time.Time",
+      "Line": 56,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "targetTask",
+      "Signature": "string",
+      "Line": 57,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "lastDispatched",
+      "Signature": "string",
+      "Line": 58,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "reservedRunID",
+      "Signature": "string",
+      "Line": 59,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "candidateSnapshot",
+      "Signature": "*TaskSnapshot",
+      "Line": 60,
+      "migration_owner": 77,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "explicitDispatch",
+      "Signature": "bool",
+      "Line": 61,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "controlFault",
+      "Signature": "func(string)",
+      "Line": 62,
+      "migration_owner": 80,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_state.go",
+      "Type": "Service",
+      "Name": "startupID",
+      "Signature": "string",
+      "Line": 63,
+      "migration_owner": 80,
+      "integration_owner": 76
+    }
+  ],
+  "methods": [
+    {
+      "File": "internal/steerline/application_config.go",
+      "Type": "Config",
+      "Name": "LoadedConfigDigest",
+      "Signature": "func (c Config) LoadedConfigDigest() string",
+      "Line": 16,
+      "migration_owner": 80,
+      "integration_owner": 80
+    },
+    {
+      "File": "internal/steerline/application_config.go",
+      "Type": "Config",
+      "Name": "ValidateApplicationPaths",
+      "Signature": "func (c Config) ValidateApplicationPaths() error",
+      "Line": 18,
+      "migration_owner": 80,
+      "integration_owner": 80
+    },
+    {
+      "File": "internal/steerline/application_config.go",
+      "Type": "Config",
+      "Name": "BindApplicationConfig",
+      "Signature": "func (c *Config) BindApplicationConfig(directory *ExecutionDirectory, projectPath, directoryPath, digest string, global bool)",
+      "Line": 28,
+      "migration_owner": 80,
+      "integration_owner": 80
+    },
+    {
+      "File": "internal/steerline/application_config.go",
+      "Type": "Config",
+      "Name": "Identity",
+      "Signature": "func (c Config) Identity() string",
+      "Line": 36,
+      "migration_owner": 80,
+      "integration_owner": 80
+    },
+    {
+      "File": "internal/steerline/application_config.go",
+      "Type": "Config",
+      "Name": "ResolveIdentity",
+      "Signature": "func (c *Config) ResolveIdentity(ctx context.Context) error",
+      "Line": 41,
+      "migration_owner": 80,
+      "integration_owner": 80
+    },
+    {
+      "File": "internal/steerline/candidate_control.go",
+      "Type": "Service",
+      "Name": "processCandidateControl",
+      "Signature": "func (s *Service) processCandidateControl(ctx context.Context, req productapi.ControlRequest, payload productapi.ControlPayload, digest string) error",
+      "Line": 15,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/candidate_control.go",
+      "Type": "Service",
+      "Name": "replayCandidateControl",
+      "Signature": "func (s *Service) replayCandidateControl(ctx context.Context, req productapi.ControlRequest, digest string) (bool, error)",
+      "Line": 76,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/candidate_control.go",
+      "Type": "Service",
+      "Name": "pollCandidateControlReceipts",
+      "Signature": "func (s *Service) pollCandidateControlReceipts(ctx context.Context) error",
+      "Line": 123,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/candidate_pr.go",
+      "Type": "Service",
+      "Name": "pollRetiredCandidatePRs",
+      "Signature": "func (s *Service) pollRetiredCandidatePRs(ctx context.Context, run *Run, fixed workerFlowContext) error",
+      "Line": 13,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/candidate_resources.go",
+      "Type": "Service",
+      "Name": "applyRetiredLifecycleReceipt",
+      "Signature": "func (s *Service) applyRetiredLifecycleReceipt(run *Run, result lifecycleEffectResult) (retErr error)",
+      "Line": 13,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/candidate_resources.go",
+      "Type": "Service",
+      "Name": "recordRetiredWorkerEvent",
+      "Signature": "func (s *Service) recordRetiredWorkerEvent(run *Run, ev WorkerEvent) error",
+      "Line": 79,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/candidate_resources.go",
+      "Type": "Service",
+      "Name": "finishRetiredCandidate",
+      "Signature": "func (s *Service) finishRetiredCandidate(run *Run, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext) error",
+      "Line": 153,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/candidate_resources.go",
+      "Type": "Service",
+      "Name": "resumeRetiredCandidate",
+      "Signature": "func (s *Service) resumeRetiredCandidate(ctx context.Context, run *Run) error",
+      "Line": 203,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/candidate_workers.go",
+      "Type": "CommandService",
+      "Name": "AbandonNativeCandidate",
+      "Signature": "func (c CommandService) AbandonNativeCandidate(ctx context.Context, config Config, options CandidateAbandonOptions) (CandidateAbandonReceipt, error)",
+      "Line": 110,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/candidate_workers.go",
+      "Type": "Service",
+      "Name": "candidateBusinessClosed",
+      "Signature": "func (s *Service) candidateBusinessClosed(run *Run) bool",
+      "Line": 233,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/candidate_workers.go",
+      "Type": "CommandService",
+      "Name": "recordCandidateMergeConflict",
+      "Signature": "func (c CommandService) recordCandidateMergeConflict(ctx context.Context, snapshot DomainSnapshot, taskID, workflowID, reason string, proofs ...executionmodel.VerifiedCandidatePR) error",
+      "Line": 241,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/command_boundary.go",
+      "Type": "Service",
+      "Name": "commandService",
+      "Signature": "func (s *Service) commandService(project string) CommandService",
+      "Line": 37,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/command_processor.go",
+      "Type": "Service",
+      "Name": "processPendingCommands",
+      "Signature": "func (s *Service) processPendingCommands(ctx context.Context) error",
+      "Line": 15,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/command_processor.go",
+      "Type": "Service",
+      "Name": "findDecision",
+      "Signature": "func (s *Service) findDecision(id string) *Run",
+      "Line": 138,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/command_processor.go",
+      "Type": "Service",
+      "Name": "processCommandsAndDecisions",
+      "Signature": "func (s *Service) processCommandsAndDecisions(ctx context.Context) error",
+      "Line": 147,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/command_submission.go",
+      "Type": "CommandService",
+      "Name": "Submit",
+      "Signature": "func (c CommandService) Submit(ctx context.Context, command storageports.CommandRecord) (storageports.CommandRecord, bool, error)",
+      "Line": 10,
+      "migration_owner": 77,
+      "integration_owner": 77
+    },
+    {
+      "File": "internal/steerline/command_submission.go",
+      "Type": "CommandService",
+      "Name": "Pending",
+      "Signature": "func (c CommandService) Pending(ctx context.Context, limit int) ([]storageports.CommandRecord, error)",
+      "Line": 18,
+      "migration_owner": 77,
+      "integration_owner": 77
+    },
+    {
+      "File": "internal/steerline/command_submission.go",
+      "Type": "CommandService",
+      "Name": "Complete",
+      "Signature": "func (c CommandService) Complete(ctx context.Context, command storageports.CommandRecord, result []byte) error",
+      "Line": 25,
+      "migration_owner": 77,
+      "integration_owner": 77
+    },
+    {
+      "File": "internal/steerline/command_submission.go",
+      "Type": "CommandService",
+      "Name": "SetStatus",
+      "Signature": "func (c CommandService) SetStatus(ctx context.Context, command storageports.CommandRecord, status string, result []byte) error",
+      "Line": 35,
+      "migration_owner": 77,
+      "integration_owner": 77
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "writeReceipt",
+      "Signature": "func (s *Service) writeReceipt(r productapi.ControlReceipt) error",
+      "Line": 30,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "baseReceipt",
+      "Signature": "func (s *Service) baseReceipt(req productapi.ControlRequest, digest string, status, code, message string) productapi.ControlReceipt",
+      "Line": 45,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "rejectControl",
+      "Signature": "func (s *Service) rejectControl(req productapi.ControlRequest, digest, code string, err error) error",
+      "Line": 49,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "finishControl",
+      "Signature": "func (s *Service) finishControl(op *ControlOperation, receipt productapi.ControlReceipt) error",
+      "Line": 68,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "controlDirectories",
+      "Signature": "func (s *Service) controlDirectories() ([]string, error)",
+      "Line": 125,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "nextControlRequest",
+      "Signature": "func (s *Service) nextControlRequest() (*productapi.ControlRequest, string, error)",
+      "Line": 144,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "processNextControl",
+      "Signature": "func (s *Service) processNextControl(ctx context.Context, cancel context.CancelFunc) error",
+      "Line": 192,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "pollControl",
+      "Signature": "func (s *Service) pollControl(ctx context.Context, cancel context.CancelFunc) error",
+      "Line": 368,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "retainControlPublicationFailure",
+      "Signature": "func (s *Service) retainControlPublicationFailure(err error) error",
+      "Line": 411,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "validateReadyTarget",
+      "Signature": "func (s *Service) validateReadyTarget(ctx context.Context, taskID string) error",
+      "Line": 434,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "applyControlAction",
+      "Signature": "func (s *Service) applyControlAction(ctx context.Context, req productapi.ControlRequest, payload productapi.ControlPayload, op *ControlOperation, result *productapi.ControlReceipt) error",
+      "Line": 450,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "recoverControlOperation",
+      "Signature": "func (s *Service) recoverControlOperation() error",
+      "Line": 569,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "captureStopControl",
+      "Signature": "func (s *Service) captureStopControl()",
+      "Line": 682,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "finalizeStopControl",
+      "Signature": "func (s *Service) finalizeStopControl() error",
+      "Line": 692,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/control_service.go",
+      "Type": "Service",
+      "Name": "ensureStopApplyingReceipt",
+      "Signature": "func (s *Service) ensureStopApplyingReceipt() error",
+      "Line": 712,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/conversation_replay.go",
+      "Type": "Service",
+      "Name": "conversationJournalSources",
+      "Signature": "func (s *Service) conversationJournalSources() []conversationJournalSource",
+      "Line": 39,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/conversation_replay.go",
+      "Type": "Service",
+      "Name": "runConversationReplayQueue",
+      "Signature": "func (s *Service) runConversationReplayQueue(ctx context.Context, requests <-chan []conversationJournalSource, errorsOut chan<- error)",
+      "Line": 87,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/conversation_replay.go",
+      "Type": "Service",
+      "Name": "reconcileConversationRun",
+      "Signature": "func (s *Service) reconcileConversationRun(run *Run) error",
+      "Line": 120,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/conversation_replay.go",
+      "Type": "Service",
+      "Name": "replayConversationJournal",
+      "Signature": "func (s *Service) replayConversationJournal(ctx context.Context, source conversationJournalSource) error",
+      "Line": 146,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/conversation_replay.go",
+      "Type": "Service",
+      "Name": "replayConversationTail",
+      "Signature": "func (s *Service) replayConversationTail(ctx context.Context, source conversationJournalSource, segment, generation string, mapper contracts.ConversationMapper, data []byte, start int64, oldSeq uint64) error",
+      "Line": 335,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/conversation_replay.go",
+      "Type": "Service",
+      "Name": "replayConversationTailGap",
+      "Signature": "func (s *Service) replayConversationTailGap(ctx context.Context, source conversationJournalSource, segment, generation string, start, end int64, sequence uint64) error",
+      "Line": 385,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/conversation_service.go",
+      "Type": "Service",
+      "Name": "recordConversationEvent",
+      "Signature": "func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) error",
+      "Line": 14,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/conversation_sources.go",
+      "Type": "Service",
+      "Name": "discoverConversationHistory",
+      "Signature": "func (s *Service) discoverConversationHistory(ctx context.Context) ([]contracts.ConversationHistorySource, error)",
+      "Line": 17,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/conversation_sources.go",
+      "Type": "Service",
+      "Name": "collectConversationHistoryPage",
+      "Signature": "func (s *Service) collectConversationHistoryPage(ctx context.Context, source contracts.ConversationHistorySource) (bool, error)",
+      "Line": 86,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/conversation_sources.go",
+      "Type": "Service",
+      "Name": "runConversationHistoryCollector",
+      "Signature": "func (s *Service) runConversationHistoryCollector(ctx context.Context, requests <-chan []contracts.ConversationHistorySource, errorsOut chan<- error)",
+      "Line": 187,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/decision.go",
+      "Type": "Service",
+      "Name": "requireDecisionReplyCapability",
+      "Signature": "func (s *Service) requireDecisionReplyCapability(ctx context.Context, run *Run) error",
+      "Line": 428,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/decision.go",
+      "Type": "Service",
+      "Name": "applyDecisions",
+      "Signature": "func (s *Service) applyDecisions(ctx context.Context) error",
+      "Line": 459,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_backend.go",
+      "Type": "Service",
+      "Name": "requireBackendCapabilitiesFor",
+      "Signature": "func (s *Service) requireBackendCapabilitiesFor(ctx context.Context, backend executionbackend.ExecutionProbe, target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec, names ...string) (executionbackend.CapabilityReport, error)",
+      "Line": 173,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_backend.go",
+      "Type": "Service",
+      "Name": "readRunWorkspace",
+      "Signature": "func (s *Service) readRunWorkspace(ctx context.Context, run *Run) (executionbackend.WorkspaceInspection, error)",
+      "Line": 200,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_backend.go",
+      "Type": "Service",
+      "Name": "inspectRunProcess",
+      "Signature": "func (s *Service) inspectRunProcess(run *Run) string",
+      "Line": 208,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_commands.go",
+      "Type": "CommandService",
+      "Name": "AnswerDecision",
+      "Signature": "func (c CommandService) AnswerDecision(ctx context.Context, decisionID string, expectedVersion uint64, idempotencyKey, requestedBy string, answer []byte) (storageports.CommandRecord, bool, error)",
+      "Line": 14,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_commands.go",
+      "Type": "CommandService",
+      "Name": "AnswerDecisionWithID",
+      "Signature": "func (c CommandService) AnswerDecisionWithID(ctx context.Context, commandID, decisionID string, expectedVersion uint64, idempotencyKey, requestedBy string, answer []byte) (storageports.CommandRecord, bool, error)",
+      "Line": 18,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_commands.go",
+      "Type": "CommandService",
+      "Name": "AcceptAnswer",
+      "Signature": "func (c CommandService) AcceptAnswer(ctx context.Context, command storageports.CommandRecord, answer executionmodel.DecisionAnswer) (executionmodel.DecisionRecord, bool, error)",
+      "Line": 55,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_config.go",
+      "Type": "Config",
+      "Name": "ValidateProfiles",
+      "Signature": "func (c Config) ValidateProfiles() error",
+      "Line": 20,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_config.go",
+      "Type": "Config",
+      "Name": "hostName",
+      "Signature": "func (c Config) hostName() string",
+      "Line": 53,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_config.go",
+      "Type": "Config",
+      "Name": "agentName",
+      "Signature": "func (c Config) agentName() string",
+      "Line": 57,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_config.go",
+      "Type": "Config",
+      "Name": "Preflight",
+      "Signature": "func (c *Config) Preflight(ctx context.Context, checkSkills bool) error",
+      "Line": 74,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_config.go",
+      "Type": "Config",
+      "Name": "preflightNative",
+      "Signature": "func (c *Config) preflightNative(ctx context.Context) error",
+      "Line": 84,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_delivery_poll.go",
+      "Type": "Service",
+      "Name": "nativeCompleteMergedTask",
+      "Signature": "func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error",
+      "Line": 10,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_delivery_poll.go",
+      "Type": "Service",
+      "Name": "pollNativePRs",
+      "Signature": "func (s *Service) pollNativePRs(ctx context.Context, onlyRunID string) error",
+      "Line": 60,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_directory.go",
+      "Type": "Service",
+      "Name": "workerFlowRegistration",
+      "Signature": "func (s *Service) workerFlowRegistration(run *Run) (ExecutionRegistration, error)",
+      "Line": 413,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_discard_cleanup.go",
+      "Type": "Service",
+      "Name": "reconcileNativeCleanup",
+      "Signature": "func (s *Service) reconcileNativeCleanup(ctx context.Context) error",
+      "Line": 19,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_discard_cleanup.go",
+      "Type": "Service",
+      "Name": "reconcileNativePRCleanup",
+      "Signature": "func (s *Service) reconcileNativePRCleanup(ctx context.Context, task taskmodel.TaskRecord, cleanupItem string) error",
+      "Line": 158,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_discard_cleanup.go",
+      "Type": "Service",
+      "Name": "reconcileNativeWorkspaceCleanup",
+      "Signature": "func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task taskmodel.TaskRecord, cleanupItem string) error",
+      "Line": 221,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_discard_cleanup.go",
+      "Type": "Service",
+      "Name": "recordNativeStopCleanup",
+      "Signature": "func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupItem string, op executionbackend.Operation) error",
+      "Line": 274,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_discard_cleanup.go",
+      "Type": "Service",
+      "Name": "reconcileExitedNativeExecution",
+      "Signature": "func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cleanupItem, executionID string) error",
+      "Line": 310,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_dispatch.go",
+      "Type": "Service",
+      "Name": "dispatchNative",
+      "Signature": "func (s *Service) dispatchNative(ctx context.Context) error",
+      "Line": 11,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_helpers.go",
+      "Type": "Service",
+      "Name": "workflowRecords",
+      "Signature": "func (s *Service) workflowRecords(run *Run) (*executionmodel.WorkflowRunRecord, *executionmodel.ExecutionRecord)",
+      "Line": 13,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_helpers.go",
+      "Type": "Service",
+      "Name": "workflowAttempt",
+      "Signature": "func (s *Service) workflowAttempt(run *Run, attemptID string) *executionmodel.StepAttemptRecord",
+      "Line": 34,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_helpers.go",
+      "Type": "Service",
+      "Name": "inspectWorkflowWorkspace",
+      "Signature": "func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *Run) (executionmodel.WorkspaceEvidence, error)",
+      "Line": 46,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_helpers.go",
+      "Type": "Service",
+      "Name": "executionRecord",
+      "Signature": "func (s *Service) executionRecord(run *Run) *executionmodel.ExecutionRecord",
+      "Line": 121,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_profiles.go",
+      "Type": "Config",
+      "Name": "CheckFixedProfile",
+      "Signature": "func (c Config) CheckFixedProfile(profile executionmodel.FixedExecutionProfile) error",
+      "Line": 42,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_profiles.go",
+      "Type": "Config",
+      "Name": "ApplyFixedExecutionProfile",
+      "Signature": "func (c Config) ApplyFixedExecutionProfile(p executionmodel.FixedExecutionProfile) Config",
+      "Line": 127,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_profiles.go",
+      "Type": "Config",
+      "Name": "bindProjectPolicy",
+      "Signature": "func (c Config) bindProjectPolicy(p ExecutionProfile) ExecutionProfile",
+      "Line": 212,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_profiles.go",
+      "Type": "Config",
+      "Name": "acceptedConfigVersion",
+      "Signature": "func (c Config) acceptedConfigVersion() string",
+      "Line": 238,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_profiles.go",
+      "Type": "Config",
+      "Name": "projectExecutionProfile",
+      "Signature": "func (c Config) projectExecutionProfile() ExecutionProfile",
+      "Line": 251,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_profiles.go",
+      "Type": "Config",
+      "Name": "AvailableExecutionProfiles",
+      "Signature": "func (c Config) AvailableExecutionProfiles() []ExecutionProfile",
+      "Line": 257,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_profiles.go",
+      "Type": "Config",
+      "Name": "DefaultProfileID",
+      "Signature": "func (c Config) DefaultProfileID() string",
+      "Line": 273,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_profiles.go",
+      "Type": "Config",
+      "Name": "ResolveExecutionProfile",
+      "Signature": "func (c Config) ResolveExecutionProfile(id, expectedDigest string) (Config, ExecutionProfile, error)",
+      "Line": 289,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_profiles.go",
+      "Type": "Config",
+      "Name": "ApplyExecutionProfile",
+      "Signature": "func (c Config) ApplyExecutionProfile(p ExecutionProfile) Config",
+      "Line": 306,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_requirements.go",
+      "Type": "Config",
+      "Name": "EvaluateRequirements",
+      "Signature": "func (c Config) EvaluateRequirements(ctx context.Context) (executionbackend.RequirementsEvaluation, error)",
+      "Line": 69,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_requirements.go",
+      "Type": "Service",
+      "Name": "checkCurrentExecutionRequirements",
+      "Signature": "func (s *Service) checkCurrentExecutionRequirements(ctx context.Context, fixed workerFlowContext) error",
+      "Line": 143,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/execution_requirements.go",
+      "Type": "Service",
+      "Name": "resumeRegisteredWorkerFlow",
+      "Signature": "func (s *Service) resumeRegisteredWorkerFlow(ctx context.Context, task *taskmodel.TaskRecord, run *Run, entry ExecutionRegistration) (bool, error)",
+      "Line": 166,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/lifecycle_effect.go",
+      "Type": "Service",
+      "Name": "lifecycleEffectPending",
+      "Signature": "func (s *Service) lifecycleEffectPending(runID string) bool",
+      "Line": 54,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/lifecycle_effect.go",
+      "Type": "Service",
+      "Name": "dispatchLifecycleEffect",
+      "Signature": "func (s *Service) dispatchLifecycleEffect(ctx context.Context, run *Run, port executionbackend.LifecyclePort, request executionbackend.LifecycleRequest, reconcile bool, apply func(*Run, lifecycleEffectResult) error) error",
+      "Line": 92,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/lifecycle_effect.go",
+      "Type": "Service",
+      "Name": "applyLifecycleEffect",
+      "Signature": "func (s *Service) applyLifecycleEffect(runID string, result lifecycleEffectResult) error",
+      "Line": 149,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/lifecycle_receipt.go",
+      "Type": "Service",
+      "Name": "newLifecycleOperation",
+      "Signature": "func (s *Service) newLifecycleOperation(run *Run, kind, key string, value any) (*executionmodel.OperationRecord, error)",
+      "Line": 10,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/lifecycle_receipt.go",
+      "Type": "Service",
+      "Name": "originalLifecycleOperation",
+      "Signature": "func (s *Service) originalLifecycleOperation(run *Run, kind, key string, value any) (*executionmodel.OperationRecord, bool, error)",
+      "Line": 23,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/lifecycle_receipt.go",
+      "Type": "Service",
+      "Name": "checkedWorkerTurnReceipt",
+      "Signature": "func (s *Service) checkedWorkerTurnReceipt(run *Run, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt, action executionbackend.LifecycleAction) (workerFlowContext, error)",
+      "Line": 56,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/native_batch_command.go",
+      "Type": "CommandService",
+      "Name": "ValidateTaskBatch",
+      "Signature": "func (c CommandService) ValidateTaskBatch(ctx context.Context, config Config, data []byte) (taskmodel.TaskBatchValidation, error)",
+      "Line": 19,
+      "migration_owner": 75,
+      "integration_owner": 75
+    },
+    {
+      "File": "internal/steerline/native_batch_command.go",
+      "Type": "CommandService",
+      "Name": "CreateTaskBatch",
+      "Signature": "func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data []byte, requestID string, expectedAuthorityVersion uint64, requestedBy string) (taskmodel.TaskBatchReceipt, error)",
+      "Line": 56,
+      "migration_owner": 75,
+      "integration_owner": 75
+    },
+    {
+      "File": "internal/steerline/native_claim_command.go",
+      "Type": "CommandService",
+      "Name": "StartNativeCandidate",
+      "Signature": "func (c CommandService) StartNativeCandidate(ctx context.Context, config Config, options TaskClaimOptions) (executionmodel.TaskClaimReceipt, error)",
+      "Line": 36,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/native_claim_command.go",
+      "Type": "CommandService",
+      "Name": "ClaimNativeTask",
+      "Signature": "func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, options TaskClaimOptions) (executionmodel.TaskClaimReceipt, error)",
+      "Line": 41,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/native_cleanup.go",
+      "Type": "CommandService",
+      "Name": "RecordNativeWorkspaceCleanupProgress",
+      "Signature": "func (c CommandService) RecordNativeWorkspaceCleanupProgress(ctx context.Context, taskID, requestID string, expectedVersion uint64, cleanupItem, requestedBy string, receipt json.RawMessage) error",
+      "Line": 55,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/native_cleanup.go",
+      "Type": "CommandService",
+      "Name": "RecordNativeCleanupReceipt",
+      "Signature": "func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, requestID string, expectedVersion uint64, cleanupItem, requestedBy string, receipt json.RawMessage) (taskmodel.TaskRecord, error)",
+      "Line": 106,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/native_cleanup_stop.go",
+      "Type": "Service",
+      "Name": "reconcileRunStop",
+      "Signature": "func (s *Service) reconcileRunStop(ctx context.Context, run *Run, op executionbackend.Operation) error",
+      "Line": 29,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/native_cleanup_stop.go",
+      "Type": "Service",
+      "Name": "stopRunExecution",
+      "Signature": "func (s *Service) stopRunExecution(ctx context.Context, r *Run, worker *Worker) (executionbackend.Operation, error)",
+      "Line": 78,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/native_cleanup_stop.go",
+      "Type": "Service",
+      "Name": "confirmExecutionStop",
+      "Signature": "func (s *Service) confirmExecutionStop(op executionbackend.Operation) (bool, error)",
+      "Line": 162,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/native_delivery_command.go",
+      "Type": "CommandService",
+      "Name": "CompleteNativeTask",
+      "Signature": "func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, taskID string, expectedTaskVersion uint64, workflowRunID string, verifier TaskDeliveryVerifier) (executionmodel.TaskDeliveryReceipt, error)",
+      "Line": 25,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/native_delivery_command.go",
+      "Type": "CommandService",
+      "Name": "recordDiscardedMergeConflict",
+      "Signature": "func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s persistence.CommandStore, config Config, task taskmodel.TaskRecord, workflowRunID string, verifier TaskDeliveryVerifier, authority executionmodel.ProjectTaskAuthority) error",
+      "Line": 155,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/native_delivery_command.go",
+      "Type": "CommandService",
+      "Name": "commitNativeDelivery",
+      "Signature": "func (c CommandService) commitNativeDelivery(ctx context.Context, s persistence.CommandStore, expectedAuthorityVersion, expectedGraphRevision uint64, task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, execution executionmodel.ExecutionRecord, contract taskmodel.TaskContract, prURL string, delivery executionmodel.TaskDeliveryRecord, expectedBindings string) (executionmodel.TaskDeliveryReceipt, error)",
+      "Line": 257,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/native_discard_command.go",
+      "Type": "CommandService",
+      "Name": "DiscardNativeTask",
+      "Signature": "func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, taskID, requestID string, expectedVersion uint64, reason, requestedBy string) (taskmodel.TaskDiscardReceipt, error)",
+      "Line": 31,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/native_discard_command.go",
+      "Type": "CommandService",
+      "Name": "commitDiscard",
+      "Signature": "func (c CommandService) commitDiscard(ctx context.Context, s persistence.CommandStore, requestID string, op executionmodel.OperationRecord, intent taskDiscardIntent, info *executionmodel.PRInfo, expectedPRRepository string, known []executionmodel.VerifiedCandidatePR) (taskmodel.TaskDiscardReceipt, error)",
+      "Line": 330,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/native_dispatch_command.go",
+      "Type": "CommandService",
+      "Name": "SetNativeDispatchState",
+      "Signature": "func (c CommandService) SetNativeDispatchState(ctx context.Context, update NativeDispatchUpdate) (executionmodel.ProjectTaskAuthority, error)",
+      "Line": 26,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/native_task_predecessors.go",
+      "Type": "CommandService",
+      "Name": "AddNativeTaskPredecessors",
+      "Signature": "func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Config, input productapi.TaskPredecessorAddInput) (productapi.TaskPredecessorAddReceipt, error)",
+      "Line": 22,
+      "migration_owner": 75,
+      "integration_owner": 75
+    },
+    {
+      "File": "internal/steerline/operation.go",
+      "Type": "Service",
+      "Name": "setOperationState",
+      "Signature": "func (s *Service) setOperationState(id, next, requestID string, receipt []byte, reason string) error",
+      "Line": 28,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/operation.go",
+      "Type": "Service",
+      "Name": "operationByKey",
+      "Signature": "func (s *Service) operationByKey(key string) *executionmodel.OperationRecord",
+      "Line": 37,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/profile_data.go",
+      "Type": "Config",
+      "Name": "DecodeImplementationConfig",
+      "Signature": "func (c Config) DecodeImplementationConfig(key string) ([]byte, error)",
+      "Line": 33,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/publication_snapshot.go",
+      "Type": "Config",
+      "Name": "publicationSettings",
+      "Signature": "func (c Config) publicationSettings() executionmodel.PublicationSettings",
+      "Line": 17,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/publication_snapshot.go",
+      "Type": "Config",
+      "Name": "bindPublicationTarget",
+      "Signature": "func (c *Config) bindPublicationTarget(ctx context.Context) error",
+      "Line": 28,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/recovery.go",
+      "Type": "Service",
+      "Name": "inspectRecoveryClaim",
+      "Signature": "func (s *Service) inspectRecoveryClaim(ctx context.Context, run *Run, report *RecoveryInspection)",
+      "Line": 89,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/runtime_view.go",
+      "Type": "Service",
+      "Name": "workflowRecord",
+      "Signature": "func (s *Service) workflowRecord(run *Run) *executionmodel.WorkflowRunRecord",
+      "Line": 34,
+      "migration_owner": 77,
+      "integration_owner": 77
+    },
+    {
+      "File": "internal/steerline/runtime_view.go",
+      "Type": "Service",
+      "Name": "refreshRun",
+      "Signature": "func (s *Service) refreshRun(run *Run)",
+      "Line": 39,
+      "migration_owner": 77,
+      "integration_owner": 77
+    },
+    {
+      "File": "internal/steerline/runtime_view.go",
+      "Type": "Service",
+      "Name": "setRunDecision",
+      "Signature": "func (s *Service) setRunDecision(run *Run, decision *executionmodel.DecisionState)",
+      "Line": 56,
+      "migration_owner": 77,
+      "integration_owner": 77
+    },
+    {
+      "File": "internal/steerline/runtime_view.go",
+      "Type": "Service",
+      "Name": "decisionRecord",
+      "Signature": "func (s *Service) decisionRecord(run *Run) *executionmodel.DecisionRecord",
+      "Line": 87,
+      "migration_owner": 77,
+      "integration_owner": 77
+    },
+    {
+      "File": "internal/steerline/runtime_view.go",
+      "Type": "Service",
+      "Name": "setDecisionStatus",
+      "Signature": "func (s *Service) setDecisionStatus(run *Run, status string)",
+      "Line": 99,
+      "migration_owner": 77,
+      "integration_owner": 77
+    },
+    {
+      "File": "internal/steerline/runtime_view.go",
+      "Type": "Service",
+      "Name": "markWorkerDecisionWrite",
+      "Signature": "func (s *Service) markWorkerDecisionWrite(id string)",
+      "Line": 106,
+      "migration_owner": 77,
+      "integration_owner": 77
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "find",
+      "Signature": "func (s *Service) find(id string) *Run",
+      "Line": 14,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "findExecution",
+      "Signature": "func (s *Service) findExecution(id string) *Run",
+      "Line": 30,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "reconcile",
+      "Signature": "func (s *Service) reconcile(ctx context.Context) error",
+      "Line": 39,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "setError",
+      "Signature": "func (s *Service) setError(e error)",
+      "Line": 49,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "dispatch",
+      "Signature": "func (s *Service) dispatch(ctx context.Context) error",
+      "Line": 54,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "injectControlFault",
+      "Signature": "func (s *Service) injectControlFault(point string)",
+      "Line": 58,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "activeControlRequestID",
+      "Signature": "func (s *Service) activeControlRequestID() string",
+      "Line": 64,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "slotReason",
+      "Signature": "func (s *Service) slotReason(ignoreRequestID string) string",
+      "Line": 71,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "executionSlotReason",
+      "Signature": "func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision bool) string",
+      "Line": 75,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "refreshSlotOccupancy",
+      "Signature": "func (s *Service) refreshSlotOccupancy()",
+      "Line": 110,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "refreshCandidates",
+      "Signature": "func (s *Service) refreshCandidates(ctx context.Context) error",
+      "Line": 115,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "finishedForRun",
+      "Signature": "func (s *Service) finishedForRun(run *Run, worker *Worker, err error) error",
+      "Line": 151,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "pollPRs",
+      "Signature": "func (s *Service) pollPRs(ctx context.Context) error",
+      "Line": 175,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "pollPRsFor",
+      "Signature": "func (s *Service) pollPRsFor(ctx context.Context, runID string) error",
+      "Line": 179,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "eventForRun",
+      "Signature": "func (s *Service) eventForRun(run *Run, ev WorkerEvent) error",
+      "Line": 183,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "recordHistoricalWorkerEvent",
+      "Signature": "func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error",
+      "Line": 220,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_actor.go",
+      "Type": "Service",
+      "Name": "finishWorkerInLoop",
+      "Signature": "func (s *Service) finishWorkerInLoop(run *Run, worker *Worker, workerErr error) error",
+      "Line": 269,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_checkpoint.go",
+      "Type": "Service",
+      "Name": "publishCheckpoint",
+      "Signature": "func (s *Service) publishCheckpoint() error",
+      "Line": 7,
+      "migration_owner": 80,
+      "integration_owner": 80
+    },
+    {
+      "File": "internal/steerline/service_client.go",
+      "Type": "Service",
+      "Name": "publishStartupReady",
+      "Signature": "func (s *Service) publishStartupReady() error",
+      "Line": 1211,
+      "migration_owner": 80,
+      "integration_owner": 80
+    },
+    {
+      "File": "internal/steerline/service_commit.go",
+      "Type": "Service",
+      "Name": "projectState",
+      "Signature": "func (s *Service) projectState() error",
+      "Line": 20,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_commit.go",
+      "Type": "Service",
+      "Name": "projectActor",
+      "Signature": "func (s *Service) projectActor() error",
+      "Line": 33,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_commit.go",
+      "Type": "Service",
+      "Name": "commitWorker",
+      "Signature": "func (s *Service) commitWorker(run *Run, operationIDs ...string) error",
+      "Line": 102,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_commit.go",
+      "Type": "Service",
+      "Name": "commitWorkerAttached",
+      "Signature": "func (s *Service) commitWorkerAttached(run *Run, attachment workerCommitAttachment, operationIDs ...string) error",
+      "Line": 111,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_commit.go",
+      "Type": "Service",
+      "Name": "discardWorkerCandidates",
+      "Signature": "func (s *Service) discardWorkerCandidates(operationIDs ...string)",
+      "Line": 192,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_commit.go",
+      "Type": "Service",
+      "Name": "commitDeclared",
+      "Signature": "func (s *Service) commitDeclared(request workerCommit) error",
+      "Line": 202,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_commit.go",
+      "Type": "Service",
+      "Name": "commitEvents",
+      "Signature": "func (s *Service) commitEvents() error",
+      "Line": 272,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_commit.go",
+      "Type": "Service",
+      "Name": "stageWorkerOperation",
+      "Signature": "func (s *Service) stageWorkerOperation(run *Run, id, next, requestID string, receipt []byte, reason string) error",
+      "Line": 276,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_commit.go",
+      "Type": "Service",
+      "Name": "changeWorkerOperation",
+      "Signature": "func (s *Service) changeWorkerOperation(run *Run, id, next, requestID string, receipt []byte, reason string) error",
+      "Line": 290,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_commit.go",
+      "Type": "Service",
+      "Name": "startWorkerOperation",
+      "Signature": "func (s *Service) startWorkerOperation(run *Run, kind, key string, payload any) (string, error)",
+      "Line": 297,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_console.go",
+      "Type": "Service",
+      "Name": "note",
+      "Signature": "func (s *Service) note(r *Run, source, kind, status, title, detail string, meta map[string]any)",
+      "Line": 13,
+      "migration_owner": 77,
+      "integration_owner": 77
+    },
+    {
+      "File": "internal/steerline/service_console.go",
+      "Type": "Service",
+      "Name": "recordActivity",
+      "Signature": "func (s *Service) recordActivity(r *Run, ev ActivityEvent)",
+      "Line": 19,
+      "migration_owner": 77,
+      "integration_owner": 77
+    },
+    {
+      "File": "internal/steerline/service_console.go",
+      "Type": "Service",
+      "Name": "emitConsole",
+      "Signature": "func (s *Service) emitConsole(ev ActivityEvent)",
+      "Line": 50,
+      "migration_owner": 77,
+      "integration_owner": 77
+    },
+    {
+      "File": "internal/steerline/service_construction.go",
+      "Type": "Service",
+      "Name": "Close",
+      "Signature": "func (s *Service) Close() error",
+      "Line": 101,
+      "migration_owner": 80,
+      "integration_owner": 80
+    },
+    {
+      "File": "internal/steerline/service_execution_profiles.go",
+      "Type": "Service",
+      "Name": "projectExecutionConfig",
+      "Signature": "func (s *Service) projectExecutionConfig() Config",
+      "Line": 12,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_execution_profiles.go",
+      "Type": "Service",
+      "Name": "selectDispatchProfile",
+      "Signature": "func (s *Service) selectDispatchProfile(id, digest string) error",
+      "Line": 19,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_execution_profiles.go",
+      "Type": "Service",
+      "Name": "selectDefaultDispatchProfile",
+      "Signature": "func (s *Service) selectDefaultDispatchProfile() error",
+      "Line": 31,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_execution_profiles.go",
+      "Type": "Service",
+      "Name": "executionConfigForRun",
+      "Signature": "func (s *Service) executionConfigForRun(run *Run) (Config, error)",
+      "Line": 40,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_execution_profiles.go",
+      "Type": "Service",
+      "Name": "executionConfigForWorkflowID",
+      "Signature": "func (s *Service) executionConfigForWorkflowID(id string) (Config, error)",
+      "Line": 106,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_loop.go",
+      "Type": "Service",
+      "Name": "Run",
+      "Signature": "func (s *Service) Run(ctx context.Context) (retErr error)",
+      "Line": 15,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_loop.go",
+      "Type": "Service",
+      "Name": "RunWithDispatch",
+      "Signature": "func (s *Service) RunWithDispatch(ctx context.Context, mode string) error",
+      "Line": 19,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_loop.go",
+      "Type": "Service",
+      "Name": "run",
+      "Signature": "func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error)",
+      "Line": 26,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_loop.go",
+      "Type": "Service",
+      "Name": "shutdown",
+      "Signature": "func (s *Service) shutdown()",
+      "Line": 332,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_task_snapshot.go",
+      "Type": "Service",
+      "Name": "refreshNativeSnapshot",
+      "Signature": "func (s *Service) refreshNativeSnapshot(ctx context.Context) error",
+      "Line": 11,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_workers.go",
+      "Type": "Service",
+      "Name": "registerWorker",
+      "Signature": "func (s *Service) registerWorker(run *Run, worker *Worker)",
+      "Line": 23,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_workers.go",
+      "Type": "Service",
+      "Name": "forwardWorker",
+      "Signature": "func (s *Service) forwardWorker(ctx context.Context, runID string, worker *Worker)",
+      "Line": 42,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_workers.go",
+      "Type": "Service",
+      "Name": "drainWorkerMessages",
+      "Signature": "func (s *Service) drainWorkerMessages()",
+      "Line": 104,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/service_workers.go",
+      "Type": "Service",
+      "Name": "handleWorkerMessage",
+      "Signature": "func (s *Service) handleWorkerMessage(message workerMessage) error",
+      "Line": 127,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_attachment_store.go",
+      "Type": "Service",
+      "Name": "commitWorkerBinding",
+      "Signature": "func (s *Service) commitWorkerBinding(run *Run, ref executionbackend.ExecutionRef) error",
+      "Line": 7,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_attachment_store.go",
+      "Type": "Service",
+      "Name": "commitExecutionOperation",
+      "Signature": "func (s *Service) commitExecutionOperation(run *Run, op executionbackend.Operation, expected string) error",
+      "Line": 11,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_completion.go",
+      "Type": "Service",
+      "Name": "finishWorkerFlowFor",
+      "Signature": "func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error",
+      "Line": 13,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_environment.go",
+      "Type": "Service",
+      "Name": "environmentTurn",
+      "Signature": "func (s *Service) environmentTurn(run *Run) string",
+      "Line": 14,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_environment.go",
+      "Type": "Service",
+      "Name": "blockWorkerEnvironment",
+      "Signature": "func (s *Service) blockWorkerEnvironment(run *Run, fact executionbackend.HostFact) error",
+      "Line": 25,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_environment.go",
+      "Type": "Service",
+      "Name": "rejectUnsentBlockedAnswer",
+      "Signature": "func (s *Service) rejectUnsentBlockedAnswer(run *Run) error",
+      "Line": 66,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_environment.go",
+      "Type": "Service",
+      "Name": "observeWorkerEnvironment",
+      "Signature": "func (s *Service) observeWorkerEnvironment(ctx context.Context, run *Run) error",
+      "Line": 112,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_environment.go",
+      "Type": "Service",
+      "Name": "advanceWorkerPreparation",
+      "Signature": "func (s *Service) advanceWorkerPreparation(ctx context.Context, run *Run) error",
+      "Line": 162,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_environment.go",
+      "Type": "Service",
+      "Name": "reconcileEnvironmentBusinessIntent",
+      "Signature": "func (s *Service) reconcileEnvironmentBusinessIntent(ctx context.Context, run *Run) error",
+      "Line": 295,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_environment.go",
+      "Type": "Service",
+      "Name": "finishWorkerPreparation",
+      "Signature": "func (s *Service) finishWorkerPreparation(ctx context.Context, run *Run, execution *executionmodel.ExecutionRecord, turn *executionbackend.HostTurnFacts, outcome string) error",
+      "Line": 338,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_environment.go",
+      "Type": "Service",
+      "Name": "applyEnvironmentAction",
+      "Signature": "func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, action string, input productapi.HostActionTarget, commandID string) error",
+      "Line": 407,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_environment_host.go",
+      "Type": "Service",
+      "Name": "hostEnvironmentForRun",
+      "Signature": "func (s *Service) hostEnvironmentForRun(run *Run) (executionbackend.HostEnvironmentPort, executionbackend.LifecyclePort, workerFlowContext, executionbackend.LifecycleSnapshot, error)",
+      "Line": 12,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_environment_host.go",
+      "Type": "Service",
+      "Name": "currentHostTurn",
+      "Signature": "func (s *Service) currentHostTurn(run *Run) (*executionbackend.HostTurnFacts, error)",
+      "Line": 28,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_environment_host.go",
+      "Type": "Service",
+      "Name": "resetHostTurnOutput",
+      "Signature": "func (s *Service) resetHostTurnOutput(run *Run, turnID string) error",
+      "Line": 36,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_environment_host.go",
+      "Type": "Service",
+      "Name": "executeHostAction",
+      "Signature": "func (s *Service) executeHostAction(ctx context.Context, run *Run, lifecycle executionbackend.LifecyclePort, input executionbackend.HostActionInput) error",
+      "Line": 51,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_environment_host.go",
+      "Type": "Service",
+      "Name": "readHostOutput",
+      "Signature": "func (s *Service) readHostOutput(ctx context.Context, run *Run) error",
+      "Line": 56,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_environment_host.go",
+      "Type": "Service",
+      "Name": "verifyHostExecutionEvidence",
+      "Signature": "func (s *Service) verifyHostExecutionEvidence(ctx context.Context, run *Run, execution *executionmodel.ExecutionRecord) error",
+      "Line": 106,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_events.go",
+      "Type": "Service",
+      "Name": "recordWorkerTurnStarted",
+      "Signature": "func (s *Service) recordWorkerTurnStarted(run *Run, workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, turnID string, sessionFacts ...string) (string, error)",
+      "Line": 11,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_events.go",
+      "Type": "Service",
+      "Name": "eventWorkerFlowFor",
+      "Signature": "func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)",
+      "Line": 60,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_events.go",
+      "Type": "Service",
+      "Name": "routedQuestionSeen",
+      "Signature": "func (s *Service) routedQuestionSeen(run *Run, execution *executionmodel.ExecutionRecord, route *executionbackend.ImplementationDataEnvelope, questions []executionbackend.Question) (bool, error)",
+      "Line": 262,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_execution.go",
+      "Type": "Service",
+      "Name": "workerFlowContext",
+      "Signature": "func (s *Service) workerFlowContext(run *Run) (workerFlowContext, error)",
+      "Line": 51,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_execution.go",
+      "Type": "Service",
+      "Name": "deliverResumableWorkerFeedback",
+      "Signature": "func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, execution *executionmodel.ExecutionRecord, answer executionmodel.DecisionAnswer, commandID string) error",
+      "Line": 104,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_feedback.go",
+      "Type": "Service",
+      "Name": "waitWorkerFlow",
+      "Signature": "func (s *Service) waitWorkerFlow(run *Run, reason string, operationIDs ...string) error",
+      "Line": 11,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_feedback.go",
+      "Type": "Service",
+      "Name": "applyWorkerFlowDecision",
+      "Signature": "func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error",
+      "Line": 77,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "acceptStartedWorkerTurn",
+      "Signature": "func (s *Service) acceptStartedWorkerTurn(run *Run, worker *Worker, events, platformRequestID, operationID, commandID string, local bool) (retErr error)",
+      "Line": 24,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "lifecycleForRun",
+      "Signature": "func (s *Service) lifecycleForRun(run *Run) (executionbackend.LifecyclePort, workerFlowContext, error)",
+      "Line": 108,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "resumeLifecycleWorkerFlow",
+      "Signature": "func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *taskmodel.TaskRecord, run *Run) (bool, error)",
+      "Line": 124,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "resumeLifecycleObservation",
+      "Signature": "func (s *Service) resumeLifecycleObservation(ctx context.Context, run *Run, lifecycle executionbackend.LifecyclePort) error",
+      "Line": 277,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "reconcilePendingLifecycleSteps",
+      "Signature": "func (s *Service) reconcilePendingLifecycleSteps(ctx context.Context, run *Run, lifecycle executionbackend.LifecyclePort) (bool, error)",
+      "Line": 312,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "lifecycleSnapshot",
+      "Signature": "func (s *Service) lifecycleSnapshot(run *Run, workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, attempt *executionmodel.StepAttemptRecord, pending *executionbackend.TurnInput) (executionbackend.LifecycleSnapshot, error)",
+      "Line": 415,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "validateLifecycleResultBinding",
+      "Signature": "func (s *Service) validateLifecycleResultBinding(run *Run, request executionbackend.LifecycleRequest) error",
+      "Line": 518,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "originalLifecycleRequest",
+      "Signature": "func (s *Service) originalLifecycleRequest(run *Run, fixed workerFlowContext) (executionbackend.LifecycleRequest, error)",
+      "Line": 540,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "startWorkerLifecycle",
+      "Signature": "func (s *Service) startWorkerLifecycle(ctx context.Context, run *Run, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext, commandID, prompt string) error",
+      "Line": 705,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "interruptOwnedLocalTurn",
+      "Signature": "func (s *Service) interruptOwnedLocalTurn(runID string, owned executionbackend.StopHandle)",
+      "Line": 832,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "executeLifecycleStep",
+      "Signature": "func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle executionbackend.LifecyclePort, candidate executionbackend.LifecycleCandidate) error",
+      "Line": 948,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "applyLifecycleStepReceipt",
+      "Signature": "func (s *Service) applyLifecycleStepReceipt(run *Run, request executionbackend.LifecycleRequest, result lifecycleEffectResult) error",
+      "Line": 1033,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "prepareLifecycleResources",
+      "Signature": "func (s *Service) prepareLifecycleResources(ctx context.Context, run *Run, lifecycle executionbackend.LifecyclePort) error",
+      "Line": 1164,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "cleanupLifecycleResources",
+      "Signature": "func (s *Service) cleanupLifecycleResources(ctx context.Context, run *Run, lifecycle executionbackend.LifecyclePort) error",
+      "Line": 1210,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "acknowledgeLifecycleDelivery",
+      "Signature": "func (s *Service) acknowledgeLifecycleDelivery(run *Run, deliveryID string) error",
+      "Line": 1250,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "applyAppServerSessionReceipt",
+      "Signature": "func (s *Service) applyAppServerSessionReceipt(run *Run, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt, executeErr error) (executionbackend.LifecycleRequest, bool, error)",
+      "Line": 1343,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "applyAppServerTurnReceipt",
+      "Signature": "func (s *Service) applyAppServerTurnReceipt(run *Run, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt, observer executionbackend.LifecycleObserver, executeErr error) error",
+      "Line": 1423,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "deliverLifecycleActiveFeedback",
+      "Signature": "func (s *Service) deliverLifecycleActiveFeedback(ctx context.Context, run *Run, answer executionmodel.DecisionAnswer,",
+      "Line": 1498,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle.go",
+      "Type": "Service",
+      "Name": "dispatchWorkerTurnEffect",
+      "Signature": "func (s *Service) dispatchWorkerTurnEffect(ctx context.Context, run *Run, lifecycle executionbackend.LifecyclePort, request executionbackend.LifecycleRequest, reconcile bool) error",
+      "Line": 1586,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle_feedback.go",
+      "Type": "Service",
+      "Name": "deliverLifecycleQuestionAnswer",
+      "Signature": "func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *Run, execution *executionmodel.ExecutionRecord, answer executionmodel.DecisionAnswer) error",
+      "Line": 11,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle_feedback.go",
+      "Type": "Service",
+      "Name": "reconcileLifecycleQuestionAnswer",
+      "Signature": "func (s *Service) reconcileLifecycleQuestionAnswer(ctx context.Context, run *Run, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext, operation *executionmodel.OperationRecord, input executionbackend.LifecycleInput) error",
+      "Line": 67,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle_feedback.go",
+      "Type": "Service",
+      "Name": "reconcileSavedLifecycleQuestionAnswer",
+      "Signature": "func (s *Service) reconcileSavedLifecycleQuestionAnswer(ctx context.Context, run *Run) error",
+      "Line": 104,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle_feedback.go",
+      "Type": "Service",
+      "Name": "applyLifecycleQuestionAnswerReceipt",
+      "Signature": "func (s *Service) applyLifecycleQuestionAnswerReceipt(run *Run, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt, executeErr error) error",
+      "Line": 131,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle_feedback.go",
+      "Type": "Service",
+      "Name": "confirmLifecycleQuestionAnswer",
+      "Signature": "func (s *Service) confirmLifecycleQuestionAnswer(run *Run, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt) error",
+      "Line": 193,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle_recovery.go",
+      "Type": "Service",
+      "Name": "resumeAppServerWorkers",
+      "Signature": "func (s *Service) resumeAppServerWorkers(ctx context.Context) error",
+      "Line": 52,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_lifecycle_recovery.go",
+      "Type": "Service",
+      "Name": "applyAppServerRecovery",
+      "Signature": "func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error",
+      "Line": 136,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_pr.go",
+      "Type": "Service",
+      "Name": "offerWorkerPRFeedback",
+      "Signature": "func (s *Service) offerWorkerPRFeedback(run *Run, url string) error",
+      "Line": 13,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_pr.go",
+      "Type": "Service",
+      "Name": "pollWorkerFlowPR",
+      "Signature": "func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *taskmodel.TaskRecord, workflow *executionmodel.WorkflowRunRecord) error",
+      "Line": 35,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_recovery.go",
+      "Type": "Service",
+      "Name": "hasUnknownWorkerOperation",
+      "Signature": "func (s *Service) hasUnknownWorkerOperation(run *Run) bool",
+      "Line": 17,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_recovery.go",
+      "Type": "Service",
+      "Name": "beginLocalRecoveryAttempt",
+      "Signature": "func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode string) error",
+      "Line": 45,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_recovery.go",
+      "Type": "Service",
+      "Name": "refreshSavedRecoveryDecision",
+      "Signature": "func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, reason string) error",
+      "Line": 153,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_recovery.go",
+      "Type": "Service",
+      "Name": "startManuallyRecoveredInitialWorker",
+      "Signature": "func (s *Service) startManuallyRecoveredInitialWorker(ctx context.Context, run *Run, answer executionmodel.DecisionAnswer, commandID string) error",
+      "Line": 210,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_recovery.go",
+      "Type": "Service",
+      "Name": "adoptOrGateServiceExecutions",
+      "Signature": "func (s *Service) adoptOrGateServiceExecutions() error",
+      "Line": 308,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_recovery.go",
+      "Type": "Service",
+      "Name": "markServiceRecoveryGateForPriorOwner",
+      "Signature": "func (s *Service) markServiceRecoveryGateForPriorOwner() error",
+      "Line": 312,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_recovery.go",
+      "Type": "Service",
+      "Name": "markServiceRecoveryGate",
+      "Signature": "func (s *Service) markServiceRecoveryGate() error",
+      "Line": 333,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_recovery.go",
+      "Type": "Service",
+      "Name": "markOneServiceRecoveryGate",
+      "Signature": "func (s *Service) markOneServiceRecoveryGate(run *Run)",
+      "Line": 345,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_recovery.go",
+      "Type": "Service",
+      "Name": "resumeConfiguredWork",
+      "Signature": "func (s *Service) resumeConfiguredWork(ctx context.Context) error",
+      "Line": 363,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_recovery.go",
+      "Type": "Service",
+      "Name": "resumeWorkerFlow",
+      "Signature": "func (s *Service) resumeWorkerFlow(ctx context.Context) error",
+      "Line": 393,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_resume.go",
+      "Type": "Service",
+      "Name": "resumeWorkerWorkspace",
+      "Signature": "func (s *Service) resumeWorkerWorkspace(ctx context.Context, task *taskmodel.TaskRecord, run *Run) (bool, error)",
+      "Line": 11,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_start.go",
+      "Type": "Service",
+      "Name": "prepareWorkerFlow",
+      "Signature": "func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskRecord, run *Run) error",
+      "Line": 13,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_start.go",
+      "Type": "Service",
+      "Name": "prepareWorkerWorkspace",
+      "Signature": "func (s *Service) prepareWorkerWorkspace(ctx context.Context, task taskmodel.TaskRecord, run *Run) error",
+      "Line": 81,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_start.go",
+      "Type": "Service",
+      "Name": "startInitialWorkerFlowTurn",
+      "Signature": "func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task taskmodel.TaskRecord, run *Run) error",
+      "Line": 153,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_start.go",
+      "Type": "Service",
+      "Name": "startWorkerFlowTurn",
+      "Signature": "func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, turnID string) error",
+      "Line": 170,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_state.go",
+      "Type": "Service",
+      "Name": "stopVerifiedWorkerTurn",
+      "Signature": "func (s *Service) stopVerifiedWorkerTurn(run *Run, workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, turnID, outcome string, question bool) error",
+      "Line": 130,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/worker_state.go",
+      "Type": "Service",
+      "Name": "resolveStoppedWorkerTurn",
+      "Signature": "func (s *Service) resolveStoppedWorkerTurn(run *Run, workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, resolution stoppedWorkerResolution) error",
+      "Line": 149,
+      "migration_owner": 76,
+      "integration_owner": 76
+    },
+    {
+      "File": "internal/steerline/workspace_config.go",
+      "Type": "Config",
+      "Name": "prepareWorktreeRoot",
+      "Signature": "func (c *Config) prepareWorktreeRoot() error",
+      "Line": 17,
+      "migration_owner": 76,
+      "integration_owner": 76
+    }
+  ]
+}

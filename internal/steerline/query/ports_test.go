@@ -8,10 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
-	"github.com/erranliu/SteerLine/internal/steerline/taskview"
+	taskview "github.com/erranliu/SteerLine/internal/steerline/taskview"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -19,7 +18,7 @@ import (
 // This reader has task capabilities only: no SQLite, command or event methods.
 type taskReader struct {
 	page  contracts.NativeTaskPage
-	graph task.Snapshot
+	graph taskview.Snapshot
 	reads int
 }
 
@@ -28,7 +27,7 @@ func (r *taskReader) NativeTaskPage(context.Context, string, string, string, uin
 	return r.page, nil
 }
 
-func (r *taskReader) TaskGraphSnapshot(context.Context, string) (task.Snapshot, error) {
+func (r *taskReader) TaskGraphSnapshot(context.Context, string) (taskview.Snapshot, error) {
 	r.reads++
 	return r.graph, nil
 }
@@ -38,7 +37,7 @@ func TestTaskQueriesUseOnlyTaskReader(t *testing.T) {
 	second := taskmodel.TaskRecord{TaskID: "2", Status: "open"}
 	reader := &taskReader{
 		page:  contracts.NativeTaskPage{Protocol: NativeTaskProtocol, ProjectID: "project", Tasks: []contracts.NativeTaskDetail{{TaskRecord: first}}},
-		graph: task.Snapshot{Authority: tasklegacy.ProjectTaskAuthority{ProjectIdentity: "project"}, Tasks: []taskmodel.TaskRecord{first, second}, ByID: map[string]taskmodel.TaskRecord{"1": first, "2": second}, Edges: []taskmodel.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "2"}}},
+		graph: taskview.Snapshot{Authority: executionmodel.ProjectTaskAuthority{ProjectIdentity: "project"}, Tasks: []taskmodel.TaskRecord{first, second}, ByID: map[string]taskmodel.TaskRecord{"1": first, "2": second}, Edges: []taskmodel.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "2"}}},
 	}
 	service := Service{Project: "project", Tasks: reader}
 	page, err := service.ListNativeTasks(context.Background(), "", 1)

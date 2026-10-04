@@ -37,7 +37,7 @@ func (p *commandPortProbe) UpdateCommand(_ context.Context, v storageports.Comma
 func TestCM69CommandPortUsesFixedProjectAndPropagatesRejection(t *testing.T) {
 	rejected := errors.New("rejected request")
 	port := &commandPortProbe{failure: rejected}
-	service := CommandService{Store: port, Project: "fixed-project"}
+	service := newTestCommandService(port, "fixed-project")
 	original := storageports.CommandRecord{ProjectIdentity: "untrusted", CommandID: "original-request", IdempotencyKey: "same-request", ExpectedVersion: 7, Payload: []byte(`{"value":1}`)}
 	_, _, err := service.Submit(context.Background(), original)
 	if !errors.Is(err, rejected) || port.submitted.ProjectIdentity != "fixed-project" || port.submitted.CommandID != original.CommandID || port.submitted.IdempotencyKey != original.IdempotencyKey || port.submitted.ExpectedVersion != 7 || string(port.submitted.Payload) != string(original.Payload) {
@@ -140,7 +140,7 @@ func TestCM69CleanupReceiptKeepsTaskAndReceiptAtomic(t *testing.T) {
 			execution.Target.Branch, execution.Target.BaseRevision = "fixture/cleanup", execution.Workspace.Base
 			execution.Workspace.Worktree = workspace
 			require(t, transactFixture(db, ctx, func(tx *fixtureTransaction) error { return tx.PutExecution(execution) }))
-			commands := CommandService{Store: db, Project: project}
+			commands := newTestCommandService(db, project)
 			task := nativeTaskRecord(service.domain.Tasks, run.TaskID)
 			discarded, err := commands.DiscardNativeTask(ctx, service.Config, task.TaskID, newID(), task.Version, "cleanup fixture", "operator")
 			require(t, err)

@@ -16,7 +16,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 	if s.commandStore == nil {
 		return nil
 	}
-	service := CommandService{Store: s.commandStore, Project: s.Config.identity}
+	service := s.commandService(s.Config.identity)
 	// Process saved answers before new work; reject retired recovery commands.
 	for _, status := range []string{"in_flight", "pending"} {
 		commands, err := s.commandStore.ServiceCommands(ctx, s.Config.identity, status, 200)

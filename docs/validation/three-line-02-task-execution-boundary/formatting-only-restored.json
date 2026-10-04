@@ -1,0 +1,17 @@
+[
+  "internal/steerline/activity.go",
+  "internal/steerline/activityview/decision.go",
+  "internal/steerline/codexapp/ask.go",
+  "internal/steerline/core_decoupling_63_test.go",
+  "internal/steerline/core_decoupling_64_lifecycle_test.go",
+  "internal/steerline/domain_snapshot.go",
+  "internal/steerline/native_graph_types.go",
+  "internal/steerline/orca_remote_worker/profile_config_cd63_test.go",
+  "internal/steerline/orca_remote_worker/version_test.go",
+  "internal/steerline/orcaworker/profile_config_cd63_test.go",
+  "internal/steerline/orcaworker/saved_receipt.go",
+  "internal/steerline/orcaworker/terminal.go",
+  "internal/steerline/project_view.go",
+  "internal/steerline/testprotocol/native_lock_other.go",
+  "internal/steerlineintegration/core_decoupling_63_test.go"
+]

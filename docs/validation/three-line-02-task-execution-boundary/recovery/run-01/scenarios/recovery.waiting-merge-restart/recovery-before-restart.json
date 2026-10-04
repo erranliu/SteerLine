@@ -1,0 +1,1452 @@
+{
+  "page": {
+    "protocol": "native-tasks/v1",
+    "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+    "authority_version": 2,
+    "graph_revision": 1,
+    "database_revision": 392,
+    "database_id": "c06c6edcdffe813a25f5a4b9ed24e2d5",
+    "sampled_at": "2026-10-04T11:02:54.1214251Z",
+    "capabilities": {
+      "dependency_readiness": "provided",
+      "dependency_blockers": "provided",
+      "startup_blockers": "provided"
+    },
+    "tasks": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "task_id": "1",
+        "batch_id": "067a56faedb9be81695a58ed8379db9d",
+        "title": "E2E a",
+        "type": "task",
+        "contract_id": "e2e-a",
+        "claimant": "e2e",
+        "source": "native",
+        "status": "in_progress",
+        "version": 2,
+        "created_at": "2026-10-04T11:02:11.566506Z",
+        "updated_at": "2026-10-04T11:02:39.5493431Z",
+        "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "priority": 2,
+        "contract": {
+          "contract_id": "e2e-a",
+          "repository": "https://github.com/e2e/project.git",
+          "remote": "origin",
+          "branch": "main",
+          "spec_ref": {
+            "path": "docs/spec/task.spec.md",
+            "commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+            "sha256": "a7da27f4d08ba5b2dc9ee65c983a54065dab93ea20d90ef9244d6408e001cf43"
+          },
+          "plan_ref": {
+            "path": "docs/spec/task.plan.md",
+            "commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+            "sha256": "ba5d19debb7029d03d2b304168c3e7f812ccd1c380aae8aee098c65f5e0e4b29"
+          },
+          "common_refs": [],
+          "acceptance_refs": [
+            {
+              "path": "docs/spec/task.spec.md",
+              "commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+              "sha256": "a7da27f4d08ba5b2dc9ee65c983a54065dab93ea20d90ef9244d6408e001cf43"
+            }
+          ],
+          "digest": "7fa6ebe073b934f8592070da034422b1ab732174c60dbda40d0345a02b034b18"
+        },
+        "workflow_runs": [
+          {
+            "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+            "workflow_run_id": "b2f35918b50dd93f81c717801c5bfd29",
+            "task_id": "1",
+            "workflow_version": "worker-flow-v1",
+            "config_digest": "c557f65b42f662ad1682dccb7c06508f0ad9f58a4d45e73178d3638cf34ef35a",
+            "execution_profile": {
+              "execution_requirements": {},
+              "implementation_version": "builtin-execution-v2",
+              "implementation_key": "local/local_codex_app_server_v1/codex",
+              "implementation_data": [
+                {
+                  "version": 1,
+                  "codec_version": 1,
+                  "purpose": "profile-config",
+                  "implementation_key": "codex.worker-profile",
+                  "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+                  "profile_id": "controlled",
+                  "accepted_config_version": "c557f65b42f662ad1682dccb7c06508f0ad9f58a4d45e73178d3638cf34ef35a",
+                  "digest": "4183280357b9fcd2df2d531bc4f1f7ba835d0696d76f8b5575b0bd6306adf2a6",
+                  "payload": {
+                    "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                    "args": null,
+                    "reasoning_effort": "high"
+                  }
+                }
+              ],
+              "implementation_display": [
+                "权限：danger-full-access",
+                "Reasoning effort：high"
+              ],
+              "publication_policy": {
+                "publisher": "worker"
+              },
+              "publication": {
+                "provider": {
+                  "kind": "command",
+                  "base_url": "https://github.com",
+                  "repository": "e2e/project",
+                  "token_env": "",
+                  "query": {
+                    "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                    "args": [
+                      "provider",
+                      "--e2e-state",
+                      "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\provider.json"
+                    ]
+                  },
+                  "close": {
+                    "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                    "args": [
+                      "provider",
+                      "--e2e-state",
+                      "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\provider.json"
+                    ]
+                  }
+                },
+                "git": {
+                  "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                  "args": [
+                    "git"
+                  ]
+                },
+                "remote": "origin",
+                "remote_url": "https://github.com/e2e/project.git",
+                "base_branch": "main",
+                "authentication_refs": [
+                  "SSH_AUTH_SOCK",
+                  "GIT_CONFIG_GLOBAL",
+                  "GIT_SSH_COMMAND",
+                  "GH_TOKEN",
+                  "GITHUB_TOKEN",
+                  "GH_CONFIG_DIR"
+                ]
+              },
+              "version": 6,
+              "execution_policy": {
+                "filesystem": {
+                  "read_scope": "host",
+                  "write_scope": "host",
+                  "git_metadata_write": false
+                },
+                "network": "allow",
+                "escalation": "deny"
+              },
+              "policy_digest": "7002c25862277355d7674338184ad9ef54ad96b52c8e5c7c887933b160373f3a",
+              "accepted_config_version": "c557f65b42f662ad1682dccb7c06508f0ad9f58a4d45e73178d3638cf34ef35a",
+              "policy_source": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\project.json",
+              "id": "controlled",
+              "name": "Controlled E2E",
+              "digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+              "host": "local",
+              "agent": "codex"
+            },
+            "phase": "waiting_pr_merge",
+            "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo",
+            "branch": "main",
+            "selected_result_id": "fb82008be3f8c8ec788fb6373adc6103",
+            "pr_url": "https://github.com/e2e/project/pull/1",
+            "pr_candidate_url": "https://github.com/e2e/project/pull/1",
+            "pr_state": "open",
+            "pr_queried_at": "2026-10-04T11:02:53.9328142Z",
+            "created_at": "2026-10-04T11:02:39.5493431Z",
+            "updated_at": "2026-10-04T11:02:54.07225Z"
+          }
+        ],
+        "predecessors": [],
+        "successors": [
+          "2"
+        ],
+        "dependency_ready": false,
+        "unmet_predecessors": [],
+        "startup_blockers": [
+          "task_not_open"
+        ]
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "task_id": "2",
+        "batch_id": "067a56faedb9be81695a58ed8379db9d",
+        "title": "E2E b",
+        "type": "task",
+        "contract_id": "e2e-b",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-10-04T11:02:11.566506Z",
+        "updated_at": "2026-10-04T11:02:11.566506Z",
+        "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "priority": 2,
+        "contract": {
+          "contract_id": "e2e-b",
+          "repository": "https://github.com/e2e/project.git",
+          "remote": "origin",
+          "branch": "main",
+          "spec_ref": {
+            "path": "docs/spec/task.spec.md",
+            "commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+            "sha256": "a7da27f4d08ba5b2dc9ee65c983a54065dab93ea20d90ef9244d6408e001cf43"
+          },
+          "plan_ref": {
+            "path": "docs/spec/task.plan.md",
+            "commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+            "sha256": "ba5d19debb7029d03d2b304168c3e7f812ccd1c380aae8aee098c65f5e0e4b29"
+          },
+          "common_refs": [],
+          "acceptance_refs": [
+            {
+              "path": "docs/spec/task.spec.md",
+              "commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+              "sha256": "a7da27f4d08ba5b2dc9ee65c983a54065dab93ea20d90ef9244d6408e001cf43"
+            }
+          ],
+          "digest": "d687c08927ee98088f99324640783237848a1e917990c2d398be570ebc8caec1"
+        },
+        "workflow_runs": [],
+        "predecessors": [
+          {
+            "task_id": "1",
+            "status": "in_progress",
+            "delivered": false,
+            "blocker": "predecessor_not_delivered"
+          }
+        ],
+        "successors": [],
+        "dependency_ready": false,
+        "unmet_predecessors": [
+          {
+            "task_id": "1",
+            "status": "in_progress",
+            "delivered": false,
+            "blocker": "predecessor_not_delivered"
+          }
+        ],
+        "startup_blockers": []
+      }
+    ],
+    "has_more": false
+  },
+  "domain": {
+    "deliveries": null,
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+    "tasks": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "task_id": "1",
+        "batch_id": "067a56faedb9be81695a58ed8379db9d",
+        "title": "E2E a",
+        "type": "task",
+        "priority": 2,
+        "contract_id": "e2e-a",
+        "claimant": "e2e",
+        "source": "native",
+        "status": "in_progress",
+        "version": 2,
+        "created_at": "2026-10-04T11:02:11.566506Z",
+        "updated_at": "2026-10-04T11:02:39.5493431Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "task_id": "2",
+        "batch_id": "067a56faedb9be81695a58ed8379db9d",
+        "title": "E2E b",
+        "type": "task",
+        "priority": 2,
+        "contract_id": "e2e-b",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-10-04T11:02:11.566506Z",
+        "updated_at": "2026-10-04T11:02:11.566506Z"
+      }
+    ],
+    "workflow_runs": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "workflow_run_id": "b2f35918b50dd93f81c717801c5bfd29",
+        "task_id": "1",
+        "workflow_version": "worker-flow-v1",
+        "config_digest": "c557f65b42f662ad1682dccb7c06508f0ad9f58a4d45e73178d3638cf34ef35a",
+        "execution_profile": {
+          "execution_requirements": {},
+          "implementation_version": "builtin-execution-v2",
+          "implementation_key": "local/local_codex_app_server_v1/codex",
+          "implementation_data": [
+            {
+              "version": 1,
+              "codec_version": 1,
+              "purpose": "profile-config",
+              "implementation_key": "codex.worker-profile",
+              "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+              "profile_id": "controlled",
+              "accepted_config_version": "c557f65b42f662ad1682dccb7c06508f0ad9f58a4d45e73178d3638cf34ef35a",
+              "digest": "4183280357b9fcd2df2d531bc4f1f7ba835d0696d76f8b5575b0bd6306adf2a6",
+              "payload": {
+                "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                "args": null,
+                "reasoning_effort": "high"
+              }
+            }
+          ],
+          "implementation_display": [
+            "权限：danger-full-access",
+            "Reasoning effort：high"
+          ],
+          "publication_policy": {
+            "publisher": "worker"
+          },
+          "publication": {
+            "provider": {
+              "kind": "command",
+              "base_url": "https://github.com",
+              "repository": "e2e/project",
+              "token_env": "",
+              "query": {
+                "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                "args": [
+                  "provider",
+                  "--e2e-state",
+                  "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\provider.json"
+                ]
+              },
+              "close": {
+                "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                "args": [
+                  "provider",
+                  "--e2e-state",
+                  "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\provider.json"
+                ]
+              }
+            },
+            "git": {
+              "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+              "args": [
+                "git"
+              ]
+            },
+            "remote": "origin",
+            "remote_url": "https://github.com/e2e/project.git",
+            "base_branch": "main",
+            "authentication_refs": [
+              "SSH_AUTH_SOCK",
+              "GIT_CONFIG_GLOBAL",
+              "GIT_SSH_COMMAND",
+              "GH_TOKEN",
+              "GITHUB_TOKEN",
+              "GH_CONFIG_DIR"
+            ]
+          },
+          "version": 6,
+          "execution_policy": {
+            "filesystem": {
+              "read_scope": "host",
+              "write_scope": "host",
+              "git_metadata_write": false
+            },
+            "network": "allow",
+            "escalation": "deny"
+          },
+          "policy_digest": "7002c25862277355d7674338184ad9ef54ad96b52c8e5c7c887933b160373f3a",
+          "accepted_config_version": "c557f65b42f662ad1682dccb7c06508f0ad9f58a4d45e73178d3638cf34ef35a",
+          "policy_source": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\project.json",
+          "id": "controlled",
+          "name": "Controlled E2E",
+          "digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+          "host": "local",
+          "agent": "codex"
+        },
+        "phase": "waiting_pr_merge",
+        "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo",
+        "branch": "main",
+        "selected_result_id": "fb82008be3f8c8ec788fb6373adc6103",
+        "pr_url": "https://github.com/e2e/project/pull/1",
+        "pr_candidate_url": "https://github.com/e2e/project/pull/1",
+        "pr_state": "open",
+        "pr_queried_at": "2026-10-04T11:02:53.9328142Z",
+        "created_at": "2026-10-04T11:02:39.5493431Z",
+        "updated_at": "2026-10-04T11:02:54.07225Z"
+      }
+    ],
+    "executions": [
+      {
+        "implementation_data": [
+          {
+            "version": 1,
+            "codec_version": 1,
+            "purpose": "execution-resources",
+            "implementation_key": "codex.app-server-binding",
+            "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+            "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+            "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+            "generation": "7797c1bc54a392e1c281a39335b4567f",
+            "config_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+            "digest": "3706c2ed89396ccbb5dbd61410920a10602c0359928e53c816f2283ad4f55167",
+            "payload": {
+              "endpoint": "ws://127.0.0.1:50983",
+              "session_id": "ede58adb-5759-494b-84ed-bc9441b2f3d5",
+              "generation": "fd098448be68824e09079248ee80a284"
+            }
+          }
+        ],
+        "policy_resources": {
+          "version": 3,
+          "digest": "b356d921c4d866da8d1a46bc8d0e311d8f8392ee681c18eeef2000da07321bc5",
+          "profile_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+          "workspace": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+          "write_roots": null,
+          "temporary_roots": [],
+          "implementation_data": {
+            "version": 1,
+            "codec_version": 1,
+            "purpose": "execution-resources",
+            "implementation_key": "codex.policy-resources",
+            "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+            "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+            "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+            "generation": "7797c1bc54a392e1c281a39335b4567f",
+            "config_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+            "digest": "13146f467e44cf1f2c19461b34b36a5d8e93593ce2895ee057ca204b3951ff4b",
+            "payload": {
+              "native_version": "codex-cli 0.159.2",
+              "contract": "codex-policy-v1:0.159.2:host-write:network-allow:never",
+              "settings": {
+                "Executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                "Args": [
+                  "--config",
+                  "sandbox_mode=danger-full-access",
+                  "--config",
+                  "approval_policy=never"
+                ],
+                "WorkingDirectory": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+                "EnvironmentRefs": null
+              }
+            }
+          }
+        },
+        "workspace_intent": {
+          "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+          "branch": "codex/1-b2f35918b50d",
+          "base_commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+        },
+        "turn_started_at": "2026-10-04T11:02:50.5025057Z",
+        "turn_ended_at": "2026-10-04T11:02:52.4120062Z",
+        "generation": "7797c1bc54a392e1c281a39335b4567f",
+        "session_id": "ede58adb-5759-494b-84ed-bc9441b2f3d5",
+        "session_generation": "fd098448be68824e09079248ee80a284",
+        "configuration_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+        "last_turn_outcome": "succeeded",
+        "log_path": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\state\\repo-70b8071faf37\\runs\\b2f35918b50dd93f81c717801c5bfd29\\turns\\ad70b73860594fd95b46863966a3c404\\appserver.jsonl",
+        "last_event": "turn/completed",
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+        "current_attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+        "owner_service_instance_id": "170b3db08ee35affbfc1c5cb9194b7a2",
+        "workflow_run_id": "b2f35918b50dd93f81c717801c5bfd29",
+        "agent": "codex",
+        "backend": "local",
+        "protocol": "local_codex_app_server_v1",
+        "process": {
+          "kind": "os",
+          "pid": 21868,
+          "created": "01dd53efe41a6900",
+          "executable": "c:\\users\\lmas1\\.codex\\worktrees\\dbbf\\steerline\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe"
+        },
+        "decision_id": "0b9797ded125f13570a210ba8a3ca188",
+        "current_command_id": "ad70b73860594fd95b46863966a3c404",
+        "current_turn_id": "1f5cf879-9cf3-4882-a2af-7316bdf4ea8d",
+        "turn_number": 1,
+        "last_stopped_turn_id": "1f5cf879-9cf3-4882-a2af-7316bdf4ea8d",
+        "target": {
+          "id": "local:windows:liuming-asus",
+          "worktree_id": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+          "branch": "codex/1-b2f35918b50d",
+          "base_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+        },
+        "workspace": {
+          "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo",
+          "worktree": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+          "branch": "codex/1-b2f35918b50d",
+          "base": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+          "head": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+          "verified_at": "2026-10-04T11:02:47.2957042Z"
+        },
+        "status": "idle",
+        "current_step": "worker",
+        "created_at": "2026-10-04T11:02:39.5493431Z",
+        "updated_at": "2026-10-04T11:02:52.4120062Z"
+      }
+    ],
+    "attempts": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+        "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+        "step_id": "worker",
+        "attempt_number": 1,
+        "event_path": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\state\\repo-70b8071faf37\\runs\\b2f35918b50dd93f81c717801c5bfd29\\turns\\ad70b73860594fd95b46863966a3c404\\appserver.jsonl",
+        "status": "running",
+        "input_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+        "contract_digest": "7fa6ebe073b934f8592070da034422b1ab732174c60dbda40d0345a02b034b18",
+        "external_binding": {
+          "id": "local:windows:liuming-asus",
+          "branch": "main",
+          "base_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+        },
+        "created_at": "2026-10-04T11:02:39.5493431Z",
+        "updated_at": "2026-10-04T11:02:50.5025057Z"
+      }
+    ],
+    "decisions": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "decision_id": "0b9797ded125f13570a210ba8a3ca188",
+        "scope": "execution",
+        "workflow_run_id": "b2f35918b50dd93f81c717801c5bfd29",
+        "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+        "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+        "question_id": "0b9797ded125f13570a210ba8a3ca188",
+        "request": "eyJmb3JtYXRfdmVyc2lvbiI6MiwicXVlc3Rpb24iOiJUaGUgd29ya2VyIHN0b3BwZWQuIFdoYXQgc2hvdWxkIGl0IGRvIG5leHQ/IiwiY29udGV4dCI6IlBSIOW3suaguOWunuW5tuetieW+heWQiOW5tuOAguacrOi9ruW3sue7k+adn++8jOaPkOS6pOWPjemmiOWQjuWwhuWcqOWOnyB3b3JrZXIg5Lya6K+d5byA5aeL5LiL5LiA6L2u44CCIiwib3B0aW9ucyI6W3siaWQiOiJjb250aW51ZSIsImxhYmVsIjoiQ29udGludWUgY3VycmVudCB3b3JrIn1dLCJhbGxvd19mcmVlX3RleHQiOnRydWV9",
+        "status": "pending",
+        "version": 1,
+        "created_at": "2026-10-04T11:02:52.4120062Z",
+        "updated_at": "2026-10-04T11:02:52.4120062Z"
+      }
+    ],
+    "operations": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "operation_id": "006390769cc294d4cae729f602cdd82e",
+        "idempotency_key": "006390769cc294d4cae729f602cdd82e",
+        "kind": "set_dispatch_state",
+        "status": "confirmed",
+        "payload_digest": "656bca5720bb47180c1d7196db9c4ff8903a3b1f76f0d05a38ae42e833a3f604",
+        "request": "eyJwYXVzZWQiOmZhbHNlLCJyZXF1ZXN0ZWRfYnkiOiJlMmUifQ==",
+        "created_at": "2026-10-04T11:02:30.6451647Z",
+        "updated_at": "2026-10-04T11:02:30.6451647Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "operation_id": "245a2483a0b1f366eda2bcd373d44a8e",
+        "idempotency_key": "worker-input-value:fb82008be3f8c8ec788fb6373adc6103:ad70b73860594fd95b46863966a3c404",
+        "kind": "worker_input_value",
+        "status": "confirmed",
+        "payload_digest": "d3039d88ae695b0848bb6d2070014987c8c3f0abcb00512ffc97ff4794ba67ae",
+        "request": "eyJDb21tYW5kSUQiOiJhZDcwYjczODYwNTk0ZmQ5NWI0Njg2Mzk2NmEzYzQwNCIsIlByb21wdCI6IlN0ZWVyTGluZSB0YXNrIDE6IEUyRSBhXG5GaXhlZCBTdGVlckxpbmUgd29ya2Zsb3dfcnVuX2lkOiBiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOVxuXG5Gb2xsb3cgdGhlIGZpeGVkIHRhc2sgY29udHJhY3QgYW5kIHRoZSBwcm9qZWN0J3MgaW5zdHJ1Y3Rpb25zLiBSZWFkIGVhY2ggcmVmZXJlbmNlIGZyb20gaXRzIGxpc3RlZCBHaXQgY29tbWl0IGFuZCBjaGVjayBpdHMgU0hBLTI1Ni4gSW1wbGVtZW50IHRoZSB0YXNrLCBjb21taXQgYW5kIHB1c2ggdGhlIGNvZGUsIGNyZWF0ZSBhIFBSIHRhcmdldGluZyBtYWluLCBhbmQgcmVwb3J0IGl0cyBVUkwuIEtlZXAgd29ya2luZyBpbiB0aGlzIHNhbWUgc2Vzc2lvbiB3aGVuIHRoZSB1c2VyIHNlbmRzIGZlZWRiYWNrLlxuXG5TcGVjOiBkb2NzL3NwZWMvdGFzay5zcGVjLm1kIGF0IDNhMmY5ZTc0MGU4MjNmMDA0NjMxYTZlNmU5OTQwYWM3NGJhMjMzYzQgKFNIQS0yNTYgYTdkYTI3ZjRkMDhiYTViMmRjOWVlNjVjOTgzYTU0MDY1ZGFiOTNlYTIwZDkwZWY5MjQ0ZDY0MDhlMDAxY2Y0MylcblBsYW46IGRvY3Mvc3BlYy90YXNrLnBsYW4ubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBiYTVkMTlkZWJiNzAyOWQwM2QyYjMwNDE2OGMzZTdmODEyY2NkMWMzODBhYWU4YWVlMDk4YzY1ZjVlMGU0YjI5KVxuQWNjZXB0YW5jZSByZWZlcmVuY2U6IGRvY3Mvc3BlYy90YXNrLnNwZWMubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBhN2RhMjdmNGQwOGJhNWIyZGM5ZWU2NWM5ODNhNTQwNjVkYWI5M2VhMjBkOTBlZjkyNDRkNjQwOGUwMDFjZjQzKVxuXG5GaXhlZCBwdWJsaWNhdGlvbiByZXNwb25zaWJpbGl0eTogd29ya2VyLiBQcm92aWRlcjogY29tbWFuZCBodHRwczovL2dpdGh1Yi5jb20vZTJlL3Byb2plY3QuIEdpdCByZW1vdGU6IG9yaWdpbiAoaHR0cHM6Ly9naXRodWIuY29tL2UyZS9wcm9qZWN0LmdpdCkuIFRhcmdldCBicmFuY2g6IG1haW4uIFVzZSB0aGVzZSBvcmlnaW5hbCB0YXJnZXRzIHRocm91Z2hvdXQgdGhpcyBleGVjdXRpb247IHJlcG9ydCBhIG1pc21hdGNoIGJlZm9yZSBwdWJsaXNoaW5nLlxuIiwiUHVycG9zZSI6ImJ1c2luZXNzIn0=",
+        "lifecycle_identity": {
+          "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+          "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+          "configuration_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+          "resource_generation": "7797c1bc54a392e1c281a39335b4567f",
+          "input_binding_digest": "f028d93d85ca9cb939a5fe22c5743dadd65fa687093d952c137123e2c5849341",
+          "ref": {
+            "version": 1,
+            "backend": "local",
+            "protocol": "local_codex_app_server_v1",
+            "target": {
+              "id": "local:windows:liuming-asus",
+              "worktree_id": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+              "branch": "codex/1-b2f35918b50d",
+              "base_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+            },
+            "agent": {
+              "name": "codex"
+            },
+            "run_id": "b2f35918b50dd93f81c717801c5bfd29",
+            "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+            "workspace_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+            "workspace_branch": "codex/1-b2f35918b50d",
+            "base_commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+            "external": {},
+            "generation": "7797c1bc54a392e1c281a39335b4567f"
+          }
+        },
+        "platform_request_id": "ad70b73860594fd95b46863966a3c404",
+        "receipt": "eyJDb21tYW5kSUQiOiJhZDcwYjczODYwNTk0ZmQ5NWI0Njg2Mzk2NmEzYzQwNCIsIlByb21wdCI6IlN0ZWVyTGluZSB0YXNrIDE6IEUyRSBhXG5GaXhlZCBTdGVlckxpbmUgd29ya2Zsb3dfcnVuX2lkOiBiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOVxuXG5Gb2xsb3cgdGhlIGZpeGVkIHRhc2sgY29udHJhY3QgYW5kIHRoZSBwcm9qZWN0J3MgaW5zdHJ1Y3Rpb25zLiBSZWFkIGVhY2ggcmVmZXJlbmNlIGZyb20gaXRzIGxpc3RlZCBHaXQgY29tbWl0IGFuZCBjaGVjayBpdHMgU0hBLTI1Ni4gSW1wbGVtZW50IHRoZSB0YXNrLCBjb21taXQgYW5kIHB1c2ggdGhlIGNvZGUsIGNyZWF0ZSBhIFBSIHRhcmdldGluZyBtYWluLCBhbmQgcmVwb3J0IGl0cyBVUkwuIEtlZXAgd29ya2luZyBpbiB0aGlzIHNhbWUgc2Vzc2lvbiB3aGVuIHRoZSB1c2VyIHNlbmRzIGZlZWRiYWNrLlxuXG5TcGVjOiBkb2NzL3NwZWMvdGFzay5zcGVjLm1kIGF0IDNhMmY5ZTc0MGU4MjNmMDA0NjMxYTZlNmU5OTQwYWM3NGJhMjMzYzQgKFNIQS0yNTYgYTdkYTI3ZjRkMDhiYTViMmRjOWVlNjVjOTgzYTU0MDY1ZGFiOTNlYTIwZDkwZWY5MjQ0ZDY0MDhlMDAxY2Y0MylcblBsYW46IGRvY3Mvc3BlYy90YXNrLnBsYW4ubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBiYTVkMTlkZWJiNzAyOWQwM2QyYjMwNDE2OGMzZTdmODEyY2NkMWMzODBhYWU4YWVlMDk4YzY1ZjVlMGU0YjI5KVxuQWNjZXB0YW5jZSByZWZlcmVuY2U6IGRvY3Mvc3BlYy90YXNrLnNwZWMubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBhN2RhMjdmNGQwOGJhNWIyZGM5ZWU2NWM5ODNhNTQwNjVkYWI5M2VhMjBkOTBlZjkyNDRkNjQwOGUwMDFjZjQzKVxuXG5GaXhlZCBwdWJsaWNhdGlvbiByZXNwb25zaWJpbGl0eTogd29ya2VyLiBQcm92aWRlcjogY29tbWFuZCBodHRwczovL2dpdGh1Yi5jb20vZTJlL3Byb2plY3QuIEdpdCByZW1vdGU6IG9yaWdpbiAoaHR0cHM6Ly9naXRodWIuY29tL2UyZS9wcm9qZWN0LmdpdCkuIFRhcmdldCBicmFuY2g6IG1haW4uIFVzZSB0aGVzZSBvcmlnaW5hbCB0YXJnZXRzIHRocm91Z2hvdXQgdGhpcyBleGVjdXRpb247IHJlcG9ydCBhIG1pc21hdGNoIGJlZm9yZSBwdWJsaXNoaW5nLlxuIiwiUHVycG9zZSI6ImJ1c2luZXNzIn0=",
+        "created_at": "2026-10-04T11:02:47.9333163Z",
+        "updated_at": "2026-10-04T11:02:47.960208Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "operation_id": "49007544e0615332fd223a2ed86e00a6",
+        "idempotency_key": "worker-session:fb82008be3f8c8ec788fb6373adc6103:ad70b73860594fd95b46863966a3c404",
+        "kind": "prepare_worker_session",
+        "status": "confirmed",
+        "payload_digest": "d3039d88ae695b0848bb6d2070014987c8c3f0abcb00512ffc97ff4794ba67ae",
+        "request": "eyJDb21tYW5kSUQiOiJhZDcwYjczODYwNTk0ZmQ5NWI0Njg2Mzk2NmEzYzQwNCIsIlByb21wdCI6IlN0ZWVyTGluZSB0YXNrIDE6IEUyRSBhXG5GaXhlZCBTdGVlckxpbmUgd29ya2Zsb3dfcnVuX2lkOiBiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOVxuXG5Gb2xsb3cgdGhlIGZpeGVkIHRhc2sgY29udHJhY3QgYW5kIHRoZSBwcm9qZWN0J3MgaW5zdHJ1Y3Rpb25zLiBSZWFkIGVhY2ggcmVmZXJlbmNlIGZyb20gaXRzIGxpc3RlZCBHaXQgY29tbWl0IGFuZCBjaGVjayBpdHMgU0hBLTI1Ni4gSW1wbGVtZW50IHRoZSB0YXNrLCBjb21taXQgYW5kIHB1c2ggdGhlIGNvZGUsIGNyZWF0ZSBhIFBSIHRhcmdldGluZyBtYWluLCBhbmQgcmVwb3J0IGl0cyBVUkwuIEtlZXAgd29ya2luZyBpbiB0aGlzIHNhbWUgc2Vzc2lvbiB3aGVuIHRoZSB1c2VyIHNlbmRzIGZlZWRiYWNrLlxuXG5TcGVjOiBkb2NzL3NwZWMvdGFzay5zcGVjLm1kIGF0IDNhMmY5ZTc0MGU4MjNmMDA0NjMxYTZlNmU5OTQwYWM3NGJhMjMzYzQgKFNIQS0yNTYgYTdkYTI3ZjRkMDhiYTViMmRjOWVlNjVjOTgzYTU0MDY1ZGFiOTNlYTIwZDkwZWY5MjQ0ZDY0MDhlMDAxY2Y0MylcblBsYW46IGRvY3Mvc3BlYy90YXNrLnBsYW4ubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBiYTVkMTlkZWJiNzAyOWQwM2QyYjMwNDE2OGMzZTdmODEyY2NkMWMzODBhYWU4YWVlMDk4YzY1ZjVlMGU0YjI5KVxuQWNjZXB0YW5jZSByZWZlcmVuY2U6IGRvY3Mvc3BlYy90YXNrLnNwZWMubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBhN2RhMjdmNGQwOGJhNWIyZGM5ZWU2NWM5ODNhNTQwNjVkYWI5M2VhMjBkOTBlZjkyNDRkNjQwOGUwMDFjZjQzKVxuXG5GaXhlZCBwdWJsaWNhdGlvbiByZXNwb25zaWJpbGl0eTogd29ya2VyLiBQcm92aWRlcjogY29tbWFuZCBodHRwczovL2dpdGh1Yi5jb20vZTJlL3Byb2plY3QuIEdpdCByZW1vdGU6IG9yaWdpbiAoaHR0cHM6Ly9naXRodWIuY29tL2UyZS9wcm9qZWN0LmdpdCkuIFRhcmdldCBicmFuY2g6IG1haW4uIFVzZSB0aGVzZSBvcmlnaW5hbCB0YXJnZXRzIHRocm91Z2hvdXQgdGhpcyBleGVjdXRpb247IHJlcG9ydCBhIG1pc21hdGNoIGJlZm9yZSBwdWJsaXNoaW5nLlxuIiwiUHVycG9zZSI6ImJ1c2luZXNzIn0=",
+        "lifecycle_identity": {
+          "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+          "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+          "configuration_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+          "resource_generation": "7797c1bc54a392e1c281a39335b4567f",
+          "input_binding_digest": "f028d93d85ca9cb939a5fe22c5743dadd65fa687093d952c137123e2c5849341",
+          "ref": {
+            "version": 1,
+            "backend": "local",
+            "protocol": "local_codex_app_server_v1",
+            "target": {
+              "id": "local:windows:liuming-asus",
+              "worktree_id": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+              "branch": "codex/1-b2f35918b50d",
+              "base_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+            },
+            "agent": {
+              "name": "codex"
+            },
+            "run_id": "b2f35918b50dd93f81c717801c5bfd29",
+            "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+            "workspace_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+            "workspace_branch": "codex/1-b2f35918b50d",
+            "base_commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+            "external": {},
+            "generation": "7797c1bc54a392e1c281a39335b4567f"
+          }
+        },
+        "platform_request_id": "ede58adb-5759-494b-84ed-bc9441b2f3d5",
+        "receipt": "eyJvcGVyYXRpb24iOnsidmVyc2lvbiI6MSwiaWQiOiI0OTAwNzU0NGUwNjE1MzMyZmQyMjNhMmVkODZlMDBhNiIsInJ1bl9pZCI6ImIyZjM1OTE4YjUwZGQ5M2Y4MWM3MTc4MDFjNWJmZDI5IiwiYXR0ZW1wdF9pZCI6ImRiMGUzNTljZjdlYTc1MjY4ZTlmMjFlZmViNjdiMmM2IiwiYmFja2VuZCI6ImxvY2FsIiwicHJvdG9jb2wiOiJsb2NhbF9jb2RleF9hcHBfc2VydmVyX3YxIiwidGFyZ2V0Ijp7ImlkIjoibG9jYWw6d2luZG93czpsaXVtaW5nLWFzdXMiLCJ3b3JrdHJlZV9pZCI6IkM6XFxVc2Vyc1xcbG1hczFcXEFwcERhdGFcXExvY2FsXFxUZW1wXFxzdGVlcmxpbmUtZTJlLTIzMDQzNDA1ODBcXHJlY292ZXJ5LndhaXRpbmctbWVyZ2UtcmVzdGFydFxccmVjb3ZlcnlcXGhvbWVcXHdvcmt0cmVlc1xcYjJmMzU5MThiNTBkZDkzZjgxYzcxNzgwMWM1YmZkMjkiLCJicmFuY2giOiJjb2RleC8xLWIyZjM1OTE4YjUwZCIsImJhc2VfcmV2aXNpb24iOiIzYTJmOWU3NDBlODIzZjAwNDYzMWE2ZTZlOTk0MGFjNzRiYTIzM2M0In0sImFjdGlvbiI6InByZXBhcmVfc2Vzc2lvbiIsImlkZW1wb3RlbmN5X2tleSI6Indvcmtlci1zZXNzaW9uOmZiODIwMDhiZTNmOGM4ZWM3ODhmYjYzNzNhZGM2MTAzOmFkNzBiNzM4NjA1OTRmZDk1YjQ2ODYzOTY2YTNjNDA0IiwicmVxdWVzdCI6ImV5SkRiMjF0WVc1a1NVUWlPaUpoWkRjd1lqY3pPRFl3TlRrMFptUTVOV0kwTmpnMk16azJObUV6WXpRd05DSXNJbEJ5YjIxd2RDSTZJbE4wWldWeVRHbHVaU0IwWVhOcklERTZJRVV5UlNCaFhHNUdhWGhsWkNCVGRHVmxja3hwYm1VZ2QyOXlhMlpzYjNkZmNuVnVYMmxrT2lCaU1tWXpOVGt4T0dJMU1HUmtPVE5tT0RGak56RTNPREF4WXpWaVptUXlPVnh1WEc1R2IyeHNiM2NnZEdobElHWnBlR1ZrSUhSaGMyc2dZMjl1ZEhKaFkzUWdZVzVrSUhSb1pTQndjbTlxWldOMEozTWdhVzV6ZEhKMVkzUnBiMjV6TGlCU1pXRmtJR1ZoWTJnZ2NtVm1aWEpsYm1ObElHWnliMjBnYVhSeklHeHBjM1JsWkNCSGFYUWdZMjl0YldsMElHRnVaQ0JqYUdWamF5QnBkSE1nVTBoQkxUSTFOaTRnU1cxd2JHVnRaVzUwSUhSb1pTQjBZWE5yTENCamIyMXRhWFFnWVc1a0lIQjFjMmdnZEdobElHTnZaR1VzSUdOeVpXRjBaU0JoSUZCU0lIUmhjbWRsZEdsdVp5QnRZV2x1TENCaGJtUWdjbVZ3YjNKMElHbDBjeUJWVWt3dUlFdGxaWEFnZDI5eWEybHVaeUJwYmlCMGFHbHpJSE5oYldVZ2MyVnpjMmx2YmlCM2FHVnVJSFJvWlNCMWMyVnlJSE5sYm1SeklHWmxaV1JpWVdOckxseHVYRzVUY0dWak9pQmtiMk56TDNOd1pXTXZkR0Z6YXk1emNHVmpMbTFrSUdGMElETmhNbVk1WlRjME1HVTRNak5tTURBME5qTXhZVFpsTm1VNU9UUXdZV00zTkdKaE1qTXpZelFnS0ZOSVFTMHlOVFlnWVRka1lUSTNaalJrTURoaVlUVmlNbVJqT1dWbE5qVmpPVGd6WVRVME1EWTFaR0ZpT1RObFlUSXdaRGt3WldZNU1qUTBaRFkwTURobE1EQXhZMlkwTXlsY2JsQnNZVzQ2SUdSdlkzTXZjM0JsWXk5MFlYTnJMbkJzWVc0dWJXUWdZWFFnTTJFeVpqbGxOelF3WlRneU0yWXdNRFEyTXpGaE5tVTJaVGs1TkRCaFl6YzBZbUV5TXpOak5DQW9VMGhCTFRJMU5pQmlZVFZrTVRsa1pXSmlOekF5T1dRd00yUXlZak13TkRFMk9HTXpaVGRtT0RFeVkyTmtNV016T0RCaFlXVTRZV1ZsTURrNFl6WTFaalZsTUdVMFlqSTVLVnh1UVdOalpYQjBZVzVqWlNCeVpXWmxjbVZ1WTJVNklHUnZZM012YzNCbFl5OTBZWE5yTG5Od1pXTXViV1FnWVhRZ00yRXlaamxsTnpRd1pUZ3lNMll3TURRMk16RmhObVUyWlRrNU5EQmhZemMwWW1FeU16TmpOQ0FvVTBoQkxUSTFOaUJoTjJSaE1qZG1OR1F3T0dKaE5XSXlaR001WldVMk5XTTVPRE5oTlRRd05qVmtZV0k1TTJWaE1qQmtPVEJsWmpreU5EUmtOalF3T0dVd01ERmpaalF6S1Z4dVhHNUdhWGhsWkNCd2RXSnNhV05oZEdsdmJpQnlaWE53YjI1emFXSnBiR2wwZVRvZ2QyOXlhMlZ5TGlCUWNtOTJhV1JsY2pvZ1kyOXRiV0Z1WkNCb2RIUndjem92TDJkcGRHaDFZaTVqYjIwdlpUSmxMM0J5YjJwbFkzUXVJRWRwZENCeVpXMXZkR1U2SUc5eWFXZHBiaUFvYUhSMGNITTZMeTluYVhSb2RXSXVZMjl0TDJVeVpTOXdjbTlxWldOMExtZHBkQ2t1SUZSaGNtZGxkQ0JpY21GdVkyZzZJRzFoYVc0dUlGVnpaU0IwYUdWelpTQnZjbWxuYVc1aGJDQjBZWEpuWlhSeklIUm9jbTkxWjJodmRYUWdkR2hwY3lCbGVHVmpkWFJwYjI0N0lISmxjRzl5ZENCaElHMXBjMjFoZEdOb0lHSmxabTl5WlNCd2RXSnNhWE5vYVc1bkxseHVJaXdpVUhWeWNHOXpaU0k2SW1KMWMybHVaWE56SW4wPSIsInBheWxvYWRfZGlnZXN0IjoiZDMwMzlkODhhZTY5NWIwODQ4YmI2ZDIwNzAwMTQ5ODdjOGMzZjBhYmNiMDA1MTJmZmM5N2ZmNDc5NGJhNjdhZSIsInN0YXR1cyI6ImluX2ZsaWdodCIsInN0YXJ0ZWRfYXQiOiIyMDI2LTEwLTA0VDExOjAyOjQ3Ljk4MDY5OTRaIiwidXBkYXRlZF9hdCI6IjIwMjYtMTAtMDRUMTE6MDI6NDcuOTgwNjk5NFoiLCJyZWYiOnsidmVyc2lvbiI6MSwiYmFja2VuZCI6ImxvY2FsIiwicHJvdG9jb2wiOiJsb2NhbF9jb2RleF9hcHBfc2VydmVyX3YxIiwidGFyZ2V0Ijp7ImlkIjoibG9jYWw6d2luZG93czpsaXVtaW5nLWFzdXMiLCJ3b3JrdHJlZV9pZCI6IkM6XFxVc2Vyc1xcbG1hczFcXEFwcERhdGFcXExvY2FsXFxUZW1wXFxzdGVlcmxpbmUtZTJlLTIzMDQzNDA1ODBcXHJlY292ZXJ5LndhaXRpbmctbWVyZ2UtcmVzdGFydFxccmVjb3ZlcnlcXGhvbWVcXHdvcmt0cmVlc1xcYjJmMzU5MThiNTBkZDkzZjgxYzcxNzgwMWM1YmZkMjkiLCJicmFuY2giOiJjb2RleC8xLWIyZjM1OTE4YjUwZCIsImJhc2VfcmV2aXNpb24iOiIzYTJmOWU3NDBlODIzZjAwNDYzMWE2ZTZlOTk0MGFjNzRiYTIzM2M0In0sImFnZW50Ijp7Im5hbWUiOiJjb2RleCJ9LCJydW5faWQiOiJiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOSIsImF0dGVtcHRfaWQiOiJkYjBlMzU5Y2Y3ZWE3NTI2OGU5ZjIxZWZlYjY3YjJjNiIsIndvcmtzcGFjZV9wYXRoIjoiQzpcXFVzZXJzXFxsbWFzMVxcQXBwRGF0YVxcTG9jYWxcXFRlbXBcXHN0ZWVybGluZS1lMmUtMjMwNDM0MDU4MFxccmVjb3Zlcnkud2FpdGluZy1tZXJnZS1yZXN0YXJ0XFxyZWNvdmVyeVxcaG9tZVxcd29ya3RyZWVzXFxiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOSIsIndvcmtzcGFjZV9icmFuY2giOiJjb2RleC8xLWIyZjM1OTE4YjUwZCIsImJhc2VfY29tbWl0IjoiM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCIsImV4dGVybmFsIjp7fSwiZ2VuZXJhdGlvbiI6Ijc3OTdjMWJjNTRhMzkyZTFjMjgxYTM5MzM1YjQ1NjdmIn0sImxpZmVjeWNsZV9pZGVudGl0eSI6eyJwcm9qZWN0X2lkIjoiYzpcXHVzZXJzXFxsbWFzMVxcYXBwZGF0YVxcbG9jYWxcXHRlbXBcXHN0ZWVybGluZS1lMmUtMjMwNDM0MDU4MFxccmVjb3Zlcnkud2FpdGluZy1tZXJnZS1yZXN0YXJ0XFxyZWNvdmVyeVxccmVwb1xcLmdpdCIsImV4ZWN1dGlvbl9pZCI6ImZiODIwMDhiZTNmOGM4ZWM3ODhmYjYzNzNhZGM2MTAzIiwiY29uZmlndXJhdGlvbl9kaWdlc3QiOiIwMmRmOWRmMjZkNjM3NzAyMGU1NWI5NDdkYWE1YTExYWExZmQ3NzYxNWZjOGE4NzExYWQ4YzNiZjdmNWVlMjc3IiwicmVzb3VyY2VfZ2VuZXJhdGlvbiI6Ijc3OTdjMWJjNTRhMzkyZTFjMjgxYTM5MzM1YjQ1NjdmIiwiaW5wdXRfYmluZGluZ19kaWdlc3QiOiJmMDI4ZDkzZDg1Y2E5Y2I5MzlhNWZlMjJjNTc0M2RhZGQ2NWZhNjg3MDkzZDk1MmMxMzcxMjNlMmM1ODQ5MzQxIiwicmVmIjp7InZlcnNpb24iOjEsImJhY2tlbmQiOiJsb2NhbCIsInByb3RvY29sIjoibG9jYWxfY29kZXhfYXBwX3NlcnZlcl92MSIsInRhcmdldCI6eyJpZCI6ImxvY2FsOndpbmRvd3M6bGl1bWluZy1hc3VzIiwid29ya3RyZWVfaWQiOiJDOlxcVXNlcnNcXGxtYXMxXFxBcHBEYXRhXFxMb2NhbFxcVGVtcFxcc3RlZXJsaW5lLWUyZS0yMzA0MzQwNTgwXFxyZWNvdmVyeS53YWl0aW5nLW1lcmdlLXJlc3RhcnRcXHJlY292ZXJ5XFxob21lXFx3b3JrdHJlZXNcXGIyZjM1OTE4YjUwZGQ5M2Y4MWM3MTc4MDFjNWJmZDI5IiwiYnJhbmNoIjoiY29kZXgvMS1iMmYzNTkxOGI1MGQiLCJiYXNlX3JldmlzaW9uIjoiM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCJ9LCJhZ2VudCI6eyJuYW1lIjoiY29kZXgifSwicnVuX2lkIjoiYjJmMzU5MThiNTBkZDkzZjgxYzcxNzgwMWM1YmZkMjkiLCJhdHRlbXB0X2lkIjoiZGIwZTM1OWNmN2VhNzUyNjhlOWYyMWVmZWI2N2IyYzYiLCJ3b3Jrc3BhY2VfcGF0aCI6IkM6XFxVc2Vyc1xcbG1hczFcXEFwcERhdGFcXExvY2FsXFxUZW1wXFxzdGVlcmxpbmUtZTJlLTIzMDQzNDA1ODBcXHJlY292ZXJ5LndhaXRpbmctbWVyZ2UtcmVzdGFydFxccmVjb3ZlcnlcXGhvbWVcXHdvcmt0cmVlc1xcYjJmMzU5MThiNTBkZDkzZjgxYzcxNzgwMWM1YmZkMjkiLCJ3b3Jrc3BhY2VfYnJhbmNoIjoiY29kZXgvMS1iMmYzNTkxOGI1MGQiLCJiYXNlX2NvbW1pdCI6IjNhMmY5ZTc0MGU4MjNmMDA0NjMxYTZlNmU5OTQwYWM3NGJhMjMzYzQiLCJleHRlcm5hbCI6e30sImdlbmVyYXRpb24iOiI3Nzk3YzFiYzU0YTM5MmUxYzI4MWEzOTMzNWI0NTY3ZiJ9fX0sImRpc3Bvc2l0aW9uIjoiY29uZmlybWVkIiwicHJvY2VzcyI6eyJraW5kIjoib3MiLCJwaWQiOjIxODY4LCJjcmVhdGVkIjoiMDFkZDUzZWZlNDFhNjkwMCIsImV4ZWN1dGFibGUiOiJjOlxcdXNlcnNcXGxtYXMxXFwuY29kZXhcXHdvcmt0cmVlc1xcZGJiZlxcc3RlZXJsaW5lXFxkb2NzXFx2YWxpZGF0aW9uXFx0aHJlZS1saW5lLTAyLXRhc2stZXhlY3V0aW9uLWJvdW5kYXJ5XFxyZWNvdmVyeVxccnVuLTAxXFxidWlsZFxcY29udHJvbGxlZC1oZWxwZXIuZXhlIn0sImltcGxlbWVudGF0aW9uIjpbeyJ2ZXJzaW9uIjoxLCJjb2RlY192ZXJzaW9uIjoxLCJwdXJwb3NlIjoiZXhlY3V0aW9uLXJlc291cmNlcyIsImltcGxlbWVudGF0aW9uX2tleSI6ImNvZGV4LmFwcC1zZXJ2ZXItYmluZGluZyIsInByb2plY3RfaWQiOiJjOlxcdXNlcnNcXGxtYXMxXFxhcHBkYXRhXFxsb2NhbFxcdGVtcFxcc3RlZXJsaW5lLWUyZS0yMzA0MzQwNTgwXFxyZWNvdmVyeS53YWl0aW5nLW1lcmdlLXJlc3RhcnRcXHJlY292ZXJ5XFxyZXBvXFwuZ2l0IiwiZXhlY3V0aW9uX2lkIjoiZmI4MjAwOGJlM2Y4YzhlYzc4OGZiNjM3M2FkYzYxMDMiLCJhdHRlbXB0X2lkIjoiZGIwZTM1OWNmN2VhNzUyNjhlOWYyMWVmZWI2N2IyYzYiLCJnZW5lcmF0aW9uIjoiNzc5N2MxYmM1NGEzOTJlMWMyODFhMzkzMzViNDU2N2YiLCJjb25maWdfZGlnZXN0IjoiMDJkZjlkZjI2ZDYzNzcwMjBlNTViOTQ3ZGFhNWExMWFhMWZkNzc2MTVmYzhhODcxMWFkOGMzYmY3ZjVlZTI3NyIsImRpZ2VzdCI6IjM3MDZjMmVkODkzOTZjY2JiNWRiZDYxNDEwOTIwYTEwNjAyYzAzNTk5MjhlNTNjODE2ZjIyODNhZDRmNTUxNjciLCJwYXlsb2FkIjp7ImVuZHBvaW50Ijoid3M6Ly8xMjcuMC4wLjE6NTA5ODMiLCJzZXNzaW9uX2lkIjoiZWRlNThhZGItNTc1OS00OTRiLTg0ZWQtYmM5NDQxYjJmM2Q1IiwiZ2VuZXJhdGlvbiI6ImZkMDk4NDQ4YmU2ODgyNGUwOTA3OTI0OGVlODBhMjg0In19XSwiZXZlbnRfcGF0aCI6ImM6XFx1c2Vyc1xcbG1hczFcXGFwcGRhdGFcXGxvY2FsXFx0ZW1wXFxzdGVlcmxpbmUtZTJlLTIzMDQzNDA1ODBcXHJlY292ZXJ5LndhaXRpbmctbWVyZ2UtcmVzdGFydFxccmVjb3ZlcnlcXGhvbWVcXHN0YXRlXFxyZXBvLTcwYjgwNzFmYWYzN1xccnVuc1xcYjJmMzU5MThiNTBkZDkzZjgxYzcxNzgwMWM1YmZkMjlcXHR1cm5zXFxhZDcwYjczODYwNTk0ZmQ5NWI0Njg2Mzk2NmEzYzQwNFxcYXBwc2VydmVyLmpzb25sIiwic3RhdGUiOnsic2Vzc2lvbl9pZCI6ImVkZTU4YWRiLTU3NTktNDk0Yi04NGVkLWJjOTQ0MWIyZjNkNSIsInNlc3Npb25fZ2VuZXJhdGlvbiI6ImZkMDk4NDQ4YmU2ODgyNGUwOTA3OTI0OGVlODBhMjg0In19",
+        "created_at": "2026-10-04T11:02:47.9806994Z",
+        "updated_at": "2026-10-04T11:02:48.3994151Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "operation_id": "4daa235cd1f6742da2299392495b6466",
+        "idempotency_key": "worker-turn:fb82008be3f8c8ec788fb6373adc6103:ad70b73860594fd95b46863966a3c404",
+        "kind": "start_worker_turn",
+        "status": "confirmed",
+        "payload_digest": "d3039d88ae695b0848bb6d2070014987c8c3f0abcb00512ffc97ff4794ba67ae",
+        "request": "eyJDb21tYW5kSUQiOiJhZDcwYjczODYwNTk0ZmQ5NWI0Njg2Mzk2NmEzYzQwNCIsIlByb21wdCI6IlN0ZWVyTGluZSB0YXNrIDE6IEUyRSBhXG5GaXhlZCBTdGVlckxpbmUgd29ya2Zsb3dfcnVuX2lkOiBiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOVxuXG5Gb2xsb3cgdGhlIGZpeGVkIHRhc2sgY29udHJhY3QgYW5kIHRoZSBwcm9qZWN0J3MgaW5zdHJ1Y3Rpb25zLiBSZWFkIGVhY2ggcmVmZXJlbmNlIGZyb20gaXRzIGxpc3RlZCBHaXQgY29tbWl0IGFuZCBjaGVjayBpdHMgU0hBLTI1Ni4gSW1wbGVtZW50IHRoZSB0YXNrLCBjb21taXQgYW5kIHB1c2ggdGhlIGNvZGUsIGNyZWF0ZSBhIFBSIHRhcmdldGluZyBtYWluLCBhbmQgcmVwb3J0IGl0cyBVUkwuIEtlZXAgd29ya2luZyBpbiB0aGlzIHNhbWUgc2Vzc2lvbiB3aGVuIHRoZSB1c2VyIHNlbmRzIGZlZWRiYWNrLlxuXG5TcGVjOiBkb2NzL3NwZWMvdGFzay5zcGVjLm1kIGF0IDNhMmY5ZTc0MGU4MjNmMDA0NjMxYTZlNmU5OTQwYWM3NGJhMjMzYzQgKFNIQS0yNTYgYTdkYTI3ZjRkMDhiYTViMmRjOWVlNjVjOTgzYTU0MDY1ZGFiOTNlYTIwZDkwZWY5MjQ0ZDY0MDhlMDAxY2Y0MylcblBsYW46IGRvY3Mvc3BlYy90YXNrLnBsYW4ubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBiYTVkMTlkZWJiNzAyOWQwM2QyYjMwNDE2OGMzZTdmODEyY2NkMWMzODBhYWU4YWVlMDk4YzY1ZjVlMGU0YjI5KVxuQWNjZXB0YW5jZSByZWZlcmVuY2U6IGRvY3Mvc3BlYy90YXNrLnNwZWMubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBhN2RhMjdmNGQwOGJhNWIyZGM5ZWU2NWM5ODNhNTQwNjVkYWI5M2VhMjBkOTBlZjkyNDRkNjQwOGUwMDFjZjQzKVxuXG5GaXhlZCBwdWJsaWNhdGlvbiByZXNwb25zaWJpbGl0eTogd29ya2VyLiBQcm92aWRlcjogY29tbWFuZCBodHRwczovL2dpdGh1Yi5jb20vZTJlL3Byb2plY3QuIEdpdCByZW1vdGU6IG9yaWdpbiAoaHR0cHM6Ly9naXRodWIuY29tL2UyZS9wcm9qZWN0LmdpdCkuIFRhcmdldCBicmFuY2g6IG1haW4uIFVzZSB0aGVzZSBvcmlnaW5hbCB0YXJnZXRzIHRocm91Z2hvdXQgdGhpcyBleGVjdXRpb247IHJlcG9ydCBhIG1pc21hdGNoIGJlZm9yZSBwdWJsaXNoaW5nLlxuIiwiUHVycG9zZSI6ImJ1c2luZXNzIn0=",
+        "lifecycle_identity": {
+          "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+          "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+          "configuration_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+          "resource_generation": "7797c1bc54a392e1c281a39335b4567f",
+          "input_binding_digest": "9e8b0ded019c5b2f3554b0af75ea2b13c306409a0e16e3857288712f7ba9f209",
+          "ref": {
+            "version": 1,
+            "backend": "local",
+            "protocol": "local_codex_app_server_v1",
+            "target": {
+              "id": "local:windows:liuming-asus",
+              "worktree_id": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+              "branch": "codex/1-b2f35918b50d",
+              "base_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+            },
+            "agent": {
+              "name": "codex"
+            },
+            "run_id": "b2f35918b50dd93f81c717801c5bfd29",
+            "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+            "workspace_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+            "workspace_branch": "codex/1-b2f35918b50d",
+            "base_commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+            "external": {
+              "kind": "os",
+              "pid": 21868,
+              "created": "01dd53efe41a6900",
+              "executable": "c:\\users\\lmas1\\.codex\\worktrees\\dbbf\\steerline\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe"
+            },
+            "generation": "7797c1bc54a392e1c281a39335b4567f"
+          }
+        },
+        "platform_request_id": "1f5cf879-9cf3-4882-a2af-7316bdf4ea8d",
+        "receipt": "eyJzZXNzaW9uX2lkIjoiZWRlNThhZGItNTc1OS00OTRiLTg0ZWQtYmM5NDQxYjJmM2Q1IiwidHVybl9pZCI6IjFmNWNmODc5LTljZjMtNDg4Mi1hMmFmLTczMTZiZGY0ZWE4ZCJ9",
+        "created_at": "2026-10-04T11:02:48.4330275Z",
+        "updated_at": "2026-10-04T11:02:50.5025057Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "operation_id": "7a751c1e3e0f92acd168390e7b2dbdb5",
+        "idempotency_key": "7a751c1e3e0f92acd168390e7b2dbdb5",
+        "kind": "claim_task",
+        "status": "pending",
+        "payload_digest": "d06e9cc861099c970ca32347d7e36726e9f9703325b13ad4151d964ac454ea0d",
+        "request": "eyJhdHRlbXB0X2lkIjoiZGIwZTM1OWNmN2VhNzUyNjhlOWYyMWVmZWI2N2IyYzYiLCJhdXRob3JpdHlfdmVyc2lvbiI6MiwiYmFzZV9jb21taXQiOiIzYTJmOWU3NDBlODIzZjAwNDYzMWE2ZTZlOTk0MGFjNzRiYTIzM2M0IiwiZXhlY3V0aW9uX2lkIjoiZmI4MjAwOGJlM2Y4YzhlYzc4OGZiNjM3M2FkYzYxMDMiLCJwcmVkZWNlc3Nvcl9tZXJnZV9jb21taXRzIjp7fSwicmVxdWVzdGVkX2J5IjoiZTJlIiwidGFza19pZCI6IjEiLCJ0YXNrX3ZlcnNpb24iOjEsIndvcmtmbG93X3J1bl9pZCI6ImIyZjM1OTE4YjUwZGQ5M2Y4MWM3MTc4MDFjNWJmZDI5In0=",
+        "created_at": "2026-10-04T11:02:39.5493431Z",
+        "updated_at": "2026-10-04T11:02:39.5493431Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "operation_id": "eeb9376b9ccac1b1e49651f208101497",
+        "idempotency_key": "worker-workspace:fb82008be3f8c8ec788fb6373adc6103",
+        "kind": "prepare_workspace",
+        "status": "confirmed",
+        "payload_digest": "385980cd0c71feb953372d8a10eeebc81d46fc82de97b085f436ee7f277bcd93",
+        "request": "eyJ3b3JrZmxvd19ydW5faWQiOiJiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOSIsImV4ZWN1dGlvbl9pZCI6ImZiODIwMDhiZTNmOGM4ZWM3ODhmYjYzNzNhZGM2MTAzIiwid29ya3NwYWNlIjp7InBhdGgiOiJDOlxcVXNlcnNcXGxtYXMxXFxBcHBEYXRhXFxMb2NhbFxcVGVtcFxcc3RlZXJsaW5lLWUyZS0yMzA0MzQwNTgwXFxyZWNvdmVyeS53YWl0aW5nLW1lcmdlLXJlc3RhcnRcXHJlY292ZXJ5XFxob21lXFx3b3JrdHJlZXNcXGIyZjM1OTE4YjUwZGQ5M2Y4MWM3MTc4MDFjNWJmZDI5IiwiYnJhbmNoIjoiY29kZXgvMS1iMmYzNTkxOGI1MGQiLCJiYXNlX2NvbW1pdCI6IjNhMmY5ZTc0MGU4MjNmMDA0NjMxYTZlNmU5OTQwYWM3NGJhMjMzYzQifX0=",
+        "lifecycle_identity": {
+          "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+          "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+          "configuration_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+          "resource_generation": "7797c1bc54a392e1c281a39335b4567f",
+          "input_binding_digest": "9e5958bc3fa63041f1f18514e2e8f73ac5c95f4231f76647909bf6af5b244566",
+          "ref": {
+            "version": 1,
+            "backend": "local",
+            "protocol": "local_codex_app_server_v1",
+            "target": {
+              "id": "local:windows:liuming-asus",
+              "branch": "main",
+              "base_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+            },
+            "agent": {
+              "name": "codex"
+            },
+            "run_id": "b2f35918b50dd93f81c717801c5bfd29",
+            "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+            "workspace_branch": "main",
+            "base_commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+            "external": {},
+            "generation": "7797c1bc54a392e1c281a39335b4567f"
+          }
+        },
+        "receipt": "eyJyZXBvc2l0b3J5IjoiQzpcXFVzZXJzXFxsbWFzMVxcQXBwRGF0YVxcTG9jYWxcXFRlbXBcXHN0ZWVybGluZS1lMmUtMjMwNDM0MDU4MFxccmVjb3Zlcnkud2FpdGluZy1tZXJnZS1yZXN0YXJ0XFxyZWNvdmVyeVxccmVwbyIsIndvcmt0cmVlIjoiQzpcXFVzZXJzXFxsbWFzMVxcQXBwRGF0YVxcTG9jYWxcXFRlbXBcXHN0ZWVybGluZS1lMmUtMjMwNDM0MDU4MFxccmVjb3Zlcnkud2FpdGluZy1tZXJnZS1yZXN0YXJ0XFxyZWNvdmVyeVxcaG9tZVxcd29ya3RyZWVzXFxiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOSIsImJyYW5jaCI6ImNvZGV4LzEtYjJmMzU5MThiNTBkIiwiYmFzZSI6IjNhMmY5ZTc0MGU4MjNmMDA0NjMxYTZlNmU5OTQwYWM3NGJhMjMzYzQiLCJoZWFkIjoiM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCIsInZlcmlmaWVkX2F0IjoiMjAyNi0xMC0wNFQxMTowMjo0Ny4yOTU3MDQyWiJ9",
+        "created_at": "2026-10-04T11:02:40.7041877Z",
+        "updated_at": "2026-10-04T11:02:47.2957042Z"
+      }
+    ]
+  },
+  "helper": {
+    "git_url": "http://127.0.0.1:60098/e2e/project.git",
+    "cwd": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+    "session": "ede58adb-5759-494b-84ed-bc9441b2f3d5",
+    "sessions": 1,
+    "dispatches": 1,
+    "turns": [
+      {
+        "completedAt": 1791111770,
+        "id": "1f5cf879-9cf3-4882-a2af-7316bdf4ea8d",
+        "items": [
+          {
+            "id": "message-1f5cf879-9cf3-4882-a2af-7316bdf4ea8d",
+            "phase": "final_answer",
+            "text": "Published by worker: https://github.com/e2e/project/pull/1",
+            "type": "agentMessage"
+          }
+        ],
+        "status": "completed"
+      }
+    ],
+    "pr": {
+      "url": "https://github.com/e2e/project/pull/1",
+      "repository": "e2e/project",
+      "base_branch": "main",
+      "head_repository": "e2e/project",
+      "head_branch": "codex/1-b2f35918b50d",
+      "head_revision": "fba83ff24afb4bbe0c634d42bc6d2559edbc3f7c",
+      "state": "open",
+      "merged": false,
+      "merged_at": null,
+      "merge_commit": null
+    }
+  },
+  "runtime": {
+    "schema_version": 18,
+    "revision": 116,
+    "updated_at": "2026-10-04T11:02:54.1197976Z",
+    "heartbeat_at": "2026-10-04T11:02:54.1197976Z",
+    "service": {
+      "execution_policy": {
+        "filesystem": {
+          "read_scope": "host",
+          "write_scope": "host",
+          "git_metadata_write": false
+        },
+        "network": "allow",
+        "escalation": "deny"
+      },
+      "policy_source": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\project.json",
+      "mode": "scheduler",
+      "instance_id": "170b3db08ee35affbfc1c5cb9194b7a2",
+      "pid": 32484,
+      "status": "running",
+      "claimant": "e2e",
+      "error": null,
+      "process_identity": {
+        "kind": "os",
+        "pid": 32484,
+        "created": "01dd53efce64718b",
+        "executable": "c:\\users\\lmas1\\.codex\\worktrees\\dbbf\\steerline\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\steerline.exe"
+      },
+      "startup_id": "481b49c57d137d2a7599c9f899ef0b93",
+      "config_digest": "c557f65b42f662ad1682dccb7c06508f0ad9f58a4d45e73178d3638cf34ef35a",
+      "ready": true,
+      "control_protocol": 1,
+      "capabilities": [
+        "answer_decision",
+        "open_terminal",
+        "recheck_environment",
+        "start_task",
+        "start_candidate",
+        "abandon_candidate",
+        "set_dispatch_mode",
+        "pause_dispatch",
+        "resume_dispatch",
+        "stop_service"
+      ],
+      "heartbeat_interval_ms": 100
+    },
+    "repository": {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo",
+      "remote": "origin",
+      "branch": "main",
+      "identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git"
+    },
+    "tasks": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "task_id": "1",
+        "batch_id": "067a56faedb9be81695a58ed8379db9d",
+        "title": "E2E a",
+        "type": "task",
+        "priority": 2,
+        "contract_id": "e2e-a",
+        "claimant": "e2e",
+        "source": "native",
+        "status": "in_progress",
+        "version": 2,
+        "created_at": "2026-10-04T11:02:11.566506Z",
+        "updated_at": "2026-10-04T11:02:39.5493431Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "task_id": "2",
+        "batch_id": "067a56faedb9be81695a58ed8379db9d",
+        "title": "E2E b",
+        "type": "task",
+        "priority": 2,
+        "contract_id": "e2e-b",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-10-04T11:02:11.566506Z",
+        "updated_at": "2026-10-04T11:02:11.566506Z"
+      }
+    ],
+    "workflow_runs": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "workflow_run_id": "b2f35918b50dd93f81c717801c5bfd29",
+        "task_id": "1",
+        "workflow_version": "worker-flow-v1",
+        "config_digest": "c557f65b42f662ad1682dccb7c06508f0ad9f58a4d45e73178d3638cf34ef35a",
+        "execution_profile": {
+          "execution_requirements": {},
+          "implementation_version": "builtin-execution-v2",
+          "implementation_key": "local/local_codex_app_server_v1/codex",
+          "implementation_data": [
+            {
+              "version": 1,
+              "codec_version": 1,
+              "purpose": "profile-config",
+              "implementation_key": "codex.worker-profile",
+              "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+              "profile_id": "controlled",
+              "accepted_config_version": "c557f65b42f662ad1682dccb7c06508f0ad9f58a4d45e73178d3638cf34ef35a",
+              "digest": "4183280357b9fcd2df2d531bc4f1f7ba835d0696d76f8b5575b0bd6306adf2a6",
+              "payload": {
+                "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                "args": null,
+                "reasoning_effort": "high"
+              }
+            }
+          ],
+          "implementation_display": [
+            "权限：danger-full-access",
+            "Reasoning effort：high"
+          ],
+          "publication_policy": {
+            "publisher": "worker"
+          },
+          "publication": {
+            "provider": {
+              "kind": "command",
+              "base_url": "https://github.com",
+              "repository": "e2e/project",
+              "token_env": "",
+              "query": {
+                "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                "args": [
+                  "provider",
+                  "--e2e-state",
+                  "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\provider.json"
+                ]
+              },
+              "close": {
+                "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                "args": [
+                  "provider",
+                  "--e2e-state",
+                  "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\provider.json"
+                ]
+              }
+            },
+            "git": {
+              "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+              "args": [
+                "git"
+              ]
+            },
+            "remote": "origin",
+            "remote_url": "https://github.com/e2e/project.git",
+            "base_branch": "main",
+            "authentication_refs": [
+              "SSH_AUTH_SOCK",
+              "GIT_CONFIG_GLOBAL",
+              "GIT_SSH_COMMAND",
+              "GH_TOKEN",
+              "GITHUB_TOKEN",
+              "GH_CONFIG_DIR"
+            ]
+          },
+          "version": 6,
+          "execution_policy": {
+            "filesystem": {
+              "read_scope": "host",
+              "write_scope": "host",
+              "git_metadata_write": false
+            },
+            "network": "allow",
+            "escalation": "deny"
+          },
+          "policy_digest": "7002c25862277355d7674338184ad9ef54ad96b52c8e5c7c887933b160373f3a",
+          "accepted_config_version": "c557f65b42f662ad1682dccb7c06508f0ad9f58a4d45e73178d3638cf34ef35a",
+          "policy_source": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\project.json",
+          "id": "controlled",
+          "name": "Controlled E2E",
+          "digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+          "host": "local",
+          "agent": "codex"
+        },
+        "phase": "waiting_pr_merge",
+        "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo",
+        "branch": "main",
+        "selected_result_id": "fb82008be3f8c8ec788fb6373adc6103",
+        "pr_url": "https://github.com/e2e/project/pull/1",
+        "pr_candidate_url": "https://github.com/e2e/project/pull/1",
+        "pr_state": "open",
+        "pr_queried_at": "2026-10-04T11:02:53.9328142Z",
+        "created_at": "2026-10-04T11:02:39.5493431Z",
+        "updated_at": "2026-10-04T11:02:54.07225Z"
+      }
+    ],
+    "executions": [
+      {
+        "implementation_data": [
+          {
+            "version": 1,
+            "codec_version": 1,
+            "purpose": "execution-resources",
+            "implementation_key": "codex.app-server-binding",
+            "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+            "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+            "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+            "generation": "7797c1bc54a392e1c281a39335b4567f",
+            "config_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+            "digest": "3706c2ed89396ccbb5dbd61410920a10602c0359928e53c816f2283ad4f55167",
+            "payload": {
+              "endpoint": "ws://127.0.0.1:50983",
+              "session_id": "ede58adb-5759-494b-84ed-bc9441b2f3d5",
+              "generation": "fd098448be68824e09079248ee80a284"
+            }
+          }
+        ],
+        "policy_resources": {
+          "version": 3,
+          "digest": "b356d921c4d866da8d1a46bc8d0e311d8f8392ee681c18eeef2000da07321bc5",
+          "profile_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+          "workspace": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+          "write_roots": null,
+          "temporary_roots": [],
+          "implementation_data": {
+            "version": 1,
+            "codec_version": 1,
+            "purpose": "execution-resources",
+            "implementation_key": "codex.policy-resources",
+            "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+            "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+            "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+            "generation": "7797c1bc54a392e1c281a39335b4567f",
+            "config_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+            "digest": "13146f467e44cf1f2c19461b34b36a5d8e93593ce2895ee057ca204b3951ff4b",
+            "payload": {
+              "native_version": "codex-cli 0.159.2",
+              "contract": "codex-policy-v1:0.159.2:host-write:network-allow:never",
+              "settings": {
+                "Executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                "Args": [
+                  "--config",
+                  "sandbox_mode=danger-full-access",
+                  "--config",
+                  "approval_policy=never"
+                ],
+                "WorkingDirectory": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+                "EnvironmentRefs": null
+              }
+            }
+          }
+        },
+        "workspace_intent": {
+          "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+          "branch": "codex/1-b2f35918b50d",
+          "base_commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+        },
+        "turn_started_at": "2026-10-04T11:02:50.5025057Z",
+        "turn_ended_at": "2026-10-04T11:02:52.4120062Z",
+        "generation": "7797c1bc54a392e1c281a39335b4567f",
+        "session_id": "ede58adb-5759-494b-84ed-bc9441b2f3d5",
+        "session_generation": "fd098448be68824e09079248ee80a284",
+        "configuration_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+        "last_turn_outcome": "succeeded",
+        "log_path": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\state\\repo-70b8071faf37\\runs\\b2f35918b50dd93f81c717801c5bfd29\\turns\\ad70b73860594fd95b46863966a3c404\\appserver.jsonl",
+        "last_event": "turn/completed",
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+        "current_attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+        "owner_service_instance_id": "170b3db08ee35affbfc1c5cb9194b7a2",
+        "workflow_run_id": "b2f35918b50dd93f81c717801c5bfd29",
+        "agent": "codex",
+        "backend": "local",
+        "protocol": "local_codex_app_server_v1",
+        "process": {
+          "kind": "os",
+          "pid": 21868,
+          "created": "01dd53efe41a6900",
+          "executable": "c:\\users\\lmas1\\.codex\\worktrees\\dbbf\\steerline\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe"
+        },
+        "decision_id": "0b9797ded125f13570a210ba8a3ca188",
+        "current_command_id": "ad70b73860594fd95b46863966a3c404",
+        "current_turn_id": "1f5cf879-9cf3-4882-a2af-7316bdf4ea8d",
+        "turn_number": 1,
+        "last_stopped_turn_id": "1f5cf879-9cf3-4882-a2af-7316bdf4ea8d",
+        "target": {
+          "id": "local:windows:liuming-asus",
+          "worktree_id": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+          "branch": "codex/1-b2f35918b50d",
+          "base_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+        },
+        "workspace": {
+          "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo",
+          "worktree": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+          "branch": "codex/1-b2f35918b50d",
+          "base": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+          "head": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+          "verified_at": "2026-10-04T11:02:47.2957042Z"
+        },
+        "status": "idle",
+        "current_step": "worker",
+        "created_at": "2026-10-04T11:02:39.5493431Z",
+        "updated_at": "2026-10-04T11:02:52.4120062Z"
+      }
+    ],
+    "attempts": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+        "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+        "step_id": "worker",
+        "attempt_number": 1,
+        "event_path": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\state\\repo-70b8071faf37\\runs\\b2f35918b50dd93f81c717801c5bfd29\\turns\\ad70b73860594fd95b46863966a3c404\\appserver.jsonl",
+        "status": "running",
+        "input_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+        "contract_digest": "7fa6ebe073b934f8592070da034422b1ab732174c60dbda40d0345a02b034b18",
+        "external_binding": {
+          "id": "local:windows:liuming-asus",
+          "branch": "main",
+          "base_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+        },
+        "created_at": "2026-10-04T11:02:39.5493431Z",
+        "updated_at": "2026-10-04T11:02:50.5025057Z"
+      }
+    ],
+    "decisions": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "decision_id": "0b9797ded125f13570a210ba8a3ca188",
+        "scope": "execution",
+        "workflow_run_id": "b2f35918b50dd93f81c717801c5bfd29",
+        "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+        "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+        "question_id": "0b9797ded125f13570a210ba8a3ca188",
+        "request": "eyJmb3JtYXRfdmVyc2lvbiI6MiwicXVlc3Rpb24iOiJUaGUgd29ya2VyIHN0b3BwZWQuIFdoYXQgc2hvdWxkIGl0IGRvIG5leHQ/IiwiY29udGV4dCI6IlBSIOW3suaguOWunuW5tuetieW+heWQiOW5tuOAguacrOi9ruW3sue7k+adn++8jOaPkOS6pOWPjemmiOWQjuWwhuWcqOWOnyB3b3JrZXIg5Lya6K+d5byA5aeL5LiL5LiA6L2u44CCIiwib3B0aW9ucyI6W3siaWQiOiJjb250aW51ZSIsImxhYmVsIjoiQ29udGludWUgY3VycmVudCB3b3JrIn1dLCJhbGxvd19mcmVlX3RleHQiOnRydWV9",
+        "status": "pending",
+        "version": 1,
+        "created_at": "2026-10-04T11:02:52.4120062Z",
+        "updated_at": "2026-10-04T11:02:52.4120062Z"
+      }
+    ],
+    "operations": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "operation_id": "006390769cc294d4cae729f602cdd82e",
+        "idempotency_key": "006390769cc294d4cae729f602cdd82e",
+        "kind": "set_dispatch_state",
+        "status": "confirmed",
+        "payload_digest": "656bca5720bb47180c1d7196db9c4ff8903a3b1f76f0d05a38ae42e833a3f604",
+        "request": "eyJwYXVzZWQiOmZhbHNlLCJyZXF1ZXN0ZWRfYnkiOiJlMmUifQ==",
+        "created_at": "2026-10-04T11:02:30.6451647Z",
+        "updated_at": "2026-10-04T11:02:30.6451647Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "operation_id": "245a2483a0b1f366eda2bcd373d44a8e",
+        "idempotency_key": "worker-input-value:fb82008be3f8c8ec788fb6373adc6103:ad70b73860594fd95b46863966a3c404",
+        "kind": "worker_input_value",
+        "status": "confirmed",
+        "payload_digest": "d3039d88ae695b0848bb6d2070014987c8c3f0abcb00512ffc97ff4794ba67ae",
+        "request": "eyJDb21tYW5kSUQiOiJhZDcwYjczODYwNTk0ZmQ5NWI0Njg2Mzk2NmEzYzQwNCIsIlByb21wdCI6IlN0ZWVyTGluZSB0YXNrIDE6IEUyRSBhXG5GaXhlZCBTdGVlckxpbmUgd29ya2Zsb3dfcnVuX2lkOiBiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOVxuXG5Gb2xsb3cgdGhlIGZpeGVkIHRhc2sgY29udHJhY3QgYW5kIHRoZSBwcm9qZWN0J3MgaW5zdHJ1Y3Rpb25zLiBSZWFkIGVhY2ggcmVmZXJlbmNlIGZyb20gaXRzIGxpc3RlZCBHaXQgY29tbWl0IGFuZCBjaGVjayBpdHMgU0hBLTI1Ni4gSW1wbGVtZW50IHRoZSB0YXNrLCBjb21taXQgYW5kIHB1c2ggdGhlIGNvZGUsIGNyZWF0ZSBhIFBSIHRhcmdldGluZyBtYWluLCBhbmQgcmVwb3J0IGl0cyBVUkwuIEtlZXAgd29ya2luZyBpbiB0aGlzIHNhbWUgc2Vzc2lvbiB3aGVuIHRoZSB1c2VyIHNlbmRzIGZlZWRiYWNrLlxuXG5TcGVjOiBkb2NzL3NwZWMvdGFzay5zcGVjLm1kIGF0IDNhMmY5ZTc0MGU4MjNmMDA0NjMxYTZlNmU5OTQwYWM3NGJhMjMzYzQgKFNIQS0yNTYgYTdkYTI3ZjRkMDhiYTViMmRjOWVlNjVjOTgzYTU0MDY1ZGFiOTNlYTIwZDkwZWY5MjQ0ZDY0MDhlMDAxY2Y0MylcblBsYW46IGRvY3Mvc3BlYy90YXNrLnBsYW4ubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBiYTVkMTlkZWJiNzAyOWQwM2QyYjMwNDE2OGMzZTdmODEyY2NkMWMzODBhYWU4YWVlMDk4YzY1ZjVlMGU0YjI5KVxuQWNjZXB0YW5jZSByZWZlcmVuY2U6IGRvY3Mvc3BlYy90YXNrLnNwZWMubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBhN2RhMjdmNGQwOGJhNWIyZGM5ZWU2NWM5ODNhNTQwNjVkYWI5M2VhMjBkOTBlZjkyNDRkNjQwOGUwMDFjZjQzKVxuXG5GaXhlZCBwdWJsaWNhdGlvbiByZXNwb25zaWJpbGl0eTogd29ya2VyLiBQcm92aWRlcjogY29tbWFuZCBodHRwczovL2dpdGh1Yi5jb20vZTJlL3Byb2plY3QuIEdpdCByZW1vdGU6IG9yaWdpbiAoaHR0cHM6Ly9naXRodWIuY29tL2UyZS9wcm9qZWN0LmdpdCkuIFRhcmdldCBicmFuY2g6IG1haW4uIFVzZSB0aGVzZSBvcmlnaW5hbCB0YXJnZXRzIHRocm91Z2hvdXQgdGhpcyBleGVjdXRpb247IHJlcG9ydCBhIG1pc21hdGNoIGJlZm9yZSBwdWJsaXNoaW5nLlxuIiwiUHVycG9zZSI6ImJ1c2luZXNzIn0=",
+        "lifecycle_identity": {
+          "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+          "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+          "configuration_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+          "resource_generation": "7797c1bc54a392e1c281a39335b4567f",
+          "input_binding_digest": "f028d93d85ca9cb939a5fe22c5743dadd65fa687093d952c137123e2c5849341",
+          "ref": {
+            "version": 1,
+            "backend": "local",
+            "protocol": "local_codex_app_server_v1",
+            "target": {
+              "id": "local:windows:liuming-asus",
+              "worktree_id": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+              "branch": "codex/1-b2f35918b50d",
+              "base_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+            },
+            "agent": {
+              "name": "codex"
+            },
+            "run_id": "b2f35918b50dd93f81c717801c5bfd29",
+            "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+            "workspace_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+            "workspace_branch": "codex/1-b2f35918b50d",
+            "base_commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+            "external": {},
+            "generation": "7797c1bc54a392e1c281a39335b4567f"
+          }
+        },
+        "platform_request_id": "ad70b73860594fd95b46863966a3c404",
+        "receipt": "eyJDb21tYW5kSUQiOiJhZDcwYjczODYwNTk0ZmQ5NWI0Njg2Mzk2NmEzYzQwNCIsIlByb21wdCI6IlN0ZWVyTGluZSB0YXNrIDE6IEUyRSBhXG5GaXhlZCBTdGVlckxpbmUgd29ya2Zsb3dfcnVuX2lkOiBiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOVxuXG5Gb2xsb3cgdGhlIGZpeGVkIHRhc2sgY29udHJhY3QgYW5kIHRoZSBwcm9qZWN0J3MgaW5zdHJ1Y3Rpb25zLiBSZWFkIGVhY2ggcmVmZXJlbmNlIGZyb20gaXRzIGxpc3RlZCBHaXQgY29tbWl0IGFuZCBjaGVjayBpdHMgU0hBLTI1Ni4gSW1wbGVtZW50IHRoZSB0YXNrLCBjb21taXQgYW5kIHB1c2ggdGhlIGNvZGUsIGNyZWF0ZSBhIFBSIHRhcmdldGluZyBtYWluLCBhbmQgcmVwb3J0IGl0cyBVUkwuIEtlZXAgd29ya2luZyBpbiB0aGlzIHNhbWUgc2Vzc2lvbiB3aGVuIHRoZSB1c2VyIHNlbmRzIGZlZWRiYWNrLlxuXG5TcGVjOiBkb2NzL3NwZWMvdGFzay5zcGVjLm1kIGF0IDNhMmY5ZTc0MGU4MjNmMDA0NjMxYTZlNmU5OTQwYWM3NGJhMjMzYzQgKFNIQS0yNTYgYTdkYTI3ZjRkMDhiYTViMmRjOWVlNjVjOTgzYTU0MDY1ZGFiOTNlYTIwZDkwZWY5MjQ0ZDY0MDhlMDAxY2Y0MylcblBsYW46IGRvY3Mvc3BlYy90YXNrLnBsYW4ubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBiYTVkMTlkZWJiNzAyOWQwM2QyYjMwNDE2OGMzZTdmODEyY2NkMWMzODBhYWU4YWVlMDk4YzY1ZjVlMGU0YjI5KVxuQWNjZXB0YW5jZSByZWZlcmVuY2U6IGRvY3Mvc3BlYy90YXNrLnNwZWMubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBhN2RhMjdmNGQwOGJhNWIyZGM5ZWU2NWM5ODNhNTQwNjVkYWI5M2VhMjBkOTBlZjkyNDRkNjQwOGUwMDFjZjQzKVxuXG5GaXhlZCBwdWJsaWNhdGlvbiByZXNwb25zaWJpbGl0eTogd29ya2VyLiBQcm92aWRlcjogY29tbWFuZCBodHRwczovL2dpdGh1Yi5jb20vZTJlL3Byb2plY3QuIEdpdCByZW1vdGU6IG9yaWdpbiAoaHR0cHM6Ly9naXRodWIuY29tL2UyZS9wcm9qZWN0LmdpdCkuIFRhcmdldCBicmFuY2g6IG1haW4uIFVzZSB0aGVzZSBvcmlnaW5hbCB0YXJnZXRzIHRocm91Z2hvdXQgdGhpcyBleGVjdXRpb247IHJlcG9ydCBhIG1pc21hdGNoIGJlZm9yZSBwdWJsaXNoaW5nLlxuIiwiUHVycG9zZSI6ImJ1c2luZXNzIn0=",
+        "created_at": "2026-10-04T11:02:47.9333163Z",
+        "updated_at": "2026-10-04T11:02:47.960208Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "operation_id": "49007544e0615332fd223a2ed86e00a6",
+        "idempotency_key": "worker-session:fb82008be3f8c8ec788fb6373adc6103:ad70b73860594fd95b46863966a3c404",
+        "kind": "prepare_worker_session",
+        "status": "confirmed",
+        "payload_digest": "d3039d88ae695b0848bb6d2070014987c8c3f0abcb00512ffc97ff4794ba67ae",
+        "request": "eyJDb21tYW5kSUQiOiJhZDcwYjczODYwNTk0ZmQ5NWI0Njg2Mzk2NmEzYzQwNCIsIlByb21wdCI6IlN0ZWVyTGluZSB0YXNrIDE6IEUyRSBhXG5GaXhlZCBTdGVlckxpbmUgd29ya2Zsb3dfcnVuX2lkOiBiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOVxuXG5Gb2xsb3cgdGhlIGZpeGVkIHRhc2sgY29udHJhY3QgYW5kIHRoZSBwcm9qZWN0J3MgaW5zdHJ1Y3Rpb25zLiBSZWFkIGVhY2ggcmVmZXJlbmNlIGZyb20gaXRzIGxpc3RlZCBHaXQgY29tbWl0IGFuZCBjaGVjayBpdHMgU0hBLTI1Ni4gSW1wbGVtZW50IHRoZSB0YXNrLCBjb21taXQgYW5kIHB1c2ggdGhlIGNvZGUsIGNyZWF0ZSBhIFBSIHRhcmdldGluZyBtYWluLCBhbmQgcmVwb3J0IGl0cyBVUkwuIEtlZXAgd29ya2luZyBpbiB0aGlzIHNhbWUgc2Vzc2lvbiB3aGVuIHRoZSB1c2VyIHNlbmRzIGZlZWRiYWNrLlxuXG5TcGVjOiBkb2NzL3NwZWMvdGFzay5zcGVjLm1kIGF0IDNhMmY5ZTc0MGU4MjNmMDA0NjMxYTZlNmU5OTQwYWM3NGJhMjMzYzQgKFNIQS0yNTYgYTdkYTI3ZjRkMDhiYTViMmRjOWVlNjVjOTgzYTU0MDY1ZGFiOTNlYTIwZDkwZWY5MjQ0ZDY0MDhlMDAxY2Y0MylcblBsYW46IGRvY3Mvc3BlYy90YXNrLnBsYW4ubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBiYTVkMTlkZWJiNzAyOWQwM2QyYjMwNDE2OGMzZTdmODEyY2NkMWMzODBhYWU4YWVlMDk4YzY1ZjVlMGU0YjI5KVxuQWNjZXB0YW5jZSByZWZlcmVuY2U6IGRvY3Mvc3BlYy90YXNrLnNwZWMubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBhN2RhMjdmNGQwOGJhNWIyZGM5ZWU2NWM5ODNhNTQwNjVkYWI5M2VhMjBkOTBlZjkyNDRkNjQwOGUwMDFjZjQzKVxuXG5GaXhlZCBwdWJsaWNhdGlvbiByZXNwb25zaWJpbGl0eTogd29ya2VyLiBQcm92aWRlcjogY29tbWFuZCBodHRwczovL2dpdGh1Yi5jb20vZTJlL3Byb2plY3QuIEdpdCByZW1vdGU6IG9yaWdpbiAoaHR0cHM6Ly9naXRodWIuY29tL2UyZS9wcm9qZWN0LmdpdCkuIFRhcmdldCBicmFuY2g6IG1haW4uIFVzZSB0aGVzZSBvcmlnaW5hbCB0YXJnZXRzIHRocm91Z2hvdXQgdGhpcyBleGVjdXRpb247IHJlcG9ydCBhIG1pc21hdGNoIGJlZm9yZSBwdWJsaXNoaW5nLlxuIiwiUHVycG9zZSI6ImJ1c2luZXNzIn0=",
+        "lifecycle_identity": {
+          "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+          "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+          "configuration_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+          "resource_generation": "7797c1bc54a392e1c281a39335b4567f",
+          "input_binding_digest": "f028d93d85ca9cb939a5fe22c5743dadd65fa687093d952c137123e2c5849341",
+          "ref": {
+            "version": 1,
+            "backend": "local",
+            "protocol": "local_codex_app_server_v1",
+            "target": {
+              "id": "local:windows:liuming-asus",
+              "worktree_id": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+              "branch": "codex/1-b2f35918b50d",
+              "base_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+            },
+            "agent": {
+              "name": "codex"
+            },
+            "run_id": "b2f35918b50dd93f81c717801c5bfd29",
+            "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+            "workspace_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+            "workspace_branch": "codex/1-b2f35918b50d",
+            "base_commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+            "external": {},
+            "generation": "7797c1bc54a392e1c281a39335b4567f"
+          }
+        },
+        "platform_request_id": "ede58adb-5759-494b-84ed-bc9441b2f3d5",
+        "receipt": "eyJvcGVyYXRpb24iOnsidmVyc2lvbiI6MSwiaWQiOiI0OTAwNzU0NGUwNjE1MzMyZmQyMjNhMmVkODZlMDBhNiIsInJ1bl9pZCI6ImIyZjM1OTE4YjUwZGQ5M2Y4MWM3MTc4MDFjNWJmZDI5IiwiYXR0ZW1wdF9pZCI6ImRiMGUzNTljZjdlYTc1MjY4ZTlmMjFlZmViNjdiMmM2IiwiYmFja2VuZCI6ImxvY2FsIiwicHJvdG9jb2wiOiJsb2NhbF9jb2RleF9hcHBfc2VydmVyX3YxIiwidGFyZ2V0Ijp7ImlkIjoibG9jYWw6d2luZG93czpsaXVtaW5nLWFzdXMiLCJ3b3JrdHJlZV9pZCI6IkM6XFxVc2Vyc1xcbG1hczFcXEFwcERhdGFcXExvY2FsXFxUZW1wXFxzdGVlcmxpbmUtZTJlLTIzMDQzNDA1ODBcXHJlY292ZXJ5LndhaXRpbmctbWVyZ2UtcmVzdGFydFxccmVjb3ZlcnlcXGhvbWVcXHdvcmt0cmVlc1xcYjJmMzU5MThiNTBkZDkzZjgxYzcxNzgwMWM1YmZkMjkiLCJicmFuY2giOiJjb2RleC8xLWIyZjM1OTE4YjUwZCIsImJhc2VfcmV2aXNpb24iOiIzYTJmOWU3NDBlODIzZjAwNDYzMWE2ZTZlOTk0MGFjNzRiYTIzM2M0In0sImFjdGlvbiI6InByZXBhcmVfc2Vzc2lvbiIsImlkZW1wb3RlbmN5X2tleSI6Indvcmtlci1zZXNzaW9uOmZiODIwMDhiZTNmOGM4ZWM3ODhmYjYzNzNhZGM2MTAzOmFkNzBiNzM4NjA1OTRmZDk1YjQ2ODYzOTY2YTNjNDA0IiwicmVxdWVzdCI6ImV5SkRiMjF0WVc1a1NVUWlPaUpoWkRjd1lqY3pPRFl3TlRrMFptUTVOV0kwTmpnMk16azJObUV6WXpRd05DSXNJbEJ5YjIxd2RDSTZJbE4wWldWeVRHbHVaU0IwWVhOcklERTZJRVV5UlNCaFhHNUdhWGhsWkNCVGRHVmxja3hwYm1VZ2QyOXlhMlpzYjNkZmNuVnVYMmxrT2lCaU1tWXpOVGt4T0dJMU1HUmtPVE5tT0RGak56RTNPREF4WXpWaVptUXlPVnh1WEc1R2IyeHNiM2NnZEdobElHWnBlR1ZrSUhSaGMyc2dZMjl1ZEhKaFkzUWdZVzVrSUhSb1pTQndjbTlxWldOMEozTWdhVzV6ZEhKMVkzUnBiMjV6TGlCU1pXRmtJR1ZoWTJnZ2NtVm1aWEpsYm1ObElHWnliMjBnYVhSeklHeHBjM1JsWkNCSGFYUWdZMjl0YldsMElHRnVaQ0JqYUdWamF5QnBkSE1nVTBoQkxUSTFOaTRnU1cxd2JHVnRaVzUwSUhSb1pTQjBZWE5yTENCamIyMXRhWFFnWVc1a0lIQjFjMmdnZEdobElHTnZaR1VzSUdOeVpXRjBaU0JoSUZCU0lIUmhjbWRsZEdsdVp5QnRZV2x1TENCaGJtUWdjbVZ3YjNKMElHbDBjeUJWVWt3dUlFdGxaWEFnZDI5eWEybHVaeUJwYmlCMGFHbHpJSE5oYldVZ2MyVnpjMmx2YmlCM2FHVnVJSFJvWlNCMWMyVnlJSE5sYm1SeklHWmxaV1JpWVdOckxseHVYRzVUY0dWak9pQmtiMk56TDNOd1pXTXZkR0Z6YXk1emNHVmpMbTFrSUdGMElETmhNbVk1WlRjME1HVTRNak5tTURBME5qTXhZVFpsTm1VNU9UUXdZV00zTkdKaE1qTXpZelFnS0ZOSVFTMHlOVFlnWVRka1lUSTNaalJrTURoaVlUVmlNbVJqT1dWbE5qVmpPVGd6WVRVME1EWTFaR0ZpT1RObFlUSXdaRGt3WldZNU1qUTBaRFkwTURobE1EQXhZMlkwTXlsY2JsQnNZVzQ2SUdSdlkzTXZjM0JsWXk5MFlYTnJMbkJzWVc0dWJXUWdZWFFnTTJFeVpqbGxOelF3WlRneU0yWXdNRFEyTXpGaE5tVTJaVGs1TkRCaFl6YzBZbUV5TXpOak5DQW9VMGhCTFRJMU5pQmlZVFZrTVRsa1pXSmlOekF5T1dRd00yUXlZak13TkRFMk9HTXpaVGRtT0RFeVkyTmtNV016T0RCaFlXVTRZV1ZsTURrNFl6WTFaalZsTUdVMFlqSTVLVnh1UVdOalpYQjBZVzVqWlNCeVpXWmxjbVZ1WTJVNklHUnZZM012YzNCbFl5OTBZWE5yTG5Od1pXTXViV1FnWVhRZ00yRXlaamxsTnpRd1pUZ3lNMll3TURRMk16RmhObVUyWlRrNU5EQmhZemMwWW1FeU16TmpOQ0FvVTBoQkxUSTFOaUJoTjJSaE1qZG1OR1F3T0dKaE5XSXlaR001WldVMk5XTTVPRE5oTlRRd05qVmtZV0k1TTJWaE1qQmtPVEJsWmpreU5EUmtOalF3T0dVd01ERmpaalF6S1Z4dVhHNUdhWGhsWkNCd2RXSnNhV05oZEdsdmJpQnlaWE53YjI1emFXSnBiR2wwZVRvZ2QyOXlhMlZ5TGlCUWNtOTJhV1JsY2pvZ1kyOXRiV0Z1WkNCb2RIUndjem92TDJkcGRHaDFZaTVqYjIwdlpUSmxMM0J5YjJwbFkzUXVJRWRwZENCeVpXMXZkR1U2SUc5eWFXZHBiaUFvYUhSMGNITTZMeTluYVhSb2RXSXVZMjl0TDJVeVpTOXdjbTlxWldOMExtZHBkQ2t1SUZSaGNtZGxkQ0JpY21GdVkyZzZJRzFoYVc0dUlGVnpaU0IwYUdWelpTQnZjbWxuYVc1aGJDQjBZWEpuWlhSeklIUm9jbTkxWjJodmRYUWdkR2hwY3lCbGVHVmpkWFJwYjI0N0lISmxjRzl5ZENCaElHMXBjMjFoZEdOb0lHSmxabTl5WlNCd2RXSnNhWE5vYVc1bkxseHVJaXdpVUhWeWNHOXpaU0k2SW1KMWMybHVaWE56SW4wPSIsInBheWxvYWRfZGlnZXN0IjoiZDMwMzlkODhhZTY5NWIwODQ4YmI2ZDIwNzAwMTQ5ODdjOGMzZjBhYmNiMDA1MTJmZmM5N2ZmNDc5NGJhNjdhZSIsInN0YXR1cyI6ImluX2ZsaWdodCIsInN0YXJ0ZWRfYXQiOiIyMDI2LTEwLTA0VDExOjAyOjQ3Ljk4MDY5OTRaIiwidXBkYXRlZF9hdCI6IjIwMjYtMTAtMDRUMTE6MDI6NDcuOTgwNjk5NFoiLCJyZWYiOnsidmVyc2lvbiI6MSwiYmFja2VuZCI6ImxvY2FsIiwicHJvdG9jb2wiOiJsb2NhbF9jb2RleF9hcHBfc2VydmVyX3YxIiwidGFyZ2V0Ijp7ImlkIjoibG9jYWw6d2luZG93czpsaXVtaW5nLWFzdXMiLCJ3b3JrdHJlZV9pZCI6IkM6XFxVc2Vyc1xcbG1hczFcXEFwcERhdGFcXExvY2FsXFxUZW1wXFxzdGVlcmxpbmUtZTJlLTIzMDQzNDA1ODBcXHJlY292ZXJ5LndhaXRpbmctbWVyZ2UtcmVzdGFydFxccmVjb3ZlcnlcXGhvbWVcXHdvcmt0cmVlc1xcYjJmMzU5MThiNTBkZDkzZjgxYzcxNzgwMWM1YmZkMjkiLCJicmFuY2giOiJjb2RleC8xLWIyZjM1OTE4YjUwZCIsImJhc2VfcmV2aXNpb24iOiIzYTJmOWU3NDBlODIzZjAwNDYzMWE2ZTZlOTk0MGFjNzRiYTIzM2M0In0sImFnZW50Ijp7Im5hbWUiOiJjb2RleCJ9LCJydW5faWQiOiJiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOSIsImF0dGVtcHRfaWQiOiJkYjBlMzU5Y2Y3ZWE3NTI2OGU5ZjIxZWZlYjY3YjJjNiIsIndvcmtzcGFjZV9wYXRoIjoiQzpcXFVzZXJzXFxsbWFzMVxcQXBwRGF0YVxcTG9jYWxcXFRlbXBcXHN0ZWVybGluZS1lMmUtMjMwNDM0MDU4MFxccmVjb3Zlcnkud2FpdGluZy1tZXJnZS1yZXN0YXJ0XFxyZWNvdmVyeVxcaG9tZVxcd29ya3RyZWVzXFxiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOSIsIndvcmtzcGFjZV9icmFuY2giOiJjb2RleC8xLWIyZjM1OTE4YjUwZCIsImJhc2VfY29tbWl0IjoiM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCIsImV4dGVybmFsIjp7fSwiZ2VuZXJhdGlvbiI6Ijc3OTdjMWJjNTRhMzkyZTFjMjgxYTM5MzM1YjQ1NjdmIn0sImxpZmVjeWNsZV9pZGVudGl0eSI6eyJwcm9qZWN0X2lkIjoiYzpcXHVzZXJzXFxsbWFzMVxcYXBwZGF0YVxcbG9jYWxcXHRlbXBcXHN0ZWVybGluZS1lMmUtMjMwNDM0MDU4MFxccmVjb3Zlcnkud2FpdGluZy1tZXJnZS1yZXN0YXJ0XFxyZWNvdmVyeVxccmVwb1xcLmdpdCIsImV4ZWN1dGlvbl9pZCI6ImZiODIwMDhiZTNmOGM4ZWM3ODhmYjYzNzNhZGM2MTAzIiwiY29uZmlndXJhdGlvbl9kaWdlc3QiOiIwMmRmOWRmMjZkNjM3NzAyMGU1NWI5NDdkYWE1YTExYWExZmQ3NzYxNWZjOGE4NzExYWQ4YzNiZjdmNWVlMjc3IiwicmVzb3VyY2VfZ2VuZXJhdGlvbiI6Ijc3OTdjMWJjNTRhMzkyZTFjMjgxYTM5MzM1YjQ1NjdmIiwiaW5wdXRfYmluZGluZ19kaWdlc3QiOiJmMDI4ZDkzZDg1Y2E5Y2I5MzlhNWZlMjJjNTc0M2RhZGQ2NWZhNjg3MDkzZDk1MmMxMzcxMjNlMmM1ODQ5MzQxIiwicmVmIjp7InZlcnNpb24iOjEsImJhY2tlbmQiOiJsb2NhbCIsInByb3RvY29sIjoibG9jYWxfY29kZXhfYXBwX3NlcnZlcl92MSIsInRhcmdldCI6eyJpZCI6ImxvY2FsOndpbmRvd3M6bGl1bWluZy1hc3VzIiwid29ya3RyZWVfaWQiOiJDOlxcVXNlcnNcXGxtYXMxXFxBcHBEYXRhXFxMb2NhbFxcVGVtcFxcc3RlZXJsaW5lLWUyZS0yMzA0MzQwNTgwXFxyZWNvdmVyeS53YWl0aW5nLW1lcmdlLXJlc3RhcnRcXHJlY292ZXJ5XFxob21lXFx3b3JrdHJlZXNcXGIyZjM1OTE4YjUwZGQ5M2Y4MWM3MTc4MDFjNWJmZDI5IiwiYnJhbmNoIjoiY29kZXgvMS1iMmYzNTkxOGI1MGQiLCJiYXNlX3JldmlzaW9uIjoiM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCJ9LCJhZ2VudCI6eyJuYW1lIjoiY29kZXgifSwicnVuX2lkIjoiYjJmMzU5MThiNTBkZDkzZjgxYzcxNzgwMWM1YmZkMjkiLCJhdHRlbXB0X2lkIjoiZGIwZTM1OWNmN2VhNzUyNjhlOWYyMWVmZWI2N2IyYzYiLCJ3b3Jrc3BhY2VfcGF0aCI6IkM6XFxVc2Vyc1xcbG1hczFcXEFwcERhdGFcXExvY2FsXFxUZW1wXFxzdGVlcmxpbmUtZTJlLTIzMDQzNDA1ODBcXHJlY292ZXJ5LndhaXRpbmctbWVyZ2UtcmVzdGFydFxccmVjb3ZlcnlcXGhvbWVcXHdvcmt0cmVlc1xcYjJmMzU5MThiNTBkZDkzZjgxYzcxNzgwMWM1YmZkMjkiLCJ3b3Jrc3BhY2VfYnJhbmNoIjoiY29kZXgvMS1iMmYzNTkxOGI1MGQiLCJiYXNlX2NvbW1pdCI6IjNhMmY5ZTc0MGU4MjNmMDA0NjMxYTZlNmU5OTQwYWM3NGJhMjMzYzQiLCJleHRlcm5hbCI6e30sImdlbmVyYXRpb24iOiI3Nzk3YzFiYzU0YTM5MmUxYzI4MWEzOTMzNWI0NTY3ZiJ9fX0sImRpc3Bvc2l0aW9uIjoiY29uZmlybWVkIiwicHJvY2VzcyI6eyJraW5kIjoib3MiLCJwaWQiOjIxODY4LCJjcmVhdGVkIjoiMDFkZDUzZWZlNDFhNjkwMCIsImV4ZWN1dGFibGUiOiJjOlxcdXNlcnNcXGxtYXMxXFwuY29kZXhcXHdvcmt0cmVlc1xcZGJiZlxcc3RlZXJsaW5lXFxkb2NzXFx2YWxpZGF0aW9uXFx0aHJlZS1saW5lLTAyLXRhc2stZXhlY3V0aW9uLWJvdW5kYXJ5XFxyZWNvdmVyeVxccnVuLTAxXFxidWlsZFxcY29udHJvbGxlZC1oZWxwZXIuZXhlIn0sImltcGxlbWVudGF0aW9uIjpbeyJ2ZXJzaW9uIjoxLCJjb2RlY192ZXJzaW9uIjoxLCJwdXJwb3NlIjoiZXhlY3V0aW9uLXJlc291cmNlcyIsImltcGxlbWVudGF0aW9uX2tleSI6ImNvZGV4LmFwcC1zZXJ2ZXItYmluZGluZyIsInByb2plY3RfaWQiOiJjOlxcdXNlcnNcXGxtYXMxXFxhcHBkYXRhXFxsb2NhbFxcdGVtcFxcc3RlZXJsaW5lLWUyZS0yMzA0MzQwNTgwXFxyZWNvdmVyeS53YWl0aW5nLW1lcmdlLXJlc3RhcnRcXHJlY292ZXJ5XFxyZXBvXFwuZ2l0IiwiZXhlY3V0aW9uX2lkIjoiZmI4MjAwOGJlM2Y4YzhlYzc4OGZiNjM3M2FkYzYxMDMiLCJhdHRlbXB0X2lkIjoiZGIwZTM1OWNmN2VhNzUyNjhlOWYyMWVmZWI2N2IyYzYiLCJnZW5lcmF0aW9uIjoiNzc5N2MxYmM1NGEzOTJlMWMyODFhMzkzMzViNDU2N2YiLCJjb25maWdfZGlnZXN0IjoiMDJkZjlkZjI2ZDYzNzcwMjBlNTViOTQ3ZGFhNWExMWFhMWZkNzc2MTVmYzhhODcxMWFkOGMzYmY3ZjVlZTI3NyIsImRpZ2VzdCI6IjM3MDZjMmVkODkzOTZjY2JiNWRiZDYxNDEwOTIwYTEwNjAyYzAzNTk5MjhlNTNjODE2ZjIyODNhZDRmNTUxNjciLCJwYXlsb2FkIjp7ImVuZHBvaW50Ijoid3M6Ly8xMjcuMC4wLjE6NTA5ODMiLCJzZXNzaW9uX2lkIjoiZWRlNThhZGItNTc1OS00OTRiLTg0ZWQtYmM5NDQxYjJmM2Q1IiwiZ2VuZXJhdGlvbiI6ImZkMDk4NDQ4YmU2ODgyNGUwOTA3OTI0OGVlODBhMjg0In19XSwiZXZlbnRfcGF0aCI6ImM6XFx1c2Vyc1xcbG1hczFcXGFwcGRhdGFcXGxvY2FsXFx0ZW1wXFxzdGVlcmxpbmUtZTJlLTIzMDQzNDA1ODBcXHJlY292ZXJ5LndhaXRpbmctbWVyZ2UtcmVzdGFydFxccmVjb3ZlcnlcXGhvbWVcXHN0YXRlXFxyZXBvLTcwYjgwNzFmYWYzN1xccnVuc1xcYjJmMzU5MThiNTBkZDkzZjgxYzcxNzgwMWM1YmZkMjlcXHR1cm5zXFxhZDcwYjczODYwNTk0ZmQ5NWI0Njg2Mzk2NmEzYzQwNFxcYXBwc2VydmVyLmpzb25sIiwic3RhdGUiOnsic2Vzc2lvbl9pZCI6ImVkZTU4YWRiLTU3NTktNDk0Yi04NGVkLWJjOTQ0MWIyZjNkNSIsInNlc3Npb25fZ2VuZXJhdGlvbiI6ImZkMDk4NDQ4YmU2ODgyNGUwOTA3OTI0OGVlODBhMjg0In19",
+        "created_at": "2026-10-04T11:02:47.9806994Z",
+        "updated_at": "2026-10-04T11:02:48.3994151Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "operation_id": "4daa235cd1f6742da2299392495b6466",
+        "idempotency_key": "worker-turn:fb82008be3f8c8ec788fb6373adc6103:ad70b73860594fd95b46863966a3c404",
+        "kind": "start_worker_turn",
+        "status": "confirmed",
+        "payload_digest": "d3039d88ae695b0848bb6d2070014987c8c3f0abcb00512ffc97ff4794ba67ae",
+        "request": "eyJDb21tYW5kSUQiOiJhZDcwYjczODYwNTk0ZmQ5NWI0Njg2Mzk2NmEzYzQwNCIsIlByb21wdCI6IlN0ZWVyTGluZSB0YXNrIDE6IEUyRSBhXG5GaXhlZCBTdGVlckxpbmUgd29ya2Zsb3dfcnVuX2lkOiBiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOVxuXG5Gb2xsb3cgdGhlIGZpeGVkIHRhc2sgY29udHJhY3QgYW5kIHRoZSBwcm9qZWN0J3MgaW5zdHJ1Y3Rpb25zLiBSZWFkIGVhY2ggcmVmZXJlbmNlIGZyb20gaXRzIGxpc3RlZCBHaXQgY29tbWl0IGFuZCBjaGVjayBpdHMgU0hBLTI1Ni4gSW1wbGVtZW50IHRoZSB0YXNrLCBjb21taXQgYW5kIHB1c2ggdGhlIGNvZGUsIGNyZWF0ZSBhIFBSIHRhcmdldGluZyBtYWluLCBhbmQgcmVwb3J0IGl0cyBVUkwuIEtlZXAgd29ya2luZyBpbiB0aGlzIHNhbWUgc2Vzc2lvbiB3aGVuIHRoZSB1c2VyIHNlbmRzIGZlZWRiYWNrLlxuXG5TcGVjOiBkb2NzL3NwZWMvdGFzay5zcGVjLm1kIGF0IDNhMmY5ZTc0MGU4MjNmMDA0NjMxYTZlNmU5OTQwYWM3NGJhMjMzYzQgKFNIQS0yNTYgYTdkYTI3ZjRkMDhiYTViMmRjOWVlNjVjOTgzYTU0MDY1ZGFiOTNlYTIwZDkwZWY5MjQ0ZDY0MDhlMDAxY2Y0MylcblBsYW46IGRvY3Mvc3BlYy90YXNrLnBsYW4ubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBiYTVkMTlkZWJiNzAyOWQwM2QyYjMwNDE2OGMzZTdmODEyY2NkMWMzODBhYWU4YWVlMDk4YzY1ZjVlMGU0YjI5KVxuQWNjZXB0YW5jZSByZWZlcmVuY2U6IGRvY3Mvc3BlYy90YXNrLnNwZWMubWQgYXQgM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCAoU0hBLTI1NiBhN2RhMjdmNGQwOGJhNWIyZGM5ZWU2NWM5ODNhNTQwNjVkYWI5M2VhMjBkOTBlZjkyNDRkNjQwOGUwMDFjZjQzKVxuXG5GaXhlZCBwdWJsaWNhdGlvbiByZXNwb25zaWJpbGl0eTogd29ya2VyLiBQcm92aWRlcjogY29tbWFuZCBodHRwczovL2dpdGh1Yi5jb20vZTJlL3Byb2plY3QuIEdpdCByZW1vdGU6IG9yaWdpbiAoaHR0cHM6Ly9naXRodWIuY29tL2UyZS9wcm9qZWN0LmdpdCkuIFRhcmdldCBicmFuY2g6IG1haW4uIFVzZSB0aGVzZSBvcmlnaW5hbCB0YXJnZXRzIHRocm91Z2hvdXQgdGhpcyBleGVjdXRpb247IHJlcG9ydCBhIG1pc21hdGNoIGJlZm9yZSBwdWJsaXNoaW5nLlxuIiwiUHVycG9zZSI6ImJ1c2luZXNzIn0=",
+        "lifecycle_identity": {
+          "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+          "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+          "configuration_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+          "resource_generation": "7797c1bc54a392e1c281a39335b4567f",
+          "input_binding_digest": "9e8b0ded019c5b2f3554b0af75ea2b13c306409a0e16e3857288712f7ba9f209",
+          "ref": {
+            "version": 1,
+            "backend": "local",
+            "protocol": "local_codex_app_server_v1",
+            "target": {
+              "id": "local:windows:liuming-asus",
+              "worktree_id": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+              "branch": "codex/1-b2f35918b50d",
+              "base_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+            },
+            "agent": {
+              "name": "codex"
+            },
+            "run_id": "b2f35918b50dd93f81c717801c5bfd29",
+            "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+            "workspace_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+            "workspace_branch": "codex/1-b2f35918b50d",
+            "base_commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+            "external": {
+              "kind": "os",
+              "pid": 21868,
+              "created": "01dd53efe41a6900",
+              "executable": "c:\\users\\lmas1\\.codex\\worktrees\\dbbf\\steerline\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe"
+            },
+            "generation": "7797c1bc54a392e1c281a39335b4567f"
+          }
+        },
+        "platform_request_id": "1f5cf879-9cf3-4882-a2af-7316bdf4ea8d",
+        "receipt": "eyJzZXNzaW9uX2lkIjoiZWRlNThhZGItNTc1OS00OTRiLTg0ZWQtYmM5NDQxYjJmM2Q1IiwidHVybl9pZCI6IjFmNWNmODc5LTljZjMtNDg4Mi1hMmFmLTczMTZiZGY0ZWE4ZCJ9",
+        "created_at": "2026-10-04T11:02:48.4330275Z",
+        "updated_at": "2026-10-04T11:02:50.5025057Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "operation_id": "7a751c1e3e0f92acd168390e7b2dbdb5",
+        "idempotency_key": "7a751c1e3e0f92acd168390e7b2dbdb5",
+        "kind": "claim_task",
+        "status": "pending",
+        "payload_digest": "d06e9cc861099c970ca32347d7e36726e9f9703325b13ad4151d964ac454ea0d",
+        "request": "eyJhdHRlbXB0X2lkIjoiZGIwZTM1OWNmN2VhNzUyNjhlOWYyMWVmZWI2N2IyYzYiLCJhdXRob3JpdHlfdmVyc2lvbiI6MiwiYmFzZV9jb21taXQiOiIzYTJmOWU3NDBlODIzZjAwNDYzMWE2ZTZlOTk0MGFjNzRiYTIzM2M0IiwiZXhlY3V0aW9uX2lkIjoiZmI4MjAwOGJlM2Y4YzhlYzc4OGZiNjM3M2FkYzYxMDMiLCJwcmVkZWNlc3Nvcl9tZXJnZV9jb21taXRzIjp7fSwicmVxdWVzdGVkX2J5IjoiZTJlIiwidGFza19pZCI6IjEiLCJ0YXNrX3ZlcnNpb24iOjEsIndvcmtmbG93X3J1bl9pZCI6ImIyZjM1OTE4YjUwZGQ5M2Y4MWM3MTc4MDFjNWJmZDI5In0=",
+        "created_at": "2026-10-04T11:02:39.5493431Z",
+        "updated_at": "2026-10-04T11:02:39.5493431Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+        "operation_id": "eeb9376b9ccac1b1e49651f208101497",
+        "idempotency_key": "worker-workspace:fb82008be3f8c8ec788fb6373adc6103",
+        "kind": "prepare_workspace",
+        "status": "confirmed",
+        "payload_digest": "385980cd0c71feb953372d8a10eeebc81d46fc82de97b085f436ee7f277bcd93",
+        "request": "eyJ3b3JrZmxvd19ydW5faWQiOiJiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOSIsImV4ZWN1dGlvbl9pZCI6ImZiODIwMDhiZTNmOGM4ZWM3ODhmYjYzNzNhZGM2MTAzIiwid29ya3NwYWNlIjp7InBhdGgiOiJDOlxcVXNlcnNcXGxtYXMxXFxBcHBEYXRhXFxMb2NhbFxcVGVtcFxcc3RlZXJsaW5lLWUyZS0yMzA0MzQwNTgwXFxyZWNvdmVyeS53YWl0aW5nLW1lcmdlLXJlc3RhcnRcXHJlY292ZXJ5XFxob21lXFx3b3JrdHJlZXNcXGIyZjM1OTE4YjUwZGQ5M2Y4MWM3MTc4MDFjNWJmZDI5IiwiYnJhbmNoIjoiY29kZXgvMS1iMmYzNTkxOGI1MGQiLCJiYXNlX2NvbW1pdCI6IjNhMmY5ZTc0MGU4MjNmMDA0NjMxYTZlNmU5OTQwYWM3NGJhMjMzYzQifX0=",
+        "lifecycle_identity": {
+          "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+          "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+          "configuration_digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+          "resource_generation": "7797c1bc54a392e1c281a39335b4567f",
+          "input_binding_digest": "9e5958bc3fa63041f1f18514e2e8f73ac5c95f4231f76647909bf6af5b244566",
+          "ref": {
+            "version": 1,
+            "backend": "local",
+            "protocol": "local_codex_app_server_v1",
+            "target": {
+              "id": "local:windows:liuming-asus",
+              "branch": "main",
+              "base_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+            },
+            "agent": {
+              "name": "codex"
+            },
+            "run_id": "b2f35918b50dd93f81c717801c5bfd29",
+            "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+            "workspace_branch": "main",
+            "base_commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+            "external": {},
+            "generation": "7797c1bc54a392e1c281a39335b4567f"
+          }
+        },
+        "receipt": "eyJyZXBvc2l0b3J5IjoiQzpcXFVzZXJzXFxsbWFzMVxcQXBwRGF0YVxcTG9jYWxcXFRlbXBcXHN0ZWVybGluZS1lMmUtMjMwNDM0MDU4MFxccmVjb3Zlcnkud2FpdGluZy1tZXJnZS1yZXN0YXJ0XFxyZWNvdmVyeVxccmVwbyIsIndvcmt0cmVlIjoiQzpcXFVzZXJzXFxsbWFzMVxcQXBwRGF0YVxcTG9jYWxcXFRlbXBcXHN0ZWVybGluZS1lMmUtMjMwNDM0MDU4MFxccmVjb3Zlcnkud2FpdGluZy1tZXJnZS1yZXN0YXJ0XFxyZWNvdmVyeVxcaG9tZVxcd29ya3RyZWVzXFxiMmYzNTkxOGI1MGRkOTNmODFjNzE3ODAxYzViZmQyOSIsImJyYW5jaCI6ImNvZGV4LzEtYjJmMzU5MThiNTBkIiwiYmFzZSI6IjNhMmY5ZTc0MGU4MjNmMDA0NjMxYTZlNmU5OTQwYWM3NGJhMjMzYzQiLCJoZWFkIjoiM2EyZjllNzQwZTgyM2YwMDQ2MzFhNmU2ZTk5NDBhYzc0YmEyMzNjNCIsInZlcmlmaWVkX2F0IjoiMjAyNi0xMC0wNFQxMTowMjo0Ny4yOTU3MDQyWiJ9",
+        "created_at": "2026-10-04T11:02:40.7041877Z",
+        "updated_at": "2026-10-04T11:02:47.2957042Z"
+      }
+    ],
+    "current_task": null,
+    "slot_occupied": false,
+    "runs": [
+      {
+        "session_id": "ede58adb-5759-494b-84ed-bc9441b2f3d5",
+        "session_generation": "fd098448be68824e09079248ee80a284",
+        "turn_number": 1,
+        "current_turn_id": "1f5cf879-9cf3-4882-a2af-7316bdf4ea8d",
+        "execution_profile": {
+          "execution_requirements": {},
+          "implementation_version": "builtin-execution-v2",
+          "implementation_key": "local/local_codex_app_server_v1/codex",
+          "implementation_data": [
+            {
+              "version": 1,
+              "codec_version": 1,
+              "purpose": "profile-config",
+              "implementation_key": "codex.worker-profile",
+              "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+              "profile_id": "controlled",
+              "accepted_config_version": "c557f65b42f662ad1682dccb7c06508f0ad9f58a4d45e73178d3638cf34ef35a",
+              "digest": "4183280357b9fcd2df2d531bc4f1f7ba835d0696d76f8b5575b0bd6306adf2a6",
+              "payload": {
+                "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                "args": null,
+                "reasoning_effort": "high"
+              }
+            }
+          ],
+          "implementation_display": [
+            "权限：danger-full-access",
+            "Reasoning effort：high"
+          ],
+          "publication_policy": {
+            "publisher": "worker"
+          },
+          "publication": {
+            "provider": {
+              "kind": "command",
+              "base_url": "https://github.com",
+              "repository": "e2e/project",
+              "token_env": "",
+              "query": {
+                "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                "args": [
+                  "provider",
+                  "--e2e-state",
+                  "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\provider.json"
+                ]
+              },
+              "close": {
+                "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+                "args": [
+                  "provider",
+                  "--e2e-state",
+                  "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\provider.json"
+                ]
+              }
+            },
+            "git": {
+              "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\dbbf\\SteerLine\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe",
+              "args": [
+                "git"
+              ]
+            },
+            "remote": "origin",
+            "remote_url": "https://github.com/e2e/project.git",
+            "base_branch": "main",
+            "authentication_refs": [
+              "SSH_AUTH_SOCK",
+              "GIT_CONFIG_GLOBAL",
+              "GIT_SSH_COMMAND",
+              "GH_TOKEN",
+              "GITHUB_TOKEN",
+              "GH_CONFIG_DIR"
+            ]
+          },
+          "version": 6,
+          "execution_policy": {
+            "filesystem": {
+              "read_scope": "host",
+              "write_scope": "host",
+              "git_metadata_write": false
+            },
+            "network": "allow",
+            "escalation": "deny"
+          },
+          "policy_digest": "7002c25862277355d7674338184ad9ef54ad96b52c8e5c7c887933b160373f3a",
+          "accepted_config_version": "c557f65b42f662ad1682dccb7c06508f0ad9f58a4d45e73178d3638cf34ef35a",
+          "policy_source": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\project.json",
+          "id": "controlled",
+          "name": "Controlled E2E",
+          "digest": "02df9df26d6377020e55b947daa5a11aa1fd77615fc8a8711ad8c3bf7f5ee277",
+          "host": "local",
+          "agent": "codex"
+        },
+        "candidate_created_at": "2026-10-04T11:02:39.5493431Z",
+        "candidate_timing": "wall_since_reservation",
+        "resource_status": "idle",
+        "task_id": "1",
+        "domain_task_id": "1",
+        "domain_attempt_number": 1,
+        "workflow_version": "worker-flow-v1",
+        "workflow_config_digest": "c557f65b42f662ad1682dccb7c06508f0ad9f58a4d45e73178d3638cf34ef35a",
+        "execution_id": "fb82008be3f8c8ec788fb6373adc6103",
+        "title": "E2E a",
+        "run_id": "b2f35918b50dd93f81c717801c5bfd29",
+        "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+        "control_revision": 11,
+        "claimant": "e2e",
+        "host": "local",
+        "backend": "local",
+        "protocol": "local_codex_app_server_v1",
+        "agent": "codex",
+        "target": {
+          "id": "local:windows:liuming-asus",
+          "worktree_id": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+          "branch": "codex/1-b2f35918b50d",
+          "base_revision": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+        },
+        "task_status": "in_progress",
+        "execution_status": "succeeded",
+        "finish_task_status": "waiting_pr_merge",
+        "process": {
+          "kind": "os",
+          "pid": 21868,
+          "created": "01dd53efe41a6900",
+          "executable": "c:\\users\\lmas1\\.codex\\worktrees\\dbbf\\steerline\\docs\\validation\\three-line-02-task-execution-boundary\\recovery\\run-01\\build\\controlled-helper.exe"
+        },
+        "started_at": "2026-10-04T11:02:50.5025057Z",
+        "ended_at": "2026-10-04T11:02:52.4120062Z",
+        "worktree_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+        "worktree_branch": "codex/1-b2f35918b50d",
+        "workspace_intent": {
+          "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\b2f35918b50dd93f81c717801c5bfd29",
+          "branch": "codex/1-b2f35918b50d",
+          "base_commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4"
+        },
+        "base_commit": "3a2f9e740e823f004631a6e6e9940ac74ba233c4",
+        "pr": {
+          "url": "https://github.com/e2e/project/pull/1",
+          "state": "open",
+          "merged_at": null,
+          "merge_commit": null,
+          "queried_at": "2026-10-04T11:02:53.9328142Z",
+          "query_error": null
+        },
+        "last_event": "turn/completed",
+        "log_path": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2304340580\\recovery.waiting-merge-restart\\recovery\\home\\state\\repo-70b8071faf37\\runs\\b2f35918b50dd93f81c717801c5bfd29\\turns\\ad70b73860594fd95b46863966a3c404\\appserver.jsonl",
+        "result_path": null,
+        "summary": null,
+        "error": null,
+        "decision": {
+          "id": "0b9797ded125f13570a210ba8a3ca188",
+          "attempt_id": "db0e359cf7ea75268e9f21efeb67b2c6",
+          "version": 1,
+          "request": {
+            "format_version": 2,
+            "question": "The worker stopped. What should it do next?",
+            "context": "PR 已核实并等待合并。本轮已结束，提交反馈后将在原 worker 会话开始下一轮。",
+            "options": [
+              {
+                "id": "continue",
+                "label": "Continue current work"
+              }
+            ],
+            "allow_free_text": true
+          },
+          "status": "pending"
+        }
+      }
+    ],
+    "control": {
+      "dispatch_mode": "manual",
+      "dispatch_paused": false,
+      "revision": 2,
+      "operation": null,
+      "blockers": null
+    }
+  }
+}

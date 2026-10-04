@@ -5,18 +5,18 @@ package sqlite
 import (
 	"database/sql"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
-const SchemaVersion = 13
+const SchemaVersion = 14
 
 type Reader struct {
 	db            *sql.DB
-	nativeBinding *tasklegacy.ProjectTaskAuthority
+	nativeBinding *executionmodel.ProjectTaskAuthority
 }
 
-func NewReader(db *sql.DB, binding *tasklegacy.ProjectTaskAuthority) Reader {
+func NewReader(db *sql.DB, binding *executionmodel.ProjectTaskAuthority) Reader {
 	if binding != nil {
 		fixed := *binding
 		binding = &fixed

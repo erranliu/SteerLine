@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -15,7 +16,7 @@ func (s *Service) processCandidateControl(ctx context.Context, req productapi.Co
 	if s.controlSeen == nil {
 		s.controlSeen = map[string]string{}
 	}
-	commands := CommandService{Store: s.commandStore, Project: s.Config.identity}
+	commands := s.commandService(s.Config.identity)
 	result := s.baseReceipt(req, digest, "applied", "applied", "candidate left the experiment; worker stop is recorded separately")
 	at := now()
 	result.AcceptedAt = &at
@@ -99,7 +100,7 @@ func (s *Service) replayCandidateControl(ctx context.Context, req productapi.Con
 	if old.Status != "accepted" {
 		return true, nativeErr("outcome_unknown", "original candidate start command has no committed reservation")
 	}
-	var saved TaskClaimReceipt
+	var saved executionmodel.TaskClaimReceipt
 	if err := json.Unmarshal(old.Result, &saved); err != nil {
 		return true, err
 	}

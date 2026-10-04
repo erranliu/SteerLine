@@ -21,7 +21,6 @@ import (
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
 	"github.com/erranliu/SteerLine/internal/steerline/taskview"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -177,8 +176,10 @@ func (c *Client) DiscardTask(ctx context.Context, in productapi.DiscardInput) (t
 	return command(ctx, c, true, func(r api.TaskCommands) (taskmodel.TaskDiscardReceipt, error) { return r.Discard(ctx, in) })
 }
 
-func (c *Client) AddPredecessors(ctx context.Context, in task.TaskPredecessorAddInput) (task.TaskPredecessorAddReceipt, error) {
-	return command(ctx, c, true, func(r api.TaskCommands) (task.TaskPredecessorAddReceipt, error) { return r.AddPredecessors(ctx, in) })
+func (c *Client) AddPredecessors(ctx context.Context, in productapi.TaskPredecessorAddInput) (productapi.TaskPredecessorAddReceipt, error) {
+	return command(ctx, c, true, func(r api.TaskCommands) (productapi.TaskPredecessorAddReceipt, error) {
+		return r.AddPredecessors(ctx, in)
+	})
 }
 
 func (c *Client) Conversation(ctx context.Context, filter contracts.ConversationFilter, cursor string) (contracts.ConversationPage, error) {

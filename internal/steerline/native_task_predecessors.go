@@ -9,25 +9,21 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
-
-type TaskPredecessorAddInput = task.TaskPredecessorAddInput
-
-type TaskPredecessorAddReceipt = task.TaskPredecessorAddReceipt
 
 func validateNativePredecessorAddition(graph taskGraphSnapshot, taskID string, predecessorIDs []string) error {
 	return taskmodel.ValidatePredecessorAddition(graph.TaskGraph(), taskID, predecessorIDs)
 }
 
-func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Config, input TaskPredecessorAddInput) (TaskPredecessorAddReceipt, error) {
+func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Config, input productapi.TaskPredecessorAddInput) (productapi.TaskPredecessorAddReceipt, error) {
 	if err := validateWorkflowConfig(&config, nil); err != nil {
-		return TaskPredecessorAddReceipt{}, err
+		return productapi.TaskPredecessorAddReceipt{}, err
 	}
-	var empty TaskPredecessorAddReceipt
+	var empty productapi.TaskPredecessorAddReceipt
 	store := c.Store
 	if store == nil || c.Project == "" || c.Project != config.Identity() || config.TaskAuthority != "native" {
 		return empty, nativeErr("authority_mismatch", "predecessor addition requires the configured native project")
@@ -51,11 +47,11 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 		return empty, nativeErr("unsupported_schema", "reopening a claimed task through the old workflow is unsupported")
 	}
 	request, _ := taskmodel.CanonicalJSON(mustJSON(input))
-	replay := func(command storageports.CommandRecord) (TaskPredecessorAddReceipt, error) {
+	replay := func(command storageports.CommandRecord) (productapi.TaskPredecessorAddReceipt, error) {
 		if command.Kind != "add_task_predecessors" || command.TargetID != input.TaskID || command.ExpectedVersion != input.ExpectedTaskVersion || command.RequestedBy != input.RequestedBy || !bytes.Equal(command.Payload, request) || command.Status != "accepted" {
 			return empty, nativeErr("idempotency_conflict", "request ID belongs to a different or incomplete command")
 		}
-		var receipt TaskPredecessorAddReceipt
+		var receipt productapi.TaskPredecessorAddReceipt
 		if err := json.Unmarshal(command.Result, &receipt); err != nil {
 			return empty, err
 		}
@@ -73,7 +69,7 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 	if err = validateNativeConfiguredTarget(ctx, config, authority); err != nil {
 		return empty, err
 	}
-	var receipt TaskPredecessorAddReceipt
+	var receipt productapi.TaskPredecessorAddReceipt
 	err = store.TransactPredecessors(ctx, func(tx persistence.PredecessorTx) error {
 		if previous, found, lookupErr := tx.LookupCommand(ctx, c.Project, input.RequestID); lookupErr != nil {
 			return lookupErr
@@ -124,7 +120,7 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 		if e != nil {
 			return e
 		}
-		receipt = TaskPredecessorAddReceipt{RequestID: input.RequestID, TaskID: input.TaskID, PredecessorIDs: input.PredecessorIDs, TaskVersion: nextTask.Version, GraphRevision: graphRevision, Status: "open"}
+		receipt = productapi.TaskPredecessorAddReceipt{RequestID: input.RequestID, TaskID: input.TaskID, PredecessorIDs: input.PredecessorIDs, TaskVersion: nextTask.Version, GraphRevision: graphRevision, Status: "open"}
 		result, _ := json.Marshal(receipt)
 		command := storageports.CommandRecord{ProjectIdentity: c.Project, CommandID: input.RequestID, Kind: "add_task_predecessors", TargetID: input.TaskID, ExpectedVersion: input.ExpectedTaskVersion, IdempotencyKey: input.RequestID, RequestedBy: input.RequestedBy, Payload: request, Status: "accepted", Result: result, CreatedAt: stamp, UpdatedAt: stamp}
 		if _, made, enqueueErr := tx.EnqueueCommand(command); enqueueErr != nil || !made {

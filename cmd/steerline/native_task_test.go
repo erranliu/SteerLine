@@ -16,7 +16,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
@@ -137,7 +136,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	if callErr != nil {
 		t.Fatalf("add-predecessors failed: %v: %s", callErr, addOutput)
 	}
-	var added steerline.TaskPredecessorAddReceipt
+	var added productapi.TaskPredecessorAddReceipt
 	if err = json.Unmarshal(addOutput, &added); err != nil || added.TaskVersion != 2 || added.GraphRevision != 2 || added.TaskID != "71" {
 		t.Fatalf("unexpected predecessor receipt: %v: %+v", err, added)
 	}

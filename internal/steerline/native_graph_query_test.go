@@ -130,7 +130,7 @@ func TestTaskGraphViewSnapshotAndBoundary(t *testing.T) {
 		t.Fatalf("excess node limit accepted: %v", err)
 	}
 
-	discard, err := (CommandService{Store: store, Project: c.Identity()}).DiscardNativeTask(ctx, c, "1", strings.Repeat("d", 32), 1, "superseded", "auditor")
+	discard, err := (newTestCommandService(store, c.Identity())).DiscardNativeTask(ctx, c, "1", strings.Repeat("d", 32), 1, "superseded", "auditor")
 	if err != nil || discard.Status != "discarded" {
 		t.Fatalf("discard fixture failed: %+v / %v", discard, err)
 	}

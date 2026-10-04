@@ -36,23 +36,23 @@ type ServiceCheckpoint struct {
 // Runtime is a sampled client view plus the service actor's working domain rows.
 // Only ServiceCheckpoint is serialized into the projection table.
 type Runtime struct {
-	SchemaVersion int                                `json:"schema_version"`
-	Revision      uint64                             `json:"revision"`
-	UpdatedAt     time.Time                          `json:"updated_at"`
-	HeartbeatAt   time.Time                          `json:"heartbeat_at"`
-	Service       ServiceState                       `json:"service"`
-	Repository    Repository                         `json:"repository"`
-	Tasks         []taskmodel.TaskRecord             `json:"tasks,omitempty"`
-	WorkflowRuns  []executionmodel.WorkflowRunRecord `json:"workflow_runs,omitempty"`
-	Executions    []executionmodel.ExecutionRecord   `json:"executions,omitempty"`
-	Attempts      []executionmodel.StepAttemptRecord `json:"attempts,omitempty"`
-	Decisions     []executionmodel.DecisionRecord    `json:"decisions,omitempty"`
-	Operations    []executionmodel.OperationRecord   `json:"operations,omitempty"`
-	Deliveries    []TaskDeliveryRecord               `json:"-"`
-	CurrentTask   *string                            `json:"current_task"`
-	SlotOccupied  bool                               `json:"slot_occupied"`
-	Runs          []*Run                             `json:"runs"`
-	Control       ControlState                       `json:"control"`
+	SchemaVersion int                                 `json:"schema_version"`
+	Revision      uint64                              `json:"revision"`
+	UpdatedAt     time.Time                           `json:"updated_at"`
+	HeartbeatAt   time.Time                           `json:"heartbeat_at"`
+	Service       ServiceState                        `json:"service"`
+	Repository    Repository                          `json:"repository"`
+	Tasks         []taskmodel.TaskRecord              `json:"tasks,omitempty"`
+	WorkflowRuns  []executionmodel.WorkflowRunRecord  `json:"workflow_runs,omitempty"`
+	Executions    []executionmodel.ExecutionRecord    `json:"executions,omitempty"`
+	Attempts      []executionmodel.StepAttemptRecord  `json:"attempts,omitempty"`
+	Decisions     []executionmodel.DecisionRecord     `json:"decisions,omitempty"`
+	Operations    []executionmodel.OperationRecord    `json:"operations,omitempty"`
+	Deliveries    []executionmodel.TaskDeliveryRecord `json:"-"`
+	CurrentTask   *string                             `json:"current_task"`
+	SlotOccupied  bool                                `json:"slot_occupied"`
+	Runs          []*Run                              `json:"runs"`
+	Control       ControlState                        `json:"control"`
 }
 
 type ServiceState struct {
