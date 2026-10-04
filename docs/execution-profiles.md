@@ -1,5 +1,7 @@
 # 全局执行配置
 
+当前第一阶段执行方案范围只有本地 Codex 和本机 Orca。Git remote/PR 平台仍用于代码发布；远程 worker 配置仅为保留资料，不表示一期已支持远程流程。
+
 所有项目共享 `<STEERLINE_HOME>/execution.json` 中的执行方案。当前全局文件使用 `version: 2`；每个方案通过带实现 key 和 codec 版本的 `implementation_configs` 提交原生配置，配置载荷由对应实现严格解码。项目文件显式配置 execution_policy 和 publication_policy，定义宿主读取、none/workspace/host 写入、Git 元数据、工具网络和 escalation=deny；仓库、任务与 PR 仍归项目。`host`、`agent`、`execution_profiles` 和 `default_execution_profile` 都只能写在全局文件的方案中。每个项目仍有独立的服务和 native Task DAG。
 
 先将 [执行配置示例](../examples/execution.json) 复制到 `<STEERLINE_HOME>/execution.json`，再按机器环境修改。至少配置一套方案；有多套方案且启用自动派发时，须指定 `default_execution_profile`。只有一套方案时，它自动成为默认方案。完整项目文件见 [项目示例](../examples/config.json)。
@@ -43,11 +45,13 @@ Orca 本机 Codex 方案使用 `host=orca`、`agent=codex`，并在 `implementat
 
 有无显式 model 都使用同一受管命令，冻结 `approval_policy=never`、Windows sandbox、严格配置校验及 linked worktree 写入根目录。原始 `codex.args` 当前只允许独立的 `--no-alt-screen`、`--no-daemon`、`--search`；子命令、配置/Profile 注入、权限覆盖与目录扩张均在资源创建前拒绝。领取前的 CLI/Orca 查询不初始化沙箱；领取后在原 terminal 上运行 readiness 工具探针，核对真实工具事件、原子收据及原生成功结算后，才派发一次业务任务。
 
-控制台显示冻结权限、环境核验及阻断来源。宿主等待时，文字保留原目标而不注入菜单；中心选项可打开原 terminal 或重新检查。重新检查先对账原操作，不用新会话替换丢失会话，不延长旧准备期限。运行中的 Execution 不受配置文件编辑影响。其他 agent 缺少完整项目策略落实证据时不可领取。local 同样冻结策略、受理配置版本和精确资源；远程方案见下节。
+控制台显示冻结权限、环境核验及阻断来源。宿主等待时，文字保留原目标而不注入菜单；中心选项可打开原 terminal 或重新检查。重新检查先对账原操作，不用新会话替换丢失会话，不延长旧准备期限。运行中的 Execution 不受配置文件编辑影响。其他 agent 缺少完整项目策略落实证据时不可领取。local 同样冻结策略、受理配置版本和精确资源；当前一期只启用两种本机路径；下节只保留远端资料，不是当前可运行方案引导。
 
 本次已完成审计修复及隔离真机服务闭环；[验收记录](validation/worker-environment-readiness/README.md)区分真实工具证据、受控故障回归及已通过的真机服务闭环。
 
 ## 远程 Orca worker
+
+> 保留配置/协议资料，非当前第一阶段操作入口。第一阶段只含本地 Codex 与本机 Orca；远端新 worker 准入尚缺目标权限证据，本节不表示该流程可交付或已通过验收，也不构成本机任务的前置。
 
 远程方案与本地 Codex、本地 Orca 共用 Task、Decision、Operation 和 PR 交付规则。Run 与协调 inbox 位于中心，工作区与 agent 位于指定远端。首次创建远端工作区和 worker，后续轮次复用同一终端与 incarnation；不创建本地替代执行。
 
@@ -122,11 +126,11 @@ Windows 本地受限方案将 `codex.windows_sandbox` 固定为 `elevated`（省
 
 ## 项目发布责任
 
-项目必须配置 `"publication_policy":{"publisher":"worker"}`。worker 统一负责 commit、push 和创建 PR；中心只查询、核验合并、提交唯一 TaskDelivery，以及按原身份关闭未合并 PR/清理资源。local、Orca 与具备真实权限证据的远程执行均使用这个责任边界。全局执行方案不再接受 publication_policy；host_service 和 execution_profile 均明确拒绝。
+项目必须配置 `"publication_policy":{"publisher":"worker"}`。worker 统一负责 commit、push 和创建 PR；中心只查询、核验合并、提交唯一 TaskDelivery，以及按原身份关闭未合并 PR/清理资源。当前本地 Codex/本机 Orca 使用这个责任边界；保留远端设计沿用同一边界，但不纳入一期运行或验收。全局执行方案不再接受 publication_policy；host_service 和 execution_profile 均明确拒绝。
 
 worker 的执行策略和本身凭据必须允许 Git 推送及 PR 创建；中心的 token_env 只用于查询/关闭，不自动下发给 worker。仅有 query 或成功创建会话不能证明发布能力。worker 的成功、URL 和 worker_done 均不代替 provider 的真实 merged 证据。
 
-冻结快照保留 publisher、原 provider/查询与关闭命令、Git、单一 fetch/push URL、base 与认证引用。后续轮次、恢复、PR 查询/关闭/交付使用原快照；远程目标变化仍拒绝副作用。秘密值不入库或写入产物。当前 SQLite schema 12、runtime/checkpoint schema 17 明确拒绝旧开发数据，不迁移、回填或回退。历史真机报告保留原始证据格式。
+冻结快照保留 publisher、原 provider/查询与关闭命令、Git、单一 fetch/push URL、base 与认证引用。后续轮次、恢复、PR 查询/关闭/交付使用原快照；远程目标变化仍拒绝副作用。秘密值不入库或写入产物。当前 SQLite schema 13、runtime/checkpoint schema 18 明确拒绝旧开发数据，不迁移、回填或回退。历史真机报告保留原始证据格式。
 
 环境阻断是执行状态旁路，保留业务问题及本地草稿。阻断时新回答明确拒绝；未产生投递意图的已保存回答作废并保留审计，恢复后重新提交。已有未知投递只核对原回执。控制台 Ctrl+O 打开原终端，Ctrl+E 重新检查原环境；CLI 的 control -action open_terminal/recheck_environment -run-id <RunID> 使用同一精确 blocker/turn/attempt/version 目标。
 

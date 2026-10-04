@@ -1,5 +1,7 @@
 # Native task and execution state
 
+Current phase-1 execution and acceptance cover local Codex and local Orca only. Retained remote protocol/state definitions are future or historical material, not current remote support or a phase-1 gate. Git remote identity remains required for local PR delivery.
+
 SteerLine has one business task authority: the center SQLite database. It owns native Tasks, claims, dependencies, WorkflowRuns, Executions, StepAttempts, decisions, Operations and delivery. The runtime JSON is a rebuildable observation projection. PR platforms own merge facts; SteerLine records delivery only after it rechecks those facts.
 
 ## Independent state axes
@@ -22,7 +24,7 @@ Process and terminal state are external observations. A process exit does not pr
 
 Orca `worker-start` 的 `input_accepted` 只使 Attempt 到 `dispatched`。同一 Dispatch 的 assistant transcript 或业务消息被服务持久化后才转 `running`；terminal ready、idle、输出沉默或存活事实不证明 turn 开始。`dispatched` 的固定绑定也可在中心重启后重接并继续观察。
 
-受监管远端 Run 的 `execution_status` 在 `input_accepted` 后也保持 `pending`，直到同一 Attempt 的 turn 证据到达才记为 `running`。这条业务阶段与 Orca 报告的进程 `live` 分开；中心重启时，已有精确 Process/Dispatch/Operation 绑定的 `pending/dispatched` 仍只读重接原 worker。
+保留远端协议资料（非一期流程）：受监管远端 Run 的 `execution_status` 在 `input_accepted` 后也保持 `pending`，直到同一 Attempt 的 turn 证据到达才记为 `running`。这条业务阶段与 Orca 报告的进程 `live` 分开；中心重启时，已有精确 Process/Dispatch/Operation 绑定的 `pending/dispatched` 仍只读重接原 worker。
 
 New native projects start in manual, paused dispatch mode. A successful claim transaction creates the Task claim, WorkflowRun, Execution, worker StepAttempt and operation checkpoint together. The worker receives a fixed task context and continues in the same session through feedback and PR changes. After a human merges, SteerLine re-queries the exact PR and branch. Only matching merge evidence lets one transaction record TaskDelivery, close the task and release ready successors.
 

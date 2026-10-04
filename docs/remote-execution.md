@@ -1,10 +1,10 @@
-# 有人值守的远程执行 MVP
+# 历史记录：有人值守的远程执行 MVP
 
-> 本页保留旧 minimal-v1 远端试验记录。当前 worker-flow-v1 已接入本地 Codex、本地 Orca 和独立 `orca_remote_worker` 远程链路；当前配置与恢复规则见[全局执行配置](execution-profiles.md#远程-orca-worker)。本页五步流程与旧真机证据不作为新 worker 链路的验收证明。
+> 本页仅保留旧 minimal-v1 远端试验记录，不是当前一期运行指南。第一阶段只交付/验收本地 Codex 与本机 Orca，远程流程后续另行规划；以下操作、版本和证据属于原试验当时的范围，不构成当前支持声明、研发前置或验收门槛。当前本机配置见[全局执行配置](execution-profiles.md)。
 
-当前最小交付使用一个本机 SteerLine 中心，通过 Orca 在已认证的 Windows 远端运行 Codex。初始交付目标为台式机64g，中心 Orca 1.4.209、远端 1.4.215，命名方案固定 `gpt-6-luna` / `xhigh`。远端不运行 SteerLine 服务。使用范围和门槛见 [Spec 03](spec/03-remote-execution-and-viewer.md#有人值守-mvp-交付边界)。
+原试验最小交付使用一个本机 SteerLine 中心，通过 Orca 在已认证的 Windows 远端运行 Codex。初始交付目标为台式机64g，中心 Orca 1.4.209、远端 1.4.215，命名方案固定 `gpt-6-luna` / `xhigh`。远端不运行 SteerLine 服务。使用范围和门槛见 [Spec 03](spec/03-remote-execution-and-viewer.md#有人值守-mvp-交付边界)。
 
-## 使用
+## 原试验操作记录
 
 1. 保持两端 Orca 在线，远端 Git、Codex、项目检查工具和 PR 发布凭据可用。本机项目配置指定的预检终端须保持打开；每个新运行另有由中心创建的独立协调终端。
 2. 打开 `C:\SteerlineRuntime\service-window.bat`；SteerlineTest 使用参数 `C:\SteerlineRuntime\etc\SteerlineTest.json`。保持服务窗口打开。
@@ -22,7 +22,7 @@
 - 远程取消不可用。关闭 viewer 不停服；关闭服务窗口只停止中心监督，远端 worker 可能继续。不要以关窗作为已停止证明。已结算的 worker 正常 release。
 - Orca 重启或专用协调终端丢失时，旧句柄不再可靠。先恢复并核验已有执行，再为后续任务更新协调终端；不能通过新句柄接管身份不明的活动执行。
 
-当前台式机64g 的目标功能、受影响故障与 4 秒 viewer 已按[Spec 03 最终范围](validation/spec03-final-scope-audit-2026-09-28.md)核对；原中心 #3/#4/#6 TaskDelivery 均已关闭。Orca 平台自然产生同句柄新 incarnation 未被声称已观察，出现时仍须定向回归。长期无人值守、固定 stable 24 小时与受控提升仍属于 #32；#29/#32/#24 的其他硬前置保持。
+原试验台式机64g 的目标功能、受影响故障与 4 秒 viewer 已按[Spec 03 最终范围](validation/spec03-final-scope-audit-2026-09-28.md)核对；原中心 #3/#4/#6 TaskDelivery 均已关闭。Orca 平台自然产生同句柄新 incarnation 未被声称已观察，出现时仍须定向回归。该试验当时的 #29/#32/#24 后续安排只作历史定位，不作为当前一期前置；当前 stable 24 小时与受控提升只按本机范围验收。
 
 ## 发布与验证
 
