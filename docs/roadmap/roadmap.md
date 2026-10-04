@@ -4,7 +4,7 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 ## 执行、候选与版本
 
-一期由外部提供稳定roadmap，复用[持续 worker基础 #36](../spec/worker-flow.spec.md)。分叉只用于人工对比执行方案：默认一个，各自冻结不同配置；开始时已达5个拒绝，允许竞态偶尔超出；合并前可放弃退出实验，合并后拒绝。保留原会话、原请求、资源事实和唯一交付，不建严格名额、自动评分/融合或实验调度器。版本线保持原目标。
+一期由外部提供稳定roadmap，复用已具备的持续worker、原会话反馈、恢复及唯一交付基础。分叉只用于人工对比执行方案：默认一个，各自冻结不同配置；开始时已达5个拒绝，允许竞态偶尔超出；合并前可放弃退出实验，合并后拒绝。保留原会话、原请求、资源事实和唯一交付，不建严格名额、自动评分/融合或实验调度器。版本线保持原目标。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
@@ -17,7 +17,7 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 ## 第一阶段残留
 
-本地 Codex app-server 迁移的 A/B 服务级验收已补齐；保留完成记录便于 #42 第一阶段集成验收复用。定向 race detector 待具备工具链时补跑。范围和通过条件以 [迁移 Spec](../spec/local-codex-app-server.spec.md#第一阶段残留2026-09-29) 为准，证据见 [验收状态](../validation/local-codex-app-server/status.md)。
+本地 Codex app-server 迁移的 A/B 服务级验收已补齐；保留完成记录便于 #42 第一阶段集成验收复用。定向 race detector 待具备工具链时补跑。剩余范围为具备CGO/C工具链后的定向race detector补验，执行要求由后续验证Plan明确；必要时按需查[现有验收状态](../validation/local-codex-app-server/status.md)。
 
 - [x] **服务级双任务真机闭环（A）**：真实 SteerLine 服务覆盖并行、运行中问答、原 thread/worktree 结束后反馈和重启恢复；原生身份和答案归属已核对。
 - [x] **独立进程生命周期与隔离（B）**：独立宿主的服务反馈三例通过；真实服务宿主进程退出后，待答 turn 存活，新进程重接并完成原请求。
@@ -25,7 +25,7 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 ### 本地 Orca 原生 worker 后续验证
 
-同一 worker 的两轮真实 Codex 问答与续聊、中心重启恢复、SQLite 故障回执对账和 provider 归属回归已有[实施证据](../validation/worker-flow/orca-native-implementation-2026-09-29.json)。以下项目继续按 [Orca Spec](../spec/worker-flow-orca-native.spec.md#9-验收与交付边界) 验证，并分别记录实际结果。
+同一 worker 的两轮真实 Codex 问答与续聊、中心重启恢复、SQLite 故障回执对账和 provider 归属回归已有[实施证据](../validation/worker-flow/orca-native-implementation-2026-09-29.json)。以下仅列仍需补验的原生边界，沿原Task/session/Dispatch、权限及provider身份记录实际结果；已具备实现不重新作为待开发任务。
 
 - [ ] **真实统一回答入口（ON3）**：通过 UI/CLI 的 `answer_decision` 对运行中的 Orca 中心提交纯文字及选项＋备注，核对回复归属原 question/message ID、重复提交不重复发送，随后继续原 Dispatch。
 - [ ] **真实消息竞争与故障（ON5、ON7）**：记录活跃 `send` 与 `worker_done` 竞争、迟到 question/旧 Dispatch、断联、agent 未识别、审批阻断及身份变化时的可观察结果；核对不串线、不替换原 worker、不误关闭其他 terminal。
