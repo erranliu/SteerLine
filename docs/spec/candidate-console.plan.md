@@ -39,7 +39,9 @@
 以下均在 Windows 隔离环境执行，不请求模型；证据根为 `C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-candidates-20261004-01a10247/`，每次新空目录：
 
 - 定向 Go / 受影响 console 包（包含 CC1–CC4 与上述冲突场景）：`go run ./cmd/test-feedback -out <证据根>/coordinator38-console-01 -- ./internal/steerline/console -count=1`；修复后执行，要求实际非零命中、无 fail/skip，summary.json 与 Go JSON 保存证据。
-- 定向 Go / 实际应用接线：`go run ./cmd/test-feedback -out <证据根>/coordinator38-wiring-01 -- ./internal/steerlineintegration -run '^TestCandidateConsoleWiring$' -count=1`；同步及复审后执行，原新增/反馈/放弃/合并守卫断言保持，两个场景非零命中且无 fail/skip；同目录保存报告和真实服务回执。
+- 定向 Go / 实际应用接线：`go run ./cmd/test-feedback -out <证据根>/coordinator38-wiring-final-03 -- ./internal/steerlineintegration -run '^TestCandidateConsoleWiring$' -count=1`；同步及复审后执行，原新增/反馈/放弃/合并守卫断言保持，两个场景非零命中且无 fail/skip；同目录保存报告和真实服务回执。
 - 最终 L1：`go run ./cmd/test-feedback -level=L1 -out <证据根>/coordinator38-l1-01`；复审修复稳定后一次，七个固定组必须通过，summary.json 记录源码和构建身份。
 
 CC5 仍需上述真实终端/IME/导航/窄窗/滚动证据。此次 Go 回归不替代它；保留 draft，不选择 Full/L2/L3 或扩权限绕过工具产品策略。
+
+协调诊断保留 `coordinator38-wiring-01` 的真实失败：正式反馈 API 在 command 准入前拒绝了短暂不同步的 ready-service/SQLite projection，报 stale_instance。诊断轮 `coordinator38-wiring-diagnostic-02` 保留即时状态诊断；最终接线夹具沿现有原问题 fixture 的规则，只对该明确准入前拒绝模拟人工刷新和显式再提交，最多三次，每次先核对原服务实例、Workflow/Execution/session、问题 ID 与 pending 状态、原轮次未改变。未知结果、目标变化或已消费问题仍立即失败；不得自动补投或改用直接 API 绕过 UI。反馈实际原轮次增加、候选数与合并守卫断言不变。最终使用新的 wiring-final-03 证据目录；L1 的最终生产源码不再变，后续只补该未纳入固定 quick 选择的接线 fixture 验证。

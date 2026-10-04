@@ -178,9 +178,50 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	}
 	step(tea.KeyMsg{Type: tea.KeyTab})
 	step(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("接线验证：精确原候选")})
-	step(tea.KeyMsg{Type: tea.KeyF2})
+	for attempt := 0; attempt < 3; attempt++ {
+		step(tea.KeyMsg{Type: tea.KeyF2})
+		if !strings.Contains(m.View(), "stale_instance: SQLite projection does not match the ready service instance") {
+			break
+		}
+		// This API rejection precedes command admission. Simulate a human
+		// refreshing and explicitly resubmitting the same unsent draft; never
+		// retry unknown outcomes or a changed worker/question/turn.
+		waitFor(t, 30*time.Second, func() bool {
+			diagnostic := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
+			if diagnostic.Observation.Runtime == nil {
+				return false
+			}
+			rt := diagnostic.Observation.Runtime
+			if rt.Service.InstanceID != svc.instanceID {
+				t.Fatal("known rejection changed the original service instance")
+			}
+			for _, current := range rt.Runs {
+				if current.RunID == primary.RunID {
+					if current.ExecutionID != primary.ExecutionID || current.SessionID != primary.SessionID || current.TurnNumber != primary.TurnNumber || current.Decision == nil || current.Decision.ID != primary.Decision.ID || current.Decision.Status != "pending" {
+						t.Fatal("known rejection changed or consumed the original question/worker/turn")
+					}
+					return rt.Service.Ready && rt.Service.Status == "running"
+				}
+			}
+			return false
+		})
+		t.Log("original pre-admission stale-instance rejection; exact unsent question/worker/turn retained; explicit UI refresh and resubmit")
+		step(tea.KeyMsg{Type: tea.KeyEsc})
+		step(key('r'))
+		step(key('a'))
+		if !strings.Contains(m.View(), "人工决策 · 显式提交") || !strings.Contains(m.View(), "接线验证：精确原候选") {
+			t.Fatal("explicit refresh lost the original unsent draft", m.View())
+		}
+	}
 	t.Logf("feedback submission UI: %s", m.View())
-	if strings.Contains(m.View(), "stale_revision") || strings.Contains(m.View(), "答案命令结果待确认") {
+	if strings.Contains(m.View(), "stale_revision") || strings.Contains(m.View(), "stale_instance") || strings.Contains(m.View(), "答案命令结果待确认") {
+		diagnostic := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
+		if diagnostic.Connection.Snapshot.Runtime != nil {
+			t.Logf("feedback connection service: %s", mustJSON(diagnostic.Connection.Snapshot.Runtime.Service))
+		}
+		if diagnostic.Observation.Runtime != nil {
+			t.Logf("feedback canonical service: %s", mustJSON(diagnostic.Observation.Runtime.Service))
+		}
 		t.Fatal("feedback did not reach its exact original identity", m.View())
 	}
 	waitFor(t, 30*time.Second, func() bool {
