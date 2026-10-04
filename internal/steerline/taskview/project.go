@@ -88,9 +88,10 @@ func Project(snapshot task.Snapshot, filter Filter) (Page, error) {
 		Nodes: []Node{}, Edges: []Edge{}, Filters: filter,
 		Boundary: Boundary{MaxDepth: filter.Depth, MaxNodes: filter.Limit, Reasons: []string{}, Edges: []BoundaryEdge{}},
 	}
+	taskGraph := snapshot.TaskGraph()
 	for _, id := range projection.NodeIDs {
 		record := byID[id]
-		page.Nodes = append(page.Nodes, graphNode(record, snapshot))
+		page.Nodes = append(page.Nodes, graphNode(record, snapshot, taskGraph))
 	}
 	for _, edge := range projection.Edges {
 		page.Edges = append(page.Edges, Edge{Predecessor: edge.Predecessor, Successor: edge.Successor})
@@ -105,9 +106,9 @@ func Project(snapshot task.Snapshot, filter Filter) (Page, error) {
 	return page, nil
 }
 
-func graphNode(record taskmodel.TaskRecord, snapshot task.Snapshot) Node {
+func graphNode(record taskmodel.TaskRecord, snapshot task.Snapshot, taskGraph taskmodel.Snapshot) Node {
 	_, delivered := snapshot.Deliveries[record.TaskID]
-	ready, blockers := taskmodel.DependencyStateForTask(record, snapshot.TaskGraph())
+	ready, blockers := taskmodel.DependencyStateForTask(record, taskGraph)
 	node := Node{
 		TaskID: record.TaskID, Title: record.Title, Status: record.Status, Priority: record.Priority,
 		DependencyReady: ready, Blockers: blockers,
