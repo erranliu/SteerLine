@@ -1,6 +1,6 @@
 # #37 多候选会话与唯一 PR 交付验证
 
-执行范围只限 #37；工作区为 `C:\Users\lmas1\.codex\worktrees\2dd4\SteerLine`，分支 `codex/candidate-workers-37`。起点/开工时最新 main 均为 `941386575e9278b8434d0a472d3e4716d82cdb20`（PR #204）。
+执行范围只限 #37；工作区为 `C:\Users\lmas1\.codex\worktrees\2dd4\SteerLine`，分支 `codex/candidate-workers-37`。起点/开工时最新 main 均为 `941386575e9278b8434d0a472d3e4716d82cdb20`（PR #204）。提交前 main 已合并 PR #205，已同步到 `886a520e570c00f4a4e63fbbaaa22814604a4ee3`；实现代码在 rebase 后为 `2e718b6`，后续提交只追加同步验证与文档。
 
 ## 实际命令与结果
 
@@ -11,7 +11,7 @@
 | [storage-02](./storage-02/summary.json) | `go run ./cmd/test-feedback -out docs/validation/candidate-workers/storage-02 -- ./internal/steerline/sqlite ./internal/steerline/projection -run TestSQLiteV(3|4|5|12)|TestNativeDatabaseInitializesCurrentSchema|TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding|TestBuildOwnsRecords|TestProjection -count=1` | 通过；9 个测试事件，0 fail/skip |
 | [receipt-final-02](./receipt-final-02/summary.json) | `go run ./cmd/test-feedback -out docs/validation/candidate-workers/receipt-final-02 -- ./internal/steerline -run ^TestMC[58]$|^TestSimplifiedCleanup|^TestAppServerLateReply -count=1` | 通过；9 个测试事件，0 fail/skip |
 | [settlement-final-02](./settlement-final-02/summary.json) | `go run ./cmd/test-feedback -out docs/validation/candidate-workers/settlement-final-02 -- ./internal/steerline -run ^TestMC7$|^TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor$|^TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent$ -count=1` | 通过；5 个测试事件，0 fail/skip |
-| [最终 L1](./l1-02/summary.json) | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-workers/l1-02` | 7 个固定最小组完整通过；准备 0.8s、执行 197.2s |
+| [最终 L1](./l1-03/summary.json) | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-workers/l1-03` | 7 个固定最小组完整通过；准备 1.5s、执行 207.0s |
 | [Linux 代表编译](./cross-os-final.txt) | `GOOS=linux go test -c -o <unique TEMP binary> ./internal/steerline`（PowerShell 精确环境恢复命令见 Plan） | exit 0；SHA-256 已记录，只是编译，不是 Linux 原生运行 |
 
 MC1–MC9 顶层真实非零命中：identity-count-01 包含 MC1/MC2/MC7/MC9，flow-abandon-01 包含 MC3/MC4/MC5/MC6/MC8。Go JSON 记录领取/新增/退出回执、PR/唯一 Delivery、完整丢弃、原停止身份与 disposition；夹具内 SQLite、Git 工作区与 provider 都独立。MC4 worker 子进程真实 commit/push/create，中心只 query/bind/verify。
@@ -26,6 +26,10 @@ SQLite schema **13**、runtime schema **18**；旧开发格式及旧单候选索
 
 ## 失败诊断与支持范围
 
-失败证据未覆盖：storage-01 的获胜者投影语义已恢复并新增独立 resource_status；receipt-final-01 的夹具未走 pending→in_flight→confirmed 原停止屏障，已补完整屏障；settlement-final-01 的旧 provider 缺少 head 身份，已补齐，并恢复未结算 PR 与迟到冲突的原字段断言。对应最终目录全部通过。l1-01 的先前通过报告也保留；最终代码使用 l1-02。
+失败证据未覆盖：storage-01 的获胜者投影语义已恢复并新增独立 resource_status；receipt-final-01 的夹具未走 pending→in_flight→confirmed 原停止屏障，已补完整屏障；settlement-final-01 的旧 provider 缺少 head 身份，已补齐，并恢复未结算 PR 与迟到冲突的原字段断言。对应最终目录全部通过。l1-01 的先前通过报告也保留；rebase 前最终代码使用 l1-02；主线同步后的最终代码使用 l1-03。
 
 无未解决的 #37 验收项。没有运行 Full/L2/L3 或真实模型矩阵；真实混合配置/原生放弃增量由 #39 验收，TUI 增量由 #38 负责。远端取消/未确认停止沿已有能力如实报告；中心只核验已知 PR，跨系统放弃与外部合并的竞态通过冲突事实处理。未使用生产业务服务、任务库或产品 CLI 领取任务。
+
+## 主线同步增量
+
+`rebase-consumers-01` 在 #205 合并后的源码上实测 MC1、MC4（冻结方案/独立资源、worker-only 发布、规范来源读取），全部通过，4 个测试事件、0 fail/skip。完整命令：`go run ./cmd/test-feedback -out docs/validation/candidate-workers/rebase-consumers-01 -- ./internal/steerline -run '^TestMC[14]$' -count=1`；[报告](./rebase-consumers-01/summary.json)。[重验 Linux 代表编译](./cross-os-rebase.txt) exit 0。[最终固定 L1 报告](./l1-03/summary.json)全部通过：7 组，0 fail/skip/零匹配；命令 `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-workers/l1-03`。
