@@ -2,6 +2,12 @@
 
 本目录描述[产品愿景第二阶段](../roadmap/product-vision.md)：“人与主 agent 受控推进 roadmap”。已选范围已形成 #43–#53 的独立 [Spec/Plan](../spec/README.md)，任务及硬前置见[执行依赖图](../roadmap/execution-map.md)。本目录保留产品与交互说明，不代替执行规格；第一阶段的持续会话、多候选及版本交付目标见[调整方案](../roadmap/phase-1-delivery.md)。
 
+## 草稿与审核准入目标
+
+二期新增方向见[目标roadmap](../roadmap/phase2-draft-roadmap-admission.md)：主agent相对自由维护草稿，独立审核agent判断内容合格和前置是否稳定到可固定，SteerLine受控办理正式加入/移出；只有正式任务可执行。该机制逐步交付，当前不创建审核Spec/Plan或任务ID。
+
+#43–#53保留既有基础范围和固定前置。草稿/发布/会话/审阅与最终闭环在实施前对照新准入目标修订，旧技术方案/原型不代表已包含审核agent；能力、协议、UI基座可按原范围准备，不把二期机制加成一期前置。
+
 ## 当前文档
 
 - [技术架构方案](technical-architecture.md)：Windows 原生 UI、Go 服务、Codex 主 agent 的边界，以及未来各平台原生 UI 的接入方式。

@@ -4,6 +4,10 @@
 
 页面视觉与演示交互见[可交互原型](prototype/index.html)，原型说明与迭代约定见[prototype README](prototype/README.md)。原型只表现页面状态，不连接真实服务或 Codex。
 
+## 草稿与审核的新交互边界
+
+后续按[草稿审核目标](../roadmap/phase2-draft-roadmap-admission.md)增加固定版本送审和三个结论：可固定、需修改、等待前置。等待不是内容错误，页面显示影响前置/未稳定点和复审触发条件。正式任务集合、草稿和外部资源状态分别展示；主agent与审核agent不能从对话直接修改正式任务。下文是原基础交互，发布/确认页面在实施前同步新准入Spec，当前原型不宣称已支持审核。
+
 ## 核心体验
 
 SteerLine 打开后首先是**规划工作台**：对话和输入占主要空间，用户与一个 Codex 主 agent 讨论目标、修改 roadmap、形成 Spec/Plan。左侧帮助定位项目、session 和主要视图；右侧按当前上下文展示文档差异、校验结果和相关约束。Roadmap 与任务 DAG 有独立的宽视图；执行页面接管第一阶段 viewer 的全部日常观察和操作。

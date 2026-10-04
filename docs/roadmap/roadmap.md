@@ -4,12 +4,12 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 ## 执行、候选与版本
 
-复用[持续 worker 基础 #36](../spec/worker-flow.spec.md)。多候选在每个候选内部保持同一 worker，创建与交付作为完整功能交付；版本入口可独立准备，提升保持现有会话和恢复门槛。
+一期由外部提供稳定roadmap，复用[持续 worker基础 #36](../spec/worker-flow.spec.md)。分叉只用于人工对比执行方案：默认一个，各自冻结不同配置；开始时已达5个拒绝，允许竞态偶尔超出；合并前可放弃退出实验，合并后拒绝。保留原会话、原请求、资源事实和唯一交付，不建严格名额、自动评分/融合或实验调度器。版本线保持原目标。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 37 | 多候选会话与唯一PR交付 | 候选创建与完整运行、反馈隔离、唯一交付及落选事实 | `#36` | [Spec](../spec/candidate-workers.spec.md) · [Plan](../spec/candidate-workers.plan.md) |
-| 38 | 候选观察界面 | 候选列表/选择和原会话反馈的 TUI 增量 | `#37` | [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) |
+| 37 | 多候选会话与唯一PR交付 | 不同配置人工实验、宽松五候选开始检查、合并前放弃、精确反馈与唯一交付 | `#36` | [Spec](../spec/candidate-workers.spec.md) · [Plan](../spec/candidate-workers.plan.md) |
+| 38 | 候选观察界面 | 配置/结果定位、候选选择、反馈和合并前放弃的TUI增量 | `#37` | [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) |
 | 39 | 多候选本机与远端真机验收 | 多候选本机/远端竞争和混合后端增量验收 | `#38` | [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) |
 | 40 | 固定版本与双入口 | 不可变构建、stable/dev 固定入口和身份 | 无 | [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) |
 | 41 | dev 隔离与 stable 提升 | 独立 home、静止可恢复会话下的受控提升 | `#40`、`#36` | [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) |
@@ -35,7 +35,9 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 ## 原生 UI 与受控规划
 
-本机 API 直接消费 #36，不等待多候选或全面代码搬包。规划权限和文档发布核验继续保留；执行界面使用五个主阶段和统一反馈。
+二期采用[草稿roadmap与审核准入目标](phase2-draft-roadmap-admission.md)：主agent自由规划，独立审核内容及前置成熟度，SteerLine受控纳入正式任务集合。该新增机制目前是目标级规划，不分配任务ID或新Spec；下表 #43–#53是既有接口/会话/UI基础，涉及草稿、发布与准入的范围在实现前按新目标核对并形成正式修订，不能把现有Spec宣称为已包含审核agent。
+
+本机API直接消费 #36，不等待分叉或全面搬包；#43/#44能力与UI基座可独立准备，执行界面复用原阶段与反馈。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
@@ -50,6 +52,14 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 | 51 | 规划对话原生界面 | 规划会话和受控草稿工具的原生对话 | `#44`、`#47` | [Spec](../spec/phase2-conversation-ui.spec.md) · [Plan](../spec/phase2-conversation-ui.plan.md) |
 | 52 | 文档审阅与确认原生界面 | 规划文档差异、固定版本确认与发布回执 | `#44`、`#48` | [Spec](../spec/phase2-review-ui.spec.md) · [Plan](../spec/phase2-review-ui.plan.md) |
 | 53 | 第二阶段完整闭环验收 | 规划到真实任务交付再回规划的完整产品链 | `#49`、`#50`、`#51`、`#52`、`#42` | [Spec](../spec/phase2-integration.spec.md) · [Plan](../spec/phase2-integration.plan.md) |
+
+## 任务执行控制台解耦与目录整理
+
+目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。完整范围、目标目录、所有权、阶段依赖与验收方向见 [目标roadmap](three-line-modularization.md)。任务负责挑选工作，执行负责并发派发、交付核验与结项并向任务提交结果，控制台消费稳定产品契约。
+
+本目标内部先交付纯类型归属与选择/结果边界，再并行推进任务、执行、产品/控制台归包，最后收口适配、存储、宿主和测试目录。产品推进优先完成一阶段 #37–#39分叉候选，全面迁移优先基于其稳定模型；二阶段主agent归规划领域，WinUI经产品协议接入。#43/#44/#45不等待全部整理，既有产品任务不增加隐藏前置。
+
+本目标目前仅做目标级规划，尚不列入可执行任务表；阶段编号不代替中心任务ID，暂不创建具体Spec/Plan。已有产品任务保持各自固定范围，具体共享修改条件见目标roadmap。
 
 ## 推进顺序
 
