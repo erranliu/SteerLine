@@ -394,13 +394,16 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 	if err := s.resumeAppServerWorkers(ctx); err != nil {
 		return err
 	}
+	// An unavailable candidate must not prevent its siblings' saved work from
+	// advancing. Keep each diagnostic while visiting every independent run.
+	var resumeErr error
 	for _, run := range s.runs {
 		if run == nil || run.WorkflowVersion != executionmodel.Version {
 			continue
 		}
 		if s.candidateBusinessClosed(run) {
 			if err := s.resumeRetiredCandidate(ctx, run); err != nil {
-				return err
+				resumeErr = errors.Join(resumeErr, err)
 			}
 			continue
 		}
@@ -414,12 +417,13 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 		}
 		adapter, err := s.workerFlowRegistration(run)
 		if err != nil {
-			return err
+			resumeErr = errors.Join(resumeErr, err)
+			continue
 		}
 		_, err = s.resumeRegisteredWorkerFlow(ctx, task, run, adapter)
 		if err != nil {
-			return err
+			resumeErr = errors.Join(resumeErr, err)
 		}
 	}
-	return nil
+	return resumeErr
 }

@@ -198,7 +198,21 @@ func TestCM69CleanupReceiptKeepsTaskAndReceiptAtomic(t *testing.T) {
 
 func TestCM69WriteConsumersDoNotAccessConcreteTransactions(t *testing.T) {
 	// Storage, project connection ownership and read adapters are separate owners.
-	files := []string{"query_command.go", "service.go", "service_commit.go", "store.go", "command_processor.go", "control_service.go", "native_service.go", "native_batch_command.go", "native_claim_command.go", "native_dispatch_command.go", "native_task_predecessors.go", "native_discard_command.go", "native_delivery_command.go", "native_cleanup.go", "worker_start.go", "worker_recovery.go", "conversation_service.go", "conversation_sources.go", "conversation_replay.go", "conversation_position.go"}
+	files := []string{"query_construction.go", "store.go", "command_processor.go", "control_service.go", "native_claim_command.go", "native_dispatch_command.go", "native_discard_command.go", "native_delivery_command.go", "native_cleanup.go", "worker_start.go", "worker_recovery.go", "conversation_service.go", "conversation_sources.go", "conversation_replay.go", "conversation_position.go"}
+	// Follow the split service and the task use cases at their current owners.
+	// Storage and read adapters remain outside this consumer boundary.
+	for _, pattern := range []string{"service_*.go", "../task/*.go"} {
+		owned, err := filepath.Glob(pattern)
+		require(t, err)
+		if len(owned) == 0 {
+			t.Fatalf("write consumer owner has no source files: %s", pattern)
+		}
+		for _, name := range owned {
+			if !strings.HasSuffix(name, "_test.go") {
+				files = append(files, name)
+			}
+		}
+	}
 	for _, name := range files {
 		parsed, err := parser.ParseFile(token.NewFileSet(), filepath.Join(".", name), nil, 0)
 		require(t, err)
@@ -226,12 +240,25 @@ func TestCM69WriteConsumersDoNotAccessConcreteTransactions(t *testing.T) {
 		})
 	}
 	// Only named, operation-specific callback interfaces cross the write boundary.
-	parsed, err := parser.ParseFile(token.NewFileSet(), "persistence/ports.go", nil, 0)
+	contracts := []string{"persistence/ports.go"}
+	owned, err := filepath.Glob("../storage/ports/*.go")
 	require(t, err)
-	ast.Inspect(parsed, func(node ast.Node) bool {
-		if v, ok := node.(*ast.Ident); ok && strings.HasPrefix(v.Name, "Domain") && v.Name != "DomainEvent" && v.Name != "DomainSnapshot" {
-			t.Errorf("write contract exports a domain writer: %s", v.Name)
+	if len(owned) == 0 {
+		t.Fatal("pure storage ports have no source files")
+	}
+	for _, name := range owned {
+		if !strings.HasSuffix(name, "_test.go") {
+			contracts = append(contracts, name)
 		}
-		return true
-	})
+	}
+	for _, name := range contracts {
+		parsed, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
+		require(t, err)
+		ast.Inspect(parsed, func(node ast.Node) bool {
+			if v, ok := node.(*ast.Ident); ok && strings.HasPrefix(v.Name, "Domain") && v.Name != "DomainEvent" && v.Name != "DomainSnapshot" {
+				t.Errorf("%s exports a domain writer: %s", name, v.Name)
+			}
+			return true
+		})
+	}
 }

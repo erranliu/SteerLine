@@ -19,6 +19,7 @@ import (
 func sha256Hex(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }
 
 type NativeOrcaState struct {
+	CompletionPRURL                                                  string
 	EnvironmentMode                                                  bool
 	EndReadinessOnBusiness                                           bool
 	ReadinessMode                                                    string
@@ -395,7 +396,11 @@ func FakeNativeOrca(stateDir string, args []string) int {
 					outcome = "failed"
 				}
 				payload, _ := json.Marshal(map[string]any{"taskId": fmt.Sprintf("task-%d", n), "dispatchId": fmt.Sprintf("ctx-%d", n), "outcome": outcome})
-				message := map[string]any{"id": fmt.Sprintf("env-message-%d", n), "from_handle": "term-agent", "type": kind, "body": "environment fixture observation", "payload": string(payload)}
+				body := "environment fixture observation"
+				if !readiness && state.CompletionPRURL != "" {
+					body += " " + state.CompletionPRURL
+				}
+				message := map[string]any{"id": fmt.Sprintf("env-message-%d", n), "from_handle": "term-agent", "type": kind, "body": body, "payload": string(payload)}
 				return nativeOrcaOK(map[string]any{"runId": "run-fake", "deliveryId": id, "messages": []any{message}})
 			}
 			if state.RelayMode {
