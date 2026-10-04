@@ -1752,6 +1752,16 @@
       "new_parent": "TestCandidateOpenPRPollPreservesOriginalPendingInput",
       "assertions": "#39 open-PR poll preserves original pending command/input and Decision; exact assertions retained",
       "status": "migrated_into_owner"
+    },
+    {
+      "old_package": "internal/steerline (latest main #218)",
+      "old_file": "candidate_resume_isolation_test.go",
+      "old_parent": "TestCandidateResumeErrorDoesNotStarveSibling",
+      "new_package": "internal/execution",
+      "new_file": "candidate_resume_isolation_test.go",
+      "new_parent": "TestCandidateResumeErrorDoesNotStarveSibling",
+      "assertions": "#218 sibling recovery/diagnostic regression retained and added to quick-execution",
+      "status": "migrated_into_owner"
     }
   ],
   "pending": [

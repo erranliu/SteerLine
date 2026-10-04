@@ -1,0 +1,12 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\8470\\SteerLine\\docs\\validation\\three-line-04-execution-usecases\\controlled\\post-218-20261005\\build\\steerline.exe",
+    "task",
+    "list",
+    "-config",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-55185266\\recovery.waiting-merge-restart\\recovery\\project.json"
+  ],
+  "error": "exit status 1",
+  "stderr": "steerline: authority_mismatch: native startup record is unsupported or belongs to another state directory\n",
+  "stdout": ""
+}

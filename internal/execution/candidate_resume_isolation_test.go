@@ -1,4 +1,4 @@
-package steerline
+package execution
 
 import (
 	"context"
@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type candidateResumeFailureResolver struct {
@@ -26,7 +27,7 @@ func TestCandidateResumeErrorDoesNotStarveSibling(t *testing.T) {
 	mcFinishTurn(t, f.s, f.first)
 	receipt, _ := f.start(t, "candidate-b")
 	first, sibling := f.s.find(f.first.RunID), f.s.find(receipt.WorkflowRunID)
-	f.s.runs = []*Run{first, sibling}
+	f.s.runs = []*contracts.Run{first, sibling}
 	failure := errors.New("original candidate lifecycle unavailable")
 	f.s.lifecycleResolver = candidateResumeFailureResolver{runID: first.RunID, err: failure}
 	err := f.s.resumeWorkerFlow(context.Background())

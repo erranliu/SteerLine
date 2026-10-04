@@ -45,6 +45,13 @@
       "owner": 76
     },
     {
+      "old": "internal/steerline/candidate_resume_isolation_test.go",
+      "new": "internal/execution/candidate_resume_isolation_test.go",
+      "old_sha256": "b2f4c77ee83f38e2a05c80a320074e58e7703ba921ccb65851fdc35e4715c179",
+      "owner": 76,
+      "source_commit": "origin/main:6a86b2af3a0f9f0acbb4578a17d47d069647a206"
+    },
+    {
       "old": "internal/steerline/candidate_workers.go",
       "new": "internal/execution/candidate_workers.go",
       "old_sha256": "c261d3c2d13613562bbe73f28cf7a243c35e7939c81069b998b42044fefdf709",

@@ -26,7 +26,7 @@ var quickTests = []string{"TestNativeProjectInitializesOnceAndRejectsMismatchedB
 
 const executionPackage = "github.com/erranliu/SteerLine/internal/execution"
 
-var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput"}
+var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput", "TestCandidateResumeErrorDoesNotStarveSibling"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/internal/steerlineintegration"
 

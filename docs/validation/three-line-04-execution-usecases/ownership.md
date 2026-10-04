@@ -2,7 +2,7 @@
 
 实现基于 #74 后的 `c4650056d701a158353836616668bfad25011552`。#75 的 task batch/固定工作所有者继续留在 `internal/task`；#76 将唯一 execution actor 与候选/会话/Decision/恢复/交付/清理命令和其断言移入 `internal/execution`。旧根包的对应生产定义已删除。
 
-`file-mapping.json` 列出从基线移出的 root 文件及原 SHA、最终位置或合并位置；`moved-symbols.json` 是当前 execution 顶层导出定义清单；`test-mapping.json` 列出基线旧包每个受影响测试 parent 和断言所有者。execution 的 9 个内部 MC parent 原样保留；来自最新 main (#39) 的 `TestCandidateOpenPRPollPreservesOriginalPendingInput` 也迁入 execution 并加入 L1。应用集成包新增真实 app 外层 parent `TestMC1/3/5/6/7/8/9`。CD66 中缺目录用例随实际 app 构造迁移；CD67 原生/provider fixture 继续提供外部效果验证。
+`file-mapping.json` 列出从基线移出的 root 文件及原 SHA、最终位置或合并位置；`moved-symbols.json` 是当前 execution 顶层导出定义清单；`test-mapping.json` 列出基线旧包每个受影响测试 parent 和断言所有者。execution 的 9 个内部 MC parent 原样保留；最新 main 的 #39 pending-PR 和 #218 sibling-recovery 回归也迁入 execution 并加入 L1。应用集成包新增真实 app 外层 parent `TestMC1/3/5/6/7/8/9`。CD66 中缺目录用例随实际 app 构造迁移；CD67 原生/provider fixture 继续提供外部效果验证。
 
 ## 唯一生产归属
 
@@ -28,6 +28,7 @@
 | `TestMC8` | 受控端口在真实 app 的异步生命周期 intent 之后等待；actor 仍可处理 candidate exit；只接受原请求/attempt 的迟到 identity |
 | `TestMC9` | 真实 app API 精确五个开始拒绝第六个，原请求重放不替换；候选退出立刻释放名额且保留完整历史 |
 | `TestCandidateOpenPRPollPreservesOriginalPendingInput` | #39 新增的 pending-PR 回归迁入 execution；真实 PR poll 存在未提交 command 时仍保留原 Decision、phase 与输入 |
+| `TestCandidateResumeErrorDoesNotStarveSibling` | #218 sibling-recovery 回归迁入 execution；一个候选恢复失败时仍恢复健康 sibling，并汇总原诊断 |
 | `TestTM04ExecutionWiring` | app claim + SQL fault injection 确认提交失败无 task/graph/authority/runtime 改动，解除故障后原请求提交，重放 receipt/版本/DB 证据不变；原 app-server 双轮和 native acknowledgement/recovery gate |
 
 内层 execution MC1–MC9 是迁移后私有 actor/事务的原断言；外层 MC 是跨 app/actor/task/query 边界断言，不以 mock 成功代替事务或 provider 事实。具体测试 parent/subtest 与证据路径见 [test-mapping.json](test-mapping.json)。

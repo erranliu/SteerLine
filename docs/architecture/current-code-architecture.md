@@ -113,7 +113,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 
 执行 actor 与私有状态、配置、命令、conversation journal cursor、执行态重建和相关白盒用例统一归属 `internal/execution`。唯一真实 app 构造注入 TaskWorkPort/TaskResultPort、目录、SQLite connection、ProcessHost 与宿主 transport/diagnostic 小端口。通用 host loop 只认识 scheduler 接口，SQL、adapter 和产品 UI 仍由各自 owner 负责。
 
-依赖守卫 `TestTM04ExecutionBoundary` 检查所有 OS/tag 源码图、Windows/Linux 构建图、product query/projection 直接依赖反例及重建包 adapter 反例。应用外层 MC1/3/5/6/7/8/9、TM04 wiring、L1 与注册的 L3 controlled recovery 的实际命中和报告见[#76 验收记录](../validation/three-line-04-execution-usecases/README.md)。没有跑 Full、L2/live 或启用原生接受开关。
+依赖守卫 `TestTM04ExecutionBoundary` 检查所有 OS/tag 源码图、Windows/Linux 构建图、product query/projection 直接依赖反例及重建包 adapter 反例。app 外层 MC1/3/5/6/7/8/9、#39 pending-PR、#218 sibling-recovery、TM04 wiring、L1 与 L3 controlled recovery 的实际命中和报告见[#76 验收记录](../validation/three-line-04-execution-usecases/README.md)。没有跑 Full、L2/live 或启用原生接受开关。
 
 #76 合入后 #78 可消费 execution/backend 固定接口；#79 等 #75/#76/#77；#80 等三线服务/目录边界固定；最终测试组合仍归 #82。后继不复制 execution implementation 或恢复旧 forwarding facade。
 
