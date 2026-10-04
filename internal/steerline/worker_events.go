@@ -67,14 +67,8 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 	if ev.RunID != "" && ev.RunID != run.RunID || ev.AttemptID != "" && ev.AttemptID != run.AttemptID {
 		return ErrWorkerTurnStale
 	}
-	if workflow.Phase == "completed" || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
-		if ev.Activity.Kind != "" {
-			if err := s.recordConversationEvent(run, ev); err != nil {
-				return err
-			}
-			s.recordActivity(run, ev.Activity)
-		}
-		return nil
+	if s.candidateBusinessClosed(run) {
+		return s.recordRetiredWorkerEvent(run, ev)
 	}
 	mode, err := s.workerFlowRegistration(run)
 	if err != nil {

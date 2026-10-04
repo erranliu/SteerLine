@@ -12,7 +12,7 @@ func (s *Service) waitWorkerFlow(run *Run, reason string, operationIDs ...string
 	if workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion {
 		return errors.New("worker flow wait has no fixed execution")
 	}
-	if workflow.Phase == "completed" || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
+	if s.candidateBusinessClosed(run) {
 		return nil
 	}
 	facts := workerWaitFacts{
@@ -74,6 +74,9 @@ func (s *Service) waitWorkerFlow(run *Run, reason string, operationIDs ...string
 }
 
 func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
+	if s.candidateBusinessClosed(run) {
+		return nil
+	}
 	fixed, contextErr := s.workerFlowContext(run)
 	if contextErr != nil {
 		return contextErr

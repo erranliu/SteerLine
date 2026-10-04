@@ -119,6 +119,9 @@ func BindWorkerPR(workflow *WorkflowRunRecord, execution *ExecutionRecord, info 
 	}
 	next, err := workerflow.BindPR(workerFlowState(workflow, execution), info.URL, info.State, pendingQuestion, time.Now().UTC())
 	if err == nil {
+		if workflow.PRURL != "" && workflow.PRURL != info.URL {
+			workflow.PRHistory = append(workflow.PRHistory, workflow.PRURL)
+		}
 		applyWorkerFlowState(workflow, execution, next)
 	}
 	return err

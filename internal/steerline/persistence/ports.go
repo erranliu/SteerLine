@@ -97,11 +97,21 @@ type ClaimTx interface {
 	commandTx
 	operationTx
 	graphTx
+	Query(context.Context, string) (contracts.DomainSnapshot, error)
 	OccupiedExecutions(context.Context, string) (int, error)
 	UpdateNativeTaskCAS(contracts.TaskRecord, uint64) error
 	PutWorkflowRun(contracts.WorkflowRunRecord) error
 	PutExecution(contracts.ExecutionRecord) error
 	PutStepAttempt(contracts.StepAttemptRecord) error
+}
+type CandidateTx interface {
+	commandTx
+	operationTx
+	graphTx
+	workflowTx
+	Query(context.Context, string) (contracts.DomainSnapshot, error)
+	PutWorkflowRun(contracts.WorkflowRunRecord) error
+	UpdateOperation(contracts.OperationRecord) error
 }
 type DispatchTx interface {
 	commandTx
@@ -172,6 +182,7 @@ type Tasks interface {
 	UpdateDiscardReceipt(context.Context, contracts.OperationRecord) error
 	TransactTaskBatch(context.Context, func(BatchTx) error) error
 	TransactClaim(context.Context, func(ClaimTx) error) error
+	TransactCandidate(context.Context, func(CandidateTx) error) error
 	TransactDispatch(context.Context, func(DispatchTx) error) error
 	TransactPredecessors(context.Context, func(PredecessorTx) error) error
 	TransactDiscardIntent(context.Context, func(DiscardIntentTx) error) error

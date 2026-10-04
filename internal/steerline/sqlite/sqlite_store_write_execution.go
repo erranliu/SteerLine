@@ -45,6 +45,28 @@ func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
 			if old.WorkflowVersion == WorkerFlowVersion && old.PRURL != "" && old.PRURL != v.PRURL && old.PRState != "closed_unmerged" {
 				return nativeErr("immutable_task", "bound worker PR cannot change before it is closed unmerged")
 			}
+			if old.Abandonment != nil && recordFingerprint(old.Abandonment) != recordFingerprint(v.Abandonment) {
+				return nativeErr("immutable_task", "candidate exit is irreversible")
+			}
+			if len(v.PRHistory) < len(old.PRHistory) {
+				return nativeErr("immutable_task", "candidate PR history cannot be removed")
+			}
+			for i, url := range old.PRHistory {
+				if v.PRHistory[i] != url {
+					return nativeErr("immutable_task", "candidate PR history cannot be replaced")
+				}
+			}
+			if old.PRURL != "" && old.PRURL != v.PRURL {
+				found := false
+				for _, url := range v.PRHistory {
+					if url == old.PRURL {
+						found = true
+					}
+				}
+				if !found {
+					return nativeErr("immutable_task", "replaced worker PR must remain in history")
+				}
+			}
 			if old.Phase == "completed" && (v.Phase != old.Phase || v.PendingDecisions != old.PendingDecisions || !v.UpdatedAt.Equal(old.UpdatedAt)) {
 				return nativeErr("immutable_task", "completed native workflow history cannot be changed")
 			}
@@ -59,6 +81,18 @@ func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
 			if deliveries != 1 {
 				return nativeErr("inconsistent_delivery", "native workflow cannot complete without its selected delivery")
 			}
+		}
+	}
+	for _, url := range append(append([]string(nil), v.PRHistory...), v.PRURL) {
+		if url == "" {
+			continue
+		}
+		var bindings int
+		if err := t.tx.QueryRowContext(t.ctx, `SELECT COUNT(*) FROM workflow_runs w WHERE w.project_identity=? AND w.workflow_run_id<>? AND (json_extract(w.payload,'$.pr_url')=? OR EXISTS (SELECT 1 FROM json_each(w.payload,'$.pr_history') h WHERE h.value=?))`, v.ProjectIdentity, v.WorkflowRunID, url, url).Scan(&bindings); err != nil {
+			return err
+		}
+		if bindings != 0 {
+			return nativeErr("immutable_task", "PR is already bound to another candidate or task")
 		}
 	}
 	if err := t.advanceControlRevision("workflow_runs", "workflow_run_id", v.ProjectIdentity, v.WorkflowRunID, v.WorkflowRunID, v); err != nil {

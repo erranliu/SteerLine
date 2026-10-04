@@ -10,6 +10,9 @@ import (
 )
 
 func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *Run) error {
+	if s.candidateBusinessClosed(run) {
+		return nil
+	}
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
@@ -163,6 +166,9 @@ func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task TaskRecor
 }
 
 func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, turnID string) error {
+	if s.candidateBusinessClosed(run) {
+		return nativeErr("candidate_inactive", "candidate no longer accepts business input")
+	}
 	if s.lifecycleEffectPending(run.RunID) {
 		return nil
 	}

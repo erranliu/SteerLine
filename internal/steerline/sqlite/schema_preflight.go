@@ -64,6 +64,9 @@ func validateDatabaseSchema(ctx context.Context, db schemaQuery) error {
 		if err = rows.Scan(&name, &definition); err != nil {
 			return err
 		}
+		if name == "one_active_workflow_per_task" {
+			return nativeErr("unsupported_schema", "SQLite retains the retired single-candidate constraint; preserve it")
+		}
 		if want, ok := expected[name]; ok {
 			if strings.Join(strings.Fields(definition), " ") != want {
 				return nativeErr("unsupported_schema", "SQLite definition differs from the current schema: "+name)

@@ -242,7 +242,7 @@ func commitNativePRCleanupReceipt(ctx context.Context, tx persistence.CleanupTx,
 		return nativeErr("contract_mismatch", "native PR cleanup attempt is not the fixed worker attempt")
 	}
 	sessionID, _ := executionSessionFacts(&execution)
-	if workflow.WorkflowVersion != WorkerFlowVersion || workflow.TaskID != task.TaskID || workflow.Repository != evidence.Repository || workflow.Branch != evidence.BaseBranch || workflow.SelectedResult != evidence.ExecutionID || workflow.PRURL != evidence.PRURL || execution.ExecutionID != evidence.ExecutionID || execution.WorkflowRunID != evidence.WorkflowRunID || sessionID == "" || execution.Workspace.Branch == "" || attempt.StepID != "worker" || attempt.ExecutionID != evidence.ExecutionID || attempt.AttemptID != evidence.AttemptID {
+	if workflow.WorkflowVersion != WorkerFlowVersion || workflow.TaskID != task.TaskID || workflow.Repository != evidence.Repository || workflow.Branch != evidence.BaseBranch || workflow.SelectedResult != evidence.ExecutionID || workflow.PRURL != evidence.PRURL && !contains(workflow.PRHistory, evidence.PRURL) || execution.ExecutionID != evidence.ExecutionID || execution.WorkflowRunID != evidence.WorkflowRunID || sessionID == "" || execution.Workspace.Branch == "" || attempt.StepID != "worker" || attempt.ExecutionID != evidence.ExecutionID || attempt.AttemptID != evidence.AttemptID {
 		return nativeErr("authority_mismatch", "native PR cleanup receipt does not match the fixed worker flow and PR")
 	}
 	authority, err := tx.NativeAuthority(ctx, project)
@@ -316,8 +316,8 @@ func commitNativeExecutionStopReceipt(ctx context.Context, tx persistence.Cleanu
 	if err := tx.PutExecution(execution); err != nil {
 		return err
 	}
-	workflow.Phase, workflow.UpdatedAt = "blocked", now()
-	return tx.PutWorkflowRun(workflow)
+	// Resource stop does not rewrite the candidate's experiment/phase history.
+	return nil
 }
 
 func replayNativeCleanupReceipt(old CommandRecord, request []byte, project, taskID, requestedBy string) (TaskRecord, error) {

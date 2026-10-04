@@ -8,7 +8,6 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 37 | 多候选会话与唯一PR交付 | 不同配置人工实验、宽松五候选开始检查、合并前放弃、精确反馈与唯一交付 | `#36` | [Spec](../spec/candidate-workers.spec.md) · [Plan](../spec/candidate-workers.plan.md) |
 | 38 | 候选观察界面 | 配置/结果定位、候选选择、反馈和合并前放弃的TUI增量 | `#37` | [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) |
 | 39 | 多候选本机与远端真机验收 | 多候选本机/远端竞争和混合后端增量验收 | `#38` | [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) |
 | 40 | 固定版本与双入口 | 不可变构建、stable/dev 固定入口和身份 | 无 | [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) |

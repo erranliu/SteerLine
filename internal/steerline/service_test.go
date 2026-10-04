@@ -50,6 +50,9 @@ type fixture struct {
 }
 
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && (os.Args[1] == "mc-provider" || os.Args[1] == "mc-worker") {
+		os.Exit(mcSubprocess(os.Args[1:]))
+	}
 	if os.Getenv("STEERLINE_LIFECYCLE_EXIT_EARLY") == "1" {
 		os.Exit(23)
 	}

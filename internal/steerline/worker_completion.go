@@ -18,8 +18,8 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 	if run == nil || workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion {
 		return errors.New("finished worker lacks its fixed execution")
 	}
-	if task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID); task != nil && (task.Status == "closed" || task.Status == "discarded") {
-		return nil
+	if s.candidateBusinessClosed(run) {
+		return s.finishRetiredCandidate(run, lifecycle, fixed)
 	}
 	snapshot, err := s.lifecycleSnapshot(run, workflow, execution, fixed.attempt, nil)
 	if err != nil {

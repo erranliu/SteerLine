@@ -394,7 +394,16 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 		return err
 	}
 	for _, run := range s.runs {
-		if run == nil || run.WorkflowVersion != WorkerFlowVersion || s.workers[run.RunID] != nil {
+		if run == nil || run.WorkflowVersion != WorkerFlowVersion {
+			continue
+		}
+		if s.candidateBusinessClosed(run) {
+			if err := s.resumeRetiredCandidate(ctx, run); err != nil {
+				return err
+			}
+			continue
+		}
+		if s.workers[run.RunID] != nil {
 			continue
 		}
 		task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)

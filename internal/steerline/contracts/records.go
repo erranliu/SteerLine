@@ -20,6 +20,8 @@ type TaskDeliveryEvidence = task.TaskDeliveryEvidence
 
 type WorkflowRunRecord struct {
 	ControlRevision  uint64                 `json:"-"`
+	Abandonment      *CandidateAbandonment  `json:"abandonment,omitempty"`
+	PRHistory        []string               `json:"pr_history,omitempty"`
 	ProjectIdentity  string                 `json:"project_identity"`
 	WorkflowRunID    string                 `json:"workflow_run_id"`
 	TaskID           string                 `json:"task_id"`
@@ -42,7 +44,17 @@ type WorkflowRunRecord struct {
 	UpdatedAt        time.Time              `json:"updated_at"`
 }
 
+// Exiting the experiment is independent of process stop and resource cleanup.
+type CandidateAbandonment struct {
+	RequestID   string    `json:"request_id"`
+	RequestedBy string    `json:"requested_by"`
+	Reason      string    `json:"reason"`
+	At          time.Time `json:"at"`
+}
+
 type ExecutionRecord struct {
+	ResourceStopOperationID       string                                    `json:"resource_stop_operation_id,omitempty"`
+	ResourceStoppedAt             *time.Time                                `json:"resource_stopped_at,omitempty"`
 	CurrentRequirementsError      *string                                   `json:"current_requirements_error,omitempty"`
 	CurrentRequirementsEvaluation *executionapi.RequirementsEvaluation      `json:"current_requirements_evaluation,omitempty"`
 	ImplementationData            []executionapi.ImplementationDataEnvelope `json:"implementation_data,omitempty"`

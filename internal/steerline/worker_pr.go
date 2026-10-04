@@ -11,6 +11,9 @@ import (
 // A verified open PR does not require input, but the original session remains
 // available if the user wants to request more work before merging it.
 func (s *Service) offerWorkerPRFeedback(run *Run, url string) error {
+	if s.candidateBusinessClosed(run) {
+		return nil
+	}
 	if run == nil || run.WorkflowVersion != WorkerFlowVersion || url == "" {
 		return errors.New("optional PR feedback requires a fixed worker and PR")
 	}
@@ -39,7 +42,10 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskReco
 		return nil
 	}
 	if task.Status == "closed" {
-		return nil
+		return s.pollRetiredCandidatePRs(ctx, run, fixed)
+	}
+	if workflow.Abandonment != nil {
+		return s.pollRetiredCandidatePRs(ctx, run, fixed)
 	}
 	if task.Status == "discarded" {
 		if workflow.PRURL == "" {
@@ -52,6 +58,9 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskReco
 		return err
 	}
 	url := workflow.PRURL
+	if workflow.PRCandidateURL != "" && (url == "" || workflow.PRState == "closed_unmerged") {
+		url = workflow.PRCandidateURL
+	}
 	if url == "" {
 		url = workflow.PRCandidateURL
 	}

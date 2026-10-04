@@ -69,7 +69,7 @@ func (tx *sqliteTx) DeliveryCount(ctx context.Context, project, task string) (in
 }
 func (tx *sqliteTx) PRBindingsOnOtherTasks(ctx context.Context, project, task, url string) (int, error) {
 	var count int
-	err := tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_runs WHERE project_identity=? AND task_id<>? AND json_extract(payload,'$.pr_url')=?`, project, task, url).Scan(&count)
+	err := tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_runs w WHERE project_identity=? AND task_id<>? AND (json_extract(payload,'$.pr_url')=? OR EXISTS (SELECT 1 FROM json_each(w.payload,'$.pr_history') h WHERE h.value=?))`, project, task, url, url).Scan(&count)
 	return count, err
 }
 func (tx *sqliteTx) Task(ctx context.Context, project, id string) (TaskRecord, error) {
@@ -178,6 +178,13 @@ func (s *SQLiteStore) TransactTaskBatch(ctx context.Context, fn func(persistence
 }
 
 func (s *SQLiteStore) TransactClaim(ctx context.Context, fn func(persistence.ClaimTx) error) error {
+	if fn == nil {
+		return errors.New("transaction callback is required")
+	}
+	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return fn(tx) })
+}
+
+func (s *SQLiteStore) TransactCandidate(ctx context.Context, fn func(persistence.CandidateTx) error) error {
 	if fn == nil {
 		return errors.New("transaction callback is required")
 	}

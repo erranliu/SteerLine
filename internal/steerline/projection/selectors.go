@@ -51,10 +51,14 @@ func CurrentAttempt(attempts []contracts.StepAttemptRecord, execution *contracts
 
 func finishStatus(task contracts.TaskRecord, workflow contracts.WorkflowRunRecord) string {
 	switch {
+	case workflow.Abandonment != nil:
+		return "abandoned"
 	case task.Status == "closed" && workflow.Phase == "blocked":
 		return "blocked"
-	case task.Status == "closed" || workflow.Phase == "completed":
+	case workflow.Phase == "completed":
 		return "completed"
+	case task.Status == "closed":
+		return "not_selected"
 	case workflow.Phase == "waiting_pr_merge":
 		return "waiting_pr_merge"
 	case workflow.Phase == "waiting_decision":

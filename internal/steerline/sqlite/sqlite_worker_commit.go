@@ -74,6 +74,12 @@ func (s *SQLiteStore) CommitWorker(ctx context.Context, request workerCommit) (w
 			if err := checkRecordWrite(tx, "executions", "execution_id", request.Project, v.After.ExecutionID, v.Before); err != nil {
 				return err
 			}
+			if v.Before != nil && (v.Before.ResourceStopOperationID != v.After.ResourceStopOperationID || recordFingerprint(v.Before.ResourceStoppedAt) != recordFingerprint(v.After.ResourceStoppedAt)) {
+				op := request.ExecutionOperation
+				if op == nil || op.After.ID != v.After.ResourceStopOperationID || op.After.Status != "confirmed" || op.After.Action != "stop" || op.After.RunID != request.WorkflowID || op.After.AttemptID != request.AttemptID || v.After.ResourceStoppedAt == nil {
+					return nativeErr("outcome_unknown", "resource stop requires the original confirmed operation in the same commit")
+				}
+			}
 		}
 		if request.Attempt != nil {
 			v := request.Attempt
@@ -131,17 +137,25 @@ func (s *SQLiteStore) CommitWorker(ctx context.Context, request workerCommit) (w
 			if err := tx.tx.QueryRowContext(ctx, `SELECT status FROM tasks WHERE project_identity=? AND task_id=?`, request.Project, request.TaskID).Scan(&status); err != nil {
 				return err
 			}
-			if status != "in_progress" {
+			var workflowBytes []byte
+			if err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, request.Project, request.WorkflowID).Scan(&workflowBytes); err != nil {
+				return err
+			}
+			var workflow WorkflowRunRecord
+			if err := json.Unmarshal(workflowBytes, &workflow); err != nil {
+				return err
+			}
+			if status != "in_progress" || workflow.Abandonment != nil {
 				// Completed/discarded tasks may retain diagnostic and cleanup
 				// receipts, but cannot restart business work or replace evidence.
 
-				if v := request.Workflow; v != nil && recordWriteChanged(*v) {
+				if v := request.Workflow; workflow.Phase == "completed" && v != nil && recordWriteChanged(*v) {
 					return nativeErr("task_not_active", "worker workflow is frozen after task settlement")
 				}
-				if v := request.Execution; v != nil && (v.Before == nil || deliveredExecutionFingerprint(*v.Before) != deliveredExecutionFingerprint(v.After)) {
+				if v := request.Execution; workflow.Phase == "completed" && v != nil && (v.Before == nil || deliveredExecutionFingerprint(*v.Before) != deliveredExecutionFingerprint(v.After)) {
 					return nativeErr("task_not_active", "worker execution is frozen after task settlement")
 				}
-				if v := request.Attempt; v != nil && recordWriteChanged(*v) {
+				if v := request.Attempt; workflow.Phase == "completed" && v != nil && recordWriteChanged(*v) {
 					return nativeErr("task_not_active", "worker attempt is frozen after task settlement")
 				}
 				for _, v := range request.Decisions {
@@ -150,7 +164,7 @@ func (s *SQLiteStore) CommitWorker(ctx context.Context, request workerCommit) (w
 					}
 				}
 				for _, v := range request.Operations {
-					if v.Before == nil && v.After.Kind != "cleanup_resources" {
+					if v.Before == nil && v.After.Kind != "cleanup_resources" && v.After.Kind != "acknowledge_delivery" && v.After.Kind != "report_completion" && v.After.Kind != "stop_execution" && v.After.Kind != "stop_worker_observation" {
 						return nativeErr("task_not_active", "settled worker cannot start another action")
 					}
 				}

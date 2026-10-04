@@ -809,6 +809,9 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *Run, lifecycle 
 		key, kind = "worker-session:"+fixed.execution.ExecutionID+":"+commandID, "prepare_worker_session"
 	}
 	prior := s.operationByKey(key)
+	if s.candidateBusinessClosed(run) && !retiredResourceAction(candidate.Action, candidate.Input) && (prior == nil || prior.Status == "pending") {
+		return nativeErr("candidate_inactive", "retired candidate cannot authorize another lifecycle action")
+	}
 	operation, err := s.newLifecycleOperation(run, kind, key, candidate.Input.Turn)
 	if err != nil {
 		return err
@@ -961,6 +964,10 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 		key, kind, value = "worker-turn:"+fixed.execution.ExecutionID+":"+candidate.Input.Turn.CommandID, "start_worker_turn", candidate.Input.Turn
 	} else if candidate.Action == executionapi.LifecycleSubmitInput {
 		key, kind, value = "worker-input:"+fixed.execution.ExecutionID+":"+candidate.Input.Turn.CommandID, "submit_worker_input", candidate.Input.Turn
+	}
+	prior := s.operationByKey(key)
+	if s.candidateBusinessClosed(run) && !retiredResourceAction(candidate.Action, candidate.Input) && (prior == nil || prior.Status == "pending") {
+		return nativeErr("candidate_inactive", "retired candidate cannot authorize another lifecycle action")
 	}
 	operation, reconcile, err := s.originalLifecycleOperation(run, kind, key, value)
 	if err != nil {

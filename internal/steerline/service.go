@@ -135,7 +135,7 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionapi.L
 		}
 	}
 	s.State.SchemaVersion = WorkerFlowRuntimeSchema
-	capabilities := []string{"answer_decision", "open_terminal", "recheck_environment", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
+	capabilities := []string{"answer_decision", "open_terminal", "recheck_environment", "start_task", "start_candidate", "abandon_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
 	s.State.Service = ServiceState{ExecutionPolicy: c.ExecutionPolicy, PolicySource: c.policySource, InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: capabilities, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
 	identity, err := currentProcessIdentity()
 	if err != nil {
@@ -235,9 +235,25 @@ func (s *Service) emitConsole(ev ActivityEvent) {
 	}
 }
 func (s *Service) find(id string) *Run {
+	var selected *Run
 	for _, r := range s.runs {
-		if r != nil && (r.TaskID == id || r.RunID == id) {
+		if r != nil && r.RunID == id {
 			return r
+		}
+		if r != nil && r.TaskID == id {
+			if selected != nil {
+				return nil
+			}
+			selected = r
+		}
+	}
+	return selected
+}
+
+func (s *Service) findExecution(id string) *Run {
+	for _, run := range s.runs {
+		if run != nil && run.ExecutionID == id {
+			return run
 		}
 	}
 	return nil

@@ -11,20 +11,21 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
 type TaskDiscardReceipt = task.TaskDiscardReceipt
 
 type taskDiscardIntent struct {
-	TaskID          string   `json:"task_id"`
-	ExpectedVersion uint64   `json:"expected_version"`
-	Reason          string   `json:"reason"`
-	RequestedBy     string   `json:"requested_by"`
-	PRURL           string   `json:"pr_url,omitempty"`
-	UncertainPR     bool     `json:"uncertain_pr,omitempty"`
-	CleanupPending  []string `json:"cleanup_pending,omitempty"`
+	TaskID            string   `json:"task_id"`
+	ExpectedVersion   uint64   `json:"expected_version"`
+	Reason            string   `json:"reason"`
+	RequestedBy       string   `json:"requested_by"`
+	PRURL             string   `json:"pr_url,omitempty"`
+	PRURLs            []string `json:"pr_urls,omitempty"`
+	CandidateBindings string   `json:"candidate_bindings"`
+	UncertainPR       bool     `json:"uncertain_pr,omitempty"`
+	CleanupPending    []string `json:"cleanup_pending,omitempty"`
 }
 
 func discardTaskRecord(record TaskRecord, reason, requestedBy, requestID string, cleanup []string, at time.Time) (TaskRecord, error) {
@@ -32,9 +33,11 @@ func discardTaskRecord(record TaskRecord, reason, requestedBy, requestID string,
 }
 
 type taskDiscardPlan struct {
-	PRURL          string
-	UncertainPR    bool
-	CleanupPending []string
+	PRURL             string
+	PRURLs            []string
+	CandidateBindings string
+	UncertainPR       bool
+	CleanupPending    []string
 }
 
 func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, taskID, requestID string, expectedVersion uint64, reason, requestedBy string) (TaskDiscardReceipt, error) {
@@ -108,7 +111,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	if task.Version != expectedVersion {
 		return TaskDiscardReceipt{}, nativeErr("stale_version", fmt.Sprintf("expected task version %d, found %d", expectedVersion, task.Version))
 	}
-	intent := taskDiscardIntent{TaskID: taskID, ExpectedVersion: expectedVersion, Reason: reason, RequestedBy: requestedBy, PRURL: plan.PRURL, UncertainPR: plan.UncertainPR, CleanupPending: uniqueSorted(plan.CleanupPending)}
+	intent := taskDiscardIntent{TaskID: taskID, ExpectedVersion: expectedVersion, Reason: reason, RequestedBy: requestedBy, PRURL: plan.PRURL, PRURLs: plan.PRURLs, CandidateBindings: plan.CandidateBindings, UncertainPR: plan.UncertainPR, CleanupPending: uniqueSorted(plan.CleanupPending)}
 	intentBytes, _ := json.Marshal(intent)
 	canonicalIntent, _ := CanonicalJSON(intentBytes)
 	var staged OperationRecord
@@ -209,8 +212,9 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "the fixed PR binding no longer matches the task's recorded publication")
 	}
 	currentCleanup := uniqueSorted(currentPlan.CleanupPending)
-	if intent.PRURL != currentPlan.PRURL || intent.UncertainPR != currentPlan.UncertainPR || !slices.Equal(intent.CleanupPending, currentCleanup) {
+	if intent.PRURL != currentPlan.PRURL || !slices.Equal(intent.PRURLs, currentPlan.PRURLs) || intent.CandidateBindings != currentPlan.CandidateBindings || intent.UncertainPR != currentPlan.UncertainPR || !slices.Equal(intent.CleanupPending, currentCleanup) {
 		intent.PRURL = currentPlan.PRURL
+		intent.PRURLs, intent.CandidateBindings = currentPlan.PRURLs, currentPlan.CandidateBindings
 		intent.UncertainPR = currentPlan.UncertainPR
 		intent.CleanupPending = currentCleanup
 		if err = updateDiscardIntentReceipt(ctx, sqlite, &staged, intent); err != nil {
@@ -218,7 +222,6 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		}
 	}
 	var prInfo *PRInfo
-	var queryErr error
 	if intent.UncertainPR {
 		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "publication outcome is not conclusive")
 	}
@@ -227,18 +230,33 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		if targetErr != nil || config.PR.ValidateRemote(target) != nil {
 			return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "PR provider configuration does not match the fixed repository target")
 		}
-		client := publication.NewClient(config.PR, Runner{Dir: config.Repository, Timeout: duration(config.CommandTimeout)}, duration(config.CommandTimeout))
-		info, e := client.Query(ctx, intent.PRURL)
-		if e != nil {
-			queryErr = e
-		} else {
-			prInfo = &info
-		}
-		if queryErr != nil {
-			return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "PR merge state could not be verified: "+clip(queryErr.Error(), 1000))
+	}
+	knownSnapshot, err := sqlite.Query(ctx, c.Project)
+	if err != nil {
+		return TaskDiscardReceipt{}, err
+	}
+	if candidateBindings(knownSnapshot, taskID) != intent.CandidateBindings {
+		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "candidate bindings changed before full PR verification")
+	}
+	known, verifyErr := verifyKnownCandidatePRs(ctx, config, knownSnapshot, taskID, nil, "")
+	if verifyErr != nil && !isNativeErrorCode(verifyErr, "already_merged") {
+		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", verifyErr.Error())
+	}
+	for _, pr := range known {
+		if pr.URL == intent.PRURL {
+			prInfo = &pr.Info
+			break
 		}
 	}
-	return c.commitDiscard(ctx, sqlite, requestID, staged, intent, prInfo, config.PR.Repository)
+	if isNativeErrorCode(verifyErr, "already_merged") {
+		for _, pr := range known {
+			if pr.Info.Merged || pr.Info.State == "merged" {
+				prInfo = &pr.Info
+				break
+			}
+		}
+	}
+	return c.commitDiscard(ctx, sqlite, requestID, staged, intent, prInfo, config.PR.Repository, known)
 }
 
 func updateDiscardIntentReceipt(ctx context.Context, s persistence.CommandStore, op *OperationRecord, intent taskDiscardIntent) error {
@@ -293,16 +311,18 @@ func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDi
 	plan := taskDiscardPlan{CleanupPending: []string{}}
 	prs := map[string]bool{}
 	for _, run := range snapshot.WorkflowRuns {
-		if run.TaskID != taskID || run.PRURL == "" || run.PRState == "closed_unmerged" {
+		if run.TaskID != taskID {
 			continue
 		}
-		prs[run.PRURL] = true
-		if run.PRState == "" || run.PRState == "unknown" {
+		for _, url := range append(append(append([]string(nil), run.PRHistory...), run.PRURL), run.PRCandidateURL) {
+			if url != "" {
+				prs[url] = true
+			}
+		}
+		if run.PRURL != "" && (run.PRState == "" || run.PRState == "unknown") {
 			plan.UncertainPR = true
 		}
-	}
-	if active := latestNativeWorkflow(snapshot.WorkflowRuns, taskID); active != nil {
-		if active.PRURL == "" && active.Phase != "queued" {
+		if run.PRURL == "" && run.PRCandidateURL == "" && run.Phase != "queued" {
 			// A started worker may have published a PR before the center saw a
 			// link. Discard cannot assume that no external PR exists.
 			plan.UncertainPR = true
@@ -316,16 +336,18 @@ func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDi
 			}
 			plan.CleanupPending = append(plan.CleanupPending, "workspace_cleanup:"+id)
 		}
-		if execution.Status == "active" || execution.Status == "waiting_decision" || execution.Status == "blocked" || execution.Status == "pending" {
+		if execution.Status == "active" || execution.Status == "waiting_decision" || execution.Status == "blocked" || execution.Status == "pending" || execution.Process != nil && execution.Status != "stopped" {
 			plan.CleanupPending = append(plan.CleanupPending, "execution_stop_manual:"+execution.ExecutionID)
 		}
 	}
-	if len(prs) > 1 {
-		return plan, task, nativeErr("immutable_task", "multiple PR identities are bound to this task; manual reconciliation is required")
-	}
 	for url := range prs {
-		plan.PRURL = url
+		plan.PRURLs = append(plan.PRURLs, url)
 	}
+	plan.PRURLs = uniqueSorted(plan.PRURLs)
+	if len(plan.PRURLs) != 0 {
+		plan.PRURL = plan.PRURLs[0]
+	}
+	plan.CandidateBindings = candidateBindings(snapshot, taskID)
 	plan.CleanupPending = uniqueSorted(plan.CleanupPending)
 	return plan, task, nil
 }
@@ -369,7 +391,7 @@ func persistDiscardPending(ctx context.Context, s persistence.CommandStore, proj
 	return receipt, err
 }
 
-func (c CommandService) commitDiscard(ctx context.Context, s persistence.CommandStore, requestID string, op OperationRecord, intent taskDiscardIntent, info *PRInfo, expectedPRRepository string) (TaskDiscardReceipt, error) {
+func (c CommandService) commitDiscard(ctx context.Context, s persistence.CommandStore, requestID string, op OperationRecord, intent taskDiscardIntent, info *PRInfo, expectedPRRepository string, known []verifiedCandidatePR) (TaskDiscardReceipt, error) {
 	var receipt TaskDiscardReceipt
 	err := s.TransactDiscard(ctx, func(tx persistence.DiscardTx) error {
 		graph, e := tx.TaskGraphSnapshot(ctx, c.Project)
@@ -393,7 +415,7 @@ func (c CommandService) commitDiscard(ctx context.Context, s persistence.Command
 		if task.Status != "open" && task.Status != "in_progress" {
 			return nativeErr("immutable_task", "only open or in_progress native tasks can be discarded")
 		}
-		if intent.PRURL != "" && (info == nil || info.URL != intent.PRURL || expectedPRRepository != "" && info.Repository != expectedPRRepository || info.BaseBranch != graph.Authority.Branch) {
+		if intent.PRURL != "" && (info == nil || !info.Merged && info.URL != intent.PRURL || expectedPRRepository != "" && info.Repository != expectedPRRepository || info.BaseBranch != graph.Authority.Branch) {
 			return nativeErr("merge_state_unknown", "PR binding or target branch changed during discard verification")
 		}
 		if info != nil && info.Merged || info != nil && info.State == "merged" {
@@ -410,15 +432,17 @@ func (c CommandService) commitDiscard(ctx context.Context, s persistence.Command
 		if currentTask.Version != intent.ExpectedVersion {
 			return nativeErr("stale_version", "task version changed during PR verification")
 		}
-		if currentPlan.UncertainPR || currentPlan.PRURL != intent.PRURL {
+		if currentPlan.UncertainPR || currentPlan.PRURL != intent.PRURL || !slices.Equal(currentPlan.PRURLs, intent.PRURLs) || currentPlan.CandidateBindings != intent.CandidateBindings {
 			return nativeErr("merge_state_unknown", "published PR binding changed or remains uncertain")
 		}
 		if info != nil && info.State != "open" && info.State != "closed_unmerged" {
 			return nativeErr("merge_state_unknown", "PR provider did not confirm an unmerged PR state")
 		}
 		cleanup := append([]string(nil), currentPlan.CleanupPending...)
-		if info != nil && info.State == "open" {
-			cleanup = append(cleanup, "pull_request_close:"+intent.PRURL)
+		for _, pr := range known {
+			if pr.Info.State == "open" {
+				cleanup = append(cleanup, "pull_request_close:"+pr.URL)
+			}
 		}
 		cleanup = uniqueSorted(cleanup)
 		discardedAt := time.Now().UTC()
