@@ -93,4 +93,8 @@ func TestPRCluesSeparateMarkdownLinks(t *testing.T) {
 			t.Fatalf("Markdown links were joined or lost: %q: %v", text, got)
 		}
 	}
+	ipv6 := "http://[::1]:3000/o/r/pulls/7"
+	if got := PRClues("[" + ipv6 + "](" + ipv6 + ")"); !reflect.DeepEqual(got, []string{ipv6}) {
+		t.Fatalf("Markdown boundaries discarded an IPv6 authority: %v", got)
+	}
 }
