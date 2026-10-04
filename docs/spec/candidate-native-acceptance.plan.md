@@ -9,6 +9,8 @@
 5. CN5及独立blocker/晚到副作用故障复用 #37受控证据，接线变化时只重跑受影响代表；不为故障全排列重复发真实模型请求。停止未支持或待核实如实保留。
 6. 汇总CN1–CN8、阻塞项及前置证据交接 #42。只修本链集成缺陷，不新增业务、名额预留、自动补位或后端支持。
 
+本次真机发现 Orca 生命周期未连接既有 codex-session-launch/history binding，修复唯一路径为 `internal/steerline/orcaworker/lifecycle.go`：原 agent 终端使用既有无模型 bootstrap 写原 session binding，再以冻结权限/模型 resume；规范 collector 只读原生 history 并提交数据库。请求在原资源 Operation 后、创建终端前固定，重对账校验同一请求内容；不扫用户日志或制造正文。该生产接线变更需定向 Orca/Codex/候选代表与当前构建 local 重验，旧 local-02 不可复用为通过。
+
 ## 并行与构建固定
 
 不增加 #73–#82 硬前置。与解耦线并行前固定本任务 commit/产品与 helper 构建、隔离配置/原生资源及场景清单；现场运行中不替换。接收各迁移任务的路径/身份/接线影响清单，按 Spec 规则复用未变证据，只定向重验受影响 CN 场景。#77/#78/#80 的接线变化不能直接沿用旧构建的通过结论。
@@ -33,6 +35,7 @@ TestMC5/6 当前在 `internal/steerline/candidate_workers_test.go`，使用下�
 
 | 级别/组或场景ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
 | --- | --- | --- | --- | --- | --- |
+| 定向 Go：原生 session 接线/当前候选边界 | 隔离 native fixture/SQLite/provider，无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-native-acceptance/native-wiring -- ./internal/steerline/orcaworker ./internal/steerline/codexworker ./internal/steerline '-run=TestCandidateSessionLaunch|TestMC[56]|TestNativeLifecycle|TestExecution|TestConversation|TestCodex|TestManaged|TestResume' -count=1` | 修复 history 接线之后、local 重验之前 | 各包非零命中；原 launch intent/权限及会话绑定保持，CN5/放弃守卫无回退 | native-wiring/summary、原始 Go JSON |
 | 定向 Go：manifest/身份/runner/边界 | 无模型、本机隔离临时目录 | `go run ./cmd/test-feedback -out docs/validation/candidate-native-acceptance/adapters-final -- ./cmd/test-feedback ./tests/e2e/internal/driver ./tests/e2e/internal/native ./tests/e2e/internal/evidence ./internal/testboundary -count=1` | 场景登记和适配完成后 | 非零命中；远端先拒绝、混合不换本机、乱序/重复/跨候选证据拒绝、生产导入边界保持 | adapters-final/summary、Go JSON |
 | 定向Go：复核CN5与 #37 MC5/MC6 | 隔离SQLite、可控provider，无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-native-acceptance/conflict -- ./internal/steerline -run '^TestMC[56]$' -count=1` | 只有集成接线改变相应边界时；否则复用前置证据 | 前置 #37已实现入口实际命中；多合并/放弃PR合并/未知不覆盖Delivery | 原证据索引或conflict/原始状态与Go JSON |
 | L3 candidates.local：CN1–CN3、CN6 | 隔离Windows本地Codex、真实Git/PR链，人工合并 | `go run ./cmd/test-feedback -level=L3 -suite=candidates -env=live '-scenario=candidates.local' -out docs/validation/candidate-native-acceptance/local` | 场景注册且原生环境验证后 | 双候选、原会话、worker实际发布、唯一交付与后继base有真实证据 | local/runner summary、身份、回执、PR及资源记录 |

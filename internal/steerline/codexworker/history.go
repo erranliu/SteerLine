@@ -422,7 +422,9 @@ func (c *HistoryClient) BootstrapSession(ctx context.Context, cwd, sandbox, inst
 func ResumeCommand(command contracts.Command, sessionID string, args []string, prompt, cwd string) executionapi.LaunchCommand {
 	argv := append(append([]string{}, command.Args...), "resume", "--include-non-interactive", sessionID)
 	argv = append(argv, args...)
-	argv = append(argv, prompt)
+	if prompt != "" {
+		argv = append(argv, prompt)
+	}
 	return executionapi.LaunchCommand{Executable: command.Executable, Args: argv, WorkingDirectory: cwd}
 }
 func ReaderCommand(command contracts.Command, profile string) contracts.Command {

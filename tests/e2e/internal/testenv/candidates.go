@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
@@ -125,6 +126,7 @@ func (p *Project) CandidateControl(in driver.CandidateCommand) driver.CandidateR
 			in.InstanceID = snap.Runtime.Service.InstanceID
 		}
 	}
+	p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, "intent-"+in.RequestID+".json"), in))
 	result, err := p.Driver.Candidate(p.Scenario.Context, p.Scenario.Run.Helper, in)
 	p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, "request-"+in.RequestID+".json"), map[string]any{"input": in, "receipt": result, "error": fmt.Sprint(err)}))
 	p.Scenario.Must(err)
@@ -239,18 +241,34 @@ func (p *Project) CandidateUsage(c Candidate, label string) native.Usage {
 	})
 	p.Scenario.Must(evidence.FullAccess(p.CandidateSnapshot(c).Domain))
 	snap := p.CandidateSnapshot(c)
-	conversation, err := driver.ReadCandidateConversation(p.Scenario.Context, p.Database, snap.Page.ProjectID, c.RunID, c.ExecutionID)
-	p.Scenario.Must(err)
-	finals := 0
-	for _, event := range conversation.Events {
-		if event.Type == contracts.ConversationMessageComplete && event.Phase == contracts.MessagePhaseFinalAnswer {
-			finals++
+	canonicalDeadline := time.Now().Add(45 * time.Second)
+	p.Scenario.Wait("canonical original candidate final/body", func() (bool, error) {
+		conversation, err := driver.ReadCandidateConversation(p.Scenario.Context, p.Database, snap.Page.ProjectID, c.RunID, c.ExecutionID)
+		if err != nil {
+			return false, err
 		}
-	}
-	if finals == 0 || len(conversation.Bodies) == 0 {
-		p.Scenario.t.Fatal("canonical original candidate messages missing")
-	}
-	p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, c.RunID+"-"+label+"-conversation.json"), conversation))
+		p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, c.RunID+"-"+label+"-conversation.json"), conversation))
+		finals := map[string]bool{}
+		for _, event := range conversation.Events {
+			if event.Type == contracts.ConversationMessageComplete && event.Phase == contracts.MessagePhaseFinalAnswer && event.SourceRole == contracts.ConversationSourceCanonical {
+				if event.SessionID != u.Session {
+					return false, errors.New("canonical final belongs to another native session")
+				}
+				finals[event.TurnID] = true
+			}
+		}
+		expected := int(snap.Domain.Executions[0].TurnNumber)
+		if snap.Domain.Executions[0].Backend == "orca" {
+			expected++
+		}
+		if len(finals) >= expected && len(conversation.Bodies) > 0 {
+			return true, nil
+		}
+		if time.Now().After(canonicalDeadline) {
+			p.Scenario.t.Fatalf("canonical original candidate final/body missing: native turns=%d expected=%d; see conversation.json", len(finals), expected)
+		}
+		return false, nil
+	})
 	return u
 }
 
@@ -269,6 +287,11 @@ func CandidateAcceptance(s *Scenario) {
 	aw := p.WaitCandidate(a, "waiting_decision")
 	bw := p.WaitCandidate(b, "waiting_decision")
 	ae, be := aw.Domain.Executions[0], bw.Domain.Executions[0]
+	for _, e := range []contracts.ExecutionRecord{ae, be} {
+		if e.Backend == "orca" {
+			s.Must(evidence.OrcaReadiness(e))
+		}
+	}
 	as, err := ExecutionSession(ae)
 	s.Must(err)
 	bs, err := ExecutionSession(be)
@@ -309,6 +332,7 @@ func CandidateAcceptance(s *Scenario) {
 		s.t.Fatal("feedback replay changed original command")
 	}
 	pa, pb := p.CandidatePR(a), p.CandidatePR(b)
+	published := map[Candidate]native.Usage{}
 	if pa.URL == pb.URL {
 		s.t.Fatal("candidate PRs are not distinct")
 	}
@@ -323,7 +347,7 @@ func CandidateAcceptance(s *Scenario) {
 		if session != pair.session || e.TurnNumber != 2 || p.git(e.Workspace.Worktree, "show", "HEAD:candidate.txt") != pair.marker {
 			s.t.Fatal("feedback crossed candidate/session/turn")
 		}
-		p.CandidateUsage(pair.c, "published")
+		published[pair.c] = p.CandidateUsage(pair.c, "published")
 	}
 	snap := mustSnapshot(p)
 	for _, t := range snap.Page.Tasks {
@@ -355,7 +379,7 @@ func CandidateAcceptance(s *Scenario) {
 	p.git(ne.Workspace.Worktree, "merge-base", "--is-ancestor", merge, ne.Workspace.Base)
 	p.Feedback(next, "successor")
 	p.WaitCandidate(next, "waiting_pr_merge")
-	p.CandidateUsage(next, "published")
+	published[next] = p.CandidateUsage(next, "published")
 	p.MergeCandidate(next)
 	p.WaitCandidate(next, "completed")
 	final := mustSnapshot(p)
@@ -366,6 +390,11 @@ func CandidateAcceptance(s *Scenario) {
 	for i := 0; i < 3; i++ {
 		if len(mustSnapshot(p).Domain.Deliveries) != 2 {
 			s.t.Fatal("polling duplicated delivery")
+		}
+	}
+	for c, baseline := range published {
+		if baseline != p.CandidateUsage(c, "final") {
+			s.t.Fatal("delivery/polling replaced native session/turn or consumed usage")
 		}
 	}
 	proof := p.CandidatePR(a)
