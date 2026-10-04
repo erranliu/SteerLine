@@ -8,7 +8,6 @@
 
 | 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |
-| 36 | 单 worker 持续执行与统一待决策 | 无 | [Spec](worker-flow.spec.md) | [Plan](worker-flow.plan.md) |
 | 40 | 固定版本与双入口 | 无 | [Spec](versioned-runtime.spec.md) | [Plan](versioned-runtime.plan.md) |
 | 41 | dev 隔离与 stable 提升 | `#40`、`#36` | [Spec](runtime-isolation-promotion.spec.md) | [Plan](runtime-isolation-promotion.plan.md) |
 | 42 | 第一阶段集成验收 | `#39`、`#41` | [Spec](phase1-release-acceptance.spec.md) | [Plan](phase1-release-acceptance.plan.md) |
@@ -26,11 +25,10 @@
 
 ## 任务执行控制台解耦与目录整理
 
-目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。每项一份独立 Spec/Plan 和实现 PR；共同边界见 [三线解耦共同实现约束](three-line-constraints.spec.md)。#73 的纯定义基础及后继残留见[验收记录](../validation/three-line-01-types/README.md)；#77 等 #38；#39 按固定构建与实际影响定向复核，不增加重构总前置。
+目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。每项一份独立 Spec/Plan 和实现 PR；共同边界见 [三线解耦共同实现约束](three-line-constraints.spec.md)。纯定义、task 边界/应用与候选 UI 基础已具备；下表仅列 #76–#82 的剩余执行规格，当前源码按需查[架构索引](../architecture/current-code-architecture.md)。
 
 | 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |
-| 75 | 任务应用用例归包 | `#74` | [Spec](three-line-03-task-usecases.spec.md) | [Plan](three-line-03-task-usecases.plan.md) |
 | 76 | 执行应用用例归包 | `#74` | [Spec](three-line-04-execution-usecases.spec.md) | [Plan](three-line-04-execution-usecases.plan.md) |
 | 77 | 产品查询与控制台契约收窄 | `#74`、`#38` | [Spec](three-line-05-product-console.spec.md) | [Plan](three-line-05-product-console.plan.md) |
 | 78 | 执行适配与资源目录归组 | `#76` | [Spec](three-line-06-adapters-resources.spec.md) | [Plan](three-line-06-adapters-resources.plan.md) |
@@ -104,5 +102,3 @@
 | 72 | TUI与中心实现解耦 | #71 | [Spec](core-decoupling-11-tui.spec.md) | [Plan](core-decoupling-11-tui.plan.md) | [PR196](https://github.com/erranliu/SteerLine/pull/196) · [验收记录](../validation/core-decoupling-11-tui/README.md) |
 
 [L2/L3 真实执行 Spec](live-tiered-e2e.spec.md) / [Plan](live-tiered-e2e.plan.md)：L2 受控门槛后执行本地 Codex 与 Orca+Codex，使用真实 SteerlineTest GitHub PR；L3 delivery/recovery 按环境和场景独立选择，固定 gpt-6-luna/medium，校验原生 token usage。
-
-#74 已实现的工作/结果/领取/丢弃端口及 Service/CommandService/Config 的实际拆分见[交接清单](../validation/three-line-02-task-execution-boundary/integration-ownership.md)。Task ID 与后继固定硬前置保持；#75/#76 基于实际已接通端口按唯一文件所有者推进，共用构造/CLI/runner/守卫段由 #76 单点顺序集成。#77/#79/#80/#81/#82 按用户当前指令暂停。
