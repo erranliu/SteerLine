@@ -8,7 +8,7 @@
 2. `candidates.go` / `preferences.go`：选择按 Task 保存；阅读位置与输入草稿按 Task/WorkflowRun/Execution/session 保存；原请求、payload、版本和实例先保存，再经原产品客户端提交。body/conversation/activity 的 generation 拒绝迟到响应；原请求重读不改投递目标。正文与活动保持规范数据库来源，无日志回填。
 3. `profile_choice.go` / `model_keys.go` / `model_update_actions.go` / `view.go`：服务资格为最终权威；五候选只限制开始检查，明确无硬名额、预留、队列和自动补位。放弃回执与停止事实分开，待核实不是成功；已知 merged 禁止放弃；获胜只依据唯一 TaskDelivery。环境 blocker 与原 Decision 分别展示，草稿可编辑，阻断或解除均不自动发送。放弃后不可反馈。
 4. `internal/steerlineintegration/candidate_console_test.go`：真实应用构造、客户端、服务、SQLite/Git 和受控 app-server 接线；精确 UI 新增、原请求重读、五个参与/第六次开始拒绝、原会话反馈、不可撤销放弃。复用现有 neutral provider fixture 验证真实合并事实及服务拒绝放弃，无生产服务/任务库、无真实模型请求。
-5. 原生 CC5 的工具诊断记录在 `windows/`。新增 opt-in 的同一接线 fixture 保持能力 `STEERLINE_CC5_MANIFEST`：写明隔离 home/config/CLI/service 实例后等待人工操作和 `.stop` 文件；该准备模式本身不证明 CC5。手工模式超时 15 分钟，关闭时清理本次临时服务和 worker；没有新增真实后端矩阵。
+5. 原生 CC5 的工具诊断记录在 `windows/`；用户追加授权后，实际 UI 工具仍拒绝终端启动（`product policy blocks this app`），没有原生通过证据。新增 opt-in 的同一接线 fixture 保持能力 `STEERLINE_CC5_MANIFEST`：写明隔离 home/config/CLI/service 实例和三项受控 Git/history 环境绑定后等待人工操作和 `.stop` 文件；该准备模式本身不证明 CC5。手工模式超时 15 分钟，关闭时清理本次临时服务和 worker；没有新增真实后端矩阵。
 
 ## 测试计划
 
@@ -21,6 +21,7 @@
 | 受影响 console 包回归 | Windows；无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-console/console-final-04 -- ./internal/steerline/console -count=1` | 自查后、最终 L1 前 | 原有布局、决策编辑、分页、身份守卫和本次候选场景通过 | console-final-04/summary.json 与 go-test.jsonl |
 | OS 源码/依赖代表 | Windows/amd64 与 Linux/amd64 交叉构建 | `go build -o <本次临时目录>/steerline-windows-amd64.exe ./cmd/steerline`；设置 `GOOS=linux` 后构建同入口，随后恢复变量 | 自查后 | 两种入口编译成功；编译不记作原生终端验收 | build.json（命令/版本/产物 SHA-256） |
 | 手工原生 UI：CC5 | 隔离 Windows 真实终端，使用上述同一受控服务保持模式 | 设 `STEERLINE_CC5_MANIFEST=<新证据目录绝对路径>/fixture.json`，运行 `go test ./internal/steerlineintegration -run '^TestCandidateConsoleWiring$' -count=1 -v -timeout=20m`；另一个真实终端从 manifest 读取 home 和 executable，执行 `console -config <manifest.config>`；操作步骤见 windows/README.md | 定向用例通过后，具备实际 IME/键盘/窗口操作能力时 | 中文组词、选项加备注、候选导航、窄窗口、滚动均保留实际操作与截图证据；准备模式、Go KeyMsg、截图或模拟输入均不替代原生通过 | windows/ 原始操作记录/构建配置身份/截图；当前仅 blocker 诊断，**未通过** |
+| 授权后准备能力补充 | 同一 Windows 隔离 fixture，无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-console/windows/bindings-regression -- ./internal/steerlineintegration -run '^TestCandidateConsoleWiring$' -count=1`；保持模式按新 manifest 绑定公开 CLI 读取后写原 stop_file | 追加授权与环境绑定修复后 | 普通接线保持通过，外部 CLI 使用三项原绑定可读同一 Task；不声明 native 输入通过 | windows/bindings-regression 与 authorized-bindings-check/ |
 | L1 固定最小入口 | runner 自有隔离 STEERLINE_HOME，无原生开关 | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-console/l1-final` | 实现自查与所有定向修复完成后一次 | 固定 quick、产品客户端/边界/UI/守卫代表非零命中且通过 | l1-final/summary.json 和原始日志 |
 
 不选择 Full/L2/L3：变更为候选 TUI 与现有端口接线；真实后端竞争归 #39，版本/24 小时组合归 #42，本次不重启历史任务，不运行全量、真实模型或新的后端矩阵。CC5 缺口不能以这些级别替代。

@@ -1,0 +1,17 @@
+{
+  "status": "passed_preparation_only",
+  "scenario": "authorized fixture manifest bindings",
+  "public_command": "steerline task show -config <original fixture.config> -task-id 901",
+  "manifest_bindings": [
+    "STEERLINE_FAKE_GIT_FETCH_REMOTE",
+    "STEERLINE_INTEGRATION_HISTORY_FILE",
+    "STEERLINE_TEST_REMOTE_URL"
+  ],
+  "task_id": "901",
+  "task_version": 2,
+  "candidate_count": 5,
+  "service_instance": "a24327c2602ffa8502c744a2a11b1db1",
+  "product_sha256": "4901063EDE99A317A7482427655CA12B8FA6A463C4469069D5551739839D95B8",
+  "native_acceptance": "not exercised; actual UI tool policy rejection remains",
+  "checked_at": "2026-10-04T06:27:47.0370765Z"
+}

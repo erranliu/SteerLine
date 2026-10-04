@@ -11,7 +11,7 @@
 | 受影响 console 包回归 | [console-final-04/summary.json](console-final-04/summary.json)，66 项原布局/编辑/分页/守卫及新增候选回归通过，无 fail/skip |
 | Windows/Linux 源码依赖代表 | [build.json](build.json)，两平台编译及 SHA-256；Linux 为交叉编译，无平台运行或 CC5 声明 |
 | 最终 L1 | [l1-final/summary.json](l1-final/summary.json)，本次唯一一次固定 L1 通过（7 组，无 fail/skip）；1.2s 准备，229.6s 执行 |
-| CC5 | **未通过**。[windows/diagnostic.json](windows/diagnostic.json) 和[实际准备/清理记录](windows/prepare/summary.json) 仅证明隔离准备能力；没有原生 IME/输入/导航/窄窗/滚动操作证据。[blocker 与人工操作方法](windows/README.md) |
+| CC5 | **未通过**。[用户授权后的实际工具拒绝](windows/authorized-20261004/diagnostic.json) 和[实际准备/清理记录](windows/authorized-20261004/prepare/summary.json) 仅证明隔离准备能力；没有原生 IME/输入/导航/窄窗/滚动操作证据。[blocker 与人工操作方法](windows/README.md) |
 
 ## 证据边界与已修复诊断
 
@@ -22,3 +22,7 @@
 亲自复查实际 diff、当前 Spec/Plan 与生产路径：Task/run/Execution/session 选择、规范 Body/Conversation/Activity、草稿/请求持久化、产品控制/反馈、环境动作和回执验证。修复了迟到读取清除新候选 busy、缺页改选兄弟、merged 状态误当获胜、原冻结配置缺少 run 直读、迟到拒绝/开始回执改变当前选择等问题。worker-only 发布、独立 environment blocker、原业务 Decision 和服务 intent/receipt/ack 屏障继续由原服务实现，本 PR 未新增进程 kill、Task 丢弃、资源删除或自动补投路径。
 
 #38 活动 roadmap 收缩为 CC5 原生输入验收残留，已实现 Spec 不作为后续强制必读；尚未完成验收，不解除 #39 前置，也不启动 #39。本 PR 保持 draft，供协调聊天独立复审，不合并。
+
+2026-10-04 追加授权：用户已授权原生终端操作；实际 UI 工具仍返回 `product policy blocks this app: ...powershell.exe`。保存新现场、实际拒绝、公开 Task 查询与进程清理证据；修正 opt-in manifest 未带出受控 Git/history 环境绑定的问题。生产实现未改动，不重跑原生输入或伪造 CC5；本次补充仅选择测试准备能力验证，原最终 L1 不重复。
+
+授权补充验证：[同一接线回归](windows/bindings-regression/summary.json) 2 项通过、无 fail/skip；[正式 manifest 的外部 CLI 检查](windows/authorized-bindings-check/check.json) 使用自动写出的三项环境绑定，读取同一 Task 901 / version 2 / 五候选后通过原 stop_file 清理。该准备能力结果不替代 CC5，生产实现未改动。

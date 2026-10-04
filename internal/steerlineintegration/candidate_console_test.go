@@ -152,7 +152,11 @@ func TestCandidateConsoleWiring(t *testing.T) {
 		// and window operations; neither fake KeyMsgs above nor this hold pass CC5.
 		cli := buildProductLifecycleCLI(t)
 		require(t, os.MkdirAll(filepath.Dir(manifest), 0700))
-		require(t, os.WriteFile(manifest, mustJSON(map[string]any{"status": "ready_for_manual_CC5_not_passed", "home": steerlineapp.HomeDir(), "config": f.configPath, "executable": cli, "repository": f.repository, "instance": svc.instanceID, "worker": "isolated controlled app-server test binary", "stop_file": manifest + ".stop"}), 0600))
+		require(t, os.WriteFile(manifest, mustJSON(map[string]any{"status": "ready_for_manual_CC5_not_passed", "home": steerlineapp.HomeDir(), "config": f.configPath, "executable": cli, "repository": f.repository, "instance": svc.instanceID, "worker": "isolated controlled app-server test binary", "stop_file": manifest + ".stop", "environment": map[string]string{
+			"STEERLINE_TEST_REMOTE_URL":          f.remoteURL,
+			"STEERLINE_FAKE_GIT_FETCH_REMOTE":    f.bareRemote,
+			"STEERLINE_INTEGRATION_HISTORY_FILE": os.Getenv("STEERLINE_INTEGRATION_HISTORY_FILE"),
+		}}), 0600))
 		t.Logf("CC5 isolated native fixture ready: %s; awaiting explicit stop file", manifest)
 		for {
 			if _, err := os.Stat(manifest + ".stop"); err == nil {
