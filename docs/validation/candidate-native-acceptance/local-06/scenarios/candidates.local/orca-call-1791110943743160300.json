@@ -1,0 +1,14 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\AppData\\Local\\Programs\\orca\\resources\\bin\\orca.exe",
+    "worktree",
+    "rm",
+    "--worktree",
+    "id:fe8c0540-de44-43ea-a967-bebb0cf4a17e::C:/Users/lmas1/orca/workspaces/repo/sl-1-3f25fcf7b0720f2f8e2efd3cc32f608a",
+    "--force",
+    "--json"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\n  \"id\": \"564a912a-ddf7-47c3-bebb-954ec4b6df8a\",\n  \"ok\": true,\n  \"result\": {\n    \"removed\": true,\n    \"preservedBranch\": {\n      \"branchName\": \"erranliu/sl-1-3f25fcf7b0720f2f8e2efd3cc32f608a\",\n      \"head\": \"34b3c3188af4de49214bcd67fa338e7b5b2dd43a\"\n    }\n  },\n  \"_meta\": {\n    \"runtimeId\": \"5eedc7aa-7395-4127-ad2f-724894efe596\"\n  }\n}\n"
+}

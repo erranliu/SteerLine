@@ -1,0 +1,18 @@
+{
+  "error": "\u003cnil\u003e",
+  "usage": {
+    "source": "codex/session-jsonl",
+    "session_id": "01a106e2-e546-74b1-88f4-eb88df4b383f",
+    "turn_id": "01a106e9-34a8-7120-be99-cec2ef8b714d",
+    "cwd": "C:/Users/lmas1/orca/workspaces/repo/sl-1-536eb03d57bd1c982b83111e363c75c4",
+    "model": "gpt-6-luna",
+    "reasoning_effort": "medium",
+    "tokens": {
+      "input_tokens": 906622,
+      "cached_input_tokens": 855040,
+      "output_tokens": 6214,
+      "reasoning_output_tokens": 1939,
+      "total_tokens": 912836
+    }
+  }
+}

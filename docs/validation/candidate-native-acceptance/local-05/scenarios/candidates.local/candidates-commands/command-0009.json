@@ -1,0 +1,17 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-05\\build\\controlled-helper.exe",
+    "control",
+    "-config",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\project.json",
+    "-action",
+    "resume_dispatch",
+    "-task-id",
+    "",
+    "-profile",
+    "orca-codex"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\"version\":1,\"request_id\":\"d1dd9ebfc2f68ae6abe2f310a4ad61dd\",\"request_digest\":\"d602fa6675bcf7e648289f18a5084883d0f4e0467e5d4ced8e55cb98730bce32\",\"instance_id\":\"c08d3e801ae42945e9f89a092fde0cb0\",\"action\":\"resume_dispatch\",\"status\":\"applied\",\"code\":\"applied\",\"message\":\"control action applied\",\"requested_by\":\"e2e\",\"submitted_at\":\"2026-10-04T10:13:33.6682244Z\",\"accepted_at\":\"2026-10-04T10:13:33.7039429Z\",\"completed_at\":\"2026-10-04T10:13:33.7517076Z\",\"control_revision\":3}\n"
+}

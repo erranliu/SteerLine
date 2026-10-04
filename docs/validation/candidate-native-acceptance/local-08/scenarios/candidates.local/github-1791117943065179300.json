@@ -1,0 +1,12 @@
+{
+  "command": [
+    "gh",
+    "api",
+    "--method",
+    "DELETE",
+    "repos/erranliu/SteerlineTest/git/refs/heads/codex/2-ec009605cfd8"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": ""
+}

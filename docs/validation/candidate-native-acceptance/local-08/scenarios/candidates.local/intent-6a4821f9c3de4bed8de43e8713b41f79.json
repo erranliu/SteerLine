@@ -1,0 +1,17 @@
+{
+  "Action": "answer_decision",
+  "RequestID": "6a4821f9c3de4bed8de43e8713b41f79",
+  "TaskID": "",
+  "ProfileID": "",
+  "RunID": "c72304798278450f8477607b98972961",
+  "ExecutionID": "227833c863db626321eb7edb3bf2d113",
+  "DecisionID": "e69e4df72a377d68f25122000bb6bf12",
+  "Option": "continue",
+  "Note": "Use exactly this candidate.txt marker: bravo-replacement. Publish according to the bound Spec/Plan in this original session. ",
+  "InstanceID": "5c9fb8a2c221f707c515fa785a289d34",
+  "TaskVersion": 0,
+  "GraphRevision": 0,
+  "CandidateVersion": 0,
+  "DecisionVersion": 1,
+  "RunRevision": 11
+}

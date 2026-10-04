@@ -1,0 +1,17 @@
+{
+  "error": "\u003cnil\u003e",
+  "usage": {
+    "source": "app-server/thread/tokenUsage/updated",
+    "session_id": "01a10669-a46f-75f2-9352-cd0f9e8d6e8c",
+    "turn_id": "01a1066b-abad-7c40-84df-43e3f55781a1",
+    "model": "gpt-6-luna",
+    "reasoning_effort": "medium",
+    "tokens": {
+      "input_tokens": 202531,
+      "cached_input_tokens": 188416,
+      "output_tokens": 1425,
+      "reasoning_output_tokens": 308,
+      "total_tokens": 203956
+    }
+  }
+}

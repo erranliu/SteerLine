@@ -1,0 +1,63 @@
+{
+  "id": "b696dc85-5e85-46d6-943b-a99c0b6365f3",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_fcc36a26-9844-4559-8282-fed60f362139",
+      "status": "running",
+      "tail": [
+        "  execution tool to run exactly this command once in the",
+        "  original worktree: powershell.exe -NoProfile",
+        "  -ExecutionPolicy Bypass -File '.steerline-readiness/",
+        "  d7a92aaac9eba486ef5a48918a318ac4/",
+        "  a803f57d360a8c2511a358a7e0d24050/probe.ps1'",
+        "  Do not modify the probe input or script, implement business",
+        "  work, use apply_patch to create a receipt, or relax sandbox",
+        "  permissions. Success requires exit code 0 and the exact",
+        "  output",
+        "  SLREADINESS:93c83485266ed7dd492ff429bbca5eb2:87ca5ef8b402a4",
+        "  2cf40d86f330e390f864f7078220d9b45748d4ff4a3d6ddef0. Then",
+        "  report native worker_done succeeded using the result relay",
+        "  instruction below; report failed on failure. Do not rerun",
+        "  an accepted or unknown probe command.",
+        "  Fixed publication responsibility: worker. Provider: command",
+        "  https://github.com/erranliu/SteerlineTest. Git remote:",
+        "  origin (https://github.com/erranliu/SteerlineTest.git).",
+        "  Target branch: codex/e2e/8fa27455695040e7af909df7a0c7cd36/",
+        "  candidates.local/base. Use these original targets",
+        "  throughout this execution; report a mismatch before",
+        "  publishing.",
+        "  Windows workspace-write delivery: Orca CLI cannot connect",
+        "  to its runtime pipe from this sandbox. For your final",
+        "  worker_done, write one UTF-8 JSON file atomically",
+        "  at .steerline-relay/3f25fcf7b0720f2f8e2efd3cc32f608a/",
+        "  a803f57d360a8c2511a358a7e0d24050.json in this worktree. Use",
+        "  the Orca Task and Dispatch IDs and the --dispatch-",
+        "  capability value from the original injected Orca preamble.",
+        "  Fields: workflow_run_id=\"3f25fcf7b0720f2f8e2efd3cc32f608a\",",
+        "  turn_id=\"a803f57d360a8c2511a358a7e0d24050\", orca_task_id,",
+        "  dispatch_id, dispatch_capability (the preamble's dcap_",
+        "  value; never print it), outcome (succeeded or failed),",
+        "  subject, body. The center will forward this exact result",
+        "  through Orca from your bound terminal and verify",
+        "  settlement. Do not commit this relay file. Do not claim",
+        "  that delivery succeeded merely because the file was",
+        "  written.",
+        "• Working (0s • esc to interrupt)",
+        "› Ask Codex to do anything",
+        "  GPT-6-Luna medium · ~\\orca\\workspaces\\repo\\sl-1-3f25fcf7b07…",
+        "  ? for shortcuts"
+      ],
+      "truncated": true,
+      "limited": false,
+      "oldestCursor": "0",
+      "nextCursor": "1",
+      "latestCursor": "1",
+      "returnedLineCount": 41,
+      "source": "screen"
+    }
+  },
+  "_meta": {
+    "runtimeId": "5eedc7aa-7395-4127-ad2f-724894efe596"
+  }
+}

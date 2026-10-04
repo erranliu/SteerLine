@@ -1,0 +1,6 @@
+{
+  "sha256": "D987CD36E080390E80CDBC9BAE07184789AB10C127866F13B39875F0579F1ACA",
+  "native_runtime_test": false,
+  "exit_code": 0,
+  "command": "GOOS=linux go test -c ./internal/steerline/orcaworker"
+}

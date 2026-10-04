@@ -1,0 +1,9 @@
+{"Time":"2026-10-04T17:41:49.1058762+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates"}
+{"Time":"2026-10-04T17:41:50.3173226+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal"}
+{"Time":"2026-10-04T17:41:50.3391319+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Output":"=== RUN   TestCandidateLocal\n"}
+{"Time":"2026-10-04T17:51:50.3079113+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Output":"    candidates.go:162: CLI [task list -config C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1515602201\\candidates.local\\candidates\\project.json]: context deadline exceeded: \n"}
+{"Time":"2026-10-04T17:52:24.1918316+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Output":"--- FAIL: TestCandidateLocal (633.91s)\n"}
+{"Time":"2026-10-04T17:52:24.1939809+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Elapsed":633.91}
+{"Time":"2026-10-04T17:52:24.1939809+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Output":"FAIL\n"}
+{"Time":"2026-10-04T17:52:24.2046764+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Output":"FAIL\tgithub.com/erranliu/SteerLine/tests/e2e/suites/candidates\t635.131s\n"}
+{"Time":"2026-10-04T17:52:24.2046764+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Elapsed":635.132}

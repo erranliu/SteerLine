@@ -1,0 +1,10 @@
+{
+  "command": [
+    "gh",
+    "api",
+    "repos/erranliu/SteerlineTest/git/matching-refs/heads/erranliu/sl-1-93b52627e191460dfe6feb30eff6d51f"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "[{\"ref\":\"refs/heads/erranliu/sl-1-93b52627e191460dfe6feb30eff6d51f\",\"node_id\":\"REF_kwDOUmnTJtoAOXJlZnMvaGVhZHMvZXJyYW5saXUvc2wtMS05M2I1MjYyN2UxOTE0NjBkZmU2ZmViMzBlZmY2ZDUxZg\",\"url\":\"https://api.github.com/repos/erranliu/SteerlineTest/git/refs/heads/erranliu/sl-1-93b52627e191460dfe6feb30eff6d51f\",\"object\":{\"sha\":\"408b2db9f102d367f58ace4fe65757f538e31750\",\"type\":\"commit\",\"url\":\"https://api.github.com/repos/erranliu/SteerlineTest/git/commits/408b2db9f102d367f58ace4fe65757f538e31750\"}}]"
+}

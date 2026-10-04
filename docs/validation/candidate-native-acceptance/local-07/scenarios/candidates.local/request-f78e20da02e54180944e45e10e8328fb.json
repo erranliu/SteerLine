@@ -1,0 +1,56 @@
+{
+  "error": "\u003cnil\u003e",
+  "input": {
+    "Action": "start_task",
+    "RequestID": "f78e20da02e54180944e45e10e8328fb",
+    "TaskID": "1",
+    "ProfileID": "candidate-orca",
+    "RunID": "",
+    "ExecutionID": "",
+    "DecisionID": "",
+    "Option": "",
+    "Note": "",
+    "InstanceID": "",
+    "TaskVersion": 0,
+    "GraphRevision": 0,
+    "CandidateVersion": 0,
+    "DecisionVersion": 0,
+    "RunRevision": 0
+  },
+  "receipt": {
+    "request": {
+      "protocol_version": 1,
+      "request_id": "f78e20da02e54180944e45e10e8328fb",
+      "repository_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-998751171\\candidates.local\\candidates\\repo\\.git",
+      "instance_id": "9463888ba248975cd12b26a793b80f41",
+      "action": "start_task",
+      "expected_control_revision": 2,
+      "payload": {
+        "task_id": "1",
+        "execution_profile_id": "candidate-orca",
+        "execution_profile_digest": "fd078911f444e032a3296290b4ec292ee5fd04755847cd908f6099153a7f3f81"
+      },
+      "requested_by": "e2e",
+      "created_at": "2026-10-04T11:04:03.7792088Z",
+      "expires_at": "2026-10-04T11:06:03.7792088Z"
+    },
+    "control": {
+      "version": 1,
+      "request_id": "f78e20da02e54180944e45e10e8328fb",
+      "request_digest": "9885364a4531a651dd6e66557246784190429b6e529d7dde1fa2e0f5c12dd5ac",
+      "instance_id": "9463888ba248975cd12b26a793b80f41",
+      "action": "start_task",
+      "status": "applied",
+      "code": "applied",
+      "message": "native task worker reservation was resumed",
+      "requested_by": "e2e",
+      "submitted_at": "2026-10-04T11:04:03.7792088Z",
+      "accepted_at": "2026-10-04T11:04:03.85752Z",
+      "completed_at": "2026-10-04T11:04:26.2993643Z",
+      "run_id": "640cff9af020fd44034f85bdd76c2788",
+      "attempt_id": "828ffab66410f7812fcac74122fbb142",
+      "control_revision": 3,
+      "run_revision": 4
+    }
+  }
+}

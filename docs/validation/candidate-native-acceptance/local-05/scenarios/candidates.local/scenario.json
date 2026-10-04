@@ -1,0 +1,64 @@
+{
+  "cleanup_complete": true,
+  "cleanup_errors": null,
+  "components": {
+    "provider": "github/erranliu/SteerlineTest",
+    "worker": "orca-codex"
+  },
+  "context_error": "\u003cnil\u003e",
+  "finished_at": "2026-10-04T10:21:10.5437935Z",
+  "id": "candidates.local",
+  "passed": false,
+  "real_pr": null,
+  "resources": [
+    {
+      "created_at": "2026-10-04T10:12:54.8918965Z",
+      "kind": "project",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-04T10:12:55.844103Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-05\\build\\controlled-helper.exe",
+      "pid": 38480
+    },
+    {
+      "created_at": "2026-10-04T10:13:02.5258915Z",
+      "kind": "github-base-branch",
+      "path": "codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-04T10:13:08.6643189Z",
+      "kind": "orca-repo",
+      "path": "b6c28d88-89cf-408e-be73-2de898cb9937",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-04T10:13:22.8259179Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-05\\build\\steerline.exe",
+      "pid": 17388
+    },
+    {
+      "created_at": "2026-10-04T10:17:11.2692244Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-05\\build\\steerline.exe",
+      "pid": 480
+    },
+    {
+      "created_at": "2026-10-04T10:20:48.3937638Z",
+      "kind": "orca-worktree",
+      "path": "b6c28d88-89cf-408e-be73-2de898cb9937::C:/Users/lmas1/AppData/Local/Temp/steerline-e2e-340710984/candidates.local/candidates/repo",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-04T10:20:49.8741479Z",
+      "kind": "orca-worktree",
+      "path": "b6c28d88-89cf-408e-be73-2de898cb9937::C:/Users/lmas1/orca/workspaces/repo/sl-1-93b52627e191460dfe6feb30eff6d51f",
+      "pid": 0
+    }
+  ],
+  "usage_verified": false
+}

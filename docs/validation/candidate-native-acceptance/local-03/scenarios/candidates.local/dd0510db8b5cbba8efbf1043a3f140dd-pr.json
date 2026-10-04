@@ -1,0 +1,12 @@
+{
+  "url": "https://github.com/erranliu/SteerlineTest/pull/61",
+  "repository": "erranliu/SteerlineTest",
+  "base_branch": "codex/e2e/e9960d32e3d34c96a88136651f222c07/candidates.local/base",
+  "head_repository": "erranliu/SteerlineTest",
+  "head_branch": "erranliu/sl-1-dd0510db8b5cbba8efbf1043a3f140dd",
+  "head_revision": "bb3baa756e7af505d5f3a20b1ebbf4d28c544a53",
+  "state": "open",
+  "merged": false,
+  "merged_at": null,
+  "merge_commit": null
+}

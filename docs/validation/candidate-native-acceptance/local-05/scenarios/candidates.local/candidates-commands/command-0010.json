@@ -1,0 +1,13 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-05\\build\\controlled-helper.exe",
+    "candidate",
+    "-config",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\project.json",
+    "-input",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\candidate-d2e243d96de84c4a8898e0722941874c.json"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\"request\":{\"protocol_version\":1,\"request_id\":\"d2e243d96de84c4a8898e0722941874c\",\"repository_identity\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\steerline-e2e-340710984\\\\candidates.local\\\\candidates\\\\repo\\\\.git\",\"instance_id\":\"c08d3e801ae42945e9f89a092fde0cb0\",\"action\":\"start_task\",\"expected_control_revision\":2,\"payload\":{\"task_id\":\"1\",\"execution_profile_id\":\"candidate-orca\",\"execution_profile_digest\":\"77b0c48b2f6b188a4f0b4b7ed936cfa84e2caffee20bd99bb2b64baf97b07d66\"},\"requested_by\":\"e2e\",\"created_at\":\"2026-10-04T10:13:35.6583629Z\",\"expires_at\":\"2026-10-04T10:15:35.6583629Z\"},\"control\":{\"version\":1,\"request_id\":\"d2e243d96de84c4a8898e0722941874c\",\"request_digest\":\"9c60185afb02184bd806d1bc46a83f700c692c7270f6eea3212b452f38e20615\",\"instance_id\":\"c08d3e801ae42945e9f89a092fde0cb0\",\"action\":\"start_task\",\"status\":\"applied\",\"code\":\"applied\",\"message\":\"native task worker reservation was resumed\",\"requested_by\":\"e2e\",\"submitted_at\":\"2026-10-04T10:13:35.6583629Z\",\"accepted_at\":\"2026-10-04T10:13:35.7520292Z\",\"completed_at\":\"2026-10-04T10:13:55.7044866Z\",\"run_id\":\"93b52627e191460dfe6feb30eff6d51f\",\"attempt_id\":\"5892e58cb0fdffb62e3231f4de6c7557\",\"control_revision\":3,\"run_revision\":4}}\n"
+}

@@ -1,0 +1,35 @@
+{
+  "error": "\u003cnil\u003e",
+  "input": {
+    "Action": "answer_decision",
+    "RequestID": "7fc0e96a54604bb781d8a7ebec113eb2",
+    "TaskID": "",
+    "ProfileID": "",
+    "RunID": "7b2d654721f44570accf902207927daa",
+    "ExecutionID": "008316e4b8ce92192e7d8ae972cc5da1",
+    "DecisionID": "93560933b48138fc27d19222a631da58",
+    "Option": "continue",
+    "Note": "Use exactly this candidate.txt marker: bravo. Publish according to the bound Spec/Plan in this original session. ",
+    "InstanceID": "eb3aa90da70262c02514e65d22ed1e02",
+    "TaskVersion": 0,
+    "GraphRevision": 0,
+    "CandidateVersion": 0,
+    "DecisionVersion": 1,
+    "RunRevision": 17
+  },
+  "receipt": {
+    "command": {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+      "command_id": "7fc0e96a54604bb781d8a7ebec113eb2",
+      "kind": "answer_decision",
+      "target_id": "93560933b48138fc27d19222a631da58",
+      "expected_version": 1,
+      "idempotency_key": "answer:93560933b48138fc27d19222a631da58:6d47609ad5d543278a8a132b6f95d1e90cd44418380425f8a76ee54394a2806b",
+      "requested_by": "e2e",
+      "payload": "eyJkZWNpc2lvbl9pZCI6IjkzNTYwOTMzYjQ4MTM4ZmMyN2QxOTIyMmE2MzFkYTU4IiwicnVuX2lkIjoiN2IyZDY1NDcyMWY0NDU3MGFjY2Y5MDIyMDc5MjdkYWEiLCJvcHRpb25faWQiOiJjb250aW51ZSIsIm5vdGUiOiJVc2UgZXhhY3RseSB0aGlzIGNhbmRpZGF0ZS50eHQgbWFya2VyOiBicmF2by4gUHVibGlzaCBhY2NvcmRpbmcgdG8gdGhlIGJvdW5kIFNwZWMvUGxhbiBpbiB0aGlzIG9yaWdpbmFsIHNlc3Npb24uIiwiYW5zd2VyZWRfYnkiOiJlMmUiLCJhbnN3ZXJlZF9hdCI6IjIwMjYtMTAtMDRUMTA6MTc6NTkuMDM0MjY0OFoiLCJleHBlY3RlZF9kZWNpc2lvbl92ZXJzaW9uIjoxLCJleHBlY3RlZF9ydW5fcmV2aXNpb24iOjE3LCJzb3VyY2VfYXR0ZW1wdF9pZCI6ImU2ZjYyNzhkZDY2MGM0Njg1MjI2ODU1Yzk2MTM5YjljIiwiZXhwZWN0ZWRfcmVjb3ZlcnlfdmVyc2lvbiI6Miwic2VydmljZV9pbnN0YW5jZV9pZCI6ImViM2FhOTBkYTcwMjYyYzAyNTE0ZTY1ZDIyZWQxZTAyIn0=",
+      "status": "pending",
+      "created_at": "2026-10-04T10:17:59.0342648Z",
+      "updated_at": "2026-10-04T10:17:59.0342648Z"
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "command": [
+    "gh",
+    "pr",
+    "ready",
+    "https://github.com/erranliu/SteerlineTest/pull/65",
+    "--repo",
+    "erranliu/SteerlineTest"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "✓ Pull request erranliu/SteerlineTest#65 is marked as \"ready for review\"\n",
+  "stdout": ""
+}

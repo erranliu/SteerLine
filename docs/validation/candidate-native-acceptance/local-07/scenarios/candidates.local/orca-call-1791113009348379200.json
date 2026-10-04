@@ -1,0 +1,14 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\AppData\\Local\\Programs\\orca\\resources\\bin\\orca.exe",
+    "terminal",
+    "close",
+    "--worktree",
+    "path:C:/Users/lmas1/AppData/Local/Temp/steerline-e2e-998751171/candidates.local/candidates/repo",
+    "--all",
+    "--json"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\n  \"id\": \"d4f1ca19-4fd1-4a00-89c7-5091b4e69093\",\n  \"ok\": true,\n  \"result\": {\n    \"closed\": 0,\n    \"stopped\": 0,\n    \"retiredSurfaces\": true\n  },\n  \"_meta\": {\n    \"runtimeId\": \"5eedc7aa-7395-4127-ad2f-724894efe596\"\n  }\n}\n"
+}

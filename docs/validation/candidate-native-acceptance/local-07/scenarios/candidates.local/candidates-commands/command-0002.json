@@ -1,0 +1,14 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-07\\build\\steerline.exe",
+    "task",
+    "validate",
+    "-config",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-998751171\\candidates.local\\candidates\\project.json",
+    "-file",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-998751171\\candidates.local\\candidates\\tasks.json"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\"valid\":true,\"project_id\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\steerline-e2e-998751171\\\\candidates.local\\\\candidates\\\\repo\\\\.git\",\"task_count\":2,\"dependency_count\":1,\"authority_version\":1,\"graph_revision\":0,\"database_revision\":1,\"database_id\":\"e5b717e8c65de6479f4a55f61088f595\",\"sampled_at\":\"2026-10-04T11:03:41.2470707Z\",\"issues\":[]}\n"
+}

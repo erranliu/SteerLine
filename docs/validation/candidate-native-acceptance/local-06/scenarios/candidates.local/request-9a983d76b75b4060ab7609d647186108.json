@@ -1,0 +1,35 @@
+{
+  "error": "\u003cnil\u003e",
+  "input": {
+    "Action": "answer_decision",
+    "RequestID": "9a983d76b75b4060ab7609d647186108",
+    "TaskID": "",
+    "ProfileID": "",
+    "RunID": "3d5b2c7cbdd74c16b03d8f7a44e1077b",
+    "ExecutionID": "b78b36abd5adfd8295feef33235a9c8e",
+    "DecisionID": "46be4d8502c3093739cd58b1d07090a3",
+    "Option": "continue",
+    "Note": "Use exactly this candidate.txt marker: bravo. Publish according to the bound Spec/Plan in this original session. ",
+    "InstanceID": "210ea24e802ab116fc92d0a39e33f168",
+    "TaskVersion": 0,
+    "GraphRevision": 0,
+    "CandidateVersion": 0,
+    "DecisionVersion": 1,
+    "RunRevision": 17
+  },
+  "receipt": {
+    "command": {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-2359840006\\candidates.local\\candidates\\repo\\.git",
+      "command_id": "9a983d76b75b4060ab7609d647186108",
+      "kind": "answer_decision",
+      "target_id": "46be4d8502c3093739cd58b1d07090a3",
+      "expected_version": 1,
+      "idempotency_key": "answer:46be4d8502c3093739cd58b1d07090a3:c9394837bd9d1f31d1e328d8f92cd2ac17174b36f2e660578189a423bc4270d9",
+      "requested_by": "e2e",
+      "payload": "eyJkZWNpc2lvbl9pZCI6IjQ2YmU0ZDg1MDJjMzA5MzczOWNkNThiMWQwNzA5MGEzIiwicnVuX2lkIjoiM2Q1YjJjN2NiZGQ3NGMxNmIwM2Q4ZjdhNDRlMTA3N2IiLCJvcHRpb25faWQiOiJjb250aW51ZSIsIm5vdGUiOiJVc2UgZXhhY3RseSB0aGlzIGNhbmRpZGF0ZS50eHQgbWFya2VyOiBicmF2by4gUHVibGlzaCBhY2NvcmRpbmcgdG8gdGhlIGJvdW5kIFNwZWMvUGxhbiBpbiB0aGlzIG9yaWdpbmFsIHNlc3Npb24uIiwiYW5zd2VyZWRfYnkiOiJlMmUiLCJhbnN3ZXJlZF9hdCI6IjIwMjYtMTAtMDRUMTA6MzM6MjEuMjc2ODgzWiIsImV4cGVjdGVkX2RlY2lzaW9uX3ZlcnNpb24iOjEsImV4cGVjdGVkX3J1bl9yZXZpc2lvbiI6MTcsInNvdXJjZV9hdHRlbXB0X2lkIjoiZDg4YmEzMTVmMjlmNjM2NTg5NTVkOTliNDlmOWI3MDYiLCJleHBlY3RlZF9yZWNvdmVyeV92ZXJzaW9uIjoyLCJzZXJ2aWNlX2luc3RhbmNlX2lkIjoiMjEwZWEyNGU4MDJhYjExNmZjOTJkMGEzOWUzM2YxNjgifQ==",
+      "status": "pending",
+      "created_at": "2026-10-04T10:33:21.276883Z",
+      "updated_at": "2026-10-04T10:33:21.276883Z"
+    }
+  }
+}
