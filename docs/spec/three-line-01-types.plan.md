@@ -41,3 +41,16 @@ L2/L3/live/Full 不选：只有纯定义与调用路径迁移，业务、协议�
 实施接线：规则命令对应四个真实新包；L1 同次迁旧 taskgraph/workerflow/execution，加入 ports 与旧 task/persistence 代表，app 构造组包含 CM71。product/api 的源码纯度及 Windows/Linux 闭包由 CD67 和 CM71 校验，无额外原生环境能力。TaskGraph 投影只搬已有同读快照事实；完整 ProjectTaskAuthority/Projects 保留唯一旧所有者供 #74/#79 拆分，详见 ownership.md。
 
 L1 首次报告保留在 run-20261004/l1；其中原受控 terminal 用例在服务取消杀死持锁 fixture 子进程后遗留文件锁。Windows fixture 使用独占/delete-on-close 句柄，未修改生产或恢复验收。登记最小进程终止回归和原失败子场景；故障修复后的固定 L1 写入新的 l1-after-fixture-fix 空目录，不覆盖首次失败，不靠重试隐藏故障。Linux 保留原 fixture 行为，Windows/Linux 生产另做 go build ./...，带 e2e tag 的调用者只编译（go test -tags=e2e ./tests/e2e/... -run ^$），不声称场景运行。
+
+## main 冲突集成的测试计划（2026-10-04）
+
+将 main 的 #38 候选控制台和 #211 测试修复合入 #73 分支。四处文本冲突保留 main 的 UI/测试语义，生产和新增测试消费者改用 #73 的唯一纯类型；不恢复旧 alias。验证为本次合并选择以下最小范围，各报告写入新的空目录 `docs/validation/three-line-01-types/merge-main-20261004/`。
+
+| 级别/组或场景 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
+| --- | --- | --- | --- | --- | --- |
+| 定向 Go：CC1–CC4/console | Windows，受控 UI，无原生 opt-in | `go run ./cmd/test-feedback -out docs/validation/three-line-01-types/merge-main-20261004/console -- ./internal/steerline/console -count=1` | 冲突与新消费者切换后 | 既有 UI 及候选断言非零 run/pass、无 skip | console/ |
+| 定向 Go：候选接线、CD67、原始/改名 terminal 恢复、必要发布资格 | Windows，隔离 STEERLINE_HOME，受控协议 fixture，无 CC5 manifest | `go run ./cmd/test-feedback -out docs/validation/three-line-01-types/merge-main-20261004/integration -- ./internal/steerlineintegration -run '^Test(CandidateConsoleWiring|CD67CoreBoundary|CD67AdditionalImplementation|NativeOrcaFixedLunaLaunchReconcilesOriginalTerminal|NativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterRestart|EmptyExecutionRequirementsKeepMandatoryChecks)$' -count=1` | 编译通过后 | main 的新增候选输入/回执/精确身份和修复后的原断言通过，非零且无 skip | integration/ |
+| 定向 Go：main 的 Markdown PR clue 与进程后代清理修复 | Windows，无模型 | `go run ./cmd/test-feedback -out docs/validation/three-line-01-types/merge-main-20261004/repairs -- ./internal/execution/backend ./internal/testprocess -run '^Test(PRClues.*|ProcessReportsDescendantCleanupFailure|OwnedProcessWaitsForDescendants)$' -count=1` | 合并修复后 | 两包非零 run/pass，原断言保留、无 skip | repairs/ |
+| 构建 | Windows/Linux amd64 | `go build ./...`（GOOS=windows/linux） | 冲突清除后 | 退出 0；Linux 只编译、不称运行 | build.json |
+
+不重跑 Full/L2/L3/live 或完整 L1：原 #73 和 main 已有固定 L1/完整回归证据，本次新增的类型接线、守卫、候选与已改测试由上述定向覆盖。CC5 Windows 人工证据按 main 的明确延期保留，不以受控接线测试替代。

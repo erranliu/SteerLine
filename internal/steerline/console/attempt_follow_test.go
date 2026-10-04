@@ -17,7 +17,7 @@ import (
 func TestConsoleFollowsCurrentAttemptUntilHistoryIsSelected(t *testing.T) {
 	run := &contracts.Run{TaskID: "task", DomainTaskID: "task", RunID: "run", ExecutionID: "execution", AttemptID: "first"}
 	state := projectState{
-		selectedKey: "run:run",
+		selectedKey: "task:task",
 		snapshot: ProjectSnapshot{
 			Observation: api.ObservationSnapshot{Runtime: &contracts.Runtime{Runs: []*contracts.Run{run}}},
 			NativeTasks: &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{{TaskRecord: taskmodel.TaskRecord{TaskID: "task"}}}},

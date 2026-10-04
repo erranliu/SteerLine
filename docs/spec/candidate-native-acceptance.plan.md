@@ -1,6 +1,6 @@
 # Plan：多候选本机与远端真机验收
 
-任务 ID：39；任务名称：多候选本机与远端真机验收。唯一执行依据：[Spec](candidate-native-acceptance.spec.md)。硬前置：#38（传递包含 #37/#36），一个实现 PR 交付。
+任务 ID：39；任务名称：多候选本机与远端真机验收。唯一执行依据：[Spec](candidate-native-acceptance.spec.md)。硬前置：#38 实现合入（传递包含 #37/#36），一个实现 PR 交付。用户允许 #38 CC5 单独待人工补验后继续本任务开发，不将该例外扩展为本任务的原生验收豁免。
 
 1. 核对实际交付和当前受支持目标/认证，固定隔离仓库、SQLite、构建与能力快照。远端权限尚未准入时标明阻塞；不增加远端权限实现，不用本机Orca、mock或skip代替远端通过。
 2. 在 `tests/e2e/suites/candidates/` 编写带e2e tag的场景，经现有driver/native/controlled及证据适配层复用产品入口。场景不直接导入生产facade或平台实现，生产和外层 `internal/steerlineintegration` 不导入 `tests/e2e/internal`；遵守Go internal可见范围与现有测试边界。

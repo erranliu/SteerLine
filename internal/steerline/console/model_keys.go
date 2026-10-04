@@ -51,7 +51,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.scrollExpandedDetail(-8)
 		case "pgdown":
 			return m.scrollExpandedDetail(8)
-		case "s", "a", "m", "p", "x", "i":
+		case "s", "a", "m", "p", "x", "i", "{", "}", "b", "z":
 			m.detailExpanded = false
 		default:
 			return m, nil
@@ -78,6 +78,14 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	switch key.String() {
+	case "{":
+		return m.cycleCandidate(-1)
+	case "}":
+		return m.cycleCandidate(1)
+	case "b":
+		return m.startAdditionalCandidate()
+	case "z":
+		return m.prepareCandidateAbandon()
 	case "q", "ctrl+c":
 		m.saveProjectView(m.selected)
 		return m, tea.Quit
@@ -223,8 +231,10 @@ func (m Model) handleDecisionAnswerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	keyName := key.String()
+	defer m.saveDecisionDraft()
 	switch keyName {
 	case "esc", "ctrl+c":
+		m.saveDecisionDraft()
 		m.answer = nil
 		m.status = "已关闭答案草稿；答案未提交"
 		return m, nil
@@ -399,6 +409,25 @@ func (m Model) handleConfirm(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "esc", "n":
 		m.confirm = nil
 	case "enter", "y":
+		if confirm.action == "abandon_candidate" {
+			s, rt := m.readyControlTarget()
+			row := m.selectedRow(m.selected)
+			if rt == nil {
+				return m, nil
+			}
+			if s.ref.Key != confirm.projectKey || rt.Service.InstanceID != confirm.instance || rt.Control.Revision != confirm.revision || row == nil || row.run == nil || row.run.RunID != confirm.runID || row.run.ControlRevision != confirm.payload.ExpectedCandidateVersion || row.native == nil || row.native.Version != confirm.payload.ExpectedTaskVersion {
+				m.confirm = nil
+				m.status = "原候选或版本已变化；未提交放弃"
+				return m, nil
+			}
+			if reason := candidateAbandonReason(*s, row); reason != "" {
+				m.confirm = nil
+				m.status = reason
+				return m, nil
+			}
+			m.confirm = nil
+			return m.submitCandidateAction(confirm.action, confirm.payload, confirm.requestID, confirm.instance, confirm.revision)
+		}
 		m.confirm = nil
 		return m.beginAction(confirm.projectKey, confirm.instance, confirm.revision, confirm.action, confirm.taskID, confirm.requestID)
 	}

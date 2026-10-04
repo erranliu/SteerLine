@@ -25,7 +25,7 @@ type OutputBatch struct {
 	SourceChanged bool      `json:"source_changed,omitempty"`
 }
 
-var prURL = regexp.MustCompile(`https?://[^\s<>"']+/(?:pulls|pull)/[0-9]+`)
+var prURL = regexp.MustCompile("https?://[^\\s<>\"'`()]+/(?:pulls|pull)/[0-9]+")
 
 func PRClues(text string) []string {
 	seen := map[string]bool{}

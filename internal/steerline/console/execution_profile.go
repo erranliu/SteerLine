@@ -118,6 +118,9 @@ func fixedRunExecutionProfile(state projectState, run *contracts.Run) *execution
 	if run == nil {
 		return nil
 	}
+	if run.ExecutionProfile != nil {
+		return run.ExecutionProfile
+	}
 	workflows := []executionmodel.WorkflowRunRecord(nil)
 	if state.snapshot.Domain != nil {
 		workflows = state.snapshot.Domain.WorkflowRuns

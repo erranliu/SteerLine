@@ -1,6 +1,6 @@
 # 当前代码架构与源码索引
 
-核对日期：2026-10-04。本页反映含 #37 候选基础的 main 与 #73 纯类型迁移工作树；[归属/验证记录](../validation/three-line-01-types/README.md)保留实际源码、构造、残留后继和测试证据。原生能力证据不因搬包而扩大。
+核对日期：2026-10-04。本页反映 main 的 #37/#38 候选基础和 #211 测试修复，与 #73 纯类型迁移集成的工作树；[归属/验证记录](../validation/three-line-01-types/README.md)保留实际源码、构造、残留后继和测试证据。原生能力证据不因搬包而扩大。
 
 ## 系统与业务权威
 
@@ -122,7 +122,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 
 ## 全 OS / 构建标签源码索引
 
-下面按实际工作树列出全部 cmd/internal 非测试 Go 文件，不排除 OS/tag；完整 hash/import 索引见 [source-index.json](../validation/three-line-01-types/source-index.json)。依赖守卫另外覆盖全部测试源码，testprotocol/testprocess 属测试支持库存而非生产产品入口。
+下面按实际工作树列出全部 cmd/internal 非测试 Go 文件，不排除 OS/tag；完整 hash/import 索引见 [source-index.json](../validation/three-line-01-types/merge-main-20261004/source-index.json)。依赖守卫另外覆盖全部测试源码，testprotocol/testprocess 属测试支持库存而非生产产品入口。
 
 | 包 | 文件数 | 项目内直接依赖 |
 | --- | --- | --- |
@@ -139,7 +139,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 | `internal/steerline/clientcontracts` | 5 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/contracts`、`internal/steerline/task`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
 | `internal/steerline/codexapp` | 4 | 无 |
 | `internal/steerline/codexworker` | 29 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/codexapp`、`internal/steerline/contracts`、`internal/steerline/workspace` |
-| `internal/steerline/console` | 21 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/activityview`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/storage/ports` |
+| `internal/steerline/console` | 22 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/activityview`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/storage/ports` |
 | `internal/steerline/contracts` | 11 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/task`、`internal/steerline/taskview`、`internal/task/model` |
 | `internal/steerline/orca_remote_worker` | 14 | `internal/execution/backend`、`internal/steerline/codexworker`、`internal/steerline/orcaworker` |
 | `internal/steerline/orcaworker` | 28 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/codexworker`、`internal/steerline/contracts`、`internal/steerline/workspace` |
@@ -381,6 +381,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 
 #### internal/steerline/console
 
+- [candidates.go](../../internal/steerline/console/candidates.go)
 - [conversation.go](../../internal/steerline/console/conversation.go)
 - [conversation_anchor.go](../../internal/steerline/console/conversation_anchor.go)
 - [execution_profile.go](../../internal/steerline/console/execution_profile.go)

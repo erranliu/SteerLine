@@ -37,3 +37,7 @@ TM01.1：生产 import 与构造清单见 [consumers.json](consumers.json)，逐
 复用 #37 已有候选基础证据；本轮又定向检查原 MC1/4/8/9 身份/唯一交付/迟到结果/名额断言。结构/import/构造变化不新增原生 launch、权限或协议能力，因此未跑 Full/L2/L3/live，也不把 mock 或 Linux 编译当作真机认证。planning/HTTP/SSE 未实现；#39 远端权限门槛仍按该任务要求验证，#73 不声称消除它。
 
 #73 无未解决实现问题。#74 得到混合 ProjectTaskAuthority/StartupBlockers/DeliveryGate/PR 证据/复合回执的唯一残留和公共 Service/Config/组装段清单；#77 收窄产品，#79 拆存储/连接，#80 消除宿主剩余。后继仍需按固定 Spec/Plan 整体交付，不由本 PR 提前实现。任务身份保留；活动 roadmap/execution-map/Spec 索引移出 #73 并引用本验收基础。
+
+## 后续 main 冲突集成
+
+2026-10-04：将 main 的 #38/PR208 候选 UI 与 #211 修复集成到本 PR，保留 main 行为、切换新增消费者到唯一类型。此次定向验证和当前源码 hash 见[冲突集成记录](merge-main-20261004/README.md)；本页初次交付的 source-index/coverage 保留历史值。

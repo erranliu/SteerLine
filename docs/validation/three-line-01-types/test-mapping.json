@@ -333,5 +333,22 @@
     "retested_parent": "TestCD67AdditionalImplementation",
     "retested_subtest": "supported_terminal_recovery_and_original_identity",
     "l1_evidence": "l1 first failure retained; l1-after-fixture-fix is separate final run"
+  },
+  "main_conflict_integration": {
+    "main_commit": "a8ff0f01d38299d77ecc9cd4463b78a1286e1bec",
+    "evidence_directory": "merge-main-20261004",
+    "text_conflicts": [
+      "internal/steerline/console/model.go",
+      "internal/steerline/console/execution_profile.go",
+      "internal/steerlineintegration/native_environment_cd67_test.go",
+      "internal/steerlineintegration/requirement_admission_cd67_test.go"
+    ],
+    "new_type_consumers": [
+      "internal/steerline/console/candidates.go",
+      "internal/steerline/console/candidates_test.go",
+      "internal/steerlineintegration/candidate_console_test.go"
+    ],
+    "preserved_semantics": "main #38 candidate UI and #211 repaired assertions; only namespace/type-owner conversion",
+    "scope": "Plan-directed tests, Windows/Linux compile; no Full/L2/L3/live or CC5 manual replay"
   }
 }

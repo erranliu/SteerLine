@@ -36,11 +36,7 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 		}
 		profile := testExecutionProfile(t, "selected", "Selected", host, "codex", codex, orca)
 		writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "selected")
-		publisher := "host_service"
-		if host == "orca" {
-			publisher = "worker"
-		}
-		data, err := json.Marshal(map[string]any{"publication_policy": map[string]string{"publisher": publisher}, "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion})
+		data, err := json.Marshal(map[string]any{"publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -82,8 +78,7 @@ func TestConfigRejectsRemovedOrcaFallback(t *testing.T) {
 
 func TestConfigRequiresAnExplicitTaskAuthority(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
-	publisher := "host_service"
-	data, err := json.Marshal(map[string]any{"publication_policy": map[string]string{"publisher": publisher}, "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": t.TempDir(), "run_dir": t.TempDir(), "branch": "main"})
+	data, err := json.Marshal(map[string]any{"publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": t.TempDir(), "run_dir": t.TempDir(), "branch": "main"})
 	if err != nil {
 		t.Fatal(err)
 	}

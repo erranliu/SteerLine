@@ -1,0 +1,10 @@
+{
+  "pid": 16988,
+  "started_at": "2026-10-04T06:19:27.9117663Z",
+  "diagnosed_first_launch": "Controlled Git helper environment missing; public query rejected before side effect. Added only the three exact isolated fixture bindings.",
+  "environment": {
+    "STEERLINE_TEST_REMOTE_URL": "git@github.com:owner/repo.git",
+    "STEERLINE_FAKE_GIT_FETCH_REMOTE": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestCandidateConsoleWiring493850477\\001\\origin.git",
+    "STEERLINE_INTEGRATION_HISTORY_FILE": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestCandidateConsoleWiring493850477\\001\\app-server-history.json"
+  }
+}

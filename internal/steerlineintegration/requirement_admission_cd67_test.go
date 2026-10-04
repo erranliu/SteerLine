@@ -35,7 +35,7 @@ func TestEmptyExecutionRequirementsKeepMandatoryChecks(t *testing.T) {
 	codex := nativeProfileSettings(c)
 	codex.Executable = "must-not-be-called"
 	setNativeProfile(t, &c, codex)
-	c.PublicationPolicy.Publisher = executionbackend.PublisherWorker
+	c.PublicationPolicy.Publisher = "host_service"
 	if err := requireNativeFlowCapabilities(context.Background(), c); err == nil || !strings.Contains(err.Error(), "publication_policy") {
 		t.Fatalf("empty requirements bypassed publisher check: %v", err)
 	}

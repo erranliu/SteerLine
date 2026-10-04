@@ -1,0 +1,8 @@
+{
+  "fixture": "authorized-20261004",
+  "status": "runtime_cleaned",
+  "remaining_runtime_paths": [],
+  "retained_static_build_artifact": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-product-cli-134230708\\steerline.exe",
+  "optional_cache_deletion": "exec_command rejected before execution: blocked by policy; no deletion retry or bypass",
+  "native_acceptance": "blocked_not_passed"
+}
