@@ -13,10 +13,10 @@ func (m Model) updateConversation(msg conversationMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	state := &m.projects[index]
-	state.conversationInFlight = false
 	if index != m.selected || msg.identity != state.ref.Identity || msg.generation != state.conversationGeneration || msg.key != state.conversationKey {
 		return m, nil
 	}
+	state.conversationInFlight = false
 	if msg.err != nil {
 		state.conversationError = msg.err.Error()
 		return m, nil

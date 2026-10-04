@@ -93,9 +93,13 @@ func (m Model) updateProject(msg projectMsg) (tea.Model, tea.Cmd) {
 	}
 	if index == m.selected && m.runFocus != "" {
 		found := false
-		for _, row := range rows {
-			if row.kind == rowRun && (row.run.RunID == m.runFocus || row.run.TaskID == m.runFocus) {
-				state.selectedKey, m.runFocus = row.key, ""
+		for _, run := range candidateRuns(*state, "") {
+			if run.RunID == m.runFocus || run.TaskID == m.runFocus {
+				if state.view.Candidates == nil {
+					state.view.Candidates = map[string]string{}
+				}
+				state.view.Candidates[run.TaskID] = run.RunID
+				state.selectedKey, m.runFocus = "task:"+run.TaskID, ""
 				found = true
 				break
 			}
@@ -154,10 +158,10 @@ func (m Model) updateActivity(msg activityResultMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	state := &m.projects[index]
-	state.activityInFlight = false
 	if index != m.selected || msg.identity != state.ref.Identity || msg.generation != state.activityGeneration || msg.key != state.activityKey || !sameCursor(msg.base, state.activityCursor) {
 		return m, nil
 	}
+	state.activityInFlight = false
 	if msg.err != nil {
 		state.activityError = msg.err.Error()
 		return m, nil

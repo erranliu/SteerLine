@@ -102,7 +102,7 @@ func TestCompletedTaskShowsHistoricalExecutionInFourColumns(t *testing.T) {
 	snapshot.Observation.Runtime.Runs = []*contracts.Run{run}
 	snapshot.NativeTasks = &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{{TaskRecord: contracts.TaskRecord{TaskID: "3", Title: run.Title, Status: "closed"}}}}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
-	m.projects[0].selectedKey = "run:run-3"
+	m.projects[0].selectedKey = "task:3"
 	m.width = 100
 	rows := m.rows(0)
 	if len(rows) != 1 || rowTaskStatus(rows[0]) != "已完成" || rowExecutionStatus(rows[0]) != "失败（历史）" {
@@ -154,7 +154,7 @@ func TestTaskPreviewKeepsOneIdentityAndShowsFixedExecutionPlan(t *testing.T) {
 	fixed := contracts.FixedExecutionProfile{ID: "orca-local", Name: "本机执行", Host: "orca", Agent: "codex", ImplementationDisplay: []string{"Model：gpt-6-luna", "Reasoning effort：xhigh"}}
 	snapshot.Domain = &contracts.DomainSnapshot{WorkflowRuns: []contracts.WorkflowRunRecord{{WorkflowRunID: run.RunID, ExecutionProfile: &fixed}}}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
-	m.projects[0].selectedKey = "run:" + run.RunID
+	m.projects[0].selectedKey = "task:" + run.TaskID
 	row := m.selectedRow(0)
 	if row == nil || row.run == nil {
 		t.Fatal("running task was not selected")
@@ -187,7 +187,7 @@ func TestPendingDecisionPreviewHidesRunIdentity(t *testing.T) {
 	ref := testProject("decision")
 	snapshot, run := decisionSnapshot(ref, now)
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
-	m.projects[0].selectedKey = "run:" + run.RunID
+	m.projects[0].selectedKey = "task:" + run.TaskID
 	row := m.selectedRow(0)
 	preview := strings.Join(renderDetailPreview(m, m.projects[0], row, 120, 200), "\n")
 	full := strings.Join(renderDetail(m, m.projects[0], row, 120, 200), "\n")

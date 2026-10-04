@@ -24,7 +24,7 @@ func TestNativeTaskAndItsRunShareOneListRow(t *testing.T) {
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "task:102"
 	rows := m.rows(0)
-	if len(rows) != 2 || rows[0].kind != rowRun || rows[0].key != "run:"+run.RunID || rows[1].taskID != "103" {
+	if len(rows) != 2 || rows[0].kind != rowRun || rows[0].key != "task:"+run.TaskID || rows[1].taskID != "103" {
 		t.Fatalf("native task and run were not coalesced in task order: %+v", rows)
 	}
 	detail := strings.Join(renderDetail(m, m.projects[0], &rows[0], 120, 60), "\n")
@@ -34,7 +34,7 @@ func TestNativeTaskAndItsRunShareOneListRow(t *testing.T) {
 	m.projects[0].refreshID = 1
 	updated, _ := m.Update(projectMsg{key: ref.Key, identity: ref.Identity, requestID: 1, snapshot: snapshot})
 	m = updated.(Model)
-	if m.projects[0].selectedKey != "run:"+run.RunID || m.selectedRow(0).run == nil {
+	if m.projects[0].selectedKey != "task:"+run.TaskID || m.selectedRow(0).run == nil {
 		t.Fatalf("task selection did not follow its new run: %q", m.projects[0].selectedKey)
 	}
 	m.projects[0].filter = 1

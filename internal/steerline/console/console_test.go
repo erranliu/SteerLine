@@ -100,7 +100,7 @@ func TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID(
 	control := &testControlClient{}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
 	m.profile = &viewProfile{dir: t.TempDir()}
-	m.projects[0].selectedKey = "run:" + run.RunID
+	m.projects[0].selectedKey = "task:" + run.TaskID
 	updated, cmd := m.answerSelectedDecision()
 	m = updated.(Model)
 	if cmd != nil || m.answer == nil || m.answer.optionIndex != 10 {
@@ -163,8 +163,8 @@ func TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID(
 	if readErr != nil {
 		t.Fatal(readErr)
 	}
-	if strings.Contains(string(viewBytes), "漢字") {
-		t.Fatal("UI view preferences stored the answer body")
+	if !strings.Contains(string(viewBytes), "漢字") {
+		t.Fatal("UI view preferences lost the isolated answer draft")
 	}
 	message := cmd()
 	updated, _ = m.Update(message)
@@ -183,7 +183,7 @@ func TestDecisionAnswerDraftSurvivesStaleRevisionAndLengthRejection(t *testing.T
 	snapshot, run := decisionSnapshot(ref, now)
 	control := &testControlClient{}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
-	m.projects[0].selectedKey = "run:" + run.RunID
+	m.projects[0].selectedKey = "task:" + run.TaskID
 	updated, _ := m.answerSelectedDecision()
 	m = updated.(Model)
 	_, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyTab})
@@ -210,7 +210,7 @@ func TestConsoleOffersWorkerFlowDecisionWithoutRecoveryActions(t *testing.T) {
 	snapshot, run := decisionSnapshot(ref, now)
 	run.WorkflowVersion, run.Backend, run.Protocol, run.Host = fixtureWorkflowVersion, "local", "local_process", "local"
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
-	m.projects[0].selectedKey = "run:" + run.RunID
+	m.projects[0].selectedKey = "task:" + run.TaskID
 	updated, cmd := m.answerSelectedDecision()
 	m = updated.(Model)
 	if cmd != nil || m.answer == nil {
@@ -1104,7 +1104,7 @@ func TestNativeTaskViewKeepsOffPageSelectionAndEscapesText(t *testing.T) {
 	runSnapshot := snapshot
 	runSnapshot.Observation.Runtime.Runs = []*contracts.Run{{RunID: "run-501", TaskID: "501", DomainTaskID: "501", TaskStatus: "in_progress", ExecutionStatus: "running"}}
 	m.projects[0].snapshot = runSnapshot
-	m.projects[0].selectedKey = "run:run-501"
+	m.projects[0].selectedKey = "task:501"
 	if selectedNativeTaskID(m.projects[0]) != "501" {
 		t.Fatal("selected native run did not retain its task identity")
 	}
@@ -1136,7 +1136,7 @@ func TestUnicodeLongErrorFitsNarrowAndWidePanels(t *testing.T) {
 	for _, width := range []int{80, 170} {
 		m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, control, now)
 		m.width, m.height = width, 24
-		m.projects[0].selectedKey = "run:run-unicode"
+		m.projects[0].selectedKey = "task:任务-一"
 		for _, panelKey := range []rune{'d', 'a', 'c', 'f', 't'} {
 			updated, _ := m.Update(runeKey(panelKey))
 			m = updated.(Model)

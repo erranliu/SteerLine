@@ -10,6 +10,9 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 const viewFileVersion = 1
@@ -24,43 +27,53 @@ type FoldChoice struct {
 }
 
 type SavedAction struct {
-	Action                 string    `json:"action,omitempty"`
-	TaskID                 string    `json:"task_id,omitempty"`
-	ExecutionProfileID     string    `json:"execution_profile_id,omitempty"`
-	ExecutionProfileDigest string    `json:"execution_profile_digest,omitempty"`
-	DecisionID             string    `json:"decision_id,omitempty"`
-	Status                 string    `json:"status"`
-	RunID                  string    `json:"run_id,omitempty"`
-	TargetInstance         string    `json:"target_instance,omitempty"`
-	UpdatedAt              time.Time `json:"updated_at,omitempty"`
+	DecisionIdentity       string                      `json:"decision_identity,omitempty"`
+	Payload                api.ControlPayload          `json:"payload,omitempty"`
+	EnvironmentTarget      *contracts.HostActionTarget `json:"environment_target,omitempty"`
+	DecisionDraftOptionID  string                      `json:"draft_option,omitempty"`
+	DecisionDraftNote      string                      `json:"draft_note,omitempty"`
+	DecisionRevision       uint64                      `json:"decision_revision,omitempty"`
+	DecisionVersion        uint64                      `json:"decision_version,omitempty"`
+	Action                 string                      `json:"action,omitempty"`
+	TaskID                 string                      `json:"task_id,omitempty"`
+	ExecutionProfileID     string                      `json:"execution_profile_id,omitempty"`
+	ExecutionProfileDigest string                      `json:"execution_profile_digest,omitempty"`
+	DecisionID             string                      `json:"decision_id,omitempty"`
+	Status                 string                      `json:"status"`
+	RunID                  string                      `json:"run_id,omitempty"`
+	TargetInstance         string                      `json:"target_instance,omitempty"`
+	UpdatedAt              time.Time                   `json:"updated_at,omitempty"`
 }
 
 type ProjectView struct {
-	ConfigPath       string                 `json:"config_path"`
-	RunDir           string                 `json:"run_dir"`
-	SelectedKey      string                 `json:"selected_key,omitempty"`
-	SelectionPending bool                   `json:"selection_pending,omitempty"`
-	Filter           string                 `json:"filter,omitempty"`
-	Panel            string                 `json:"panel,omitempty"`
-	AttemptID        string                 `json:"attempt_id,omitempty"`
-	AttemptPinned    bool                   `json:"attempt_pinned,omitempty"` // Only an explicit history choice pins an attempt across refreshes and restarts.
-	Follow           bool                   `json:"follow"`
-	AnchorGroup      string                 `json:"anchor_group,omitempty"`
-	AnchorItem       string                 `json:"anchor_item,omitempty"`
-	AnchorRevision   int64                  `json:"anchor_revision,omitempty"`
-	AnchorLine       int                    `json:"anchor_line,omitempty"`
-	ReadGroup        string                 `json:"read_group,omitempty"`
-	ReadItem         string                 `json:"read_item,omitempty"`
-	ReadRevision     int64                  `json:"read_revision,omitempty"`
-	ReadLine         int                    `json:"read_line,omitempty"`
-	BodyOffset       int64                  `json:"body_offset,omitempty"`
-	BodyPages        []int64                `json:"body_pages,omitempty"`
-	BodyKind         string                 `json:"body_kind,omitempty"`
-	DetailScroll     int                    `json:"detail_scroll,omitempty"`
-	LogScroll        int                    `json:"log_scroll,omitempty"`
-	Outstanding      map[string]string      `json:"outstanding,omitempty"`
-	Actions          map[string]SavedAction `json:"actions,omitempty"`
-	Groups           map[string]FoldChoice  `json:"groups,omitempty"`
+	Candidates       map[string]string           `json:"candidates,omitempty"`
+	Reading          map[string]CandidateReading `json:"candidate_reading,omitempty"`
+	Drafts           map[string]CandidateDraft   `json:"candidate_drafts,omitempty"`
+	ConfigPath       string                      `json:"config_path"`
+	RunDir           string                      `json:"run_dir"`
+	SelectedKey      string                      `json:"selected_key,omitempty"`
+	SelectionPending bool                        `json:"selection_pending,omitempty"`
+	Filter           string                      `json:"filter,omitempty"`
+	Panel            string                      `json:"panel,omitempty"`
+	AttemptID        string                      `json:"attempt_id,omitempty"`
+	AttemptPinned    bool                        `json:"attempt_pinned,omitempty"` // Only an explicit history choice pins an attempt across refreshes and restarts.
+	Follow           bool                        `json:"follow"`
+	AnchorGroup      string                      `json:"anchor_group,omitempty"`
+	AnchorItem       string                      `json:"anchor_item,omitempty"`
+	AnchorRevision   int64                       `json:"anchor_revision,omitempty"`
+	AnchorLine       int                         `json:"anchor_line,omitempty"`
+	ReadGroup        string                      `json:"read_group,omitempty"`
+	ReadItem         string                      `json:"read_item,omitempty"`
+	ReadRevision     int64                       `json:"read_revision,omitempty"`
+	ReadLine         int                         `json:"read_line,omitempty"`
+	BodyOffset       int64                       `json:"body_offset,omitempty"`
+	BodyPages        []int64                     `json:"body_pages,omitempty"`
+	BodyKind         string                      `json:"body_kind,omitempty"`
+	DetailScroll     int                         `json:"detail_scroll,omitempty"`
+	LogScroll        int                         `json:"log_scroll,omitempty"`
+	Outstanding      map[string]string           `json:"outstanding,omitempty"`
+	Actions          map[string]SavedAction      `json:"actions,omitempty"`
+	Groups           map[string]FoldChoice       `json:"groups,omitempty"`
 }
 
 type ViewFile struct {
@@ -216,7 +229,7 @@ func readViewFile(path string) (ViewFile, error) {
 		return ViewFile{}, errors.New("view preferences have an unsupported format")
 	}
 	for key, project := range view.Projects {
-		if key == "" || len(view.Projects) > 1024 || (project.Groups != nil && len(project.Groups) > 50000) || len(project.Outstanding) > 256 || len(project.Actions) > 256 || project.AnchorRevision < 0 || project.AnchorLine < 0 || project.ReadRevision < 0 || project.ReadLine < 0 || project.BodyOffset < 0 || project.DetailScroll < 0 || project.LogScroll < 0 || !validBodyPages(project.BodyPages, project.BodyOffset) || !validSavedFilter(project.Filter) || !validSavedPanel(project.Panel) || !validBodyKind(project.BodyKind) {
+		if key == "" || len(view.Projects) > 1024 || (project.Groups != nil && len(project.Groups) > 50000) || len(project.Outstanding) > 256 || len(project.Actions) > 256 || len(project.Candidates) > 1024 || len(project.Reading) > 4096 || len(project.Drafts) > 4096 || project.AnchorRevision < 0 || project.AnchorLine < 0 || project.ReadRevision < 0 || project.ReadLine < 0 || project.BodyOffset < 0 || project.DetailScroll < 0 || project.LogScroll < 0 || !validBodyPages(project.BodyPages, project.BodyOffset) || !validSavedFilter(project.Filter) || !validSavedPanel(project.Panel) || !validBodyKind(project.BodyKind) {
 			return ViewFile{}, errors.New("view preferences contain invalid or excessive state")
 		}
 		for requestID, taskKey := range project.Outstanding {
@@ -233,6 +246,16 @@ func readViewFile(path string) (ViewFile, error) {
 		for groupID := range project.Groups {
 			if groupID == "" {
 				return ViewFile{}, errors.New("view preferences contain an invalid group identity")
+			}
+		}
+		for id, reading := range project.Reading {
+			if id == "" || reading.AnchorRevision < 0 || reading.ReadRevision < 0 || reading.AnchorLine < 0 || reading.ReadLine < 0 || reading.DetailScroll < 0 || reading.LogScroll < 0 || !validBodyKind(reading.BodyKind) || !validBodyPages(reading.BodyPages, reading.BodyOffset) {
+				return ViewFile{}, errors.New("view preferences contain invalid candidate reading state")
+			}
+		}
+		for id, draft := range project.Drafts {
+			if id == "" || draft.OptionIndex < -1 {
+				return ViewFile{}, errors.New("view preferences contain invalid candidate draft state")
 			}
 		}
 	}
@@ -274,7 +297,7 @@ func validBodyPages(values []int64, current int64) bool {
 }
 func validSavedAction(value string) bool {
 	switch value {
-	case "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "answer_decision":
+	case "open_terminal", "recheck_environment", "start_candidate", "abandon_candidate", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "answer_decision":
 		return true
 	}
 	return false

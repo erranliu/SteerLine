@@ -1,0 +1,224 @@
+package steerlineintegration
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/console"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerlineapp"
+)
+
+func TestCandidateConsoleWiring(t *testing.T) {
+	timeout := 3 * time.Minute
+	if os.Getenv("STEERLINE_CC5_MANIFEST") != "" {
+		timeout = 15 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	f := newLifecycleProject(t, "local")
+	var profiles []any
+	for i := 0; i < 6; i++ {
+		payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: os.Args[0], Model: fmt.Sprintf("fixture-model-%d", i), WindowsSandbox: "unelevated"})
+		require(t, err)
+		profiles = append(profiles, map[string]any{"id": fmt.Sprintf("p%d", i), "name": fmt.Sprintf("隔离方案%d", i), "host": "local", "agent": "codex", "implementation_configs": []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload}}})
+	}
+	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), mustJSON(map[string]any{"version": 2, "default_execution_profile": "p0", "execution_profiles": profiles}), 0600))
+	var err error
+	f.config, err = steerlineapp.LoadConfig(f.configPath)
+	require(t, err)
+	createIntegrationTask(t, ctx, f, 901)
+	svc := startIntegrationService(t, ctx, f.config, &integrationLifecycleResolver{})
+	defer svc.stop(t)
+	client, err := steerlineapp.OpenClient(ctx, f.configPath)
+	require(t, err)
+	defer client.Close()
+	ref := client.Project()
+	m, err := console.NewModel(ctx, []api.ProjectRef{ref}, console.Options{Clients: map[string]api.ConsoleClient{ref.Key: client}, ApplicationHome: steerlineapp.HomeDir()})
+	require(t, err)
+	defer m.Close()
+	next, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 80})
+	m = next.(console.Model)
+	step := func(key tea.KeyMsg) {
+		t.Helper()
+		next, cmd := m.Update(key)
+		m = next.(console.Model)
+		if cmd != nil {
+			next, _ = m.Update(cmd())
+			m = next.(console.Model)
+		}
+	}
+	key := func(r rune) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
+	step(key('r'))
+	step(tea.KeyMsg{Type: tea.KeyDown})
+	step(key('s'))
+	step(tea.KeyMsg{Type: tea.KeyEnter})
+	var primary *contracts.Run
+	waitFor(t, 30*time.Second, func() bool {
+		snap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
+		if snap.Observation.Runtime == nil {
+			return false
+		}
+		for _, r := range snap.Observation.Runtime.Runs {
+			if r.Decision != nil && r.SessionID != "" {
+				primary = r
+				return true
+			}
+		}
+		return false
+	})
+	step(key('r'))
+	step(key('b'))
+	step(tea.KeyMsg{Type: tea.KeyDown})
+	step(tea.KeyMsg{Type: tea.KeyEnter})
+	// The UI's archived request is read through the public control client.
+	var candidateRequest *api.ControlRequest
+	waitFor(t, 30*time.Second, func() bool {
+		snap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
+		if snap.Observation.Runtime == nil {
+			return false
+		}
+		for _, r := range snap.Observation.Runtime.Runs {
+			if r.RunID == primary.RunID || r.SessionID == "" {
+				continue
+			}
+			req, e := client.Request(ctx, r.RunID)
+			if e == nil {
+				candidateRequest = req
+				return true
+			}
+		}
+		return false
+	})
+	var p api.ControlPayload
+	require(t, json.Unmarshal(candidateRequest.Payload, &p))
+	if p.TaskID != "901" || p.ExecutionProfileID != "p1" || p.ExpectedTaskVersion == 0 || p.ExpectedGraphRevision == 0 {
+		t.Fatalf("console start lost fixed identity: %+v", p)
+	}
+	r, err := client.WaitControl(ctx, candidateRequest.RequestID, 100*time.Millisecond)
+	require(t, err)
+	if r.Status != "applied" {
+		t.Fatal(r)
+	}
+	revision := candidateRequest.ExpectedControlRevision
+	_, err = client.SubmitControl(ctx, api.ControlInput{Action: api.StartCandidate, Payload: p, RequestID: candidateRequest.RequestID, RequestedBy: candidateRequest.RequestedBy, InstanceID: candidateRequest.InstanceID, ExpectedRevision: &revision})
+	require(t, err)
+	t.Logf("UI start request %s: %s; original receipt: %s", candidateRequest.RequestID, candidateRequest.Payload, mustJSON(r))
+	for i := 2; i < 5; i++ {
+		snap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
+		page, err := client.ShowTask(ctx, "901")
+		require(t, err)
+		profile := ref.Presentation.Profiles[i]
+		revision := snap.Connection.Snapshot.Runtime.Control.Revision
+		in := api.ControlInput{Action: api.StartCandidate, RequestID: newID(), InstanceID: svc.instanceID, ExpectedRevision: &revision, Payload: api.ControlPayload{TaskID: "901", ExpectedTaskVersion: page.Tasks[0].Version, ExpectedGraphRevision: page.GraphRevision, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest}}
+		_, err = client.SubmitControl(ctx, in)
+		require(t, err)
+		receipt, err := client.WaitControl(ctx, in.RequestID, 100*time.Millisecond)
+		require(t, err)
+		if receipt.Status != "applied" {
+			t.Fatal(receipt)
+		}
+	}
+	step(key('r'))
+	step(key('b'))
+	if !containsConsoleText(m.View(), "已达5个") {
+		t.Fatal("UI did not show start-time participation limit", m.View())
+	}
+	limitSnap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
+	limitPage, err := client.ShowTask(ctx, "901")
+	require(t, err)
+	limitRevision := limitSnap.Connection.Snapshot.Runtime.Control.Revision
+	limit := api.ControlInput{Action: api.StartCandidate, RequestID: newID(), InstanceID: svc.instanceID, ExpectedRevision: &limitRevision, Payload: api.ControlPayload{TaskID: "901", ExpectedTaskVersion: limitPage.Tasks[0].Version, ExpectedGraphRevision: limitPage.GraphRevision, ExecutionProfileID: ref.Presentation.Profiles[5].ID, ExecutionProfileDigest: ref.Presentation.Profiles[5].Digest}}
+	_, err = client.SubmitControl(ctx, limit)
+	require(t, err)
+	limited, err := client.WaitControl(ctx, limit.RequestID, 100*time.Millisecond)
+	require(t, err)
+	if limited.Status != "rejected" || !strings.Contains(limited.Message, "candidate_limit_reached") {
+		t.Fatalf("serial sixth start was not rejected: %+v", limited)
+	}
+	t.Logf("real start-time participation receipt: %s", mustJSON(limited))
+	if manifest := os.Getenv("STEERLINE_CC5_MANIFEST"); manifest != "" {
+		// Opt-in native console preparation only. The human supplies actual IME
+		// and window operations; neither fake KeyMsgs above nor this hold pass CC5.
+		cli := buildProductLifecycleCLI(t)
+		require(t, os.MkdirAll(filepath.Dir(manifest), 0700))
+		require(t, os.WriteFile(manifest, mustJSON(map[string]any{"status": "ready_for_manual_CC5_not_passed", "home": steerlineapp.HomeDir(), "config": f.configPath, "executable": cli, "repository": f.repository, "instance": svc.instanceID, "worker": "isolated controlled app-server test binary", "stop_file": manifest + ".stop"}), 0600))
+		t.Logf("CC5 isolated native fixture ready: %s; awaiting explicit stop file", manifest)
+		for {
+			if _, err := os.Stat(manifest + ".stop"); err == nil {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				t.Fatal("CC5 manual fixture timed out; no native pass recorded")
+			case <-time.After(time.Second):
+			}
+		}
+		return
+	}
+	// Feedback is submitted through the actual console against the selected original Decision.
+	step(key('r'))
+	step(key('a'))
+	if !strings.Contains(m.View(), "人工决策 · 显式提交") {
+		t.Fatalf("original decision draft did not open: %s", m.View())
+	}
+	step(tea.KeyMsg{Type: tea.KeyTab})
+	step(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("接线验证：精确原候选")})
+	step(tea.KeyMsg{Type: tea.KeyF2})
+	t.Logf("feedback submission UI: %s", m.View())
+	if strings.Contains(m.View(), "stale_revision") || strings.Contains(m.View(), "答案命令结果待确认") {
+		t.Fatal("feedback did not reach its exact original identity", m.View())
+	}
+	waitFor(t, 30*time.Second, func() bool {
+		snap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
+		for _, r := range snap.Observation.Runtime.Runs {
+			if r.RunID == primary.RunID && r.TurnNumber >= 2 {
+				return true
+			}
+		}
+		return false
+	})
+	step(key('r'))
+	step(key('z'))
+	step(tea.KeyMsg{Type: tea.KeyEnter})
+	waitFor(t, 30*time.Second, func() bool {
+		snap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
+		for _, r := range snap.Observation.Runtime.Runs {
+			if r.RunID == primary.RunID {
+				return r.Abandonment != nil
+			}
+		}
+		return false
+	})
+	step(key('r'))
+	step(tea.KeyMsg{Type: tea.KeyEnter})
+	if !containsConsoleText(m.View(), "已放弃") {
+		t.Fatal("UI lost original exit/stop facts", m.View())
+	}
+	snap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
+	t.Logf("canonical five-candidate snapshot after exact feedback/exit: %s", mustJSON(snap.Observation.Runtime.Runs))
+	if len(snap.Observation.Runtime.Runs) != 5 {
+		t.Fatal("duplicate request created another candidate")
+	}
+	// A sixth start is rejected by the real service before exit (the UI test above
+	// exercises its display); merged-PR authoritative guard is covered below.
+	t.Run("merged_PR_service_guard", func(t *testing.T) { testCandidateConsoleMergedGuard(t) })
+}
+
+func containsConsoleText(text, want string) bool { return strings.Contains(text, want) }
+
+func testCandidateConsoleMergedGuard(t *testing.T) {
+	// Retain the existing real application/provider delivery path rather than
+	// manufacturing a merged flag in the business database.
+	testAdditionalImplementationWithCandidateGuard(t, true)
+}

@@ -53,6 +53,8 @@ type consoleRow struct {
 }
 
 type actionState struct {
+	DecisionIdentity       string
+	Payload                api.ControlPayload
 	EnvironmentTarget      *contracts.HostActionTarget
 	RequestID              string
 	Action                 string
@@ -74,6 +76,7 @@ type actionState struct {
 }
 
 type decisionAnswerDialog struct {
+	identity        string
 	projectKey      string
 	instance        string
 	runID           string
@@ -106,7 +109,8 @@ type projectState struct {
 	focus         int // 0: task list, 1: task activity
 	attemptID     string
 
-	actions map[string]*actionState
+	readingIdentity string
+	actions         map[string]*actionState
 
 	activityKey        string
 	activityCursor     api.ActivityCursor
@@ -166,10 +170,12 @@ type confirmAction struct {
 	requestID    string
 	runID        string
 	decisionID   string
+	payload      api.ControlPayload
 	basis        string
 }
 
 type executionProfileChoice struct {
+	action     string
 	projectKey string
 	taskID     string
 	instance   string
@@ -264,7 +270,7 @@ func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, e
 			if outstanding {
 				message = "控制台重开后重新查询此 request_id"
 			}
-			state.actions[requestID] = &actionState{RequestID: requestID, Action: saved.Action, TaskID: saved.TaskID, ExecutionProfileID: saved.ExecutionProfileID, ExecutionProfileDigest: saved.ExecutionProfileDigest, Status: saved.Status, Message: message, RunID: saved.RunID, DecisionID: saved.DecisionID, TargetInstance: saved.TargetInstance, Resolved: !outstanding, UpdatedAt: saved.UpdatedAt}
+			state.actions[requestID] = &actionState{RequestID: requestID, Action: saved.Action, TaskID: saved.TaskID, ExecutionProfileID: saved.ExecutionProfileID, ExecutionProfileDigest: saved.ExecutionProfileDigest, Status: saved.Status, Message: message, RunID: saved.RunID, DecisionID: saved.DecisionID, TargetInstance: saved.TargetInstance, Resolved: !outstanding, UpdatedAt: saved.UpdatedAt, Payload: saved.Payload, EnvironmentTarget: saved.EnvironmentTarget, DecisionIdentity: saved.DecisionIdentity, DecisionDraftOptionID: saved.DecisionDraftOptionID, DecisionDraftNote: saved.DecisionDraftNote, DecisionRevision: saved.DecisionRevision, DecisionVersion: saved.DecisionVersion}
 		}
 		m.projects = append(m.projects, state)
 	}
@@ -365,14 +371,6 @@ func selectedNativeTaskID(state projectState) string {
 	if strings.HasPrefix(state.selectedKey, "task:") {
 		return strings.TrimPrefix(state.selectedKey, "task:")
 	}
-	if strings.HasPrefix(state.selectedKey, "run:") && state.snapshot.Observation.Runtime != nil {
-		runID := strings.TrimPrefix(state.selectedKey, "run:")
-		for _, run := range state.snapshot.Observation.Runtime.Runs {
-			if run != nil && run.RunID == runID {
-				return firstText(run.DomainTaskID, run.TaskID)
-			}
-		}
-	}
 	return ""
 }
 
@@ -445,6 +443,8 @@ func (m Model) submitControl(index int, action, taskID, requestID string, instan
 	ref := state.ref
 	payload := api.ControlPayload{}
 	switch action {
+	case "start_candidate", "abandon_candidate":
+		payload = state.actions[requestID].Payload
 	case "open_terminal", "recheck_environment":
 		if pending := state.actions[requestID]; pending != nil {
 			payload.Environment = pending.EnvironmentTarget
@@ -576,8 +576,12 @@ func (m Model) answerSelectedDecision() (tea.Model, tea.Cmd) {
 		m.status = "请选择带有 pending 决策的问题"
 		return m, nil
 	}
+	if row.run.Abandonment != nil {
+		m.status = "候选已退出实验；不再反馈"
+		return m, nil
+	}
 	reason := decisionAnswerAvailability(*state, row)
-	if !strings.HasPrefix(reason, "提交后") {
+	if !strings.HasPrefix(reason, "提交后") && row.run.EnvironmentBlocker == nil {
 		m.status = reason
 		return m, nil
 	}
@@ -587,7 +591,7 @@ func (m Model) answerSelectedDecision() (tea.Model, tea.Cmd) {
 		m.status = "当前控制客户端不支持决策资格核验"
 		return m, nil
 	}
-	if err := eligibility.DecisionEligibility(m.ctx, row.run); err != nil {
+	if err := eligibility.DecisionEligibility(m.ctx, row.run); err != nil && row.run.EnvironmentBlocker == nil {
 		m.status = "回答资格核验失败：" + err.Error()
 		return m, nil
 	}
@@ -608,7 +612,10 @@ func (m Model) answerSelectedDecision() (tea.Model, tea.Cmd) {
 			}
 		}
 	}
-	m.answer = &decisionAnswerDialog{projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, runID: row.run.RunID, decisionID: decision.ID, runRevision: row.run.ControlRevision, decisionVersion: decision.Version, optionIndex: optionIndex}
+	m.answer = &decisionAnswerDialog{identity: candidateIdentity(row.run), projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, runID: row.run.RunID, decisionID: decision.ID, runRevision: row.run.ControlRevision, decisionVersion: decision.Version, optionIndex: optionIndex}
+	if draft, ok := state.view.Drafts[m.answer.identity+"\x00"+decision.ID]; ok {
+		m.answer.optionIndex, m.answer.note, m.answer.cursor, m.answer.noteFocus = draft.OptionIndex, []rune(draft.Note), len([]rune(draft.Note)), true
+	}
 	m.status = "决策草稿已打开；推荐选项只是预选，需要显式提交"
 	return m, nil
 }
@@ -638,6 +645,20 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
 		dialog.error = "stale_revision：问题或运行身份已变化；草稿已保留，请刷新并核对原问题"
 		return m, nil
 	}
+	if dialog.identity != "" && candidateIdentity(run) != dialog.identity || run.Abandonment != nil {
+		dialog.error = "原候选身份已变化或已退出实验；草稿保留"
+		return m, nil
+	}
+	if run.EnvironmentBlocker != nil {
+		dialog.error = "环境阻断：" + run.EnvironmentBlocker.Fact.Reason + "；未发送，解除后请重新提交"
+		return m, nil
+	}
+	for _, pending := range state.actions {
+		if pending.Action == "answer_decision" && pending.DecisionID == dialog.decisionID && !pending.Resolved {
+			dialog.error = "原答案请求仍在核实：" + pending.RequestID
+			return m, nil
+		}
+	}
 	request := run.Decision.Request
 	optionID := ""
 	custom := len(request.Options) == 0
@@ -662,7 +683,7 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
 	}
 	requestID := newRequestID()
 	answer := contracts.DecisionAnswer{DecisionID: dialog.decisionID, RunID: dialog.runID, OptionID: optionID, Note: note, ExpectedDecisionVersion: dialog.decisionVersion, ExpectedRunRevision: dialog.runRevision, ServiceInstanceID: dialog.instance}
-	action := &actionState{RequestID: requestID, Action: "answer_decision", TaskID: run.TaskID, RunID: run.RunID, DecisionID: dialog.decisionID, DecisionDraftOptionID: optionID, DecisionDraftNote: string(dialog.note), DecisionRevision: dialog.runRevision, DecisionVersion: dialog.decisionVersion, Status: "submitting", Message: "保存 command_id 并提交答案", TargetInstance: dialog.instance, UpdatedAt: m.clock.Now()}
+	action := &actionState{RequestID: requestID, Action: "answer_decision", TaskID: run.TaskID, RunID: run.RunID, DecisionID: dialog.decisionID, DecisionIdentity: dialog.identity, DecisionDraftOptionID: optionID, DecisionDraftNote: string(dialog.note), DecisionRevision: dialog.runRevision, DecisionVersion: dialog.decisionVersion, Status: "submitting", Message: "保存 command_id 并提交答案", TargetInstance: dialog.instance, UpdatedAt: m.clock.Now()}
 	state.actions[requestID] = action
 	state.view.Outstanding[requestID] = "decision:" + run.RunID
 	if err := m.saveProjectView(index); err != nil {
@@ -797,7 +818,7 @@ func (m *Model) reopenDecisionDraft(index int, action *actionState) {
 		}
 	}
 	note := []rune(action.DecisionDraftNote)
-	m.answer = &decisionAnswerDialog{projectKey: state.ref.Key, instance: action.TargetInstance, runID: action.RunID, decisionID: action.DecisionID, runRevision: action.DecisionRevision, decisionVersion: action.DecisionVersion, optionIndex: optionIndex, note: note, cursor: len(note), noteFocus: true, error: action.Message}
+	m.answer = &decisionAnswerDialog{identity: action.DecisionIdentity, projectKey: state.ref.Key, instance: action.TargetInstance, runID: action.RunID, decisionID: action.DecisionID, runRevision: action.DecisionRevision, decisionVersion: action.DecisionVersion, optionIndex: optionIndex, note: note, cursor: len(note), noteFocus: true, error: action.Message}
 }
 
 func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
@@ -837,6 +858,8 @@ func controlRequestMatchesAction(request *api.ControlRequest, action *actionStat
 		return false
 	}
 	switch action.Action {
+	case "start_candidate", "abandon_candidate":
+		return payload == action.Payload
 	case "open_terminal", "recheck_environment":
 		return payload.Environment != nil && payload.Environment.RunID == action.TaskID && (action.EnvironmentTarget == nil || *payload.Environment == *action.EnvironmentTarget)
 	case "start_task":
@@ -890,11 +913,10 @@ func (m Model) rows(index int) []consoleRow {
 	state := &m.projects[index]
 	var rows []consoleRow
 	runsByTask := map[string]*contracts.Run{}
-	if runtime := state.snapshot.Observation.Runtime; runtime != nil {
-		for _, run := range runtime.Runs {
-			if run != nil {
-				runsByTask[firstText(run.DomainTaskID, run.TaskID)] = run
-			}
+	for _, run := range candidateRuns(*state, "") {
+		id := firstText(run.DomainTaskID, run.TaskID)
+		if runsByTask[id] == nil || state.view.Candidates[id] == run.RunID {
+			runsByTask[id] = run
 		}
 	}
 	shownRuns := map[string]bool{}
@@ -910,8 +932,13 @@ func (m Model) rows(index int) []consoleRow {
 		nativeByID[detail.TaskID] = detail
 	}
 	appendRun := func(run *contracts.Run) {
-		rows = append(rows, consoleRow{key: "run:" + run.RunID, kind: rowRun, taskID: run.TaskID, title: run.Title, run: run, native: nativeByID[firstText(run.DomainTaskID, run.TaskID)]})
-		shownRuns[run.RunID] = true
+		row := consoleRow{key: "task:" + run.TaskID, kind: rowRun, taskID: run.TaskID, title: run.Title, run: run, native: nativeByID[firstText(run.DomainTaskID, run.TaskID)]}
+		if pin := state.view.Candidates[run.TaskID]; pin != "" && pin != run.RunID {
+			row.run = nil
+			row.kind = rowNative
+		}
+		rows = append(rows, row)
+		shownRuns[run.TaskID] = true
 	}
 	seenTasks := map[string]bool{}
 	if state.snapshot.Tasks != nil {
@@ -951,10 +978,10 @@ func (m Model) rows(index int) []consoleRow {
 	}
 	if runtime := state.snapshot.Observation.Runtime; runtime != nil {
 		for _, run := range runtime.Runs {
-			if run == nil || shownRuns[run.RunID] || !filterAllows(state.filter, rowRun, run) {
+			if run == nil || shownRuns[run.TaskID] || !candidateFilterAllows(*state, state.filter, run.TaskID) {
 				continue
 			}
-			appendRun(run)
+			appendRun(runsByTask[run.TaskID])
 		}
 	}
 	return rows
@@ -1094,12 +1121,19 @@ func (m Model) refreshSelectedLogs(index int) (Model, tea.Cmd) {
 	state := &m.projects[index]
 	row := m.selectedRow(index)
 	if row == nil || row.run == nil {
+		storeCandidateReading(state)
+		clearReadingAnchor(state)
+		state.readingIdentity = ""
+		state.activityGeneration++
+		state.conversationGeneration++
+		state.activityInFlight, state.conversationInFlight = false, false
 		state.activityKey, state.conversationKey = "", ""
 		state.activityEvents = nil
 		state.conversationEvents = nil
 		return m, nil
 	}
 	run := row.run
+	switchCandidateReading(state, run)
 	attemptID := run.AttemptID
 	if state.attemptID != "" {
 		attemptID = state.attemptID
@@ -1109,15 +1143,23 @@ func (m Model) refreshSelectedLogs(index int) (Model, tea.Cmd) {
 	}
 	activityKey := strings.Join([]string{run.RunID, run.ExecutionID, attemptID}, "\x00")
 	if state.activityKey != activityKey {
+		state.activityInFlight = false
 		state.activityKey, state.activityCursor = activityKey, api.ActivityCursor{}
 		state.activityEvents, state.activityError = nil, ""
 		state.activityGeneration++
 	}
-	conversationKey := strings.Join([]string{run.ExecutionID, attemptID}, "\x00")
+	conversationKey := strings.Join([]string{run.TaskID, run.RunID, run.ExecutionID, run.SessionID, attemptID}, "\x00")
 	var cmds []tea.Cmd
 	if state.conversationKey != conversationKey {
+		state.conversationInFlight = false
 		state.conversationKey = conversationKey
-		state.conversationFilter = contracts.ConversationFilter{WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: attemptID}
+		sessionID := run.SessionID
+		// Historical attempts have their own canonical session records; the
+		// current session must not filter them out or be guessed for them.
+		if state.attemptID != "" && attemptID != run.AttemptID {
+			sessionID = ""
+		}
+		state.conversationFilter = contracts.ConversationFilter{WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: attemptID, SessionID: sessionID}
 		state.conversationCursor, state.conversationTailCursor, state.conversationMore, state.conversationTailMore = "", "", false, false
 		state.conversationEvents, state.conversationError = nil, ""
 		state.capabilityError = ""
@@ -1146,6 +1188,7 @@ func (m *Model) saveProjectView(index int) error {
 		return nil
 	}
 	state := &m.projects[index]
+	storeCandidateReading(state)
 	state.view.ConfigPath, state.view.RunDir = state.ref.ConfigPath, state.ref.RunDir
 	state.view.SelectedKey, state.view.Filter, state.view.Panel = state.selectedKey, filterName(state.filter), panelName(state.panel)
 	state.view.SelectionPending = state.selectionHold
@@ -1226,13 +1269,13 @@ func savedActions(actions map[string]*actionState, limit int) map[string]SavedAc
 		if len(out) >= limit {
 			break
 		}
-		out[action.RequestID] = SavedAction{Action: action.Action, TaskID: action.TaskID, ExecutionProfileID: action.ExecutionProfileID, ExecutionProfileDigest: action.ExecutionProfileDigest, Status: action.Status, RunID: action.RunID, DecisionID: action.DecisionID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt}
+		out[action.RequestID] = SavedAction{Action: action.Action, TaskID: action.TaskID, ExecutionProfileID: action.ExecutionProfileID, ExecutionProfileDigest: action.ExecutionProfileDigest, Status: action.Status, RunID: action.RunID, DecisionID: action.DecisionID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt, Payload: action.Payload, EnvironmentTarget: action.EnvironmentTarget, DecisionIdentity: action.DecisionIdentity, DecisionDraftOptionID: action.DecisionDraftOptionID, DecisionDraftNote: action.DecisionDraftNote, DecisionRevision: action.DecisionRevision, DecisionVersion: action.DecisionVersion}
 	}
 	for _, action := range terminal {
 		if len(out) >= limit {
 			break
 		}
-		out[action.RequestID] = SavedAction{Action: action.Action, TaskID: action.TaskID, ExecutionProfileID: action.ExecutionProfileID, ExecutionProfileDigest: action.ExecutionProfileDigest, Status: action.Status, RunID: action.RunID, DecisionID: action.DecisionID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt}
+		out[action.RequestID] = SavedAction{Action: action.Action, TaskID: action.TaskID, ExecutionProfileID: action.ExecutionProfileID, ExecutionProfileDigest: action.ExecutionProfileDigest, Status: action.Status, RunID: action.RunID, DecisionID: action.DecisionID, TargetInstance: action.TargetInstance, UpdatedAt: action.UpdatedAt, Payload: action.Payload, EnvironmentTarget: action.EnvironmentTarget, DecisionIdentity: action.DecisionIdentity, DecisionDraftOptionID: action.DecisionDraftOptionID, DecisionDraftNote: action.DecisionDraftNote, DecisionRevision: action.DecisionRevision, DecisionVersion: action.DecisionVersion}
 	}
 	return out
 }
@@ -1299,10 +1342,9 @@ func (m Model) moveSelection(delta int) (tea.Model, tea.Cmd) {
 	if rows[index].key == state.selectedKey {
 		return m, nil
 	}
+	storeCandidateReading(state)
 	state.selectedKey = rows[index].key
 	state.selectionHold = false
-	state.attemptID = ""
-	clearReadingAnchor(state)
 	m.status = ""
 	m.saveProjectView(m.selected)
 	var cmd tea.Cmd
@@ -1321,13 +1363,9 @@ func (m Model) changeFilter(filter int) (tea.Model, tea.Cmd) {
 	state.filter = filter
 	rows := m.rows(m.selected)
 	if !rowExists(rows, state.selectedKey) {
-		oldSelection := state.selectedKey
+		storeCandidateReading(state)
 		state.selectedKey = firstRowKey(rows)
 		state.selectionHold = state.selectedKey == ""
-		state.attemptID = ""
-		if oldSelection != state.selectedKey {
-			clearReadingAnchor(state)
-		}
 	}
 	m.saveProjectView(m.selected)
 	return m.refreshSelectedLogs(m.selected)

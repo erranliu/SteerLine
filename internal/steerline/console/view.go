@@ -238,6 +238,9 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
 	if row.native != nil && row.run == nil {
+		if state.view.Candidates[row.taskID] != "" {
+			lines = append(lines, "原所选候选暂不在快照中；未改选其他候选。{ / } 显式重新选择。")
+		}
 		if full {
 			lines = append(lines, renderNativeTaskDetail(state, *row.native)...)
 		} else {
@@ -264,11 +267,20 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 		lines = append(lines, renderActionLines(state, row.taskID)...)
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
+	if row.run == nil {
+		lines = append(lines, "原所选候选及 Task 详情暂不可读；未改选其他候选。{ / } 显式重新选择。")
+		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
+	}
 	run := row.run
 	if state.snapshot.Connection.State == api.ConnectionOffline || state.snapshot.Connection.State == api.ConnectionNoRecord {
 		lines = append(lines, "服务入口："+safeTerminalText(serviceWindowInstruction(state.ref)), "配置："+safeTerminalText(state.ref.ConfigPath))
 	}
 	lines = append(lines, "任务 "+safeTerminalInlineText(run.TaskID)+" · "+safeTerminalInlineText(run.Title))
+	if full {
+		lines = append(lines, renderCandidates(m, state, row)...)
+	} else {
+		lines = append(lines, fmt.Sprintf("候选 %d 个 · { / } 切换 · b 新增 · z 放弃", len(candidateRuns(state, row.taskID))))
+	}
 	if full {
 		lines = append(lines,
 			"任务状态："+safeTerminalText(rowTaskStatus(*row)),
@@ -465,6 +477,20 @@ func renderActionLines(state projectState, taskID string) []string {
 	lines := []string{"", "本任务操作回执"}
 	for _, action := range visible {
 		lines = append(lines, safeTerminalText(actionStatusLabel(action.Status))+" · "+safeTerminalText(action.Message))
+		if action.Action != "start_candidate" && action.Action != "abandon_candidate" && action.Action != "answer_decision" && action.EnvironmentTarget == nil {
+			continue
+		}
+		target := action.RunID
+		if action.Action == "start_candidate" {
+			target = action.RequestID
+		}
+		if action.EnvironmentTarget != nil {
+			target = action.EnvironmentTarget.RunID
+		}
+		lines = append(lines, safeTerminalText(action.Action+" · request "+action.RequestID+" · workflow_run_id "+displayDash(target)+" · 实例 "+action.TargetInstance))
+		if action.Payload.ExpectedTaskVersion != 0 {
+			lines = append(lines, fmt.Sprintf("Task版本 %d · 候选版本 %d · 冻结方案 %s", action.Payload.ExpectedTaskVersion, action.Payload.ExpectedCandidateVersion, safeTerminalText(displayDash(action.Payload.ExecutionProfileID))))
+		}
 	}
 	return lines
 }
@@ -753,6 +779,9 @@ func renderDecisionIdentity(state projectState, run *contracts.Run, now time.Tim
 }
 
 func decisionAnswerAvailability(state projectState, row *consoleRow) string {
+	if row != nil && row.run != nil && row.run.Abandonment != nil {
+		return "候选已退出实验；不再反馈"
+	}
 	if row == nil || row.run == nil || row.run.Decision == nil || row.run.Decision.Status != "pending" {
 		return "当前没有待回答的问题"
 	}
@@ -765,6 +794,9 @@ func decisionAnswerAvailability(state projectState, row *consoleRow) string {
 
 func decisionAnswerStatusLines(state projectState, row *consoleRow) []string {
 	reason := decisionAnswerAvailability(state, row)
+	if row != nil && row.run != nil && row.run.Abandonment == nil && row.run.EnvironmentBlocker != nil {
+		return []string{"a 编辑本地草稿 · 发送被环境阻断：" + safeTerminalText(reason), "解除阻断后仍需人重新提交；没有自动补投队列。"}
+	}
 	if strings.HasPrefix(reason, "提交后") {
 		if row != nil && row.run != nil && state.ref.Presentation.NativeWorkflow {
 			return []string{"a 核验原会话身份并打开回答草稿 · " + reason, "显式提交后分别显示答案保存、发送回执与原会话轮次开始。"}
@@ -783,6 +815,9 @@ func renderStopConfirmation(m Model, state projectState, height int) string {
 		grace = "配置的宽限时间"
 	}
 	lines := []string{"停止服务确认", "", "目标实例：" + safeTerminalText(m.confirm.instance), "这会停止新派发，并等待当前 worker 最长 " + grace + " 后按服务策略结束；工作现场会保留。", "request_id：" + m.confirm.requestID, "", "Enter/y 确认停止 · Esc/n 取消"}
+	if m.confirm.action == "abandon_candidate" {
+		lines = []string{"不可撤销放弃候选确认", "Task：" + m.confirm.taskID, "workflow_run_id：" + m.confirm.runID, safeTerminalText(m.confirm.basis), "退出实验立即生效且不可撤销；worker 可能仍运行，真实停止独立核实。", "不会丢弃 Task 或删除资源。已知 PR 合并后禁止放弃；服务提交时重检。", "待核实回执不代表已放弃成功。", "request_id：" + m.confirm.requestID, "Enter/y 确认退出实验 · Esc/n 取消"}
+	}
 	width := max(20, m.width-4)
 	visible := fitLines(scrollLines(wrapLines(lines, width), max(0, m.confirm.scroll), height), m.width, height)
 	return strings.Join(visible, "\n")
@@ -795,6 +830,9 @@ func renderAnswerDialog(m Model, state projectState, height int) string {
 	}
 	request, ok := decisionRequestFor(state, dialog.runID, dialog.decisionID)
 	lines := []string{"人工决策 · 显式提交", "项目：" + safeTerminalText(state.ref.Name), "task_id：" + safeTerminalText(displayDash(m.answerRunTask(state, dialog))), "run_id：" + safeTerminalText(dialog.runID), "decision_id：" + safeTerminalText(dialog.decisionID), fmt.Sprintf("运行版本：%d · 问题版本：%d · 目标服务：%s", dialog.runRevision, dialog.decisionVersion, safeTerminalText(dialog.instance))}
+	if identity := strings.Split(dialog.identity, "\x00"); len(identity) == 4 {
+		lines = append(lines, "原 execution_id："+safeTerminalText(identity[2]), "原 session："+safeTerminalText(identity[3]))
+	}
 	if !ok {
 		lines = append(lines, "原问题正文暂不可读；保留的草稿不会提交。")
 	} else {
@@ -877,7 +915,7 @@ func renderFooter(m Model, state projectState) string {
 		return "↑↓/PgUp/PgDn 阅读完整确认内容 · Enter/y 确认 · Esc/n 取消"
 	}
 	if m.answer != nil {
-		return "↑↓ 选择声明选项/移动光标 · Tab 切换选项与说明 · Enter 换到说明/插入换行 · F2 明确提交 · PgUp/PgDn 浏览完整问题 · Esc 丢弃草稿"
+		return "↑↓ 选择声明选项/移动光标 · Tab 切换选项与说明 · Enter 换到说明/插入换行 · F2 明确提交 · PgUp/PgDn 浏览完整问题 · Esc 保留草稿并关闭"
 	}
 	if m.detailExpanded {
 		return "↑↓/PgUp/PgDn 阅读完整详情 · d / Enter / Esc 返回 · q 退出"
@@ -887,11 +925,23 @@ func renderFooter(m Model, state projectState) string {
 	}
 	parts := []string{"←→ 项目", "Tab 列表/动态", "1–7 筛选", "↑↓ 选择/滚动", "d 详情"}
 	row := m.selectedRow(m.selected)
+	if row != nil && len(candidateRuns(state, row.taskID)) > 0 {
+		parts = append(parts, "{ / } 候选")
+		if candidateStartReason(state, row, m.clock.Now()) == "" {
+			parts = append(parts, "b 新增")
+		}
+		if candidateAbandonReason(state, row) == "" {
+			parts = append(parts, "z 放弃")
+		}
+	}
 	if row != nil && row.kind == rowReady && candidateActionReason(state, m.clock.Now()) == "" {
 		parts = append(parts, "s 选方案")
 	}
 	if row != nil && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" && strings.HasPrefix(decisionAnswerAvailability(state, row), "提交后") {
 		parts = append(parts, "a 回答")
+	}
+	if row != nil && row.run != nil && row.run.Abandonment == nil && row.run.EnvironmentBlocker != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" {
+		parts = append(parts, "a 保留草稿")
 	}
 	connection := state.snapshot.Connection
 	if rt := connection.Snapshot.Runtime; rt != nil && connection.State == api.ConnectionConnected && connection.CanControl {
@@ -907,7 +957,7 @@ func renderFooter(m Model, state projectState) string {
 }
 
 func renderHelp(state projectState) []string {
-	lines := []string{"快捷键", "", "←/→  切换项目", "Tab  在任务列表与任务动态间切换", "↑/↓  选择任务或滚动动态", "d/Enter  打开完整只读详情；Esc 返回", "q    退出控制台；服务继续运行"}
+	lines := []string{"快捷键", "", "←/→  切换项目", "Tab  在任务列表与任务动态间切换", "↑/↓  选择任务或滚动动态", "d/Enter  打开完整只读详情；Esc 返回", "{ / }  按 workflow_run_id 切换候选", "b    选择不同冻结配置新增候选（开始时5个检查）", "z    不可撤销退出实验（需确认，停止独立核实）", "q    退出控制台；服务继续运行"}
 	if state.ref.Presentation.NativeWorkflow {
 		return append(lines,
 			"", "任务与服务", "1 全部 · 2 Ready · 3 进行中", "4 待决策 · 5 待合并", "6 需处理 · 7 历史", "s    选择已配置方案并开始 Ready 任务", "m    切换手动/自动派发", "x    停止服务（需确认）",
