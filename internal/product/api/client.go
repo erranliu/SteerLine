@@ -16,16 +16,15 @@ const (
 	UnknownRecord      ErrorKind = "unknown_record"
 	ReadFailed         ErrorKind = "read_failed"
 	Closed             ErrorKind = "closed"
+	Unsupported        ErrorKind = "unsupported"
 )
 
 type Error struct {
-	Kind  ErrorKind
-	Cause error
+	Kind    ErrorKind `json:"kind"`
+	Message string    `json:"message"`
 }
 
-func (e *Error) Error() string { return e.Cause.Error() }
-
-func (e *Error) Unwrap() error { return e.Cause }
+func (e *Error) Error() string { return e.Message }
 
 type ControlAction string
 

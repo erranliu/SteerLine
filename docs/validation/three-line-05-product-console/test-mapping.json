@@ -1,0 +1,44 @@
+{
+  "baseline": "621707d534b62e4b7df015463c53949715ba8be3",
+  "status": "preparing owned DTO, ports and projections; production consumer migration awaits actual merged execution namespace",
+  "tests": [
+    {
+      "old_package": "internal/steerline/console",
+      "new_package": "internal/console",
+      "parents": ["TestCC1", "TestCC2", "TestCC4"],
+      "assertion_owner": "console API fixtures: candidate identity, draft, blocker, request receipt and resource facts",
+      "status": "temporary module preparation; final production package rerun required"
+    },
+    {
+      "old_package": "internal/steerlineclient",
+      "new_package": "internal/product/client",
+      "parents": ["TestCM71ResourceOwnershipAndClosedClient", "TestCM71ProjectScopeAndErrors", "TestCM71UnknownControlUsesOriginalRequestAndRejectsConflict"],
+      "assertion_owner": "single product client lifecycle and original request replay",
+      "status": "pending actual consumer switch"
+    },
+    {
+      "new_package": "internal/product/api",
+      "parent": "TestTM05ProductDTO",
+      "subtests": ["serializable_target_version_original_receipt", "api_has_no_internal_models_aliases_or_go_handles", "task_page_escapes_bidi_preserves_unicode"],
+      "assertion_owner": "public DTO shape, serializable original identity/version/receipt/error and Unicode"
+    },
+    {
+      "new_package": "internal/product/query",
+      "parent": "TestTM05PageProjection",
+      "subtests": ["candidate_excludes_private_execution_and_copies_page_values", "history_retains_complete_candidate_numbering_without_private_records"],
+      "assertion_owner": "pure page projection; does not reconstruct actor state"
+    },
+    {
+      "old_package": "internal/steerline/sqlite",
+      "parents": ["TestProjectViewSharesTransactionAcrossWriterCommit", "TestProjectViewKeepsReadOnlySectionsWithoutCheckpointOrSelection"],
+      "assertion_owner": "one pinned SQLite transaction across writer commit and partial read failures",
+      "status": "preserve unique SQL and assertions during shared interface integration"
+    },
+    {
+      "package": "internal/steerlineintegration",
+      "parent": "TestCandidateConsoleWiring",
+      "assertion_owner": "real app/client/SQLite/control construction and candidate commands",
+      "status": "rerun after actual factory migration"
+    }
+  ]
+}

@@ -4,6 +4,8 @@
 
 ## 实施步骤
 
+开工实际基线为 main `621707d534b62e4b7df015463c53949715ba8be3`。#38/#39/#74/#75 已合入。协调已明确共享接线顺序：#76 先完成独立复审并真实合入；本任务先完成专属 DTO、注入端口、纯页面投影与控制台中性 fixture 准备，再基于协调提供的实际 main SHA 切换 ownership.md 第 1–6 项消费者。不能以接口草案或纯文档 PR217 代替执行 namespace 真实交付。
+
 1. 按 #38 实际消费者列 DTO 字段及映射，移除产品聚合内部记录；小接口按查询/命令/连接拆，旧定义立即删除。
 
 2. 迁纯投影及唯一 query/client，切换 app/CLI；console 迁包并完整保留 #38 行为与中性 fixture。
@@ -20,6 +22,7 @@
 
 | 级别/组或场景 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
 | --- | --- | --- | --- | --- | --- |
+| 定向 Go：TM05.1、TM05.2、TM05.3 页面准备 | Windows；纯 DTO/投影，无模型 | `go run ./cmd/test-feedback -out docs/validation/three-line-05-product-console/dto-preparation-01 -- ./internal/product/api ./internal/product/query -run '^TestTM05(ProductDTO\|PageProjection)$' -count=1` | 专属 DTO/纯投影完成后；共享消费者切换后另存新目录重验 | 两个父测试及其序列化/私有字段/Unicode/候选历史子测试非零通过；准备结果不替代真实产品接线验收 | `docs/validation/three-line-05-product-console/dto-preparation-01/` |
 | 定向 Go：TM05.2 | Windows；#38 产品 fixture，无模型 | `go run ./cmd/test-feedback -out docs/validation/three-line-05-product-console/console -- ./internal/console -run '^TestCC[124]$' -count=1` | 候选 UI 迁移后 | 既有 CC1/2/4 非零命中；身份/草稿/历史/停止事实保持 | `docs/validation/three-line-05-product-console/console/` |
 | 定向 Go：TM05.1、TM05.3 | Windows；真实 app/client 和 SQLite 读快照 | `go run ./cmd/test-feedback -out docs/validation/three-line-05-product-console/product -- ./internal/product/api ./internal/product/client -run '^TestTM05(ProductDTO\|Snapshot\|OriginalRequest)$' -count=1` | 公开 DTO 和客户端切换后 | DTO 不含内部记录；同快照与原请求拒绝/对账代表实际通过 | `docs/validation/three-line-05-product-console/product/` |
 | 定向 Go：TM05.1–TM05.3 | Windows；真实服务与受控后端 | `go run ./cmd/test-feedback -out docs/validation/three-line-05-product-console/wiring -- ./internal/steerlineintegration -run '^TestCandidateConsoleWiring$' -count=1` | 默认工厂迁移后 | 复用 #38 CC3/4 实际命令接线，无 UI 业务写权 | `docs/validation/three-line-05-product-console/wiring/` |
@@ -28,6 +31,8 @@
 边界类变更在本阶段同步既有守卫/负向注入及 L1 选择；扫描全 OS/build tag 源码，核对 Windows/Linux 生产直接及传递依赖。跨系统只做依赖图/编译不冒充运行行为。新增场景或环境能力须先登记包/测试/ID与命令，再执行；当前已注册 E2E 入口和环境约定见 [E2E README](../../tests/e2e/README.md)。
 
 不选 Full/L2/L3/live：公开形状和路径调整由 fixture、读快照及真实应用接线验。#38 CC5 原输入证据复用；若输入/渲染实现变动，仅补受影响 Windows 手工代表并记录实际命令。
+
+控制台迁移准备位于独立临时模块（不进入生产目录）；使用当前 api DTO 编译既有 CC1/2/4，最终须在真实 `internal/console` 和 app/CLI 构造切换后重新运行，不能作为 TM05 完成交付。原契约 Plan/digest 隐藏断言由 UI fixture 与产品 TaskDetail 源映射共同承接；fixture 不再造完整 TaskContract。唯一交付断言由明确的候选 `delivery_outcome` 承接，不再向 UI 传完整交付持久记录。决策历史的原 JSON 解码归 query，UI 只消费已类型化的问题、答案或未知格式诊断。
 
 ## 自查与交付
 

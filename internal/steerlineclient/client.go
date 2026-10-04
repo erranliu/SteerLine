@@ -40,7 +40,7 @@ func Open(ctx context.Context, ref api.ProjectRef, factory api.Factory) (*Client
 		return nil, err
 	}
 	if factory == nil {
-		return nil, &productapi.Error{Kind: productapi.Unavailable, Cause: errors.New("product client resource factory is required")}
+		return nil, &productapi.Error{Kind: productapi.Unavailable, Message: "product client resource factory is required"}
 	}
 	r, err := factory(ctx, ref)
 	if err != nil {
@@ -52,7 +52,7 @@ func Open(ctx context.Context, ref api.ProjectRef, factory api.Factory) (*Client
 		if r.Close != nil {
 			_ = r.Close()
 		}
-		return nil, &productapi.Error{Kind: productapi.IdentityConflict, Cause: errors.New("product client project identity or configuration does not match")}
+		return nil, &productapi.Error{Kind: productapi.IdentityConflict, Message: "product client project identity or configuration does not match"}
 	}
 	r.Project = api.CloneProjectRef(r.Project)
 	r.ExecutableTypes = append([]string(nil), r.ExecutableTypes...)
@@ -80,10 +80,18 @@ func (c *Client) begin(ctx context.Context) error {
 	c.mu.RLock()
 	if c.closed {
 		c.mu.RUnlock()
-		return &productapi.Error{Kind: productapi.Closed, Cause: errors.New("product client is closed")}
+		return &productapi.Error{Kind: productapi.Closed, Message: "product client is closed"}
 	}
 	return nil
 }
+
+type classifiedError struct {
+	public productapi.Error
+	cause  error
+}
+
+func (e *classifiedError) Error() string   { return e.public.Message }
+func (e *classifiedError) Unwrap() []error { return []error{&e.public, e.cause} }
 
 func classify(err error) error {
 	if err == nil {
@@ -109,7 +117,7 @@ func classify(err error) error {
 	case strings.Contains(err.Error(), "identity") || strings.Contains(err.Error(), "does not match"):
 		kind = productapi.IdentityConflict
 	}
-	return &productapi.Error{Kind: kind, Cause: err}
+	return &classifiedError{public: productapi.Error{Kind: kind, Message: err.Error()}, cause: err}
 }
 
 func read[T any](ctx context.Context, c *Client, fn func(api.Reader) (T, error)) (result T, err error) {
@@ -158,7 +166,7 @@ func (c *Client) TaskGraph(ctx context.Context, cursor string, limit int) (taskv
 
 func (c *Client) QueryTaskGraph(ctx context.Context, filter taskview.Filter) (taskview.Page, error) {
 	if filter.ProjectID != "" && filter.ProjectID != c.Project().Identity {
-		return taskview.Page{}, &productapi.Error{Kind: productapi.IdentityConflict, Cause: errors.New("task graph belongs to another project")}
+		return taskview.Page{}, &productapi.Error{Kind: productapi.IdentityConflict, Message: "task graph belongs to another project"}
 	}
 	filter.ProjectID = c.Project().Identity
 	return read(ctx, c, func(r api.Reader) (taskview.Page, error) { return r.QueryTaskGraph(ctx, filter) })
