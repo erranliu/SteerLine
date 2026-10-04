@@ -6,6 +6,8 @@
 
 已 fetch 并无冲突 rebase 到 `origin/main` 的 `9da05cb`（SQLite 持久化模块 PR #197）；原修复提交重放后为 `f930c83`。上轮修复及历史证据见 [完整测试修复记录](../all-tests-2026-10-03/README.md)。
 
+复测期间主分支继续合入 #198/#199，最新为 `7eb02bb`。已再次无冲突 rebase；修复提交为 `bda7006` 和 `5b3d158`。下面保留此前报告作为中间记录，最终验收使用该新基线重新运行的报告。
+
 按 `tests/e2e/README.md` 和 `docs/testing.md` 的明确范围重新运行 Full、L1、完整 L2、L3 delivery/recovery 的 controlled/live 全部场景，以及带标签的内部环境和 sandbox-setup 单测。不会批量启用独立原生验收开关，也不执行管理员 sandbox 初始化。默认 skip 单独记录，不当作 E2E 通过。
 
 ## 本轮新增修复
@@ -24,19 +26,35 @@
 
 Orca 按键语义通过当前安装版本 CLI 帮助、`orca-cli` 版本匹配指南及本机实现只读核对；没有更新 Codex/Orca 或修改它们的安装文件。实际原生模型、usage、PR 合并和资源清理仍由正式 E2E 断言验证。
 
+最终 L3 在 `delivery.orca-codex` 捕获 usage 基线竞态。基线文件写于 07:45:42.805，原生同一回合最后 token 更新为 07:45:42.923，`task_complete` 为 07:45:43.327；累计 usage 从 206310 变为 230337，没有新增原生回合。业务 relay 完成早于原生最后回复，因此在原生回合尚未完成时采样会误报交付轮询增加 token。现要求 latest turn 的匹配原生完成事件及该回合自己的 model/usage 证据，再建立基线；只对明确尚未完成的回合按原场景期限等待，等待期间回合变化、错误完成 ID、缺失 model/usage 均拒绝。restart/final 的身份与 usage 相等断言保留。新增回归覆盖末尾 token 更新、完成 ID 不匹配、后续活跃回合及继承旧回合证据拒绝。
+
 ## 复核结果
 
 报告根目录：`C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/`。各次报告包含原始日志、源码信息；E2E 另包含构建哈希、场景快照、usage 和清理结果。
 
 | 范围 | 命令 | 本轮报告与结果 |
 | --- | --- | --- |
-| Full | `go run ./cmd/test-feedback -workers=3` | 首次 `20261003T222833.319020300Z` 仅纯端口守卫失败；修复后 `20261003T230248.057097800Z` 执行中 |
+| Full | `go run ./cmd/test-feedback -workers=3` | 首次 `20261003T222833.319020300Z` 仅纯端口守卫失败；修复后中间运行 `20261003T230248.057097800Z` 通过，但期间发生 rebase，不作为最终基线证据 |
 | L1 | `go run ./cmd/test-feedback -level=L1` | `20261003T223046.409874600Z`，通过 |
 | L2 gated 全部 3 场景 | `go run ./cmd/test-feedback -level=L2` | `20261003T222944.437445800Z` 的 Orca 超时、清理完成；提交观察修复后 `20261003T225907.041937600Z` 全部通过，清理完成 |
 | L3 controlled 全部 2 场景 | `go run ./cmd/test-feedback -level=L3 '-suite=delivery,recovery' -env=controlled` | `20261003T224628.208493900Z` 通过，清理完成 |
-| L3 live 全部 4 场景 | `go run ./cmd/test-feedback -level=L3 '-suite=delivery,recovery' -env=live` | 待执行 |
+| L3 live 全部 4 场景 | `go run ./cmd/test-feedback -level=L3 '-suite=delivery,recovery' -env=live` | 中间基线 `20261003T230937.630095900Z` 全部通过，清理完成 |
 | 基础设施与边界 | `go test ./cmd/test-feedback ./tests/e2e/internal/... ./internal/testboundary -count=1` | 通过 |
 | tagged 内部环境与 CLI | `go run ./cmd/test-feedback -- -tags=e2e ./tests/e2e/internal/... ./tests/e2e/cmd/... -count=1` | 待执行 |
 | 所有 E2E 包编译 | `go test -tags=e2e ./tests/e2e/... -run '^$' -count=1` | 通过；编译结果不替代场景执行 |
 
 本机原生版本为 `codex-cli 0.159.2`、Orca `1.4.209`；Orca app/runtime 可达。真实场景仍使用登记的 `gpt-6-luna` / `medium` 及独立测试 home。
+
+## 最终基线 7eb02bb 的复核
+
+| 范围 | 报告目录或结果 |
+| --- | --- |
+| Full | usage 修复前 `20261003T231457.863489000Z` 通过。最终 `20261003T235707.193223500Z` 通过，complete=true；1022 条测试记录、零失败、18 项默认 skip，执行 1345.5 秒 |
+| L1 | `20261003T231508.482586200Z`，通过 |
+| L2 全部 | usage 修复前 `20261003T232651.239153600Z` 通过；最终 `20261004T001008.824679000Z`，3/3 通过，清理完成 |
+| L3 controlled 全部 | `20261003T233629.530625900Z`，2/2 通过，清理完成 |
+| L3 live 全部 | `20261003T234003.731533300Z` 的 Orca delivery 仅 usage 基线竞态失败，另外 3 场景通过；修复后 `20261003T235454.610747100Z` 4/4 全部通过，清理完成 |
+| tagged 内部环境与 CLI | 最终 `rebase-usage-final-infra-e40053007d0e421d93c9c8a6e5844bef` 通过，零失败；仅额外 sandbox 凭据 opt-in 按默认 skip |
+| 所有 E2E 包编译 | 通过 |
+
+最终结论：基于 `7eb02bb` 的 Full、L1、L2 3/3、L3 controlled 2/2、L3 live 4/4 和 tagged 内部环境/CLI 单测全部通过。三个 E2E 组合报告均确认 cleanup_complete=true；未新增 skip、放宽场景期限或删除原身份/usage 不增长断言。最终 L2 的真实已合并 PR 为 [local #53](https://github.com/erranliu/SteerlineTest/pull/53) 和 [Orca #54](https://github.com/erranliu/SteerlineTest/pull/54)。`git diff --check` 通过。

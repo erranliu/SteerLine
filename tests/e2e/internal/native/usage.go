@@ -16,6 +16,8 @@ import (
 const Model = "gpt-6-luna"
 const Effort = "medium"
 
+var ErrNativeTurnPending = errors.New("latest native turn has not completed")
+
 func TrustProject(home, path string) error {
 	quoted, _ := json.Marshal(filepath.Clean(path))
 	f, err := os.OpenFile(filepath.Join(home, "config.toml"), os.O_APPEND|os.O_WRONLY, 0600)
@@ -110,7 +112,8 @@ func RolloutUsage(raw []byte, cwd string) (Usage, []byte, error) {
 	var evidence bytes.Buffer
 	scanner := bufio.NewScanner(bytes.NewReader(raw))
 	scanner.Buffer(make([]byte, 4096), 16<<20)
-	matched, found, contextFound := false, false, false
+	matched, found, contextFound, completed := false, false, false, false
+	latestContext, latestUsage := false, false
 	for scanner.Scan() {
 		var e struct {
 			Type    string          `json:"type"`
@@ -134,6 +137,7 @@ func RolloutUsage(raw []byte, cwd string) (Usage, []byte, error) {
 			relevant = true
 		case "turn_context":
 			var c struct {
+				Turn            string `json:"turn_id"`
 				Model           string `json:"model"`
 				Effort          string `json:"effort"`
 				ReasoningEffort string `json:"reasoning_effort"`
@@ -147,18 +151,46 @@ func RolloutUsage(raw []byte, cwd string) (Usage, []byte, error) {
 			if c.Model != Model || c.Effort != Effort {
 				return u, nil, fmt.Errorf("native turn used %s/%s; require %s/%s", c.Model, c.Effort, Model, Effort)
 			}
+			if c.Turn == "" {
+				return u, nil, errors.New("native turn context identity missing")
+			}
+			if c.Turn != u.Turn {
+				u.Turn, completed = c.Turn, false
+				latestContext, latestUsage = false, false
+			}
+			latestContext = true
 			u.Model, u.Effort = c.Model, c.Effort
 			contextFound = true
 			relevant = true
 		case "event_msg":
 			var p struct {
 				Type string `json:"type"`
+				Turn string `json:"turn_id"`
 				Info *struct {
 					Total Tokens `json:"total_token_usage"`
 				} `json:"info"`
 			}
 			if err := json.Unmarshal(e.Payload, &p); err != nil {
 				return u, nil, err
+			}
+			if p.Type == "task_started" || p.Type == "task_complete" {
+				if p.Turn == "" {
+					return u, nil, errors.New("native turn lifecycle identity missing")
+				}
+				if p.Type == "task_started" {
+					if p.Turn != u.Turn {
+						u.Turn, completed = p.Turn, false
+						latestContext, latestUsage = false, false
+					}
+				} else {
+					if p.Turn != u.Turn {
+						return u, nil, errors.New("native completion differs from latest turn")
+					}
+					completed = true
+				}
+				evidence.Write(scanner.Bytes())
+				evidence.WriteByte('\n')
+				continue
 			}
 			if p.Type != "token_count" || p.Info == nil {
 				continue
@@ -168,6 +200,7 @@ func RolloutUsage(raw []byte, cwd string) (Usage, []byte, error) {
 			}
 			u.Tokens = p.Info.Total
 			found = true
+			latestUsage = true
 			relevant = true
 		}
 		if relevant {
@@ -180,6 +213,12 @@ func RolloutUsage(raw []byte, cwd string) (Usage, []byte, error) {
 	}
 	if !matched || u.Session == "" || !contextFound || !found {
 		return u, nil, errors.New("native session/cwd/model/usage evidence missing")
+	}
+	if !completed {
+		return u, evidence.Bytes(), ErrNativeTurnPending
+	}
+	if !latestContext || !latestUsage {
+		return u, nil, errors.New("completed native turn lacks its own model/usage evidence")
 	}
 	return u, evidence.Bytes(), u.Tokens.Validate()
 }

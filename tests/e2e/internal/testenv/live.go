@@ -351,8 +351,22 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	if content != "real model delivery" {
 		s.t.Fatalf("real native result differs: %q", content)
 	}
-	usage, err := p.NativeUsage(before, "before")
-	s.Must(err)
+	var usage native.Usage
+	baselineTurn := ""
+	s.Wait("completed native usage baseline", func() (bool, error) {
+		current, err := p.NativeUsage(before, "before")
+		if baselineTurn != "" && current.Turn != baselineTurn {
+			return false, errors.New("native turn changed while awaiting usage completion")
+		}
+		if current.Turn != "" {
+			baselineTurn = current.Turn
+		}
+		if errors.Is(err, native.ErrNativeTurnPending) {
+			return false, nil
+		}
+		usage = current
+		return err == nil, err
+	})
 	if restart {
 		p.RestartService()
 		after := p.WaitPhase("waiting_pr_merge")
