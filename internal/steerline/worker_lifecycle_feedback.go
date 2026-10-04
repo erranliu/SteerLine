@@ -39,23 +39,16 @@ func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *Run, 
 	if operation := s.operationByKey(key); operation != nil {
 		return s.reconcileLifecycleQuestionAnswer(ctx, run, lifecycle, fixed, operation, input)
 	}
-	operationID, err := s.startWorkerOperation(run, "reply_execution_question", key, input.Feedback)
+	operation, err := s.newLifecycleOperation(run, "reply_execution_question", key, input.Feedback)
 	if err != nil {
-		return err
-	}
-	operation := s.operationByKey(key)
-	if operation == nil || operation.OperationID != operationID {
-		return errors.New("saved answer operation disappeared before delivery")
-	}
-	if err := validateSavedLifecycleOperation(operation, executionapi.LifecycleDeliverFeedback, input); err != nil {
 		return err
 	}
 	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, execution, fixed.attempt, nil)
 	if err != nil {
 		return err
 	}
-	request := lifecycleRequest(snapshot, *operation, executionapi.LifecycleDeliverFeedback, input)
-	if err := request.Validate(); err != nil {
+	request, err := checkedLifecycleRequest(snapshot, operation, executionapi.LifecycleDeliverFeedback, input)
+	if err != nil {
 		return err
 	}
 	err = s.dispatchLifecycleEffect(ctx, run, lifecycle, request, false, func(run *Run, result lifecycleEffectResult) error {
@@ -87,8 +80,8 @@ func (s *Service) reconcileLifecycleQuestionAnswer(ctx context.Context, run *Run
 	if err != nil {
 		return err
 	}
-	request := lifecycleRequest(snapshot, *operation, executionapi.LifecycleDeliverFeedback, input)
-	if err := request.Validate(); err != nil {
+	request, err := checkedLifecycleRequest(snapshot, operation, executionapi.LifecycleDeliverFeedback, input)
+	if err != nil {
 		return err
 	}
 	receipt, observer, reconcileErr := lifecycle.Reconcile(ctx, request)
@@ -173,11 +166,7 @@ func (s *Service) applyLifecycleQuestionAnswerReceipt(run *Run, request executio
 		return ErrWorkerTurnStale
 	}
 	if executeErr != nil || receipt.Disposition == executionapi.OperationUnknown || receipt.Disposition == executionapi.OperationRejected {
-		reason := receipt.Diagnostic
-		if executeErr != nil {
-			reason = executeErr.Error()
-		}
-		status := string(receipt.Disposition)
+		status, reason := lifecycleOutcome(receipt, executeErr)
 		if status != "rejected" {
 			status = "outcome_unknown"
 		}

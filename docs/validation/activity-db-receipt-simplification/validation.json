@@ -1,0 +1,119 @@
+{
+  "base": "886a520",
+  "runs": [
+    {
+      "evidence": "bin/activity-db-receipt-simplification/activity-final/summary.json",
+      "sha256": "e5460f89f46083c9a17e52aee0d0fd611caa9535bb273deeae601696d43de512",
+      "command": [
+        "go",
+        "test",
+        "./internal/steerline",
+        "./internal/steerlineclient",
+        "-run",
+        "^TestActivity|^TestConversationJournalReplay|^TestSimplifiedCanonicalActivity|^TestCM71.*Attempt",
+        "-count=1",
+        "-json"
+      ],
+      "source_commit": "886a520e570c00f4a4e63fbbaaa22814604a4ee3",
+      "passed": true,
+      "complete": true,
+      "package_count": 2,
+      "test_count": 4,
+      "cleanup_complete": null,
+      "selected_scenarios": null
+    },
+    {
+      "evidence": "bin/activity-db-receipt-simplification/receipts/summary.json",
+      "sha256": "b478e5be2b39c1b485b4ec8164cff20a2dd3e1b82a192c871725e89e2e5d8def",
+      "command": [
+        "go",
+        "test",
+        "./internal/steerline",
+        "-run",
+        "^TestWorker.*(Intent|Receipt|Commit)|^TestExecutionStop|^TestAppServer|^TestSimplifiedLifecycle|^TestSimplifiedCleanup",
+        "-count=1",
+        "-json"
+      ],
+      "source_commit": "886a520e570c00f4a4e63fbbaaa22814604a4ee3",
+      "passed": true,
+      "complete": true,
+      "package_count": 1,
+      "test_count": 39,
+      "cleanup_complete": null,
+      "selected_scenarios": null
+    },
+    {
+      "evidence": "bin/activity-db-receipt-simplification/quick/summary.json",
+      "sha256": "73a9553414e9c77524fc3be9d7291b8d50e81e377e860ea6b9a3913dea51e434",
+      "command": null,
+      "source_commit": "886a520e570c00f4a4e63fbbaaa22814604a4ee3",
+      "passed": true,
+      "complete": true,
+      "package_count": 15,
+      "test_count": 215,
+      "cleanup_complete": null,
+      "selected_scenarios": null
+    },
+    {
+      "evidence": "bin/activity-db-receipt-simplification/controlled/summary.json",
+      "sha256": "ae404c7644bd84301d8d8b9e4eb07f4b387006cf16ae5f7064bbbcc343f2e4a7",
+      "command": null,
+      "source_commit": "886a520e570c00f4a4e63fbbaaa22814604a4ee3",
+      "passed": true,
+      "complete": true,
+      "package_count": 2,
+      "test_count": 2,
+      "cleanup_complete": true,
+      "selected_scenarios": [
+        {
+          "id": "delivery.basic",
+          "level": "L3",
+          "suite": "delivery",
+          "package": "./tests/e2e/suites/delivery",
+          "test": "TestBasicDelivery",
+          "env": "controlled"
+        },
+        {
+          "id": "recovery.waiting-merge-restart",
+          "level": "L3",
+          "suite": "recovery",
+          "package": "./tests/e2e/suites/recovery",
+          "test": "TestWaitingMergeRestart",
+          "env": "controlled"
+        }
+      ]
+    },
+    {
+      "evidence": "bin/activity-db-receipt-simplification/build-final/summary.json",
+      "sha256": "3dc961a99ac441ef4753a3c9fd7ea62d27d10a262bc92f59245ff9e4128a6e4c",
+      "command": [
+        "go",
+        "test",
+        "./...",
+        "-run=^$",
+        "-count=1",
+        "-timeout",
+        "20m",
+        "-json"
+      ],
+      "source_commit": "886a520e570c00f4a4e63fbbaaa22814604a4ee3",
+      "passed": true,
+      "complete": true,
+      "package_count": 40,
+      "test_count": 0,
+      "cleanup_complete": null,
+      "selected_scenarios": null
+    }
+  ],
+  "builds": [
+    {
+      "name": "steerline-windows.exe",
+      "sha256": "c56949bf63bab6c72fcc1bf88443f08c1b53a706ccc4519cf42c14b398a8b26d"
+    },
+    {
+      "name": "steerline-linux",
+      "sha256": "e8b084ca52da5b2cb4b113c0720422c20a99f7d3f20b5f6f4b24b0abf24473eb"
+    }
+  ],
+  "full_l2_live_selected": false
+}
