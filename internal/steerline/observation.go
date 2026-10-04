@@ -1,14 +1,13 @@
 package steerline
 
 import (
-"github.com/erranliu/SteerLine/internal/steerline/contracts"
- "github.com/erranliu/SteerLine/internal/execution"
 	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 )

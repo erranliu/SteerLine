@@ -1,16 +1,14 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
+
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"strings"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // WriteDecisionRequest creates a new decision identity in the service-owned
@@ -19,7 +17,7 @@ func WriteDecisionRequest(r *contracts.Run, req executionmodel.DecisionRequest) 
 	return writeDecisionRequestWithID(r, req, newID())
 }
 
-func decisionRequestFromEventFact(fact executionbackend.EventFact) executionmodel.DecisionRequest {
+func DecisionRequestFromEventFact(fact executionbackend.EventFact) executionmodel.DecisionRequest {
 	request := executionmodel.DecisionRequest{FormatVersion: executionmodel.DecisionRequestFormatVersion, Question: fact.QuestionText,
 		Context: fact.QuestionContext, Options: append([]executionbackend.DecisionOption(nil), fact.QuestionOptions...), AllowFreeText: fact.AllowFreeText}
 	if len(fact.Questions) == 0 {
@@ -181,7 +179,7 @@ func (s *Service) requireDecisionReplyCapability(ctx context.Context, run *contr
 // CLI, console client and service handler. It checks the immutable execution
 // binding and verified reply capabilities for this exact target.
 func DecisionReplyEligibility(ctx context.Context, c Config, run *contracts.Run) error {
-	if err := requireNativeTaskAuthority(c); err != nil {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return err
 	}
 	if run == nil || run.Decision == nil || run.Decision.Status != "pending" {

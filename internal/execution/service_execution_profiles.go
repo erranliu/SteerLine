@@ -1,16 +1,13 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"errors"
 	"fmt"
 	"path/filepath"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func (s *Service) projectExecutionConfig() Config {
@@ -54,7 +51,7 @@ func (s *Service) executionConfigForRun(run *contracts.Run) (Config, error) {
 			return Config{}, errors.New("execution snapshot v5 is required; preserve original state and external session")
 		}
 		fixed := *workflow.ExecutionProfile
-		if fixed.ID == "" || !verifyFixedExecutionProfile(fixed, base.ExecutionDirectory) || workflow.ConfigDigest != fixed.AcceptedConfigVersion {
+		if fixed.ID == "" || !VerifyFixedExecutionProfile(fixed, base.ExecutionDirectory) || workflow.ConfigDigest != fixed.AcceptedConfigVersion {
 			return Config{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "fixed execution profile identity is incomplete"}
 		}
 		config := base.ApplyFixedExecutionProfile(fixed)
@@ -99,7 +96,7 @@ func (s *Service) executionConfigForRun(run *contracts.Run) (Config, error) {
 		if err == nil {
 			backend, protocol = entry.Key.Backend, entry.Key.Protocol
 		}
-		if err != nil || run.Host != fixed.Host || run.Agent != fixed.Agent || run.Backend != string(backend) || run.Protocol != string(protocol) || !sameConfiguredExecutionTarget(run.Target, targetFor(config)) {
+		if err != nil || run.Host != fixed.Host || run.Agent != fixed.Agent || run.Backend != string(backend) || run.Protocol != string(protocol) || !sameConfiguredExecutionTarget(run.Target, TargetFor(config)) {
 			return Config{}, errors.New("fixed execution profile differs from the persisted run identity")
 		}
 		return config, nil

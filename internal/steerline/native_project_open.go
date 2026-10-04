@@ -1,13 +1,13 @@
 package steerline
 
 import (
- "github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"errors"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -17,7 +17,7 @@ func OpenNativeTaskProject(ctx context.Context, c *execution.Config) (persistenc
 	if c == nil {
 		return nil, nativeErr("authority_mismatch", "native project configuration is required")
 	}
-	if requireNativeTaskAuthority(*c) != nil {
+	if c.RequireNativeTaskAuthority() != nil {
 		return nil, nativeErr("authority_mismatch", "configuration must explicitly select task_authority=native")
 	}
 	if err := c.ValidateTaskCommandConfiguration(); err != nil {
@@ -82,7 +82,7 @@ func OpenNativeTaskProject(ctx context.Context, c *execution.Config) (persistenc
 // OpenNativeTaskReader opens an existing native authority without creating
 // project state. Every read is bound to the configured repository and target.
 func OpenNativeTaskReader(ctx context.Context, c *execution.Config) (persistence.Connection, error) {
-	if c == nil || c.Persistence == nil || requireNativeTaskAuthority(*c) != nil {
+	if c == nil || c.Persistence == nil || c.RequireNativeTaskAuthority() != nil {
 		return nil, nativeErr("authority_mismatch", "native task reader requires task_authority=native")
 	}
 	if err := validateNativeStateLocation(*c); err != nil {
@@ -102,7 +102,7 @@ func OpenNativeTaskReader(ctx context.Context, c *execution.Config) (persistence
 // for a bounded command. The caller must hold the repository identity lock,
 // and the project must already have been initialized and bound.
 func OpenNativeTaskCommandStore(ctx context.Context, c *execution.Config) (persistence.Connection, error) {
-	if c == nil || requireNativeTaskAuthority(*c) != nil {
+	if c == nil || c.RequireNativeTaskAuthority() != nil {
 		return nil, nativeErr("authority_mismatch", "native task command requires task_authority=native")
 	}
 	if err := c.ValidateTaskCommandConfiguration(); err != nil {

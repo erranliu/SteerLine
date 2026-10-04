@@ -1,12 +1,9 @@
 package execution
 
 import (
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
-)
-
-import (
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func (s *Service) commitWorkerBinding(run *contracts.Run, ref executionbackend.ExecutionRef) error {

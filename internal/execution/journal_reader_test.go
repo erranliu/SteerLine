@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 func writeJournal(t *testing.T, path, body string) {
@@ -24,7 +22,7 @@ func TestJournalWaitsForCompleteUTF8CRLFRecord(t *testing.T) {
 	if err := os.WriteFile(path, bytes[:cut], 0600); err != nil {
 		t.Fatal(err)
 	}
-	first, err := ReadJournalBatch(path, productapi.JournalCursor{}, JournalOptions{FromStart: true})
+	first, err := ReadJournalBatch(path, JournalCursor{}, JournalOptions{FromStart: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +61,7 @@ func TestJournalWaitsForCompleteUTF8CRLFRecord(t *testing.T) {
 func TestJournalResetsOnTruncationAndAtomicReplacement(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "activity.jsonl")
 	writeJournal(t, path, "old-record-one\nold-record-two\n")
-	first, err := ReadJournalBatch(path, productapi.JournalCursor{}, JournalOptions{FromStart: true})
+	first, err := ReadJournalBatch(path, JournalCursor{}, JournalOptions{FromStart: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +107,7 @@ func TestJournalFramingDoesNotInterpretActivitySequence(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	contents := "{\"seq\":3}\n{\"seq\":3}\n{\"seq\":4}\n{\"seq\":2}\n"
 	writeJournal(t, path, contents)
-	batch, err := ReadJournalBatch(path, productapi.JournalCursor{}, JournalOptions{FromStart: true})
+	batch, err := ReadJournalBatch(path, JournalCursor{}, JournalOptions{FromStart: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +129,7 @@ func TestJournalBoundsBatchesAndSkipsOversizeLine(t *testing.T) {
 		b.WriteString("row\n")
 	}
 	writeJournal(t, path, b.String())
-	cursor := productapi.JournalCursor{}
+	cursor := JournalCursor{}
 	all := 0
 	first := true
 	for {
@@ -168,7 +166,7 @@ func TestJournalBoundsBatchesAndSkipsOversizeLine(t *testing.T) {
 func TestJournalFromStartFalseSkipsOldPartialRecord(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	writeJournal(t, path, "old-partial")
-	first, err := ReadJournalBatch(path, productapi.JournalCursor{}, JournalOptions{FromStart: false})
+	first, err := ReadJournalBatch(path, JournalCursor{}, JournalOptions{FromStart: false})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +194,7 @@ func TestJournalByteBudgetIsolatesLargeRecords(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	want := []string{"first", strings.Repeat("x", JournalMaxBytes+20), "last"}
 	writeJournal(t, path, strings.Join(want, "\n")+"\n")
-	cursor := productapi.JournalCursor{}
+	cursor := JournalCursor{}
 	var got []string
 	for i := 0; i < 10; i++ {
 		batch, err := ReadJournalBatch(path, cursor, JournalOptions{FromStart: true})
@@ -224,7 +222,7 @@ func TestJournalByteBudgetIsolatesLargeRecords(t *testing.T) {
 func TestJournalBoundsUnterminatedOversizeScan(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "events.jsonl")
 	writeJournal(t, path, strings.Repeat("x", 3*JournalMaxRecord))
-	batch, err := ReadJournalBatch(path, productapi.JournalCursor{}, JournalOptions{FromStart: true})
+	batch, err := ReadJournalBatch(path, JournalCursor{}, JournalOptions{FromStart: true})
 	if err != nil {
 		t.Fatal(err)
 	}

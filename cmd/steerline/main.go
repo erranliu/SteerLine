@@ -390,7 +390,7 @@ func run() error {
 		return steerlineapp.RunConfiguredService(ctx, c, *dispatchMode, *startupID, *console)
 	}
 	if command == "check" {
-		if e = c.Preflight(ctx, true); e != nil {
+		if e = steerline.Preflight(ctx, &c, true); e != nil {
 			return e
 		}
 		fmt.Println("Worker-flow configuration, native authority binding, Git and PR provider verified; no task claimed.")

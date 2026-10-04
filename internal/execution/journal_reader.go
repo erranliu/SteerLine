@@ -9,8 +9,6 @@ import (
 	"io"
 	"os"
 	"strings"
-
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 const (
@@ -31,7 +29,7 @@ type JournalOptions struct {
 type JournalBatch struct {
 	Lines       [][]byte
 	Records     []JournalRecord
-	Cursor      productapi.JournalCursor
+	Cursor      JournalCursor
 	Reset       bool
 	More        bool
 	Diagnostics []string
@@ -47,7 +45,7 @@ type JournalRecord struct {
 // ReadJournalBatch reads at most one bounded batch of complete UTF-8/byte
 // records. It is deliberately representation-agnostic; consumers normalize or
 // validate lines after this shared framing layer.
-func ReadJournalBatch(path string, cursor productapi.JournalCursor, opts JournalOptions) (JournalBatch, error) {
+func ReadJournalBatch(path string, cursor JournalCursor, opts JournalOptions) (JournalBatch, error) {
 	if strings.TrimSpace(path) == "" {
 		return JournalBatch{}, errors.New("empty journal path")
 	}
@@ -86,7 +84,7 @@ func ReadJournalBatch(path string, cursor productapi.JournalCursor, opts Journal
 		if generation == 0 {
 			generation = 1
 		}
-		cursor = productapi.JournalCursor{Path: path, FileID: id, Generation: generation, Initialized: true}
+		cursor = JournalCursor{Path: path, FileID: id, Generation: generation, Initialized: true}
 		batch.Reset = true
 	}
 	if !cursor.Initialized {
@@ -230,7 +228,7 @@ func readJournalLine(reader *bufio.Reader, prefix []byte, scanned int64) (bool, 
 	}
 }
 
-func journalAnchorsMatch(f *os.File, c productapi.JournalCursor) bool {
+func journalAnchorsMatch(f *os.File, c JournalCursor) bool {
 	if c.HeaderHash != "" && c.HeaderLength > 0 {
 		n := c.HeaderLength
 		b := make([]byte, n)
@@ -255,7 +253,7 @@ func journalAnchorsMatch(f *os.File, c productapi.JournalCursor) bool {
 	return true
 }
 
-func captureJournalAnchors(f *os.File, c *productapi.JournalCursor, size int64) {
+func captureJournalAnchors(f *os.File, c *JournalCursor, size int64) {
 	if c.HeaderHash == "" && size > 0 {
 		n := journalAnchorSize
 		if size < int64(n) {
@@ -271,7 +269,7 @@ func captureJournalAnchors(f *os.File, c *productapi.JournalCursor, size int64) 
 	}
 }
 
-func captureLineAnchor(c *productapi.JournalCursor, line []byte, offset int64) {
+func captureLineAnchor(c *JournalCursor, line []byte, offset int64) {
 	c.AnchorOffset = offset
 	c.AnchorLength = len(line)
 	c.AnchorHash = hashJournalBytes(line)

@@ -2,7 +2,7 @@
 
 一期产品流程和验收仅包含本地 Codex/本机 Orca；本页远端包、接口与协议条目描述存量代码归属，保留迁移/编译/拒绝保护，不表示一期启用远端或必须完成其真机认证。
 
-核对日期：2026-10-04。本页反映 main 的 #37/#38 候选基础和 #211 测试修复，与 #73/#74 基础集成并实现 #75 任务应用用例的候选工作树；[归属/验证记录](../validation/three-line-01-types/README.md)保留实际源码、构造、残留后继和测试证据。原生能力证据不因搬包而扩大。
+核对日期：2026-10-05。本页反映已合入 #74/#75/#39 前置的当前工作树与 #76 execution 用例归包实现；[类型归属](../validation/three-line-01-types/README.md)、[#75 任务交付](../validation/three-line-03-task-usecases/README.md)、[#76 execution 归属/验证](../validation/three-line-04-execution-usecases/README.md)记录接口和行为证据。原生能力证据不因搬包而扩大。
 
 ## 系统与业务权威
 
@@ -39,14 +39,15 @@ flowchart LR
 
 | 所有者 | 简短职责与源码入口 |
 | --- | --- |
-| `internal/steerline` | Task/Workflow/Execution/Decision/Operation/TaskDelivery 用例、通用协调、提交和恢复。显式 [execution_directory.go](../../internal/steerline/execution_directory.go)、[worker_lifecycle.go](../../internal/steerline/worker_lifecycle.go)、[service_commit.go](../../internal/steerline/service_commit.go)；#69 已通过 [persistence/ports.go](../../internal/steerline/persistence/ports.go) 收窄生产写消费者，SQL/连接/schema/原子事务由唯一 sqlite 模块持有，应用注入实际连接；#73 同次切换了纯记录、backend、API 和声明消费者。 |
+| `internal/steerline` | 宿主循环/启动/锁/控制传输/产品 query；execution actor 已迁出。通用 [host loop](../../internal/steerline/host/loop.go) 调用接口型 Scheduler，保持唯一 host/service 现场接线。SQL/连接/schema/原子事务由唯一 SQLite 模块持有；#73/#74/#75 已交付纯模型和任务/结果小端口。 |
 | `internal/execution/backend` | 通用身份、闭集操作、事实/问题/回执、策略/需求、不可变有界封套和实现证据；仅标准库。[lifecycle.go](../../internal/execution/backend/lifecycle.go)、[implementation_data.go](../../internal/execution/backend/implementation_data.go)。 |
-| `internal/execution/model` / `internal/execution` | 前者拥有 Workflow/Execution/Attempt/Decision/Operation、冻结 profile/PR/资源和 workerflow 纯状态/恢复；只依赖 backend。后者持任务提示构造；执行模型新增调度资格、固定交付证据/回执、候选绑定/base/丢弃事实，仍不依赖 task/model。任务提示不进入执行纯模型。 |
+| `internal/execution/backend` / `internal/execution/model` / `internal/execution` | backend 持通用 adapter protocol 与封套，model 持冻结 profile/PR/资源及 workerflow 状态。execution 持唯一 actor、候选/会话/Decision/恢复/交付/清理命令、配置、journal cursor 与任务提示构造；TaskWorkPort/TaskResultPort 经 app 注入，production 不导入 task app、query/projection、SQL 或 adapter。 |
+| `internal/execution/reconstruction` | 由 task/workflow/execution/attempt/decision/delivery 记录重建内部 Run/Runtime/selectors 的无 I/O 函数；使用 transitional contracts 输出，不构造 product DTO，不依赖 query/SQL/adapter。原 `internal/steerline/projection` 已删。 |
 | `internal/task` | 固定工作挑选/排序与任务结果/丢弃声明；app 注入消费方 TaskWorkPort/TaskResultPort，纯输入为 task/model.FixedWork，Reader 只返回任务快照与固定契约。schema 14 的领取/唯一结果/丢弃由 storage/ports 专用声明一次 SQLite 事务组合重检；共享字段/实际拆分见[交接清单](../validation/three-line-02-task-execution-boundary/integration-ownership.md)。 |
 | `internal/task/model` | 固定任务/契约、批次/生命周期、DAG 与资格唯一规则；仅标准库。GraphAuthority/DeliveryFact 不含派发、session、PR 明细。 |
 | `internal/product/api` | 独立状态标量、用户输入、游标、错误、控制目标和回执；仅标准库，不含 Domain/Runtime/持久记录。 |
 | `internal/storage/ports` | RecordWrite 前值声明、Commands 纯读写契约、CommandRecord/DomainEvent、ClaimCommit/ResultCommit/DiscardCommit 和存储错误；只消费纯模型/API/backend。 |
-| `contracts` | 尚未迁的宽 Domain/Runtime/产品视图、会话来源/存储组合与宿主记录；每字段唯一后继见[残留清单](../validation/three-line-01-types/residual-ownership.json)。纯执行记录和相关旧别名已删除。 |
+| `contracts` | 尚未迁的宽 Domain/Runtime/内部投影、会话来源/存储组合与宿主记录；每字段唯一后继见[残留清单](../validation/three-line-01-types/residual-ownership.json)。execution 对这些 transitional records 的重建位于自己的纯函数子包。 |
 | `codexworker` / `codexapp` | 前者拥有原生 codec、配置/命令/权限、生命周期、history/source/mapper；后者拥有 WebSocket/JSON-RPC 和原生问题传输。不给实现 Store 或可写 Service。 |
 | `orcaworker` | 原生配置/绑定/资源/terminal/Dispatch/message、宿主准备和输出、观察及原操作对账。[lifecycle_resources.go](../../internal/steerline/orcaworker/lifecycle_resources.go)、[lifecycle_observation.go](../../internal/steerline/orcaworker/lifecycle_observation.go)。 |
 | `orca_remote_worker` | 原远端协议、身份、消息、观察、结算与对账；新执行仍按权限准入拒绝，远端取消 unsupported。协议 mock 不证明权限认证。 |
@@ -86,7 +87,7 @@ sequenceDiagram
     Center->>Impl: 授权下一步或 ack
 ```
 
-源码：[service_commit.go](../../internal/steerline/service_commit.go)、[worker_attachment_store.go](../../internal/steerline/worker_attachment_store.go)、[worker_lifecycle_async.go](../../internal/steerline/worker_lifecycle_async.go)、[worker_lifecycle_recovery.go](../../internal/steerline/worker_lifecycle_recovery.go)、[state_preflight.go](../../internal/steerline/state_preflight.go)、[native_delivery_command.go](../../internal/steerline/native_delivery_command.go)。
+执行来源：[service_commit.go](../../internal/execution/service_commit.go)、[worker_attachment_store.go](../../internal/execution/worker_attachment_store.go)、[scheduler.go](../../internal/execution/scheduler.go)、[native_delivery_command.go](../../internal/execution/native_delivery_command.go)；host 启动/loop 与状态预检仍由根宿主拥有。
 
 ## 产品客户端（#71）
 
@@ -98,7 +99,7 @@ sequenceDiagram
 
 console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读锚点、折叠、原请求及按配置路径/状态目录隔离的偏好。偏好 OS 锁与原子文件写入归 UI；恢复核验通过 [RecoveryQueries](../../internal/steerline/clientcontracts/recovery.go) 调用原中心只读核验，游标编码复用原 query。`Model.Close` 和外层退出清理只释放 UI/client 资源，不提交 stop。依赖守卫在既有 #67/quick 内同时检查 console 全源码、测试、helper 与 Windows/Linux 生产图。实际接线与断言映射见 [#72 验证记录](../validation/core-decoupling-11-tui/README.md)。
 
-中心活动仅随业务提交写入数据库，不维护 activity.jsonl 镜像或文件 seq。操作准备、请求验证、结果归一化和启动回执的共同身份检查由 [lifecycle_receipt.go](../../internal/steerline/lifecycle_receipt.go) 复用；每种动作仍决定自己的接收条件和下一步，保留 intent/receipt/附件屏障。
+中心活动仅随业务提交写入数据库，不维护 activity.jsonl 镜像或文件 seq。操作准备、请求验证、结果归一化和启动回执的共同身份检查由 [lifecycle_receipt.go](../../internal/execution/lifecycle_receipt.go) 复用；每种动作仍决定自己的接收条件和下一步，保留 intent/receipt/附件屏障。
 
 ## 会话和客户端读取
 
@@ -106,75 +107,67 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 
 公开 Runtime/Run 从已提交记录深复制构建，与私有工作 Run 分开。sqlite.Reader 在同一读事务采样任务、Ready、选中任务、记录和 checkpoint；query 复用 projection/task 规则。连接身份失败仍可展示可用只读数据，控制和领取各自重检。领域事件正文有页预算，cursor 只推进到实际返回事件；缺来源终态/final 时不能由界面推断完成。
 
-源码：[conversation_service.go](../../internal/steerline/conversation_service.go)、[conversation_store.go](../../internal/steerline/sqlite/conversation_store.go)、[project_view.go](../../internal/steerline/project_view.go)、[query/project.go](../../internal/steerline/query/project.go)、[console/source.go](../../internal/steerline/console/source.go)。
+源码：[conversation.go](../../internal/execution/conversation.go)、[conversation_replay.go](../../internal/execution/conversation_replay.go)、[conversation_store.go](../../internal/steerline/sqlite/conversation_store.go)、[project_view.go](../../internal/steerline/project_view.go)、[query/project.go](../../internal/steerline/query/project.go)。
 
-## 验证映射与后续任务
+## #76 验收与后续任务
 
-| 约束 / 原断言 | 当前所有者与入口 |
-| --- | --- |
-| 配置/封套版本、身份、摘要、深复制及拒绝 | execution/三个实现 codec、app 固定 profile；quick rules + owner cases；[#63 Plan 交付映射](../spec/core-decoupling-02-bindings.plan.md) |
-| intent/receipt/ack、未知结果、原身份与唯一交付 | 中心中性事务测试 + 外层公开生命周期；[#64 映射](../validation/core-decoupling-03-lifecycle/README.md)、CD67 AdditionalImplementation |
-| 来源 mapper/cursor 同事务、host 人工门槛、旧 conversation 拒绝 | 中心 CD65、query/sqlite、实现 history/host；[#65 映射](../validation/core-decoupling-04-conversation/README.md) |
-| 唯一应用构造、产品配置、原 fixed profile 恢复 | app / integration；[#66 映射](../validation/core-decoupling-05-composition/README.md) |
-| 全标签源码/依赖、负向 fixture、第三实现及支持/remote 原路径 | `TestCD67CoreBoundary` / `TestCD67AdditionalImplementation`，quick 固定选择，逐包 parent/subtest JSON run/pass；[#67 映射](../validation/core-decoupling-06-boundary/test-mapping.json) |
-| #68 删除依据、保留入口及受影响代表 | [候选清单](../validation/core-decoupling-07-cleanup/candidate-inventory.json)、[验证记录](../validation/core-decoupling-07-cleanup/README.md)；没有删除/迁移断言，quick 引用仍有效 |
-| #70 唯一存储、事务/CAS/回滚/WAL/关闭与应用注入 | sqlite / persistence / app；[#70 验证记录](../validation/core-decoupling-09-sqlite/README.md)，严格只读文件要求待决，未按整体通过处理。 |
+执行 actor 与私有状态、配置、命令、conversation journal cursor、执行态重建和相关白盒用例统一归属 `internal/execution`。唯一真实 app 构造注入 TaskWorkPort/TaskResultPort、目录、SQLite connection、ProcessHost 与宿主 transport/diagnostic 小端口。通用 host loop 只认识 scheduler 接口，SQL、adapter 和产品 UI 仍由各自 owner 负责。
 
-`go run ./cmd/test-feedback -quick` 已包含 15 包的规则/实现/app/CD67 守卫，不另加重复守卫。按 [测试计划](../spec/core-decoupling-07-cleanup.plan.md) 运行必要定向和一次 quick，明确临时 STEERLINE_HOME，仅隔离 Git/SQLite/协议 mock。原生支持和 opt-in live 证据保留，本次未启用。远端权限缺证拒绝不变。
+依赖守卫 `TestTM04ExecutionBoundary` 检查所有 OS/tag 源码图、Windows/Linux 构建图、product query/projection 直接依赖反例及重建包 adapter 反例。应用外层 MC1/3/5/6/7/8/9、TM04 wiring、L1 与注册的 L3 controlled recovery 的实际命中和报告见[#76 验收记录](../validation/three-line-04-execution-usecases/README.md)。没有跑 Full、L2/live 或启用原生接受开关。
 
-#67/#68/#69/#71 已实际合并；本页同步 #72 实施交付并保持 #69 的写端口。#70 搬唯一 SQL 实现；#71/#72 已接通公共产品 DTO/adapter/CLI/TUI。共享 contracts/组装/quick 顺序集成。没有新平台、remote 权限、兼容层或插件系统。
+#76 合入后 #78 可消费 execution/backend 固定接口；#79 等 #75/#76/#77；#80 等三线服务/目录边界固定；最终测试组合仍归 #82。后继不复制 execution implementation 或恢复旧 forwarding facade。
 
 ## 全 OS / 构建标签源码索引
 
-下面按 #75 实际工作树列出全部 cmd/internal 非测试 Go 文件，不排除 OS/tag；go/parser 逐文件 import 和 hash 见 [source-index](../validation/three-line-03-task-usecases/source-index.json)。测试源码另由依赖守卫覆盖，testprotocol/testprocess 属测试支持库存。
+以下索引从当前工作树生成，包含 cmd/internal 所有生产 Go 源码（包括 Windows/Linux 和其他 build tags）；不包含测试文件。逐文件 SHA/import 清单在 [#76 source-index](../validation/three-line-04-execution-usecases/source-index.json)。依赖守卫另扫描测试文件与完整传递图。
 
-| 包 | 文件数 | 项目内直接依赖 |
-| --- | --- | --- |
+| 包 | 生产文件数 | 项目内直接依赖 |
+| --- | ---: | --- |
 | `cmd/orca-probe` | 1 | 无 |
-| `cmd/steerline` | 2 | `internal/product/api`、`internal/steerline`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/taskview`、`internal/steerlineapp`、`internal/steerlineclient`、`internal/storage/ports`、`internal/task/model` |
-| `cmd/test-feedback` | 6 | `internal/testfeedback`、`internal/testprocess` |
+| `cmd/steerline` | 2 | `internal/execution`, `internal/product/api`, `internal/steerline`, `internal/steerline/clientcontracts`, `internal/steerline/contracts`, `internal/steerline/taskview`, `internal/steerlineapp`, `internal/steerlineclient`, `internal/storage/ports`, `internal/task/model` |
+| `cmd/test-feedback` | 6 | `internal/coreboundary`, `internal/execution`, `internal/execution/backend`, `internal/execution/model`, `internal/steerline`, `internal/steerlineapp`, `internal/steerlineintegration`, `internal/storage/ports`, `internal/task`, `internal/task/model`, `internal/testboundary`, `internal/testfeedback`, `internal/testprocess` |
 | `internal/coreboundary` | 1 | 无 |
-| `internal/execution` | 1 | `internal/execution/backend`、`internal/task/model` |
+| `internal/execution` | 94 | `internal/execution/backend`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/product/api`, `internal/steerline/activityview`, `internal/steerline/clientcontracts`, `internal/steerline/contracts`, `internal/steerline/persistence`, `internal/steerline/publication`, `internal/steerline/workspace`, `internal/storage/ports`, `internal/task/model` |
 | `internal/execution/backend` | 19 | 无 |
 | `internal/execution/model` | 21 | `internal/execution/backend` |
+| `internal/execution/process` | 3 | `internal/execution/backend` |
+| `internal/execution/reconstruction` | 3 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/contracts`, `internal/task/model` |
 | `internal/product/api` | 5 | 无 |
-| `internal/steerline` | 112 | `internal/execution`、`internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/activityview`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/persistence`、`internal/steerline/projection`、`internal/steerline/publication`、`internal/steerline/query`、`internal/steerline/taskview`、`internal/steerline/workspace`、`internal/storage/ports`、`internal/task/model` |
+| `internal/steerline` | 42 | `internal/execution`, `internal/execution/backend`, `internal/execution/model`, `internal/execution/process`, `internal/product/api`, `internal/steerline/activityview`, `internal/steerline/clientcontracts`, `internal/steerline/contracts`, `internal/steerline/host`, `internal/steerline/persistence`, `internal/steerline/publication`, `internal/steerline/query`, `internal/steerline/taskview`, `internal/steerline/workspace`, `internal/storage/ports`, `internal/task/model` |
 | `internal/steerline/activityview` | 2 | `internal/steerline/contracts` |
-| `internal/steerline/clientcontracts` | 5 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/contracts`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
+| `internal/steerline/clientcontracts` | 5 | `internal/execution/backend`, `internal/execution/model`, `internal/product/api`, `internal/steerline/contracts`, `internal/steerline/taskview`, `internal/storage/ports`, `internal/task/model` |
 | `internal/steerline/codexapp` | 4 | 无 |
-| `internal/steerline/codexworker` | 29 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/codexapp`、`internal/steerline/contracts`、`internal/steerline/workspace` |
-| `internal/steerline/console` | 23 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/activityview`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/storage/ports` |
-| `internal/steerline/contracts` | 10 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/taskview`、`internal/task/model` |
-| `internal/steerline/orca_remote_worker` | 14 | `internal/execution/backend`、`internal/steerline/codexworker`、`internal/steerline/orcaworker` |
-| `internal/steerline/orcaworker` | 28 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/codexworker`、`internal/steerline/contracts`、`internal/steerline/workspace` |
-| `internal/steerline/persistence` | 2 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts`、`internal/steerline/query`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
+| `internal/steerline/codexworker` | 29 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/codexapp`, `internal/steerline/contracts`, `internal/steerline/workspace` |
+| `internal/steerline/console` | 23 | `internal/execution/backend`, `internal/execution/model`, `internal/product/api`, `internal/steerline/activityview`, `internal/steerline/clientcontracts`, `internal/steerline/contracts`, `internal/storage/ports` |
+| `internal/steerline/contracts` | 10 | `internal/execution/backend`, `internal/execution/model`, `internal/product/api`, `internal/steerline/taskview`, `internal/task/model` |
+| `internal/steerline/host` | 2 | `internal/product/api` |
+| `internal/steerline/orca_remote_worker` | 14 | `internal/execution/backend`, `internal/steerline/codexworker`, `internal/steerline/orcaworker` |
+| `internal/steerline/orcaworker` | 28 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/codexworker`, `internal/steerline/contracts`, `internal/steerline/workspace` |
+| `internal/steerline/persistence` | 2 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/contracts`, `internal/steerline/query`, `internal/steerline/taskview`, `internal/storage/ports`, `internal/task/model` |
 | `internal/steerline/processhost` | 4 | `internal/execution/backend` |
-| `internal/steerline/projection` | 3 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts`、`internal/task/model` |
-| `internal/steerline/publication` | 6 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts` |
-| `internal/steerline/query` | 6 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
-| `internal/steerline/sqlite` | 35 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts`、`internal/steerline/persistence`、`internal/steerline/projection`、`internal/steerline/query`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
-| `internal/steerline/taskview` | 4 | `internal/execution/model`、`internal/task/model` |
+| `internal/steerline/publication` | 6 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/contracts` |
+| `internal/steerline/query` | 6 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/contracts`, `internal/steerline/taskview`, `internal/storage/ports`, `internal/task/model` |
+| `internal/steerline/sqlite` | 35 | `internal/execution/backend`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/steerline/contracts`, `internal/steerline/persistence`, `internal/steerline/query`, `internal/steerline/taskview`, `internal/storage/ports`, `internal/task/model` |
+| `internal/steerline/taskview` | 4 | `internal/execution/model`, `internal/task/model` |
 | `internal/steerline/testprotocol` | 6 | 无 |
 | `internal/steerline/workspace` | 6 | `internal/execution/backend` |
-| `internal/steerlineapp` | 14 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline`、`internal/steerline/clientcontracts`、`internal/steerline/codexworker`、`internal/steerline/console`、`internal/steerline/contracts`、`internal/steerline/orca_remote_worker`、`internal/steerline/orcaworker`、`internal/steerline/persistence`、`internal/steerline/processhost`、`internal/steerline/publication`、`internal/steerline/query`、`internal/steerline/sqlite`、`internal/steerline/workspace`、`internal/steerlineclient`、`internal/storage/ports`、`internal/task`、`internal/task/model` |
-| `internal/steerlineclient` | 1 | `internal/execution/backend`、`internal/product/api`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/query`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
-| `internal/storage/ports` | 6 | `internal/execution/model`、`internal/task/model` |
+| `internal/steerlineapp` | 14 | `internal/execution`, `internal/execution/backend`, `internal/execution/model`, `internal/product/api`, `internal/steerline`, `internal/steerline/clientcontracts`, `internal/steerline/codexworker`, `internal/steerline/console`, `internal/steerline/contracts`, `internal/steerline/orca_remote_worker`, `internal/steerline/orcaworker`, `internal/steerline/persistence`, `internal/steerline/processhost`, `internal/steerline/publication`, `internal/steerline/query`, `internal/steerline/sqlite`, `internal/steerline/workspace`, `internal/steerlineclient`, `internal/storage/ports`, `internal/task`, `internal/task/model` |
+| `internal/steerlineclient` | 1 | `internal/execution/backend`, `internal/product/api`, `internal/steerline/clientcontracts`, `internal/steerline/contracts`, `internal/steerline/query`, `internal/steerline/taskview`, `internal/storage/ports`, `internal/task/model` |
+| `internal/storage/ports` | 6 | `internal/execution/model`, `internal/task/model` |
 | `internal/task` | 6 | `internal/task/model` |
 | `internal/task/model` | 15 | 无 |
 | `internal/testfeedback` | 1 | 无 |
 | `internal/testprocess` | 3 | 无 |
 
-### 全量源码路径
+### 文件
 
 #### cmd/orca-probe
 
 - [main.go](../../cmd/orca-probe/main.go)
-
 #### cmd/steerline
 
 - [main.go](../../cmd/steerline/main.go)
 - [task_commands.go](../../cmd/steerline/task_commands.go)
-
 #### cmd/test-feedback
 
 - [e2e.go](../../cmd/test-feedback/e2e.go)
@@ -183,15 +176,105 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [process_windows.go](../../cmd/test-feedback/process_windows.go)
 - [scoped.go](../../cmd/test-feedback/scoped.go)
 - [task_scope.go](../../cmd/test-feedback/task_scope.go)
-
 #### internal/coreboundary
 
 - [check.go](../../internal/coreboundary/check.go)
-
 #### internal/execution
 
+- [application_config.go](../../internal/execution/application_config.go)
+- [application_config_types.go](../../internal/execution/application_config_types.go)
+- [candidate_control.go](../../internal/execution/candidate_control.go)
+- [candidate_pr.go](../../internal/execution/candidate_pr.go)
+- [candidate_resources.go](../../internal/execution/candidate_resources.go)
+- [candidate_workers.go](../../internal/execution/candidate_workers.go)
+- [command_boundary.go](../../internal/execution/command_boundary.go)
+- [command_kinds.go](../../internal/execution/command_kinds.go)
+- [command_processor.go](../../internal/execution/command_processor.go)
+- [command_submission.go](../../internal/execution/command_submission.go)
+- [config_admission.go](../../internal/execution/config_admission.go)
+- [control_digest.go](../../internal/execution/control_digest.go)
+- [control_service.go](../../internal/execution/control_service.go)
+- [control_validation.go](../../internal/execution/control_validation.go)
+- [conversation.go](../../internal/execution/conversation.go)
+- [conversation_identity.go](../../internal/execution/conversation_identity.go)
+- [conversation_position.go](../../internal/execution/conversation_position.go)
+- [conversation_replay.go](../../internal/execution/conversation_replay.go)
+- [conversation_service.go](../../internal/execution/conversation_service.go)
+- [conversation_sources.go](../../internal/execution/conversation_sources.go)
+- [decision.go](../../internal/execution/decision.go)
+- [execution_backend.go](../../internal/execution/execution_backend.go)
+- [execution_command_runner.go](../../internal/execution/execution_command_runner.go)
+- [execution_commands.go](../../internal/execution/execution_commands.go)
+- [execution_config.go](../../internal/execution/execution_config.go)
+- [execution_delivery_poll.go](../../internal/execution/execution_delivery_poll.go)
+- [execution_directory.go](../../internal/execution/execution_directory.go)
+- [execution_discard_cleanup.go](../../internal/execution/execution_discard_cleanup.go)
+- [execution_dispatch.go](../../internal/execution/execution_dispatch.go)
+- [execution_errors.go](../../internal/execution/execution_errors.go)
+- [execution_helpers.go](../../internal/execution/execution_helpers.go)
+- [execution_profiles.go](../../internal/execution/execution_profiles.go)
+- [execution_requirements.go](../../internal/execution/execution_requirements.go)
+- [execution_snapshot.go](../../internal/execution/execution_snapshot.go)
+- [execution_store.go](../../internal/execution/execution_store.go)
+- [host_callbacks.go](../../internal/execution/host_callbacks.go)
+- [host_ports.go](../../internal/execution/host_ports.go)
+- [implementation_bindings.go](../../internal/execution/implementation_bindings.go)
+- [journal_cursor.go](../../internal/execution/journal_cursor.go)
+- [journal_platform_linux.go](../../internal/execution/journal_platform_linux.go)
+- [journal_platform_other.go](../../internal/execution/journal_platform_other.go)
+- [journal_platform_windows.go](../../internal/execution/journal_platform_windows.go)
+- [journal_reader.go](../../internal/execution/journal_reader.go)
+- [json_decode.go](../../internal/execution/json_decode.go)
+- [lifecycle_effect.go](../../internal/execution/lifecycle_effect.go)
+- [lifecycle_receipt.go](../../internal/execution/lifecycle_receipt.go)
+- [native_claim_command.go](../../internal/execution/native_claim_command.go)
+- [native_cleanup.go](../../internal/execution/native_cleanup.go)
+- [native_cleanup_stop.go](../../internal/execution/native_cleanup_stop.go)
+- [native_delivery_command.go](../../internal/execution/native_delivery_command.go)
+- [native_discard_command.go](../../internal/execution/native_discard_command.go)
+- [native_dispatch_command.go](../../internal/execution/native_dispatch_command.go)
+- [native_repository_target.go](../../internal/execution/native_repository_target.go)
+- [operation.go](../../internal/execution/operation.go)
+- [profile_data.go](../../internal/execution/profile_data.go)
 - [prompt.go](../../internal/execution/prompt.go)
-
+- [publication_snapshot.go](../../internal/execution/publication_snapshot.go)
+- [read_ports.go](../../internal/execution/read_ports.go)
+- [recovery.go](../../internal/execution/recovery.go)
+- [runtime_view.go](../../internal/execution/runtime_view.go)
+- [scheduler.go](../../internal/execution/scheduler.go)
+- [service_activity.go](../../internal/execution/service_activity.go)
+- [service_actor.go](../../internal/execution/service_actor.go)
+- [service_checkpoint.go](../../internal/execution/service_checkpoint.go)
+- [service_commit.go](../../internal/execution/service_commit.go)
+- [service_construction.go](../../internal/execution/service_construction.go)
+- [service_execution_profiles.go](../../internal/execution/service_execution_profiles.go)
+- [service_shutdown.go](../../internal/execution/service_shutdown.go)
+- [service_state.go](../../internal/execution/service_state.go)
+- [service_task_snapshot.go](../../internal/execution/service_task_snapshot.go)
+- [service_workers.go](../../internal/execution/service_workers.go)
+- [store.go](../../internal/execution/store.go)
+- [stored_execution_validation.go](../../internal/execution/stored_execution_validation.go)
+- [utilities.go](../../internal/execution/utilities.go)
+- [worker_attachment_store.go](../../internal/execution/worker_attachment_store.go)
+- [worker_completion.go](../../internal/execution/worker_completion.go)
+- [worker_environment.go](../../internal/execution/worker_environment.go)
+- [worker_environment_host.go](../../internal/execution/worker_environment_host.go)
+- [worker_events.go](../../internal/execution/worker_events.go)
+- [worker_evidence.go](../../internal/execution/worker_evidence.go)
+- [worker_execution.go](../../internal/execution/worker_execution.go)
+- [worker_feedback.go](../../internal/execution/worker_feedback.go)
+- [worker_lifecycle.go](../../internal/execution/worker_lifecycle.go)
+- [worker_lifecycle_async.go](../../internal/execution/worker_lifecycle_async.go)
+- [worker_lifecycle_feedback.go](../../internal/execution/worker_lifecycle_feedback.go)
+- [worker_lifecycle_recovery.go](../../internal/execution/worker_lifecycle_recovery.go)
+- [worker_pr.go](../../internal/execution/worker_pr.go)
+- [worker_process.go](../../internal/execution/worker_process.go)
+- [worker_recovery.go](../../internal/execution/worker_recovery.go)
+- [worker_resume.go](../../internal/execution/worker_resume.go)
+- [worker_start.go](../../internal/execution/worker_start.go)
+- [worker_state.go](../../internal/execution/worker_state.go)
+- [worker_types.go](../../internal/execution/worker_types.go)
+- [workspace_config.go](../../internal/execution/workspace_config.go)
 #### internal/execution/backend
 
 - [backend.go](../../internal/execution/backend/backend.go)
@@ -213,7 +296,6 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [requirements.go](../../internal/execution/backend/requirements.go)
 - [session.go](../../internal/execution/backend/session.go)
 - [workspace.go](../../internal/execution/backend/workspace.go)
-
 #### internal/execution/model
 
 - [answer_identity.go](../../internal/execution/model/answer_identity.go)
@@ -237,7 +319,16 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [task_delivery_validation.go](../../internal/execution/model/task_delivery_validation.go)
 - [task_receipts.go](../../internal/execution/model/task_receipts.go)
 - [verified_pr.go](../../internal/execution/model/verified_pr.go)
+#### internal/execution/process
 
+- [facts.go](../../internal/execution/process/facts.go)
+- [facts_linux.go](../../internal/execution/process/facts_linux.go)
+- [facts_windows.go](../../internal/execution/process/facts_windows.go)
+#### internal/execution/reconstruction
+
+- [run.go](../../internal/execution/reconstruction/run.go)
+- [runtime.go](../../internal/execution/reconstruction/runtime.go)
+- [selectors.go](../../internal/execution/reconstruction/selectors.go)
 #### internal/product/api
 
 - [client.go](../../internal/product/api/client.go)
@@ -245,127 +336,54 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [observations.go](../../internal/product/api/observations.go)
 - [runtime.go](../../internal/product/api/runtime.go)
 - [task_predecessors.go](../../internal/product/api/task_predecessors.go)
-
 #### internal/steerline
 
 - [activity.go](../../internal/steerline/activity.go)
 - [application_config.go](../../internal/steerline/application_config.go)
-- [application_config_types.go](../../internal/steerline/application_config_types.go)
-- [candidate_control.go](../../internal/steerline/candidate_control.go)
-- [candidate_pr.go](../../internal/steerline/candidate_pr.go)
-- [candidate_resources.go](../../internal/steerline/candidate_resources.go)
-- [candidate_workers.go](../../internal/steerline/candidate_workers.go)
-- [command_boundary.go](../../internal/steerline/command_boundary.go)
 - [command_digest.go](../../internal/steerline/command_digest.go)
 - [command_kinds.go](../../internal/steerline/command_kinds.go)
-- [command_processor.go](../../internal/steerline/command_processor.go)
 - [command_replay.go](../../internal/steerline/command_replay.go)
-- [command_submission.go](../../internal/steerline/command_submission.go)
 - [control_client.go](../../internal/steerline/control_client.go)
+- [control_files.go](../../internal/steerline/control_files.go)
 - [control_protocol.go](../../internal/steerline/control_protocol.go)
-- [control_service.go](../../internal/steerline/control_service.go)
 - [conversation.go](../../internal/steerline/conversation.go)
-- [conversation_position.go](../../internal/steerline/conversation_position.go)
 - [conversation_query.go](../../internal/steerline/conversation_query.go)
-- [conversation_replay.go](../../internal/steerline/conversation_replay.go)
-- [conversation_service.go](../../internal/steerline/conversation_service.go)
-- [conversation_sources.go](../../internal/steerline/conversation_sources.go)
-- [decision.go](../../internal/steerline/decision.go)
+- [decision_client.go](../../internal/steerline/decision_client.go)
 - [domain.go](../../internal/steerline/domain.go)
 - [domain_snapshot.go](../../internal/steerline/domain_snapshot.go)
-- [execution_backend.go](../../internal/steerline/execution_backend.go)
-- [execution_command_runner.go](../../internal/steerline/execution_command_runner.go)
-- [execution_commands.go](../../internal/steerline/execution_commands.go)
-- [execution_config.go](../../internal/steerline/execution_config.go)
-- [execution_delivery_poll.go](../../internal/steerline/execution_delivery_poll.go)
-- [execution_directory.go](../../internal/steerline/execution_directory.go)
-- [execution_discard_cleanup.go](../../internal/steerline/execution_discard_cleanup.go)
-- [execution_dispatch.go](../../internal/steerline/execution_dispatch.go)
-- [execution_errors.go](../../internal/steerline/execution_errors.go)
-- [execution_helpers.go](../../internal/steerline/execution_helpers.go)
-- [execution_profiles.go](../../internal/steerline/execution_profiles.go)
-- [execution_requirements.go](../../internal/steerline/execution_requirements.go)
-- [execution_snapshot.go](../../internal/steerline/execution_snapshot.go)
-- [execution_store.go](../../internal/steerline/execution_store.go)
-- [implementation_bindings.go](../../internal/steerline/implementation_bindings.go)
-- [journal_platform_linux.go](../../internal/steerline/journal_platform_linux.go)
-- [journal_platform_other.go](../../internal/steerline/journal_platform_other.go)
-- [journal_platform_windows.go](../../internal/steerline/journal_platform_windows.go)
-- [journal_reader.go](../../internal/steerline/journal_reader.go)
+- [host_utilities.go](../../internal/steerline/host_utilities.go)
 - [json_decode.go](../../internal/steerline/json_decode.go)
 - [launchers.go](../../internal/steerline/launchers.go)
-- [lifecycle_effect.go](../../internal/steerline/lifecycle_effect.go)
-- [lifecycle_receipt.go](../../internal/steerline/lifecycle_receipt.go)
 - [model.go](../../internal/steerline/model.go)
-- [native_claim_command.go](../../internal/steerline/native_claim_command.go)
-- [native_cleanup.go](../../internal/steerline/native_cleanup.go)
-- [native_cleanup_stop.go](../../internal/steerline/native_cleanup_stop.go)
-- [native_contract_files.go](../../internal/steerline/native_contract_files.go)
-- [native_delivery_command.go](../../internal/steerline/native_delivery_command.go)
-- [native_discard_command.go](../../internal/steerline/native_discard_command.go)
-- [native_dispatch_command.go](../../internal/steerline/native_dispatch_command.go)
 - [native_graph_export.go](../../internal/steerline/native_graph_export.go)
 - [native_graph_types.go](../../internal/steerline/native_graph_types.go)
 - [native_project_open.go](../../internal/steerline/native_project_open.go)
 - [native_readiness_query.go](../../internal/steerline/native_readiness_query.go)
-- [native_repository_target.go](../../internal/steerline/native_repository_target.go)
 - [native_state_preflight.go](../../internal/steerline/native_state_preflight.go)
 - [native_task_page.go](../../internal/steerline/native_task_page.go)
 - [observation.go](../../internal/steerline/observation.go)
-- [operation.go](../../internal/steerline/operation.go)
 - [platform_linux.go](../../internal/steerline/platform_linux.go)
 - [platform_windows.go](../../internal/steerline/platform_windows.go)
-- [profile_data.go](../../internal/steerline/profile_data.go)
+- [process_projection.go](../../internal/steerline/process_projection.go)
 - [project_view.go](../../internal/steerline/project_view.go)
-- [publication_snapshot.go](../../internal/steerline/publication_snapshot.go)
 - [query_construction.go](../../internal/steerline/query_construction.go)
-- [recovery.go](../../internal/steerline/recovery.go)
 - [render.go](../../internal/steerline/render.go)
-- [runtime_view.go](../../internal/steerline/runtime_view.go)
-- [service_actor.go](../../internal/steerline/service_actor.go)
-- [service_checkpoint.go](../../internal/steerline/service_checkpoint.go)
 - [service_client.go](../../internal/steerline/service_client.go)
-- [service_commit.go](../../internal/steerline/service_commit.go)
 - [service_console.go](../../internal/steerline/service_console.go)
-- [service_construction.go](../../internal/steerline/service_construction.go)
-- [service_execution_profiles.go](../../internal/steerline/service_execution_profiles.go)
+- [service_host.go](../../internal/steerline/service_host.go)
 - [service_loop.go](../../internal/steerline/service_loop.go)
+- [service_preflight.go](../../internal/steerline/service_preflight.go)
 - [service_prepare.go](../../internal/steerline/service_prepare.go)
-- [service_state.go](../../internal/steerline/service_state.go)
-- [service_task_snapshot.go](../../internal/steerline/service_task_snapshot.go)
-- [service_workers.go](../../internal/steerline/service_workers.go)
+- [service_startup_publication.go](../../internal/steerline/service_startup_publication.go)
 - [state_preflight.go](../../internal/steerline/state_preflight.go)
 - [state_revision.go](../../internal/steerline/state_revision.go)
 - [store.go](../../internal/steerline/store.go)
-- [task_configuration.go](../../internal/steerline/task_configuration.go)
 - [task_record_lookup.go](../../internal/steerline/task_record_lookup.go)
-- [worker_attachment_store.go](../../internal/steerline/worker_attachment_store.go)
-- [worker_completion.go](../../internal/steerline/worker_completion.go)
-- [worker_environment.go](../../internal/steerline/worker_environment.go)
-- [worker_environment_host.go](../../internal/steerline/worker_environment_host.go)
-- [worker_events.go](../../internal/steerline/worker_events.go)
-- [worker_evidence.go](../../internal/steerline/worker_evidence.go)
-- [worker_execution.go](../../internal/steerline/worker_execution.go)
-- [worker_feedback.go](../../internal/steerline/worker_feedback.go)
-- [worker_lifecycle.go](../../internal/steerline/worker_lifecycle.go)
-- [worker_lifecycle_async.go](../../internal/steerline/worker_lifecycle_async.go)
-- [worker_lifecycle_feedback.go](../../internal/steerline/worker_lifecycle_feedback.go)
-- [worker_lifecycle_recovery.go](../../internal/steerline/worker_lifecycle_recovery.go)
-- [worker_pr.go](../../internal/steerline/worker_pr.go)
-- [worker_process.go](../../internal/steerline/worker_process.go)
-- [worker_recovery.go](../../internal/steerline/worker_recovery.go)
-- [worker_resume.go](../../internal/steerline/worker_resume.go)
-- [worker_start.go](../../internal/steerline/worker_start.go)
-- [worker_state.go](../../internal/steerline/worker_state.go)
-- [worker_types.go](../../internal/steerline/worker_types.go)
-- [workspace_config.go](../../internal/steerline/workspace_config.go)
 - [write_ports.go](../../internal/steerline/write_ports.go)
-
 #### internal/steerline/activityview
 
 - [decision.go](../../internal/steerline/activityview/decision.go)
 - [render.go](../../internal/steerline/activityview/render.go)
-
 #### internal/steerline/clientcontracts
 
 - [client.go](../../internal/steerline/clientcontracts/client.go)
@@ -373,14 +391,12 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [observations.go](../../internal/steerline/clientcontracts/observations.go)
 - [presentation.go](../../internal/steerline/clientcontracts/presentation.go)
 - [recovery.go](../../internal/steerline/clientcontracts/recovery.go)
-
 #### internal/steerline/codexapp
 
 - [ask.go](../../internal/steerline/codexapp/ask.go)
 - [client.go](../../internal/steerline/codexapp/client.go)
 - [doc.go](../../internal/steerline/codexapp/doc.go)
 - [transport.go](../../internal/steerline/codexapp/transport.go)
-
 #### internal/steerline/codexworker
 
 - [ask.go](../../internal/steerline/codexworker/ask.go)
@@ -412,7 +428,6 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [profile_config.go](../../internal/steerline/codexworker/profile_config.go)
 - [recovery.go](../../internal/steerline/codexworker/recovery.go)
 - [session_launcher.go](../../internal/steerline/codexworker/session_launcher.go)
-
 #### internal/steerline/console
 
 - [candidates.go](../../internal/steerline/console/candidates.go)
@@ -438,7 +453,6 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [view_conversation.go](../../internal/steerline/console/view_conversation.go)
 - [view_tasks.go](../../internal/steerline/console/view_tasks.go)
 - [view_text.go](../../internal/steerline/console/view_text.go)
-
 #### internal/steerline/contracts
 
 - [activity.go](../../internal/steerline/contracts/activity.go)
@@ -451,7 +465,10 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [query.go](../../internal/steerline/contracts/query.go)
 - [runtime.go](../../internal/steerline/contracts/runtime.go)
 - [snapshot.go](../../internal/steerline/contracts/snapshot.go)
+#### internal/steerline/host
 
+- [errors.go](../../internal/steerline/host/errors.go)
+- [loop.go](../../internal/steerline/host/loop.go)
 #### internal/steerline/orca_remote_worker
 
 - [backend.go](../../internal/steerline/orca_remote_worker/backend.go)
@@ -468,7 +485,6 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [types.go](../../internal/steerline/orca_remote_worker/types.go)
 - [version.go](../../internal/steerline/orca_remote_worker/version.go)
 - [worker.go](../../internal/steerline/orca_remote_worker/worker.go)
-
 #### internal/steerline/orcaworker
 
 - [backend.go](../../internal/steerline/orcaworker/backend.go)
@@ -499,25 +515,16 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [terminal.go](../../internal/steerline/orcaworker/terminal.go)
 - [terminal_protocol.go](../../internal/steerline/orcaworker/terminal_protocol.go)
 - [workspace.go](../../internal/steerline/orcaworker/workspace.go)
-
 #### internal/steerline/persistence
 
 - [connections.go](../../internal/steerline/persistence/connections.go)
 - [ports.go](../../internal/steerline/persistence/ports.go)
-
 #### internal/steerline/processhost
 
 - [host.go](../../internal/steerline/processhost/host.go)
 - [process_other.go](../../internal/steerline/processhost/process_other.go)
 - [process_unix.go](../../internal/steerline/processhost/process_unix.go)
 - [process_windows.go](../../internal/steerline/processhost/process_windows.go)
-
-#### internal/steerline/projection
-
-- [run.go](../../internal/steerline/projection/run.go)
-- [runtime.go](../../internal/steerline/projection/runtime.go)
-- [selectors.go](../../internal/steerline/projection/selectors.go)
-
 #### internal/steerline/publication
 
 - [command.go](../../internal/steerline/publication/command.go)
@@ -526,7 +533,6 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [policy.go](../../internal/steerline/publication/policy.go)
 - [pr.go](../../internal/steerline/publication/pr.go)
 - [provider.go](../../internal/steerline/publication/provider.go)
-
 #### internal/steerline/query
 
 - [conversation.go](../../internal/steerline/query/conversation.go)
@@ -535,7 +541,6 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [ports.go](../../internal/steerline/query/ports.go)
 - [project.go](../../internal/steerline/query/project.go)
 - [tasks.go](../../internal/steerline/query/tasks.go)
-
 #### internal/steerline/sqlite
 
 - [atomic_replay.go](../../internal/steerline/sqlite/atomic_replay.go)
@@ -573,14 +578,12 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [tasks.go](../../internal/steerline/sqlite/tasks.go)
 - [values.go](../../internal/steerline/sqlite/values.go)
 - [worker_attachment_store.go](../../internal/steerline/sqlite/worker_attachment_store.go)
-
 #### internal/steerline/taskview
 
 - [model.go](../../internal/steerline/taskview/model.go)
 - [page.go](../../internal/steerline/taskview/page.go)
 - [project.go](../../internal/steerline/taskview/project.go)
 - [snapshot.go](../../internal/steerline/taskview/snapshot.go)
-
 #### internal/steerline/testprotocol
 
 - [appserver.go](../../internal/steerline/testprotocol/appserver.go)
@@ -589,7 +592,6 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [native_orca.go](../../internal/steerline/testprotocol/native_orca.go)
 - [supervised.go](../../internal/steerline/testprotocol/supervised.go)
 - [terminal.go](../../internal/steerline/testprotocol/terminal.go)
-
 #### internal/steerline/workspace
 
 - [cleanup.go](../../internal/steerline/workspace/cleanup.go)
@@ -598,7 +600,6 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [lifecycle.go](../../internal/steerline/workspace/lifecycle.go)
 - [prepare.go](../../internal/steerline/workspace/prepare.go)
 - [resources.go](../../internal/steerline/workspace/resources.go)
-
 #### internal/steerlineapp
 
 - [app.go](../../internal/steerlineapp/app.go)
@@ -615,11 +616,9 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [task_boundary_wiring.go](../../internal/steerlineapp/task_boundary_wiring.go)
 - [task_command_store.go](../../internal/steerlineapp/task_command_store.go)
 - [task_documents.go](../../internal/steerlineapp/task_documents.go)
-
 #### internal/steerlineclient
 
 - [client.go](../../internal/steerlineclient/client.go)
-
 #### internal/storage/ports
 
 - [errors.go](../../internal/storage/ports/errors.go)
@@ -628,7 +627,6 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [task_claim.go](../../internal/storage/ports/task_claim.go)
 - [task_discard.go](../../internal/storage/ports/task_discard.go)
 - [task_result.go](../../internal/storage/ports/task_result.go)
-
 #### internal/task
 
 - [batch.go](../../internal/task/batch.go)
@@ -637,7 +635,6 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [predecessors.go](../../internal/task/predecessors.go)
 - [validation.go](../../internal/task/validation.go)
 - [work.go](../../internal/task/work.go)
-
 #### internal/task/model
 
 - [batch.go](../../internal/task/model/batch.go)
@@ -655,15 +652,11 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [status.go](../../internal/task/model/status.go)
 - [taskgraph.go](../../internal/task/model/taskgraph.go)
 - [work.go](../../internal/task/model/work.go)
-
 #### internal/testfeedback
 
 - [summary.go](../../internal/testfeedback/summary.go)
-
 #### internal/testprocess
 
 - [process.go](../../internal/testprocess/process.go)
 - [process_unix.go](../../internal/testprocess/process_unix.go)
 - [process_windows.go](../../internal/testprocess/process_windows.go)
-
-任务应用、窄事务与固定文档能力见 [#75 验证与交接](../validation/three-line-03-task-usecases/README.md)。#76 顺序集成领取文件核验端口，当前旧核验函数只保留真实执行启动消费者，删除条件见 [interface-handoff](../validation/three-line-03-task-usecases/interface-handoff.md)。#77 产品收窄及 #79/#80 后继保持各自范围。

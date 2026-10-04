@@ -1,12 +1,9 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"

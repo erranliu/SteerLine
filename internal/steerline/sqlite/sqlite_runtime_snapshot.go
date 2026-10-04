@@ -4,7 +4,7 @@ import (
 	"context"
 	"database/sql"
 
-	"github.com/erranliu/SteerLine/internal/steerline/projection"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func (db *SQLiteStore) LoadRuntime(project string, requireIdentity bool) (*Runtime, error) {
@@ -25,7 +25,7 @@ func (db *SQLiteStore) LoadRuntime(project string, requireIdentity bool) (*Runti
 	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
-	view, err := projection.Build(snapshot, projection.MetadataOf(*state))
+	view, err := reconstruction.Build(snapshot, reconstruction.MetadataOf(*state))
 	if err != nil {
 		return nil, err
 	}

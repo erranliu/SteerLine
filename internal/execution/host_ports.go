@@ -1,13 +1,11 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
+	"time"
 
-import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"time"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // HostPort carries transport and diagnostics only. All qualification, intent,

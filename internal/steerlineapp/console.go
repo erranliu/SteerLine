@@ -1,16 +1,14 @@
 package steerlineapp
 
 import (
-"github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"errors"
 	"path/filepath"
 	"runtime"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/execution"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
-
 	"github.com/erranliu/SteerLine/internal/steerline/console"
 )
 

@@ -10,7 +10,7 @@ import (
 )
 
 func configuredRepositoryTarget(ctx context.Context, c Config) (string, error) {
-	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
+	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: c.ProcessHost}
 	if c.Remote == "" || c.Branch == "" {
 		return "", nativeErr("authority_mismatch", "native project requires a fixed remote and branch")
 	}

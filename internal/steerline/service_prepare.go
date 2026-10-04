@@ -1,10 +1,10 @@
 package steerline
 
 import (
- "github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"errors"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 )
 
 // PrepareServiceConfig performs center-owned admission and recovery checks
@@ -31,7 +31,9 @@ func PrepareServiceConfig(c execution.Config) (execution.Config, error) {
 	return c, nil
 }
 
-func admitServiceConfig(c execution.Config) (execution.Config,error) {
- if err:=c.ValidateAdmission();err!=nil{return c,err}
- return c,validateNativeStateLocation(c)
+func admitServiceConfig(c execution.Config) (execution.Config, error) {
+	if err := c.ValidateAdmission(); err != nil {
+		return c, err
+	}
+	return c, validateNativeStateLocation(c)
 }

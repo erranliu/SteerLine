@@ -1,16 +1,13 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"errors"
 	"reflect"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func (s *Service) hostEnvironmentForRun(run *contracts.Run) (executionbackend.HostEnvironmentPort, executionbackend.LifecyclePort, workerFlowContext, executionbackend.LifecycleSnapshot, error) {

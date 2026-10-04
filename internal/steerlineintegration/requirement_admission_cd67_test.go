@@ -5,8 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
@@ -14,7 +14,7 @@ import (
 
 func TestExecutionRequirementsCannotInferOtherTargetEnvironment(t *testing.T) {
 	for _, host := range []string{"orca", "orca_supervised"} {
-		c := steerline.Config{Host: host, Agent: "codex"}
+		c := execution.Config{Host: host, Agent: "codex"}
 		orca := &orcaworker.ProfileConfig{Executable: "must-not-run", Shell: "cmd.exe", WaitTimeout: "1m"}
 		if host == "orca_supervised" {
 			remoteSettings := &remote.ProfileConfig{ConnectionID: "connection", EnvironmentID: "remote", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1}

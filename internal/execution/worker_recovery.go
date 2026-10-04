@@ -1,10 +1,6 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +9,7 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // Operations are bound by their saved request and exact identity components,

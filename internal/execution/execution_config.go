@@ -3,13 +3,14 @@ package execution
 import (
 	"errors"
 	"fmt"
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 func (c Config) ValidateProfiles() error { return validateExecutionProfiles(c) }

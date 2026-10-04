@@ -1,15 +1,12 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"errors"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 var errLifecycleEffectPending = errors.New("lifecycle action accepted and awaiting its original receipt")

@@ -1,7 +1,1618 @@
 {
-  "status": "in_progress",
+  "status": "complete_with_splits_documented",
   "baseline": "c4650056d701a158353836616668bfad25011552",
   "tests": [
+    {
+      "old_package": "internal/steerline",
+      "old_file": "candidate_workers_test.go",
+      "old_parent": "TestMC1",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/candidate_workers_test.go",
+      "new_parent": "TestMC1",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "candidate_workers_test.go",
+      "old_parent": "TestMC2",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/candidate_workers_test.go",
+      "new_parent": "TestMC2",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "candidate_workers_test.go",
+      "old_parent": "TestMC3",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/candidate_workers_test.go",
+      "new_parent": "TestMC3",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "candidate_workers_test.go",
+      "old_parent": "TestMC4",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/candidate_workers_test.go",
+      "new_parent": "TestMC4",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "candidate_workers_test.go",
+      "old_parent": "TestMC5",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/candidate_workers_test.go",
+      "new_parent": "TestMC5",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "candidate_workers_test.go",
+      "old_parent": "TestMC6",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/candidate_workers_test.go",
+      "new_parent": "TestMC6",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "candidate_workers_test.go",
+      "old_parent": "TestMC7",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/candidate_workers_test.go",
+      "new_parent": "TestMC7",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "candidate_workers_test.go",
+      "old_parent": "TestMC8",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/candidate_workers_test.go",
+      "new_parent": "TestMC8",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "candidate_workers_test.go",
+      "old_parent": "TestMC9",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/candidate_workers_test.go",
+      "new_parent": "TestMC9",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "capability_snapshot_business_test.go",
+      "old_parent": "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/capability_snapshot_business_test.go",
+      "new_parent": "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "command_persistence_test.go",
+      "old_parent": "TestCheckpointDoesNotSynthesizeControlOperations",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/command_persistence_test.go",
+      "new_parent": "TestCheckpointDoesNotSynthesizeControlOperations",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "command_persistence_test.go",
+      "old_parent": "TestCommandIdempotencyAndDecisionVersionArbitration",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/command_persistence_test.go",
+      "new_parent": "TestCommandIdempotencyAndDecisionVersionArbitration",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "command_persistence_test.go",
+      "old_parent": "TestDecisionAnswerCommandClientProcess",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/command_persistence_test.go",
+      "new_parent": "TestDecisionAnswerCommandClientProcess",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "command_persistence_test.go",
+      "old_parent": "TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/command_persistence_test.go",
+      "new_parent": "TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "command_persistence_test.go",
+      "old_parent": "TestDecisionAnswerSeparateClientProcessesUseOneFirstWinsCommand",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/command_persistence_test.go",
+      "new_parent": "TestDecisionAnswerSeparateClientProcessesUseOneFirstWinsCommand",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "conversation_test.go",
+      "old_parent": "TestConversationChangedLiveBytesCannotBindOrCheckpoint",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/conversation_test.go",
+      "new_parent": "TestConversationChangedLiveBytesCannotBindOrCheckpoint",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "conversation_test.go",
+      "old_parent": "TestConversationJournalReplayIsBoundedAndIdempotent",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/conversation_test.go",
+      "new_parent": "TestConversationJournalReplayIsBoundedAndIdempotent",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "conversation_test.go",
+      "old_parent": "TestConversationLiveSourceFailureKeepsGapAndMapperPosition",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/conversation_test.go",
+      "new_parent": "TestConversationLiveSourceFailureKeepsGapAndMapperPosition",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "core_decoupling_63_test.go",
+      "old_parent": "TestCD63FrozenConfigAndBinding",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/core_decoupling_63_test.go",
+      "new_parent": "TestCD63FrozenConfigAndBinding",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "core_decoupling_64_lifecycle_test.go",
+      "old_parent": "TestCD64IntentReceiptAndRecoveryGate",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/core_decoupling_64_lifecycle_test.go",
+      "new_parent": "TestCD64IntentReceiptAndRecoveryGate",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "core_decoupling_64_review_test.go",
+      "old_parent": "TestCD64ReviewReceiptAndRecoveryIsolation",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/core_decoupling_64_review_test.go",
+      "new_parent": "TestCD64ReviewReceiptAndRecoveryIsolation",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "core_decoupling_65_test.go",
+      "old_parent": "TestCD65HistoryAndPreparation",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/core_decoupling_65_test.go",
+      "new_parent": "TestCD65HistoryAndPreparation",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "core_decoupling_65_test.go",
+      "old_parent": "TestCD65HistoryBudgetRotatesSources",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/core_decoupling_65_test.go",
+      "new_parent": "TestCD65HistoryBudgetRotatesSources",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "core_decoupling_65_test.go",
+      "old_parent": "TestCD65HistoryCursorCommitsWithItsConversationBatch",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/core_decoupling_65_test.go",
+      "new_parent": "TestCD65HistoryCursorCommitsWithItsConversationBatch",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "core_decoupling_65_test.go",
+      "old_parent": "TestCD65SourceCommitAndHostGate",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/core_decoupling_65_test.go",
+      "new_parent": "TestCD65SourceCommitAndHostGate",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "core_decoupling_65_test.go",
+      "old_parent": "TestConversationHistoryMissingInjectedHostReturnsError",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/core_decoupling_65_test.go",
+      "new_parent": "TestConversationHistoryMissingInjectedHostReturnsError",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "core_decoupling_66_test.go",
+      "old_parent": "TestCD66CandidateResourceIdentityAndCommitRollback",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/core_decoupling_66_test.go",
+      "new_parent": "TestCD66CandidateResourceIdentityAndCommitRollback",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "core_decoupling_66_test.go",
+      "old_parent": "TestCD66ExplicitCatalogAndEntrypoints",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/core_decoupling_66_test.go",
+      "new_parent": "TestCD66ExplicitCatalogAndEntrypoints",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "environment_business_test.go",
+      "old_parent": "TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/environment_business_test.go",
+      "new_parent": "TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "environment_business_test.go",
+      "old_parent": "TestSimplifiedEnvironmentSavedInputRequiresFreshAnswer",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/environment_business_test.go",
+      "new_parent": "TestSimplifiedEnvironmentSavedInputRequiresFreshAnswer",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "environment_business_test.go",
+      "old_parent": "TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/environment_business_test.go",
+      "new_parent": "TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "environment_business_test.go",
+      "old_parent": "TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/environment_business_test.go",
+      "new_parent": "TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "environment_business_test.go",
+      "old_parent": "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/environment_business_test.go",
+      "new_parent": "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "environment_business_test.go",
+      "old_parent": "TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/environment_business_test.go",
+      "new_parent": "TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "environment_business_test.go",
+      "old_parent": "TestWorkerEnvironmentUnidentifiedAgentKeepsOriginalDeadline",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/environment_business_test.go",
+      "new_parent": "TestWorkerEnvironmentUnidentifiedAgentKeepsOriginalDeadline",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_backend_test.go",
+      "old_parent": "TestCapabilityReportRejectsRetiredWholeRunActions",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_backend_test.go",
+      "new_parent": "TestCapabilityReportRejectsRetiredWholeRunActions",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_backend_test.go",
+      "old_parent": "TestExecutionRecordsPinBindingsAndOperations",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_backend_test.go",
+      "new_parent": "TestExecutionRecordsPinBindingsAndOperations",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_backend_test.go",
+      "old_parent": "TestLocalReadOutputUsesBoundedExecutionCursor",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_backend_test.go",
+      "new_parent": "TestLocalReadOutputUsesBoundedExecutionCursor",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_backend_test.go",
+      "old_parent": "TestNativeCapabilityCheckKeepsFixedAgent",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_backend_test.go",
+      "new_parent": "TestNativeCapabilityCheckKeepsFixedAgent",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_backend_test.go",
+      "old_parent": "TestOperationRecordRejectsCorruptionBeforeUse",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_backend_test.go",
+      "new_parent": "TestOperationRecordRejectsCorruptionBeforeUse",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_policy_test.go",
+      "old_parent": "TestAppServerLaunchMessagePersistsPolicyResources",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_policy_test.go",
+      "new_parent": "TestAppServerLaunchMessagePersistsPolicyResources",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_policy_test.go",
+      "old_parent": "TestProjectPolicyMissingBoundResourcesAreNotReconstructed",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_policy_test.go",
+      "new_parent": "TestProjectPolicyMissingBoundResourcesAreNotReconstructed",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_profiles_test.go",
+      "old_parent": "TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_profiles_test.go",
+      "new_parent": "TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_profiles_test.go",
+      "old_parent": "TestNativeClaimPersistsChosenExecutionProfile",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_profiles_test.go",
+      "new_parent": "TestNativeClaimPersistsChosenExecutionProfile",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_profiles_test.go",
+      "old_parent": "TestStartPayloadRequiresCompleteExecutionProfileSelection",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_profiles_test.go",
+      "new_parent": "TestStartPayloadRequiresCompleteExecutionProfileSelection",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_profiles_test.go",
+      "old_parent": "TestWorkerFlowClaimsFreezeIndependentLocalProfiles",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_profiles_test.go",
+      "new_parent": "TestWorkerFlowClaimsFreezeIndependentLocalProfiles",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_registry_test.go",
+      "old_parent": "TestEveryRegisteredExecutionUsesTheLifecyclePort",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_registry_test.go",
+      "new_parent": "TestEveryRegisteredExecutionUsesTheLifecyclePort",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_registry_test.go",
+      "old_parent": "TestWorkerFlowAdapterUsesFixedProtocol",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_registry_test.go",
+      "new_parent": "TestWorkerFlowAdapterUsesFixedProtocol",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_registry_test.go",
+      "old_parent": "TestWorkerFlowModeUsesFixedExecutionIdentity",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_registry_test.go",
+      "new_parent": "TestWorkerFlowModeUsesFixedExecutionIdentity",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_registry_test.go",
+      "old_parent": "TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_registry_test.go",
+      "new_parent": "TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_requirements_test.go",
+      "old_parent": "TestClaimRechecksAcceptedConfigFiles",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_requirements_test.go",
+      "new_parent": "TestClaimRechecksAcceptedConfigFiles",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_requirements_test.go",
+      "old_parent": "TestExecutionRegistryRejectsDuplicatesAndRequiresLifecyclePorts",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_requirements_test.go",
+      "new_parent": "TestExecutionRegistryRejectsDuplicatesAndRequiresLifecyclePorts",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_requirements_test.go",
+      "old_parent": "TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_requirements_test.go",
+      "new_parent": "TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_requirements_test.go",
+      "old_parent": "TestExecutionRequirementsDoNotUpgradeProbeToVerified",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_requirements_test.go",
+      "new_parent": "TestExecutionRequirementsDoNotUpgradeProbeToVerified",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_requirements_test.go",
+      "old_parent": "TestExecutionRequirementsExistenceAndNonSecretEvidence",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_requirements_test.go",
+      "new_parent": "TestExecutionRequirementsExistenceAndNonSecretEvidence",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_requirements_test.go",
+      "old_parent": "TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_requirements_test.go",
+      "new_parent": "TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_resolution_audit_test.go",
+      "old_parent": "TestResolutionAuditEvidenceCannotChangeUnderOriginalProfileDigest",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_resolution_audit_test.go",
+      "new_parent": "TestResolutionAuditEvidenceCannotChangeUnderOriginalProfileDigest",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_resolution_audit_test.go",
+      "old_parent": "TestResolutionAuditProfilesDoNotAliasProjectValues",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_resolution_audit_test.go",
+      "new_parent": "TestResolutionAuditProfilesDoNotAliasProjectValues",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_resolution_audit_test.go",
+      "old_parent": "TestResolutionAuditRegistrationRejectsBaseTargetDrift",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_resolution_audit_test.go",
+      "new_parent": "TestResolutionAuditRegistrationRejectsBaseTargetDrift",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_resolution_audit_test.go",
+      "old_parent": "TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_resolution_audit_test.go",
+      "new_parent": "TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_resolution_audit_test.go",
+      "old_parent": "TestResolutionAuditRestoresOriginalWorkspaceRoot",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_resolution_audit_test.go",
+      "new_parent": "TestResolutionAuditRestoresOriginalWorkspaceRoot",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_resolution_audit_test.go",
+      "old_parent": "TestResolutionAuditWorkerCommitCannotReplaceSnapshot",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_resolution_audit_test.go",
+      "new_parent": "TestResolutionAuditWorkerCommitCannotReplaceSnapshot",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "execution_target_compat_test.go",
+      "old_parent": "TestCurrentRuntimeRetainsSupervisedCoordinatorTerminal",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/execution_target_compat_test.go",
+      "new_parent": "TestCurrentRuntimeRetainsSupervisedCoordinatorTerminal",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "fixed_agent_business_test.go",
+      "old_parent": "TestFixedProfileRetainsSelectedAgent",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/fixed_agent_business_test.go",
+      "new_parent": "TestFixedProfileRetainsSelectedAgent",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "host_wait_business_test.go",
+      "old_parent": "TestHostInputWaitPersistsWithoutBusinessDecision",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/host_wait_business_test.go",
+      "new_parent": "TestHostInputWaitPersistsWithoutBusinessDecision",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "journal_reader_test.go",
+      "old_parent": "TestJournalBoundsBatchesAndSkipsOversizeLine",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/journal_reader_test.go",
+      "new_parent": "TestJournalBoundsBatchesAndSkipsOversizeLine",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "journal_reader_test.go",
+      "old_parent": "TestJournalBoundsUnterminatedOversizeScan",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/journal_reader_test.go",
+      "new_parent": "TestJournalBoundsUnterminatedOversizeScan",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "journal_reader_test.go",
+      "old_parent": "TestJournalByteBudgetIsolatesLargeRecords",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/journal_reader_test.go",
+      "new_parent": "TestJournalByteBudgetIsolatesLargeRecords",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "journal_reader_test.go",
+      "old_parent": "TestJournalFramingDoesNotInterpretActivitySequence",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/journal_reader_test.go",
+      "new_parent": "TestJournalFramingDoesNotInterpretActivitySequence",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "journal_reader_test.go",
+      "old_parent": "TestJournalFromStartFalseSkipsOldPartialRecord",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/journal_reader_test.go",
+      "new_parent": "TestJournalFromStartFalseSkipsOldPartialRecord",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "journal_reader_test.go",
+      "old_parent": "TestJournalResetsOnTruncationAndAtomicReplacement",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/journal_reader_test.go",
+      "new_parent": "TestJournalResetsOnTruncationAndAtomicReplacement",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "journal_reader_test.go",
+      "old_parent": "TestJournalWaitsForCompleteUTF8CRLFRecord",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/journal_reader_test.go",
+      "new_parent": "TestJournalWaitsForCompleteUTF8CRLFRecord",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "native_dag_commands_test.go",
+      "old_parent": "TestCreateTaskBatchAtomicIdempotentAndQueryable",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/native_dag_commands_test.go",
+      "new_parent": "TestCreateTaskBatchAtomicIdempotentAndQueryable",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "native_dag_commands_test.go",
+      "old_parent": "TestCreateTaskBatchRollsBackEveryWriteWhenEdgeInsertFails",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/native_dag_commands_test.go",
+      "new_parent": "TestCreateTaskBatchRollsBackEveryWriteWhenEdgeInsertFails",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "native_dag_commands_test.go",
+      "old_parent": "TestNativeClaimAllowsManualParallelButKeepsAutoSlot",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/native_dag_commands_test.go",
+      "new_parent": "TestNativeClaimAllowsManualParallelButKeepsAutoSlot",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "native_dag_commands_test.go",
+      "old_parent": "TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/native_dag_commands_test.go",
+      "new_parent": "TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "native_dag_commands_test.go",
+      "old_parent": "TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/native_dag_commands_test.go",
+      "new_parent": "TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "native_dag_commands_test.go",
+      "old_parent": "TestNativeCommandsRejectConfigurationBindingDriftBeforeSideEffects",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/native_dag_commands_test.go",
+      "new_parent": "TestNativeCommandsRejectConfigurationBindingDriftBeforeSideEffects",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "native_dag_commands_test.go",
+      "old_parent": "TestTaskBatchRejectsDuplicateAndCrossProjectDependencies",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/native_dag_commands_test.go",
+      "new_parent": "TestTaskBatchRejectsDuplicateAndCrossProjectDependencies",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "native_dag_commands_test.go",
+      "old_parent": "TestTaskBatchStrictDecodeAndDeterministicCyclePath",
+      "new_package": "internal/task",
+      "new_file": "batch_test.go",
+      "new_parent": "task batch strict decode and deterministic cycle assertions",
+      "assertions": "task batch responsibility delivered by #75; tracked by #75 test mapping",
+      "status": "owned_by_75",
+      "owner": 75
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "native_dag_commands_test.go",
+      "old_parent": "TestTaskDependencyStateRequiresEveryPredecessorDelivery",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/native_dag_commands_test.go",
+      "new_parent": "TestTaskDependencyStateRequiresEveryPredecessorDelivery",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "native_dag_commands_test.go",
+      "old_parent": "TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/native_dag_commands_test.go",
+      "new_parent": "TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "native_dag_commands_test.go",
+      "old_parent": "TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/native_dag_commands_test.go",
+      "new_parent": "TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "native_dag_commands_test.go",
+      "old_parent": "TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/native_dag_commands_test.go",
+      "new_parent": "TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "policy_snapshot_business_test.go",
+      "old_parent": "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/policy_snapshot_business_test.go",
+      "new_parent": "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "projection/runtime_test.go",
+      "old_parent": "TestBuildOwnsRecordsAndMetadataAcrossRefreshes",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/reconstruction/runtime_test.go",
+      "new_parent": "TestBuildOwnsRecordsAndMetadataAcrossRefreshes",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "projection/runtime_test.go",
+      "old_parent": "TestExecutionProjectionKeepsRemotePathAndWhitespaceSemantics",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/reconstruction/runtime_test.go",
+      "new_parent": "TestExecutionProjectionKeepsRemotePathAndWhitespaceSemantics",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "projection/runtime_test.go",
+      "old_parent": "TestProjectionRejectsBrokenBindingsWithoutReusingOldViews",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/reconstruction/runtime_test.go",
+      "new_parent": "TestProjectionRejectsBrokenBindingsWithoutReusingOldViews",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "projection/runtime_test.go",
+      "old_parent": "TestProjectionRetainsDeliveryAndReservationRules",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/reconstruction/runtime_test.go",
+      "new_parent": "TestProjectionRetainsDeliveryAndReservationRules",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "publication_policy_test.go",
+      "old_parent": "TestPublicationOriginalProviderAfterRestartAndRemoteDrift",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/publication_policy_test.go",
+      "new_parent": "TestPublicationOriginalProviderAfterRestartAndRemoteDrift",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "publication_policy_test.go",
+      "old_parent": "TestPublicationPolicyFrozenConfigurationAndCredentials",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/publication_policy_test.go",
+      "new_parent": "TestPublicationPolicyFrozenConfigurationAndCredentials",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "publication_policy_test.go",
+      "old_parent": "TestRetiredPublicationMetadataRejected",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/publication_policy_test.go",
+      "new_parent": "TestRetiredPublicationMetadataRejected",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "readiness_business_test.go",
+      "old_parent": "TestManagedFrozenResourceEvidenceIsVerifiedBeforeInput",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/readiness_business_test.go",
+      "new_parent": "TestManagedFrozenResourceEvidenceIsVerifiedBeforeInput",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "readiness_business_test.go",
+      "old_parent": "TestWorkerEnvironmentER1ProbeAndSettlementGate",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/readiness_business_test.go",
+      "new_parent": "TestWorkerEnvironmentER1ProbeAndSettlementGate",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "recovery_test.go",
+      "old_parent": "TestRecoveryConfirmationBasisIsBoundedAndPreserved",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/recovery_test.go",
+      "new_parent": "TestRecoveryConfirmationBasisIsBoundedAndPreserved",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "recovery_test.go",
+      "old_parent": "TestRecoveryInspectionReadsNativeClaimFromCenter",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/recovery_test.go",
+      "new_parent": "TestRecoveryInspectionReadsNativeClaimFromCenter",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "resource_restart_business_test.go",
+      "old_parent": "TestRestartPreflightRetainsOriginalPolicyRoots",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/resource_restart_business_test.go",
+      "new_parent": "TestRestartPreflightRetainsOriginalPolicyRoots",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "runtime_boundary_test.go",
+      "old_parent": "TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/runtime_boundary_test.go",
+      "new_parent": "TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "runtime_boundary_test.go",
+      "old_parent": "TestWorkerBindingRollsBackWithItsCheckpoint",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/runtime_boundary_test.go",
+      "new_parent": "TestWorkerBindingRollsBackWithItsCheckpoint",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "runtime_view_test.go",
+      "old_parent": "TestActorProjectionReusesPrivatePointersWithoutPublishingCandidates",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/runtime_view_test.go",
+      "new_parent": "TestActorProjectionReusesPrivatePointersWithoutPublishingCandidates",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "runtime_view_test.go",
+      "old_parent": "TestAnswerChecksDomainRevisionBeforeCheckpointPublication",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/runtime_view_test.go",
+      "new_parent": "TestAnswerChecksDomainRevisionBeforeCheckpointPublication",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "runtime_view_test.go",
+      "old_parent": "TestObservationReportsMissingAuthorityAsCorruption",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/runtime_view_test.go",
+      "new_parent": "TestObservationReportsMissingAuthorityAsCorruption",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "runtime_view_test.go",
+      "old_parent": "TestPublicationPreservesExternallyAcceptedDecision",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/runtime_view_test.go",
+      "new_parent": "TestPublicationPreservesExternallyAcceptedDecision",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "runtime_view_test.go",
+      "old_parent": "TestRuntimeViewCannotWriteBusinessState",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/runtime_view_test.go",
+      "new_parent": "TestRuntimeViewCannotWriteBusinessState",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "runtime_view_test.go",
+      "old_parent": "TestRuntimeViewRejectsInvalidWorkerAttempts",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/runtime_view_test.go",
+      "new_parent": "TestRuntimeViewRejectsInvalidWorkerAttempts",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "runtime_view_test.go",
+      "old_parent": "TestWorkerCommitPreservesExternallyAcceptedDecision",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/runtime_view_test.go",
+      "new_parent": "TestWorkerCommitPreservesExternallyAcceptedDecision",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "runtime_view_test.go",
+      "old_parent": "TestWorkerCommitRejectsConflictingDecisionAtomically",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/runtime_view_test.go",
+      "new_parent": "TestWorkerCommitRejectsConflictingDecisionAtomically",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "service_test.go",
+      "old_parent": "TestIdleServiceDoesNotPublishOnNoOpPolls",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/service_test.go",
+      "new_parent": "TestIdleServiceDoesNotPublishOnNoOpPolls",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "service_test.go",
+      "old_parent": "TestMain",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/service_test.go",
+      "new_parent": "TestMain",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "service_test.go",
+      "old_parent": "TestProjectRuntimeOmitsSettledDiscardedRuns",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/service_test.go",
+      "new_parent": "TestProjectRuntimeOmitsSettledDiscardedRuns",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "simplified_lifecycle_test.go",
+      "old_parent": "TestSimplifiedCleanupRetainsFrozenDeliveryEvidence",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/simplified_lifecycle_test.go",
+      "new_parent": "TestSimplifiedCleanupRetainsFrozenDeliveryEvidence",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "simplified_lifecycle_test.go",
+      "old_parent": "TestSimplifiedLifecycleActorDoesNotWaitForEffect",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/simplified_lifecycle_test.go",
+      "new_parent": "TestSimplifiedLifecycleActorDoesNotWaitForEffect",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "source_replacement_business_test.go",
+      "old_parent": "TestCD64SourceReplacementRetainsEvidence",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/source_replacement_business_test.go",
+      "new_parent": "TestCD64SourceReplacementRetainsEvidence",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "task_result_boundary_test.go",
+      "old_parent": "TestTM02ResultCAS",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/task_result_boundary_test.go",
+      "new_parent": "TestTM02ResultCAS",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "task_result_boundary_test.go",
+      "old_parent": "TestTM02TaskWorkPort",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/task_result_boundary_test.go",
+      "new_parent": "TestTM02TaskWorkPort",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_commit_boundary_test.go",
+      "old_parent": "TestAppServerFailedPreparationKeepsPartialSessionBinding",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_commit_boundary_test.go",
+      "new_parent": "TestAppServerFailedPreparationKeepsPartialSessionBinding",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_commit_boundary_test.go",
+      "old_parent": "TestWorkerCommitRejectsSavedAnswerRegression",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_commit_boundary_test.go",
+      "new_parent": "TestWorkerCommitRejectsSavedAnswerRegression",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_commit_boundary_test.go",
+      "old_parent": "TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_commit_boundary_test.go",
+      "new_parent": "TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_commit_boundary_test.go",
+      "old_parent": "TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_commit_boundary_test.go",
+      "new_parent": "TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_commit_boundary_test.go",
+      "old_parent": "TestWorkerIntentIsDurableBeforeDispatchAndFailurePreventsDispatch",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_commit_boundary_test.go",
+      "new_parent": "TestWorkerIntentIsDurableBeforeDispatchAndFailurePreventsDispatch",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_commit_boundary_test.go",
+      "old_parent": "TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_commit_boundary_test.go",
+      "new_parent": "TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_commit_test.go",
+      "old_parent": "TestCheckpointAndReadViewsCannotPublishWorkerCandidates",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_commit_test.go",
+      "new_parent": "TestCheckpointAndReadViewsCannotPublishWorkerCandidates",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_commit_test.go",
+      "old_parent": "TestWorkerCommitChecksSettledTaskInsideTransaction",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_commit_test.go",
+      "new_parent": "TestWorkerCommitChecksSettledTaskInsideTransaction",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_commit_test.go",
+      "old_parent": "TestWorkerCommitRollsBackRecordsReceiptsEventsAndCheckpoint",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_commit_test.go",
+      "new_parent": "TestWorkerCommitRollsBackRecordsReceiptsEventsAndCheckpoint",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_config_test.go",
+      "old_parent": "TestFreshWorkerFlowRuntimeUsesDistinctFormat",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_config_test.go",
+      "new_parent": "TestFreshWorkerFlowRuntimeUsesDistinctFormat",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_config_test.go",
+      "old_parent": "TestUnregisteredWorkerFlowConfigurationCannotClaim",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_config_test.go",
+      "new_parent": "TestUnregisteredWorkerFlowConfigurationCannotClaim",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_config_test.go",
+      "old_parent": "TestWorkerFlowRejectsOldLocalExecutionProtocol",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_config_test.go",
+      "new_parent": "TestWorkerFlowRejectsOldLocalExecutionProtocol",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_config_test.go",
+      "old_parent": "TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_config_test.go",
+      "new_parent": "TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_context_test.go",
+      "old_parent": "TestWorkerFlowContextKeepsFixedRunAndCopiesConfig",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_context_test.go",
+      "new_parent": "TestWorkerFlowContextKeepsFixedRunAndCopiesConfig",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_context_test.go",
+      "old_parent": "TestWorkerFlowContextsDoNotExchangeExecutionProfiles",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_context_test.go",
+      "new_parent": "TestWorkerFlowContextsDoNotExchangeExecutionProfiles",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_delivery_test.go",
+      "old_parent": "TestWorkerFlowClaimNeedsNoProjectSteps",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_delivery_test.go",
+      "new_parent": "TestWorkerFlowClaimNeedsNoProjectSteps",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_delivery_test.go",
+      "old_parent": "TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_delivery_test.go",
+      "new_parent": "TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_delivery_test.go",
+      "old_parent": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_delivery_test.go",
+      "new_parent": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_events_cd62_test.go",
+      "old_parent": "TestCD62NativeFactsAndQuestionRoute",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_events_cd62_test.go",
+      "new_parent": "TestCD62NativeFactsAndQuestionRoute",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_events_cd62_test.go",
+      "old_parent": "TestCD62QuestionReceiptBarrier",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_events_cd62_test.go",
+      "new_parent": "TestCD62QuestionReceiptBarrier",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_feedback_phase_test.go",
+      "old_parent": "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_feedback_phase_test.go",
+      "new_parent": "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_local_test.go",
+      "old_parent": "TestWorkerFlowPromptIncludesFixedWorkflowRunID",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_local_test.go",
+      "new_parent": "TestWorkerFlowPromptIncludesFixedWorkflowRunID",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_pr_binding_test.go",
+      "old_parent": "TestWorkerPRBindingUsesProviderAndRetainsSession",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_pr_binding_test.go",
+      "new_parent": "TestWorkerPRBindingUsesProviderAndRetainsSession",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_receipts_business_test.go",
+      "old_parent": "TestAppServerLateReplyCannotModifyTerminalTask",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_receipts_business_test.go",
+      "new_parent": "TestAppServerLateReplyCannotModifyTerminalTask",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_receipts_business_test.go",
+      "old_parent": "TestAppServerRecoveryDoesNotRaceInFlightLaunch",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_receipts_business_test.go",
+      "new_parent": "TestAppServerRecoveryDoesNotRaceInFlightLaunch",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_receipts_business_test.go",
+      "old_parent": "TestAppServerRejectedEventReleasesObserver",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_receipts_business_test.go",
+      "new_parent": "TestAppServerRejectedEventReleasesObserver",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_receipts_business_test.go",
+      "old_parent": "TestAppServerSlowRecoveryLeavesServiceWriterAvailable",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_receipts_business_test.go",
+      "new_parent": "TestAppServerSlowRecoveryLeavesServiceWriterAvailable",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_receipts_business_test.go",
+      "old_parent": "TestAppServerStartReplayPreservesNativeSavedAnswer",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_receipts_business_test.go",
+      "new_parent": "TestAppServerStartReplayPreservesNativeSavedAnswer",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_receipts_business_test.go",
+      "old_parent": "TestAppServerStartedEventCommitsOperationReceipt",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_receipts_business_test.go",
+      "new_parent": "TestAppServerStartedEventCommitsOperationReceipt",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_receipts_business_test.go",
+      "old_parent": "TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_receipts_business_test.go",
+      "new_parent": "TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_receipts_business_test.go",
+      "old_parent": "TestRoutedDecisionRequiresAllQuestionIDs",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_receipts_business_test.go",
+      "new_parent": "TestRoutedDecisionRequiresAllQuestionIDs",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_recovery_commit_test.go",
+      "old_parent": "TestWorkerRecoveryAttemptCommitsAtomically",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_recovery_commit_test.go",
+      "new_parent": "TestWorkerRecoveryAttemptCommitsAtomically",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_recovery_test.go",
+      "old_parent": "TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_recovery_test.go",
+      "new_parent": "TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_service_test.go",
+      "old_parent": "TestRestartDoesNotSendPreviouslyAcceptedFeedback",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_service_test.go",
+      "new_parent": "TestRestartDoesNotSendPreviouslyAcceptedFeedback",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_service_test.go",
+      "old_parent": "TestServiceRecoveryGateRequiresTransactionalOwner",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_service_test.go",
+      "new_parent": "TestServiceRecoveryGateRequiresTransactionalOwner",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_service_test.go",
+      "old_parent": "TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_service_test.go",
+      "new_parent": "TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_state_test.go",
+      "old_parent": "TestWorkerFeedbackKeepsOptionAndAdditionalText",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_state_rules_test.go",
+      "new_parent": "TestWorkerFeedbackKeepsOptionAndAdditionalText",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_state_test.go",
+      "old_parent": "TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_state_test.go",
+      "new_parent": "TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_state_test.go",
+      "old_parent": "TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_state_rules_test.go",
+      "new_parent": "TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_state_test.go",
+      "old_parent": "TestWorkerFlowRejectsReplacementsAndLateTurns",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/worker_state_rules_test.go",
+      "new_parent": "TestWorkerFlowRejectsReplacementsAndLateTurns",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "workspace_identity_business_test.go",
+      "old_parent": "TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/workspace_identity_business_test.go",
+      "new_parent": "TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "write_ports_test.go",
+      "old_parent": "TestCM69CleanupReceiptKeepsTaskAndReceiptAtomic",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/write_ports_test.go",
+      "new_parent": "TestCM69CleanupReceiptKeepsTaskAndReceiptAtomic",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "write_ports_test.go",
+      "old_parent": "TestCM69CommandPortUsesFixedProjectAndPropagatesRejection",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/write_ports_test.go",
+      "new_parent": "TestCM69CommandPortUsesFixedProjectAndPropagatesRejection",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "write_ports_test.go",
+      "old_parent": "TestCM69WorkerCommitRejectsSupersededAttempt",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/write_ports_test.go",
+      "new_parent": "TestCM69WorkerCommitRejectsSupersededAttempt",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "write_ports_test.go",
+      "old_parent": "TestCM69WorkerPortRejectsCandidateWithoutPublishing",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/write_ports_test.go",
+      "new_parent": "TestCM69WorkerPortRejectsCandidateWithoutPublishing",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "write_ports_test.go",
+      "old_parent": "TestCM69WriteConsumersDoNotAccessConcreteTransactions",
+      "new_package": "internal/steerline",
+      "new_file": "internal/execution/write_ports_test.go",
+      "new_parent": "TestCM69WriteConsumersDoNotAccessConcreteTransactions",
+      "assertions": "migrated; original parent and assertions retained",
+      "status": "migrated"
+    },
     {
       "old_package": "internal/steerline",
       "old_file": "journal_reader_test.go",
@@ -138,5 +1749,21 @@
     "TM04ExecutionWiring",
     "remaining execution fixtures and tests",
     "L1 once after final self-review"
+  ],
+  "preexisting_task_test_owners": [
+    {
+      "old_source": "internal/steerline/native_batch_command.go",
+      "new_owner": "internal/task/batch.go",
+      "new_test": "internal/task/batch_test.go",
+      "parent": "TestTM03TaskBatch",
+      "owner": 75
+    },
+    {
+      "old_source": "internal/steerline/native_task_predecessors.go",
+      "new_owner": "internal/task/predecessors.go",
+      "new_test": "internal/task/predecessors_test.go",
+      "parent": "TestTM03Dependencies",
+      "owner": 75
+    }
   ]
 }

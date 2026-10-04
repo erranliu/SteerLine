@@ -11,10 +11,11 @@ import (
 	"testing"
 	"time"
 
+	execution "github.com/erranliu/SteerLine/internal/execution"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func seedNativeGraphForView(t *testing.T, c Config, commit string, store *sqliteFixture, count int, edges []taskmodel.TaskDependencyRecord) {
+func seedNativeGraphForView(t *testing.T, c execution.Config, commit string, store *sqliteFixture, count int, edges []taskmodel.TaskDependencyRecord) {
 	t.Helper()
 	base := nativeContract(t, c, commit, "fixture-contract")
 	created := time.Now().UTC()

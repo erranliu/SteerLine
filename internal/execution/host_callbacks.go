@@ -1,12 +1,10 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"regexp"
+
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 const ControlProtocolVersion = 1

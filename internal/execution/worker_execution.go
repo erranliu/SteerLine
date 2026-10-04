@@ -1,15 +1,12 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"errors"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
@@ -77,7 +74,7 @@ func copyWorkerFlowConfig(c Config) Config {
 	}
 	c.ExecutableTypes = append([]string(nil), c.ExecutableTypes...)
 	c.Git.Args = append([]string(nil), c.Git.Args...)
-	c.ImplementationData = cloneImplementationData(c.ImplementationData)
+	c.ImplementationData = CloneImplementationData(c.ImplementationData)
 	c.ImplementationDisplay = append([]string(nil), c.ImplementationDisplay...)
 	profiles := make([]ExecutionProfile, len(c.ExecutionProfiles))
 	copy(profiles, c.ExecutionProfiles)
@@ -89,7 +86,7 @@ func copyWorkerFlowConfig(c Config) Config {
 			profiles[i].RequirementsEvaluation = &e
 		}
 		profiles[i].ImplementationConfigs = cloneImplementationInputs(profiles[i].ImplementationConfigs)
-		profiles[i].ImplementationData = cloneImplementationData(profiles[i].ImplementationData)
+		profiles[i].ImplementationData = CloneImplementationData(profiles[i].ImplementationData)
 		profiles[i].ImplementationDisplay = append([]string(nil), profiles[i].ImplementationDisplay...)
 	}
 	c.ExecutionProfiles = profiles

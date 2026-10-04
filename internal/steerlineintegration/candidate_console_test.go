@@ -1,11 +1,6 @@
 package steerlineintegration
 
 import (
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"fmt"
@@ -16,11 +11,12 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/console"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
 

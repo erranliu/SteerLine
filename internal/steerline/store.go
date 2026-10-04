@@ -1,15 +1,16 @@
 package steerline
 
 import (
- "github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"os"
 	"path/filepath"
+
+	"github.com/erranliu/SteerLine/internal/execution"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func newID() string {
@@ -52,7 +53,7 @@ func atomicWriteWith(path string, data []byte, write func(*os.File, []byte) erro
 // LoadDatabaseRuntime reads one SQLite snapshot, joining the compact service
 // checkpoint with the authoritative domain rows in a read transaction.
 func LoadDatabaseRuntime(c execution.Config) (*Runtime, error) {
-	if err := requireNativeTaskAuthority(c); err != nil {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return nil, err
 	}
 	if c.Identity() == "" {

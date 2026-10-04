@@ -1,11 +1,10 @@
 package steerlineapp
 
 import (
-"github.com/erranliu/SteerLine/internal/execution"
 	"context"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 

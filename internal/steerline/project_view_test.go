@@ -13,13 +13,13 @@ import (
 func TestProjectViewConnectionUsesSampledRuntime(t *testing.T) {
 	ctx := context.Background()
 	service := controlReviewService(t)
-	view, err := (NewQueryService(testSQLite(service), service.Config.Identity())).ReadProjectView(ctx, "", 500)
+	view, err := (NewQueryService(fixtureStoreFor(t, service), service.Config.Identity())).ReadProjectView(ctx, "", 500)
 	require(t, err)
 	requireProjectView(t, view)
 	observation := ObserveRuntimeSnapshot(service.Config, view.Runtime, view.RuntimeError, view.SampledAt)
 	// A subsequent checkpoint must not be read by connection classification.
 	service.State.Service.Ready = false
-	require(t, service.publishCheckpoint())
+	require(t, publishFixtureCheckpoint(service))
 	connection := ConnectServiceFromSnapshot(ctx, service.Config, observation)
 	if connection.State != ConnectionConnected || connection.Snapshot.Runtime != view.Runtime || !connection.Snapshot.SampledAt.Equal(view.SampledAt) {
 		t.Fatalf("connection re-read the database instead of using the project sample: %+v", connection)
@@ -38,7 +38,7 @@ func TestProjectViewConnectionUsesSampledRuntime(t *testing.T) {
 func TestProjectViewConnectionRechecksHeartbeatAtUse(t *testing.T) {
 	ctx := context.Background()
 	service := controlReviewService(t)
-	view, err := (NewQueryService(testSQLite(service), service.Config.Identity())).ReadProjectView(ctx, "", 500)
+	view, err := (NewQueryService(fixtureStoreFor(t, service), service.Config.Identity())).ReadProjectView(ctx, "", 500)
 	require(t, err)
 	requireProjectView(t, view)
 	for _, test := range []struct {

@@ -1,15 +1,12 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"errors"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/projection"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
@@ -51,5 +48,5 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
 }
 
 func latestNativeWorkflow(records []executionmodel.WorkflowRunRecord, taskID string) *executionmodel.WorkflowRunRecord {
-	return projection.LatestWorkflow(records, taskID)
+	return reconstruction.LatestWorkflow(records, taskID)
 }

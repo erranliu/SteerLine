@@ -1,31 +1,28 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	persistence "github.com/erranliu/SteerLine/internal/steerline/persistence"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/projection"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+	persistence "github.com/erranliu/SteerLine/internal/steerline/persistence"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func copyDomainSnapshot(snapshot contracts.DomainSnapshot) (contracts.DomainSnapshot, error) {
-	return projection.CloneDomain(snapshot)
+	return reconstruction.CloneDomain(snapshot)
 }
 
 // projectState builds independently owned read views from committed records.
 // Worker candidates live in domain and are never publication input.
 func (s *Service) projectState() error {
-	metadata := projection.MetadataOf(s.State)
+	metadata := reconstruction.MetadataOf(s.State)
 	metadata.Checkpoint = runtimeCheckpoint(s.State)
-	view, err := projection.Build(s.committed, metadata)
+	view, err := reconstruction.Build(s.committed, metadata)
 	if err != nil {
 		return err
 	}
@@ -36,7 +33,7 @@ func (s *Service) projectState() error {
 // Working projections are private to the single center actor. Public Runtime
 // objects are built from committed rows and share no Run pointers with them.
 func (s *Service) projectActor() error {
-	runs, err := projection.Runs(s.domain)
+	runs, err := reconstruction.Runs(s.domain)
 	if err != nil {
 		return err
 	}

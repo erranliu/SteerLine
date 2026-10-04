@@ -15,6 +15,9 @@ func TestTM04ExecutionBoundary(t *testing.T) {
 		{"old_host_in_other_os", "edge_freebsd.go", "package execution\nimport _ \"" + core + "\"\n", ""},
 		{"concrete_storage_in_helper", "edge.go", "package execution\nimport _ \"" + module + "/internal/helper\"\n", "package helper\nimport _ \"" + core + "/sqlite\"\n"},
 		{"adapter_in_other_os_test", "edge_linux_test.go", "package execution\nimport _ \"" + core + "/codexworker\"\n", ""},
+		{"product_query_in_execution", "query_edge.go", "package execution\nimport _ \"" + core + "/query\"\n", ""},
+		{"old_projection_in_execution", "projection_edge.go", "package execution\nimport _ \"" + core + "/projection\"\n", ""},
+		{"adapter_in_pure_reconstruction", "pure_edge.go", "package reconstruction\nimport _ \"" + core + "/codexapp\"\n", ""},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			root := t.TempDir()

@@ -1,14 +1,15 @@
 package steerline
 
 import (
-"github.com/erranliu/SteerLine/internal/execution"
 	"encoding/json"
 	"errors"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"io"
 	"os"
 	"path/filepath"
 	"regexp"
+
+	"github.com/erranliu/SteerLine/internal/execution"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 const ControlProtocolVersion = 1

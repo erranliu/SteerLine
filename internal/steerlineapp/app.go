@@ -1,11 +1,11 @@
 package steerlineapp
 
 import (
-"github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"errors"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"

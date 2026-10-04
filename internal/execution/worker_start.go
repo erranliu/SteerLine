@@ -1,15 +1,12 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"errors"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -31,7 +28,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskReco
 	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
 		return err
 	}
-	if err := c.bindPublicationTarget(ctx); err != nil {
+	if err := c.BindPublicationTarget(ctx); err != nil {
 		return err
 	}
 	lifecycle, fixed, err := s.lifecycleForRun(run)

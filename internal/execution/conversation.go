@@ -1,12 +1,10 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"encoding/json"
 	"time"
+
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func nonEmpty(values ...string) string {

@@ -1,15 +1,12 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"errors"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func (s *Service) recordWorkerTurnStarted(run *contracts.Run, workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, turnID string, sessionFacts ...string) (string, error) {
@@ -123,7 +120,7 @@ func (s *Service) eventWorkerFlowFor(run *contracts.Run, ev WorkerEvent) (result
 			if run.Decision != nil && (run.Decision.Status == "pending" || run.Decision.Status == "answer_saved") {
 				execution.PendingQuestions = append(execution.PendingQuestions, executionmodel.PendingQuestion{Questions: cloneExecutionQuestions(fact.Questions), Route: fact.QuestionRoute.Clone()})
 			} else {
-				decision, err := WriteDecisionRequest(run, decisionRequestFromEventFact(fact))
+				decision, err := WriteDecisionRequest(run, DecisionRequestFromEventFact(fact))
 				if err != nil {
 					return err
 				}
@@ -139,7 +136,7 @@ func (s *Service) eventWorkerFlowFor(run *contracts.Run, ev WorkerEvent) (result
 	if fact.Kind == executionbackend.EventEscalation && fact.Matched && fact.SourceEventID != "" && execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID &&
 		(run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") &&
 		(execution.Environment == nil || execution.Environment.Blocker == nil && (execution.Environment.Preparation == nil || execution.Environment.Preparation.TurnID != execution.CurrentTurnID)) {
-		request := decisionRequestFromEventFact(fact)
+		request := DecisionRequestFromEventFact(fact)
 		if request.Question == "" {
 			return errors.New("matched guidance event lacks its question")
 		}
@@ -186,7 +183,7 @@ func (s *Service) eventWorkerFlowFor(run *contracts.Run, ev WorkerEvent) (result
 					next := execution.PendingQuestions[0]
 					execution.PendingQuestions = execution.PendingQuestions[1:]
 					queued := executionbackend.EventFact{Questions: cloneExecutionQuestions(next.Questions), QuestionRoute: ptr(next.Route.Clone())}
-					decision, err := WriteDecisionRequest(run, decisionRequestFromEventFact(queued))
+					decision, err := WriteDecisionRequest(run, DecisionRequestFromEventFact(queued))
 					if err != nil {
 						return err
 					}

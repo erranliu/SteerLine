@@ -10,22 +10,22 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
-type Config = steerline.Config
+type Config = execution.Config
 
-type ExecutionProfile = steerline.ExecutionProfile
+type ExecutionProfile = execution.ExecutionProfile
 
 const WorkerFlowVersion = executionmodel.Version
 
-const ProjectExecutionProfileID = steerline.ProjectExecutionProfileID
+const ProjectExecutionProfileID = execution.ProjectExecutionProfileID
 
 func workspacePolicyFixture() executionbackend.ExecutionPolicy {
 	return executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}

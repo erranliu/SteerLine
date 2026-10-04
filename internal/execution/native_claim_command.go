@@ -1,10 +1,6 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"bytes"
 	"context"
 	"encoding/json"
@@ -15,6 +11,7 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -124,7 +121,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err := requireWorkerFlowCapabilities(ctx, config); err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
 	}
-	if err := config.bindPublicationTarget(ctx); err != nil {
+	if err := config.BindPublicationTarget(ctx); err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
 	}
 	if options.ExecutionProfile != nil {
@@ -238,7 +235,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		}
 	}
 	backend, protocol := entry.Key.Backend, entry.Key.Protocol
-	target := targetFor(config)
+	target := TargetFor(config)
 	target.Branch, target.BaseRevision = config.Branch, base
 	claimant := strings.TrimSpace(config.Claimant)
 	if claimant == "" {
@@ -282,7 +279,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err := verifyClaimConfigFiles(config); err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
 	}
-	if !verifyFixedExecutionProfile(*wfr.ExecutionProfile, config.ExecutionDirectory) {
+	if !VerifyFixedExecutionProfile(*wfr.ExecutionProfile, config.ExecutionDirectory) {
 		return executionmodel.TaskClaimReceipt{}, nativeErr("stale_profile", "claim snapshot changed after evaluation")
 	}
 	command := storageports.CommandRecord{ProjectIdentity: c.Project, CommandID: options.RequestID, Kind: kind, TargetID: task.TaskID, ExpectedVersion: options.ExpectedTaskVersion, IdempotencyKey: options.RequestID, RequestedBy: options.RequestedBy, Payload: requestPayload, Status: "in_flight", CreatedAt: created}

@@ -1,13 +1,14 @@
 package steerline
 
 import (
-"github.com/erranliu/SteerLine/internal/execution"
 	"context"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestDecisionSubmissionRequiresNativeAuthorityBeforeStateAccess(t *testing.T) {

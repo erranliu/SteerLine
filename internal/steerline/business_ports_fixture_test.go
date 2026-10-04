@@ -9,12 +9,14 @@ import (
 	"sync"
 	"time"
 
+	execution "github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
-type neutralBackend struct{ config Config }
+type neutralBackend struct{ config execution.Config }
 
 func (b neutralBackend) Identity() (executionbackend.BackendKind, executionbackend.ExecutionProtocol) {
 	return executionbackend.BackendLocal, neutralProtocol
@@ -27,7 +29,7 @@ func (b neutralBackend) Probe(_ context.Context, target executionbackend.Executi
 func (b neutralBackend) Observe(_ context.Context, ref executionbackend.ExecutionRef) (executionbackend.Observation, error) {
 	live := "live"
 	if ref.External.Kind == "os" {
-		label := inspectProcess(&ref.External)
+		label := resourceprocess.InspectProcess(&ref.External)
 		if label == "process absent" {
 			live = "exited"
 		} else if label != "matching process still exists" {
@@ -189,7 +191,7 @@ func (p *neutralLifecycle) CleanupLifecycle(_ context.Context, r executionbacken
 func (p *neutralLifecycle) VerifyManualRecovery(_ context.Context, s executionbackend.LifecycleSnapshot) (executionbackend.LifecycleRecoveryEvidence, error) {
 	absent := false
 	if s.Ref.External.Kind == "os" {
-		absent = inspectProcess(&s.Ref.External) == "process absent"
+		absent = resourceprocess.InspectProcess(&s.Ref.External) == "process absent"
 	}
 	return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true, ProcessAbsent: absent, SessionAvailable: s.Session.SessionID != ""}, nil
 }

@@ -1,22 +1,23 @@
 package steerline
 
 import (
- "github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"errors"
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
-	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/erranliu/SteerLine/internal/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 func Preflight(ctx context.Context, c *execution.Config, checkSkills bool) error {
-	if err := requireNativeTaskAuthority(*c); err != nil {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return err
 	}
-	return preflightNative(ctx,c)
+	return preflightNative(ctx, c)
 }
 
 // preflightNative validates a native project without resolving or invoking a
@@ -26,7 +27,7 @@ func preflightNative(ctx context.Context, c *execution.Config) error {
 	if err := c.ValidateTaskCommandConfiguration(); err != nil {
 		return err
 	}
-	if err := requireNativeTaskAuthority(*c); err != nil {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return err
 	}
 	if err := c.ValidateProfiles(); err != nil {

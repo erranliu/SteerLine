@@ -1,10 +1,6 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
@@ -14,6 +10,7 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
@@ -310,7 +307,7 @@ func (directory *ExecutionDirectory) ValidateProfileData(c Config) error {
 		return errors.New("configuration has no selected implementation profile")
 	}
 	inputs := implementationInputsFromData(c.ImplementationData)
-	data, _, err := directory.NormalizeProfile(inputs, c.ExecutionPolicy, c.hostName(), c.agentName(), configurationProjectIdentity(c), c.selectedProfileID, c.acceptedConfigVersion())
+	data, _, err := directory.NormalizeProfile(inputs, c.ExecutionPolicy, c.hostName(), c.agentName(), ConfigurationProjectIdentity(c), c.selectedProfileID, c.acceptedConfigVersion())
 	if err != nil {
 		return err
 	}
@@ -395,7 +392,7 @@ func (b rejectedExecutionBackend) InspectWorkspace(context.Context, executionbac
 	return executionbackend.WorkspaceInspection{}, b.err
 }
 
-func backendFor(c Config) executionbackend.ExecutionBackend {
+func BackendFor(c Config) executionbackend.ExecutionBackend {
 	entry, err := registrationFor(c)
 	if err != nil {
 		return rejectedExecutionBackend{err}
@@ -403,11 +400,11 @@ func backendFor(c Config) executionbackend.ExecutionBackend {
 	return entry.Backend(c)
 }
 
-func agentFor(c Config) executionbackend.AgentSpec {
+func AgentFor(c Config) executionbackend.AgentSpec {
 	return executionbackend.AgentSpec{Name: c.agentName()}
 }
 
-func targetFor(c Config) executionbackend.ExecutionTarget {
+func TargetFor(c Config) executionbackend.ExecutionTarget {
 	entry, err := registrationFor(c)
 	if err != nil {
 		return executionbackend.ExecutionTarget{}

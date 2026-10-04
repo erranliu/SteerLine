@@ -1,13 +1,11 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
+
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func conversationItemKey(e contracts.ConversationEvent, itemID string) string {

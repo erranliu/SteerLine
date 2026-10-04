@@ -1,7 +1,6 @@
 package steerlineapp
 
 import (
-"github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -16,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
@@ -252,7 +252,7 @@ func preflightLocalConfig(ctx context.Context, c execution.Config) error {
 		return err
 	}
 	command := executionbackend.Command{Executable: executable, Args: append([]string(nil), settings.Args...)}
-	runner := execution.Runner{Dir: c.Repository, ProcessHost:c.ProcessHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}
+	runner := execution.Runner{Dir: c.Repository, ProcessHost: c.ProcessHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}
 	return codexworker.ProbeCapabilities(ctx, codexworker.ProbeConfig{Executable: executable, Args: settings.Args, Repository: c.Repository, RunDir: c.RunDir}, codexworker.ProbePort{
 		Output: func(ctx context.Context, executable string, args []string) ([]byte, error) {
 			return runner.Output(ctx, executionbackend.Command{Executable: executable, Args: args})
@@ -279,7 +279,7 @@ func preflightTerminalConfig(ctx context.Context, c execution.Config) error {
 	if err != nil {
 		return err
 	}
-	if _, err := (execution.Runner{Dir: c.Repository, ProcessHost:c.ProcessHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: settings.Executable, Args: settings.Args}, "status", "--json"); err != nil {
+	if _, err := (execution.Runner{Dir: c.Repository, ProcessHost: c.ProcessHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: settings.Executable, Args: settings.Args}, "status", "--json"); err != nil {
 		return fmt.Errorf("terminal host is not reachable: %w", err)
 	}
 	client := orcaworker.New(nativeTerminalConfig(c, terminalTarget(c, execution.ExecutionRegistrationKey{Backend: executionbackend.BackendOrca})))
@@ -349,7 +349,7 @@ func policyToolVersion(ctx context.Context, c execution.Config) (string, error) 
 	if err := resolveNativeCommand(&command); err != nil {
 		return "", err
 	}
-	out, err := (execution.Runner{Dir: c.Repository, ProcessHost:c.ProcessHost, Timeout: min(positiveDuration(c.CommandTimeout, 10*time.Second), 10*time.Second)}).Output(ctx, command, "--version")
+	out, err := (execution.Runner{Dir: c.Repository, ProcessHost: c.ProcessHost, Timeout: min(positiveDuration(c.CommandTimeout, 10*time.Second), 10*time.Second)}).Output(ctx, command, "--version")
 	if err != nil {
 		return "", err
 	}
@@ -395,13 +395,13 @@ func nativeTerminalConfig(c execution.Config, target executionbackend.ExecutionT
 	worker, _ := codexSettings(c)
 	config := orcaworker.Config{Repository: c.Repository, CommandTimeout: c.CommandTimeout, Target: target,
 		Output: func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
-			return (execution.Runner{Dir: c.Repository, ProcessHost:c.ProcessHost, Timeout: timeout}).Output(ctx, executionbackend.Command{Executable: terminal.Executable, Args: terminal.Args}, args...)
+			return (execution.Runner{Dir: c.Repository, ProcessHost: c.ProcessHost, Timeout: timeout}).Output(ctx, executionbackend.Command{Executable: terminal.Executable, Args: terminal.Args}, args...)
 		}, InspectWorkspace: func(ctx context.Context, ref executionbackend.ExecutionRef) (executionbackend.WorkspaceInspection, error) {
 			return inspectBoundWorkspace(ctx, c, ref, c.ProcessHost)
 		}}
 	if runtime.GOOS == "windows" && worker.WindowsSandbox != "" || worker.Model != "" || worker.ReasoningEffort != "" || worker.Profile != "" {
 		config.AgentVersion = func(ctx context.Context) (string, error) {
-			out, err := (execution.Runner{Dir: c.Repository, ProcessHost:c.ProcessHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: worker.Executable, Args: worker.Args}, "--version")
+			out, err := (execution.Runner{Dir: c.Repository, ProcessHost: c.ProcessHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: worker.Executable, Args: worker.Args}, "--version")
 			return string(out), err
 		}
 	}
@@ -415,7 +415,7 @@ func remoteWorkerConfig(c execution.Config) remote.Config {
 	config := remote.Config{Repository: c.Repository, ProjectID: c.Identity(), Agent: c.Agent, Model: worker.Model,
 		ReasoningEffort: worker.ReasoningEffort, CommandTimeout: c.CommandTimeout, Call: client.Raw,
 		Origin: func(ctx context.Context) ([]byte, error) {
-			return (execution.Runner{Dir: c.Repository, ProcessHost:c.ProcessHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, c.Git, "remote", "get-url", c.Remote)
+			return (execution.Runner{Dir: c.Repository, ProcessHost: c.ProcessHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, c.Git, "remote", "get-url", c.Remote)
 		}}
 	config.Settings = remote.Settings{ConnectionID: settings.ConnectionID, EnvironmentID: settings.EnvironmentID,
 		RepositorySelector: settings.RepositorySelector, CoordinatorTerminal: settings.CoordinatorTerminal,
@@ -436,7 +436,7 @@ func buildPolicyResource(ctx context.Context, request execution.PolicyResourceBu
 		if timeout <= 0 || timeout > 10*time.Second {
 			timeout = 10 * time.Second
 		}
-		out, err := (execution.Runner{Dir: request.RepositoryPath, ProcessHost:request.ProcessHost, Timeout: timeout}).Output(ctx, executionbackend.Command{Executable: executable}, "--version")
+		out, err := (execution.Runner{Dir: request.RepositoryPath, ProcessHost: request.ProcessHost, Timeout: timeout}).Output(ctx, executionbackend.Command{Executable: executable}, "--version")
 		return strings.TrimSpace(string(out)), err
 	})
 	if err != nil {
@@ -494,7 +494,7 @@ func queryHostRequirementTool(ctx context.Context, c execution.Config, id string
 		return evidence
 	}
 	command.Executable = executable
-	runner := execution.Runner{Dir: c.Repository, ProcessHost:c.ProcessHost, Timeout: min(positiveDuration(c.CommandTimeout, 10*time.Second), 10*time.Second), Environment: environment}
+	runner := execution.Runner{Dir: c.Repository, ProcessHost: c.ProcessHost, Timeout: min(positiveDuration(c.CommandTimeout, 10*time.Second), 10*time.Second), Environment: environment}
 	if id == "go" {
 		runner.Env = map[string]string{"GOTOOLCHAIN": "local"}
 		evidence.Source = "target:inherited-path/local-go-toolchain-version-query"
@@ -581,7 +581,7 @@ func (backend localExecutionBackend) Probe(ctx context.Context, target execution
 	if err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
-	out, err := (execution.Runner{Dir: backend.config.Repository, ProcessHost:backend.config.ProcessHost, Timeout: positiveDuration(backend.config.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: settings.Executable, Args: settings.Args}, "--version")
+	out, err := (execution.Runner{Dir: backend.config.Repository, ProcessHost: backend.config.ProcessHost, Timeout: positiveDuration(backend.config.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: settings.Executable, Args: settings.Args}, "--version")
 	if err != nil {
 		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendUnreachable, Diagnostic: "configured execution version probe failed", Cause: err}
 	}

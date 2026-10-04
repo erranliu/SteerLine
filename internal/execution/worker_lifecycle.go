@@ -1,10 +1,6 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"bytes"
 	"context"
 	"encoding/json"
@@ -16,6 +12,7 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -68,7 +65,7 @@ func lifecycleSetupForRun(run *contracts.Run, fixed workerFlowContext, snapshot 
 	blocked := append([]string(nil), fixed.config.publicationSettings().AuthenticationRefs...)
 	blocked = append(blocked, "BEADS_*", "BD_*", "GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_*", "GIT_CONFIG_VALUE_*")
 	return executionbackend.LifecycleSetup{
-		Snapshot: snapshot.Clone(), ProfileData: cloneImplementationData(fixed.config.ImplementationData),
+		Snapshot: snapshot.Clone(), ProfileData: CloneImplementationData(fixed.config.ImplementationData),
 		ProfileID: fixed.config.selectedProfileID, AcceptedConfigVersion: fixed.config.acceptedConfigVersion(),
 		Policy: fixed.config.ExecutionPolicy, ProcessHost: fixed.config.ProcessHost, RepositoryPath: fixed.config.Repository,
 		RunDirectory: fixed.config.RunDir, CommandTimeout: duration(fixed.config.CommandTimeout),
@@ -86,12 +83,12 @@ func lifecycleSetupForConfig(c Config, entry ExecutionRegistration) (executionba
 	}
 	ref := executionbackend.ExecutionRef{
 		Version: executionbackend.ExecutionRecordVersion, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol,
-		Target: entry.Target(c), Agent: agentFor(c), WorkspacePath: c.Repository,
+		Target: entry.Target(c), Agent: AgentFor(c), WorkspacePath: c.Repository,
 	}
 	session := executionbackend.SessionContext{
 		ProjectID: c.identity, TaskID: "capability-probe", WorkflowRunID: "00000000000000000000000000000001",
 		ExecutionID: "00000000000000000000000000000002", AttemptID: "00000000000000000000000000000003",
-		Agent: agentFor(c), Target: ref.Target,
+		Agent: AgentFor(c), Target: ref.Target,
 	}
 	snapshot := executionbackend.LifecycleSnapshot{
 		Ref: ref, Session: session, ConfigurationDigest: c.fixedProfileDigest,
@@ -100,7 +97,7 @@ func lifecycleSetupForConfig(c Config, entry ExecutionRegistration) (executionba
 	blocked := append([]string(nil), c.publicationSettings().AuthenticationRefs...)
 	blocked = append(blocked, "BEADS_*", "BD_*", "GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_*", "GIT_CONFIG_VALUE_*")
 	return executionbackend.LifecycleSetup{
-		Snapshot: snapshot, ProfileData: cloneImplementationData(c.ImplementationData),
+		Snapshot: snapshot, ProfileData: CloneImplementationData(c.ImplementationData),
 		ProfileID: c.selectedProfileID, AcceptedConfigVersion: c.acceptedConfigVersion(),
 		Policy: c.ExecutionPolicy, ProcessHost: c.ProcessHost,
 		RepositoryPath: c.Repository, RunDirectory: c.RunDir, CommandTimeout: duration(c.CommandTimeout),
@@ -377,7 +374,7 @@ func lifecycleSnapshot(run *contracts.Run, workflow *executionmodel.WorkflowRunR
 		Ref: ref, Session: session, TaskTitle: run.Title, WorkflowPhase: workflow.Phase, TaskDelivered: run.TaskStatus == "closed",
 		ConfigurationDigest: execution.ConfigurationDigest,
 		ResourceGeneration:  execution.Generation,
-		Implementation:      cloneImplementationData(execution.ImplementationData),
+		Implementation:      CloneImplementationData(execution.ImplementationData),
 		WorkspaceDirty:      execution.Workspace.Dirty,
 		Workspace:           executionbackend.WorkspaceIntent{Path: execution.Workspace.Worktree, Branch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base},
 		OutputCursor:        attempt.OutputCursor, PendingTurn: pending,

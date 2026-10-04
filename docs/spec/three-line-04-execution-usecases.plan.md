@@ -22,11 +22,13 @@
 | --- | --- | --- | --- | --- | --- |
 | 定向 Go：TM04.2–TM04.3 | Windows；受控后端/SQLite/provider，无模型 | `go run ./cmd/test-feedback -out docs/validation/three-line-04-execution-usecases/candidates -- ./internal/steerlineintegration -run '^TestMC[1356789]$' -count=1` | 候选/提交/恢复迁移后 | 原 MC 改为真实 app 的外层跨模块断言；身份、交付、放弃、阻断与晚到副作用非零命中 | `docs/validation/three-line-04-execution-usecases/candidates/` |
 | 定向 Go：TM04.1–TM04.2 | Windows；真实 app，提交失败与原请求对账 fixture | `go run ./cmd/test-feedback -out docs/validation/three-line-04-execution-usecases/wiring -- ./internal/steerlineintegration -run '^TestTM04ExecutionWiring$' -count=1` | actor 和默认工厂切换后 | 调用真实新执行入口；原 intent/receipt 及失败回滚保留 | `docs/validation/three-line-04-execution-usecases/wiring/` |
-| L1 固定最小入口 | Windows；隔离 STEERLINE_HOME，无原生 opt-in | `go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-04-execution-usecases/l1` | 自查/定向修复完成后一次 | 现有规则/构造/守卫代表非零命中且通过，无意外 live | `docs/validation/three-line-04-execution-usecases/l1/` |
+| 定向 Go：重建/Journals/TM04 边界守卫 | Windows；孤立记录 fixture，无 SQL/adapter writer，coreboundary 编译 Windows/Linux 依赖图 | `go run ./cmd/test-feedback -out docs/validation/three-line-04-execution-usecases/reconstruction -- ./internal/execution/reconstruction ./internal/coreboundary ./internal/execution -run '^(TestBuildOwnsRecordsAndMetadataAcrossRefreshes|TestProjectionRejectsBrokenBindingsWithoutReusingOldViews|TestProjectionRetainsDeliveryAndReservationRules|TestExecutionProjectionKeepsRemotePathAndWhitespaceSemantics|TestTM04ExecutionBoundary|TestJournal.*)$' -count=1` | 重建包、JournalCursor 与守卫迁移后；L1 前 | 4 个纯重建断言、边界父/反例及全部 journal parents 命中；无 skip | `docs/validation/three-line-04-execution-usecases/reconstruction/` |
+| L1 固定最小入口 | Windows；隔离 STEERLINE_HOME，无原生 opt-in | `go run ./cmd/test-feedback -level L1 -out docs/validation/three-line-04-execution-usecases/l1` | 自查/定向修复完成后一次 | 现有规则/构造/守卫代表非零命中且通过，无意外 live | `docs/validation/three-line-04-execution-usecases/l1/` |
+| L3 controlled：`recovery.waiting-merge-restart` | Windows；已注册的受控恢复 backend | `go run ./cmd/test-feedback -level L3 -suite recovery -env controlled -scenario recovery.waiting-merge-restart -out docs/validation/three-line-04-execution-usecases/controlled` | 通用 host loop 与 actor 单步提取后 | 原 task/DB/workflow/execution/worktree 身份稳定、不重派并正常交付 | `docs/validation/three-line-04-execution-usecases/controlled/` |
 
 边界类变更在本阶段同步既有守卫/负向注入及 L1 选择；扫描全 OS/build tag 源码，核对 Windows/Linux 生产直接及传递依赖。跨系统只做依赖图/编译不冒充运行行为。新增场景或环境能力须先登记包/测试/ID与命令，再执行；当前已注册 E2E 入口和环境约定见 [E2E README](../../tests/e2e/README.md)。
 
-不选 Full/L2/live：平台协议与权限不变，重用原生证据。若恢复授权或宿主实际行为变化，追加已注册的 L3 controlled recovery.waiting-merge-restart；最终组合归 #82。
+不选 Full/L2/live：平台协议与权限不变，重用既有原生证据。actor/host loop 拆分触及恢复宿主，故本次追加一次已注册的 L3 controlled `recovery.waiting-merge-restart`；最终组合归 #82。
 
 ## 自查与交付
 

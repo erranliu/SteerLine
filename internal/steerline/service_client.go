@@ -1,8 +1,6 @@
 package steerline
 
 import (
-"github.com/erranliu/SteerLine/internal/steerline/contracts"
- "github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,16 +11,16 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 var errLockBusy = errors.New("service lock is held")
-
-var errDetachUnsupported = errors.New("host Job Object prevents independent service lifetime")
 
 type ServiceConnection = clientcontracts.ServiceConnection
 
@@ -284,7 +282,7 @@ func findLiveStartupAttempt(c execution.Config) (*StartupRecord, productapi.Proc
 		if canonical(record.RunDir) != canonical(runDir) {
 			continue
 		}
-		probe := probeProcess(record.ProcessIdentity)
+		probe := publicProcessProbe(record.ProcessIdentity)
 		if probe.State == ProcessAbsent || probe.State == ProcessReused {
 			if record.Status == "starting" {
 				record.Status = "failed"
@@ -339,13 +337,13 @@ func validateRecordForRuntime(c execution.Config, rt *Runtime, record *StartupRe
 }
 
 func ConnectService(ctx context.Context, c execution.Config) ServiceConnection {
-	return connectServiceWithProbe(ctx, c, probeProcess)
+	return connectServiceWithProbe(ctx, c, publicProcessProbe)
 }
 
 // ProbeServiceProcess checks the exact saved OS identity without running Git.
 // It is only an observation; control commands perform their own admission checks.
 func ProbeServiceProcess(identity *executionbackend.ProcessIdentity) productapi.ProcessProbe {
-	return probeProcess(identity)
+	return publicProcessProbe(identity)
 }
 
 func connectServiceWithProbe(ctx context.Context, c execution.Config, probe func(*executionbackend.ProcessIdentity) productapi.ProcessProbe) ServiceConnection {
@@ -365,7 +363,7 @@ func ConnectServiceFromSnapshot(ctx context.Context, c execution.Config, obs Obs
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return ServiceConnection{State: ConnectionIdentityError, Snapshot: obs, Diagnostic: "resolve repository identity: " + err.Error()}
 	}
-	return connectServiceFromSnapshot(ctx, c, obs, probeProcess)
+	return connectServiceFromSnapshot(ctx, c, obs, publicProcessProbe)
 }
 
 func connectServiceFromSnapshot(ctx context.Context, c execution.Config, obs ObservationSnapshot, probe func(*executionbackend.ProcessIdentity) productapi.ProcessProbe) ServiceConnection {
@@ -868,7 +866,7 @@ func waitForStartup(ctx context.Context, c execution.Config, id, logPath string,
 			}
 			return result, nil
 		} else if err == nil && record.ProcessIdentity != nil {
-			probe := probeProcess(record.ProcessIdentity)
+			probe := publicProcessProbe(record.ProcessIdentity)
 			if probe.State == ProcessAbsent || probe.State == ProcessReused {
 				record.Status = "failed"
 				record.Error = "service process exited before the client confirmed the ready handshake; see startup log"
@@ -890,7 +888,7 @@ func waitForStartup(ctx context.Context, c execution.Config, id, logPath string,
 }
 
 func StopService(ctx context.Context, c execution.Config, requestedBy string, timeout time.Duration) (productapi.ServiceStopResult, error) {
-	if err := requireNativeTaskAuthority(c); err != nil {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return productapi.ServiceStopResult{}, err
 	}
 	if timeout <= 0 {
@@ -951,7 +949,7 @@ func StopService(ctx context.Context, c execution.Config, requestedBy string, ti
 			result.Diagnostic = e.Error()
 		}
 		{
-			probe := probeProcess(connection.Snapshot.Runtime.Service.ProcessIdentity)
+			probe := publicProcessProbe(connection.Snapshot.Runtime.Service.ProcessIdentity)
 			if probe.State == ProcessAbsent || probe.State == ProcessReused {
 				result.ProcessExited = true
 				locks, lockErr := serviceLocksReleased(c)
@@ -1044,10 +1042,10 @@ func acquireLaunchLock(ctx context.Context, path string) (*RepoLock, error) {
 
 // RunConfiguredService is the lock-owning service entry point used by the CLI.
 // It records preflight and lock failures under startup_id before returning.
-type ServiceFactory func(execution.Config,execution.HostPort) (*execution.Service,error)
+type ServiceFactory func(execution.Config, execution.HostPort) (*execution.Service, error)
 
 func RunConfiguredService(ctx context.Context, c execution.Config, mode, startupID, console string, construct ServiceFactory) (retErr error) {
-	if err := requireNativeTaskAuthority(c); err != nil {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return err
 	}
 	if construct == nil {
@@ -1059,7 +1057,7 @@ func RunConfiguredService(ctx context.Context, c execution.Config, mode, startup
 	if c.ProcessHost == nil {
 		return errors.New("managed process host is required")
 	}
-	if err := requireNativeTaskAuthority(c); err != nil {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return err
 	}
 	if c.WorkflowProtocol != executionmodel.Version {
@@ -1099,7 +1097,7 @@ func RunConfiguredService(ctx context.Context, c execution.Config, mode, startup
 	if retErr != nil {
 		return retErr
 	}
-	processIdentity, retErr := currentProcessIdentity()
+	processIdentity, retErr := resourceprocess.CurrentIdentity()
 	if retErr != nil {
 		// Without our own identity, we cannot claim or modify an existing attempt.
 		return fmt.Errorf("identify service process: %w", retErr)
@@ -1144,7 +1142,7 @@ func RunConfiguredService(ctx context.Context, c execution.Config, mode, startup
 		failed.Error = clip(err.Error(), 4000)
 		return errors.Join(err, writeStartupRecord(c, failed))
 	}
-	if err := requireNativeTaskAuthority(c); err != nil {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return fail(err)
 	}
 	if retErr = Preflight(ctx, &c, true); retErr != nil {
@@ -1159,7 +1157,7 @@ func RunConfiguredService(ctx context.Context, c execution.Config, mode, startup
 	}
 	// Preflight canonicalizes paths and applies the same defaults used by the
 	// service. Rewrite only this attempt's non-authoritative startup record.
-	processIdentity, retErr = currentProcessIdentity()
+	processIdentity, retErr = resourceprocess.CurrentIdentity()
 	if retErr != nil {
 		return fail(fmt.Errorf("identify service process: %w", retErr))
 	}
@@ -1179,14 +1177,16 @@ func RunConfiguredService(ctx context.Context, c execution.Config, mode, startup
 	}
 	defer runLock.Close()
 	selectedConsole := console
-	if selectedConsole == "" { selectedConsole = ConsoleDefault() }
-	host := NewServiceHost(c,startupID,selectedConsole,io.MultiWriter(logFile,os.Stdout))
-	s, err := construct(c,host)
+	if selectedConsole == "" {
+		selectedConsole = ConsoleDefault()
+	}
+	host := NewServiceHost(c, startupID, selectedConsole, io.MultiWriter(logFile, os.Stdout))
+	s, err := construct(c, host)
 	if err != nil {
 		return fail(err)
 	}
 	s.SetStartupMetadata(startupID)
-	retErr = RunService(ctx,s,s.Config,mode)
+	retErr = RunService(ctx, s, s.Config, mode)
 	if retErr != nil {
 		fmt.Fprintf(logFile, "service exited: %v\n", retErr)
 	} else {
@@ -1203,4 +1203,3 @@ func RunConfiguredService(ctx context.Context, c execution.Config, mode, startup
 	}
 	return retErr
 }
-

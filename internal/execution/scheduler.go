@@ -5,7 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"time"
+
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
@@ -222,10 +225,10 @@ func (s *Service) TickPR(ctx context.Context) error {
 	}
 	return s.step(ctx, true, s.pollPRs)
 }
-func (s *Service) EndActor(stop *StopAcceptance, prior error) error {
+func (s *Service) EndActor(stop *productapi.ControlRequest, acceptedAt *time.Time, prior error) error {
 	if s.stopControl == nil && stop != nil {
-		s.stopControl = &stop.Request
-		s.stopAcceptedAt = &stop.At
+		s.stopControl = stop
+		s.stopAcceptedAt = acceptedAt
 	}
 	s.State.Service.Status = "stopping"
 	s.State.Service.Ready = false

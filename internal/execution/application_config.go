@@ -3,10 +3,11 @@ package execution
 import (
 	"context"
 	"errors"
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 	"path/filepath"
 	"strings"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 // LoadedConfigDigest identifies the project and global execution file bytes

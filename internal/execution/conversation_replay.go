@@ -12,7 +12,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
@@ -145,7 +144,7 @@ func (s *Service) reconcileConversationRun(run *contracts.Run) error {
 
 func (s *Service) replayConversationJournal(ctx context.Context, source conversationJournalSource) error {
 	const batchRecords = 256
-	readCursor := productapi.JournalCursor{}
+	readCursor := JournalCursor{}
 	if s.conversationSources == nil {
 		return errors.New("conversation source port is required")
 	}

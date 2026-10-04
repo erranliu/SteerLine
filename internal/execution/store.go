@@ -1,16 +1,14 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-	"sync"
 )
 
 // Store serializes publication with heartbeat. SQLite is the only durable

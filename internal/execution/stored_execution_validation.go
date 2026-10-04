@@ -1,18 +1,16 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
+	"slices"
 
-import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"slices"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func (c Config) ValidateStoredExecutions(snapshot contracts.DomainSnapshot) error {
 	for _, workflow := range snapshot.WorkflowRuns {
-		if workflow.WorkflowVersion != executionmodel.Version || workflow.ExecutionProfile == nil || !verifyFixedExecutionProfile(*workflow.ExecutionProfile, c.ExecutionDirectory) || workflow.ConfigDigest != workflow.ExecutionProfile.AcceptedConfigVersion {
+		if workflow.WorkflowVersion != executionmodel.Version || workflow.ExecutionProfile == nil || !VerifyFixedExecutionProfile(*workflow.ExecutionProfile, c.ExecutionDirectory) || workflow.ConfigDigest != workflow.ExecutionProfile.AcceptedConfigVersion {
 			return nativeErr("unsupported_schema", "worker-flow-v1 refuses an old WorkflowRun; preserve the original state and external session")
 		}
 	}
@@ -58,7 +56,7 @@ func (c Config) ValidateStoredExecutions(snapshot contracts.DomainSnapshot) erro
 			}
 			matched := false
 			for _, workflow := range snapshot.WorkflowRuns {
-				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && verifyFixedExecutionProfile(*workflow.ExecutionProfile, c.ExecutionDirectory) && workflow.ExecutionProfile.Digest == env.ProfileDigest {
+				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && VerifyFixedExecutionProfile(*workflow.ExecutionProfile, c.ExecutionDirectory) && workflow.ExecutionProfile.Digest == env.ProfileDigest {
 					matched = true
 				}
 			}

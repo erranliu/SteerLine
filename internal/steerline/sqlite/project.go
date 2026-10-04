@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/projection"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	queryrules "github.com/erranliu/SteerLine/internal/steerline/query"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -106,7 +106,7 @@ func (s Reader) ReadProjectViewTx(ctx context.Context, tx *sql.Tx, project, sele
 func projectView(records ProjectRecords) contracts.ProjectView {
 	view := records.View
 	if metadata := records.Metadata; metadata != nil {
-		projected, err := projection.Build(*view.Domain, projection.MetadataOf(*metadata))
+		projected, err := reconstruction.Build(*view.Domain, reconstruction.MetadataOf(*metadata))
 		if err != nil {
 			view.RuntimeError = err
 		} else {

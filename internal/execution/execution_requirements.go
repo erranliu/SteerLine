@@ -1,10 +1,6 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,11 +11,12 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func queryCredentialRequirement(c Config, r executionbackend.CredentialRequirement) executionbackend.RequirementEvidence {
-	e := executionbackend.RequirementEvidence{ID: r.ID, Site: r.Site, Version: "provider-reference-v1", Target: targetFor(c), Status: executionbackend.RequirementUnknown, Source: "provider:reference-unavailable", CheckedAt: now()}
+	e := executionbackend.RequirementEvidence{ID: r.ID, Site: r.Site, Version: "provider-reference-v1", Target: TargetFor(c), Status: executionbackend.RequirementUnknown, Source: "provider:reference-unavailable", CheckedAt: now()}
 	if r.ID != "pr.token_env" || r.Site != "service" {
 		return e
 	}
@@ -45,7 +42,7 @@ func evaluateExecutionRequirements(ctx context.Context, c Config) (executionback
 	if err = c.ExecutionRequirements.Validate(); err != nil {
 		return executionbackend.RequirementsEvaluation{}, err
 	}
-	key := executionbackend.CapabilityReport{Version: 1, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol, Target: entry.Target(c), Agent: agentFor(c)}
+	key := executionbackend.CapabilityReport{Version: 1, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol, Target: entry.Target(c), Agent: AgentFor(c)}
 	e := executionbackend.RequirementsEvaluation{Version: 1, Backend: key.Backend, Protocol: key.Protocol, Target: key.Target, Agent: key.Agent, CheckedAt: now()}
 	if len(c.ExecutionRequirements.Capabilities) > 0 {
 		key, err = entry.ProbeRequirements(ctx, c)
@@ -93,12 +90,12 @@ func verifyRequirementsSnapshot(p executionmodel.FixedExecutionProfile, director
 	if len(p.ImplementationData) > 0 {
 		projectID = p.ImplementationData[0].ProjectID
 	}
-	c := Config{ExecutionDirectory: directory, Host: p.Host, Agent: p.Agent, selectedProfileID: p.ID, configDigest: p.AcceptedConfigVersion, identity: projectID, ImplementationData: cloneImplementationData(p.ImplementationData), fixedProfileDigest: p.Digest}
+	c := Config{ExecutionDirectory: directory, Host: p.Host, Agent: p.Agent, selectedProfileID: p.ID, configDigest: p.AcceptedConfigVersion, identity: projectID, ImplementationData: CloneImplementationData(p.ImplementationData), fixedProfileDigest: p.Digest}
 	entry, err := registrationFor(c)
 	if err != nil {
 		return false
 	}
-	key := executionbackend.CapabilityReport{Version: 1, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol, Target: targetFor(c), Agent: agentFor(c)}
+	key := executionbackend.CapabilityReport{Version: 1, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol, Target: TargetFor(c), Agent: AgentFor(c)}
 	if e.Capabilities != nil {
 		key.PlatformVersion = e.Capabilities.PlatformVersion
 		key.AgentVersion = e.Capabilities.AgentVersion

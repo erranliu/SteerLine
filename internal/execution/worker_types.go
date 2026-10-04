@@ -1,14 +1,11 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type WorkerEvent struct {
@@ -81,7 +78,7 @@ func workerFromLifecycle(runID, attemptID string, observer executionbackend.Life
 			event := WorkerEvent{
 				RunID: runID, AttemptID: attemptID, Source: "execution", Summary: value.Summary,
 				Activity: contracts.ActivityEvent{Source: "execution", Kind: value.Kind, Status: value.Status, Title: value.Title},
-				Fact:     value.Fact, Implementation: cloneImplementationData(value.Implementation),
+				Fact:     value.Fact, Implementation: CloneImplementationData(value.Implementation),
 				Candidate:  value.Candidate,
 				DeliveryID: value.DeliveryID, DeliveryFinal: value.DeliveryFinal,
 				Persisted: value.Persisted, Processed: value.Processed,

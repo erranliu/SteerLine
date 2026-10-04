@@ -9,13 +9,13 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func policyResourceDigest(p executionmodel.PolicyResources) string {
+func PolicyResourceDigest(p executionmodel.PolicyResources) string {
 	p.Digest = ""
 	return digestValue(p)
 }
 
 func verifyPolicyResources(c Config, p *executionmodel.PolicyResources, profileDigest, workspace string, records ...*executionmodel.ExecutionRecord) error {
-	if p == nil || p.Version != 3 || p.Digest != policyResourceDigest(*p) || p.ProfileDigest != profileDigest || p.Workspace != workspace || len(p.TemporaryRoots) != 0 || p.ImplementationData.ConfigDigest != profileDigest {
+	if p == nil || p.Version != 3 || p.Digest != PolicyResourceDigest(*p) || p.ProfileDigest != profileDigest || p.Workspace != workspace || len(p.TemporaryRoots) != 0 || p.ImplementationData.ConfigDigest != profileDigest {
 		return errors.New("execution policy resource snapshot differs from original settings or identity")
 	}
 	identity := PolicyResourceIdentity{
@@ -77,7 +77,7 @@ func bindPolicyResources(ctx context.Context, c Config, e *executionmodel.Execut
 		AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: profileDigest}
 	bound, err := entry.BuildPolicyResource(ctx, PolicyResourceBuildRequest{
 		ProcessHost: c.ProcessHost,
-		ProfileData: cloneImplementationData(c.ImplementationData), ProjectID: configurationProjectIdentity(c),
+		ProfileData: CloneImplementationData(c.ImplementationData), ProjectID: ConfigurationProjectIdentity(c),
 		ProfileID: c.selectedProfileID, AcceptedConfigVersion: c.acceptedConfigVersion(), Resource: identity,
 		Policy: c.ExecutionPolicy, Host: c.hostName(), Agent: c.agentName(), Workspace: workspace,
 		LinkedWorktreeArgs: append([]string(nil), linkedArgs...), RepositoryPath: c.Repository,
@@ -94,7 +94,7 @@ func bindPolicyResources(ctx context.Context, c Config, e *executionmodel.Execut
 	}
 	evidence := executionmodel.PolicyResources{Version: 3, ProfileDigest: profileDigest, Workspace: workspace,
 		WriteRoots: append([]string(nil), bound.WriteRoots...), TemporaryRoots: []string{}, ImplementationData: bound.Envelope.Clone()}
-	evidence.Digest = policyResourceDigest(evidence)
+	evidence.Digest = PolicyResourceDigest(evidence)
 	if e.PolicyResources != nil {
 		if !reflect.DeepEqual(*e.PolicyResources, evidence) {
 			return errors.New("implementation resources or settings expanded or changed after binding")

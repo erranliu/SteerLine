@@ -1,0 +1,33 @@
+{"Time":"2026-10-05T05:32:39.0493735+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration"}
+{"Time":"2026-10-05T05:32:39.2744079+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC1"}
+{"Time":"2026-10-05T05:32:39.2744079+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC1","Output":"=== RUN   TestMC1\n"}
+{"Time":"2026-10-05T05:33:00.5868932+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC1","Output":"--- PASS: TestMC1 (21.31s)\n"}
+{"Time":"2026-10-05T05:33:00.5874408+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC1","Elapsed":21.31}
+{"Time":"2026-10-05T05:33:00.5874408+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC9"}
+{"Time":"2026-10-05T05:33:00.5874408+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC9","Output":"=== RUN   TestMC9\n"}
+{"Time":"2026-10-05T05:33:23.8176745+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC9","Output":"--- PASS: TestMC9 (23.23s)\n"}
+{"Time":"2026-10-05T05:33:23.8176745+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC9","Elapsed":23.23}
+{"Time":"2026-10-05T05:33:23.8176745+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC7"}
+{"Time":"2026-10-05T05:33:23.8176745+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC7","Output":"=== RUN   TestMC7\n"}
+{"Time":"2026-10-05T05:33:38.6521586+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC7","Output":"--- PASS: TestMC7 (14.83s)\n"}
+{"Time":"2026-10-05T05:33:38.6526972+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC7","Elapsed":14.83}
+{"Time":"2026-10-05T05:33:38.6526972+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC3"}
+{"Time":"2026-10-05T05:33:38.6526972+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC3","Output":"=== RUN   TestMC3\n"}
+{"Time":"2026-10-05T05:34:11.8667845+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC3","Output":"--- PASS: TestMC3 (33.21s)\n"}
+{"Time":"2026-10-05T05:34:11.8667845+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC3","Elapsed":33.21}
+{"Time":"2026-10-05T05:34:11.8667845+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC5"}
+{"Time":"2026-10-05T05:34:11.8667845+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC5","Output":"=== RUN   TestMC5\n"}
+{"Time":"2026-10-05T05:34:49.3468713+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC5","Output":"--- PASS: TestMC5 (37.48s)\n"}
+{"Time":"2026-10-05T05:34:49.3477594+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC5","Elapsed":37.48}
+{"Time":"2026-10-05T05:34:49.3477594+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC6"}
+{"Time":"2026-10-05T05:34:49.3477594+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC6","Output":"=== RUN   TestMC6\n"}
+{"Time":"2026-10-05T05:35:23.1299299+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC6","Output":"    core_decoupling_67_additional_test.go:233: real provider merge http://127.0.0.1:65445/owner/repo/pulls/901; candidate abandon rejected: already_merged: delivered task cannot abandon candidates\n"}
+{"Time":"2026-10-05T05:35:23.2106907+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC6","Output":"--- PASS: TestMC6 (33.86s)\n"}
+{"Time":"2026-10-05T05:35:23.2106907+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC6","Elapsed":33.86}
+{"Time":"2026-10-05T05:35:23.2106907+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC8"}
+{"Time":"2026-10-05T05:35:23.2106907+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC8","Output":"=== RUN   TestMC8\n"}
+{"Time":"2026-10-05T05:35:45.9469419+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC8","Output":"--- PASS: TestMC8 (22.74s)\n"}
+{"Time":"2026-10-05T05:35:45.9469419+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC8","Elapsed":22.74}
+{"Time":"2026-10-05T05:35:45.9469419+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"PASS\n"}
+{"Time":"2026-10-05T05:35:45.9589899+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerlineintegration\t186.910s\n"}
+{"Time":"2026-10-05T05:35:45.9589899+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Elapsed":186.91}

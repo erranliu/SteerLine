@@ -1,7 +1,6 @@
 package steerlineapp
 
 import (
-"github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
@@ -132,7 +132,9 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 	}
 	config.ProcessHost = processHost
 	config.Resources = steerline.ExecutionResources{}
-	config.ReadRuntime = func(_ context.Context,c execution.Config)(*contracts.Runtime,error){ return steerline.LoadDatabaseRuntime(c) }
+	config.ReadRuntime = func(_ context.Context, c execution.Config) (*contracts.Runtime, error) {
+		return steerline.LoadDatabaseRuntime(c)
+	}
 	config.ExecutionDirectory = directory
 	config.StateRoot = StateRoot()
 	config.ExecutionProfiles = global.ExecutionProfiles

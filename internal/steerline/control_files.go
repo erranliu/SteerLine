@@ -1,17 +1,18 @@
 package steerline
 
 import (
- "github.com/erranliu/SteerLine/internal/execution"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/execution"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 func (s *ServiceHost) WriteControlReceipt(r productapi.ControlReceipt) error {

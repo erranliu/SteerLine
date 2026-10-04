@@ -58,7 +58,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 				return registryErr
 			}
 			required := append([]string(nil), entry.CleanupCapabilities...)
-			if _, err = s.requireBackendCapabilitiesFor(ctx, backendFor(c), targetFor(c), agentFor(c), required...); err != nil {
+			if _, err = s.requireBackendCapabilitiesFor(ctx, BackendFor(c), TargetFor(c), AgentFor(c), required...); err != nil {
 				return err
 			}
 		}

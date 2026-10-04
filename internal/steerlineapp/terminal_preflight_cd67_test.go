@@ -1,6 +1,7 @@
 package steerlineapp
 
 import (
+"github.com/erranliu/SteerLine/internal/steerline"
 	"context"
 	"errors"
 	"fmt"
@@ -131,7 +132,7 @@ func TestOrcaPreflightRequiresConfiguredCodexPolicyMapping(t *testing.T) {
 		c = c.ApplyExecutionProfile(profile)
 	}
 	applyProfile(codexworker.ProfileConfig{Executable: missing, WindowsSandbox: "unelevated"})
-	if err := c.Preflight(context.Background(), false); err == nil || !strings.Contains(err.Error(), "missing-worker.exe") {
+	if err := steerline.Preflight(context.Background(), &c, false); err == nil || !strings.Contains(err.Error(), "missing-worker.exe") {
 		t.Fatalf("native policy mapping did not require its fixed tool: %v", err)
 	}
 	// A fixed model actually requires the configured local tool. Probe the

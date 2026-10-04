@@ -1,22 +1,19 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/projection"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func runtimeCheckpoint(v contracts.Runtime) contracts.ServiceCheckpoint {
-	return projection.Checkpoint(v)
+	return reconstruction.Checkpoint(v)
 }
 
 // projectRuntime is composition for already-loaded rows, without reuse of client Run pointers.
 func projectRuntime(v *contracts.Runtime) error {
 	snapshot := contracts.DomainSnapshot{Tasks: v.Tasks, WorkflowRuns: v.WorkflowRuns, Executions: v.Executions, Attempts: v.Attempts, Decisions: v.Decisions, Operations: v.Operations, Deliveries: v.Deliveries}
-	next, err := projection.Build(snapshot, projection.MetadataOf(*v))
+	next, err := reconstruction.Build(snapshot, reconstruction.MetadataOf(*v))
 	if err != nil {
 		return err
 	}
@@ -25,10 +22,10 @@ func projectRuntime(v *contracts.Runtime) error {
 }
 
 func refreshExecutionView(run *contracts.Run, e *executionmodel.ExecutionRecord) {
-	*run = projection.Execution(*run, *e)
+	*run = reconstruction.Execution(*run, *e)
 }
 
-func projectSlot(v *contracts.Runtime) { v.SlotOccupied, v.CurrentTask = projection.Slot(*v) }
+func projectSlot(v *contracts.Runtime) { v.SlotOccupied, v.CurrentTask = reconstruction.Slot(*v) }
 
 func copyPtr[T any](value *T) *T {
 	if value == nil {
@@ -51,7 +48,7 @@ func (s *Service) refreshRun(run *contracts.Run) {
 	if workflow == nil || execution == nil || task == nil {
 		return
 	}
-	view, err := projection.Run(*task, *workflow, *execution, s.domain.Attempts, s.domain.Decisions, s.domain.Deliveries)
+	view, err := reconstruction.Run(*task, *workflow, *execution, s.domain.Attempts, s.domain.Decisions, s.domain.Deliveries)
 	if err != nil {
 		s.setError(err)
 		return

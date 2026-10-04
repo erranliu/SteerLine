@@ -1,10 +1,6 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,6 +11,7 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -86,7 +83,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					continue // Remote cancellation is not available; keep the exact manual item.
 				}
 				worker := s.workers[run.RunID]
-				if _, err := s.requireBackendCapabilitiesFor(ctx, backendFor(config), targetFor(config), agentFor(config), "stop", "observe"); err != nil {
+				if _, err := s.requireBackendCapabilitiesFor(ctx, BackendFor(config), TargetFor(config), AgentFor(config), "stop", "observe"); err != nil {
 					s.executionRecord(run).Error = ptr("discarded task worker remains active; verified local stop capability is unavailable: " + clip(err.Error(), 1000))
 					s.refreshRun(run)
 					if commitErr := s.commitWorker(run); commitErr != nil {
@@ -107,7 +104,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					continue
 				}
 				if op.Status != executionbackend.OperationConfirmed {
-					backend := backendFor(config)
+					backend := BackendFor(config)
 					observation, observeErr := backend.Observe(ctx, *op.Ref)
 					if observeErr != nil || observation.Liveness != "exited" {
 						s.executionRecord(run).Error = ptr("discarded task worker stop is awaiting confirmed process absence")
@@ -197,7 +194,7 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task taskmodel.T
 	}
 	if info.State == "open" {
 		c := fixed.config
-		if err := c.bindPublicationTarget(ctx); err != nil {
+		if err := c.BindPublicationTarget(ctx); err != nil {
 			return err
 		}
 		info, err = publicationClient(c).Close(ctx, prURL)
@@ -292,7 +289,7 @@ func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupIt
 	if configErr != nil {
 		return configErr
 	}
-	backend := backendFor(config)
+	backend := BackendFor(config)
 	observation, err := backend.Observe(ctx, *op.Ref)
 	if err != nil || observation.Liveness != "exited" {
 		return errors.Join(err, nativeErr("outcome_unknown", "fixed local execution is not confirmed absent"))
@@ -346,7 +343,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	if err != nil {
 		return err
 	}
-	backend := backendFor(config)
+	backend := BackendFor(config)
 	observation, err := backend.Observe(ctx, ref)
 	if err != nil || observation.Liveness != "exited" {
 		return errors.Join(err, nativeErr("outcome_unknown", "fixed local process is live or its state is unknown; it cannot be stopped without the original handle"))

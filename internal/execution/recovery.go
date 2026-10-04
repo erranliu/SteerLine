@@ -1,10 +1,6 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
@@ -12,12 +8,13 @@ import (
 	"unicode/utf8"
 
 	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // InspectRecovery reads the current SQLite projection and performs read-only
 // host, workspace, claim and PR checks. It never constructs a running Service.
 func InspectRecovery(ctx context.Context, c Config, runID string) (clientcontracts.RecoveryInspection, error) {
-	if err := requireNativeTaskAuthority(c); err != nil {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return clientcontracts.RecoveryInspection{}, err
 	}
 	if strings.TrimSpace(runID) == "" {

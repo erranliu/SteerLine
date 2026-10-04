@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
@@ -75,12 +75,12 @@ func TestSupervisedOrcaExecutionBindingRequiresExactDispatchIdentity(t *testing.
 	}
 }
 
-func supervisedAdmissionConfig(t *testing.T) steerline.Config {
+func supervisedAdmissionConfig(t *testing.T) execution.Config {
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_REMOTE_URL", "https://git.example/owner/repo.git")
-	return builtinFixtureConfig(t, steerline.Config{Host: "orca_supervised", Agent: "codex", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionbackend.PublicationPolicy{Publisher: "worker"}, PR: hostPublicationProviderFixture()}, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "must-not-run", Shell: "powershell.exe", WaitTimeout: "5s"}, &remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "term-coordinator", PollInterval: "2s", CapabilityReportVersion: 1})
+	return builtinFixtureConfig(t, execution.Config{Host: "orca_supervised", Agent: "codex", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionbackend.PublicationPolicy{Publisher: "worker"}, PR: hostPublicationProviderFixture()}, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "must-not-run", Shell: "powershell.exe", WaitTimeout: "5s"}, &remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "term-coordinator", PollInterval: "2s", CapabilityReportVersion: 1})
 }
 
-func nativeTerminalSettings(c steerline.Config) orcaworker.ProfileConfig {
+func nativeTerminalSettings(c execution.Config) orcaworker.ProfileConfig {
 	for _, p := range c.ExecutionProfiles {
 		for _, input := range p.ImplementationConfigs {
 			if input.ImplementationKey == orcaworker.ProfileCodecKey {
@@ -92,7 +92,7 @@ func nativeTerminalSettings(c steerline.Config) orcaworker.ProfileConfig {
 	return orcaworker.ProfileConfig{}
 }
 
-func nativeRemoteSettings(c steerline.Config) remote.ProfileConfig {
+func nativeRemoteSettings(c execution.Config) remote.ProfileConfig {
 	for _, p := range c.ExecutionProfiles {
 		for _, input := range p.ImplementationConfigs {
 			if input.ImplementationKey == remote.ProfileCodecKey {
@@ -104,7 +104,7 @@ func nativeRemoteSettings(c steerline.Config) remote.ProfileConfig {
 	return remote.ProfileConfig{}
 }
 
-func nativeRemoteConfig(c steerline.Config) remote.Config {
+func nativeRemoteConfig(c execution.Config) remote.Config {
 	w, o, r := nativeProfileSettings(c), nativeTerminalSettings(c), nativeRemoteSettings(c)
 	client := orcaworker.New(orcaworker.Config{Repository: c.Repository, CommandTimeout: c.CommandTimeout, Output: func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
 		ctx, cancel := context.WithTimeout(ctx, timeout)

@@ -1,16 +1,17 @@
 package steerline
 
 import (
- "github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/erranliu/SteerLine/internal/execution"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 // AnswerOptions is the CLI entry point for answering a pending decision.
@@ -30,7 +31,7 @@ func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisi
 	if strings.TrimSpace(runID) == "" {
 		return storageports.CommandRecord{}, false, errors.New("answer requires a run ID")
 	}
-	if err := requireNativeTaskAuthority(c); err != nil {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return storageports.CommandRecord{}, false, err
 	}
 	if err := preflightNativeStatePath(c); err != nil {
@@ -213,7 +214,7 @@ func SubmitDecisionAnswer(ctx context.Context, c execution.Config, o AnswerOptio
 	if strings.TrimSpace(o.RunID) == "" {
 		return storageports.CommandRecord{}, false, errors.New("answer requires a run ID or task ID")
 	}
-	if err := requireNativeTaskAuthority(c); err != nil {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return storageports.CommandRecord{}, false, err
 	}
 	if err := preflightNativeStatePath(c); err != nil {

@@ -25,7 +25,7 @@ func implementationProfilePayload(c Config, key string) ([]byte, error) {
 	if c.selectedProfileID == "" {
 		return nil, errors.New("configuration has no selected implementation profile")
 	}
-	return c.ExecutionDirectory.DecodeProfile(c.ImplementationData, key, configurationProjectIdentity(c), c.selectedProfileID, c.acceptedConfigVersion())
+	return c.ExecutionDirectory.DecodeProfile(c.ImplementationData, key, ConfigurationProjectIdentity(c), c.selectedProfileID, c.acceptedConfigVersion())
 }
 
 // DecodeImplementationConfig asks the injected version directory to validate

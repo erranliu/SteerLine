@@ -40,7 +40,7 @@ type ExecutionProfile struct {
 // CheckFixedProfile reports whether the injected version directory can read
 // this exact frozen profile without replacing its implementation identity.
 func (c Config) CheckFixedProfile(profile executionmodel.FixedExecutionProfile) error {
-	if !verifyFixedExecutionProfile(profile, c.ExecutionDirectory) {
+	if !VerifyFixedExecutionProfile(profile, c.ExecutionDirectory) {
 		return &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "fixed execution profile key, version, codec or digest is unsupported"}
 	}
 	return nil
@@ -77,7 +77,7 @@ func (p ExecutionProfile) Freeze(projectIDs ...string) executionmodel.FixedExecu
 	p.Publication.AuthenticationRefs = slices.Clone(p.Publication.AuthenticationRefs)
 	fixed := executionmodel.FixedExecutionProfile{
 		Version: fixedExecutionProfileVersion, ImplementationVersion: p.directory.Version(),
-		ImplementationKey: profileImplementationKey(p.directory, p.Host, p.Agent), ImplementationData: cloneImplementationData(data),
+		ImplementationKey: profileImplementationKey(p.directory, p.Host, p.Agent), ImplementationData: CloneImplementationData(data),
 		ImplementationDisplay: slices.Clone(display), ExecutionRequirements: p.ExecutionRequirements,
 		RequirementsEvaluation: p.RequirementsEvaluation, RequirementsEvidenceDigest: requirementsEvidenceDigest(p.RequirementsEvaluation),
 		PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ExecutionPolicy: p.ExecutionPolicy,
@@ -93,7 +93,7 @@ func fixedExecutionProfileDigest(p executionmodel.FixedExecutionProfile) string 
 	return digestValue(p)
 }
 
-func verifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile, directory *ExecutionDirectory) bool {
+func VerifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile, directory *ExecutionDirectory) bool {
 	if directory == nil || p.Version != fixedExecutionProfileVersion || p.ImplementationVersion != directory.Version() ||
 		p.ImplementationKey == "" || p.ID == "" || p.Name == "" || p.AcceptedConfigVersion == "" ||
 		p.PolicySource == "" || p.Digest == "" || p.Digest != fixedExecutionProfileDigest(p) ||
@@ -136,7 +136,7 @@ func (c Config) ApplyFixedExecutionProfile(p executionmodel.FixedExecutionProfil
 			c.WorkspaceBranchPrefix = entry.WorkspaceBranchPrefix
 		}
 	}
-	c.ImplementationData = cloneImplementationData(p.ImplementationData)
+	c.ImplementationData = CloneImplementationData(p.ImplementationData)
 	c.ImplementationDisplay = slices.Clone(p.ImplementationDisplay)
 	c.selectedProfileID = p.ID
 	c.fixedProfileDigest = p.Digest
@@ -175,7 +175,7 @@ func cloneRequirementsEvaluation(value *executionbackend.RequirementsEvaluation)
 func (p ExecutionProfile) MatchesConfig(c Config) bool {
 	actual := c.projectExecutionProfile()
 	actual.ID, actual.Name = p.ID, p.Name
-	return p.ID != "" && actual.DigestFor(configurationProjectIdentity(c)) == p.DigestFor(configurationProjectIdentity(c))
+	return p.ID != "" && actual.DigestFor(ConfigurationProjectIdentity(c)) == p.DigestFor(ConfigurationProjectIdentity(c))
 }
 
 func (p ExecutionProfile) StaticUnavailableReason() string {
@@ -220,7 +220,7 @@ func (c Config) bindProjectPolicy(p ExecutionProfile) ExecutionProfile {
 	if p.PolicySource == "" {
 		p.PolicySource = "service:explicit-config"
 	}
-	p.projectIdentity = configurationProjectIdentity(c)
+	p.projectIdentity = ConfigurationProjectIdentity(c)
 	if p.directory == nil {
 		return p
 	}
@@ -291,7 +291,7 @@ func (c Config) ResolveExecutionProfile(id, expectedDigest string) (Config, Exec
 		if profile.ID != id {
 			continue
 		}
-		if expectedDigest != "" && expectedDigest != profile.DigestFor(configurationProjectIdentity(c)) {
+		if expectedDigest != "" && expectedDigest != profile.DigestFor(ConfigurationProjectIdentity(c)) {
 			return Config{}, ExecutionProfile{}, errors.New("stale_profile: execution profile changed")
 		}
 		if reason := profile.StaticUnavailableReason(); reason != "" {
@@ -315,10 +315,10 @@ func (c Config) ApplyExecutionProfile(p ExecutionProfile) Config {
 			c.WorkspaceBranchPrefix = ""
 		}
 	}
-	c.ImplementationData = cloneImplementationData(p.ImplementationData)
+	c.ImplementationData = CloneImplementationData(p.ImplementationData)
 	c.ImplementationDisplay = slices.Clone(p.ImplementationDisplay)
 	c.selectedProfileID = p.ID
-	c.fixedProfileDigest = p.DigestFor(configurationProjectIdentity(c))
+	c.fixedProfileDigest = p.DigestFor(ConfigurationProjectIdentity(c))
 	return copyWorkerFlowConfig(c)
 }
 
@@ -370,7 +370,7 @@ func profileImplementationKey(directory *ExecutionDirectory, host, agent string)
 	return entry.ProfileKey
 }
 
-func cloneImplementationData(values []executionbackend.ImplementationDataEnvelope) []executionbackend.ImplementationDataEnvelope {
+func CloneImplementationData(values []executionbackend.ImplementationDataEnvelope) []executionbackend.ImplementationDataEnvelope {
 	if values == nil {
 		return nil
 	}
@@ -393,7 +393,7 @@ func cloneImplementationInputs(values []executionbackend.ImplementationConfigInp
 	return out
 }
 
-func configurationProjectIdentity(c Config) string {
+func ConfigurationProjectIdentity(c Config) string {
 	if c.identity != "" {
 		return c.identity
 	}

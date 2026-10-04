@@ -1,0 +1,17 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\8470\\SteerLine\\docs\\validation\\three-line-04-execution-usecases\\controlled\\run-go-20261005\\build\\controlled-helper.exe",
+    "control",
+    "-config",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2307835133\\recovery.waiting-merge-restart\\recovery\\project.json",
+    "-action",
+    "start_task",
+    "-task-id",
+    "1",
+    "-profile",
+    "controlled"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\"version\":1,\"request_id\":\"a1a5708cc56e3eac23c00e9b52cab3a0\",\"request_digest\":\"a334ecc358eebe92986c7a3bed86a69d3ad07a90c83be7b1d9730120b7d9497f\",\"instance_id\":\"f5e7b9ba28eb3b9e296e24cfb18ec2d6\",\"action\":\"start_task\",\"status\":\"applied\",\"code\":\"applied\",\"message\":\"native task worker identity is persisted and running\",\"requested_by\":\"e2e\",\"submitted_at\":\"2026-10-04T21:21:10.4717193Z\",\"accepted_at\":\"2026-10-04T21:21:10.5688388Z\",\"completed_at\":\"2026-10-04T21:21:29.2174401Z\",\"run_id\":\"71e07daf2b60235033a371caedd20997\",\"attempt_id\":\"d061f9e4ddf07eec09cea52a32a57c7e\",\"control_revision\":3,\"run_revision\":8}\n"
+}

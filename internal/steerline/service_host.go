@@ -1,11 +1,13 @@
 package steerline
 
 import (
-	"github.com/erranliu/SteerLine/internal/execution"
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"io"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 // ServiceHost owns file transport and console/startup publication. It holds no
@@ -37,13 +39,13 @@ func (s *ServiceHost) FindStopRequest(instance string, seen map[string]bool) (*p
 	return findStopRequestCached(s.Config, instance, seen)
 }
 func (*ServiceHost) CurrentProcessIdentity() (*executionbackend.ProcessIdentity, error) {
-	return currentProcessIdentity()
+	return resourceprocess.CurrentIdentity()
 }
 
 type ExecutionResources struct{}
 
 func (ExecutionResources) WorkerTreeAbsent(id executionbackend.ProcessIdentity) bool {
-	return workerTreeAbsent(id)
+	return resourceprocess.WorkerTreeAbsent(id)
 }
 func (ExecutionResources) AtomicWrite(path string, data []byte) error { return AtomicWrite(path, data) }
 

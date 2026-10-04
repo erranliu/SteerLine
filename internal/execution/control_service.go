@@ -1,29 +1,21 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"os"
 	"strings"
-	"time"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 var errClaimConflict = errors.New("native task claim conflict")
 
 var errTaskNotReady = errors.New("target task is no longer ready")
-
-type StopAcceptance struct {
-	Request productapi.ControlRequest
-	At      time.Time
-}
 
 func (s *Service) baseReceipt(req productapi.ControlRequest, digest string, status, code, message string) productapi.ControlReceipt {
 	return productapi.ControlReceipt{Version: 1, RequestID: req.RequestID, RequestDigest: digest, InstanceID: req.InstanceID, Action: req.Action, Status: status, Code: code, Message: message, RequestedBy: req.RequestedBy, SubmittedAt: req.CreatedAt}

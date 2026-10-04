@@ -1,16 +1,13 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"errors"
 	"os"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type stopReconciliationPort struct {
@@ -47,7 +44,7 @@ func (s *Service) reconcileRunStop(ctx context.Context, run *contracts.Run, op e
 	requestOp.LifecycleIdentity = &executionbackend.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionbackend.LifecycleBindingDigest(snapshot), Ref: *op.Ref}
 	request := executionbackend.LifecycleRequest{Snapshot: snapshot, Operation: requestOp, Input: executionbackend.LifecycleInput{Stop: &executionbackend.StopInput{TurnID: snapshot.Session.CurrentTurnID}}}
 	records := executionRecords{root: fixed.config.RunDir, persistence: fixed.config.Persistence, resources: fixed.config.Resources}
-	err = s.dispatchLifecycleEffect(ctx, run, stopReconciliationPort{LifecyclePort: lifecycle, backend: backendFor(fixed.config), ref: *op.Ref}, request, true, func(run *contracts.Run, result lifecycleEffectResult) error {
+	err = s.dispatchLifecycleEffect(ctx, run, stopReconciliationPort{LifecyclePort: lifecycle, backend: BackendFor(fixed.config), ref: *op.Ref}, request, true, func(run *contracts.Run, result lifecycleEffectResult) error {
 		if err := result.receipt.ValidateFor(request); err != nil {
 			return err
 		}
@@ -201,7 +198,7 @@ func (s *Service) confirmExecutionStop(op executionbackend.Operation) (bool, err
 		}
 		ref = &loaded
 	}
-	backend := backendFor(config)
+	backend := BackendFor(config)
 	obs, err := backend.Observe(context.Background(), *ref)
 	if err != nil {
 		op.Status, op.Diagnostic, op.UpdatedAt = executionbackend.OperationUnknown, err.Error(), now()

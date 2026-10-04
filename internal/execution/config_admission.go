@@ -2,12 +2,13 @@ package execution
 
 import (
 	"context"
+
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 func (c *Config) ValidateAdmission() error {
-	if err := requireNativeTaskAuthority(*c); err != nil {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return err
 	}
 	if c.WorkflowProtocol != executionmodel.Version {

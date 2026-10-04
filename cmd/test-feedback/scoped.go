@@ -22,11 +22,11 @@ import (
 
 const corePackage = "github.com/erranliu/SteerLine/internal/steerline"
 
-var quickTests = []string{"TestRestartPreflightRetainsOriginalPolicyRoots"}
+var quickTests = []string{"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding"}
 
 const executionPackage = "github.com/erranliu/SteerLine/internal/execution"
 
-var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker"}
+var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/internal/steerlineintegration"
 
@@ -66,7 +66,7 @@ var quickBoundaryAssigned = []string{
 	"TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
 }
 
-var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{corePackage + "/taskview", "github.com/erranliu/SteerLine/internal/storage/ports", corePackage + "/persistence", corePackage + "/testprotocol", "github.com/erranliu/SteerLine/internal/execution/model", "github.com/erranliu/SteerLine/internal/execution/backend", corePackage + "/contracts", corePackage + "/projection", corePackage + "/query", corePackage + "/sqlite", "github.com/erranliu/SteerLine/internal/testboundary"}...)
+var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{corePackage + "/taskview", "github.com/erranliu/SteerLine/internal/storage/ports", corePackage + "/persistence", corePackage + "/testprotocol", "github.com/erranliu/SteerLine/internal/execution/model", "github.com/erranliu/SteerLine/internal/execution/backend", corePackage + "/contracts", executionPackage + "/reconstruction", corePackage + "/query", corePackage + "/sqlite", "github.com/erranliu/SteerLine/internal/testboundary"}...)
 
 var quickOwnerCases = []struct {
 	ID, Package string
@@ -541,7 +541,7 @@ func checkScopedCoverage(report scopedReport) []string {
 			if count != 1 {
 				failures = append(failures, fmt.Sprintf("%s: package %s has %d terminal events", group.ID, pkg, count))
 			}
-			if group.ID == "other-packages" || group.ID == "quick-core" || group.ID == "quick-rules" || (group.ID == "quick-boundary" || strings.HasPrefix(group.ID, "quick-owner-")) {
+			if group.ID == "other-packages" || group.ID == "quick-core" || group.ID == "quick-rules" || (group.ID == "quick-boundary" || strings.HasPrefix(group.ID, "quick-owner-")) || group.ID == "quick-execution" || group.ID == "quick-execution-boundary" {
 				seenPackages[pkg] += count
 			}
 		}

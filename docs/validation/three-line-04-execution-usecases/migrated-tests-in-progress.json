@@ -1,0 +1,624 @@
+[
+  {
+    "file": "business_audit_fixture_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "shared_test_fixture",
+    "tests": []
+  },
+  {
+    "file": "business_fixture_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "shared_test_fixture",
+    "tests": []
+  },
+  {
+    "file": "business_ports_fixture_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "shared_test_fixture",
+    "tests": []
+  },
+  {
+    "file": "candidate_workers_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestMC1",
+      "TestMC2",
+      "TestMC3",
+      "TestMC4",
+      "TestMC5",
+      "TestMC6",
+      "TestMC7",
+      "TestMC8",
+      "TestMC9"
+    ]
+  },
+  {
+    "file": "capability_snapshot_business_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion"
+    ]
+  },
+  {
+    "file": "command_boundary_fixture_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "shared_test_fixture",
+    "tests": []
+  },
+  {
+    "file": "command_persistence_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestCommandIdempotencyAndDecisionVersionArbitration",
+      "TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional",
+      "TestDecisionAnswerCommandClientProcess",
+      "TestDecisionAnswerSeparateClientProcessesUseOneFirstWinsCommand",
+      "TestCheckpointDoesNotSynthesizeControlOperations"
+    ]
+  },
+  {
+    "file": "conversation_fixture_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "shared_test_fixture",
+    "tests": []
+  },
+  {
+    "file": "conversation_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestConversationLiveSourceFailureKeepsGapAndMapperPosition",
+      "TestConversationChangedLiveBytesCannotBindOrCheckpoint",
+      "TestConversationJournalReplayIsBoundedAndIdempotent"
+    ]
+  },
+  {
+    "file": "core_decoupling_63_audit_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": []
+  },
+  {
+    "file": "core_decoupling_64_review_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestCD64ReviewReceiptAndRecoveryIsolation"
+    ]
+  },
+  {
+    "file": "core_decoupling_65_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestCD65SourceCommitAndHostGate",
+      "TestCD65HistoryAndPreparation",
+      "TestCD65HistoryBudgetRotatesSources",
+      "TestCD65HistoryCursorCommitsWithItsConversationBatch",
+      "TestConversationHistoryMissingInjectedHostReturnsError"
+    ]
+  },
+  {
+    "file": "core_decoupling_66_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestCD66ExplicitCatalogAndEntrypoints",
+      "TestCD66CandidateResourceIdentityAndCommitRollback"
+    ]
+  },
+  {
+    "file": "environment_business_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestWorkerEnvironmentUnidentifiedAgentKeepsOriginalDeadline",
+      "TestSimplifiedEnvironmentSavedInputRequiresFreshAnswer",
+      "TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR",
+      "TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch",
+      "TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput",
+      "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt",
+      "TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll"
+    ]
+  },
+  {
+    "file": "execution_acceptance_helpers_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": []
+  },
+  {
+    "file": "execution_backend_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestExecutionRecordsPinBindingsAndOperations",
+      "TestCapabilityReportRejectsRetiredWholeRunActions",
+      "TestLocalReadOutputUsesBoundedExecutionCursor",
+      "TestOperationRecordRejectsCorruptionBeforeUse",
+      "TestNativeCapabilityCheckKeepsFixedAgent"
+    ]
+  },
+  {
+    "file": "execution_policy_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestProjectPolicyMissingBoundResourcesAreNotReconstructed",
+      "TestAppServerLaunchMessagePersistsPolicyResources"
+    ]
+  },
+  {
+    "file": "execution_profiles_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestNativeClaimPersistsChosenExecutionProfile",
+      "TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles",
+      "TestWorkerFlowClaimsFreezeIndependentLocalProfiles",
+      "TestStartPayloadRequiresCompleteExecutionProfileSelection"
+    ]
+  },
+  {
+    "file": "execution_record_fixture_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": []
+  },
+  {
+    "file": "execution_registry_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestWorkerFlowAdapterUsesFixedProtocol",
+      "TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent",
+      "TestWorkerFlowModeUsesFixedExecutionIdentity",
+      "TestEveryRegisteredExecutionUsesTheLifecyclePort"
+    ]
+  },
+  {
+    "file": "execution_requirements_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestExecutionRequirementsExistenceAndNonSecretEvidence",
+      "TestExecutionRequirementsDoNotUpgradeProbeToVerified",
+      "TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal",
+      "TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot",
+      "TestClaimRechecksAcceptedConfigFiles",
+      "TestExecutionRegistryRejectsDuplicatesAndRequiresLifecyclePorts"
+    ]
+  },
+  {
+    "file": "execution_resolution_audit_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestResolutionAuditProfilesDoNotAliasProjectValues",
+      "TestResolutionAuditRegistrationRejectsBaseTargetDrift",
+      "TestResolutionAuditRestoresOriginalWorkspaceRoot",
+      "TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents",
+      "TestResolutionAuditEvidenceCannotChangeUnderOriginalProfileDigest",
+      "TestResolutionAuditWorkerCommitCannotReplaceSnapshot"
+    ]
+  },
+  {
+    "file": "execution_target_compat_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestCurrentRuntimeRetainsSupervisedCoordinatorTerminal"
+    ]
+  },
+  {
+    "file": "fixed_agent_business_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestFixedProfileRetainsSelectedAgent"
+    ]
+  },
+  {
+    "file": "global_execution_test_helpers_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "shared_test_fixture",
+    "tests": []
+  },
+  {
+    "file": "host_wait_business_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestHostInputWaitPersistsWithoutBusinessDecision"
+    ]
+  },
+  {
+    "file": "native_dag_commands_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestTaskBatchDeterministicCyclePath",
+      "TestCreateTaskBatchAtomicIdempotentAndQueryable",
+      "TestCreateTaskBatchRollsBackEveryWriteWhenEdgeInsertFails",
+      "TestNativeCommandsRejectConfigurationBindingDriftBeforeSideEffects",
+      "TestTaskBatchRejectsDuplicateAndCrossProjectDependencies",
+      "TestTaskDependencyStateRequiresEveryPredecessorDelivery",
+      "TestNativeClaimAllowsManualParallelButKeepsAutoSlot",
+      "TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge",
+      "TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation",
+      "TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof",
+      "TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent",
+      "TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity"
+    ]
+  },
+  {
+    "file": "native_tasks_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestNativeFixtureSeedAndCopiesAreIndependent",
+      "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding",
+      "TestNativePreflightAllowsItsEmptyRunLockFile",
+      "TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation",
+      "TestNativeTaskCASGuardsAndDeliveryProjection",
+      "TestNativeDiscardCASKeepsAuditAndNeverReusesID",
+      "TestTaskContractPinsCommittedBlobsAndRejectsInvalidReferences",
+      "TestTaskContractRejectsCommittedSymlinkReferences",
+      "TestNativeInitializationRejectsBeadsStateAndCustomDatabaseFork",
+      "TestNativeInitializationRefusesExistingBeadsTaskDatabase",
+      "TestNewServiceRejectsNonNativeAuthorityBeforeCreatingState",
+      "TestNativeStoreRejectsRetiredSQLiteRunProjectionBeforeAuthorityOpen",
+      "TestNativeCursorErrorHasStableCode"
+    ]
+  },
+  {
+    "file": "policy_snapshot_business_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority"
+    ]
+  },
+  {
+    "file": "publication_policy_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestPublicationPolicyFrozenConfigurationAndCredentials",
+      "TestRetiredPublicationMetadataRejected",
+      "TestPublicationOriginalProviderAfterRestartAndRemoteDrift"
+    ]
+  },
+  {
+    "file": "readiness_business_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestWorkerEnvironmentER1ProbeAndSettlementGate",
+      "TestManagedFrozenResourceEvidenceIsVerifiedBeforeInput"
+    ]
+  },
+  {
+    "file": "recovery_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestRecoveryInspectionReadsNativeClaimFromCenter",
+      "TestRecoveryConfirmationBasisIsBoundedAndPreserved"
+    ]
+  },
+  {
+    "file": "requirements_fixture_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "shared_test_fixture",
+    "tests": []
+  },
+  {
+    "file": "resource_restart_business_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestRestartPreflightRetainsOriginalPolicyRoots"
+    ]
+  },
+  {
+    "file": "runtime_boundary_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestWorkerBindingRollsBackWithItsCheckpoint",
+      "TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding"
+    ]
+  },
+  {
+    "file": "runtime_view_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestRuntimeViewCannotWriteBusinessState",
+      "TestActorProjectionReusesPrivatePointersWithoutPublishingCandidates",
+      "TestAnswerChecksDomainRevisionBeforeCheckpointPublication",
+      "TestPublicationPreservesExternallyAcceptedDecision",
+      "TestWorkerCommitRejectsConflictingDecisionAtomically",
+      "TestObservationReportsMissingAuthorityAsCorruption",
+      "TestRuntimeViewRejectsInvalidWorkerAttempts",
+      "TestWorkerCommitPreservesExternallyAcceptedDecision"
+    ]
+  },
+  {
+    "file": "service_ports_fixture_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "shared_test_fixture",
+    "tests": []
+  },
+  {
+    "file": "service_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestProjectRuntimeOmitsSettledDiscardedRuns",
+      "TestMain",
+      "TestIdleServiceDoesNotPublishOnNoOpPolls"
+    ]
+  },
+  {
+    "file": "simplified_lifecycle_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestSimplifiedCleanupRetainsFrozenDeliveryEvidence",
+      "TestSimplifiedLifecycleActorDoesNotWaitForEffect"
+    ]
+  },
+  {
+    "file": "source_replacement_business_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestCD64SourceReplacementRetainsEvidence"
+    ]
+  },
+  {
+    "file": "task_commands_fixture_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "shared_test_fixture",
+    "tests": []
+  },
+  {
+    "file": "task_documents_fixture_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "shared_test_fixture",
+    "tests": []
+  },
+  {
+    "file": "task_result_boundary_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestTM02TaskWorkPort",
+      "TestTM02ResultCAS"
+    ]
+  },
+  {
+    "file": "worker_commit_boundary_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint",
+      "TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure",
+      "TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver",
+      "TestAppServerFailedPreparationKeepsPartialSessionBinding",
+      "TestWorkerCommitRejectsSavedAnswerRegression",
+      "TestWorkerIntentIsDurableBeforeDispatchAndFailurePreventsDispatch"
+    ]
+  },
+  {
+    "file": "worker_commit_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestWorkerCommitRollsBackRecordsReceiptsEventsAndCheckpoint",
+      "TestCheckpointAndReadViewsCannotPublishWorkerCandidates",
+      "TestWorkerCommitChecksSettledTaskInsideTransaction"
+    ]
+  },
+  {
+    "file": "worker_config_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestUnregisteredWorkerFlowConfigurationCannotClaim",
+      "TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation",
+      "TestFreshWorkerFlowRuntimeUsesDistinctFormat",
+      "TestWorkerFlowRejectsOldLocalExecutionProtocol"
+    ]
+  },
+  {
+    "file": "worker_context_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestWorkerFlowContextKeepsFixedRunAndCopiesConfig",
+      "TestWorkerFlowContextsDoNotExchangeExecutionProfiles"
+    ]
+  },
+  {
+    "file": "worker_delivery_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor",
+      "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged",
+      "TestWorkerFlowClaimNeedsNoProjectSteps"
+    ]
+  },
+  {
+    "file": "worker_events_cd62_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestCD62NativeFactsAndQuestionRoute",
+      "TestCD62QuestionReceiptBarrier"
+    ]
+  },
+  {
+    "file": "worker_feedback_phase_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor"
+    ]
+  },
+  {
+    "file": "worker_local_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestWorkerFlowPromptIncludesFixedWorkflowRunID"
+    ]
+  },
+  {
+    "file": "worker_publish_local_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": []
+  },
+  {
+    "file": "worker_receipts_business_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestAppServerStartReplayPreservesNativeSavedAnswer",
+      "TestAppServerRejectedEventReleasesObserver",
+      "TestAppServerRecoveryDoesNotRaceInFlightLaunch",
+      "TestAppServerLateReplyCannotModifyTerminalTask",
+      "TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback",
+      "TestAppServerSlowRecoveryLeavesServiceWriterAvailable",
+      "TestRoutedDecisionRequiresAllQuestionIDs",
+      "TestAppServerStartedEventCommitsOperationReceipt"
+    ]
+  },
+  {
+    "file": "worker_recovery_commit_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestWorkerRecoveryAttemptCommitsAtomically"
+    ]
+  },
+  {
+    "file": "worker_recovery_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer"
+    ]
+  },
+  {
+    "file": "worker_service_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace",
+      "TestServiceRecoveryGateRequiresTransactionalOwner",
+      "TestRestartDoesNotSendPreviouslyAcceptedFeedback"
+    ]
+  },
+  {
+    "file": "worker_state_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults"
+    ]
+  },
+  {
+    "file": "workspace_identity_business_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath"
+    ]
+  },
+  {
+    "file": "write_ports_fixture_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "shared_test_fixture",
+    "tests": []
+  },
+  {
+    "file": "write_ports_test.go",
+    "old": "internal/steerline",
+    "new": "internal/execution",
+    "kind": "migrated",
+    "tests": [
+      "TestCM69CommandPortUsesFixedProjectAndPropagatesRejection",
+      "TestCM69WorkerPortRejectsCandidateWithoutPublishing",
+      "TestCM69WorkerCommitRejectsSupersededAttempt",
+      "TestCM69CleanupReceiptKeepsTaskAndReceiptAtomic",
+      "TestCM69WriteConsumersDoNotAccessConcreteTransactions"
+    ]
+  }
+]

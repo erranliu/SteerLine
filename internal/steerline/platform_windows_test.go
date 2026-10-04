@@ -15,8 +15,8 @@ import (
 	"syscall"
 	"testing"
 	"time"
-	"unsafe"
 
+	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"golang.org/x/sys/windows"
 )
 
@@ -82,12 +82,12 @@ func TestLifecycleReviewExitedProcessWithRetainedHandle(t *testing.T) {
 	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION|windows.SYNCHRONIZE, false, uint32(cmd.Process.Pid))
 	require(t, err)
 	defer windows.CloseHandle(handle)
-	identity, err := identityFromHandle(handle, cmd.Process.Pid)
+	identity, err := resourceprocess.IdentityFromHandle(handle, cmd.Process.Pid)
 	require(t, err)
 	require(t, cmd.Process.Kill())
 	_, err = windows.WaitForSingleObject(handle, 5000)
 	require(t, err)
-	if probe := probeProcess(&identity); probe.State != ProcessAbsent {
+	if probe := publicProcessProbe(&identity); probe.State != ProcessAbsent {
 		t.Fatalf("retained exited process handle reported alive: %+v", probe)
 	}
 }
@@ -97,11 +97,11 @@ func TestWindowsOwnedWorkerRunsInJobAndStopsWithOwner(t *testing.T) {
 	require(t, err)
 	childPath := filepath.Join(t.TempDir(), "child.pid")
 	cmd := exec.Command(exe, "--fake", "spawn-owned-child", childPath)
-	owned, err := startProcess(cmd)
+	owned, err := resourceprocess.StartManaged(cmd)
 	require(t, err)
 	defer func() { owned.Close(); _ = cmd.Wait() }()
 	identity := owned.Identity()
-	if inspectProcess(&identity) != "matching process still exists" {
+	if resourceprocess.InspectProcess(&identity) != "matching process still exists" {
 		t.Fatal("owned worker identity is not live")
 	}
 	var childPID int
@@ -119,24 +119,24 @@ func TestWindowsOwnedWorkerRunsInJobAndStopsWithOwner(t *testing.T) {
 	}
 	handle, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(childPID))
 	require(t, err)
-	childIdentity, err := identityFromHandle(handle, childPID)
+	childIdentity, err := resourceprocess.IdentityFromHandle(handle, childPID)
 	require(t, err)
 	defer func() {
-		if inspectProcess(&childIdentity) == "matching process still exists" {
+		if resourceprocess.InspectProcess(&childIdentity) == "matching process still exists" {
 			if child, findErr := os.FindProcess(childPID); findErr == nil {
 				_ = child.Kill()
 			}
 		}
 	}()
-	var inJob uint32
-	ok, _, callErr := windows.NewLazySystemDLL("kernel32.dll").NewProc("IsProcessInJob").Call(uintptr(handle), uintptr(owned.job), uintptr(unsafe.Pointer(&inJob)))
 	windows.CloseHandle(handle)
-	if ok == 0 || inJob == 0 {
-		t.Fatalf("owned child did not inherit the worker Job Object: ok=%d in_job=%d err=%v", ok, inJob, callErr)
+	inJob, err := owned.ContainsProcess(uint32(childPID))
+	require(t, err)
+	if !inJob {
+		t.Fatal("owned child did not inherit the worker Job Object")
 	}
 	owned.Close()
 	for deadline := time.Now().Add(3 * time.Second); time.Now().Before(deadline); {
-		if workerTreeAbsent(identity) && inspectProcess(&childIdentity) == "process absent" {
+		if resourceprocess.WorkerTreeAbsent(identity) && resourceprocess.InspectProcess(&childIdentity) == "process absent" {
 			return
 		}
 		time.Sleep(20 * time.Millisecond)
@@ -237,7 +237,7 @@ func TestWindowsPendingStartupPreservesMismatchClassification(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			f := newFixture(t)
 			c, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
-			identity, err := currentProcessIdentity()
+			identity, err := resourceprocess.CurrentIdentity()
 			require(t, err)
 			record := reviewStartup(t, c, "starting", identity)
 			expected := ConnectionConfigChanged

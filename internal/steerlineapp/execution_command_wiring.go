@@ -1,9 +1,9 @@
 package steerlineapp
 
 import (
-"github.com/erranliu/SteerLine/internal/execution"
 	"errors"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
 

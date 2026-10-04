@@ -1,11 +1,12 @@
 package steerlineapp
 
 import (
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func TestReadinessNativeLaunchKeepsDefaultModelAndPermissions(t *testing.T) {

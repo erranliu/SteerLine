@@ -99,10 +99,6 @@ func (s *sqliteFixture) transactRecords(ctx context.Context, fn func(*fixtureTra
 	})
 }
 
-func testSQLite(s *Service) *sqliteFixture {
-	return fixtureStore(s.domainStore.(persistence.Connection), filepath.Join(s.Config.RunDir, "steerline.db"))
-}
-
 func openDomainTestStore(t *testing.T) *sqliteFixture {
 	t.Helper()
 	s, err := openSQLiteFixture(filepath.Join(t.TempDir(), "steerline.db"))

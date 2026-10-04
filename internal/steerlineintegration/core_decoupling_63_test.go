@@ -1,6 +1,8 @@
 package steerlineintegration
 
-import "testing"
+import (
+	"testing"
+)
 
 func TestCD63FrozenConfigAndBinding(t *testing.T) {
 	t.Run("legacy_permission_evidence_rejected", TestProjectPolicyNativeReportsRetainOriginalSnapshotDigests)

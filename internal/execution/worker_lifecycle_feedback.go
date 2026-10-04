@@ -1,15 +1,12 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"errors"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *contracts.Run, execution *executionmodel.ExecutionRecord, answer executionmodel.DecisionAnswer) error {
@@ -209,7 +206,7 @@ func (s *Service) confirmLifecycleQuestionAnswer(run *contracts.Run, request exe
 	if len(execution.PendingQuestions) > 0 {
 		next := execution.PendingQuestions[0]
 		execution.PendingQuestions = execution.PendingQuestions[1:]
-		decision, err := WriteDecisionRequest(run, decisionRequestFromEventFact(executionbackend.EventFact{Questions: next.Questions, QuestionRoute: &next.Route}))
+		decision, err := WriteDecisionRequest(run, DecisionRequestFromEventFact(executionbackend.EventFact{Questions: next.Questions, QuestionRoute: &next.Route}))
 		if err != nil {
 			return err
 		}

@@ -1,62 +1,39 @@
 # #76 消费方接口交接
 
-基线 main `c4650056d701a158353836616668bfad25011552`（PR214）；本文件记录 #75/#76 的并行接口及唯一接线归属。接口完成实际实现后以本文件同步最终签名，不保留旧包 alias/转发。#75 文件由 #75 修改；共同执行构造段由 #76 顺序集成。
+基线 `c4650056d701a158353836616668bfad25011552`（#74）。本阶段把执行 actor、配置、命令与执行侧纯重建实现归入 `internal/execution`；app/CLI/runner 的唯一构造路径也已切到新所有者。执行实际接口以源码为准，旧 `internal/steerline` 不保留执行定义、别名或转发。
 
-## 消费方端口
+## 任务能力与构造
 
-`internal/execution` 拥有 `TaskWorkPort` 和 `TaskResultPort`，按协调方 2026-10-04 最新精确交接，保留 #74 现有方法，并为 Work 增加 #75 已发布的文件核验能力：
+`execution.TaskWorkPort` 和 `execution.TaskResultPort` 消费 #74/#75 的任务能力。WorkPort 包含 `VerifyContractFiles(context.Context, taskmodel.TaskContract) error`，沿用 #75 的 `task.Service.VerifyContractFiles`；核验仍在领取前执行，并校验固定 repository/remote/branch、完整 commit、regular blob、SHA-256 与验收标题。ResultPort 持有声明、丢弃 intent 与丢弃应用。执行包不导入 task app、SQLite 或具体 adapter。
 
-```go
-type TaskWorkPort interface {
-    VerifyContractFiles(context.Context, taskmodel.TaskContract) error
-    Ready(context.Context, string) ([]taskmodel.TaskRecord, error)
-    Fixed(context.Context, string, string, uint64, bool) (taskmodel.FixedWork, error)
-    Claim(taskmodel.FixedWork, string, time.Time) (taskmodel.TaskRecord, error)
-}
-type TaskResultPort interface {
-    Declare(taskmodel.TaskRecord, taskmodel.TaskContract, taskmodel.Result, time.Time) (taskmodel.ResultDeclaration, error)
-    Intent(taskmodel.DiscardIntent) (taskmodel.DiscardIntent, error)
-    Discard(taskmodel.TaskRecord, taskmodel.DiscardIntent, string, []string, time.Time) (taskmodel.TaskRecord, error)
-}
+`steerlineapp.NewCommandService(store, execution.Config)` 构造完整 task 服务并注入执行命令。`steerlineapp.NewService` / `NewServiceWithLifecycleResolver` 组装唯一 `execution.Service`、目录、backend、ProcessHost、任务能力与宿主端口。`execution.NewService` 接收显式能力端口；service 写域状态仍集中在 actor 和原声明事务。`execution.Config` 持有执行冻结/选择规则；宿主残留字段由 #80 继续收口。
+
+根 `steerline` 保留应用宿主、启动/锁/控制文件传输、状态位置检查和通用调度循环。循环只认识 `host.Scheduler[T]`，execution 提供调度步骤；app 通过 HostPort 注入控制传输、诊断、就绪发布和 OS/文件事实。执行端口不携带业务写入权限。
+
+## 归属边界
+
+| 定义/行为 | 当前唯一所有者 | 消费者与证据 |
+| --- | --- | --- |
+| `execution.Config`、profile、候选、Conversation JournalCursor、worker、Decision、恢复、交付核验与清理 | `internal/execution` | CLI/app/runner 和公共查询；`moved-symbols.json` 与源码映射 |
+| 由任务、workflow、execution、attempt、decision、delivery 记录重建 runtime/run/selectors 的纯逻辑 | `internal/execution/reconstruction` | execution actor、SQLite 同快照查询、metadata 查询；只依赖纯 model/backend/contracts，不依赖产品 query、SQL 或 adapter |
+| 产品 API DTO 与产品查询 | `internal/product/api` 与 #77 查询所有者 | #76 将原执行 journal 游标移至 execution；没有复制产品投影 |
+| 宿主循环与文件/进程现场事实 | `internal/steerline/host`、`internal/execution/process` | 宿主和 execution 的窄端口；coreboundary 扫描所有 tag 和 Windows/Linux 图 |
+| `ClaimCommit`、`ResultCommit`、`DiscardCommit` 事务和 schema | `internal/storage/ports` + 唯一 SQLite 实现 | actor 只经窄声明端口写入；app 服务 wiring 验证事务失败回滚 |
+
+旧 `internal/steerline/projection` 已删除。`execution/reconstruction` 接管的是执行记录重建这一组旧纯函数，输入/输出仍为既有内部 domain contracts；它不对外生成产品 DTO。#77 继续拥有产品 DTO 与面向产品的查询收窄。
+
+## 测试归属与接线
+
+原执行包内的白盒断言随实际私有状态所有者迁入 `internal/execution`，包括 MC1–MC9；全量 parent/subtest 映射在 [test-mapping.json](test-mapping.json)，源文件与 SHA 清单在 [file-mapping.json](file-mapping.json)。被 #75 提前迁出的任务 batch parent 单独标为 #75。
+
+`internal/steerlineintegration` 新增真实 app MC 外层断言：`TestMC1/3/5/6/7/8/9` 经 `steerlineapp.NewCommandService`、真实 app actor、公开 runtime/task query 和隔离 SQLite/Git/provider 验证候选身份与宽松五个检查、精确反馈、唯一 provider delivery、放弃/替补、原 intent 与晚到回执。原包内父子断言仍留在 execution。`TestTM04ExecutionWiring` 使用真实 app 构造覆盖 intent/receipt、故障 trigger 回滚、原请求只读重放、app-server 两轮、原生手动恢复和回执 ack；原生细节复用 Windows 受控 fixture，不启用用户原生接受开关。
+
+```
+execution -> execution/model, execution/backend, task/model, storage/ports,
+             persistence/query contracts, execution/reconstruction
+execution -X-> task app, root steerline, product query/projection, SQL, adapters,
+              app, console, client, integration, test runner
+host -> generic scheduler contract; app binds execution.Service
 ```
 
-文件核验沿用 #75 已发布的 `task.Service.VerifyContractFiles(ctx, contract)`，由完整任务服务的 Input 固定 project identity。核验保持原 repository/remote/branch 绑定、完整 canonical commit、精确 regular blob、SHA-256、验收标题断言；执行在原领取前时点调用 `Work.VerifyContractFiles`，并继续实际工作区/启动资格检查。不导入 task 应用、不重复文件核验实现。此方法扩展来自协调方明确指令，替代早期独立 ContractPort 草案。
-
-## 构造与 namespace
-
-已读取 #75 PR215 发布接口；使用其 `NewTaskService(reader, config)` 实际值分别注入 Work/Result 两个消费方端口，文件核验归 WorkPort。执行命令归 `execution.CommandService`，构造实际签名为：
-
-```go
-execution.NewCommandService(store persistence.CommandStore, project string,
-    work execution.TaskWorkPort, results execution.TaskResultPort) execution.CommandService
-```
-
-`execution.Service` 是唯一执行 actor；派发/反馈/Decision/恢复/交付/执行清理在该包。执行 Service 构造也显式注入相同 work/results 任务能力。`Service` 私有结果声明能力不交给产品/后端。
-
-执行配置值与冻结/选择规则归 `execution.Config`；当前公开字段的语义和序列化保持。宿主所需状态目录、Persistence、Heartbeat 等残余组装字段先保留在此唯一值上，#80 再收口；本任务不会把启动/心跳/锁/控制文件传输搬入执行业务。#75 不应消费这个执行配置值，而由其 app 小适配器映射任务需要的固定 project identity、repository target、remote/branch、executable types；Git 文件读取通过任务自有小能力注入，不把执行 backend Command 或配置传入 task 应用。
-
-## #75 专属接线
-
-| 文件/消费者 | 所需任务侧接线 |
-| --- | --- |
-| `internal/steerlineapp/task_boundary_wiring.go` | 工厂返回具体 task 服务/能力值（例如 `(task.Service, task.Service)`），不要返回旧主包端口或要求 task import execution。提供可结构匹配 VerifyContractFiles 的任务文件核验能力。 |
-| `internal/steerlineapp/client_task_commands.go` | 切到 #75 任务命令构造及最小任务输入；不再构造旧主包 NewCommandService。保留 Validate/Create/AddPredecessors 的产品行为。 |
-| `cmd/steerline/task_commands.go` | 创建/依赖/文档操作只接 #75 任务入口及最小输入。 |
-| `cmd/test-feedback/task_scope.go` | 注册 #75 迁入任务测试的真实包与父/子名称。 |
-| `internal/steerline/native_{batch_command,task_predecessors,contract_files}.go`、`task_configuration.go`、`task_record_lookup.go` | 仍由 #75 迁移和删除；#76 不复制这些实现。 |
-
-## #76 公共顺序集成
-
-`execution_service_wiring.go`、`execution_command_wiring.go`、`client_discard_commands.go`、`client_command_wiring.go`、`directory.go`、`cmd/steerline/main.go`、`cmd/test-feedback/scoped.go`、核心守卫及共同存储端口由 #76 接 execution 的新 namespace。其余 app/CLI/集成测试中直接消费执行类型的调用者同次切换。任务核验通过上述 TaskWorkPort 注入。
-
-独立执行迁移先推进；依赖 #75 已编译任务接口的最终构造与 MC 外层 app 验证，等协调安排 #75 主干交付后集成。中间构建缺口不能记为通过，也不以 alias/转发隐藏。最终定向 MC、TM04ExecutionWiring 和一次 L1 的范围/断言仍按原 Plan。
-
-## 已发布 #75 接口的集成差异
-
-读取 PR215 head `69867c5d9ee998aebf8fdbcb6e1c500dac183d09` 的 interface-handoff，并接受协调方明确接线要求后，采用 WorkPort.VerifyContractFiles；旧 Ready/Fixed/Claim/Declare/Intent/Discard 方法形状不变。早期 TaskContractPort 草案已从实现与当前文档删除，没有别名或转发。
-
-共同执行构造改用 `tasks := NewTaskService(store,config)`，将 tasks 分别注入工作/结果两个窄端口。#75 的 app 构造/客户端方法及其 Git adapter 在主干集成时只需同步 `steerline.Config` → `execution.Config`，并给已迁到 execution 的 Runner 显式注入 config.ProcessHost；不改变 task 内部接口/规则。
-
-`Config.ValidateTaskCommandConfiguration()` 与 `Config.TaskRepositoryTarget(ctx)` 的实际规则已随唯一配置/目标规则归 execution，不保留旧 Config alias。State 路径准入仍通过宿主 HostPort.ValidateStateLocation 注入，生产 NewService 仍执行原检查。Config.Resources、Config.ReadRuntime 是注入的 OS 事实/原子文件写与已绑定运行时只读能力，皆 json:"-"，不会改变冻结方案或持久格式。#80 后继收口宿主配置。
-
-执行应用已独立构建；现有纯交付规则和新增全 OS/tag + Windows/Linux 禁止依赖反例通过（independent-core）。这不代表整仓可构建或 MC/TM04/L1 已通过；这些仍等待 #75 主干顺序集成、测试迁移和最终验证。没有修改 #75 专属当前文件，没有替代文件核验实现。
+当前映射、测试分组、命令和运行证据见 [ownership.md](ownership.md) 与 [README.md](README.md)。

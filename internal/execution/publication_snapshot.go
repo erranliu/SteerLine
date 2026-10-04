@@ -1,16 +1,13 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"context"
 	"errors"
 	"fmt"
 	"strings"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
@@ -29,7 +26,7 @@ func (c Config) publicationSettings() executionmodel.PublicationSettings {
 	return executionmodel.PublicationSettings{Provider: executionmodel.PRProviderConfig(c.PR), Git: c.Git, Remote: c.Remote, RemoteURL: c.publicationRemoteURL, BaseBranch: c.Branch, AuthenticationRefs: refs}
 }
 
-func (c *Config) bindPublicationTarget(ctx context.Context) error {
+func (c *Config) BindPublicationTarget(ctx context.Context) error {
 	url, err := (Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: c.ProcessHost}).Output(ctx, c.Git, "remote", "get-url", c.Remote)
 	if err != nil {
 		return errors.New("publication remote cannot be read; original state is preserved")
@@ -64,11 +61,11 @@ func verifyPublicationTargetForRun(ctx context.Context, c Config, run *contracts
 	if run != nil && run.WorktreePath != nil && entry.LocalWorkspace {
 		c.Repository = *run.WorktreePath
 	}
-	return c.bindPublicationTarget(ctx)
+	return c.BindPublicationTarget(ctx)
 }
 
 func fixedWorkflowPublicationConfig(c Config, w executionmodel.WorkflowRunRecord) (Config, error) {
-	if w.ExecutionProfile == nil || !verifyFixedExecutionProfile(*w.ExecutionProfile, c.ExecutionDirectory) || w.ConfigDigest != w.ExecutionProfile.AcceptedConfigVersion || w.Repository == "" || w.Branch != w.ExecutionProfile.Publication.BaseBranch || w.ExecutionProfile.Publication.RemoteURL == "" {
+	if w.ExecutionProfile == nil || !VerifyFixedExecutionProfile(*w.ExecutionProfile, c.ExecutionDirectory) || w.ConfigDigest != w.ExecutionProfile.AcceptedConfigVersion || w.Repository == "" || w.Branch != w.ExecutionProfile.Publication.BaseBranch || w.ExecutionProfile.Publication.RemoteURL == "" {
 		return Config{}, errors.New("publication requires the original v6 execution snapshot; preserve original state")
 	}
 	c = c.ApplyFixedExecutionProfile(*w.ExecutionProfile)

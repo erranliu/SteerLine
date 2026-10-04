@@ -4,10 +4,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"strings"
 	"time"
+
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func ValidateControlRequest(req productapi.ControlRequest, instanceID, repositoryIdentity string, revision uint64, now time.Time) (string, error) {

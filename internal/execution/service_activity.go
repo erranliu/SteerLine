@@ -1,12 +1,10 @@
 package execution
 
 import (
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-)
-
-import (
 	"encoding/json"
+
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 

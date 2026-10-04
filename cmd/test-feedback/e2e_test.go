@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/testfeedback"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/testfeedback"
 )
 
 func TestLevelSelectionsRejectAmbiguity(t *testing.T) {

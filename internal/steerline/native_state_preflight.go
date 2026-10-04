@@ -1,7 +1,6 @@
 package steerline
 
 import (
- "github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,6 +10,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
@@ -138,7 +138,7 @@ func ensureRunDirOutsideRepository(c execution.Config) error {
 	if inside(resolvedRepo, resolvedRun) {
 		return nativeErr("authority_mismatch", "native state directory must be outside the repository")
 	}
-	r := execution.Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost:c.ProcessHost}
+	r := execution.Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: c.ProcessHost}
 	worktrees, err := r.Output(context.Background(), c.Git, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return nativeErr("authority_mismatch", "cannot verify native state against linked Git worktrees")
@@ -364,7 +364,7 @@ func validateNativeExecutionArtifacts(root string) error {
 			if decode(data, &report) != nil || report.Version != 1 || entry.Name() != execution.CapabilityReportKey(report)+".json" {
 				return nativeErr("authority_mismatch", "native capability report identity or digest is invalid")
 			}
-			if verifyErr := execution.VerifyStoredCapabilityReport(filepath.Dir(root),report); verifyErr != nil {
+			if verifyErr := execution.VerifyStoredCapabilityReport(filepath.Dir(root), report); verifyErr != nil {
 				return nativeErr("authority_mismatch", "native capability report evidence is invalid: "+verifyErr.Error())
 			}
 		}

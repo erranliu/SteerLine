@@ -5,13 +5,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"os"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
 	"time"
+
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func newID() string {
@@ -39,7 +40,7 @@ func nativeTaskRecord(tasks []taskmodel.TaskRecord, id string) *taskmodel.TaskRe
 	}
 	return nil
 }
-func requireNativeTaskAuthority(c Config) error {
+func (c Config) RequireNativeTaskAuthority() error {
 	if c.TaskAuthority != "native" {
 		return errors.New("task_authority=native is required; Beads is not an active product task source")
 	}

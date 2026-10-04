@@ -1,7 +1,6 @@
 package steerline
 
 import (
- "github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -11,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -19,7 +19,7 @@ func ControlSnapshot(c execution.Config) (*Runtime, error) {
 }
 
 func controlSnapshot(c execution.Config, allowInitializing bool) (*Runtime, error) {
-	if err := requireNativeTaskAuthority(c); err != nil {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return nil, err
 	}
 	connection := ConnectService(context.Background(), c)
@@ -59,7 +59,7 @@ func serviceHasCapability(rt *Runtime, action string) bool {
 }
 
 func ReadTaskSnapshot(c execution.Config) (*TaskSnapshot, error) {
-	if err := requireNativeTaskAuthority(c); err != nil {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return nil, err
 	}
 	if err := c.ResolveIdentity(context.Background()); err != nil {
