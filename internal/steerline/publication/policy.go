@@ -3,7 +3,6 @@ package publication
 import (
 	"errors"
 	"net/url"
-	"reflect"
 	"regexp"
 	"strings"
 
@@ -21,10 +20,6 @@ func CheckPolicy(p executionapi.PublicationPolicy, provider Config) error {
 		return errors.New("publication provider requires a valid kind/base_url/repository")
 	}
 	return nil
-}
-
-func CreateDescription(p executionapi.PublicationPolicy, provider Config) contracts.Command {
-	return contracts.Command{}
 }
 
 // Reject before persistence. Diagnostics deliberately never contain input.
@@ -76,15 +71,12 @@ func ValidateNonSecret(c Config, git contracts.Command) error {
 	return nil
 }
 
-func ValidateSettings(s contracts.PublicationSettings, p executionapi.PublicationPolicy) error {
+func ValidateSettings(s contracts.PublicationSettings) error {
 	if err := ValidateNonSecret(Config(s.Provider), s.Git); err != nil {
 		return err
 	}
 	if err := ValidateURL(s.RemoteURL); err != nil {
 		return err
-	}
-	if !reflect.DeepEqual(s.Create, CreateDescription(p, Config(s.Provider))) {
-		return errors.New("fixed create description differs from publication capability")
 	}
 	for _, ref := range s.AuthenticationRefs {
 		if !envName.MatchString(ref) {

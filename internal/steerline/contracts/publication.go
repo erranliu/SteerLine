@@ -13,7 +13,6 @@ type PRProviderConfig struct {
 
 type PublicationSettings struct {
 	Provider           PRProviderConfig `json:"provider"`
-	Create             Command          `json:"create"`
 	Git                Command          `json:"git"`
 	Remote             string           `json:"remote"`
 	RemoteURL          string           `json:"remote_url"`

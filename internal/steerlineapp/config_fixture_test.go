@@ -25,7 +25,6 @@ type FixedExecutionProfile = steerline.FixedExecutionProfile
 
 const WorkerFlowVersion = steerline.WorkerFlowVersion
 const ProjectExecutionProfileID = steerline.ProjectExecutionProfileID
-const PublisherExecutionProfile = steerline.PublisherExecutionProfile
 
 func workspacePolicyFixture() executionapi.ExecutionPolicy {
 	return executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}

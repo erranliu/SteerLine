@@ -631,3 +631,11 @@ func conversationExternalRef(identity *executionapi.ProcessIdentity) string {
 	}
 	return ""
 }
+
+func clip(s string, n int) string {
+	r := []rune(s)
+	if len(r) > n {
+		return string(r[:n]) + "…"
+	}
+	return s
+}

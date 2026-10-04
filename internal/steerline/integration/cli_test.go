@@ -98,7 +98,7 @@ func TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead(t *test
 		"task_authority":     "native",
 		"workflow_protocol":  steerline.WorkerFlowVersion,
 		"execution_policy":   executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"},
-		"publication_policy": executionapi.PublicationPolicy{Publisher: executionapi.PublisherHostService},
+		"publication_policy": executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker},
 		"pr":                 map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "owner/repo", "query": map[string]any{"executable": "gh"}},
 	})
 	config, err := steerlineapp.LoadConfig(configPath)

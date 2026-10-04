@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
@@ -51,10 +52,20 @@ func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
 	if neutralVerifyFixedExecutionProfile(copy) {
 		t.Fatal("changed auth reference accepted")
 	}
-	copy = original
-	copy.Version = 2
-	if neutralVerifyFixedExecutionProfile(copy) {
-		t.Fatal("old snapshot accepted")
+	for _, version := range []int{5, 2} {
+		copy = original
+		copy.Version = version
+		copy.Digest = fixedExecutionProfileDigest(copy)
+		if neutralVerifyFixedExecutionProfile(copy) {
+			t.Fatalf("old snapshot version %d accepted", version)
+		}
+	}
+}
+
+func TestRetiredPublicationMetadataRejected(t *testing.T) {
+	var settings contracts.PublicationSettings
+	if err := contracts.DecodeJSON([]byte(`{"create":{"executable":"retired-publisher"}}`), &settings); err == nil {
+		t.Fatal("retired create command accepted by the current metadata schema")
 	}
 }
 

@@ -1,0 +1,228 @@
+{
+  "base": "9413865",
+  "counting": "Physical Go lines incl blanks/comments; production excludes _test.go; core excludes subpackages.",
+  "totals": {
+    "all_go": -798,
+    "production_go": -526,
+    "test_go": -272,
+    "core_production": -313
+  },
+  "files": [
+    {
+      "path": "cmd/steerline/native_task_test.go",
+      "before": 372,
+      "after": 372,
+      "net": 0,
+      "test": true,
+      "core": false
+    },
+    {
+      "path": "cmd/test-feedback/scoped.go",
+      "before": 606,
+      "after": 606,
+      "net": 0,
+      "test": false,
+      "core": false
+    },
+    {
+      "path": "internal/steerline/activity.go",
+      "before": 404,
+      "after": 164,
+      "net": -240,
+      "test": false,
+      "core": true
+    },
+    {
+      "path": "internal/steerline/activity_test.go",
+      "before": 224,
+      "after": 191,
+      "net": -33,
+      "test": true,
+      "core": true
+    },
+    {
+      "path": "internal/steerline/clientcontracts/observations.go",
+      "before": 134,
+      "after": 131,
+      "net": -3,
+      "test": false,
+      "core": false
+    },
+    {
+      "path": "internal/steerline/clientcontracts/presentation.go",
+      "before": 35,
+      "after": 35,
+      "net": 0,
+      "test": false,
+      "core": false
+    },
+    {
+      "path": "internal/steerline/codexworker/activity.go",
+      "before": 208,
+      "after": 0,
+      "net": -208,
+      "test": false,
+      "core": false
+    },
+    {
+      "path": "internal/steerline/codexworker/conversation_adapter.go",
+      "before": 633,
+      "after": 641,
+      "net": 8,
+      "test": false,
+      "core": false
+    },
+    {
+      "path": "internal/steerline/codexworker/exec_stream_cd67_test.go",
+      "before": 54,
+      "after": 0,
+      "net": -54,
+      "test": true,
+      "core": false
+    },
+    {
+      "path": "internal/steerline/codexworker/exec_stream_fixture_cd67_test.go",
+      "before": 107,
+      "after": 0,
+      "net": -107,
+      "test": true,
+      "core": false
+    },
+    {
+      "path": "internal/steerline/codexworker/normalizer_cd67_test.go",
+      "before": 47,
+      "after": 0,
+      "net": -47,
+      "test": true,
+      "core": false
+    },
+    {
+      "path": "internal/steerline/console/execution_profile.go",
+      "before": 131,
+      "after": 131,
+      "net": 0,
+      "test": false,
+      "core": false
+    },
+    {
+      "path": "internal/steerline/contracts/publication.go",
+      "before": 22,
+      "after": 21,
+      "net": -1,
+      "test": false,
+      "core": false
+    },
+    {
+      "path": "internal/steerline/execution/publication.go",
+      "before": 18,
+      "after": 17,
+      "net": -1,
+      "test": false,
+      "core": false
+    },
+    {
+      "path": "internal/steerline/execution_profiles.go",
+      "before": 408,
+      "after": 403,
+      "net": -5,
+      "test": false,
+      "core": true
+    },
+    {
+      "path": "internal/steerline/execution_requirements.go",
+      "before": 167,
+      "after": 166,
+      "net": -1,
+      "test": false,
+      "core": true
+    },
+    {
+      "path": "internal/steerline/integration/cli_test.go",
+      "before": 193,
+      "after": 193,
+      "net": 0,
+      "test": true,
+      "core": false
+    },
+    {
+      "path": "internal/steerline/journal_reader.go",
+      "before": 352,
+      "after": 285,
+      "net": -67,
+      "test": false,
+      "core": true
+    },
+    {
+      "path": "internal/steerline/journal_reader_test.go",
+      "before": 257,
+      "after": 232,
+      "net": -25,
+      "test": true,
+      "core": true
+    },
+    {
+      "path": "internal/steerline/publication/policy.go",
+      "before": 95,
+      "after": 87,
+      "net": -8,
+      "test": false,
+      "core": false
+    },
+    {
+      "path": "internal/steerline/publication_policy_test.go",
+      "before": 104,
+      "after": 115,
+      "net": 11,
+      "test": true,
+      "core": true
+    },
+    {
+      "path": "internal/steerline/publication_snapshot.go",
+      "before": 72,
+      "after": 72,
+      "net": 0,
+      "test": false,
+      "core": true
+    },
+    {
+      "path": "internal/steerlineapp/config_fixture_test.go",
+      "before": 203,
+      "after": 202,
+      "net": -1,
+      "test": true,
+      "core": false
+    },
+    {
+      "path": "internal/steerlineapp/console_projects_test.go",
+      "before": 65,
+      "after": 65,
+      "net": 0,
+      "test": true,
+      "core": false
+    },
+    {
+      "path": "internal/steerlineapp/core_decoupling_66_test.go",
+      "before": 227,
+      "after": 227,
+      "net": 0,
+      "test": true,
+      "core": false
+    },
+    {
+      "path": "internal/steerlineapp/global_execution_example_test.go",
+      "before": 61,
+      "after": 61,
+      "net": 0,
+      "test": true,
+      "core": false
+    },
+    {
+      "path": "internal/steerlineintegration/normalizer_composition_test.go",
+      "before": 16,
+      "after": 0,
+      "net": -16,
+      "test": true,
+      "core": false
+    }
+  ]
+}
