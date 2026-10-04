@@ -6,11 +6,11 @@
 
 本文只规划目标、分阶段交付、依赖、所有权和最小验证方向。M01–M10 是本文内的阶段定位编号，不是中心任务 ID，不构成可领取任务。当前不创建 Spec、Plan、任务身份、中心 DAG 或实现 PR；选定实施范围后，再按 [Roadmap 目录约定](readme.md) 为各独立交付形成正式任务与 Spec/Plan。
 
-本目标服务于 [产品愿景](product-vision.md) 的两个近期交付节点：一阶段加强同任务分叉候选执行与唯一交付，二阶段增加受控规划主agent与原生UI。三条开发线是当前解耦边界，不把未来全部业务强行归入这三个包。对齐审计的依据、问题和修正见 [审计记录](../validation/three-line-modularization-audit/README.md)。
+本目标服务于 [产品愿景](product-vision.md) 的两个近期交付节点：一阶段加强同任务分叉候选执行与唯一交付，二阶段增加受控规划主agent与原生UI。三条开发线是当前解耦边界，不把未来全部业务强行归入这三个包。
 
 ## 已具备基础与剩余问题
 
-复用现有执行后端隔离、唯一应用组装、窄提交端口、SQLite 唯一实现、产品客户端及 CLI/TUI 注入接口。已有边界与证据见 [当前架构](../architecture/current-code-architecture.md)、[#69 写端口依据](../spec/core-decoupling-08-write-ports.spec.md)、[#70 存储记录](../validation/core-decoupling-09-sqlite/README.md)、[#71 客户端记录](../validation/core-decoupling-10-client/README.md) 和 [#72 TUI 记录](../validation/core-decoupling-11-tui/README.md)。这些能力是本目标的输入，不作为待重做的任务。
+已具备执行后端隔离、唯一应用组装、窄提交端口、SQLite唯一实现，以及CLI/TUI共用的注入式产品客户端。本目标保留这些能力：业务不依赖具体后端或SQL，客户端不拥有业务写权限，提交/恢复仍核验原身份与版本。需要核对源码归属时按需查 [当前架构](../architecture/current-code-architecture.md)，不要求先阅读已交付Spec/Plan或历史验收链。
 
 当前剩余问题如下：
 

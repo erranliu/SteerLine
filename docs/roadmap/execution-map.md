@@ -8,7 +8,7 @@
 
 ## 固定前置
 
-#36 的持续 worker 功能、#61 的执行需求/注册基础和 #63 的配置/原生绑定封套是后继可复用能力，不再作为活动实施任务；原验收范围分别以[持续 worker Spec](../spec/worker-flow.spec.md)、[执行隔离验收](../validation/execution-isolation-08-resolution/README.md)和[#63 Spec/Plan](../spec/core-decoupling-02-bindings.spec.md)为准。图中基础节点只表示后继依赖，未完成的原生验收限制不据此解除。
+已具备持续worker/原会话反馈、执行需求准入、配置注册和固定原生绑定封套。后续复用这些能力，保持原身份、版本、提交屏障及恢复授权；当前接口归属需要核实时按需查[架构索引](../architecture/current-code-architecture.md)。图中已交付基础节点和原硬前置ID仅表达依赖，不要求阅读历史Spec/Plan，也不解除未完成的原生验收限制。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
