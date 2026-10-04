@@ -1,0 +1,55 @@
+{
+  "scope": "e2e",
+  "level": "L3",
+  "env": "controlled",
+  "environment": {
+    "source_commit": "8e9499754cc54e910f0315741f085d6eac8936c3",
+    "worktree_status": " M cmd/test-feedback/scoped.go\n D internal/steerline/candidate_pending_pr_test.go\n?? internal/execution/candidate_pending_pr_test.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "controlled worker/provider; no model requests"
+  },
+  "selected_scenarios": [
+    {
+      "id": "recovery.waiting-merge-restart",
+      "level": "L3",
+      "suite": "recovery",
+      "package": "./tests/e2e/suites/recovery",
+      "test": "TestWaitingMergeRestart",
+      "env": "controlled"
+    }
+  ],
+  "groups": null,
+  "build_sha256": {},
+  "preparation_seconds": 0,
+  "execution_seconds": 0,
+  "passed": false,
+  "cleanup_complete": true,
+  "errors": [
+    "build ./cmd/steerline: exit status 1: cmd\\steerline\\main.go:4:1: found packages execution (activity_test.go) and steerline (candidate_pending_pr_test.go) in C:\\Users\\lmas1\\.codex\\worktrees\\8470\\SteerLine\\internal\\execution\n"
+  ],
+  "started_at": "2026-10-04T21:45:50.1178107Z",
+  "finished_at": "2026-10-04T21:45:50.853188Z",
+  "coverage": "selected-L3"
+}

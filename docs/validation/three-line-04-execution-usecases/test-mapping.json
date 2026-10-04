@@ -1742,6 +1742,16 @@
       "new_parent": "TestWorkerFeedbackKeepsOptionAndAdditionalText",
       "assertions": "original assertions retained",
       "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline (latest main #39)",
+      "old_file": "candidate_pending_pr_test.go",
+      "old_parent": "TestCandidateOpenPRPollPreservesOriginalPendingInput",
+      "new_package": "internal/execution",
+      "new_file": "candidate_pending_pr_test.go",
+      "new_parent": "TestCandidateOpenPRPollPreservesOriginalPendingInput",
+      "assertions": "#39 open-PR poll preserves original pending command/input and Decision; exact assertions retained",
+      "status": "migrated_into_owner"
     }
   ],
   "pending": [
