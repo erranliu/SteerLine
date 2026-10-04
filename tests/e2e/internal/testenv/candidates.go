@@ -162,6 +162,9 @@ func (p *Project) CandidateSnapshot(c Candidate) Snapshot {
 	return snap
 }
 func (p *Project) WaitCandidate(c Candidate, phase string) Snapshot {
+	return p.WaitCandidateCommand(c, phase, "")
+}
+func (p *Project) WaitCandidateCommand(c Candidate, phase, commandID string) Snapshot {
 	var result Snapshot
 	p.Scenario.Wait("candidate "+c.RunID+" "+phase, func() (bool, error) {
 		result = p.CandidateSnapshot(c)
@@ -170,7 +173,7 @@ func (p *Project) WaitCandidate(c Candidate, phase string) Snapshot {
 		if e.Environment != nil && e.Environment.Blocker != nil {
 			return false, fmt.Errorf("original candidate environment blocker %s (no automatic feedback replay)", e.Environment.Blocker.Fact.Reason)
 		}
-		return result.Domain.WorkflowRuns[0].Phase == phase && e.Status != "active", nil
+		return result.Domain.WorkflowRuns[0].Phase == phase && e.Status != "active" && e.PendingCommandID == "" && (commandID == "" || e.CurrentCommandID == commandID), nil
 	})
 	return result
 }
@@ -371,8 +374,8 @@ func CandidateAcceptance(s *Scenario) {
 		s.t.Fatal("connection fault replaced the original session or sent input")
 	}
 	p.Record("disconnected-original-request", faulted)
-	p.Feedback(a, "alpha-review")
-	p.WaitCandidate(a, "waiting_pr_merge")
+	reviewFeedback := p.Feedback(a, "alpha-review")
+	p.WaitCandidateCommand(a, "waiting_pr_merge", reviewFeedback.RequestID)
 	published[a] = p.CandidateUsage(a, "after-sibling-fault")
 	afterFaultA := p.CandidateSnapshot(a).Domain.Executions[0]
 	aSession, err := ExecutionSession(afterFaultA)
