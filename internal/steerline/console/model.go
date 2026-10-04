@@ -81,6 +81,7 @@ type actionState struct {
 }
 
 type decisionAnswerDialog struct {
+	details         bool
 	identity        string
 	projectKey      string
 	instance        string
@@ -591,6 +592,10 @@ func (m Model) answerSelectedDecision() (tea.Model, tea.Cmd) {
 		m.status = "候选已退出实验；不再反馈"
 		return m, nil
 	}
+	if feedbackInProgress(*state, row.run) {
+		m.status = candidateLabel(*state, row.run) + " 的反馈已提交；等待原请求回执"
+		return m, nil
+	}
 	reason := decisionAnswerAvailability(*state, row)
 	if !strings.HasPrefix(reason, "提交后") && row.run.EnvironmentBlocker == nil {
 		m.status = reason
@@ -624,6 +629,7 @@ func (m Model) answerSelectedDecision() (tea.Model, tea.Cmd) {
 		}
 	}
 	m.answer = &decisionAnswerDialog{identity: candidateIdentity(row.run), projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, runID: row.run.RunID, decisionID: decision.ID, runRevision: row.run.ControlRevision, decisionVersion: decision.Version, optionIndex: optionIndex}
+	m.answer.noteFocus = len(decision.Request.Options) == 0
 	if draft, ok := state.view.Drafts[m.answer.identity+"\x00"+decision.ID]; ok {
 		m.answer.optionIndex, m.answer.note, m.answer.cursor, m.answer.noteFocus = draft.OptionIndex, []rune(draft.Note), len([]rune(draft.Note)), true
 	}
@@ -704,7 +710,9 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.answer = nil
-	m.status = "答案命令已发布；command_id=" + requestID
+	state.panel, state.focus = 2, 1
+	m.detailExpanded = false
+	m.status = candidateLabel(*state, run) + " 反馈已提交；等待保存/送达回执"
 	return m, m.submitDecisionCommand(index, answer, "", requestID)
 }
 
@@ -815,6 +823,10 @@ func (m *Model) reopenDecisionDraft(index int, action *actionState) {
 		return
 	}
 	state := &m.projects[index]
+	row := m.selectedRow(index)
+	if row == nil || row.run == nil || row.run.RunID != action.RunID || m.answer != nil {
+		return
+	}
 	request, ok := decisionRequestFor(*state, action.RunID, action.DecisionID)
 	optionIndex := 0
 	if !ok || len(request.Options) == 0 {

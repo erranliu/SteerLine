@@ -112,12 +112,16 @@ func TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID(
 	if cmd != nil || m.answer == nil || m.answer.optionIndex != 10 {
 		t.Fatalf("recommended option was not only preselected: dialog=%+v cmd=%v", m.answer, cmd)
 	}
+	updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyF8})
+	m = updated.(Model)
 	all := renderAnswerDialog(m, m.projects[0], 200)
 	for _, want := range []string{"详细说明 12：完整内容", "背景第二行", run.Decision.ID} {
 		if !strings.Contains(all, want) {
 			t.Fatalf("full decision evidence missing %q", want)
 		}
 	}
+	updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyF8})
+	m = updated.(Model)
 	for i := 0; i < 13; i++ {
 		updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyDown})
 		m = updated.(Model)

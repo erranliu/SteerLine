@@ -1,6 +1,6 @@
 # Plan：候选观察界面
 
-任务 ID：38；任务名称：候选观察界面。唯一执行依据：[Spec](candidate-console.spec.md)。起点 `28b81d82f4afb3e158cf96bd5cbf257fa48b7adc`（#37 已合入）；分支 `codex/candidate-console-38`。本 PR 交付已复审实现；按用户明确授权先合入，CC5 保留待人工补验，不声明通过，不阻止 #39 开发。
+任务 ID：38；任务名称：候选观察界面。唯一执行依据：[Spec](candidate-console.spec.md)。起点 `28b81d82f4afb3e158cf96bd5cbf257fa48b7adc`（#37 已合入）；分支 `codex/candidate-console-38`。原实现已合入；CC5 与本次交互增量已获用户人工确认通过。最新状态见[人工确认记录](../validation/candidate-interaction-ux/manual-acceptance-20261004.md)，历史延期记录保留。
 
 ## 实际实现
 
@@ -57,3 +57,37 @@ CC5 仍需上述真实终端/IME/导航/窄窗/滚动证据。此次 Go 回归�
 - 文档变更核验 `python scripts/roadmap_task_id.py check` 与 `git diff --check`；任务身份、剩余前置和本次例外记录一致。
 
 不跑 Full/L2/L3；当前额外验证只覆盖主线集成的实际消费者。CC5 待人工状态见 windows/README.md，合并不产生新的原生通过证据。
+
+## 用户交互反馈增量（2026-10-04）
+
+在 `codex/candidate-interaction-ux` 上落实用户要求；当前增量只修改 console 的视图编号、交互页、键位和本地提交显示，服务、数据库合同、精确 request/Decision/session 绑定保持。已有用户 `windows/manual-*` 现场不改动，不启动其他任务。
+
+实际路径：`interaction.go` 根据同任务完整 WorkflowRun.CreatedAt/WorkflowRunID 排序计算编号，并负责交互状态/固定预览；不持久化窗口私有编号；`model.go` / `model_update_project.go` / `model_keys.go` 管理焦点与显示；`view.go` / `view_conversation.go` 简化默认页面，F8/d 保留完整信息；`model_update_actions.go` 标识原回执所属并行。`interaction_test.go` 补 UX1–UX5。
+
+### 测试计划
+
+| 级别/组或场景 | 环境 | 命令 | 时点 | 通过条件 | 证据位置 |
+| --- | --- | --- | --- | --- | --- |
+| 定向 Go UX1–UX5、CC1–CC4 与受影响 console | Windows，纯产品端口 fixture，无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-interaction-ux/console-verified -- ./internal/steerline/console -count=1` | 界面与回执路径自查后 | 按同任务触发顺序计算短编号，跨窗口一致且包含退出历史；数量/选择稳定；无选项直接输入；预览在窄窗口可见；F2 返回会话且原问题不重复输入；新问题可交互；精确目标、草稿/缺口/blocker 守卫保持，无 fail/skip | console-verified/summary.json 和原始 JSONL |
+| 真实应用接线 `TestCandidateConsoleWiring` | 同一临时 Git/SQLite/受控后端，无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-interaction-ux/wiring-final -- ./internal/steerlineintegration -run '^TestCandidateConsoleWiring$' -count=1` | console 通过后 | 默认控制台实际接线、原会话反馈、不同方案新增/放弃及合并守卫保持 | wiring-final/summary.json 和原始 JSONL |
+| L1 固定入口 | runner 隔离 home，无原生开关 | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-interaction-ux/l1` | 增量自查及定向修复完成后一次 | 当前固定最小组非零命中且通过 | l1/summary.json 和原始日志 |
+| CC5 人工补验 | 新构建、新的隔离 Windows 终端现场 | 复用正式 manifest 保持模式与三项 fixture 环境绑定，按新 F6/F7、a/Enter、Tab、F8、F2 操作 | 用户具备实际终端操作条件时 | 实际中文组词、选项加备注、并行导航、窄窗与滚动证据；确认提交后退出本次输入；不使用 Go fixture 或旧现场声称通过 | 新的 windows/manual-* 操作记录/截图 |
+
+不选 Full/L2/L3，不另建后端矩阵；增量为输入/呈现流程与原产品接线，原生 CC5 仍需实际人工证据，不能由上述 Go 验证替代。
+
+编号简化补充：UX5 使用与触发顺序不一致的 ID、退出历史、仅可见部分 run 和独立窗口，核验完整任务记录排序；时间相同按 ID 稳定兜底。仅运行受影响 console 代表回归；未改命令合同/应用构造或服务，无需再次重跑真实接线、L1、Full/L2/L3，前次交互增量验证仍保留。
+
+## Rebase 与人工验收收口（2026-10-04）
+
+用户明确要求 rebase、创建新 PR 并记录人工验收通过。基线更新到 main `80469d8a7f861d3cdddc0a2debef2b7e27e94b2e`；同步 #73 的 execution/model 和 execution/backend 类型，当前 console 实际路径不变。人工结论只覆盖 #38 CC5/本次交互，不替代 #39 的真机矩阵。
+
+### 测试计划
+
+| 级别/场景 | 环境 | 命令 | 时点 | 条件 | 证据 |
+| --- | --- | --- | --- | --- | --- |
+| 定向 console 全部代表与 UX1–UX5、CC1–CC4 | Windows，纯端口 fixture | `go run ./cmd/test-feedback -out docs/validation/candidate-interaction-ux/final-main/console -- ./internal/steerline/console -count=1` | 类型冲突修复后 | 当前消费者编译、编号/输入/回执/守卫非零命中，无 fail/skip | final-main/console/summary.json 与 JSONL |
+| 真实应用接线 TestCandidateConsoleWiring | 隔离 Git/SQLite/受控后端，无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-interaction-ux/final-main/wiring -- ./internal/steerlineintegration -run '^TestCandidateConsoleWiring$' -count=1` | rebase 后 | 新归属合同接线及原候选/反馈/合并守卫保持 | final-main/wiring/summary.json 与 JSONL |
+| L1 | runner 隔离 home | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-interaction-ux/final-main/l1` | 最终内容自查完成后一次 | 7 个当前最小组通过 | final-main/l1/summary.json |
+| 文档 | 当前工作树 | `python scripts/roadmap_task_id.py check`、`git diff --check` | 提交前 | 任务身份/依赖不变，CC5 最新状态与人工记录一致 | PR 验证说明 |
+
+不选 Full/L2/L3 或其他任务真机矩阵。历史测试产物及延期授权不重写；本次人工状态以用户确认作为独立验收来源。
