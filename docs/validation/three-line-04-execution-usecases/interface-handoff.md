@@ -37,3 +37,5 @@ host -> generic scheduler contract; app binds execution.Service
 ```
 
 当前映射、测试分组、命令和运行证据见 [ownership.md](ownership.md) 与 [README.md](README.md)。
+
+协调复审将 `persistence.Connection` 的 query 接口嵌入改为原方法的结构声明，消除 execution → persistence → query 用例包的传递依赖。方法/返回值、唯一 SQL 与同事务读取不变；#77 在本阶段实际合入后按公开 DTO 收窄消费者，#79 再整理存储与各自小端口。执行/控制台的传递依赖守卫包含旧 query、未来 product/query 和 execution/reconstruction 的责任边界；反例使用真实目录及全部 OS/tag 的生产和测试 helper。

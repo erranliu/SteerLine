@@ -10,28 +10,35 @@ CLI 和 TUI 通过配置、查询及控制入口访问本机服务；`run` 承�
 
 ```mermaid
 flowchart LR
-    Entry[CLI] --> App[steerlineapp 显式应用组装]
-    App --> UI[console 注入项目产品客户端]
-    App --> Client[steerlineclient 唯一产品适配]
+    Entry[CLI] --> App[steerlineapp 应用组装]
+    App --> UI[console]
+    App --> Client[steerlineclient]
     Entry --> Client
-    UI --> Product
-    Client --> Product[product/api 独立纯契约与旧 clientcontracts 聚合]
-    App --> Core[steerline 业务用例和唯一写者]
+    UI --> Product[product/api 与旧 clientcontracts]
+    Client --> Product
+    App --> Task[task 任务用例]
+    App --> Exec[execution 唯一 actor 与执行用例]
+    App --> Host[steerline 宿主与旧产品门面]
+    Host -. 注入 Scheduler .-> Exec
+    Exec --> Work[task/model 与注入的任务工作和结果端口]
+    Task --> Work
+    Exec --> Ports[execution/backend]
+    Exec --> Records[execution/model]
     App --> Impl[具体执行实现与 processhost]
-    Core --> Ports[execution/backend 纯交互契约]
-    Core --> Records[task/model 与 execution/model 唯一纯记录]
     Impl --> Ports
     Impl --> Records
-    App --> DB[(SQLite)]
-    Core --> Persistence[storage/ports 窄定义与旧 persistence 组合]
+    App --> Persistence[storage/ports 与旧 persistence 契约]
+    Exec --> Persistence
+    App --> DB[SQLite 唯一连接和事务]
     DB --> Persistence
-    Core --> Query[query 只读契约与用例]
     App --> Reader[sqlite.Reader]
-    Core --> Query
+    Host --> Query[旧 query 产品读取用例]
     Reader --> Query
-    Reader --> DB
-    Reader --> Projection[projection 纯视图]
+    Query --> Projection[execution/reconstruction 纯重建]
+    Exec --> Projection
+    DB --> Projection
 ```
+
 
 图中箭头表达源码依赖或明确标注的数据库访问。运行时中心通过注入端口调用实现。直属主包生产/测试源码和文件名无平台关键字，直接及传递依赖无具体实现、app 或 integration；实现不导入主包。`coreboundary` 检查所有 OS/tag 的源码图及 Windows/Linux 生产依赖，不按目录名排除生成源码。
 
@@ -143,7 +150,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 | `internal/steerline/host` | 2 | `internal/product/api` |
 | `internal/steerline/orca_remote_worker` | 14 | `internal/execution/backend`, `internal/steerline/codexworker`, `internal/steerline/orcaworker` |
 | `internal/steerline/orcaworker` | 28 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/codexworker`, `internal/steerline/contracts`, `internal/steerline/workspace` |
-| `internal/steerline/persistence` | 2 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/contracts`, `internal/steerline/query`, `internal/steerline/taskview`, `internal/storage/ports`, `internal/task/model` |
+| `internal/steerline/persistence` | 2 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
 | `internal/steerline/processhost` | 4 | `internal/execution/backend` |
 | `internal/steerline/publication` | 6 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/contracts` |
 | `internal/steerline/query` | 6 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/contracts`, `internal/steerline/taskview`, `internal/storage/ports`, `internal/task/model` |

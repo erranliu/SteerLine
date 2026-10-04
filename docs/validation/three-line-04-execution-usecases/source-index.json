@@ -9,7 +9,7 @@
   {
     "package": "cmd/steerline",
     "file": "cmd/steerline/main.go",
-    "sha256": "0a5aab052c08beac357f8e6cc64ea9144d28154aeed233f79de2e46f3bb50261",
+    "sha256": "2c4a4de7a28aa7a9fa785b7b5dd2e4194967263c1d130dd857adf415a92be702",
     "build_constraint": "",
     "project_imports": [
       "internal/execution",
@@ -104,7 +104,7 @@
   {
     "package": "internal/coreboundary",
     "file": "internal/coreboundary/check.go",
-    "sha256": "1ea9096803d1895d7e771678824ec787adbd95060e32d43718f4c1e95f7bd681",
+    "sha256": "c2fd971eb6729e7535bf9a02544ef5a5dbd8d350dcfb3536f587deabe6db83eb",
     "build_constraint": "",
     "project_imports": []
   },
@@ -973,7 +973,7 @@
   {
     "package": "internal/execution/process",
     "file": "internal/execution/process/facts.go",
-    "sha256": "eb6d85ed7b496353f4cbc1ea18f1481518e3745e23ebff80b7561afdd6148c98",
+    "sha256": "e859ff6546dbaa603559549caf0b4a3ea3b593505fa140c4ba99ba2010c8c0c9",
     "build_constraint": "",
     "project_imports": []
   },
@@ -1079,7 +1079,7 @@
   {
     "package": "internal/execution",
     "file": "internal/execution/runtime_view.go",
-    "sha256": "e439aa1387a20a1170ffd023f5f6428a3fd6b7833fe4359147686fe2243e20d8",
+    "sha256": "b37546f798d3e56ab8d98fabe89200749994f1eaebf7af9222b8fb1e8acd6941",
     "build_constraint": "",
     "project_imports": [
       "internal/execution/model",
@@ -1131,7 +1131,7 @@
   {
     "package": "internal/execution",
     "file": "internal/execution/service_commit.go",
-    "sha256": "c545d20900ecffc84f8353840a246261af90c9992ee672ca5eb0a04d72d3659c",
+    "sha256": "104098b8a8ff386a35a6faa4e16dc784f6d3a8aca26edce483f0430b0a48ea6f",
     "build_constraint": "",
     "project_imports": [
       "internal/execution/backend",
@@ -1192,7 +1192,7 @@
   {
     "package": "internal/execution",
     "file": "internal/execution/service_task_snapshot.go",
-    "sha256": "03f827cd8de3a8e01c62d6f2525e38b7375988517fe9f39b1f5a77f18f5fbdb6",
+    "sha256": "0e3282d8cc0ff3ac7dbe2eb78c8366609bac462324c95a12d0caac593eb8466b",
     "build_constraint": "",
     "project_imports": [
       "internal/execution/model",
@@ -1377,7 +1377,7 @@
   {
     "package": "internal/execution",
     "file": "internal/execution/worker_pr.go",
-    "sha256": "3acee2d1ffbeccc6e9b6a08f49b2c6164806942e4b609e1467bbbce04e60679e",
+    "sha256": "1ed3b929b14542d5a64bfa1ced9cbe1e9a8185808285fc8352584fc6bf5d944e",
     "build_constraint": "",
     "project_imports": [
       "internal/execution/backend",
@@ -1399,7 +1399,7 @@
   {
     "package": "internal/execution",
     "file": "internal/execution/worker_recovery.go",
-    "sha256": "56f159a473abd552276b59bf8b13dcf6015f47d6d3df013cb3a9d0240b40d9e7",
+    "sha256": "744a0b11b9ff93b06ef6b94f3c72f18bd4292176ba7c0d1152f5c60602097bea",
     "build_constraint": "",
     "project_imports": [
       "internal/execution/backend",
@@ -1479,7 +1479,7 @@
   {
     "package": "internal/product/api",
     "file": "internal/product/api/observations.go",
-    "sha256": "f03f8987163b94713be9fb6511bdea359e545e0fc51670700a393bd16b52ccca",
+    "sha256": "f749a98969ece25d334dad9091b9ee13b0baaf5278ecf348a5939333006ab0c9",
     "build_constraint": "",
     "project_imports": []
   },
@@ -2285,7 +2285,7 @@
   {
     "package": "internal/steerline/host",
     "file": "internal/steerline/host/errors.go",
-    "sha256": "dfc875bf5643aa250d1fd6dc304ef3d553b0acc355cc8d01061c86a2f0ba250f",
+    "sha256": "5ced045ce9302e0298e8c51a8a3e3a0984674b60c930514568a388226a39294e",
     "build_constraint": "",
     "project_imports": []
   },
@@ -2770,13 +2770,14 @@
   {
     "package": "internal/steerline/persistence",
     "file": "internal/steerline/persistence/connections.go",
-    "sha256": "e21a94d5aa4029668ae950c9fecfdbd9f42e68302116b9b9ea27837c5e036d77",
+    "sha256": "4c186d741c038c5630b2f28503b504bc9eb8f9d7c29a1fc7139c27c6f8b015e4",
     "build_constraint": "",
     "project_imports": [
       "internal/execution/backend",
       "internal/execution/model",
       "internal/steerline/contracts",
-      "internal/steerline/query"
+      "internal/steerline/taskview",
+      "internal/storage/ports"
     ]
   },
   {
@@ -2806,7 +2807,7 @@
   {
     "package": "internal/steerline",
     "file": "internal/steerline/platform_windows.go",
-    "sha256": "73b04a36581387d0f54335384159e3031dff4fa5b8b10130c4923d9da96fadc4",
+    "sha256": "5723604f03892db40cf8be0cbbae817a7aa7de230e92c3253fc2301cd900eceb",
     "build_constraint": "windows",
     "project_imports": [
       "internal/execution/backend",
@@ -2817,7 +2818,7 @@
   {
     "package": "internal/steerline",
     "file": "internal/steerline/process_projection.go",
-    "sha256": "be771f3134264850d99a65212f4e5bd18f866effa348e4b4102115cca9ad2fa2",
+    "sha256": "84e19a2cabb39fbb54418bf733dce4be1fe3e066c1c835c949c7b48313047350",
     "build_constraint": "",
     "project_imports": [
       "internal/execution/backend",
@@ -3159,7 +3160,7 @@
   {
     "package": "internal/steerline/sqlite",
     "file": "internal/steerline/sqlite/project.go",
-    "sha256": "71d67d6665705cf2ef7d90e55583c43765750f9dd25788ed1a74022f6923c4af",
+    "sha256": "971c129bb5eb1e53c2ccbb5e6fa3bec4ac9530649de2f8aa344f7e943345f4dd",
     "build_constraint": "",
     "project_imports": [
       "internal/execution/reconstruction",

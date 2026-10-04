@@ -7,6 +7,6 @@ import (
 )
 
 func publicProcessProbe(identity *executionbackend.ProcessIdentity) productapi.ProcessProbe {
-	facts:=resourceprocess.Probe(identity)
-	return productapi.ProcessProbe{State:productapi.ProcessProbeState(facts.State),Reason:facts.Reason}
+	facts := resourceprocess.Probe(identity)
+	return productapi.ProcessProbe{State: productapi.ProcessProbeState(facts.State), Reason: facts.Reason}
 }

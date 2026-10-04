@@ -94,7 +94,7 @@ func consoleForbidden(pkg string) bool {
 	if pkg == core || pkg == execution || pkg == "database/sql" || pkg == "modernc.org/sqlite" || strings.HasPrefix(pkg, "modernc.org/sqlite/") || forbidden(pkg) {
 		return true
 	}
-	for _, p := range []string{core + "/sqlite", core + "/persistence", core + "/workspace", core + "/publication", module + "/internal/steerlineclient"} {
+	for _, p := range []string{core + "/sqlite", core + "/persistence", core + "/query", core + "/projection", execution + "/reconstruction", core + "/workspace", core + "/publication", module + "/internal/steerlineclient"} {
 		if pkg == p || strings.HasPrefix(pkg, p+"/") {
 			return true
 		}
@@ -109,7 +109,7 @@ func executionForbidden(pkg string) bool {
 	if pkg == core || pkg == module+"/internal/task" || forbidden(pkg) || pkg == "database/sql" || strings.HasPrefix(pkg, "modernc.org/sqlite") {
 		return true
 	}
-	for _, owner := range []string{core + "/sqlite", core + "/console", module + "/internal/steerlineclient", module + "/internal/testboundary", module + "/internal/testfeedback"} {
+	for _, owner := range []string{core + "/sqlite", core + "/console", core + "/query", core + "/projection", module + "/internal/product/query", module + "/internal/steerlineclient", module + "/internal/testboundary", module + "/internal/testfeedback"} {
 		if pkg == owner || strings.HasPrefix(pkg, owner+"/") {
 			return true
 		}

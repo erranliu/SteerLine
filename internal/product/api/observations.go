@@ -45,8 +45,6 @@ type ServiceConnectionState string
 
 type SnapshotState string
 
-
-
 type ControlRequest struct {
 	ProtocolVersion         int             `json:"protocol_version"`
 	RequestID               string          `json:"request_id"`

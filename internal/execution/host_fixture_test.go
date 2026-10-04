@@ -22,7 +22,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
 	"github.com/erranliu/SteerLine/internal/steerline/taskview"
- storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -95,7 +95,10 @@ func openFixtureProject(ctx context.Context, c *Config) (persistence.Connection,
 			return nil, err
 		}
 	}
-	if err != nil { _ = db.Close(); return nil,err }
+	if err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	db.BindAuthority(authority)
 	return db, nil
 }

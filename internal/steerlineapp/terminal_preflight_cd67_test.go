@@ -1,10 +1,10 @@
 package steerlineapp
 
 import (
-"github.com/erranliu/SteerLine/internal/steerline"
 	"context"
 	"errors"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/steerline"
 	"os"
 	"os/exec"
 	"path/filepath"

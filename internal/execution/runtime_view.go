@@ -2,8 +2,8 @@ package execution
 
 import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func runtimeCheckpoint(v contracts.Runtime) contracts.ServiceCheckpoint {

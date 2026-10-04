@@ -17,7 +17,9 @@ func TestTM04ExecutionBoundary(t *testing.T) {
 		{"adapter_in_other_os_test", "edge_linux_test.go", "package execution\nimport _ \"" + core + "/codexworker\"\n", ""},
 		{"product_query_in_execution", "query_edge.go", "package execution\nimport _ \"" + core + "/query\"\n", ""},
 		{"old_projection_in_execution", "projection_edge.go", "package execution\nimport _ \"" + core + "/projection\"\n", ""},
-		{"adapter_in_pure_reconstruction", "pure_edge.go", "package reconstruction\nimport _ \"" + core + "/codexapp\"\n", ""},
+		{"product_query_in_helper", "helper_query.go", "package execution\nimport _ \"" + module + "/internal/helper\"\n", "package helper\nimport _ \"" + core + "/query\"\n"},
+		{"new_product_query_in_helper", "helper_product_query.go", "package execution\nimport _ \"" + module + "/internal/helper\"\n", "package helper\nimport _ \"" + module + "/internal/product/query\"\n"},
+		{"adapter_in_pure_reconstruction", "reconstruction/pure_edge.go", "package reconstruction\nimport _ \"" + core + "/codexapp\"\n", ""},
 	} {
 		t.Run(fixture.name, func(t *testing.T) {
 			root := t.TempDir()
@@ -60,4 +62,34 @@ func TestTM04ExecutionBoundary(t *testing.T) {
 			t.Fatal(strings.Join(report.Violations, "\n"))
 		}
 	})
+}
+
+// Console tests and inactive-tag helpers must not regain internal query or
+// execution reconstruction access when the execution package moves.
+func TestTM04ConsoleQueryBoundary(t *testing.T) {
+	for _, dependency := range []string{core + "/query", core + "/projection", execution + "/reconstruction"} {
+		t.Run(strings.TrimPrefix(dependency, module+"/internal/"), func(t *testing.T) {
+			root := t.TempDir()
+			files := map[string]string{
+				"internal/steerline/console/edge_linux_test.go": "package console\nimport _ \"" + module + "/internal/helper\"\n",
+				"internal/helper/query_plan9.go":                "//go:build never_enabled\n\npackage helper\nimport _ \"" + dependency + "\"\n",
+			}
+			for name, source := range files {
+				path := filepath.Join(root, name)
+				if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(source), 0600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			report, err := ScanSource(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(report.Violations) == 0 {
+				t.Fatalf("console helper reached internal query: %+v", report)
+			}
+		})
+	}
 }

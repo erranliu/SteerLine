@@ -1,9 +1,9 @@
 package steerlineapp
 
 import (
-"github.com/erranliu/SteerLine/internal/steerline"
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline"
 	"os"
 	"os/exec"
 	"path/filepath"

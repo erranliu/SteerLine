@@ -16,9 +16,9 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	host "github.com/erranliu/SteerLine/internal/steerline/host"
-	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {

@@ -5,8 +5,8 @@ import (
 	"errors"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func (s *Service) refreshNativeSnapshot(ctx context.Context) error {

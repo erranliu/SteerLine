@@ -7,10 +7,12 @@ import (
 	"strings"
 )
 
-type ProbeResult struct { State, Reason string }
+type ProbeResult struct{ State, Reason string }
 
 func canonical(path string) string {
-	path=filepath.Clean(path)
-	if runtime.GOOS=="windows" { return strings.ToLower(path) }
+	path = filepath.Clean(path)
+	if runtime.GOOS == "windows" {
+		return strings.ToLower(path)
+	}
 	return path
 }
