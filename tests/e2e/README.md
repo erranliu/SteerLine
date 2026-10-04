@@ -30,6 +30,10 @@ go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delive
 | L3 controlled | `recovery.waiting-merge-restart` | 等待合并后重启，原任务/数据库/工作流/执行/工作区保持，不重派，再正常交付 |
 | L3 live | `delivery.local-codex` / `delivery.orca-codex` | 真实模型配 loopback provider，分别独立交付 |
 | L3 live | `recovery.local-codex` / `recovery.orca-codex` | 真实执行后重启保持原身份，usage 不增加，再合并交付 |
+| L3 live | `candidates.local` | manifest 固定本地 Codex + 本机 Orca，两候选真实反馈/PR/唯一交付与后继；使用真实 SteerlineTest GitHub PR |
+| L3 live | `candidates.remote` / `candidates.mixed` | 真远端/混合入口；当前产品缺目标权限回执，发模型/创建资源前写 blocker 并失败，不能当作通过 |
+
+候选入口使用 `STEERLINE_CANDIDATE_ACCEPTANCE_CONFIG`，格式和精确现场证据见 [#39](../../docs/validation/candidate-native-acceptance/README.md)。runner 在清除继承 STEERLINE 环境时将该输入的绝对路径保存在 Run 中；manifest 的源码 commit 必须匹配实际 HEAD。三个场景显式选择，不用本机 Orca 替代真远端。`candidates.local` 的 chain 字段用于 runner live 枚举，实际两份 profile 在 manifest/规范 SQLite snapshot 中逐一核验。
 
 ## 包与所有权
 

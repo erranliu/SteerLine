@@ -23,10 +23,11 @@ import (
 	"github.com/erranliu/SteerLine/internal/testprocess"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
 	"github.com/google/uuid"
 )
 
-type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level string }
+type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level, CandidateConfig string }
 type Scenario struct {
 	Run              Run
 	ID, Root, Output string
@@ -82,7 +83,7 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
-	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") {
+	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") || strings.HasPrefix(id, "candidates.") {
 		timeout = 10 * time.Minute
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -355,7 +356,7 @@ func (p *Project) Snapshot() (Snapshot, error) {
 	snap.Page, snap.Domain = *view.Tasks, *view.Domain
 	snap.Runtime = view.Runtime
 	snap.Helper, err = controlled.Read(p.Provider)
-	if err == nil && p.RealPR {
+	if err == nil && p.RealPR && !strings.HasPrefix(p.Scenario.ID, "candidates.") {
 		snap.Helper.PR, err = p.githubPR(snap)
 	}
 	return snap, err
@@ -450,8 +451,19 @@ func (s *Scenario) cleanup() {
 			}
 			snap, err := p.Snapshot()
 			if err == nil {
-				u, usageErr := p.NativeUsage(snap, "cleanup")
-				_ = controlled.Write(filepath.Join(s.Output, p.Name+"-cleanup-usage-result.json"), map[string]any{"usage": u, "error": fmt.Sprint(usageErr)})
+				for _, execution := range snap.Domain.Executions {
+					selected, selectErr := evidence.Candidate(snap.Domain, execution.WorkflowRunID, execution.ExecutionID)
+					if selectErr != nil {
+						failures = append(failures, selectErr.Error())
+						continue
+					}
+					bound := snap
+					bound.Domain = selected
+					u, usageErr := p.NativeUsage(bound, execution.ExecutionID+"-cleanup")
+					if writeErr := controlled.Write(filepath.Join(s.Output, p.Name+"-"+execution.ExecutionID+"-cleanup-usage-result.json"), map[string]any{"usage": u, "error": fmt.Sprint(usageErr)}); writeErr != nil {
+						failures = append(failures, writeErr.Error())
+					}
+				}
 			}
 		}
 	}

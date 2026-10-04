@@ -98,7 +98,8 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 	var selected []e2eScenario
 	for _, entry := range entries {
 		key := entry.Package + "/" + entry.Test
-		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-codex") || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
+		candidateChain := entry.Level == "L3" && entry.Suite == "candidates" && ((entry.ID == "candidates.remote" && entry.Chain == "orca-remote") || (entry.ID == "candidates.mixed" && entry.Chain == "mixed"))
+		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-codex" && !candidateChain) || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
 			return nil, fmt.Errorf("invalid E2E manifest entry %+v", entry)
 		}
 		if ids[entry.ID] || tests[key] {
@@ -192,6 +193,9 @@ func runE2E(opts options) (code int) {
 	note, coverage := "controlled worker/provider; no model requests", "selected-L3"
 	if opts.e2eEnv == "live" {
 		note = "native gpt-6-luna/medium; loopback provider"
+		if opts.suite == "candidates" {
+			note = "native gpt-6-luna/medium; exact multi-profile admission; real SteerlineTest PRs"
+		}
 	}
 	if opts.level == "L2" {
 		coverage = "gate-only"
@@ -273,7 +277,14 @@ func runE2E(opts options) (code int) {
 	if err != nil {
 		return fail(err)
 	}
-	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level})
+	candidateConfig := os.Getenv("STEERLINE_CANDIDATE_ACCEPTANCE_CONFIG")
+	if candidateConfig != "" {
+		candidateConfig, err = filepath.Abs(candidateConfig)
+		if err != nil {
+			return fail(err)
+		}
+	}
+	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "CandidateConfig": candidateConfig})
 	if err != nil {
 		return fail(err)
 	}
@@ -373,6 +384,11 @@ func runE2E(opts options) (code int) {
 		return checkE2EGroup(g, packages[pkg], out)
 	})
 	report.Execution = time.Since(execution).Seconds()
+	for _, entry := range selected {
+		if _, err := os.Stat(filepath.Join(out, "scenarios", entry.ID, "blocker.json")); err == nil {
+			report.Blocked = append(report.Blocked, entry)
+		}
+	}
 	if len(report.Groups) != len(names) {
 		report.Errors = append(report.Errors, "not all selected packages completed")
 	}
