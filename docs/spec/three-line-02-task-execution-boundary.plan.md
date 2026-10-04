@@ -47,3 +47,16 @@ L1 首次运行确认 task 包无测试产生 package skip，且旧 CM69 仍指�
 逐项核对 Spec 验收，保留提交屏障、同快照、身份/版本和唯一结果，删除迁出路径/无消费者桥接，核对最小命令实际命中。汇总 `docs/validation/three-line-02-task-execution-boundary/README.md`，注明复用证据、定向重验依据及未具备能力。
 
 #75/#76/#77 只能消费本次已接通的窄端口；清单指定共同文件集成所有者，不把接口草案当交付。与 #39 并行时固定其构建，变更交付路径只定向复核受影响证据。
+
+## 协调复审与最新 main 集成测试计划
+
+集成 main 的 PR213 候选交互更新。复审将工作纯值归到 task/model.FixedWork，并将 TaskWorkPort/TaskResultPort 定义放在当前执行消费方；任务实现由 app 注入并通过结构匹配满足端口，执行生产代码不再 import task 实现。只调整定义归属与构造签名，不改变业务状态/提交语义。
+
+| 级别/组或场景 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
+| --- | --- | --- | --- | --- | --- |
+| L1 固定最小入口 | Windows，隔离 STEERLINE_HOME，无 opt-in | `go run ./cmd/test-feedback -level=L1 -out C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-three-line-20261004-01a10589/review74-l1-main-integrated` | 集成 main 后、消费方端口整理前 | 原构造/规则/全 OS 源码与 Windows/Linux 依赖守卫通过 | 协调 run 的 review74-l1-main-integrated/ |
+| 定向 Go：任务工作/结果 CAS/重复回执/交付丢弃竞争 | Windows，真实 SQLite/受控 provider，无模型 | `go run ./cmd/test-feedback -out C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-three-line-20261004-01a10589/review74-boundary-final -- ./internal/task ./internal/steerline ./internal/steerlineintegration -run '^(TestTM02TaskWorkPort\|TestTM02ResultCAS\|TestTaskStatusAndDeliveryEvidence\|TestBatchPlanAndTaskClaimKeepFixedValues\|TestCandidateConsoleWiring)$' -count=1` | 纯工作值迁移后 | 非零 pass，无 fail/skip，原身份、集合版本、去重和 CAS 保持 | 协调 run 的 review74-boundary-final/ |
+| 定向 Go：消费方端口/实际应用/禁止依赖 | 同上，无原生权限开关 | `go run ./cmd/test-feedback -out C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-three-line-20261004-01a10589/review74-port-wiring -- ./internal/task ./internal/steerline ./internal/steerlineintegration -run '^(TestTaskStatusAndDeliveryEvidence\|TestBatchPlanAndTaskClaimKeepFixedValues\|TestTM02TaskWorkPort\|TestCandidateConsoleWiring\|TestCD67CoreBoundary)$' -count=1` | 端口定义和全部构造签名切换后 | 非零 pass，无 fail/skip；真实注入及跨平台源码/依赖矩阵正确 | 协调 run 的 review74-port-wiring/ |
+| 定向 Go：当前 main 控制台消费者 | Windows 产品 fixture，无模型 | `go run ./cmd/test-feedback -out C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-three-line-20261004-01a10589/review74-console-main -- ./internal/steerline/console -count=1` | main 组合接通后 | 最新候选交互与 UI 身份/输入/展示代表通过 | 协调 run 的 review74-console-main/ |
+
+复用本任务既有 controlled recovery.waiting-merge-restart 与 schema 14 拒绝证据；复审不改事务或恢复行为，不重复 Full/L2/L3/live。最后消费方端口整理为结构匹配的签名归位，补上表实际构造/守卫定向，不再重跑无变化的固定 L1 或 CAS 故障矩阵。所有报告保留仓库外协调 run，最终 SHA 和结果在 PR 复审评论中关联。

@@ -11,7 +11,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
-	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -19,7 +18,7 @@ import (
 // directory and its conversation source port. Lifecycle operations receive
 // only execution values and already-persisted operation intents. The application
 // calls PrepareServiceConfig before opening and transferring the connection.
-func NewService(c Config, directory *ExecutionDirectory, resolver executionbackend.LifecycleResolver, conversationSources contracts.ConversationSourcePort, processHost executionbackend.ManagedProcessHost, db persistence.Connection, work taskapp.WorkPort, results taskapp.ResultPort) (_ *Service, retErr error) {
+func NewService(c Config, directory *ExecutionDirectory, resolver executionbackend.LifecycleResolver, conversationSources contracts.ConversationSourcePort, processHost executionbackend.ManagedProcessHost, db persistence.Connection, work TaskWorkPort, results TaskResultPort) (_ *Service, retErr error) {
 	if directory == nil || resolver == nil || conversationSources == nil || processHost == nil || c.Persistence == nil || db == nil || work == nil || results == nil {
 		return nil, errors.New("execution directory, conversation source, process host and persistence ports are required")
 	}

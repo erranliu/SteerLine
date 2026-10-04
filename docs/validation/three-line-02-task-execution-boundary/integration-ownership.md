@@ -1,13 +1,13 @@
 # #74 实际集成与后继所有权
 
-本清单依据本 PR 的生产字段和方法生成；逐声明签名、行号与所有者见 [integration-inventory.json](integration-inventory.json)。当前是 #74 实现候选，只有协调聊天独立复审并真实合并后才解除 #75/#76 的硬前置。本聊天只执行 #74；不启动其它任务。#77/#79/#80/#81/#82 按用户 2026-10-04 指令暂停。
+本清单依据本 PR 的生产字段和方法生成；逐声明签名、行号与所有者见 [integration-inventory.json](integration-inventory.json)。本清单交接 #74 的实际端口和文件边界，#75/#76 仍须核对其固定硬前置真实交付。本聊天只执行 #74；不启动其它任务。#77/#79/#80/#81/#82 按用户 2026-10-04 指令暂停。
 
 ## 已接通的窄端口
 
 | 端口 | 实际定义/构造/消费者 | #75/#76 交接 |
 | --- | --- | --- |
-| task.Reader、WorkPort | `internal/task/work.go`；SQLite `TaskSnapshot` 从一次图读取转换；`steerlineapp/task_boundary_wiring.go` 构造；`execution_dispatch.go` 用 Ready，`native_claim_command.go` 用 Fixed/Claim | #75 拥有 task 及其构造；#76 只消费接口。任务只见 task/model 快照、固定契约和前值。 |
-| task.ResultPort | 同一 task 服务的 Declare/Intent/Discard；app 显式注入 NewService/NewCommandService；执行的交付/丢弃协调器消费 | #75 拥有任务声明，#76 拥有结论核验。`CommandService.taskResults`、`Service.taskResults` 不公开；产品/后端契约无此能力。 |
+| task.Reader、TaskWorkPort | `internal/task/work.go` 定义 Reader/任务实现，`internal/steerline/command_boundary.go` 定义消费方端口，`task/model.FixedWork` 定义工作纯值；SQLite `TaskSnapshot` 从一次图读取转换；`steerlineapp/task_boundary_wiring.go` 构造；`execution_dispatch.go` 用 Ready，`native_claim_command.go` 用 Fixed/Claim | #75 拥有 task 实现及其构造；#76 拥有消费方接口，只依赖 task/model.FixedWork。任务只见 task/model 快照、固定契约和前值。 |
+| TaskResultPort | 消费方 `command_boundary.go` 定义声明端口，task 服务结构匹配 Declare/Intent/Discard；app 显式注入 NewService/NewCommandService；执行的交付/丢弃协调器消费 | #75 拥有任务声明，#76 拥有结论核验。`CommandService.taskResults`、`Service.taskResults` 不公开；产品/后端契约无此能力。 |
 | storage/ports Claims/Results/Discards | 三个固定提交声明；SQLite `task_{claim,result,discard}_commit.go` 各一次事务 | #76 负责执行提交，#75 不持执行写端口或 SQL 回调；#79 后续移目录时保留同一实现。 |
 | task-only 客户端适配 | `steerlineapp/client_task_commands.go` 的 Validate/Create/AddPredecessors、小服务接口和独立构造 | #75 可独立替换为 task 应用；该适配器没有 ResultPort。 |
 | 执行丢弃客户端适配 | `steerlineapp/client_discard_commands.go`；其执行协调器内部持任务意图/结果声明能力 | #76 独立迁执行核验与清理，产品只提交原 DiscardInput。 |

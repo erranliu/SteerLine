@@ -8,28 +8,9 @@ import (
 	"github.com/erranliu/SteerLine/internal/task/model"
 )
 
-type Work struct {
-	Record    model.TaskRecord
-	Contract  model.TaskContract
-	Authority model.GraphAuthority
-}
-
 type Reader interface {
 	TaskSnapshot(context.Context, string) (model.Snapshot, error)
 	TaskContract(context.Context, string, model.TaskRecord) (model.TaskContract, error)
-}
-
-type WorkPort interface {
-	Ready(context.Context, string) ([]model.TaskRecord, error)
-	Fixed(context.Context, string, string, uint64, bool) (Work, error)
-	Claim(Work, string, time.Time) (model.TaskRecord, error)
-}
-
-// ResultPort returns a task-only declaration; it provides no execution writes.
-type ResultPort interface {
-	Declare(model.TaskRecord, model.TaskContract, model.Result, time.Time) (model.ResultDeclaration, error)
-	Intent(model.DiscardIntent) (model.DiscardIntent, error)
-	Discard(model.TaskRecord, model.DiscardIntent, string, []string, time.Time) (model.TaskRecord, error)
 }
 
 type Service struct{ Reader Reader }
@@ -42,37 +23,37 @@ func (s Service) Ready(ctx context.Context, project string) ([]model.TaskRecord,
 	return model.ReadyTasks(graph), nil
 }
 
-func (s Service) Fixed(ctx context.Context, project, id string, version uint64, candidate bool) (Work, error) {
+func (s Service) Fixed(ctx context.Context, project, id string, version uint64, candidate bool) (model.FixedWork, error) {
 	graph, err := s.Reader.TaskSnapshot(ctx, project)
 	if err != nil {
-		return Work{}, err
+		return model.FixedWork{}, err
 	}
 	record, found := graph.ByID[id]
 	if !found {
-		return Work{}, &model.Error{Code: "task_not_found", Message: "fixed task was not found"}
+		return model.FixedWork{}, &model.Error{Code: "task_not_found", Message: "fixed task was not found"}
 	}
 	status := "open"
 	if candidate {
 		status = "in_progress"
 	}
 	if record.Status != status || record.Version != version {
-		return Work{}, &model.Error{Code: "stale_version", Message: "fixed task version changed"}
+		return model.FixedWork{}, &model.Error{Code: "stale_version", Message: "fixed task version changed"}
 	}
 	eligibility := record
 	if candidate {
 		eligibility.Status = "open"
 	}
 	if ready, blockers := model.DependencyStateForTask(eligibility, graph); !ready {
-		return Work{}, model.DependencyClaimError(blockers)
+		return model.FixedWork{}, model.DependencyClaimError(blockers)
 	}
 	contract, err := s.Reader.TaskContract(ctx, project, record)
 	if err != nil {
-		return Work{}, err
+		return model.FixedWork{}, err
 	}
-	return Work{Record: record, Contract: contract, Authority: graph.Authority}, nil
+	return model.FixedWork{Record: record, Contract: contract, Authority: graph.Authority}, nil
 }
 
-func (s Service) Claim(work Work, claimant string, at time.Time) (model.TaskRecord, error) {
+func (s Service) Claim(work model.FixedWork, claimant string, at time.Time) (model.TaskRecord, error) {
 	return model.Claim(work.Record, claimant, at)
 }
 

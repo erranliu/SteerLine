@@ -6,7 +6,7 @@
 
 | Spec | 实际交付 |
 | --- | --- |
-| TM02.1 | app 显式注入 task.Reader/WorkPort/ResultPort；调度 Ready 与 first/later candidate 的 Fixed/Claim 真实消费任务端口。任务不读 mode/slot/session/PR，后续候选保持原领取/契约/base。 |
+| TM02.1 | app 显式注入 task.Reader、消费方 TaskWorkPort/TaskResultPort；调度 Ready 与 first/later candidate 的 Fixed/Claim 真实消费任务端口。任务不读 mode/slot/session/PR，后续候选保持原领取/契约/base。 |
 | TM02.2 | ClaimCommit/ResultCommit/DiscardCommit 是固定声明，无任意事务句柄；SQLite 重检原身份/前值/任务/图/集合版本。结果、唯一执行 Delivery、Task closed、DAG/event 一次事务；重复原结果保持原回执和 DB/图版本，异内容/旧版本/未知/失败不释放后继。 |
 | TM02.3 | task 拥有人意图与任务声明，execution 拥有 PR/候选核验及停止/清理。Service/Config/CommandService 与 app/cmd/runner 已实际拆文件，后继只改自己的文件，#76 负责公共段单点集成。 |
 

@@ -11,12 +11,11 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
-	taskapp "github.com/erranliu/SteerLine/internal/task"
 )
 
 type Service struct {
-	taskWork             taskapp.WorkPort
-	taskResults          taskapp.ResultPort
+	taskWork             TaskWorkPort
+	taskResults          TaskResultPort
 	Config               Config
 	baseConfig           Config
 	lifecycleResolver    executionbackend.LifecycleResolver
