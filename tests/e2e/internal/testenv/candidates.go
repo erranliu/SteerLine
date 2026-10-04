@@ -181,7 +181,11 @@ func (p *Project) WaitCandidateCommand(c Candidate, phase, commandID string) Sna
 			p.Scenario.t.Fatalf("candidate PR verification failed: %s; see exact original snapshot", *w.PRQueryError)
 		}
 		if phase == "waiting_pr_merge" && candidatePublicationEndedWithoutPR(w, e, commandID) {
-			p.Scenario.t.Fatalf("original candidate feedback ended without a verified PR: %v; see exact original snapshot", e.Error)
+			diagnostic := "original turn completed without a verified PR"
+			if e.Error != nil {
+				diagnostic = *e.Error
+			}
+			p.Scenario.t.Fatalf("original candidate feedback ended without a verified PR: %s; see exact original snapshot", diagnostic)
 		}
 		return result.Domain.WorkflowRuns[0].Phase == phase && e.Status != "active" && e.PendingCommandID == "" && (commandID == "" || e.CurrentCommandID == commandID), nil
 	})
