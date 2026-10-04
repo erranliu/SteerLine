@@ -16,4 +16,3 @@
 - Markdown 表格列数与 `git diff --check` 通过；无新测试场景、验收豁免、Full/L2/L3/live 运行。
 
 原始报告保留在仓库外协调 run；此次源码修复由新的复审 commit 固定，PR 评论记录最终 SHA。之前 source-index 与报告保持其历史候选语义，不覆盖旧证据。
-
