@@ -122,24 +122,15 @@ Windows 本地受限方案将 `codex.windows_sandbox` 固定为 `elevated`（省
 
 ## 项目发布责任
 
-项目必须配置 `publication_policy.publisher`，接受 `worker`、`host_service` 或 `execution_profile`，统一覆盖 commit、push、建 PR。固定 worker/host_service 项目始终使用项目责任；execution_profile 项目使用所选全局方案明确填写的责任。不支持的组合在领取前拒绝，并在方案列表显示原因。
+项目必须配置 `"publication_policy":{"publisher":"worker"}`。worker 统一负责 commit、push 和创建 PR；中心只查询、核验合并、提交唯一 TaskDelivery，以及按原身份关闭未合并 PR/清理资源。local、Orca 与具备真实权限证据的远程执行均使用这个责任边界。全局执行方案不再接受 publication_policy；host_service 和 execution_profile 均明确拒绝。
 
-| 执行路径 | worker | host_service |
-| --- | --- | --- |
-| local Codex app-server + GitHub command provider | 拒绝 | 原精确 GitHub draft PR 实现 |
-| local + Gitea/其他 provider | 拒绝 | 拒绝 |
-| 本机 Orca + 可查询的 command/Gitea provider | 原 worker 发布 | 拒绝 |
-| 远程 Orca + 可查询 provider | 保留原 worker 发布能力；权限缺证仍拒绝领取 | 拒绝 |
+worker 的执行策略和本身凭据必须允许 Git 推送及 PR 创建；中心的 token_env 只用于查询/关闭，不自动下发给 worker。仅有 query 或成功创建会话不能证明发布能力。worker 的成功、URL 和 worker_done 均不代替 provider 的真实 merged 证据。
 
-例如 Orca 项目使用 `"publication_policy":{"publisher":"worker"}`；local GitHub 项目使用 `"publication_policy":{"publisher":"host_service"}`，并配置原生 `pr.query` 命令。仅有 query 不增加 create 能力。示例项目使用 worker/Gitea，需选择匹配的 Orca 方案。
+冻结快照保留 publisher、原 provider/查询与关闭命令、Git、单一 fetch/push URL、base 与认证引用。后续轮次、恢复、PR 查询/关闭/交付使用原快照；远程目标变化仍拒绝副作用。秘密值不入库或写入产物。当前 SQLite schema 12、runtime/checkpoint schema 17 明确拒绝旧开发数据，不迁移、回填或回退。历史真机报告保留原始证据格式。
 
-同一 GitHub 项目要同时提供本机 Codex 与 Orca，可填写 `"publication_policy":{"publisher":"execution_profile"}`，并配置原生 GitHub command provider。全局 local 方案填写 `"publication_policy":{"publisher":"host_service"}`，Orca 方案填写 `"publication_policy":{"publisher":"worker"}`。每个方案必须明确填写，不能嵌套 execution_profile 或按能力自动选责任。修改配置后重启服务和控制台；已有执行沿用原冻结值。
+环境阻断是执行状态旁路，保留业务问题及本地草稿。阻断时新回答明确拒绝；未产生投递意图的已保存回答作废并保留审计，恢复后重新提交。已有未知投递只核对原回执。控制台 Ctrl+O 打开原终端，Ctrl+E 重新检查原环境；CLI 的 control -action open_terminal/recheck_environment -run-id <RunID> 使用同一精确 blocker/turn/attempt/version 目标。
 
-host_service 仍仅受理原 Execution 当前已结束轮次的显式 final marker，先保存固定候选/发布意图，再 commit、push、create；未知结果仅按原请求只读对账。worker 的成功、URL 和 worker_done 均不代替真实 merged 证据，两条路径共用原唯一 TaskDelivery 事务。
-
-FixedExecutionProfile v5 与 PolicyResources v3 固定 publisher、provider kind/base_url/repository、query/close 与宿主 create 描述、Git executable/argv、remote 名和实际单一 fetch/push URL、base 与认证环境变量名。恢复、后续轮次、PR 查询/关闭/交付使用原 provider。remote URL 被更改、增加 pushurl 或多推送目标时拒绝副作用。控制台从同一 ProjectView 显示原快照。
-
-URL 的 HTTP 用户信息、密码、query/fragment 和含认证的命令参数在冻结前拒绝，诊断不回显原值；普通 SSH user@host 身份允许。认证只冻结引用，值可沿原引用轮换。宿主发布不会把 token、SSH/工具认证环境值下发给 local worker。PolicyResources v3 的 ProfileDigest 指向完整 v5 摘要；v4 及更早 Profile 与旧 v1 发布请求不在生产恢复中接受，不迁移或回填。#59 的两份真机报告保留原始格式和摘要，仅作为历史证据核验。
+会话和活动只显示 SQLite 已采集的规范记录。采集缺口显示诊断，原始文件仅供手动排障，不自动补画或补投输入。
 
 ## 附加执行需求与注册
 

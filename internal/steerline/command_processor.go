@@ -65,7 +65,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 				command.Status = "in_flight"
 			}
 			if run := s.findDecision(command.TargetID); run != nil {
-				if execution := s.executionRecord(run); execution != nil && run.Decision.Request.HostTarget == nil && execution.RecoveryRequired &&
+				if execution := s.executionRecord(run); execution != nil && execution.RecoveryRequired &&
 					(execution.RecoveryState == "unverified" || execution.RecoveryState == "" ||
 						execution.RecoveryState == "interrupted" && run.Decision.Request.QuestionRoute != nil) {
 					result, _ := json.Marshal(map[string]string{"code": "recovery_unverified", "error": "the original worker or request is not verified for this answer; review the recovery decision"})
@@ -85,6 +85,15 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 					result, _ := json.Marshal(map[string]string{"code": code, "error": err.Error()})
 					if e := service.SetStatus(ctx, command, "rejected", result); e != nil {
 						return e
+					}
+					continue
+				}
+			}
+			if run := s.findDecision(command.TargetID); run != nil {
+				if e := s.executionRecord(run); e != nil && e.Environment != nil && e.Environment.Blocker != nil {
+					result := mustJSON(map[string]string{"code": "environment_blocked", "error": "resolve the environment blocker before sending feedback"})
+					if err := service.SetStatus(ctx, command, "rejected", result); err != nil {
+						return err
 					}
 					continue
 				}

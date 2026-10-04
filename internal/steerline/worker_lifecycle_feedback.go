@@ -8,6 +8,10 @@ import (
 )
 
 func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer) error {
+	if run != nil && s.lifecycleEffectPending(run.RunID) {
+		return nil
+	}
+
 	if run == nil || run.Decision == nil || run.Decision.Request.QuestionRoute == nil || execution == nil || run.Decision.ID != answer.DecisionID {
 		return errors.New("saved answer has no fixed original question")
 	}
@@ -54,43 +58,20 @@ func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *Run, 
 	if err := request.Validate(); err != nil {
 		return err
 	}
-	if s.workerMessages != nil {
-		runID := run.RunID
-		ctx = s.runContext
-		s.forwarders.Add(1)
-		go func() {
-			defer s.forwarders.Done()
-			receipt, executeErr := executeLifecycleQuestionFeedback(ctx, lifecycle, request)
-			message := &lifecycleReplyMessage{request: request, receipt: receipt.Clone(), err: executeErr}
-			select {
-			case s.workerMessages <- workerMessage{runID: runID, reply: message}:
-			case <-ctx.Done():
-			}
-		}()
+	err = s.dispatchLifecycleEffect(ctx, run, lifecycle, request, false, func(run *Run, result lifecycleEffectResult) error {
+		if result.observer != nil {
+			_ = result.observer.Close(context.Background())
+		}
+		return s.applyLifecycleQuestionAnswerReceipt(run, request, result.receipt, result.err)
+	})
+	if errors.Is(err, errLifecycleEffectPending) {
 		return nil
 	}
-	receipt, executeErr := executeLifecycleQuestionFeedback(ctx, lifecycle, request)
-	return s.applyLifecycleQuestionAnswerReceipt(run, request, receipt, executeErr)
+	return err
 }
 
 // A lost reply receipt may be confirmed immediately by its original read-only
 // reconciliation. An active observer must not strand that saved answer forever.
-func executeLifecycleQuestionFeedback(ctx context.Context, lifecycle executionapi.LifecyclePort, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, error) {
-	receipt, observer, executeErr := lifecycle.Execute(ctx, request.Clone())
-	if observer != nil {
-		_ = observer.Close(ctx)
-	}
-	if executeErr != nil || receipt.Disposition == executionapi.OperationUnknown {
-		confirmed, observation, reconcileErr := lifecycle.Reconcile(ctx, request.Clone())
-		if observation != nil {
-			_ = observation.Close(ctx)
-		}
-		if reconcileErr == nil && confirmed.Disposition == executionapi.OperationConfirmed && confirmed.State.InputAccepted {
-			return confirmed, nil
-		}
-	}
-	return receipt, executeErr
-}
 
 func (s *Service) reconcileLifecycleQuestionAnswer(ctx context.Context, run *Run, lifecycle executionapi.LifecyclePort, fixed workerFlowContext, operation *OperationRecord, input executionapi.LifecycleInput) error {
 	if operation == nil || operation.Status == "pending" {
@@ -249,30 +230,4 @@ func (s *Service) confirmLifecycleQuestionAnswer(run *Run, request executionapi.
 		s.refreshRun(run)
 	}
 	return s.commitWorker(run, request.Operation.ID)
-}
-
-func (s *Service) handleLifecycleFeedbackMessage(runID string, message *lifecycleReplyMessage) error {
-	if message == nil {
-		return errors.New("lifecycle reply result is required")
-	}
-	var run *Run
-	for _, candidate := range s.runs {
-		if candidate != nil && candidate.RunID == runID {
-			run = candidate
-			break
-		}
-	}
-	if run == nil {
-		return nil
-	}
-	feedback := message.request.Input.Feedback
-	if run.TaskStatus == "closed" || run.TaskStatus == "discarded" || run.Decision == nil || run.Decision.Status != "answer_saved" ||
-		feedback == nil || run.Decision.ID != feedback.DecisionID || run.Decision.Request.QuestionRoute == nil ||
-		run.Decision.Request.QuestionRoute.QuestionID != feedback.QuestionID {
-		return nil // A terminal or replaced Decision cannot be changed by a late native result.
-	}
-	if message.request.Operation.ID == "" {
-		return errors.New("lifecycle reply result lacks its original durable operation")
-	}
-	return s.applyLifecycleQuestionAnswerReceipt(run, message.request, message.receipt, message.err)
 }

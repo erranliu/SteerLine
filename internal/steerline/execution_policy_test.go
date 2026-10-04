@@ -57,8 +57,8 @@ func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
 			Implementation: partial.ImplementationData,
 			State:          executionapi.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "policy-generation"},
 		}
-		message := &appServerLaunchMessage{phase: "session_prepared", request: request, receipt: receipt, err: errors.New("session receipt persistence failed")}
-		require(t, s.handleAppServerLaunchMessage(run.RunID, message))
+		_, _, applyErr := s.applyAppServerSessionReceipt(run, request, receipt, errors.New("session receipt persistence failed"))
+		require(t, applyErr)
 		snapshotResult, err := s.domainStore.Query(context.Background(), s.Config.identity)
 		require(t, err)
 		got := snapshotResult.Executions[0]
@@ -97,8 +97,8 @@ func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
 		request := lifecycleRequest(snapshot, *operation, executionapi.LifecycleStartTurn, executionapi.LifecycleInput{Turn: &input})
 		receipt := executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown, RequestID: workerFlowMockSession, Process: identity,
 			Implementation: cloneImplementationData(execution.ImplementationData), State: executionapi.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "policy-generation"}}
-		message := &appServerLaunchMessage{phase: "turn_result", request: request, receipt: receipt, err: errors.New("turn receipt persistence failed")}
-		require(t, s.handleAppServerLaunchMessage(run.RunID, message))
+		applyErr := s.applyAppServerTurnReceipt(run, request, receipt, nil, errors.New("turn receipt persistence failed"))
+		require(t, applyErr)
 		snapshotResult, err := s.domainStore.Query(context.Background(), s.Config.identity)
 		require(t, err)
 		got := snapshotResult.Executions[0]

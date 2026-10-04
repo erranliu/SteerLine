@@ -24,9 +24,6 @@ func CheckPolicy(p executionapi.PublicationPolicy, provider Config) error {
 }
 
 func CreateDescription(p executionapi.PublicationPolicy, provider Config) contracts.Command {
-	if p.Publisher == executionapi.PublisherHostService {
-		return contracts.Command{Executable: provider.Query.Executable, Args: []string{"pr", "create", "--repo", "{repository}", "--base", "{base}", "--head", "{head}", "--draft", "--title", "{title}", "--body", "{body}"}}
-	}
 	return contracts.Command{}
 }
 

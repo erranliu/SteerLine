@@ -33,7 +33,6 @@ type OperationRecord = contracts.OperationRecord
 type CommandRecord = contracts.CommandRecord
 
 type WorkerEnvironment = contracts.WorkerEnvironment
-type EnvironmentFeedback = contracts.EnvironmentFeedback
 type WorkerPreparation = contracts.WorkerPreparation
 type WorkerHostBlocker = contracts.WorkerHostBlocker
 

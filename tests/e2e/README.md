@@ -43,7 +43,7 @@ Run 持有本次产品/helper 构建和选择；Scenario 持有 scratch/证据�
 
 任务创建/查询使用当前 CLI。领取使用公开 SubmitControl/WaitControlReceipt，先 ResolveIdentity 再计算 Profile digest，与控制台/服务一致。执行身份通过公开 reader/query 的同一事务读取，不直接写 SQL 或读取私有业务状态。
 
-controlled 使用真实 SteerLine、Git、SQLite，helper 实现最小 app-server 和 GitHub provider。worker 暂存后请求 host_service 发布；中心真实 commit/push/create。loopback `git http-backend` 执行真实传输，Git 适配器保留正式 remote 身份及原始输出；外部 PR 状态只存于 provider 文件。
+controlled 使用真实 SteerLine、Git、SQLite，helper 实现最小 app-server 和 GitHub provider。worker 真实 commit/push/create；中心查询与核验真实合并后提交交付。loopback `git http-backend` 执行真实传输，Git 适配器保留正式 remote 身份及原始输出；外部 PR 状态只存于 provider 文件。
 
 受控场景上限 5 分钟，真实场景 10 分钟；普通驱动命令 30 秒，原生资源操作 45 秒；Orca 准备总期限 4 分钟，服务清理 30 秒，外部资源清理各 2 分钟。按真实条件等待，失败不自动重跑。
 
@@ -76,7 +76,7 @@ go test ./tests/e2e/internal/native -run '^TestSandboxReadinessExistingAccounts$
 
 脚本依赖 Go 和 `codex-cli 0.159.2`，可从任意当前目录通过绝对路径运行。默认使用 CODEX_HOME，未设置时使用用户 .codex。`approval_policy=never` 管理模型命令审批，不会批准 Windows UAC。测试不通过关闭 sandbox 或自动点击授权来处理初始化问题。
 
-L2 使用用户授权的 [SteerlineTest](https://github.com/erranliu/SteerlineTest)，需要 gh 写权限。每次克隆独立仓库，以 `codex/e2e/<随机ID>/<场景>/base` 保存最小 fixture 树及测试合同，不改变 main。正式 worker 分支针对该 base 创建真实 PR。local-codex 由中心发布；orca-codex 由模型执行 fixture publish.ps1，真实 commit/push/gh create。测试按匹配的 head SHA 转 ready 并合并，由真实 provider 确认交付。清理只关闭本次仍 open 的 PR、删除本次分支，保留真实 GitHub PR 历史。认证只存在项目 scratch，以环境引用传递，不写入产物。
+L2 使用用户授权的 [SteerlineTest](https://github.com/erranliu/SteerlineTest)，需要 gh 写权限。每次克隆独立仓库，以 `codex/e2e/<随机ID>/<场景>/base` 保存最小 fixture 树及测试合同，不改变 main。正式 worker 分支针对该 base 创建真实 PR。local-codex 与 orca-codex 均由模型执行 fixture publish.ps1，真实 commit/push/gh create。测试按匹配的 head SHA 转 ready 并合并，由真实 provider 确认交付。清理只关闭本次仍 open 的 PR、删除本次分支，保留真实 GitHub PR 历史。认证只存在项目 scratch，以环境引用传递，不写入产物。
 
 L3 live 使用 loopback Git/PR provider，两条链路均执行真实模型；与无 token 环境分别选择。Orca 使用真实 CLI 创建、绑定、结算、清理资源。测试 CLI 适配器为新建终端注入隔离环境；当前版本长文本注入若明确停在 Pasted Content 输入框，则完成该原终端的一次 Enter，不重发文本。readiness 探针、业务命令和结算都需要真实模型及原生证据，不合成权限或成功回执。
 

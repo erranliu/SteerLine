@@ -11,8 +11,8 @@ const PublisherWorker = "worker"
 const PublisherHostService = "host_service"
 
 func (p PublicationPolicy) Validate() error {
-	if p.Publisher != PublisherWorker && p.Publisher != PublisherHostService {
-		return errors.New("publication_policy.publisher must explicitly be worker or host_service")
+	if p.Publisher != PublisherWorker {
+		return errors.New("publication_policy.publisher must explicitly be worker; host_service and profile delegation are retired")
 	}
 	return nil
 }

@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
@@ -207,7 +205,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	feedbackPrompt := workerFeedbackText(answer, run.Decision.Request)
 	fixedConfig, err := service.executionConfigForRun(run)
 	require(t, err)
-	fullPrompt := feedbackPrompt + publicationTargetInstruction(fixedConfig) + publication.WorkerInstruction(run.RunID)
+	fullPrompt := feedbackPrompt + publicationTargetInstruction(fixedConfig)
 	feedbackDir := filepath.Join(c.RunDir, "runs", run.RunID, "turns", command.CommandID)
 	savedPrompt, err := os.ReadFile(filepath.Join(feedbackDir, "prompt.txt"))
 	if err != nil || string(savedPrompt) != fullPrompt {

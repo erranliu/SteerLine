@@ -61,7 +61,6 @@ type Config struct {
 	workerEnv               map[string]string
 	configDigest            string
 	globalExecution         bool
-	profilePublication      bool
 }
 
 // LoadedConfigDigest identifies the project and global execution file bytes

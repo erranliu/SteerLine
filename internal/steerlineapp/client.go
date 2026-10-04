@@ -57,7 +57,6 @@ func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef
 	if ref.Key == "" {
 		ref.Key = ref.ConfigPath + "\x00" + ref.RunDir
 	}
-	logs := steerlineclient.NewLogReader(func(first []byte) api.LogNormalizer { return selectLogNormalizer(first) })
 	freshness := 30 * time.Second
 	if poll, err := time.ParseDuration(c.TaskPoll); err == nil && poll*3 > freshness {
 		freshness = poll * 3
@@ -151,7 +150,6 @@ func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef
 			}
 			return ""
 		},
-		ReadLog: logs.ReadLog,
 	}, nil
 }
 
@@ -284,4 +282,8 @@ func clientServiceInstruction(ref api.ProjectRef) string {
 		return fmt.Sprintf("服务窗口不可用：缺少 %s；运行 steerline launchers", launcher)
 	}
 	return launcher
+}
+
+func (r *clientReader) ActivityEvents(ctx context.Context, execution, attempt string, after int64) ([]contracts.DomainEvent, error) {
+	return r.store.Events(ctx, r.project, execution, attempt, after, query.DefaultEventPageSize, query.MaxEventPageBytes)
 }

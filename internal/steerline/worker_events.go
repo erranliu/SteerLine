@@ -2,7 +2,6 @@ package steerline
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -44,29 +43,10 @@ func (s *Service) recordWorkerTurnStarted(run *Run, workflow *WorkflowRunRecord,
 		if attempt := s.workflowAttempt(run, run.AttemptID); attempt != nil {
 			attempt.Status, attempt.UpdatedAt = "running", now()
 		}
-		if run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.QuestionRoute == nil && run.Decision.Request.HostTarget == nil {
+		if run.Decision != nil && run.Decision.Status == "answer_saved" && run.Decision.Request.QuestionRoute == nil {
 			s.setDecisionStatus(run, "reply_accepted")
 		}
-		// A host gate may display another Decision while this original business
-		// input starts. Consume only the answer bound to its accepted Command.
-		if environment := execution.Environment; s.domainStore != nil && environment != nil && environment.DeferredDecisionID != "" {
-			for i := range s.domain.Decisions {
-				deferred := &s.domain.Decisions[i]
-				if deferred.DecisionID != environment.DeferredDecisionID || deferred.ExecutionID != execution.ExecutionID || deferred.AttemptID != run.AttemptID || deferred.Status != "answer_saved" {
-					continue
-				}
-				var request DecisionRequest
-				var answer DecisionAnswer
-				if json.Unmarshal(deferred.Request, &request) != nil || json.Unmarshal(deferred.Answer, &answer) != nil || request.QuestionRoute != nil || request.HostTarget != nil {
-					continue
-				}
-				command, err := s.commandStore.CommandByIdempotency(context.Background(), s.Config.identity, decisionAnswerKey(answer))
-				if err == nil && command.CommandID == commandID && command.Status == "accepted" && command.TargetID == deferred.DecisionID {
-					deferred.Status, deferred.Version, deferred.UpdatedAt = "reply_accepted", deferred.Version+1, now()
-					s.markWorkerDecisionWrite(deferred.DecisionID)
-				}
-			}
-		}
+
 		execution.Status, execution.Error = "active", nil
 		s.refreshRun(run)
 		execution.TurnStartedAt, execution.TurnEndedAt = ptr(now()), nil

@@ -32,22 +32,8 @@ func TestCD65HistoryAndPreparation(t *testing.T) {
 }
 
 func testCD65HostGateKeepsTrustedActionSeparate(t *testing.T) {
-	run := &Run{RunID: "workflow", ExecutionID: "execution", AttemptID: "attempt"}
-	request := DecisionRequest{Question: "Worker environment requires review", AllowFreeText: true, HostTarget: &HostActionTarget{ExecutionID: "execution", TurnID: "turn", BlockerID: "blocker"},
-		Options: []executionapi.DecisionOption{{ID: "open_terminal", Label: "Open original terminal", Receiver: "center", Action: "open_terminal"},
-			{ID: "recheck_environment", Label: "Recheck environment", Receiver: "center", Action: "recheck_environment"}}}
-	decision, err := WriteDecisionRequest(run, request)
-	require(t, err)
-	if decision.Status != "pending" || decision.Request.HostTarget == nil || decision.Request.HostTarget.ExecutionID != run.ExecutionID || len(decision.Request.Options) != 2 {
-		t.Fatal("host action request lost its fixed center-owned target or trusted options")
-	}
-	for _, option := range decision.Request.Options {
-		if option.Receiver != "center" || option.Action != option.ID {
-			t.Fatalf("host action was not expressed as a trusted center option: %+v", option)
-		}
-	}
 	process := executionapi.ProcessIdentity{Kind: "fixture", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "generation"}
-	authorization := &executionapi.HostActionAuthorization{ExecutionID: "execution", AttemptID: "attempt", TurnID: "turn", DecisionID: decision.ID, BlockerID: "blocker", DecisionVersion: decision.Version}
+	authorization := &executionapi.HostActionAuthorization{ExecutionID: "execution", AttemptID: "attempt", TurnID: "turn", CommandID: "command", BlockerID: "blocker", BlockerVersion: 1}
 	if err := (executionapi.HostActionInput{Kind: executionapi.HostOpenOriginal, Process: &process, Authorization: authorization}).Validate(); err != nil {
 		t.Fatalf("original host action was not accepted by its durable value contract: %v", err)
 	}

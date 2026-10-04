@@ -132,6 +132,9 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					continue
 				}
 				op, stopErr := s.stopRunExecution(ctx, run, worker)
+				if errors.Is(stopErr, errLifecycleEffectPending) {
+					continue
+				}
 				if stopErr != nil {
 					s.executionRecord(run).Error = ptr("discarded task worker stop requires reconciliation: " + clip(stopErr.Error(), 1000))
 					s.refreshRun(run)
@@ -394,7 +397,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	} else if !os.IsNotExist(loadErr) {
 		return loadErr
 	}
-	if err := s.commitExecutionOperation(s.localWorkerRun(workflowRunID), op, expectedOperation); err != nil {
+	if err := s.commitExecutionOperation(s.find(workflowRunID), op, expectedOperation); err != nil {
 		return err
 	}
 	return s.recordNativeStopCleanup(ctx, taskID, cleanupItem, op)

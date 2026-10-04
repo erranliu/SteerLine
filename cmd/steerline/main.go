@@ -230,6 +230,30 @@ func run() error {
 				return fmt.Errorf("set_dispatch_mode does not accept -task-id")
 			}
 			payload = api.ControlPayload{Mode: *controlMode}
+		case "open_terminal", "recheck_environment":
+			if *runID == "" {
+				return fmt.Errorf("environment action requires -run-id")
+			}
+			snapshot := product.ReadProject(ctx, "", api.ProjectSnapshot{})
+			runtimeState := snapshot.Connection.Snapshot.Runtime
+			if runtimeState == nil {
+				return fmt.Errorf("service snapshot is unavailable")
+			}
+			var target *contracts.HostActionTarget
+			for _, run := range runtimeState.Runs {
+				if run.RunID == *runID {
+					var targetErr error
+					target, targetErr = api.EnvironmentTarget(run)
+					if targetErr != nil {
+						return targetErr
+					}
+					break
+				}
+			}
+			if target == nil {
+				return fmt.Errorf("run has no current environment blocker")
+			}
+			payload = api.ControlPayload{Environment: target}
 		case "pause_dispatch", "resume_dispatch", "stop_service":
 			if *taskID != "" || *controlMode != "" {
 				return fmt.Errorf("%s does not accept task or mode parameters", *action)

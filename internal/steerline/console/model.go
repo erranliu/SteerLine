@@ -1,7 +1,6 @@
 package console
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -54,6 +53,7 @@ type consoleRow struct {
 }
 
 type actionState struct {
+	EnvironmentTarget      *contracts.HostActionTarget
 	RequestID              string
 	Action                 string
 	TaskID                 string
@@ -109,7 +109,7 @@ type projectState struct {
 	actions map[string]*actionState
 
 	activityKey        string
-	activityCursor     api.JournalCursor
+	activityCursor     api.ActivityCursor
 	activityEvents     []contracts.ActivityEvent
 	activityError      string
 	activityInFlight   bool
@@ -342,7 +342,7 @@ func (m Model) readProject(index int) tea.Cmd {
 	}
 }
 
-func (m Model) readActivity(index int, runID, executionID, attemptID, path, key string) tea.Cmd {
+func (m Model) readActivity(index int, runID, executionID, attemptID, key string) tea.Cmd {
 	state := &m.projects[index]
 	if state.activityInFlight {
 		return nil
@@ -353,7 +353,7 @@ func (m Model) readActivity(index int, runID, executionID, attemptID, path, key 
 	base := state.activityCursor
 	query, ctx, ref := state.client, m.ctx, state.ref
 	return func() tea.Msg {
-		batch, err := query.Activity(ctx, runID, executionID, attemptID, path, base)
+		batch, err := query.Activity(ctx, runID, executionID, attemptID, base)
 		return activityResultMsg{projectKey: ref.Key, identity: ref.Identity, key: key, generation: generation, base: base, batchActivity: batch.Activity, next: batch.Cursor, reset: batch.Reset, diagnostics: batch.Diagnostics, err: err}
 	}
 }
@@ -445,6 +445,10 @@ func (m Model) submitControl(index int, action, taskID, requestID string, instan
 	ref := state.ref
 	payload := api.ControlPayload{}
 	switch action {
+	case "open_terminal", "recheck_environment":
+		if pending := state.actions[requestID]; pending != nil {
+			payload.Environment = pending.EnvironmentTarget
+		}
 	case "start_task":
 		profile := state.actions[requestID]
 		if profile != nil && profile.ExecutionProfileID != "" {
@@ -507,9 +511,9 @@ type projectMsg struct {
 type activityResultMsg struct {
 	projectKey, identity, key string
 	generation                uint64
-	base                      api.JournalCursor
+	base                      api.ActivityCursor
 	batchActivity             []contracts.ActivityEvent
-	next                      api.JournalCursor
+	next                      api.ActivityCursor
 	reset                     bool
 	diagnostics               []string
 	err                       error
@@ -828,16 +832,13 @@ func controlRequestMatchesAction(request *api.ControlRequest, action *actionStat
 	if request == nil || action == nil || request.RequestID != action.RequestID || request.Action != action.Action || request.InstanceID != action.TargetInstance || viewCanonical(request.RepositoryIdentity) != viewCanonical(repositoryIdentity) {
 		return false
 	}
-	var payload struct {
-		TaskID                 string `json:"task_id"`
-		Mode                   string `json:"mode"`
-		ExecutionProfileID     string `json:"execution_profile_id"`
-		ExecutionProfileDigest string `json:"execution_profile_digest"`
-	}
+	var payload api.ControlPayload
 	if len(request.Payload) > 0 && json.Unmarshal(request.Payload, &payload) != nil {
 		return false
 	}
 	switch action.Action {
+	case "open_terminal", "recheck_environment":
+		return payload.Environment != nil && payload.Environment.RunID == action.TaskID && (action.EnvironmentTarget == nil || *payload.Environment == *action.EnvironmentTarget)
 	case "start_task":
 		return payload.TaskID == action.TaskID && payload.Mode == "" && payload.ExecutionProfileID == action.ExecutionProfileID && payload.ExecutionProfileDigest == action.ExecutionProfileDigest
 	case "set_dispatch_mode":
@@ -1106,13 +1107,9 @@ func (m Model) refreshSelectedLogs(index int) (Model, tea.Cmd) {
 	if attemptID == "" {
 		attemptID = run.RunID
 	}
-	var activityPath string
-	if attemptID == run.AttemptID && run.LogPath != nil {
-		activityPath = *run.LogPath
-	}
-	activityKey := strings.Join([]string{run.RunID, run.ExecutionID, attemptID, activityPath}, "\x00")
+	activityKey := strings.Join([]string{run.RunID, run.ExecutionID, attemptID}, "\x00")
 	if state.activityKey != activityKey {
-		state.activityKey, state.activityCursor = activityKey, api.JournalCursor{}
+		state.activityKey, state.activityCursor = activityKey, api.ActivityCursor{}
 		state.activityEvents, state.activityError = nil, ""
 		state.activityGeneration++
 	}
@@ -1139,7 +1136,7 @@ func (m Model) refreshSelectedLogs(index int) (Model, tea.Cmd) {
 		}
 	}
 	if state.view.Follow && !state.activityInFlight {
-		cmds = append(cmds, m.readActivity(index, run.RunID, run.ExecutionID, attemptID, activityPath, activityKey))
+		cmds = append(cmds, m.readActivity(index, run.RunID, run.ExecutionID, attemptID, activityKey))
 	}
 	return m, tea.Batch(cmds...)
 }
@@ -1338,9 +1335,7 @@ func (m Model) changeFilter(filter int) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string { return render(m) }
 
-func sameCursor(a, b api.JournalCursor) bool {
-	return a.Path == b.Path && a.FileID == b.FileID && a.Generation == b.Generation && a.Offset == b.Offset && a.ScanOffset == b.ScanOffset && a.LastSeq == b.LastSeq && a.HaveSeq == b.HaveSeq && a.FallbackSeq == b.FallbackSeq && a.Dropping == b.Dropping && a.SkipUntilNewline == b.SkipUntilNewline && a.AnchorOffset == b.AnchorOffset && a.AnchorLength == b.AnchorLength && a.AnchorHash == b.AnchorHash && a.HeaderLength == b.HeaderLength && a.HeaderHash == b.HeaderHash && a.Initialized == b.Initialized && bytes.Equal(a.Pending, b.Pending)
-}
+func sameCursor(a, b api.ActivityCursor) bool { return a == b }
 
 func stringValue(value *string) string {
 	if value == nil {

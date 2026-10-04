@@ -31,7 +31,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	}
 	codex, err := native.CodexExecutable("codex")
 	s.Must(err)
-	publisher, host := "host_service", "local"
+	publisher, host := "worker", "local"
 	var orcaConfig map[string]any
 	if chain == "orca-codex" {
 		host, publisher = "orca", "worker"

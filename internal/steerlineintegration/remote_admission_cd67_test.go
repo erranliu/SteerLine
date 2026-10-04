@@ -23,7 +23,7 @@ func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
 		t.Fatalf("remote permission evidence gate lost: %s", reason)
 	}
 	c.Host = "local"
-	c.PublicationPolicy.Publisher = "host_service"
+	c.PublicationPolicy.Publisher = "worker"
 	c.PR = hostPublicationProviderFixture()
 	c.ExecutionPolicy.Network = "deny"
 	settings := nativeProfileSettings(c)

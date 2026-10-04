@@ -18,8 +18,7 @@
             "windows_sandbox": "elevated"
           }
         }
-      ],
-      "publication_policy": {"publisher": "host_service"}
+      ]
     },
     {
       "id": "local-luna-xhigh",
@@ -37,8 +36,7 @@
             "windows_sandbox": "elevated"
           }
         }
-      ],
-      "publication_policy": {"publisher": "host_service"}
+      ]
     },
     {
       "id": "orca-local-luna-xhigh",
@@ -65,8 +63,7 @@
             "wait_timeout": "15m"
           }
         }
-      ],
-      "publication_policy": {"publisher": "worker"}
+      ]
     },
     {
       "id": "orca-local-luna-medium",
@@ -93,8 +90,7 @@
             "wait_timeout": "15m"
           }
         }
-      ],
-      "publication_policy": {"publisher": "worker"}
+      ]
     },
     {
       "id": "orca-local-luna-high",
@@ -121,8 +117,7 @@
             "wait_timeout": "15m"
           }
         }
-      ],
-      "publication_policy": {"publisher": "worker"}
+      ]
     }
   ]
 }

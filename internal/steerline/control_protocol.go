@@ -157,7 +157,7 @@ func validateControlRequest(req ControlRequest, instanceID, repositoryIdentity s
 }
 func validControlAction(action string) bool {
 	switch action {
-	case "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service":
+	case "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment":
 		return true
 	}
 	return false
@@ -186,7 +186,15 @@ func decodeControlPayload(req ControlRequest) (ControlPayload, error) {
 			return p, err
 		}
 	}
+	if p.Environment != nil && req.Action != "open_terminal" && req.Action != "recheck_environment" {
+		return p, errors.New("environment target is only valid for environment actions")
+	}
 	switch req.Action {
+	case "open_terminal", "recheck_environment":
+		target := p.Environment
+		if len(fields) != 1 || target == nil || !controlIDPattern.MatchString(target.RunID) || !controlIDPattern.MatchString(target.ExecutionID) || !controlIDPattern.MatchString(target.AttemptID) || !controlIDPattern.MatchString(target.TurnID) || !controlIDPattern.MatchString(target.BlockerID) || target.Version == 0 {
+			return p, errors.New("environment action requires its exact run, execution, attempt, turn and blocker version")
+		}
 	case "start_task":
 		if strings.TrimSpace(p.TaskID) == "" || len(fields) != 1 && len(fields) != 3 || p.ExecutionProfileID == "" && p.ExecutionProfileDigest != "" || p.ExecutionProfileID != "" && !evidenceDigest(p.ExecutionProfileDigest) {
 			return p, errors.New("start_task requires task_id and a complete configured execution profile selection")

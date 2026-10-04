@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
-	"path/filepath"
+
 	"strings"
 	"testing"
 	"time"
@@ -20,6 +20,7 @@ type readerFixture struct {
 	closed   int
 	closeErr error
 	command  func(context.Context, string) (contracts.CommandRecord, error)
+	activity []contracts.DomainEvent
 	domain   contracts.DomainSnapshot
 }
 
@@ -214,25 +215,25 @@ func TestCM71UnknownControlUsesOriginalRequestAndRejectsConflict(t *testing.T) {
 	}
 }
 func TestCM71ActivityChecksOriginalAttemptBeforeReadingLog(t *testing.T) {
-	r := &readerFixture{domain: contracts.DomainSnapshot{Executions: []contracts.ExecutionRecord{{ExecutionID: "exec", WorkflowRunID: "run"}}, Attempts: []contracts.StepAttemptRecord{{ExecutionID: "exec", AttemptID: "old", EventPath: "old/events.jsonl"}, {ExecutionID: "exec", AttemptID: "new", EventPath: "new/events.jsonl"}}}}
-	reads := 0
-	c := testClient(t, api.Resources{OpenReader: func(context.Context) (api.Reader, error) { return r, nil }, ReadLog: func(path string, _ api.JournalCursor) (api.LogBatch, error) {
-		reads++
-		if path != filepath.Join("state", "old/events.jsonl") {
-			t.Fatalf("old attempt retargeted to %s", path)
-		}
-		return api.LogBatch{}, nil
-	}})
-	if _, err := c.Activity(context.Background(), "run", "exec", "old", "", api.JournalCursor{}); err != nil {
+	r := &readerFixture{domain: contracts.DomainSnapshot{Executions: []contracts.ExecutionRecord{{ExecutionID: "exec", WorkflowRunID: "run"}}, Attempts: []contracts.StepAttemptRecord{{ExecutionID: "exec", AttemptID: "old"}, {ExecutionID: "exec", AttemptID: "new"}}}}
+	c := testClient(t, api.Resources{OpenReader: func(context.Context) (api.Reader, error) { return r, nil }})
+	if _, err := c.Activity(context.Background(), "run", "exec", "old", api.ActivityCursor{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Activity(context.Background(), "run", "exec", "old", filepath.Join("state", "new/events.jsonl"), api.JournalCursor{}); err == nil {
-		t.Fatal("current path overrode original attempt")
+	if _, err := c.Activity(context.Background(), "run", "exec", "old", api.ActivityCursor{RunID: "run", ExecutionID: "exec", AttemptID: "new", Initialized: true}); err == nil {
+		t.Fatal("current cursor overrode original attempt")
 	}
-	if _, err := c.Activity(context.Background(), "other", "exec", "old", "", api.JournalCursor{}); err == nil {
+	if _, err := c.Activity(context.Background(), "other", "exec", "old", api.ActivityCursor{}); err == nil {
 		t.Fatal("cross-run activity read")
 	}
-	if reads != 1 {
-		t.Fatalf("rejected activity read performed I/O: %d", reads)
+}
+
+func (r *readerFixture) ActivityEvents(_ context.Context, _, _ string, after int64) ([]contracts.DomainEvent, error) {
+	var events []contracts.DomainEvent
+	for _, e := range r.activity {
+		if e.EventID > after {
+			events = append(events, e)
+		}
 	}
+	return events, nil
 }

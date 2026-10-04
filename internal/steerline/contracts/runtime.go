@@ -14,7 +14,7 @@ type Repository struct {
 	Identity string `json:"identity"`
 }
 
-const WorkerFlowRuntimeSchema = 16
+const WorkerFlowRuntimeSchema = 17
 const DecisionRequestFormatVersion = 2
 
 type PendingQuestion struct {
@@ -126,6 +126,7 @@ type TaskCandidate struct {
 // ProcessIdentity is a host-neutral identity of a running worker. Concrete
 // process and session bindings are stored in implementation data envelopes.
 type Run struct {
+	EnvironmentBlocker   *WorkerHostBlocker            `json:"environment_blocker,omitempty"`
 	RecoveryRequired     bool                          `json:"recovery_required,omitempty"`
 	RecoveryState        string                        `json:"recovery_state,omitempty"`
 	RecoveryVersion      uint64                        `json:"recovery_version,omitempty"`
@@ -202,25 +203,26 @@ type DecisionRequest struct {
 	QuestionRoute *executionapi.QuestionRoute   `json:"question_route,omitempty"`
 	Recommended   string                        `json:"recommended,omitempty"`
 	AllowFreeText bool                          `json:"allow_free_text,omitempty"`
-	HostTarget    *HostActionTarget             `json:"host_target,omitempty"`
 }
 
 // DecisionState is the runtime projection of one decision. SQLite owns the
 // accepted request and answer; callers submit answers through CommandService.
 type DecisionState struct {
-	ID              string              `json:"id"`
-	AttemptID       string              `json:"attempt_id,omitempty"`
-	Version         uint64              `json:"version"`
-	Request         DecisionRequest     `json:"request"`
-	Status          string              `json:"status"`
-	OptionID        string              `json:"option_id,omitempty"`
-	Note            string              `json:"note,omitempty"`
-	Answers         map[string][]string `json:"answers,omitempty"`
-	SourceAttemptID string              `json:"source_attempt_id,omitempty"`
-	RecoveryVersion uint64              `json:"recovery_version,omitempty"`
-	AnsweredBy      string              `json:"answered_by,omitempty"`
-	AnsweredAt      *time.Time          `json:"answered_at,omitempty"`
-	AppliedAt       *time.Time          `json:"applied_at,omitempty"`
+	AnswerDecisionVersion uint64              `json:"answer_decision_version,omitempty"`
+	AnswerRunRevision     uint64              `json:"answer_run_revision,omitempty"`
+	ID                    string              `json:"id"`
+	AttemptID             string              `json:"attempt_id,omitempty"`
+	Version               uint64              `json:"version"`
+	Request               DecisionRequest     `json:"request"`
+	Status                string              `json:"status"`
+	OptionID              string              `json:"option_id,omitempty"`
+	Note                  string              `json:"note,omitempty"`
+	Answers               map[string][]string `json:"answers,omitempty"`
+	SourceAttemptID       string              `json:"source_attempt_id,omitempty"`
+	RecoveryVersion       uint64              `json:"recovery_version,omitempty"`
+	AnsweredBy            string              `json:"answered_by,omitempty"`
+	AnsweredAt            *time.Time          `json:"answered_at,omitempty"`
+	AppliedAt             *time.Time          `json:"applied_at,omitempty"`
 	// Decoded only to reject projections written by the old sidecar-answer
 	// implementation. These paths are never read as answer authority.
 	RequestPath string `json:"request_path,omitempty"`
@@ -263,6 +265,9 @@ func RuntimeFromCheckpoint(c ServiceCheckpoint) Runtime {
 }
 
 type HostActionTarget struct {
+	RunID       string `json:"run_id"`
+	AttemptID   string `json:"attempt_id"`
+	Version     uint64 `json:"version"`
 	ExecutionID string `json:"execution_id"`
 	TurnID      string `json:"turn_id"`
 	BlockerID   string `json:"blocker_id"`

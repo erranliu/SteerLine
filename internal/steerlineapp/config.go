@@ -85,10 +85,8 @@ func loadConfig(path string, directory *steerline.ExecutionDirectory, processHos
 	if err := config.ExecutionRequirements.Validate(); err != nil {
 		return config, err
 	}
-	if config.PublicationPolicy.Publisher != steerline.PublisherExecutionProfile {
-		if err := config.PublicationPolicy.Validate(); err != nil {
-			return config, err
-		}
+	if err := config.PublicationPolicy.Validate(); err != nil {
+		return config, err
 	}
 	if err := publication.ValidateNonSecret(config.PR, config.Git); err != nil {
 		return config, err
@@ -215,11 +213,7 @@ func validateQueryProfiles(config steerline.Config) error {
 			return errors.New("execution profile ID or name is invalid")
 		}
 		seen[profile.ID] = true
-		if profile.ConfiguredPublicationPolicy != nil {
-			if err := profile.ConfiguredPublicationPolicy.Validate(); err != nil {
-				return err
-			}
-		}
+
 	}
 	if config.DefaultExecutionProfile != "" && !seen[config.DefaultExecutionProfile] {
 		return errors.New("default_execution_profile is not configured")

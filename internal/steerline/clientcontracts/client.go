@@ -36,7 +36,7 @@ type ProjectSnapshot struct {
 }
 
 type LogBatch struct {
-	Cursor      JournalCursor
+	Cursor      ActivityCursor
 	Reset       bool
 	Activity    []contracts.ActivityEvent
 	Diagnostics []string
@@ -73,11 +73,13 @@ func (e *Error) Unwrap() error { return e.Cause }
 type ControlAction string
 
 const (
-	StartTask       ControlAction = "start_task"
-	SetDispatchMode ControlAction = "set_dispatch_mode"
-	PauseDispatch   ControlAction = "pause_dispatch"
-	ResumeDispatch  ControlAction = "resume_dispatch"
-	StopService     ControlAction = "stop_service"
+	OpenTerminal       ControlAction = "open_terminal"
+	RecheckEnvironment ControlAction = "recheck_environment"
+	StartTask          ControlAction = "start_task"
+	SetDispatchMode    ControlAction = "set_dispatch_mode"
+	PauseDispatch      ControlAction = "pause_dispatch"
+	ResumeDispatch     ControlAction = "resume_dispatch"
+	StopService        ControlAction = "stop_service"
 )
 
 type ControlInput struct {
@@ -118,6 +120,7 @@ type CapabilityFilter struct {
 type Reader interface {
 	Close() error
 	ReadProjectView(context.Context, string, int) (contracts.ProjectView, error)
+	ActivityEvents(context.Context, string, string, int64) ([]contracts.DomainEvent, error)
 	Domain(context.Context) (contracts.DomainSnapshot, error)
 	DatabaseVersion(context.Context) (string, uint64, error)
 	ShowNativeTask(context.Context, string) (contracts.NativeTaskPage, error)
@@ -179,7 +182,6 @@ type Resources struct {
 	ResolveStartTask        func(context.Context, string, string) (ControlPayload, error)
 	InspectRecovery         func(context.Context, string) (RecoveryInspection, error)
 	DecisionAvailability    func(context.Context, *contracts.Run) string
-	ReadLog                 func(string, JournalCursor) (LogBatch, error)
 	Close                   func() error
 }
 type Factory func(context.Context, ProjectRef) (Resources, error)
@@ -202,7 +204,7 @@ type TaskClient interface {
 type ProjectQueries interface {
 	ReadProject(context.Context, string, ProjectSnapshot) ProjectSnapshot
 	TaskSnapshot(context.Context) (*contracts.TaskSnapshot, error)
-	Activity(context.Context, string, string, string, string, JournalCursor) (LogBatch, error)
+	Activity(context.Context, string, string, string, ActivityCursor) (LogBatch, error)
 }
 type ConversationQueries interface {
 	Conversation(context.Context, contracts.ConversationFilter, string) (contracts.ConversationPage, error)
@@ -257,4 +259,11 @@ type Client interface {
 	ConversationQueries
 	Controls
 	Decisions
+}
+
+// ActivityCursor belongs to one canonical database stream.
+type ActivityCursor struct {
+	RunID, ExecutionID, AttemptID string
+	AfterEventID                  int64
+	Initialized                   bool
 }

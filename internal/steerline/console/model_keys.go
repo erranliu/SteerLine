@@ -30,6 +30,12 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	state := &m.projects[m.selected]
+	if key.String() == "ctrl+e" {
+		return m.createAction("recheck_environment", "")
+	}
+	if key.String() == "ctrl+o" {
+		return m.createAction("open_terminal", "")
+	}
 	if m.detailExpanded {
 		switch key.String() {
 		case "q", "ctrl+c":

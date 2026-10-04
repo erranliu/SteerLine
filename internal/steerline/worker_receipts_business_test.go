@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"context"
+	"errors"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"strings"
@@ -63,7 +64,7 @@ func TestAppServerRejectedEventReleasesObserver(t *testing.T) {
 
 func TestAppServerRecoveryDoesNotRaceInFlightLaunch(t *testing.T) {
 	run := &Run{RunID: newID(), ExecutionID: newID(), DomainTaskID: "8", Protocol: string(neutralProtocol), WorkflowVersion: WorkerFlowVersion}
-	service := &Service{appServerLaunching: map[string]string{run.RunID: newID()}, State: Runtime{}, domain: DomainSnapshot{Tasks: []TaskRecord{{TaskID: "8", Status: "in_progress"}},
+	service := &Service{lifecycleEffects: map[string]pendingLifecycleEffect{newID(): {runID: run.RunID}}, State: Runtime{}, domain: DomainSnapshot{Tasks: []TaskRecord{{TaskID: "8", Status: "in_progress"}},
 		WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: run.RunID, WorkflowVersion: WorkerFlowVersion, Phase: "queued"}},
 		Executions:   []ExecutionRecord{{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, PendingCommandID: newID()}}}, runs: []*Run{run},
 	}
@@ -91,9 +92,10 @@ func TestAppServerLateReplyCannotModifyTerminalTask(t *testing.T) {
 			View   Runtime
 			Domain DomainSnapshot
 		}{service.State, service.domain})
-		late := &lifecycleReplyMessage{request: executionapi.LifecycleRequest{Input: executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{DecisionID: run.Decision.ID, QuestionID: "original"}}}}
-		if err := service.handleLifecycleFeedbackMessage(run.RunID, late); err != nil {
-			t.Fatal(err)
+		late := lifecycleEffectResult{request: executionapi.LifecycleRequest{Operation: executionapi.Operation{ID: "reply", Action: string(executionapi.LifecycleDeliverFeedback)}, Input: executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{DecisionID: run.Decision.ID, QuestionID: "original"}}}}
+		service.lifecycleEffects = map[string]pendingLifecycleEffect{"reply": {runID: run.RunID, apply: func(*Run, lifecycleEffectResult) error { t.Fatal("terminal task consumed a late receipt"); return nil }}}
+		if err := service.handleWorkerMessage(workerMessage{runID: run.RunID, effect: &late}); !errors.Is(err, ErrWorkerTurnStale) {
+			t.Fatalf("late reply admission: %v", err)
 		}
 		if before != digestValue(struct {
 			View   Runtime

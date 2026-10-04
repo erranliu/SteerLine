@@ -9,7 +9,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+
 	"github.com/erranliu/SteerLine/internal/steerline/console"
 )
 
@@ -161,12 +161,4 @@ func makeConsoleProjectRef(name, path string, config steerline.Config, home, bin
 	ref := api.ProjectRef{Key: key, Name: name, ConfigPath: configPath, Presentation: projectPresentation(config), ApplicationHome: home, ApplicationBin: bin, Identity: identity, RunDir: absoluteRunDir}
 	ref.Presentation.ServiceInstruction = clientServiceInstruction(ref)
 	return ref
-}
-
-func selectLogNormalizer(first []byte) steerline.Normalizer {
-	normalizer := steerline.NewPiNormalizer()
-	if normalizer.Detect(first) {
-		return normalizer
-	}
-	return codexworker.NewNormalizer()
 }

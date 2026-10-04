@@ -11,7 +11,7 @@ import (
 )
 
 func executionPublicationFixture() executionapi.PublicationPolicy {
-	return executionapi.PublicationPolicy{Publisher: "host_service"}
+	return executionapi.PublicationPolicy{Publisher: "worker"}
 }
 func hostPublicationProviderFixture() publication.Config {
 	return publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: Command{Executable: os.Args[0], Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: Command{Executable: os.Args[0], Args: []string{"pr", "close", "{pr_url}"}}}
@@ -23,7 +23,7 @@ func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
 	workflow, _ := f.s.workflowRecords(f.run)
 	original := *workflow.ExecutionProfile
 	current := f.c
-	current.PublicationPolicy.Publisher = "worker"
+	current.PublicationPolicy.Publisher = "host_service"
 	current.PR.BaseURL, current.PR.Repository, current.PR.TokenEnv = "https://other.invalid", "other/repo", "OTHER_TOKEN"
 	current.PR.Query = Command{Executable: "must-not-be-called", Args: []string{"changed"}}
 	current.PR.Close = current.PR.Query
@@ -60,9 +60,9 @@ func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
 
 func TestPublicationOriginalProviderAfterRestartAndRemoteDrift(t *testing.T) {
 	f := newLocalWorkerPublicationFixture(t)
-	workflow, execution := f.s.workflowRecords(f.run)
-	info, err := f.s.publishLocalWorkerRun(f.ctx, f.run, workflow, execution, f.turnID)
-	require(t, err)
+	info := PRInfo{URL: "https://github.com/owner/repo/pull/1", Repository: "owner/repo", HeadRepository: "owner/repo", HeadBranch: f.run.WorkspaceIntent.Branch, HeadRevision: f.base, BaseBranch: "main", State: "open"}
+	// The worker supplied this external PR; the center can only query/close it.
+	require(t, os.WriteFile(os.Getenv("STEERLINE_TEST_HOST_GH_FILE"), mustJSON(info), 0600))
 	original := *f.s.domain.WorkflowRuns[0].ExecutionProfile
 	require(t, f.s.Close())
 	changed := f.c
@@ -98,7 +98,7 @@ func TestPublicationOriginalProviderAfterRestartAndRemoteDrift(t *testing.T) {
 	if err := reader.bindPublicationTarget(f.ctx); err == nil {
 		t.Fatal("different physical remote accepted")
 	}
-	if count, err := os.ReadFile(os.Getenv("STEERLINE_TEST_HOST_GH_FILE") + ".creates"); err != nil || string(count) != "x" {
-		t.Fatalf("query/close/recovery repeated create: %q %v", count, err)
+	if _, err := os.Stat(os.Getenv("STEERLINE_TEST_HOST_GH_FILE") + ".creates"); !os.IsNotExist(err) {
+		t.Fatalf("center query/close/recovery attempted publication: %v", err)
 	}
 }

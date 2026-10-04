@@ -75,11 +75,12 @@ func (c CommandService) AcceptAnswer(ctx context.Context, command CommandRecord,
 
 func decisionAnswerKey(answer DecisionAnswer) string {
 	return "answer:" + answer.DecisionID + ":" + digestValue(struct {
-		OptionID, Note  string
-		Answers         map[string][]string
-		SourceAttemptID string
-		RecoveryVersion uint64
-	}{answer.OptionID, strings.TrimSpace(answer.Note), answer.Answers, answer.SourceAttemptID, answer.ExpectedRecoveryVersion})
+		OptionID, Note               string
+		Answers                      map[string][]string
+		SourceAttemptID              string
+		RecoveryVersion              uint64
+		DecisionVersion, RunRevision uint64
+	}{answer.OptionID, strings.TrimSpace(answer.Note), answer.Answers, answer.SourceAttemptID, answer.ExpectedRecoveryVersion, answer.ExpectedDecisionVersion, answer.ExpectedRunRevision})
 }
 
 func (c CommandService) Pending(ctx context.Context, limit int) ([]CommandRecord, error) {

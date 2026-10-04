@@ -11,11 +11,14 @@ func TestPublicationPolicyValidatesProviderValues(t *testing.T) {
 	github := Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: contracts.Command{Executable: "gh"}}
 	gitea := Config{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "owner/repo"}
 	for _, provider := range []Config{github, gitea} {
-		for _, publisher := range []string{string(executionapi.PublisherWorker), string(executionapi.PublisherHostService)} {
+		for _, publisher := range []string{string(executionapi.PublisherWorker)} {
 			if err := CheckPolicy(executionapi.PublicationPolicy{Publisher: publisher}, provider); err != nil {
 				t.Fatalf("valid policy/provider was rejected: %s/%s: %v", publisher, provider.Kind, err)
 			}
 		}
+	}
+	if err := CheckPolicy(executionapi.PublicationPolicy{Publisher: "host_service"}, github); err == nil {
+		t.Fatal("retired host publisher was accepted")
 	}
 	if err := CheckPolicy(executionapi.PublicationPolicy{Publisher: "automatic"}, github); err == nil {
 		t.Fatal("unknown publisher was accepted")

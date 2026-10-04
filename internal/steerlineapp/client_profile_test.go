@@ -21,7 +21,6 @@ func TestCLIExecutionProfileIsBoundIntoStartTaskRequest(t *testing.T) {
 	if output, err := exec.Command("git", "init", "-b", "main", repository).CombinedOutput(); err != nil {
 		t.Fatalf("initialize repository: %v: %s", err, output)
 	}
-	worker := executionapi.PublicationPolicy{Publisher: "worker"}
 	host := NewProcessHost(30 * time.Second)
 	directory, err := NewBuiltinDirectory(host)
 	if err != nil {
@@ -32,9 +31,9 @@ func TestCLIExecutionProfileIsBoundIntoStartTaskRequest(t *testing.T) {
 	config := steerline.Config{
 		Repository: repository, Git: steerline.Command{Executable: "git"},
 		ExecutionPolicy:   executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"},
-		PublicationPolicy: executionapi.PublicationPolicy{Publisher: steerline.PublisherExecutionProfile},
+		PublicationPolicy: executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker},
 		PR:                publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: steerline.Command{Executable: os.Args[0]}},
-		ExecutionProfiles: []steerline.ExecutionProfile{{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ConfiguredPublicationPolicy: &worker, ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: workerPayload}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: hostPayload}}}},
+		ExecutionProfiles: []steerline.ExecutionProfile{{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: workerPayload}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: hostPayload}}}},
 	}
 	config.ProcessHost = host
 	config.BindApplicationConfig(directory, "fixture", "", "accepted", true)

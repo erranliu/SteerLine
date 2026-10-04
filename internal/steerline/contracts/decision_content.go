@@ -112,9 +112,7 @@ func ValidateDecisionRequest(req *DecisionRequest) error {
 // ValidateDecisionAnswer normalizes and validates saved answer content, without authorization or I/O.
 func ValidateDecisionAnswer(req *DecisionRequest, a *DecisionAnswer) error {
 	a.OptionID = strings.TrimSpace(a.OptionID)
-	if req.HostTarget == nil {
-		a.Note = strings.TrimSpace(a.Note)
-	}
+	a.Note = strings.TrimSpace(a.Note)
 	a.AnsweredBy = strings.TrimSpace(a.AnsweredBy)
 	if a.AnsweredBy == "" {
 		return errors.New("answer requires answered_by")

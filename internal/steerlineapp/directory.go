@@ -238,16 +238,7 @@ func validateWorkerPublicationPolicy(policy executionapi.PublicationPolicy, prov
 }
 
 func validateLocalPublicationPolicy(policy executionapi.PublicationPolicy, provider publication.Config) error {
-	if err := policy.Validate(); err != nil {
-		return err
-	}
-	if err := provider.ValidateRemote(strings.TrimSuffix(provider.BaseURL, "/") + "/" + provider.Repository + ".git"); err != nil {
-		return errors.New("publication provider requires a valid kind/base_url/repository")
-	}
-	if policy.Publisher == executionapi.PublisherHostService && provider.Kind == "command" && strings.TrimSuffix(provider.BaseURL, "/") == "https://github.com" && provider.Query.Executable != "" {
-		return nil
-	}
-	return executionapi.UnsupportedAdapterOperation("PublicationPolicy", "publication_policy is unsupported by the selected implementation/provider")
+	return validateWorkerPublicationPolicy(policy, provider)
 }
 
 func preflightLocalConfig(ctx context.Context, c steerline.Config) error {

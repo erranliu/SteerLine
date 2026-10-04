@@ -104,9 +104,6 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
 		return err
 	}
-	if run.Decision.Request.HostTarget != nil {
-		return s.applyEnvironmentAction(ctx, run, answer, command.CommandID)
-	}
 	if execution.Environment != nil && execution.Environment.Blocker != nil {
 		return nil
 	}

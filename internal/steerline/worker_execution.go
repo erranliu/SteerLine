@@ -83,10 +83,6 @@ func copyWorkerFlowConfig(c Config) Config {
 			e := profiles[i].RequirementsEvaluation.Clone()
 			profiles[i].RequirementsEvaluation = &e
 		}
-		if profiles[i].ConfiguredPublicationPolicy != nil {
-			policy := *profiles[i].ConfiguredPublicationPolicy
-			profiles[i].ConfiguredPublicationPolicy = &policy
-		}
 		profiles[i].ImplementationConfigs = cloneImplementationInputs(profiles[i].ImplementationConfigs)
 		profiles[i].ImplementationData = cloneImplementationData(profiles[i].ImplementationData)
 		profiles[i].ImplementationDisplay = append([]string(nil), profiles[i].ImplementationDisplay...)
@@ -128,7 +124,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 		s.refreshRun(run)
 		return s.commitWorker(run)
 	}
-	priorStatus := s.operationByKey("worker-environment-feedback:" + execution.ExecutionID + ":" + commandID)
+	priorStatus := s.operationByKey("worker-live-feedback:" + execution.ExecutionID + ":" + commandID)
 	liveTurn := execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID && execution.PendingCommandID == "" && (execution.Status == "active" || execution.Status == "running" || s.workers[run.RunID] != nil)
 	if priorStatus != nil || liveTurn {
 		lifecycle, _, err := s.lifecycleForRun(run)
@@ -138,7 +134,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 		if priorStatus == nil && !lifecycle.PolicyCapabilities().ActiveTurnFeedback {
 			return nil // This implementation preserves input until the original turn stops.
 		}
-		return s.deliverLifecycleEnvironmentFeedback(ctx, run, answer, commandID, run.Decision.Request, s.decisionRecord(run))
+		return s.deliverLifecycleActiveFeedback(ctx, run, answer, commandID, run.Decision.Request, s.decisionRecord(run))
 	}
 	if execution.PendingCommandID != "" || s.workers[run.RunID] != nil {
 		return nil
@@ -147,9 +143,6 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 }
 
 func workerFeedbackText(answer DecisionAnswer, request DecisionRequest) string {
-	if request.HostTarget != nil && answer.OptionID == "" {
-		return answer.Note
-	}
 	if answer.OptionID == "" {
 		return answer.Note
 	}

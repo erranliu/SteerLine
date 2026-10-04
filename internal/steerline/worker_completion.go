@@ -7,8 +7,6 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
@@ -165,17 +163,6 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 	if err := s.stopVerifiedWorkerTurn(run, workflow, execution, evidence.TurnID, turnOutcome, question); err != nil {
 		return err
 	}
-	if publication.RequestedByWorker(evidence.LastMessage, run.RunID) && fixed.config.PublicationPolicy.Publisher == executionapi.PublisherHostService {
-		runID := run.RunID
-		_, publishErr := s.publishLocalWorkerRun(context.Background(), run, workflow, execution, evidence.TurnID)
-		run = s.localWorkerRun(runID)
-		workflow, execution = s.workflowRecords(run)
-		if run == nil || workflow == nil || execution == nil {
-			return errors.New("fixed worker execution disappeared during host publication")
-		}
-		if publishErr != nil {
-			issue = strings.TrimSpace(issue + "; host publication failed: " + publishErr.Error())
-		}
-	}
+
 	return s.resolveStoppedWorkerTurn(run, workflow, execution, stoppedWorkerResolution{TurnID: evidence.TurnID, LastMessage: evidence.LastMessage, Issue: issue, Question: question, RecordPRStop: true})
 }

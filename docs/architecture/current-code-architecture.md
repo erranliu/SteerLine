@@ -58,11 +58,11 @@ flowchart LR
 
 ## 固定配置、提交与恢复
 
-项目策略与全局方案分开；发布责任保持 `worker` / `host_service` 或项目显式委托 `execution_profile`。应用每次构造独立不可变目录，配置受理、Claim、冻结、恢复和查询使用同一目录。固定 profile v5 / `builtin-execution-v2`、PolicyResources v3、SQLite schema 11、runtime/checkpoint schema 16、conversation event v2 保持。封套固定 key、版本、用途、所属身份、摘要及 64 KiB 上限，载荷深复制并只由实现 codec 解码。旧开发格式明确拒绝，不迁移、双写、重建或回退。
+项目策略与全局方案分开；发布责任统一为 `worker`，中心只核验交付。应用每次构造独立不可变目录，配置受理、Claim、冻结、恢复和查询使用同一目录。固定 profile v5 / `builtin-execution-v2`、PolicyResources v3、SQLite schema 12、runtime/checkpoint schema 17、conversation event v2 保持。封套固定 key、版本、用途、所属身份、摘要及 64 KiB 上限，载荷深复制并只由实现 codec 解码。旧开发格式明确拒绝，不迁移、双写、重建或回退。
 
 中心先提交原 intent 再执行一个动作，原 receipt 与绑定提交后才授权下一步；thread 绑定提交后才发送首轮、资源回执后才派发、消息消费事实提交后才 ack。异步结果核对原 Operation/request digest、target、Execution/Attempt/代次和输入绑定；提交失败恢复私有候选，不发布成功视图。heartbeat 只写服务元数据。
 
-未知 start/reply/send/ack 保持原请求并只读对账，不重派或换会话。准备 nonce/deadline、准备与业务用途、工具/收据、DeferredDecision/Feedback 和人工恢复门槛仍由中心拥有。重启不自动解除人工门槛；当前配置不能重写原 profile/session/process/incarnation/workspace。TaskDelivery 按真实 provider 的原 PR/repository/head/base/merge 事实唯一提交，清理失败不撤销交付。
+未知 start/reply/send/ack 保持原请求并只读对账，不重派或换会话。准备 nonce/deadline、准备与业务用途、工具/收据、独立环境 blocker 和人工恢复门槛由中心拥有；阻断时拒绝新输入，不保留自动补投队列。生命周期副作用经同一后台单步结果通道，actor 提交原回执后才允许下一步。重启不自动解除人工门槛；当前配置不能重写原 profile/session/process/incarnation/workspace。TaskDelivery 按真实 provider 的原 PR/repository/head/base/merge 事实唯一提交，清理失败不撤销交付。
 
 ```mermaid
 sequenceDiagram
@@ -456,8 +456,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [policy.go](../../internal/steerline/publication/policy.go)
 - [pr.go](../../internal/steerline/publication/pr.go)
 - [provider.go](../../internal/steerline/publication/provider.go)
-- [publish.go](../../internal/steerline/publication/publish.go)
-- [request.go](../../internal/steerline/publication/request.go)
+- [identity.go](../../internal/steerline/publication/identity.go)
 
 #### internal/steerline/query
 
