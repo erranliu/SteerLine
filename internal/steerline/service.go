@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sync"
 	"time"
 
@@ -37,19 +36,16 @@ type Service struct {
 	conversationStore    persistence.Conversations
 	closeStore           func() error
 	// workers owns live observers by authoritative workflow run ID.
-	workers             map[string]*Worker
-	ownedProcesses      map[string]executionapi.StopHandle
-	lifecycleEffects    map[string]pendingLifecycleEffect
-	lifecycleMessages   map[string][]workerMessage
-	appServerRecovering map[string]bool
-	workerMessages      chan workerMessage
-	runContext          context.Context
-	forwarders          sync.WaitGroup
-	forwardMu           sync.Mutex
-	forwardedDone       []workerMessage
-	// activities holds one journal per run so PR and delivery events always land in
-	// their own run's file, even after the worker exited.
-	activities                 map[string]*ActivityWriter
+	workers                    map[string]*Worker
+	ownedProcesses             map[string]executionapi.StopHandle
+	lifecycleEffects           map[string]pendingLifecycleEffect
+	lifecycleMessages          map[string][]workerMessage
+	appServerRecovering        map[string]bool
+	workerMessages             chan workerMessage
+	runContext                 context.Context
+	forwarders                 sync.WaitGroup
+	forwardMu                  sync.Mutex
+	forwardedDone              []workerMessage
 	conversationReplayRequests chan []conversationJournalSource
 	conversationReplayErrors   chan error
 	// Console selects service-side rendering: "", "off", "pretty", "summary" or "json".
@@ -88,7 +84,7 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionapi.L
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: db, commandStore: db, conversationStore: db, closeStore: db.Close, store: &Store{Domain: db, Project: c.identity}, activities: map[string]*ActivityWriter{}, workers: map[string]*Worker{}, ownedProcesses: map[string]executionapi.StopHandle{}}
+	s := &Service{Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: db, commandStore: db, conversationStore: db, closeStore: db.Close, store: &Store{Domain: db, Project: c.identity}, workers: map[string]*Worker{}, ownedProcesses: map[string]executionapi.StopHandle{}}
 	old, e := db.LoadRuntime(c.identity, false)
 	if errors.Is(e, persistence.ErrNotFound) {
 		old, e = nil, nil
@@ -171,58 +167,7 @@ func (s *Service) publishCheckpoint() error {
 	return s.refreshNativeSnapshot(context.Background())
 }
 
-// activityWriter returns the lazily-opened journal for one run. Opening is
-// idempotent and append-only, so a run keeps accumulating lifecycle events after
-// its worker exits and after a service restart.
-func (s *Service) activityWriter(r *Run) *ActivityWriter {
-	if r == nil || r.LogPath == nil || r.RunID == "" {
-		return nil
-	}
-	if s.activities == nil {
-		s.activities = map[string]*ActivityWriter{}
-	}
-	if w, ok := s.activities[r.RunID]; ok {
-		return w
-	}
-	path := activityPath(*r.LogPath)
-	if e := os.MkdirAll(filepath.Dir(path), 0700); e != nil {
-		s.setError(fmt.Errorf("activity log unavailable: %w", e))
-		return nil
-	}
-	w, e := OpenActivity(path, r.RunID, r.TaskID)
-	if e != nil {
-		s.setError(fmt.Errorf("activity log unavailable: %w", e))
-		return nil
-	}
-	s.activities[r.RunID] = w
-	return w
-}
-
-func (s *Service) closeActivity(r *Run) {
-	if r == nil {
-		return
-	}
-	w, ok := s.activities[r.RunID]
-	if !ok {
-		return
-	}
-	if e := w.Close(); e != nil {
-		s.setError(fmt.Errorf("activity log close: %w", e))
-	}
-	delete(s.activities, r.RunID)
-}
-
-func (s *Service) closeAllActivities() {
-	for id, w := range s.activities {
-		if e := w.Close(); e != nil {
-			s.setError(fmt.Errorf("activity log close: %w", e))
-		}
-		delete(s.activities, id)
-	}
-}
-
-// note queues a canonical event for the next domain transaction and mirrors it
-// to the optional display journal.
+// note queues a canonical event for the next domain transaction.
 func (s *Service) note(r *Run, source, kind, status, title, detail string, meta map[string]any) {
 	ev := ActivityEvent{Source: source, Kind: kind, Status: status, Title: title, Detail: detail, Meta: meta}
 	s.recordActivity(r, ev)
@@ -243,14 +188,6 @@ func (s *Service) recordActivity(r *Run, ev ActivityEvent) {
 	}
 	metadata["attempt_id"], metadata["execution_id"] = r.AttemptID, r.ExecutionID
 	ev.Meta = metadata
-	if w := s.activityWriter(r); w != nil {
-		written, e := w.WriteEvent(ev)
-		if e != nil {
-			s.setError(e)
-		} else {
-			ev.Seq = written.Seq
-		}
-	}
 	payload, err := json.Marshal(ev)
 	if err != nil {
 		s.setError(err)
@@ -532,10 +469,6 @@ func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
 	if err := s.recordConversationEvent(run, ev); err != nil {
 		return err
 	}
-	dir := filepath.Join(s.Config.RunDir, "runs", ev.RunID)
-	if ev.AttemptID != ev.RunID {
-		dir = filepath.Join(dir, "attempts", ev.AttemptID)
-	}
 	ev.Activity.V, ev.Activity.RunID, ev.Activity.TaskID = ActivityVersion, run.RunID, run.TaskID
 	if ev.Activity.TS.IsZero() {
 		ev.Activity.TS = now()
@@ -545,14 +478,7 @@ func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
 		return err
 	}
 	s.pendingEvents = append(s.pendingEvents, DomainEvent{ProjectIdentity: s.Config.identity, TaskID: run.DomainTaskID, WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: ev.AttemptID, ExternalSource: "center:" + run.RunID, ExternalID: newID(), Type: "activity." + ev.Activity.Kind, ReceivedAt: ev.Activity.TS, Payload: payload})
-	if err = s.commitEvents(); err != nil {
-		return err
-	}
-	w, err := OpenActivity(filepath.Join(dir, "activity.jsonl"), ev.RunID, run.TaskID)
-	if err != nil {
-		return err
-	}
-	return w.Write(ev.Activity)
+	return s.commitEvents()
 }
 func (s *Service) Run(ctx context.Context) (retErr error) {
 	return s.RunWithDispatch(ctx, "auto")
@@ -584,7 +510,6 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 		s.conversationReplayRequests = nil
 		s.conversationReplayErrors = nil
 	}()
-	defer s.closeAllActivities()
 	s.State.Service.Mode = "scheduler"
 	if err := s.refreshNativeSnapshot(ctx); err != nil {
 		return err

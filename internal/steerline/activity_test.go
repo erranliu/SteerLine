@@ -1,6 +1,7 @@
 package steerline
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -9,174 +10,51 @@ import (
 	"time"
 )
 
-func TestActivityWriterDeduplicatesItemAcrossReopen(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "activity.jsonl")
-	writer, err := OpenActivity(path, "run", "task")
-	if err != nil {
-		t.Fatal(err)
-	}
-	first, err := writer.WriteEvent(ActivityEvent{Kind: "message", ItemID: "source-cursor-1", Detail: "first delivery"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	writer, err = OpenActivity(path, "run", "task")
-	if err != nil {
-		t.Fatal(err)
-	}
-	duplicate, err := writer.WriteEvent(ActivityEvent{Kind: "message", ItemID: "source-cursor-1", Detail: "replayed delivery"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if duplicate.Seq != first.Seq {
-		t.Fatalf("duplicate sequence = %d, want %d", duplicate.Seq, first.Seq)
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	if len(lines) != 1 {
-		t.Fatalf("activity line count = %d, want 1: %s", len(lines), data)
-	}
-	var event ActivityEvent
-	if err = json.Unmarshal([]byte(lines[0]), &event); err != nil || event.Seq != first.Seq {
-		t.Fatalf("persisted activity = %+v, error=%v", event, err)
-	}
-}
-
-func TestActivityWriterRoundTrip(t *testing.T) {
+func TestActivityDatabaseSurvivesReopenWithoutMirror(t *testing.T) {
+	s, run := neutralAuditService(t)
+	ctx := context.Background()
 	dir := t.TempDir()
-	path := filepath.Join(dir, "activity.jsonl")
-	w, e := OpenActivity(path, "run-1", "task-1")
-	if e != nil {
-		t.Fatal(e)
+	log := filepath.Join(dir, "events.jsonl")
+	raw := []byte("original raw evidence\r\n")
+	require(t, os.WriteFile(log, raw, 0600))
+	// A directory at the obsolete mirror path must not affect event commitment.
+	require(t, os.Mkdir(filepath.Join(dir, "activity.jsonl"), 0700))
+	run.LogPath = &log
+	event := ActivityEvent{Source: "fixture-stream", Kind: "message", ItemID: "original-item", Detail: "original activity", TS: now()}
+	s.recordActivity(run, event)
+	require(t, s.commitEvents())
+	if s.State.Service.Error != nil {
+		t.Fatal("obsolete mirror path affected the activity transaction")
 	}
-	if e = w.Write(ActivityEvent{Source: "fixture-stream", Kind: "message", Detail: "one"}); e != nil {
-		t.Fatal(e)
-	}
-	if e = w.Write(ActivityEvent{Source: "steer", Kind: "claim", Status: "completed"}); e != nil {
-		t.Fatal(e)
-	}
-	if e = w.Close(); e != nil {
-		t.Fatal(e)
-	}
-	b, e := os.ReadFile(path)
-	if e != nil {
-		t.Fatal(e)
-	}
-	rows := strings.Split(strings.TrimSpace(string(b)), "\n")
-	if len(rows) != 2 {
-		t.Fatalf("got %d rows, want 2", len(rows))
-	}
-	for i, row := range rows {
-		var ev ActivityEvent
-		if e := json.Unmarshal([]byte(row), &ev); e != nil {
-			t.Fatalf("row %d not JSON: %v", i, e)
+	config, runID := s.Config, run.RunID
+	require(t, s.Close())
+	reopened, err := newNeutralService(config)
+	require(t, err)
+	defer reopened.Close()
+	run = reopened.find(runID)
+	reopened.recordActivity(run, event)
+	require(t, reopened.commitEvents())
+	page, err := NewQueryService(testSQLite(reopened), config.Identity()).ReadEvents(ctx, EventFilter{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID}, "", 100)
+	require(t, err)
+	count := 0
+	for _, stored := range page.Events {
+		if stored.Type != "activity.message" {
+			continue
 		}
-		if ev.V != ActivityVersion {
-			t.Fatalf("row %d v=%d", i, ev.V)
-		}
-		if ev.Seq != uint64(i+1) {
-			t.Fatalf("row %d seq=%d", i, ev.Seq)
-		}
-		if ev.RunID != "run-1" || ev.TaskID != "task-1" {
-			t.Fatalf("row %d identity=%q/%q", i, ev.RunID, ev.TaskID)
-		}
-		if ev.TS.IsZero() {
-			t.Fatalf("row %d missing timestamp", i)
+		count++
+		var got ActivityEvent
+		require(t, json.Unmarshal(stored.Payload, &got))
+		if stored.EventID <= 0 || stored.WorkflowRunID != runID || got.RunID != runID || got.Detail != event.Detail || got.V != ActivityVersion {
+			t.Fatal("database activity lost its original scope or payload")
 		}
 	}
-}
-
-func TestOpenActivityCreatesRunDir(t *testing.T) {
-	// Regression: dispatch opens the activity writer before the run directory
-	// exists, so the writer must create it.
-	dir := t.TempDir()
-	logPath := filepath.Join(dir, "runs", "abc", "events.jsonl")
-	r := &Run{RunID: "abc", TaskID: "t1", LogPath: &logPath}
-	s := &Service{activities: map[string]*ActivityWriter{}}
-	w := s.activityWriter(r)
-	if w == nil {
-		t.Fatal("activity writer was not opened")
+	if count != 1 || reopened.State.Service.Error != nil {
+		t.Fatal("mirror interference or reopen duplicated the canonical activity")
 	}
-	if e := w.Write(ActivityEvent{Source: "steer", Kind: "claim"}); e != nil {
-		t.Fatal(e)
-	}
-	s.closeActivity(r)
-	if _, err := os.Stat(activityPath(logPath)); err != nil {
-		t.Fatal("activity.jsonl was not created")
-	}
-}
-
-func TestActivityWriterAppendRecoversSeq(t *testing.T) {
-	dir := t.TempDir()
-	path := filepath.Join(dir, "activity.jsonl")
-	w, e := OpenActivity(path, "r", "t")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if e := w.Write(ActivityEvent{Source: "steer", Kind: "claim"}); e != nil {
-		t.Fatal(e)
-	}
-	if e := w.Close(); e != nil {
-		t.Fatal(e)
-	}
-	// A crash can leave a partial trailing line; reopening must repair it and
-	// continue the sequence instead of truncating the journal.
-	f, e := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0600)
-	if e != nil {
-		t.Fatal(e)
-	}
-	f.WriteString(`{"v":1,"seq":99`)
-	f.Close()
-	w2, e := OpenActivity(path, "r", "t")
-	if e != nil {
-		t.Fatal(e)
-	}
-	if e := w2.Write(ActivityEvent{Source: "steer", Kind: "completed"}); e != nil {
-		t.Fatal(e)
-	}
-	w2.Close()
-	b, e := os.ReadFile(path)
-	if e != nil {
-		t.Fatal(e)
-	}
-	lines := strings.Split(strings.TrimSpace(string(b)), "\n")
-	if len(lines) != 2 {
-		t.Fatalf("partial line was not repaired: %q", b)
-	}
-	var ev ActivityEvent
-	if e := json.Unmarshal([]byte(lines[1]), &ev); e != nil {
-		t.Fatal(e)
-	}
-	if ev.Seq != 2 {
-		t.Fatalf("seq not recovered: %d", ev.Seq)
-	}
-}
-
-func TestActivityJournalIsPerRun(t *testing.T) {
-	dir := t.TempDir()
-	s := &Service{activities: map[string]*ActivityWriter{}}
-	log1 := filepath.Join(dir, "r1", "events.jsonl")
-	log2 := filepath.Join(dir, "r2", "events.jsonl")
-	r1 := &Run{RunID: "r1", TaskID: "t1", LogPath: &log1}
-	r2 := &Run{RunID: "r2", TaskID: "t2", LogPath: &log2}
-	s.note(r1, "steer", "pr", "info", "one", "", nil)
-	s.note(r2, "steer", "completion", "completed", "two", "", nil)
-	s.closeAllActivities()
-	b1, e := os.ReadFile(activityPath(log1))
-	if e != nil {
-		t.Fatal(e)
-	}
-	b2, e := os.ReadFile(activityPath(log2))
-	if e != nil {
-		t.Fatal(e)
-	}
-	if !strings.Contains(string(b1), "one") || strings.Contains(string(b1), "two") {
-		t.Fatalf("run r1 journal leaked another run: %s", b1)
-	}
-	if !strings.Contains(string(b2), "two") || strings.Contains(string(b2), "one") {
-		t.Fatalf("run r2 journal leaked another run: %s", b2)
+	got, err := os.ReadFile(log)
+	require(t, err)
+	if string(got) != string(raw) {
+		t.Fatal("activity recording changed raw evidence")
 	}
 }
 

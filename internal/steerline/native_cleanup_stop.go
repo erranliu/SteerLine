@@ -145,12 +145,10 @@ func (s *Service) stopRunExecution(ctx context.Context, r *Run, worker *Worker) 
 			return err
 		}
 		expected := recordFingerprint(saved)
-		saved.Status, saved.Diagnostic, saved.UpdatedAt = result.receipt.Disposition, result.receipt.Diagnostic, now()
+		status, diagnostic := lifecycleOutcome(result.receipt, result.err)
+		saved.Status, saved.Diagnostic, saved.UpdatedAt = executionapi.OperationStatus(status), diagnostic, now()
 		if result.err != nil || saved.Status != executionapi.OperationConfirmed && saved.Status != executionapi.OperationAccepted && saved.Status != executionapi.OperationRejected {
 			saved.Status = executionapi.OperationUnknown
-			if result.err != nil {
-				saved.Diagnostic = result.err.Error()
-			}
 		}
 		return s.commitExecutionOperation(run, saved, expected)
 	})
