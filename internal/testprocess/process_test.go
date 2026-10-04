@@ -17,4 +17,8 @@ func TestProcessReportsDescendantCleanupFailure(t *testing.T) {
 	if err := p.Stop(context.Background()); !errors.Is(err, cleanupErr) {
 		t.Fatalf("Stop reported successful cleanup after descendant failure: %v", err)
 	}
+	p.cleanupErr = nil
+	if err := p.Wait(context.Background()); err != rootErr {
+		t.Fatalf("successful cleanup changed the original command error: %v", err)
+	}
 }

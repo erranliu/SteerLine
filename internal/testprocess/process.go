@@ -23,6 +23,9 @@ func (p *Process) Wait(ctx context.Context) error {
 	case <-p.Done:
 		p.mu.Lock()
 		defer p.mu.Unlock()
+		if p.cleanupErr == nil {
+			return p.err
+		}
 		return errors.Join(p.err, p.cleanupErr)
 	case <-ctx.Done():
 		return ctx.Err()
