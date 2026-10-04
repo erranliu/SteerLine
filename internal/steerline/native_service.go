@@ -9,10 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/projection"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
@@ -32,7 +34,7 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
 		}
 	}
 	for _, workflow := range snapshot.WorkflowRuns {
-		if workflow.WorkflowVersion != WorkerFlowVersion {
+		if workflow.WorkflowVersion != executionmodel.Version {
 			return nativeErr("unsupported_schema", "unsupported workflow version")
 		}
 	}
@@ -53,7 +55,7 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
 	return s.projectState()
 }
 
-func latestNativeWorkflow(records []WorkflowRunRecord, taskID string) *WorkflowRunRecord {
+func latestNativeWorkflow(records []executionmodel.WorkflowRunRecord, taskID string) *executionmodel.WorkflowRunRecord {
 	return projection.LatestWorkflow(records, taskID)
 }
 
@@ -143,7 +145,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					}
 					continue
 				}
-				if op.Status != executionapi.OperationConfirmed {
+				if op.Status != executionbackend.OperationConfirmed {
 					backend := backendFor(config)
 					observation, observeErr := backend.Observe(ctx, *op.Ref)
 					if observeErr != nil || observation.Liveness != "exited" {
@@ -196,7 +198,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 	return cleanupErr
 }
 
-func (s *Service) reconcileNativePRCleanup(ctx context.Context, task TaskRecord, cleanupItem string) error {
+func (s *Service) reconcileNativePRCleanup(ctx context.Context, task taskmodel.TaskRecord, cleanupItem string) error {
 	prURL := strings.TrimPrefix(cleanupItem, "pull_request_close:")
 	var run *Run
 	for _, candidate := range s.runs {
@@ -215,7 +217,7 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task TaskRecord,
 	workflow, execution := s.workflowRecords(run)
 	attempt := s.workflowAttempt(run, run.AttemptID)
 	sessionID, _ := executionSessionFacts(execution)
-	if workflow == nil || execution == nil || attempt == nil || workflow.WorkflowVersion != WorkerFlowVersion || attempt.StepID != "worker" || workflow.PRURL != prURL && !contains(workflow.PRHistory, prURL) || sessionID == "" {
+	if workflow == nil || execution == nil || attempt == nil || workflow.WorkflowVersion != executionmodel.Version || attempt.StepID != "worker" || workflow.PRURL != prURL && !contains(workflow.PRHistory, prURL) || sessionID == "" {
 		return nativeErr("authority_mismatch", "discarded PR cleanup lacks its fixed worker flow, session and PR URL")
 	}
 	fixed, err := s.workerFlowContext(run)
@@ -258,14 +260,15 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task TaskRecord,
 	_, err = (CommandService{Store: s.commandStore, Project: s.Config.identity}).RecordNativeCleanupReceipt(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
 	return err
 }
-func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task TaskRecord, cleanupItem string) error {
+
+func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task taskmodel.TaskRecord, cleanupItem string) error {
 	path := strings.TrimPrefix(cleanupItem, "workspace_cleanup:")
-	var execution *ExecutionRecord
-	var workflow *WorkflowRunRecord
+	var execution *executionmodel.ExecutionRecord
+	var workflow *executionmodel.WorkflowRunRecord
 	for i := range s.domain.Executions {
 		candidate := &s.domain.Executions[i]
 		matches := candidate.Target.WorktreeID == path || candidate.Workspace.Worktree == path
-		if !matches && filepath.IsAbs(path) && executionUsesLocalWorkspace(s.Config, executionapi.BackendKind(candidate.Backend), executionapi.ExecutionProtocol(candidate.Protocol), candidate.Agent) {
+		if !matches && filepath.IsAbs(path) && executionUsesLocalWorkspace(s.Config, executionbackend.BackendKind(candidate.Backend), executionbackend.ExecutionProtocol(candidate.Protocol), candidate.Agent) {
 			matches = canonical(candidate.Target.WorktreeID) == canonical(path) || canonical(candidate.Workspace.Worktree) == canonical(path)
 		}
 		if !matches {
@@ -278,11 +281,11 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task Task
 			}
 		}
 	}
-	if execution == nil || workflow == nil || execution.Target.Branch == "" || !validCommit(execution.Target.BaseRevision) {
+	if execution == nil || workflow == nil || execution.Target.Branch == "" || !taskmodel.ValidCommit(execution.Target.BaseRevision) {
 		return nativeErr("contract_mismatch", "discarded workspace path lacks a fixed branch and base identity")
 	}
-	if !executionUsesLocalWorkspace(s.Config, executionapi.BackendKind(execution.Backend), executionapi.ExecutionProtocol(execution.Protocol), execution.Agent) {
-		return executionapi.UnsupportedAdapterOperation("WorkspaceCleanup", "remote native worktree cleanup is unavailable")
+	if !executionUsesLocalWorkspace(s.Config, executionbackend.BackendKind(execution.Backend), executionbackend.ExecutionProtocol(execution.Protocol), execution.Agent) {
+		return executionbackend.UnsupportedAdapterOperation("WorkspaceCleanup", "remote native worktree cleanup is unavailable")
 	}
 	if !filepath.IsAbs(path) {
 		return nativeErr("authority_mismatch", "discarded local workspace cleanup path is not absolute")
@@ -294,7 +297,7 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task Task
 	if err != nil || canonical(filepath.Dir(resolved)) != canonical(s.Config.WorktreeRoot) {
 		return nativeErr("authority_mismatch", "discarded workspace cleanup path no longer matches worktree_root")
 	}
-	intent := &executionapi.WorkspaceIntent{Path: resolved, Branch: execution.Target.Branch, BaseCommit: execution.Target.BaseRevision}
+	intent := &executionbackend.WorkspaceIntent{Path: resolved, Branch: execution.Target.Branch, BaseCommit: execution.Target.BaseRevision}
 	repository, err := workspaceRepository(s.Config)
 	if err != nil {
 		return err
@@ -311,17 +314,17 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task Task
 	return err
 }
 
-func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupItem string, op executionapi.Operation) error {
+func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupItem string, op executionbackend.Operation) error {
 	if op.Ref == nil {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native stop operation has no fixed execution reference"}
+		return &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "native stop operation has no fixed execution reference"}
 	}
 	confirmed, err := s.confirmExecutionStop(op)
 	if err != nil || !confirmed {
-		return errors.Join(err, &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "native stop operation is not confirmed"})
+		return errors.Join(err, &executionbackend.BackendError{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "native stop operation is not confirmed"})
 	}
 	records := executionRecords{root: s.Config.RunDir, persistence: s.Config.Persistence}
 	persisted, err := records.loadOperation(op.RunID, op.AttemptID, op.ID)
-	if err != nil || persisted.Status != executionapi.OperationConfirmed {
+	if err != nil || persisted.Status != executionbackend.OperationConfirmed {
 		return errors.Join(err, nativeErr("outcome_unknown", "confirmed stop was not durably recorded"))
 	}
 	config, configErr := s.executionConfigForWorkflowID(op.RunID)
@@ -348,7 +351,7 @@ func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupIt
 }
 
 func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cleanupItem, executionID string) error {
-	var execution *ExecutionRecord
+	var execution *executionmodel.ExecutionRecord
 	for i := range s.domain.Executions {
 		if s.domain.Executions[i].ExecutionID == executionID {
 			execution = &s.domain.Executions[i]
@@ -358,15 +361,15 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	if execution == nil || execution.Process == nil {
 		return nativeErr("outcome_unknown", "discarded task has no fixed local process identity")
 	}
-	if !executionUsesLocalWorkspace(s.Config, executionapi.BackendKind(execution.Backend), executionapi.ExecutionProtocol(execution.Protocol), execution.Agent) {
-		return executionapi.UnsupportedAdapterOperation("StopExecution", "remote native worker cancellation is unavailable")
+	if !executionUsesLocalWorkspace(s.Config, executionbackend.BackendKind(execution.Backend), executionbackend.ExecutionProtocol(execution.Protocol), execution.Agent) {
+		return executionbackend.UnsupportedAdapterOperation("StopExecution", "remote native worker cancellation is unavailable")
 	}
 	workflowRunID := execution.WorkflowRunID
 	config, configErr := s.executionConfigForWorkflowID(workflowRunID)
 	if configErr != nil {
 		return configErr
 	}
-	var attempt *StepAttemptRecord
+	var attempt *executionmodel.StepAttemptRecord
 	for i := range s.domain.Attempts {
 		candidate := &s.domain.Attempts[i]
 		if candidate.ExecutionID == executionID && candidate.Status != "succeeded" && candidate.Status != "failed" && candidate.Status != "rejected" && candidate.Status != "stopped" {
@@ -392,7 +395,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 		Policy string
 		Grace  string
 	}{"fixed_local_execution_stop", s.Config.ShutdownGrace}
-	op := executionapi.Operation{Version: executionapi.ExecutionRecordVersion, ID: opID, RunID: workflowRunID, AttemptID: attempt.AttemptID, Backend: executionapi.BackendLocal, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: executionapi.OperationConfirmed, StartedAt: now(), UpdatedAt: now(), Diagnostic: observation.Diagnostic, Ref: &ref}
+	op := executionbackend.Operation{Version: executionbackend.ExecutionRecordVersion, ID: opID, RunID: workflowRunID, AttemptID: attempt.AttemptID, Backend: executionbackend.BackendLocal, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: executionbackend.OperationConfirmed, StartedAt: now(), UpdatedAt: now(), Diagnostic: observation.Diagnostic, Ref: &ref}
 	records := executionRecords{root: s.Config.RunDir, persistence: s.Config.Persistence}
 	expectedOperation := ""
 	if old, loadErr := records.loadOperation(workflowRunID, attempt.AttemptID, opID); loadErr == nil {
@@ -400,8 +403,8 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 		if old.PayloadDigest != op.PayloadDigest || old.Ref == nil || digestValue(*old.Ref) != digestValue(ref) {
 			return nativeErr("authority_mismatch", "saved local stop operation differs from the fixed execution identity")
 		}
-		if old.Status != executionapi.OperationConfirmed {
-			old.Status, old.UpdatedAt, old.Diagnostic = executionapi.OperationConfirmed, now(), observation.Diagnostic
+		if old.Status != executionbackend.OperationConfirmed {
+			old.Status, old.UpdatedAt, old.Diagnostic = executionbackend.OperationConfirmed, now(), observation.Diagnostic
 			op = old
 		}
 	} else if !os.IsNotExist(loadErr) {
@@ -413,7 +416,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	return s.recordNativeStopCleanup(ctx, taskID, cleanupItem, op)
 }
 
-func nativeExecutionIDForAttempt(attempts []StepAttemptRecord, attemptID string) string {
+func nativeExecutionIDForAttempt(attempts []executionmodel.StepAttemptRecord, attemptID string) string {
 	for _, attempt := range attempts {
 		if attempt.AttemptID == attemptID {
 			return attempt.ExecutionID
@@ -462,7 +465,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		return err
 	}
 	if len(ready) > 0 {
-		if c.WorkflowProtocol == WorkerFlowVersion {
+		if c.WorkflowProtocol == executionmodel.Version {
 			if err = requireWorkerFlowCapabilitiesWithResolver(ctx, c, s.lifecycleResolver); err != nil {
 				return err
 			}
@@ -563,7 +566,7 @@ func contains(values []string, value string) bool {
 }
 
 func isNativeErrorCode(err error, codes ...string) bool {
-	var native *NativeTaskError
+	var native *taskmodel.Error
 	if !errors.As(err, &native) {
 		return false
 	}
@@ -609,7 +612,7 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 		return err
 	}
 	var cleanupErr error
-	if workflow.WorkflowVersion == WorkerFlowVersion {
+	if workflow.WorkflowVersion == executionmodel.Version {
 		lifecycle, _, lifecycleErr := s.lifecycleForRun(run)
 		if lifecycleErr != nil {
 			cleanupErr = lifecycleErr
@@ -642,7 +645,7 @@ func (s *Service) pollNativePRs(ctx context.Context, onlyRunID string) error {
 		if workflow == nil {
 			continue
 		}
-		if workflow.WorkflowVersion != WorkerFlowVersion {
+		if workflow.WorkflowVersion != executionmodel.Version {
 			return nativeErr("unsupported_schema", "PR polling found an unsupported workflow")
 		}
 		if err := s.pollWorkerFlowPR(ctx, run, task, workflow); err != nil {
@@ -652,7 +655,7 @@ func (s *Service) pollNativePRs(ctx context.Context, onlyRunID string) error {
 	return operationErr
 }
 
-func nativeTaskRecord(tasks []TaskRecord, taskID string) *TaskRecord {
+func nativeTaskRecord(tasks []taskmodel.TaskRecord, taskID string) *taskmodel.TaskRecord {
 	for i := range tasks {
 		if tasks[i].TaskID == taskID {
 			return &tasks[i]

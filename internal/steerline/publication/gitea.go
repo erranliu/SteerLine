@@ -5,11 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"io"
 	"net/http"
 	"os"
 	"strings"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func (c *Client) get(ctx context.Context, path string, out any) error {
@@ -41,9 +42,10 @@ func (c *Client) get(ctx context.Context, path string, out any) error {
 	}
 	return json.Unmarshal(b, out)
 }
+
 func (c *Client) Check(ctx context.Context) error {
 	if c.Config.Kind != "gitea" {
-		return executionapi.UnsupportedAdapterOperation("CheckPRProvider", "repository preflight is only supported for Gitea")
+		return executionbackend.UnsupportedAdapterOperation("CheckPRProvider", "repository preflight is only supported for Gitea")
 	}
 	var repo struct {
 		FullName string `json:"full_name"`

@@ -1,13 +1,14 @@
 package codexworker
 
 import (
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"strings"
 	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-func policyFixture() executionapi.ExecutionPolicy {
-	return executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
+func policyFixture() executionbackend.ExecutionPolicy {
+	return executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
 }
 
 func TestExplicitHostPolicyMapsBothWindowsWorkersToFullAccess(t *testing.T) {
@@ -67,7 +68,7 @@ func TestProjectPolicyCompilerSupportsOnlyVerifiedTargetMappings(t *testing.T) {
 	if err != nil || compiled.Sandbox != "read-only" || compiled.NetworkAccess {
 		t.Fatalf("explicit local read-only denied: %+v/%v", compiled, err)
 	}
-	for _, mutate := range []func(*executionapi.ExecutionPolicy){func(p *executionapi.ExecutionPolicy) { p.Network = "deny" }, func(p *executionapi.ExecutionPolicy) { p.Filesystem.GitMetadataWrite = false }, func(p *executionapi.ExecutionPolicy) {
+	for _, mutate := range []func(*executionbackend.ExecutionPolicy){func(p *executionbackend.ExecutionPolicy) { p.Network = "deny" }, func(p *executionbackend.ExecutionPolicy) { p.Filesystem.GitMetadataWrite = false }, func(p *executionbackend.ExecutionPolicy) {
 		p.Filesystem.WriteScope = "host"
 		p.Filesystem.GitMetadataWrite = false
 		p.Network = "deny"

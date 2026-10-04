@@ -11,9 +11,10 @@ import (
 	"strings"
 	"testing"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
 
@@ -90,15 +91,15 @@ func TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead(t *test
 		t.Fatal(err)
 	}
 	profilePayload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "elevated"})
-	writeConfig(t, steerlineapp.GlobalExecutionConfigPath(), map[string]any{"version": 2, "execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "implementation_configs": []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: profilePayload}}}}})
+	writeConfig(t, steerlineapp.GlobalExecutionConfigPath(), map[string]any{"version": 2, "execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "implementation_configs": []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: profilePayload}}}}})
 	writeConfig(t, configPath, map[string]any{
 		"repository":         repo,
 		"remote":             "origin",
 		"branch":             "main",
 		"task_authority":     "native",
-		"workflow_protocol":  steerline.WorkerFlowVersion,
-		"execution_policy":   executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"},
-		"publication_policy": executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker},
+		"workflow_protocol":  executionmodel.Version,
+		"execution_policy":   executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"},
+		"publication_policy": executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker},
 		"pr":                 map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "owner/repo", "query": map[string]any{"executable": "gh"}},
 	})
 	config, err := steerlineapp.LoadConfig(configPath)

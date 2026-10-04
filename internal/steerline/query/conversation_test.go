@@ -12,8 +12,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type conversationEvents func(context.Context, string, contracts.ConversationFilter, int64) (*contracts.ConversationEventRecord, error)
@@ -34,9 +34,9 @@ func (f conversationRaw) ConversationRaw(ctx context.Context, project string, re
 	return f(ctx, project, ref, limit)
 }
 
-type conversationCapabilities func(context.Context, executionapi.BackendKind, executionapi.ExecutionProtocol, string, int) ([]contracts.ConversationCapabilityReport, error)
+type conversationCapabilities func(context.Context, executionbackend.BackendKind, executionbackend.ExecutionProtocol, string, int) ([]contracts.ConversationCapabilityReport, error)
 
-func (f conversationCapabilities) ConversationCapabilityReports(ctx context.Context, backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, target string, limit int) ([]contracts.ConversationCapabilityReport, error) {
+func (f conversationCapabilities) ConversationCapabilityReports(ctx context.Context, backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, target string, limit int) ([]contracts.ConversationCapabilityReport, error) {
 	return f(ctx, backend, protocol, target, limit)
 }
 
@@ -170,13 +170,13 @@ func TestConversationBodyAndRawQueriesUseSeparatePorts(t *testing.T) {
 }
 
 func TestConversationCapabilitiesNeedNoUnrelatedReader(t *testing.T) {
-	service := ConversationService{Capabilities: conversationCapabilities(func(_ context.Context, backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, target string, limit int) ([]contracts.ConversationCapabilityReport, error) {
-		if backend != executionapi.BackendLocal || protocol != executionapi.ProtocolLocalCodexAppServer || target != "local" || limit != 1000 {
+	service := ConversationService{Capabilities: conversationCapabilities(func(_ context.Context, backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, target string, limit int) ([]contracts.ConversationCapabilityReport, error) {
+		if backend != executionbackend.BackendLocal || protocol != executionbackend.ProtocolLocalCodexAppServer || target != "local" || limit != 1000 {
 			t.Fatal("capability filter or limit changed")
 		}
 		return []contracts.ConversationCapabilityReport{{SourceIdentity: "source"}}, nil
 	})}
-	reports, err := service.ReadCapabilities(context.Background(), executionapi.BackendLocal, executionapi.ProtocolLocalCodexAppServer, "local", 2000)
+	reports, err := service.ReadCapabilities(context.Background(), executionbackend.BackendLocal, executionbackend.ProtocolLocalCodexAppServer, "local", 2000)
 	if err != nil || len(reports) != 1 || reports[0].SourceIdentity != "source" {
 		t.Fatalf("capability-only read failed: %+v %v", reports, err)
 	}

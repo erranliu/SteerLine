@@ -12,7 +12,9 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
@@ -40,8 +42,8 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	if connected.State != ConnectionConnected || !connected.CanControl || !connected.IdentityMatched {
 		t.Fatalf("connected process classified as %+v", connected)
 	}
-	denied := connectServiceWithProbe(context.Background(), c, func(*executionapi.ProcessIdentity) ProcessProbe {
-		return ProcessProbe{State: ProcessUnknown, Reason: "access denied"}
+	denied := connectServiceWithProbe(context.Background(), c, func(*executionbackend.ProcessIdentity) productapi.ProcessProbe {
+		return productapi.ProcessProbe{State: ProcessUnknown, Reason: "access denied"}
 	})
 	if denied.State != ConnectionUnknown || denied.CanStart || denied.CanControl || denied.CanStop || !strings.Contains(denied.Diagnostic, "access denied") {
 		t.Fatalf("inaccessible process was treated as a controllable or replaceable service: %+v", denied)
@@ -117,7 +119,7 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	wrongRepo := rt
 	wrongRepo.Repository.Identity = filepath.Join(filepath.Dir(c.Repository), "other.git")
 	wrongRepo.Service.PID = 2_000_000_000
-	wrongRepo.Service.ProcessIdentity = &executionapi.ProcessIdentity{Kind: "os", PID: wrongRepo.Service.PID, Created: "unused", Executable: "unused"}
+	wrongRepo.Service.ProcessIdentity = &executionbackend.ProcessIdentity{Kind: "os", PID: wrongRepo.Service.PID, Created: "unused", Executable: "unused"}
 	write(wrongRepo)
 	if got := ConnectService(context.Background(), c); got.State != ConnectionIdentityError || got.CanStart {
 		t.Fatalf("mismatched repository must not be treated as offline: %+v", got)
@@ -216,7 +218,7 @@ func TestWaitForStartupMarksConfirmedEarlyExit(t *testing.T) {
 	_, logPath, err := createStartupAttempt(config, id, true)
 	require(t, err)
 	record := initialStartupRecord(config, id)
-	record.ProcessIdentity = &executionapi.ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "no-such-process", Executable: "no-such-executable"}
+	record.ProcessIdentity = &executionbackend.ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "no-such-process", Executable: "no-such-executable"}
 	require(t, writeStartupRecord(config, record))
 	result, err := waitForStartup(context.Background(), config, id, logPath, StartServiceOptions{WaitTimeout: time.Second, PollInterval: 10 * time.Millisecond})
 	if err != nil || result.Status != "failed" || !strings.Contains(result.Error, "exited before") {
@@ -246,7 +248,7 @@ func TestStartupIDAndOutputPathValidation(t *testing.T) {
 func lifecycleConfigFile(t *testing.T, f *fixture, runDir string) (Config, string) {
 	t.Helper()
 	c := f.c
-	c.WorkflowProtocol = WorkerFlowVersion
+	c.WorkflowProtocol = executionmodel.Version
 	c.RunDir = runDir
 	c.WorktreeRoot = ""
 	profile := c.projectExecutionProfile()
@@ -264,7 +266,7 @@ func lifecycleConfigFile(t *testing.T, f *fixture, runDir string) (Config, strin
 	return loaded, configPath
 }
 
-func terminatePendingTestProcess(identity *executionapi.ProcessIdentity) error {
+func terminatePendingTestProcess(identity *executionbackend.ProcessIdentity) error {
 	if identity == nil || probeProcess(identity).State != ProcessMatches {
 		return fmt.Errorf("refusing to terminate a process without its matching test identity")
 	}

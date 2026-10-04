@@ -3,20 +3,22 @@ package steerline
 import (
 	"context"
 	"errors"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 	config := workerContextConfigFixture()
 	fixed := config.projectExecutionProfile().Freeze()
 	target := targetFor(config)
-	run := &Run{RunID: "run", ExecutionID: "execution", AttemptID: "attempt", Host: "local", Agent: "fixture", Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Target: target}
+	run := &Run{RunID: "run", ExecutionID: "execution", AttemptID: "attempt", Host: "local", Agent: "fixture", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Target: target}
 	service := Service{
 		Config: config,
-		domain: DomainSnapshot{WorkflowRuns: []WorkflowRunRecord{{ProjectIdentity: configurationProjectIdentity(config), WorkflowRunID: "run", WorkflowVersion: WorkerFlowVersion, Repository: config.Repository, Branch: config.Branch, ConfigDigest: fixed.AcceptedConfigVersion, ExecutionProfile: &fixed}},
-			Executions: []ExecutionRecord{{ProjectIdentity: configurationProjectIdentity(config), ConfigurationDigest: fixed.Digest, CurrentAttemptID: run.AttemptID, ExecutionID: "execution", WorkflowRunID: "run", Agent: "fixture", Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Target: target}},
-			Attempts:   []StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}}},
+		domain: DomainSnapshot{WorkflowRuns: []executionmodel.WorkflowRunRecord{{ProjectIdentity: configurationProjectIdentity(config), WorkflowRunID: "run", WorkflowVersion: executionmodel.Version, Repository: config.Repository, Branch: config.Branch, ConfigDigest: fixed.AcceptedConfigVersion, ExecutionProfile: &fixed}},
+			Executions: []executionmodel.ExecutionRecord{{ProjectIdentity: configurationProjectIdentity(config), ConfigurationDigest: fixed.Digest, CurrentAttemptID: run.AttemptID, ExecutionID: "execution", WorkflowRunID: "run", Agent: "fixture", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Target: target}},
+			Attempts:   []executionmodel.StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}}},
 	}
 	mode, err := service.workerFlowRegistration(run)
 	if err != nil {
@@ -29,7 +31,7 @@ func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 		t.Fatal("fixed local protocol has no lifecycle port")
 	}
 	wrong := *run
-	wrong.Protocol = string(executionapi.ProtocolLocalProcess)
+	wrong.Protocol = string(executionbackend.ProtocolLocalProcess)
 	if _, err := service.workerFlowRegistration(&wrong); err == nil {
 		t.Fatal("local execution accepted a foreign protocol adapter")
 	}
@@ -58,8 +60,8 @@ func TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent(t *testing.T)
 		func() error { return service.startWorkerFlowTurn(ctx, run, "fixed prompt", newID()) },
 	} {
 		err := action()
-		var backendErr *executionapi.BackendError
-		if !errors.As(err, &backendErr) || backendErr.Code != executionapi.BackendIdentityMismatch {
+		var backendErr *executionbackend.BackendError
+		if !errors.As(err, &backendErr) || backendErr.Code != executionbackend.BackendIdentityMismatch {
 			t.Fatalf("configuration drift reached a worker side effect: %v", err)
 		}
 	}
@@ -83,7 +85,7 @@ func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
 	require(t, err)
 	target := targetFor(config)
 	run := &Run{Host: config.Host, Agent: config.Agent, Backend: string(entry.Key.Backend), Protocol: string(entry.Key.Protocol), Target: target}
-	record := &ExecutionRecord{Agent: config.Agent, Backend: run.Backend, Protocol: run.Protocol, Target: target}
+	record := &executionmodel.ExecutionRecord{Agent: config.Agent, Backend: run.Backend, Protocol: run.Protocol, Target: target}
 	mode, err := workerFlowRegistrationFor(config, run, record)
 	require(t, err)
 	if mode.Key.Protocol != neutralProtocol {
@@ -94,15 +96,15 @@ func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
 	if _, err := workerFlowRegistrationFor(changed, run, record); !feedbackIdentityMismatch(err) {
 		t.Fatalf("replacement host routed fixed feedback: %v", err)
 	}
-	record.Protocol = string(executionapi.ProtocolLocalProcess)
+	record.Protocol = string(executionbackend.ProtocolLocalProcess)
 	if _, err := workerFlowRegistrationFor(config, run, record); !feedbackIdentityMismatch(err) {
 		t.Fatalf("replacement protocol routed fixed feedback: %v", err)
 	}
 }
 
 func feedbackIdentityMismatch(err error) bool {
-	var backendErr *executionapi.BackendError
-	return errors.As(err, &backendErr) && backendErr.Code == executionapi.BackendIdentityMismatch
+	var backendErr *executionbackend.BackendError
+	return errors.As(err, &backendErr) && backendErr.Code == executionbackend.BackendIdentityMismatch
 }
 
 func TestEveryRegisteredExecutionUsesTheLifecyclePort(t *testing.T) {

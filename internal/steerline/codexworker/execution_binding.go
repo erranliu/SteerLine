@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 const ExecutionBindingCodecKey = "codex.app-server-binding"
@@ -24,30 +24,30 @@ type AppServerBindingIdentity struct {
 	ConfigDigest string
 }
 
-func NewAppServerBindingEnvelope(identity AppServerBindingIdentity, binding AppServerBinding) (executionapi.ImplementationDataEnvelope, error) {
+func NewAppServerBindingEnvelope(identity AppServerBindingIdentity, binding AppServerBinding) (executionbackend.ImplementationDataEnvelope, error) {
 	if identity.Generation == "" || binding.SessionID != "" && !ValidNativeID(binding.SessionID) ||
 		binding.Endpoint == "" && (binding.SessionID == "" || binding.Generation != "") ||
 		binding.Endpoint != "" && binding.Generation == "" {
-		return executionapi.ImplementationDataEnvelope{}, errors.New("app-server binding is incomplete")
+		return executionbackend.ImplementationDataEnvelope{}, errors.New("app-server binding is incomplete")
 	}
 	if binding.Endpoint != "" {
 		if err := codexapp.ValidateEndpoint(binding.Endpoint); err != nil {
-			return executionapi.ImplementationDataEnvelope{}, err
+			return executionbackend.ImplementationDataEnvelope{}, err
 		}
 	}
 	payload, err := json.Marshal(binding)
 	if err != nil {
-		return executionapi.ImplementationDataEnvelope{}, err
+		return executionbackend.ImplementationDataEnvelope{}, err
 	}
-	return executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{
-		CodecVersion: 1, Purpose: executionapi.ImplementationResourcePurpose,
+	return executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{
+		CodecVersion: 1, Purpose: executionbackend.ImplementationResourcePurpose,
 		ImplementationKey: ExecutionBindingCodecKey, ProjectID: identity.ProjectID,
 		ExecutionID: identity.ExecutionID, AttemptID: identity.AttemptID,
 		Generation: identity.Generation, ConfigDigest: identity.ConfigDigest,
 	}, payload)
 }
 
-func DecodeAppServerBindingEnvelope(envelope executionapi.ImplementationDataEnvelope, identity AppServerBindingIdentity) (AppServerBinding, error) {
+func DecodeAppServerBindingEnvelope(envelope executionbackend.ImplementationDataEnvelope, identity AppServerBindingIdentity) (AppServerBinding, error) {
 	if envelope.ImplementationKey != ExecutionBindingCodecKey || envelope.CodecVersion != 1 {
 		return AppServerBinding{}, errors.New("unsupported app-server binding codec")
 	}
@@ -55,7 +55,7 @@ func DecodeAppServerBindingEnvelope(envelope executionapi.ImplementationDataEnve
 		return AppServerBinding{}, err
 	}
 	var binding AppServerBinding
-	if err := executionapi.DecodeStrictJSON(envelope.Payload, &binding, "app-server binding payload has trailing JSON"); err != nil {
+	if err := executionbackend.DecodeStrictJSON(envelope.Payload, &binding, "app-server binding payload has trailing JSON"); err != nil {
 		return AppServerBinding{}, err
 	}
 	if binding.SessionID != "" && !ValidNativeID(binding.SessionID) ||

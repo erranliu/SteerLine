@@ -7,7 +7,10 @@ import (
 	"errors"
 	"fmt"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 const (
@@ -30,12 +33,14 @@ type EventFilter struct {
 	ExecutionID string
 	AttemptID   string
 }
+
 type EventPage struct {
-	Events       []contracts.DomainEvent `json:"events"`
-	NextCursor   string                  `json:"next_cursor,omitempty"`
-	HasMore      bool                    `json:"has_more"`
-	PayloadBytes int                     `json:"payload_bytes"`
+	Events       []storageports.DomainEvent `json:"events"`
+	NextCursor   string                     `json:"next_cursor,omitempty"`
+	HasMore      bool                       `json:"has_more"`
+	PayloadBytes int                        `json:"payload_bytes"`
 }
+
 type EventBodyPage struct {
 	EventID    int64  `json:"event_id"`
 	Offset     int64  `json:"offset"`
@@ -45,6 +50,7 @@ type EventBodyPage struct {
 	Complete   bool   `json:"complete"`
 	Data       []byte `json:"data"`
 }
+
 type queryCursor struct {
 	Version   int    `json:"v"`
 	Project   string `json:"p"`
@@ -65,7 +71,7 @@ func (q Service) Workflow(ctx context.Context, workflowRunID string) (contracts.
 	if err != nil {
 		return contracts.DomainSnapshot{}, err
 	}
-	filtered := contracts.DomainSnapshot{ProjectIdentity: snapshot.ProjectIdentity, Tasks: []contracts.TaskRecord{}, WorkflowRuns: []contracts.WorkflowRunRecord{}, Executions: []contracts.ExecutionRecord{}, Attempts: []contracts.StepAttemptRecord{}, Decisions: []contracts.DecisionRecord{}}
+	filtered := contracts.DomainSnapshot{ProjectIdentity: snapshot.ProjectIdentity, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}}
 	taskIDs := map[string]bool{}
 	for _, run := range snapshot.WorkflowRuns {
 		if workflowRunID == "" || run.WorkflowRunID == workflowRunID {
@@ -123,7 +129,7 @@ func (q Service) ReadEvents(ctx context.Context, filter EventFilter, cursor stri
 		}
 		after = c.After
 	}
-	page := EventPage{Events: []contracts.DomainEvent{}}
+	page := EventPage{Events: []storageports.DomainEvent{}}
 	for len(page.Events) < limit {
 		batchSize := min(EventReadBatchSize, limit-len(page.Events))
 		events, err := q.Events.Events(ctx, q.Project, filter.ExecutionID, filter.AttemptID, after, batchSize, MaxEventPageBytes-page.PayloadBytes)

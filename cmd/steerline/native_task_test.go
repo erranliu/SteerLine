@@ -16,15 +16,19 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/console"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 	"github.com/erranliu/SteerLine/internal/steerlineclient"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T) {
@@ -32,7 +36,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	profilePayload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "elevated"})
 	global, err := json.Marshal(map[string]any{
 		"version":                   2,
-		"execution_profiles":        []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "implementation_configs": []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: profilePayload}}}},
+		"execution_profiles":        []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "implementation_configs": []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: profilePayload}}}},
 		"default_execution_profile": "local",
 	})
 	if err != nil {
@@ -69,7 +73,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	}
 	commit := strings.TrimSpace(string(head))
 	configPath := filepath.Join(t.TempDir(), "native.json")
-	configJSON, _ := json.Marshal(map[string]any{"claimant": "cli-fixture", "repository": repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion, "executable_types": []string{"task"}, "execution_policy": executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}, "publication_policy": executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}, "pr": map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "org/repo", "query": map[string]any{"executable": "gh"}}})
+	configJSON, _ := json.Marshal(map[string]any{"claimant": "cli-fixture", "repository": repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": executionmodel.Version, "executable_types": []string{"task"}, "execution_policy": executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}, "publication_policy": executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}, "pr": map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "org/repo", "query": map[string]any{"executable": "gh"}}})
 	if err = os.WriteFile(configPath, configJSON, 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -84,27 +88,27 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	if err = reader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	ref := func(name string) steerline.FileReference {
+	ref := func(name string) taskmodel.FileReference {
 		blob, e := exec.Command("git", "-C", repo, "cat-file", "blob", commit+":"+name).Output()
 		if e != nil {
 			t.Fatal(e)
 		}
 		sum := sha256.Sum256(blob)
-		return steerline.FileReference{Path: name, Commit: commit, SHA256: hex.EncodeToString(sum[:])}
+		return taskmodel.FileReference{Path: name, Commit: commit, SHA256: hex.EncodeToString(sum[:])}
 	}
-	contract := steerline.TaskContract{ContractID: "contract-example", Repository: remoteURL, Remote: "origin", Branch: "main", SpecRef: ref("docs/spec/example.spec.md"), PlanRef: ref("docs/spec/example.plan.md"), CommonRefs: []steerline.FileReference{ref("docs/spec/native-task-constraints.md")}}
-	contract.AcceptanceRefs = []steerline.FileReference{contract.SpecRef}
-	contract.Digest, err = steerline.TaskContractDigest(contract)
+	contract := taskmodel.TaskContract{ContractID: "contract-example", Repository: remoteURL, Remote: "origin", Branch: "main", SpecRef: ref("docs/spec/example.spec.md"), PlanRef: ref("docs/spec/example.plan.md"), CommonRefs: []taskmodel.FileReference{ref("docs/spec/native-task-constraints.md")}}
+	contract.AcceptanceRefs = []taskmodel.FileReference{contract.SpecRef}
+	contract.Digest, err = taskmodel.ContractDigest(contract)
 	if err != nil {
 		t.Fatal(err)
 	}
 	contract2 := contract
 	contract2.ContractID = "contract-second"
-	contract2.Digest, err = steerline.TaskContractDigest(contract2)
+	contract2.Digest, err = taskmodel.ContractDigest(contract2)
 	if err != nil {
 		t.Fatal(err)
 	}
-	payload, err := json.Marshal(steerline.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: c.Identity(), Tasks: []steerline.TaskBatchTask{{LocalKey: "fixed-task", TaskID: 70, Title: "Fixed planned task", Type: "task", Contract: contract}, {LocalKey: "second-task", TaskID: 71, Title: "Second task", Type: "task", Contract: contract2}}, Dependencies: []steerline.TaskBatchEdge{}})
+	payload, err := json.Marshal(taskmodel.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: c.Identity(), Tasks: []taskmodel.TaskBatchTask{{LocalKey: "fixed-task", TaskID: 70, Title: "Fixed planned task", Type: "task", Contract: contract}, {LocalKey: "second-task", TaskID: 71, Title: "Second task", Type: "task", Contract: contract2}}, Dependencies: []taskmodel.TaskBatchEdge{}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +120,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	if callErr != nil {
 		t.Fatalf("validate failed: %v: %s", callErr, validationOutput)
 	}
-	var validation steerline.TaskBatchValidation
+	var validation taskmodel.TaskBatchValidation
 	if err = json.Unmarshal(validationOutput, &validation); err != nil || !validation.Valid || validation.AuthorityVersion == 0 {
 		t.Fatalf("unexpected validation output: %v: %s", err, validationOutput)
 	}
@@ -125,7 +129,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	if callErr != nil {
 		t.Fatalf("create failed: %v: %s", callErr, createOutput)
 	}
-	var receipt steerline.TaskBatchReceipt
+	var receipt taskmodel.TaskBatchReceipt
 	if err = json.Unmarshal(createOutput, &receipt); err != nil || receipt.TaskIDs["fixed-task"] != "70" || !strings.Contains(receipt.DispatchNote, "does not start work") {
 		t.Fatalf("unexpected create receipt: %v: %+v", err, receipt)
 	}
@@ -141,7 +145,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	if callErr != nil {
 		t.Fatalf("discard failed: %v: %s", callErr, discardOutput)
 	}
-	var discard steerline.TaskDiscardReceipt
+	var discard taskmodel.TaskDiscardReceipt
 	if err = json.Unmarshal(discardOutput, &discard); err != nil || discard.Status != "discarded" || discard.TaskID != "70" {
 		t.Fatalf("unexpected discard receipt: %v: %+v", err, discard)
 	}
@@ -241,7 +245,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 		if err != nil || req.InstanceID != state.Service.InstanceID || req.RepositoryIdentity != c.Identity() || req.ExpectedControlRevision != state.Control.Revision {
 			t.Fatalf("fixed request target: %+v / %v", req, err)
 		}
-		input := api.ControlInput{Action: api.SetDispatchMode, Payload: api.ControlPayload{Mode: "manual"}, RequestID: id, RequestedBy: "operator", InstanceID: req.InstanceID, ExpectedRevision: &req.ExpectedControlRevision}
+		input := productapi.ControlInput{Action: productapi.SetDispatchMode, Payload: productapi.ControlPayload{Mode: "manual"}, RequestID: id, RequestedBy: "operator", InstanceID: req.InstanceID, ExpectedRevision: &req.ExpectedControlRevision}
 		if _, err = client.SubmitControl(context.Background(), input); err != nil {
 			t.Fatalf("immutable request replay: %v", err)
 		}
@@ -254,7 +258,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 			t.Fatal(err)
 		}
 		digest := sha256.Sum256(raw)
-		receipt := api.ControlReceipt{Version: 1, RequestID: id, RequestDigest: hex.EncodeToString(digest[:]), InstanceID: req.InstanceID, Action: req.Action, Status: "indeterminate", Code: "outcome_unknown"}
+		receipt := productapi.ControlReceipt{Version: 1, RequestID: id, RequestDigest: hex.EncodeToString(digest[:]), InstanceID: req.InstanceID, Action: req.Action, Status: "indeterminate", Code: "outcome_unknown"}
 		receiptBody, _ := json.Marshal(receipt)
 		receiptDir := filepath.Join(c.RunDir, "control", "receipts")
 		if err = os.MkdirAll(receiptDir, 0700); err != nil {
@@ -267,7 +271,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 		if err != nil {
 			t.Fatal(err)
 		}
-		var queried api.ControlReceipt
+		var queried productapi.ControlReceipt
 		if err = json.Unmarshal(output, &queried); err != nil || queried.RequestID != id || queried.Status != "indeterminate" {
 			t.Fatalf("unknown CLI receipt became success or changed ID: %s / %v", output, err)
 		}
@@ -289,7 +293,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 			if result, err := tuiClient.Receipt(context.Background(), id); err != nil || result.Status != "indeterminate" || result.RequestID != id {
 				t.Fatalf("TUI changed original CLI receipt: %+v / %v", result, err)
 			}
-			if snapshot := tuiClient.ReadProject(context.Background(), "70", api.ProjectSnapshot{}); snapshot.Connection.State != api.ConnectionConnected || snapshot.DomainError != "" {
+			if snapshot := tuiClient.ReadProject(context.Background(), "70", api.ProjectSnapshot{}); snapshot.Connection.State != productapi.ConnectionConnected || snapshot.DomainError != "" {
 				t.Fatalf("actual console failed reading project: %+v", snapshot)
 			}
 

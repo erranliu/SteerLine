@@ -2,20 +2,20 @@ package steerlineintegration
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
-	"crypto/rand"
-	"encoding/hex"
-	"errors"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
-	"os/exec"
-	"time"
 )
 
 // Protocol fixtures invoke production adapters without claiming a Service run
@@ -45,6 +45,7 @@ func newRemoteProtocolFixture(t *testing.T) *remoteProtocolFixture {
 	require(t, err)
 	return f
 }
+
 func readRemoteFixture(t *testing.T, dir string) remoteFixtureState {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join(dir, "remote.json"))
@@ -53,37 +54,43 @@ func readRemoteFixture(t *testing.T, dir string) remoteFixtureState {
 	require(t, json.Unmarshal(raw, &state))
 	return state
 }
+
 func changeRemoteFixture(t *testing.T, dir string, change func(*remoteFixtureState)) {
 	t.Helper()
 	state := readRemoteFixture(t, dir)
 	change(&state)
 	require(t, AtomicWrite(filepath.Join(dir, "remote.json"), mustJSON(state)))
 }
+
 func (f *remoteProtocolFixture) task(t *testing.T, prompt string) string {
 	t.Helper()
 	receipt, err := orcaworker.CreateTask(context.Background(), f.client.CenterCall, prompt, "fixture task", "remote-run", f.config.Settings.CoordinatorTerminal, "center")
 	require(t, err)
 	return receipt.ID
 }
-func (f *remoteProtocolFixture) bind(t *testing.T, start remote.StartReceipt, previous *executionapi.ProcessIdentity) remote.Ref {
+
+func (f *remoteProtocolFixture) bind(t *testing.T, start remote.StartReceipt, previous *executionbackend.ProcessIdentity) remote.Ref {
 	t.Helper()
 	state := readRemoteFixture(t, f.dir)
 	identity, err := f.client.BindStart(context.Background(), start, previous, state.Path, state.Branch)
 	require(t, err)
-	target := executionapi.ExecutionTarget{ID: "orca-supervised:home-connection", ConnectionID: "home-connection", ExternalRuntime: "env-home"}
+	target := executionbackend.ExecutionTarget{ID: "orca-supervised:home-connection", ConnectionID: "home-connection", ExternalRuntime: "env-home"}
 	target.OrchestrationRun, target.ExternalTask, target.Dispatch, target.ExecutionHost, target.WorktreeID, target.CoordinatorTerminal = identity.OrchestrationRun, identity.Task, identity.Dispatch, identity.ExecutionHost, identity.WorktreeID, state.Coordinator
-	return remote.Ref{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, RunID: f.runID, Target: target, External: identity, WorkspacePath: state.Path, WorkspaceBranch: state.Branch, BaseCommit: state.Base}
+	return remote.Ref{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaSupervised, RunID: f.runID, Target: target, External: identity, WorkspacePath: state.Path, WorkspaceBranch: state.Branch, BaseCommit: state.Base}
 }
-func (f *remoteProtocolFixture) start(t *testing.T, previous *executionapi.ProcessIdentity) remote.Ref {
+
+func (f *remoteProtocolFixture) start(t *testing.T, previous *executionbackend.ProcessIdentity) remote.Ref {
 	t.Helper()
 	task := f.task(t, "Continue original remote work")
 	receipt, err := f.client.StartTask(context.Background(), "remote-run", task, f.worktreeID, previous)
 	require(t, err)
 	return f.bind(t, receipt, previous)
 }
+
 func (f *remoteProtocolFixture) reconnect() {
 	f.client = remote.New(f.config)
 }
+
 func (f *remoteProtocolFixture) finish(t *testing.T, ref remote.Ref) {
 	t.Helper()
 	ctx := context.Background()
@@ -128,13 +135,14 @@ func testRemoteOrcaProtocolTwoTurnsKeepSessionAndSettleResources(t *testing.T) {
 		t.Fatalf("settled resources not cleaned: %+v", state)
 	}
 }
+
 func testRemoteOrcaProtocolLostStartReconcilesWithoutResend(t *testing.T) {
 	ctx := context.Background()
 	f := newRemoteProtocolFixture(t)
 	task := f.task(t, "original saved input")
 	changeRemoteFixture(t, f.dir, func(s *remoteFixtureState) { s.LoseStart = true })
 	_, err := f.client.StartTask(ctx, "remote-run", task, f.worktreeID, nil)
-	if !isBackendError(err, executionapi.BackendOutcomeUnknown) {
+	if !isBackendError(err, executionbackend.BackendOutcomeUnknown) {
 		t.Fatalf("lost receipt guessed successful start: %v", err)
 	}
 	f.reconnect()
@@ -154,6 +162,7 @@ func testRemoteOrcaProtocolLostStartReconcilesWithoutResend(t *testing.T) {
 		t.Fatal("lost receipt recovery sent another start")
 	}
 }
+
 func testRemoteOrcaProtocolQuestionLostReplyAndAckAreReconciled(t *testing.T) {
 	ctx := context.Background()
 	f := newRemoteProtocolFixture(t)
@@ -165,7 +174,7 @@ func testRemoteOrcaProtocolQuestionLostReplyAndAckAreReconciled(t *testing.T) {
 		t.Fatalf("question missing: %+v", delivery)
 	}
 	_, err = f.client.Ack(ctx, ref, delivery.ID)
-	if !isBackendError(err, executionapi.BackendOutcomeUnknown) {
+	if !isBackendError(err, executionbackend.BackendOutcomeUnknown) {
 		t.Fatalf("lost ack receipt not uncertain: %v", err)
 	}
 	acknowledged, err := f.client.DeliveryAcknowledged(ctx, ref, delivery.ID)
@@ -176,7 +185,7 @@ func testRemoteOrcaProtocolQuestionLostReplyAndAckAreReconciled(t *testing.T) {
 	changeRemoteFixture(t, f.dir, func(s *remoteFixtureState) { s.LoseReply = true })
 	question := delivery.Messages[0].ID
 	_, err = f.client.Reply(ctx, ref, question, "left")
-	if !isBackendError(err, executionapi.BackendOutcomeUnknown) {
+	if !isBackendError(err, executionbackend.BackendOutcomeUnknown) {
 		t.Fatalf("lost reply not uncertain: %v", err)
 	}
 	id, err := f.client.FindAnswer(ctx, ref, question, "left")
@@ -185,13 +194,14 @@ func testRemoteOrcaProtocolQuestionLostReplyAndAckAreReconciled(t *testing.T) {
 		t.Fatal("answer reconciliation repeated or lost original reply")
 	}
 }
+
 func testRemoteOrcaProtocolRejectsReplacementSession(t *testing.T) {
 	ctx := context.Background()
 	f := newRemoteProtocolFixture(t)
 	ref := f.start(t, nil)
 	f.finish(t, ref)
 	changeRemoteFixture(t, f.dir, func(s *remoteFixtureState) { s.ChangedIdentity = true })
-	if err := f.client.VerifyWorker(ctx, ref); !isBackendError(err, executionapi.BackendIdentityMismatch) {
+	if err := f.client.VerifyWorker(ctx, ref); !isBackendError(err, executionbackend.BackendIdentityMismatch) {
 		t.Fatalf("replacement identity was accepted: %v", err)
 	}
 	task := f.task(t, "continue original session")
@@ -209,12 +219,14 @@ func testCD64RemoteProtocolAssertions(t *testing.T) {
 	t.Run("lost_reply_and_ack", testRemoteOrcaProtocolQuestionLostReplyAndAckAreReconciled)
 	t.Run("replacement_session_rejected", testRemoteOrcaProtocolRejectsReplacementSession)
 }
+
 func require(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
 	}
 }
+
 func newID() string {
 	var value [16]byte
 	if _, err := rand.Read(value[:]); err != nil {
@@ -222,6 +234,7 @@ func newID() string {
 	}
 	return hex.EncodeToString(value[:])
 }
+
 func mustJSON(value any) []byte {
 	wire, err := json.Marshal(value)
 	if err != nil {
@@ -229,6 +242,7 @@ func mustJSON(value any) []byte {
 	}
 	return wire
 }
+
 func AtomicWrite(path string, value []byte) error {
 	temporary := path + ".tmp"
 	if err := os.WriteFile(temporary, value, 0600); err != nil {
@@ -236,7 +250,8 @@ func AtomicWrite(path string, value []byte) error {
 	}
 	return os.Rename(temporary, path)
 }
-func isBackendError(err error, code executionapi.BackendErrorCode) bool {
+
+func isBackendError(err error, code executionbackend.BackendErrorCode) bool {
 	var remoteErr *remote.Error
 	return errors.As(err, &remoteErr) && remoteErr.Code == code
 }

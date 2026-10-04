@@ -10,12 +10,15 @@ import (
 	"strings"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func (t *sqliteTx) PutProjectTaskAuthority(v ProjectTaskAuthority) error {
+func (t *sqliteTx) PutProjectTaskAuthority(v tasklegacy.ProjectTaskAuthority) error {
 	if v.ProjectIdentity == "" || v.Authority != "native" || v.AuthorityVersion == 0 || v.DispatchMode != "manual" || !v.DispatchPaused || v.Repository == "" || v.Remote == "" || v.Branch == "" {
 		return errors.New("native project authority requires identity, target, version and initial manual/paused dispatch")
 	}
@@ -29,11 +32,11 @@ func (t *sqliteTx) PutProjectTaskAuthority(v ProjectTaskAuthority) error {
 	return requireIdentityWrite(result, err, "authority_mismatch: native project authority is immutable without a compare-and-swap")
 }
 
-func (t *sqliteTx) UpdateProjectTaskAuthorityCAS(v ProjectTaskAuthority, expectedVersion uint64) error {
+func (t *sqliteTx) UpdateProjectTaskAuthorityCAS(v tasklegacy.ProjectTaskAuthority, expectedVersion uint64) error {
 	if v.ProjectIdentity == "" || expectedVersion == 0 || v.AuthorityVersion != expectedVersion+1 || v.Authority != "native" || v.DispatchMode != "manual" && v.DispatchMode != "auto" {
 		return nativeErr("authority_mismatch", "project authority update requires a valid next version and dispatch mode")
 	}
-	var old ProjectTaskAuthority
+	var old tasklegacy.ProjectTaskAuthority
 	var paused int
 	var created, updated string
 	err := t.tx.QueryRowContext(t.ctx, `SELECT authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused,created_at,updated_at FROM project_task_authorities WHERE project_identity=?`, v.ProjectIdentity).Scan(&old.Authority, &old.AuthorityVersion, &old.GraphRevision, &old.Repository, &old.Remote, &old.Branch, &old.DispatchMode, &paused, &created, &updated)
@@ -75,11 +78,11 @@ func (t *sqliteTx) AdvanceTaskGraphRevision(project string, expectedAuthorityVer
 	return expectedGraphRevision + 1, nil
 }
 
-func (t *sqliteTx) PutTaskContract(project, taskID string, v TaskContract) error {
-	if project == "" || taskID == "" || v.ContractID == "" || !task.ValidSHA256(v.Digest) {
+func (t *sqliteTx) PutTaskContract(project, taskID string, v taskmodel.TaskContract) error {
+	if project == "" || taskID == "" || v.ContractID == "" || !taskmodel.ValidSHA256(v.Digest) {
 		return errors.New("contract_mismatch: contract identity and digest are required")
 	}
-	if err := task.ValidateContract(v); err != nil {
+	if err := taskmodel.ValidateContract(v); err != nil {
 		return err
 	}
 	var repository, remote, branch string
@@ -97,8 +100,8 @@ func (t *sqliteTx) PutTaskContract(project, taskID string, v TaskContract) error
 	return requireIdentityWrite(res, err, "contract_mismatch: task contract is immutable or bound to another task")
 }
 
-func (t *sqliteTx) PutTaskBatch(v TaskBatchRecord, expectedAuthorityVersion, expectedGraphRevision uint64) error {
-	if v.ProjectIdentity == "" || v.BatchID == "" || v.SchemaVersion != "task-batch/v1" || v.CommandID == "" || len(v.TaskIDs) == 0 || !task.ValidSHA256(v.PayloadDigest) {
+func (t *sqliteTx) PutTaskBatch(v taskmodel.TaskBatchRecord, expectedAuthorityVersion, expectedGraphRevision uint64) error {
+	if v.ProjectIdentity == "" || v.BatchID == "" || v.SchemaVersion != "task-batch/v1" || v.CommandID == "" || len(v.TaskIDs) == 0 || !taskmodel.ValidSHA256(v.PayloadDigest) {
 		return errors.New("invalid task batch record")
 	}
 	if expectedAuthorityVersion == 0 {
@@ -116,7 +119,7 @@ func (t *sqliteTx) PutTaskBatch(v TaskBatchRecord, expectedAuthorityVersion, exp
 	}
 	seen := map[string]bool{}
 	for localID, taskID := range v.TaskIDs {
-		if strings.TrimSpace(localID) == "" || !task.CanonicalDecimalID(taskID) || seen[taskID] {
+		if strings.TrimSpace(localID) == "" || !taskmodel.CanonicalDecimalID(taskID) || seen[taskID] {
 			return nativeErr("contract_mismatch", "task batch mapping must contain unique canonical task IDs and nonempty local keys")
 		}
 		seen[taskID] = true
@@ -144,7 +147,7 @@ func (t *sqliteTx) PutTaskBatch(v TaskBatchRecord, expectedAuthorityVersion, exp
 	return err
 }
 
-func (t *sqliteTx) PutTaskDependency(v TaskDependencyRecord) error {
+func (t *sqliteTx) PutTaskDependency(v taskmodel.TaskDependencyRecord) error {
 	if v.ProjectIdentity == "" || v.PredecessorID == "" || v.SuccessorID == "" || v.PredecessorID == v.SuccessorID {
 		return errors.New("invalid task dependency")
 	}
@@ -214,7 +217,7 @@ func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
 	if err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=? AND task_id=?`, v.ProjectIdentity, v.SelectedWorkflowRunID, v.TaskID).Scan(&runPayload); err != nil {
 		return requiredRecordError(err, "contract_mismatch", "delivery must reference a workflow run belonging to the task")
 	}
-	var run WorkflowRunRecord
+	var run executionmodel.WorkflowRunRecord
 	if err := json.Unmarshal(runPayload, &run); err != nil {
 		return err
 	}
@@ -222,7 +225,7 @@ func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
 	if err := json.Unmarshal(v.Evidence, &evidence); err != nil {
 		return err
 	}
-	if evidence.ExistingAcceptance != nil || run.WorkflowVersion != WorkerFlowVersion {
+	if evidence.ExistingAcceptance != nil || run.WorkflowVersion != executionmodel.Version {
 		return nativeErr("unsupported_schema", "delivery requires a worker-flow-v1 run")
 	}
 	if run.Abandonment != nil || run.SelectedResult == "" || run.PRURL != v.PRURL || run.Phase != "executing" && run.Phase != "waiting_decision" && run.Phase != "waiting_pr_merge" {
@@ -232,7 +235,7 @@ func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
 	if err := t.tx.QueryRowContext(t.ctx, "SELECT payload FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=?", v.ProjectIdentity, v.SelectedWorkflowRunID, run.SelectedResult).Scan(&executionPayload); err != nil {
 		return requiredRecordError(err, "contract_mismatch", "delivery has no selected worker execution")
 	}
-	var execution ExecutionRecord
+	var execution executionmodel.ExecutionRecord
 	if err := json.Unmarshal(executionPayload, &execution); err != nil {
 		return err
 	}
@@ -248,11 +251,11 @@ func validateNativeTaskDelivery(v TaskDeliveryRecord, targetBranch string) error
 	return task.ValidateDelivery(v, targetBranch)
 }
 
-func (t *sqliteTx) PutTask(v TaskRecord) error {
+func (t *sqliteTx) PutTask(v taskmodel.TaskRecord) error {
 	if v.ProjectIdentity == "" || v.TaskID == "" || v.Status == "" {
 		return errors.New("task identity and status are required")
 	}
-	if !task.ValidStatus(v.Status) {
+	if !taskmodel.ValidStatus(v.Status) {
 		return fmt.Errorf("invalid task status %q", v.Status)
 	}
 	b, err := encodePayload(v)
@@ -268,7 +271,7 @@ func (t *sqliteTx) PutTask(v TaskRecord) error {
 		return nativeErr("authority_mismatch", "native task cannot be stored without a registered native project")
 	}
 	if authorityErr == nil {
-		if nativeAuthority != "native" || v.Source != "native" || !task.CanonicalDecimalID(v.TaskID) || v.BatchID == "" || v.Title == "" || v.Type == "" || v.Priority < 0 || v.Priority > 4 || v.ContractID == "" || v.Version == 0 || v.CreatedAt.IsZero() || v.ExternalProvider != "" || v.ExternalProject != "" || v.ExternalID != "" || v.IdentityMapDigest != "" {
+		if nativeAuthority != "native" || v.Source != "native" || !taskmodel.CanonicalDecimalID(v.TaskID) || v.BatchID == "" || v.Title == "" || v.Type == "" || v.Priority < 0 || v.Priority > 4 || v.ContractID == "" || v.Version == 0 || v.CreatedAt.IsZero() || v.ExternalProvider != "" || v.ExternalProject != "" || v.ExternalID != "" || v.IdentityMapDigest != "" {
 			return nativeErr("contract_mismatch", "native Task requires its original numeric ID, batch, type, priority and fixed contract")
 		}
 		var repository string
@@ -283,7 +286,7 @@ func (t *sqliteTx) PutTask(v TaskRecord) error {
 			return nativeErr("immutable_task", "task ID is already used in the same repository identity")
 		}
 		if v.Status == "discarded" {
-			if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" || strings.TrimSpace(v.DiscardedBy) == "" || !executionapi.StableExecutionID(v.DiscardRequestID) {
+			if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" || strings.TrimSpace(v.DiscardedBy) == "" || !executionbackend.StableExecutionID(v.DiscardRequestID) {
 				return errors.New("discarded native task requires timestamp, reason, requester and request ID")
 			}
 		} else if v.DiscardedAt != nil || v.DiscardReason != "" || v.DiscardedBy != "" || v.DiscardRequestID != "" || len(v.CleanupPending) > 0 {
@@ -314,8 +317,8 @@ func (t *sqliteTx) PutTask(v TaskRecord) error {
 	return requireIdentityWrite(result, err, "task ID belongs to another external identity")
 }
 
-func (t *sqliteTx) UpdateNativeTaskCAS(v TaskRecord, expectedVersion uint64) error {
-	if v.ProjectIdentity == "" || !task.CanonicalDecimalID(v.TaskID) || expectedVersion == 0 {
+func (t *sqliteTx) UpdateNativeTaskCAS(v taskmodel.TaskRecord, expectedVersion uint64) error {
+	if v.ProjectIdentity == "" || !taskmodel.CanonicalDecimalID(v.TaskID) || expectedVersion == 0 {
 		return nativeErr("contract_mismatch", "native task update requires project, canonical task ID and expected version")
 	}
 	var payload []byte
@@ -329,7 +332,7 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v TaskRecord, expectedVersion uint64) err
 	if err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM tasks WHERE project_identity=? AND task_id=?`, v.ProjectIdentity, v.TaskID).Scan(&payload); err != nil {
 		return err
 	}
-	var old TaskRecord
+	var old taskmodel.TaskRecord
 	if err := json.Unmarshal(payload, &old); err != nil {
 		return err
 	}
@@ -354,7 +357,7 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v TaskRecord, expectedVersion uint64) err
 		return nativeErr("contract_mismatch", "claimant is preserved after claim")
 	}
 	if v.Status == "discarded" {
-		if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" || strings.TrimSpace(v.DiscardedBy) == "" || !executionapi.StableExecutionID(v.DiscardRequestID) {
+		if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" || strings.TrimSpace(v.DiscardedBy) == "" || !executionbackend.StableExecutionID(v.DiscardRequestID) {
 			return nativeErr("contract_mismatch", "discard requires timestamp, reason, requester and request ID")
 		}
 		var count int
@@ -417,11 +420,11 @@ func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error 
 	if proof.ExistingAcceptance != nil {
 		return nativeErr("unsupported_schema", "old acceptance delivery is unsupported")
 	}
-	var run WorkflowRunRecord
+	var run executionmodel.WorkflowRunRecord
 	if err = json.Unmarshal(runPayload, &run); err != nil {
 		return err
 	}
-	if run.WorkflowVersion == WorkerFlowVersion {
+	if run.WorkflowVersion == executionmodel.Version {
 		var executionPayload []byte
 		if run.SelectedResult == "" || run.PRURL != proof.URL || !proof.Merged || proof.State != "merged" {
 			return nativeErr("stale_version", "selected worker flow no longer matches the merged PR")
@@ -429,7 +432,7 @@ func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error 
 		if err = t.tx.QueryRowContext(t.ctx, `SELECT payload FROM executions WHERE project_identity=? AND workflow_run_id=? AND execution_id=?`, project, runID, run.SelectedResult).Scan(&executionPayload); err != nil {
 			return requiredRecordError(err, "contract_mismatch", "selected worker flow has no execution")
 		}
-		var execution ExecutionRecord
+		var execution executionmodel.ExecutionRecord
 		if err = json.Unmarshal(executionPayload, &execution); err != nil {
 			return err
 		}
@@ -438,7 +441,7 @@ func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error 
 			return nativeErr("contract_mismatch", "selected worker flow lacks its session or branch")
 		}
 		delivery := TaskDeliveryRecord{TaskID: taskID, SelectedWorkflowRunID: runID, PRURL: proof.URL, MergeCommit: proof.MergeCommit, MergedAt: proof.MergedAt}
-		if err = contracts.MarkWorkerDeliveryCommitted(TaskRecord{TaskID: taskID, Status: "closed"}, &run, delivery); err != nil {
+		if err = contracts.MarkWorkerDeliveryCommitted(taskmodel.TaskRecord{TaskID: taskID, Status: "closed"}, &run, delivery); err != nil {
 			return err
 		}
 		return t.PutWorkflowRun(run)

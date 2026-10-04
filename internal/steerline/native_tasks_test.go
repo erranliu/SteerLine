@@ -15,11 +15,15 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 var nativeSeedOnce sync.Once
+
 var nativeSeedRepo, nativeSeedRemote, nativeSeedCommit string
 
 func prepareNativeSeed(t *testing.T) {
@@ -70,7 +74,7 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 		t.Fatalf("fixture remote: %v: %s", err, output)
 	}
 	commit := nativeSeedCommit
-	c := Config{Persistence: sqlite.Factory{}, PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: repo, Remote: "origin", Branch: "main", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "10s", ShutdownGrace: "10s", ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Git: Command{Executable: "git"}}
+	c := Config{Persistence: sqlite.Factory{}, PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, Repository: repo, Remote: "origin", Branch: "main", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "10s", ShutdownGrace: "10s", ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Git: executionbackend.Command{Executable: "git"}}
 	setNeutralProfile(t, &c, neutralSettings{Executable: os.Args[0]})
 	key, err := fixtureRepositoryStateKey(c)
 	if err != nil {
@@ -79,7 +83,7 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 	c.StateRoot, c.RepositoryStateKey = fixtureStateRoot(), key
 	c.RunDir = filepath.Join(c.StateRoot, key)
 	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
-	c.Git = Command{Executable: os.Args[0], Args: []string{"--fake", "publication-git", "git"}}
+	c.Git = executionbackend.Command{Executable: os.Args[0], Args: []string{"--fake", "publication-git", "git"}}
 	return c, commit
 }
 
@@ -135,17 +139,17 @@ func TestNativeFixtureSeedAndCopiesAreIndependent(t *testing.T) {
 	}
 }
 
-func nativeRef(t *testing.T, c Config, commit, name string) FileReference {
+func nativeRef(t *testing.T, c Config, commit, name string) taskmodel.FileReference {
 	t.Helper()
 	blob, err := exec.Command("git", "-C", c.Repository, "cat-file", "blob", commit+":"+name).Output()
 	if err != nil {
 		t.Fatal(err)
 	}
 	sum := sha256.Sum256(blob)
-	return FileReference{Path: name, Commit: commit, SHA256: hex.EncodeToString(sum[:])}
+	return taskmodel.FileReference{Path: name, Commit: commit, SHA256: hex.EncodeToString(sum[:])}
 }
 
-func nativeContract(t *testing.T, c Config, commit, id string) TaskContract {
+func nativeContract(t *testing.T, c Config, commit, id string) taskmodel.TaskContract {
 	t.Helper()
 	spec := nativeRef(t, c, commit, "docs/spec/task-core.spec.md")
 	plan := nativeRef(t, c, commit, "docs/spec/task-core.plan.md")
@@ -154,8 +158,8 @@ func nativeContract(t *testing.T, c Config, commit, id string) TaskContract {
 	if err != nil {
 		t.Fatal(err)
 	}
-	v := TaskContract{ContractID: id, Repository: target, Remote: c.Remote, Branch: c.Branch, SpecRef: spec, PlanRef: plan, CommonRefs: []FileReference{common}, AcceptanceRefs: []FileReference{spec}}
-	v.Digest, err = TaskContractDigest(v)
+	v := taskmodel.TaskContract{ContractID: id, Repository: target, Remote: c.Remote, Branch: c.Branch, SpecRef: spec, PlanRef: plan, CommonRefs: []taskmodel.FileReference{common}, AcceptanceRefs: []taskmodel.FileReference{spec}}
+	v.Digest, err = taskmodel.ContractDigest(v)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -258,13 +262,13 @@ func TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation(t *testing.T) {
 	contract10 := nativeContract(t, c, commit, "contract-10")
 	foreignContract := nativeContract(t, c, commit, "foreign-contract")
 	foreignContract.Repository = "https://example.invalid/Other/Repo.git"
-	foreignContract.Digest, err = TaskContractDigest(foreignContract)
+	foreignContract.Digest, err = taskmodel.ContractDigest(foreignContract)
 	if err != nil {
 		t.Fatal(err)
 	}
 	batchDigest := strings.Repeat("a", 64)
 	created := time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)
-	staleBatch := TaskBatchRecord{BatchID: "stale-batch", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("f", 64), CreatedAt: created, CommandID: "stale-command", TaskIDs: map[string]string{"stale": "99"}}
+	staleBatch := taskmodel.TaskBatchRecord{BatchID: "stale-batch", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("f", 64), CreatedAt: created, CommandID: "stale-command", TaskIDs: map[string]string{"stale": "99"}}
 	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutTaskBatch(staleBatch, 2, 0) }); err == nil || !strings.Contains(err.Error(), "stale_version") {
 		t.Fatalf("stale project authority created a batch: %v", err)
 	}
@@ -273,15 +277,15 @@ func TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation(t *testing.T) {
 		t.Fatalf("stale batch transaction left partial state: count=%d err=%v", staleCount, err)
 	}
 	err = store.transactRecords(ctx, func(tx *fixtureTransaction) error {
-		if err := tx.PutTaskBatch(TaskBatchRecord{BatchID: "batch-1", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: batchDigest, CreatedAt: created, CommandID: "command-1", TaskIDs: map[string]string{"two": "2", "ten": "10"}}, 1, 0); err != nil {
+		if err := tx.PutTaskBatch(taskmodel.TaskBatchRecord{BatchID: "batch-1", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: batchDigest, CreatedAt: created, CommandID: "command-1", TaskIDs: map[string]string{"two": "2", "ten": "10"}}, 1, 0); err != nil {
 			return err
 		}
 		for _, entry := range []struct {
 			id       string
-			contract TaskContract
+			contract taskmodel.TaskContract
 			priority int
 		}{{"2", contract2, 1}, {"10", contract10, 2}} {
-			record := TaskRecord{ProjectIdentity: project, TaskID: entry.id, BatchID: "batch-1", Title: "task " + entry.id, Type: "task", Priority: entry.priority, ContractID: entry.contract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
+			record := taskmodel.TaskRecord{ProjectIdentity: project, TaskID: entry.id, BatchID: "batch-1", Title: "task " + entry.id, Type: "task", Priority: entry.priority, ContractID: entry.contract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
 			if err := tx.PutTask(record); err != nil {
 				return err
 			}
@@ -290,14 +294,14 @@ func TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation(t *testing.T) {
 			}
 		}
 		foreignProject := "other-project"
-		otherAuthority := ProjectTaskAuthority{ProjectIdentity: foreignProject, Authority: "native", AuthorityVersion: 1, Repository: foreignContract.Repository, Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true, CreatedAt: created, UpdatedAt: created}
+		otherAuthority := tasklegacy.ProjectTaskAuthority{ProjectIdentity: foreignProject, Authority: "native", AuthorityVersion: 1, Repository: foreignContract.Repository, Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true, CreatedAt: created, UpdatedAt: created}
 		if err := tx.PutProjectTaskAuthority(otherAuthority); err != nil {
 			return err
 		}
-		if err := tx.PutTaskBatch(TaskBatchRecord{BatchID: "other-batch", ProjectIdentity: foreignProject, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("e", 64), CreatedAt: created, CommandID: "other-command", TaskIDs: map[string]string{"other": "2"}}, 1, 0); err != nil {
+		if err := tx.PutTaskBatch(taskmodel.TaskBatchRecord{BatchID: "other-batch", ProjectIdentity: foreignProject, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("e", 64), CreatedAt: created, CommandID: "other-command", TaskIDs: map[string]string{"other": "2"}}, 1, 0); err != nil {
 			return err
 		}
-		foreign := TaskRecord{ProjectIdentity: foreignProject, TaskID: "2", BatchID: "other-batch", Title: "foreign", Type: "task", ContractID: "foreign-contract", Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
+		foreign := taskmodel.TaskRecord{ProjectIdentity: foreignProject, TaskID: "2", BatchID: "other-batch", Title: "foreign", Type: "task", ContractID: "foreign-contract", Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
 		if err := tx.PutTask(foreign); err != nil {
 			return err
 		}
@@ -309,7 +313,7 @@ func TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	replayedBatch := TaskBatchRecord{BatchID: "batch-1", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: batchDigest, CreatedAt: created, CommandID: "command-1", TaskIDs: map[string]string{"two": "2", "ten": "10"}}
+	replayedBatch := taskmodel.TaskBatchRecord{BatchID: "batch-1", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: batchDigest, CreatedAt: created, CommandID: "command-1", TaskIDs: map[string]string{"two": "2", "ten": "10"}}
 	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutTaskBatch(replayedBatch, 1, 0) }); err != nil {
 		t.Fatalf("identical batch retry was not idempotent: %v", err)
 	}
@@ -338,7 +342,7 @@ func TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation(t *testing.T) {
 	if len(show.Tasks) != 1 || show.Tasks[0].Contract.ContractID != "contract-2" || show.Tasks[0].Status != "open" {
 		t.Fatalf("bad task detail: %+v", show)
 	}
-	duplicate := TaskRecord{ProjectIdentity: project, TaskID: "2", BatchID: "batch-1", Title: "replacement", Type: "task", ContractID: "contract-2", Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
+	duplicate := taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "2", BatchID: "batch-1", Title: "replacement", Type: "task", ContractID: "contract-2", Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
 	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutTask(duplicate) }); err == nil {
 		t.Fatal("duplicate numeric task ID was accepted")
 	}
@@ -385,9 +389,9 @@ func TestNativeTaskCASGuardsAndDeliveryProjection(t *testing.T) {
 	project := c.Identity()
 	contract := nativeContract(t, c, commit, "contract-1")
 	created := time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)
-	task := TaskRecord{ProjectIdentity: project, TaskID: "7", BatchID: "batch-7", Title: "task", Type: "task", Priority: 2, ContractID: contract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
+	task := taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "7", BatchID: "batch-7", Title: "task", Type: "task", Priority: 2, ContractID: contract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
 	err = store.transactRecords(ctx, func(tx *fixtureTransaction) error {
-		if err := tx.PutTaskBatch(TaskBatchRecord{BatchID: "batch-7", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("b", 64), CreatedAt: created, CommandID: "cmd-7", TaskIDs: map[string]string{"seven": "7"}}, 1, 0); err != nil {
+		if err := tx.PutTaskBatch(taskmodel.TaskBatchRecord{BatchID: "batch-7", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("b", 64), CreatedAt: created, CommandID: "cmd-7", TaskIDs: map[string]string{"seven": "7"}}, 1, 0); err != nil {
 			return err
 		}
 		if err := tx.PutTask(task); err != nil {
@@ -416,8 +420,8 @@ func TestNativeTaskCASGuardsAndDeliveryProjection(t *testing.T) {
 	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.UpdateNativeTaskCAS(closed, 2) }); err == nil {
 		t.Fatal("unverified delivery closed a task")
 	}
-	run := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-7", TaskID: "7", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-7", PRURL: "https://forge.invalid/org/repo/pulls/4", CreatedAt: created, UpdatedAt: created}
-	execution := ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-7", CurrentAttemptID: "attempt-7", WorkflowRunID: "wf-7", Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Workspace: WorkspaceEvidence{Branch: "fixture/task-7"}, Status: "succeeded", CurrentStep: "waiting_pr_merge", CreatedAt: created, UpdatedAt: created}
+	run := executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-7", TaskID: "7", WorkflowVersion: executionmodel.Version, Phase: "waiting_pr_merge", SelectedResult: "exec-7", PRURL: "https://forge.invalid/org/repo/pulls/4", CreatedAt: created, UpdatedAt: created}
+	execution := executionmodel.ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-7", CurrentAttemptID: "attempt-7", WorkflowRunID: "wf-7", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Workspace: executionmodel.WorkspaceEvidence{Branch: "fixture/task-7"}, Status: "succeeded", CurrentStep: "waiting_pr_merge", CreatedAt: created, UpdatedAt: created}
 	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", workerFlowMockSession)
 	err = store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		if err := tx.PutWorkflowRun(run); err != nil {
@@ -484,9 +488,9 @@ func TestNativeDiscardCASKeepsAuditAndNeverReusesID(t *testing.T) {
 	project := c.Identity()
 	contract := nativeContract(t, c, commit, "contract-4")
 	created := time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)
-	task := TaskRecord{ProjectIdentity: project, TaskID: "4", BatchID: "batch-4", Title: "discard me", Type: "task", Priority: 2, ContractID: contract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
+	task := taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "4", BatchID: "batch-4", Title: "discard me", Type: "task", Priority: 2, ContractID: contract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
 	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error {
-		if err := tx.PutTaskBatch(TaskBatchRecord{BatchID: "batch-4", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("4", 64), CreatedAt: created, CommandID: "cmd-4", TaskIDs: map[string]string{"four": "4"}}, 1, 0); err != nil {
+		if err := tx.PutTaskBatch(taskmodel.TaskBatchRecord{BatchID: "batch-4", ProjectIdentity: project, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("4", 64), CreatedAt: created, CommandID: "cmd-4", TaskIDs: map[string]string{"four": "4"}}, 1, 0); err != nil {
 			return err
 		}
 		if err := tx.PutTask(task); err != nil {
@@ -553,45 +557,45 @@ func TestTaskContractPinsCommittedBlobsAndRejectsInvalidReferences(t *testing.T)
 	for _, bad := range []string{"../outside.spec.md", "/absolute.spec.md", "C:/outside.spec.md", "docs\\spec\\bad.spec.md"} {
 		v := contract
 		v.SpecRef.Path = bad
-		v.Digest, _ = TaskContractDigest(v)
-		if err = ValidateTaskContract(v); err == nil {
+		v.Digest, _ = taskmodel.ContractDigest(v)
+		if err = taskmodel.ValidateContract(v); err == nil {
 			t.Fatalf("invalid contract path accepted: %q", bad)
 		}
 	}
 	missing := contract
 	missing.SpecRef.Path = "docs/spec/missing-task.spec.md"
 	missing.PlanRef.Path = "docs/spec/missing-task.plan.md"
-	missing.Digest, _ = TaskContractDigest(missing)
+	missing.Digest, _ = taskmodel.ContractDigest(missing)
 	if err = VerifyTaskContractFiles(ctx, c, missing); err == nil || !strings.Contains(err.Error(), "contract_mismatch") {
 		t.Fatalf("missing committed contract files were accepted: %v", err)
 	}
 	v := contract
-	v.CommonRefs = []FileReference{contract.SpecRef}
-	v.Digest, _ = TaskContractDigest(v)
-	if err = ValidateTaskContract(v); err == nil {
+	v.CommonRefs = []taskmodel.FileReference{contract.SpecRef}
+	v.Digest, _ = taskmodel.ContractDigest(v)
+	if err = taskmodel.ValidateContract(v); err == nil {
 		t.Fatal("task-specific spec was accepted as a common reference")
 	}
 	v = contract
-	v.PlanRef = FileReference{}
-	v.Digest, _ = TaskContractDigest(v)
-	if err = ValidateTaskContract(v); err == nil {
+	v.PlanRef = taskmodel.FileReference{}
+	v.Digest, _ = taskmodel.ContractDigest(v)
+	if err = taskmodel.ValidateContract(v); err == nil {
 		t.Fatal("missing plan was accepted")
 	}
 	v = contract
-	v.AcceptanceRefs = []FileReference{contract.PlanRef}
-	v.Digest, _ = TaskContractDigest(v)
+	v.AcceptanceRefs = []taskmodel.FileReference{contract.PlanRef}
+	v.Digest, _ = taskmodel.ContractDigest(v)
 	if err = VerifyTaskContractFiles(ctx, c, v); err == nil || !strings.Contains(err.Error(), "acceptance heading") {
 		t.Fatalf("acceptance reference without its section was accepted: %v", err)
 	}
-	if _, err = ValidateTaskContractJSON([]byte(`{"contract_id":"one","contract_id":"two"}`)); err == nil || !strings.Contains(err.Error(), "duplicate JSON object key") {
+	if _, err = taskmodel.ValidateContractJSON([]byte(`{"contract_id":"one","contract_id":"two"}`)); err == nil || !strings.Contains(err.Error(), "duplicate JSON object key") {
 		t.Fatalf("duplicate JSON key was accepted: %v", err)
 	}
 	// The digest is over canonical JSON and therefore independent of object key order.
-	canonicalA, err := CanonicalJSON([]byte(`{"b":2,"a":{"d":4,"c":3}}`))
+	canonicalA, err := taskmodel.CanonicalJSON([]byte(`{"b":2,"a":{"d":4,"c":3}}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	canonicalB, err := CanonicalJSON([]byte(` { "a" : {"c":3,"d":4},"b":2 } `))
+	canonicalB, err := taskmodel.CanonicalJSON([]byte(` { "a" : {"c":3,"d":4},"b":2 } `))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -643,8 +647,8 @@ func TestTaskContractRejectsCommittedSymlinkReferences(t *testing.T) {
 	contract := nativeContract(t, c, strings.TrimSpace(string(head)), "contract-link")
 	contract.SpecRef = nativeRef(t, c, contract.SpecRef.Commit, "docs/spec/linked.spec.md")
 	contract.PlanRef = nativeRef(t, c, contract.PlanRef.Commit, "docs/spec/linked.plan.md")
-	contract.AcceptanceRefs = []FileReference{contract.SpecRef}
-	contract.Digest, err = TaskContractDigest(contract)
+	contract.AcceptanceRefs = []taskmodel.FileReference{contract.SpecRef}
+	contract.Digest, err = taskmodel.ContractDigest(contract)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -682,7 +686,7 @@ func TestNativeInitializationRefusesExistingBeadsTaskDatabase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	old := TaskRecord{ProjectIdentity: "legacy-project", TaskID: "legacy:one", Source: "beads", Status: "open", Version: 1, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	old := taskmodel.TaskRecord{ProjectIdentity: "legacy-project", TaskID: "legacy:one", Source: "beads", Status: "open", Version: 1, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutTask(old) }); err != nil {
 		t.Fatal(err)
 	}
@@ -758,22 +762,22 @@ func TestNativeStoreRejectsRetiredSQLiteRunProjectionBeforeAuthorityOpen(t *test
 }
 
 func TestNativeCursorErrorHasStableCode(t *testing.T) {
-	var native *NativeTaskError
+	var native *taskmodel.Error
 	if !errors.As(nativeErr("cursor_invalidated", "expired"), &native) || native.Code != "cursor_invalidated" {
 		t.Fatalf("native error code missing: %+v", native)
 	}
 }
 
 // Task creation is not the behavior under test in the execution profile case.
-func seedExecutionProfileTasks(t *testing.T, c Config, store *sqliteFixture, payload []byte) (TaskBatchReceipt, error) {
+func seedExecutionProfileTasks(t *testing.T, c Config, store *sqliteFixture, payload []byte) (taskmodel.TaskBatchReceipt, error) {
 	t.Helper()
-	var batch TaskBatchInput
+	var batch taskmodel.TaskBatchInput
 	if err := json.Unmarshal(payload, &batch); err != nil {
-		return TaskBatchReceipt{}, err
+		return taskmodel.TaskBatchReceipt{}, err
 	}
 	authority, err := store.NativeAuthority(context.Background(), c.Identity())
 	if err != nil {
-		return TaskBatchReceipt{}, err
+		return taskmodel.TaskBatchReceipt{}, err
 	}
 	stamp := now()
 	batchID := newID()
@@ -782,7 +786,7 @@ func seedExecutionProfileTasks(t *testing.T, c Config, store *sqliteFixture, pay
 		mapping[v.LocalKey] = strconvID(v.TaskID)
 	}
 	err = store.transactRecords(context.Background(), func(tx *fixtureTransaction) error {
-		if err := tx.PutTaskBatch(TaskBatchRecord{ProjectIdentity: c.Identity(), BatchID: batchID, SchemaVersion: taskBatchSchemaVersion, PayloadDigest: digestCanonical(payload), CommandID: "fixture-" + batchID, CreatedAt: stamp, TaskIDs: mapping}, authority.AuthorityVersion, authority.GraphRevision); err != nil {
+		if err := tx.PutTaskBatch(taskmodel.TaskBatchRecord{ProjectIdentity: c.Identity(), BatchID: batchID, SchemaVersion: taskmodel.BatchSchemaVersion, PayloadDigest: digestCanonical(payload), CommandID: "fixture-" + batchID, CreatedAt: stamp, TaskIDs: mapping}, authority.AuthorityVersion, authority.GraphRevision); err != nil {
 			return err
 		}
 		for _, v := range batch.Tasks {
@@ -790,7 +794,7 @@ func seedExecutionProfileTasks(t *testing.T, c Config, store *sqliteFixture, pay
 			if v.Priority != nil {
 				priority = *v.Priority
 			}
-			record := TaskRecord{ProjectIdentity: c.Identity(), TaskID: strconvID(v.TaskID), BatchID: batchID, Title: v.Title, Type: v.Type, Priority: priority, GoalIDs: append([]string(nil), v.GoalIDs...), ContractID: v.Contract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: stamp, UpdatedAt: stamp}
+			record := taskmodel.TaskRecord{ProjectIdentity: c.Identity(), TaskID: strconvID(v.TaskID), BatchID: batchID, Title: v.Title, Type: v.Type, Priority: priority, GoalIDs: append([]string(nil), v.GoalIDs...), ContractID: v.Contract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: stamp, UpdatedAt: stamp}
 			if err := tx.PutTask(record); err != nil {
 				return err
 			}
@@ -798,12 +802,12 @@ func seedExecutionProfileTasks(t *testing.T, c Config, store *sqliteFixture, pay
 				return err
 			}
 		}
-		for _, edge := range resolveTaskBatchEdges(batch) {
+		for _, edge := range taskmodel.ResolveBatchEdges(batch) {
 			if err := tx.PutTaskDependency(edge); err != nil {
 				return err
 			}
 		}
 		return nil
 	})
-	return TaskBatchReceipt{TaskIDs: mapping, BatchID: batchID, Status: "fixture"}, err
+	return taskmodel.TaskBatchReceipt{TaskIDs: mapping, BatchID: batchID, Status: "fixture"}, err
 }

@@ -10,7 +10,10 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 	"github.com/erranliu/SteerLine/internal/steerline/taskview"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 // This reader has task capabilities only: no SQLite, command or event methods.
@@ -31,11 +34,11 @@ func (r *taskReader) TaskGraphSnapshot(context.Context, string) (task.Snapshot, 
 }
 
 func TestTaskQueriesUseOnlyTaskReader(t *testing.T) {
-	first := task.TaskRecord{TaskID: "1", Status: "open"}
-	second := task.TaskRecord{TaskID: "2", Status: "open"}
+	first := taskmodel.TaskRecord{TaskID: "1", Status: "open"}
+	second := taskmodel.TaskRecord{TaskID: "2", Status: "open"}
 	reader := &taskReader{
 		page:  contracts.NativeTaskPage{Protocol: NativeTaskProtocol, ProjectID: "project", Tasks: []contracts.NativeTaskDetail{{TaskRecord: first}}},
-		graph: task.Snapshot{Authority: task.ProjectTaskAuthority{ProjectIdentity: "project"}, Tasks: []task.TaskRecord{first, second}, ByID: map[string]task.TaskRecord{"1": first, "2": second}, Edges: []task.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "2"}}},
+		graph: task.Snapshot{Authority: tasklegacy.ProjectTaskAuthority{ProjectIdentity: "project"}, Tasks: []taskmodel.TaskRecord{first, second}, ByID: map[string]taskmodel.TaskRecord{"1": first, "2": second}, Edges: []taskmodel.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "2"}}},
 	}
 	service := Service{Project: "project", Tasks: reader}
 	page, err := service.ListNativeTasks(context.Background(), "", 1)
@@ -77,14 +80,14 @@ func TestTaskCursorRemainsStrictWithoutSQLite(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = service.ListNativeTasks(context.Background(), base64.RawURLEncoding.EncodeToString(input), 1)
-	var coded *task.Error
+	var coded *taskmodel.Error
 	if !errors.As(err, &coded) || coded.Code != "cursor_invalidated" || reader.reads != 0 {
 		t.Fatalf("unknown cursor field reached storage: reads=%d err=%v", reader.reads, err)
 	}
 }
 
 func TestTaskQueriesRejectReaderScopeAndCursorDrift(t *testing.T) {
-	reader := &taskReader{page: contracts.NativeTaskPage{ProjectID: "project", DatabaseID: strings.Repeat("a", 32), DatabaseRevision: 8, AuthorityVersion: 2, GraphRevision: 3, HasMore: true, Tasks: []contracts.NativeTaskDetail{{TaskRecord: task.TaskRecord{TaskID: "1"}}}}}
+	reader := &taskReader{page: contracts.NativeTaskPage{ProjectID: "project", DatabaseID: strings.Repeat("a", 32), DatabaseRevision: 8, AuthorityVersion: 2, GraphRevision: 3, HasMore: true, Tasks: []contracts.NativeTaskDetail{{TaskRecord: taskmodel.TaskRecord{TaskID: "1"}}}}}
 	service := Service{Project: "project", Tasks: reader}
 	first, err := service.ListNativeTasks(context.Background(), "", 1)
 	if err != nil || first.NextCursor == "" {
@@ -96,7 +99,7 @@ func TestTaskQueriesRejectReaderScopeAndCursorDrift(t *testing.T) {
 	} {
 		reader.page = changed
 		_, err := service.ListNativeTasks(context.Background(), first.NextCursor, 1)
-		var coded *task.Error
+		var coded *taskmodel.Error
 		if !errors.As(err, &coded) || coded.Code != "cursor_invalidated" {
 			t.Fatalf("different database sample was accepted: %+v %v", changed, err)
 		}
@@ -123,12 +126,12 @@ func TestTaskQueriesRejectReaderScopeAndCursorDrift(t *testing.T) {
 
 type eventReader struct{ budgets []int }
 
-func (r *eventReader) Events(_ context.Context, _, _, _ string, after int64, _ int, budget int) ([]contracts.DomainEvent, error) {
+func (r *eventReader) Events(_ context.Context, _, _, _ string, after int64, _ int, budget int) ([]storageports.DomainEvent, error) {
 	r.budgets = append(r.budgets, budget)
 	if after > 0 {
-		return []contracts.DomainEvent{{EventID: 2, PayloadBytes: 3, PayloadOmitted: true}}, nil
+		return []storageports.DomainEvent{{EventID: 2, PayloadBytes: 3, PayloadOmitted: true}}, nil
 	}
-	return []contracts.DomainEvent{{EventID: 1, Payload: []byte("one"), PayloadBytes: 3}}, nil
+	return []storageports.DomainEvent{{EventID: 1, Payload: []byte("one"), PayloadBytes: 3}}, nil
 }
 
 func (r *eventReader) EventPayload(context.Context, string, int64, int64, int) ([]byte, int64, string, error) {

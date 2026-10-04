@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 var commitPattern = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
@@ -20,9 +20,6 @@ type Repository struct {
 	Path      string
 	CommonDir string
 }
-
-type Intent = execution.WorkspaceIntent
-type Inspection = execution.WorkspaceInspection
 
 func ResolveRepository(ctx context.Context, git Git, checkout string) (Repository, error) {
 	root, err := git.Output(ctx, checkout, "rev-parse", "--show-toplevel")
@@ -58,7 +55,7 @@ func (r Repository) Verify(ctx context.Context, git Git) error {
 	return nil
 }
 
-func Verify(ctx context.Context, git Git, repository Repository, intent *Intent, initial bool) error {
+func Verify(ctx context.Context, git Git, repository Repository, intent *executionbackend.WorkspaceIntent, initial bool) error {
 	if intent == nil || !filepath.IsAbs(intent.Path) || intent.Branch == "" || !commitPattern.MatchString(intent.BaseCommit) {
 		return errors.New("incomplete workspace intent")
 	}
@@ -111,19 +108,19 @@ func Verify(ctx context.Context, git Git, repository Repository, intent *Intent,
 	return nil
 }
 
-func Inspect(ctx context.Context, git Git, repository Repository, intent *Intent) (Inspection, error) {
+func Inspect(ctx context.Context, git Git, repository Repository, intent *executionbackend.WorkspaceIntent) (executionbackend.WorkspaceInspection, error) {
 	if err := Verify(ctx, git, repository, intent, false); err != nil {
-		return Inspection{}, err
+		return executionbackend.WorkspaceInspection{}, err
 	}
 	head, err := git.Output(ctx, intent.Path, "rev-parse", "HEAD")
 	if err != nil {
-		return Inspection{}, err
+		return executionbackend.WorkspaceInspection{}, err
 	}
 	status, err := git.Output(ctx, intent.Path, "status", "--porcelain=v1", "-z", "--untracked-files=all")
 	if err != nil {
-		return Inspection{}, err
+		return executionbackend.WorkspaceInspection{}, err
 	}
-	return Inspection{Repository: repository.Path, Worktree: intent.Path, Branch: intent.Branch, Base: intent.BaseCommit, Head: strings.TrimSpace(string(head)), Dirty: len(status) != 0, CheckedAt: time.Now().UTC()}, nil
+	return executionbackend.WorkspaceInspection{Repository: repository.Path, Worktree: intent.Path, Branch: intent.Branch, Base: intent.BaseCommit, Head: strings.TrimSpace(string(head)), Dirty: len(status) != 0, CheckedAt: time.Now().UTC()}, nil
 }
 
 // ValidateRoot resolves existing symlink ancestors before applying the original

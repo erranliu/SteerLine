@@ -7,8 +7,10 @@ import (
 	"os"
 	"time"
 
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 // Only exercised pure ports are implemented; unused ports cannot perform I/O.
@@ -21,65 +23,79 @@ type testClient struct {
 }
 
 func (c *testClient) Project() api.ProjectRef { return c.ref }
-func (c *testClient) Close() error            { c.closed++; return nil }
+
+func (c *testClient) Close() error { c.closed++; return nil }
+
 func (c *testClient) ReadProject(_ context.Context, selected string, _ api.ProjectSnapshot) api.ProjectSnapshot {
 	c.query.selected = selected
 	return c.query.snapshot
 }
-func (c *testClient) Activity(context.Context, string, string, string, api.ActivityCursor) (api.LogBatch, error) {
+
+func (c *testClient) Activity(context.Context, string, string, string, productapi.ActivityCursor) (api.LogBatch, error) {
 	return c.query.activity, nil
 }
+
 func (c *testClient) Conversation(context.Context, contracts.ConversationFilter, string) (contracts.ConversationPage, error) {
 	return c.query.page, nil
 }
+
 func (c *testClient) Body(context.Context, contracts.ConversationBodyRef, int64, int) (contracts.ConversationBodyPage, error) {
 	return c.query.body, nil
 }
+
 func (c *testClient) Capabilities(context.Context, api.CapabilityFilter) ([]contracts.ConversationCapabilityReport, error) {
 	return nil, nil
 }
-func (c *testClient) SubmitControl(_ context.Context, in api.ControlInput) (api.ControlRequest, error) {
+
+func (c *testClient) SubmitControl(_ context.Context, in productapi.ControlInput) (productapi.ControlRequest, error) {
 	f := c.control
 	f.calls++
 	f.instance, f.revision = in.InstanceID, in.ExpectedRevision
 	if f.err != nil {
-		return api.ControlRequest{}, f.err
+		return productapi.ControlRequest{}, f.err
 	}
 	var raw json.RawMessage
-	if in.Payload != (api.ControlPayload{}) {
+	if in.Payload != (productapi.ControlPayload{}) {
 		raw, _ = json.Marshal(in.Payload)
 	}
-	f.request = api.ControlRequest{RequestID: in.RequestID, Action: string(in.Action), Payload: raw, InstanceID: in.InstanceID}
+	f.request = productapi.ControlRequest{RequestID: in.RequestID, Action: string(in.Action), Payload: raw, InstanceID: in.InstanceID}
 	return f.request, nil
 }
-func (c *testClient) Receipt(context.Context, string) (*api.ControlReceipt, error) {
+
+func (c *testClient) Receipt(context.Context, string) (*productapi.ControlReceipt, error) {
 	c.control.receipts++
 	return nil, os.ErrNotExist
 }
-func (c *testClient) Request(context.Context, string) (*api.ControlRequest, error) {
+
+func (c *testClient) Request(context.Context, string) (*productapi.ControlRequest, error) {
 	c.control.requests++
 	return nil, os.ErrNotExist
 }
-func (c *testClient) SubmitDecision(_ context.Context, in api.DecisionInput) (contracts.CommandRecord, bool, error) {
+
+func (c *testClient) SubmitDecision(_ context.Context, in api.DecisionInput) (storageports.CommandRecord, bool, error) {
 	f := c.control
 	f.decisionCalls++
 	f.decisionAnswer = in.Answer
 	if f.decisionErr != nil {
-		return contracts.CommandRecord{}, false, f.decisionErr
+		return storageports.CommandRecord{}, false, f.decisionErr
 	}
-	f.decisionCommand = contracts.CommandRecord{ProjectIdentity: c.ref.Identity, CommandID: in.CommandID, Kind: "answer_decision", TargetID: in.Answer.DecisionID, RequestedBy: in.RequestedBy, Status: "pending"}
+	f.decisionCommand = storageports.CommandRecord{ProjectIdentity: c.ref.Identity, CommandID: in.CommandID, Kind: "answer_decision", TargetID: in.Answer.DecisionID, RequestedBy: in.RequestedBy, Status: "pending"}
 	return f.decisionCommand, true, nil
 }
-func (c *testClient) Command(context.Context, string) (contracts.CommandRecord, error) {
+
+func (c *testClient) Command(context.Context, string) (storageports.CommandRecord, error) {
 	c.control.receipts++
 	return c.control.decisionCommand, nil
 }
+
 func (c *testClient) DecisionEligibility(context.Context, *contracts.Run) error {
 	return c.control.eligibilityErr
 }
+
 func (c *testClient) CursorAfter(contracts.ConversationFilter, int64) (string, error) {
 	return "fixture-cursor", nil
 }
+
 func (c *testClient) InspectRecovery(context.Context, string) (api.RecoveryInspection, error) {
 	return api.RecoveryInspection{}, errors.New("fixture inspection unavailable")
 }
@@ -89,9 +105,11 @@ var _ api.ConsoleClient = (*testClient)(nil)
 func (c *testClient) CandidateAvailability(snapshot api.ProjectSnapshot, now time.Time) (bool, string) {
 	return api.CandidateFreshness(c.ref.Identity, snapshot, now)
 }
+
 func (c *testClient) StartTaskAvailability(snapshot api.ProjectSnapshot, now time.Time) string {
 	return api.StartTaskReason(c.ref, snapshot, now)
 }
+
 func (c *testClient) AutoDispatchAvailability(snapshot api.ProjectSnapshot) string {
 	return api.AutoDispatchReason(c.ref, snapshot)
 }

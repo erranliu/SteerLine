@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer) error {
+func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *Run, execution *executionmodel.ExecutionRecord, answer executionmodel.DecisionAnswer) error {
 	if run != nil && s.lifecycleEffectPending(run.RunID) {
 		return nil
 	}
@@ -20,7 +21,7 @@ func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *Run, 
 		return err
 	}
 	if fixed.execution != execution && fixed.execution.ExecutionID != execution.ExecutionID {
-		return ErrWorkerTurnStale
+		return executionmodel.ErrTurnStale
 	}
 	if lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots {
 		args, err := linkedWorktreeWriteArgs(ctx, fixed.config, execution.Workspace.Worktree)
@@ -32,9 +33,9 @@ func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *Run, 
 		}
 	}
 	key := "worker-question-answer:" + execution.ExecutionID + ":" + answer.DecisionID
-	input := executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{
+	input := executionbackend.LifecycleInput{Feedback: &executionbackend.FeedbackInput{
 		DecisionID: answer.DecisionID, QuestionID: run.Decision.Request.QuestionRoute.QuestionID,
-		Message: workerFeedbackText(answer, run.Decision.Request), Answer: &executionapi.Answer{Answers: answer.Answers},
+		Message: workerFeedbackText(answer, run.Decision.Request), Answer: &executionbackend.Answer{Answers: answer.Answers},
 	}}
 	if operation := s.operationByKey(key); operation != nil {
 		return s.reconcileLifecycleQuestionAnswer(ctx, run, lifecycle, fixed, operation, input)
@@ -47,7 +48,7 @@ func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *Run, 
 	if err != nil {
 		return err
 	}
-	request, err := checkedLifecycleRequest(snapshot, operation, executionapi.LifecycleDeliverFeedback, input)
+	request, err := checkedLifecycleRequest(snapshot, operation, executionbackend.LifecycleDeliverFeedback, input)
 	if err != nil {
 		return err
 	}
@@ -63,14 +64,11 @@ func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *Run, 
 	return err
 }
 
-// A lost reply receipt may be confirmed immediately by its original read-only
-// reconciliation. An active observer must not strand that saved answer forever.
-
-func (s *Service) reconcileLifecycleQuestionAnswer(ctx context.Context, run *Run, lifecycle executionapi.LifecyclePort, fixed workerFlowContext, operation *OperationRecord, input executionapi.LifecycleInput) error {
+func (s *Service) reconcileLifecycleQuestionAnswer(ctx context.Context, run *Run, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext, operation *executionmodel.OperationRecord, input executionbackend.LifecycleInput) error {
 	if operation == nil || operation.Status == "pending" {
 		return errors.New("original answer has no persisted send operation")
 	}
-	if err := validateSavedLifecycleOperation(operation, executionapi.LifecycleDeliverFeedback, input); err != nil {
+	if err := validateSavedLifecycleOperation(operation, executionbackend.LifecycleDeliverFeedback, input); err != nil {
 		return err
 	}
 	if operation.Status == "accepted" || operation.Status == "confirmed" {
@@ -80,7 +78,7 @@ func (s *Service) reconcileLifecycleQuestionAnswer(ctx context.Context, run *Run
 	if err != nil {
 		return err
 	}
-	request, err := checkedLifecycleRequest(snapshot, operation, executionapi.LifecycleDeliverFeedback, input)
+	request, err := checkedLifecycleRequest(snapshot, operation, executionbackend.LifecycleDeliverFeedback, input)
 	if err != nil {
 		return err
 	}
@@ -91,7 +89,7 @@ func (s *Service) reconcileLifecycleQuestionAnswer(ctx context.Context, run *Run
 	if err := receipt.ValidateFor(request); err != nil {
 		return err
 	}
-	if reconcileErr != nil || receipt.Disposition != executionapi.OperationConfirmed || !receipt.State.InputAccepted {
+	if reconcileErr != nil || receipt.Disposition != executionbackend.OperationConfirmed || !receipt.State.InputAccepted {
 		if reconcileErr != nil {
 			return reconcileErr
 		}
@@ -123,14 +121,14 @@ func (s *Service) reconcileSavedLifecycleQuestionAnswer(ctx context.Context, run
 	if err != nil {
 		return err
 	}
-	input := executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{
+	input := executionbackend.LifecycleInput{Feedback: &executionbackend.FeedbackInput{
 		DecisionID: answer.DecisionID, QuestionID: run.Decision.Request.QuestionRoute.QuestionID,
-		Message: workerFeedbackText(answer, run.Decision.Request), Answer: &executionapi.Answer{Answers: answer.Answers},
+		Message: workerFeedbackText(answer, run.Decision.Request), Answer: &executionbackend.Answer{Answers: answer.Answers},
 	}}
 	return s.reconcileLifecycleQuestionAnswer(ctx, run, lifecycle, fixed, operation, input)
 }
 
-func (s *Service) applyLifecycleQuestionAnswerReceipt(run *Run, request executionapi.LifecycleRequest, receipt executionapi.LifecycleReceipt, executeErr error) error {
+func (s *Service) applyLifecycleQuestionAnswerReceipt(run *Run, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt, executeErr error) error {
 	if err := receipt.ValidateFor(request); err != nil {
 		return err
 	}
@@ -139,7 +137,7 @@ func (s *Service) applyLifecycleQuestionAnswerReceipt(run *Run, request executio
 		run.Decision.Request.QuestionRoute == nil || run.Decision.Request.QuestionRoute.QuestionID != request.Input.Feedback.QuestionID {
 		return nil
 	}
-	if err := validateSavedLifecycleOperation(snapshotOperation(&s.domain, request.Operation.ID), executionapi.LifecycleDeliverFeedback, request.Input); err != nil {
+	if err := validateSavedLifecycleOperation(snapshotOperation(&s.domain, request.Operation.ID), executionbackend.LifecycleDeliverFeedback, request.Input); err != nil {
 		return err
 	}
 	for _, operation := range s.domain.Operations {
@@ -163,9 +161,9 @@ func (s *Service) applyLifecycleQuestionAnswerReceipt(run *Run, request executio
 	}
 	original := request.Snapshot
 	if current.Ref != original.Ref || current.Session.SessionID != original.Session.SessionID || current.Session.Generation != original.Session.Generation || current.ConfigurationDigest != original.ConfigurationDigest || current.ResourceGeneration != original.ResourceGeneration || recordFingerprint(current.PolicyResources) != recordFingerprint(original.PolicyResources) || recordFingerprint(current.QuestionRoute) != recordFingerprint(original.QuestionRoute) {
-		return ErrWorkerTurnStale
+		return executionmodel.ErrTurnStale
 	}
-	if executeErr != nil || receipt.Disposition == executionapi.OperationUnknown || receipt.Disposition == executionapi.OperationRejected {
+	if executeErr != nil || receipt.Disposition == executionbackend.OperationUnknown || receipt.Disposition == executionbackend.OperationRejected {
 		status, reason := lifecycleOutcome(receipt, executeErr)
 		if status != "rejected" {
 			status = "outcome_unknown"
@@ -179,10 +177,10 @@ func (s *Service) applyLifecycleQuestionAnswerReceipt(run *Run, request executio
 		}
 		return s.commitWorker(run, request.Operation.ID)
 	}
-	if receipt.Disposition == executionapi.OperationConfirmed && receipt.State.InputAccepted {
+	if receipt.Disposition == executionbackend.OperationConfirmed && receipt.State.InputAccepted {
 		return s.confirmLifecycleQuestionAnswer(run, request, receipt)
 	}
-	if receipt.Disposition != executionapi.OperationAccepted || !receipt.State.InputAccepted {
+	if receipt.Disposition != executionbackend.OperationAccepted || !receipt.State.InputAccepted {
 		return errors.New("question answer result has no accepted original request")
 	}
 	if err := s.setOperationState(request.Operation.ID, "accepted", receipt.RequestID, mustJSON(receipt), ""); err != nil {
@@ -192,7 +190,7 @@ func (s *Service) applyLifecycleQuestionAnswerReceipt(run *Run, request executio
 	return s.commitWorker(run, request.Operation.ID)
 }
 
-func (s *Service) confirmLifecycleQuestionAnswer(run *Run, request executionapi.LifecycleRequest, receipt executionapi.LifecycleReceipt) error {
+func (s *Service) confirmLifecycleQuestionAnswer(run *Run, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt) error {
 	if run == nil || run.Decision == nil || run.Decision.ID != request.Input.Feedback.DecisionID || run.Decision.Status != "answer_saved" {
 		return nil
 	}
@@ -207,7 +205,7 @@ func (s *Service) confirmLifecycleQuestionAnswer(run *Run, request executionapi.
 	if len(execution.PendingQuestions) > 0 {
 		next := execution.PendingQuestions[0]
 		execution.PendingQuestions = execution.PendingQuestions[1:]
-		decision, err := WriteDecisionRequest(run, decisionRequestFromEventFact(executionapi.EventFact{Questions: next.Questions, QuestionRoute: &next.Route}))
+		decision, err := WriteDecisionRequest(run, decisionRequestFromEventFact(executionbackend.EventFact{Questions: next.Questions, QuestionRoute: &next.Route}))
 		if err != nil {
 			return err
 		}

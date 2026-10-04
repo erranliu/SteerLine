@@ -12,16 +12,13 @@ import (
 	"testing"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
-
-// These explicitly gated read-only native probes retain their original switches.
-// The automated roadmap acceptance never enables them or calls the product CLI.
 
 func TestCodexHistoryRealFailedAcceptance(t *testing.T) {
 	path := os.Getenv("STEERLINE_CODEX_HISTORY_FAILED_BINDING")
@@ -32,7 +29,7 @@ func TestCodexHistoryRealFailedAcceptance(t *testing.T) {
 	require(t, err)
 	var binding codexworker.HistoryBinding
 	require(t, json.Unmarshal(raw, &binding))
-	if binding.Backend != executionapi.BackendLocal || binding.Home == "" {
+	if binding.Backend != executionbackend.BackendLocal || binding.Home == "" {
 		t.Fatal("failed-turn acceptance requires an isolated local Codex home")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
@@ -92,7 +89,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 			store, err := sqlite.OpenSQLiteStore(dbPath)
 			require(t, err)
 			service := &isolatedHistoryCommitFixture{domainStore: store, directory: t.TempDir()}
-			if binding.Backend == executionapi.BackendOrca {
+			if binding.Backend == executionbackend.BackendOrca {
 				orcaExe, lookErr := exec.LookPath("orca")
 				require(t, lookErr)
 				version, versionErr := exec.CommandContext(ctx, orcaExe, "--version").Output()
@@ -143,7 +140,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 			if starts != 2 || ends != 2 || commentary < 1 || finals != 2 {
 				t.Fatalf("native exact facts missing: starts=%d ends=%d commentary=%d finals=%d", starts, ends, commentary, finals)
 			}
-			if binding.Backend == executionapi.BackendOrca && tools < 2 {
+			if binding.Backend == executionbackend.BackendOrca && tools < 2 {
 				t.Fatal("Orca native tool history missing")
 			}
 			reports, reportErr := store.ConversationCapabilityReports(ctx, binding.Backend, binding.Protocol, binding.TargetID, 1)
@@ -151,19 +148,19 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 			if len(reports) != 1 || reports[0].AgentVersion == "" || reports[0].PlatformVersion == "" || reports[0].PlatformVersion == "windows" || reports[0].ExecutionID != binding.ExecutionID || reports[0].AttemptID != binding.AttemptID || reports[0].SourceIdentity != binding.Identity() {
 				t.Fatal("native capability report lacks actual agent version")
 			}
-			statuses := map[string]executionapi.CapabilityStatus{}
+			statuses := map[string]executionbackend.CapabilityStatus{}
 			for _, cap := range reports[0].Capabilities {
 				statuses[cap.Name] = cap.Status
 			}
 			for _, name := range []string{"turn_boundaries", "message_phase", "final_content", "stable_item_identity", "incremental_read", "history_replay"} {
-				if statuses[name] != executionapi.CapabilityVerified {
+				if statuses[name] != executionbackend.CapabilityVerified {
 					t.Fatalf("native report did not verify %s: %+v", name, statuses)
 				}
 			}
-			if binding.Backend == executionapi.BackendOrca && statuses["input_wait"] != executionapi.CapabilityNotTested {
+			if binding.Backend == executionbackend.BackendOrca && statuses["input_wait"] != executionbackend.CapabilityNotTested {
 				t.Fatal("unobserved Orca wait was overclaimed")
 			}
-			if binding.Backend == executionapi.BackendLocal && statuses["input_wait"] != executionapi.CapabilityUnsupported {
+			if binding.Backend == executionbackend.BackendLocal && statuses["input_wait"] != executionbackend.CapabilityUnsupported {
 				t.Fatal("unsupported local reply was overclaimed")
 			}
 			checkpoint, err := store.ConversationCheckpoint(ctx, binding.ProjectID, binding.ExecutionID, binding.AttemptID, "codex-app-server", binding.Identity())
@@ -216,11 +213,14 @@ func isolatedHistoryDigest(value any) string {
 
 type isolatedHistoryStop struct{ process *os.Process }
 
-func (p isolatedHistoryStop) Identity() executionapi.ProcessIdentity {
-	return executionapi.ProcessIdentity{Kind: "fixture", PID: p.process.Pid, Created: "native-read-only-probe"}
+func (p isolatedHistoryStop) Identity() executionbackend.ProcessIdentity {
+	return executionbackend.ProcessIdentity{Kind: "fixture", PID: p.process.Pid, Created: "native-read-only-probe"}
 }
-func (p isolatedHistoryStop) Kill()  { _ = p.process.Kill() }
+
+func (p isolatedHistoryStop) Kill() { _ = p.process.Kill() }
+
 func (p isolatedHistoryStop) Close() {}
+
 func (f *isolatedHistoryCommitFixture) collectCodexHistoryPage(ctx context.Context, b codexworker.HistoryBinding) (bool, error) {
 	path := filepath.Join(f.directory, isolatedHistoryDigest(b)+".json")
 	if err := codexworker.WriteHistoryBinding(path, b, steerline.AtomicWrite); err != nil {
@@ -228,7 +228,7 @@ func (f *isolatedHistoryCommitFixture) collectCodexHistoryPage(ctx context.Conte
 	}
 	checkpoint, cpErr := f.domainStore.ConversationCheckpoint(ctx, b.ProjectID, b.ExecutionID, b.AttemptID, "codex-app-server", b.Identity())
 	source := contracts.ConversationHistorySource{Identity: b.Identity() + ":" + b.AttemptID, BindingPath: path, Workspace: b.Workspace, Event: b.Event()}
-	batch, err := codexworker.NewConversationAdapter().ReadHistory(ctx, contracts.ConversationHistoryReadRequest{Source: source, Cursor: checkpoint.Cursor, HasCheckpoint: cpErr == nil, PlatformVersion: f.platformVersion}, func(cmd *exec.Cmd) (executionapi.StopHandle, error) {
+	batch, err := codexworker.NewConversationAdapter().ReadHistory(ctx, contracts.ConversationHistoryReadRequest{Source: source, Cursor: checkpoint.Cursor, HasCheckpoint: cpErr == nil, PlatformVersion: f.platformVersion}, func(cmd *exec.Cmd) (executionbackend.StopHandle, error) {
 		if err := cmd.Start(); err != nil {
 			return nil, err
 		}
@@ -260,7 +260,7 @@ func TestCodexHistoryRealSourceReplacement(t *testing.T) {
 	require(t, err)
 	var bindings []codexworker.HistoryBinding
 	require(t, json.Unmarshal(raw, &bindings))
-	if len(bindings) != 2 || bindings[0].Backend != executionapi.BackendLocal || bindings[1].Backend != executionapi.BackendLocal || bindings[0].ProjectID != bindings[1].ProjectID || bindings[0].ExecutionID != bindings[1].ExecutionID || bindings[0].AttemptID != bindings[1].AttemptID || !strings.EqualFold(filepath.Clean(bindings[0].Workspace), filepath.Clean(bindings[1].Workspace)) || bindings[0].SessionID == bindings[1].SessionID {
+	if len(bindings) != 2 || bindings[0].Backend != executionbackend.BackendLocal || bindings[1].Backend != executionbackend.BackendLocal || bindings[0].ProjectID != bindings[1].ProjectID || bindings[0].ExecutionID != bindings[1].ExecutionID || bindings[0].AttemptID != bindings[1].AttemptID || !strings.EqualFold(filepath.Clean(bindings[0].Workspace), filepath.Clean(bindings[1].Workspace)) || bindings[0].SessionID == bindings[1].SessionID {
 		t.Fatal("replacement acceptance needs two distinct real sessions bound to one local attempt and workspace")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)

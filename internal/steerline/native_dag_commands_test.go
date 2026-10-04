@@ -13,21 +13,24 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func taskBatchFixture(t *testing.T, c Config, commit string, tasks []TaskBatchTask, edges []TaskBatchEdge) []byte {
+func taskBatchFixture(t *testing.T, c Config, commit string, tasks []taskmodel.TaskBatchTask, edges []taskmodel.TaskBatchEdge) []byte {
 	t.Helper()
 	if edges == nil {
-		edges = []TaskBatchEdge{}
+		edges = []taskmodel.TaskBatchEdge{}
 	}
 	for i := range tasks {
 		if tasks[i].Contract.ContractID == "" {
 			tasks[i].Contract = nativeContract(t, c, commit, "batch-contract-"+strconvID(tasks[i].TaskID))
 		}
 	}
-	b, err := json.Marshal(TaskBatchInput{SchemaVersion: taskBatchSchemaVersion, ProjectID: c.Identity(), Tasks: tasks, Dependencies: edges})
+	b, err := json.Marshal(taskmodel.TaskBatchInput{SchemaVersion: taskmodel.BatchSchemaVersion, ProjectID: c.Identity(), Tasks: tasks, Dependencies: edges})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,11 +57,11 @@ func openDAGFixture(t *testing.T) (Config, string, *sqliteFixture) {
 	return c, commit, store
 }
 
-func batchTasks(ids ...int64) []TaskBatchTask {
-	out := make([]TaskBatchTask, len(ids))
+func batchTasks(ids ...int64) []taskmodel.TaskBatchTask {
+	out := make([]taskmodel.TaskBatchTask, len(ids))
 	for i, id := range ids {
 		priority := 2
-		out[i] = TaskBatchTask{LocalKey: "k" + strconvID(id), TaskID: id, Title: "Task " + strconvID(id), Type: "task", Priority: &priority}
+		out[i] = taskmodel.TaskBatchTask{LocalKey: "k" + strconvID(id), TaskID: id, Title: "Task " + strconvID(id), Type: "task", Priority: &priority}
 	}
 	return out
 }
@@ -70,13 +73,13 @@ func TestTaskBatchStrictDecodeAndDeterministicCyclePath(t *testing.T) {
 		`{"schema_version":"task-batch/v1","project_id":"p","tasks":[{"local_key":"a","task_id":1.5,"title":"x","type":"task","contract":{}}]}`,
 		`{"schema_version":"task-batch/v1","project_id":"p","tasks":[],"tasks":[]}`,
 	} {
-		if _, _, err := decodeTaskBatch([]byte(raw)); err == nil {
+		if _, _, err := taskmodel.DecodeBatch([]byte(raw)); err == nil {
 			t.Fatalf("invalid batch accepted: %s", raw)
 		}
 	}
 	c, commit, store := openDAGFixture(t)
 	tasks := batchTasks(2, 3)
-	edges := []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k2"}, Successor: TaskBatchReference{LocalKey: "k3"}}, {Predecessor: TaskBatchReference{LocalKey: "k3"}, Successor: TaskBatchReference{LocalKey: "k2"}}}
+	edges := []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k2"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k3"}}, {Predecessor: taskmodel.TaskBatchReference{LocalKey: "k3"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k2"}}}
 	beforeGraph, err := store.TaskGraphSnapshot(context.Background(), c.Identity())
 	require(t, err)
 	payload := taskBatchFixture(t, c, commit, tasks, edges)
@@ -102,8 +105,8 @@ func TestCreateTaskBatchAtomicIdempotentAndQueryable(t *testing.T) {
 	c, commit, store := openDAGFixture(t)
 	tasks := batchTasks(20, 21, 24)
 	tasks[2].Priority = func() *int { v := 0; return &v }()
-	edges := []TaskBatchEdge{
-		{Predecessor: TaskBatchReference{LocalKey: "k20"}, Successor: TaskBatchReference{LocalKey: "k21"}},
+	edges := []taskmodel.TaskBatchEdge{
+		{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k20"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k21"}},
 	}
 	payload := taskBatchFixture(t, c, commit, tasks, edges)
 	commands := CommandService{Store: store, Project: c.Identity()}
@@ -177,9 +180,9 @@ func TestCreateTaskBatchAtomicIdempotentAndQueryable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, mutate := range []func(*TaskRecord){
-		func(task *TaskRecord) { task.GoalIDs = []string{"unapproved-goal"} },
-		func(task *TaskRecord) { task.IdentityMapDigest = "unapproved-digest" },
+	for _, mutate := range []func(*taskmodel.TaskRecord){
+		func(task *taskmodel.TaskRecord) { task.GoalIDs = []string{"unapproved-goal"} },
+		func(task *taskmodel.TaskRecord) { task.IdentityMapDigest = "unapproved-digest" },
 	} {
 		task := rootPage.Tasks[0].TaskRecord
 		task.Status, task.Claimant, task.Version = "in_progress", "worker", task.Version+1
@@ -214,7 +217,7 @@ func TestCreateTaskBatchRollsBackEveryWriteWhenEdgeInsertFails(t *testing.T) {
 	if _, err := store.db.ExecContext(ctx, `CREATE TRIGGER fail_task_edge BEFORE INSERT ON task_dependencies BEGIN SELECT RAISE(ABORT,'injected edge failure'); END`); err != nil {
 		t.Fatal(err)
 	}
-	payload := taskBatchFixture(t, c, commit, batchTasks(40, 41), []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k40"}, Successor: TaskBatchReference{LocalKey: "k41"}}})
+	payload := taskBatchFixture(t, c, commit, batchTasks(40, 41), []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k40"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k41"}}})
 	if _, err := commands.CreateTaskBatch(ctx, c, payload, strings.Repeat("4", 32), 1, "planner"); err == nil {
 		t.Fatal("injected edge failure did not abort creation")
 	}
@@ -274,14 +277,14 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 	created := time.Now().UTC()
 	err := store.transactRecords(ctx, func(domainTx *fixtureTransaction) error {
 		tx := domainTx
-		authority := ProjectTaskAuthority{ProjectIdentity: otherProject, Authority: "native", AuthorityVersion: 1, Repository: foreignContract.Repository, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: created, UpdatedAt: created}
+		authority := tasklegacy.ProjectTaskAuthority{ProjectIdentity: otherProject, Authority: "native", AuthorityVersion: 1, Repository: foreignContract.Repository, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: created, UpdatedAt: created}
 		if e := tx.PutProjectTaskAuthority(authority); e != nil {
 			return e
 		}
-		if e := tx.PutTaskBatch(TaskBatchRecord{BatchID: "foreign-batch", ProjectIdentity: otherProject, SchemaVersion: taskBatchSchemaVersion, PayloadDigest: strings.Repeat("b", 64), CreatedAt: created, CommandID: "foreign-command", TaskIDs: map[string]string{"foreign": "99"}}, 1, 0); e != nil {
+		if e := tx.PutTaskBatch(taskmodel.TaskBatchRecord{BatchID: "foreign-batch", ProjectIdentity: otherProject, SchemaVersion: taskmodel.BatchSchemaVersion, PayloadDigest: strings.Repeat("b", 64), CreatedAt: created, CommandID: "foreign-command", TaskIDs: map[string]string{"foreign": "99"}}, 1, 0); e != nil {
 			return e
 		}
-		task := TaskRecord{ProjectIdentity: otherProject, TaskID: "99", BatchID: "foreign-batch", Title: "foreign", Type: "task", Priority: 2, ContractID: foreignContract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
+		task := taskmodel.TaskRecord{ProjectIdentity: otherProject, TaskID: "99", BatchID: "foreign-batch", Title: "foreign", Type: "task", Priority: 2, ContractID: foreignContract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
 		if e := tx.PutTask(task); e != nil {
 			return e
 		}
@@ -293,7 +296,7 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 	commands := CommandService{Store: store, Project: c.Identity()}
 	tasks := batchTasks(30)
 	ref := int64(99)
-	edges := []TaskBatchEdge{{Predecessor: TaskBatchReference{TaskID: &ref}, Successor: TaskBatchReference{LocalKey: "k30"}}}
+	edges := []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{TaskID: &ref}, Successor: taskmodel.TaskBatchReference{LocalKey: "k30"}}}
 	validation, err := commands.ValidateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, tasks, edges))
 	if err != nil {
 		t.Fatal(err)
@@ -301,17 +304,17 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 	if validation.Valid || !hasTaskIssue(validation.Issues, "cross_project_dependency") {
 		t.Fatalf("cross-project dependency was accepted: %+v", validation)
 	}
-	validateRules := func(payload []byte) (TaskBatchValidation, error) {
-		batch, _, err := decodeTaskBatch(payload)
+	validateRules := func(payload []byte) (taskmodel.TaskBatchValidation, error) {
+		batch, _, err := taskmodel.DecodeBatch(payload)
 		if err != nil {
-			return TaskBatchValidation{}, err
+			return taskmodel.TaskBatchValidation{}, err
 		}
 		graph, err := store.TaskGraphSnapshot(ctx, c.Identity())
 		if err != nil {
-			return TaskBatchValidation{}, err
+			return taskmodel.TaskBatchValidation{}, err
 		}
 		issues, cycle := validateTaskBatchAgainstGraph(ctx, c, batch, graph, false)
-		return TaskBatchValidation{Valid: len(issues) == 0, Issues: issues, Cycle: cycle}, nil
+		return taskmodel.TaskBatchValidation{Valid: len(issues) == 0, Issues: issues, Cycle: cycle}, nil
 	}
 	contractCollision := batchTasks(30)
 	contractCollision[0].Contract = nativeContract(t, c, commit, foreignContract.ContractID)
@@ -320,7 +323,7 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 		t.Fatalf("cross-project contract ID mismatch was hidden by validation: %+v / %v", validation, err)
 	}
 	dupTasks := batchTasks(30, 31)
-	dup := []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k30"}, Successor: TaskBatchReference{LocalKey: "k31"}}, {Predecessor: TaskBatchReference{LocalKey: "k30"}, Successor: TaskBatchReference{LocalKey: "k31"}}}
+	dup := []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k30"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k31"}}, {Predecessor: taskmodel.TaskBatchReference{LocalKey: "k30"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k31"}}}
 	validation, err = validateRules(taskBatchFixture(t, c, commit, dupTasks, dup))
 	if err != nil {
 		t.Fatal(err)
@@ -328,7 +331,7 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 	if validation.Valid || !hasTaskIssue(validation.Issues, "duplicate_dependency") {
 		t.Fatalf("duplicate edge was accepted: %+v", validation)
 	}
-	self := []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k30"}, Successor: TaskBatchReference{LocalKey: "k30"}}}
+	self := []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k30"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k30"}}}
 	validation, err = validateRules(taskBatchFixture(t, c, commit, batchTasks(30), self))
 	if err != nil {
 		t.Fatal(err)
@@ -337,7 +340,7 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 		t.Fatalf("self dependency was accepted: %+v", validation)
 	}
 	missing := int64(404)
-	missingEdge := []TaskBatchEdge{{Predecessor: TaskBatchReference{TaskID: &missing}, Successor: TaskBatchReference{LocalKey: "k30"}}}
+	missingEdge := []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{TaskID: &missing}, Successor: taskmodel.TaskBatchReference{LocalKey: "k30"}}}
 	validation, err = validateRules(taskBatchFixture(t, c, commit, batchTasks(30), missingEdge))
 	if err != nil {
 		t.Fatal(err)
@@ -346,7 +349,7 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 		t.Fatalf("missing predecessor was accepted: %+v", validation)
 	}
 	oldSuccessor := int64(99)
-	badSuccessor := []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k30"}, Successor: TaskBatchReference{TaskID: &oldSuccessor}}}
+	badSuccessor := []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k30"}, Successor: taskmodel.TaskBatchReference{TaskID: &oldSuccessor}}}
 	validation, err = validateRules(taskBatchFixture(t, c, commit, batchTasks(30), badSuccessor))
 	if err != nil {
 		t.Fatal(err)
@@ -368,15 +371,15 @@ func TestTaskDependencyStateRequiresEveryPredecessorDelivery(t *testing.T) {
 		{"all", 2, true, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			task := TaskRecord{TaskID: "3", Status: "open"}
+			task := taskmodel.TaskRecord{TaskID: "3", Status: "open"}
 			graph := taskGraphSnapshot{
-				ByID:       map[string]TaskRecord{"1": {TaskID: "1", Status: "open"}, "2": {TaskID: "2", Status: "open"}, "3": task},
-				Edges:      []TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "3"}, {PredecessorID: "2", SuccessorID: "3"}},
+				ByID:       map[string]taskmodel.TaskRecord{"1": {TaskID: "1", Status: "open"}, "2": {TaskID: "2", Status: "open"}, "3": task},
+				Edges:      []taskmodel.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "3"}, {PredecessorID: "2", SuccessorID: "3"}},
 				Deliveries: map[string]TaskDeliveryRecord{},
 			}
 			for i, id := range []string{"1", "2"} {
 				if i < tc.delivered {
-					graph.ByID[id] = TaskRecord{TaskID: id, Status: "closed"}
+					graph.ByID[id] = taskmodel.TaskRecord{TaskID: id, Status: "closed"}
 					graph.Deliveries[id] = TaskDeliveryRecord{TaskID: id}
 				}
 			}
@@ -388,7 +391,7 @@ func TestTaskDependencyStateRequiresEveryPredecessorDelivery(t *testing.T) {
 	}
 }
 
-func hasTaskIssue(issues []TaskBatchIssue, code string) bool {
+func hasTaskIssue(issues []taskmodel.TaskBatchIssue, code string) bool {
 	for _, issue := range issues {
 		if issue.Code == code {
 			return true
@@ -556,7 +559,7 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 		t.Fatal(err)
 	}
 	commands := CommandService{Store: store, Project: c.Identity()}
-	payload := taskBatchFixture(t, c, commit, batchTasks(120, 121), []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k120"}, Successor: TaskBatchReference{LocalKey: "k121"}}})
+	payload := taskBatchFixture(t, c, commit, batchTasks(120, 121), []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k120"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k121"}}})
 	if _, err = commands.CreateTaskBatch(ctx, c, payload, strings.Repeat("5", 32), 2, "planner"); err != nil {
 		t.Fatal(err)
 	}
@@ -566,8 +569,8 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	}
 	task := page.Tasks[0].TaskRecord
 	created := time.Now().UTC()
-	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-120", TaskID: "120", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-120", PRURL: "https://forge.invalid/org/repo/pulls/120", PRState: "merged", CreatedAt: created, UpdatedAt: created}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-120", CurrentAttemptID: "attempt-120", WorkflowRunID: "wf-120", Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "succeeded", CurrentStep: "worker", Workspace: WorkspaceEvidence{Branch: "fixture/task-120"}, CreatedAt: created, UpdatedAt: created}
+	run := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-120", TaskID: "120", WorkflowVersion: executionmodel.Version, Phase: "waiting_pr_merge", SelectedResult: "exec-120", PRURL: "https://forge.invalid/org/repo/pulls/120", PRState: "merged", CreatedAt: created, UpdatedAt: created}
+	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-120", CurrentAttemptID: "attempt-120", WorkflowRunID: "wf-120", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "succeeded", CurrentStep: "worker", Workspace: executionmodel.WorkspaceEvidence{Branch: "fixture/task-120"}, CreatedAt: created, UpdatedAt: created}
 	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", workerFlowMockSession)
 	mergeCommit := strings.Repeat("f", 40)
 	mergedAt := created.Add(-time.Minute)
@@ -673,16 +676,16 @@ func TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation(t *testing.T) {
 }
 
 type fixedTaskDeliveryVerifier struct {
-	info    PRInfo
+	info    executionmodel.PRInfo
 	calls   int
 	err     error
 	onQuery func()
 }
 
-func (v *fixedTaskDeliveryVerifier) Query(ctx context.Context, url string) (PRInfo, error) {
+func (v *fixedTaskDeliveryVerifier) Query(ctx context.Context, url string) (executionmodel.PRInfo, error) {
 	v.calls++
 	if url != v.info.URL {
-		return PRInfo{}, publication.ErrPRIdentity
+		return executionmodel.PRInfo{}, publication.ErrPRIdentity
 	}
 	if v.onQuery != nil {
 		v.onQuery()
@@ -738,8 +741,8 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 	task := page.Tasks[0].TaskRecord
 	createdAt := time.Now().UTC()
 	frozen := publicationSnapshotFixture(t, c)
-	workflow := WorkflowRunRecord{Repository: c.Repository, Branch: c.Branch, ExecutionProfile: &frozen, ConfigDigest: frozen.AcceptedConfigVersion, ProjectIdentity: c.Identity(), WorkflowRunID: "wf-71", TaskID: "71", WorkflowVersion: WorkerFlowVersion, Phase: "executing", SelectedResult: "exec-71", CreatedAt: createdAt, UpdatedAt: createdAt}
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-71", WorkflowRunID: "wf-71", Status: "blocked", CurrentStep: "worker", CreatedAt: createdAt, UpdatedAt: createdAt}
+	workflow := executionmodel.WorkflowRunRecord{Repository: c.Repository, Branch: c.Branch, ExecutionProfile: &frozen, ConfigDigest: frozen.AcceptedConfigVersion, ProjectIdentity: c.Identity(), WorkflowRunID: "wf-71", TaskID: "71", WorkflowVersion: executionmodel.Version, Phase: "executing", SelectedResult: "exec-71", CreatedAt: createdAt, UpdatedAt: createdAt}
+	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-71", WorkflowRunID: "wf-71", Status: "blocked", CurrentStep: "worker", CreatedAt: createdAt, UpdatedAt: createdAt}
 	task.Status = "in_progress"
 	task.Claimant = "worker"
 	task.Version++
@@ -773,7 +776,7 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 	if err = store.db.QueryRowContext(ctx, `SELECT payload FROM operations WHERE project_identity=? AND idempotency_key=?`, c.Identity(), strings.Repeat("a", 32)).Scan(&operationBody); err != nil {
 		t.Fatal(err)
 	}
-	var operation OperationRecord
+	var operation executionmodel.OperationRecord
 	if err = json.Unmarshal(operationBody, &operation); err != nil {
 		t.Fatal(err)
 	}
@@ -819,7 +822,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	c.globalExecution = false
 	c.ExecutionProfiles, c.DefaultExecutionProfile = nil, ""
 	setNeutralProfile(t, &c, neutralSettings{Executable: "fixture-agent"})
-	c.Git = Command{Executable: "git"}
+	c.Git = executionbackend.Command{Executable: "git"}
 	if out, err := exec.Command("git", "-C", c.Repository, "remote", "set-url", "origin", remoteURL).CombinedOutput(); err != nil {
 		t.Fatalf("set fixture remote: %v: %s", err, out)
 	}
@@ -896,7 +899,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	if err = store.db.QueryRowContext(ctx, `SELECT payload FROM operations WHERE project_identity=? AND idempotency_key=?`, c.Identity(), "native-cleanup-progress:"+cleanupRequestID).Scan(&operationPayload); err != nil {
 		t.Fatal(err)
 	}
-	var partialOperation OperationRecord
+	var partialOperation executionmodel.OperationRecord
 	if err = json.Unmarshal(operationPayload, &partialOperation); err != nil || partialOperation.Status != "outcome_unknown" || string(partialOperation.Receipt) != string(partialJSON) {
 		t.Fatalf("partial workspace cleanup facts were not retained: %+v err=%v", partialOperation, err)
 	}
@@ -1004,14 +1007,14 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	task := page.Tasks[0].TaskRecord
 	contract := page.Tasks[0].Contract
 	created := time.Now().UTC()
-	workspace := WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-72", Branch: "fixture/72", Base: commit, Head: commit, VerifiedAt: created}
-	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-72", TaskID: "72", WorkflowVersion: WorkerFlowVersion, Phase: "executing", SelectedResult: "exec-72", CreatedAt: created, UpdatedAt: created}
+	workspace := executionmodel.WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-72", Branch: "fixture/72", Base: commit, Head: commit, VerifiedAt: created}
+	run := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-72", TaskID: "72", WorkflowVersion: executionmodel.Version, Phase: "executing", SelectedResult: "exec-72", CreatedAt: created, UpdatedAt: created}
 	require(t, c.bindPublicationTarget(ctx))
 	fixed := c.projectExecutionProfile().Freeze()
 	run.ExecutionProfile, run.ConfigDigest, run.Repository, run.Branch = &fixed, fixed.AcceptedConfigVersion, c.Repository, c.Branch
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-72", WorkflowRunID: run.WorkflowRunID, Status: "active", CurrentStep: "worker", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
+	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-72", WorkflowRunID: run.WorkflowRunID, Status: "active", CurrentStep: "worker", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
 	execution.ConfigurationDigest = fixed.Digest
-	attempt := StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "attempt-72", ExecutionID: execution.ExecutionID, StepID: "worker", AttemptNumber: 1, Status: "running", ContractDigest: contract.Digest, CreatedAt: created, UpdatedAt: created}
+	attempt := executionmodel.StepAttemptRecord{ProjectIdentity: c.Identity(), AttemptID: "attempt-72", ExecutionID: execution.ExecutionID, StepID: "worker", AttemptNumber: 1, Status: "running", ContractDigest: contract.Digest, CreatedAt: created, UpdatedAt: created}
 	task.Status = "in_progress"
 	task.Claimant = "worker"
 	task.Version++
@@ -1071,13 +1074,13 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store 
 	created := time.Now().UTC()
 	runID := "wf-" + taskID
 	executionID := "exec-" + taskID
-	workspace := WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-" + taskID, Branch: "fixture/" + taskID, Base: commit, Head: commit, VerifiedAt: created}
-	run := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: runID, TaskID: taskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: executionID, PRURL: prURL, PRState: "open", CreatedAt: created, UpdatedAt: created}
+	workspace := executionmodel.WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-" + taskID, Branch: "fixture/" + taskID, Base: commit, Head: commit, VerifiedAt: created}
+	run := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: runID, TaskID: taskID, WorkflowVersion: executionmodel.Version, Phase: "waiting_pr_merge", SelectedResult: executionID, PRURL: prURL, PRState: "open", CreatedAt: created, UpdatedAt: created}
 	run.ExecutionProfile, run.ConfigDigest, run.Repository, run.Branch = &fixed, fixed.AcceptedConfigVersion, c.Repository, c.Branch
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: executionID, CurrentAttemptID: "attempt-" + taskID, WorkflowRunID: runID, Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "idle", CurrentStep: "worker", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
+	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: executionID, CurrentAttemptID: "attempt-" + taskID, WorkflowRunID: runID, Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "idle", CurrentStep: "worker", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
 	execution.ConfigurationDigest = fixed.Digest
 	setNeutralBinding(t, &execution, "fixture-endpoint", "fixture-generation", workerFlowMockSession)
-	execution.Process = &executionapi.ProcessIdentity{Kind: "fixture", RuntimeID: "fixture-runtime", Incarnation: "original"}
+	execution.Process = &executionbackend.ProcessIdentity{Kind: "fixture", RuntimeID: "fixture-runtime", Incarnation: "original"}
 
 	task.Status = "in_progress"
 	task.Claimant = "worker"

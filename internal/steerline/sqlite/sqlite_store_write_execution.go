@@ -6,16 +6,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
+func (t *sqliteTx) PutWorkflowRun(v executionmodel.WorkflowRunRecord) error {
 	if v.ProjectIdentity == "" || v.WorkflowRunID == "" || v.TaskID == "" || v.Phase == "" {
 		return errors.New("workflow run identity, task and phase are required")
 	}
 	if !validWorkflowPhase(v.Phase) {
 		return fmt.Errorf("invalid workflow run phase %q", v.Phase)
 	}
-	if v.WorkflowVersion == WorkerFlowVersion && v.Phase != "queued" && v.Phase != "executing" && v.Phase != "waiting_decision" && v.Phase != "waiting_pr_merge" && v.Phase != "completed" {
+	if v.WorkflowVersion == executionmodel.Version && v.Phase != "queued" && v.Phase != "executing" && v.Phase != "waiting_decision" && v.Phase != "waiting_pr_merge" && v.Phase != "completed" {
 		return fmt.Errorf("invalid worker flow phase %q", v.Phase)
 	}
 	var authority string
@@ -27,7 +29,7 @@ func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
 		var previous []byte
 		err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, v.ProjectIdentity, v.WorkflowRunID).Scan(&previous)
 		if err == nil {
-			var old WorkflowRunRecord
+			var old executionmodel.WorkflowRunRecord
 			if err = json.Unmarshal(previous, &old); err != nil {
 				return err
 			}
@@ -42,7 +44,7 @@ func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
 			if old.ProjectIdentity != v.ProjectIdentity || old.WorkflowRunID != v.WorkflowRunID || old.TaskID != v.TaskID || !old.CreatedAt.Equal(v.CreatedAt) || !bytes.Equal(oldPin, newPin) || old.SelectedResult != "" && old.SelectedResult != v.SelectedResult {
 				return nativeErr("immutable_task", "native workflow identity, definition, runner and selected result are fixed")
 			}
-			if old.WorkflowVersion == WorkerFlowVersion && old.PRURL != "" && old.PRURL != v.PRURL && old.PRState != "closed_unmerged" {
+			if old.WorkflowVersion == executionmodel.Version && old.PRURL != "" && old.PRURL != v.PRURL && old.PRState != "closed_unmerged" {
 				return nativeErr("immutable_task", "bound worker PR cannot change before it is closed unmerged")
 			}
 			if old.Abandonment != nil && recordFingerprint(old.Abandonment) != recordFingerprint(v.Abandonment) {
@@ -106,7 +108,7 @@ func (t *sqliteTx) PutWorkflowRun(v WorkflowRunRecord) error {
 	return requireIdentityWrite(result, err, "workflow identity cannot be rebound to another task")
 }
 
-func nativeWorkflowPin(v WorkflowRunRecord) ([]byte, error) {
+func nativeWorkflowPin(v executionmodel.WorkflowRunRecord) ([]byte, error) {
 	profileDigest := ""
 	implementationKey := ""
 	if v.ExecutionProfile != nil {
@@ -117,13 +119,14 @@ func nativeWorkflowPin(v WorkflowRunRecord) ([]byte, error) {
 		WorkflowVersion   string
 		ConfigDigest      string
 		ProfileDigest     string
-		Profile           *FixedExecutionProfile
+		Profile           *executionmodel.FixedExecutionProfile
 		ImplementationKey string
 		Repository        string
 		Branch            string
 	}{v.WorkflowVersion, v.ConfigDigest, profileDigest, v.ExecutionProfile, implementationKey, v.Repository, v.Branch})
 }
-func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
+
+func (t *sqliteTx) PutExecution(v executionmodel.ExecutionRecord) error {
 	if v.ProjectIdentity == "" || v.ExecutionID == "" || v.WorkflowRunID == "" || v.Status == "" {
 		return errors.New("execution identity, workflow and status are required")
 	}
@@ -137,7 +140,7 @@ func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
 	var previous []byte
 	err = t.tx.QueryRowContext(t.ctx, `SELECT payload FROM executions WHERE project_identity=? AND execution_id=?`, v.ProjectIdentity, v.ExecutionID).Scan(&previous)
 	if err == nil && !bytes.Equal(previous, b) {
-		var old ExecutionRecord
+		var old executionmodel.ExecutionRecord
 		if err = json.Unmarshal(previous, &old); err != nil {
 			return err
 		}
@@ -170,7 +173,8 @@ func (t *sqliteTx) PutExecution(v ExecutionRecord) error {
 	result, err := t.tx.ExecContext(t.ctx, `INSERT INTO executions(project_identity,execution_id,workflow_run_id,status,current_step,target_json,payload) VALUES(?,?,?,?,?,?,?) ON CONFLICT(project_identity,execution_id) DO UPDATE SET status=excluded.status,current_step=excluded.current_step,target_json=excluded.target_json,payload=excluded.payload WHERE executions.workflow_run_id=excluded.workflow_run_id`, v.ProjectIdentity, v.ExecutionID, v.WorkflowRunID, v.Status, v.CurrentStep, target, b)
 	return requireIdentityWrite(result, err, "execution identity cannot be rebound to another workflow")
 }
-func (t *sqliteTx) PutStepAttempt(v StepAttemptRecord) error {
+
+func (t *sqliteTx) PutStepAttempt(v executionmodel.StepAttemptRecord) error {
 	if v.ProjectIdentity == "" || v.AttemptID == "" || v.ExecutionID == "" || v.StepID == "" || v.AttemptNumber < 1 || v.Status == "" {
 		return errors.New("step attempt identity, step, positive number and status are required")
 	}
@@ -187,7 +191,7 @@ func (t *sqliteTx) PutStepAttempt(v StepAttemptRecord) error {
 		return err
 	}
 	if err == nil && !bytes.Equal(previous, b) {
-		var old StepAttemptRecord
+		var old executionmodel.StepAttemptRecord
 		if err := json.Unmarshal(previous, &old); err != nil {
 			return err
 		}
@@ -221,7 +225,7 @@ func (t *sqliteTx) selectedNativeDeliveryExecution(project, executionID string) 
 	if err = t.tx.QueryRowContext(t.ctx, `SELECT task_id,payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, project, runID).Scan(&taskID, &body); err != nil {
 		return false, nativeErr("inconsistent_delivery", "selected execution has no matching workflow")
 	}
-	var workflow WorkflowRunRecord
+	var workflow executionmodel.WorkflowRunRecord
 	if err = json.Unmarshal(body, &workflow); err != nil {
 		return false, err
 	}

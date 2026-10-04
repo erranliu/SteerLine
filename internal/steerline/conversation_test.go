@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
@@ -29,11 +30,11 @@ func TestConversationLiveSourceFailureKeepsGapAndMapperPosition(t *testing.T) {
 	require(t, err)
 	defer store.Close()
 	executionID, taskID := newID(), "501"
-	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "fixture", Target: executionapi.ExecutionTarget{ID: "local"}, LogPath: &path}
+	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionbackend.BackendLocal), Protocol: string(executionbackend.ProtocolLocalProcess), Agent: "fixture", Target: executionbackend.ExecutionTarget{ID: "local"}, LogPath: &path}
 	port := neutralJournalPort{}
 	s := &Service{Config: Config{Persistence: sqlite.Factory{}, RunDir: root, identity: "project"}, conversationSources: port, domainStore: store, commandStore: store, conversationStore: store, State: Runtime{}, runs: []*Run{run}}
-	sourceName := port.JournalSource(executionapi.BackendLocal, executionapi.ProtocolLocalProcess)
-	segment := port.JournalSegment(executionapi.BackendLocal, executionapi.ProtocolLocalProcess, fileID)
+	sourceName := port.JournalSource(executionbackend.BackendLocal, executionbackend.ProtocolLocalProcess)
+	segment := port.JournalSegment(executionbackend.BackendLocal, executionbackend.ProtocolLocalProcess, fileID)
 	first := WorkerEvent{RunID: runID, AttemptID: runID, Source: sourceName, SourceSegment: segment, SourceIdentity: fileID, SourceSeq: 1, SourceOffset: 0, SourceLength: int64(len(firstRaw)), Raw: firstRaw}
 	require(t, s.recordConversationEvent(run, first))
 	secondRaw := []byte(`{"kind":"turn"}` + "\n")
@@ -78,12 +79,12 @@ func TestConversationChangedLiveBytesCannotBindOrCheckpoint(t *testing.T) {
 	require(t, err)
 	require(t, file.Close())
 	port := neutralJournalPort{}
-	sourceName := port.JournalSource(executionapi.BackendLocal, executionapi.ProtocolLocalProcess)
-	segment := port.JournalSegment(executionapi.BackendLocal, executionapi.ProtocolLocalProcess, fileID)
+	sourceName := port.JournalSource(executionbackend.BackendLocal, executionbackend.ProtocolLocalProcess)
+	segment := port.JournalSegment(executionbackend.BackendLocal, executionbackend.ProtocolLocalProcess, fileID)
 	store, err := openSQLiteFixture(filepath.Join(root, "steerline.db"))
 	require(t, err)
 	defer store.Close()
-	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "fixture", Target: executionapi.ExecutionTarget{ID: "local"}, WorktreePath: &root, LogPath: &path}
+	run := &Run{TaskID: taskID, RunID: runID, AttemptID: runID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionbackend.BackendLocal), Protocol: string(executionbackend.ProtocolLocalProcess), Agent: "fixture", Target: executionbackend.ExecutionTarget{ID: "local"}, WorktreePath: &root, LogPath: &path}
 	service := &Service{Config: Config{Persistence: sqlite.Factory{}, RunDir: root, identity: "project"}, conversationSources: port, domainStore: store, commandStore: store, conversationStore: store}
 	source := WorkerEvent{RunID: runID, AttemptID: runID, Source: sourceName, SourceSegment: segment, SourceIdentity: fileID, SourceSeq: 1, SourceOffset: 0, SourceLength: int64(len(forged)), Raw: forged, Session: forgedSession}
 	if err = service.recordConversationEvent(run, source); err == nil || !strings.Contains(err.Error(), "source bytes changed") {
@@ -135,7 +136,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	}
 	defer store.Close()
 	serviceConfig := Config{Persistence: sqlite.Factory{}, RunDir: projectRoot, identity: "project"}
-	service := &Service{Config: serviceConfig, conversationSources: neutralJournalPort{}, domainStore: store, commandStore: store, conversationStore: store, State: Runtime{}, domain: DomainSnapshot{Attempts: []StepAttemptRecord{{ProjectIdentity: "project", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: path, Status: "succeeded"}}}, runs: []*Run{{TaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "fixture", Target: executionapi.ExecutionTarget{ID: "local-test"}, WorktreePath: &projectRoot, LogPath: &path, EndedAt: ptr(time.Now().UTC())}}}
+	service := &Service{Config: serviceConfig, conversationSources: neutralJournalPort{}, domainStore: store, commandStore: store, conversationStore: store, State: Runtime{}, domain: DomainSnapshot{Attempts: []executionmodel.StepAttemptRecord{{ProjectIdentity: "project", AttemptID: attemptID, ExecutionID: executionID, StepID: "implement", EventPath: path, Status: "succeeded"}}}, runs: []*Run{{TaskID: taskID, RunID: runID, AttemptID: attemptID, ExecutionID: executionID, DomainTaskID: taskID, WorkflowVersion: "minimal-v1", Backend: string(executionbackend.BackendLocal), Protocol: string(executionbackend.ProtocolLocalProcess), Agent: "fixture", Target: executionbackend.ExecutionTarget{ID: "local-test"}, WorktreePath: &projectRoot, LogPath: &path, EndedAt: ptr(time.Now().UTC())}}}
 	oldRunID := newID()
 	oldRoot := filepath.Join(projectRoot, "runs", oldRunID)
 	if err = os.MkdirAll(oldRoot, 0700); err != nil {
@@ -145,7 +146,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	if err = os.WriteFile(oldPath, []byte(`{"kind":"session","session":"old-development-session"}`+"\n"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	service.State.Runs = append(service.State.Runs, &Run{TaskID: "505", RunID: oldRunID, AttemptID: oldRunID, ExecutionID: newID(), DomainTaskID: "505", WorkflowVersion: "minimal-v1", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalProcess), Agent: "fixture", Target: executionapi.ExecutionTarget{ID: "local-test"}, LogPath: &oldPath, EndedAt: ptr(time.Now().UTC())})
+	service.State.Runs = append(service.State.Runs, &Run{TaskID: "505", RunID: oldRunID, AttemptID: oldRunID, ExecutionID: newID(), DomainTaskID: "505", WorkflowVersion: "minimal-v1", Backend: string(executionbackend.BackendLocal), Protocol: string(executionbackend.ProtocolLocalProcess), Agent: "fixture", Target: executionbackend.ExecutionTarget{ID: "local-test"}, LogPath: &oldPath, EndedAt: ptr(time.Now().UTC())})
 	sources := service.conversationJournalSources()
 	if len(sources) != 1 {
 		t.Fatalf("expected one validated local source, got %+v", sources)
@@ -180,13 +181,13 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	if err != nil || len(page.Events) != 4 {
 		t.Fatalf("replay was not idempotent: count=%d err=%v", len(page.Events), err)
 	}
-	journalSource := service.conversationSources.JournalSource(executionapi.BackendLocal, executionapi.ProtocolLocalProcess)
+	journalSource := service.conversationSources.JournalSource(executionbackend.BackendLocal, executionbackend.ProtocolLocalProcess)
 	checkpoint, err := store.ConversationCheckpoint(ctx, "project", executionID, attemptID, journalSource, sources[0].FileID)
 	if err == nil {
 		// Checkpoints are addressed by the full source segment, not only the file ID.
 		t.Fatalf("checkpoint lookup unexpectedly accepted a partial segment: %+v", checkpoint)
 	}
-	segment := service.conversationSources.JournalSegment(executionapi.BackendLocal, executionapi.ProtocolLocalProcess, sources[0].FileID)
+	segment := service.conversationSources.JournalSegment(executionbackend.BackendLocal, executionbackend.ProtocolLocalProcess, sources[0].FileID)
 	checkpoint, err = store.ConversationCheckpoint(ctx, "project", executionID, attemptID, journalSource, segment)
 	if err != nil || checkpoint.LocalSeq != 4 {
 		t.Fatalf("source cursor did not reach the last committed record: checkpoint=%+v err=%v", checkpoint, err)
@@ -219,7 +220,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 func conversationTestWrite(sourceID string, seq uint64, mode string, body, raw []byte) ConversationWrite {
 	event := ConversationEvent{
 		Version: ConversationVersion, ProjectID: "project", TaskID: "task", WorkflowID: "workflow",
-		ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess,
+		ExecutionID: "execution", AttemptID: "attempt", Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess,
 		Agent: "fixture", TargetID: "local-test", Source: neutralJournalSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment-1",
 		SessionID: "session", SessionQuality: IdentityNative, TurnID: "turn", TurnQuality: IdentityDerived,
 		ItemID: "same-item", ItemQuality: IdentityNative, SourceEventID: sourceID, SourceEventQuality: IdentityDerived,

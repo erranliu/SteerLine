@@ -14,30 +14,34 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 	ctx := context.Background()
 	s := openDomainTestStore(t)
 	project := "repo:commands"
-	request := DecisionRequest{Question: "choose", AllowFreeText: true}
-	run := &Run{TaskID: "task", RunID: "wf", DomainTaskID: "task", ExecutionID: "exec", AttemptID: "attempt", ControlRevision: 5, Host: "unregistered", Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), WorkflowVersion: "legacy-v1", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &DecisionState{ID: "decision", AttemptID: "attempt", Version: 1, Status: "pending", Request: request}}
+	request := executionmodel.DecisionRequest{Question: "choose", AllowFreeText: true}
+	run := &Run{TaskID: "task", RunID: "wf", DomainTaskID: "task", ExecutionID: "exec", AttemptID: "attempt", ControlRevision: 5, Host: "unregistered", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), WorkflowVersion: "legacy-v1", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &executionmodel.DecisionState{ID: "decision", AttemptID: "attempt", Version: 1, Status: "pending", Request: request}}
 	projection := ServiceCheckpoint{SchemaVersion: WorkerFlowRuntimeSchema, Revision: 1, Repository: Repository{Identity: project}, Service: ServiceState{InstanceID: "service", Status: "running", Ready: true}}
 	err := s.transactRecords(ctx, func(tx *fixtureTransaction) error {
-		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "task", Status: "in_progress", Version: 1}); err != nil {
+		if err := tx.PutTask(taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "task", Status: "in_progress", Version: 1}); err != nil {
 			return err
 		}
-		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf", TaskID: "task", Phase: "waiting_decision"}); err != nil {
+		if err := tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf", TaskID: "task", Phase: "waiting_decision"}); err != nil {
 			return err
 		}
-		if err := tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec", WorkflowRunID: "wf", Status: "idle", CurrentStep: "worker", DecisionID: "decision"}); err != nil {
+		if err := tx.PutExecution(executionmodel.ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec", WorkflowRunID: "wf", Status: "idle", CurrentStep: "worker", DecisionID: "decision"}); err != nil {
 			return err
 		}
-		if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: "attempt", ExecutionID: "exec", StepID: "worker", AttemptNumber: 1, Status: "waiting_decision"}); err != nil {
+		if err := tx.PutStepAttempt(executionmodel.StepAttemptRecord{ProjectIdentity: project, AttemptID: "attempt", ExecutionID: "exec", StepID: "worker", AttemptNumber: 1, Status: "waiting_decision"}); err != nil {
 			return err
 		}
-		if err := tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: "decision", Scope: "execution", WorkflowRunID: "wf", ExecutionID: "exec", AttemptID: "attempt", QuestionID: "q1", Status: "pending", Version: 1, Request: mustJSON(request)}); err != nil {
+		if err := tx.PutDecision(executionmodel.DecisionRecord{ProjectIdentity: project, DecisionID: "decision", Scope: "execution", WorkflowRunID: "wf", ExecutionID: "exec", AttemptID: "attempt", QuestionID: "q1", Status: "pending", Version: 1, Request: mustJSON(request)}); err != nil {
 			return err
 		}
 		return tx.PutProjection(project, projection.Revision, mustJSON(projection))
@@ -47,7 +51,7 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 	}
 	commands := CommandService{Store: s, Project: project}
 	require(t, s.db.QueryRow(`SELECT control_revision FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, project, "wf").Scan(&run.ControlRevision))
-	answer := DecisionAnswer{DecisionID: "decision", RunID: "wf", Note: "yes", AnsweredBy: "alice", ExpectedDecisionVersion: 1, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: projection.Service.InstanceID}
+	answer := executionmodel.DecisionAnswer{DecisionID: "decision", RunID: "wf", Note: "yes", AnsweredBy: "alice", ExpectedDecisionVersion: 1, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: projection.Service.InstanceID}
 	first, created, err := commands.AnswerDecision(ctx, "decision", 1, "answer-key-a", "alice", mustJSON(answer))
 	if err != nil {
 		t.Fatal(err)
@@ -62,12 +66,12 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 	if created || retry.CommandID != first.CommandID {
 		t.Fatalf("idempotent retry changed command: %+v %+v", first, retry)
 	}
-	var savedAnswer DecisionAnswer
+	var savedAnswer executionmodel.DecisionAnswer
 	require(t, decode(first.Payload, &savedAnswer))
 	if _, _, err = commands.AcceptAnswer(ctx, first, savedAnswer); err != nil {
 		t.Fatalf("first answer was not accepted against the current service projection: %v", err)
 	}
-	if _, _, err = commands.AnswerDecision(ctx, "decision", 1, "answer-key-b", "bob", mustJSON(DecisionAnswer{DecisionID: "decision", RunID: "wf", Note: "no", AnsweredBy: "bob", ExpectedDecisionVersion: 1, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: projection.Service.InstanceID})); !errors.Is(err, ErrAnswerConflict) {
+	if _, _, err = commands.AnswerDecision(ctx, "decision", 1, "answer-key-b", "bob", mustJSON(executionmodel.DecisionAnswer{DecisionID: "decision", RunID: "wf", Note: "no", AnsweredBy: "bob", ExpectedDecisionVersion: 1, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: projection.Service.InstanceID})); !errors.Is(err, storageports.ErrAnswerConflict) {
 		t.Fatalf("second accepted answer should lose first-wins arbitration, got %v", err)
 	}
 	pending, err := commands.Pending(ctx, 10)
@@ -101,11 +105,11 @@ func TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional(t *testin
 	defer db2.Close()
 	commands1 := CommandService{Store: db, Project: project}
 	commands2 := CommandService{Store: db2, Project: project}
-	answer := DecisionAnswer{DecisionID: decisionID, RunID: runID, OptionID: "yes", Note: "same", AnsweredBy: "alice", ExpectedDecisionVersion: 1, ExpectedRunRevision: 4, ServiceInstanceID: "service-instance"}
+	answer := executionmodel.DecisionAnswer{DecisionID: decisionID, RunID: runID, OptionID: "yes", Note: "same", AnsweredBy: "alice", ExpectedDecisionVersion: 1, ExpectedRunRevision: 4, ServiceInstanceID: "service-instance"}
 	answerFromSecondClient := answer
 	answerFromSecondClient.AnsweredBy = "bob"
 	type submitResult struct {
-		command CommandRecord
+		command storageports.CommandRecord
 		created bool
 		err     error
 	}
@@ -165,7 +169,7 @@ func TestDecisionAnswerCommandClientProcess(t *testing.T) {
 		t.Fatal(err)
 	}
 	project, decisionID, commandID, requester := os.Getenv("STEERLINE_PR5_ANSWER_PROJECT"), os.Getenv("STEERLINE_PR5_ANSWER_DECISION"), os.Getenv("STEERLINE_PR5_ANSWER_COMMAND"), os.Getenv("STEERLINE_PR5_ANSWER_BY")
-	var answer DecisionAnswer
+	var answer executionmodel.DecisionAnswer
 	if err = json.Unmarshal([]byte(os.Getenv("STEERLINE_PR5_ANSWER_PAYLOAD")), &answer); err != nil {
 		t.Fatal(err)
 	}
@@ -200,7 +204,7 @@ func TestDecisionAnswerSeparateClientProcessesUseOneFirstWinsCommand(t *testing.
 	children := make([]*exec.Cmd, 2)
 	var childOutput [2]bytes.Buffer
 	for i := range children {
-		answer := DecisionAnswer{DecisionID: decisionID, RunID: runID, OptionID: "yes", Note: "same", AnsweredBy: by[i], ExpectedDecisionVersion: 1, ExpectedRunRevision: 3, ServiceInstanceID: "instance"}
+		answer := executionmodel.DecisionAnswer{DecisionID: decisionID, RunID: runID, OptionID: "yes", Note: "same", AnsweredBy: by[i], ExpectedDecisionVersion: 1, ExpectedRunRevision: 3, ServiceInstanceID: "instance"}
 		payload, _ := json.Marshal(answer)
 		executable, execErr := os.Executable()
 		require(t, execErr)
@@ -246,14 +250,14 @@ func seedNativeDecision(t *testing.T, db *sqliteFixture, project, runID, decisio
 	t.Helper()
 	ctx := context.Background()
 	nowTime := now()
-	request := DecisionRequest{Question: "Choose", Options: []executionapi.DecisionOption{{ID: "yes", Label: "Yes"}, {ID: "no", Label: "No"}}}
-	err := db.InitializeProject(ctx, ProjectTaskAuthority{ProjectIdentity: project, Authority: "native", AuthorityVersion: 1, Repository: "repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true, CreatedAt: nowTime, UpdatedAt: nowTime})
+	request := executionmodel.DecisionRequest{Question: "Choose", Options: []executionbackend.DecisionOption{{ID: "yes", Label: "Yes"}, {ID: "no", Label: "No"}}}
+	err := db.InitializeProject(ctx, tasklegacy.ProjectTaskAuthority{ProjectIdentity: project, Authority: "native", AuthorityVersion: 1, Repository: "repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true, CreatedAt: nowTime, UpdatedAt: nowTime})
 	require(t, err)
 	raw, err := db.db.BeginTx(ctx, nil)
 	require(t, err)
 	defer raw.Rollback()
 	err = func() error {
-		task := TaskRecord{ProjectIdentity: project, TaskID: "1", Title: "Decision task", Type: "task", Priority: 1, BatchID: "batch-1", ContractID: "contract-1", Claimant: "fixture", Source: "native", Status: "in_progress", Version: 1, CreatedAt: nowTime, UpdatedAt: nowTime}
+		task := taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "1", Title: "Decision task", Type: "task", Priority: 1, BatchID: "batch-1", ContractID: "contract-1", Claimant: "fixture", Source: "native", Status: "in_progress", Version: 1, CreatedAt: nowTime, UpdatedAt: nowTime}
 		taskPayload, err := json.Marshal(task)
 		if err != nil {
 			return err
@@ -269,7 +273,7 @@ func seedNativeDecision(t *testing.T, db *sqliteFixture, project, runID, decisio
 		if _, err = raw.ExecContext(ctx, `INSERT INTO task_batches(project_identity,batch_id,schema_version,payload_digest,created_at,command_id,task_ids) VALUES(?,?,?,?,?,?,?)`, project, task.BatchID, "task-batch/v1", strings.Repeat("b", 64), nowTime.UTC().Format(time.RFC3339Nano), strings.Repeat("c", 32), batchIDs); err != nil {
 			return err
 		}
-		workflow := WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: runID, TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_decision", CreatedAt: nowTime, UpdatedAt: nowTime}
+		workflow := executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: runID, TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, Phase: "waiting_decision", CreatedAt: nowTime, UpdatedAt: nowTime}
 		workflowPayload, err := json.Marshal(workflow)
 		if err != nil {
 			return err
@@ -277,7 +281,7 @@ func seedNativeDecision(t *testing.T, db *sqliteFixture, project, runID, decisio
 		if _, err = raw.ExecContext(ctx, `INSERT INTO workflow_runs(project_identity,workflow_run_id,task_id,phase,payload) VALUES(?,?,?,?,?)`, project, runID, "1", workflow.Phase, workflowPayload); err != nil {
 			return err
 		}
-		execution := ExecutionRecord{ProjectIdentity: project, ExecutionID: runID, WorkflowRunID: runID, Status: "waiting_decision", CurrentStep: "decision", CreatedAt: nowTime, UpdatedAt: nowTime}
+		execution := executionmodel.ExecutionRecord{ProjectIdentity: project, ExecutionID: runID, WorkflowRunID: runID, Status: "waiting_decision", CurrentStep: "decision", CreatedAt: nowTime, UpdatedAt: nowTime}
 		executionPayload, err := json.Marshal(execution)
 		if err != nil {
 			return err
@@ -292,19 +296,20 @@ func seedNativeDecision(t *testing.T, db *sqliteFixture, project, runID, decisio
 	}
 	if err == nil {
 		err = transactFixture(db, ctx, func(tx *fixtureTransaction) error {
-			return tx.PutDecision(DecisionRecord{ProjectIdentity: project, DecisionID: decisionID, Scope: "workflow", WorkflowRunID: runID, ExecutionID: runID, QuestionID: "question-1", Request: mustJSON(request), Status: "pending", Version: 1, CreatedAt: nowTime, UpdatedAt: nowTime})
+			return tx.PutDecision(executionmodel.DecisionRecord{ProjectIdentity: project, DecisionID: decisionID, Scope: "workflow", WorkflowRunID: runID, ExecutionID: runID, QuestionID: "question-1", Request: mustJSON(request), Status: "pending", Version: 1, CreatedAt: nowTime, UpdatedAt: nowTime})
 		})
 	}
 	if err != nil {
 		t.Fatalf("seed native decision graph: %v", err)
 	}
 	store := &Store{Domain: db, Project: project}
-	state := Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "service-instance", Status: "running", Ready: true, Claimant: "alice"}, Runs: []*Run{}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Control: ControlState{DispatchMode: "manual", Revision: 1}}
+	state := Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: ServiceState{InstanceID: "service-instance", Status: "running", Ready: true, Claimant: "alice"}, Runs: []*Run{}, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}, Control: ControlState{DispatchMode: "manual", Revision: 1}}
 	checkpoint := runtimeCheckpoint(state)
 	if err = store.Publish(&checkpoint); err != nil {
 		t.Fatalf("publish decision test projection: %v", err)
 	}
 }
+
 func TestCheckpointDoesNotSynthesizeControlOperations(t *testing.T) {
 	service, _ := neutralAuditService(t)
 	before := recordFingerprint(service.committed.Operations)

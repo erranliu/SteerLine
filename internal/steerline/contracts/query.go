@@ -4,11 +4,10 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/task"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/taskview"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
-
-type TaskDependencyStatus = task.TaskDependencyStatus
 
 type NativeTaskCapabilities struct {
 	DependencyReadiness string `json:"dependency_readiness"`
@@ -17,17 +16,17 @@ type NativeTaskCapabilities struct {
 }
 
 type NativeTaskDetail struct {
-	TaskRecord
-	ProjectID         string                 `json:"project_id"`
-	Priority          int                    `json:"priority"`
-	Contract          TaskContract           `json:"contract"`
-	WorkflowRuns      []WorkflowRunRecord    `json:"workflow_runs"`
-	Delivery          *TaskDeliveryRecord    `json:"delivery,omitempty"`
-	Predecessors      []TaskDependencyStatus `json:"predecessors"`
-	Successors        []string               `json:"successors"`
-	DependencyReady   bool                   `json:"dependency_ready"`
-	UnmetPredecessors []TaskDependencyStatus `json:"unmet_predecessors"`
-	StartupBlockers   []string               `json:"startup_blockers"`
+	taskmodel.TaskRecord
+	ProjectID         string                             `json:"project_id"`
+	Priority          int                                `json:"priority"`
+	Contract          taskmodel.TaskContract             `json:"contract"`
+	WorkflowRuns      []executionmodel.WorkflowRunRecord `json:"workflow_runs"`
+	Delivery          *TaskDeliveryRecord                `json:"delivery,omitempty"`
+	Predecessors      []taskmodel.TaskDependencyStatus   `json:"predecessors"`
+	Successors        []string                           `json:"successors"`
+	DependencyReady   bool                               `json:"dependency_ready"`
+	UnmetPredecessors []taskmodel.TaskDependencyStatus   `json:"unmet_predecessors"`
+	StartupBlockers   []string                           `json:"startup_blockers"`
 }
 
 type NativeTaskPage struct {
@@ -45,13 +44,13 @@ type NativeTaskPage struct {
 }
 
 type NativeReadyTaskSnapshot struct {
-	ProjectID        string       `json:"project_id"`
-	AuthorityVersion uint64       `json:"authority_version"`
-	GraphRevision    uint64       `json:"graph_revision"`
-	DatabaseID       string       `json:"database_id"`
-	DatabaseRevision uint64       `json:"database_revision"`
-	SampledAt        time.Time    `json:"sampled_at"`
-	Tasks            []TaskRecord `json:"tasks"`
+	ProjectID        string                 `json:"project_id"`
+	AuthorityVersion uint64                 `json:"authority_version"`
+	GraphRevision    uint64                 `json:"graph_revision"`
+	DatabaseID       string                 `json:"database_id"`
+	DatabaseRevision uint64                 `json:"database_revision"`
+	SampledAt        time.Time              `json:"sampled_at"`
+	Tasks            []taskmodel.TaskRecord `json:"tasks"`
 }
 
 type ProjectView struct {

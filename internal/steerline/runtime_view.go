@@ -1,6 +1,9 @@
 package steerline
 
-import "github.com/erranliu/SteerLine/internal/steerline/projection"
+import (
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/steerline/projection"
+)
 
 func runtimeCheckpoint(v Runtime) ServiceCheckpoint { return projection.Checkpoint(v) }
 
@@ -15,7 +18,9 @@ func projectRuntime(v *Runtime) error {
 	return nil
 }
 
-func refreshExecutionView(run *Run, e *ExecutionRecord) { *run = projection.Execution(*run, *e) }
+func refreshExecutionView(run *Run, e *executionmodel.ExecutionRecord) {
+	*run = projection.Execution(*run, *e)
+}
 
 func projectSlot(v *Runtime) { v.SlotOccupied, v.CurrentTask = projection.Slot(*v) }
 
@@ -25,7 +30,8 @@ func copyPtr[T any](value *T) *T {
 	}
 	return ptr(*value)
 }
-func (s *Service) workflowRecord(run *Run) *WorkflowRunRecord {
+
+func (s *Service) workflowRecord(run *Run) *executionmodel.WorkflowRunRecord {
 	workflow, _ := s.workflowRecords(run)
 	return workflow
 }
@@ -47,7 +53,7 @@ func (s *Service) refreshRun(run *Run) {
 	*run = view
 }
 
-func (s *Service) setRunDecision(run *Run, decision *DecisionState) {
+func (s *Service) setRunDecision(run *Run, decision *executionmodel.DecisionState) {
 	execution := s.executionRecord(run)
 	if execution == nil {
 		return
@@ -58,7 +64,7 @@ func (s *Service) setRunDecision(run *Run, decision *DecisionState) {
 		return
 	}
 	s.markWorkerDecisionWrite(decision.ID)
-	record := DecisionRecord{ProjectIdentity: s.Config.identity, DecisionID: decision.ID, Scope: "execution",
+	record := executionmodel.DecisionRecord{ProjectIdentity: s.Config.identity, DecisionID: decision.ID, Scope: "execution",
 		WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: decision.AttemptID, QuestionID: decision.ID,
 		Request: mustJSON(decision.Request), Status: decision.Status, Version: decision.Version, CreatedAt: now(), UpdatedAt: now()}
 	if decision.Request.QuestionRoute != nil {
@@ -78,7 +84,7 @@ func (s *Service) setRunDecision(run *Run, decision *DecisionState) {
 	s.refreshRun(run)
 }
 
-func (s *Service) decisionRecord(run *Run) *DecisionRecord {
+func (s *Service) decisionRecord(run *Run) *executionmodel.DecisionRecord {
 	if run == nil || run.Decision == nil {
 		return nil
 	}
@@ -89,6 +95,7 @@ func (s *Service) decisionRecord(run *Run) *DecisionRecord {
 	}
 	return nil
 }
+
 func (s *Service) setDecisionStatus(run *Run, status string) {
 	record := s.decisionRecord(run)
 	record.Status, record.Version, record.UpdatedAt = status, record.Version+1, now()

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestDecodeQuestionsKeepsCenterActionsOutOfNativeContent(t *testing.T) {
@@ -29,7 +29,7 @@ func TestDecodeQuestionsKeepsCenterActionsOutOfNativeContent(t *testing.T) {
 
 func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 	thread, turn := "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
-	fixed := executionapi.SessionContext{ProjectID: "project", WorkflowRunID: "workflow", ExecutionID: "execution", AttemptID: "attempt", SessionID: thread, Generation: "generation", CurrentTurnID: turn}
+	fixed := executionbackend.SessionContext{ProjectID: "project", WorkflowRunID: "workflow", ExecutionID: "execution", AttemptID: "attempt", SessionID: thread, Generation: "generation", CurrentTurnID: turn}
 	params, _ := json.Marshal(map[string]any{"threadId": thread, "turnId": turn, "callId": "call-original", "tool": codexapp.AskToolName, "arguments": map[string]any{"questions": []any{
 		map[string]any{"id": "choice", "header": "Choice", "question": "Which path?", "allow_free_text": true, "options": []any{map[string]any{"id": "direct", "label": "Direct"}}},
 		map[string]any{"id": "scope", "header": "Scope", "question": "What scope?", "allow_free_text": true},
@@ -75,7 +75,7 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 		t.Fatal("unknown route codec version was accepted")
 	}
 	unknownPayload, _ := json.Marshal(map[string]any{"request_id": 17, "thread_id": thread, "turn_id": turn, "call_id": "call-original", "recipient_override": "untrusted"})
-	unknownRoute, err := executionapi.NewQuestionRoute(QuestionRouteImplementationKey, 1, executionapi.QuestionRouteIdentity{
+	unknownRoute, err := executionbackend.NewQuestionRoute(QuestionRouteImplementationKey, 1, executionbackend.QuestionRouteIdentity{
 		ProjectID: fixed.ProjectID, WorkflowRunID: fixed.WorkflowRunID, ExecutionID: fixed.ExecutionID,
 		AttemptID: fixed.AttemptID, Generation: fixed.Generation, TurnID: turn, QuestionID: "call-original",
 	}, unknownPayload)
@@ -86,7 +86,7 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 		t.Fatal("unknown route payload field was accepted")
 	}
 	finished, err := DecodeEvent(codexapp.Envelope{Method: "turn/completed", Params: json.RawMessage(`{"threadId":"` + thread + `","turn":{"id":"` + turn + `","status":"completed"}}`)}, fixed, true)
-	if err != nil || finished.Kind != executionapi.EventCompleted || !finished.Completed {
+	if err != nil || finished.Kind != executionbackend.EventCompleted || !finished.Completed {
 		t.Fatalf("current turn completion shape was not represented as a generic fact: %+v / %v", finished, err)
 	}
 	wrongCompletion, err := DecodeEvent(codexapp.Envelope{Method: "turn/completed", Params: json.RawMessage(`{"threadId":"` + thread + `","turn":{"id":"00000000-0000-0000-0000-000000000003"}}`)}, fixed, true)

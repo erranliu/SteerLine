@@ -57,11 +57,10 @@ flowchart LR
 
 ## 任务执行控制台解耦与目录整理
 
-目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。#73 的 #37 前置已具备；#77 为避免共同 TUI 重写另等 #38。#39 不成为本目标硬前置；它仍按自己的范围与能力门槛验收。
+目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。#73 的纯定义和实际消费者基线见[验收记录](../validation/three-line-01-types/README.md)；#77 为避免共同 TUI 重写另等 #38。#39 不成为本目标硬前置；它仍按自己的范围与能力门槛验收。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 73 | 纯类型与契约归属整理 | 纯模型/backend/api/ports 唯一归属与实际消费者迁移 | `#37` | [Spec](../spec/three-line-01-types.spec.md) · [Plan](../spec/three-line-01-types.plan.md) |
 | 74 | 任务选择与执行结果边界 | 任务工作/原子领取与规范化结果边界、执行核验归属 | `#73` | [Spec](../spec/three-line-02-task-execution-boundary.spec.md) · [Plan](../spec/three-line-02-task-execution-boundary.plan.md) |
 | 75 | 任务应用用例归包 | 任务创建/依赖/挑选/结果应用归 task | `#74` | [Spec](../spec/three-line-03-task-usecases.spec.md) · [Plan](../spec/three-line-03-task-usecases.plan.md) |
 | 76 | 执行应用用例归包 | 候选/会话/恢复/交付/清理归 execution | `#74` | [Spec](../spec/three-line-04-execution-usecases.spec.md) · [Plan](../spec/three-line-04-execution-usecases.plan.md) |
@@ -74,7 +73,7 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    C37["#37 已交付候选基础"] --> M01["#73 类型与契约"]
+    C37["#37 候选基础"] --> M01["#73 纯定义基础"]
     C37 --> U38["#38 候选 UI"]
     U38 --> A39["#39 原生验收"]
     M01 --> M02["#74 选择/结果边界"]
@@ -95,11 +94,10 @@ flowchart LR
     M09 --> M10["#82 独立开发/清理"]
 ```
 
-#37 的候选身份、领取及唯一交付基础已具备，#73 可立即与 #38 在隔离 worktree/构建/配置上开工；不再等待 #39 完整真机验收。#73 → #74 顺序交付公共基础后，#75/#76 可分线，#77 另等待 #38 整体交付。#78 在 #76 后；#79 等 #75/#76/#77；后续按正式硬前置交付，不以接口草案提前放行。
+#73 的唯一类型、实际消费者及残留字段交接见[验收记录](../validation/three-line-01-types/README.md)。#74 接通选择/结果公共基础后，#75/#76 可分线，#77 另等待 #38 整体交付。#78 在 #76 后；#79 等 #75/#76/#77；后续按正式硬前置交付，不以接口草案提前放行。
 
 | 并行工作 | 开工与接口条件 | 共享修改与集成条件 |
 | --- | --- | --- |
-| #73 与 #38 | 都消费已交付 #37；#73 不扩展候选产品语义 | #38 拥有候选交互/视图/fixture，#73 拥有纯定义与 import 迁移；共用产品定义/app 构造段由 #73 顺序集成，#38 随已集成类型更新 |
 | #74 与 #38/#39 | #74 等 #73；#39 仍等 #38，远端准入缺口不因重构消失 | #74 只改业务边界/事务；query 资格原因、公共 DTO/工厂段串行集成，不同时重写 TUI |
 | #75 与 #76；#77 与两者 | 已交付 #74 的工作/结果小端口；#77 同时等 #38 | #75 拥有任务，#76 拥有执行，#77 拥有产品/console；按 #74 字段/函数/文件清单分拆，Service/Config/提交协调和 app/cmd/runner 共用段指定一个集成所有者 |
 | #78 与未完成产品/存储工作 | #76 整体交付；#79 仍须自身三项硬前置 | 适配/资源与其他目录分别所有；backend/API 形状变化先由定义所有者集成，构造段顺序修改 |

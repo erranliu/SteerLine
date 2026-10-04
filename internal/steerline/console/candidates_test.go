@@ -1,6 +1,13 @@
 package console
 
 import (
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+)
+
+import (
 	"context"
 	"encoding/json"
 	"fmt"
@@ -38,11 +45,11 @@ func ccFixture(t *testing.T, count int) (Model, *testControlClient) {
 		r.SessionID = fmt.Sprintf("session-%d", i)
 		r.AttemptID = fmt.Sprintf("attempt-%d", i)
 		r.Decision.ID = fmt.Sprintf("decision-%d", i)
-		r.ExecutionProfile = &contracts.FixedExecutionProfile{ID: fmt.Sprintf("profile-%d", i), Name: fmt.Sprintf("方案%d", i), Host: "local", Agent: "codex", ImplementationDisplay: []string{fmt.Sprintf("model-%d", i)}}
+		r.ExecutionProfile = &executionmodel.FixedExecutionProfile{ID: fmt.Sprintf("profile-%d", i), Name: fmt.Sprintf("方案%d", i), Host: "local", Agent: "codex", ImplementationDisplay: []string{fmt.Sprintf("model-%d", i)}}
 		rt.Runs = append(rt.Runs, &r)
 		snap.DecisionReasons[r.RunID] = "提交后核对原会话接收与工作轮次开始"
 	}
-	snap.NativeTasks = &contracts.NativeTaskPage{GraphRevision: 7, Tasks: []contracts.NativeTaskDetail{{TaskRecord: contracts.TaskRecord{TaskID: "38", Status: "in_progress", Version: 2}}}}
+	snap.NativeTasks = &contracts.NativeTaskPage{GraphRevision: 7, Tasks: []contracts.NativeTaskDetail{{TaskRecord: taskmodel.TaskRecord{TaskID: "38", Status: "in_progress", Version: 2}}}}
 	ref.Presentation.Profiles = []api.ExecutionProfileSummary{{ID: "profile-new", Name: "新方案", Digest: "fixed-new"}}
 	control := &testControlClient{}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snap}, control, now)
@@ -131,7 +138,7 @@ func TestCC2(t *testing.T) {
 		t.Fatal("A draft/reading not restored")
 	}
 	r := m.selectedRow(0).run
-	r.EnvironmentBlocker = &contracts.WorkerHostBlocker{ID: "blocker-A", Version: 2, TurnID: "turn-A", Fact: contracts.HostFact{Reason: "原终端不可输入"}}
+	r.EnvironmentBlocker = &executionmodel.WorkerHostBlocker{ID: "blocker-A", Version: 2, TurnID: "turn-A", Fact: executionbackend.HostFact{Reason: "原终端不可输入"}}
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyF2})
 	if c.decisionCalls != 0 || m.answer == nil || !strings.Contains(m.answer.error, "环境阻断") {
 		t.Fatal("blocked draft was sent")
@@ -145,7 +152,7 @@ func TestCC2(t *testing.T) {
 	m, _ = ccKey(m, runeKey('}'))
 	next, _ = m.Update(environmentCmd())
 	m = next.(Model)
-	var environment api.ControlPayload
+	var environment productapi.ControlPayload
 	if err := json.Unmarshal(c.request.Payload, &environment); err != nil {
 		t.Fatal(err)
 	}
@@ -249,7 +256,7 @@ func TestCC3(t *testing.T) {
 	if m.projects[0].actions[id].Status != "submitted" || len(m.projects[0].actions) != 1 {
 		t.Fatal("lost receipt replaced request")
 	}
-	next, _ = m.Update(actionReceiptMsg{projectKey: "cc", identity: c.request.RepositoryIdentity, requestID: id, receipt: &api.ControlReceipt{RequestID: id, Action: "start_candidate", InstanceID: a.TargetInstance, Status: "applied", RunID: "wrong-candidate"}})
+	next, _ = m.Update(actionReceiptMsg{projectKey: "cc", identity: c.request.RepositoryIdentity, requestID: id, receipt: &productapi.ControlReceipt{RequestID: id, Action: "start_candidate", InstanceID: a.TargetInstance, Status: "applied", RunID: "wrong-candidate"}})
 	m = next.(Model)
 	if m.projects[0].actions[id].Status != "indeterminate" || m.projects[0].actions[id].Payload != a.Payload || m.selectedRow(0).run.RunID != "candidate-1" {
 		t.Fatal("wrong candidate receipt changed target")
@@ -283,13 +290,13 @@ func TestCC4(t *testing.T) {
 	if a.Payload.WorkflowRunID != "candidate-0" || a.Payload.ExpectedCandidateVersion != 9 {
 		t.Fatal(a)
 	}
-	next, _ = m.Update(actionReceiptMsg{projectKey: "cc", identity: m.projects[0].ref.Identity, requestID: a.RequestID, receipt: &api.ControlReceipt{RequestID: a.RequestID, Action: a.Action, InstanceID: a.TargetInstance, Status: "applying", Code: "merge_state_unknown", RunID: "candidate-0"}})
+	next, _ = m.Update(actionReceiptMsg{projectKey: "cc", identity: m.projects[0].ref.Identity, requestID: a.RequestID, receipt: &productapi.ControlReceipt{RequestID: a.RequestID, Action: a.Action, InstanceID: a.TargetInstance, Status: "applying", Code: "merge_state_unknown", RunID: "candidate-0"}})
 	m = next.(Model)
 	if m.projects[0].actions[a.RequestID].Resolved || m.selectedRow(0).run.RunID != "candidate-1" {
 		t.Fatal("pending verification reported exit or switched selection")
 	}
 	r := m.projects[0].snapshot.Observation.Runtime.Runs[0]
-	r.Abandonment = &contracts.CandidateAbandonment{At: m.clock.Now()}
+	r.Abandonment = &executionmodel.CandidateAbandonment{At: m.clock.Now()}
 	r.ResourceStatus = "unknown"
 	r.PRHistory = []string{"https://example.invalid/historical/1"}
 	m, _ = ccKey(m, runeKey('{'))
@@ -316,7 +323,7 @@ func TestCandidateMergedConflictPresentation(t *testing.T) {
 	m, _ := ccFixture(t, 2)
 	s := &m.projects[0]
 	runs := s.snapshot.Observation.Runtime.Runs
-	runs[0].Abandonment = &contracts.CandidateAbandonment{At: m.clock.Now()}
+	runs[0].Abandonment = &executionmodel.CandidateAbandonment{At: m.clock.Now()}
 	runs[0].PR.State = "merged"
 	text := strings.Join(renderCandidates(m, *s, m.selectedRow(0)), "\n")
 	if !strings.Contains(text, "冲突：已放弃候选 PR 已合并") || !strings.Contains(text, "资源 active") {

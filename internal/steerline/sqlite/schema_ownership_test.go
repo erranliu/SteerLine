@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestNativeDatabaseInitializesCurrentSchema(t *testing.T) {
@@ -56,7 +58,7 @@ func TestSchemaOneCenterDatabaseIsRejectedWithoutMutation(t *testing.T) {
 		}
 	}
 	created := time.Date(2026, 9, 24, 0, 0, 0, 0, time.UTC)
-	old := TaskRecord{ProjectIdentity: "repo:previous-center", TaskID: "legacy:stable", Title: "center task", Source: "beads", Status: "in_progress", Version: 2, CreatedAt: created, UpdatedAt: created}
+	old := taskmodel.TaskRecord{ProjectIdentity: "repo:previous-center", TaskID: "legacy:stable", Title: "center task", Source: "beads", Status: "in_progress", Version: 2, CreatedAt: created, UpdatedAt: created}
 	payload, err := json.Marshal(old)
 	if err != nil {
 		t.Fatal(err)

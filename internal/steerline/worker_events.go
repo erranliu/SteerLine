@@ -4,21 +4,20 @@ import (
 	"context"
 	"errors"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-// Verified start facts can be replayed after recovery. Only the first
-// confirmed start consumes a pending Command and accepts post-turn feedback.
-func (s *Service) recordWorkerTurnStarted(run *Run, workflow *WorkflowRunRecord, execution *ExecutionRecord, turnID string, sessionFacts ...string) (string, error) {
+func (s *Service) recordWorkerTurnStarted(run *Run, workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, turnID string, sessionFacts ...string) (string, error) {
 	commandID := execution.PendingCommandID
 	fresh := commandID != ""
 	if !fresh && execution.CurrentTurnID == turnID && execution.LastStoppedTurnID != turnID {
 		commandID = execution.CurrentCommandID
 	}
-	if !executionapi.StableExecutionID(commandID) || turnID == "" || fresh && execution.PendingTurnID != turnID {
+	if !executionbackend.StableExecutionID(commandID) || turnID == "" || fresh && execution.PendingTurnID != turnID {
 		return "", errors.New("turn start lacks its fixed input command or verified receipt")
 	}
-	var operation *OperationRecord
+	var operation *executionmodel.OperationRecord
 	for i := range s.domain.Operations {
 		if s.domain.Operations[i].IdempotencyKey == "worker-turn:"+run.ExecutionID+":"+commandID {
 			operation = &s.domain.Operations[i]
@@ -61,11 +60,11 @@ func (s *Service) recordWorkerTurnStarted(run *Run, workflow *WorkflowRunRecord,
 func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error) {
 	defer func() { ackWorkerEventPersistence(ev, resultErr) }()
 	workflow, execution := s.workflowRecords(run)
-	if run == nil || workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion {
+	if run == nil || workflow == nil || execution == nil || workflow.WorkflowVersion != executionmodel.Version {
 		return errors.New("worker event has no fixed worker-flow execution")
 	}
 	if ev.RunID != "" && ev.RunID != run.RunID || ev.AttemptID != "" && ev.AttemptID != run.AttemptID {
-		return ErrWorkerTurnStale
+		return executionmodel.ErrTurnStale
 	}
 	if s.candidateBusinessClosed(run) {
 		return s.recordRetiredWorkerEvent(run, ev)
@@ -76,12 +75,12 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 	}
 	fact := ev.Fact
 	if ev.SourceGap || ev.OutputGap {
-		fact.Kind, fact.Gap = executionapi.EventGap, true
+		fact.Kind, fact.Gap = executionbackend.EventGap, true
 	}
-	if fact.Kind == executionapi.EventInputAccepted {
+	if fact.Kind == executionbackend.EventInputAccepted {
 		fact.InputAccepted = true
 	}
-	if fact.Kind == executionapi.EventGap {
+	if fact.Kind == executionbackend.EventGap {
 		fact.Gap = true
 	}
 	var operationIDs []string
@@ -91,10 +90,10 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 	if fact.SessionID != "" {
 		sessionID, _ := executionSessionFacts(execution)
 		if sessionID != "" && fact.SessionID != sessionID || sessionID == "" && execution.Process != nil {
-			return ErrWorkerTurnStale
+			return executionmodel.ErrTurnStale
 		}
 	}
-	if fact.StartedTurnID != "" && fact.Kind == executionapi.EventStarted {
+	if fact.StartedTurnID != "" && fact.Kind == executionbackend.EventStarted {
 		opID, err := s.recordWorkerTurnStarted(run, workflow, execution, fact.StartedTurnID, fact.SessionID)
 		if err != nil {
 			return err
@@ -118,7 +117,7 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		}
 		if !seen {
 			if run.Decision != nil && (run.Decision.Status == "pending" || run.Decision.Status == "answer_saved") {
-				execution.PendingQuestions = append(execution.PendingQuestions, PendingQuestion{Questions: cloneExecutionQuestions(fact.Questions), Route: fact.QuestionRoute.Clone()})
+				execution.PendingQuestions = append(execution.PendingQuestions, executionmodel.PendingQuestion{Questions: cloneExecutionQuestions(fact.Questions), Route: fact.QuestionRoute.Clone()})
 			} else {
 				decision, err := WriteDecisionRequest(run, decisionRequestFromEventFact(fact))
 				if err != nil {
@@ -133,14 +132,14 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 		s.refreshRun(run)
 		s.note(run, "steer", "decision", "pending", "Execution is waiting for an answer", routeID, decisionMeta(run))
 	}
-	if fact.Kind == executionapi.EventEscalation && fact.Matched && fact.SourceEventID != "" && execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID &&
+	if fact.Kind == executionbackend.EventEscalation && fact.Matched && fact.SourceEventID != "" && execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID &&
 		(run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") &&
 		(execution.Environment == nil || execution.Environment.Blocker == nil && (execution.Environment.Preparation == nil || execution.Environment.Preparation.TurnID != execution.CurrentTurnID)) {
 		request := decisionRequestFromEventFact(fact)
 		if request.Question == "" {
 			return errors.New("matched guidance event lacks its question")
 		}
-		request.Options = []executionapi.DecisionOption{{ID: "continue", Label: "Continue current work"}}
+		request.Options = []executionbackend.DecisionOption{{ID: "continue", Label: "Continue current work"}}
 		request.AllowFreeText = true
 		decision, err := WriteDecisionRequest(run, request)
 		if err != nil {
@@ -182,7 +181,7 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 				if len(execution.PendingQuestions) > 0 {
 					next := execution.PendingQuestions[0]
 					execution.PendingQuestions = execution.PendingQuestions[1:]
-					queued := executionapi.EventFact{Questions: cloneExecutionQuestions(next.Questions), QuestionRoute: ptr(next.Route.Clone())}
+					queued := executionbackend.EventFact{Questions: cloneExecutionQuestions(next.Questions), QuestionRoute: ptr(next.Route.Clone())}
 					decision, err := WriteDecisionRequest(run, decisionRequestFromEventFact(queued))
 					if err != nil {
 						return err
@@ -214,19 +213,19 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 	}
 	if ev.DeliveryFinal && ev.DeliveryID != "" {
 		if execution.PendingDeliveryID != "" && execution.PendingDeliveryID != ev.DeliveryID {
-			return ErrWorkerTurnStale
+			return executionmodel.ErrTurnStale
 		}
 		execution.PendingDeliveryID = ev.DeliveryID
 		s.refreshRun(run)
 	}
-	var completionCandidate *executionapi.LifecycleCandidate
+	var completionCandidate *executionbackend.LifecycleCandidate
 	if ev.Candidate != nil {
 		candidate := ev.Candidate.Clone()
-		if err := candidate.Validate(); err != nil || candidate.Action != executionapi.LifecycleReportCompletion || candidate.Input.Completion == nil {
+		if err := candidate.Validate(); err != nil || candidate.Action != executionbackend.LifecycleReportCompletion || candidate.Input.Completion == nil {
 			return errors.Join(err, errors.New("worker observer proposed an unsupported follow-up action"))
 		}
 		if candidate.Input.Completion.TurnID != execution.PendingTurnID && candidate.Input.Completion.TurnID != execution.CurrentTurnID {
-			return ErrWorkerTurnStale
+			return executionmodel.ErrTurnStale
 		}
 		completionCandidate = &candidate
 	}
@@ -260,7 +259,7 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 	return nil
 }
 
-func (s *Service) routedQuestionSeen(run *Run, execution *ExecutionRecord, route *executionapi.QuestionRoute, questions []executionapi.Question) (bool, error) {
+func (s *Service) routedQuestionSeen(run *Run, execution *executionmodel.ExecutionRecord, route *executionbackend.ImplementationDataEnvelope, questions []executionbackend.Question) (bool, error) {
 	if run.Decision != nil && sameQuestionOrigin(run.Decision.Request.QuestionRoute, route) {
 		if err := sameRoutedQuestion(route, questions, run.Decision.Request.QuestionRoute, run.Decision.Request.Questions); err != nil {
 			return true, err
@@ -280,7 +279,7 @@ func (s *Service) routedQuestionSeen(run *Run, execution *ExecutionRecord, route
 		if record.ExecutionID != execution.ExecutionID || record.QuestionID != route.QuestionID {
 			continue
 		}
-		var request DecisionRequest
+		var request executionmodel.DecisionRequest
 		if err := decode(record.Request, &request); err != nil {
 			return false, err
 		}
@@ -295,34 +294,34 @@ func (s *Service) routedQuestionSeen(run *Run, execution *ExecutionRecord, route
 	return false, nil
 }
 
-func sameQuestionOrigin(a, b *executionapi.QuestionRoute) bool {
+func sameQuestionOrigin(a, b *executionbackend.ImplementationDataEnvelope) bool {
 	return a != nil && b != nil && a.ProjectID == b.ProjectID && a.WorkflowRunID == b.WorkflowRunID &&
 		a.ExecutionID == b.ExecutionID && a.AttemptID == b.AttemptID && a.Generation == b.Generation &&
 		a.TurnID == b.TurnID && a.QuestionID == b.QuestionID
 }
 
-func sameRoutedQuestion(route *executionapi.QuestionRoute, questions []executionapi.Question, oldRoute *executionapi.QuestionRoute, oldQuestions []executionapi.Question) error {
+func sameRoutedQuestion(route *executionbackend.ImplementationDataEnvelope, questions []executionbackend.Question, oldRoute *executionbackend.ImplementationDataEnvelope, oldQuestions []executionbackend.Question) error {
 	if route == nil || oldRoute == nil || route.Digest != oldRoute.Digest || digestValue(questions) != digestValue(oldQuestions) {
 		return errors.New("conflicting duplicate question route or content")
 	}
 	return nil
 }
 
-func validateQuestionRouteForRun(run *Run, execution *ExecutionRecord, route *executionapi.QuestionRoute, questions []executionapi.Question, codecKey string, codecVersion int) error {
+func validateQuestionRouteForRun(run *Run, execution *executionmodel.ExecutionRecord, route *executionbackend.ImplementationDataEnvelope, questions []executionbackend.Question, codecKey string, codecVersion int) error {
 	if run == nil || execution == nil || route == nil {
 		return errors.New("question route has no fixed execution")
 	}
 	_, generation := executionSessionFacts(execution)
-	want := executionapi.QuestionRouteIdentity{ProjectID: execution.ProjectIdentity, WorkflowRunID: run.RunID,
+	want := executionbackend.QuestionRouteIdentity{ProjectID: execution.ProjectIdentity, WorkflowRunID: run.RunID,
 		ExecutionID: execution.ExecutionID, AttemptID: run.AttemptID, Generation: generation,
 		TurnID: route.TurnID, QuestionID: route.QuestionID}
 	if route.TurnID != execution.CurrentTurnID && route.TurnID != execution.PendingTurnID {
-		return ErrWorkerTurnStale
+		return executionmodel.ErrTurnStale
 	}
 	return validateQuestionRoute(route, questions, want, codecKey, codecVersion)
 }
 
-func validateQuestionRoute(route *executionapi.QuestionRoute, questions []executionapi.Question, want executionapi.QuestionRouteIdentity, codecKey string, codecVersion int) error {
+func validateQuestionRoute(route *executionbackend.ImplementationDataEnvelope, questions []executionbackend.Question, want executionbackend.QuestionRouteIdentity, codecKey string, codecVersion int) error {
 	if route == nil {
 		return errors.New("question route is missing")
 	}

@@ -11,55 +11,54 @@ import (
 	"path/filepath"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
-type ProcessProbeState = clientcontracts.ProcessProbeState
-type ProcessProbe = clientcontracts.ProcessProbe
-
 var errLockBusy = errors.New("service lock is held")
+
 var errDetachUnsupported = errors.New("host Job Object prevents independent service lifetime")
 
-type ServiceConnectionState = clientcontracts.ServiceConnectionState
 type ServiceConnection = clientcontracts.ServiceConnection
 
 const (
-	ConnectionNoRecord      = clientcontracts.ConnectionNoRecord
-	ConnectionCorrupt       = clientcontracts.ConnectionCorrupt
-	ConnectionOffline       = clientcontracts.ConnectionOffline
-	ConnectionUnknown       = clientcontracts.ConnectionUnknown
-	ConnectionIdentityError = clientcontracts.ConnectionIdentityError
-	ConnectionInitializing  = clientcontracts.ConnectionInitializing
-	ConnectionStale         = clientcontracts.ConnectionStale
-	ConnectionIncompatible  = clientcontracts.ConnectionIncompatible
-	ConnectionConfigChanged = clientcontracts.ConnectionConfigChanged
-	ConnectionConnected     = clientcontracts.ConnectionConnected
-	ProcessAbsent           = clientcontracts.ProcessAbsent
-	ProcessMatches          = clientcontracts.ProcessMatches
-	ProcessReused           = clientcontracts.ProcessReused
-	ProcessUnknown          = clientcontracts.ProcessUnknown
+	ConnectionNoRecord      = productapi.ConnectionNoRecord
+	ConnectionCorrupt       = productapi.ConnectionCorrupt
+	ConnectionOffline       = productapi.ConnectionOffline
+	ConnectionUnknown       = productapi.ConnectionUnknown
+	ConnectionIdentityError = productapi.ConnectionIdentityError
+	ConnectionInitializing  = productapi.ConnectionInitializing
+	ConnectionStale         = productapi.ConnectionStale
+	ConnectionIncompatible  = productapi.ConnectionIncompatible
+	ConnectionConfigChanged = productapi.ConnectionConfigChanged
+	ConnectionConnected     = productapi.ConnectionConnected
+	ProcessAbsent           = productapi.ProcessAbsent
+	ProcessMatches          = productapi.ProcessMatches
+	ProcessReused           = productapi.ProcessReused
+	ProcessUnknown          = productapi.ProcessUnknown
 )
 
 // StartupRecord binds a startup attempt to the service process and its target
 // configuration. It is diagnostic evidence, not runtime or task state.
 type StartupRecord struct {
-	Version            int                           `json:"version"`
-	StartupID          string                        `json:"startup_id"`
-	Status             string                        `json:"status"`
-	StartedAt          time.Time                     `json:"started_at"`
-	UpdatedAt          time.Time                     `json:"updated_at"`
-	RepositoryIdentity string                        `json:"repository_identity"`
-	RepositoryPath     string                        `json:"repository_path"`
-	RunDir             string                        `json:"run_dir"`
-	Remote             string                        `json:"remote"`
-	Branch             string                        `json:"branch"`
-	Claimant           string                        `json:"claimant"`
-	ConfigDigest       string                        `json:"config_digest"`
-	InstanceID         string                        `json:"instance_id,omitempty"`
-	ProcessIdentity    *executionapi.ProcessIdentity `json:"process_identity,omitempty"`
-	Error              string                        `json:"error,omitempty"`
+	Version            int                               `json:"version"`
+	StartupID          string                            `json:"startup_id"`
+	Status             string                            `json:"status"`
+	StartedAt          time.Time                         `json:"started_at"`
+	UpdatedAt          time.Time                         `json:"updated_at"`
+	RepositoryIdentity string                            `json:"repository_identity"`
+	RepositoryPath     string                            `json:"repository_path"`
+	RunDir             string                            `json:"run_dir"`
+	Remote             string                            `json:"remote"`
+	Branch             string                            `json:"branch"`
+	Claimant           string                            `json:"claimant"`
+	ConfigDigest       string                            `json:"config_digest"`
+	InstanceID         string                            `json:"instance_id,omitempty"`
+	ProcessIdentity    *executionbackend.ProcessIdentity `json:"process_identity,omitempty"`
+	Error              string                            `json:"error,omitempty"`
 }
 
 type StartServiceOptions struct {
@@ -81,8 +80,6 @@ type ServiceStartResult struct {
 	Connection   ServiceConnection `json:"connection"`
 	Error        string            `json:"error,omitempty"`
 }
-
-type ServiceStopResult = clientcontracts.ServiceStopResult
 
 func startupPath(runDir, id string) (string, error) {
 	if !controlIDPattern.MatchString(id) {
@@ -231,12 +228,12 @@ func readStartupRecord(c Config, id string) (*StartupRecord, error) {
 }
 
 type startupProcessRecord struct {
-	Version         int                          `json:"version"`
-	StartupID       string                       `json:"startup_id"`
-	ProcessIdentity executionapi.ProcessIdentity `json:"process_identity"`
+	Version         int                              `json:"version"`
+	StartupID       string                           `json:"startup_id"`
+	ProcessIdentity executionbackend.ProcessIdentity `json:"process_identity"`
 }
 
-func recordStartupProcess(c Config, id string, identity executionapi.ProcessIdentity) error {
+func recordStartupProcess(c Config, id string, identity executionbackend.ProcessIdentity) error {
 	path, err := startupPath(c.RunDir, id)
 	if err != nil {
 		return err
@@ -248,28 +245,28 @@ func recordStartupProcess(c Config, id string, identity executionapi.ProcessIden
 	return AtomicWrite(filepath.Join(filepath.Dir(path), "process.json"), append(b, '\n'))
 }
 
-func findLiveStartupAttempt(c Config) (*StartupRecord, ProcessProbe, string, error) {
+func findLiveStartupAttempt(c Config) (*StartupRecord, productapi.ProcessProbe, string, error) {
 	root, err := resolveProspectivePath(filepath.Join(c.RunDir, "service", "startups"))
 	if err != nil {
-		return nil, ProcessProbe{}, "", err
+		return nil, productapi.ProcessProbe{}, "", err
 	}
 	entries, err := os.ReadDir(root)
 	if os.IsNotExist(err) {
-		return nil, ProcessProbe{}, "", nil
+		return nil, productapi.ProcessProbe{}, "", nil
 	}
 	if err != nil {
-		return nil, ProcessProbe{}, "", err
+		return nil, productapi.ProcessProbe{}, "", err
 	}
 	repositoryPath, err := resolveRepositoryPath(context.Background(), c)
 	if err != nil {
-		return nil, ProcessProbe{}, "", err
+		return nil, productapi.ProcessProbe{}, "", err
 	}
 	runDir, err := expectedRunDir(c)
 	if err != nil {
-		return nil, ProcessProbe{}, "", err
+		return nil, productapi.ProcessProbe{}, "", err
 	}
 	var found *StartupRecord
-	var foundProbe ProcessProbe
+	var foundProbe productapi.ProcessProbe
 	var foundDiagnostic string
 	for _, entry := range entries {
 		if !entry.IsDir() || !controlIDPattern.MatchString(entry.Name()) {
@@ -277,7 +274,7 @@ func findLiveStartupAttempt(c Config) (*StartupRecord, ProcessProbe, string, err
 		}
 		record, e := readStartupRecord(c, entry.Name())
 		if e != nil {
-			return nil, ProcessProbe{}, "", fmt.Errorf("read startup %s: %w", entry.Name(), e)
+			return nil, productapi.ProcessProbe{}, "", fmt.Errorf("read startup %s: %w", entry.Name(), e)
 		}
 		if record.Status != "starting" && record.Status != "started" {
 			continue
@@ -302,7 +299,7 @@ func findLiveStartupAttempt(c Config) (*StartupRecord, ProcessProbe, string, err
 			diagnostic = "a live startup attempt uses an older configuration digest; do not launch a replacement"
 		}
 		if found != nil {
-			return nil, ProcessProbe{State: ProcessUnknown}, "", errors.New("multiple live startup attempts claim the same run_dir")
+			return nil, productapi.ProcessProbe{State: ProcessUnknown}, "", errors.New("multiple live startup attempts claim the same run_dir")
 		}
 		found, foundProbe, foundDiagnostic = record, probe, diagnostic
 	}
@@ -345,11 +342,11 @@ func ConnectService(ctx context.Context, c Config) ServiceConnection {
 
 // ProbeServiceProcess checks the exact saved OS identity without running Git.
 // It is only an observation; control commands perform their own admission checks.
-func ProbeServiceProcess(identity *executionapi.ProcessIdentity) ProcessProbe {
+func ProbeServiceProcess(identity *executionbackend.ProcessIdentity) productapi.ProcessProbe {
 	return probeProcess(identity)
 }
 
-func connectServiceWithProbe(ctx context.Context, c Config, probe func(*executionapi.ProcessIdentity) ProcessProbe) ServiceConnection {
+func connectServiceWithProbe(ctx context.Context, c Config, probe func(*executionbackend.ProcessIdentity) productapi.ProcessProbe) ServiceConnection {
 	connection := ServiceConnection{State: ConnectionNoRecord, Capabilities: []string{}, CanStart: true}
 	if err := c.ResolveIdentity(ctx); err != nil {
 		connection.State, connection.Diagnostic, connection.CanStart = ConnectionIdentityError, "resolve repository identity: "+err.Error(), false
@@ -369,7 +366,7 @@ func ConnectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSn
 	return connectServiceFromSnapshot(ctx, c, obs, probeProcess)
 }
 
-func connectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSnapshot, probe func(*executionapi.ProcessIdentity) ProcessProbe) ServiceConnection {
+func connectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSnapshot, probe func(*executionbackend.ProcessIdentity) productapi.ProcessProbe) ServiceConnection {
 	connection := ServiceConnection{State: ConnectionNoRecord, Capabilities: []string{}, CanStart: true}
 	connection.Snapshot = obs
 	if obs.State == SnapshotNone {
@@ -415,7 +412,7 @@ func connectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSn
 	}
 	instanceBound := (rt.Service.StartupID != nil && recordTargetsRuntime) || (rt.Service.StartupID == nil && connection.ConfigMatched)
 	if rt.Service.ProcessIdentity == nil || rt.Service.PID <= 0 || rt.Service.ProcessIdentity.PID != rt.Service.PID {
-		connection.Process = ProcessProbe{State: ProcessUnknown, Reason: "runtime has no internally consistent service process identity"}
+		connection.Process = productapi.ProcessProbe{State: ProcessUnknown, Reason: "runtime has no internally consistent service process identity"}
 	} else {
 		connection.Process = probe(rt.Service.ProcessIdentity)
 	}
@@ -890,37 +887,37 @@ func waitForStartup(ctx context.Context, c Config, id, logPath string, opts Star
 	}
 }
 
-func StopService(ctx context.Context, c Config, requestedBy string, timeout time.Duration) (ServiceStopResult, error) {
+func StopService(ctx context.Context, c Config, requestedBy string, timeout time.Duration) (productapi.ServiceStopResult, error) {
 	if err := requireNativeTaskAuthority(c); err != nil {
-		return ServiceStopResult{}, err
+		return productapi.ServiceStopResult{}, err
 	}
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
 	if err := c.ResolveIdentity(ctx); err != nil {
-		return ServiceStopResult{}, fmt.Errorf("resolve service repository identity: %w", err)
+		return productapi.ServiceStopResult{}, fmt.Errorf("resolve service repository identity: %w", err)
 	}
 	var err error
 	c.Repository, err = resolveRepositoryPath(ctx, c)
 	if err != nil {
-		return ServiceStopResult{}, fmt.Errorf("resolve configured repository: %w", err)
+		return productapi.ServiceStopResult{}, fmt.Errorf("resolve configured repository: %w", err)
 	}
 	c.RunDir, err = expectedRunDir(c)
 	if err != nil {
-		return ServiceStopResult{}, fmt.Errorf("resolve configured run_dir: %w", err)
+		return productapi.ServiceStopResult{}, fmt.Errorf("resolve configured run_dir: %w", err)
 	}
 	connection := ConnectService(ctx, c)
 	if !connection.CanStop {
-		return ServiceStopResult{}, fmt.Errorf("cannot stop service in state %q: %s", connection.State, connection.Diagnostic)
+		return productapi.ServiceStopResult{}, fmt.Errorf("cannot stop service in state %q: %s", connection.State, connection.Diagnostic)
 	}
 	if err := ctx.Err(); err != nil {
-		return ServiceStopResult{}, err
+		return productapi.ServiceStopResult{}, err
 	}
 	request, err := submitControlSnapshot(c, connection.Snapshot.Runtime, "stop_service", nil, requestedBy)
 	if err != nil {
-		return ServiceStopResult{}, err
+		return productapi.ServiceStopResult{}, err
 	}
-	result := ServiceStopResult{Status: "stopping", RequestID: request.RequestID, InstanceID: request.InstanceID}
+	result := productapi.ServiceStopResult{Status: "stopping", RequestID: request.RequestID, InstanceID: request.InstanceID}
 	deadline := time.NewTimer(timeout)
 	defer deadline.Stop()
 	tick := time.NewTicker(100 * time.Millisecond)
@@ -1063,7 +1060,7 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 	if err := requireNativeTaskAuthority(c); err != nil {
 		return err
 	}
-	if c.WorkflowProtocol != WorkerFlowVersion {
+	if c.WorkflowProtocol != executionmodel.Version {
 		return nativeErr("unsupported_schema", "only worker-flow-v1 is supported")
 	}
 	if mode != "manual" && mode != "auto" {

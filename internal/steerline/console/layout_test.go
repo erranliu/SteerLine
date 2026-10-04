@@ -8,7 +8,10 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestTaskSelectionAndTwoFocusRegions(t *testing.T) {
@@ -100,7 +103,7 @@ func TestCompletedTaskShowsHistoricalExecutionInFourColumns(t *testing.T) {
 	snapshot.Tasks = nil
 	run := &contracts.Run{TaskID: "3", RunID: "run-3", Title: "人工决策与恢复闭环", TaskStatus: "closed", ExecutionStatus: "failed", FinishTaskStatus: "blocked", EndedAt: &now}
 	snapshot.Observation.Runtime.Runs = []*contracts.Run{run}
-	snapshot.NativeTasks = &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{{TaskRecord: contracts.TaskRecord{TaskID: "3", Title: run.Title, Status: "closed"}}}}
+	snapshot.NativeTasks = &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{{TaskRecord: taskmodel.TaskRecord{TaskID: "3", Title: run.Title, Status: "closed"}}}}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "task:3"
 	m.width = 100
@@ -150,9 +153,9 @@ func TestTaskPreviewKeepsOneIdentityAndShowsFixedExecutionPlan(t *testing.T) {
 	snapshot.Tasks = nil
 	run := &contracts.Run{TaskID: "102", DomainTaskID: "102", RunID: "run-102", Title: "进行中的任务", TaskStatus: "in_progress", ExecutionStatus: "running"}
 	snapshot.Observation.Runtime.Runs = []*contracts.Run{run}
-	snapshot.NativeTasks = &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{{TaskRecord: contracts.TaskRecord{TaskID: "102", Title: run.Title, Status: "in_progress"}, Successors: []string{"104"}}}}
-	fixed := contracts.FixedExecutionProfile{ID: "orca-local", Name: "本机执行", Host: "orca", Agent: "codex", ImplementationDisplay: []string{"Model：gpt-6-luna", "Reasoning effort：xhigh"}}
-	snapshot.Domain = &contracts.DomainSnapshot{WorkflowRuns: []contracts.WorkflowRunRecord{{WorkflowRunID: run.RunID, ExecutionProfile: &fixed}}}
+	snapshot.NativeTasks = &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{{TaskRecord: taskmodel.TaskRecord{TaskID: "102", Title: run.Title, Status: "in_progress"}, Successors: []string{"104"}}}}
+	fixed := executionmodel.FixedExecutionProfile{ID: "orca-local", Name: "本机执行", Host: "orca", Agent: "codex", ImplementationDisplay: []string{"Model：gpt-6-luna", "Reasoning effort：xhigh"}}
+	snapshot.Domain = &contracts.DomainSnapshot{WorkflowRuns: []executionmodel.WorkflowRunRecord{{WorkflowRunID: run.RunID, ExecutionProfile: &fixed}}}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "task:" + run.TaskID
 	row := m.selectedRow(0)
@@ -215,8 +218,8 @@ func TestClosedTaskWithUncertainExecutionStillNeedsAttention(t *testing.T) {
 
 func TestNativeTaskDetailKeepsBlockersWithoutPlanOrHashes(t *testing.T) {
 	task := contracts.NativeTaskDetail{
-		TaskRecord:   contracts.TaskRecord{TaskID: "12", Title: "中文任务", Status: "open"},
-		Predecessors: []contracts.TaskDependencyStatus{{TaskID: "9", Status: "discarded", Blocker: "discarded_predecessor"}},
+		TaskRecord:   taskmodel.TaskRecord{TaskID: "12", Title: "中文任务", Status: "open"},
+		Predecessors: []taskmodel.TaskDependencyStatus{{TaskID: "9", Status: "discarded", Blocker: "discarded_predecessor"}},
 	}
 	task.Contract.SpecRef.Path = "docs/spec/task.spec.md"
 	task.Contract.SpecRef.SHA256 = "secret-document-hash"

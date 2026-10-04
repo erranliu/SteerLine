@@ -4,16 +4,16 @@ import (
 	"encoding/json"
 	"errors"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type EventFact struct {
-	executionapi.EventFact
+	executionbackend.EventFact
 }
 
 // DecodeEvent checks native identities before exposing facts to the center.
-func DecodeEvent(envelope codexapp.Envelope, fixed executionapi.SessionContext, inspectReply bool) (EventFact, error) {
+func DecodeEvent(envelope codexapp.Envelope, fixed executionbackend.SessionContext, inspectReply bool) (EventFact, error) {
 	var fact EventFact
 	threadID := fixed.SessionID
 	turnID := fixed.CurrentTurnID
@@ -33,7 +33,7 @@ func DecodeEvent(envelope codexapp.Envelope, fixed executionapi.SessionContext, 
 			return fact, errors.New("app-server turn start changed its fixed thread")
 		}
 		fact.StartedTurnID = params.Turn.ID
-		fact.Kind = executionapi.EventStarted
+		fact.Kind = executionbackend.EventStarted
 	case "item/tool/call":
 		call, err := ParseAskCall(envelope, threadID, turnID)
 		if err != nil {
@@ -49,7 +49,7 @@ func DecodeEvent(envelope codexapp.Envelope, fixed executionapi.SessionContext, 
 			call.Questions[i].Generation = fixed.Generation
 			call.Questions[i].TurnID = call.Route.TurnID
 		}
-		fact.Kind = executionapi.EventQuestion
+		fact.Kind = executionbackend.EventQuestion
 		fact.EventFact.Questions = call.Questions
 		fact.QuestionRoute = &route
 	case "item/completed":
@@ -76,18 +76,18 @@ func DecodeEvent(envelope codexapp.Envelope, fixed executionapi.SessionContext, 
 		if params.Item.Type != "dynamicToolCall" {
 			return fact, nil
 		}
-		reply := executionapi.ToolReplyFact{ThreadID: params.ThreadID, TurnID: params.TurnID, CallID: params.Item.ID, Status: params.Item.Status, Success: params.Item.Success}
+		reply := executionbackend.ToolReplyFact{ThreadID: params.ThreadID, TurnID: params.TurnID, CallID: params.Item.ID, Status: params.Item.Status, Success: params.Item.Success}
 		for _, content := range params.Item.ContentItems {
 			if content.Type != "inputText" {
 				continue
 			}
-			var body executionapi.Answer
+			var body executionbackend.Answer
 			if json.Unmarshal([]byte(content.Text), &body) == nil {
 				reply.Answers = append(reply.Answers, body.Answers)
 			}
 		}
 		fact.ToolReply = &reply
-		fact.Kind = executionapi.EventCompleted
+		fact.Kind = executionbackend.EventCompleted
 	case "turn/completed":
 		var params struct {
 			ThreadID string `json:"threadId"`
@@ -98,13 +98,13 @@ func DecodeEvent(envelope codexapp.Envelope, fixed executionapi.SessionContext, 
 		if json.Unmarshal(envelope.Params, &params) != nil || params.ThreadID != threadID || params.Turn.ID != turnID {
 			return fact, errors.New("app-server turn completion changed its fixed identity")
 		}
-		fact.Kind = executionapi.EventCompleted
+		fact.Kind = executionbackend.EventCompleted
 		fact.Completed = true
 	}
 	return fact, nil
 }
 
-func DecodeQuestions(arguments json.RawMessage) ([]executionapi.Question, error) {
+func DecodeQuestions(arguments json.RawMessage) ([]executionbackend.Question, error) {
 	// Decode the native schema before converting to common values. Receiver
 	// and Action belong to center-generated choices, never native tool input.
 	var body struct {
@@ -124,13 +124,13 @@ func DecodeQuestions(arguments json.RawMessage) ([]executionapi.Question, error)
 	if body.Questions == nil {
 		return nil, err
 	}
-	questions := make([]executionapi.Question, len(body.Questions))
+	questions := make([]executionbackend.Question, len(body.Questions))
 	for i, wire := range body.Questions {
-		question := executionapi.Question{ID: wire.ID, Header: wire.Header, Question: wire.Question, AllowFreeText: wire.AllowFreeText}
+		question := executionbackend.Question{ID: wire.ID, Header: wire.Header, Question: wire.Question, AllowFreeText: wire.AllowFreeText}
 		if wire.Options != nil {
-			question.Options = make([]executionapi.DecisionOption, len(wire.Options))
+			question.Options = make([]executionbackend.DecisionOption, len(wire.Options))
 			for j, option := range wire.Options {
-				question.Options[j] = executionapi.DecisionOption{ID: option.ID, Label: option.Label, Detail: option.Detail}
+				question.Options[j] = executionbackend.DecisionOption{ID: option.ID, Label: option.Label, Detail: option.Detail}
 			}
 		}
 		questions[i] = question

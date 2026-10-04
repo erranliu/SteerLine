@@ -15,9 +15,9 @@ import (
 	"strings"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
@@ -34,38 +34,38 @@ var requirementToolPatterns = map[string]*regexp.Regexp{
 
 // NewBuiltinDirectory constructs this application's fixed implementation
 // catalog. Every returned directory is independent and immutable.
-func NewBuiltinDirectory(processHost executionapi.ManagedProcessHost) (*steerline.ExecutionDirectory, error) {
+func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*steerline.ExecutionDirectory, error) {
 	if processHost == nil {
 		return nil, errors.New("managed process host is required")
 	}
 	codecs := []steerline.ImplementationProfileCodec{
-		{Key: codexworker.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, policy executionapi.ExecutionPolicy, host, agent string) ([]byte, []string, error) {
+		{Key: codexworker.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, policy executionbackend.ExecutionPolicy, host, agent string) ([]byte, []string, error) {
 			return codexworker.NormalizeProfilePayload(payload, policy, runtime.GOOS, host, agent)
 		}},
-		{Key: orcaworker.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, _ executionapi.ExecutionPolicy, host, _ string) ([]byte, []string, error) {
+		{Key: orcaworker.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, _ executionbackend.ExecutionPolicy, host, _ string) ([]byte, []string, error) {
 			return orcaworker.NormalizeProfilePayload(payload, host)
 		}},
-		{Key: remote.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, _ executionapi.ExecutionPolicy, _, _ string) ([]byte, []string, error) {
+		{Key: remote.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, _ executionbackend.ExecutionPolicy, _, _ string) ([]byte, []string, error) {
 			return remote.NormalizeProfilePayload(payload)
 		}},
 	}
-	localKey := steerline.ExecutionRegistrationKey{Backend: executionapi.BackendLocal, Agent: "codex", Protocol: executionapi.ProtocolLocalCodexAppServer}
-	terminalKey := steerline.ExecutionRegistrationKey{Backend: executionapi.BackendOrca, Agent: "codex", Protocol: executionapi.ProtocolOrcaTerminalV2}
-	supervisedKey := steerline.ExecutionRegistrationKey{Backend: executionapi.BackendOrca, Agent: "codex", Protocol: executionapi.ProtocolOrcaSupervised}
+	localKey := steerline.ExecutionRegistrationKey{Backend: executionbackend.BackendLocal, Agent: "codex", Protocol: executionbackend.ProtocolLocalCodexAppServer}
+	terminalKey := steerline.ExecutionRegistrationKey{Backend: executionbackend.BackendOrca, Agent: "codex", Protocol: executionbackend.ProtocolOrcaTerminalV2}
+	supervisedKey := steerline.ExecutionRegistrationKey{Backend: executionbackend.BackendOrca, Agent: "codex", Protocol: executionbackend.ProtocolOrcaSupervised}
 	entries := []steerline.ExecutionRegistration{
 		{
 			Key: localKey, ProfileKey: "local/local_codex_app_server_v1/codex", WorkspaceBranchPrefix: "codex", LocalWorkspace: true, ProfileCodecKeys: []string{codexworker.ProfileCodecKey},
 			QuestionCodecKey: codexworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, Host: "local",
-			Backend: func(c steerline.Config) executionapi.ExecutionBackend {
+			Backend: func(c steerline.Config) executionbackend.ExecutionBackend {
 				return localExecutionBackend{config: c, target: localTarget(), host: processHost}
 			},
-			Target: func(steerline.Config) executionapi.ExecutionTarget { return localTarget() },
-			ProbeRequirements: func(ctx context.Context, c steerline.Config) (executionapi.CapabilityReport, error) {
+			Target: func(steerline.Config) executionbackend.ExecutionTarget { return localTarget() },
+			ProbeRequirements: func(ctx context.Context, c steerline.Config) (executionbackend.CapabilityReport, error) {
 				version, err := policyToolVersion(ctx, c)
 				return capabilityReport(localKey.Backend, localKey.Protocol, localTarget(), agentFor(c), version), err
 			},
 			QueryTool: queryHostRequirementTool,
-			Lifecycle: func(setup executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {
+			Lifecycle: func(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 				setup.ProcessHost = processHost
 				return codexworker.NewExecutionLifecycle(setup)
 			},
@@ -84,11 +84,11 @@ func NewBuiltinDirectory(processHost executionapi.ManagedProcessHost) (*steerlin
 		{
 			Key: terminalKey, ProfileKey: "orca/orca_terminal_v2/codex", WorkspaceBranchPrefix: "codex", LocalWorkspace: true, ProfileCodecKeys: []string{codexworker.ProfileCodecKey, orcaworker.ProfileCodecKey},
 			QuestionCodecKey: orcaworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, Host: "orca",
-			Backend: func(c steerline.Config) executionapi.ExecutionBackend {
+			Backend: func(c steerline.Config) executionbackend.ExecutionBackend {
 				return orcaworker.NewBackend(nativeTerminalConfig(c, terminalTarget(c, terminalKey)))
 			},
-			Target: func(c steerline.Config) executionapi.ExecutionTarget { return terminalTarget(c, terminalKey) },
-			ProbeRequirements: func(ctx context.Context, c steerline.Config) (executionapi.CapabilityReport, error) {
+			Target: func(c steerline.Config) executionbackend.ExecutionTarget { return terminalTarget(c, terminalKey) },
+			ProbeRequirements: func(ctx context.Context, c steerline.Config) (executionbackend.CapabilityReport, error) {
 				return orcaworker.NewBackend(nativeTerminalConfig(c, terminalTarget(c, terminalKey))).Probe(ctx, terminalTarget(c, terminalKey), agentFor(c))
 			},
 			QueryTool:                 queryTerminalRequirementTool,
@@ -101,7 +101,7 @@ func NewBuiltinDirectory(processHost executionapi.ManagedProcessHost) (*steerlin
 			BuildPolicyResource:       buildPolicyResource,
 			VerifyPolicyResource:      verifyPolicyResource,
 			LinkedWorktreeWriteArgs:   linkedWorktreeWriteArgs,
-			ValidTurnID:               executionapi.StableExecutionID,
+			ValidTurnID:               executionbackend.StableExecutionID,
 			ValidateRef:               validateCatalogRef,
 			CleanupCapabilities:       []string{"start", "observe", "stop", "workspace_inspection", "output_reading"},
 			ValidatePublicationPolicy: validateWorkerPublicationPolicy,
@@ -109,11 +109,11 @@ func NewBuiltinDirectory(processHost executionapi.ManagedProcessHost) (*steerlin
 		{
 			Key: supervisedKey, ProfileKey: "orca/orca_supervised/codex", WorkspaceBranchPrefix: "codex", ProfileCodecKeys: []string{codexworker.ProfileCodecKey, orcaworker.ProfileCodecKey, remote.ProfileCodecKey},
 			QuestionCodecKey: orcaworker.QuestionRouteImplementationKey, QuestionCodecVersion: 1, Host: "orca_supervised",
-			Backend: func(c steerline.Config) executionapi.ExecutionBackend {
+			Backend: func(c steerline.Config) executionbackend.ExecutionBackend {
 				return remote.NewBackend(remoteWorkerConfig(c))
 			},
-			Target: func(c steerline.Config) executionapi.ExecutionTarget { return supervisedTarget(c, supervisedKey) },
-			ProbeRequirements: func(ctx context.Context, c steerline.Config) (executionapi.CapabilityReport, error) {
+			Target: func(c steerline.Config) executionbackend.ExecutionTarget { return supervisedTarget(c, supervisedKey) },
+			ProbeRequirements: func(ctx context.Context, c steerline.Config) (executionbackend.CapabilityReport, error) {
 				return remote.NewBackend(remoteWorkerConfig(c)).Probe(ctx, supervisedTarget(c, supervisedKey), agentFor(c))
 			},
 			QueryTool:                 queryRemoteRequirementTool,
@@ -126,7 +126,7 @@ func NewBuiltinDirectory(processHost executionapi.ManagedProcessHost) (*steerlin
 			BuildPolicyResource:       buildPolicyResource,
 			VerifyPolicyResource:      verifyPolicyResource,
 			LinkedWorktreeWriteArgs:   linkedWorktreeWriteArgs,
-			ValidTurnID:               executionapi.StableExecutionID,
+			ValidTurnID:               executionbackend.StableExecutionID,
 			ValidateRef:               validateCatalogRef,
 			CleanupCapabilities:       []string{"start", "observe", "workspace_inspection", "output_reading", "message_inbox", "resource_settlement"},
 			ValidatePublicationPolicy: validateWorkerPublicationPolicy,
@@ -135,32 +135,32 @@ func NewBuiltinDirectory(processHost executionapi.ManagedProcessHost) (*steerlin
 	return steerline.NewExecutionDirectory(executionDirectoryVersion, codecs, entries)
 }
 
-func agentFor(c steerline.Config) executionapi.AgentSpec {
-	return executionapi.AgentSpec{Name: c.Agent}
+func agentFor(c steerline.Config) executionbackend.AgentSpec {
+	return executionbackend.AgentSpec{Name: c.Agent}
 }
 
-func localTarget() executionapi.ExecutionTarget {
+func localTarget() executionbackend.ExecutionTarget {
 	hostname, _ := os.Hostname()
-	return executionapi.ExecutionTarget{ID: "local:" + runtime.GOOS + ":" + hostname}
+	return executionbackend.ExecutionTarget{ID: "local:" + runtime.GOOS + ":" + hostname}
 }
 
-func terminalTarget(c steerline.Config, key steerline.ExecutionRegistrationKey) executionapi.ExecutionTarget {
+func terminalTarget(c steerline.Config, key steerline.ExecutionRegistrationKey) executionbackend.ExecutionTarget {
 	settings, err := terminalSettings(c)
 	if err != nil {
-		return executionapi.ExecutionTarget{}
+		return executionbackend.ExecutionTarget{}
 	}
-	return executionapi.ExecutionTarget{ID: string(key.Backend) + ":" + shortDigest(struct {
+	return executionbackend.ExecutionTarget{ID: string(key.Backend) + ":" + shortDigest(struct {
 		Executable string
 		Args       []string
 	}{settings.Executable, settings.Args})[:24]}
 }
 
-func supervisedTarget(c steerline.Config, _ steerline.ExecutionRegistrationKey) executionapi.ExecutionTarget {
+func supervisedTarget(c steerline.Config, _ steerline.ExecutionRegistrationKey) executionbackend.ExecutionTarget {
 	settings, err := remoteSettings(c)
 	if err != nil || settings.ConnectionID == "" {
-		return executionapi.ExecutionTarget{}
+		return executionbackend.ExecutionTarget{}
 	}
-	return executionapi.ExecutionTarget{ID: "orca-supervised:" + settings.ConnectionID, ConnectionID: settings.ConnectionID, ExternalRuntime: settings.EnvironmentID}
+	return executionbackend.ExecutionTarget{ID: "orca-supervised:" + settings.ConnectionID, ConnectionID: settings.ConnectionID, ExternalRuntime: settings.EnvironmentID}
 }
 
 func codexSettings(c steerline.Config) (codexworker.ProfileConfig, error) {
@@ -187,11 +187,11 @@ func remoteSettings(c steerline.Config) (remote.ProfileConfig, error) {
 	return remote.DecodeProfileConfig(payload)
 }
 
-func validateTerminalProfileSelection(policy executionapi.ExecutionPolicy, agent string, payloads map[string][]byte) error {
+func validateTerminalProfileSelection(policy executionbackend.ExecutionPolicy, agent string, payloads map[string][]byte) error {
 	return orcaworker.ValidateProfileSelection(policy, agent, payloads[codexworker.ProfileCodecKey], payloads[orcaworker.ProfileCodecKey])
 }
 
-func validateSupervisedProfileSelection(policy executionapi.ExecutionPolicy, agent string, payloads map[string][]byte) error {
+func validateSupervisedProfileSelection(policy executionbackend.ExecutionPolicy, agent string, payloads map[string][]byte) error {
 	return remote.ValidateProfileSelection(policy, agent, payloads[codexworker.ProfileCodecKey], payloads[orcaworker.ProfileCodecKey], payloads[remote.ProfileCodecKey])
 }
 
@@ -213,7 +213,7 @@ func validateTerminalConfig(_ context.Context, c steerline.Config) error {
 		return err
 	}
 	if settings.Profile != "" || (c.ExecutionPolicy.Filesystem.WriteScope != "workspace" && c.ExecutionPolicy.Filesystem.WriteScope != "host") {
-		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "terminal host requires workspace or host write scope and an empty agent profile"}
+		return &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "terminal host requires workspace or host write scope and an empty agent profile"}
 	}
 	return nil
 }
@@ -223,7 +223,7 @@ func validateSupervisedConfig(_ context.Context, c steerline.Config) error {
 	return err
 }
 
-func validateWorkerPublicationPolicy(policy executionapi.PublicationPolicy, provider publication.Config) error {
+func validateWorkerPublicationPolicy(policy executionbackend.PublicationPolicy, provider publication.Config) error {
 	if err := policy.Validate(); err != nil {
 		return err
 	}
@@ -231,13 +231,13 @@ func validateWorkerPublicationPolicy(policy executionapi.PublicationPolicy, prov
 		return errors.New("publication provider requires a valid kind/base_url/repository")
 	}
 	queryAvailable := provider.Kind == "gitea" || provider.Kind == "command" && provider.Query.Executable != ""
-	if policy.Publisher == executionapi.PublisherWorker && queryAvailable {
+	if policy.Publisher == executionbackend.PublisherWorker && queryAvailable {
 		return nil
 	}
-	return executionapi.UnsupportedAdapterOperation("PublicationPolicy", "publication_policy is unsupported by the selected implementation/provider")
+	return executionbackend.UnsupportedAdapterOperation("PublicationPolicy", "publication_policy is unsupported by the selected implementation/provider")
 }
 
-func validateLocalPublicationPolicy(policy executionapi.PublicationPolicy, provider publication.Config) error {
+func validateLocalPublicationPolicy(policy executionbackend.PublicationPolicy, provider publication.Config) error {
 	return validateWorkerPublicationPolicy(policy, provider)
 }
 
@@ -250,11 +250,11 @@ func preflightLocalConfig(ctx context.Context, c steerline.Config) error {
 	if err != nil {
 		return err
 	}
-	command := steerline.Command{Executable: executable, Args: append([]string(nil), settings.Args...)}
+	command := executionbackend.Command{Executable: executable, Args: append([]string(nil), settings.Args...)}
 	runner := steerline.Runner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}
 	return codexworker.ProbeCapabilities(ctx, codexworker.ProbeConfig{Executable: executable, Args: settings.Args, Repository: c.Repository, RunDir: c.RunDir}, codexworker.ProbePort{
 		Output: func(ctx context.Context, executable string, args []string) ([]byte, error) {
-			return runner.Output(ctx, steerline.Command{Executable: executable, Args: args})
+			return runner.Output(ctx, executionbackend.Command{Executable: executable, Args: args})
 		},
 		CheckHistory: func(ctx context.Context) error {
 			historyCommand := codexworker.ReaderCommand(command, settings.Profile)
@@ -278,13 +278,13 @@ func preflightTerminalConfig(ctx context.Context, c steerline.Config) error {
 	if err != nil {
 		return err
 	}
-	if _, err := (steerline.Runner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, steerline.Command{Executable: settings.Executable, Args: settings.Args}, "status", "--json"); err != nil {
+	if _, err := (steerline.Runner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: settings.Executable, Args: settings.Args}, "status", "--json"); err != nil {
 		return fmt.Errorf("terminal host is not reachable: %w", err)
 	}
-	client := orcaworker.New(nativeTerminalConfig(c, terminalTarget(c, steerline.ExecutionRegistrationKey{Backend: executionapi.BackendOrca})))
+	client := orcaworker.New(nativeTerminalConfig(c, terminalTarget(c, steerline.ExecutionRegistrationKey{Backend: executionbackend.BackendOrca})))
 	_, err = orcaworker.FindRepo(ctx, client.Call, c.Repository)
 	if errors.Is(err, orcaworker.ErrRepoUnavailable) {
-		return executionapi.UnsupportedAdapterOperation("Preflight", "the fixed repository is not registered on the selected terminal host")
+		return executionbackend.UnsupportedAdapterOperation("Preflight", "the fixed repository is not registered on the selected terminal host")
 	}
 	return err
 }
@@ -294,7 +294,7 @@ func preflightSupervisedConfig(ctx context.Context, c steerline.Config) error {
 	if err != nil {
 		var remoteErr *remote.Error
 		if errors.As(err, &remoteErr) {
-			return &executionapi.BackendError{Code: executionapi.BackendErrorCode(remoteErr.Code), Diagnostic: remoteErr.Diagnostic, Cause: remoteErr.Cause}
+			return &executionbackend.BackendError{Code: executionbackend.BackendErrorCode(remoteErr.Code), Diagnostic: remoteErr.Diagnostic, Cause: remoteErr.Cause}
 		}
 	}
 	return err
@@ -344,7 +344,7 @@ func policyToolVersion(ctx context.Context, c steerline.Config) (string, error) 
 	if err != nil {
 		return "", err
 	}
-	command := steerline.Command{Executable: settings.Executable}
+	command := executionbackend.Command{Executable: settings.Executable}
 	if err := resolveNativeCommand(&command); err != nil {
 		return "", err
 	}
@@ -389,18 +389,18 @@ func managedTerminalCommand(c steerline.Config, path string, roots []string) (st
 	return orcaworker.WrapAgentCommand(command, terminal.Shell)
 }
 
-func nativeTerminalConfig(c steerline.Config, target executionapi.ExecutionTarget) orcaworker.Config {
+func nativeTerminalConfig(c steerline.Config, target executionbackend.ExecutionTarget) orcaworker.Config {
 	terminal, _ := terminalSettings(c)
 	worker, _ := codexSettings(c)
 	config := orcaworker.Config{Repository: c.Repository, CommandTimeout: c.CommandTimeout, Target: target,
 		Output: func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
-			return (steerline.Runner{Dir: c.Repository, Timeout: timeout}).Output(ctx, steerline.Command{Executable: terminal.Executable, Args: terminal.Args}, args...)
-		}, InspectWorkspace: func(ctx context.Context, ref executionapi.ExecutionRef) (executionapi.WorkspaceInspection, error) {
+			return (steerline.Runner{Dir: c.Repository, Timeout: timeout}).Output(ctx, executionbackend.Command{Executable: terminal.Executable, Args: terminal.Args}, args...)
+		}, InspectWorkspace: func(ctx context.Context, ref executionbackend.ExecutionRef) (executionbackend.WorkspaceInspection, error) {
 			return inspectBoundWorkspace(ctx, c, ref, c.ProcessHost)
 		}}
 	if runtime.GOOS == "windows" && worker.WindowsSandbox != "" || worker.Model != "" || worker.ReasoningEffort != "" || worker.Profile != "" {
 		config.AgentVersion = func(ctx context.Context) (string, error) {
-			out, err := (steerline.Runner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, steerline.Command{Executable: worker.Executable, Args: worker.Args}, "--version")
+			out, err := (steerline.Runner{Dir: c.Repository, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: worker.Executable, Args: worker.Args}, "--version")
 			return string(out), err
 		}
 	}
@@ -410,7 +410,7 @@ func nativeTerminalConfig(c steerline.Config, target executionapi.ExecutionTarge
 func remoteWorkerConfig(c steerline.Config) remote.Config {
 	worker, _ := codexSettings(c)
 	settings, _ := remoteSettings(c)
-	client := orcaworker.New(nativeTerminalConfig(c, executionapi.ExecutionTarget{}))
+	client := orcaworker.New(nativeTerminalConfig(c, executionbackend.ExecutionTarget{}))
 	config := remote.Config{Repository: c.Repository, ProjectID: c.Identity(), Agent: c.Agent, Model: worker.Model,
 		ReasoningEffort: worker.ReasoningEffort, CommandTimeout: c.CommandTimeout, Call: client.Raw,
 		Origin: func(ctx context.Context) ([]byte, error) {
@@ -435,7 +435,7 @@ func buildPolicyResource(ctx context.Context, request steerline.PolicyResourceBu
 		if timeout <= 0 || timeout > 10*time.Second {
 			timeout = 10 * time.Second
 		}
-		out, err := (steerline.Runner{Dir: request.RepositoryPath, Timeout: timeout}).Output(ctx, steerline.Command{Executable: executable}, "--version")
+		out, err := (steerline.Runner{Dir: request.RepositoryPath, Timeout: timeout}).Output(ctx, executionbackend.Command{Executable: executable}, "--version")
 		return strings.TrimSpace(string(out)), err
 	})
 	if err != nil {
@@ -444,7 +444,7 @@ func buildPolicyResource(ctx context.Context, request steerline.PolicyResourceBu
 	return steerline.PolicyResourceBuildResult{Envelope: bound.Envelope, WriteRoots: append([]string(nil), bound.WriteRoots...)}, nil
 }
 
-func verifyPolicyResource(envelope executionapi.ImplementationDataEnvelope, identity steerline.PolicyResourceIdentity) error {
+func verifyPolicyResource(envelope executionbackend.ImplementationDataEnvelope, identity steerline.PolicyResourceIdentity) error {
 	_, err := codexworker.DecodePolicyResourceEnvelope(envelope, codexworker.PolicyResourceIdentity{ProjectID: identity.ProjectID,
 		ExecutionID: identity.ExecutionID, AttemptID: identity.AttemptID, Generation: identity.Generation, ConfigDigest: identity.ConfigDigest})
 	return err
@@ -455,7 +455,7 @@ func linkedWorktreeWriteArgs(ctx context.Context, c steerline.Config, worktreePa
 		return nil, nil
 	}
 	if c.Host != "local" && c.Host != "orca" {
-		return nil, executionapi.UnsupportedAdapterOperation("PrepareWorkspace", "this implementation does not expose local linked-worktree metadata")
+		return nil, executionbackend.UnsupportedAdapterOperation("PrepareWorkspace", "this implementation does not expose local linked-worktree metadata")
 	}
 	if c.Identity() == "" {
 		return nil, errors.New("repository identity must be resolved before preparing write roots")
@@ -467,10 +467,10 @@ func linkedWorktreeWriteArgs(ctx context.Context, c steerline.Config, worktreePa
 	return codexworker.LinkedWorktreeWriteArgs(resources.Objects, resources.Refs, resources.Logs, resources.Admin)
 }
 
-func queryHostRequirementTool(ctx context.Context, c steerline.Config, id string) executionapi.RequirementEvidence {
+func queryHostRequirementTool(ctx context.Context, c steerline.Config, id string) executionbackend.RequirementEvidence {
 	target := targetForConfig(c)
-	evidence := executionapi.RequirementEvidence{ID: id, Site: "target", Target: target, Status: executionapi.RequirementUnknown, Source: "target:inherited-path/version-query", CheckedAt: time.Now().UTC()}
-	command := steerline.Command{Executable: id}
+	evidence := executionbackend.RequirementEvidence{ID: id, Site: "target", Target: target, Status: executionbackend.RequirementUnknown, Source: "target:inherited-path/version-query", CheckedAt: time.Now().UTC()}
+	command := executionbackend.Command{Executable: id}
 	args := []string{"--version"}
 	if id == "git" {
 		command = c.Git
@@ -489,7 +489,7 @@ func queryHostRequirementTool(ctx context.Context, c steerline.Config, id string
 	}
 	executable, err := requirementExecutable(command.Executable, environment)
 	if err != nil {
-		evidence.Status = executionapi.RequirementMissing
+		evidence.Status = executionbackend.RequirementMissing
 		return evidence
 	}
 	command.Executable = executable
@@ -504,28 +504,28 @@ func queryHostRequirementTool(ctx context.Context, c steerline.Config, id string
 	}
 	match := parser.FindStringSubmatch(strings.TrimSpace(string(out)))
 	if len(match) == 2 {
-		evidence.Status, evidence.Version = executionapi.RequirementPresent, match[1]
+		evidence.Status, evidence.Version = executionbackend.RequirementPresent, match[1]
 	}
 	return evidence
 }
 
-func queryTerminalRequirementTool(ctx context.Context, c steerline.Config, id string) executionapi.RequirementEvidence {
+func queryTerminalRequirementTool(ctx context.Context, c steerline.Config, id string) executionbackend.RequirementEvidence {
 	if id == "git" {
 		return queryHostRequirementTool(ctx, c, id)
 	}
-	return executionapi.RequirementEvidence{ID: id, Site: "target", Target: targetForConfig(c), Status: executionapi.RequirementUnknown,
+	return executionbackend.RequirementEvidence{ID: id, Site: "target", Target: targetForConfig(c), Status: executionbackend.RequirementUnknown,
 		Source: "terminal:path-query-unavailable", CheckedAt: time.Now().UTC()}
 }
 
-func queryRemoteRequirementTool(_ context.Context, c steerline.Config, id string) executionapi.RequirementEvidence {
-	return executionapi.RequirementEvidence{ID: id, Site: "target", Target: targetForConfig(c), Status: executionapi.RequirementUnknown,
+func queryRemoteRequirementTool(_ context.Context, c steerline.Config, id string) executionbackend.RequirementEvidence {
+	return executionbackend.RequirementEvidence{ID: id, Site: "target", Target: targetForConfig(c), Status: executionbackend.RequirementUnknown,
 		Source: "remote:fixed-read-only-tool-query-unavailable", CheckedAt: time.Now().UTC()}
 }
 
-func targetForConfig(c steerline.Config) executionapi.ExecutionTarget {
+func targetForConfig(c steerline.Config) executionbackend.ExecutionTarget {
 	entry, err := c.ExecutionDirectory.Resolve(c)
 	if err != nil {
-		return executionapi.ExecutionTarget{}
+		return executionbackend.ExecutionTarget{}
 	}
 	return entry.Target(c)
 }
@@ -557,46 +557,46 @@ func requirementExecutable(name string, environment []string) (string, error) {
 	return "", exec.ErrNotFound
 }
 
-func capabilityReport(backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, target executionapi.ExecutionTarget, agent executionapi.AgentSpec, version string) executionapi.CapabilityReport {
-	capabilities := []executionapi.Capability{{Name: "start", Status: executionapi.CapabilityNotTested}, {Name: "observe", Status: executionapi.CapabilityNotTested}, {Name: "stop", Status: executionapi.CapabilityNotTested}, {Name: "detach_observation", Status: executionapi.CapabilityNotTested}, {Name: "operation_reconciliation", Status: executionapi.CapabilityNotTested}, {Name: "workspace_inspection", Status: executionapi.CapabilityNotTested}, {Name: "output_reading", Status: executionapi.CapabilityNotTested}, {Name: "output_turns", Status: executionapi.CapabilityNotTested}, {Name: "output_final_answer", Status: executionapi.CapabilityNotTested}, {Name: "resource_settlement", Status: executionapi.CapabilityUnsupported}}
-	return executionapi.CapabilityReport{Version: 1, Backend: backend, Protocol: protocol, Target: target, Agent: agent, PlatformVersion: version, CheckedAt: time.Now().UTC(), Capabilities: capabilities}
+func capabilityReport(backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec, version string) executionbackend.CapabilityReport {
+	capabilities := []executionbackend.Capability{{Name: "start", Status: executionbackend.CapabilityNotTested}, {Name: "observe", Status: executionbackend.CapabilityNotTested}, {Name: "stop", Status: executionbackend.CapabilityNotTested}, {Name: "detach_observation", Status: executionbackend.CapabilityNotTested}, {Name: "operation_reconciliation", Status: executionbackend.CapabilityNotTested}, {Name: "workspace_inspection", Status: executionbackend.CapabilityNotTested}, {Name: "output_reading", Status: executionbackend.CapabilityNotTested}, {Name: "output_turns", Status: executionbackend.CapabilityNotTested}, {Name: "output_final_answer", Status: executionbackend.CapabilityNotTested}, {Name: "resource_settlement", Status: executionbackend.CapabilityUnsupported}}
+	return executionbackend.CapabilityReport{Version: 1, Backend: backend, Protocol: protocol, Target: target, Agent: agent, PlatformVersion: version, CheckedAt: time.Now().UTC(), Capabilities: capabilities}
 }
 
 type localExecutionBackend struct {
 	config steerline.Config
-	target executionapi.ExecutionTarget
-	host   executionapi.ManagedProcessHost
+	target executionbackend.ExecutionTarget
+	host   executionbackend.ManagedProcessHost
 }
 
-func (backend localExecutionBackend) Identity() (executionapi.BackendKind, executionapi.ExecutionProtocol) {
-	return executionapi.BackendLocal, executionapi.ProtocolLocalCodexAppServer
+func (backend localExecutionBackend) Identity() (executionbackend.BackendKind, executionbackend.ExecutionProtocol) {
+	return executionbackend.BackendLocal, executionbackend.ProtocolLocalCodexAppServer
 }
 
-func (backend localExecutionBackend) Probe(ctx context.Context, target executionapi.ExecutionTarget, agent executionapi.AgentSpec) (executionapi.CapabilityReport, error) {
+func (backend localExecutionBackend) Probe(ctx context.Context, target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec) (executionbackend.CapabilityReport, error) {
 	if agent.Name != "codex" || target != backend.target {
-		return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed execution target or agent changed"}
+		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "fixed execution target or agent changed"}
 	}
 	settings, err := codexSettings(backend.config)
 	if err != nil {
-		return executionapi.CapabilityReport{}, err
+		return executionbackend.CapabilityReport{}, err
 	}
-	out, err := (steerline.Runner{Dir: backend.config.Repository, Timeout: positiveDuration(backend.config.CommandTimeout, 30*time.Second)}).Output(ctx, steerline.Command{Executable: settings.Executable, Args: settings.Args}, "--version")
+	out, err := (steerline.Runner{Dir: backend.config.Repository, Timeout: positiveDuration(backend.config.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: settings.Executable, Args: settings.Args}, "--version")
 	if err != nil {
-		return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendUnreachable, Diagnostic: "configured execution version probe failed", Cause: err}
+		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendUnreachable, Diagnostic: "configured execution version probe failed", Cause: err}
 	}
 	version := strings.TrimSpace(string(out))
 	if version == "" {
-		return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "configured execution version probe returned no version"}
+		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendProtocolInvalid, Diagnostic: "configured execution version probe returned no version"}
 	}
-	return capabilityReport(executionapi.BackendLocal, executionapi.ProtocolLocalCodexAppServer, target, agent, version), nil
+	return capabilityReport(executionbackend.BackendLocal, executionbackend.ProtocolLocalCodexAppServer, target, agent, version), nil
 }
 
-func (backend localExecutionBackend) Observe(ctx context.Context, ref executionapi.ExecutionRef) (executionapi.Observation, error) {
+func (backend localExecutionBackend) Observe(ctx context.Context, ref executionbackend.ExecutionRef) (executionbackend.Observation, error) {
 	if err := backend.validateRef(ref); err != nil {
-		return executionapi.Observation{}, err
+		return executionbackend.Observation{}, err
 	}
 	if err := ctx.Err(); err != nil {
-		return executionapi.Observation{}, err
+		return executionbackend.Observation{}, err
 	}
 	label := backend.host.InspectProcess(&ref.External)
 	liveness := "unverifiable"
@@ -605,73 +605,73 @@ func (backend localExecutionBackend) Observe(ctx context.Context, ref executiona
 	} else if label == "process absent" {
 		liveness = "exited"
 	} else if strings.Contains(label, "different process") {
-		return executionapi.Observation{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: label}
+		return executionbackend.Observation{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: label}
 	}
-	return executionapi.Observation{Liveness: liveness, Connection: "connected", ObservedAt: time.Now().UTC(), Source: "process-probe", Diagnostic: label}, nil
+	return executionbackend.Observation{Liveness: liveness, Connection: "connected", ObservedAt: time.Now().UTC(), Source: "process-probe", Diagnostic: label}, nil
 }
 
-func (backend localExecutionBackend) InspectWorkspace(ctx context.Context, ref executionapi.ExecutionRef) (executionapi.WorkspaceInspection, error) {
+func (backend localExecutionBackend) InspectWorkspace(ctx context.Context, ref executionbackend.ExecutionRef) (executionbackend.WorkspaceInspection, error) {
 	if err := backend.validateRef(ref); err != nil {
-		return executionapi.WorkspaceInspection{}, err
+		return executionbackend.WorkspaceInspection{}, err
 	}
 	return inspectBoundWorkspace(ctx, backend.config, ref, backend.host)
 }
 
-func (backend localExecutionBackend) StopExecution(ctx context.Context, ref executionapi.ExecutionRef, _ executionapi.Operation, handle executionapi.StopHandle) (executionapi.StopReceipt, error) {
+func (backend localExecutionBackend) StopExecution(ctx context.Context, ref executionbackend.ExecutionRef, _ executionbackend.Operation, handle executionbackend.StopHandle) (executionbackend.StopReceipt, error) {
 	if err := backend.validateRef(ref); err != nil {
-		return executionapi.StopReceipt{}, err
+		return executionbackend.StopReceipt{}, err
 	}
 	if handle == nil || handle.Identity() != ref.External {
-		return executionapi.StopReceipt{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "stop handle does not match the fixed process identity"}
+		return executionbackend.StopReceipt{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "stop handle does not match the fixed process identity"}
 	}
 	if err := ctx.Err(); err != nil {
-		return executionapi.StopReceipt{}, err
+		return executionbackend.StopReceipt{}, err
 	}
 	observation, err := backend.Observe(ctx, ref)
 	if err != nil {
-		return executionapi.StopReceipt{}, err
+		return executionbackend.StopReceipt{}, err
 	}
 	if observation.Liveness == "exited" {
-		return executionapi.StopReceipt{Disposition: "confirmed", Diagnostic: observation.Diagnostic}, nil
+		return executionbackend.StopReceipt{Disposition: "confirmed", Diagnostic: observation.Diagnostic}, nil
 	}
 	if observation.Liveness != "live" {
-		return executionapi.StopReceipt{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "process liveness cannot be verified"}
+		return executionbackend.StopReceipt{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "process liveness cannot be verified"}
 	}
 	handle.Kill()
-	return executionapi.StopReceipt{Disposition: "accepted"}, nil
+	return executionbackend.StopReceipt{Disposition: "accepted"}, nil
 }
 
-func (backend localExecutionBackend) validateRef(ref executionapi.ExecutionRef) error {
-	if ref.Backend != executionapi.BackendLocal || ref.Protocol != executionapi.ProtocolLocalCodexAppServer || ref.Target.ID != backend.target.ID || ref.Target.ConnectionID != backend.target.ConnectionID || ref.Target.ExternalRuntime != backend.target.ExternalRuntime || ref.External.Kind != "os" || ref.External.PID <= 0 || ref.External.Created == "" || ref.External.Executable == "" {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed process target or identity changed"}
+func (backend localExecutionBackend) validateRef(ref executionbackend.ExecutionRef) error {
+	if ref.Backend != executionbackend.BackendLocal || ref.Protocol != executionbackend.ProtocolLocalCodexAppServer || ref.Target.ID != backend.target.ID || ref.Target.ConnectionID != backend.target.ConnectionID || ref.Target.ExternalRuntime != backend.target.ExternalRuntime || ref.External.Kind != "os" || ref.External.PID <= 0 || ref.External.Created == "" || ref.External.Executable == "" {
+		return &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "fixed process target or identity changed"}
 	}
 	return nil
 }
 
-func inspectBoundWorkspace(ctx context.Context, c steerline.Config, ref executionapi.ExecutionRef, processHost executionapi.ManagedProcessHost) (executionapi.WorkspaceInspection, error) {
+func inspectBoundWorkspace(ctx context.Context, c steerline.Config, ref executionbackend.ExecutionRef, processHost executionbackend.ManagedProcessHost) (executionbackend.WorkspaceInspection, error) {
 	if ref.Incomplete || ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || !regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`).MatchString(ref.BaseCommit) {
-		return executionapi.WorkspaceInspection{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "workspace ref is incomplete"}
+		return executionbackend.WorkspaceInspection{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "workspace ref is incomplete"}
 	}
 	if c.Identity() == "" {
 		if err := c.ResolveIdentity(ctx); err != nil {
-			return executionapi.WorkspaceInspection{}, err
+			return executionbackend.WorkspaceInspection{}, err
 		}
 	}
-	inspection, err := workspace.Inspect(ctx, workspaceGit(c, processHost), workspace.Repository{Path: c.Repository, CommonDir: c.Identity()}, &executionapi.WorkspaceIntent{Path: ref.WorkspacePath, Branch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit})
+	inspection, err := workspace.Inspect(ctx, workspaceGit(c, processHost), workspace.Repository{Path: c.Repository, CommonDir: c.Identity()}, &executionbackend.WorkspaceIntent{Path: ref.WorkspacePath, Branch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit})
 	if err != nil {
-		return executionapi.WorkspaceInspection{}, err
+		return executionbackend.WorkspaceInspection{}, err
 	}
-	return executionapi.WorkspaceInspection{Repository: inspection.Repository, Worktree: inspection.Worktree, Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, CheckedAt: inspection.CheckedAt}, nil
+	return executionbackend.WorkspaceInspection{Repository: inspection.Repository, Worktree: inspection.Worktree, Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, CheckedAt: inspection.CheckedAt}, nil
 }
 
-func workspaceGit(c steerline.Config, processHost executionapi.ManagedProcessHost) workspace.Git {
-	return workspace.Git{Command: executionapi.LaunchCommand{Executable: c.Git.Executable, Args: append([]string(nil), c.Git.Args...)}, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second), Start: processHost.StartManaged}
+func workspaceGit(c steerline.Config, processHost executionbackend.ManagedProcessHost) workspace.Git {
+	return workspace.Git{Command: executionbackend.LaunchCommand{Executable: c.Git.Executable, Args: append([]string(nil), c.Git.Args...)}, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second), Start: processHost.StartManaged}
 }
 
-func targetFor(c steerline.Config, key steerline.ExecutionRegistrationKey) executionapi.ExecutionTarget {
+func targetFor(c steerline.Config, key steerline.ExecutionRegistrationKey) executionbackend.ExecutionTarget {
 	entry, err := c.ExecutionDirectory.ResolveIdentity(key)
 	if err != nil {
-		return executionapi.ExecutionTarget{}
+		return executionbackend.ExecutionTarget{}
 	}
 	return entry.Target(c)
 }
@@ -690,7 +690,7 @@ func positiveDuration(value string, fallback time.Duration) time.Duration {
 	return duration
 }
 
-func resolveNativeCommand(command *steerline.Command) error {
+func resolveNativeCommand(command *executionbackend.Command) error {
 	path, err := exec.LookPath(command.Executable)
 	if err != nil {
 		return err
@@ -703,18 +703,18 @@ func resolveNativeCommand(command *steerline.Command) error {
 	return nil
 }
 
-func validateCatalogRef(ref executionapi.ExecutionRef) error {
+func validateCatalogRef(ref executionbackend.ExecutionRef) error {
 	switch ref.Protocol {
-	case executionapi.ProtocolLocalCodexAppServer, executionapi.ProtocolLocalProcess:
-		if ref.Backend != executionapi.BackendLocal || ref.External.Kind != "os" || ref.External.PID <= 0 || ref.External.Created == "" || ref.External.Executable == "" {
+	case executionbackend.ProtocolLocalCodexAppServer, executionbackend.ProtocolLocalProcess:
+		if ref.Backend != executionbackend.BackendLocal || ref.External.Kind != "os" || ref.External.PID <= 0 || ref.External.Created == "" || ref.External.Executable == "" {
 			return errors.New("local resource lacks its fixed process identity")
 		}
-	case executionapi.ProtocolOrcaTerminalV2:
-		if ref.Backend != executionapi.BackendOrca || ref.External.Kind != "orca" || ref.External.Terminal == "" || ref.External.RuntimeID == "" || ref.External.Incarnation == "" {
+	case executionbackend.ProtocolOrcaTerminalV2:
+		if ref.Backend != executionbackend.BackendOrca || ref.External.Kind != "orca" || ref.External.Terminal == "" || ref.External.RuntimeID == "" || ref.External.Incarnation == "" {
 			return errors.New("terminal resource lacks its fixed runtime/terminal/incarnation")
 		}
-	case executionapi.ProtocolOrcaSupervised:
-		if ref.Backend != executionapi.BackendOrca || ref.External.Kind != "orca_supervised" || ref.External.RuntimeID == "" || ref.External.OrchestrationRun == "" || ref.External.Task == "" || ref.External.Dispatch == "" || ref.External.ExecutionHost == "" || ref.External.WorktreeID == "" {
+	case executionbackend.ProtocolOrcaSupervised:
+		if ref.Backend != executionbackend.BackendOrca || ref.External.Kind != "orca_supervised" || ref.External.RuntimeID == "" || ref.External.OrchestrationRun == "" || ref.External.Task == "" || ref.External.Dispatch == "" || ref.External.ExecutionHost == "" || ref.External.WorktreeID == "" {
 			return errors.New("supervised resource lacks its fixed run/task/dispatch/host/worktree")
 		}
 	default:

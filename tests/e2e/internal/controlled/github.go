@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"os"
 	"strings"
 	"time"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func githubCommand(path string, args []string) error {
@@ -50,7 +51,7 @@ func githubCommand(path string, args []string) error {
 		if err != nil || !strings.HasPrefix(remoteHead, head) {
 			return fmt.Errorf("PR branch was not pushed: %v", err)
 		}
-		s.PR = contracts.PRInfo{URL: "https://github.com/e2e/project/pull/1", Repository: "e2e/project", BaseBranch: "main", HeadRepository: "e2e/project", HeadBranch: branch, HeadRevision: head, State: "open"}
+		s.PR = executionmodel.PRInfo{URL: "https://github.com/e2e/project/pull/1", Repository: "e2e/project", BaseBranch: "main", HeadRepository: "e2e/project", HeadBranch: branch, HeadRevision: head, State: "open"}
 		if err := Write(path, s); err != nil {
 			return err
 		}

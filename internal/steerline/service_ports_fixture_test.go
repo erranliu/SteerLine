@@ -9,7 +9,8 @@ import (
 	"strings"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
@@ -18,6 +19,7 @@ import (
 type testProcessHost struct{}
 
 func mustTestDirectory() (*ExecutionDirectory, error) { return newNeutralDirectory() }
+
 func testConfigWithDirectory(c Config) Config {
 	if c.ExecutionDirectory == nil {
 		c = withNeutralProfile(c, neutralSettings{Executable: os.Args[0]})
@@ -34,16 +36,17 @@ func testConfigWithDirectory(c Config) Config {
 	}
 	return c
 }
+
 func newTestService(c Config) (*Service, error) { return newNeutralService(testConfigWithDirectory(c)) }
 
 // Only the generic bounded raw output test uses this fixture.
 type localExecutionBackend struct{ config Config }
 
-func (testProcessHost) StartManaged(command *exec.Cmd) (executionapi.StopHandle, error) {
+func (testProcessHost) StartManaged(command *exec.Cmd) (executionbackend.StopHandle, error) {
 	return startProcess(command)
 }
 
-func (testProcessHost) InspectProcess(identity *executionapi.ProcessIdentity) string {
+func (testProcessHost) InspectProcess(identity *executionbackend.ProcessIdentity) string {
 	return inspectProcess(identity)
 }
 
@@ -53,28 +56,28 @@ func (testProcessHost) WriteExecutionFile(path string, value []byte) error {
 	return AtomicWrite(path, value)
 }
 
-func (testProcessHost) OutputCommand(ctx context.Context, command executionapi.LaunchCommand) ([]byte, error) {
-	return (Runner{Dir: command.WorkingDirectory, Timeout: 30 * time.Second}).Output(ctx, Command{Executable: command.Executable, Args: command.Args})
+func (testProcessHost) OutputCommand(ctx context.Context, command executionbackend.LaunchCommand) ([]byte, error) {
+	return (Runner{Dir: command.WorkingDirectory, Timeout: 30 * time.Second}).Output(ctx, executionbackend.Command{Executable: command.Executable, Args: command.Args})
 }
 
-func inspectTestWorkspace(ctx context.Context, c Config, ref executionapi.ExecutionRef) (executionapi.WorkspaceInspection, error) {
+func inspectTestWorkspace(ctx context.Context, c Config, ref executionbackend.ExecutionRef) (executionbackend.WorkspaceInspection, error) {
 	if ref.Incomplete || ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || !commitHash.MatchString(ref.BaseCommit) {
-		return executionapi.WorkspaceInspection{}, errors.New("workspace ref is incomplete")
+		return executionbackend.WorkspaceInspection{}, errors.New("workspace ref is incomplete")
 	}
 	if c.Identity() == "" {
 		if err := c.ResolveIdentity(ctx); err != nil {
-			return executionapi.WorkspaceInspection{}, err
+			return executionbackend.WorkspaceInspection{}, err
 		}
 	}
 	repository, err := workspaceRepository(c)
 	if err != nil {
-		return executionapi.WorkspaceInspection{}, err
+		return executionbackend.WorkspaceInspection{}, err
 	}
-	inspection, err := workspace.Inspect(ctx, workspaceGit(c), repository, &executionapi.WorkspaceIntent{Path: ref.WorkspacePath, Branch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit})
+	inspection, err := workspace.Inspect(ctx, workspaceGit(c), repository, &executionbackend.WorkspaceIntent{Path: ref.WorkspacePath, Branch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit})
 	if err != nil {
-		return executionapi.WorkspaceInspection{}, err
+		return executionbackend.WorkspaceInspection{}, err
 	}
-	return executionapi.WorkspaceInspection{Repository: inspection.Repository, Worktree: inspection.Worktree, Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, CheckedAt: inspection.CheckedAt}, nil
+	return executionbackend.WorkspaceInspection{Repository: inspection.Repository, Worktree: inspection.Worktree, Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, CheckedAt: inspection.CheckedAt}, nil
 }
 
 func testHomePath() string {
@@ -103,7 +106,7 @@ func fixtureRepositoryStateKey(c Config) (string, error) {
 }
 
 func loadFixtureConfig(path string) (Config, error) {
-	c := Config{Persistence: sqlite.Factory{}, Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
+	c := Config{Persistence: sqlite.Factory{}, Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: executionbackend.Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
 	projectPath, err := filepath.Abs(path)
 	if err != nil {
 		return c, err
@@ -118,7 +121,7 @@ func loadFixtureConfig(path string) (Config, error) {
 	if c.TaskAuthority != "native" {
 		return c, errors.New("task_authority must be explicitly set to native; Beads is not supported")
 	}
-	if c.WorkflowProtocol != WorkerFlowVersion {
+	if c.WorkflowProtocol != executionmodel.Version {
 		return c, errors.New("workflow_protocol must be worker-flow-v1")
 	}
 	if err := c.ExecutionPolicy.Validate(); err != nil {

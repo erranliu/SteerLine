@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 // Host implements only the small process/file port consumed by execution
@@ -21,11 +21,11 @@ type Host struct{ Timeout time.Duration }
 
 func New(timeout time.Duration) Host { return Host{Timeout: timeout} }
 
-func (host Host) StartManaged(command *exec.Cmd) (executionapi.StopHandle, error) {
+func (host Host) StartManaged(command *exec.Cmd) (executionbackend.StopHandle, error) {
 	return startManaged(command)
 }
 
-func (Host) InspectProcess(identity *executionapi.ProcessIdentity) string {
+func (Host) InspectProcess(identity *executionbackend.ProcessIdentity) string {
 	return inspectProcess(identity)
 }
 
@@ -39,7 +39,7 @@ func (Host) NewProcessGeneration() string {
 
 func (Host) WriteExecutionFile(path string, value []byte) error { return writeAtomic(path, value) }
 
-func (host Host) OutputCommand(ctx context.Context, command executionapi.LaunchCommand) ([]byte, error) {
+func (host Host) OutputCommand(ctx context.Context, command executionbackend.LaunchCommand) ([]byte, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}

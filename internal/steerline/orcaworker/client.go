@@ -12,7 +12,7 @@ import (
 	"sync"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func digestValue(v any) string {
@@ -20,6 +20,7 @@ func digestValue(v any) string {
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
 }
+
 func positiveDuration(s string, def time.Duration) time.Duration {
 	if d, e := time.ParseDuration(s); e == nil && d > 0 {
 		return d
@@ -30,9 +31,11 @@ func positiveDuration(s string, def time.Duration) time.Duration {
 type Client struct{ config Config }
 
 func New(c Config) Client { return Client{config: c} }
+
 func (c Client) Raw(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
 	return c.config.Output(ctx, timeout, args...)
 }
+
 func (c Client) MetaCall(ctx context.Context, args ...string) (Result, error) {
 	out, callErr := c.Raw(ctx, positiveDuration(c.config.CommandTimeout, 30*time.Second), args...)
 	env, parseErr := ParseEnvelope(out)
@@ -46,6 +49,7 @@ func (c Client) MetaCall(ctx context.Context, args ...string) (Result, error) {
 	}
 	return result, errors.Join(callErr, parseErr)
 }
+
 func (c Client) Call(ctx context.Context, args ...string) (json.RawMessage, error) {
 	v, e := c.MetaCall(ctx, args...)
 	return v.Payload, e
@@ -92,10 +96,10 @@ var orcaObservationGates = struct {
 
 // Show calls for one fixed terminal are serialized across Service, output
 // readers and its observer. Other terminal identities have independent gates.
-func (c Client) ShowBoundTerminal(ctx context.Context, target executionapi.ExecutionTarget, identity executionapi.ProcessIdentity) (Terminal, error) {
+func (c Client) ShowBoundTerminal(ctx context.Context, target executionbackend.ExecutionTarget, identity executionbackend.ProcessIdentity) (Terminal, error) {
 	key := digestValue(struct {
-		Target   executionapi.ExecutionTarget
-		Identity executionapi.ProcessIdentity
+		Target   executionbackend.ExecutionTarget
+		Identity executionbackend.ProcessIdentity
 	}{target, identity})
 	orcaObservationGates.Lock()
 	gate := orcaObservationGates.byIdentity[key]
@@ -127,32 +131,32 @@ func (c Client) ShowBoundTerminal(ctx context.Context, target executionapi.Execu
 	return c.ShowTerminal(ctx, identity.Terminal)
 }
 
-func (c Client) InspectBoundTerminal(ctx context.Context, target executionapi.ExecutionTarget, identity executionapi.ProcessIdentity) (Terminal, error) {
+func (c Client) InspectBoundTerminal(ctx context.Context, target executionbackend.ExecutionTarget, identity executionbackend.ProcessIdentity) (Terminal, error) {
 	term, err := c.ShowBoundTerminal(ctx, target, identity)
 	if err != nil {
-		return term, &executionapi.BackendError{Code: executionapi.BackendUnreachable, Diagnostic: "could not inspect fixed Orca terminal", Cause: err}
+		return term, &executionbackend.BackendError{Code: executionbackend.BackendUnreachable, Diagnostic: "could not inspect fixed Orca terminal", Cause: err}
 	}
 	if identity.RuntimeID == "" || identity.Incarnation == "" || term.Handle != identity.Terminal ||
 		term.RuntimeID != identity.RuntimeID || term.IncarnationID != identity.Incarnation {
-		return term, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca terminal runtime/handle/incarnation changed or is incomplete"}
+		return term, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "Orca terminal runtime/handle/incarnation changed or is incomplete"}
 	}
 	return term, nil
 }
 
-func (c Client) CloseTerminalChecked(ctx context.Context, handle, runtimeID string) (executionapi.StopReceipt, error) {
+func (c Client) CloseTerminalChecked(ctx context.Context, handle, runtimeID string) (executionbackend.StopReceipt, error) {
 	if strings.TrimSpace(handle) == "" {
-		return executionapi.StopReceipt{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "cannot close an empty terminal handle"}
+		return executionbackend.StopReceipt{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "cannot close an empty terminal handle"}
 	}
 	out, callErr := c.Raw(ctx, positiveDuration(c.config.CommandTimeout, 30*time.Second), "terminal", "close", "--terminal", handle, "--json")
 	env, parseErr := ParseEnvelope(out)
 	if callErr != nil {
-		return executionapi.StopReceipt{}, &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "Orca terminal close response is uncertain", Cause: errors.Join(callErr, parseErr)}
+		return executionbackend.StopReceipt{}, &executionbackend.BackendError{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "Orca terminal close response is uncertain", Cause: errors.Join(callErr, parseErr)}
 	}
 	if parseErr != nil {
-		return executionapi.StopReceipt{}, &executionapi.BackendError{Code: executionapi.BackendRejected, Diagnostic: "Orca rejected terminal close", Cause: parseErr}
+		return executionbackend.StopReceipt{}, &executionbackend.BackendError{Code: executionbackend.BackendRejected, Diagnostic: "Orca rejected terminal close", Cause: parseErr}
 	}
 	if runtimeID == "" || env.Meta.RuntimeID != runtimeID {
-		return executionapi.StopReceipt{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca terminal close receipt came from a different runtime"}
+		return executionbackend.StopReceipt{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "Orca terminal close receipt came from a different runtime"}
 	}
 	var result struct {
 		Close struct {
@@ -161,12 +165,12 @@ func (c Client) CloseTerminalChecked(ctx context.Context, handle, runtimeID stri
 		} `json:"close"`
 	}
 	if err := json.Unmarshal(env.Result, &result); err != nil || result.Close.Handle != handle {
-		return executionapi.StopReceipt{}, &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "Orca terminal close receipt omitted the exact stopped handle", Cause: err}
+		return executionbackend.StopReceipt{}, &executionbackend.BackendError{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "Orca terminal close receipt omitted the exact stopped handle", Cause: err}
 	}
 	if result.Close.PtyKilled {
-		return executionapi.StopReceipt{Disposition: "confirmed", Diagnostic: "Orca confirmed the fixed terminal PTY was killed"}, nil
+		return executionbackend.StopReceipt{Disposition: "confirmed", Diagnostic: "Orca confirmed the fixed terminal PTY was killed"}, nil
 	}
-	return executionapi.StopReceipt{Disposition: "accepted", Diagnostic: "Orca accepted close without original PTY exit proof"}, nil
+	return executionbackend.StopReceipt{Disposition: "accepted", Diagnostic: "Orca accepted close without original PTY exit proof"}, nil
 }
 
 func (c Client) ShowTerminal(ctx context.Context, handle string) (Terminal, error) {

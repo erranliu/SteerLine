@@ -5,13 +5,13 @@ import (
 	"errors"
 	"strings"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 const ProfileCodecKey = "codex.worker-profile"
 
 // NormalizeProfilePayload owns the native defaults and non-secret projection.
-func NormalizeProfilePayload(payload []byte, policy executionapi.ExecutionPolicy, goos, host, agent string) ([]byte, []string, error) {
+func NormalizeProfilePayload(payload []byte, policy executionbackend.ExecutionPolicy, goos, host, agent string) ([]byte, []string, error) {
 	settings, err := DecodeProfileConfig(payload)
 	if err != nil {
 		return nil, nil, err
@@ -69,7 +69,7 @@ type ProfileConfig struct {
 
 func DecodeProfileConfig(payload []byte) (ProfileConfig, error) {
 	var config ProfileConfig
-	if err := executionapi.DecodeStrictJSON(payload, &config, "Codex profile configuration has trailing JSON"); err != nil {
+	if err := executionbackend.DecodeStrictJSON(payload, &config, "Codex profile configuration has trailing JSON"); err != nil {
 		return ProfileConfig{}, err
 	}
 	return config, nil
@@ -80,7 +80,7 @@ func EncodeProfileConfig(config ProfileConfig) ([]byte, error) {
 	return json.Marshal(config)
 }
 
-func NormalizeProfileConfig(config ProfileConfig, policy executionapi.ExecutionPolicy, goos, host, agent string) (ProfileConfig, error) {
+func NormalizeProfileConfig(config ProfileConfig, policy executionbackend.ExecutionPolicy, goos, host, agent string) (ProfileConfig, error) {
 	if err := ValidateManagedArgs(config.Args); err != nil {
 		return ProfileConfig{}, err
 	}

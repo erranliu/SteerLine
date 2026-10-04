@@ -6,14 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
 )
 
 var _ query.ConversationEventReader = Reader{}
+
 var _ query.ConversationBodyReader = Reader{}
+
 var _ query.ConversationRawReader = Reader{}
+
 var _ query.ConversationCapabilityReader = Reader{}
 
 // A committed canonical source hides fallback projections only within the same
@@ -75,7 +78,7 @@ func (s Reader) ConversationRaw(ctx context.Context, project string, ref contrac
 	return record, err
 }
 
-func (s Reader) ConversationCapabilityReports(ctx context.Context, backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, targetID string, limit int) ([]contracts.ConversationCapabilityReport, error) {
+func (s Reader) ConversationCapabilityReports(ctx context.Context, backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, targetID string, limit int) ([]contracts.ConversationCapabilityReport, error) {
 	query := `SELECT payload FROM conversation_capability_reports WHERE 1=1`
 	args := []any{}
 	if backend != "" {

@@ -20,9 +20,13 @@
 
 | 级别/组或场景 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
 | --- | --- | --- | --- | --- | --- |
-| 定向 Go：TM01.1–TM01.2 | Windows；纯规则，无模型 | `go run ./cmd/test-feedback -out docs/validation/three-line-01-types/rules -- ./internal/task/model ./internal/execution/model ./internal/execution/backend ./internal/storage/ports -count=1` | 归属和调用者切换后 | 迁入既有规则/契约断言通过，各包非零命中 | `docs/validation/three-line-01-types/rules/` |
-| 定向 Go：TM01.3 | Windows；全源码及 Windows/Linux 依赖图 | `go run ./cmd/test-feedback -out docs/validation/three-line-01-types/boundary -- ./internal/steerlineintegration -run '^TestCD67CoreBoundary$' -count=1` | 守卫改为新旧路径后 | 禁止依赖反例与实际应用闭包通过 | `docs/validation/three-line-01-types/boundary/` |
-| L1 固定最小入口 | Windows；隔离 STEERLINE_HOME，无原生 opt-in | `go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-01-types/l1` | 自查/定向修复完成后一次 | 现有规则/构造/守卫代表非零命中且通过，无意外 live | `docs/validation/three-line-01-types/l1/` |
+| 编译：受影响跨平台/带 tag 调用者 | Windows 主机，Windows/Linux 生产；e2e tag 只编译 | `go build ./...`（GOOS=windows/linux）；`go test -tags=e2e ./tests/e2e/... -run '^$' -count=1` | 消费者切换后 | 构建退出 0；不计入场景非零命中/行为证明 | `run-20261004/build/`、`e2e-compile.txt` |
+| 定向 Go：TM01.1–TM01.2 | Windows；纯规则，无模型 | `go run ./cmd/test-feedback -out docs/validation/three-line-01-types/run-20261004/rules -- ./internal/task/model ./internal/execution/model ./internal/execution/backend ./internal/storage/ports -count=1` | 归属和调用者切换后 | 迁入既有规则/契约断言通过，各包非零命中 | `docs/validation/three-line-01-types/run-20261004/rules/` |
+| 定向 Go：TM01.3 | Windows；全源码及 Windows/Linux 依赖图 | `go run ./cmd/test-feedback -out docs/validation/three-line-01-types/run-20261004/boundary -- ./internal/steerlineintegration -run '^TestCD67CoreBoundary$' -count=1` | 守卫改为新旧路径后 | 禁止依赖反例与实际应用闭包通过 | `docs/validation/three-line-01-types/run-20261004/boundary/` |
+| 定向 Go：生产消费者/候选屏障 | Windows；隔离 Git/SQLite/受控后端 | `go run ./cmd/test-feedback -out docs/validation/three-line-01-types/run-20261004/consumers -- ./internal/steerline -run '^TestMC(1\|4\|8\|9)$' -count=1` | 自查后、一次 L1 前 | 原领取/多候选/唯一交付/迟到结果/原请求与数量断言非零 run/pass，无 skip | `docs/validation/three-line-01-types/run-20261004/consumers/` |
+| 定向 Go：TM01.fixture-lock-process-death | Windows；真实受控子进程，无原生 opt-in | `go run ./cmd/test-feedback -out docs/validation/three-line-01-types/run-20261004/fixture-lock -- ./internal/steerline/testprotocol -run '^TestTM01FixtureLockProcessDeath$' -count=1` | L1 原 fixture 停止/清理故障诊断后 | 活进程互斥；持锁子进程被终止后可重新获取并清除锁，不改变恢复断言 | `docs/validation/three-line-01-types/run-20261004/fixture-lock/` |
+| 定向 Go：CD67 受影响恢复 | Windows；原受控 terminal 协议 fixture | `go run ./cmd/test-feedback -out docs/validation/three-line-01-types/run-20261004/fixture-recovery -- ./internal/steerlineintegration -run '^TestCD67AdditionalImplementation$/^supported_terminal_recovery_and_original_identity$' -count=1` | fixture 锁修复后 | 原 session/目标/身份/原请求及停止清理断言全部通过，parent/subtest 非零且无 skip | `docs/validation/three-line-01-types/run-20261004/fixture-recovery/` |
+| L1 固定最小入口 | Windows；隔离 STEERLINE_HOME，无原生 opt-in | `go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-01-types/run-20261004/l1-after-fixture-fix` | 自查/定向修复完成后一次 | 现有规则/构造/守卫代表非零命中且通过，无意外 live | `docs/validation/three-line-01-types/run-20261004/l1-after-fixture-fix/` |
 
 边界类变更在本阶段同步既有守卫/负向注入及 L1 选择；扫描全 OS/build tag 源码，核对 Windows/Linux 生产直接及传递依赖。跨系统只做依赖图/编译不冒充运行行为。新增场景或环境能力须先登记包/测试/ID与命令，再执行；当前已注册 E2E 入口和环境约定见 [E2E README](../../tests/e2e/README.md)。
 
@@ -33,3 +37,31 @@ L2/L3/live/Full 不选：只有纯定义与调用路径迁移，业务、协议�
 逐项核对 Spec 验收，保留提交屏障、同快照、身份/版本和唯一结果，删除迁出路径/无消费者桥接，核对最小命令实际命中。汇总 `docs/validation/three-line-01-types/README.md`，注明复用证据、定向重验依据及未具备能力。
 
 #74 得到唯一类型与端口及明确残留；#38 可继续做交互，仅共享定义、import 与构造段由本任务顺序集成。
+
+实施接线：规则命令对应四个真实新包；L1 同次迁旧 taskgraph/workerflow/execution，加入 ports 与旧 task/persistence 代表，app 构造组包含 CM71。product/api 的源码纯度及 Windows/Linux 闭包由 CD67 和 CM71 校验，无额外原生环境能力。TaskGraph 投影只搬已有同读快照事实；完整 ProjectTaskAuthority/Projects 保留唯一旧所有者供 #74/#79 拆分，详见 ownership.md。
+
+L1 首次报告保留在 run-20261004/l1；其中原受控 terminal 用例在服务取消杀死持锁 fixture 子进程后遗留文件锁。Windows fixture 使用独占/delete-on-close 句柄，未修改生产或恢复验收。登记最小进程终止回归和原失败子场景；故障修复后的固定 L1 写入新的 l1-after-fixture-fix 空目录，不覆盖首次失败，不靠重试隐藏故障。Linux 保留原 fixture 行为，Windows/Linux 生产另做 go build ./...，带 e2e tag 的调用者只编译（go test -tags=e2e ./tests/e2e/... -run ^$），不声称场景运行。
+
+## main 冲突集成的测试计划（2026-10-04）
+
+将 main 的 #38 候选控制台和 #211 测试修复合入 #73 分支。四处文本冲突保留 main 的 UI/测试语义，生产和新增测试消费者改用 #73 的唯一纯类型；不恢复旧 alias。验证为本次合并选择以下最小范围，各报告写入新的空目录 `docs/validation/three-line-01-types/merge-main-20261004/`。
+
+| 级别/组或场景 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
+| --- | --- | --- | --- | --- | --- |
+| 定向 Go：CC1–CC4/console | Windows，受控 UI，无原生 opt-in | `go run ./cmd/test-feedback -out docs/validation/three-line-01-types/merge-main-20261004/console -- ./internal/steerline/console -count=1` | 冲突与新消费者切换后 | 既有 UI 及候选断言非零 run/pass、无 skip | console/ |
+| 定向 Go：候选接线、CD67、原始/改名 terminal 恢复、必要发布资格 | Windows，隔离 STEERLINE_HOME，受控协议 fixture，无 CC5 manifest | `go run ./cmd/test-feedback -out docs/validation/three-line-01-types/merge-main-20261004/integration -- ./internal/steerlineintegration -run '^Test(CandidateConsoleWiring\|CD67CoreBoundary\|CD67AdditionalImplementation\|NativeOrcaFixedLunaLaunchReconcilesOriginalTerminal\|NativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterRestart\|EmptyExecutionRequirementsKeepMandatoryChecks)$' -count=1` | 编译通过后 | main 的新增候选输入/回执/精确身份和修复后的原断言通过，非零且无 skip | integration/ |
+| 定向 Go：main 的 Markdown PR clue 与进程后代清理修复 | Windows，无模型 | `go run ./cmd/test-feedback -out docs/validation/three-line-01-types/merge-main-20261004/repairs -- ./internal/execution/backend ./internal/testprocess -run '^Test(PRClues.*\|ProcessReportsDescendantCleanupFailure\|OwnedProcessWaitsForDescendants)$' -count=1` | 合并修复后 | 两包非零 run/pass，原断言保留、无 skip | repairs/ |
+| 构建 | Windows/Linux amd64 | `go build ./...`（GOOS=windows/linux） | 冲突清除后 | 退出 0；Linux 只编译、不称运行 | build.json |
+
+不重跑 Full/L2/L3/live 或完整 L1：原 #73 和 main 已有固定 L1/完整回归证据，本次新增的类型接线、守卫、候选与已改测试由上述定向覆盖。CC5 Windows 人工证据按 main 的明确延期保留，不以受控接线测试替代。
+
+## 协调复审修复测试计划
+
+图浏览/分页对同一次持久快照只构造一次 task/model 图事实，避免每个节点复制全部 DeliveryFact；资格、PR 展示与游标语义不变。没有新增测试能力，使用既有代表断言。
+
+| 级别/组或场景 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
+| --- | --- | --- | --- | --- | --- |
+| 定向 Go：TM01.2、图快照/依赖/唯一交付 | Windows，受控 SQLite/provider，无模型 | `go run ./cmd/test-feedback -out C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-three-line-20261004-01a10589/review73-graph-final -- ./internal/steerline/taskview ./internal/steerline -run '^(TestGraphViewUsesOneSnapshot\|TestTaskGraphLimitsAndExportPublication\|TestTaskDependencyStateRequiresEveryPredecessorDelivery\|TestMC5\|TestMC6)$' -count=1` | 复审修复后 | 父/子用例非零通过且无 skip，同快照、分页、依赖资格和唯一结果/冲突保持 | 协调 run 的 review73-graph-final/ |
+| L1 固定最小入口 | Windows，隔离 STEERLINE_HOME，无 opt-in | `go run ./cmd/test-feedback -level=L1 -out C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-three-line-20261004-01a10589/review73-l1-8734a16` | 本轮独立复审时，图事实复用修复前 | 现有规则/构造/守卫代表通过 | 协调 run 的 review73-l1-8734a16/ |
+
+L1 已在原候选通过；复审修复只影响既有 graphNode 的纯事实参数与两个调用者，按上表补定向覆盖，不重复无变化的 Full/L2/L3/live 或 L1。原始报告保留在仓库外协调状态目录，实际结果与最终修复 SHA 在 PR 复审评论记录。

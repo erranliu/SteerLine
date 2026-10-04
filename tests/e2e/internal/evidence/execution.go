@@ -4,9 +4,11 @@ package evidence
 
 import (
 	"errors"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -62,8 +64,8 @@ func FullAccess(domain contracts.DomainSnapshot) error {
 	return nil
 }
 
-func Session(e contracts.ExecutionRecord) (string, error) {
-	if e.Protocol == string(executionapi.ProtocolOrcaTerminalV2) && e.Process != nil {
+func Session(e executionmodel.ExecutionRecord) (string, error) {
+	if e.Protocol == string(executionbackend.ProtocolOrcaTerminalV2) && e.Process != nil {
 		return orcaworker.SessionID(*e.Process), nil
 	}
 	for _, data := range e.ImplementationData {
@@ -75,7 +77,7 @@ func Session(e contracts.ExecutionRecord) (string, error) {
 	return "", errors.New("missing native session binding")
 }
 
-func OrcaReadiness(e contracts.ExecutionRecord) error {
+func OrcaReadiness(e executionmodel.ExecutionRecord) error {
 	state, err := orcaState(e)
 	if err != nil {
 		return err
@@ -91,13 +93,13 @@ func OrcaReadiness(e contracts.ExecutionRecord) error {
 	return nil
 }
 
-func orcaState(e contracts.ExecutionRecord) (orcaworker.NativeExecutionState, error) {
+func orcaState(e executionmodel.ExecutionRecord) (orcaworker.NativeExecutionState, error) {
 	if e.Process == nil {
 		return orcaworker.NativeExecutionState{}, errors.New("missing native Orca process")
 	}
 	for _, data := range e.ImplementationData {
 		if data.ImplementationKey == orcaworker.ExecutionStateCodecKey {
-			return orcaworker.DecodeExecutionStateEnvelope(data, orcaworker.ExecutionStateIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest, Protocol: executionapi.ExecutionProtocol(e.Protocol), Process: *e.Process})
+			return orcaworker.DecodeExecutionStateEnvelope(data, orcaworker.ExecutionStateIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest, Protocol: executionbackend.ExecutionProtocol(e.Protocol), Process: *e.Process})
 		}
 	}
 	return orcaworker.NativeExecutionState{}, errors.New("missing native Orca state envelope")

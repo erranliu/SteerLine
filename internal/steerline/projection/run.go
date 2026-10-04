@@ -6,16 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func Run(task contracts.TaskRecord, workflow contracts.WorkflowRunRecord, execution contracts.ExecutionRecord, attempts []contracts.StepAttemptRecord, decisions []contracts.DecisionRecord, deliveries []contracts.TaskDeliveryRecord) (contracts.Run, error) {
+func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, execution executionmodel.ExecutionRecord, attempts []executionmodel.StepAttemptRecord, decisions []executionmodel.DecisionRecord, deliveries []contracts.TaskDeliveryRecord) (contracts.Run, error) {
 	if workflow.TaskID != task.TaskID || execution.WorkflowRunID != workflow.WorkflowRunID || workflow.SelectedResult != "" && workflow.SelectedResult != execution.ExecutionID {
 		return contracts.Run{}, errors.New("task, workflow and selected execution identity differ")
 	}
-	if workflow.WorkflowVersion == workerflow.Version {
+	if workflow.WorkflowVersion == executionmodel.Version {
 		count := 0
 		for _, attempt := range attempts {
 			if attempt.ExecutionID == execution.ExecutionID {
@@ -42,10 +43,10 @@ func Run(task contracts.TaskRecord, workflow contracts.WorkflowRunRecord, execut
 		StartedAt: copyPtr(execution.TurnStartedAt), EndedAt: copyPtr(execution.TurnEndedAt), LogPath: copyPtr(execution.LogPath),
 		LastEvent: copyPtr(execution.LastEvent), Summary: copyPtr(execution.Summary), Error: copyPtr(execution.Error), ManualStop: copyPtr(execution.ManualStop),
 		FinishTaskStatus: finishStatus(task, workflow), ExecutionStatus: executionViewStatus(execution),
-		PR: contracts.PRState{State: nonEmpty(workflow.PRState, "unknown"), QueriedAt: copyPtr(workflow.PRQueriedAt),
+		PR: executionmodel.PRState{State: nonEmpty(workflow.PRState, "unknown"), QueriedAt: copyPtr(workflow.PRQueriedAt),
 			QueryError: copyPtr(workflow.PRQueryError), MergedAt: copyPtr(workflow.PRMergedAt), MergeCommit: copyPtr(workflow.PRMergeCommit)}}
 	if attempt := CurrentAttempt(attempts, &execution); attempt != nil {
-		if workflow.WorkflowVersion == workerflow.Version && execution.CurrentAttemptID != "" && execution.CurrentAttemptID != attempt.AttemptID {
+		if workflow.WorkflowVersion == executionmodel.Version && execution.CurrentAttemptID != "" && execution.CurrentAttemptID != attempt.AttemptID {
 			return contracts.Run{}, errors.New("worker flow current attempt pointer differs from latest worker generation")
 		}
 		run.AttemptID, run.DomainAttemptNumber = attempt.AttemptID, attempt.AttemptNumber
@@ -90,14 +91,14 @@ func Run(task contracts.TaskRecord, workflow contracts.WorkflowRunRecord, execut
 				if !delivery.RecordedAt.IsZero() {
 					run.CandidateEndedAt = ptr(delivery.RecordedAt)
 				}
-				run.PR = contracts.PRState{URL: ptr(delivery.PRURL), State: "merged", MergedAt: ptr(delivery.MergedAt), MergeCommit: ptr(delivery.MergeCommit)}
+				run.PR = executionmodel.PRState{URL: ptr(delivery.PRURL), State: "merged", MergedAt: ptr(delivery.MergedAt), MergeCommit: ptr(delivery.MergeCommit)}
 			}
 		}
 	}
 	return run, nil
 }
 
-func executionViewStatus(e contracts.ExecutionRecord) string {
+func executionViewStatus(e executionmodel.ExecutionRecord) string {
 	switch e.Status {
 	case "active":
 		return "running"
@@ -112,14 +113,14 @@ func executionViewStatus(e contracts.ExecutionRecord) string {
 	}
 }
 
-func workflowExecutionHost(workflow contracts.WorkflowRunRecord) string {
+func workflowExecutionHost(workflow executionmodel.WorkflowRunRecord) string {
 	if workflow.ExecutionProfile == nil {
 		return ""
 	}
 	return workflow.ExecutionProfile.Host
 }
 
-func Execution(run contracts.Run, e contracts.ExecutionRecord) contracts.Run {
+func Execution(run contracts.Run, e executionmodel.ExecutionRecord) contracts.Run {
 	run.Process, run.Target = copyPtr(e.Process), e.Target
 	run.WorkspaceIntent = copyPtr(e.WorkspaceIntent)
 	path, branch, base := e.Workspace.Worktree, e.Workspace.Branch, e.Workspace.Base
@@ -150,18 +151,18 @@ func Execution(run contracts.Run, e contracts.ExecutionRecord) contracts.Run {
 	return run
 }
 
-func decisionView(record contracts.DecisionRecord) (*contracts.DecisionState, error) {
-	var request contracts.DecisionRequest
-	if err := contracts.DecodeJSON(record.Request, &request); err != nil || request.FormatVersion != contracts.DecisionRequestFormatVersion {
+func decisionView(record executionmodel.DecisionRecord) (*executionmodel.DecisionState, error) {
+	var request executionmodel.DecisionRequest
+	if err := contracts.DecodeJSON(record.Request, &request); err != nil || request.FormatVersion != executionmodel.DecisionRequestFormatVersion {
 		return nil, errors.New("persisted decision request has an unsupported format; preserve it for manual recovery")
 	}
-	if err := contracts.ValidateDecisionRequest(&request); err != nil {
+	if err := executionmodel.ValidateDecisionRequest(&request); err != nil {
 		return nil, err
 	}
-	decision := &contracts.DecisionState{ID: record.DecisionID, AttemptID: record.AttemptID, Version: record.Version, Request: request, Status: record.Status}
+	decision := &executionmodel.DecisionState{ID: record.DecisionID, AttemptID: record.AttemptID, Version: record.Version, Request: request, Status: record.Status}
 	expectedQuestionID := record.DecisionID
 	if request.QuestionRoute != nil {
-		if err := request.QuestionRoute.ValidateIdentity(executionapi.QuestionRouteIdentity{
+		if err := request.QuestionRoute.ValidateIdentity(executionbackend.QuestionRouteIdentity{
 			ProjectID: record.ProjectIdentity, WorkflowRunID: record.WorkflowRunID, ExecutionID: record.ExecutionID,
 			AttemptID: record.AttemptID, Generation: request.QuestionRoute.Generation,
 			TurnID: request.QuestionRoute.TurnID, QuestionID: request.QuestionRoute.QuestionID,
@@ -174,11 +175,11 @@ func decisionView(record contracts.DecisionRecord) (*contracts.DecisionState, er
 		return nil, errors.New("persisted question route differs from its decision binding")
 	}
 	if len(record.Answer) > 0 {
-		var answer contracts.DecisionAnswer
+		var answer executionmodel.DecisionAnswer
 		if err := json.Unmarshal(record.Answer, &answer); err != nil {
 			return nil, err
 		}
-		if answer.DecisionID != record.DecisionID || answer.RunID != record.WorkflowRunID || contracts.ValidateDecisionAnswer(&request, &answer) != nil {
+		if answer.DecisionID != record.DecisionID || answer.RunID != record.WorkflowRunID || executionmodel.ValidateDecisionAnswer(&request, &answer) != nil {
 			return nil, errors.New("saved answer differs from its fixed question or identity")
 		}
 		decision.OptionID, decision.Note, decision.Answers, decision.AnsweredBy = answer.OptionID, answer.Note, answer.Answers, answer.AnsweredBy
@@ -199,6 +200,7 @@ func copyPtr[T any](value *T) *T {
 }
 
 func ptr[T any](value T) *T { return &value }
+
 func nonEmpty(values ...string) string {
 	for _, value := range values {
 		if value != "" {

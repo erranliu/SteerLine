@@ -9,22 +9,28 @@ import (
 	"os"
 	"time"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func now() time.Time { return time.Now().UTC() }
-func executionSessionFacts(v *ExecutionRecord) (string, string) {
+
+func executionSessionFacts(v *executionmodel.ExecutionRecord) (string, string) {
 	if v == nil {
 		return "", ""
 	}
 	return v.SessionID, v.SessionGeneration
 }
+
 func sameRepositoryTarget(a, b string) bool { return a == b }
-func mustJSON(v any) []byte                 { b, _ := json.Marshal(v); return b }
-func decode(b []byte, v any) error          { return contracts.DecodeJSON(b, v) }
-func digestValue(v any) string              { return recordFingerprint(v) }
+
+func mustJSON(v any) []byte { b, _ := json.Marshal(v); return b }
+
+func decode(b []byte, v any) error { return contracts.DecodeJSON(b, v) }
+
+func digestValue(v any) string { return recordFingerprint(v) }
 
 func nonEmpty(v ...string) string {
 	for _, s := range v {
@@ -34,6 +40,7 @@ func nonEmpty(v ...string) string {
 	}
 	return ""
 }
+
 func newID() string {
 	var b [16]byte
 	if _, err := rand.Read(b[:]); err != nil {
@@ -47,13 +54,13 @@ func storageFailure(err error, code string) error {
 		return nil
 	}
 	if errors.Is(err, sql.ErrNoRows) {
-		return errors.Join(persistence.ErrNotFound, err)
+		return errors.Join(storageports.ErrNotFound, err)
 	}
-	var invalid *task.Error
+	var invalid *taskmodel.Error
 	if errors.As(err, &invalid) {
 		return err
 	}
-	var existing *persistence.StorageError
+	var existing *storageports.StorageError
 	if errors.As(err, &existing) {
 		return err
 	}
@@ -61,12 +68,12 @@ func storageFailure(err error, code string) error {
 	var pathError *os.PathError
 	if errors.As(err, &coded) {
 		if coded.Code()&255 == 5 || coded.Code()&255 == 6 {
-			code = persistence.StorageLocked
+			code = storageports.StorageLocked
 		}
-		return &persistence.StorageError{Code: code, Cause: err}
+		return &storageports.StorageError{Code: code, Cause: err}
 	}
 	if errors.As(err, &pathError) {
-		return &persistence.StorageError{Code: persistence.StorageIO, Cause: err}
+		return &storageports.StorageError{Code: storageports.StorageIO, Cause: err}
 	}
 	return err
 }
@@ -76,7 +83,7 @@ func schemaFailure(err error, message string) error {
 	if errors.Is(err, sql.ErrNoRows) || errors.As(err, &coded) && (coded.Code()&255 == 1 || coded.Code()&255 == 11 || coded.Code()&255 == 26) {
 		return errors.Join(nativeErr("unsupported_schema", message), err)
 	}
-	return storageFailure(err, persistence.StorageIO)
+	return storageFailure(err, storageports.StorageIO)
 }
 
 func requiredRecordError(err error, code, message string) error {

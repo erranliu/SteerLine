@@ -7,7 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
@@ -47,7 +48,7 @@ func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
 	}
 	service.State.Service.Ready = true
 	require(t, service.commitWorker(run))
-	answer := DecisionAnswer{DecisionID: decisionID, RunID: run.RunID, OptionID: "continue", Note: "resume after inspecting files", AnsweredBy: "operator", ExpectedDecisionVersion: decisionVersion, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: execution.RecoveryVersion}
+	answer := executionmodel.DecisionAnswer{DecisionID: decisionID, RunID: run.RunID, OptionID: "continue", Note: "resume after inspecting files", AnsweredBy: "operator", ExpectedDecisionVersion: decisionVersion, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: execution.RecoveryVersion}
 	commands := CommandService{Store: service.commandStore, Project: service.Config.identity}
 	command, _, err := commands.AnswerDecisionWithID(context.Background(), newID(), decisionID, decisionVersion, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
@@ -82,7 +83,7 @@ func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
 func appServerRecoveryFixture(t *testing.T, service *Service, run *Run) appServerRecoveryResult {
 	t.Helper()
 	execution := service.executionRecord(run)
-	input := executionapi.TurnInput{CommandID: execution.CurrentCommandID, Prompt: "original persisted input"}
+	input := executionbackend.TurnInput{CommandID: execution.CurrentCommandID, Prompt: "original persisted input"}
 	_, err := service.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+execution.ExecutionID+":"+input.CommandID, &input)
 	require(t, err)
 	fixed, err := service.workerFlowContext(run)
@@ -91,6 +92,6 @@ func appServerRecoveryFixture(t *testing.T, service *Service, run *Run) appServe
 	require(t, err)
 	execution = service.executionRecord(run)
 	return appServerRecoveryResult{runID: run.RunID, attemptID: run.AttemptID, execution: *execution, request: request,
-		receipt: executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationConfirmed,
-			State: executionapi.LifecycleStateFacts{SessionID: execution.SessionID, SessionGeneration: execution.SessionGeneration, TurnID: execution.CurrentTurnID}}}
+		receipt: executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationConfirmed,
+			State: executionbackend.LifecycleStateFacts{SessionID: execution.SessionID, SessionGeneration: execution.SessionGeneration, TurnID: execution.CurrentTurnID}}}
 }

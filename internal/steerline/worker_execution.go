@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
@@ -14,7 +15,7 @@ func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
 	return requireWorkerFlowCapabilitiesWithResolver(ctx, c, c.ExecutionDirectory)
 }
 
-func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, resolver executionapi.LifecycleResolver) error {
+func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, resolver executionbackend.LifecycleResolver) error {
 	if err := validateWorkflowConfig(&c, nil); err != nil {
 		return err
 	}
@@ -41,9 +42,9 @@ func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, re
 // It is resolved for each operation; no mutable "current worker" slot owns it.
 type workerFlowContext struct {
 	run       *Run
-	workflow  *WorkflowRunRecord
-	execution *ExecutionRecord
-	attempt   *StepAttemptRecord
+	workflow  *executionmodel.WorkflowRunRecord
+	execution *executionmodel.ExecutionRecord
+	attempt   *executionmodel.StepAttemptRecord
 	config    Config
 }
 
@@ -100,7 +101,7 @@ func copyWorkerFlowConfig(c Config) Config {
 	return c
 }
 
-func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, execution *ExecutionRecord, answer DecisionAnswer, commandID string) error {
+func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, execution *executionmodel.ExecutionRecord, answer executionmodel.DecisionAnswer, commandID string) error {
 	sessionID, _ := executionSessionFacts(execution)
 	if sessionID == "" {
 		execution.Error = ptr("Feedback is saved, but the original worker session is not yet available for delivery")
@@ -142,7 +143,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *Run, 
 	return s.startWorkerFlowTurn(ctx, run, workerFeedbackText(answer, run.Decision.Request), commandID)
 }
 
-func workerFeedbackText(answer DecisionAnswer, request DecisionRequest) string {
+func workerFeedbackText(answer executionmodel.DecisionAnswer, request executionmodel.DecisionRequest) string {
 	if answer.OptionID == "" {
 		return answer.Note
 	}
@@ -169,7 +170,7 @@ func prepareLocalWorkerWorkspace(s *Service, ctx context.Context, run *Run, opID
 	preparation, err := prepareWorktree(ctx, fixed.config, run)
 	if err != nil {
 		status := string(preparation.Status)
-		if status != string(executionapi.OperationRejected) {
+		if status != string(executionbackend.OperationRejected) {
 			status = "outcome_unknown"
 		}
 		_ = s.changeWorkerOperation(run, opID, status, "", mustJSON(preparation), err.Error())

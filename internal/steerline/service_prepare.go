@@ -3,6 +3,8 @@ package steerline
 import (
 	"context"
 	"errors"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 // PrepareServiceConfig performs center-owned admission and recovery checks
@@ -33,7 +35,7 @@ func admitServiceConfig(c Config) (Config, error) {
 	if err := requireNativeTaskAuthority(c); err != nil {
 		return c, err
 	}
-	if c.WorkflowProtocol != WorkerFlowVersion {
+	if c.WorkflowProtocol != executionmodel.Version {
 		return c, nativeErr("unsupported_schema", "only worker-flow-v1 may start a service; preserve older execution state")
 	}
 	if err := validateWorkflowConfig(&c, nil); err != nil {

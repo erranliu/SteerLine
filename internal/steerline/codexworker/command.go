@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"runtime"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 type ManagedCommandOptions struct {
@@ -17,26 +17,26 @@ type ManagedCommandOptions struct {
 	ReasoningEffort  string
 	Executable       string
 	Args             []string
-	Policy           executionapi.ExecutionPolicy
+	Policy           executionbackend.ExecutionPolicy
 	Sandbox          string
 	WindowsSandbox   string
 }
 
-func ManagedCommand(options ManagedCommandOptions) (executionapi.LaunchCommand, error) {
+func ManagedCommand(options ManagedCommandOptions) (executionbackend.LaunchCommand, error) {
 	if options.Host != "orca" || options.Agent != "codex" || options.Executable == "" {
-		return executionapi.LaunchCommand{}, errors.New("managed Orca launch requires Codex and an executable")
+		return executionbackend.LaunchCommand{}, errors.New("managed Orca launch requires Codex and an executable")
 	}
 	permissions, err := CompilePolicy(options.Policy, runtime.GOOS, options.Host, options.Agent, options.WindowsSandbox, "", options.Args)
 	if err != nil {
-		return executionapi.LaunchCommand{}, err
+		return executionbackend.LaunchCommand{}, err
 	}
 	if options.Sandbox != permissions.Sandbox || (permissions.Sandbox == "danger-full-access" && len(options.WriteRoots) != 0) {
-		return executionapi.LaunchCommand{}, errors.New("managed Orca settings differ from the explicit execution_policy")
+		return executionbackend.LaunchCommand{}, errors.New("managed Orca settings differ from the explicit execution_policy")
 	}
 	options.Sandbox, options.WindowsSandbox = permissions.Sandbox, permissions.WindowsSandbox
 	args := append([]string(nil), options.Args...)
 	if err := ValidateManagedArgs(args); err != nil {
-		return executionapi.LaunchCommand{}, err
+		return executionbackend.LaunchCommand{}, err
 	}
 	if options.Model != "" {
 		args = append(args, "--model", options.Model)
@@ -52,7 +52,7 @@ func ManagedCommand(options ManagedCommandOptions) (executionapi.LaunchCommand, 
 	if options.WorkingDirectory != "" {
 		args = append(args, "--cd", options.WorkingDirectory)
 	}
-	return executionapi.LaunchCommand{Executable: options.Executable, Args: args, WorkingDirectory: options.WorkingDirectory}, nil
+	return executionbackend.LaunchCommand{Executable: options.Executable, Args: args, WorkingDirectory: options.WorkingDirectory}, nil
 }
 
 // The managed launcher accepts only standalone presentation switches. This

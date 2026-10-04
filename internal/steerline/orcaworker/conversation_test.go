@@ -3,13 +3,13 @@ package orcaworker
 import (
 	"testing"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestTerminalWaitMapsAsHostFactWithoutBusinessInput(t *testing.T) {
 	input := contracts.ConversationInput{Event: contracts.ConversationEvent{ProjectID: "project", TaskID: "task", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt",
-		Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Agent: "codex", TargetID: "target"}, Source: "orca-terminal-v2", Segment: "terminal", Identity: "terminal-source", Session: "terminal-session", InputWait: true}
+		Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV2, Agent: "codex", TargetID: "target"}, Source: "orca-terminal-v2", Segment: "terminal", Identity: "terminal-source", Session: "terminal-session", InputWait: true}
 	batch, err := MapTerminalConversation(input)
 	if err != nil {
 		t.Fatal(err)

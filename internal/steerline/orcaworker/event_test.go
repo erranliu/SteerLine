@@ -5,13 +5,13 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
-	fixed := executionapi.SessionContext{ProjectID: "project", WorkflowRunID: "workflow", ExecutionID: "execution", AttemptID: "attempt",
-		TaskID: "task-original", Target: executionapi.ExecutionTarget{OrchestrationRun: "run-original"}, Generation: "incarnation-original", CurrentTurnID: "turn-original"}
+	fixed := executionbackend.SessionContext{ProjectID: "project", WorkflowRunID: "workflow", ExecutionID: "execution", AttemptID: "attempt",
+		TaskID: "task-original", Target: executionbackend.ExecutionTarget{OrchestrationRun: "run-original"}, Generation: "incarnation-original", CurrentTurnID: "turn-original"}
 	t.Run("TestNativeOrcaRejectsLateDispatchMessages", func(t *testing.T) {
 		testCD62OrcaLateDispatch(t, fixed)
 	})
@@ -22,8 +22,8 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 			t.Fatalf("first question was not decoded: %+v / %v", first, err)
 		}
 		saved := first.Questions[0]
-		content := contracts.DecisionRequest{Question: saved.Question, Options: append([]executionapi.DecisionOption(nil), saved.Options...), AllowFreeText: saved.AllowFreeText}
-		if err := contracts.NormalizeDecisionContent(&content); err != nil {
+		content := executionmodel.DecisionRequest{Question: saved.Question, Options: append([]executionbackend.DecisionOption(nil), saved.Options...), AllowFreeText: saved.AllowFreeText}
+		if err := executionmodel.NormalizeDecisionContent(&content); err != nil {
 			t.Fatal(err)
 		}
 		saved.Question, saved.Options = content.Question, content.Options
@@ -53,7 +53,7 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 	}
 }
 
-func testCD62OrcaLateDispatch(t *testing.T, fixed executionapi.SessionContext) {
+func testCD62OrcaLateDispatch(t *testing.T, fixed executionbackend.SessionContext) {
 	const payload = `{"taskId":"task-original","dispatchId":"ctx-original","outcome":"failed"}`
 	encoded, _ := json.Marshal(payload)
 	for _, raw := range []json.RawMessage{json.RawMessage(payload), encoded} {

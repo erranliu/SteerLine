@@ -10,8 +10,8 @@ import (
 	"fmt"
 	"unicode/utf8"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // ConversationService owns read rules without connection ownership or write capabilities.
@@ -201,7 +201,7 @@ func utf8SafePrefix(data []byte) []byte {
 }
 
 // ReadCapabilities preserves the shared backend/target report lookup; consumers select their source identity.
-func (q ConversationService) ReadCapabilities(ctx context.Context, backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, targetID string, limit int) ([]contracts.ConversationCapabilityReport, error) {
+func (q ConversationService) ReadCapabilities(ctx context.Context, backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, targetID string, limit int) ([]contracts.ConversationCapabilityReport, error) {
 	if q.Capabilities == nil {
 		return nil, errors.New("conversation capability reader is required")
 	}

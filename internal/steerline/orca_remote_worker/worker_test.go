@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func flag(args []string, key string) string {
@@ -19,6 +19,7 @@ func flag(args []string, key string) string {
 	}
 	return ""
 }
+
 func wire(runtime string, result any) []byte {
 	raw, _ := json.Marshal(map[string]any{"ok": true, "result": result, "_meta": map[string]string{"runtimeId": runtime}})
 	return raw
@@ -50,7 +51,7 @@ func remoteTestConfig(t *testing.T, call func([]string) ([]byte, error)) Config 
 
 func TestRemoteContinuationRequiresOriginalPeerAndTerminal(t *testing.T) {
 	starts := 0
-	previous := executionapi.ProcessIdentity{Kind: "orca_supervised", RuntimeID: "peer", CoordinatorRuntimeID: "center", Terminal: "agent", Incarnation: "inc", OrchestrationRun: "run", Task: "old", Dispatch: "old-dispatch", ExecutionHost: "peer-env", WorktreeID: "repo::/srv/worker"}
+	previous := executionbackend.ProcessIdentity{Kind: "orca_supervised", RuntimeID: "peer", CoordinatorRuntimeID: "center", Terminal: "agent", Incarnation: "inc", OrchestrationRun: "run", Task: "old", Dispatch: "old-dispatch", ExecutionHost: "peer-env", WorktreeID: "repo::/srv/worker"}
 	config := remoteTestConfig(t, func(args []string) ([]byte, error) {
 		if flag(args, "--environment") != "" {
 			t.Fatal("center lifecycle routed to peer")
@@ -102,8 +103,8 @@ func TestRemoteWorkspaceKeepsPeerPathAndRuntime(t *testing.T) {
 func TestRemoteReplyRejectsOversizeWithoutMutation(t *testing.T) {
 	calls := 0
 	config := remoteTestConfig(t, func([]string) ([]byte, error) { calls++; return nil, errors.New("unexpected mutation") })
-	identity := executionapi.ProcessIdentity{Kind: "orca_supervised", RuntimeID: "peer", CoordinatorRuntimeID: "center", OrchestrationRun: "run", Task: "task", Dispatch: "dispatch", ExecutionHost: "peer-env", WorktreeID: "repo::/srv/worker"}
-	ref := Ref{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: executionapi.ExecutionTarget{ID: "orca-supervised:connection", ConnectionID: "connection", ExternalRuntime: "peer-env", OrchestrationRun: "run", ExternalTask: "task", Dispatch: "dispatch", ExecutionHost: "peer-env", WorktreeID: identity.WorktreeID}, External: identity}
+	identity := executionbackend.ProcessIdentity{Kind: "orca_supervised", RuntimeID: "peer", CoordinatorRuntimeID: "center", OrchestrationRun: "run", Task: "task", Dispatch: "dispatch", ExecutionHost: "peer-env", WorktreeID: "repo::/srv/worker"}
+	ref := Ref{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaSupervised, Target: executionbackend.ExecutionTarget{ID: "orca-supervised:connection", ConnectionID: "connection", ExternalRuntime: "peer-env", OrchestrationRun: "run", ExternalTask: "task", Dispatch: "dispatch", ExecutionHost: "peer-env", WorktreeID: identity.WorktreeID}, External: identity}
 	if _, err := New(config).Reply(context.Background(), ref, "question", strings.Repeat("\n", 4000)); err == nil {
 		t.Fatal("oversize reply accepted")
 	}

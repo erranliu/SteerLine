@@ -10,8 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
@@ -19,22 +18,22 @@ import (
 // and reconciliation. Every mutating call receives one center-persisted
 // operation; the returned binding must be committed before another step.
 type ExecutionLifecycle struct {
-	setup          executionapi.LifecycleSetup
+	setup          executionbackend.LifecycleSetup
 	Backend        Backend
-	HistoryCommand contracts.Command
-	ProbeLifecycle func(context.Context, executionapi.LifecycleSetup) (executionapi.CapabilityReport, error)
+	HistoryCommand executionbackend.Command
+	ProbeLifecycle func(context.Context, executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error)
 	prepared       *SessionHandle
 }
 
-func (l ExecutionLifecycle) PolicyCapabilities() executionapi.LifecyclePolicyCapabilities {
-	return executionapi.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true}
+func (l ExecutionLifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
+	return executionbackend.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true}
 }
 
-func NewExecutionLifecycle(setup executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {
+func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 	setup = setup.Clone()
 	snapshot := setup.Snapshot
-	if snapshot.Ref.Backend != executionapi.BackendLocal || snapshot.Ref.Protocol != executionapi.ProtocolLocalCodexAppServer || snapshot.Session.Agent.Name != "codex" || setup.ProcessHost == nil {
-		return nil, &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "local app-server lifecycle setup differs from its fixed implementation target"}
+	if snapshot.Ref.Backend != executionbackend.BackendLocal || snapshot.Ref.Protocol != executionbackend.ProtocolLocalCodexAppServer || snapshot.Session.Agent.Name != "codex" || setup.ProcessHost == nil {
+		return nil, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "local app-server lifecycle setup differs from its fixed implementation target"}
 	}
 	profile, err := DecodeProfileConfigEnvelope(setup.ProfileData, ProfileConfigIdentity{
 		ProjectID: snapshot.Session.ProjectID, ProfileID: setup.ProfileID, AcceptedConfigVersion: setup.AcceptedConfigVersion,
@@ -69,8 +68,8 @@ func NewExecutionLifecycle(setup executionapi.LifecycleSetup) (executionapi.Life
 	if err := backend.Config.Validate(runtime.GOOS); err != nil {
 		return nil, err
 	}
-	history := ReaderCommand(contracts.Command{Executable: profile.Executable, Args: append([]string(nil), profile.Args...)}, profile.Profile)
-	return &ExecutionLifecycle{setup: setup, Backend: backend, HistoryCommand: history, ProbeLifecycle: func(ctx context.Context, probeSetup executionapi.LifecycleSetup) (executionapi.CapabilityReport, error) {
+	history := ReaderCommand(executionbackend.Command{Executable: profile.Executable, Args: append([]string(nil), profile.Args...)}, profile.Profile)
+	return &ExecutionLifecycle{setup: setup, Backend: backend, HistoryCommand: history, ProbeLifecycle: func(ctx context.Context, probeSetup executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error) {
 		probeSetup.ProcessHost = setup.ProcessHost
 		return probeLifecycleCapabilities(ctx, backend, history, probeSetup)
 	}}, nil
@@ -107,10 +106,10 @@ func blockedEnvironmentKey(key string, blocked []string) bool {
 	return false
 }
 
-func probeLifecycleCapabilities(ctx context.Context, backend Backend, history contracts.Command, setup executionapi.LifecycleSetup) (executionapi.CapabilityReport, error) {
+func probeLifecycleCapabilities(ctx context.Context, backend Backend, history executionbackend.Command, setup executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error) {
 	probe := ProbePort{
 		Output: func(ctx context.Context, executable string, args []string) ([]byte, error) {
-			return setup.ProcessHost.OutputCommand(ctx, executionapi.LaunchCommand{Executable: executable, Args: append([]string(nil), args...), WorkingDirectory: setup.RepositoryPath})
+			return setup.ProcessHost.OutputCommand(ctx, executionbackend.LaunchCommand{Executable: executable, Args: append([]string(nil), args...), WorkingDirectory: setup.RepositoryPath})
 		},
 		CheckHistory: func(ctx context.Context) error {
 			client, err := OpenHistory(ctx, history, setup.RepositoryPath, "", setup.ProcessHost.StartManaged)
@@ -129,73 +128,73 @@ func probeLifecycleCapabilities(ctx context.Context, backend Backend, history co
 		},
 	}
 	err := ProbeCapabilities(ctx, ProbeConfig{Executable: backend.Config.Executable, Args: backend.Config.Args, Repository: setup.RepositoryPath, RunDir: setup.RunDirectory}, probe)
-	status := executionapi.CapabilityNotTested
+	status := executionbackend.CapabilityNotTested
 	if err == nil {
-		status = executionapi.CapabilityVerified
+		status = executionbackend.CapabilityVerified
 	}
-	report := executionapi.CapabilityReport{
+	report := executionbackend.CapabilityReport{
 		Version: 1, Backend: setup.Snapshot.Ref.Backend, Protocol: setup.Snapshot.Ref.Protocol,
 		Target: setup.Snapshot.Ref.Target, Agent: setup.Snapshot.Ref.Agent, CheckedAt: time.Now().UTC(),
-		Capabilities: []executionapi.Capability{{Name: "start", Status: status}, {Name: "observe", Status: status}, {Name: "operation_reconciliation", Status: status}},
+		Capabilities: []executionbackend.Capability{{Name: "start", Status: status}, {Name: "observe", Status: status}, {Name: "operation_reconciliation", Status: status}},
 	}
 	return report, err
 }
 
-func (l ExecutionLifecycle) PreflightLifecycle(ctx context.Context, setup executionapi.LifecycleSetup) (executionapi.CapabilityReport, error) {
+func (l ExecutionLifecycle) PreflightLifecycle(ctx context.Context, setup executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error) {
 	if l.ProbeLifecycle == nil {
-		return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "lifecycle capability probe is not configured"}
+		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "lifecycle capability probe is not configured"}
 	}
 	return l.ProbeLifecycle(ctx, setup.Clone())
 }
 
-func (l ExecutionLifecycle) Next(_ context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.LifecycleCandidate, error) {
+func (l ExecutionLifecycle) Next(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleCandidate, error) {
 	if snapshot.PendingTurn == nil {
-		return executionapi.LifecycleCandidate{Done: true}, nil
+		return executionbackend.LifecycleCandidate{Done: true}, nil
 	}
 	if snapshot.PendingTurn.CommandID == "" || snapshot.PendingTurn.Prompt == "" {
-		return executionapi.LifecycleCandidate{}, errors.New("app-server lifecycle has no saved turn input")
+		return executionbackend.LifecycleCandidate{}, errors.New("app-server lifecycle has no saved turn input")
 	}
 	binding, found, err := l.readBinding(snapshot)
 	if err != nil {
-		return executionapi.LifecycleCandidate{}, err
+		return executionbackend.LifecycleCandidate{}, err
 	}
 	if !found || binding.Endpoint == "" || binding.Generation == "" {
-		candidate := executionapi.LifecycleCandidate{Action: executionapi.LifecyclePrepareSession, Input: executionapi.LifecycleInput{Turn: cloneTurn(snapshot.PendingTurn)}}
+		candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecyclePrepareSession, Input: executionbackend.LifecycleInput{Turn: cloneTurn(snapshot.PendingTurn)}}
 		return candidate, candidate.Validate()
 	}
-	candidate := executionapi.LifecycleCandidate{Action: executionapi.LifecycleStartTurn, Input: executionapi.LifecycleInput{Turn: cloneTurn(snapshot.PendingTurn)}}
+	candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleStartTurn, Input: executionbackend.LifecycleInput{Turn: cloneTurn(snapshot.PendingTurn)}}
 	return candidate, candidate.Validate()
 }
 
-func (l *ExecutionLifecycle) Execute(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (l *ExecutionLifecycle) Execute(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	if err := request.Validate(); err != nil {
-		return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationRejected, Diagnostic: err.Error()}, nil, err
+		return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationRejected, Diagnostic: err.Error()}, nil, err
 	}
 	if err := l.validateIdentity(request.Snapshot); err != nil {
-		return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown, Diagnostic: err.Error()}, nil, err
+		return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationUnknown, Diagnostic: err.Error()}, nil, err
 	}
 	snapshot := request.Snapshot.Clone()
-	var receipt executionapi.LifecycleReceipt
-	var observer executionapi.LifecycleObserver
+	var receipt executionbackend.LifecycleReceipt
+	var observer executionbackend.LifecycleObserver
 	var err error
-	switch executionapi.LifecycleAction(request.Operation.Action) {
-	case executionapi.LifecyclePrepareSession:
+	switch executionbackend.LifecycleAction(request.Operation.Action) {
+	case executionbackend.LifecyclePrepareSession:
 		receipt, observer, err = l.prepareSession(ctx, snapshot, *request.Input.Turn)
-	case executionapi.LifecycleStartTurn:
+	case executionbackend.LifecycleStartTurn:
 		receipt, observer, err = l.startTurn(ctx, snapshot, *request.Input.Turn)
-	case executionapi.LifecycleDeliverFeedback:
+	case executionbackend.LifecycleDeliverFeedback:
 		receipt, err = l.deliverFeedback(ctx, request)
 	default:
-		return executionapi.LifecycleReceipt{}, nil, errors.New("app-server lifecycle does not implement this operation")
+		return executionbackend.LifecycleReceipt{}, nil, errors.New("app-server lifecycle does not implement this operation")
 	}
 	receipt.Operation = request.Operation
 	return receipt, observer, err
 }
 
-func (l ExecutionLifecycle) deliverFeedback(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, error) {
+func (l ExecutionLifecycle) deliverFeedback(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, error) {
 	snapshot := request.Snapshot.Clone()
 	input := request.Input.Feedback
-	receipt := executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown}
+	receipt := executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationUnknown}
 	if input == nil || input.Answer == nil || snapshot.QuestionRoute == nil {
 		return receipt, errors.New("app-server feedback lacks its original structured question")
 	}
@@ -208,7 +207,7 @@ func (l ExecutionLifecycle) deliverFeedback(ctx context.Context, request executi
 		return receipt, err
 	}
 	if input.QuestionID != "" && input.QuestionID != ask.CallID {
-		return receipt, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "saved feedback changed its original question identity"}
+		return receipt, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "saved feedback changed its original question identity"}
 	}
 	if err := l.Backend.ValidateReply(binding, ask.Generation, ask.ThreadID, ask.TurnID, snapshot.Session.CurrentTurnID, snapshot.Session.LastStoppedTurnID); err != nil {
 		return receipt, err
@@ -220,28 +219,28 @@ func (l ExecutionLifecycle) deliverFeedback(ctx context.Context, request executi
 	receipt.State.SessionID, receipt.State.SessionGeneration = binding.SessionID, binding.Generation
 	receipt.RequestID = ask.CallID
 	if err != nil {
-		receipt.Disposition, receipt.Diagnostic = executionapi.OperationUnknown, err.Error()
+		receipt.Disposition, receipt.Diagnostic = executionbackend.OperationUnknown, err.Error()
 		return receipt, err
 	}
-	receipt.Disposition = executionapi.OperationAccepted
+	receipt.Disposition = executionbackend.OperationAccepted
 	receipt.State.InputAccepted = true
 	return receipt, nil
 }
 
-func (l ExecutionLifecycle) Reconcile(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (l ExecutionLifecycle) Reconcile(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	if err := request.Validate(); err != nil {
-		return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationRejected, Diagnostic: err.Error()}, nil, err
+		return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationRejected, Diagnostic: err.Error()}, nil, err
 	}
 	if err := l.validateIdentity(request.Snapshot); err != nil {
-		return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown, Diagnostic: err.Error()}, nil, err
+		return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationUnknown, Diagnostic: err.Error()}, nil, err
 	}
 	snapshot := request.Snapshot.Clone()
-	if executionapi.LifecycleAction(request.Operation.Action) == executionapi.LifecycleDeliverFeedback {
+	if executionbackend.LifecycleAction(request.Operation.Action) == executionbackend.LifecycleDeliverFeedback {
 		return l.reconcileFeedback(ctx, request)
 	}
 	binding, _, err := l.readBinding(snapshot)
 	if err != nil {
-		return executionapi.LifecycleReceipt{}, nil, err
+		return executionbackend.LifecycleReceipt{}, nil, err
 	}
 	commandID := snapshot.Session.CurrentCommandID
 	turnID := snapshot.Session.CurrentTurnID
@@ -258,29 +257,29 @@ func (l ExecutionLifecycle) Reconcile(ctx context.Context, request executionapi.
 	receipt.State.TurnCompleted = recovered.Completed
 	receipt.State.WorkerAbsent = recovered.Dead
 	if reconcileErr != nil {
-		receipt.Disposition = executionapi.OperationUnknown
+		receipt.Disposition = executionbackend.OperationUnknown
 		receipt.Diagnostic = reconcileErr.Error()
 	} else if recovered.Completed {
-		receipt.Disposition = executionapi.OperationConfirmed
+		receipt.Disposition = executionbackend.OperationConfirmed
 	} else if recovered.Observer != nil {
-		receipt.Disposition = executionapi.OperationAccepted
+		receipt.Disposition = executionbackend.OperationAccepted
 		receipt.Handle = recovered.Observer.Process
 		fixed := lifecycleSession(snapshot, recovered.Binding.SessionID, recovered.TurnID)
 		return receipt, newLifecycleObserver(recovered.Observer, fixed), nil
 	} else {
-		receipt.Disposition = executionapi.OperationUnknown
+		receipt.Disposition = executionbackend.OperationUnknown
 	}
 	return receipt, nil, reconcileErr
 }
 
-func (l ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (l ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	if err := l.validateIdentity(snapshot); err != nil {
-		return executionapi.LifecycleReceipt{}, nil, err
+		return executionbackend.LifecycleReceipt{}, nil, err
 	}
 	snapshot = snapshot.Clone()
 	binding, _, err := l.readBinding(snapshot)
 	if err != nil {
-		return executionapi.LifecycleReceipt{}, nil, err
+		return executionbackend.LifecycleReceipt{}, nil, err
 	}
 	commandID, turnID := snapshot.Session.CurrentCommandID, snapshot.Session.CurrentTurnID
 	if snapshot.Session.PendingCommandID != "" {
@@ -294,9 +293,9 @@ func (l ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot execu
 	if commandID != "" && recovered.Binding.SessionID != "" && recovered.TurnID != "" {
 		path := filepath.Join(l.Backend.Config.RunDir, "runs", snapshot.Session.WorkflowRunID, "turns", commandID, "appserver.jsonl")
 		if outcome, outcomeErr := ReadAppServerOutcome(path, recovered.Binding.SessionID, recovered.TurnID); outcomeErr == nil && outcome.Started && outcome.Completed {
-			receipt.Disposition = executionapi.OperationConfirmed
+			receipt.Disposition = executionbackend.OperationConfirmed
 			receipt.State.TurnCompleted = true
-			receipt.TurnEvidence = &executionapi.TurnEvidence{
+			receipt.TurnEvidence = &executionbackend.TurnEvidence{
 				SourcePath: path, TurnID: recovered.TurnID, CommandID: commandID, SessionID: outcome.SessionID,
 				Started: outcome.Started, Completed: outcome.Completed, Succeeded: outcome.Succeeded,
 				LastMessage: outcome.LastMessage, Failure: outcome.Failure, PRCandidates: append([]string(nil), outcome.PRCandidates...),
@@ -305,23 +304,23 @@ func (l ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot execu
 		}
 	}
 	if err != nil {
-		receipt.Disposition, receipt.Diagnostic = executionapi.OperationUnknown, err.Error()
+		receipt.Disposition, receipt.Diagnostic = executionbackend.OperationUnknown, err.Error()
 		return receipt, nil, err
 	}
 	if recovered.Observer != nil {
-		receipt.Disposition = executionapi.OperationAccepted
+		receipt.Disposition = executionbackend.OperationAccepted
 		receipt.Handle = recovered.Observer.Process
 		fixed := lifecycleSession(snapshot, recovered.Binding.SessionID, recovered.TurnID)
 		return receipt, newLifecycleObserver(recovered.Observer, fixed), nil
 	}
-	receipt.Disposition = executionapi.OperationUnknown
+	receipt.Disposition = executionbackend.OperationUnknown
 	return receipt, nil, nil
 }
 
-func (l ExecutionLifecycle) reconcileFeedback(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (l ExecutionLifecycle) reconcileFeedback(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	snapshot := request.Snapshot.Clone()
 	input := request.Input.Feedback
-	receipt := executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown}
+	receipt := executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationUnknown}
 	if input == nil || input.Answer == nil || snapshot.QuestionRoute == nil || snapshot.Session.CurrentCommandID == "" {
 		return receipt, nil, errors.New("saved app-server reply lacks its original question, command, or answers")
 	}
@@ -343,7 +342,7 @@ func (l ExecutionLifecycle) reconcileFeedback(ctx context.Context, request execu
 		receipt.Diagnostic = "original app-server answer has no matching committed tool reply"
 		return receipt, nil, nil
 	}
-	receipt.Disposition = executionapi.OperationConfirmed
+	receipt.Disposition = executionbackend.OperationConfirmed
 	receipt.RequestID = ask.CallID
 	receipt.State.SessionID = binding.SessionID
 	receipt.State.SessionGeneration = binding.Generation
@@ -351,34 +350,34 @@ func (l ExecutionLifecycle) reconcileFeedback(ctx context.Context, request execu
 	return receipt, nil, nil
 }
 
-func (l ExecutionLifecycle) StopLifecycle(ctx context.Context, request executionapi.LifecycleRequest, handle executionapi.StopHandle) (executionapi.LifecycleReceipt, error) {
+func (l ExecutionLifecycle) StopLifecycle(ctx context.Context, request executionbackend.LifecycleRequest, handle executionbackend.StopHandle) (executionbackend.LifecycleReceipt, error) {
 	if err := request.Validate(); err != nil {
-		return executionapi.LifecycleReceipt{}, err
+		return executionbackend.LifecycleReceipt{}, err
 	}
 	ref := request.Snapshot.Ref
-	result := executionapi.LifecycleReceipt{Operation: request.Operation, RequestID: request.Operation.ID}
-	if ref.Protocol != executionapi.ProtocolLocalCodexAppServer || ref.External.Kind != "os" || ref.External.PID <= 0 || handle == nil || handle.Identity() != ref.External {
-		return result, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "app-server stop handle does not match the fixed process identity"}
+	result := executionbackend.LifecycleReceipt{Operation: request.Operation, RequestID: request.Operation.ID}
+	if ref.Protocol != executionbackend.ProtocolLocalCodexAppServer || ref.External.Kind != "os" || ref.External.PID <= 0 || handle == nil || handle.Identity() != ref.External {
+		return result, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "app-server stop handle does not match the fixed process identity"}
 	}
-	if executionapi.LifecycleAction(request.Operation.Action) == executionapi.LifecycleStopObservation {
+	if executionbackend.LifecycleAction(request.Operation.Action) == executionbackend.LifecycleStopObservation {
 		binding, found, err := l.readBinding(request.Snapshot.Clone())
 		if err != nil || !found || binding.SessionID != request.Snapshot.Session.SessionID || binding.Process == nil || *binding.Process != ref.External ||
 			request.Input.Stop.TurnID == "" || request.Input.Stop.TurnID != request.Snapshot.Session.CurrentTurnID || request.Input.Stop.TurnID == request.Snapshot.Session.LastStoppedTurnID {
-			return result, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "app-server interrupt does not match the fixed live session and turn", Cause: err}
+			return result, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "app-server interrupt does not match the fixed live session and turn", Cause: err}
 		}
 		if err := Interrupt(ctx, binding.Endpoint, binding.SessionID, request.Input.Stop.TurnID); err != nil {
-			result.Disposition, result.Diagnostic = executionapi.OperationUnknown, err.Error()
-			return result, &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "app-server interrupt receipt is unverified", Cause: err}
+			result.Disposition, result.Diagnostic = executionbackend.OperationUnknown, err.Error()
+			return result, &executionbackend.BackendError{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "app-server interrupt receipt is unverified", Cause: err}
 		}
-		result.Disposition = executionapi.OperationAccepted
+		result.Disposition = executionbackend.OperationAccepted
 		return result, nil
 	}
-	if executionapi.LifecycleAction(request.Operation.Action) != executionapi.LifecycleStopExecution {
-		return result, &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "app-server stop action is unsupported"}
+	if executionbackend.LifecycleAction(request.Operation.Action) != executionbackend.LifecycleStopExecution {
+		return result, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "app-server stop action is unsupported"}
 	}
 	if l.Backend.Process.Inspect(&ref.External) == "process absent" {
 		handle.Close()
-		result.Disposition, result.State.Stopped = executionapi.OperationConfirmed, true
+		result.Disposition, result.State.Stopped = executionbackend.OperationConfirmed, true
 		return result, nil
 	}
 	handle.Kill()
@@ -387,60 +386,60 @@ func (l ExecutionLifecycle) StopLifecycle(ctx context.Context, request execution
 	for {
 		if l.Backend.Process.Inspect(&ref.External) == "process absent" {
 			handle.Close()
-			result.Disposition, result.State.Stopped = executionapi.OperationConfirmed, true
+			result.Disposition, result.State.Stopped = executionbackend.OperationConfirmed, true
 			return result, nil
 		}
 		select {
 		case <-ctx.Done():
-			result.Disposition, result.Diagnostic = executionapi.OperationUnknown, ctx.Err().Error()
-			return result, &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "app-server process exit is unverified", Cause: ctx.Err()}
+			result.Disposition, result.Diagnostic = executionbackend.OperationUnknown, ctx.Err().Error()
+			return result, &executionbackend.BackendError{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "app-server process exit is unverified", Cause: ctx.Err()}
 		case <-ticker.C:
 		}
 	}
 }
 
-func (l ExecutionLifecycle) CleanupLifecycle(_ context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, error) {
-	return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationRejected}, &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "app-server cleanup is owned by the workspace and process owners"}
+func (l ExecutionLifecycle) CleanupLifecycle(_ context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, error) {
+	return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationRejected}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "app-server cleanup is owned by the workspace and process owners"}
 }
 
-func (l ExecutionLifecycle) VerifyManualRecovery(ctx context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.LifecycleRecoveryEvidence, error) {
+func (l ExecutionLifecycle) VerifyManualRecovery(ctx context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleRecoveryEvidence, error) {
 	if err := ctx.Err(); err != nil {
-		return executionapi.LifecycleRecoveryEvidence{}, err
+		return executionbackend.LifecycleRecoveryEvidence{}, err
 	}
 	if err := l.validateIdentity(snapshot); err != nil {
-		return executionapi.LifecycleRecoveryEvidence{}, err
+		return executionbackend.LifecycleRecoveryEvidence{}, err
 	}
 	binding, found, err := l.readBinding(snapshot.Clone())
 	if err != nil {
-		return executionapi.LifecycleRecoveryEvidence{}, err
+		return executionbackend.LifecycleRecoveryEvidence{}, err
 	}
 	if !found || !ValidNativeID(binding.SessionID) {
-		return executionapi.LifecycleRecoveryEvidence{SessionAvailable: false}, nil
+		return executionbackend.LifecycleRecoveryEvidence{SessionAvailable: false}, nil
 	}
 	managed, absent := l.Backend.ManagedProcessState(binding)
-	return executionapi.LifecycleRecoveryEvidence{SessionAvailable: true, ManagedProcess: managed, ProcessAbsent: absent}, nil
+	return executionbackend.LifecycleRecoveryEvidence{SessionAvailable: true, ManagedProcess: managed, ProcessAbsent: absent}, nil
 }
 
-func (l ExecutionLifecycle) BindRecovery(ctx context.Context, previous, next executionapi.LifecycleSnapshot) (executionapi.ImplementationDataEnvelope, error) {
+func (l ExecutionLifecycle) BindRecovery(ctx context.Context, previous, next executionbackend.LifecycleSnapshot) (executionbackend.ImplementationDataEnvelope, error) {
 	if err := ctx.Err(); err != nil {
-		return executionapi.ImplementationDataEnvelope{}, err
+		return executionbackend.ImplementationDataEnvelope{}, err
 	}
 	if err := l.validateIdentity(previous); err != nil {
-		return executionapi.ImplementationDataEnvelope{}, err
+		return executionbackend.ImplementationDataEnvelope{}, err
 	}
 	if err := l.validateIdentity(next); err != nil {
-		return executionapi.ImplementationDataEnvelope{}, err
+		return executionbackend.ImplementationDataEnvelope{}, err
 	}
 	if previous.Session.ProjectID != next.Session.ProjectID || previous.Session.ExecutionID != next.Session.ExecutionID ||
 		previous.Session.AttemptID == next.Session.AttemptID || previous.ConfigurationDigest != next.ConfigurationDigest {
-		return executionapi.ImplementationDataEnvelope{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "manual recovery changed the fixed execution or configuration identity"}
+		return executionbackend.ImplementationDataEnvelope{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "manual recovery changed the fixed execution or configuration identity"}
 	}
 	binding, found, err := l.readBinding(previous.Clone())
 	if err != nil {
-		return executionapi.ImplementationDataEnvelope{}, err
+		return executionbackend.ImplementationDataEnvelope{}, err
 	}
 	if !found || !ValidNativeID(binding.SessionID) {
-		return executionapi.ImplementationDataEnvelope{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original app-server thread identity is unavailable for manual recovery"}
+		return executionbackend.ImplementationDataEnvelope{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "original app-server thread identity is unavailable for manual recovery"}
 	}
 	seed := AppServerBinding{SessionID: binding.SessionID}
 	return NewAppServerBindingEnvelope(l.identity(next), seed)
@@ -456,11 +455,11 @@ func (l *ExecutionLifecycle) ReleasePreparation() {
 	}
 }
 
-func (l *ExecutionLifecycle) prepareSession(ctx context.Context, snapshot executionapi.LifecycleSnapshot, input executionapi.TurnInput) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (l *ExecutionLifecycle) prepareSession(ctx context.Context, snapshot executionbackend.LifecycleSnapshot, input executionbackend.TurnInput) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	l.ReleasePreparation()
 	fixed, _, err := l.readBinding(snapshot)
 	if err != nil {
-		return executionapi.LifecycleReceipt{}, nil, err
+		return executionbackend.LifecycleReceipt{}, nil, err
 	}
 	handle, binding, prepareErr := l.Backend.PrepareSession(ctx, fixed, input)
 	receipt := l.bindingReceipt(snapshot, binding)
@@ -471,7 +470,7 @@ func (l *ExecutionLifecycle) prepareSession(ctx context.Context, snapshot execut
 		receipt.Process = &process
 	}
 	if prepareErr != nil {
-		receipt.Disposition = executionapi.OperationUnknown
+		receipt.Disposition = executionbackend.OperationUnknown
 		receipt.Diagnostic = prepareErr.Error()
 		if handle != nil {
 			receipt.Handle = handle.Detach()
@@ -482,14 +481,14 @@ func (l *ExecutionLifecycle) prepareSession(ctx context.Context, snapshot execut
 		if handle != nil {
 			receipt.Handle = handle.Detach()
 		}
-		receipt.Disposition = executionapi.OperationUnknown
+		receipt.Disposition = executionbackend.OperationUnknown
 		err := errors.New("app-server preparation returned no complete original session receipt")
 		receipt.Diagnostic = err.Error()
 		return receipt, nil, err
 	}
 	if err := l.writeHistoryBinding(snapshot, binding, handle); err != nil {
 		receipt.Handle = handle.Detach()
-		receipt.Disposition = executionapi.OperationUnknown
+		receipt.Disposition = executionbackend.OperationUnknown
 		receipt.Diagnostic = err.Error()
 		return receipt, nil, err
 	}
@@ -499,17 +498,17 @@ func (l *ExecutionLifecycle) prepareSession(ctx context.Context, snapshot execut
 	handle.owned = false
 	l.prepared = handle
 	receipt.Handle = handle.process
-	receipt.Disposition = executionapi.OperationConfirmed
+	receipt.Disposition = executionbackend.OperationConfirmed
 	return receipt, nil, nil
 }
 
-func (l *ExecutionLifecycle) startTurn(ctx context.Context, snapshot executionapi.LifecycleSnapshot, input executionapi.TurnInput) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (l *ExecutionLifecycle) startTurn(ctx context.Context, snapshot executionbackend.LifecycleSnapshot, input executionbackend.TurnInput) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	fixed, found, err := l.readBinding(snapshot)
 	if err != nil {
-		return executionapi.LifecycleReceipt{}, nil, err
+		return executionbackend.LifecycleReceipt{}, nil, err
 	}
 	if !found || fixed.SessionID == "" || fixed.Endpoint == "" || fixed.Generation == "" {
-		return executionapi.LifecycleReceipt{}, nil, errors.New("app-server turn requires its committed original session binding")
+		return executionbackend.LifecycleReceipt{}, nil, errors.New("app-server turn requires its committed original session binding")
 	}
 	handle := l.prepared
 	l.prepared = nil
@@ -526,7 +525,7 @@ func (l *ExecutionLifecycle) startTurn(ctx context.Context, snapshot executionap
 		receipt := l.bindingReceipt(snapshot, binding)
 		receipt.State.SessionID = binding.SessionID
 		receipt.State.SessionGeneration = binding.Generation
-		receipt.Disposition, receipt.Diagnostic = executionapi.OperationUnknown, err.Error()
+		receipt.Disposition, receipt.Diagnostic = executionbackend.OperationUnknown, err.Error()
 		if binding.Process != nil {
 			process := *binding.Process
 			receipt.Process = &process
@@ -542,13 +541,13 @@ func (l *ExecutionLifecycle) startTurn(ctx context.Context, snapshot executionap
 		receipt.Process = &process
 	}
 	if startErr != nil {
-		receipt.Disposition, receipt.Diagnostic = executionapi.OperationUnknown, startErr.Error()
+		receipt.Disposition, receipt.Diagnostic = executionbackend.OperationUnknown, startErr.Error()
 		if handle != nil {
 			receipt.Handle = handle.Detach()
 		}
 		return receipt, nil, startErr
 	}
-	receipt.Disposition = executionapi.OperationAccepted
+	receipt.Disposition = executionbackend.OperationAccepted
 	receipt.State.InputAccepted = true
 	receipt.State.TurnStarted = true
 	receipt.EventPath = handle.Paths.JournalPath
@@ -561,7 +560,7 @@ func sameBinding(a, b Binding) bool {
 		a.Endpoint == b.Endpoint && a.Generation == b.Generation && a.SessionID == b.SessionID
 }
 
-func (l ExecutionLifecycle) writeHistoryBinding(snapshot executionapi.LifecycleSnapshot, binding Binding, handle *SessionHandle) error {
+func (l ExecutionLifecycle) writeHistoryBinding(snapshot executionbackend.LifecycleSnapshot, binding Binding, handle *SessionHandle) error {
 	if snapshot.Ref.WorkspacePath == "" || handle == nil {
 		return errors.New("app-server history binding has no fixed workspace")
 	}
@@ -572,8 +571,8 @@ func (l ExecutionLifecycle) writeHistoryBinding(snapshot executionapi.LifecycleS
 	history := HistoryBinding{
 		Version: 1, ProjectID: snapshot.Session.ProjectID, TaskID: snapshot.Session.TaskID,
 		WorkflowID: snapshot.Session.WorkflowRunID, ExecutionID: snapshot.Session.ExecutionID,
-		AttemptID: snapshot.Session.AttemptID, Backend: executionapi.BackendLocal,
-		Protocol: executionapi.ProtocolLocalCodexAppServer, TargetID: snapshot.Ref.Target.ID,
+		AttemptID: snapshot.Session.AttemptID, Backend: executionbackend.BackendLocal,
+		Protocol: executionbackend.ProtocolLocalCodexAppServer, TargetID: snapshot.Ref.Target.ID,
 		ExternalRef: processRef, Workspace: snapshot.Ref.WorkspacePath, SessionID: binding.SessionID,
 		Command: l.HistoryCommand, Home: EnvironmentHome(),
 	}
@@ -587,7 +586,7 @@ func localHistoryBindingPath(dir, session string) string {
 	return filepath.Join(dir, "codex-history."+session+".v1.json")
 }
 
-func (l ExecutionLifecycle) validateIdentity(snapshot executionapi.LifecycleSnapshot) error {
+func (l ExecutionLifecycle) validateIdentity(snapshot executionbackend.LifecycleSnapshot) error {
 	if snapshot.Session.ProjectID == "" || snapshot.Session.ExecutionID == "" || snapshot.Session.AttemptID == "" ||
 		snapshot.Session.WorkflowRunID == "" || snapshot.ConfigurationDigest == "" || snapshot.ResourceGeneration == "" {
 		return errors.New("app-server lifecycle has no fixed execution identity")
@@ -595,7 +594,7 @@ func (l ExecutionLifecycle) validateIdentity(snapshot executionapi.LifecycleSnap
 	return nil
 }
 
-func (l ExecutionLifecycle) identity(snapshot executionapi.LifecycleSnapshot) AppServerBindingIdentity {
+func (l ExecutionLifecycle) identity(snapshot executionbackend.LifecycleSnapshot) AppServerBindingIdentity {
 	return AppServerBindingIdentity{
 		ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID,
 		AttemptID: snapshot.Session.AttemptID, Generation: snapshot.ResourceGeneration,
@@ -603,10 +602,10 @@ func (l ExecutionLifecycle) identity(snapshot executionapi.LifecycleSnapshot) Ap
 	}
 }
 
-func (l ExecutionLifecycle) readBinding(snapshot executionapi.LifecycleSnapshot) (Binding, bool, error) {
-	var envelope *executionapi.ImplementationDataEnvelope
+func (l ExecutionLifecycle) readBinding(snapshot executionbackend.LifecycleSnapshot) (Binding, bool, error) {
+	var envelope *executionbackend.ImplementationDataEnvelope
 	for i := range snapshot.Implementation {
-		if snapshot.Implementation[i].Purpose != executionapi.ImplementationResourcePurpose || snapshot.Implementation[i].ImplementationKey != ExecutionBindingCodecKey {
+		if snapshot.Implementation[i].Purpose != executionbackend.ImplementationResourcePurpose || snapshot.Implementation[i].ImplementationKey != ExecutionBindingCodecKey {
 			return Binding{}, false, errors.New("app-server lifecycle received an unsupported resource envelope")
 		}
 		if envelope != nil {
@@ -626,29 +625,29 @@ func (l ExecutionLifecycle) readBinding(snapshot executionapi.LifecycleSnapshot)
 	return binding, true, nil
 }
 
-func (l ExecutionLifecycle) bindingReceipt(snapshot executionapi.LifecycleSnapshot, binding Binding) executionapi.LifecycleReceipt {
-	receipt := executionapi.LifecycleReceipt{}
+func (l ExecutionLifecycle) bindingReceipt(snapshot executionbackend.LifecycleSnapshot, binding Binding) executionbackend.LifecycleReceipt {
+	receipt := executionbackend.LifecycleReceipt{}
 	if binding.Process != nil {
 		process := *binding.Process
 		receipt.Process = &process
 	}
 	if binding.Endpoint != "" || binding.SessionID != "" || binding.Generation != "" {
 		if envelope, err := NewAppServerBindingEnvelope(l.identity(snapshot), AppServerBinding{Endpoint: binding.Endpoint, SessionID: binding.SessionID, Generation: binding.Generation}); err == nil {
-			receipt.Implementation = []executionapi.ImplementationDataEnvelope{envelope}
+			receipt.Implementation = []executionbackend.ImplementationDataEnvelope{envelope}
 		}
 	}
 	return receipt
 }
 
-func optionalProcess(identity executionapi.ProcessIdentity) *executionapi.ProcessIdentity {
-	if identity == (executionapi.ProcessIdentity{}) {
+func optionalProcess(identity executionbackend.ProcessIdentity) *executionbackend.ProcessIdentity {
+	if identity == (executionbackend.ProcessIdentity{}) {
 		return nil
 	}
 	copy := identity
 	return &copy
 }
 
-func cloneTurn(turn *executionapi.TurnInput) *executionapi.TurnInput {
+func cloneTurn(turn *executionbackend.TurnInput) *executionbackend.TurnInput {
 	if turn == nil {
 		return nil
 	}
@@ -657,7 +656,7 @@ func cloneTurn(turn *executionapi.TurnInput) *executionapi.TurnInput {
 	return &copy
 }
 
-func lifecycleSession(snapshot executionapi.LifecycleSnapshot, sessionID, turnID string) executionapi.SessionContext {
+func lifecycleSession(snapshot executionbackend.LifecycleSnapshot, sessionID, turnID string) executionbackend.SessionContext {
 	fixed := snapshot.Session
 	fixed.SessionID, fixed.CurrentTurnID = sessionID, turnID
 	return fixed
@@ -665,21 +664,23 @@ func lifecycleSession(snapshot executionapi.LifecycleSnapshot, sessionID, turnID
 
 type lifecycleObserver struct {
 	original *Observation
-	events   chan executionapi.LifecycleEvent
-	fixed    executionapi.SessionContext
+	events   chan executionbackend.LifecycleEvent
+	fixed    executionbackend.SessionContext
 }
 
-func newLifecycleObserver(original *Observation, fixed executionapi.SessionContext) executionapi.LifecycleObserver {
-	observer := &lifecycleObserver{original: original, events: make(chan executionapi.LifecycleEvent, cap(original.Events)), fixed: fixed}
+func newLifecycleObserver(original *Observation, fixed executionbackend.SessionContext) executionbackend.LifecycleObserver {
+	observer := &lifecycleObserver{original: original, events: make(chan executionbackend.LifecycleEvent, cap(original.Events)), fixed: fixed}
 	go observer.forward()
 	return observer
 }
 
-func (observer *lifecycleObserver) Events() <-chan executionapi.LifecycleEvent {
+func (observer *lifecycleObserver) Events() <-chan executionbackend.LifecycleEvent {
 	return observer.events
 }
+
 func (observer *lifecycleObserver) Done() <-chan error { return observer.original.Done }
-func (observer *lifecycleObserver) StopHandle() executionapi.StopHandle {
+
+func (observer *lifecycleObserver) StopHandle() executionbackend.StopHandle {
 	return observer.original.Process
 }
 
@@ -696,7 +697,7 @@ func (observer *lifecycleObserver) Close(ctx context.Context) error {
 func (observer *lifecycleObserver) forward() {
 	defer close(observer.events)
 	for value := range observer.original.Events {
-		fact := executionapi.EventFact{}
+		fact := executionbackend.EventFact{}
 		if value.Forward {
 			decoded, err := DecodeEvent(value.Envelope, observer.fixed, true)
 			if err != nil {
@@ -707,12 +708,12 @@ func (observer *lifecycleObserver) forward() {
 			fact.Source = "execution"
 			fact.SourceEventID = value.Envelope.Method + ":" + digestValue(value.Envelope)
 		} else {
-			fact.Kind = executionapi.EventStatus
+			fact.Kind = executionbackend.EventStatus
 			fact.Source = "execution"
 			fact.SourceEventID = value.Envelope.Method + ":" + digestValue(value.Envelope)
 		}
 		persisted := make(chan error, 1)
-		event := executionapi.LifecycleEvent{Fact: fact, Summary: value.Summary, Kind: value.Kind, Status: value.Status, Title: value.Title, Persisted: persisted}
+		event := executionbackend.LifecycleEvent{Fact: fact, Summary: value.Summary, Kind: value.Kind, Status: value.Status, Title: value.Title, Persisted: persisted}
 		select {
 		case observer.events <- event:
 		case <-observer.original.Finished:
@@ -729,6 +730,6 @@ func (observer *lifecycleObserver) forward() {
 	}
 }
 
-func (l ExecutionLifecycle) InspectLifecycleWorkspace(ctx context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.WorkspaceInspection, error) {
+func (l ExecutionLifecycle) InspectLifecycleWorkspace(ctx context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.WorkspaceInspection, error) {
 	return workspace.InspectLifecycleWorkspace(ctx, l.setup, snapshot)
 }

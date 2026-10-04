@@ -11,10 +11,10 @@ import (
 	"testing"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
@@ -23,8 +23,8 @@ func TestCodexHistoryNativeFixtures(t *testing.T) {
 	require(t, err)
 	var fixture struct {
 		Samples []struct {
-			Backend executionapi.BackendKind  `json:"backend"`
-			Thread  codexworker.HistoryThread `json:"thread"`
+			Backend executionbackend.BackendKind `json:"backend"`
+			Thread  codexworker.HistoryThread    `json:"thread"`
 		} `json:"samples"`
 	}
 	require(t, json.Unmarshal(raw, &fixture))
@@ -36,9 +36,9 @@ func TestCodexHistoryNativeFixtures(t *testing.T) {
 			store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "history.db"))
 			require(t, err)
 			defer store.Close()
-			base := steerline.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: sample.Backend, Protocol: executionapi.ProtocolLocalProcess, Agent: "codex", Source: "codex-app-server", SourceSegment: "native", SourceIdentity: "native", SessionID: sample.Thread.ID}
-			if sample.Backend == executionapi.BackendOrca {
-				base.Protocol = executionapi.ProtocolOrcaTerminalV2
+			base := steerline.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: sample.Backend, Protocol: executionbackend.ProtocolLocalProcess, Agent: "codex", Source: "codex-app-server", SourceSegment: "native", SourceIdentity: "native", SessionID: sample.Thread.ID}
+			if sample.Backend == executionbackend.BackendOrca {
+				base.Protocol = executionbackend.ProtocolOrcaTerminalV2
 			}
 			var all []steerline.ConversationWrite
 			for _, turn := range sample.Thread.Turns {
@@ -81,7 +81,7 @@ func TestCodexHistoryNativeFixtures(t *testing.T) {
 			if starts != 2 || ends != 2 || commentary < 1 || finals != 2 {
 				t.Fatalf("native facts lost: starts=%d ends=%d commentary=%d finals=%d", starts, ends, commentary, finals)
 			}
-			if sample.Backend == executionapi.BackendOrca && tools < 2 {
+			if sample.Backend == executionbackend.BackendOrca && tools < 2 {
 				t.Fatalf("Orca native tool events lost: %d", tools)
 			}
 		})
@@ -98,7 +98,7 @@ func TestCodexHistoryRealLocalToolInterleaveFixture(t *testing.T) {
 	if len(fixture.Thread.Turns) != 1 {
 		t.Fatal("real local tool fixture must contain exactly one turn")
 	}
-	base := steerline.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
+	base := steerline.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
 	writes, err := codexworker.MapHistoryTurn(base, fixture.Thread.Turns[0], 1)
 	require(t, err)
 	store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "history.db"))
@@ -147,7 +147,7 @@ func TestCodexHistoryRealCancelledTurnFixture(t *testing.T) {
 	if len(fixture.Thread.Turns) != 1 || fixture.Thread.Turns[0].CompletedAt == nil {
 		t.Fatal("real cancelled turn lacks a native completion timestamp")
 	}
-	base := steerline.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
+	base := steerline.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
 	writes, err := codexworker.MapHistoryTurn(base, fixture.Thread.Turns[0], 1)
 	require(t, err)
 	if len(writes) != 2 || writes[0].Event.Type != steerline.ConversationTurnStarted || writes[1].Event.Type != steerline.ConversationTurnCancelled || writes[1].Event.Status != "interrupted" || writes[1].Event.FinalAvailability != steerline.FinalAbsent || writes[1].Event.TurnID != writes[0].Event.TurnID {
@@ -165,7 +165,7 @@ func TestCodexHistoryRealFailedTurnFixture(t *testing.T) {
 	if len(fixture.Thread.Turns) != 1 || fixture.Thread.Turns[0].CompletedAt == nil || fixture.Thread.Turns[0].Status != "failed" {
 		t.Fatal("real failed turn lacks native terminal evidence")
 	}
-	base := steerline.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
+	base := steerline.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
 	writes, err := codexworker.MapHistoryTurn(base, fixture.Thread.Turns[0], 1)
 	require(t, err)
 	if len(writes) != 3 || writes[0].Event.Type != steerline.ConversationTurnStarted || writes[1].Event.Type != steerline.ConversationObservation || writes[2].Event.Type != steerline.ConversationTurnFailed || writes[2].Event.Status != "failed" || writes[2].Event.FinalAvailability != steerline.FinalAbsent {
@@ -293,7 +293,7 @@ func TestCodexHistoryCanonicalSourceKeepsRawReadable(t *testing.T) {
 }
 
 func TestCodexHistoryBindingCannotChangeAttempt(t *testing.T) {
-	b := codexworker.HistoryBinding{Version: 1, ProjectID: "p", WorkflowID: "w", ExecutionID: "e", AttemptID: "a", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: t.TempDir(), SessionID: "00000000-0000-0000-0000-000000000001", Command: steerline.Command{Executable: "codex"}}
+	b := codexworker.HistoryBinding{Version: 1, ProjectID: "p", WorkflowID: "w", ExecutionID: "e", AttemptID: "a", Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, TargetID: "local", Workspace: t.TempDir(), SessionID: "00000000-0000-0000-0000-000000000001", Command: executionbackend.Command{Executable: "codex"}}
 	path := filepath.Join(t.TempDir(), "codex-history.v1.json")
 	require(t, codexworker.WriteHistoryBinding(path, b, steerline.AtomicWrite))
 	b.AttemptID = "replacement"
@@ -307,8 +307,9 @@ func conversationItemKey(event steerline.ConversationEvent, item string) string 
 	digest := sha256.Sum256([]byte(event.ItemIdentity()))
 	return hex.EncodeToString(digest[:])
 }
+
 func conversationTestWrite(sourceID string, sequence uint64, mode string, body, raw []byte) steerline.ConversationWrite {
-	event := steerline.ConversationEvent{Version: steerline.ConversationVersion, ProjectID: "project", TaskID: "task", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Agent: "codex", TargetID: "local-test", Source: "codex-jsonl", SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment-1", SessionID: "session", SessionQuality: steerline.IdentityNative, TurnID: "turn", TurnQuality: steerline.IdentityDerived, ItemID: "same-item", ItemQuality: steerline.IdentityNative, SourceEventID: sourceID, SourceEventQuality: steerline.IdentityDerived, SourceSeq: sequence, Type: steerline.ConversationMessageDelta, Phase: steerline.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()}
+	event := steerline.ConversationEvent{Version: steerline.ConversationVersion, ProjectID: "project", TaskID: "task", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Agent: "codex", TargetID: "local-test", Source: "codex-jsonl", SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment-1", SessionID: "session", SessionQuality: steerline.IdentityNative, TurnID: "turn", TurnQuality: steerline.IdentityDerived, ItemID: "same-item", ItemQuality: steerline.IdentityNative, SourceEventID: sourceID, SourceEventQuality: steerline.IdentityDerived, SourceSeq: sequence, Type: steerline.ConversationMessageDelta, Phase: steerline.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()}
 	event.ItemKey = conversationItemKey(event, event.ItemID)
 	return steerline.ConversationWrite{Event: event, Body: body, BodyMode: mode, Raw: raw, BodySource: "test-source"}
 }

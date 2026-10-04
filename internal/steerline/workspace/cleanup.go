@@ -8,31 +8,31 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 type CleanupResult struct {
-	Status       execution.OperationStatus `json:"status"`
-	WorktreeGone bool                      `json:"worktree_absent"`
-	BranchGone   bool                      `json:"branch_absent"`
+	Status       executionbackend.OperationStatus `json:"status"`
+	WorktreeGone bool                             `json:"worktree_absent"`
+	BranchGone   bool                             `json:"branch_absent"`
 }
 
-func Cleanup(ctx context.Context, git Git, repository Repository, root string, intent *Intent) (CleanupResult, error) {
-	result := CleanupResult{Status: execution.OperationUnknown}
+func Cleanup(ctx context.Context, git Git, repository Repository, root string, intent *executionbackend.WorkspaceIntent) (CleanupResult, error) {
+	result := CleanupResult{Status: executionbackend.OperationUnknown}
 	if intent == nil || !filepath.IsAbs(root) || !filepath.IsAbs(intent.Path) || canonical(filepath.Dir(intent.Path)) != canonical(root) || intent.Branch == "" || !commitPattern.MatchString(intent.BaseCommit) {
-		result.Status = execution.OperationRejected
+		result.Status = executionbackend.OperationRejected
 		return result, errors.New("cleanup intent does not match the fixed local workspace identity")
 	}
 	if err := validateOperationRoot(root); err != nil {
-		result.Status = execution.OperationRejected
+		result.Status = executionbackend.OperationRejected
 		return result, err
 	}
 	if err := repository.Verify(ctx, git); err != nil {
-		result.Status = execution.OperationRejected
+		result.Status = executionbackend.OperationRejected
 		return result, err
 	}
 	if _, err := git.Output(ctx, repository.Path, "check-ref-format", "refs/heads/"+intent.Branch); err != nil {
-		result.Status = execution.OperationRejected
+		result.Status = executionbackend.OperationRejected
 		return result, errors.New("workspace branch identity is invalid")
 	}
 	worktrees, err := git.Output(ctx, repository.Path, "worktree", "list", "--porcelain", "-z")
@@ -54,7 +54,7 @@ func Cleanup(ctx context.Context, git Git, repository Repository, root string, i
 			return observeCleanup(ctx, git, repository, intent, result, err)
 		}
 	} else if _, statErr := os.Lstat(intent.Path); statErr == nil {
-		result.Status = execution.OperationRejected
+		result.Status = executionbackend.OperationRejected
 		return result, errors.New("workspace path exists but is not the fixed Git worktree")
 	} else if !os.IsNotExist(statErr) {
 		return result, statErr
@@ -103,11 +103,11 @@ func Cleanup(ctx context.Context, git Git, repository Repository, root string, i
 		return result, errors.New("workspace branch remains after cleanup")
 	}
 	result.BranchGone = true
-	result.Status = execution.OperationConfirmed
+	result.Status = executionbackend.OperationConfirmed
 	return result, nil
 }
 
-func observeCleanup(ctx context.Context, git Git, repository Repository, intent *Intent, result CleanupResult, cause error) (CleanupResult, error) {
+func observeCleanup(ctx context.Context, git Git, repository Repository, intent *executionbackend.WorkspaceIntent, result CleanupResult, cause error) (CleanupResult, error) {
 	if _, err := os.Lstat(intent.Path); os.IsNotExist(err) {
 		result.WorktreeGone = true
 	} else if err == nil {
@@ -127,6 +127,6 @@ func observeCleanup(ctx context.Context, git Git, repository Repository, intent 
 	if refs, err := git.Output(ctx, repository.Path, "for-each-ref", "--format=%(refname)", "refs/heads/"+intent.Branch); err == nil {
 		result.BranchGone = !containsExactLine(string(refs), "refs/heads/"+intent.Branch)
 	}
-	result.Status = execution.OperationUnknown
+	result.Status = executionbackend.OperationUnknown
 	return result, cause
 }

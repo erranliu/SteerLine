@@ -2,15 +2,16 @@ package steerlineapp
 
 import (
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T) {
@@ -23,7 +24,7 @@ func TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets(t *testing.T
 	remoteOrca := testExecutionProfile(t, "orca-remote", "Orca 远程", "orca_supervised", "codex", codexworker.ProfileConfig{Executable: "codex", Model: "chosen-model", ReasoningEffort: "xhigh"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}, &remote.ProfileConfig{ConnectionID: "connection", EnvironmentID: "environment", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "5s", CapabilityReportVersion: 1})
 	local := testExecutionProfile(t, "local", "本地", "local", "codex", codexworker.ProfileConfig{Executable: "codex"}, nil)
 	writeGlobalExecutionFixture(t, []ExecutionProfile{local, localOrca, remoteOrca}, "local")
-	input := map[string]any{"publication_policy": executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}, "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": base.Repository, "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion}
+	input := map[string]any{"publication_policy": executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}, "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": base.Repository, "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion}
 	path := filepath.Join(t.TempDir(), "config.json")
 	write := func() {
 		t.Helper()

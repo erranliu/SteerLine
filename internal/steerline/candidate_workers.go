@@ -8,9 +8,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func participatingCandidates(snapshot DomainSnapshot, taskID string) int {
@@ -33,7 +35,7 @@ func candidateBase(snapshot DomainSnapshot, taskID string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		if !validCommit(e.Workspace.Base) || base != "" && base != e.Workspace.Base {
+		if !taskmodel.ValidCommit(e.Workspace.Base) || base != "" && base != e.Workspace.Base {
 			return "", nativeErr("contract_mismatch", "candidate common base is missing or inconsistent")
 		}
 		base = e.Workspace.Base
@@ -50,7 +52,7 @@ func candidateBindings(snapshot DomainSnapshot, taskID string) string {
 	type binding struct {
 		ID, Selected, PR, Proposed, Profile string
 		History                             []string
-		Exit                                *contracts.CandidateAbandonment
+		Exit                                *executionmodel.CandidateAbandonment
 	}
 	values := []binding{}
 	for _, w := range snapshot.WorkflowRuns {
@@ -77,7 +79,7 @@ func candidatePRBindings(snapshot DomainSnapshot, taskID string) string {
 type verifiedCandidatePR struct {
 	WorkflowID string
 	URL        string
-	Info       PRInfo
+	Info       executionmodel.PRInfo
 }
 
 // selectedID="" requires every known PR to be verified unmerged. Delivery
@@ -114,7 +116,7 @@ func verifyKnownCandidatePRs(ctx context.Context, config Config, snapshot Domain
 			if err != nil || info.State != "open" && info.State != "closed_unmerged" && info.State != "merged" {
 				return nil, nativeErr("merge_state_unknown", "known candidate PR could not be verified: "+url)
 			}
-			if (info.State == "merged") != info.Merged || info.Merged && (info.MergedAt == nil || info.MergedAt.IsZero() || info.MergeCommit == nil || !validCommit(*info.MergeCommit)) {
+			if (info.State == "merged") != info.Merged || info.Merged && (info.MergedAt == nil || info.MergedAt.IsZero() || info.MergeCommit == nil || !taskmodel.ValidCommit(*info.MergeCommit)) {
 				return nil, nativeErr("merge_state_unknown", "known candidate PR merge evidence is incomplete or inconsistent: "+url)
 			}
 			_, e, err := selectedNativeDeliveryState(snapshot, taskID, w.WorkflowRunID)
@@ -154,27 +156,27 @@ type CandidateAbandonOptions struct {
 }
 
 type CandidateAbandonReceipt struct {
-	RequestID     string                          `json:"request_id"`
-	TaskID        string                          `json:"task_id"`
-	WorkflowRunID string                          `json:"workflow_run_id"`
-	Status        string                          `json:"status"`
-	Code          string                          `json:"code,omitempty"`
-	Message       string                          `json:"message,omitempty"`
-	Abandonment   *contracts.CandidateAbandonment `json:"abandonment,omitempty"`
+	RequestID     string                               `json:"request_id"`
+	TaskID        string                               `json:"task_id"`
+	WorkflowRunID string                               `json:"workflow_run_id"`
+	Status        string                               `json:"status"`
+	Code          string                               `json:"code,omitempty"`
+	Message       string                               `json:"message,omitempty"`
+	Abandonment   *executionmodel.CandidateAbandonment `json:"abandonment,omitempty"`
 }
 
 func (c CommandService) AbandonNativeCandidate(ctx context.Context, config Config, options CandidateAbandonOptions) (CandidateAbandonReceipt, error) {
 	if c.Store == nil || c.Project == "" || config.Identity() != c.Project {
 		return CandidateAbandonReceipt{}, nativeErr("authority_mismatch", "candidate exit requires its native project")
 	}
-	if ValidateNativeTaskID(options.TaskID) != nil || !controlIDPattern.MatchString(options.RequestID) || options.WorkflowRunID == "" || options.ExpectedTaskVersion == 0 || options.ExpectedCandidateVersion == 0 || strings.TrimSpace(options.RequestedBy) == "" || strings.TrimSpace(options.Reason) == "" || len(options.Reason) > 4000 {
+	if taskmodel.ValidateID(options.TaskID) != nil || !controlIDPattern.MatchString(options.RequestID) || options.WorkflowRunID == "" || options.ExpectedTaskVersion == 0 || options.ExpectedCandidateVersion == 0 || strings.TrimSpace(options.RequestedBy) == "" || strings.TrimSpace(options.Reason) == "" || len(options.Reason) > 4000 {
 		return CandidateAbandonReceipt{}, nativeErr("invalid_batch", "candidate exit requires exact task/candidate versions, request, requester and reason")
 	}
-	body, err := CanonicalJSON(mustJSON(options))
+	body, err := taskmodel.CanonicalJSON(mustJSON(options))
 	if err != nil {
 		return CandidateAbandonReceipt{}, err
 	}
-	var saved CommandRecord
+	var saved storageports.CommandRecord
 	if old, found, err := c.Store.LookupCommand(ctx, c.Project, options.RequestID); err != nil {
 		return CandidateAbandonReceipt{}, err
 	} else if found {
@@ -210,7 +212,7 @@ func (c CommandService) AbandonNativeCandidate(ctx context.Context, config Confi
 		return CandidateAbandonReceipt{}, nativeErr("immutable_task", "candidate cannot exit this experiment")
 	}
 	if saved.CommandID == "" {
-		saved = CommandRecord{ProjectIdentity: c.Project, CommandID: options.RequestID, IdempotencyKey: options.RequestID, Kind: "abandon_candidate", TargetID: options.WorkflowRunID, ExpectedVersion: options.ExpectedCandidateVersion, RequestedBy: options.RequestedBy, Payload: body, Status: "in_flight", CreatedAt: now()}
+		saved = storageports.CommandRecord{ProjectIdentity: c.Project, CommandID: options.RequestID, IdempotencyKey: options.RequestID, Kind: "abandon_candidate", TargetID: options.WorkflowRunID, ExpectedVersion: options.ExpectedCandidateVersion, RequestedBy: options.RequestedBy, Payload: body, Status: "in_flight", CreatedAt: now()}
 		var made bool
 		saved, made, err = c.Store.EnqueueCommand(ctx, saved)
 		if err != nil {
@@ -224,7 +226,7 @@ func (c CommandService) AbandonNativeCandidate(ctx context.Context, config Confi
 	receipt := CandidateAbandonReceipt{RequestID: options.RequestID, TaskID: options.TaskID, WorkflowRunID: options.WorkflowRunID, Status: "abandoned"}
 	status := "accepted"
 	if verificationErr != nil {
-		var native *NativeTaskError
+		var native *taskmodel.Error
 		if !errors.As(verificationErr, &native) {
 			return receipt, verificationErr
 		}
@@ -255,7 +257,7 @@ func (c CommandService) AbandonNativeCandidate(ctx context.Context, config Confi
 			return nativeErr("stale_version", "task, candidate or PR set changed during exit verification")
 		}
 		if status == "accepted" {
-			w.Abandonment = &contracts.CandidateAbandonment{RequestID: options.RequestID, RequestedBy: options.RequestedBy, Reason: options.Reason, At: now()}
+			w.Abandonment = &executionmodel.CandidateAbandonment{RequestID: options.RequestID, RequestedBy: options.RequestedBy, Reason: options.Reason, At: now()}
 			w.UpdatedAt = w.Abandonment.At
 			receipt.Abandonment = w.Abandonment
 			if err := tx.PutWorkflowRun(w); err != nil {
@@ -266,7 +268,7 @@ func (c CommandService) AbandonNativeCandidate(ctx context.Context, config Confi
 		if err := tx.UpdateCommand(old); err != nil {
 			return err
 		}
-		op := OperationRecord{ProjectIdentity: c.Project, OperationID: options.RequestID, IdempotencyKey: options.RequestID, Kind: "abandon_candidate", Status: "confirmed", PayloadDigest: digestCanonical(body), Request: body, Receipt: mustJSON(receipt), CreatedAt: saved.CreatedAt, UpdatedAt: now()}
+		op := executionmodel.OperationRecord{ProjectIdentity: c.Project, OperationID: options.RequestID, IdempotencyKey: options.RequestID, Kind: "abandon_candidate", Status: "confirmed", PayloadDigest: digestCanonical(body), Request: body, Receipt: mustJSON(receipt), CreatedAt: saved.CreatedAt, UpdatedAt: now()}
 		if status == "pending_verification" {
 			op.Status = "outcome_unknown"
 		}
@@ -280,7 +282,7 @@ func (c CommandService) AbandonNativeCandidate(ctx context.Context, config Confi
 				return err
 			}
 		}
-		_, err = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: options.TaskID, WorkflowRunID: options.WorkflowRunID, ExternalSource: "candidate-command", ExternalID: options.RequestID + ":" + status, Type: "candidate.exit." + status, ReceivedAt: time.Now().UTC(), Payload: mustJSON(receipt)})
+		_, err = tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, TaskID: options.TaskID, WorkflowRunID: options.WorkflowRunID, ExternalSource: "candidate-command", ExternalID: options.RequestID + ":" + status, Type: "candidate.exit." + status, ReceivedAt: time.Now().UTC(), Payload: mustJSON(receipt)})
 		return err
 	})
 	return receipt, err
@@ -296,7 +298,7 @@ func (s *Service) candidateBusinessClosed(run *Run) bool {
 
 func (c CommandService) recordCandidateMergeConflict(ctx context.Context, snapshot DomainSnapshot, taskID, workflowID, reason string, proofs ...verifiedCandidatePR) error {
 	err := c.Store.TransactCandidate(ctx, func(tx persistence.CandidateTx) error {
-		_, err := tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: taskID, WorkflowRunID: workflowID, ExternalSource: "candidate-delivery", ExternalID: taskID + ":" + candidateBindings(snapshot, taskID) + ":" + digestValue(reason), Type: "task.delivery.conflict", ReceivedAt: now(), Payload: mustJSON(map[string]any{"reason": reason, "known_prs": proofs})})
+		_, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, TaskID: taskID, WorkflowRunID: workflowID, ExternalSource: "candidate-delivery", ExternalID: taskID + ":" + candidateBindings(snapshot, taskID) + ":" + digestValue(reason), Type: "task.delivery.conflict", ReceivedAt: now(), Payload: mustJSON(map[string]any{"reason": reason, "known_prs": proofs})})
 		return err
 	})
 	if err != nil {

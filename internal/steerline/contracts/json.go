@@ -3,7 +3,7 @@ package contracts
 import (
 	"bytes"
 
-	"github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func TrimBOM(data []byte) []byte {
@@ -12,5 +12,5 @@ func TrimBOM(data []byte) []byte {
 
 // DecodeJSON accepts exactly one value with the current contract's fields.
 func DecodeJSON(data []byte, value any) error {
-	return execution.DecodeStrictJSON(TrimBOM(data), value, "expected exactly one JSON value")
+	return executionbackend.DecodeStrictJSON(TrimBOM(data), value, "expected exactly one JSON value")
 }

@@ -15,7 +15,7 @@ import (
 func TestCM71ProductDependencyBoundary(t *testing.T) {
 	const base = "github.com/erranliu/SteerLine/internal/steerline"
 	// Parse all source files, independent of host or build tags.
-	for _, dir := range []string{"../steerline/clientcontracts", "../steerlineclient"} {
+	for _, dir := range []string{"../steerline/clientcontracts", "../steerlineclient", "../product/api"} {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
 			t.Fatal(err)
@@ -36,10 +36,18 @@ func TestCM71ProductDependencyBoundary(t *testing.T) {
 				if strings.Contains(path, "/steerlineapp") || strings.Contains(path, "/sqlite") || strings.Contains(path, "/console") {
 					t.Fatalf("%s depends on concrete construction: %s", entry.Name(), path)
 				}
+				if strings.HasSuffix(dir, "api") && strings.Contains(path, ".") {
+					t.Fatalf("product/api imports non-scalar owner %s", path)
+				}
 				if strings.HasSuffix(dir, "clientcontracts") && strings.HasPrefix(path, "github.com/erranliu/SteerLine/") {
 					allowed := false
-					for _, owner := range []string{"contracts", "execution", "task", "taskview"} {
+					for _, owner := range []string{"contracts", "task", "taskview"} {
 						if path == base+"/"+owner {
+							allowed = true
+						}
+					}
+					for _, owner := range []string{"execution/backend", "execution/model", "product/api", "storage/ports", "task/model"} {
+						if path == "github.com/erranliu/SteerLine/internal/"+owner {
 							allowed = true
 						}
 					}

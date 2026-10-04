@@ -12,9 +12,9 @@ import (
 	"time"
 	"unicode/utf8"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 const maxConversationBodyBytes = contracts.MaxConversationBodyBytes
@@ -149,7 +149,7 @@ func (s *SQLiteStore) CommitConversation(ctx context.Context, writes []Conversat
 			}
 		}
 	}
-	if err := storageFailure(tx.Commit(), persistence.StorageCommitFailed); err != nil {
+	if err := storageFailure(tx.Commit(), storageports.StorageCommitFailed); err != nil {
 		return nil, err
 	}
 	return out, nil
@@ -323,11 +323,11 @@ func (s *SQLiteStore) SaveConversationCapabilityReport(ctx context.Context, repo
 		}
 		seen[capability.Name] = true
 		switch capability.Status {
-		case executionapi.CapabilityVerified, executionapi.CapabilityUnsupported, executionapi.CapabilityNotTested:
+		case executionbackend.CapabilityVerified, executionbackend.CapabilityUnsupported, executionbackend.CapabilityNotTested:
 		default:
 			return fmt.Errorf("invalid conversation capability status %q", capability.Status)
 		}
-		if capability.Status == executionapi.CapabilityVerified && capability.Evidence == "" {
+		if capability.Status == executionbackend.CapabilityVerified && capability.Evidence == "" {
 			return fmt.Errorf("verified conversation capability %q requires evidence", capability.Name)
 		}
 	}

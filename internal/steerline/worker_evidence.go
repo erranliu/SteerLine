@@ -1,18 +1,19 @@
 package steerline
 
-import executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+import (
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+)
 
-// workerSessionContext copies the fixed execution identity into a value-only
-// input for implementation codecs.
-func workerSessionContext(run *Run, record *ExecutionRecord) *executionapi.SessionContext {
+func workerSessionContext(run *Run, record *executionmodel.ExecutionRecord) *executionbackend.SessionContext {
 	if record == nil {
 		return nil
 	}
 	sessionID, generation := executionSessionFacts(record)
-	fixed := &executionapi.SessionContext{
+	fixed := &executionbackend.SessionContext{
 		ProjectID: record.ProjectIdentity, WorkflowRunID: record.WorkflowRunID,
 		ExecutionID: record.ExecutionID, AttemptID: record.CurrentAttemptID,
-		Agent: executionapi.AgentSpec{Name: record.Agent}, Target: record.Target,
+		Agent: executionbackend.AgentSpec{Name: record.Agent}, Target: record.Target,
 		SessionID: sessionID, Generation: generation,
 		CurrentTurnID: record.CurrentTurnID, PendingTurnID: record.PendingTurnID,
 		CurrentCommandID: record.CurrentCommandID, PendingCommandID: record.PendingCommandID,
@@ -26,7 +27,7 @@ func workerSessionContext(run *Run, record *ExecutionRecord) *executionapi.Sessi
 // Worker protocol adapters verify native evidence before the service changes
 // business records. Empty fields mean that the source did not provide a fact.
 type workerTurnEvidence struct {
-	executionapi.TurnEvidence
+	executionbackend.TurnEvidence
 	PublishRequested bool
 }
 
@@ -35,5 +36,5 @@ type workerWaitFacts struct {
 	PreserveUnresolvedTurn bool
 	PreserveActiveStatus   bool
 	ContextPrefix          string
-	Options                []executionapi.DecisionOption
+	Options                []executionbackend.DecisionOption
 }

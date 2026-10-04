@@ -3,26 +3,28 @@ package steerline
 import (
 	"context"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"strings"
 	"testing"
 	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	first, second := "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
 	commandID := newID()
-	run := &Run{RunID: newID(), ExecutionID: newID(), AttemptID: newID(), Decision: &DecisionState{Status: "answer_saved", Request: DecisionRequest{FormatVersion: contracts.DecisionRequestFormatVersion, Question: "Continue?", AllowFreeText: true}}}
-	workflow := &WorkflowRunRecord{WorkflowRunID: run.RunID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_decision"}
-	execution := &ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, CurrentAttemptID: run.AttemptID, CurrentStep: "worker", CurrentTurnID: first, LastStoppedTurnID: first, PendingTurnID: second, PendingCommandID: commandID, TurnNumber: 1}
+	run := &Run{RunID: newID(), ExecutionID: newID(), AttemptID: newID(), Decision: &executionmodel.DecisionState{Status: "answer_saved", Request: executionmodel.DecisionRequest{FormatVersion: executionmodel.DecisionRequestFormatVersion, Question: "Continue?", AllowFreeText: true}}}
+	workflow := &executionmodel.WorkflowRunRecord{WorkflowRunID: run.RunID, WorkflowVersion: executionmodel.Version, Phase: "waiting_decision"}
+	execution := &executionmodel.ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, CurrentAttemptID: run.AttemptID, CurrentStep: "worker", CurrentTurnID: first, LastStoppedTurnID: first, PendingTurnID: second, PendingCommandID: commandID, TurnNumber: 1}
 	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
-	service := &Service{domain: DomainSnapshot{Operations: []OperationRecord{{OperationID: newID(), IdempotencyKey: "worker-turn:" + run.ExecutionID + ":" + commandID, Status: "outcome_unknown"}}}}
+	service := &Service{domain: DomainSnapshot{Operations: []executionmodel.OperationRecord{{OperationID: newID(), IdempotencyKey: "worker-turn:" + run.ExecutionID + ":" + commandID, Status: "outcome_unknown"}}}}
 	service.Config.identity = "test-project"
 	run.TaskID, run.DomainTaskID, workflow.TaskID = "task", "task", "task"
-	service.domain.Tasks = []TaskRecord{{TaskID: "task", Status: "in_progress"}}
-	service.domain.Attempts = []StepAttemptRecord{{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, StepID: "worker", AttemptNumber: 1}}
-	service.domain.WorkflowRuns, service.domain.Executions = []WorkflowRunRecord{*workflow}, []ExecutionRecord{*execution}
+	service.domain.Tasks = []taskmodel.TaskRecord{{TaskID: "task", Status: "in_progress"}}
+	service.domain.Attempts = []executionmodel.StepAttemptRecord{{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, StepID: "worker", AttemptNumber: 1}}
+	service.domain.WorkflowRuns, service.domain.Executions = []executionmodel.WorkflowRunRecord{*workflow}, []executionmodel.ExecutionRecord{*execution}
 	workflow, execution = &service.domain.WorkflowRuns[0], &service.domain.Executions[0]
 	run.Decision.ID, run.Decision.Version = newID(), 1
 	run.Decision.AttemptID = run.AttemptID
@@ -33,9 +35,9 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	if execution.CurrentCommandID != commandID || execution.CurrentTurnID != second || execution.PendingCommandID != "" || execution.TurnNumber != 2 || run.Decision.Status != "reply_accepted" || service.domain.Operations[0].Status != "confirmed" {
 		t.Fatalf("second turn receipt was not applied: execution=%+v decision=%+v", execution, run.Decision)
 	}
-	fixed := executionapi.SessionContext{ProjectID: execution.ProjectIdentity, WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, SessionID: workerFlowMockSession, Generation: execution.SessionGeneration, CurrentTurnID: second}
-	request := neutralDecisionFixture(t, fixed, "pending", []executionapi.Question{{ID: "choice", Question: "Continue?", AllowFreeText: true}})
-	service.setRunDecision(run, &DecisionState{ID: newID(), AttemptID: run.AttemptID, Version: 1, Status: "answer_saved", Request: request})
+	fixed := executionbackend.SessionContext{ProjectID: execution.ProjectIdentity, WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, SessionID: workerFlowMockSession, Generation: execution.SessionGeneration, CurrentTurnID: second}
+	request := neutralDecisionFixture(t, fixed, "pending", []executionbackend.Question{{ID: "choice", Question: "Continue?", AllowFreeText: true}})
+	service.setRunDecision(run, &executionmodel.DecisionState{ID: newID(), AttemptID: run.AttemptID, Version: 1, Status: "answer_saved", Request: request})
 	workflow.Phase = "waiting_decision"
 	run.FinishTaskStatus = "waiting_decision"
 	if _, err := service.recordWorkerTurnStarted(run, workflow, execution, second); err != nil {
@@ -63,10 +65,10 @@ func TestAppServerRejectedEventReleasesObserver(t *testing.T) {
 }
 
 func TestAppServerRecoveryDoesNotRaceInFlightLaunch(t *testing.T) {
-	run := &Run{RunID: newID(), ExecutionID: newID(), DomainTaskID: "8", Protocol: string(neutralProtocol), WorkflowVersion: WorkerFlowVersion}
-	service := &Service{lifecycleEffects: map[string]pendingLifecycleEffect{newID(): {runID: run.RunID}}, State: Runtime{}, domain: DomainSnapshot{Tasks: []TaskRecord{{TaskID: "8", Status: "in_progress"}},
-		WorkflowRuns: []WorkflowRunRecord{{WorkflowRunID: run.RunID, WorkflowVersion: WorkerFlowVersion, Phase: "queued"}},
-		Executions:   []ExecutionRecord{{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, PendingCommandID: newID()}}}, runs: []*Run{run},
+	run := &Run{RunID: newID(), ExecutionID: newID(), DomainTaskID: "8", Protocol: string(neutralProtocol), WorkflowVersion: executionmodel.Version}
+	service := &Service{lifecycleEffects: map[string]pendingLifecycleEffect{newID(): {runID: run.RunID}}, State: Runtime{}, domain: DomainSnapshot{Tasks: []taskmodel.TaskRecord{{TaskID: "8", Status: "in_progress"}},
+		WorkflowRuns: []executionmodel.WorkflowRunRecord{{WorkflowRunID: run.RunID, WorkflowVersion: executionmodel.Version, Phase: "queued"}},
+		Executions:   []executionmodel.ExecutionRecord{{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, PendingCommandID: newID()}}}, runs: []*Run{run},
 	}
 	before := digestValue(struct {
 		View   Runtime
@@ -86,15 +88,15 @@ func TestAppServerRecoveryDoesNotRaceInFlightLaunch(t *testing.T) {
 func TestAppServerLateReplyCannotModifyTerminalTask(t *testing.T) {
 	for _, status := range []string{"closed", "discarded"} {
 		route := simpleQuestionRoute(t, neutralQuestionKey, "project", newID(), newID(), newID(), "generation", "turn", "original")
-		run := &Run{RunID: newID(), TaskStatus: status, Decision: &DecisionState{ID: newID(), Status: "answer_saved", Request: DecisionRequest{QuestionRoute: &route}}}
-		service := &Service{State: Runtime{}, domain: DomainSnapshot{Operations: []OperationRecord{{OperationID: "reply", Status: "in_flight"}}}, runs: []*Run{run}}
+		run := &Run{RunID: newID(), TaskStatus: status, Decision: &executionmodel.DecisionState{ID: newID(), Status: "answer_saved", Request: executionmodel.DecisionRequest{QuestionRoute: &route}}}
+		service := &Service{State: Runtime{}, domain: DomainSnapshot{Operations: []executionmodel.OperationRecord{{OperationID: "reply", Status: "in_flight"}}}, runs: []*Run{run}}
 		before := digestValue(struct {
 			View   Runtime
 			Domain DomainSnapshot
 		}{service.State, service.domain})
-		late := lifecycleEffectResult{request: executionapi.LifecycleRequest{Operation: executionapi.Operation{ID: "reply", Action: string(executionapi.LifecycleDeliverFeedback)}, Input: executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{DecisionID: run.Decision.ID, QuestionID: "original"}}}}
+		late := lifecycleEffectResult{request: executionbackend.LifecycleRequest{Operation: executionbackend.Operation{ID: "reply", Action: string(executionbackend.LifecycleDeliverFeedback)}, Input: executionbackend.LifecycleInput{Feedback: &executionbackend.FeedbackInput{DecisionID: run.Decision.ID, QuestionID: "original"}}}}
 		service.lifecycleEffects = map[string]pendingLifecycleEffect{"reply": {runID: run.RunID, apply: func(*Run, lifecycleEffectResult) error { t.Fatal("terminal task consumed a late receipt"); return nil }}}
-		if err := service.handleWorkerMessage(workerMessage{runID: run.RunID, effect: &late}); !errors.Is(err, ErrWorkerTurnStale) {
+		if err := service.handleWorkerMessage(workerMessage{runID: run.RunID, effect: &late}); !errors.Is(err, executionmodel.ErrTurnStale) {
 			t.Fatalf("late reply admission: %v", err)
 		}
 		if before != digestValue(struct {
@@ -156,7 +158,7 @@ func TestAppServerSlowRecoveryLeavesServiceWriterAvailable(t *testing.T) {
 	execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	execution.CurrentTurnID, execution.CurrentCommandID = "00000000-0000-0000-0000-000000000001", newID()
 	execution.Status, workflow.Phase = "active", "executing"
-	input := executionapi.TurnInput{CommandID: execution.CurrentCommandID, Prompt: "original persisted input"}
+	input := executionbackend.TurnInput{CommandID: execution.CurrentCommandID, Prompt: "original persisted input"}
 	if _, err := service.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+execution.ExecutionID+":"+input.CommandID, &input); err != nil {
 		t.Fatal(err)
 	}
@@ -204,7 +206,7 @@ func testAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	execution.CurrentTurnID = "00000000-0000-0000-0000-000000000003"
 	fixed := *workerSessionContext(run, execution)
 	fixed.ProjectID = service.Config.identity
-	ask := neutralDecisionFixture(t, fixed, "first", []executionapi.Question{{ID: "choice", Header: "Choice", Question: "Continue?", AllowFreeText: true}})
+	ask := neutralDecisionFixture(t, fixed, "first", []executionbackend.Question{{ID: "choice", Header: "Choice", Question: "Continue?", AllowFreeText: true}})
 	var err error
 	run.Decision, err = WriteDecisionRequest(run, ask)
 	if err != nil {
@@ -213,18 +215,18 @@ func testAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	service.setRunDecision(run, run.Decision)
 	record := service.decisionRecord(run)
 	record.Status, record.AnsweredBy = "answer_saved", "tester"
-	acceptedAnswer := DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, Answers: map[string][]string{"choice": {"A"}}, AnsweredBy: "tester", AnsweredAt: now()}
+	acceptedAnswer := executionmodel.DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, Answers: map[string][]string{"choice": {"A"}}, AnsweredBy: "tester", AnsweredAt: now()}
 	record.Answer = mustJSON(acceptedAnswer)
 	service.refreshRun(run)
 	firstID := run.Decision.ID
-	feedback := &executionapi.FeedbackInput{DecisionID: firstID, QuestionID: ask.QuestionRoute.QuestionID, Answer: &executionapi.Answer{Answers: acceptedAnswer.Answers}}
+	feedback := &executionbackend.FeedbackInput{DecisionID: firstID, QuestionID: ask.QuestionRoute.QuestionID, Answer: &executionbackend.Answer{Answers: acceptedAnswer.Answers}}
 	if _, err := service.startWorkerOperation(run, "reply_execution_question", "worker-question-answer:"+execution.ExecutionID+":"+firstID, feedback); err != nil {
 		t.Fatal(err)
 	}
 	workflow, execution = service.workflowRecords(run)
 	fixed = *workerSessionContext(run, execution)
-	next := neutralDecisionFixture(t, fixed, "second", []executionapi.Question{{ID: "choice", Header: "Choice", Question: "Continue?", AllowFreeText: true}})
-	execution.PendingQuestions = []PendingQuestion{{Questions: next.Questions, Route: *next.QuestionRoute}}
+	next := neutralDecisionFixture(t, fixed, "second", []executionbackend.Question{{ID: "choice", Header: "Choice", Question: "Continue?", AllowFreeText: true}})
+	execution.PendingQuestions = []executionmodel.PendingQuestion{{Questions: next.Questions, Route: *next.QuestionRoute}}
 	service.lifecycleResolver = neutralReceiptResolver{confirmedAnswer: true}
 
 	if err := service.reconcileSavedLifecycleQuestionAnswer(context.Background(), run); err != nil {
@@ -247,12 +249,12 @@ func testAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 
 func TestRoutedDecisionRequiresAllQuestionIDs(t *testing.T) {
 	route := simpleQuestionRoute(t, "example.implementation", "project", "workflow", "execution", "attempt", "generation", "turn", "native-question")
-	questions := []executionapi.Question{
-		{ExecutionID: "execution", AttemptID: "attempt", Generation: "generation", TurnID: "turn", ID: "one", Header: "One", Question: "First?", Options: []executionapi.DecisionOption{{ID: "a", Label: "A"}}},
+	questions := []executionbackend.Question{
+		{ExecutionID: "execution", AttemptID: "attempt", Generation: "generation", TurnID: "turn", ID: "one", Header: "One", Question: "First?", Options: []executionbackend.DecisionOption{{ID: "a", Label: "A"}}},
 		{ExecutionID: "execution", AttemptID: "attempt", Generation: "generation", TurnID: "turn", ID: "two", Header: "Two", Question: "Second?", AllowFreeText: true},
 	}
-	request := DecisionRequest{FormatVersion: 2, Question: "Two questions", AllowFreeText: true, Questions: questions, QuestionRoute: &route}
-	answer := DecisionAnswer{AnsweredBy: "tester", Note: `{"one":["A"],"two":["scope"]}`}
+	request := executionmodel.DecisionRequest{FormatVersion: 2, Question: "Two questions", AllowFreeText: true, Questions: questions, QuestionRoute: &route}
+	answer := executionmodel.DecisionAnswer{AnsweredBy: "tester", Note: `{"one":["A"],"two":["scope"]}`}
 	if err := normalizeNativeDecisionAnswer(&request, &answer); err != nil {
 		t.Fatal(err)
 	}
@@ -260,7 +262,7 @@ func TestRoutedDecisionRequiresAllQuestionIDs(t *testing.T) {
 		t.Fatal("native answers lost a question")
 	}
 	delete(answer.Answers, "two")
-	if err := validateDecisionAnswer(&request, &answer); err == nil {
+	if err := executionmodel.ValidateDecisionAnswer(&request, &answer); err == nil {
 		t.Fatal("missing second answer was accepted")
 	}
 }
@@ -274,7 +276,7 @@ func TestAppServerStartedEventCommitsOperationReceipt(t *testing.T) {
 	execution.PendingCommandID, execution.PendingTurnID = commandID, turnID
 	opID, err := service.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
 	require(t, err)
-	event := WorkerEvent{Fact: executionapi.EventFact{Kind: executionapi.EventStarted, SessionID: workerFlowMockSession, StartedTurnID: turnID}}
+	event := WorkerEvent{Fact: executionbackend.EventFact{Kind: executionbackend.EventStarted, SessionID: workerFlowMockSession, StartedTurnID: turnID}}
 	require(t, service.eventWorkerFlowFor(run, event))
 	snapshot, err := service.domainStore.Query(context.Background(), service.Config.identity)
 	require(t, err)

@@ -1,11 +1,12 @@
 package projection
 
 import (
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func LatestWorkflow(workflows []contracts.WorkflowRunRecord, taskID string) *contracts.WorkflowRunRecord {
-	var latest *contracts.WorkflowRunRecord
+func LatestWorkflow(workflows []executionmodel.WorkflowRunRecord, taskID string) *executionmodel.WorkflowRunRecord {
+	var latest *executionmodel.WorkflowRunRecord
 	for i := range workflows {
 		workflow := &workflows[i]
 		if workflow.TaskID != taskID {
@@ -18,8 +19,8 @@ func LatestWorkflow(workflows []contracts.WorkflowRunRecord, taskID string) *con
 	return latest
 }
 
-func LatestExecution(executions []contracts.ExecutionRecord, workflowRunID string) *contracts.ExecutionRecord {
-	var latest *contracts.ExecutionRecord
+func LatestExecution(executions []executionmodel.ExecutionRecord, workflowRunID string) *executionmodel.ExecutionRecord {
+	var latest *executionmodel.ExecutionRecord
 	for i := range executions {
 		execution := &executions[i]
 		if execution.WorkflowRunID != workflowRunID {
@@ -32,11 +33,11 @@ func LatestExecution(executions []contracts.ExecutionRecord, workflowRunID strin
 	return latest
 }
 
-func CurrentAttempt(attempts []contracts.StepAttemptRecord, execution *contracts.ExecutionRecord) *contracts.StepAttemptRecord {
+func CurrentAttempt(attempts []executionmodel.StepAttemptRecord, execution *executionmodel.ExecutionRecord) *executionmodel.StepAttemptRecord {
 	if execution == nil || execution.CurrentStep == "" {
 		return nil
 	}
-	var latest *contracts.StepAttemptRecord
+	var latest *executionmodel.StepAttemptRecord
 	for i := range attempts {
 		attempt := &attempts[i]
 		if attempt.ExecutionID != execution.ExecutionID || attempt.StepID != execution.CurrentStep {
@@ -49,7 +50,7 @@ func CurrentAttempt(attempts []contracts.StepAttemptRecord, execution *contracts
 	return latest
 }
 
-func finishStatus(task contracts.TaskRecord, workflow contracts.WorkflowRunRecord) string {
+func finishStatus(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord) string {
 	switch {
 	case workflow.Abandonment != nil:
 		return "abandoned"

@@ -8,15 +8,17 @@ import (
 	"strings"
 	"time"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	taskdomain "github.com/erranliu/SteerLine/internal/steerline/task"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-// TaskClaimReceipt records reservation, not worker start. The existing
-
 type TaskDeliveryVerifier interface {
-	Query(context.Context, string) (PRInfo, error)
+	Query(context.Context, string) (executionmodel.PRInfo, error)
 }
 
 type TaskDeliveryReceipt = taskdomain.TaskDeliveryReceipt
@@ -32,7 +34,7 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	if sqlite == nil || c.Project == "" || config.Identity() != c.Project {
 		return TaskDeliveryReceipt{}, nativeErr("authority_mismatch", "delivery requires the configured native project")
 	}
-	if err := ValidateNativeTaskID(taskID); err != nil {
+	if err := taskmodel.ValidateID(taskID); err != nil {
 		return TaskDeliveryReceipt{}, err
 	}
 	if expectedTaskVersion == 0 || workflowRunID == "" {
@@ -110,7 +112,7 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 		}
 		return TaskDeliveryReceipt{}, err
 	}
-	var info PRInfo
+	var info executionmodel.PRInfo
 	for _, pr := range known {
 		if pr.WorkflowID == workflowRunID && pr.URL == prURL {
 			info = pr.Info
@@ -121,7 +123,7 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 		return TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "PR provider returned an unknown merge state")
 	} else if !info.Merged || info.State != "merged" {
 		return TaskDeliveryReceipt{}, nativeErr("task_not_ready", "selected PR does not have complete verified merged evidence")
-	} else if info.MergedAt == nil || info.MergedAt.IsZero() || info.MergeCommit == nil || !validCommit(*info.MergeCommit) {
+	} else if info.MergedAt == nil || info.MergedAt.IsZero() || info.MergeCommit == nil || !taskmodel.ValidCommit(*info.MergeCommit) {
 		return TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "merged PR evidence is incomplete")
 	} else {
 		target, targetErr := configuredRepositoryTarget(ctx, config)
@@ -144,7 +146,7 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 
 // recordDiscardedMergeConflict keeps a late platform merge as audit evidence
 // without converting a discarded task into a normal delivery.
-func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s persistence.CommandStore, config Config, task TaskRecord, workflowRunID string, verifier TaskDeliveryVerifier, authority ProjectTaskAuthority) error {
+func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s persistence.CommandStore, config Config, task taskmodel.TaskRecord, workflowRunID string, verifier TaskDeliveryVerifier, authority tasklegacy.ProjectTaskAuthority) error {
 	snapshot, err := s.Query(ctx, c.Project)
 	if err != nil {
 		return err
@@ -166,7 +168,7 @@ func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s pers
 		if !info.Merged || info.State != "merged" {
 			continue
 		}
-		if info.MergedAt == nil || info.MergedAt.IsZero() || info.MergeCommit == nil || !validCommit(*info.MergeCommit) {
+		if info.MergedAt == nil || info.MergedAt.IsZero() || info.MergeCommit == nil || !taskmodel.ValidCommit(*info.MergeCommit) {
 			return nativeErr("merge_state_unknown", "discarded candidate merge evidence is incomplete")
 		}
 		err = s.TransactDelivery(ctx, func(tx persistence.DeliveryTx) error {
@@ -185,7 +187,7 @@ func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s pers
 			if candidateBindings(currentSnapshot, task.TaskID) != candidateBindings(snapshot, task.TaskID) {
 				return nativeErr("stale_version", "candidate PR set changed during merge reconciliation")
 			}
-			_, err = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: task.TaskID, WorkflowRunID: workflowRunID, ExecutionID: execution.ExecutionID, ExternalSource: "native-task-delivery", ExternalID: task.TaskID + ":late-merge:" + url + ":" + *info.MergeCommit, Type: "task.delivery.conflict", ReceivedAt: time.Now().UTC(), Payload: mustJSON(map[string]any{"task_id": task.TaskID, "workflow_run_id": workflowRunID, "pr_url": info.URL, "pr_head": info.HeadRevision, "merge_commit": *info.MergeCommit, "merged_at": *info.MergedAt, "pr": info, "discard_request_id": task.DiscardRequestID, "discarded_at": task.DiscardedAt})})
+			_, err = tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, TaskID: task.TaskID, WorkflowRunID: workflowRunID, ExecutionID: execution.ExecutionID, ExternalSource: "native-task-delivery", ExternalID: task.TaskID + ":late-merge:" + url + ":" + *info.MergeCommit, Type: "task.delivery.conflict", ReceivedAt: time.Now().UTC(), Payload: mustJSON(map[string]any{"task_id": task.TaskID, "workflow_run_id": workflowRunID, "pr_url": info.URL, "pr_head": info.HeadRevision, "merge_commit": *info.MergeCommit, "merged_at": *info.MergedAt, "pr": info, "discard_request_id": task.DiscardRequestID, "discarded_at": task.DiscardedAt})})
 			return err
 		})
 		if err != nil {
@@ -199,8 +201,8 @@ func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s pers
 	return nativeErr("task_discarded", "discarded candidate PR is not verified merged")
 }
 
-func selectedNativeDeliveryState(snapshot DomainSnapshot, taskID, workflowRunID string) (WorkflowRunRecord, ExecutionRecord, error) {
-	var workflow *WorkflowRunRecord
+func selectedNativeDeliveryState(snapshot DomainSnapshot, taskID, workflowRunID string) (executionmodel.WorkflowRunRecord, executionmodel.ExecutionRecord, error) {
+	var workflow *executionmodel.WorkflowRunRecord
 	for i := range snapshot.WorkflowRuns {
 		if snapshot.WorkflowRuns[i].WorkflowRunID == workflowRunID && snapshot.WorkflowRuns[i].TaskID == taskID {
 			workflow = &snapshot.WorkflowRuns[i]
@@ -208,9 +210,9 @@ func selectedNativeDeliveryState(snapshot DomainSnapshot, taskID, workflowRunID 
 		}
 	}
 	if workflow == nil {
-		return WorkflowRunRecord{}, ExecutionRecord{}, nativeErr("immutable_task", "selected workflow run does not belong to this task")
+		return executionmodel.WorkflowRunRecord{}, executionmodel.ExecutionRecord{}, nativeErr("immutable_task", "selected workflow run does not belong to this task")
 	}
-	var execution *ExecutionRecord
+	var execution *executionmodel.ExecutionRecord
 	for i := range snapshot.Executions {
 		if snapshot.Executions[i].WorkflowRunID == workflowRunID && snapshot.Executions[i].ExecutionID == workflow.SelectedResult {
 			execution = &snapshot.Executions[i]
@@ -218,12 +220,12 @@ func selectedNativeDeliveryState(snapshot DomainSnapshot, taskID, workflowRunID 
 		}
 	}
 	if execution == nil {
-		return *workflow, ExecutionRecord{}, nativeErr("inconsistent_delivery", "selected workflow result is missing")
+		return *workflow, executionmodel.ExecutionRecord{}, nativeErr("inconsistent_delivery", "selected workflow result is missing")
 	}
 	return *workflow, *execution, nil
 }
 
-func validateNativeDeliveryGates(record TaskRecord, contract TaskContract, workflow WorkflowRunRecord, execution ExecutionRecord) (string, error) {
+func validateNativeDeliveryGates(record taskmodel.TaskRecord, contract taskmodel.TaskContract, workflow executionmodel.WorkflowRunRecord, execution executionmodel.ExecutionRecord) (string, error) {
 	sessionID, _ := executionSessionFacts(&execution)
 	return taskdomain.DeliveryPR(record, contract, taskdomain.DeliveryGate{
 		WorkflowVersion:     workflow.WorkflowVersion,
@@ -236,10 +238,10 @@ func validateNativeDeliveryGates(record TaskRecord, contract TaskContract, workf
 		SessionID:           sessionID,
 		WorkspaceBranch:     execution.Workspace.Branch,
 		Phase:               workflow.Phase,
-	}, WorkerFlowVersion)
+	}, executionmodel.Version)
 }
 
-func (c CommandService) commitNativeDelivery(ctx context.Context, s persistence.CommandStore, expectedAuthorityVersion uint64, task TaskRecord, workflow WorkflowRunRecord, execution ExecutionRecord, contract TaskContract, prURL string, delivery TaskDeliveryRecord, expectedBindings string) (TaskDeliveryReceipt, error) {
+func (c CommandService) commitNativeDelivery(ctx context.Context, s persistence.CommandStore, expectedAuthorityVersion uint64, task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, execution executionmodel.ExecutionRecord, contract taskmodel.TaskContract, prURL string, delivery TaskDeliveryRecord, expectedBindings string) (TaskDeliveryReceipt, error) {
 	if expectedBindings == "" {
 		return TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "delivery requires its verified candidate and PR binding set")
 	}
@@ -331,7 +333,7 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s persistence.
 		}
 		receipt = TaskDeliveryReceipt{TaskID: task.TaskID, TaskVersion: next.Version, WorkflowRunID: workflow.WorkflowRunID, GraphRevision: graph.Authority.GraphRevision + 1, Status: "closed", Delivery: delivery}
 		body, _ := json.Marshal(receipt)
-		_, err = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: task.TaskID, WorkflowRunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, ExternalSource: "native-task-delivery", ExternalID: delivery.PRURL + ":" + delivery.MergeCommit, Type: "task.delivered", ReceivedAt: delivery.RecordedAt, Payload: body})
+		_, err = tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, TaskID: task.TaskID, WorkflowRunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, ExternalSource: "native-task-delivery", ExternalID: delivery.PRURL + ":" + delivery.MergeCommit, Type: "task.delivered", ReceivedAt: delivery.RecordedAt, Payload: body})
 		return err
 	})
 	var replay taskDeliveryReplay

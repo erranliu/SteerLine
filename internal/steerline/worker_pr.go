@@ -4,26 +4,26 @@ import (
 	"context"
 	"errors"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-// A verified open PR does not require input, but the original session remains
-// available if the user wants to request more work before merging it.
 func (s *Service) offerWorkerPRFeedback(run *Run, url string) error {
 	if s.candidateBusinessClosed(run) {
 		return nil
 	}
-	if run == nil || run.WorkflowVersion != WorkerFlowVersion || url == "" {
+	if run == nil || run.WorkflowVersion != executionmodel.Version || url == "" {
 		return errors.New("optional PR feedback requires a fixed worker and PR")
 	}
 	if run.Decision != nil && run.Decision.Status == "pending" {
 		return nil
 	}
-	decision, err := WriteDecisionRequest(run, DecisionRequest{
+	decision, err := WriteDecisionRequest(run, executionmodel.DecisionRequest{
 		Question: "The worker stopped. What should it do next?",
 		Context:  "PR 已核实并等待合并。本轮已结束，提交反馈后将在原 worker 会话开始下一轮。",
-		Options:  []executionapi.DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true,
+		Options:  []executionbackend.DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true,
 	})
 	if err != nil {
 		return err
@@ -32,13 +32,13 @@ func (s *Service) offerWorkerPRFeedback(run *Run, url string) error {
 	return nil
 }
 
-func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *TaskRecord, workflow *WorkflowRunRecord) error {
+func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *taskmodel.TaskRecord, workflow *executionmodel.WorkflowRunRecord) error {
 	fixed, contextErr := s.workerFlowContext(run)
 	if contextErr != nil {
 		return contextErr
 	}
 	c := fixed.config
-	if run == nil || task == nil || workflow == nil || workflow.WorkflowVersion != WorkerFlowVersion {
+	if run == nil || task == nil || workflow == nil || workflow.WorkflowVersion != executionmodel.Version {
 		return nil
 	}
 	if task.Status == "closed" {

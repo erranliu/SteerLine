@@ -10,9 +10,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func seedNativeGraphForView(t *testing.T, c Config, commit string, store *sqliteFixture, count int, edges []TaskDependencyRecord) {
+func seedNativeGraphForView(t *testing.T, c Config, commit string, store *sqliteFixture, count int, edges []taskmodel.TaskDependencyRecord) {
 	t.Helper()
 	base := nativeContract(t, c, commit, "fixture-contract")
 	created := time.Now().UTC()
@@ -22,7 +24,7 @@ func seedNativeGraphForView(t *testing.T, c Config, commit string, store *sqlite
 		mapping["k"+id] = id
 	}
 	err := store.transactRecords(context.Background(), func(tx *fixtureTransaction) error {
-		batch := TaskBatchRecord{ProjectIdentity: c.Identity(), BatchID: "view-fixture", SchemaVersion: taskBatchSchemaVersion, PayloadDigest: strings.Repeat("a", 64), CommandID: "view-fixture-command", TaskIDs: mapping, CreatedAt: created}
+		batch := taskmodel.TaskBatchRecord{ProjectIdentity: c.Identity(), BatchID: "view-fixture", SchemaVersion: taskmodel.BatchSchemaVersion, PayloadDigest: strings.Repeat("a", 64), CommandID: "view-fixture-command", TaskIDs: mapping, CreatedAt: created}
 		if err := tx.PutTaskBatch(batch, 1, 0); err != nil {
 			return err
 		}
@@ -31,7 +33,7 @@ func seedNativeGraphForView(t *testing.T, c Config, commit string, store *sqlite
 			contract := base
 			contract.ContractID = "contract-" + id
 			var err error
-			contract.Digest, err = TaskContractDigest(contract)
+			contract.Digest, err = taskmodel.ContractDigest(contract)
 			if err != nil {
 				return err
 			}
@@ -39,7 +41,7 @@ func seedNativeGraphForView(t *testing.T, c Config, commit string, store *sqlite
 			if i == 3 {
 				title = strings.Repeat("中文标题🙂", 12) + "<script>\x1b[2J\n伪造状态\u202e"
 			}
-			task := TaskRecord{ProjectIdentity: c.Identity(), TaskID: id, BatchID: batch.BatchID, Title: title, Type: "task", Priority: 2, ContractID: contract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
+			task := taskmodel.TaskRecord{ProjectIdentity: c.Identity(), TaskID: id, BatchID: batch.BatchID, Title: title, Type: "task", Priority: 2, ContractID: contract.ContractID, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
 			if err = tx.PutTask(task); err != nil {
 				return err
 			}
@@ -62,7 +64,7 @@ func seedNativeGraphForView(t *testing.T, c Config, commit string, store *sqlite
 func TestTaskGraphViewSnapshotAndBoundary(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
-	edges := []TaskDependencyRecord{
+	edges := []taskmodel.TaskDependencyRecord{
 		{ProjectIdentity: c.Identity(), PredecessorID: "1", SuccessorID: "2"},
 		{ProjectIdentity: c.Identity(), PredecessorID: "2", SuccessorID: "3"},
 		{ProjectIdentity: c.Identity(), PredecessorID: "2", SuccessorID: "5"},
@@ -200,7 +202,7 @@ func TestTaskGraphLimitsAndExportPublication(t *testing.T) {
 	if strings.ContainsRune(string(body), '\u202e') || !strings.Contains(string(body), `\u202e`) {
 		t.Fatal("export JSON exposed a bidi control as terminal text")
 	}
-	if _, _, err = decodeTaskBatch(body); err == nil {
+	if _, _, err = taskmodel.DecodeBatch(body); err == nil {
 		t.Fatal("graph export was accepted as task-batch/v1 input")
 	}
 	var exported TaskGraphPage
