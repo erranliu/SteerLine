@@ -41,26 +41,37 @@ const (
 )
 
 type ControlInput struct {
-	Action                             ControlAction
-	Payload                            ControlPayload
-	RequestID, RequestedBy, InstanceID string
-	ExpectedRevision                   *uint64
+	Action           ControlAction  `json:"action"`
+	Payload          ControlPayload `json:"payload"`
+	RequestID        string         `json:"request_id"`
+	RequestedBy      string         `json:"requested_by"`
+	InstanceID       string         `json:"instance_id"`
+	ExpectedRevision *uint64        `json:"expected_revision,omitempty"`
 }
 
 type AnswerInput struct {
-	RunID, DecisionID, Option, Note, RequestedBy, CommandID string
-	ExpectedVersion                                         uint64
+	RunID           string `json:"run_id"`
+	DecisionID      string `json:"decision_id"`
+	Option          string `json:"option"`
+	Note            string `json:"note"`
+	RequestedBy     string `json:"requested_by"`
+	CommandID       string `json:"command_id"`
+	ExpectedVersion uint64 `json:"expected_version"`
 }
 
 type CreateInput struct {
-	Payload                  []byte
-	RequestID, RequestedBy   string
-	ExpectedAuthorityVersion uint64
+	Payload                  []byte `json:"payload"`
+	RequestID                string `json:"request_id"`
+	RequestedBy              string `json:"requested_by"`
+	ExpectedAuthorityVersion uint64 `json:"expected_authority_version"`
 }
 
 type DiscardInput struct {
-	TaskID, RequestID, Reason, RequestedBy string
-	ExpectedVersion                        uint64
+	TaskID          string `json:"task_id"`
+	RequestID       string `json:"request_id"`
+	Reason          string `json:"reason"`
+	RequestedBy     string `json:"requested_by"`
+	ExpectedVersion uint64 `json:"expected_version"`
 }
 
 type ServiceStopResult struct {
@@ -75,7 +86,9 @@ type ServiceStopResult struct {
 
 // ActivityCursor belongs to one canonical database stream.
 type ActivityCursor struct {
-	RunID, ExecutionID, AttemptID string
-	AfterEventID                  int64
-	Initialized                   bool
+	RunID        string `json:"run_id"`
+	ExecutionID  string `json:"execution_id"`
+	AttemptID    string `json:"attempt_id"`
+	AfterEventID int64  `json:"after_event_id"`
+	Initialized  bool   `json:"initialized"`
 }

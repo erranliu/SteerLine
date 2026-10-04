@@ -16,16 +16,14 @@ func ConversationEvent(e contracts.ConversationEvent) (api.ConversationEvent, er
 	if r := e.Raw; r != nil {
 		p.Raw = &api.ConversationRawRef{ExecutionID: r.ExecutionID, AttemptID: r.AttemptID, ID: r.ID, SHA256: r.SHA256, Bytes: r.Bytes}
 	}
-	// Attributes are validated bounded JSON display metadata. Re-decode into an
-	// independently owned JSON tree so UI changes cannot mutate reader state.
+	// Only the display end reason is public. Private native attributes and
+	// implementation payloads are never forwarded as an open JSON object.
 	if e.Attributes != nil {
-		body, err := json.Marshal(e.Attributes)
+		_, err := json.Marshal(e.Attributes)
 		if err != nil {
 			return api.ConversationEvent{}, err
 		}
-		if err := json.Unmarshal(body, &p.Attributes); err != nil {
-			return api.ConversationEvent{}, err
-		}
+		p.EndReason, _ = e.Attributes["reason"].(string)
 	}
 	return p, nil
 }

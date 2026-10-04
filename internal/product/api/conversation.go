@@ -104,7 +104,7 @@ type ConversationEvent struct {
 	Status             string                 `json:"status,omitempty"`
 	Body               *ConversationBodyRef   `json:"body,omitempty"`
 	Raw                *ConversationRawRef    `json:"raw,omitempty"`
-	Attributes         map[string]any         `json:"attributes,omitempty"`
+	EndReason          string                 `json:"end_reason,omitempty"`
 	OccurredAt         *time.Time             `json:"occurred_at,omitempty"`
 	ReceivedAt         time.Time              `json:"received_at"`
 	Diagnostic         string                 `json:"diagnostic,omitempty"`

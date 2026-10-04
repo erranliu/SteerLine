@@ -41,7 +41,7 @@ func TestTM05PageProjection(t *testing.T) {
 		}
 	})
 	t.Run("conversation_projects_exact_body_raw_and_source_without_checkpoint", func(t *testing.T) {
-		input := contracts.ConversationEvent{ProjectID: "project", WorkflowID: "workflow-b", ExecutionID: "execution-b", AttemptID: "attempt-b", SessionID: "session-b", Source: "canonical", SourceSegment: "segment", SourceCursor: "private-source-checkpoint", ExternalRef: "private-envelope", Body: &contracts.ConversationBodyRef{ExecutionID: "execution-b", AttemptID: "attempt-b", ItemKey: "item", Revision: 3, SHA256: "body-digest", Completeness: contracts.BodyComplete}, Raw: &contracts.ConversationRawRef{ExecutionID: "execution-b", AttemptID: "attempt-b", ID: "raw", SHA256: "raw-digest"}, Attributes: map[string]any{"label": "中文😀"}}
+		input := contracts.ConversationEvent{ProjectID: "project", WorkflowID: "workflow-b", ExecutionID: "execution-b", AttemptID: "attempt-b", SessionID: "session-b", Source: "canonical", SourceSegment: "segment", SourceCursor: "private-source-checkpoint", ExternalRef: "private-envelope", Body: &contracts.ConversationBodyRef{ExecutionID: "execution-b", AttemptID: "attempt-b", ItemKey: "item", Revision: 3, SHA256: "body-digest", Completeness: contracts.BodyComplete}, Raw: &contracts.ConversationRawRef{ExecutionID: "execution-b", AttemptID: "attempt-b", ID: "raw", SHA256: "raw-digest"}, Attributes: map[string]any{"reason": "中文😀", "private": "private-native-envelope"}}
 		page, err := ConversationEvent(input)
 		if err != nil {
 			t.Fatal(err)
@@ -50,15 +50,15 @@ func TestTM05PageProjection(t *testing.T) {
 			t.Fatalf("lost exact source/body/raw target: %+v", page)
 		}
 		page.Body.ItemKey = "changed"
-		page.Attributes["label"] = "changed"
-		if input.Body.ItemKey != "item" || input.Attributes["label"] != "中文😀" {
+		page.EndReason = "changed"
+		if input.Body.ItemKey != "item" || input.Attributes["reason"] != "中文😀" {
 			t.Fatal("page mutation changed canonical source")
 		}
 		body, err := json.Marshal(page)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if strings.Contains(string(body), "private-source-checkpoint") || strings.Contains(string(body), "private-envelope") {
+		if strings.Contains(string(body), "private-source-checkpoint") || strings.Contains(string(body), "private-envelope") || strings.Contains(string(body), "private-native-envelope") {
 			t.Fatalf("private source fields reached UI: %s", body)
 		}
 		input.Attributes["invalid"] = make(chan int)

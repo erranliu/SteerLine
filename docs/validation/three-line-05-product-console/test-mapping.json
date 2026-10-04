@@ -13,6 +13,7 @@
       "old_package": "internal/steerlineclient",
       "new_package": "internal/product/client",
       "parents": ["TestCM71ResourceOwnershipAndClosedClient", "TestCM71ProjectScopeAndErrors", "TestCM71UnknownControlUsesOriginalRequestAndRejectsConflict"],
+      "new_original_request_parent": "TestTM05OriginalRequest",
       "assertion_owner": "single product client lifecycle and original request replay",
       "status": "pending actual consumer switch"
     },
@@ -25,7 +26,7 @@
     {
       "new_package": "internal/product/query",
       "parent": "TestTM05PageProjection",
-      "subtests": ["candidate_excludes_private_execution_and_copies_page_values", "history_retains_complete_candidate_numbering_without_private_records"],
+      "subtests": ["candidate_excludes_private_execution_and_copies_page_values", "history_retains_complete_candidate_numbering_without_private_records", "task_page_excludes_fixed_contract_and_private_delivery_evidence", "unique_delivery_projects_winner_and_loser_without_choosing_by_merge", "conversation_projects_exact_body_raw_and_source_without_checkpoint"],
       "assertion_owner": "pure page projection; does not reconstruct actor state"
     },
     {
