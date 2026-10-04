@@ -19,9 +19,9 @@ type ProbeConfig struct {
 }
 
 type ProbePort struct {
-	Output           func(context.Context, string, []string) ([]byte, error)
-	HistoryAvailable func(context.Context) bool
-	StartManaged     func(*exec.Cmd) (func(), error)
+	Output       func(context.Context, string, []string) ([]byte, error)
+	CheckHistory func(context.Context) error
+	StartManaged func(*exec.Cmd) (func(), error)
 }
 
 type ProbeError struct {
@@ -49,10 +49,11 @@ func ProbeCapabilities(ctx context.Context, config ProbeConfig, port ProbePort) 
 	if err != nil || !strings.Contains(string(out), "--listen") {
 		return &ProbeError{Diagnostic: "configured Codex executable does not expose app-server WebSocket transport", Cause: err}
 	}
-	if !port.HistoryAvailable(ctx) {
-		return &ProbeError{Diagnostic: "configured Codex session history cannot be read for exact turn reconciliation"}
+	if err := port.CheckHistory(ctx); err != nil {
+		return &ProbeError{Diagnostic: "configured Codex session history cannot be read for exact turn reconciliation: " + err.Error(), Cause: err}
 	}
-	probeFile, err := os.CreateTemp(config.RunDir, "worker-process-probe-*.log")
+	// Preflight must work before runtime state exists and leave it untouched.
+	probeFile, err := os.CreateTemp("", "worker-process-probe-*.log")
 	if err != nil {
 		return err
 	}

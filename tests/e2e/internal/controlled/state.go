@@ -53,7 +53,7 @@ func Write(path string, value any) error {
 	if err = f.Close(); err != nil {
 		return err
 	}
-	return os.Rename(name, path)
+	return replaceStateFile(name, path)
 }
 
 func Git(ctx context.Context, dir string, args ...string) (string, error) {

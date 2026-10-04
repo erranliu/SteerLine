@@ -64,7 +64,7 @@ func TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEff
 			t.Fatalf("%s did not reject missing native authority: %v", name, err)
 		}
 	}
-	assertAuthorityError("RunConfiguredService", testRunConfiguredService(context.Background(), c, "manual", "", "off"))
+	assertAuthorityError("RunConfiguredService", RunConfiguredService(context.Background(), c, "manual", "", "off", newTestService))
 	_, stopErr := StopService(context.Background(), c, "operator", time.Second)
 	assertAuthorityError("StopService", stopErr)
 	if _, err := ControlSnapshot(c); err == nil || !strings.Contains(err.Error(), "task_authority=native") {

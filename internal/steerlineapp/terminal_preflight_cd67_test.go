@@ -19,6 +19,19 @@ import (
 )
 
 func TestMain(m *testing.M) {
+	if os.Getenv("STEERLINE_APP_SERVER_FIXTURE") == "1" {
+		switch strings.Join(os.Args[1:], " ") {
+		case "--version":
+			fmt.Println("codex-cli 0.159.2")
+		case "app-server --help":
+			fmt.Println("app-server --listen")
+		case "app-server --stdio":
+			testprotocol.MockAppServerStdio()
+		default:
+			os.Exit(2)
+		}
+		os.Exit(0)
+	}
 	for i, arg := range os.Args {
 		if arg == "--terminal-fixture" && i+1 < len(os.Args) {
 			os.Exit(testprotocol.FakeTerminal(os.Args[i+1], os.Args[i+2:]))

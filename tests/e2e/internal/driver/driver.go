@@ -14,6 +14,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 	"github.com/erranliu/SteerLine/internal/testprocess"
 )
@@ -154,7 +155,7 @@ func (c *Client) Tasks(ctx context.Context) (contracts.NativeTaskPage, error) {
 }
 
 func ReadWorkflow(ctx context.Context, database, project string) (contracts.DomainSnapshot, error) {
-	reader, err := steerline.OpenSQLiteReader(database)
+	reader, err := (sqlite.Factory{}).OpenReader(database)
 	if err != nil {
 		return contracts.DomainSnapshot{}, err
 	}
@@ -164,7 +165,7 @@ func ReadWorkflow(ctx context.Context, database, project string) (contracts.Doma
 
 // ReadProjectView uses the product reader's public transaction contract.
 func ReadProjectView(ctx context.Context, database, project string) (contracts.ProjectView, error) {
-	reader, err := steerline.OpenSQLiteReader(database)
+	reader, err := (sqlite.Factory{}).OpenReader(database)
 	if err != nil {
 		return contracts.ProjectView{}, err
 	}
@@ -188,7 +189,7 @@ func MainView(args []string) error {
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return err
 	}
-	reader, err := steerline.OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
+	reader, err := steerline.OpenNativeTaskReader(ctx, &c)
 	if err != nil {
 		return err
 	}

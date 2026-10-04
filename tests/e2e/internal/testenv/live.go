@@ -110,7 +110,7 @@ gh pr create --repo '%s' --base '%s' --head $branch --draft --title 'SteerLine E
 if ($LASTEXITCODE -ne 0) { throw 'PR create failed' }
 `, filepath.Join(p.Home, "github-token"), githubRepository, p.BaseBranch, s.ID)
 			s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(script), 0600))
-			spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. It commits, pushes to the real test repository and creates a real GitHub draft PR. Report its returned URL in your final reply.\n"
+			spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. It commits, pushes to the real test repository and creates a real GitHub draft PR. Copy its returned URL verbatim into your final reply and completion relay body, including the repository owner. The URL must have the form https://github.com/erranliu/SteerlineTest/pull/<number>; do not shorten or reconstruct it.\n"
 		} else {
 			state, err := controlled.Read(p.Provider)
 			s.Must(err)
@@ -351,8 +351,22 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	if content != "real model delivery" {
 		s.t.Fatalf("real native result differs: %q", content)
 	}
-	usage, err := p.NativeUsage(before, "before")
-	s.Must(err)
+	var usage native.Usage
+	baselineTurn := ""
+	s.Wait("completed native usage baseline", func() (bool, error) {
+		current, err := p.NativeUsage(before, "before")
+		if baselineTurn != "" && current.Turn != baselineTurn {
+			return false, errors.New("native turn changed while awaiting usage completion")
+		}
+		if current.Turn != "" {
+			baselineTurn = current.Turn
+		}
+		if errors.Is(err, native.ErrNativeTurnPending) {
+			return false, nil
+		}
+		usage = current
+		return err == nil, err
+	})
 	if restart {
 		p.RestartService()
 		after := p.WaitPhase("waiting_pr_merge")

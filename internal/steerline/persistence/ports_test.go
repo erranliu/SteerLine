@@ -30,7 +30,10 @@ func TestCM69PurePortDependencies(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if path == "database/sql" || strings.Contains(path, ".") && path != base+"contracts" && path != base+"execution" && path != base+"task" {
+			// CM70's application-owned Connection composes the existing query
+			// read contracts. Keep that exception out of the narrow write ports.
+			connectionReadPort := file.Name() == "connections.go" && path == base+"query"
+			if path == "database/sql" || strings.Contains(path, ".") && path != base+"contracts" && path != base+"execution" && path != base+"task" && !connectionReadPort {
 				t.Errorf("port depends on non-value owner: %s", path)
 			}
 		}

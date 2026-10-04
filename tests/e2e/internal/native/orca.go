@@ -132,7 +132,7 @@ func OrcaMain(args []string) error {
 				}
 				// A bracketed-paste preview may appear before the queued prompt's
 				// remaining bytes arrive. Submit only after the full draft settles.
-				if (strings.Contains(lastDraft, "[Pasted Content ") && time.Since(stableSince) >= time.Second) || strings.Contains(screen.String(), "esc to interrupt") || time.Now().After(deadline) {
+				if (strings.Contains(lastDraft, "[Pasted Content ") && time.Since(stableSince) >= 3*time.Second) || strings.Contains(screen.String(), "esc to interrupt") || time.Now().After(deadline) {
 					break
 				}
 				select {
@@ -168,6 +168,9 @@ func OrcaMain(args []string) error {
 					}
 				}
 				if pending && !busy {
+					if time.Since(stableSince) < 3*time.Second {
+						return fmt.Errorf("native pasted Dispatch draft did not settle before submission")
+					}
 					var submission strings.Builder
 					send := exec.Command(c.Executable, "terminal", "send", "--terminal", terminal, "--enter", "--json")
 					send.Stdout, send.Stderr = &submission, &submission
@@ -178,16 +181,24 @@ func OrcaMain(args []string) error {
 					if sendErr != nil {
 						return sendErr
 					}
-					// Observe the original terminal after the one accepted Enter;
-					// an acknowledgement is not proof that the agent has started.
-					screen.Reset()
-					confirm := exec.Command(c.Executable, "terminal", "read", "--terminal", terminal, "--limit", "50", "--json")
-					confirm.Stdout = &screen
-					if readErr := testprocess.Run(ctx, confirm); readErr != nil {
-						return readErr
-					}
-					if logErr := os.WriteFile(filepath.Join(c.LogDir, fmt.Sprintf("after-submit-%d.json", time.Now().UnixNano())), []byte(screen.String()), 0600); logErr != nil {
+					// Observe without any second Enter or text injection. Acceptance
+					// alone can leave the original draft in the asynchronous UI queue.
+					observeCtx, observeCancel := context.WithTimeout(ctx, 25*time.Second)
+					observed, observeErr := waitForOrcaPasteSubmission(observeCtx, terminal, func(ctx context.Context) ([]byte, error) {
+						var observed strings.Builder
+						confirm := exec.Command(c.Executable, "terminal", "read", "--terminal", terminal, "--screen", "--limit", "50", "--json")
+						confirm.Stdout = &observed
+						readErr := testprocess.Run(ctx, confirm)
+						return []byte(observed.String()), readErr
+					})
+					observeCancel()
+					if logErr := os.WriteFile(filepath.Join(c.LogDir, fmt.Sprintf("after-submit-%d.json", time.Now().UnixNano())), observed, 0600); logErr != nil {
 						return logErr
+					}
+					// Keep the original mutation receipt and diagnostic even when
+					// submission remains unproven; do not fabricate a started stage.
+					if observeErr != nil {
+						err = observeErr
 					}
 				}
 			}
@@ -203,4 +214,44 @@ func OrcaMain(args []string) error {
 	fmt.Fprint(os.Stdout, out.String())
 	fmt.Fprint(os.Stderr, stderr.String())
 	return err
+}
+
+func waitForOrcaPasteSubmission(ctx context.Context, terminal string, read func(context.Context) ([]byte, error)) ([]byte, error) {
+	var last []byte
+	for {
+		raw, err := read(ctx)
+		if err != nil {
+			return last, err
+		}
+		last = raw
+		payload, err := OrcaPayload(raw)
+		if err != nil {
+			return last, err
+		}
+		var view struct {
+			Terminal struct {
+				Handle, Source, Draft string
+				Tail                  []string
+			} `json:"terminal"`
+		}
+		if err := json.Unmarshal(payload, &view); err != nil {
+			return last, err
+		}
+		if view.Terminal.Handle != terminal || view.Terminal.Source != "screen" {
+			return last, fmt.Errorf("native submission observation is not the original terminal screen")
+		}
+		pending, busy := view.Terminal.Draft != "", false
+		for _, line := range view.Terminal.Tail {
+			pending = pending || strings.Contains(line, "[Pasted Content ")
+			busy = busy || strings.Contains(line, "esc to interrupt")
+		}
+		if !pending || busy {
+			return last, nil
+		}
+		select {
+		case <-ctx.Done():
+			return last, fmt.Errorf("original pasted Dispatch remains unsubmitted: %w", ctx.Err())
+		case <-time.After(200 * time.Millisecond):
+		}
+	}
 }

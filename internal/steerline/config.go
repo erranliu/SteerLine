@@ -129,10 +129,19 @@ func positiveDuration(value string, fallback time.Duration) time.Duration {
 // or create runtime directories. Control clients use it without constructing a
 // Service or taking ownership of scheduler state.
 func (c *Config) ResolveIdentity(ctx context.Context) error {
-	// Readers and the service must identify the same native Git executable
+	// Readers and the service must bind the same publication executables
 	// before they compute a selectable execution profile's digest.
 	if err := resolveCommand(&c.Git); err != nil {
 		return err
+	}
+	if c.PR.Kind == "command" {
+		for _, command := range []*Command{&c.PR.Query, &c.PR.Close} {
+			if command.Executable != "" {
+				// Inspecting original frozen runs must not require the current
+				// provider to be available. Preflight checks it before new work.
+				_ = resolveCommand(command)
+			}
+		}
 	}
 	repository, err := workspace.ResolveRepository(ctx, workspaceGit(*c), c.Repository)
 	if err != nil {
@@ -226,7 +235,12 @@ func (c *Config) preflightNative(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	c.Repository, c.identity = repository.Path, canonical(repository.CommonDir)
+	c.Repository = repository.Path
+	// Rebind accepted profile envelopes to the same Git identity used by
+	// control clients before implementation preflight decodes them.
+	if err := c.ResolveIdentity(ctx); err != nil {
+		return err
+	}
 	git.Dir = c.Repository
 	if entry.Preflight != nil {
 		if err := entry.Preflight(ctx, *c); err != nil {

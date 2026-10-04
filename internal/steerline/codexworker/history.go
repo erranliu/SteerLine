@@ -99,15 +99,15 @@ func OpenHistory(ctx context.Context, command contracts.Command, dir, home strin
 	return c, nil
 }
 
-func HistoryAvailable(ctx context.Context, command contracts.Command, dir string, start func(*exec.Cmd) (executionapi.StopHandle, error)) bool {
+func CheckHistory(ctx context.Context, command contracts.Command, dir string, start func(*exec.Cmd) (executionapi.StopHandle, error)) error {
 	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	client, err := OpenHistory(probeCtx, command, dir, "", start)
 	if err != nil {
-		return false
+		return err
 	}
 	client.Close()
-	return true
+	return nil
 }
 
 func (c *HistoryClient) Close() {
