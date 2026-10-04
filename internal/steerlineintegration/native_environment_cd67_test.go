@@ -69,9 +69,11 @@ func testIntegratedManagedLaunch(t *testing.T, renamed bool) {
 	createIntegrationTask(t, ctx, f, 901)
 	first := startIntegrationService(t, ctx, f.config, f.config.ExecutionDirectory)
 	claimIntegrationTask(t, ctx, f, 901, first.instanceID)
+	var originalProcess executionapi.ProcessIdentity
+	var originalSession, originalTurn string
 	if !renamed {
 		uncertain := waitIntegrationRun(t, ctx, first, f.config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
-			return run.TaskID == "901" && e.Environment != nil && e.Environment.Blocker != nil && run.Decision != nil && run.Decision.Status == "pending"
+			return run.TaskID == "901" && e.Environment != nil && e.Environment.Blocker != nil
 		})
 		if uncertain.run.Process != nil {
 			// The read-only reconciliation may already have recovered the original
@@ -87,9 +89,16 @@ func testIntegratedManagedLaunch(t *testing.T, renamed bool) {
 		}
 		submitIntegrationAnswerOption(t, ctx, f.config, uncertain.run, "recheck_environment")
 	} else {
-		waitIntegrationRun(t, ctx, first, f.config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
-			return run.TaskID == "901" && e.Process != nil && e.Environment != nil && e.Environment.Ready
+		started := waitIntegrationRun(t, ctx, first, f.config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+			state, err := testprotocol.ReadNativeOrcaState(f.nativeStateDir)
+			require(t, err)
+			return run.TaskID == "901" && e.Process != nil && e.Environment != nil && e.Environment.Ready &&
+				e.TurnNumber == 1 && e.CurrentTurnID != "" && state.Dispatches == 2
 		})
+		// Renamed-terminal recovery starts from an acknowledged business turn.
+		// Readiness alone does not authorize automatic input after a restart.
+		originalProcess = *started.execution.Process
+		originalSession, originalTurn = started.execution.SessionID, started.execution.CurrentTurnID
 		first.stop(t)
 		first = startIntegrationService(t, ctx, f.config, f.config.ExecutionDirectory)
 	}
@@ -107,6 +116,9 @@ func testIntegratedManagedLaunch(t *testing.T, renamed bool) {
 	saved := integratedEnvironmentState(t, recovered.execution)
 	if !saved.AgentBound {
 		t.Fatal("reconciled launch replaced its original saved terminal incarnation")
+	}
+	if renamed && (*recovered.execution.Process != originalProcess || recovered.execution.SessionID != originalSession || recovered.execution.CurrentTurnID != originalTurn || recovered.execution.TurnNumber != 1) {
+		t.Fatal("renamed terminal restart changed the original process, session or business turn")
 	}
 }
 
