@@ -17,7 +17,7 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 ## 第一阶段残留
 
-- [ ] **候选控制台 CC5 人工补验**：中文组词、选项加备注、候选导航、窄窗口及滚动尚无真实通过证据；用户已允许实现先合入并继续 #39 开发，人工证据仍单独补齐。见[操作与待验记录](../validation/candidate-console/windows/README.md)。
+- [x] **候选控制台 CC5 人工验收**：用户于 2026-10-04 明确确认交互通过；中文组词、选项加备注、候选导航、窄窗口与滚动的人工待验项已关闭。见[人工确认记录](../validation/candidate-interaction-ux/manual-acceptance-20261004.md)。
 
 本地 Codex app-server 迁移的 A/B 服务级验收已补齐；保留完成记录便于 #42 第一阶段集成验收复用。定向 race detector 待具备工具链时补跑。剩余范围为具备CGO/C工具链后的定向race detector补验，执行要求由后续验证Plan明确；必要时按需查[现有验收状态](../validation/local-codex-app-server/status.md)。
 

@@ -1,4 +1,4 @@
-# #38 候选观察界面：实现已复审，CC5 待人工补验
+# #38 候选观察界面：实现已复审，CC5 人工确认通过
 
 起点：`28b81d82f4afb3e158cf96bd5cbf257fa48b7adc`，与执行开始时最新 `origin/main` 相同；分支：`codex/candidate-console-38`。实现使用当前 #37 服务/客户端合同，无生产服务、生产任务库或模型请求。
 
@@ -11,7 +11,7 @@
 | 受影响 console 包回归 | [console-final-04/summary.json](console-final-04/summary.json)，66 项原布局/编辑/分页/守卫及新增候选回归通过，无 fail/skip |
 | Windows/Linux 源码依赖代表 | [build.json](build.json)，两平台编译及 SHA-256；Linux 为交叉编译，无平台运行或 CC5 声明 |
 | 最终 L1 | [l1-final/summary.json](l1-final/summary.json)，本次唯一一次固定 L1 通过（7 组，无 fail/skip）；1.2s 准备，229.6s 执行 |
-| CC5 | **未通过**。[用户授权后的实际工具拒绝](windows/authorized-20261004/diagnostic.json) 和[实际准备/清理记录](windows/authorized-20261004/prepare/summary.json) 仅证明隔离准备能力；没有原生 IME/输入/导航/窄窗/滚动操作证据。[blocker 与人工操作方法](windows/README.md) |
+| CC5 | **用户人工确认通过（2026-10-04）**，见[人工确认记录](../candidate-interaction-ux/manual-acceptance-20261004.md)。此前工具拒绝/准备日志保留为历史，未作为原生通过依据。 |
 
 ## 证据边界与已修复诊断
 
@@ -27,10 +27,14 @@
 
 授权补充验证：[同一接线回归](windows/bindings-regression/summary.json) 2 项通过、无 fail/skip；[正式 manifest 的外部 CLI 检查](windows/authorized-bindings-check/check.json) 使用自动写出的三项环境绑定，读取同一 Task 901 / version 2 / 五候选后通过原 stop_file 清理。该准备能力结果不替代 CC5，生产实现未改动。
 
-## 合入授权与人工补验交接
+## 历史合入授权与人工补验交接
 
 2026-10-04，本协调聊天用户先确认“#38 我来人工补验”，随后明确要求：“合并#38，标记待人工补验即可继续开发#39”。协调按此限定例外记录 accepted_exception 并完成实际平台合并后，才启动 #39；原生条件不删，CC5 仍未通过。该例外不扩大到 #39 CN1–CN8、远端准入或其他尚缺证据。
 
 协调复审修复了放弃/落选/多合并的冲突展示和活动契约入口，67 项 console、最终真实接线（2 项）及 L1 七组已通过；同一 run 中的初始 stale_instance 失败、诊断与最终通过都保留。同步 PR #211 后另按 Plan 核对 PR 文本链接和测试子进程清理的受影响消费者。最终 head/base、实际命令与合并事实在 PR 评论及 run 状态中记录，不用本段文字代替平台证据。
 
 CC5 由用户按 [Windows 人工操作步骤](windows/README.md)完成，取得实际终端/输入法、中文组词、选项加备注、候选导航、窄窗口及滚动证据后，再追加人工通过记录。准备/保持/清理、Go KeyMsg、授权和 PR 合并均不替代这些证据。
+
+## 人工补验收口
+
+2026-10-04，用户明确确认“交互ok”，并要求把 roadmap 人工未验收项记为通过。CC5 现按[用户人工确认记录](../candidate-interaction-ux/manual-acceptance-20261004.md)关闭待验事项；上文此前未通过/延期例外均为历史记录，不代表当前状态。不扩展为 #39 或其他原生验收通过。

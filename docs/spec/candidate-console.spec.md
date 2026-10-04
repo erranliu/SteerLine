@@ -1,6 +1,6 @@
 # Spec：候选观察界面
 
-任务 ID：38；任务名称：候选观察界面；目标：`PHASE1-CANDIDATES`。配套 [Plan](candidate-console.plan.md)。状态：实现已完成独立复审；用户明确允许先合入，CC5 标记待人工补验，不阻止后续 #39 开发。CC5 没有通过证据，不以合并代替原生验收。证据及授权见[验收记录](../validation/candidate-console/README.md)。
+任务 ID：38；任务名称：候选观察界面；目标：`PHASE1-CANDIDATES`。配套 [Plan](candidate-console.plan.md)。状态：实现已完成独立复审；此前按用户授权先合入；CC5 与交互流程增量现已由用户于 2026-10-04 人工确认通过，见[人工确认记录](../validation/candidate-interaction-ux/manual-acceptance-20261004.md)。证据及授权见[验收记录](../validation/candidate-console/README.md)。
 
 ## 范围与前置
 
@@ -46,4 +46,4 @@ CC1–CC4使用产品客户端fake和一组真实应用/可控后端接线，CC5
 
 F2 发布原命令后关闭本次编辑，回到所选会话，显示“已提交、等待回执”；该原问题不再提示重复输入。接受只表示已保存，结果未知继续核实原命令，拒绝保留草稿，新问题按新 Decision ID 重新进入待交互。此显示流程不写业务 Decision 状态、不假称送达或 worker 已处理。环境 blocker 继续独立，阻断不发布反馈也不自动补投。
 
-本增量改变输入/渲染，原 CC5 仍待人工补验，旧手工现场保留，新版使用新构建与隔离现场验证。
+本增量已获用户人工验收确认；旧手工现场与历史诊断保留，不以 Go fixture 代替人工结论。
