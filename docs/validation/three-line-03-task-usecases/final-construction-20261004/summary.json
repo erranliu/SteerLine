@@ -1,0 +1,444 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./internal/task",
+    "./internal/steerlineintegration",
+    "-run",
+    "^(TestTM03(TaskBatch|Dependencies|Result|TaskWiring)|TestCD67CoreBoundary)$",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-04T13:09:32.748964Z",
+  "finished_at": "2026-10-04T13:10:03.0472258Z",
+  "wall_seconds": 30.2982921,
+  "environment": {
+    "source_commit": "c4650056d701a158353836616668bfad25011552",
+    "worktree_status": " M cmd/test-feedback/task_scope.go\n M docs/architecture/current-code-architecture.md\n M docs/roadmap/execution-map.md\n M docs/roadmap/roadmap.md\n M docs/roadmap/three-line-modularization.md\n M docs/spec/three-line-03-task-usecases.plan.md\n M docs/testing.md\n D internal/steerline/native_batch_command.go\n M internal/steerline/native_contract_files.go\n M internal/steerline/native_dag_commands_test.go\n D internal/steerline/native_task_predecessors.go\n M internal/steerline/native_task_predecessors_test.go\n M internal/steerline/native_tasks_test.go\n M internal/steerline/task_configuration.go\n M internal/steerlineapp/client_task_commands.go\n M internal/steerlineapp/task_boundary_wiring.go\n M internal/steerlineintegration/lifecycle_test.go\n M internal/steerlineintegration/readiness_live_cd67_test.go\n M internal/steerlineintegration/worker_recovery_live_cd67_test.go\n M internal/task/model/batch.go\n M internal/task/model/command_plan.go\n M internal/task/model/contract.go\n M internal/task/model/delivery_gate.go\n M internal/task/model/discard_intent.go\n M internal/task/model/model.go\n M internal/task/model/predecessors.go\n M internal/task/model/readiness.go\n M internal/task/model/result.go\n M internal/task/model/snapshot.go\n M internal/task/model/status.go\n M internal/task/model/task_test.go\n M internal/task/model/taskgraph.go\n M internal/task/model/taskgraph_test.go\n M internal/task/model/work.go\n M internal/task/work.go\n M internal/task/work_test.go\n?? docs/validation/three-line-03-task-usecases/documents-20261004/go-test.jsonl\n?? docs/validation/three-line-03-task-usecases/documents-20261004/go-test.stderr.txt\n?? docs/validation/three-line-03-task-usecases/documents-20261004/summary.json\n?? docs/validation/three-line-03-task-usecases/interface-handoff.md\n?? docs/validation/three-line-03-task-usecases/l1-20261004/quick-boundary/stderr.txt\n?? docs/validation/three-line-03-task-usecases/l1-20261004/quick-boundary/test.jsonl\n?? docs/validation/three-line-03-task-usecases/l1-20261004/quick-core/stderr.txt\n?? docs/validation/three-line-03-task-usecases/l1-20261004/quick-core/test.jsonl\n?? docs/validation/three-line-03-task-usecases/l1-20261004/quick-owner-app/stderr.txt\n?? docs/validation/three-line-03-task-usecases/l1-20261004/quick-owner-app/test.jsonl\n?? docs/validation/three-line-03-task-usecases/l1-20261004/quick-owner-codec/stderr.txt\n?? docs/validation/three-line-03-task-usecases/l1-20261004/quick-owner-codec/test.jsonl\n?? docs/validation/three-line-03-task-usecases/l1-20261004/quick-owner-identity/stderr.txt\n?? docs/validation/three-line-03-task-usecases/l1-20261004/quick-owner-identity/test.jsonl\n?? docs/validation/three-line-03-task-usecases/l1-20261004/quick-owner-remote/stderr.txt\n?? docs/validation/three-line-03-task-usecases/l1-20261004/quick-owner-remote/test.jsonl\n?? docs/validation/three-line-03-task-usecases/l1-20261004/quick-rules/stderr.txt\n?? docs/validation/three-line-03-task-usecases/l1-20261004/quick-rules/test.jsonl\n?? docs/validation/three-line-03-task-usecases/l1-20261004/summary.json\n?? docs/validation/three-line-03-task-usecases/source-index.json\n?? docs/validation/three-line-03-task-usecases/task-20261004/go-test.jsonl\n?? docs/validation/three-line-03-task-usecases/task-20261004/go-test.stderr.txt\n?? docs/validation/three-line-03-task-usecases/task-20261004/summary.json\n?? docs/validation/three-line-03-task-usecases/task-deps-linux.json\n?? docs/validation/three-line-03-task-usecases/task-deps-windows.json\n?? docs/validation/three-line-03-task-usecases/transactions-20261004/go-test.jsonl\n?? docs/validation/three-line-03-task-usecases/transactions-20261004/go-test.stderr.txt\n?? docs/validation/three-line-03-task-usecases/transactions-20261004/summary.json\n?? docs/validation/three-line-03-task-usecases/wiring-20261004/go-test.jsonl\n?? docs/validation/three-line-03-task-usecases/wiring-20261004/go-test.stderr.txt\n?? docs/validation/three-line-03-task-usecases/wiring-20261004/summary.json\n?? docs/validation/three-line-03-task-usecases/wiring-complete-20261004/go-test.jsonl\n?? docs/validation/three-line-03-task-usecases/wiring-complete-20261004/go-test.stderr.txt\n?? docs/validation/three-line-03-task-usecases/wiring-complete-20261004/summary.json\n?? docs/validation/three-line-03-task-usecases/wiring-final-20261004/go-test.jsonl\n?? docs/validation/three-line-03-task-usecases/wiring-final-20261004/go-test.stderr.txt\n?? docs/validation/three-line-03-task-usecases/wiring-final-20261004/summary.json\n?? docs/validation/three-line-03-task-usecases/wiring-verified-20261004/go-test.jsonl\n?? docs/validation/three-line-03-task-usecases/wiring-verified-20261004/go-test.stderr.txt\n?? docs/validation/three-line-03-task-usecases/wiring-verified-20261004/summary.json\n?? internal/steerline/command_digest.go\n?? internal/steerline/command_replay.go\n?? internal/steerline/task_commands_fixture_test.go\n?? internal/steerline/task_documents_fixture_test.go\n?? internal/steerlineapp/task_command_store.go\n?? internal/steerlineapp/task_documents.go\n?? internal/steerlineintegration/task_commands_fixture_test.go\n?? internal/steerlineintegration/task_wiring_test.go\n?? internal/task/batch.go\n?? internal/task/batch_test.go\n?? internal/task/commands.go\n?? internal/task/documents.go\n?? internal/task/documents_test.go\n?? internal/task/model/document_content.go\n?? internal/task/model/predecessor_command.go\n?? internal/task/predecessors.go\n?? internal/task/predecessors_test.go\n?? internal/task/validation.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 2,
+    "passed_packages": 2,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 40,
+    "passed_tests": 40,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "status": "pass",
+        "elapsed_seconds": 28.566
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/task",
+        "status": "pass",
+        "elapsed_seconds": 0.446
+      }
+    ],
+    "tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestTM03TaskWiring",
+        "status": "pass",
+        "elapsed_seconds": 26.51
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary",
+        "status": "pass",
+        "elapsed_seconds": 1.86
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+        "status": "pass",
+        "elapsed_seconds": 1.38
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests",
+        "status": "pass",
+        "elapsed_seconds": 0.34
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests",
+        "status": "pass",
+        "elapsed_seconds": 0.09
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/steerline/taskview",
+        "status": "pass",
+        "elapsed_seconds": 0.07
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/backend",
+        "status": "pass",
+        "elapsed_seconds": 0.05
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/negative_source_fixtures",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/model",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/product/api",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/storage/ports",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/task/model",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/task",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/database/sql",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerline/sqlite",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerline/codexworker",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerline/persistence",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerline/processhost",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerlineapp",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/modernc.org/sqlite",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/transitive_test_helper",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerline",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerlineclient",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/negative_source_fixtures/concrete_storage_edge",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/negative_source_fixtures/nested_generated_name_is_not_an_exclusion",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/negative_source_fixtures/reverse_client_subpackage",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/negative_source_fixtures/reverse_storage_edge",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/negative_source_fixtures/top_level_output_name_is_not_an_exclusion",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/negative_source_fixtures/transitive_storage_edge",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/task",
+        "name": "TestTM03Dependencies",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/task",
+        "name": "TestTM03Result",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/task",
+        "name": "TestTM03TaskBatch",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/task",
+        "name": "TestTM03TaskBatch/original_receipt_without_documents_or_writes",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/task",
+        "name": "TestTM03TaskBatch/strict_decode",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "slowest_tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestTM03TaskWiring",
+        "status": "pass",
+        "elapsed_seconds": 26.51
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary",
+        "status": "pass",
+        "elapsed_seconds": 1.86
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+        "status": "pass",
+        "elapsed_seconds": 1.38
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests",
+        "status": "pass",
+        "elapsed_seconds": 0.34
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests",
+        "status": "pass",
+        "elapsed_seconds": 0.09
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/steerline/taskview",
+        "status": "pass",
+        "elapsed_seconds": 0.07
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/backend",
+        "status": "pass",
+        "elapsed_seconds": 0.05
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/negative_source_fixtures",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/model",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/product/api",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/storage/ports",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/task/model",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/task",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/database/sql",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerline/sqlite",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerline/codexworker",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerline/persistence",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerline/processhost",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+        "name": "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerlineapp",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      }
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 29.2816056,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/three-line-03-task-usecases/final-construction-20261004/go-test.jsonl",
+  "stderr_log": "docs/validation/three-line-03-task-usecases/final-construction-20261004/go-test.stderr.txt"
+}

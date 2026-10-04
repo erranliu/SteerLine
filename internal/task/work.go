@@ -13,7 +13,11 @@ type Reader interface {
 	TaskContract(context.Context, string, model.TaskRecord) (model.TaskContract, error)
 }
 
-type Service struct{ Reader Reader }
+type Service struct {
+	Reader    Reader
+	Input     Input
+	Documents Documents
+}
 
 func (s Service) Ready(ctx context.Context, project string) ([]model.TaskRecord, error) {
 	graph, err := s.Reader.TaskSnapshot(ctx, project)

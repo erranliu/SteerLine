@@ -65,17 +65,7 @@ func batchTasks(ids ...int64) []taskmodel.TaskBatchTask {
 	return out
 }
 
-func TestTaskBatchStrictDecodeAndDeterministicCyclePath(t *testing.T) {
-	for _, raw := range []string{
-		`{"schema_version":"task-batch/v1","project_id":"p","tasks":[],"unknown":true}`,
-		`{"schema_version":"task-batch/v1","project_id":"p","tasks":[{"local_key":"a","title":"x","type":"task","contract":{}}]}`,
-		`{"schema_version":"task-batch/v1","project_id":"p","tasks":[{"local_key":"a","task_id":1.5,"title":"x","type":"task","contract":{}}]}`,
-		`{"schema_version":"task-batch/v1","project_id":"p","tasks":[],"tasks":[]}`,
-	} {
-		if _, _, err := taskmodel.DecodeBatch([]byte(raw)); err == nil {
-			t.Fatalf("invalid batch accepted: %s", raw)
-		}
-	}
+func TestTaskBatchDeterministicCyclePath(t *testing.T) {
 	c, commit, store := openDAGFixture(t)
 	tasks := batchTasks(2, 3)
 	edges := []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k2"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k3"}}, {Predecessor: taskmodel.TaskBatchReference{LocalKey: "k3"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k2"}}}

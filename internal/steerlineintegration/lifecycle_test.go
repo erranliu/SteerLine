@@ -415,7 +415,7 @@ func createIntegrationTask(t *testing.T, ctx context.Context, fixture integratio
 	}
 	body, err := json.Marshal(batch)
 	require(t, err)
-	_, err = commands.CreateTaskBatch(ctx, fixture.config, body, newID(), authority.AuthorityVersion, "operator")
+	_, err = createTaskBatchFixture(ctx, commands.Store, fixture.config, body, newID(), authority.AuthorityVersion, "operator")
 	require(t, err)
 	paused := false
 	page, err := queries.ShowNativeTask(ctx, fmt.Sprint(id))

@@ -82,7 +82,7 @@ func createNativeLiveTask(t *testing.T, ctx context.Context, f *integrationFixtu
 	require(t, err)
 	commands := steerline.NewCommandService(store, f.config.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})
 	batch := taskmodel.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: f.config.Identity(), Tasks: []taskmodel.TaskBatchTask{{LocalKey: "fixture", TaskID: id, Title: "Native recovery acceptance", Type: "task", Contract: contract}}, Dependencies: []taskmodel.TaskBatchEdge{}}
-	_, err = commands.CreateTaskBatch(ctx, f.config, mustJSON(batch), newID(), authority.AuthorityVersion, "operator")
+	_, err = createTaskBatchFixture(ctx, commands.Store, f.config, mustJSON(batch), newID(), authority.AuthorityVersion, "operator")
 	require(t, err)
 	page, err := queries.ShowNativeTask(ctx, fmt.Sprint(id))
 	require(t, err)
