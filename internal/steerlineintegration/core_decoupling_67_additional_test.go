@@ -87,6 +87,10 @@ func TestCD67AdditionalImplementation(t *testing.T) {
 }
 
 func testAdditionalImplementation(t *testing.T) {
+	testAdditionalImplementationWithCandidateGuard(t, false)
+}
+
+func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	fixture := newLifecycleProjectBase(t, "local", false)
@@ -214,6 +218,17 @@ func testAdditionalImplementation(t *testing.T) {
 	}
 	if delivery := delivered.Tasks[0].Delivery; delivery.SelectedWorkflowRunID != first.run.RunID || delivery.MergeCommit != fixture.commit || delivery.PRURL != ledger.publicationURL {
 		t.Fatal("task detail lost its original selected workflow/provider delivery")
+	}
+	if candidateGuard {
+		store, err := steerline.OpenNativeTaskCommandStore(ctx, &config2)
+		require(t, err)
+		defer store.Close()
+		command := steerline.CommandService{Store: store, Project: config2.Identity()}
+		_, err = command.AbandonNativeCandidate(ctx, config2, steerline.CandidateAbandonOptions{TaskID: "901", WorkflowRunID: first.run.RunID, RequestID: newID(), ExpectedTaskVersion: delivered.Tasks[0].Version, ExpectedCandidateVersion: first.run.ControlRevision, RequestedBy: "operator", Reason: "must reject known merged candidate"})
+		if err == nil || !strings.Contains(err.Error(), "already_merged") {
+			t.Fatalf("real merged delivery allowed exit: %v", err)
+		}
+		t.Logf("real provider merge %s; candidate abandon rejected: %v", ledger.publicationURL, err)
 	}
 	waitFor(t, 20*time.Second, func() bool {
 		ledger2.mu.Lock()

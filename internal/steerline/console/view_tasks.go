@@ -20,23 +20,25 @@ func projectCounts(state projectState, now time.Time) (ready, cached, running, d
 		}
 	}
 	if rt := state.snapshot.Observation.Runtime; rt != nil {
+		runningTasks, decisionTasks, mergeTasks, attentionTasks := map[string]bool{}, map[string]bool{}, map[string]bool{}, map[string]bool{}
 		for _, run := range rt.Runs {
 			if run == nil {
 				continue
 			}
 			if run.TaskStatus == "in_progress" && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running") {
-				running++
+				runningTasks[run.TaskID] = true
 			}
 			if run.FinishTaskStatus == "waiting_decision" && run.TaskStatus != "closed" {
-				decision++
+				decisionTasks[run.TaskID] = true
 			}
 			if run.FinishTaskStatus == "waiting_pr_merge" && run.TaskStatus != "closed" {
-				merge++
+				mergeTasks[run.TaskID] = true
 			}
 			if runNeedsAttention(run) {
-				attention++
+				attentionTasks[run.TaskID] = true
 			}
 		}
+		running, decision, merge, attention = len(runningTasks), len(decisionTasks), len(mergeTasks), len(attentionTasks)
 	}
 	return
 }

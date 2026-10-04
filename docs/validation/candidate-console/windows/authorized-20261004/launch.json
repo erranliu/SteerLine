@@ -1,0 +1,17 @@
+{
+  "pid": 13352,
+  "shell": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+  "arguments": [
+    "-NoLogo",
+    "-NoProfile",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-File",
+    "\"C:\\Users\\lmas1\\.codex\\worktrees\\29ce\\SteerLine\\docs\\validation\\candidate-console\\windows\\authorized-20261004\\launch-console.ps1\"",
+    "-Manifest",
+    "\"C:\\Users\\lmas1\\.codex\\worktrees\\29ce\\SteerLine\\docs\\validation\\candidate-console\\windows\\authorized-20261004\\fixture.json\""
+  ],
+  "user_authorization": "给你授权",
+  "purpose": "isolated native CC5 terminal",
+  "started_at": "2026-10-04T06:18:01.4247547Z"
+}

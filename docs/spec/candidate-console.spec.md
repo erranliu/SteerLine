@@ -1,10 +1,10 @@
 # Spec：候选观察界面
 
-任务 ID：38；任务名称：候选观察界面；目标：`PHASE1-CANDIDATES`。配套 [Plan](candidate-console.plan.md)。状态：待实现与验收，一个独立实现 PR 交付。
+任务 ID：38；任务名称：候选观察界面；目标：`PHASE1-CANDIDATES`。配套 [Plan](candidate-console.plan.md)。状态：实现已完成独立复审；用户明确允许先合入，CC5 标记待人工补验，不阻止后续 #39 开发。CC5 没有通过证据，不以合并代替原生验收。证据及授权见[验收记录](../validation/candidate-console/README.md)。
 
 ## 范围与前置
 
-硬前置：#37 [多候选会话与唯一交付](candidate-workers.spec.md)，传递包含 #36。遵守[第一阶段共同约束](phase1-delivery-constraints.md)。一期只增加用于人工方案实验的候选列表、选择、反馈和放弃，复用原TUI与统一待决策；不建设评分、排名、融合或实验调度工作台。
+硬前置：#37 已交付，传递包含 #36；需要核对接口时查当前产品合同、投影和候选服务源码，不追读已交付 Spec/历史验收链。遵守[第一阶段共同约束](phase1-delivery-constraints.md)。一期只增加用于人工方案实验的候选列表、选择、反馈和放弃，复用原TUI与统一待决策；不建设评分、排名、融合或实验调度工作台。
 
 ## 展示与操作
 

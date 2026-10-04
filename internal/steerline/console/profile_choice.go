@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 )
 
 func (m Model) handleExecutionProfileChoice(key tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -47,6 +48,20 @@ func (m Model) handleExecutionProfileChoice(key tea.KeyMsg) (tea.Model, tea.Cmd)
 		}
 		runtime := state.snapshot.Connection.Snapshot.Runtime
 		row := m.selectedRow(index)
+		if choice.action == "start_candidate" {
+			if runtime == nil || runtime.Service.InstanceID != choice.instance || runtime.Control.Revision != choice.revision || row == nil || row.taskID != choice.taskID {
+				m.profileChoice = nil
+				m.status = "原任务或服务版本已变化，请重新选择"
+				return m, nil
+			}
+			if reason := candidateStartReason(*state, row, m.clock.Now()); reason != "" {
+				m.status = reason
+				return m, nil
+			}
+			p := api.ControlPayload{TaskID: choice.taskID, ExpectedTaskVersion: row.native.Version, ExpectedGraphRevision: state.snapshot.NativeTasks.GraphRevision, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest}
+			m.profileChoice = nil
+			return m.submitCandidateAction("start_candidate", p, newRequestID(), choice.instance, choice.revision)
+		}
 		if runtime == nil || runtime.Service.InstanceID != choice.instance || runtime.Control.Revision != choice.revision || row == nil || row.kind != rowReady || row.taskID != choice.taskID {
 			m.profileChoice = nil
 			m.status = "任务或服务状态已变化；请刷新后重新选择执行配置"
@@ -73,6 +88,9 @@ func renderExecutionProfileChoice(m Model, state projectState, height int) strin
 		return "执行方案不可用；请刷新"
 	}
 	lines := []string{"开始任务 " + safeTerminalInlineText(choice.taskID) + " · 选择已配置的执行方案", ""}
+	if choice.action == "start_candidate" {
+		lines[0] = "新增候选 · Task " + safeTerminalInlineText(choice.taskID) + " · 选择不同冻结配置"
+	}
 	visible := max(1, height-13)
 	start := max(0, choice.index-visible/2)
 	if start+visible > len(profiles) {
