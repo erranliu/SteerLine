@@ -1,6 +1,7 @@
 package steerline
 
 import (
+ "github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -16,7 +17,7 @@ import (
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-func validateNativeStateLocation(c Config) error {
+func validateNativeStateLocation(c execution.Config) error {
 	if c.RepositoryStateKey == "" || c.StateRoot == "" {
 		return nativeErr("authority_mismatch", "application configuration lacks its fixed repository state location")
 	}
@@ -51,7 +52,7 @@ func RepositoryStateKey(identity string) string {
 	return name + "-" + shortHash(canonical(common))[:12]
 }
 
-func openBoundNativeStore(ctx context.Context, c Config, path string) (_ persistence.Connection, retErr error) {
+func openBoundNativeStore(ctx context.Context, c execution.Config, path string) (_ persistence.Connection, retErr error) {
 	if c.Persistence == nil {
 		return nil, nativeErr("authority_mismatch", "persistence factory is required")
 	}
@@ -74,7 +75,7 @@ func openBoundNativeStore(ctx context.Context, c Config, path string) (_ persist
 	if err != nil {
 		return nil, err
 	}
-	target, err := configuredRepositoryTarget(ctx, c)
+	target, err := c.TaskRepositoryTarget(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +95,7 @@ func openBoundNativeStore(ctx context.Context, c Config, path string) (_ persist
 	return db, nil
 }
 
-func preflightNativeStatePath(c Config) error {
+func preflightNativeStatePath(c execution.Config) error {
 	if c.Identity() == "" {
 		if err := c.ResolveIdentity(context.Background()); err != nil {
 			return err
@@ -122,7 +123,7 @@ func preflightNativeStatePath(c Config) error {
 	return ensureNativeStateClean(c.RunDir, c.Repository)
 }
 
-func ensureRunDirOutsideRepository(c Config) error {
+func ensureRunDirOutsideRepository(c execution.Config) error {
 	if c.RunDir == "" || c.Repository == "" {
 		return nativeErr("authority_mismatch", "repository and run_dir are required")
 	}
@@ -137,7 +138,7 @@ func ensureRunDirOutsideRepository(c Config) error {
 	if inside(resolvedRepo, resolvedRun) {
 		return nativeErr("authority_mismatch", "native state directory must be outside the repository")
 	}
-	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
+	r := execution.Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost:c.ProcessHost}
 	worktrees, err := r.Output(context.Background(), c.Git, "worktree", "list", "--porcelain", "-z")
 	if err != nil {
 		return nativeErr("authority_mismatch", "cannot verify native state against linked Git worktrees")
@@ -360,10 +361,10 @@ func validateNativeExecutionArtifacts(root string) error {
 				continue
 			}
 			var report executionbackend.CapabilityReport
-			if decode(data, &report) != nil || report.Version != 1 || entry.Name() != capabilityReportKey(report)+".json" {
+			if decode(data, &report) != nil || report.Version != 1 || entry.Name() != execution.CapabilityReportKey(report)+".json" {
 				return nativeErr("authority_mismatch", "native capability report identity or digest is invalid")
 			}
-			if _, verifyErr := (executionRecords{root: filepath.Dir(root)}).loadCapabilityReport(report); verifyErr != nil {
+			if verifyErr := execution.VerifyStoredCapabilityReport(filepath.Dir(root),report); verifyErr != nil {
 				return nativeErr("authority_mismatch", "native capability report evidence is invalid: "+verifyErr.Error())
 			}
 		}

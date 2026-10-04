@@ -1,6 +1,8 @@
 package steerline
 
 import (
+"github.com/erranliu/SteerLine/internal/steerline/contracts"
+ "github.com/erranliu/SteerLine/internal/execution"
 	"errors"
 	"os"
 	"path/filepath"
@@ -23,7 +25,7 @@ const (
 
 // ReadObservationSnapshot reads the committed SQLite service checkpoint.
 // nowFn keeps freshness and future-heartbeat behavior testable.
-func ReadObservationSnapshot(c Config, nowFn func() time.Time) ObservationSnapshot {
+func ReadObservationSnapshot(c execution.Config, nowFn func() time.Time) ObservationSnapshot {
 	if nowFn == nil {
 		nowFn = time.Now
 	}
@@ -40,7 +42,7 @@ func ReadObservationSnapshot(c Config, nowFn func() time.Time) ObservationSnapsh
 
 // ObserveRuntimeSnapshot applies freshness to an already sampled database
 // runtime. It does not read storage or infer whether the service process lives.
-func ObserveRuntimeSnapshot(c Config, rt *Runtime, err error, sampledAt time.Time) ObservationSnapshot {
+func ObserveRuntimeSnapshot(c execution.Config, rt *Runtime, err error, sampledAt time.Time) ObservationSnapshot {
 	now := sampledAt.UTC()
 	limit := freshnessLimit(c.Heartbeat)
 	if err != nil {

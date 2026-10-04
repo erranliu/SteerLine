@@ -1,0 +1,371 @@
+{
+  "baseline": "c4650056d701a158353836616668bfad25011552",
+  "files": [
+    {
+      "old": "internal/steerline/application_config_types.go",
+      "new": "internal/execution/application_config_types.go",
+      "old_sha256": "5d6190a7e4dac124d8c1771e15148f2572bd3f607122ce48fc41e42300c48488",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/candidate_control.go",
+      "new": "internal/execution/candidate_control.go",
+      "old_sha256": "d38dabfab8e0cbb5613231968d8c6f2f8dcec6ae39e81f03b8df4d03e4b96e7b",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/candidate_pr.go",
+      "new": "internal/execution/candidate_pr.go",
+      "old_sha256": "f15e612411736801b659220ea1fc8e6e116ca8c44e93ddd323ddf5e50c9afcbe",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/candidate_resources.go",
+      "new": "internal/execution/candidate_resources.go",
+      "old_sha256": "513039d06c594cd6136ad7a01ad8c79f75525104b22313dbf7f550434992b8ce",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/candidate_workers.go",
+      "new": "internal/execution/candidate_workers.go",
+      "old_sha256": "c38c7d5f9af51ce741509acaab812b4f8d7a2552dda2dff89fa6897ea1dee5f9",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/command_boundary.go",
+      "new": "internal/execution/command_boundary.go",
+      "old_sha256": "e62e15d62a886cd804c4c0de164f125e0375c373f4fd62ad38ede3c143b93e2c",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/command_processor.go",
+      "new": "internal/execution/command_processor.go",
+      "old_sha256": "d660ec9ccc3e7d8824e2007e752a9cedd5c46a651348556cbc3da2a40671d278",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/decision.go",
+      "new": "internal/execution/decision.go",
+      "old_sha256": "1f3f6304b6c880bc8d10875f3255cb31ad55d82ce5911bf038b82397dbad5e31",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/execution_backend.go",
+      "new": "internal/execution/execution_backend.go",
+      "old_sha256": "b62868ec5e9d2c8ea04e54a3da560dd7e4dda3df9cb37310acc39c1d68a17c5e",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/execution_commands.go",
+      "new": "internal/execution/execution_commands.go",
+      "old_sha256": "a1a52ff10eda10772677696ec2e861f85359012ccb5791f255be15db48e8d8f0",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/execution_command_runner.go",
+      "new": "internal/execution/execution_command_runner.go",
+      "old_sha256": "5ce6a2f6fbc7d903b2ad6ed495fbfec04c6bb1272a8750ea84ecc5b8ef206454",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/execution_config.go",
+      "new": "internal/execution/execution_config.go",
+      "old_sha256": "8e81d82824e4b2ec220e5a45b969571d2199bbd28ff324ac20e94ae660a2d89c",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/execution_delivery_poll.go",
+      "new": "internal/execution/execution_delivery_poll.go",
+      "old_sha256": "ff40fb65aa37d7af74ffdbd09f5aaed1d2570ebb0b3c6d89335719183d1b1d10",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/execution_directory.go",
+      "new": "internal/execution/execution_directory.go",
+      "old_sha256": "6fa479151b904529e444133cc876404d0495df3b2406a776a75049a6c03ac635",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/execution_discard_cleanup.go",
+      "new": "internal/execution/execution_discard_cleanup.go",
+      "old_sha256": "ddf7224a2e9d8a556dfb6d0cf98922f3e3febd28ab189dd16b40cd5441105835",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/execution_dispatch.go",
+      "new": "internal/execution/execution_dispatch.go",
+      "old_sha256": "23e985fca7a3c2cd05b2a2a9fa76b70a4d33b8bbafbd9b6cc94bd2433bf4d436",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/execution_errors.go",
+      "new": "internal/execution/execution_errors.go",
+      "old_sha256": "009316f7f47a3d53eae35cad61f4d43dc85b9335b1ede2ab2f914ef085b936bf",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/execution_helpers.go",
+      "new": "internal/execution/execution_helpers.go",
+      "old_sha256": "01931248f0477fa99e67ec7f2ae1a4d4e0f289eee8d0e91a7364ed663a8d44b9",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/execution_profiles.go",
+      "new": "internal/execution/execution_profiles.go",
+      "old_sha256": "673c71dfe2b7e67e0d7baf81397a4f45b42908d5f0fef750a868e01a9112cff7",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/execution_requirements.go",
+      "new": "internal/execution/execution_requirements.go",
+      "old_sha256": "e6e14c00360bed5321fca335a563dc2537fb46602dde9a361e13a6c63d50a57a",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/execution_snapshot.go",
+      "new": "internal/execution/execution_snapshot.go",
+      "old_sha256": "a76812371ad2bd5aa0b04fda91e56109b8838a3b96f2baf5794b440fed7537b2",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/execution_store.go",
+      "new": "internal/execution/execution_store.go",
+      "old_sha256": "347f36c6e5d9f4031bb01614acb46e9b9a99c85bf81a47463cb4860b4277f7ea",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/implementation_bindings.go",
+      "new": "internal/execution/implementation_bindings.go",
+      "old_sha256": "9c6849e69bdfb0f1e453b34371c4af22cda5bfa497fce9cc7f44f334373b9d91",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/lifecycle_effect.go",
+      "new": "internal/execution/lifecycle_effect.go",
+      "old_sha256": "f2ab593323694066fc7bb640fdf61796b94c117502492ea61fdefa4c4b737994",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/lifecycle_receipt.go",
+      "new": "internal/execution/lifecycle_receipt.go",
+      "old_sha256": "81a31def51ac7dad26d5019377cc6b7ef62ce82522bd75b93331c34cb1278ced",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/native_claim_command.go",
+      "new": "internal/execution/native_claim_command.go",
+      "old_sha256": "a78a0c98884d43c60bd5c054476802b6f8a62d4ddf7360855c0409092eb3fd92",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/native_cleanup.go",
+      "new": "internal/execution/native_cleanup.go",
+      "old_sha256": "cdb3fea77d5c7cc84904e03491ec6dd737f65e60f9bba8c9afb488c2e580f369",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/native_cleanup_stop.go",
+      "new": "internal/execution/native_cleanup_stop.go",
+      "old_sha256": "043258ab79bc291d48f31f5a1acb3f362ae644a0de472b013101bcaeeb49e8fb",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/native_delivery_command.go",
+      "new": "internal/execution/native_delivery_command.go",
+      "old_sha256": "9b706bd987db59a1d917d8c756ed46ee61c9cc96e1a52269221c6b66714ce8bc",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/native_discard_command.go",
+      "new": "internal/execution/native_discard_command.go",
+      "old_sha256": "ba5437a9140a175116fde91f75b44161e517426c9e6af7173cd5139056225161",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/native_dispatch_command.go",
+      "new": "internal/execution/native_dispatch_command.go",
+      "old_sha256": "935d023d51e996d82982aabcc1100573323fd9b623587f6416f6c269dd59fa20",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/operation.go",
+      "new": "internal/execution/operation.go",
+      "old_sha256": "2d085ad56e2bb3429dcb80d2d6addca2b26d3b92ed2a89c63fece06cd0ee4cd4",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/profile_data.go",
+      "new": "internal/execution/profile_data.go",
+      "old_sha256": "7574b2f75f6684fe302eea5491f8c50c9efcfe174f24779d964345848cbe6e6c",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/publication_snapshot.go",
+      "new": "internal/execution/publication_snapshot.go",
+      "old_sha256": "52e9cb57432d50f27bd925ffae2d870d312ae86bce4009d5204277d73c3c6b40",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/runtime_view.go",
+      "new": "internal/execution/runtime_view.go",
+      "old_sha256": "6382232cfe12e7321806980f5d1215af244b63bba2989c4042074a422218c55b",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/service_actor.go",
+      "new": "internal/execution/service_actor.go",
+      "old_sha256": "cd275ec9d18bf98c9fb55446362204e961d933a45ba1b23fc7cc5e5f8a4f1965",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/service_commit.go",
+      "new": "internal/execution/service_commit.go",
+      "old_sha256": "9661f14d89a3b6bbe6ba436d56f1117b6cf6ec9a55bf7b131e5371678b257652",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/service_execution_profiles.go",
+      "new": "internal/execution/service_execution_profiles.go",
+      "old_sha256": "61bebf503fbdb24fa5526474725645e409854ece7b4987e90b18d9b30f7b17ba",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/service_state.go",
+      "new": "internal/execution/service_state.go",
+      "old_sha256": "6216eb523a52e24f27937d1b5fd151271382daed15469fdcff48d1cd4cf33018",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/service_task_snapshot.go",
+      "new": "internal/execution/service_task_snapshot.go",
+      "old_sha256": "79ff6328531376b5082b0bce09ecf39203873c565d386b790b89647b67450644",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/service_workers.go",
+      "new": "internal/execution/service_workers.go",
+      "old_sha256": "0f3a0815293832d3cb7b524f6f87f70b7ae2ed0dbbf17f32283dac393e637da9",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_attachment_store.go",
+      "new": "internal/execution/worker_attachment_store.go",
+      "old_sha256": "e6e0ae7050df17c32b7ef9cc68e40b56f09fa26953b9bcff7442c5e62114ecd5",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_completion.go",
+      "new": "internal/execution/worker_completion.go",
+      "old_sha256": "86044ca9c64fe428c7e78174fbb2de0b5cc79890612e9c96cd2ef6659e1bad35",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_environment.go",
+      "new": "internal/execution/worker_environment.go",
+      "old_sha256": "4a9b782cfc1551ac13c0d41901975770ea4160db1303d558d19a3f8bc5594e00",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_environment_host.go",
+      "new": "internal/execution/worker_environment_host.go",
+      "old_sha256": "170bdfd7982a0253f9893c3398df916191e8767af7af40024d1abf70c66a2c08",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_events.go",
+      "new": "internal/execution/worker_events.go",
+      "old_sha256": "395bba4c952f6b3567090ffc68f74287d24e5f8e82a32f2d018571d38e7f8610",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_evidence.go",
+      "new": "internal/execution/worker_evidence.go",
+      "old_sha256": "60ba247c1352dfd0828e783db23f93efe6edab9681df0dd9b02501da221b9916",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_execution.go",
+      "new": "internal/execution/worker_execution.go",
+      "old_sha256": "d011b2826347f04fdf8d0f95bb4a82de31b9ec51d9f4b9717f4b0e582bfc5681",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_feedback.go",
+      "new": "internal/execution/worker_feedback.go",
+      "old_sha256": "e63f37f619071b67dddaf5bea2cdd923d812146d0f23834e5118fd405ffaa0c4",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_lifecycle.go",
+      "new": "internal/execution/worker_lifecycle.go",
+      "old_sha256": "c8260df73ab1567ff5466045ad0b97e769043dd2d07d29093c17cf6023bc99f6",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_lifecycle_async.go",
+      "new": "internal/execution/worker_lifecycle_async.go",
+      "old_sha256": "8a04df736f2d7343175a31932ec2cecbca5cb151cc5f3fa9fc963ac58f8f979f",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_lifecycle_feedback.go",
+      "new": "internal/execution/worker_lifecycle_feedback.go",
+      "old_sha256": "a373fbcc57c46c27750d6feeb2f39b9a54b6165a1051d5267fd1f3c9e1c4c33c",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_lifecycle_recovery.go",
+      "new": "internal/execution/worker_lifecycle_recovery.go",
+      "old_sha256": "2bbf7089762af92ad6eb321b2fea8911ebfaf8dcb0759a285d0664d572a5b6fc",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_pr.go",
+      "new": "internal/execution/worker_pr.go",
+      "old_sha256": "2b36510d81186ae80e6072c6932c552090fd7409159505eaf5c8f03e3164a0ac",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_process.go",
+      "new": "internal/execution/worker_process.go",
+      "old_sha256": "496543c19f113258f4a9259caf496b84a6e6c9faa574e0653d7ccfdee259643e",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_recovery.go",
+      "new": "internal/execution/worker_recovery.go",
+      "old_sha256": "348201131b781c0417da545bbbd58894bc5b97324411d619716ddc1f4e3d9fb2",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_resume.go",
+      "new": "internal/execution/worker_resume.go",
+      "old_sha256": "ea3a672541cdd60ce419ac6e65ffc66013cc4c35eaaed934c9f50c6c56355caa",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_start.go",
+      "new": "internal/execution/worker_start.go",
+      "old_sha256": "15850d91be4be2298a4f78113baf919fbb835d8ca213bcb1f2860c7d8712519f",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_state.go",
+      "new": "internal/execution/worker_state.go",
+      "old_sha256": "3edb2221a7bd0427d20ff995407a445be17ae37c7ff050e7443894787f854ba0",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/worker_types.go",
+      "new": "internal/execution/worker_types.go",
+      "old_sha256": "d3313b6d12ceecdb0fe23f408b8f99b9f1743e106c3759c8185f98f7b0609924",
+      "owner": 76
+    },
+    {
+      "old": "internal/steerline/workspace_config.go",
+      "new": "internal/execution/workspace_config.go",
+      "old_sha256": "1fc5b76707e2871113869002ae6fbf8ceadfab7817c2cd18d3b4dc5f7098e7cc",
+      "owner": 76
+    }
+  ]
+}

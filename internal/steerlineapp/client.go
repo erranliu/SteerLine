@@ -1,6 +1,7 @@
 package steerlineapp
 
 import (
+"github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"errors"
 	"fmt"
@@ -43,7 +44,7 @@ func ClientResources(ctx context.Context, ref api.ProjectRef) (api.Resources, er
 	return clientResources(ctx, c, ref)
 }
 
-func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef) (api.Resources, error) {
+func clientResources(ctx context.Context, c execution.Config, ref api.ProjectRef) (api.Resources, error) {
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return api.Resources{}, err
 	}
@@ -133,7 +134,7 @@ func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef
 			return productapi.ControlPayload{TaskID: id, ExecutionProfileID: p.ID, ExecutionProfileDigest: p.Digest()}, nil
 		},
 		InspectRecovery: func(ctx context.Context, id string) (api.RecoveryInspection, error) {
-			return steerline.InspectRecovery(ctx, c, id)
+			return execution.InspectRecovery(ctx, c, id)
 		},
 		DecisionAvailability: func(ctx context.Context, run *contracts.Run) string {
 			if run == nil || run.Decision == nil {
@@ -142,13 +143,13 @@ func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef
 			if run.Decision.RequestPath != "" || run.Decision.AnswerPath != "" {
 				return "问题绑定了已移除的 sidecar-answer 格式；保留状态并转入人工恢复，不导入答案文件"
 			}
-			if err := steerline.DecisionReplyEligibility(ctx, c, run); err != nil {
+			if err := execution.DecisionReplyEligibility(ctx, c, run); err != nil {
 				return err.Error()
 			}
 			if c.ExecutionDirectory == nil {
 				return "执行目录不可用；不能续跑原问题"
 			}
-			if _, err := c.ExecutionDirectory.ResolveIdentity(steerline.ExecutionRegistrationKey{Backend: executionbackend.BackendKind(run.Backend), Protocol: executionbackend.ExecutionProtocol(run.Protocol), Agent: run.Agent}); err != nil {
+			if _, err := c.ExecutionDirectory.ResolveIdentity(execution.ExecutionRegistrationKey{Backend: executionbackend.BackendKind(run.Backend), Protocol: executionbackend.ExecutionProtocol(run.Protocol), Agent: run.Agent}); err != nil {
 				return "原执行后端/协议不支持决策续跑"
 			}
 			return ""
@@ -184,7 +185,7 @@ func (r *clientReader) Command(ctx context.Context, id string) (storageports.Com
 // These compile-time assertions keep the injected port tied to real consumers.
 var _ api.Reader = (*clientReader)(nil)
 
-type clientControl struct{ config steerline.Config }
+type clientControl struct{ config execution.Config }
 
 func (r clientControl) Submit(ctx context.Context, in productapi.ControlInput) (productapi.ControlRequest, error) {
 	if err := ctx.Err(); err != nil {
@@ -222,10 +223,10 @@ func (r clientControl) Stop(ctx context.Context, by string, timeout time.Duratio
 	return steerline.StopService(ctx, r.config, by, timeout)
 }
 
-type clientDecision struct{ config steerline.Config }
+type clientDecision struct{ config execution.Config }
 
 func (r clientDecision) Eligibility(ctx context.Context, run *contracts.Run) error {
-	return steerline.DecisionReplyEligibility(ctx, r.config, run)
+	return execution.DecisionReplyEligibility(ctx, r.config, run)
 }
 
 func (r clientDecision) Submit(ctx context.Context, in api.DecisionInput) (storageports.CommandRecord, bool, error) {
@@ -239,7 +240,7 @@ func (r clientDecision) Answer(ctx context.Context, in productapi.AnswerInput) (
 
 // projectPresentation exposes only accepted non-secret display fields and fixed
 // profile digests. Configuration compilation stays with the original owner.
-func projectPresentation(c steerline.Config) api.ProjectPresentation {
+func projectPresentation(c execution.Config) api.ProjectPresentation {
 	result := api.ProjectPresentation{NativeWorkflow: c.WorkflowProtocol == executionmodel.Version, ConfigDigest: c.LoadedConfigDigest(), TaskAuthority: c.TaskAuthority, WorkflowProtocol: c.WorkflowProtocol, ShutdownGrace: c.ShutdownGrace, DefaultProfileID: c.DefaultProfileID()}
 	for _, p := range c.AvailableExecutionProfiles() {
 		reason := p.StaticUnavailableReason()

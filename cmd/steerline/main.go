@@ -1,6 +1,7 @@
 package main
 
 import (
+"github.com/erranliu/SteerLine/internal/execution"
 	"bufio"
 	"context"
 	"encoding/json"
@@ -113,7 +114,7 @@ func run() error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	var c steerline.Config
+	var c execution.Config
 	var product api.Client
 	var e error
 	switch command {

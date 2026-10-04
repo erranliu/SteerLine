@@ -1,6 +1,7 @@
 package steerlineapp
 
 import (
+"github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"errors"
 	"path/filepath"
@@ -149,7 +150,7 @@ func invalidConsoleProjectRef(name, path string, configErr error) api.ProjectRef
 	return api.ProjectRef{Key: key, Name: name, ConfigPath: path, Error: configErr.Error(), Presentation: api.ProjectPresentation{ServiceInstruction: "steerline start-service -config " + path}}
 }
 
-func makeConsoleProjectRef(name, path string, config steerline.Config, home, bin string) api.ProjectRef {
+func makeConsoleProjectRef(name, path string, config execution.Config, home, bin string) api.ProjectRef {
 	absoluteRunDir, _ := filepath.Abs(config.RunDir)
 	configPath, _ := filepath.Abs(path)
 	key, _ := consoleViewKey(configPath, absoluteRunDir)

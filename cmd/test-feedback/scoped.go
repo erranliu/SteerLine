@@ -22,7 +22,11 @@ import (
 
 const corePackage = "github.com/erranliu/SteerLine/internal/steerline"
 
-var quickTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion"}
+var quickTests = []string{"TestRestartPreflightRetainsOriginalPolicyRoots"}
+
+const executionPackage = "github.com/erranliu/SteerLine/internal/execution"
+
+var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/internal/steerlineintegration"
 
@@ -62,12 +66,14 @@ var quickBoundaryAssigned = []string{
 	"TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
 }
 
-var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{corePackage + "/taskview", "github.com/erranliu/SteerLine/internal/storage/ports", "github.com/erranliu/SteerLine/internal/execution", corePackage + "/persistence", corePackage + "/testprotocol", "github.com/erranliu/SteerLine/internal/execution/model", "github.com/erranliu/SteerLine/internal/execution/backend", corePackage + "/contracts", corePackage + "/projection", corePackage + "/query", corePackage + "/sqlite", "github.com/erranliu/SteerLine/internal/testboundary"}...)
+var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{corePackage + "/taskview", "github.com/erranliu/SteerLine/internal/storage/ports", corePackage + "/persistence", corePackage + "/testprotocol", "github.com/erranliu/SteerLine/internal/execution/model", "github.com/erranliu/SteerLine/internal/execution/backend", corePackage + "/contracts", corePackage + "/projection", corePackage + "/query", corePackage + "/sqlite", "github.com/erranliu/SteerLine/internal/testboundary"}...)
 
 var quickOwnerCases = []struct {
 	ID, Package string
 	Tests       []string
 }{
+	{"quick-execution", executionPackage, quickExecutionTests},
+	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/coreboundary", []string{"TestTM04ExecutionBoundary"}},
 	{"quick-owner-remote", corePackage + "/orca_remote_worker", []string{"TestCD63CodecIdentityAndVersion", "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily", "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift", "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch", "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree", "TestSupervisedRunCoordinatorsAreDistinctAndFenced", "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal", "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall", "TestRemoteContinuationRequiresOriginalPeerAndTerminal", "TestRemoteWorkspaceKeepsPeerPathAndRuntime", "TestRemoteReplyRejectsOversizeWithoutMutation", "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending", "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox", "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID", "TestLoadConfigRequiresExplicitRemoteCancellationFalse"}},
 	{"quick-owner-codec", corePackage + "/codexworker", []string{"TestConversationMapperNativeTwoTurnFixture", "TestHistoryAdapterRejectsOversizedNativeCursor", "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt"}},
 	{"quick-owner-identity", corePackage + "/orcaworker", []string{"TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess", "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation", "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost"}},

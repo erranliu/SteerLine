@@ -1,6 +1,7 @@
 package steerlineapp
 
 import (
+"github.com/erranliu/SteerLine/internal/execution"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
@@ -12,7 +13,7 @@ type clientCommands struct {
 	lock  *steerline.RepoLock
 }
 
-func newClientCommands(store persistence.Connection, config steerline.Config, lock *steerline.RepoLock) (*clientCommands, error) {
+func newClientCommands(store persistence.Connection, config execution.Config, lock *steerline.RepoLock) (*clientCommands, error) {
 	execution, err := NewCommandService(store, config)
 	if err != nil {
 		return nil, err

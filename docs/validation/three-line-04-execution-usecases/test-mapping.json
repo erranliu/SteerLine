@@ -1,0 +1,142 @@
+{
+  "status": "in_progress",
+  "baseline": "c4650056d701a158353836616668bfad25011552",
+  "tests": [
+    {
+      "old_package": "internal/steerline",
+      "old_file": "journal_reader_test.go",
+      "old_parent": "TestJournalWaitsForCompleteUTF8CRLFRecord",
+      "new_package": "internal/execution",
+      "new_file": "journal_reader_test.go",
+      "new_parent": "TestJournalWaitsForCompleteUTF8CRLFRecord",
+      "assertions": "original assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "journal_reader_test.go",
+      "old_parent": "TestJournalResetsOnTruncationAndAtomicReplacement",
+      "new_package": "internal/execution",
+      "new_file": "journal_reader_test.go",
+      "new_parent": "TestJournalResetsOnTruncationAndAtomicReplacement",
+      "assertions": "original assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "journal_reader_test.go",
+      "old_parent": "TestJournalFramingDoesNotInterpretActivitySequence",
+      "new_package": "internal/execution",
+      "new_file": "journal_reader_test.go",
+      "new_parent": "TestJournalFramingDoesNotInterpretActivitySequence",
+      "assertions": "original assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "journal_reader_test.go",
+      "old_parent": "TestJournalBoundsBatchesAndSkipsOversizeLine",
+      "new_package": "internal/execution",
+      "new_file": "journal_reader_test.go",
+      "new_parent": "TestJournalBoundsBatchesAndSkipsOversizeLine",
+      "assertions": "original assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "journal_reader_test.go",
+      "old_parent": "TestJournalFromStartFalseSkipsOldPartialRecord",
+      "new_package": "internal/execution",
+      "new_file": "journal_reader_test.go",
+      "new_parent": "TestJournalFromStartFalseSkipsOldPartialRecord",
+      "assertions": "original assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "journal_reader_test.go",
+      "old_parent": "TestJournalByteBudgetIsolatesLargeRecords",
+      "new_package": "internal/execution",
+      "new_file": "journal_reader_test.go",
+      "new_parent": "TestJournalByteBudgetIsolatesLargeRecords",
+      "assertions": "original assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "journal_reader_test.go",
+      "old_parent": "TestJournalBoundsUnterminatedOversizeScan",
+      "new_package": "internal/execution",
+      "new_file": "journal_reader_test.go",
+      "new_parent": "TestJournalBoundsUnterminatedOversizeScan",
+      "assertions": "original assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_pr_binding_test.go",
+      "old_parent": "TestWorkerPRBindingUsesProviderAndRetainsSession",
+      "new_package": "internal/execution",
+      "new_file": "worker_pr_binding_test.go",
+      "new_parent": "TestWorkerPRBindingUsesProviderAndRetainsSession",
+      "assertions": "original assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "decision_native_test.go",
+      "old_parent": "TestDecisionSubmissionRequiresNativeAuthorityBeforeStateAccess",
+      "new_package": "internal/execution/model",
+      "new_file": "decision_native_test.go",
+      "new_parent": "TestDecisionSubmissionRequiresNativeAuthorityBeforeStateAccess",
+      "assertions": "original assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "decision_native_test.go",
+      "old_parent": "TestNativeDecisionRequestAndAnswerValidation",
+      "new_package": "internal/execution/model",
+      "new_file": "decision_native_test.go",
+      "new_parent": "TestNativeDecisionRequestAndAnswerValidation",
+      "assertions": "original assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_state_test.go",
+      "old_parent": "TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges",
+      "new_package": "internal/execution",
+      "new_file": "worker_state_rules_test.go",
+      "new_parent": "TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges",
+      "assertions": "original assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_state_test.go",
+      "old_parent": "TestWorkerFlowRejectsReplacementsAndLateTurns",
+      "new_package": "internal/execution",
+      "new_file": "worker_state_rules_test.go",
+      "new_parent": "TestWorkerFlowRejectsReplacementsAndLateTurns",
+      "assertions": "original assertions retained",
+      "status": "migrated"
+    },
+    {
+      "old_package": "internal/steerline",
+      "old_file": "worker_state_test.go",
+      "old_parent": "TestWorkerFeedbackKeepsOptionAndAdditionalText",
+      "new_package": "internal/execution",
+      "new_file": "worker_state_rules_test.go",
+      "new_parent": "TestWorkerFeedbackKeepsOptionAndAdditionalText",
+      "assertions": "original assertions retained",
+      "status": "migrated"
+    }
+  ],
+  "pending": [
+    "MC external real app assertions",
+    "TM04ExecutionWiring",
+    "remaining execution fixtures and tests",
+    "L1 once after final self-review"
+  ]
+}

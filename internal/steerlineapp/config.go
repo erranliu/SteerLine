@@ -1,6 +1,7 @@
 package steerlineapp
 
 import (
+"github.com/erranliu/SteerLine/internal/execution"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -55,19 +56,19 @@ func StateRoot() string { return filepath.Join(HomeDir(), "state") }
 // LoadConfig reads the project file and fixed execution catalog as one
 // application configuration. The returned catalog belongs to this config
 // instance and is reused by all of its entry paths.
-func LoadConfig(path string) (steerline.Config, error) { return loadConfig(path, nil, nil, true) }
+func LoadConfig(path string) (execution.Config, error) { return loadConfig(path, nil, nil, true) }
 
-func LoadQueryConfig(path string) (steerline.Config, error) { return loadConfig(path, nil, nil, false) }
+func LoadQueryConfig(path string) (execution.Config, error) { return loadConfig(path, nil, nil, false) }
 
-func LoadConfigWithDirectory(path string, directory *steerline.ExecutionDirectory, host executionbackend.ManagedProcessHost) (steerline.Config, error) {
+func LoadConfigWithDirectory(path string, directory *execution.ExecutionDirectory, host executionbackend.ManagedProcessHost) (execution.Config, error) {
 	if directory == nil || host == nil {
-		return steerline.Config{}, errors.New("execution directory and process host are required")
+		return execution.Config{}, errors.New("execution directory and process host are required")
 	}
 	return loadConfig(path, directory, host, true)
 }
 
-func loadConfig(path string, directory *steerline.ExecutionDirectory, processHost executionbackend.ManagedProcessHost, requireSupport bool) (steerline.Config, error) {
-	config := steerline.Config{Persistence: sqlite.Factory{}, Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s",
+func loadConfig(path string, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost, requireSupport bool) (execution.Config, error) {
+	config := execution.Config{Persistence: sqlite.Factory{}, Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s",
 		Git: executionbackend.Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
 	projectPath, err := filepath.Abs(path)
 	if err != nil {
@@ -108,7 +109,7 @@ func loadConfig(path string, directory *steerline.ExecutionDirectory, processHos
 	}
 	var global struct {
 		Version           int                          `json:"version"`
-		ExecutionProfiles []steerline.ExecutionProfile `json:"execution_profiles"`
+		ExecutionProfiles []execution.ExecutionProfile `json:"execution_profiles"`
 		DefaultProfile    string                       `json:"default_execution_profile"`
 	}
 	if err := contracts.DecodeJSON(globalBytes, &global); err != nil {
@@ -130,6 +131,8 @@ func loadConfig(path string, directory *steerline.ExecutionDirectory, processHos
 		return config, err
 	}
 	config.ProcessHost = processHost
+	config.Resources = steerline.ExecutionResources{}
+	config.ReadRuntime = func(_ context.Context,c execution.Config)(*contracts.Runtime,error){ return steerline.LoadDatabaseRuntime(c) }
 	config.ExecutionDirectory = directory
 	config.StateRoot = StateRoot()
 	config.ExecutionProfiles = global.ExecutionProfiles
@@ -207,13 +210,13 @@ func loadConfig(path string, directory *steerline.ExecutionDirectory, processHos
 			return config, err
 		}
 	}
-	if err := config.ValidateApplicationPaths(); err != nil {
+	if err := steerline.ValidateApplicationPaths(config); err != nil {
 		return config, err
 	}
 	return config, nil
 }
 
-func validateQueryProfiles(config steerline.Config) error {
+func validateQueryProfiles(config execution.Config) error {
 	seen := map[string]bool{}
 	for _, profile := range config.ExecutionProfiles {
 		if !regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`).MatchString(profile.ID) || seen[profile.ID] || strings.TrimSpace(profile.Name) == "" {
@@ -228,7 +231,7 @@ func validateQueryProfiles(config steerline.Config) error {
 	return nil
 }
 
-func repositoryStateKey(config steerline.Config, processHost executionbackend.ManagedProcessHost) (string, error) {
+func repositoryStateKey(config execution.Config, processHost executionbackend.ManagedProcessHost) (string, error) {
 	repository, err := workspace.ResolveRepository(context.Background(), workspace.Git{
 		Command: executionbackend.LaunchCommand{Executable: config.Git.Executable, Args: append([]string(nil), config.Git.Args...)},
 		Timeout: positiveDuration(config.CommandTimeout, 30*time.Second), Start: processHost.StartManaged,
