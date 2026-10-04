@@ -2,9 +2,10 @@ package steerlineapp
 
 import (
 	"context"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 )
 
 func TestRequirementVersionParsers(t *testing.T) {
@@ -33,7 +34,7 @@ func TestRequirementToolsUseWorkerEnvironment(t *testing.T) {
 	// target tool exists. No query may use the service PATH as a substitute.
 	for _, id := range []string{"go", "python"} {
 		e := queryHostRequirementTool(context.Background(), c, id)
-		if e.Status != executionapi.RequirementMissing {
+		if e.Status != executionbackend.RequirementMissing {
 			t.Fatalf("service environment proved %s after worker PATH removal: %+v", id, e)
 		}
 	}

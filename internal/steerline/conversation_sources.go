@@ -8,9 +8,10 @@ import (
 	"slices"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func (s *Service) discoverConversationHistory(ctx context.Context) ([]contracts.ConversationHistorySource, error) {
@@ -23,15 +24,15 @@ func (s *Service) discoverConversationHistory(ctx context.Context) ([]contracts.
 			continue
 		}
 		base := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, AttemptID: run.AttemptID,
-			ExecutionID: run.ExecutionID, Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID,
+			ExecutionID: run.ExecutionID, Backend: executionbackend.BackendKind(run.Backend), Protocol: executionbackend.ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID,
 			SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown}
-		runSource := contracts.ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath), WorkerFlow: run.WorkflowVersion == WorkerFlowVersion, Process: conversationProcessSnapshot(run.Process)}
+		runSource := contracts.ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath), WorkerFlow: run.WorkflowVersion == executionmodel.Version, Process: conversationProcessSnapshot(run.Process)}
 		for _, attempt := range s.domain.Attempts {
 			if attempt.ExecutionID != run.ExecutionID || attempt.EventPath == "" {
 				continue
 			}
 			ended := attempt.AttemptID != run.AttemptID || run.EndedAt != nil
-			if run.WorkflowVersion == WorkerFlowVersion && attempt.AttemptID == run.AttemptID {
+			if run.WorkflowVersion == executionmodel.Version && attempt.AttemptID == run.AttemptID {
 				ended = run.TaskStatus == "closed" || run.TaskStatus == "discarded"
 			}
 			runSource.Attempts = append(runSource.Attempts, contracts.ConversationAttemptSource{AttemptID: attempt.AttemptID, EventPath: attempt.EventPath, Ended: ended})
@@ -98,7 +99,7 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 			return false, errors.New("persisted conversation source cursor exceeds the read budget")
 		}
 		previousCursor = checkpoint.Cursor
-	} else if !errors.Is(err, persistence.ErrNotFound) {
+	} else if !errors.Is(err, storageports.ErrNotFound) {
 		return false, err
 	}
 	platformVersion := ""
@@ -167,7 +168,7 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 					if old.Name != report.Capabilities[i].Name {
 						continue
 					}
-					if report.Capabilities[i].Status == executionapi.CapabilityNotTested && old.Status != executionapi.CapabilityNotTested || old.Status == executionapi.CapabilityVerified && report.Capabilities[i].Status != executionapi.CapabilityVerified {
+					if report.Capabilities[i].Status == executionbackend.CapabilityNotTested && old.Status != executionbackend.CapabilityNotTested || old.Status == executionbackend.CapabilityVerified && report.Capabilities[i].Status != executionbackend.CapabilityVerified {
 						report.Capabilities[i] = old
 					}
 				}

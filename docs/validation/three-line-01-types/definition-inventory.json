@@ -1,0 +1,4334 @@
+[
+  {
+    "file": "internal/execution/backend/backend.go",
+    "name": "BackendKind",
+    "kind": "type"
+  },
+  {
+    "file": "internal/execution/backend/backend.go",
+    "name": "ExecutionProtocol",
+    "kind": "type"
+  },
+  {
+    "file": "internal/execution/backend/backend.go",
+    "name": "AgentSpec",
+    "kind": "type",
+    "fields": [
+      "Name"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/backend.go",
+    "name": "ExecutionRef",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "Backend",
+      "Protocol",
+      "Target",
+      "Agent",
+      "RunID",
+      "AttemptID",
+      "WorkspacePath",
+      "WorkspaceBranch",
+      "BaseCommit",
+      "External",
+      "Generation",
+      "Incomplete"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/backend.go",
+    "name": "ExecutionProbe",
+    "kind": "type",
+    "fields": [
+      "Identity",
+      "Probe"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/backend.go",
+    "name": "ExecutionBackend",
+    "kind": "type",
+    "fields": [
+      "Observe",
+      "InspectWorkspace"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/backend.go",
+    "name": "StopHandle",
+    "kind": "type",
+    "fields": [
+      "Identity",
+      "Kill",
+      "Close"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/backend.go",
+    "name": "OwnedProcessHandle",
+    "kind": "type",
+    "fields": [
+      "OwnedProcess"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/backend.go",
+    "name": "ExecutionStopper",
+    "kind": "type",
+    "fields": [
+      "StopExecution"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/backend.go",
+    "name": "ManagedProcessHost",
+    "kind": "type",
+    "fields": [
+      "StartManaged",
+      "InspectProcess",
+      "NewProcessGeneration",
+      "WriteExecutionFile",
+      "OutputCommand"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/backend.go",
+    "name": "ProcessIdentity",
+    "kind": "type",
+    "fields": [
+      "Kind",
+      "PID",
+      "Created",
+      "Executable",
+      "Terminal",
+      "RuntimeID",
+      "Incarnation",
+      "CoordinatorRuntimeID",
+      "OrchestrationRun",
+      "Task",
+      "Dispatch",
+      "ExecutionHost",
+      "WorktreeID"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/capability.go",
+    "name": "CapabilityStatus",
+    "kind": "type"
+  },
+  {
+    "file": "internal/execution/backend/capability.go",
+    "name": "Capability",
+    "kind": "type",
+    "fields": [
+      "Name",
+      "Status",
+      "Evidence"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/capability.go",
+    "name": "CapabilityReport",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "Backend",
+      "Protocol",
+      "Agent",
+      "Target",
+      "CheckedAt",
+      "CenterVersion",
+      "PlatformVersion",
+      "ExpectedAgentVersion",
+      "AgentVersion",
+      "Capabilities"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/environment.go",
+    "name": "ProbeReceipt",
+    "kind": "type",
+    "fields": [
+      "InputSHA256",
+      "GitHead",
+      "Read",
+      "Write",
+      "Delete"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/environment.go",
+    "name": "ProbeToolEvidence",
+    "kind": "type",
+    "fields": [
+      "SourceIdentity",
+      "CallID",
+      "MessageID",
+      "Command",
+      "Marker",
+      "Verified",
+      "FailureCode"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/environment.go",
+    "name": "ToolContext",
+    "kind": "type",
+    "fields": [
+      "SourceIdentity",
+      "TaskBound",
+      "CallID",
+      "Started"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/environment.go",
+    "name": "ProbePlan",
+    "kind": "type",
+    "fields": [
+      "Command",
+      "InputDigest",
+      "ScriptDigest"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/environment.go",
+    "name": "HostInputObservation",
+    "kind": "type",
+    "fields": [
+      "Fact",
+      "Ready"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/environment.go",
+    "name": "HostTurnFacts",
+    "kind": "type",
+    "fields": [
+      "TurnID",
+      "TaskID",
+      "Purpose",
+      "Outcome",
+      "IntentAt",
+      "Deadline",
+      "Settled",
+      "HasDispatch",
+      "HasDoneMessage"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/environment.go",
+    "name": "HostOutput",
+    "kind": "type",
+    "fields": [
+      "Source",
+      "Cursor",
+      "Content",
+      "FallbackReason",
+      "ContentComplete",
+      "SourceChanged",
+      "UpdateAttemptCursor",
+      "ContentChanged",
+      "Clipping",
+      "Fact",
+      "ProbeEvidence"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/environment.go",
+    "name": "HostReadInput",
+    "kind": "type",
+    "fields": [
+      "Probe"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/environment.go",
+    "name": "HostProbeObservation",
+    "kind": "type",
+    "fields": [
+      "Command",
+      "Nonce",
+      "ScriptDigest",
+      "Evidence"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/environment.go",
+    "name": "HostEnvironmentPort",
+    "kind": "type",
+    "fields": [
+      "PreparationBudget",
+      "PlatformVersion",
+      "ObserveHost",
+      "InspectAgentInput",
+      "CurrentTurn",
+      "ResetTurnOutput",
+      "PrepareProbe",
+      "ProbePrompt",
+      "ReadProbe",
+      "ReadWorkerOutput"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/environment.go",
+    "name": "HostFact",
+    "kind": "type",
+    "fields": [
+      "Reason",
+      "Confidence",
+      "Source",
+      "Detail",
+      "Runtime",
+      "Terminal",
+      "Incarnation",
+      "Turn"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/errors.go",
+    "name": "BackendErrorCode",
+    "kind": "type"
+  },
+  {
+    "file": "internal/execution/backend/errors.go",
+    "name": "BackendError",
+    "kind": "type",
+    "fields": [
+      "Code",
+      "Diagnostic",
+      "Cause"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/errors.go",
+    "name": "AdapterErrorKind",
+    "kind": "type"
+  },
+  {
+    "file": "internal/execution/backend/errors.go",
+    "name": "AdapterError",
+    "kind": "type",
+    "fields": [
+      "Kind",
+      "Operation",
+      "Diagnostic",
+      "Cause"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/errors.go",
+    "name": "UnsupportedAdapterOperation",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/errors.go",
+    "name": "IsAdapterError",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/event.go",
+    "name": "Observation",
+    "kind": "type",
+    "fields": [
+      "Liveness",
+      "Connection",
+      "ObservedAt",
+      "Source",
+      "Diagnostic"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/event.go",
+    "name": "OutputBatch",
+    "kind": "type",
+    "fields": [
+      "Data",
+      "Source",
+      "RetainedFrom",
+      "ObservedAt",
+      "NextCursor",
+      "Gap",
+      "SourceChanged"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/event.go",
+    "name": "PRClues",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/event.go",
+    "name": "ToolReplyFact",
+    "kind": "type",
+    "fields": [
+      "ThreadID",
+      "TurnID",
+      "CallID",
+      "Status",
+      "Success",
+      "Answers"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/event.go",
+    "name": "TurnEvidence",
+    "kind": "type",
+    "fields": [
+      "SourcePath",
+      "TurnID",
+      "CommandID",
+      "SessionID",
+      "Started",
+      "Completed",
+      "Succeeded",
+      "LastMessage",
+      "Failure",
+      "PRCandidates"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/event.go",
+    "name": "EventFact",
+    "kind": "type",
+    "fields": [
+      "Kind",
+      "Source",
+      "SourceEventID",
+      "SourceIdentity",
+      "SourceCursor",
+      "SourceSegment",
+      "SourceOffset",
+      "SourceLength",
+      "SessionID",
+      "StartedTurnID",
+      "Questions",
+      "QuestionRoute",
+      "QuestionText",
+      "QuestionContext",
+      "QuestionOptions",
+      "AllowFreeText",
+      "ToolReply",
+      "InputAccepted",
+      "Completed",
+      "Gap",
+      "Matched",
+      "Outcome",
+      "PRCandidates",
+      "LastMessage"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/event.go",
+    "name": "EventKind",
+    "kind": "type"
+  },
+  {
+    "file": "internal/execution/backend/event.go",
+    "name": "EventBatch",
+    "kind": "type",
+    "fields": [
+      "Source",
+      "DeliveryID",
+      "ExecutionID",
+      "AttemptID",
+      "ExternalRunID",
+      "Facts"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/execution.go",
+    "name": "Command",
+    "kind": "type",
+    "fields": [
+      "Executable",
+      "Args"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/host.go",
+    "name": "ProbeIdentity",
+    "kind": "type",
+    "fields": [
+      "Execution",
+      "Turn",
+      "Nonce",
+      "ProfileDigest",
+      "Runtime",
+      "Terminal",
+      "Incarnation",
+      "Worktree"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/host.go",
+    "name": "HostActionKind",
+    "kind": "type"
+  },
+  {
+    "file": "internal/execution/backend/host.go",
+    "name": "HostActionInput",
+    "kind": "type",
+    "fields": [
+      "Kind",
+      "Probe",
+      "Process",
+      "Authorization",
+      "Worktree",
+      "WorkflowRun",
+      "TurnID"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/host.go",
+    "name": "HostActionAuthorization",
+    "kind": "type",
+    "fields": [
+      "ExecutionID",
+      "AttemptID",
+      "TurnID",
+      "CommandID",
+      "BlockerID",
+      "BlockerVersion"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/implementation_config_input.go",
+    "name": "ImplementationConfigInput",
+    "kind": "type",
+    "fields": [
+      "ImplementationKey",
+      "CodecVersion",
+      "Payload"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/implementation_config_input.go",
+    "name": "implementationConfigInputWire",
+    "kind": "type",
+    "fields": [
+      "ImplementationKey",
+      "CodecVersion",
+      "Payload"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/implementation_data.go",
+    "name": "ImplementationDataEnvelope",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "CodecVersion",
+      "Purpose",
+      "ImplementationKey",
+      "ProjectID",
+      "ProfileID",
+      "AcceptedConfigVersion",
+      "ExecutionID",
+      "AttemptID",
+      "Generation",
+      "ConfigDigest",
+      "WorkflowRunID",
+      "TurnID",
+      "QuestionID",
+      "Digest",
+      "Payload"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/implementation_data.go",
+    "name": "implementationDataWire",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "CodecVersion",
+      "Purpose",
+      "ImplementationKey",
+      "ProjectID",
+      "ProfileID",
+      "AcceptedConfigVersion",
+      "ExecutionID",
+      "AttemptID",
+      "Generation",
+      "ConfigDigest",
+      "WorkflowRunID",
+      "TurnID",
+      "QuestionID",
+      "Digest",
+      "Payload"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/implementation_data.go",
+    "name": "NewImplementationDataEnvelope",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/implementation_data.go",
+    "name": "canonicalImplementationPayload",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/json.go",
+    "name": "DecodeStrictJSON",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleAction",
+    "kind": "type"
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleInput",
+    "kind": "type",
+    "fields": [
+      "Workspace",
+      "Resource",
+      "Turn",
+      "Completion",
+      "Feedback",
+      "Ack",
+      "Stop",
+      "Cleanup",
+      "Host"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "FeedbackInput",
+    "kind": "type",
+    "fields": [
+      "DecisionID",
+      "QuestionID",
+      "Message",
+      "Answer"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "ResourceIntent",
+    "kind": "type",
+    "fields": [
+      "Purpose",
+      "Name",
+      "Objective",
+      "Base",
+      "TurnID",
+      "TurnPurpose"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "CompletionInput",
+    "kind": "type",
+    "fields": [
+      "TurnID",
+      "Outcome",
+      "Subject",
+      "Body"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "AcknowledgeInput",
+    "kind": "type",
+    "fields": [
+      "DeliveryID"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "StopInput",
+    "kind": "type",
+    "fields": [
+      "TurnID"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "CleanupInput",
+    "kind": "type",
+    "fields": [
+      "Resources",
+      "Workspace"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleSnapshot",
+    "kind": "type",
+    "fields": [
+      "Ref",
+      "Session",
+      "TaskTitle",
+      "WorkflowPhase",
+      "TaskDelivered",
+      "ConfigurationDigest",
+      "ResourceGeneration",
+      "Implementation",
+      "PolicyResources",
+      "Operations",
+      "Workspace",
+      "WorkspaceDirty",
+      "WorkspacePlan",
+      "PendingTurn",
+      "QuestionRoute",
+      "OutputCursor",
+      "PendingDeliveryID",
+      "KnownQuestionIDs",
+      "PendingQuestions",
+      "PreparationProbe",
+      "OriginalHost",
+      "HostAuthorization"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleCandidate",
+    "kind": "type",
+    "fields": [
+      "Action",
+      "Input",
+      "Done"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleRequest",
+    "kind": "type",
+    "fields": [
+      "Snapshot",
+      "Operation",
+      "Input"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleReceipt",
+    "kind": "type",
+    "fields": [
+      "Operation",
+      "Disposition",
+      "RequestID",
+      "Diagnostic",
+      "OriginalHost",
+      "Process",
+      "Target",
+      "Workspace",
+      "Implementation",
+      "Facts",
+      "DeliveryID",
+      "EventPath",
+      "State",
+      "TurnEvidence",
+      "Handle"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleStateFacts",
+    "kind": "type",
+    "fields": [
+      "SessionID",
+      "SessionGeneration",
+      "TurnID",
+      "InputAccepted",
+      "TurnStarted",
+      "TurnCompleted",
+      "WorkerAbsent",
+      "WritersAbsent",
+      "QuestionPending",
+      "Stopped",
+      "ResourceID",
+      "ResourcePending",
+      "RuntimeID",
+      "WorktreeID",
+      "LaunchCommand"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleBindingDigest",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "sameLifecycleOperationIdentity",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "CandidateForOperation",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "sameLifecycleRef",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "cloneImplementationData",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "cloneQuestions",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "cloneFacts",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "cloneAnswer",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "cloneAnswers",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleEvent",
+    "kind": "type",
+    "fields": [
+      "Fact",
+      "Implementation",
+      "Candidate",
+      "DeliveryID",
+      "DeliveryFinal",
+      "Summary",
+      "Kind",
+      "Status",
+      "Title",
+      "Persisted",
+      "Processed"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleObserver",
+    "kind": "type",
+    "fields": [
+      "Events",
+      "Done",
+      "StopHandle",
+      "Close"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecyclePlanPort",
+    "kind": "type",
+    "fields": [
+      "Next"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleProbePort",
+    "kind": "type",
+    "fields": [
+      "PreflightLifecycle"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleExecutePort",
+    "kind": "type",
+    "fields": [
+      "Execute"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecyclePreparationOwner",
+    "kind": "type",
+    "fields": [
+      "ReleasePreparation"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleReconcilePort",
+    "kind": "type",
+    "fields": [
+      "Reconcile"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleObservePort",
+    "kind": "type",
+    "fields": [
+      "ObserveLifecycle"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleStopPort",
+    "kind": "type",
+    "fields": [
+      "StopLifecycle"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleCleanupPort",
+    "kind": "type",
+    "fields": [
+      "CleanupLifecycle"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleRecoveryEvidence",
+    "kind": "type",
+    "fields": [
+      "SessionAvailable",
+      "ManagedProcess",
+      "ProcessAbsent"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleWorkspacePort",
+    "kind": "type",
+    "fields": [
+      "InspectLifecycleWorkspace"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleRecoveryPort",
+    "kind": "type",
+    "fields": [
+      "VerifyManualRecovery",
+      "BindRecovery"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecyclePolicyCapabilities",
+    "kind": "type",
+    "fields": [
+      "ActiveTurnFeedback",
+      "LinkedWorkspaceWriteRoots",
+      "SeparateTurnStart",
+      "ResumeActiveObservation"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecyclePolicyPort",
+    "kind": "type",
+    "fields": [
+      "PolicyCapabilities"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecyclePort",
+    "kind": "type"
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleResolver",
+    "kind": "type",
+    "fields": [
+      "ResolveLifecycle"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/lifecycle.go",
+    "name": "LifecycleSetup",
+    "kind": "type",
+    "fields": [
+      "Snapshot",
+      "ProfileData",
+      "ProfileID",
+      "AcceptedConfigVersion",
+      "Policy",
+      "ProcessHost",
+      "RepositoryPath",
+      "RunDirectory",
+      "CommandTimeout",
+      "AttemptNumber",
+      "BlockedEnvironment",
+      "GitExecutable",
+      "GitArgs",
+      "RemoteName",
+      "TargetBranch"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/operation.go",
+    "name": "OperationStatus",
+    "kind": "type"
+  },
+  {
+    "file": "internal/execution/backend/operation.go",
+    "name": "Operation",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "ID",
+      "RunID",
+      "AttemptID",
+      "Backend",
+      "Protocol",
+      "Target",
+      "Action",
+      "IdempotencyKey",
+      "Request",
+      "Receipt",
+      "PayloadDigest",
+      "Status",
+      "StartedAt",
+      "UpdatedAt",
+      "Diagnostic",
+      "ResidualResources",
+      "Ref",
+      "LifecycleIdentity"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/operation.go",
+    "name": "LifecycleOperationIdentity",
+    "kind": "type",
+    "fields": [
+      "ProjectID",
+      "ExecutionID",
+      "ConfigurationDigest",
+      "ResourceGeneration",
+      "InputBindingDigest",
+      "Ref"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/operation.go",
+    "name": "StopReceipt",
+    "kind": "type",
+    "fields": [
+      "Disposition",
+      "Diagnostic"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/operation.go",
+    "name": "LaunchCommand",
+    "kind": "type",
+    "fields": [
+      "Executable",
+      "Args",
+      "WorkingDirectory",
+      "EnvironmentRefs"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/policy.go",
+    "name": "ExecutionPolicy",
+    "kind": "type",
+    "fields": [
+      "Filesystem",
+      "Network",
+      "Escalation"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/policy.go",
+    "name": "FilesystemPolicy",
+    "kind": "type",
+    "fields": [
+      "ReadScope",
+      "WriteScope",
+      "GitMetadataWrite"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/publication.go",
+    "name": "PublicationPolicy",
+    "kind": "type",
+    "fields": [
+      "Publisher"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/question_route.go",
+    "name": "NewQuestionRoute",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/record_validation.go",
+    "name": "StableExecutionID",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/record_validation.go",
+    "name": "StableOperationID",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/record_validation.go",
+    "name": "ValidateExecutionRef",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/record_validation.go",
+    "name": "ValidateExecutionOperation",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/requirements.go",
+    "name": "ExecutionRequirements",
+    "kind": "type",
+    "fields": [
+      "Capabilities",
+      "Tools",
+      "Credentials"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/requirements.go",
+    "name": "ToolRequirement",
+    "kind": "type",
+    "fields": [
+      "ID",
+      "ExactVersion"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/requirements.go",
+    "name": "CredentialRequirement",
+    "kind": "type",
+    "fields": [
+      "ID",
+      "Site"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/requirements.go",
+    "name": "RequirementStatus",
+    "kind": "type"
+  },
+  {
+    "file": "internal/execution/backend/requirements.go",
+    "name": "RequirementEvidence",
+    "kind": "type",
+    "fields": [
+      "ID",
+      "Site",
+      "Target",
+      "Status",
+      "Version",
+      "Source",
+      "CheckedAt"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/requirements.go",
+    "name": "RequirementsEvaluation",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "Backend",
+      "Protocol",
+      "Target",
+      "Agent",
+      "CheckedAt",
+      "Capabilities",
+      "Tools",
+      "Credentials"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/requirements.go",
+    "name": "RegisteredCapability",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/requirements.go",
+    "name": "matchEvidence",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/backend/session.go",
+    "name": "DecisionOption",
+    "kind": "type",
+    "fields": [
+      "ID",
+      "Label",
+      "Detail",
+      "Receiver",
+      "Action"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/session.go",
+    "name": "Question",
+    "kind": "type",
+    "fields": [
+      "ExecutionID",
+      "AttemptID",
+      "Generation",
+      "TurnID",
+      "ID",
+      "Header",
+      "Question",
+      "Options",
+      "AllowFreeText"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/session.go",
+    "name": "QuestionRouteIdentity",
+    "kind": "type",
+    "fields": [
+      "ProjectID",
+      "WorkflowRunID",
+      "ExecutionID",
+      "AttemptID",
+      "Generation",
+      "TurnID",
+      "QuestionID"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/session.go",
+    "name": "SessionContext",
+    "kind": "type",
+    "fields": [
+      "ProjectID",
+      "TaskID",
+      "WorkflowRunID",
+      "ExecutionID",
+      "AttemptID",
+      "Agent",
+      "Target",
+      "SessionID",
+      "Generation",
+      "CurrentTurnID",
+      "PendingTurnID",
+      "LastStoppedTurnID",
+      "CurrentCommandID",
+      "PendingCommandID",
+      "AttemptNumber"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/session.go",
+    "name": "TurnInput",
+    "kind": "type",
+    "fields": [
+      "CommandID",
+      "Prompt",
+      "Purpose",
+      "LinkedWorktreeArgs"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/session.go",
+    "name": "Answer",
+    "kind": "type",
+    "fields": [
+      "Answers"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/workspace.go",
+    "name": "ExecutionTarget",
+    "kind": "type",
+    "fields": [
+      "ID",
+      "ConnectionID",
+      "WorktreeID",
+      "Branch",
+      "BaseRevision",
+      "ExternalRuntime",
+      "OrchestrationRun",
+      "OrchestrationRunRequestID",
+      "CoordinatorTerminal",
+      "ExternalTask",
+      "Dispatch",
+      "ExecutionHost"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/workspace.go",
+    "name": "WorkspaceIntent",
+    "kind": "type",
+    "fields": [
+      "Path",
+      "Branch",
+      "BaseCommit"
+    ]
+  },
+  {
+    "file": "internal/execution/backend/workspace.go",
+    "name": "WorkspaceInspection",
+    "kind": "type",
+    "fields": [
+      "Repository",
+      "Worktree",
+      "Branch",
+      "Base",
+      "Head",
+      "Dirty",
+      "CheckedAt"
+    ]
+  },
+  {
+    "file": "internal/execution/model/answer_identity.go",
+    "name": "SameDecisionAnswer",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/answer_identity.go",
+    "name": "answerFingerprint",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/decision_content.go",
+    "name": "NormalizeDecisionText",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/decision_content.go",
+    "name": "NormalizeDecisionContent",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/decision_content.go",
+    "name": "ValidateDecisionRequest",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/decision_content.go",
+    "name": "ValidateDecisionAnswer",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/decision_content.go",
+    "name": "DecisionQuestions",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/environment.go",
+    "name": "WorkerEnvironment",
+    "kind": "type",
+    "fields": [
+      "OriginalTerminal",
+      "ProfileDigest",
+      "LaunchCommand",
+      "WriteRoots",
+      "Runtime",
+      "Preparation",
+      "History",
+      "Blocker",
+      "Ready"
+    ]
+  },
+  {
+    "file": "internal/execution/model/environment.go",
+    "name": "WorkerPreparation",
+    "kind": "type",
+    "fields": [
+      "TurnID",
+      "Nonce",
+      "StartedAt",
+      "Deadline",
+      "Probe",
+      "Command",
+      "InputDigest",
+      "ScriptDigest",
+      "Receipt",
+      "Evidence",
+      "Verified",
+      "Invalidated"
+    ]
+  },
+  {
+    "file": "internal/execution/model/environment.go",
+    "name": "WorkerHostBlocker",
+    "kind": "type",
+    "fields": [
+      "ID",
+      "Fact",
+      "ObservedAt",
+      "TurnID",
+      "Version",
+      "RecheckOperationID"
+    ]
+  },
+  {
+    "file": "internal/execution/model/execution.go",
+    "name": "FixedExecutionProfile",
+    "kind": "type",
+    "fields": [
+      "ExecutionRequirements",
+      "RequirementsEvaluation",
+      "RequirementsEvidenceDigest",
+      "ImplementationVersion",
+      "ImplementationKey",
+      "ImplementationData",
+      "ImplementationDisplay",
+      "PublicationPolicy",
+      "Publication",
+      "Version",
+      "ExecutionPolicy",
+      "PolicyDigest",
+      "AcceptedConfigVersion",
+      "PolicySource",
+      "ID",
+      "Name",
+      "Digest",
+      "Host",
+      "Agent"
+    ]
+  },
+  {
+    "file": "internal/execution/model/execution.go",
+    "name": "PolicyResources",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "Digest",
+      "ProfileDigest",
+      "Workspace",
+      "WriteRoots",
+      "TemporaryRoots",
+      "ImplementationData"
+    ]
+  },
+  {
+    "file": "internal/execution/model/json.go",
+    "name": "decodeJSON",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/operation_rules.go",
+    "name": "OperationTransitionAllowed",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/pr.go",
+    "name": "PRInfo",
+    "kind": "type",
+    "fields": [
+      "URL",
+      "Repository",
+      "BaseBranch",
+      "HeadRepository",
+      "HeadBranch",
+      "HeadRevision",
+      "State",
+      "Merged",
+      "MergedAt",
+      "MergeCommit"
+    ]
+  },
+  {
+    "file": "internal/execution/model/publication.go",
+    "name": "PRProviderConfig",
+    "kind": "type",
+    "fields": [
+      "Kind",
+      "BaseURL",
+      "Repository",
+      "TokenEnv",
+      "Query",
+      "Close"
+    ]
+  },
+  {
+    "file": "internal/execution/model/publication.go",
+    "name": "PublicationSettings",
+    "kind": "type",
+    "fields": [
+      "Provider",
+      "Git",
+      "Remote",
+      "RemoteURL",
+      "BaseBranch",
+      "AuthenticationRefs"
+    ]
+  },
+  {
+    "file": "internal/execution/model/records.go",
+    "name": "WorkflowRunRecord",
+    "kind": "type",
+    "fields": [
+      "ControlRevision",
+      "Abandonment",
+      "PRHistory",
+      "ProjectIdentity",
+      "WorkflowRunID",
+      "TaskID",
+      "WorkflowVersion",
+      "ConfigDigest",
+      "ExecutionProfile",
+      "Phase",
+      "Repository",
+      "Branch",
+      "SelectedResult",
+      "PRURL",
+      "PRCandidateURL",
+      "PRState",
+      "PRQueriedAt",
+      "PRQueryError",
+      "PRMergedAt",
+      "PRMergeCommit",
+      "PendingDecisions",
+      "CreatedAt",
+      "UpdatedAt"
+    ]
+  },
+  {
+    "file": "internal/execution/model/records.go",
+    "name": "CandidateAbandonment",
+    "kind": "type",
+    "fields": [
+      "RequestID",
+      "RequestedBy",
+      "Reason",
+      "At"
+    ]
+  },
+  {
+    "file": "internal/execution/model/records.go",
+    "name": "ExecutionRecord",
+    "kind": "type",
+    "fields": [
+      "ResourceStopOperationID",
+      "ResourceStoppedAt",
+      "CurrentRequirementsError",
+      "CurrentRequirementsEvaluation",
+      "ImplementationData",
+      "PolicyResources",
+      "RecoveryRequired",
+      "RecoveryVersion",
+      "RecoveryState",
+      "RecoveryMarkedAt",
+      "WorkspaceIntent",
+      "TurnStartedAt",
+      "TurnEndedAt",
+      "Generation",
+      "SessionID",
+      "SessionGeneration",
+      "PendingDeliveryID",
+      "ConfigurationDigest",
+      "LastTurnOutcome",
+      "LogPath",
+      "LastEvent",
+      "Summary",
+      "Error",
+      "ManualStop",
+      "ProjectIdentity",
+      "ExecutionID",
+      "CurrentAttemptID",
+      "OwnerServiceInstanceID",
+      "WorkflowRunID",
+      "Agent",
+      "Backend",
+      "Protocol",
+      "Process",
+      "Environment",
+      "DecisionID",
+      "PendingCommandID",
+      "CurrentCommandID",
+      "PendingQuestions",
+      "PendingTurnID",
+      "CurrentTurnID",
+      "TurnNumber",
+      "LastStoppedTurnID",
+      "Target",
+      "Workspace",
+      "Status",
+      "CurrentStep",
+      "CreatedAt",
+      "UpdatedAt"
+    ]
+  },
+  {
+    "file": "internal/execution/model/records.go",
+    "name": "WorkspaceEvidence",
+    "kind": "type",
+    "fields": [
+      "Repository",
+      "Worktree",
+      "Branch",
+      "Base",
+      "Head",
+      "Dirty",
+      "VerifiedAt"
+    ]
+  },
+  {
+    "file": "internal/execution/model/records.go",
+    "name": "StepAttemptRecord",
+    "kind": "type",
+    "fields": [
+      "WorkerProcess",
+      "ProjectIdentity",
+      "AttemptID",
+      "ExecutionID",
+      "StepID",
+      "AttemptNumber",
+      "OperationID",
+      "EventPath",
+      "ResultPath",
+      "OutputSource",
+      "OutputCursor",
+      "Status",
+      "InputRevision",
+      "ContractDigest",
+      "Result",
+      "ExternalBinding",
+      "NativeLauncherPath",
+      "NativeLauncherDigest",
+      "CreatedAt",
+      "UpdatedAt"
+    ]
+  },
+  {
+    "file": "internal/execution/model/records.go",
+    "name": "DecisionRecord",
+    "kind": "type",
+    "fields": [
+      "RecoveryVersion",
+      "RecoveryState",
+      "RecoveryOfDecision",
+      "ProjectIdentity",
+      "DecisionID",
+      "Scope",
+      "WorkflowRunID",
+      "ExecutionID",
+      "AttemptID",
+      "QuestionID",
+      "Request",
+      "Answer",
+      "AnsweredBy",
+      "Status",
+      "Version",
+      "CreatedAt",
+      "UpdatedAt"
+    ]
+  },
+  {
+    "file": "internal/execution/model/records.go",
+    "name": "OperationRecord",
+    "kind": "type",
+    "fields": [
+      "ProjectIdentity",
+      "OperationID",
+      "IdempotencyKey",
+      "Kind",
+      "Status",
+      "PayloadDigest",
+      "Request",
+      "LifecycleIdentity",
+      "PlatformRequestID",
+      "Receipt",
+      "UnknownReason",
+      "CreatedAt",
+      "UpdatedAt"
+    ]
+  },
+  {
+    "file": "internal/execution/model/recovery.go",
+    "name": "RecoveryFacts",
+    "kind": "type",
+    "fields": [
+      "WorkerLive",
+      "WorkerAbsent",
+      "WritersAbsent",
+      "Completed",
+      "QuestionPending",
+      "OutcomeUncertain"
+    ]
+  },
+  {
+    "file": "internal/execution/model/recovery.go",
+    "name": "RecoveryDisposition",
+    "kind": "type"
+  },
+  {
+    "file": "internal/execution/model/recovery.go",
+    "name": "ClassifyRecovery",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/runtime.go",
+    "name": "PendingQuestion",
+    "kind": "type",
+    "fields": [
+      "Questions",
+      "Route"
+    ]
+  },
+  {
+    "file": "internal/execution/model/runtime.go",
+    "name": "ManualStopConfirmation",
+    "kind": "type",
+    "fields": [
+      "AttemptID",
+      "ConfirmedAt",
+      "ConfirmedBy",
+      "Basis"
+    ]
+  },
+  {
+    "file": "internal/execution/model/runtime.go",
+    "name": "DecisionRequest",
+    "kind": "type",
+    "fields": [
+      "FormatVersion",
+      "Question",
+      "Context",
+      "Options",
+      "Questions",
+      "QuestionRoute",
+      "Recommended",
+      "AllowFreeText"
+    ]
+  },
+  {
+    "file": "internal/execution/model/runtime.go",
+    "name": "DecisionState",
+    "kind": "type",
+    "fields": [
+      "AnswerDecisionVersion",
+      "AnswerRunRevision",
+      "ID",
+      "AttemptID",
+      "Version",
+      "Request",
+      "Status",
+      "OptionID",
+      "Note",
+      "Answers",
+      "SourceAttemptID",
+      "RecoveryVersion",
+      "AnsweredBy",
+      "AnsweredAt",
+      "AppliedAt",
+      "RequestPath",
+      "AnswerPath"
+    ]
+  },
+  {
+    "file": "internal/execution/model/runtime.go",
+    "name": "DecisionAnswer",
+    "kind": "type",
+    "fields": [
+      "DecisionID",
+      "RunID",
+      "OptionID",
+      "Note",
+      "Answers",
+      "AnsweredBy",
+      "AnsweredAt",
+      "ExpectedDecisionVersion",
+      "ExpectedRunRevision",
+      "SourceAttemptID",
+      "ExpectedRecoveryVersion",
+      "ServiceInstanceID"
+    ]
+  },
+  {
+    "file": "internal/execution/model/runtime.go",
+    "name": "PRState",
+    "kind": "type",
+    "fields": [
+      "URL",
+      "HeadRevision",
+      "State",
+      "MergedAt",
+      "MergeCommit",
+      "QueriedAt",
+      "QueryError"
+    ]
+  },
+  {
+    "file": "internal/execution/model/state.go",
+    "name": "State",
+    "kind": "type",
+    "fields": [
+      "WorkflowRunID",
+      "TaskID",
+      "WorkflowVersion",
+      "Phase",
+      "PRURL",
+      "PRState",
+      "WorkflowUpdatedAt",
+      "ExecutionID",
+      "ExecutionWorkflowRunID",
+      "SessionID",
+      "PendingTurnID",
+      "CurrentTurnID",
+      "LastStoppedTurnID",
+      "ExecutionStatus",
+      "TurnNumber",
+      "ExecutionUpdatedAt"
+    ]
+  },
+  {
+    "file": "internal/execution/model/state.go",
+    "name": "ValidateBinding",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/state.go",
+    "name": "BeginTurn",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/state.go",
+    "name": "NoteQuestion",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/state.go",
+    "name": "ContinueQuestion",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/state.go",
+    "name": "StopTurn",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/state.go",
+    "name": "BindPR",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/model/state.go",
+    "name": "Delivery",
+    "kind": "type",
+    "fields": [
+      "TaskID",
+      "WorkflowRunID",
+      "PRURL",
+      "MergeCommit",
+      "MergedAt"
+    ]
+  },
+  {
+    "file": "internal/execution/model/state.go",
+    "name": "Complete",
+    "kind": "function"
+  },
+  {
+    "file": "internal/execution/prompt.go",
+    "name": "Prompt",
+    "kind": "function"
+  },
+  {
+    "file": "internal/product/api/client.go",
+    "name": "ErrorKind",
+    "kind": "type"
+  },
+  {
+    "file": "internal/product/api/client.go",
+    "name": "Error",
+    "kind": "type",
+    "fields": [
+      "Kind",
+      "Cause"
+    ]
+  },
+  {
+    "file": "internal/product/api/client.go",
+    "name": "ControlAction",
+    "kind": "type"
+  },
+  {
+    "file": "internal/product/api/client.go",
+    "name": "ControlInput",
+    "kind": "type",
+    "fields": [
+      "Action",
+      "Payload",
+      "RequestID",
+      "RequestedBy",
+      "InstanceID",
+      "ExpectedRevision"
+    ]
+  },
+  {
+    "file": "internal/product/api/client.go",
+    "name": "AnswerInput",
+    "kind": "type",
+    "fields": [
+      "RunID",
+      "DecisionID",
+      "Option",
+      "Note",
+      "RequestedBy",
+      "CommandID",
+      "ExpectedVersion"
+    ]
+  },
+  {
+    "file": "internal/product/api/client.go",
+    "name": "CreateInput",
+    "kind": "type",
+    "fields": [
+      "Payload",
+      "RequestID",
+      "RequestedBy",
+      "ExpectedAuthorityVersion"
+    ]
+  },
+  {
+    "file": "internal/product/api/client.go",
+    "name": "DiscardInput",
+    "kind": "type",
+    "fields": [
+      "TaskID",
+      "RequestID",
+      "Reason",
+      "RequestedBy",
+      "ExpectedVersion"
+    ]
+  },
+  {
+    "file": "internal/product/api/client.go",
+    "name": "ServiceStopResult",
+    "kind": "type",
+    "fields": [
+      "Status",
+      "RequestID",
+      "InstanceID",
+      "Receipt",
+      "ProcessExited",
+      "LocksReleased",
+      "Diagnostic"
+    ]
+  },
+  {
+    "file": "internal/product/api/client.go",
+    "name": "ActivityCursor",
+    "kind": "type",
+    "fields": [
+      "RunID",
+      "ExecutionID",
+      "AttemptID",
+      "AfterEventID",
+      "Initialized"
+    ]
+  },
+  {
+    "file": "internal/product/api/execution.go",
+    "name": "ControlReceipt",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "RequestID",
+      "RequestDigest",
+      "InstanceID",
+      "Action",
+      "Status",
+      "Code",
+      "Message",
+      "RequestedBy",
+      "SubmittedAt",
+      "AcceptedAt",
+      "CompletedAt",
+      "RunID",
+      "AttemptID",
+      "DecisionID",
+      "ControlRevision",
+      "RunRevision"
+    ]
+  },
+  {
+    "file": "internal/product/api/observations.go",
+    "name": "ProcessProbeState",
+    "kind": "type"
+  },
+  {
+    "file": "internal/product/api/observations.go",
+    "name": "ProcessProbe",
+    "kind": "type",
+    "fields": [
+      "State",
+      "Reason"
+    ]
+  },
+  {
+    "file": "internal/product/api/observations.go",
+    "name": "ServiceConnectionState",
+    "kind": "type"
+  },
+  {
+    "file": "internal/product/api/observations.go",
+    "name": "SnapshotState",
+    "kind": "type"
+  },
+  {
+    "file": "internal/product/api/observations.go",
+    "name": "JournalCursor",
+    "kind": "type",
+    "fields": [
+      "Path",
+      "FileID",
+      "Generation",
+      "Offset",
+      "ScanOffset",
+      "Pending",
+      "Dropping",
+      "DroppingStart",
+      "SkipUntilNewline",
+      "AnchorOffset",
+      "AnchorLength",
+      "AnchorHash",
+      "HeaderLength",
+      "HeaderHash",
+      "Initialized"
+    ]
+  },
+  {
+    "file": "internal/product/api/observations.go",
+    "name": "ControlRequest",
+    "kind": "type",
+    "fields": [
+      "ProtocolVersion",
+      "RequestID",
+      "RepositoryIdentity",
+      "InstanceID",
+      "Action",
+      "ExpectedControlRevision",
+      "RunID",
+      "DecisionID",
+      "ExpectedRunRevision",
+      "Payload",
+      "RequestedBy",
+      "CreatedAt",
+      "ExpiresAt"
+    ]
+  },
+  {
+    "file": "internal/product/api/observations.go",
+    "name": "ControlPayload",
+    "kind": "type",
+    "fields": [
+      "WorkflowRunID",
+      "ExpectedTaskVersion",
+      "ExpectedGraphRevision",
+      "ExpectedCandidateVersion",
+      "Reason",
+      "Environment",
+      "TaskID",
+      "Mode",
+      "ExecutionProfileID",
+      "ExecutionProfileDigest"
+    ]
+  },
+  {
+    "file": "internal/product/api/runtime.go",
+    "name": "HostActionTarget",
+    "kind": "type",
+    "fields": [
+      "RunID",
+      "AttemptID",
+      "Version",
+      "ExecutionID",
+      "TurnID",
+      "BlockerID"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "ProjectRef",
+    "kind": "type",
+    "fields": [
+      "Key",
+      "Name",
+      "ConfigPath",
+      "Identity",
+      "RunDir",
+      "ApplicationHome",
+      "ApplicationBin",
+      "Error",
+      "Conflict",
+      "Presentation"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "ProjectSnapshot",
+    "kind": "type",
+    "fields": [
+      "CandidateFreshnessLimit",
+      "DecisionReasons",
+      "SelectedTaskID",
+      "FullReadAt",
+      "Connection",
+      "Observation",
+      "Tasks",
+      "TaskError",
+      "NativeTasks",
+      "SelectedNative",
+      "NativeTaskError",
+      "Domain",
+      "DomainError"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "LogBatch",
+    "kind": "type",
+    "fields": [
+      "Cursor",
+      "Reset",
+      "Activity",
+      "Diagnostics"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "LogNormalizer",
+    "kind": "type",
+    "fields": [
+      "Name",
+      "Detect",
+      "Normalize"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "DecisionInput",
+    "kind": "type",
+    "fields": [
+      "Answer",
+      "RequestedBy",
+      "CommandID"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "CapabilityFilter",
+    "kind": "type",
+    "fields": [
+      "Backend",
+      "Protocol",
+      "TargetID",
+      "ExecutionID",
+      "AttemptID",
+      "Source",
+      "SourceIdentity"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "Reader",
+    "kind": "type",
+    "fields": [
+      "Close",
+      "ReadProjectView",
+      "ActivityEvents",
+      "Domain",
+      "DatabaseVersion",
+      "ShowNativeTask",
+      "ListNativeTasks",
+      "TaskGraph",
+      "QueryTaskGraph",
+      "ReadConversation",
+      "ReadMessageBody",
+      "ReadRaw",
+      "ReadCapabilities",
+      "Command"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "TaskCommands",
+    "kind": "type",
+    "fields": [
+      "Close",
+      "Validate",
+      "Create",
+      "Discard",
+      "AddPredecessors"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "ControlPort",
+    "kind": "type",
+    "fields": [
+      "Submit",
+      "Receipt",
+      "Request",
+      "Stop"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "DecisionPort",
+    "kind": "type",
+    "fields": [
+      "Eligibility",
+      "Submit",
+      "Answer"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "Resources",
+    "kind": "type",
+    "fields": [
+      "Project",
+      "ExecutableTypes",
+      "DefaultRequestedBy",
+      "DefaultAnswerer",
+      "CandidateFreshnessLimit",
+      "OpenReader",
+      "OpenCommands",
+      "Connect",
+      "Observe",
+      "ProbeProcess",
+      "Control",
+      "Decision",
+      "TaskSnapshot",
+      "ResolveStartTask",
+      "InspectRecovery",
+      "DecisionAvailability",
+      "Close"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "Factory",
+    "kind": "type"
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "Lifecycle",
+    "kind": "type",
+    "fields": [
+      "Project",
+      "Close"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "TaskClient",
+    "kind": "type",
+    "fields": [
+      "ShowTask",
+      "ListTasks",
+      "TaskGraph",
+      "QueryTaskGraph",
+      "ValidateTaskBatch",
+      "CreateTaskBatch",
+      "DiscardTask",
+      "AddPredecessors"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "ProjectQueries",
+    "kind": "type",
+    "fields": [
+      "ReadProject",
+      "TaskSnapshot",
+      "Activity"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "ConversationQueries",
+    "kind": "type",
+    "fields": [
+      "Conversation",
+      "Body",
+      "Raw",
+      "CursorAfter",
+      "Capabilities"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "Controls",
+    "kind": "type",
+    "fields": [
+      "SubmitControl",
+      "Receipt",
+      "Request",
+      "WaitControl",
+      "StopService",
+      "StartTaskPayload"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "Decisions",
+    "kind": "type",
+    "fields": [
+      "DecisionEligibility",
+      "SubmitDecision",
+      "Answer",
+      "Command",
+      "WaitCommand"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "RecoveryQueries",
+    "kind": "type",
+    "fields": [
+      "InspectRecovery"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "InputChecks",
+    "kind": "type",
+    "fields": [
+      "CandidateAvailability",
+      "StartTaskAvailability",
+      "AutoDispatchAvailability"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "ConsoleClient",
+    "kind": "type"
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "Client",
+    "kind": "type"
+  },
+  {
+    "file": "internal/steerline/clientcontracts/eligibility.go",
+    "name": "CandidateFreshness",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/clientcontracts/eligibility.go",
+    "name": "canonicalIdentity",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/clientcontracts/eligibility.go",
+    "name": "connectionDiagnostic",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/clientcontracts/eligibility.go",
+    "name": "ExecutionConfigMismatch",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/clientcontracts/eligibility.go",
+    "name": "StartTaskReason",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/clientcontracts/eligibility.go",
+    "name": "AutoDispatchReason",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/clientcontracts/observations.go",
+    "name": "Runtime",
+    "kind": "type"
+  },
+  {
+    "file": "internal/steerline/clientcontracts/observations.go",
+    "name": "ServiceConnection",
+    "kind": "type",
+    "fields": [
+      "Snapshot",
+      "Process",
+      "State",
+      "IdentityMatched",
+      "ConfigMatched",
+      "Protocol",
+      "Capabilities",
+      "CanControl",
+      "CanStop",
+      "CanStart",
+      "StartupID",
+      "Diagnostic"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/observations.go",
+    "name": "ObservationSnapshot",
+    "kind": "type",
+    "fields": [
+      "Runtime",
+      "State",
+      "SampledAt",
+      "HeartbeatAge",
+      "FreshnessLimit",
+      "ClockSkew",
+      "Error"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/observations.go",
+    "name": "EnvironmentTarget",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/clientcontracts/presentation.go",
+    "name": "ProjectPresentation",
+    "kind": "type",
+    "fields": [
+      "ServiceInstruction",
+      "NativeWorkflow",
+      "ConfigDigest",
+      "TaskAuthority",
+      "WorkflowProtocol",
+      "ShutdownGrace",
+      "DefaultProfileID",
+      "Profiles"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/presentation.go",
+    "name": "ExecutionProfileSummary",
+    "kind": "type",
+    "fields": [
+      "ID",
+      "Name",
+      "Host",
+      "Agent",
+      "Digest",
+      "AcceptedConfigVersion",
+      "UnavailableReason",
+      "ExecutionPolicy",
+      "PublicationPolicy",
+      "Publication",
+      "ImplementationDisplay"
+    ]
+  },
+  {
+    "file": "internal/steerline/clientcontracts/presentation.go",
+    "name": "CloneProjectRef",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/clientcontracts/recovery.go",
+    "name": "RecoveryInspection",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "SampledAt",
+      "RunID",
+      "RunRevision",
+      "ServiceInstanceID",
+      "ServiceStatus",
+      "DispatchMode",
+      "DispatchPaused",
+      "SlotOccupied",
+      "TaskID",
+      "DecisionID",
+      "DecisionStatus",
+      "ExecutionStatus",
+      "DeliveryStatus",
+      "Backend",
+      "Protocol",
+      "Target",
+      "ProcessCheck",
+      "Workspace",
+      "WorkspaceError",
+      "NativeClaim",
+      "ClaimError",
+      "PR",
+      "PRError",
+      "Blockers",
+      "ConcurrentActionReason"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/activity.go",
+    "name": "ActivityEvent",
+    "kind": "type",
+    "fields": [
+      "V",
+      "Seq",
+      "TS",
+      "Source",
+      "RunID",
+      "TaskID",
+      "ItemID",
+      "Kind",
+      "Status",
+      "Title",
+      "Detail",
+      "ElapsedMS",
+      "Meta",
+      "Raw"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationEventType",
+    "kind": "type"
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationSourceRole",
+    "kind": "type"
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "IdentityQuality",
+    "kind": "type"
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "MessagePhase",
+    "kind": "type"
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "FinalAvailability",
+    "kind": "type"
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "BodyCompleteness",
+    "kind": "type"
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationEvent",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "EventID",
+      "ProjectID",
+      "TaskID",
+      "WorkflowID",
+      "ExecutionID",
+      "AttemptID",
+      "Backend",
+      "Protocol",
+      "Agent",
+      "TargetID",
+      "ExternalRef",
+      "Source",
+      "SourceRole",
+      "SourceSegment",
+      "SourceIdentity",
+      "SourceCursor",
+      "SessionID",
+      "SessionQuality",
+      "TurnID",
+      "TurnQuality",
+      "ItemID",
+      "ItemQuality",
+      "ItemKey",
+      "SourceEventID",
+      "SourceEventQuality",
+      "SourceSeq",
+      "SourceRevision",
+      "LocalSeq",
+      "Type",
+      "Phase",
+      "FinalAvailability",
+      "Status",
+      "Body",
+      "Raw",
+      "Evidence",
+      "Attributes",
+      "OccurredAt",
+      "ReceivedAt",
+      "Diagnostic"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationBodyRef",
+    "kind": "type",
+    "fields": [
+      "ExecutionID",
+      "AttemptID",
+      "ItemKey",
+      "Revision",
+      "SHA256",
+      "Bytes",
+      "Source",
+      "Completeness"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationRawRef",
+    "kind": "type",
+    "fields": [
+      "ExecutionID",
+      "AttemptID",
+      "ID",
+      "SHA256",
+      "Bytes"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationWrite",
+    "kind": "type",
+    "fields": [
+      "Event",
+      "Body",
+      "BodyMode",
+      "Raw",
+      "BodySource"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationCheckpoint",
+    "kind": "type",
+    "fields": [
+      "ProjectID",
+      "ExecutionID",
+      "AttemptID",
+      "Source",
+      "SourceSegment",
+      "SourceIdentity",
+      "Generation",
+      "Cursor",
+      "LocalSeq",
+      "UpdatedAt",
+      "AllowReplay"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationMapperSnapshot",
+    "kind": "type",
+    "fields": [
+      "Session",
+      "Turn",
+      "FinalSeen"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationMapper",
+    "kind": "type",
+    "fields": [
+      "MapRecord"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationInput",
+    "kind": "type",
+    "fields": [
+      "Event",
+      "Process",
+      "Source",
+      "Segment",
+      "Identity",
+      "Cursor",
+      "Generation",
+      "Session",
+      "SourceSeq",
+      "SourceOffset",
+      "SourceLength",
+      "Raw",
+      "Diagnostic",
+      "Gap",
+      "InputWait",
+      "SourceChanged",
+      "Mapper"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationMappedBatch",
+    "kind": "type",
+    "fields": [
+      "Writes",
+      "Checkpoint",
+      "VerifySourcePosition"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationInputMapper",
+    "kind": "type",
+    "fields": [
+      "MapConversation"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationSourcePort",
+    "kind": "type",
+    "fields": [
+      "RestoreMapper",
+      "JournalSources",
+      "JournalSource",
+      "JournalSegment",
+      "JournalGeneration",
+      "LiveJournalPath",
+      "DiscoverHistory",
+      "DiscoverJournals",
+      "ReadHistory"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationJournalPathRequest",
+    "kind": "type",
+    "fields": [
+      "RunDirectory",
+      "WorkflowID",
+      "ExecutionID",
+      "AttemptID",
+      "SourceIdentity",
+      "LogPath",
+      "EventPaths",
+      "WorkerFlow"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationDiscovery",
+    "kind": "type",
+    "fields": [
+      "ProjectID",
+      "RunDirectory",
+      "Repository",
+      "Runs"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationRunSource",
+    "kind": "type",
+    "fields": [
+      "Base",
+      "RunDirectory",
+      "Workspace",
+      "WorkerFlow",
+      "Process",
+      "Attempts"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationAttemptSource",
+    "kind": "type",
+    "fields": [
+      "AttemptID",
+      "EventPath",
+      "FileID",
+      "Ended"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationJournalSource",
+    "kind": "type",
+    "fields": [
+      "Path",
+      "AttemptID",
+      "FileID",
+      "ExpectedFileID",
+      "Diagnostic",
+      "Workspace",
+      "Event",
+      "Ended"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationHistorySource",
+    "kind": "type",
+    "fields": [
+      "Identity",
+      "BindingPath",
+      "Workspace",
+      "Event",
+      "Ended",
+      "RequiresPlatformVersion"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationDiscoveryResult",
+    "kind": "type",
+    "fields": [
+      "Sources",
+      "Writes"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationHistoryReadRequest",
+    "kind": "type",
+    "fields": [
+      "Source",
+      "Cursor",
+      "HasCheckpoint",
+      "Repository",
+      "RunDirectory",
+      "PlatformVersion"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationHistoryBatch",
+    "kind": "type",
+    "fields": [
+      "Writes",
+      "Cursor",
+      "Sequence",
+      "Settled",
+      "More",
+      "Capabilities"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationCapability",
+    "kind": "type",
+    "fields": [
+      "Name",
+      "Status",
+      "Evidence"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationCapabilityReport",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "Backend",
+      "Protocol",
+      "Agent",
+      "AgentVersion",
+      "PlatformVersion",
+      "Target",
+      "ExecutionID",
+      "AttemptID",
+      "Source",
+      "SourceIdentity",
+      "CheckedAt",
+      "Capabilities"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_position.go",
+    "name": "ConversationJournalPosition",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "ByteOffset",
+      "SourceSeq",
+      "Generation",
+      "FileID",
+      "FileSize",
+      "ModifiedNS",
+      "HeaderLength",
+      "HeaderHash",
+      "AnchorOffset",
+      "AnchorLength",
+      "AnchorHash"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_position.go",
+    "name": "DecodeConversationJournalPosition",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "name": "ConversationFilter",
+    "kind": "type",
+    "fields": [
+      "WorkflowID",
+      "ExecutionID",
+      "AttemptID",
+      "SessionID",
+      "TurnID",
+      "Source"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "name": "ConversationPage",
+    "kind": "type",
+    "fields": [
+      "Events",
+      "NextCursor",
+      "HasMore",
+      "PayloadBytes"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "name": "ConversationBodyPage",
+    "kind": "type",
+    "fields": [
+      "ItemKey",
+      "Revision",
+      "Offset",
+      "NextOffset",
+      "TotalBytes",
+      "SHA256",
+      "Completeness",
+      "Complete",
+      "Data"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "name": "ConversationRawPage",
+    "kind": "type",
+    "fields": [
+      "RawID",
+      "Offset",
+      "NextOffset",
+      "TotalBytes",
+      "SHA256",
+      "Complete",
+      "Data"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "name": "ConversationEventRecord",
+    "kind": "type",
+    "fields": [
+      "EventID",
+      "PayloadBytes",
+      "Payload"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "name": "ConversationBodyRecord",
+    "kind": "type",
+    "fields": [
+      "Body",
+      "TotalBytes",
+      "SHA256",
+      "Completeness"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "name": "ConversationRawRecord",
+    "kind": "type",
+    "fields": [
+      "Data",
+      "TotalBytes",
+      "SHA256"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/delivery.go",
+    "name": "MarkWorkerDeliveryCommitted",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/contracts/execution.go",
+    "name": "LegacyCompletionConfig",
+    "kind": "type",
+    "fields": [
+      "Command",
+      "Timeout"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/json.go",
+    "name": "TrimBOM",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/contracts/json.go",
+    "name": "DecodeJSON",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/contracts/query.go",
+    "name": "NativeTaskCapabilities",
+    "kind": "type",
+    "fields": [
+      "DependencyReadiness",
+      "DependencyBlockers",
+      "StartupBlockers"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/query.go",
+    "name": "NativeTaskDetail",
+    "kind": "type",
+    "fields": [
+      "ProjectID",
+      "Priority",
+      "Contract",
+      "WorkflowRuns",
+      "Delivery",
+      "Predecessors",
+      "Successors",
+      "DependencyReady",
+      "UnmetPredecessors",
+      "StartupBlockers"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/query.go",
+    "name": "NativeTaskPage",
+    "kind": "type",
+    "fields": [
+      "Protocol",
+      "ProjectID",
+      "AuthorityVersion",
+      "GraphRevision",
+      "DatabaseRevision",
+      "DatabaseID",
+      "SampledAt",
+      "Capabilities",
+      "Tasks",
+      "NextCursor",
+      "HasMore"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/query.go",
+    "name": "NativeReadyTaskSnapshot",
+    "kind": "type",
+    "fields": [
+      "ProjectID",
+      "AuthorityVersion",
+      "GraphRevision",
+      "DatabaseID",
+      "DatabaseRevision",
+      "SampledAt",
+      "Tasks"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/query.go",
+    "name": "ProjectView",
+    "kind": "type",
+    "fields": [
+      "SampledAt",
+      "Tasks",
+      "Ready",
+      "SelectedTask",
+      "Domain",
+      "Runtime",
+      "TaskError",
+      "SelectedTaskError",
+      "DomainError",
+      "RuntimeError"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/records.go",
+    "name": "TaskDeliveryRecord",
+    "kind": "type"
+  },
+  {
+    "file": "internal/steerline/contracts/records.go",
+    "name": "TaskDeliveryEvidence",
+    "kind": "type"
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "Repository",
+    "kind": "type",
+    "fields": [
+      "Path",
+      "Remote",
+      "Branch",
+      "Identity"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "ServiceCheckpoint",
+    "kind": "type",
+    "fields": [
+      "SchemaVersion",
+      "Revision",
+      "UpdatedAt",
+      "HeartbeatAt",
+      "Service",
+      "Repository",
+      "Operation",
+      "Blockers",
+      "ReservedTask"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "Runtime",
+    "kind": "type",
+    "fields": [
+      "SchemaVersion",
+      "Revision",
+      "UpdatedAt",
+      "HeartbeatAt",
+      "Service",
+      "Repository",
+      "Tasks",
+      "WorkflowRuns",
+      "Executions",
+      "Attempts",
+      "Decisions",
+      "Operations",
+      "Deliveries",
+      "CurrentTask",
+      "SlotOccupied",
+      "Runs",
+      "Control"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "ServiceState",
+    "kind": "type",
+    "fields": [
+      "ExecutionPolicy",
+      "PolicySource",
+      "Mode",
+      "InstanceID",
+      "PID",
+      "Status",
+      "Claimant",
+      "Error",
+      "ProcessIdentity",
+      "StartupID",
+      "ConfigDigest",
+      "Ready",
+      "ControlProtocol",
+      "Capabilities",
+      "HeartbeatIntervalMS"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "ControlState",
+    "kind": "type",
+    "fields": [
+      "DispatchMode",
+      "DispatchPaused",
+      "Revision",
+      "Operation",
+      "Blockers"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "ControlOperation",
+    "kind": "type",
+    "fields": [
+      "RequestID",
+      "Action",
+      "TaskID",
+      "Payload",
+      "Phase",
+      "RunID",
+      "AttemptID",
+      "DecisionID",
+      "RequestDigest",
+      "Result"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "ControlBlocker",
+    "kind": "type",
+    "fields": [
+      "RequestID",
+      "Action",
+      "TaskID",
+      "RunID",
+      "AttemptID",
+      "DecisionID",
+      "Reason"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "TaskSnapshot",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "InstanceID",
+      "RepositoryIdentity",
+      "QueriedAt",
+      "LastSuccessAt",
+      "Error",
+      "BlockReason",
+      "Tasks"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "TaskCandidate",
+    "kind": "type",
+    "fields": [
+      "TaskID",
+      "Title",
+      "Type",
+      "Summary"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "Run",
+    "kind": "type",
+    "fields": [
+      "SessionID",
+      "SessionGeneration",
+      "TurnNumber",
+      "CurrentTurnID",
+      "Abandonment",
+      "ExecutionProfile",
+      "PRHistory",
+      "CandidateCreatedAt",
+      "CandidateEndedAt",
+      "CandidateTiming",
+      "ResourceStatus",
+      "EnvironmentBlocker",
+      "RecoveryRequired",
+      "RecoveryState",
+      "RecoveryVersion",
+      "ManualStop",
+      "TaskID",
+      "DomainTaskID",
+      "IdentityMapDigest",
+      "DomainAttemptNumber",
+      "WorkflowVersion",
+      "WorkflowConfigDigest",
+      "ExecutionID",
+      "StepResultPath",
+      "Title",
+      "RunID",
+      "AttemptID",
+      "ControlRevision",
+      "Claimant",
+      "Host",
+      "Backend",
+      "Protocol",
+      "Agent",
+      "Target",
+      "TaskStatus",
+      "BeadsStatus",
+      "ExecutionStatus",
+      "FinishTaskStatus",
+      "Process",
+      "StartedAt",
+      "EndedAt",
+      "WorktreePath",
+      "WorktreeBranch",
+      "WorkspaceIntent",
+      "Completion",
+      "BeadsContext",
+      "BaseCommit",
+      "PR",
+      "LastEvent",
+      "LogPath",
+      "ResultPath",
+      "Summary",
+      "Error",
+      "Decision"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "LegacyBeadsContext",
+    "kind": "type",
+    "fields": [
+      "Directory",
+      "ProjectID",
+      "Database",
+      "Backend"
+    ]
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "RuntimeFromCheckpoint",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/contracts/snapshot.go",
+    "name": "DomainSnapshot",
+    "kind": "type",
+    "fields": [
+      "Deliveries",
+      "ProjectIdentity",
+      "Tasks",
+      "WorkflowRuns",
+      "Executions",
+      "Attempts",
+      "Decisions",
+      "Operations"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/connections.go",
+    "name": "RuntimeReader",
+    "kind": "type",
+    "fields": [
+      "LoadRuntime"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/connections.go",
+    "name": "Connection",
+    "kind": "type",
+    "fields": [
+      "Close",
+      "LoadProjection",
+      "BindAuthority",
+      "ValidateStoredFormat",
+      "ExecutionBinding",
+      "ExecutionOperation"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/connections.go",
+    "name": "Factory",
+    "kind": "type",
+    "fields": [
+      "OpenWriter",
+      "OpenReader"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "WorkerCommit",
+    "kind": "type",
+    "fields": [
+      "Binding",
+      "ExecutionOperation",
+      "Project",
+      "TaskID",
+      "WorkflowID",
+      "ExecutionID",
+      "AttemptID",
+      "ControlRevision",
+      "AuthorityRevision",
+      "ExpectedAttemptID",
+      "Workflow",
+      "Execution",
+      "Attempt",
+      "RetiredAttempt",
+      "Decisions",
+      "Operations",
+      "Events",
+      "Checkpoint"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "WorkerCommitResult",
+    "kind": "type",
+    "fields": [
+      "ControlRevision",
+      "Checkpoint"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "Worker",
+    "kind": "type",
+    "fields": [
+      "CommitWorker"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "Metadata",
+    "kind": "type",
+    "fields": [
+      "SaveCheckpoint",
+      "Heartbeat"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "WorkerMetadata",
+    "kind": "type"
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "commandInsertTx",
+    "kind": "type",
+    "fields": [
+      "LookupCommand",
+      "EnqueueCommand",
+      "AppendEvent"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "commandTx",
+    "kind": "type",
+    "fields": [
+      "UpdateCommand"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "operationTx",
+    "kind": "type",
+    "fields": [
+      "PutOperation"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "graphTx",
+    "kind": "type",
+    "fields": [
+      "TaskGraphSnapshot"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "workflowTx",
+    "kind": "type",
+    "fields": [
+      "Workflow",
+      "Execution"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "BatchTx",
+    "kind": "type",
+    "fields": [
+      "PutTask",
+      "PutTaskContract",
+      "PutTaskBatch",
+      "PutTaskDependency"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "ClaimTx",
+    "kind": "type",
+    "fields": [
+      "Query",
+      "OccupiedExecutions",
+      "UpdateNativeTaskCAS",
+      "PutWorkflowRun",
+      "PutExecution",
+      "PutStepAttempt"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "CandidateTx",
+    "kind": "type",
+    "fields": [
+      "Query",
+      "PutWorkflowRun",
+      "UpdateOperation"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "DispatchTx",
+    "kind": "type",
+    "fields": [
+      "UpdateProjectTaskAuthorityCAS"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "PredecessorTx",
+    "kind": "type",
+    "fields": [
+      "PutTaskDependency",
+      "BumpOpenTaskVersionCAS",
+      "AdvanceTaskGraphRevision"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "DiscardIntentTx",
+    "kind": "type",
+    "fields": [
+      "Task",
+      "DeliveryCount"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "DiscardPendingTx",
+    "kind": "type",
+    "fields": [
+      "UpdateOperation",
+      "UpdateCommand",
+      "AppendEvent"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "DiscardTx",
+    "kind": "type",
+    "fields": [
+      "Query",
+      "DeliveryCount",
+      "UpdateNativeTaskCAS"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "DeliveryTx",
+    "kind": "type",
+    "fields": [
+      "Query",
+      "TaskContract",
+      "PRBindingsOnOtherTasks",
+      "PutTaskDelivery",
+      "UpdateNativeTaskCAS",
+      "AppendEvent"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "CleanupProgressTx",
+    "kind": "type",
+    "fields": [
+      "Task"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "CleanupTx",
+    "kind": "type",
+    "fields": [
+      "Attempt",
+      "Task",
+      "NativeAuthority",
+      "UpdateDiscardedTaskCAS",
+      "AdvanceTaskGraphRevision",
+      "PutWorkflowRun",
+      "PutExecution",
+      "PutStepAttempt"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "Tasks",
+    "kind": "type",
+    "fields": [
+      "Query",
+      "TaskGraphSnapshot",
+      "NativeAuthority",
+      "TaskContract",
+      "Operation",
+      "WorkflowOwned",
+      "UpdateDiscardReceipt",
+      "TransactTaskBatch",
+      "TransactClaim",
+      "TransactCandidate",
+      "TransactDispatch",
+      "TransactPredecessors",
+      "TransactDiscardIntent",
+      "TransactDiscardPending",
+      "TransactDiscard",
+      "TransactDelivery",
+      "TransactCleanupProgress",
+      "TransactCleanup"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "CommandStore",
+    "kind": "type"
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "CenterReader",
+    "kind": "type",
+    "fields": [
+      "Query",
+      "NativeAuthority",
+      "DatabaseVersion"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "Conversations",
+    "kind": "type",
+    "fields": [
+      "CommitConversation",
+      "ConversationCheckpoint",
+      "ConversationSourceCheckpoints",
+      "ConversationMapperSnapshot",
+      "ValidateConversationCheckpointFormat",
+      "ConversationCapabilityReports",
+      "SaveConversationCapabilityReport"
+    ]
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "Projects",
+    "kind": "type",
+    "fields": [
+      "InitializeProject"
+    ]
+  },
+  {
+    "file": "internal/steerline/task/batch.go",
+    "name": "Snapshot",
+    "kind": "type",
+    "fields": [
+      "Authority",
+      "DatabaseID",
+      "DatabaseRevision",
+      "SampledAt",
+      "Tasks",
+      "ByID",
+      "RepositoryTaskIDs",
+      "ContractIDs",
+      "Edges",
+      "Deliveries",
+      "ExecutionSlotBusy"
+    ]
+  },
+  {
+    "file": "internal/steerline/task/command_plan.go",
+    "name": "CompleteDelivery",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/task/delivery.go",
+    "name": "ValidateDelivery",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/task/delivery_gate.go",
+    "name": "DeliveryGate",
+    "kind": "type",
+    "fields": [
+      "WorkflowVersion",
+      "WorkflowTaskID",
+      "SelectedExecutionID",
+      "ExecutionID",
+      "ExecutionWorkflowID",
+      "WorkflowRunID",
+      "PRURL",
+      "SessionID",
+      "WorkspaceBranch",
+      "Phase"
+    ]
+  },
+  {
+    "file": "internal/steerline/task/delivery_gate.go",
+    "name": "DeliveryPR",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/task/errors.go",
+    "name": "newError",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/task/model.go",
+    "name": "TaskDeliveryRecord",
+    "kind": "type",
+    "fields": [
+      "ProjectIdentity",
+      "TaskID",
+      "SelectedWorkflowRunID",
+      "PRInstance",
+      "PRRepository",
+      "PRNumber",
+      "PRURL",
+      "MergeCommit",
+      "MergedAt",
+      "RecordedAt",
+      "Evidence"
+    ]
+  },
+  {
+    "file": "internal/steerline/task/model.go",
+    "name": "TaskDeliveryEvidence",
+    "kind": "type",
+    "fields": [
+      "PRInstance",
+      "URL",
+      "Repository",
+      "PRNumber",
+      "BaseBranch",
+      "State",
+      "Merged",
+      "MergedAt",
+      "MergeCommit",
+      "ExistingAcceptance"
+    ]
+  },
+  {
+    "file": "internal/steerline/task/model.go",
+    "name": "ProjectTaskAuthority",
+    "kind": "type",
+    "fields": [
+      "ProjectIdentity",
+      "Authority",
+      "AuthorityVersion",
+      "GraphRevision",
+      "Repository",
+      "Remote",
+      "Branch",
+      "DispatchMode",
+      "DispatchPaused",
+      "CreatedAt",
+      "UpdatedAt"
+    ]
+  },
+  {
+    "file": "internal/steerline/task/predecessors.go",
+    "name": "TaskPredecessorAddInput",
+    "kind": "type",
+    "fields": [
+      "TaskID",
+      "PredecessorIDs",
+      "RequestID",
+      "ExpectedTaskVersion",
+      "ExpectedGraphRevision",
+      "WorkflowRunID",
+      "ConfirmedProcessStopped",
+      "Reason",
+      "RequestedBy"
+    ]
+  },
+  {
+    "file": "internal/steerline/task/predecessors.go",
+    "name": "TaskPredecessorAddReceipt",
+    "kind": "type",
+    "fields": [
+      "RequestID",
+      "TaskID",
+      "PredecessorIDs",
+      "TaskVersion",
+      "GraphRevision",
+      "AbandonedRunID",
+      "Status"
+    ]
+  },
+  {
+    "file": "internal/steerline/task/readiness.go",
+    "name": "StartupBlockers",
+    "kind": "function"
+  },
+  {
+    "file": "internal/steerline/task/receipts.go",
+    "name": "TaskClaimReceipt",
+    "kind": "type",
+    "fields": [
+      "RequestID",
+      "TaskID",
+      "TaskVersion",
+      "WorkflowRunID",
+      "ExecutionID",
+      "AttemptID",
+      "BaseCommit",
+      "Status",
+      "StartTaskApplied"
+    ]
+  },
+  {
+    "file": "internal/steerline/task/receipts.go",
+    "name": "TaskDeliveryReceipt",
+    "kind": "type",
+    "fields": [
+      "TaskID",
+      "TaskVersion",
+      "WorkflowRunID",
+      "GraphRevision",
+      "Status",
+      "Delivery"
+    ]
+  },
+  {
+    "file": "internal/storage/ports/errors.go",
+    "name": "StorageError",
+    "kind": "type",
+    "fields": [
+      "Code",
+      "Cause"
+    ]
+  },
+  {
+    "file": "internal/storage/ports/ports.go",
+    "name": "RecordWrite",
+    "kind": "type",
+    "fields": [
+      "Before",
+      "After"
+    ]
+  },
+  {
+    "file": "internal/storage/ports/ports.go",
+    "name": "Commands",
+    "kind": "type",
+    "fields": [
+      "EnqueueCommand",
+      "AcceptDecisionAnswer",
+      "UpdateCommand",
+      "Commands",
+      "ServiceCommands",
+      "Command",
+      "CommandByIdempotency",
+      "LookupCommand"
+    ]
+  },
+  {
+    "file": "internal/storage/ports/records.go",
+    "name": "DomainEvent",
+    "kind": "type",
+    "fields": [
+      "ProjectIdentity",
+      "EventID",
+      "TaskID",
+      "WorkflowRunID",
+      "ExecutionID",
+      "AttemptID",
+      "ExternalSource",
+      "ExternalID",
+      "Type",
+      "ReceivedAt",
+      "Payload",
+      "PayloadBytes",
+      "PayloadDigest",
+      "PayloadOmitted"
+    ]
+  },
+  {
+    "file": "internal/storage/ports/records.go",
+    "name": "CommandRecord",
+    "kind": "type",
+    "fields": [
+      "ProjectIdentity",
+      "CommandID",
+      "Kind",
+      "TargetID",
+      "ExpectedVersion",
+      "IdempotencyKey",
+      "RequestedBy",
+      "Payload",
+      "Status",
+      "Result",
+      "CreatedAt",
+      "UpdatedAt"
+    ]
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "TaskBatchInput",
+    "kind": "type",
+    "fields": [
+      "SchemaVersion",
+      "ProjectID",
+      "Tasks",
+      "Dependencies"
+    ]
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "TaskBatchTask",
+    "kind": "type",
+    "fields": [
+      "LocalKey",
+      "TaskID",
+      "Title",
+      "Type",
+      "Priority",
+      "Contract",
+      "GoalIDs"
+    ]
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "TaskBatchReference",
+    "kind": "type",
+    "fields": [
+      "LocalKey",
+      "TaskID"
+    ]
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "TaskBatchEdge",
+    "kind": "type",
+    "fields": [
+      "Predecessor",
+      "Successor"
+    ]
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "TaskBatchIssue",
+    "kind": "type",
+    "fields": [
+      "Code",
+      "Node",
+      "Message"
+    ]
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "TaskBatchValidation",
+    "kind": "type",
+    "fields": [
+      "Valid",
+      "ProjectID",
+      "TaskCount",
+      "DependencyCount",
+      "AuthorityVersion",
+      "GraphRevision",
+      "DatabaseRevision",
+      "DatabaseID",
+      "SampledAt",
+      "Cycle",
+      "Issues"
+    ]
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "TaskBatchReceipt",
+    "kind": "type",
+    "fields": [
+      "RequestID",
+      "BatchID",
+      "TaskIDs",
+      "GraphRevision",
+      "PayloadDigest",
+      "Status",
+      "DispatchNote"
+    ]
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "TaskDiscardReceipt",
+    "kind": "type",
+    "fields": [
+      "RequestID",
+      "TaskID",
+      "Status",
+      "Code",
+      "Message",
+      "GraphRevision",
+      "CleanupPending"
+    ]
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "TaskDependencyStatus",
+    "kind": "type",
+    "fields": [
+      "TaskID",
+      "Status",
+      "Delivered",
+      "Blocker"
+    ]
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "DecodeBatch",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "ResolveBatchEdges",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "formatTaskBatchIssues",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "BatchValidationError",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "ValidateBatchAgainstGraph",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/batch.go",
+    "name": "dependencyCycle",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/command_plan.go",
+    "name": "BatchPlan",
+    "kind": "type",
+    "fields": [
+      "Batch",
+      "Tasks",
+      "Edges"
+    ]
+  },
+  {
+    "file": "internal/task/model/command_plan.go",
+    "name": "PlanBatch",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/command_plan.go",
+    "name": "Claim",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/command_plan.go",
+    "name": "Discard",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/contract.go",
+    "name": "Error",
+    "kind": "type",
+    "fields": [
+      "Code",
+      "Message"
+    ]
+  },
+  {
+    "file": "internal/task/model/contract.go",
+    "name": "newError",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/contract.go",
+    "name": "CanonicalDecimalID",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/contract.go",
+    "name": "ValidateID",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/contract.go",
+    "name": "ValidSHA256",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/contract.go",
+    "name": "ValidCommit",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/contract.go",
+    "name": "ContractDigest",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/contract.go",
+    "name": "ValidateContract",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/contract.go",
+    "name": "taskDocumentPath",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/contract.go",
+    "name": "sharedContractPath",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/contract.go",
+    "name": "ValidateFileReference",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/contract.go",
+    "name": "ValidateContractJSON",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/contract.go",
+    "name": "CanonicalJSON",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/contract.go",
+    "name": "readJSONValue",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/delivery_gate.go",
+    "name": "DependencyClaimError",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/model.go",
+    "name": "TaskRecord",
+    "kind": "type",
+    "fields": [
+      "ProjectIdentity",
+      "TaskID",
+      "ExternalProvider",
+      "ExternalProject",
+      "ExternalID",
+      "IdentityMapDigest",
+      "BatchID",
+      "Title",
+      "Type",
+      "Priority",
+      "GoalIDs",
+      "ContractID",
+      "Claimant",
+      "Source",
+      "Status",
+      "Version",
+      "CreatedAt",
+      "UpdatedAt",
+      "DiscardedAt",
+      "DiscardReason",
+      "DiscardedBy",
+      "DiscardRequestID",
+      "CleanupPending"
+    ]
+  },
+  {
+    "file": "internal/task/model/model.go",
+    "name": "FileReference",
+    "kind": "type",
+    "fields": [
+      "Path",
+      "Commit",
+      "SHA256"
+    ]
+  },
+  {
+    "file": "internal/task/model/model.go",
+    "name": "TaskContract",
+    "kind": "type",
+    "fields": [
+      "ContractID",
+      "Repository",
+      "Remote",
+      "Branch",
+      "SpecRef",
+      "PlanRef",
+      "CommonRefs",
+      "AcceptanceRefs",
+      "Digest"
+    ]
+  },
+  {
+    "file": "internal/task/model/model.go",
+    "name": "TaskBatchRecord",
+    "kind": "type",
+    "fields": [
+      "BatchID",
+      "ProjectIdentity",
+      "SchemaVersion",
+      "PayloadDigest",
+      "CreatedAt",
+      "CommandID",
+      "TaskIDs"
+    ]
+  },
+  {
+    "file": "internal/task/model/model.go",
+    "name": "TaskDependencyRecord",
+    "kind": "type",
+    "fields": [
+      "ProjectIdentity",
+      "PredecessorID",
+      "SuccessorID"
+    ]
+  },
+  {
+    "file": "internal/task/model/predecessors.go",
+    "name": "NormalizePredecessorIDs",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/predecessors.go",
+    "name": "ValidatePredecessorAddition",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/readiness.go",
+    "name": "DependencyState",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/readiness.go",
+    "name": "DeliveryInconsistent",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/readiness.go",
+    "name": "DependencyStateForTask",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/readiness.go",
+    "name": "ReadyTasks",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/snapshot.go",
+    "name": "DeliveryFact",
+    "kind": "type",
+    "fields": [
+      "ProjectIdentity",
+      "TaskID"
+    ]
+  },
+  {
+    "file": "internal/task/model/snapshot.go",
+    "name": "Snapshot",
+    "kind": "type",
+    "fields": [
+      "Authority",
+      "DatabaseID",
+      "DatabaseRevision",
+      "SampledAt",
+      "Tasks",
+      "ByID",
+      "RepositoryTaskIDs",
+      "ContractIDs",
+      "Edges",
+      "Deliveries"
+    ]
+  },
+  {
+    "file": "internal/task/model/snapshot.go",
+    "name": "GraphAuthority",
+    "kind": "type",
+    "fields": [
+      "ProjectIdentity",
+      "AuthorityVersion",
+      "GraphRevision"
+    ]
+  },
+  {
+    "file": "internal/task/model/status.go",
+    "name": "ValidStatus",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/status.go",
+    "name": "SetStatus",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/taskgraph.go",
+    "name": "Node",
+    "kind": "type",
+    "fields": [
+      "ID",
+      "Status",
+      "Priority",
+      "CreatedAt"
+    ]
+  },
+  {
+    "file": "internal/task/model/taskgraph.go",
+    "name": "Edge",
+    "kind": "type",
+    "fields": [
+      "Predecessor",
+      "Successor"
+    ]
+  },
+  {
+    "file": "internal/task/model/taskgraph.go",
+    "name": "Filter",
+    "kind": "type",
+    "fields": [
+      "Status",
+      "CenterID",
+      "Direction",
+      "Depth",
+      "Limit",
+      "MaxBoundaryEdges"
+    ]
+  },
+  {
+    "file": "internal/task/model/taskgraph.go",
+    "name": "BoundaryEdge",
+    "kind": "type",
+    "fields": [
+      "Predecessor",
+      "Successor",
+      "Reason"
+    ]
+  },
+  {
+    "file": "internal/task/model/taskgraph.go",
+    "name": "Projection",
+    "kind": "type",
+    "fields": [
+      "NodeIDs",
+      "Edges",
+      "BoundaryEdges",
+      "OmittedNodeCount",
+      "OmittedBoundaryEdgeCount",
+      "Reasons",
+      "Truncated"
+    ]
+  },
+  {
+    "file": "internal/task/model/taskgraph.go",
+    "name": "Cycle",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/taskgraph.go",
+    "name": "StableTaskOrder",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/taskgraph.go",
+    "name": "Project",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/taskgraph.go",
+    "name": "neighbors",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/taskgraph.go",
+    "name": "sortedUniqueTaskIDs",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/taskgraph.go",
+    "name": "sortTaskIDs",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/taskgraph.go",
+    "name": "taskIDLess",
+    "kind": "function"
+  },
+  {
+    "file": "internal/task/model/taskgraph.go",
+    "name": "compactStrings",
+    "kind": "function"
+  }
+]

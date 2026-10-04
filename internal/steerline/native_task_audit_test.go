@@ -7,11 +7,14 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func requireNativeAuditCode(t *testing.T, err error, code string) {
 	t.Helper()
-	var got *NativeTaskError
+	var got *taskmodel.Error
 	if !errors.As(err, &got) || got.Code != code {
 		t.Fatalf("want %s, got %v", code, err)
 	}
@@ -19,20 +22,20 @@ func requireNativeAuditCode(t *testing.T, err error, code string) {
 
 // Storage fixtures deliberately bypass the future DAG command/PR verification
 // pipeline. Their records test persistence and query boundaries only.
-func nativeAuditRecords(t *testing.T, store *sqliteFixture, a ProjectTaskAuthority) []TaskRecord {
+func nativeAuditRecords(t *testing.T, store *sqliteFixture, a tasklegacy.ProjectTaskAuthority) []taskmodel.TaskRecord {
 	t.Helper()
 	created := time.Now().UTC()
-	ref := FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
-	tasks := []TaskRecord{}
+	ref := taskmodel.FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
+	tasks := []taskmodel.TaskRecord{}
 	err := store.transactRecords(context.Background(), func(tx *fixtureTransaction) error {
-		if err := tx.PutTaskBatch(TaskBatchRecord{BatchID: "audit-batch", ProjectIdentity: a.ProjectIdentity, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("c", 64), CommandID: "audit-command", CreatedAt: created, TaskIDs: map[string]string{"a": "2", "b": "10", "c": "99"}}, a.AuthorityVersion, a.GraphRevision); err != nil {
+		if err := tx.PutTaskBatch(taskmodel.TaskBatchRecord{BatchID: "audit-batch", ProjectIdentity: a.ProjectIdentity, SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("c", 64), CommandID: "audit-command", CreatedAt: created, TaskIDs: map[string]string{"a": "2", "b": "10", "c": "99"}}, a.AuthorityVersion, a.GraphRevision); err != nil {
 			return err
 		}
 		for _, id := range []string{"2", "10", "99"} {
-			task := TaskRecord{ProjectIdentity: a.ProjectIdentity, TaskID: id, BatchID: "audit-batch", Title: "Audit " + id, Type: "task", Priority: 2, ContractID: "contract-" + id, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
-			contract := TaskContract{ContractID: task.ContractID, Repository: a.Repository, Remote: a.Remote, Branch: a.Branch, SpecRef: ref, PlanRef: FileReference{Path: "docs/task.plan.md", Commit: ref.Commit, SHA256: ref.SHA256}, AcceptanceRefs: []FileReference{ref}}
+			task := taskmodel.TaskRecord{ProjectIdentity: a.ProjectIdentity, TaskID: id, BatchID: "audit-batch", Title: "Audit " + id, Type: "task", Priority: 2, ContractID: "contract-" + id, Source: "native", Status: "open", Version: 1, CreatedAt: created, UpdatedAt: created}
+			contract := taskmodel.TaskContract{ContractID: task.ContractID, Repository: a.Repository, Remote: a.Remote, Branch: a.Branch, SpecRef: ref, PlanRef: taskmodel.FileReference{Path: "docs/task.plan.md", Commit: ref.Commit, SHA256: ref.SHA256}, AcceptanceRefs: []taskmodel.FileReference{ref}}
 			var err error
-			contract.Digest, err = TaskContractDigest(contract)
+			contract.Digest, err = taskmodel.ContractDigest(contract)
 			if err != nil {
 				return err
 			}
@@ -50,10 +53,10 @@ func nativeAuditRecords(t *testing.T, store *sqliteFixture, a ProjectTaskAuthori
 	return tasks
 }
 
-func nativeAuditStore(t *testing.T) (*sqliteFixture, string, []TaskRecord) {
+func nativeAuditStore(t *testing.T) (*sqliteFixture, string, []taskmodel.TaskRecord) {
 	t.Helper()
 	s := openDomainTestStore(t)
-	a := ProjectTaskAuthority{ProjectIdentity: "audit-project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
+	a := tasklegacy.ProjectTaskAuthority{ProjectIdentity: "audit-project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/Org/Repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
 	require(t, s.transactRecords(context.Background(), func(tx *fixtureTransaction) error { return tx.PutProjectTaskAuthority(a) }))
 	return s, a.ProjectIdentity, nativeAuditRecords(t, s, a)
 }
@@ -61,7 +64,7 @@ func nativeAuditStore(t *testing.T) (*sqliteFixture, string, []TaskRecord) {
 func TestNativeAuditPageBatchesRelationsAcrossPageBoundary(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
-	seedNativeGraphForView(t, c, commit, store, 402, []TaskDependencyRecord{{ProjectIdentity: c.Identity(), PredecessorID: "1", SuccessorID: "402"}})
+	seedNativeGraphForView(t, c, commit, store, 402, []taskmodel.TaskDependencyRecord{{ProjectIdentity: c.Identity(), PredecessorID: "1", SuccessorID: "402"}})
 	q := NewQueryService(store, c.Identity())
 	first, err := q.ListNativeTasks(ctx, "", 1)
 	require(t, err)
@@ -139,7 +142,7 @@ func TestNativeAuditSchemaDefinitionMustMatchVersionStamp(t *testing.T) {
 }
 
 func TestNativeAuditContractRolesAndFixedReferenceVersions(t *testing.T) {
-	if _, err := CanonicalJSON([]byte{'"', 0xff, '"'}); err == nil {
+	if _, err := taskmodel.CanonicalJSON([]byte{'"', 0xff, '"'}); err == nil {
 		t.Fatal("invalid UTF-8 was silently replaced before hashing")
 	}
 	s, project, _ := nativeAuditStore(t)
@@ -152,19 +155,19 @@ func TestNativeAuditContractRolesAndFixedReferenceVersions(t *testing.T) {
 	v.SpecRef.Path = "design.md"
 	v.PlanRef.Path = "implementation.md"
 	v.PlanRef.Commit = strings.Repeat("d", 40)
-	v.AcceptanceRefs = []FileReference{v.SpecRef}
-	v.CommonRefs = []FileReference{{Path: "docs/spec/execution-architecture.spec.md", Commit: strings.Repeat("e", 40), SHA256: strings.Repeat("f", 64)}}
-	v.Digest, err = TaskContractDigest(v)
+	v.AcceptanceRefs = []taskmodel.FileReference{v.SpecRef}
+	v.CommonRefs = []taskmodel.FileReference{{Path: "docs/spec/execution-architecture.spec.md", Commit: strings.Repeat("e", 40), SHA256: strings.Repeat("f", 64)}}
+	v.Digest, err = taskmodel.ContractDigest(v)
 	require(t, err)
-	require(t, ValidateTaskContract(v))
+	require(t, taskmodel.ValidateContract(v))
 	for _, name := range []string{"other.spec.md", "other.plan.md"} {
 		v := base
 		extra := base.SpecRef
 		extra.Path = name
-		v.AcceptanceRefs = []FileReference{extra}
-		v.Digest, err = TaskContractDigest(v)
+		v.AcceptanceRefs = []taskmodel.FileReference{extra}
+		v.Digest, err = taskmodel.ContractDigest(v)
 		require(t, err)
-		requireNativeAuditCode(t, ValidateTaskContract(v), "contract_mismatch")
+		requireNativeAuditCode(t, taskmodel.ValidateContract(v), "contract_mismatch")
 	}
 	for _, bad := range []string{"https://example.invalid/org/repo.git", "https://example.invalid/Org/Repo"} {
 		if sameRepositoryTarget(base.Repository, bad) {

@@ -8,22 +8,19 @@ import (
 	"strings"
 	"time"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-// TaskPredecessorAddInput adds hard dependencies to an existing native task.
-// A claimed task must identify its stopped run so the same transaction can
-// abandon that run and make the task claimable from a fresh base.
 type TaskPredecessorAddInput = task.TaskPredecessorAddInput
+
 type TaskPredecessorAddReceipt = task.TaskPredecessorAddReceipt
 
-func normalizePredecessorIDs(ids []string) ([]string, error) {
-	return task.NormalizePredecessorIDs(ids)
-}
-
 func validateNativePredecessorAddition(graph taskGraphSnapshot, taskID string, predecessorIDs []string) error {
-	return task.ValidatePredecessorAddition(graph, taskID, predecessorIDs)
+	return taskmodel.ValidatePredecessorAddition(graph.TaskGraph(), taskID, predecessorIDs)
 }
 
 func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Config, input TaskPredecessorAddInput) (TaskPredecessorAddReceipt, error) {
@@ -35,7 +32,7 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 	if store == nil || c.Project == "" || c.Project != config.Identity() || config.TaskAuthority != "native" {
 		return empty, nativeErr("authority_mismatch", "predecessor addition requires the configured native project")
 	}
-	if err := ValidateNativeTaskID(input.TaskID); err != nil {
+	if err := taskmodel.ValidateID(input.TaskID); err != nil {
 		return empty, err
 	}
 	if !controlIDPattern.MatchString(input.RequestID) || input.ExpectedTaskVersion == 0 || strings.TrimSpace(input.RequestedBy) == "" {
@@ -46,15 +43,15 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 		return empty, err
 	}
 	input.Reason = reason
-	input.PredecessorIDs, err = normalizePredecessorIDs(input.PredecessorIDs)
+	input.PredecessorIDs, err = taskmodel.NormalizePredecessorIDs(input.PredecessorIDs)
 	if err != nil {
 		return empty, err
 	}
 	if input.WorkflowRunID != "" || input.ConfirmedProcessStopped {
 		return empty, nativeErr("unsupported_schema", "reopening a claimed task through the old workflow is unsupported")
 	}
-	request, _ := CanonicalJSON(mustJSON(input))
-	replay := func(command CommandRecord) (TaskPredecessorAddReceipt, error) {
+	request, _ := taskmodel.CanonicalJSON(mustJSON(input))
+	replay := func(command storageports.CommandRecord) (TaskPredecessorAddReceipt, error) {
 		if command.Kind != "add_task_predecessors" || command.TargetID != input.TaskID || command.ExpectedVersion != input.ExpectedTaskVersion || command.RequestedBy != input.RequestedBy || !bytes.Equal(command.Payload, request) || command.Status != "accepted" {
 			return empty, nativeErr("idempotency_conflict", "request ID belongs to a different or incomplete command")
 		}
@@ -66,7 +63,7 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 	}
 	if previous, lookupErr := store.CommandByIdempotency(ctx, c.Project, input.RequestID); lookupErr == nil {
 		return replay(previous)
-	} else if !errors.Is(lookupErr, persistence.ErrNotFound) {
+	} else if !errors.Is(lookupErr, storageports.ErrNotFound) {
 		return empty, lookupErr
 	}
 	authority, err := store.NativeAuthority(ctx, c.Project)
@@ -113,7 +110,7 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 		}
 		stamp := time.Now().UTC()
 		for _, predecessorID := range input.PredecessorIDs {
-			if e = tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: c.Project, PredecessorID: predecessorID, SuccessorID: input.TaskID}); e != nil {
+			if e = tx.PutTaskDependency(taskmodel.TaskDependencyRecord{ProjectIdentity: c.Project, PredecessorID: predecessorID, SuccessorID: input.TaskID}); e != nil {
 				return e
 			}
 		}
@@ -129,16 +126,16 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 		}
 		receipt = TaskPredecessorAddReceipt{RequestID: input.RequestID, TaskID: input.TaskID, PredecessorIDs: input.PredecessorIDs, TaskVersion: nextTask.Version, GraphRevision: graphRevision, Status: "open"}
 		result, _ := json.Marshal(receipt)
-		command := CommandRecord{ProjectIdentity: c.Project, CommandID: input.RequestID, Kind: "add_task_predecessors", TargetID: input.TaskID, ExpectedVersion: input.ExpectedTaskVersion, IdempotencyKey: input.RequestID, RequestedBy: input.RequestedBy, Payload: request, Status: "accepted", Result: result, CreatedAt: stamp, UpdatedAt: stamp}
+		command := storageports.CommandRecord{ProjectIdentity: c.Project, CommandID: input.RequestID, Kind: "add_task_predecessors", TargetID: input.TaskID, ExpectedVersion: input.ExpectedTaskVersion, IdempotencyKey: input.RequestID, RequestedBy: input.RequestedBy, Payload: request, Status: "accepted", Result: result, CreatedAt: stamp, UpdatedAt: stamp}
 		if _, made, enqueueErr := tx.EnqueueCommand(command); enqueueErr != nil || !made {
 			return errors.Join(enqueueErr, nativeErr("idempotency_conflict", "predecessor command already exists"))
 		}
-		operation := OperationRecord{ProjectIdentity: c.Project, OperationID: input.RequestID, IdempotencyKey: input.RequestID, Kind: "add_task_predecessors", Status: "confirmed", PayloadDigest: digestCanonical(request), Request: request, Receipt: result, CreatedAt: stamp, UpdatedAt: stamp}
+		operation := executionmodel.OperationRecord{ProjectIdentity: c.Project, OperationID: input.RequestID, IdempotencyKey: input.RequestID, Kind: "add_task_predecessors", Status: "confirmed", PayloadDigest: digestCanonical(request), Request: request, Receipt: result, CreatedAt: stamp, UpdatedAt: stamp}
 		if _, made, opErr := tx.PutOperation(operation); opErr != nil || !made {
 			return errors.Join(opErr, nativeErr("idempotency_conflict", "predecessor operation already exists"))
 		}
 		body, _ := json.Marshal(map[string]any{"receipt": receipt, "reason": input.Reason, "requested_by": input.RequestedBy})
-		_, e = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: input.TaskID, ExternalSource: "native-task-command", ExternalID: input.RequestID, Type: "task.predecessors.added", ReceivedAt: stamp, Payload: body})
+		_, e = tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, TaskID: input.TaskID, ExternalSource: "native-task-command", ExternalID: input.RequestID, Type: "task.predecessors.added", ReceivedAt: stamp, Payload: body})
 		return e
 	})
 	var already taskBatchReplay

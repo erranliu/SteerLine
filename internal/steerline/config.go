@@ -10,53 +10,54 @@ import (
 	"strings"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 type Config struct {
-	Persistence             persistence.Factory             `json:"-"`
-	ExecutionDirectory      *ExecutionDirectory             `json:"-"`
-	ProcessHost             executionapi.ManagedProcessHost `json:"-"`
-	WorkspaceBranchPrefix   string                          `json:"-"`
-	StateRoot               string                          `json:"-"`
-	RepositoryStateKey      string                          `json:"-"`
+	Persistence             persistence.Factory                 `json:"-"`
+	ExecutionDirectory      *ExecutionDirectory                 `json:"-"`
+	ProcessHost             executionbackend.ManagedProcessHost `json:"-"`
+	WorkspaceBranchPrefix   string                              `json:"-"`
+	StateRoot               string                              `json:"-"`
+	RepositoryStateKey      string                              `json:"-"`
 	fixedProfileDigest      string
 	frozenExecutionConfig   bool
-	requirementsEvaluation  *executionapi.RequirementsEvaluation
+	requirementsEvaluation  *executionbackend.RequirementsEvaluation
 	executionConfigPath     string
 	publicationRemoteURL    string
 	selectedProfileID       string
-	PublicationPolicy       executionapi.PublicationPolicy     `json:"publication_policy"`
-	ExecutionPolicy         executionapi.ExecutionPolicy       `json:"execution_policy"`
-	ExecutionRequirements   executionapi.ExecutionRequirements `json:"execution_requirements,omitempty"`
+	PublicationPolicy       executionbackend.PublicationPolicy     `json:"publication_policy"`
+	ExecutionPolicy         executionbackend.ExecutionPolicy       `json:"execution_policy"`
+	ExecutionRequirements   executionbackend.ExecutionRequirements `json:"execution_requirements,omitempty"`
 	policySource            string
-	Repository              string                                    `json:"repository"`
-	TaskAuthority           string                                    `json:"task_authority,omitempty"`
-	Remote                  string                                    `json:"remote"`
-	Branch                  string                                    `json:"branch"`
-	RunDir                  string                                    `json:"run_dir"`
-	WorktreeRoot            string                                    `json:"worktree_root"`
-	Claimant                string                                    `json:"claimant"`
-	Git                     Command                                   `json:"git"`
-	ImplementationData      []executionapi.ImplementationDataEnvelope `json:"-"`
-	ImplementationDisplay   []string                                  `json:"-"`
-	WorkflowProtocol        string                                    `json:"workflow_protocol,omitempty"`
-	ExecutableTypes         []string                                  `json:"executable_types"`
-	TaskPoll                string                                    `json:"task_poll"`
-	PRPoll                  string                                    `json:"pr_poll"`
-	Heartbeat               string                                    `json:"heartbeat"`
-	CommandTimeout          string                                    `json:"command_timeout"`
-	ShutdownGrace           string                                    `json:"shutdown_grace"`
-	Agent                   string                                    `json:"agent"`
-	Host                    string                                    `json:"host"`
-	ExecutionProfiles       []ExecutionProfile                        `json:"execution_profiles,omitempty"`
-	DefaultExecutionProfile string                                    `json:"default_execution_profile,omitempty"`
-	StallTimeout            string                                    `json:"stall_timeout"`
-	PR                      publication.Config                        `json:"pr"`
+	Repository              string                                        `json:"repository"`
+	TaskAuthority           string                                        `json:"task_authority,omitempty"`
+	Remote                  string                                        `json:"remote"`
+	Branch                  string                                        `json:"branch"`
+	RunDir                  string                                        `json:"run_dir"`
+	WorktreeRoot            string                                        `json:"worktree_root"`
+	Claimant                string                                        `json:"claimant"`
+	Git                     executionbackend.Command                      `json:"git"`
+	ImplementationData      []executionbackend.ImplementationDataEnvelope `json:"-"`
+	ImplementationDisplay   []string                                      `json:"-"`
+	WorkflowProtocol        string                                        `json:"workflow_protocol,omitempty"`
+	ExecutableTypes         []string                                      `json:"executable_types"`
+	TaskPoll                string                                        `json:"task_poll"`
+	PRPoll                  string                                        `json:"pr_poll"`
+	Heartbeat               string                                        `json:"heartbeat"`
+	CommandTimeout          string                                        `json:"command_timeout"`
+	ShutdownGrace           string                                        `json:"shutdown_grace"`
+	Agent                   string                                        `json:"agent"`
+	Host                    string                                        `json:"host"`
+	ExecutionProfiles       []ExecutionProfile                            `json:"execution_profiles,omitempty"`
+	DefaultExecutionProfile string                                        `json:"default_execution_profile,omitempty"`
+	StallTimeout            string                                        `json:"stall_timeout"`
+	PR                      publication.Config                            `json:"pr"`
 	identity                string
 	workerEnv               map[string]string
 	configDigest            string
@@ -88,9 +89,6 @@ func (c *Config) BindApplicationConfig(directory *ExecutionDirectory, projectPat
 	c.globalExecution = global
 }
 
-// LegacyCompletionConfig is decoded only as a marker for rejecting old runtime
-// projections; it is never accepted in Config or executed.
-
 func decode(data []byte, v any) error { return contracts.DecodeJSON(data, v) }
 
 func validateWorkflowConfig(c *Config, _ []byte) error {
@@ -107,14 +105,15 @@ func validateWorkflowConfig(c *Config, _ []byte) error {
 	if err := publication.ValidateNonSecret(c.PR, c.Git); err != nil {
 		return err
 	}
-	if c.WorkflowProtocol != WorkerFlowVersion {
+	if c.WorkflowProtocol != executionmodel.Version {
 		return errors.New("only worker-flow-v1 is supported")
 	}
 	return validateImplementationProfileData(*c)
 }
 
 func duration(s string) time.Duration { d, _ := time.ParseDuration(s); return d }
-func (c Config) Identity() string     { return c.identity }
+
+func (c Config) Identity() string { return c.identity }
 
 func positiveDuration(value string, fallback time.Duration) time.Duration {
 	parsed, err := time.ParseDuration(value)
@@ -134,7 +133,7 @@ func (c *Config) ResolveIdentity(ctx context.Context) error {
 		return err
 	}
 	if c.PR.Kind == "command" {
-		for _, command := range []*Command{&c.PR.Query, &c.PR.Close} {
+		for _, command := range []*executionbackend.Command{&c.PR.Query, &c.PR.Close} {
 			if command.Executable != "" {
 				// Inspecting original frozen runs must not require the current
 				// provider to be available. Preflight checks it before new work.
@@ -179,10 +178,12 @@ func (c *Config) ResolveIdentity(ctx context.Context) error {
 func (c Config) hostName() string {
 	return c.Host
 }
+
 func (c Config) agentName() string {
 	return c.Agent
 }
-func resolveCommand(c *Command) error {
+
+func resolveCommand(c *executionbackend.Command) error {
 	p, e := exec.LookPath(c.Executable)
 	if e != nil {
 		return e
@@ -194,6 +195,7 @@ func resolveCommand(c *Command) error {
 	c.Executable = p
 	return nil
 }
+
 func (c *Config) Preflight(ctx context.Context, checkSkills bool) error {
 	if err := requireNativeTaskAuthority(*c); err != nil {
 		return err
@@ -223,7 +225,7 @@ func (c *Config) preflightNative(ctx context.Context) error {
 			return err
 		}
 	}
-	commands := []*Command{&c.Git}
+	commands := []*executionbackend.Command{&c.Git}
 	for _, command := range commands {
 		if err := resolveCommand(command); err != nil {
 			return err
@@ -305,7 +307,5 @@ func inside(root, path string) bool {
 	rel, e := filepath.Rel(root, path)
 	return e == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
 }
-
-type Command = contracts.Command
 
 type LegacyCompletionConfig = contracts.LegacyCompletionConfig

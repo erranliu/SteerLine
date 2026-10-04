@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
@@ -52,6 +53,7 @@ func (c *Client) Command(ctx context.Context, args ...string) *exec.Cmd {
 func (c *Client) Run(ctx context.Context, args ...string) ([]byte, error) {
 	return c.run(ctx, c.Binary, args...)
 }
+
 func (c *Client) run(ctx context.Context, binary string, args ...string) ([]byte, error) {
 	return c.runWithTimeout(ctx, 30*time.Second, binary, args...)
 }
@@ -124,7 +126,7 @@ func MainControl(args []string) error {
 		if err != nil {
 			return err
 		}
-		payload = steerline.ControlPayload{TaskID: *taskID, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest()}
+		payload = productapi.ControlPayload{TaskID: *taskID, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest()}
 	}
 	request, err := steerline.SubmitControl(c, *action, payload, "e2e")
 	if err != nil {

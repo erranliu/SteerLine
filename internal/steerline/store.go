@@ -12,6 +12,8 @@ import (
 	"sync"
 
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func newID() string {
@@ -21,7 +23,9 @@ func newID() string {
 	}
 	return hex.EncodeToString(b[:])
 }
+
 func shortHash(s string) string { h := sha256.Sum256([]byte(s)); return hex.EncodeToString(h[:12]) }
+
 func AtomicWrite(path string, data []byte) error {
 	return atomicWriteWith(path, data, func(f *os.File, data []byte) error {
 		_, err := f.Write(data)
@@ -68,7 +72,7 @@ func (s *Store) commitWorker(request workerCommit) (workerCommitResult, error) {
 		return workerCommitResult{}, errors.New("worker commitment requires a durable store")
 	}
 	result, err := s.Domain.CommitWorker(context.Background(), request)
-	var conflict *NativeTaskError
+	var conflict *taskmodel.Error
 	if err != nil && !errors.As(err, &conflict) {
 		s.failure = fmt.Errorf("critical worker persistence: %w", err)
 		return result, s.failure
@@ -98,6 +102,7 @@ func (s *Store) Publish(checkpoint *ServiceCheckpoint) error {
 	*checkpoint = value
 	return nil
 }
+
 func (s *Store) Heartbeat() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -147,7 +152,7 @@ func loadObservedRuntime(c Config) (*Runtime, error) {
 	}
 	defer db.Close()
 	value, err := db.LoadRuntime(c.Identity(), false)
-	if errors.Is(err, persistence.ErrNotFound) {
+	if errors.Is(err, storageports.ErrNotFound) {
 		return nil, nil
 	}
 	return value, err

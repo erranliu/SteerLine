@@ -4,10 +4,10 @@ import (
 	"fmt"
 
 	"github.com/erranliu/SteerLine/internal/steerline/task"
-	"github.com/erranliu/SteerLine/internal/steerline/taskgraph"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func viewError(code, message string) error { return &task.Error{Code: code, Message: message} }
+func viewError(code, message string) error { return &taskmodel.Error{Code: code, Message: message} }
 
 // NormalizeFilter validates protocol limits before a snapshot is read.
 func NormalizeFilter(project string, filter Filter) (Filter, error) {
@@ -15,11 +15,11 @@ func NormalizeFilter(project string, filter Filter) (Filter, error) {
 		return Filter{}, viewError("authority_mismatch", "graph project_id must match the configured project")
 	}
 	filter.ProjectID = project
-	if filter.Status != "" && !task.ValidStatus(filter.Status) {
+	if filter.Status != "" && !taskmodel.ValidStatus(filter.Status) {
 		return Filter{}, viewError("invalid_filter", "status is not a supported native task status")
 	}
 	if filter.CenterTaskID != "" {
-		if err := task.ValidateID(filter.CenterTaskID); err != nil {
+		if err := taskmodel.ValidateID(filter.CenterTaskID); err != nil {
 			return Filter{}, err
 		}
 		if filter.Direction == "" {
@@ -75,7 +75,7 @@ func Project(snapshot task.Snapshot, filter Filter) (Page, error) {
 			return Page{}, viewError("contract_mismatch", "graph edge has no successor task")
 		}
 	}
-	projection := taskgraph.Project(graphNodes(snapshot.Tasks), graphEdges(snapshot.Edges), taskgraph.Filter{
+	projection := taskmodel.Project(graphNodes(snapshot.Tasks), graphEdges(snapshot.Edges), taskmodel.Filter{
 		Status: filter.Status, CenterID: filter.CenterTaskID, Direction: filter.Direction,
 		Depth: filter.Depth, Limit: filter.Limit, MaxBoundaryEdges: MaxBoundaryEdges,
 	})
@@ -88,9 +88,10 @@ func Project(snapshot task.Snapshot, filter Filter) (Page, error) {
 		Nodes: []Node{}, Edges: []Edge{}, Filters: filter,
 		Boundary: Boundary{MaxDepth: filter.Depth, MaxNodes: filter.Limit, Reasons: []string{}, Edges: []BoundaryEdge{}},
 	}
+	taskGraph := snapshot.TaskGraph()
 	for _, id := range projection.NodeIDs {
 		record := byID[id]
-		page.Nodes = append(page.Nodes, graphNode(record, snapshot))
+		page.Nodes = append(page.Nodes, graphNode(record, snapshot, taskGraph))
 	}
 	for _, edge := range projection.Edges {
 		page.Edges = append(page.Edges, Edge{Predecessor: edge.Predecessor, Successor: edge.Successor})
@@ -105,9 +106,9 @@ func Project(snapshot task.Snapshot, filter Filter) (Page, error) {
 	return page, nil
 }
 
-func graphNode(record task.TaskRecord, snapshot task.Snapshot) Node {
+func graphNode(record taskmodel.TaskRecord, snapshot task.Snapshot, taskGraph taskmodel.Snapshot) Node {
 	_, delivered := snapshot.Deliveries[record.TaskID]
-	ready, blockers := task.DependencyStateForTask(record, snapshot)
+	ready, blockers := taskmodel.DependencyStateForTask(record, taskGraph)
 	node := Node{
 		TaskID: record.TaskID, Title: record.Title, Status: record.Status, Priority: record.Priority,
 		DependencyReady: ready, Blockers: blockers,
@@ -120,18 +121,18 @@ func graphNode(record task.TaskRecord, snapshot task.Snapshot) Node {
 	return node
 }
 
-func graphNodes(records []task.TaskRecord) []taskgraph.Node {
-	nodes := make([]taskgraph.Node, 0, len(records))
+func graphNodes(records []taskmodel.TaskRecord) []taskmodel.Node {
+	nodes := make([]taskmodel.Node, 0, len(records))
 	for _, record := range records {
-		nodes = append(nodes, taskgraph.Node{ID: record.TaskID, Status: record.Status, Priority: record.Priority, CreatedAt: record.CreatedAt})
+		nodes = append(nodes, taskmodel.Node{ID: record.TaskID, Status: record.Status, Priority: record.Priority, CreatedAt: record.CreatedAt})
 	}
 	return nodes
 }
 
-func graphEdges(edges []task.TaskDependencyRecord) []taskgraph.Edge {
-	converted := make([]taskgraph.Edge, 0, len(edges))
+func graphEdges(edges []taskmodel.TaskDependencyRecord) []taskmodel.Edge {
+	converted := make([]taskmodel.Edge, 0, len(edges))
 	for _, edge := range edges {
-		converted = append(converted, taskgraph.Edge{Predecessor: edge.PredecessorID, Successor: edge.SuccessorID})
+		converted = append(converted, taskmodel.Edge{Predecessor: edge.PredecessorID, Successor: edge.SuccessorID})
 	}
 	return converted
 }

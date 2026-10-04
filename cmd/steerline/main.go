@@ -15,14 +15,16 @@ import (
 	"syscall"
 	"time"
 
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
 	"github.com/erranliu/SteerLine/internal/steerline/taskview"
-	"github.com/erranliu/SteerLine/internal/steerlineclient"
-
 	steerlineapp "github.com/erranliu/SteerLine/internal/steerlineapp"
+	"github.com/erranliu/SteerLine/internal/steerlineclient"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func main() {
@@ -31,6 +33,7 @@ func main() {
 		os.Exit(1)
 	}
 }
+
 func run() error {
 	if len(os.Args) < 2 {
 		return fmt.Errorf("usage: steerline <console|run|start-service|stop-service|check|control|tasks|task|stop|answer|certify-backend|home|install|launchers|projects> [-config config.json]")
@@ -171,7 +174,7 @@ func run() error {
 	}
 	if command == "stop" {
 		id := steerlineclient.NewRequestID()
-		request, err := product.SubmitControl(ctx, api.ControlInput{Action: api.StopService, RequestID: id, RequestedBy: *by})
+		request, err := product.SubmitControl(ctx, productapi.ControlInput{Action: productapi.StopService, RequestID: id, RequestedBy: *by})
 		if err != nil {
 			fmt.Println("request_id", id)
 			return err
@@ -191,7 +194,7 @@ func run() error {
 			if *action != "" || *taskID != "" || *controlMode != "" {
 				return fmt.Errorf("-request-id cannot be combined with a new action or action parameters")
 			}
-			var r *steerline.ControlReceipt
+			var r *productapi.ControlReceipt
 			var err error
 			if *waitReceipt {
 				ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
@@ -210,7 +213,7 @@ func run() error {
 		if *action == "" {
 			return fmt.Errorf("control requires -action or -request-id")
 		}
-		var payload api.ControlPayload
+		var payload productapi.ControlPayload
 		var candidateRevision *uint64
 		var candidateInstance string
 		switch *action {
@@ -247,7 +250,7 @@ func run() error {
 			if target == nil || *taskID != "" && *taskID != target.TaskID {
 				return fmt.Errorf("exact candidate does not belong to the requested task")
 			}
-			payload = api.ControlPayload{TaskID: target.TaskID, WorkflowRunID: target.RunID, ExpectedCandidateVersion: target.ControlRevision, Reason: *candidateReason}
+			payload = productapi.ControlPayload{TaskID: target.TaskID, WorkflowRunID: target.RunID, ExpectedCandidateVersion: target.ControlRevision, Reason: *candidateReason}
 			for _, task := range runtimeState.Tasks {
 				if task.TaskID == target.TaskID {
 					payload.ExpectedTaskVersion = task.Version
@@ -276,7 +279,7 @@ func run() error {
 			if *taskID != "" {
 				return fmt.Errorf("set_dispatch_mode does not accept -task-id")
 			}
-			payload = api.ControlPayload{Mode: *controlMode}
+			payload = productapi.ControlPayload{Mode: *controlMode}
 		case "open_terminal", "recheck_environment":
 			if *runID == "" {
 				return fmt.Errorf("environment action requires -run-id")
@@ -286,7 +289,7 @@ func run() error {
 			if runtimeState == nil {
 				return fmt.Errorf("service snapshot is unavailable")
 			}
-			var target *contracts.HostActionTarget
+			var target *productapi.HostActionTarget
 			for _, run := range runtimeState.Runs {
 				if run.RunID == *runID {
 					var targetErr error
@@ -300,7 +303,7 @@ func run() error {
 			if target == nil {
 				return fmt.Errorf("run has no current environment blocker")
 			}
-			payload = api.ControlPayload{Environment: target}
+			payload = productapi.ControlPayload{Environment: target}
 		case "pause_dispatch", "resume_dispatch", "stop_service":
 			if *taskID != "" || *controlMode != "" {
 				return fmt.Errorf("%s does not accept task or mode parameters", *action)
@@ -309,7 +312,7 @@ func run() error {
 			return fmt.Errorf("unsupported control action %q", *action)
 		}
 		id := steerlineclient.NewRequestID()
-		req, err := product.SubmitControl(ctx, api.ControlInput{Action: api.ControlAction(*action), Payload: payload, RequestID: id, RequestedBy: *by, ExpectedRevision: candidateRevision, InstanceID: candidateInstance})
+		req, err := product.SubmitControl(ctx, productapi.ControlInput{Action: productapi.ControlAction(*action), Payload: payload, RequestID: id, RequestedBy: *by, ExpectedRevision: candidateRevision, InstanceID: candidateInstance})
 		if err != nil {
 			fmt.Println("request_id", id)
 			return err
@@ -344,7 +347,7 @@ func run() error {
 			if *runID != "" || *decisionID != "" || *option != "" || *note != "" {
 				return errors.New("-request-id cannot be combined with a new answer")
 			}
-			var result contracts.CommandRecord
+			var result storageports.CommandRecord
 			var err error
 			if *waitReceipt {
 				result, err = product.WaitCommand(ctx, *requestID, 2*time.Minute)
@@ -357,7 +360,7 @@ func run() error {
 			return json.NewEncoder(os.Stdout).Encode(result)
 		}
 		id := steerlineclient.NewRequestID()
-		request, _, err := product.Answer(ctx, api.AnswerInput{RunID: *runID, DecisionID: *decisionID, Option: *option, Note: *note, RequestedBy: *by, CommandID: id})
+		request, _, err := product.Answer(ctx, productapi.AnswerInput{RunID: *runID, DecisionID: *decisionID, Option: *option, Note: *note, RequestedBy: *by, CommandID: id})
 		if err != nil {
 			fmt.Println("command_id", id)
 			return err
@@ -489,7 +492,7 @@ func runNativeTaskCommand(args []string) error {
 		if *taskID == "" {
 			return errors.New("task show requires -task-id")
 		}
-		if err := task.ValidateID(*taskID); err != nil {
+		if err := taskmodel.ValidateID(*taskID); err != nil {
 			return err
 		}
 		if *cursor != "" {
@@ -517,20 +520,20 @@ func runNativeTaskCommand(args []string) error {
 		if *taskID == "" || *requestID == "" || *expectedVersion == 0 || strings.TrimSpace(*reason) == "" {
 			return errors.New("task discard requires -task-id, -request-id, -expected-version and -reason")
 		}
-		if err := task.ValidateID(*taskID); err != nil {
+		if err := taskmodel.ValidateID(*taskID); err != nil {
 			return err
 		}
 		if *file != "" || *cursor != "" || *expectedAuthority != 0 {
 			return errors.New("task discard does not accept -file, -cursor or -expected-authority-version")
 		}
-		if err := task.ValidateID(*taskID); err != nil {
+		if err := taskmodel.ValidateID(*taskID); err != nil {
 			return err
 		}
 	case "add-predecessors":
 		if *taskID == "" || strings.TrimSpace(*predecessors) == "" || *requestID == "" || *expectedVersion == 0 || !graphRevisionWasSet || strings.TrimSpace(*reason) == "" || strings.TrimSpace(*by) == "" {
 			return errors.New("task add-predecessors requires -task-id, -predecessors, -request-id, -expected-version, -expected-graph-revision, -reason and -by")
 		}
-		if err := task.ValidateID(*taskID); err != nil {
+		if err := taskmodel.ValidateID(*taskID); err != nil {
 			return err
 		}
 	case "graph":
@@ -587,13 +590,13 @@ func runNativeTaskCommand(args []string) error {
 		if readErr != nil {
 			return readErr
 		}
-		receipt, createErr := product.CreateTaskBatch(ctx, api.CreateInput{Payload: payload, RequestID: *requestID, ExpectedAuthorityVersion: *expectedAuthority, RequestedBy: *by})
+		receipt, createErr := product.CreateTaskBatch(ctx, productapi.CreateInput{Payload: payload, RequestID: *requestID, ExpectedAuthorityVersion: *expectedAuthority, RequestedBy: *by})
 		if createErr != nil {
 			return createErr
 		}
 		return json.NewEncoder(os.Stdout).Encode(receipt)
 	case "discard":
-		receipt, discardErr := product.DiscardTask(ctx, api.DiscardInput{TaskID: *taskID, RequestID: *requestID, ExpectedVersion: *expectedVersion, Reason: *reason, RequestedBy: *by})
+		receipt, discardErr := product.DiscardTask(ctx, productapi.DiscardInput{TaskID: *taskID, RequestID: *requestID, ExpectedVersion: *expectedVersion, Reason: *reason, RequestedBy: *by})
 		if discardErr != nil {
 			return discardErr
 		}

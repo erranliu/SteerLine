@@ -5,8 +5,8 @@ import (
 	"errors"
 	"os"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type Outcome struct {
@@ -24,7 +24,7 @@ func ReadAppServerOutcome(path, threadID, turnID string) (Outcome, error) {
 	var outcome Outcome
 	seenPR := map[string]bool{}
 	addPR := func(message string) {
-		for _, candidate := range executionapi.PRClues(message) {
+		for _, candidate := range executionbackend.PRClues(message) {
 			if !seenPR[candidate] {
 				seenPR[candidate] = true
 				outcome.PRCandidates = append(outcome.PRCandidates, candidate)

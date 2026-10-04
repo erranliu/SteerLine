@@ -6,6 +6,8 @@ import (
 	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
@@ -16,7 +18,7 @@ func (m Model) cycleAttempt(next bool) (tea.Model, tea.Cmd) {
 		m.status = "没有可切换的执行尝试"
 		return m, nil
 	}
-	attempts := make([]contracts.StepAttemptRecord, 0)
+	attempts := make([]executionmodel.StepAttemptRecord, 0)
 	seenAttempts := map[string]bool{}
 	maxAttemptNumber := 0
 	for _, attempt := range state.snapshot.Domain.Attempts {
@@ -40,7 +42,7 @@ func (m Model) cycleAttempt(next bool) (tea.Model, tea.Cmd) {
 			if row.run.StartedAt != nil {
 				created = *row.run.StartedAt
 			}
-			attempts = append(attempts, contracts.StepAttemptRecord{ExecutionID: row.run.ExecutionID, AttemptID: row.run.AttemptID, AttemptNumber: maxAttemptNumber + 1, CreatedAt: created})
+			attempts = append(attempts, executionmodel.StepAttemptRecord{ExecutionID: row.run.ExecutionID, AttemptID: row.run.AttemptID, AttemptNumber: maxAttemptNumber + 1, CreatedAt: created})
 		}
 	}
 	sort.SliceStable(attempts, func(i, j int) bool {

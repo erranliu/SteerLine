@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 const ProfileCodecKey = "orca.worker-profile"
@@ -29,7 +29,7 @@ func NormalizeProfilePayload(payload []byte, host string) ([]byte, []string, err
 	return encoded, nil, err
 }
 
-func ValidateProfileSelection(policy executionapi.ExecutionPolicy, agent string, codexPayload, orcaPayload []byte) error {
+func ValidateProfileSelection(policy executionbackend.ExecutionPolicy, agent string, codexPayload, orcaPayload []byte) error {
 	codex, err := codexworker.DecodeProfileConfig(codexPayload)
 	if err != nil {
 		return err
@@ -65,7 +65,7 @@ type ProfileConfig struct {
 
 func DecodeProfileConfig(payload []byte) (ProfileConfig, error) {
 	var config ProfileConfig
-	if err := executionapi.DecodeStrictJSON(payload, &config, "Orca profile configuration has trailing JSON"); err != nil {
+	if err := executionbackend.DecodeStrictJSON(payload, &config, "Orca profile configuration has trailing JSON"); err != nil {
 		return ProfileConfig{}, err
 	}
 	return config, nil

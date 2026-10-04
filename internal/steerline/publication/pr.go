@@ -2,19 +2,21 @@ package publication
 
 import (
 	"errors"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 var ErrPRIdentity = errors.New("PR identity mismatch")
+
 var commitHash = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 func validCommit(value string) bool { return commitHash.MatchString(value) }
 
-type Config contracts.PRProviderConfig
+type Config executionmodel.PRProviderConfig
 
 func (c Config) ValidateRemote(remote string) error {
 	if c.Kind != "gitea" && c.Kind != "command" {
@@ -55,6 +57,7 @@ func (c Config) ValidateRemote(remote string) error {
 	}
 	return nil
 }
+
 func (c Config) PRNumber(raw string) (int, error) {
 	u, e := url.Parse(raw)
 	if e != nil {
@@ -83,7 +86,7 @@ func (c Config) PRNumber(raw string) (int, error) {
 // branch. A URL or title supplied by a worker is only a clue until this check
 // succeeds. The head SHA deliberately remains free to advance as the worker
 // pushes more commits to the same PR.
-func ValidateWorkerPRIdentity(info contracts.PRInfo, url, repository, baseBranch, executionBranch string) error {
+func ValidateWorkerPRIdentity(info executionmodel.PRInfo, url, repository, baseBranch, executionBranch string) error {
 	if url == "" || repository == "" || baseBranch == "" || executionBranch == "" ||
 		info.URL != url || info.Repository != repository || info.BaseBranch != baseBranch ||
 		info.HeadRepository != repository || info.HeadBranch != executionBranch ||

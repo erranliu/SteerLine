@@ -5,49 +5,43 @@ package persistence
 
 import (
 	"context"
-	"errors"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-var ErrNotFound = errors.New("persistent record not found")
-
-type RecordWrite[T any] struct {
-	Before *T
-	After  T
-}
-
-// WorkerCommit declares only records changed by one transition, with the exact
-// authoritative values from which the center computed its private candidate.
 type WorkerCommit struct {
-	Binding                                             *execution.ExecutionRef
-	ExecutionOperation                                  *RecordWrite[execution.Operation]
+	Binding                                             *executionbackend.ExecutionRef
+	ExecutionOperation                                  *storageports.RecordWrite[executionbackend.Operation]
 	Project, TaskID, WorkflowID, ExecutionID, AttemptID string
 	ControlRevision, AuthorityRevision                  uint64
 	ExpectedAttemptID                                   string
-	Workflow                                            *RecordWrite[contracts.WorkflowRunRecord]
-	Execution                                           *RecordWrite[contracts.ExecutionRecord]
-	Attempt, RetiredAttempt                             *RecordWrite[contracts.StepAttemptRecord]
-	Decisions                                           []RecordWrite[contracts.DecisionRecord]
-	Operations                                          []RecordWrite[contracts.OperationRecord]
-	Events                                              []contracts.DomainEvent
+	Workflow                                            *storageports.RecordWrite[executionmodel.WorkflowRunRecord]
+	Execution                                           *storageports.RecordWrite[executionmodel.ExecutionRecord]
+	Attempt, RetiredAttempt                             *storageports.RecordWrite[executionmodel.StepAttemptRecord]
+	Decisions                                           []storageports.RecordWrite[executionmodel.DecisionRecord]
+	Operations                                          []storageports.RecordWrite[executionmodel.OperationRecord]
+	Events                                              []storageports.DomainEvent
 	Checkpoint                                          contracts.ServiceCheckpoint
 }
+
 type WorkerCommitResult struct {
 	ControlRevision uint64
 	Checkpoint      contracts.ServiceCheckpoint
 }
+
 type Worker interface {
 	CommitWorker(context.Context, WorkerCommit) (WorkerCommitResult, error)
 }
+
 type Metadata interface {
 	SaveCheckpoint(context.Context, contracts.ServiceCheckpoint) (contracts.ServiceCheckpoint, error)
 	Heartbeat(context.Context, string) error
-}
-type Projects interface {
-	InitializeProject(context.Context, task.ProjectTaskAuthority) error
 }
 
 type WorkerMetadata interface {
@@ -55,131 +49,136 @@ type WorkerMetadata interface {
 	Metadata
 }
 
-type Commands interface {
-	EnqueueCommand(context.Context, contracts.CommandRecord) (contracts.CommandRecord, bool, error)
-	AcceptDecisionAnswer(context.Context, contracts.CommandRecord, contracts.DecisionAnswer) (contracts.DecisionRecord, bool, error)
-	UpdateCommand(context.Context, contracts.CommandRecord) error
-	Commands(context.Context, string, string, int) ([]contracts.CommandRecord, error)
-	ServiceCommands(context.Context, string, string, int) ([]contracts.CommandRecord, error)
-	Command(context.Context, string, string) (contracts.CommandRecord, error)
-	CommandByIdempotency(context.Context, string, string) (contracts.CommandRecord, error)
-	LookupCommand(context.Context, string, string) (contracts.CommandRecord, bool, error)
-}
 type commandInsertTx interface {
-	LookupCommand(context.Context, string, string) (contracts.CommandRecord, bool, error)
-	EnqueueCommand(contracts.CommandRecord) (contracts.CommandRecord, bool, error)
-	AppendEvent(contracts.DomainEvent) (int64, error)
+	LookupCommand(context.Context, string, string) (storageports.CommandRecord, bool, error)
+	EnqueueCommand(storageports.CommandRecord) (storageports.CommandRecord, bool, error)
+	AppendEvent(storageports.DomainEvent) (int64, error)
 }
+
 type commandTx interface {
 	commandInsertTx
-	UpdateCommand(contracts.CommandRecord) error
+	UpdateCommand(storageports.CommandRecord) error
 }
+
 type operationTx interface {
-	PutOperation(contracts.OperationRecord) (contracts.OperationRecord, bool, error)
+	PutOperation(executionmodel.OperationRecord) (executionmodel.OperationRecord, bool, error)
 }
+
 type graphTx interface {
 	TaskGraphSnapshot(context.Context, string) (task.Snapshot, error)
 }
+
 type workflowTx interface {
-	Workflow(context.Context, string, string, string) (contracts.WorkflowRunRecord, error)
-	Execution(context.Context, string, string, string) (contracts.ExecutionRecord, error)
+	Workflow(context.Context, string, string, string) (executionmodel.WorkflowRunRecord, error)
+	Execution(context.Context, string, string, string) (executionmodel.ExecutionRecord, error)
 }
 
 type BatchTx interface {
 	commandTx
 	graphTx
-	PutTask(contracts.TaskRecord) error
-	PutTaskContract(string, string, task.TaskContract) error
-	PutTaskBatch(task.TaskBatchRecord, uint64, uint64) error
-	PutTaskDependency(task.TaskDependencyRecord) error
+	PutTask(taskmodel.TaskRecord) error
+	PutTaskContract(string, string, taskmodel.TaskContract) error
+	PutTaskBatch(taskmodel.TaskBatchRecord, uint64, uint64) error
+	PutTaskDependency(taskmodel.TaskDependencyRecord) error
 }
+
 type ClaimTx interface {
 	commandTx
 	operationTx
 	graphTx
 	Query(context.Context, string) (contracts.DomainSnapshot, error)
 	OccupiedExecutions(context.Context, string) (int, error)
-	UpdateNativeTaskCAS(contracts.TaskRecord, uint64) error
-	PutWorkflowRun(contracts.WorkflowRunRecord) error
-	PutExecution(contracts.ExecutionRecord) error
-	PutStepAttempt(contracts.StepAttemptRecord) error
+	UpdateNativeTaskCAS(taskmodel.TaskRecord, uint64) error
+	PutWorkflowRun(executionmodel.WorkflowRunRecord) error
+	PutExecution(executionmodel.ExecutionRecord) error
+	PutStepAttempt(executionmodel.StepAttemptRecord) error
 }
+
 type CandidateTx interface {
 	commandTx
 	operationTx
 	graphTx
 	workflowTx
 	Query(context.Context, string) (contracts.DomainSnapshot, error)
-	PutWorkflowRun(contracts.WorkflowRunRecord) error
-	UpdateOperation(contracts.OperationRecord) error
+	PutWorkflowRun(executionmodel.WorkflowRunRecord) error
+	UpdateOperation(executionmodel.OperationRecord) error
 }
+
 type DispatchTx interface {
 	commandTx
 	operationTx
 	graphTx
-	UpdateProjectTaskAuthorityCAS(task.ProjectTaskAuthority, uint64) error
+	UpdateProjectTaskAuthorityCAS(tasklegacy.ProjectTaskAuthority, uint64) error
 }
+
 type PredecessorTx interface {
 	commandInsertTx
 	operationTx
 	graphTx
-	PutTaskDependency(task.TaskDependencyRecord) error
-	BumpOpenTaskVersionCAS(contracts.TaskRecord, uint64) error
+	PutTaskDependency(taskmodel.TaskDependencyRecord) error
+	BumpOpenTaskVersionCAS(taskmodel.TaskRecord, uint64) error
 	AdvanceTaskGraphRevision(string, uint64, uint64) (uint64, error)
 }
+
 type DiscardIntentTx interface {
 	commandTx
 	operationTx
-	Task(context.Context, string, string) (contracts.TaskRecord, error)
+	Task(context.Context, string, string) (taskmodel.TaskRecord, error)
 	DeliveryCount(context.Context, string, string) (int, error)
 }
+
 type DiscardPendingTx interface {
-	UpdateOperation(contracts.OperationRecord) error
-	UpdateCommand(contracts.CommandRecord) error
-	AppendEvent(contracts.DomainEvent) (int64, error)
+	UpdateOperation(executionmodel.OperationRecord) error
+	UpdateCommand(storageports.CommandRecord) error
+	AppendEvent(storageports.DomainEvent) (int64, error)
 }
+
 type DiscardTx interface {
 	DiscardPendingTx
 	graphTx
 	Query(context.Context, string) (contracts.DomainSnapshot, error)
 	DeliveryCount(context.Context, string, string) (int, error)
-	UpdateNativeTaskCAS(contracts.TaskRecord, uint64) error
+	UpdateNativeTaskCAS(taskmodel.TaskRecord, uint64) error
 }
+
 type DeliveryTx interface {
 	graphTx
 	workflowTx
 	Query(context.Context, string) (contracts.DomainSnapshot, error)
-	TaskContract(context.Context, string, contracts.TaskRecord) (task.TaskContract, error)
+	TaskContract(context.Context, string, taskmodel.TaskRecord) (taskmodel.TaskContract, error)
 	PRBindingsOnOtherTasks(context.Context, string, string, string) (int, error)
 	PutTaskDelivery(task.TaskDeliveryRecord) error
-	UpdateNativeTaskCAS(contracts.TaskRecord, uint64) error
-	AppendEvent(contracts.DomainEvent) (int64, error)
+	UpdateNativeTaskCAS(taskmodel.TaskRecord, uint64) error
+	AppendEvent(storageports.DomainEvent) (int64, error)
 }
+
 type CleanupProgressTx interface {
 	operationTx
-	Task(context.Context, string, string) (contracts.TaskRecord, error)
+	Task(context.Context, string, string) (taskmodel.TaskRecord, error)
 }
+
 type CleanupTx interface {
-	Attempt(context.Context, string, string, string) (contracts.StepAttemptRecord, error)
+	Attempt(context.Context, string, string, string) (executionmodel.StepAttemptRecord, error)
 	commandInsertTx
 	operationTx
 	workflowTx
-	Task(context.Context, string, string) (contracts.TaskRecord, error)
-	NativeAuthority(context.Context, string) (task.ProjectTaskAuthority, error)
-	UpdateDiscardedTaskCAS(contracts.TaskRecord, uint64) error
+	Task(context.Context, string, string) (taskmodel.TaskRecord, error)
+	NativeAuthority(context.Context, string) (tasklegacy.ProjectTaskAuthority, error)
+	UpdateDiscardedTaskCAS(taskmodel.TaskRecord, uint64) error
 	AdvanceTaskGraphRevision(string, uint64, uint64) (uint64, error)
-	PutWorkflowRun(contracts.WorkflowRunRecord) error
-	PutExecution(contracts.ExecutionRecord) error
-	PutStepAttempt(contracts.StepAttemptRecord) error
+	PutWorkflowRun(executionmodel.WorkflowRunRecord) error
+	PutExecution(executionmodel.ExecutionRecord) error
+	PutStepAttempt(executionmodel.StepAttemptRecord) error
 }
+
 type Tasks interface {
 	Query(context.Context, string) (contracts.DomainSnapshot, error)
 	TaskGraphSnapshot(context.Context, string) (task.Snapshot, error)
-	NativeAuthority(context.Context, string) (task.ProjectTaskAuthority, error)
-	TaskContract(context.Context, string, contracts.TaskRecord) (task.TaskContract, error)
-	Operation(context.Context, string, string) (contracts.OperationRecord, error)
+	NativeAuthority(context.Context, string) (tasklegacy.ProjectTaskAuthority, error)
+	TaskContract(context.Context, string, taskmodel.TaskRecord) (taskmodel.TaskContract, error)
+	Operation(context.Context, string, string) (executionmodel.OperationRecord, error)
 	WorkflowOwned(context.Context, string, string, string) (bool, error)
-	UpdateDiscardReceipt(context.Context, contracts.OperationRecord) error
+	UpdateDiscardReceipt(context.Context, executionmodel.OperationRecord) error
 	TransactTaskBatch(context.Context, func(BatchTx) error) error
 	TransactClaim(context.Context, func(ClaimTx) error) error
 	TransactCandidate(context.Context, func(CandidateTx) error) error
@@ -196,23 +195,26 @@ type Tasks interface {
 // CommandStore composes the operations consumed by the command application
 // service. It supplies no shared transaction, connection or arbitrary row write.
 type CommandStore interface {
-	Commands
+	storageports.Commands
 	Tasks
 }
 
 type CenterReader interface {
 	Query(context.Context, string) (contracts.DomainSnapshot, error)
-	NativeAuthority(context.Context, string) (task.ProjectTaskAuthority, error)
+	NativeAuthority(context.Context, string) (tasklegacy.ProjectTaskAuthority, error)
 	DatabaseVersion(context.Context) (string, uint64, error)
 }
+
 type Conversations interface {
 	CommitConversation(context.Context, []contracts.ConversationWrite, contracts.ConversationCheckpoint) ([]contracts.ConversationEvent, error)
 	ConversationCheckpoint(context.Context, string, string, string, string, string) (contracts.ConversationCheckpoint, error)
 	ConversationSourceCheckpoints(context.Context, string, string, string, string) ([]contracts.ConversationCheckpoint, error)
 	ConversationMapperSnapshot(context.Context, string, string, string, string, string) (contracts.ConversationMapperSnapshot, error)
 	ValidateConversationCheckpointFormat(context.Context, string, []string) error
-	ConversationCapabilityReports(context.Context, execution.BackendKind, execution.ExecutionProtocol, string, int) ([]contracts.ConversationCapabilityReport, error)
+	ConversationCapabilityReports(context.Context, executionbackend.BackendKind, executionbackend.ExecutionProtocol, string, int) ([]contracts.ConversationCapabilityReport, error)
 	SaveConversationCapabilityReport(context.Context, contracts.ConversationCapabilityReport) error
 }
 
-var ErrAnswerConflict = errors.New("answer_conflict: this decision already has a different accepted answer")
+type Projects interface {
+	InitializeProject(context.Context, tasklegacy.ProjectTaskAuthority) error
+}

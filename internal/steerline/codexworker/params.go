@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func ThreadParams(worktree, sandbox, model string, dynamicTools []any) (map[string]any, error) {
@@ -14,14 +14,14 @@ func ThreadParams(worktree, sandbox, model string, dynamicTools []any) (map[stri
 type TurnParamsInput struct {
 	Worktree string
 	ThreadID string
-	executionapi.TurnInput
+	executionbackend.TurnInput
 	Sandbox         string
 	Model           string
 	ReasoningEffort string
 }
 
 func TurnParams(ctx context.Context, input TurnParamsInput, linkedWorktreeArgs func(context.Context, string) ([]string, error)) (map[string]any, error) {
-	if !nativeID.MatchString(input.ThreadID) || !executionapi.StableExecutionID(input.CommandID) || input.Worktree == "" || input.Prompt == "" {
+	if !nativeID.MatchString(input.ThreadID) || !executionbackend.StableExecutionID(input.CommandID) || input.Worktree == "" || input.Prompt == "" {
 		return nil, errors.New("Codex app-server turn lacks a fixed thread, command or input")
 	}
 	var roots []string

@@ -2,39 +2,42 @@ package steerline
 
 import (
 	"context"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"strings"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-func queryHostRequirementTool(_ context.Context, c Config, id string) executionapi.RequirementEvidence {
-	e := executionapi.RequirementEvidence{ID: id, Site: "target", Target: targetFor(c), Status: executionapi.RequirementUnknown, Source: "neutral:declared-tool-fact", CheckedAt: now()}
+func queryHostRequirementTool(_ context.Context, c Config, id string) executionbackend.RequirementEvidence {
+	e := executionbackend.RequirementEvidence{ID: id, Site: "target", Target: targetFor(c), Status: executionbackend.RequirementUnknown, Source: "neutral:declared-tool-fact", CheckedAt: now()}
 	if id == "git" {
 		if c.Git.Executable == "git" || len(c.Git.Args) > 0 {
-			e.Status, e.Version = executionapi.RequirementPresent, "fixture-tool-v1"
+			e.Status, e.Version = executionbackend.RequirementPresent, "fixture-tool-v1"
 			return e
 		}
 		if _, err := os.Stat(c.Git.Executable); err != nil {
-			e.Status = executionapi.RequirementMissing
+			e.Status = executionbackend.RequirementMissing
 		}
 		return e
 	}
 	if id == "go" || id == "python" {
-		e.Status, e.Version = executionapi.RequirementPresent, "fixture-tool-v1"
+		e.Status, e.Version = executionbackend.RequirementPresent, "fixture-tool-v1"
 		if strings.EqualFold(c.PR.TokenEnv, "PATH") {
-			e.Status, e.Version = executionapi.RequirementMissing, ""
+			e.Status, e.Version = executionbackend.RequirementMissing, ""
 		}
 	}
 	return e
 }
-func queryRemoteRequirementTool(_ context.Context, c Config, id string) executionapi.RequirementEvidence {
-	return executionapi.RequirementEvidence{ID: id, Site: "target", Target: targetFor(c), Status: executionapi.RequirementUnknown, Source: "neutral:unavailable-target-tool", CheckedAt: now()}
+
+func queryRemoteRequirementTool(_ context.Context, c Config, id string) executionbackend.RequirementEvidence {
+	return executionbackend.RequirementEvidence{ID: id, Site: "target", Target: targetFor(c), Status: executionbackend.RequirementUnknown, Source: "neutral:unavailable-target-tool", CheckedAt: now()}
 }
-func capabilityReport(backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, target executionapi.ExecutionTarget, agent executionapi.AgentSpec, version string) executionapi.CapabilityReport {
+
+func capabilityReport(backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec, version string) executionbackend.CapabilityReport {
 	names := []string{"start", "observe", "stop", "detach_observation", "operation_reconciliation", "workspace_inspection", "output_reading", "output_turns", "output_final_answer", "resource_settlement"}
-	caps := make([]executionapi.Capability, 0, len(names))
+	caps := make([]executionbackend.Capability, 0, len(names))
 	for _, name := range names {
-		caps = append(caps, executionapi.Capability{Name: name, Status: executionapi.CapabilityNotTested})
+		caps = append(caps, executionbackend.Capability{Name: name, Status: executionbackend.CapabilityNotTested})
 	}
-	return executionapi.CapabilityReport{Version: 1, Backend: backend, Protocol: protocol, Target: target, Agent: agent, PlatformVersion: version, CheckedAt: now(), Capabilities: caps}
+	return executionbackend.CapabilityReport{Version: 1, Backend: backend, Protocol: protocol, Target: target, Agent: agent, PlatformVersion: version, CheckedAt: now(), Capabilities: caps}
 }

@@ -1,0 +1,2900 @@
+[
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "ProjectRef",
+    "kind": "type",
+    "fields": [
+      "Key",
+      "Name",
+      "ConfigPath",
+      "Identity",
+      "RunDir",
+      "ApplicationHome",
+      "ApplicationBin",
+      "Error",
+      "Conflict",
+      "Presentation"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Key": 77,
+      "Name": 77,
+      "ConfigPath": 77,
+      "Identity": 77,
+      "RunDir": 77,
+      "ApplicationHome": 77,
+      "ApplicationBin": 77,
+      "Error": 77,
+      "Conflict": 77,
+      "Presentation": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "ProjectSnapshot",
+    "kind": "type",
+    "fields": [
+      "CandidateFreshnessLimit",
+      "DecisionReasons",
+      "SelectedTaskID",
+      "FullReadAt",
+      "Connection",
+      "Observation",
+      "Tasks",
+      "TaskError",
+      "NativeTasks",
+      "SelectedNative",
+      "NativeTaskError",
+      "Domain",
+      "DomainError"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "CandidateFreshnessLimit": 77,
+      "DecisionReasons": 77,
+      "SelectedTaskID": 77,
+      "FullReadAt": 77,
+      "Connection": 77,
+      "Observation": 77,
+      "Tasks": 77,
+      "TaskError": 77,
+      "NativeTasks": 77,
+      "SelectedNative": 77,
+      "NativeTaskError": 77,
+      "Domain": 77,
+      "DomainError": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "LogBatch",
+    "kind": "type",
+    "fields": [
+      "Cursor",
+      "Reset",
+      "Activity",
+      "Diagnostics"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Cursor": 77,
+      "Reset": 77,
+      "Activity": 77,
+      "Diagnostics": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "LogNormalizer",
+    "kind": "type",
+    "fields": [
+      "Name",
+      "Detect",
+      "Normalize"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Name": 77,
+      "Detect": 77,
+      "Normalize": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "DecisionInput",
+    "kind": "type",
+    "fields": [
+      "Answer",
+      "RequestedBy",
+      "CommandID"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Answer": 77,
+      "RequestedBy": 77,
+      "CommandID": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "CapabilityFilter",
+    "kind": "type",
+    "fields": [
+      "Backend",
+      "Protocol",
+      "TargetID",
+      "ExecutionID",
+      "AttemptID",
+      "Source",
+      "SourceIdentity"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Backend": 77,
+      "Protocol": 77,
+      "TargetID": 77,
+      "ExecutionID": 77,
+      "AttemptID": 77,
+      "Source": 77,
+      "SourceIdentity": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "Reader",
+    "kind": "type",
+    "fields": [
+      "Close",
+      "ReadProjectView",
+      "ActivityEvents",
+      "Domain",
+      "DatabaseVersion",
+      "ShowNativeTask",
+      "ListNativeTasks",
+      "TaskGraph",
+      "QueryTaskGraph",
+      "ReadConversation",
+      "ReadMessageBody",
+      "ReadRaw",
+      "ReadCapabilities",
+      "Command"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Close": 77,
+      "ReadProjectView": 77,
+      "ActivityEvents": 77,
+      "Domain": 77,
+      "DatabaseVersion": 77,
+      "ShowNativeTask": 77,
+      "ListNativeTasks": 77,
+      "TaskGraph": 77,
+      "QueryTaskGraph": 77,
+      "ReadConversation": 77,
+      "ReadMessageBody": 77,
+      "ReadRaw": 77,
+      "ReadCapabilities": 77,
+      "Command": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "TaskCommands",
+    "kind": "type",
+    "fields": [
+      "Close",
+      "Validate",
+      "Create",
+      "Discard",
+      "AddPredecessors"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Close": 77,
+      "Validate": 77,
+      "Create": 77,
+      "Discard": 77,
+      "AddPredecessors": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "ControlPort",
+    "kind": "type",
+    "fields": [
+      "Submit",
+      "Receipt",
+      "Request",
+      "Stop"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Submit": 77,
+      "Receipt": 77,
+      "Request": 77,
+      "Stop": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "DecisionPort",
+    "kind": "type",
+    "fields": [
+      "Eligibility",
+      "Submit",
+      "Answer"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Eligibility": 77,
+      "Submit": 77,
+      "Answer": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "Resources",
+    "kind": "type",
+    "fields": [
+      "Project",
+      "ExecutableTypes",
+      "DefaultRequestedBy",
+      "DefaultAnswerer",
+      "CandidateFreshnessLimit",
+      "OpenReader",
+      "OpenCommands",
+      "Connect",
+      "Observe",
+      "ProbeProcess",
+      "Control",
+      "Decision",
+      "TaskSnapshot",
+      "ResolveStartTask",
+      "InspectRecovery",
+      "DecisionAvailability",
+      "Close"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Project": 77,
+      "ExecutableTypes": 77,
+      "DefaultRequestedBy": 77,
+      "DefaultAnswerer": 77,
+      "CandidateFreshnessLimit": 77,
+      "OpenReader": 77,
+      "OpenCommands": 77,
+      "Connect": 77,
+      "Observe": 77,
+      "ProbeProcess": 77,
+      "Control": 77,
+      "Decision": 77,
+      "TaskSnapshot": 77,
+      "ResolveStartTask": 77,
+      "InspectRecovery": 77,
+      "DecisionAvailability": 77,
+      "Close": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "Factory",
+    "kind": "type",
+    "definition_successor": 77,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "Lifecycle",
+    "kind": "type",
+    "fields": [
+      "Project",
+      "Close"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Project": 77,
+      "Close": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "TaskClient",
+    "kind": "type",
+    "fields": [
+      "ShowTask",
+      "ListTasks",
+      "TaskGraph",
+      "QueryTaskGraph",
+      "ValidateTaskBatch",
+      "CreateTaskBatch",
+      "DiscardTask",
+      "AddPredecessors"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "ShowTask": 77,
+      "ListTasks": 77,
+      "TaskGraph": 77,
+      "QueryTaskGraph": 77,
+      "ValidateTaskBatch": 77,
+      "CreateTaskBatch": 77,
+      "DiscardTask": 77,
+      "AddPredecessors": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "ProjectQueries",
+    "kind": "type",
+    "fields": [
+      "ReadProject",
+      "TaskSnapshot",
+      "Activity"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "ReadProject": 77,
+      "TaskSnapshot": 77,
+      "Activity": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "ConversationQueries",
+    "kind": "type",
+    "fields": [
+      "Conversation",
+      "Body",
+      "Raw",
+      "CursorAfter",
+      "Capabilities"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Conversation": 77,
+      "Body": 77,
+      "Raw": 77,
+      "CursorAfter": 77,
+      "Capabilities": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "Controls",
+    "kind": "type",
+    "fields": [
+      "SubmitControl",
+      "Receipt",
+      "Request",
+      "WaitControl",
+      "StopService",
+      "StartTaskPayload"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "SubmitControl": 77,
+      "Receipt": 77,
+      "Request": 77,
+      "WaitControl": 77,
+      "StopService": 77,
+      "StartTaskPayload": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "Decisions",
+    "kind": "type",
+    "fields": [
+      "DecisionEligibility",
+      "SubmitDecision",
+      "Answer",
+      "Command",
+      "WaitCommand"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "DecisionEligibility": 77,
+      "SubmitDecision": 77,
+      "Answer": 77,
+      "Command": 77,
+      "WaitCommand": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "RecoveryQueries",
+    "kind": "type",
+    "fields": [
+      "InspectRecovery"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "InspectRecovery": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "InputChecks",
+    "kind": "type",
+    "fields": [
+      "CandidateAvailability",
+      "StartTaskAvailability",
+      "AutoDispatchAvailability"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "CandidateAvailability": 77,
+      "StartTaskAvailability": 77,
+      "AutoDispatchAvailability": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "ConsoleClient",
+    "kind": "type",
+    "definition_successor": 77,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/clientcontracts/client.go",
+    "name": "Client",
+    "kind": "type",
+    "definition_successor": 77,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/clientcontracts/eligibility.go",
+    "name": "CandidateFreshness",
+    "kind": "function",
+    "definition_successor": 77,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/clientcontracts/eligibility.go",
+    "name": "canonicalIdentity",
+    "kind": "function",
+    "definition_successor": 77,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/clientcontracts/eligibility.go",
+    "name": "connectionDiagnostic",
+    "kind": "function",
+    "definition_successor": 77,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/clientcontracts/eligibility.go",
+    "name": "ExecutionConfigMismatch",
+    "kind": "function",
+    "definition_successor": 77,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/clientcontracts/eligibility.go",
+    "name": "StartTaskReason",
+    "kind": "function",
+    "definition_successor": 77,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/clientcontracts/eligibility.go",
+    "name": "AutoDispatchReason",
+    "kind": "function",
+    "definition_successor": 77,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/clientcontracts/observations.go",
+    "name": "Runtime",
+    "kind": "type",
+    "definition_successor": 77,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/clientcontracts/observations.go",
+    "name": "ServiceConnection",
+    "kind": "type",
+    "fields": [
+      "Snapshot",
+      "Process",
+      "State",
+      "IdentityMatched",
+      "ConfigMatched",
+      "Protocol",
+      "Capabilities",
+      "CanControl",
+      "CanStop",
+      "CanStart",
+      "StartupID",
+      "Diagnostic"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Snapshot": 77,
+      "Process": 77,
+      "State": 77,
+      "IdentityMatched": 77,
+      "ConfigMatched": 77,
+      "Protocol": 77,
+      "Capabilities": 77,
+      "CanControl": 77,
+      "CanStop": 77,
+      "CanStart": 77,
+      "StartupID": 77,
+      "Diagnostic": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/observations.go",
+    "name": "ObservationSnapshot",
+    "kind": "type",
+    "fields": [
+      "Runtime",
+      "State",
+      "SampledAt",
+      "HeartbeatAge",
+      "FreshnessLimit",
+      "ClockSkew",
+      "Error"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Runtime": 77,
+      "State": 77,
+      "SampledAt": 77,
+      "HeartbeatAge": 77,
+      "FreshnessLimit": 77,
+      "ClockSkew": 77,
+      "Error": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/observations.go",
+    "name": "EnvironmentTarget",
+    "kind": "function",
+    "definition_successor": 77,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/clientcontracts/presentation.go",
+    "name": "ProjectPresentation",
+    "kind": "type",
+    "fields": [
+      "ServiceInstruction",
+      "NativeWorkflow",
+      "ConfigDigest",
+      "TaskAuthority",
+      "WorkflowProtocol",
+      "ShutdownGrace",
+      "DefaultProfileID",
+      "Profiles"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "ServiceInstruction": 77,
+      "NativeWorkflow": 77,
+      "ConfigDigest": 77,
+      "TaskAuthority": 77,
+      "WorkflowProtocol": 77,
+      "ShutdownGrace": 77,
+      "DefaultProfileID": 77,
+      "Profiles": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/presentation.go",
+    "name": "ExecutionProfileSummary",
+    "kind": "type",
+    "fields": [
+      "ID",
+      "Name",
+      "Host",
+      "Agent",
+      "Digest",
+      "AcceptedConfigVersion",
+      "UnavailableReason",
+      "ExecutionPolicy",
+      "PublicationPolicy",
+      "Publication",
+      "ImplementationDisplay"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "ID": 77,
+      "Name": 77,
+      "Host": 77,
+      "Agent": 77,
+      "Digest": 77,
+      "AcceptedConfigVersion": 77,
+      "UnavailableReason": 77,
+      "ExecutionPolicy": 77,
+      "PublicationPolicy": 77,
+      "Publication": 77,
+      "ImplementationDisplay": 77
+    }
+  },
+  {
+    "file": "internal/steerline/clientcontracts/presentation.go",
+    "name": "CloneProjectRef",
+    "kind": "function",
+    "definition_successor": 77,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/clientcontracts/recovery.go",
+    "name": "RecoveryInspection",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "SampledAt",
+      "RunID",
+      "RunRevision",
+      "ServiceInstanceID",
+      "ServiceStatus",
+      "DispatchMode",
+      "DispatchPaused",
+      "SlotOccupied",
+      "TaskID",
+      "DecisionID",
+      "DecisionStatus",
+      "ExecutionStatus",
+      "DeliveryStatus",
+      "Backend",
+      "Protocol",
+      "Target",
+      "ProcessCheck",
+      "Workspace",
+      "WorkspaceError",
+      "NativeClaim",
+      "ClaimError",
+      "PR",
+      "PRError",
+      "Blockers",
+      "ConcurrentActionReason"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Version": 77,
+      "SampledAt": 77,
+      "RunID": 77,
+      "RunRevision": 77,
+      "ServiceInstanceID": 77,
+      "ServiceStatus": 77,
+      "DispatchMode": 77,
+      "DispatchPaused": 77,
+      "SlotOccupied": 77,
+      "TaskID": 77,
+      "DecisionID": 77,
+      "DecisionStatus": 77,
+      "ExecutionStatus": 77,
+      "DeliveryStatus": 77,
+      "Backend": 77,
+      "Protocol": 77,
+      "Target": 77,
+      "ProcessCheck": 77,
+      "Workspace": 77,
+      "WorkspaceError": 77,
+      "NativeClaim": 77,
+      "ClaimError": 77,
+      "PR": 77,
+      "PRError": 77,
+      "Blockers": 77,
+      "ConcurrentActionReason": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/activity.go",
+    "name": "ActivityEvent",
+    "kind": "type",
+    "fields": [
+      "V",
+      "Seq",
+      "TS",
+      "Source",
+      "RunID",
+      "TaskID",
+      "ItemID",
+      "Kind",
+      "Status",
+      "Title",
+      "Detail",
+      "ElapsedMS",
+      "Meta",
+      "Raw"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "V": 77,
+      "Seq": 77,
+      "TS": 77,
+      "Source": 77,
+      "RunID": 77,
+      "TaskID": 77,
+      "ItemID": 77,
+      "Kind": 77,
+      "Status": 77,
+      "Title": 77,
+      "Detail": 77,
+      "ElapsedMS": 77,
+      "Meta": 77,
+      "Raw": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationEventType",
+    "kind": "type",
+    "definition_successor": 78,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationSourceRole",
+    "kind": "type",
+    "definition_successor": 78,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "IdentityQuality",
+    "kind": "type",
+    "definition_successor": 78,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "MessagePhase",
+    "kind": "type",
+    "definition_successor": 78,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "FinalAvailability",
+    "kind": "type",
+    "definition_successor": 78,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "BodyCompleteness",
+    "kind": "type",
+    "definition_successor": 78,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationEvent",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "EventID",
+      "ProjectID",
+      "TaskID",
+      "WorkflowID",
+      "ExecutionID",
+      "AttemptID",
+      "Backend",
+      "Protocol",
+      "Agent",
+      "TargetID",
+      "ExternalRef",
+      "Source",
+      "SourceRole",
+      "SourceSegment",
+      "SourceIdentity",
+      "SourceCursor",
+      "SessionID",
+      "SessionQuality",
+      "TurnID",
+      "TurnQuality",
+      "ItemID",
+      "ItemQuality",
+      "ItemKey",
+      "SourceEventID",
+      "SourceEventQuality",
+      "SourceSeq",
+      "SourceRevision",
+      "LocalSeq",
+      "Type",
+      "Phase",
+      "FinalAvailability",
+      "Status",
+      "Body",
+      "Raw",
+      "Evidence",
+      "Attributes",
+      "OccurredAt",
+      "ReceivedAt",
+      "Diagnostic"
+    ],
+    "definition_successor": 76,
+    "field_successors": {
+      "Version": 76,
+      "EventID": 76,
+      "ProjectID": 76,
+      "TaskID": 76,
+      "WorkflowID": 76,
+      "ExecutionID": 76,
+      "AttemptID": 76,
+      "Backend": 76,
+      "Protocol": 76,
+      "Agent": 76,
+      "TargetID": 76,
+      "ExternalRef": 76,
+      "Source": 76,
+      "SourceRole": 76,
+      "SourceSegment": 76,
+      "SourceIdentity": 76,
+      "SourceCursor": 76,
+      "SessionID": 76,
+      "SessionQuality": 76,
+      "TurnID": 76,
+      "TurnQuality": 76,
+      "ItemID": 76,
+      "ItemQuality": 76,
+      "ItemKey": 76,
+      "SourceEventID": 76,
+      "SourceEventQuality": 76,
+      "SourceSeq": 76,
+      "SourceRevision": 76,
+      "LocalSeq": 76,
+      "Type": 76,
+      "Phase": 76,
+      "FinalAvailability": 76,
+      "Status": 76,
+      "Body": 76,
+      "Raw": 76,
+      "Evidence": 76,
+      "Attributes": 76,
+      "OccurredAt": 76,
+      "ReceivedAt": 76,
+      "Diagnostic": 76
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationBodyRef",
+    "kind": "type",
+    "fields": [
+      "ExecutionID",
+      "AttemptID",
+      "ItemKey",
+      "Revision",
+      "SHA256",
+      "Bytes",
+      "Source",
+      "Completeness"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "ExecutionID": 78,
+      "AttemptID": 78,
+      "ItemKey": 78,
+      "Revision": 78,
+      "SHA256": 78,
+      "Bytes": 78,
+      "Source": 78,
+      "Completeness": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationRawRef",
+    "kind": "type",
+    "fields": [
+      "ExecutionID",
+      "AttemptID",
+      "ID",
+      "SHA256",
+      "Bytes"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "ExecutionID": 78,
+      "AttemptID": 78,
+      "ID": 78,
+      "SHA256": 78,
+      "Bytes": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationWrite",
+    "kind": "type",
+    "fields": [
+      "Event",
+      "Body",
+      "BodyMode",
+      "Raw",
+      "BodySource"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Event": 79,
+      "Body": 79,
+      "BodyMode": 79,
+      "Raw": 79,
+      "BodySource": 79
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationCheckpoint",
+    "kind": "type",
+    "fields": [
+      "ProjectID",
+      "ExecutionID",
+      "AttemptID",
+      "Source",
+      "SourceSegment",
+      "SourceIdentity",
+      "Generation",
+      "Cursor",
+      "LocalSeq",
+      "UpdatedAt",
+      "AllowReplay"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "ProjectID": 79,
+      "ExecutionID": 79,
+      "AttemptID": 79,
+      "Source": 79,
+      "SourceSegment": 79,
+      "SourceIdentity": 79,
+      "Generation": 79,
+      "Cursor": 79,
+      "LocalSeq": 79,
+      "UpdatedAt": 79,
+      "AllowReplay": 79
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationMapperSnapshot",
+    "kind": "type",
+    "fields": [
+      "Session",
+      "Turn",
+      "FinalSeen"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Session": 79,
+      "Turn": 79,
+      "FinalSeen": 79
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationMapper",
+    "kind": "type",
+    "fields": [
+      "MapRecord"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "MapRecord": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationInput",
+    "kind": "type",
+    "fields": [
+      "Event",
+      "Process",
+      "Source",
+      "Segment",
+      "Identity",
+      "Cursor",
+      "Generation",
+      "Session",
+      "SourceSeq",
+      "SourceOffset",
+      "SourceLength",
+      "Raw",
+      "Diagnostic",
+      "Gap",
+      "InputWait",
+      "SourceChanged",
+      "Mapper"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "Event": 78,
+      "Process": 78,
+      "Source": 78,
+      "Segment": 78,
+      "Identity": 78,
+      "Cursor": 78,
+      "Generation": 78,
+      "Session": 78,
+      "SourceSeq": 78,
+      "SourceOffset": 78,
+      "SourceLength": 78,
+      "Raw": 78,
+      "Diagnostic": 78,
+      "Gap": 78,
+      "InputWait": 78,
+      "SourceChanged": 78,
+      "Mapper": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationMappedBatch",
+    "kind": "type",
+    "fields": [
+      "Writes",
+      "Checkpoint",
+      "VerifySourcePosition"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "Writes": 78,
+      "Checkpoint": 78,
+      "VerifySourcePosition": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationInputMapper",
+    "kind": "type",
+    "fields": [
+      "MapConversation"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "MapConversation": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationSourcePort",
+    "kind": "type",
+    "fields": [
+      "RestoreMapper",
+      "JournalSources",
+      "JournalSource",
+      "JournalSegment",
+      "JournalGeneration",
+      "LiveJournalPath",
+      "DiscoverHistory",
+      "DiscoverJournals",
+      "ReadHistory"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "RestoreMapper": 78,
+      "JournalSources": 78,
+      "JournalSource": 78,
+      "JournalSegment": 78,
+      "JournalGeneration": 78,
+      "LiveJournalPath": 78,
+      "DiscoverHistory": 78,
+      "DiscoverJournals": 78,
+      "ReadHistory": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationJournalPathRequest",
+    "kind": "type",
+    "fields": [
+      "RunDirectory",
+      "WorkflowID",
+      "ExecutionID",
+      "AttemptID",
+      "SourceIdentity",
+      "LogPath",
+      "EventPaths",
+      "WorkerFlow"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "RunDirectory": 78,
+      "WorkflowID": 78,
+      "ExecutionID": 78,
+      "AttemptID": 78,
+      "SourceIdentity": 78,
+      "LogPath": 78,
+      "EventPaths": 78,
+      "WorkerFlow": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationDiscovery",
+    "kind": "type",
+    "fields": [
+      "ProjectID",
+      "RunDirectory",
+      "Repository",
+      "Runs"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "ProjectID": 78,
+      "RunDirectory": 78,
+      "Repository": 78,
+      "Runs": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationRunSource",
+    "kind": "type",
+    "fields": [
+      "Base",
+      "RunDirectory",
+      "Workspace",
+      "WorkerFlow",
+      "Process",
+      "Attempts"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "Base": 78,
+      "RunDirectory": 78,
+      "Workspace": 78,
+      "WorkerFlow": 78,
+      "Process": 78,
+      "Attempts": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationAttemptSource",
+    "kind": "type",
+    "fields": [
+      "AttemptID",
+      "EventPath",
+      "FileID",
+      "Ended"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "AttemptID": 78,
+      "EventPath": 78,
+      "FileID": 78,
+      "Ended": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationJournalSource",
+    "kind": "type",
+    "fields": [
+      "Path",
+      "AttemptID",
+      "FileID",
+      "ExpectedFileID",
+      "Diagnostic",
+      "Workspace",
+      "Event",
+      "Ended"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "Path": 78,
+      "AttemptID": 78,
+      "FileID": 78,
+      "ExpectedFileID": 78,
+      "Diagnostic": 78,
+      "Workspace": 78,
+      "Event": 78,
+      "Ended": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationHistorySource",
+    "kind": "type",
+    "fields": [
+      "Identity",
+      "BindingPath",
+      "Workspace",
+      "Event",
+      "Ended",
+      "RequiresPlatformVersion"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "Identity": 78,
+      "BindingPath": 78,
+      "Workspace": 78,
+      "Event": 78,
+      "Ended": 78,
+      "RequiresPlatformVersion": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationDiscoveryResult",
+    "kind": "type",
+    "fields": [
+      "Sources",
+      "Writes"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "Sources": 78,
+      "Writes": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationHistoryReadRequest",
+    "kind": "type",
+    "fields": [
+      "Source",
+      "Cursor",
+      "HasCheckpoint",
+      "Repository",
+      "RunDirectory",
+      "PlatformVersion"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "Source": 78,
+      "Cursor": 78,
+      "HasCheckpoint": 78,
+      "Repository": 78,
+      "RunDirectory": 78,
+      "PlatformVersion": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationHistoryBatch",
+    "kind": "type",
+    "fields": [
+      "Writes",
+      "Cursor",
+      "Sequence",
+      "Settled",
+      "More",
+      "Capabilities"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "Writes": 78,
+      "Cursor": 78,
+      "Sequence": 78,
+      "Settled": 78,
+      "More": 78,
+      "Capabilities": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationCapability",
+    "kind": "type",
+    "fields": [
+      "Name",
+      "Status",
+      "Evidence"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "Name": 78,
+      "Status": 78,
+      "Evidence": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation.go",
+    "name": "ConversationCapabilityReport",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "Backend",
+      "Protocol",
+      "Agent",
+      "AgentVersion",
+      "PlatformVersion",
+      "Target",
+      "ExecutionID",
+      "AttemptID",
+      "Source",
+      "SourceIdentity",
+      "CheckedAt",
+      "Capabilities"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "Version": 78,
+      "Backend": 78,
+      "Protocol": 78,
+      "Agent": 78,
+      "AgentVersion": 78,
+      "PlatformVersion": 78,
+      "Target": 78,
+      "ExecutionID": 78,
+      "AttemptID": 78,
+      "Source": 78,
+      "SourceIdentity": 78,
+      "CheckedAt": 78,
+      "Capabilities": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_position.go",
+    "name": "ConversationJournalPosition",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "ByteOffset",
+      "SourceSeq",
+      "Generation",
+      "FileID",
+      "FileSize",
+      "ModifiedNS",
+      "HeaderLength",
+      "HeaderHash",
+      "AnchorOffset",
+      "AnchorLength",
+      "AnchorHash"
+    ],
+    "definition_successor": 78,
+    "field_successors": {
+      "Version": 78,
+      "ByteOffset": 78,
+      "SourceSeq": 78,
+      "Generation": 78,
+      "FileID": 78,
+      "FileSize": 78,
+      "ModifiedNS": 78,
+      "HeaderLength": 78,
+      "HeaderHash": 78,
+      "AnchorOffset": 78,
+      "AnchorLength": 78,
+      "AnchorHash": 78
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_position.go",
+    "name": "DecodeConversationJournalPosition",
+    "kind": "function",
+    "definition_successor": 78,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "name": "ConversationFilter",
+    "kind": "type",
+    "fields": [
+      "WorkflowID",
+      "ExecutionID",
+      "AttemptID",
+      "SessionID",
+      "TurnID",
+      "Source"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "WorkflowID": 77,
+      "ExecutionID": 77,
+      "AttemptID": 77,
+      "SessionID": 77,
+      "TurnID": 77,
+      "Source": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "name": "ConversationPage",
+    "kind": "type",
+    "fields": [
+      "Events",
+      "NextCursor",
+      "HasMore",
+      "PayloadBytes"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Events": 77,
+      "NextCursor": 77,
+      "HasMore": 77,
+      "PayloadBytes": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "name": "ConversationBodyPage",
+    "kind": "type",
+    "fields": [
+      "ItemKey",
+      "Revision",
+      "Offset",
+      "NextOffset",
+      "TotalBytes",
+      "SHA256",
+      "Completeness",
+      "Complete",
+      "Data"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "ItemKey": 77,
+      "Revision": 77,
+      "Offset": 77,
+      "NextOffset": 77,
+      "TotalBytes": 77,
+      "SHA256": 77,
+      "Completeness": 77,
+      "Complete": 77,
+      "Data": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "name": "ConversationRawPage",
+    "kind": "type",
+    "fields": [
+      "RawID",
+      "Offset",
+      "NextOffset",
+      "TotalBytes",
+      "SHA256",
+      "Complete",
+      "Data"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "RawID": 77,
+      "Offset": 77,
+      "NextOffset": 77,
+      "TotalBytes": 77,
+      "SHA256": 77,
+      "Complete": 77,
+      "Data": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "name": "ConversationEventRecord",
+    "kind": "type",
+    "fields": [
+      "EventID",
+      "PayloadBytes",
+      "Payload"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "EventID": 77,
+      "PayloadBytes": 77,
+      "Payload": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "name": "ConversationBodyRecord",
+    "kind": "type",
+    "fields": [
+      "Body",
+      "TotalBytes",
+      "SHA256",
+      "Completeness"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Body": 77,
+      "TotalBytes": 77,
+      "SHA256": 77,
+      "Completeness": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "name": "ConversationRawRecord",
+    "kind": "type",
+    "fields": [
+      "Data",
+      "TotalBytes",
+      "SHA256"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Data": 77,
+      "TotalBytes": 77,
+      "SHA256": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/delivery.go",
+    "name": "MarkWorkerDeliveryCommitted",
+    "kind": "function",
+    "definition_successor": 74,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/contracts/execution.go",
+    "name": "LegacyCompletionConfig",
+    "kind": "type",
+    "fields": [
+      "Command",
+      "Timeout"
+    ],
+    "definition_successor": 80,
+    "field_successors": {
+      "Command": 80,
+      "Timeout": 80
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/json.go",
+    "name": "TrimBOM",
+    "kind": "function",
+    "definition_successor": 80,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/contracts/json.go",
+    "name": "DecodeJSON",
+    "kind": "function",
+    "definition_successor": 80,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/contracts/query.go",
+    "name": "NativeTaskCapabilities",
+    "kind": "type",
+    "fields": [
+      "DependencyReadiness",
+      "DependencyBlockers",
+      "StartupBlockers"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "DependencyReadiness": 77,
+      "DependencyBlockers": 77,
+      "StartupBlockers": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/query.go",
+    "name": "NativeTaskDetail",
+    "kind": "type",
+    "fields": [
+      "ProjectID",
+      "Priority",
+      "Contract",
+      "WorkflowRuns",
+      "Delivery",
+      "Predecessors",
+      "Successors",
+      "DependencyReady",
+      "UnmetPredecessors",
+      "StartupBlockers"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "ProjectID": 77,
+      "Priority": 77,
+      "Contract": 77,
+      "WorkflowRuns": 77,
+      "Delivery": 77,
+      "Predecessors": 77,
+      "Successors": 77,
+      "DependencyReady": 77,
+      "UnmetPredecessors": 77,
+      "StartupBlockers": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/query.go",
+    "name": "NativeTaskPage",
+    "kind": "type",
+    "fields": [
+      "Protocol",
+      "ProjectID",
+      "AuthorityVersion",
+      "GraphRevision",
+      "DatabaseRevision",
+      "DatabaseID",
+      "SampledAt",
+      "Capabilities",
+      "Tasks",
+      "NextCursor",
+      "HasMore"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Protocol": 77,
+      "ProjectID": 77,
+      "AuthorityVersion": 77,
+      "GraphRevision": 77,
+      "DatabaseRevision": 77,
+      "DatabaseID": 77,
+      "SampledAt": 77,
+      "Capabilities": 77,
+      "Tasks": 77,
+      "NextCursor": 77,
+      "HasMore": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/query.go",
+    "name": "NativeReadyTaskSnapshot",
+    "kind": "type",
+    "fields": [
+      "ProjectID",
+      "AuthorityVersion",
+      "GraphRevision",
+      "DatabaseID",
+      "DatabaseRevision",
+      "SampledAt",
+      "Tasks"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "ProjectID": 77,
+      "AuthorityVersion": 77,
+      "GraphRevision": 77,
+      "DatabaseID": 77,
+      "DatabaseRevision": 77,
+      "SampledAt": 77,
+      "Tasks": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/query.go",
+    "name": "ProjectView",
+    "kind": "type",
+    "fields": [
+      "SampledAt",
+      "Tasks",
+      "Ready",
+      "SelectedTask",
+      "Domain",
+      "Runtime",
+      "TaskError",
+      "SelectedTaskError",
+      "DomainError",
+      "RuntimeError"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "SampledAt": 77,
+      "Tasks": 77,
+      "Ready": 77,
+      "SelectedTask": 77,
+      "Domain": 77,
+      "Runtime": 77,
+      "TaskError": 77,
+      "SelectedTaskError": 77,
+      "DomainError": 77,
+      "RuntimeError": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/records.go",
+    "name": "TaskDeliveryRecord",
+    "kind": "type",
+    "definition_successor": 74,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/contracts/records.go",
+    "name": "TaskDeliveryEvidence",
+    "kind": "type",
+    "definition_successor": 74,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "Repository",
+    "kind": "type",
+    "fields": [
+      "Path",
+      "Remote",
+      "Branch",
+      "Identity"
+    ],
+    "definition_successor": 80,
+    "field_successors": {
+      "Path": 80,
+      "Remote": 80,
+      "Branch": 80,
+      "Identity": 80
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "ServiceCheckpoint",
+    "kind": "type",
+    "fields": [
+      "SchemaVersion",
+      "Revision",
+      "UpdatedAt",
+      "HeartbeatAt",
+      "Service",
+      "Repository",
+      "Operation",
+      "Blockers",
+      "ReservedTask"
+    ],
+    "definition_successor": 80,
+    "field_successors": {
+      "SchemaVersion": 80,
+      "Revision": 80,
+      "UpdatedAt": 80,
+      "HeartbeatAt": 80,
+      "Service": 80,
+      "Repository": 80,
+      "Operation": 80,
+      "Blockers": 80,
+      "ReservedTask": 80
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "Runtime",
+    "kind": "type",
+    "fields": [
+      "SchemaVersion",
+      "Revision",
+      "UpdatedAt",
+      "HeartbeatAt",
+      "Service",
+      "Repository",
+      "Tasks",
+      "WorkflowRuns",
+      "Executions",
+      "Attempts",
+      "Decisions",
+      "Operations",
+      "Deliveries",
+      "CurrentTask",
+      "SlotOccupied",
+      "Runs",
+      "Control"
+    ],
+    "definition_successor": 80,
+    "field_successors": {
+      "SchemaVersion": 80,
+      "Revision": 80,
+      "UpdatedAt": 80,
+      "HeartbeatAt": 80,
+      "Service": 80,
+      "Repository": 80,
+      "Tasks": 76,
+      "WorkflowRuns": 76,
+      "Executions": 76,
+      "Attempts": 76,
+      "Decisions": 76,
+      "Operations": 76,
+      "Deliveries": 76,
+      "CurrentTask": 74,
+      "SlotOccupied": 74,
+      "Runs": 76,
+      "Control": 74
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "ServiceState",
+    "kind": "type",
+    "fields": [
+      "ExecutionPolicy",
+      "PolicySource",
+      "Mode",
+      "InstanceID",
+      "PID",
+      "Status",
+      "Claimant",
+      "Error",
+      "ProcessIdentity",
+      "StartupID",
+      "ConfigDigest",
+      "Ready",
+      "ControlProtocol",
+      "Capabilities",
+      "HeartbeatIntervalMS"
+    ],
+    "definition_successor": 80,
+    "field_successors": {
+      "ExecutionPolicy": 80,
+      "PolicySource": 80,
+      "Mode": 80,
+      "InstanceID": 80,
+      "PID": 80,
+      "Status": 80,
+      "Claimant": 80,
+      "Error": 80,
+      "ProcessIdentity": 80,
+      "StartupID": 80,
+      "ConfigDigest": 80,
+      "Ready": 80,
+      "ControlProtocol": 80,
+      "Capabilities": 80,
+      "HeartbeatIntervalMS": 80
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "ControlState",
+    "kind": "type",
+    "fields": [
+      "DispatchMode",
+      "DispatchPaused",
+      "Revision",
+      "Operation",
+      "Blockers"
+    ],
+    "definition_successor": 80,
+    "field_successors": {
+      "DispatchMode": 74,
+      "DispatchPaused": 74,
+      "Revision": 80,
+      "Operation": 80,
+      "Blockers": 80
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "ControlOperation",
+    "kind": "type",
+    "fields": [
+      "RequestID",
+      "Action",
+      "TaskID",
+      "Payload",
+      "Phase",
+      "RunID",
+      "AttemptID",
+      "DecisionID",
+      "RequestDigest",
+      "Result"
+    ],
+    "definition_successor": 80,
+    "field_successors": {
+      "RequestID": 80,
+      "Action": 80,
+      "TaskID": 80,
+      "Payload": 80,
+      "Phase": 80,
+      "RunID": 80,
+      "AttemptID": 80,
+      "DecisionID": 80,
+      "RequestDigest": 80,
+      "Result": 80
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "ControlBlocker",
+    "kind": "type",
+    "fields": [
+      "RequestID",
+      "Action",
+      "TaskID",
+      "RunID",
+      "AttemptID",
+      "DecisionID",
+      "Reason"
+    ],
+    "definition_successor": 80,
+    "field_successors": {
+      "RequestID": 80,
+      "Action": 80,
+      "TaskID": 80,
+      "RunID": 80,
+      "AttemptID": 80,
+      "DecisionID": 80,
+      "Reason": 80
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "TaskSnapshot",
+    "kind": "type",
+    "fields": [
+      "Version",
+      "InstanceID",
+      "RepositoryIdentity",
+      "QueriedAt",
+      "LastSuccessAt",
+      "Error",
+      "BlockReason",
+      "Tasks"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "Version": 77,
+      "InstanceID": 77,
+      "RepositoryIdentity": 77,
+      "QueriedAt": 77,
+      "LastSuccessAt": 77,
+      "Error": 77,
+      "BlockReason": 77,
+      "Tasks": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "TaskCandidate",
+    "kind": "type",
+    "fields": [
+      "TaskID",
+      "Title",
+      "Type",
+      "Summary"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "TaskID": 77,
+      "Title": 77,
+      "Type": 77,
+      "Summary": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "Run",
+    "kind": "type",
+    "fields": [
+      "SessionID",
+      "SessionGeneration",
+      "TurnNumber",
+      "CurrentTurnID",
+      "Abandonment",
+      "ExecutionProfile",
+      "PRHistory",
+      "CandidateCreatedAt",
+      "CandidateEndedAt",
+      "CandidateTiming",
+      "ResourceStatus",
+      "EnvironmentBlocker",
+      "RecoveryRequired",
+      "RecoveryState",
+      "RecoveryVersion",
+      "ManualStop",
+      "TaskID",
+      "DomainTaskID",
+      "IdentityMapDigest",
+      "DomainAttemptNumber",
+      "WorkflowVersion",
+      "WorkflowConfigDigest",
+      "ExecutionID",
+      "StepResultPath",
+      "Title",
+      "RunID",
+      "AttemptID",
+      "ControlRevision",
+      "Claimant",
+      "Host",
+      "Backend",
+      "Protocol",
+      "Agent",
+      "Target",
+      "TaskStatus",
+      "BeadsStatus",
+      "ExecutionStatus",
+      "FinishTaskStatus",
+      "Process",
+      "StartedAt",
+      "EndedAt",
+      "WorktreePath",
+      "WorktreeBranch",
+      "WorkspaceIntent",
+      "Completion",
+      "BeadsContext",
+      "BaseCommit",
+      "PR",
+      "LastEvent",
+      "LogPath",
+      "ResultPath",
+      "Summary",
+      "Error",
+      "Decision"
+    ],
+    "definition_successor": 77,
+    "field_successors": {
+      "SessionID": 77,
+      "SessionGeneration": 77,
+      "TurnNumber": 77,
+      "CurrentTurnID": 77,
+      "Abandonment": 77,
+      "ExecutionProfile": 77,
+      "PRHistory": 77,
+      "CandidateCreatedAt": 77,
+      "CandidateEndedAt": 77,
+      "CandidateTiming": 77,
+      "ResourceStatus": 77,
+      "EnvironmentBlocker": 77,
+      "RecoveryRequired": 77,
+      "RecoveryState": 77,
+      "RecoveryVersion": 77,
+      "ManualStop": 77,
+      "TaskID": 77,
+      "DomainTaskID": 77,
+      "IdentityMapDigest": 77,
+      "DomainAttemptNumber": 77,
+      "WorkflowVersion": 77,
+      "WorkflowConfigDigest": 77,
+      "ExecutionID": 77,
+      "StepResultPath": 77,
+      "Title": 77,
+      "RunID": 77,
+      "AttemptID": 77,
+      "ControlRevision": 77,
+      "Claimant": 77,
+      "Host": 77,
+      "Backend": 77,
+      "Protocol": 77,
+      "Agent": 77,
+      "Target": 77,
+      "TaskStatus": 77,
+      "BeadsStatus": 77,
+      "ExecutionStatus": 77,
+      "FinishTaskStatus": 77,
+      "Process": 77,
+      "StartedAt": 77,
+      "EndedAt": 77,
+      "WorktreePath": 77,
+      "WorktreeBranch": 77,
+      "WorkspaceIntent": 77,
+      "Completion": 80,
+      "BeadsContext": 80,
+      "BaseCommit": 77,
+      "PR": 77,
+      "LastEvent": 77,
+      "LogPath": 77,
+      "ResultPath": 77,
+      "Summary": 77,
+      "Error": 77,
+      "Decision": 77
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "LegacyBeadsContext",
+    "kind": "type",
+    "fields": [
+      "Directory",
+      "ProjectID",
+      "Database",
+      "Backend"
+    ],
+    "definition_successor": 80,
+    "field_successors": {
+      "Directory": 80,
+      "ProjectID": 80,
+      "Database": 80,
+      "Backend": 80
+    }
+  },
+  {
+    "file": "internal/steerline/contracts/runtime.go",
+    "name": "RuntimeFromCheckpoint",
+    "kind": "function",
+    "definition_successor": 80,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/contracts/snapshot.go",
+    "name": "DomainSnapshot",
+    "kind": "type",
+    "fields": [
+      "Deliveries",
+      "ProjectIdentity",
+      "Tasks",
+      "WorkflowRuns",
+      "Executions",
+      "Attempts",
+      "Decisions",
+      "Operations"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Deliveries": 79,
+      "ProjectIdentity": 79,
+      "Tasks": 79,
+      "WorkflowRuns": 79,
+      "Executions": 79,
+      "Attempts": 79,
+      "Decisions": 79,
+      "Operations": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/connections.go",
+    "name": "RuntimeReader",
+    "kind": "type",
+    "fields": [
+      "LoadRuntime"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "LoadRuntime": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/connections.go",
+    "name": "Connection",
+    "kind": "type",
+    "fields": [
+      "Close",
+      "LoadProjection",
+      "BindAuthority",
+      "ValidateStoredFormat",
+      "ExecutionBinding",
+      "ExecutionOperation"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Close": 79,
+      "LoadProjection": 79,
+      "BindAuthority": 79,
+      "ValidateStoredFormat": 79,
+      "ExecutionBinding": 79,
+      "ExecutionOperation": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/connections.go",
+    "name": "Factory",
+    "kind": "type",
+    "fields": [
+      "OpenWriter",
+      "OpenReader"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "OpenWriter": 79,
+      "OpenReader": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "WorkerCommit",
+    "kind": "type",
+    "fields": [
+      "Binding",
+      "ExecutionOperation",
+      "Project",
+      "TaskID",
+      "WorkflowID",
+      "ExecutionID",
+      "AttemptID",
+      "ControlRevision",
+      "AuthorityRevision",
+      "ExpectedAttemptID",
+      "Workflow",
+      "Execution",
+      "Attempt",
+      "RetiredAttempt",
+      "Decisions",
+      "Operations",
+      "Events",
+      "Checkpoint"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Binding": 79,
+      "ExecutionOperation": 79,
+      "Project": 79,
+      "TaskID": 79,
+      "WorkflowID": 79,
+      "ExecutionID": 79,
+      "AttemptID": 79,
+      "ControlRevision": 79,
+      "AuthorityRevision": 79,
+      "ExpectedAttemptID": 79,
+      "Workflow": 79,
+      "Execution": 79,
+      "Attempt": 79,
+      "RetiredAttempt": 79,
+      "Decisions": 79,
+      "Operations": 79,
+      "Events": 79,
+      "Checkpoint": 80
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "WorkerCommitResult",
+    "kind": "type",
+    "fields": [
+      "ControlRevision",
+      "Checkpoint"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "ControlRevision": 79,
+      "Checkpoint": 80
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "Worker",
+    "kind": "type",
+    "fields": [
+      "CommitWorker"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "CommitWorker": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "Metadata",
+    "kind": "type",
+    "fields": [
+      "SaveCheckpoint",
+      "Heartbeat"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "SaveCheckpoint": 79,
+      "Heartbeat": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "WorkerMetadata",
+    "kind": "type",
+    "definition_successor": 79,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "commandInsertTx",
+    "kind": "type",
+    "fields": [
+      "LookupCommand",
+      "EnqueueCommand",
+      "AppendEvent"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "LookupCommand": 79,
+      "EnqueueCommand": 79,
+      "AppendEvent": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "commandTx",
+    "kind": "type",
+    "fields": [
+      "UpdateCommand"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "UpdateCommand": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "operationTx",
+    "kind": "type",
+    "fields": [
+      "PutOperation"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "PutOperation": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "graphTx",
+    "kind": "type",
+    "fields": [
+      "TaskGraphSnapshot"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "TaskGraphSnapshot": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "workflowTx",
+    "kind": "type",
+    "fields": [
+      "Workflow",
+      "Execution"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Workflow": 79,
+      "Execution": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "BatchTx",
+    "kind": "type",
+    "fields": [
+      "PutTask",
+      "PutTaskContract",
+      "PutTaskBatch",
+      "PutTaskDependency"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "PutTask": 79,
+      "PutTaskContract": 79,
+      "PutTaskBatch": 79,
+      "PutTaskDependency": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "ClaimTx",
+    "kind": "type",
+    "fields": [
+      "Query",
+      "OccupiedExecutions",
+      "UpdateNativeTaskCAS",
+      "PutWorkflowRun",
+      "PutExecution",
+      "PutStepAttempt"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Query": 79,
+      "OccupiedExecutions": 79,
+      "UpdateNativeTaskCAS": 79,
+      "PutWorkflowRun": 79,
+      "PutExecution": 79,
+      "PutStepAttempt": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "CandidateTx",
+    "kind": "type",
+    "fields": [
+      "Query",
+      "PutWorkflowRun",
+      "UpdateOperation"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Query": 79,
+      "PutWorkflowRun": 79,
+      "UpdateOperation": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "DispatchTx",
+    "kind": "type",
+    "fields": [
+      "UpdateProjectTaskAuthorityCAS"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "UpdateProjectTaskAuthorityCAS": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "PredecessorTx",
+    "kind": "type",
+    "fields": [
+      "PutTaskDependency",
+      "BumpOpenTaskVersionCAS",
+      "AdvanceTaskGraphRevision"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "PutTaskDependency": 79,
+      "BumpOpenTaskVersionCAS": 79,
+      "AdvanceTaskGraphRevision": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "DiscardIntentTx",
+    "kind": "type",
+    "fields": [
+      "Task",
+      "DeliveryCount"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Task": 79,
+      "DeliveryCount": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "DiscardPendingTx",
+    "kind": "type",
+    "fields": [
+      "UpdateOperation",
+      "UpdateCommand",
+      "AppendEvent"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "UpdateOperation": 79,
+      "UpdateCommand": 79,
+      "AppendEvent": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "DiscardTx",
+    "kind": "type",
+    "fields": [
+      "Query",
+      "DeliveryCount",
+      "UpdateNativeTaskCAS"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Query": 79,
+      "DeliveryCount": 79,
+      "UpdateNativeTaskCAS": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "DeliveryTx",
+    "kind": "type",
+    "fields": [
+      "Query",
+      "TaskContract",
+      "PRBindingsOnOtherTasks",
+      "PutTaskDelivery",
+      "UpdateNativeTaskCAS",
+      "AppendEvent"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Query": 79,
+      "TaskContract": 79,
+      "PRBindingsOnOtherTasks": 79,
+      "PutTaskDelivery": 79,
+      "UpdateNativeTaskCAS": 79,
+      "AppendEvent": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "CleanupProgressTx",
+    "kind": "type",
+    "fields": [
+      "Task"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Task": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "CleanupTx",
+    "kind": "type",
+    "fields": [
+      "Attempt",
+      "Task",
+      "NativeAuthority",
+      "UpdateDiscardedTaskCAS",
+      "AdvanceTaskGraphRevision",
+      "PutWorkflowRun",
+      "PutExecution",
+      "PutStepAttempt"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Attempt": 79,
+      "Task": 79,
+      "NativeAuthority": 79,
+      "UpdateDiscardedTaskCAS": 79,
+      "AdvanceTaskGraphRevision": 79,
+      "PutWorkflowRun": 79,
+      "PutExecution": 79,
+      "PutStepAttempt": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "Tasks",
+    "kind": "type",
+    "fields": [
+      "Query",
+      "TaskGraphSnapshot",
+      "NativeAuthority",
+      "TaskContract",
+      "Operation",
+      "WorkflowOwned",
+      "UpdateDiscardReceipt",
+      "TransactTaskBatch",
+      "TransactClaim",
+      "TransactCandidate",
+      "TransactDispatch",
+      "TransactPredecessors",
+      "TransactDiscardIntent",
+      "TransactDiscardPending",
+      "TransactDiscard",
+      "TransactDelivery",
+      "TransactCleanupProgress",
+      "TransactCleanup"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Query": 79,
+      "TaskGraphSnapshot": 79,
+      "NativeAuthority": 79,
+      "TaskContract": 79,
+      "Operation": 79,
+      "WorkflowOwned": 79,
+      "UpdateDiscardReceipt": 79,
+      "TransactTaskBatch": 79,
+      "TransactClaim": 79,
+      "TransactCandidate": 79,
+      "TransactDispatch": 79,
+      "TransactPredecessors": 79,
+      "TransactDiscardIntent": 79,
+      "TransactDiscardPending": 79,
+      "TransactDiscard": 79,
+      "TransactDelivery": 79,
+      "TransactCleanupProgress": 79,
+      "TransactCleanup": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "CommandStore",
+    "kind": "type",
+    "definition_successor": 79,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "CenterReader",
+    "kind": "type",
+    "fields": [
+      "Query",
+      "NativeAuthority",
+      "DatabaseVersion"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "Query": 79,
+      "NativeAuthority": 79,
+      "DatabaseVersion": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "Conversations",
+    "kind": "type",
+    "fields": [
+      "CommitConversation",
+      "ConversationCheckpoint",
+      "ConversationSourceCheckpoints",
+      "ConversationMapperSnapshot",
+      "ValidateConversationCheckpointFormat",
+      "ConversationCapabilityReports",
+      "SaveConversationCapabilityReport"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "CommitConversation": 79,
+      "ConversationCheckpoint": 79,
+      "ConversationSourceCheckpoints": 79,
+      "ConversationMapperSnapshot": 79,
+      "ValidateConversationCheckpointFormat": 79,
+      "ConversationCapabilityReports": 79,
+      "SaveConversationCapabilityReport": 79
+    }
+  },
+  {
+    "file": "internal/steerline/persistence/ports.go",
+    "name": "Projects",
+    "kind": "type",
+    "fields": [
+      "InitializeProject"
+    ],
+    "definition_successor": 79,
+    "field_successors": {
+      "InitializeProject": 79
+    }
+  },
+  {
+    "file": "internal/steerline/task/batch.go",
+    "name": "Snapshot",
+    "kind": "type",
+    "fields": [
+      "Authority",
+      "DatabaseID",
+      "DatabaseRevision",
+      "SampledAt",
+      "Tasks",
+      "ByID",
+      "RepositoryTaskIDs",
+      "ContractIDs",
+      "Edges",
+      "Deliveries",
+      "ExecutionSlotBusy"
+    ],
+    "definition_successor": 74,
+    "field_successors": {
+      "Authority": 74,
+      "DatabaseID": 74,
+      "DatabaseRevision": 74,
+      "SampledAt": 74,
+      "Tasks": 74,
+      "ByID": 74,
+      "RepositoryTaskIDs": 74,
+      "ContractIDs": 74,
+      "Edges": 74,
+      "Deliveries": 74,
+      "ExecutionSlotBusy": 74
+    }
+  },
+  {
+    "file": "internal/steerline/task/command_plan.go",
+    "name": "CompleteDelivery",
+    "kind": "function",
+    "definition_successor": 74,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/task/delivery.go",
+    "name": "ValidateDelivery",
+    "kind": "function",
+    "definition_successor": 74,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/task/delivery_gate.go",
+    "name": "DeliveryGate",
+    "kind": "type",
+    "fields": [
+      "WorkflowVersion",
+      "WorkflowTaskID",
+      "SelectedExecutionID",
+      "ExecutionID",
+      "ExecutionWorkflowID",
+      "WorkflowRunID",
+      "PRURL",
+      "SessionID",
+      "WorkspaceBranch",
+      "Phase"
+    ],
+    "definition_successor": 74,
+    "field_successors": {
+      "WorkflowVersion": 74,
+      "WorkflowTaskID": 74,
+      "SelectedExecutionID": 74,
+      "ExecutionID": 74,
+      "ExecutionWorkflowID": 74,
+      "WorkflowRunID": 74,
+      "PRURL": 74,
+      "SessionID": 74,
+      "WorkspaceBranch": 74,
+      "Phase": 74
+    }
+  },
+  {
+    "file": "internal/steerline/task/delivery_gate.go",
+    "name": "DeliveryPR",
+    "kind": "function",
+    "definition_successor": 74,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/task/errors.go",
+    "name": "newError",
+    "kind": "function",
+    "definition_successor": 74,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/task/model.go",
+    "name": "TaskDeliveryRecord",
+    "kind": "type",
+    "fields": [
+      "ProjectIdentity",
+      "TaskID",
+      "SelectedWorkflowRunID",
+      "PRInstance",
+      "PRRepository",
+      "PRNumber",
+      "PRURL",
+      "MergeCommit",
+      "MergedAt",
+      "RecordedAt",
+      "Evidence"
+    ],
+    "definition_successor": 74,
+    "field_successors": {
+      "ProjectIdentity": 74,
+      "TaskID": 74,
+      "SelectedWorkflowRunID": 74,
+      "PRInstance": 74,
+      "PRRepository": 74,
+      "PRNumber": 74,
+      "PRURL": 74,
+      "MergeCommit": 74,
+      "MergedAt": 74,
+      "RecordedAt": 74,
+      "Evidence": 74
+    }
+  },
+  {
+    "file": "internal/steerline/task/model.go",
+    "name": "TaskDeliveryEvidence",
+    "kind": "type",
+    "fields": [
+      "PRInstance",
+      "URL",
+      "Repository",
+      "PRNumber",
+      "BaseBranch",
+      "State",
+      "Merged",
+      "MergedAt",
+      "MergeCommit",
+      "ExistingAcceptance"
+    ],
+    "definition_successor": 74,
+    "field_successors": {
+      "PRInstance": 74,
+      "URL": 74,
+      "Repository": 74,
+      "PRNumber": 74,
+      "BaseBranch": 74,
+      "State": 74,
+      "Merged": 74,
+      "MergedAt": 74,
+      "MergeCommit": 74,
+      "ExistingAcceptance": 74
+    }
+  },
+  {
+    "file": "internal/steerline/task/model.go",
+    "name": "ProjectTaskAuthority",
+    "kind": "type",
+    "fields": [
+      "ProjectIdentity",
+      "Authority",
+      "AuthorityVersion",
+      "GraphRevision",
+      "Repository",
+      "Remote",
+      "Branch",
+      "DispatchMode",
+      "DispatchPaused",
+      "CreatedAt",
+      "UpdatedAt"
+    ],
+    "definition_successor": 74,
+    "field_successors": {
+      "ProjectIdentity": 74,
+      "Authority": 74,
+      "AuthorityVersion": 74,
+      "GraphRevision": 74,
+      "Repository": 74,
+      "Remote": 74,
+      "Branch": 74,
+      "DispatchMode": 74,
+      "DispatchPaused": 74,
+      "CreatedAt": 74,
+      "UpdatedAt": 74
+    }
+  },
+  {
+    "file": "internal/steerline/task/predecessors.go",
+    "name": "TaskPredecessorAddInput",
+    "kind": "type",
+    "fields": [
+      "TaskID",
+      "PredecessorIDs",
+      "RequestID",
+      "ExpectedTaskVersion",
+      "ExpectedGraphRevision",
+      "WorkflowRunID",
+      "ConfirmedProcessStopped",
+      "Reason",
+      "RequestedBy"
+    ],
+    "definition_successor": 74,
+    "field_successors": {
+      "TaskID": 74,
+      "PredecessorIDs": 74,
+      "RequestID": 74,
+      "ExpectedTaskVersion": 74,
+      "ExpectedGraphRevision": 74,
+      "WorkflowRunID": 74,
+      "ConfirmedProcessStopped": 74,
+      "Reason": 74,
+      "RequestedBy": 74
+    }
+  },
+  {
+    "file": "internal/steerline/task/predecessors.go",
+    "name": "TaskPredecessorAddReceipt",
+    "kind": "type",
+    "fields": [
+      "RequestID",
+      "TaskID",
+      "PredecessorIDs",
+      "TaskVersion",
+      "GraphRevision",
+      "AbandonedRunID",
+      "Status"
+    ],
+    "definition_successor": 74,
+    "field_successors": {
+      "RequestID": 74,
+      "TaskID": 74,
+      "PredecessorIDs": 74,
+      "TaskVersion": 74,
+      "GraphRevision": 74,
+      "AbandonedRunID": 74,
+      "Status": 74
+    }
+  },
+  {
+    "file": "internal/steerline/task/readiness.go",
+    "name": "StartupBlockers",
+    "kind": "function",
+    "definition_successor": 74,
+    "field_successors": {}
+  },
+  {
+    "file": "internal/steerline/task/receipts.go",
+    "name": "TaskClaimReceipt",
+    "kind": "type",
+    "fields": [
+      "RequestID",
+      "TaskID",
+      "TaskVersion",
+      "WorkflowRunID",
+      "ExecutionID",
+      "AttemptID",
+      "BaseCommit",
+      "Status",
+      "StartTaskApplied"
+    ],
+    "definition_successor": 74,
+    "field_successors": {
+      "RequestID": 74,
+      "TaskID": 74,
+      "TaskVersion": 74,
+      "WorkflowRunID": 74,
+      "ExecutionID": 74,
+      "AttemptID": 74,
+      "BaseCommit": 74,
+      "Status": 74,
+      "StartTaskApplied": 74
+    }
+  },
+  {
+    "file": "internal/steerline/task/receipts.go",
+    "name": "TaskDeliveryReceipt",
+    "kind": "type",
+    "fields": [
+      "TaskID",
+      "TaskVersion",
+      "WorkflowRunID",
+      "GraphRevision",
+      "Status",
+      "Delivery"
+    ],
+    "definition_successor": 74,
+    "field_successors": {
+      "TaskID": 74,
+      "TaskVersion": 74,
+      "WorkflowRunID": 74,
+      "GraphRevision": 74,
+      "Status": 74,
+      "Delivery": 74
+    }
+  }
+]

@@ -6,7 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
@@ -15,7 +16,7 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 		return err
 	}
 	workflow, execution := s.workflowRecords(run)
-	if run == nil || workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion {
+	if run == nil || workflow == nil || execution == nil || workflow.WorkflowVersion != executionmodel.Version {
 		return errors.New("finished worker lacks its fixed execution")
 	}
 	if s.candidateBusinessClosed(run) {
@@ -71,7 +72,7 @@ func (s *Service) finishWorkerFlowFor(run *Run, workerErr error) error {
 			if s.store.Err() != nil {
 				return s.store.Err()
 			}
-			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "preparation_output_unverified", Confidence: "unverified", Source: "host.worker-output", Detail: clip(err.Error(), 1000), Turn: turn.TurnID})
+			return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "preparation_output_unverified", Confidence: "unverified", Source: "host.worker-output", Detail: clip(err.Error(), 1000), Turn: turn.TurnID})
 		}
 		return s.finishWorkerPreparation(context.Background(), run, execution, turn, turn.Outcome)
 	}

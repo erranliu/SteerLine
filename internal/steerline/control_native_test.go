@@ -8,12 +8,14 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 func TestControlRequestPublicationIsImmutableAcrossClientProcesses(t *testing.T) {
 	runDir := t.TempDir()
 	created := now()
-	request := ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: filepath.Join(t.TempDir(), ".git"), InstanceID: newID(), Action: "pause_dispatch", RequestedBy: "process-race", CreatedAt: created, ExpiresAt: created.Add(time.Minute), ExpectedControlRevision: 1}
+	request := productapi.ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: filepath.Join(t.TempDir(), ".git"), InstanceID: newID(), Action: "pause_dispatch", RequestedBy: "process-race", CreatedAt: created, ExpiresAt: created.Add(time.Minute), ExpectedControlRevision: 1}
 	requestPath := filepath.Join(t.TempDir(), "request.json")
 	data, err := json.Marshal(request)
 	if err != nil {
@@ -73,7 +75,7 @@ func publishControlRequestFromFileForTest(runDir, path string) error {
 }
 
 func TestNativeControlPayloadRejectsUnknownFields(t *testing.T) {
-	for _, request := range []ControlRequest{
+	for _, request := range []productapi.ControlRequest{
 		{Action: "start_task", Payload: json.RawMessage(`{"task_id":"1","extra":true}`)},
 		{Action: "set_dispatch_mode", Payload: json.RawMessage(`{"mode":"manual","extra":true}`)},
 		{Action: "pause_dispatch", Payload: json.RawMessage(`{"unexpected":true}`)},
@@ -82,10 +84,10 @@ func TestNativeControlPayloadRejectsUnknownFields(t *testing.T) {
 			t.Fatalf("control payload with unknown fields was accepted: %+v", request)
 		}
 	}
-	if _, err := decodeControlPayload(ControlRequest{Action: "pause_dispatch", Payload: json.RawMessage(`{}`)}); err != nil {
+	if _, err := decodeControlPayload(productapi.ControlRequest{Action: "pause_dispatch", Payload: json.RawMessage(`{}`)}); err != nil {
 		t.Fatalf("empty object should be a valid payload for pause_dispatch: %v", err)
 	}
-	if _, err := decodeControlPayload(ControlRequest{Action: "set_dispatch_mode", Payload: json.RawMessage(`{"mode":"auto"}`)}); err != nil {
+	if _, err := decodeControlPayload(productapi.ControlRequest{Action: "set_dispatch_mode", Payload: json.RawMessage(`{"mode":"auto"}`)}); err != nil {
 		t.Fatalf("valid native dispatch mode was rejected: %v", err)
 	}
 }

@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 // Candidate mutations have durable per-request commands. The project-wide
 // control checkpoint is never held while their worker starts or stops.
-func (s *Service) processCandidateControl(ctx context.Context, req ControlRequest, payload ControlPayload, digest string) error {
+func (s *Service) processCandidateControl(ctx context.Context, req productapi.ControlRequest, payload productapi.ControlPayload, digest string) error {
 	if s.controlSeen == nil {
 		s.controlSeen = map[string]string{}
 	}
@@ -70,7 +72,7 @@ func (s *Service) processCandidateControl(ctx context.Context, req ControlReques
 
 // Recover a committed candidate command before checking a new request's
 // expiry/instance/revision. The full immutable inbox digest prevents retargeting.
-func (s *Service) replayCandidateControl(ctx context.Context, req ControlRequest, digest string) (bool, error) {
+func (s *Service) replayCandidateControl(ctx context.Context, req productapi.ControlRequest, digest string) (bool, error) {
 	if s.commandStore == nil {
 		return false, nil
 	}

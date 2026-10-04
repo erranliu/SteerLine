@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -21,9 +23,9 @@ type CandidateCommand struct {
 	TaskVersion, GraphRevision, CandidateVersion, DecisionVersion, RunRevision                     uint64
 }
 type CandidateReceipt struct {
-	Request *steerline.ControlRequest `json:"request,omitempty"`
-	Control *steerline.ControlReceipt `json:"control,omitempty"`
-	Command *contracts.CommandRecord  `json:"command,omitempty"`
+	Request *productapi.ControlRequest  `json:"request,omitempty"`
+	Control *productapi.ControlReceipt  `json:"control,omitempty"`
+	Command *storageports.CommandRecord `json:"command,omitempty"`
 }
 
 func (c *Client) Candidate(ctx context.Context, helper string, in CandidateCommand) (CandidateReceipt, error) {
@@ -157,7 +159,7 @@ func MainCandidate(args []string) error {
 	if in.Action != "start_candidate" && in.Action != "abandon_candidate" && in.Action != "start_task" {
 		return fmt.Errorf("unsupported candidate control")
 	}
-	payload := steerline.ControlPayload{TaskID: in.TaskID, WorkflowRunID: in.RunID, ExpectedTaskVersion: in.TaskVersion, ExpectedGraphRevision: in.GraphRevision, ExpectedCandidateVersion: in.CandidateVersion, Reason: in.Note}
+	payload := productapi.ControlPayload{TaskID: in.TaskID, WorkflowRunID: in.RunID, ExpectedTaskVersion: in.TaskVersion, ExpectedGraphRevision: in.GraphRevision, ExpectedCandidateVersion: in.CandidateVersion, Reason: in.Note}
 	if in.Action != "abandon_candidate" {
 		_, profile, err := c.ResolveExecutionProfile(in.ProfileID, "")
 		if err != nil {

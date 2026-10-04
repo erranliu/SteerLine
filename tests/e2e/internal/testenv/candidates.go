@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"os"
 	"path/filepath"
 	"strings"
@@ -182,7 +183,7 @@ func (p *Project) Feedback(c Candidate, marker string) driver.CandidateCommand {
 }
 func (p *Project) FeedbackWithNote(c Candidate, marker, extra string) driver.CandidateCommand {
 	snap := p.CandidateSnapshot(c)
-	var decision *contracts.DecisionState
+	var decision *executionmodel.DecisionState
 	var revision uint64
 	if snap.Runtime != nil {
 		for _, r := range snap.Runtime.Runs {
@@ -205,7 +206,7 @@ func (p *Project) FeedbackWithNote(c Candidate, marker, extra string) driver.Can
 	}
 	return in
 }
-func (p *Project) CandidatePR(c Candidate) contracts.PRInfo {
+func (p *Project) CandidatePR(c Candidate) executionmodel.PRInfo {
 	snap := p.CandidateSnapshot(c)
 	info, err := p.githubPR(snap)
 	p.Scenario.Must(err)
@@ -216,7 +217,7 @@ func (p *Project) CandidatePR(c Candidate) contracts.PRInfo {
 	p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, c.RunID+"-pr.json"), info))
 	return info
 }
-func (p *Project) MergeCandidate(c Candidate) contracts.PRInfo {
+func (p *Project) MergeCandidate(c Candidate) executionmodel.PRInfo {
 	info := p.CandidatePR(c)
 	if info.State != "open" {
 		p.Scenario.t.Fatal("operator needs an owned open PR")
@@ -290,7 +291,7 @@ func CandidateAcceptance(s *Scenario) {
 	aw := p.WaitCandidate(a, "waiting_decision")
 	bw := p.WaitCandidate(b, "waiting_decision")
 	ae, be := aw.Domain.Executions[0], bw.Domain.Executions[0]
-	for _, e := range []contracts.ExecutionRecord{ae, be} {
+	for _, e := range []executionmodel.ExecutionRecord{ae, be} {
 		if e.Backend == "orca" {
 			s.Must(evidence.OrcaReadiness(e))
 		}

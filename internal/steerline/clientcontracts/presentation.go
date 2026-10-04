@@ -1,23 +1,22 @@
 package clientcontracts
 
 import (
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-// ProjectPresentation is a read-only description of accepted configuration.
-// It never carries implementation payloads, factories, runtime or services.
 type ProjectPresentation struct {
 	ServiceInstruction                                                             string
 	NativeWorkflow                                                                 bool
 	ConfigDigest, TaskAuthority, WorkflowProtocol, ShutdownGrace, DefaultProfileID string
 	Profiles                                                                       []ExecutionProfileSummary
 }
+
 type ExecutionProfileSummary struct {
 	ID, Name, Host, Agent, Digest, AcceptedConfigVersion, UnavailableReason string
-	ExecutionPolicy                                                         execution.ExecutionPolicy
-	PublicationPolicy                                                       execution.PublicationPolicy
-	Publication                                                             contracts.PublicationSettings
+	ExecutionPolicy                                                         executionbackend.ExecutionPolicy
+	PublicationPolicy                                                       executionbackend.PublicationPolicy
+	Publication                                                             executionmodel.PublicationSettings
 	ImplementationDisplay                                                   []string
 }
 
@@ -27,7 +26,7 @@ func CloneProjectRef(ref ProjectRef) ProjectRef {
 		p := &ref.Presentation.Profiles[i]
 		p.ImplementationDisplay = append([]string(nil), p.ImplementationDisplay...)
 		p.Publication.AuthenticationRefs = append([]string(nil), p.Publication.AuthenticationRefs...)
-		for _, command := range []*contracts.Command{&p.Publication.Git, &p.Publication.Provider.Query, &p.Publication.Provider.Close} {
+		for _, command := range []*executionbackend.Command{&p.Publication.Git, &p.Publication.Provider.Query, &p.Publication.Provider.Close} {
 			command.Args = append([]string(nil), command.Args...)
 		}
 	}

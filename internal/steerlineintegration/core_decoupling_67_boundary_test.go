@@ -13,6 +13,37 @@ import (
 )
 
 func TestCD67CoreBoundary(t *testing.T) {
+	t.Run("pure_ownership_all_tags_production_and_tests", func(t *testing.T) {
+		for _, owner := range []string{"task/model", "execution/model", "execution/backend", "product/api", "storage/ports"} {
+			t.Run(owner, func(t *testing.T) {
+				for _, dependency := range []string{"database/sql", "github.com/erranliu/SteerLine/internal/steerline/contracts", "github.com/erranliu/SteerLine/internal/steerline/query", "github.com/erranliu/SteerLine/internal/steerline/sqlite", "github.com/erranliu/SteerLine/internal/steerline/codexworker", "github.com/erranliu/SteerLine/internal/steerlineapp", "github.com/erranliu/SteerLine/internal/helper", "example.org/implementation"} {
+					for _, filename := range []string{"edge_plan9.go", "edge_linux_test.go"} {
+						root := t.TempDir()
+						dir := filepath.Join(root, "internal", owner)
+						require(t, os.MkdirAll(dir, 0700))
+						require(t, os.WriteFile(filepath.Join(dir, filename), []byte("//go:build never_enabled\n\npackage fixture\nimport _ \""+dependency+"\"\n"), 0600))
+						report, err := coreboundary.ScanSource(root)
+						require(t, err)
+						if !strings.Contains(strings.Join(report.Violations, "\n"), "pure ownership dependency") {
+							t.Fatalf("%s fixture escaped %s: %+v", owner, dependency, report)
+						}
+					}
+				}
+			})
+		}
+		// A model importing another pure domain is still forbidden.
+		for _, edge := range [][2]string{{"task/model", "execution/backend"}, {"execution/model", "task/model"}, {"execution/backend", "execution/model"}, {"product/api", "execution/backend"}, {"storage/ports", "steerline/persistence"}} {
+			root := t.TempDir()
+			dir := filepath.Join(root, "internal", edge[0])
+			require(t, os.MkdirAll(dir, 0700))
+			require(t, os.WriteFile(filepath.Join(dir, "edge_test.go"), []byte("package fixture\nimport _ \"github.com/erranliu/SteerLine/internal/"+edge[1]+"\"\n"), 0600))
+			report, err := coreboundary.ScanSource(root)
+			require(t, err)
+			if len(report.Violations) == 0 {
+				t.Fatalf("cross-domain pure edge escaped: %v", edge)
+			}
+		}
+	})
 	t.Run("negative_source_fixtures", func(t *testing.T) {
 		for _, fixture := range []struct {
 			name, filename, source, helper, helperPath, implementation string
@@ -98,6 +129,11 @@ func TestCD67CoreBoundary(t *testing.T) {
 		raw, err := json.Marshal(report)
 		require(t, err)
 		t.Log(string(raw))
+		for _, owner := range []string{"task/model", "execution/model", "execution/backend", "product/api", "storage/ports"} {
+			if report.PureFiles["github.com/erranliu/SteerLine/internal/"+owner] == 0 {
+				t.Fatalf("empty migrated owner scan: %s", owner)
+			}
+		}
 		if report.CoreFiles == 0 || report.ConsoleFiles == 0 || report.Dependencies["windows-console"] == 0 || report.Dependencies["linux-console"] == 0 || report.Dependencies["windows"] == 0 || report.Dependencies["linux"] == 0 {
 			t.Fatal("empty boundary scan")
 		}

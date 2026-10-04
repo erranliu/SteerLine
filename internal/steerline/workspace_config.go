@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
@@ -30,7 +30,7 @@ func (c *Config) prepareWorktreeRoot() error {
 	return nil
 }
 
-func planWorkspace(c Config, taskID, runID, base string) (*executionapi.WorkspaceIntent, error) {
+func planWorkspace(c Config, taskID, runID, base string) (*executionbackend.WorkspaceIntent, error) {
 	if !regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9._-]*$`).MatchString(taskID) || strings.Contains(taskID, "..") {
 		return nil, errors.New("task ID cannot safely form a branch name")
 	}
@@ -40,7 +40,7 @@ func planWorkspace(c Config, taskID, runID, base string) (*executionapi.Workspac
 	if c.WorkspaceBranchPrefix == "" {
 		return nil, errors.New("execution directory did not provide a workspace branch prefix")
 	}
-	return &executionapi.WorkspaceIntent{Path: filepath.Join(c.WorktreeRoot, runID), Branch: c.WorkspaceBranchPrefix + "/" + taskID + "-" + runID[:12], BaseCommit: base}, nil
+	return &executionbackend.WorkspaceIntent{Path: filepath.Join(c.WorktreeRoot, runID), Branch: c.WorkspaceBranchPrefix + "/" + taskID + "-" + runID[:12], BaseCommit: base}, nil
 }
 
 func workspaceGit(c Config) workspace.Git {
@@ -48,14 +48,14 @@ func workspaceGit(c Config) workspace.Git {
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
-	start := func(cmd *exec.Cmd) (executionapi.StopHandle, error) {
+	start := func(cmd *exec.Cmd) (executionbackend.StopHandle, error) {
 		if c.ProcessHost == nil {
 			return nil, errors.New("managed process host is required for workspace Git")
 		}
 		return c.ProcessHost.StartManaged(cmd)
 	}
 	return workspace.Git{
-		Command: executionapi.LaunchCommand{Executable: c.Git.Executable, Args: append([]string(nil), c.Git.Args...)},
+		Command: executionbackend.LaunchCommand{Executable: c.Git.Executable, Args: append([]string(nil), c.Git.Args...)},
 		Timeout: timeout,
 		Start:   start,
 	}

@@ -5,46 +5,48 @@ import (
 	"errors"
 	"testing"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-type recoveryOnlyLifecycle struct{ executionapi.LifecyclePort }
+type recoveryOnlyLifecycle struct{ executionbackend.LifecyclePort }
 
-func (recoveryOnlyLifecycle) PolicyCapabilities() executionapi.LifecyclePolicyCapabilities {
-	return executionapi.LifecyclePolicyCapabilities{}
+func (recoveryOnlyLifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
+	return executionbackend.LifecyclePolicyCapabilities{}
 }
-func (recoveryOnlyLifecycle) VerifyManualRecovery(context.Context, executionapi.LifecycleSnapshot) (executionapi.LifecycleRecoveryEvidence, error) {
-	return executionapi.LifecycleRecoveryEvidence{SessionAvailable: true, ProcessAbsent: true}, nil
+
+func (recoveryOnlyLifecycle) VerifyManualRecovery(context.Context, executionbackend.LifecycleSnapshot) (executionbackend.LifecycleRecoveryEvidence, error) {
+	return executionbackend.LifecycleRecoveryEvidence{SessionAvailable: true, ProcessAbsent: true}, nil
 }
 
 type recoveryOnlyResolver struct{}
 
-func (recoveryOnlyResolver) ResolveLifecycle(executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {
+func (recoveryOnlyResolver) ResolveLifecycle(executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 	return recoveryOnlyLifecycle{}, nil
 }
 
 type inspectionLifecycle struct {
-	executionapi.LifecyclePort
-	want executionapi.ProcessIdentity
-	ref  executionapi.LifecycleSnapshot
+	executionbackend.LifecyclePort
+	want executionbackend.ProcessIdentity
+	ref  executionbackend.LifecycleSnapshot
 }
 
-func (p *inspectionLifecycle) VerifyManualRecovery(_ context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.LifecycleRecoveryEvidence, error) {
+func (p *inspectionLifecycle) VerifyManualRecovery(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleRecoveryEvidence, error) {
 	p.ref = snapshot.Clone()
 	if snapshot.Ref.External != p.want {
-		return executionapi.LifecycleRecoveryEvidence{}, ErrWorkerTurnStale
+		return executionbackend.LifecycleRecoveryEvidence{}, executionmodel.ErrTurnStale
 	}
-	return executionapi.LifecycleRecoveryEvidence{ManagedProcess: true, SessionAvailable: true}, nil
+	return executionbackend.LifecycleRecoveryEvidence{ManagedProcess: true, SessionAvailable: true}, nil
 }
 
-func (p *inspectionLifecycle) InspectLifecycleWorkspace(_ context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.WorkspaceInspection, error) {
+func (p *inspectionLifecycle) InspectLifecycleWorkspace(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.WorkspaceInspection, error) {
 	p.ref = snapshot.Clone()
-	return executionapi.WorkspaceInspection{Repository: snapshot.Session.ProjectID, Worktree: snapshot.Ref.WorkspacePath, Branch: snapshot.Ref.WorkspaceBranch, Base: snapshot.Ref.BaseCommit, Head: snapshot.Ref.BaseCommit, Dirty: snapshot.WorkspaceDirty}, nil
+	return executionbackend.WorkspaceInspection{Repository: snapshot.Session.ProjectID, Worktree: snapshot.Ref.WorkspacePath, Branch: snapshot.Ref.WorkspaceBranch, Base: snapshot.Ref.BaseCommit, Head: snapshot.Ref.BaseCommit, Dirty: snapshot.WorkspaceDirty}, nil
 }
 
 type inspectionResolver struct{ port *inspectionLifecycle }
 
-func (r inspectionResolver) ResolveLifecycle(executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {
+func (r inspectionResolver) ResolveLifecycle(executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 	return r.port, nil
 }
 
@@ -54,8 +56,8 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		execution := s.executionRecord(run)
 		workflow := s.workflowRecord(run)
 		execution.Generation, execution.ConfigurationDigest = "resources", workflow.ExecutionProfile.Digest
-		execution.Workspace = WorkspaceEvidence{Repository: s.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
-		identity := executionapi.ProcessIdentity{Kind: "fixture-process", PID: 42, Created: "original-generation"}
+		execution.Workspace = executionmodel.WorkspaceEvidence{Repository: s.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
+		identity := executionbackend.ProcessIdentity{Kind: "fixture-process", PID: 42, Created: "original-generation"}
 		execution.Process = &identity
 		execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 		s.refreshRun(run)
@@ -75,13 +77,13 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 	})
 	t.Run("delivery_commit_failure_never_acknowledges", testCD64InboxCommitBeforeAck)
 	t.Run("invalid_receipt_keeps_binding", func(t *testing.T) {
-		execution := ExecutionRecord{ProjectIdentity: "project", ExecutionID: "execution", CurrentAttemptID: "attempt", Generation: "generation", ConfigurationDigest: "config",
-			Target: executionapi.ExecutionTarget{ID: "target"}}
+		execution := executionmodel.ExecutionRecord{ProjectIdentity: "project", ExecutionID: "execution", CurrentAttemptID: "attempt", Generation: "generation", ConfigurationDigest: "config",
+			Target: executionbackend.ExecutionTarget{ID: "target"}}
 		before := recordFingerprint(execution)
 		target := execution.Target
 		target.WorktreeID = "uncommitted-worktree"
-		receipt := executionapi.LifecycleReceipt{Target: &target,
-			Implementation: []executionapi.ImplementationDataEnvelope{{ImplementationKey: "broken"}}}
+		receipt := executionbackend.LifecycleReceipt{Target: &target,
+			Implementation: []executionbackend.ImplementationDataEnvelope{{ImplementationKey: "broken"}}}
 		if err := mergeLifecycleExecutionReceipt(&execution, receipt); err == nil {
 			t.Fatal("damaged envelope was accepted")
 		}
@@ -95,8 +97,8 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		s.lifecycleResolver = recoveryOnlyResolver{}
 		execution := s.executionRecord(run)
 		execution.RecoveryRequired = true
-		s.domain.Operations = append(s.domain.Operations, OperationRecord{OperationID: newID(), Kind: string(executionapi.LifecycleAcknowledge), Status: "outcome_unknown",
-			IdempotencyKey: "worker-delivery-ack:another-execution:another-delivery", Request: mustJSON(executionapi.AcknowledgeInput{DeliveryID: "another-delivery"})})
+		s.domain.Operations = append(s.domain.Operations, executionmodel.OperationRecord{OperationID: newID(), Kind: string(executionbackend.LifecycleAcknowledge), Status: "outcome_unknown",
+			IdempotencyKey: "worker-delivery-ack:another-execution:another-delivery", Request: mustJSON(executionbackend.AcknowledgeInput{DeliveryID: "another-delivery"})})
 		if handled, err := s.resumeLifecycleWorkerFlow(context.Background(), nil, run); err != nil || !handled {
 			t.Fatalf("unrelated ack blocked original recovery: handled=%v err=%v", handled, err)
 		}
@@ -106,8 +108,8 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		execution := s.executionRecord(run)
 		workflow := s.workflowRecord(run)
 		execution.Generation, execution.ConfigurationDigest = "resources", workflow.ExecutionProfile.Digest
-		execution.Workspace = WorkspaceEvidence{Repository: s.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
-		input := executionapi.TurnInput{CommandID: newID(), Prompt: "original"}
+		execution.Workspace = executionmodel.WorkspaceEvidence{Repository: s.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
+		input := executionbackend.TurnInput{CommandID: newID(), Prompt: "original"}
 		key := "worker-session:" + execution.ExecutionID + ":" + input.CommandID
 		_, err := s.startWorkerOperation(run, "prepare_worker_session", key, &input)
 		require(t, err)
@@ -115,7 +117,7 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		require(t, err)
 		snapshot.Session.AttemptID = "replacement-attempt"
 		snapshot.Ref.AttemptID = snapshot.Session.AttemptID
-		request := lifecycleRequest(snapshot, *s.operationByKey(key), executionapi.LifecyclePrepareSession, executionapi.LifecycleInput{Turn: &input})
+		request := lifecycleRequest(snapshot, *s.operationByKey(key), executionbackend.LifecyclePrepareSession, executionbackend.LifecycleInput{Turn: &input})
 		if err := request.Validate(); err == nil {
 			t.Fatal("old intent was rebound to a replacement attempt")
 		}
@@ -128,8 +130,8 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		execution := s.executionRecord(run)
 		workflow := s.workflowRecord(run)
 		execution.Generation, execution.ConfigurationDigest = "resources", workflow.ExecutionProfile.Digest
-		execution.Workspace = WorkspaceEvidence{Repository: s.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
-		input := executionapi.TurnInput{CommandID: newID(), Prompt: "original"}
+		execution.Workspace = executionmodel.WorkspaceEvidence{Repository: s.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
+		input := executionbackend.TurnInput{CommandID: newID(), Prompt: "original"}
 		execution.PendingCommandID = input.CommandID
 		execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 		key := "worker-session:" + execution.ExecutionID + ":" + input.CommandID
@@ -137,11 +139,11 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		require(t, err)
 		snapshot, err := s.lifecycleSnapshot(run, workflow, execution, s.workflowAttempt(run, run.AttemptID), &input)
 		require(t, err)
-		request := lifecycleRequest(snapshot, *s.operationByKey(key), executionapi.LifecyclePrepareSession, executionapi.LifecycleInput{Turn: &input})
-		execution.Process = &executionapi.ProcessIdentity{Kind: "os", PID: 42, Created: "replacement"}
+		request := lifecycleRequest(snapshot, *s.operationByKey(key), executionbackend.LifecyclePrepareSession, executionbackend.LifecycleInput{Turn: &input})
+		execution.Process = &executionbackend.ProcessIdentity{Kind: "os", PID: 42, Created: "replacement"}
 		before := recordFingerprint(execution)
-		receipt := executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationConfirmed, State: executionapi.LifecycleStateFacts{SessionID: "late-session"}}
-		if _, proceed, err := s.applyAppServerSessionReceipt(run, request, receipt, nil); !errors.Is(err, ErrWorkerTurnStale) || proceed {
+		receipt := executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationConfirmed, State: executionbackend.LifecycleStateFacts{SessionID: "late-session"}}
+		if _, proceed, err := s.applyAppServerSessionReceipt(run, request, receipt, nil); !errors.Is(err, executionmodel.ErrTurnStale) || proceed {
 			t.Fatalf("late session advanced changed binding: proceed=%v err=%v", proceed, err)
 		}
 		if recordFingerprint(*s.executionRecord(run)) != before || s.operationByKey(key).Status != "in_flight" {
@@ -159,7 +161,7 @@ func testCD64InboxCommitBeforeAck(t *testing.T) {
 	// after a failed content/consumption transaction.
 	s.lifecycleResolver = nil
 	event := WorkerEvent{RunID: run.RunID, AttemptID: run.AttemptID, Source: "execution", SourceEventID: "message-original",
-		Fact:       executionapi.EventFact{Kind: executionapi.EventStatus, Source: "execution", SourceEventID: "message-original", LastMessage: "original content"},
+		Fact:       executionbackend.EventFact{Kind: executionbackend.EventStatus, Source: "execution", SourceEventID: "message-original", LastMessage: "original content"},
 		Activity:   ActivityEvent{Source: "execution", Kind: "execution", Status: "observed", Title: "Original message"},
 		DeliveryID: "delivery-original", DeliveryFinal: true, Persisted: make(chan error, 1)}
 	if err := s.eventWorkerFlowFor(run, event); err == nil {
@@ -174,7 +176,7 @@ func testCD64InboxCommitBeforeAck(t *testing.T) {
 	snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
 	require(t, err)
 	for _, operation := range snapshot.Operations {
-		if operation.Kind == string(executionapi.LifecycleAcknowledge) {
+		if operation.Kind == string(executionbackend.LifecycleAcknowledge) {
 			t.Fatal("failed message transaction issued an acknowledgement intent")
 		}
 	}

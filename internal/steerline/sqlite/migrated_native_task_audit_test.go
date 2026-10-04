@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/query"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestNativeAuditPaginationBoundsAndDatabaseIdentity(t *testing.T) {
@@ -57,10 +58,10 @@ func TestNativeAuditPageDecodesOnlyDirectPredecessors(t *testing.T) {
 	ctx := context.Background()
 	store, project, _ := nativeAuditStore(t)
 	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if err := tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "2", SuccessorID: "10"}); err != nil {
+		if err := tx.PutTaskDependency(taskmodel.TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "2", SuccessorID: "10"}); err != nil {
 			return err
 		}
-		return tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "10", SuccessorID: "99"})
+		return tx.PutTaskDependency(taskmodel.TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "10", SuccessorID: "99"})
 	}))
 	_, err := store.db.ExecContext(ctx, `UPDATE tasks SET payload='invalid JSON' WHERE project_identity=? AND task_id='2'`, project)
 	require(t, err)
@@ -76,7 +77,7 @@ func TestNativeAuditDependencyCycleRollsBackAndEdgesAreImmutable(t *testing.T) {
 	s, project, _ := nativeAuditStore(t)
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		for _, edge := range [][2]string{{"2", "10"}, {"10", "99"}, {"99", "2"}} {
-			if err := tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: project, PredecessorID: edge[0], SuccessorID: edge[1]}); err != nil {
+			if err := tx.PutTaskDependency(taskmodel.TaskDependencyRecord{ProjectIdentity: project, PredecessorID: edge[0], SuccessorID: edge[1]}); err != nil {
 				return err
 			}
 		}
@@ -91,7 +92,7 @@ func TestNativeAuditDependencyCycleRollsBackAndEdgesAreImmutable(t *testing.T) {
 		t.Fatal("failed dependency transaction left partial edges")
 	}
 	require(t, s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		return tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "2", SuccessorID: "10"})
+		return tx.PutTaskDependency(taskmodel.TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "2", SuccessorID: "10"})
 	}))
 	for _, query := range []string{`DELETE FROM task_dependencies`, `UPDATE task_dependencies SET successor_id='99'`} {
 		if _, err = s.db.Exec(query); err == nil {

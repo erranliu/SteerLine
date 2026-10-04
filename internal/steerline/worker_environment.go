@@ -6,8 +6,9 @@ import (
 	"errors"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 func (s *Service) environmentTurn(run *Run) string {
@@ -21,7 +22,7 @@ func (s *Service) environmentTurn(run *Run) string {
 	return execution.Environment.Preparation.TurnID
 }
 
-func (s *Service) blockWorkerEnvironment(run *Run, fact contracts.HostFact) error {
+func (s *Service) blockWorkerEnvironment(run *Run, fact executionbackend.HostFact) error {
 	if s.candidateBusinessClosed(run) {
 		return nil
 	}
@@ -42,7 +43,7 @@ func (s *Service) blockWorkerEnvironment(run *Run, fact contracts.HostFact) erro
 		env.Preparation.Invalidated = true
 	}
 	if env.Blocker == nil || env.Blocker.TurnID != turnID || env.Blocker.Fact.Reason != fact.Reason || env.Blocker.Fact.Source != fact.Source {
-		env.Blocker = &WorkerHostBlocker{ID: newID(), Version: 1, Fact: fact, TurnID: turnID, ObservedAt: now()}
+		env.Blocker = &executionmodel.WorkerHostBlocker{ID: newID(), Version: 1, Fact: fact, TurnID: turnID, ObservedAt: now()}
 	} else if env.Blocker.Fact != fact {
 		env.Blocker.Fact, env.Blocker.ObservedAt = fact, now()
 		env.Blocker.Version++
@@ -79,10 +80,10 @@ func (s *Service) rejectUnsentBlockedAnswer(run *Run) error {
 		}
 	}
 	for _, operation := range s.domain.Operations {
-		if operation.Kind != string(executionapi.LifecycleCreateResource) || operation.LifecycleIdentity == nil || operation.LifecycleIdentity.ExecutionID != e.ExecutionID || operation.LifecycleIdentity.Ref.AttemptID != run.AttemptID {
+		if operation.Kind != string(executionbackend.LifecycleCreateResource) || operation.LifecycleIdentity == nil || operation.LifecycleIdentity.ExecutionID != e.ExecutionID || operation.LifecycleIdentity.Ref.AttemptID != run.AttemptID {
 			continue
 		}
-		var resource executionapi.ResourceIntent
+		var resource executionbackend.ResourceIntent
 		if json.Unmarshal(operation.Request, &resource) == nil && resource.TurnID == command.CommandID {
 			return s.commitWorker(run)
 		}
@@ -146,12 +147,12 @@ func (s *Service) observeWorkerEnvironment(ctx context.Context, run *Run) error 
 		}
 	}
 	if !env.Preparation.Verified && !now().Before(env.Preparation.Deadline) {
-		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "preparation_unverified", Confidence: "unverified", Source: "preparation.deadline", Turn: env.Preparation.TurnID})
+		return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "preparation_unverified", Confidence: "unverified", Source: "preparation.deadline", Turn: env.Preparation.TurnID})
 	}
 	if turn, turnErr := s.currentHostTurn(run); turnErr != nil {
 		return turnErr
 	} else if turn != nil && turn.Purpose == "business" && !turn.Settled && !turn.HasDoneMessage && execution.CurrentTurnID != turn.TurnID && !now().Before(turn.Deadline) {
-		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "business_start_unverified", Confidence: "unverified", Source: "dispatch.intent.deadline", Turn: turn.TurnID})
+		return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "business_start_unverified", Confidence: "unverified", Source: "dispatch.intent.deadline", Turn: turn.TurnID})
 	}
 	return nil
 }
@@ -180,7 +181,7 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *Run) error 
 		return nil
 	}
 	if execution.RecoveryRequired {
-		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "service_recovery_required", Confidence: "confirmed", Source: "service.recovery", Detail: "原准备状态已保留；重新检查后才允许继续派发。"})
+		return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "service_recovery_required", Confidence: "confirmed", Source: "service.recovery", Detail: "原准备状态已保留；重新检查后才允许继续派发。"})
 	}
 	if env.Preparation.Verified && !env.Preparation.Invalidated {
 		env.Ready = true
@@ -220,7 +221,7 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *Run) error 
 			if ctx.Err() != nil {
 				return nil
 			}
-			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "resource_preparation_unverified", Confidence: "unverified", Source: "host.resource-operation", Detail: clip(err.Error(), 1000)})
+			return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "resource_preparation_unverified", Confidence: "unverified", Source: "host.resource-operation", Detail: clip(err.Error(), 1000)})
 		}
 		if execution.Workspace.Worktree == "" || execution.Process == nil || run.Decision != nil {
 			return nil
@@ -244,13 +245,13 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *Run) error 
 		}
 		observation, err := host.InspectAgentInput(prepareCtx, *execution.Process)
 		if err != nil {
-			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "agent_input_unverified", Confidence: "unverified", Source: "host.input-qualification", Detail: clip(err.Error(), 500)})
+			return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "agent_input_unverified", Confidence: "unverified", Source: "host.input-qualification", Detail: clip(err.Error(), 500)})
 		}
 		if !observation.Ready {
 			return s.blockWorkerEnvironment(run, observation.Fact)
 		}
 	}
-	identity := executionapi.ProbeIdentity{Execution: execution.ExecutionID, Turn: p.TurnID, Nonce: p.Nonce, ProfileDigest: env.ProfileDigest, Runtime: execution.Process.RuntimeID, Terminal: execution.Process.Terminal, Incarnation: execution.Process.Incarnation, Worktree: execution.Workspace.Worktree}
+	identity := executionbackend.ProbeIdentity{Execution: execution.ExecutionID, Turn: p.TurnID, Nonce: p.Nonce, ProfileDigest: env.ProfileDigest, Runtime: execution.Process.RuntimeID, Terminal: execution.Process.Terminal, Incarnation: execution.Process.Incarnation, Worktree: execution.Workspace.Worktree}
 	host, lifecycle, _, _, err := s.hostEnvironmentForRun(run)
 	if err != nil {
 		return err
@@ -258,7 +259,7 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *Run) error 
 	if p.Command == "" {
 		plan, planErr := host.PrepareProbe(identity)
 		if planErr != nil {
-			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "probe_preparation_failed", Confidence: "confirmed", Source: "readiness.files", Detail: planErr.Error()})
+			return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "probe_preparation_failed", Confidence: "confirmed", Source: "readiness.files", Detail: planErr.Error()})
 		}
 		p.Probe, p.Command, p.InputDigest, p.ScriptDigest = identity, plan.Command, plan.InputDigest, plan.ScriptDigest
 		if err = s.commitWorker(run); err != nil {
@@ -266,18 +267,18 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *Run) error 
 		}
 	}
 	if p.Probe != identity {
-		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "identity_mismatch", Confidence: "confirmed", Source: "readiness.probe.identity"})
+		return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "identity_mismatch", Confidence: "confirmed", Source: "readiness.probe.identity"})
 	}
-	if err = s.executeHostAction(prepareCtx, run, lifecycle, executionapi.HostActionInput{Kind: executionapi.HostPrepareProbeFiles, Probe: &identity}); err != nil {
+	if err = s.executeHostAction(prepareCtx, run, lifecycle, executionbackend.HostActionInput{Kind: executionbackend.HostPrepareProbeFiles, Probe: &identity}); err != nil {
 		if errors.Is(err, errLifecycleEffectPending) {
 			return nil
 		}
 		if ctx.Err() != nil {
 			return nil
 		}
-		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "probe_preparation_failed", Confidence: "confirmed", Source: "readiness.files", Detail: err.Error()})
+		return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "probe_preparation_failed", Confidence: "confirmed", Source: "readiness.files", Detail: err.Error()})
 	}
-	plan := contracts.ProbePlan{Command: p.Command, InputDigest: p.InputDigest, ScriptDigest: p.ScriptDigest}
+	plan := executionbackend.ProbePlan{Command: p.Command, InputDigest: p.InputDigest, ScriptDigest: p.ScriptDigest}
 	prompt := host.ProbePrompt(plan, p.Nonce, p.ScriptDigest)
 	if err = s.startWorkerFlowTurn(prepareCtx, run, prompt, p.TurnID); err != nil {
 		if ctx.Err() != nil {
@@ -286,7 +287,7 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *Run) error 
 		if env.Blocker != nil {
 			return nil
 		}
-		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "preparation_dispatch_unverified", Confidence: "unverified", Source: "host.operation-receipt", Detail: clip(err.Error(), 1000)})
+		return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "preparation_dispatch_unverified", Confidence: "unverified", Source: "host.operation-receipt", Detail: clip(err.Error(), 1000)})
 	}
 	return s.commitWorker(run)
 }
@@ -301,7 +302,7 @@ func (s *Service) reconcileEnvironmentBusinessIntent(ctx context.Context, run *R
 		return errors.New("saved business input lost its original Command")
 	}
 	operation := s.operationByKey("worker-input-value:" + fixed.execution.ExecutionID + ":" + commandID)
-	var input executionapi.TurnInput
+	var input executionbackend.TurnInput
 	if operation == nil || operation.Kind != "worker_input_value" || (operation.Status != "confirmed" && operation.Status != "in_flight") || operation.LifecycleIdentity == nil || operation.LifecycleIdentity.ExecutionID != run.ExecutionID || operation.LifecycleIdentity.Ref.AttemptID != run.AttemptID || operation.LifecycleIdentity.ConfigurationDigest != fixed.execution.ConfigurationDigest || operation.LifecycleIdentity.ResourceGeneration != fixed.execution.Generation || operation.PayloadDigest != operationDigest(operation.Request) || json.Unmarshal(operation.Request, &input) != nil || input.CommandID != commandID || input.Prompt == "" {
 		return errors.New("saved business input is invalid or belongs to another original execution")
 	}
@@ -316,8 +317,8 @@ func (s *Service) reconcileEnvironmentBusinessIntent(ctx context.Context, run *R
 			externalIntent = true
 			break
 		}
-		if candidate.Kind == string(executionapi.LifecycleCreateResource) {
-			var resource executionapi.ResourceIntent
+		if candidate.Kind == string(executionbackend.LifecycleCreateResource) {
+			var resource executionbackend.ResourceIntent
 			if json.Unmarshal(candidate.Request, &resource) == nil && resource.TurnID == commandID {
 				externalIntent = true
 				break
@@ -334,7 +335,7 @@ func (s *Service) reconcileEnvironmentBusinessIntent(ctx context.Context, run *R
 	return s.startWorkerLifecycle(ctx, run, lifecycle, fixed, input.CommandID, input.Prompt)
 }
 
-func (s *Service) finishWorkerPreparation(ctx context.Context, run *Run, execution *ExecutionRecord, turn *contracts.HostTurnFacts, outcome string) error {
+func (s *Service) finishWorkerPreparation(ctx context.Context, run *Run, execution *executionmodel.ExecutionRecord, turn *executionbackend.HostTurnFacts, outcome string) error {
 	p := execution.Environment.Preparation
 	if turn.TurnID != p.TurnID {
 		return nil
@@ -346,7 +347,7 @@ func (s *Service) finishWorkerPreparation(ctx context.Context, run *Run, executi
 		execution.PendingCommandID = ""
 	}
 	if outcome != "succeeded" {
-		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "preparation_failed", Confidence: "confirmed", Source: "host.operation-settlement", Turn: turn.TurnID})
+		return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "preparation_failed", Confidence: "confirmed", Source: "host.operation-settlement", Turn: turn.TurnID})
 	}
 	if p.Receipt == nil {
 		host, _, _, _, hostErr := s.hostEnvironmentForRun(run)
@@ -355,7 +356,7 @@ func (s *Service) finishWorkerPreparation(ctx context.Context, run *Run, executi
 		}
 		receipt, err := host.ReadProbe(p.Probe, p.InputDigest)
 		if err != nil {
-			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "probe_receipt_invalid", Confidence: "confirmed", Source: "readiness.receipt", Detail: err.Error(), Turn: turn.TurnID})
+			return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "probe_receipt_invalid", Confidence: "confirmed", Source: "readiness.receipt", Detail: err.Error(), Turn: turn.TurnID})
 		}
 		p.Receipt = receipt
 	}
@@ -365,7 +366,7 @@ func (s *Service) finishWorkerPreparation(ctx context.Context, run *Run, executi
 	p.Verified = true
 	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil && run.Decision.Request.QuestionRoute.TurnID == turn.TurnID {
 		if run.Decision.Status == "answer_saved" {
-			return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "answer_delivery_unverified", Confidence: "unverified", Source: "host.question-reply", Turn: turn.TurnID})
+			return s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "answer_delivery_unverified", Confidence: "unverified", Source: "host.question-reply", Turn: turn.TurnID})
 		}
 		if run.Decision.Status == "pending" {
 			s.setDecisionStatus(run, "superseded")
@@ -373,14 +374,14 @@ func (s *Service) finishWorkerPreparation(ctx context.Context, run *Run, executi
 		s.setRunDecision(run, nil)
 	}
 	if !now().Before(p.Deadline) && !execution.Environment.Ready && execution.Environment.Blocker == nil {
-		if err := s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "preparation_unverified", Confidence: "unverified", Source: "preparation.deadline", Turn: turn.TurnID}); err != nil {
+		if err := s.blockWorkerEnvironment(run, executionbackend.HostFact{Reason: "preparation_unverified", Confidence: "unverified", Source: "preparation.deadline", Turn: turn.TurnID}); err != nil {
 			return err
 		}
 	}
 	if err := s.commitWorker(run); err != nil {
 		return err
 	}
-	hostInput := executionapi.HostActionInput{Kind: executionapi.HostCleanupProbeFiles, Probe: &p.Probe}
+	hostInput := executionbackend.HostActionInput{Kind: executionbackend.HostCleanupProbeFiles, Probe: &p.Probe}
 	if err := func() error {
 		_, lifecycle, _, _, hostErr := s.hostEnvironmentForRun(run)
 		if hostErr != nil {
@@ -394,7 +395,7 @@ func (s *Service) finishWorkerPreparation(ctx context.Context, run *Run, executi
 		execution.LastEvent = ptr("准备证据已保存；文件清理待核实：" + err.Error())
 	}
 	if _, lifecycle, _, _, hostErr := s.hostEnvironmentForRun(run); hostErr == nil {
-		cleanup := executionapi.HostActionInput{Kind: executionapi.HostRemoveFeedback, Worktree: execution.Workspace.Worktree, WorkflowRun: run.RunID, TurnID: turn.TurnID}
+		cleanup := executionbackend.HostActionInput{Kind: executionbackend.HostRemoveFeedback, Worktree: execution.Workspace.Worktree, WorkflowRun: run.RunID, TurnID: turn.TurnID}
 		_ = s.executeHostAction(ctx, run, lifecycle, cleanup)
 	}
 	if execution.Environment.Blocker != nil {
@@ -403,7 +404,7 @@ func (s *Service) finishWorkerPreparation(ctx context.Context, run *Run, executi
 	return s.advanceWorkerPreparation(ctx, run)
 }
 
-func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, action string, input HostActionTarget, commandID string) error {
+func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, action string, input productapi.HostActionTarget, commandID string) error {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
@@ -433,9 +434,9 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, action s
 			return errors.New("original terminal cannot be located")
 		}
 		original := *identity
-		authorization := &executionapi.HostActionAuthorization{ExecutionID: target.ExecutionID, AttemptID: run.AttemptID, TurnID: target.TurnID,
+		authorization := &executionbackend.HostActionAuthorization{ExecutionID: target.ExecutionID, AttemptID: run.AttemptID, TurnID: target.TurnID,
 			CommandID: commandID, BlockerID: target.BlockerID, BlockerVersion: target.Version}
-		if err = s.executeHostAction(ctx, run, lifecycle, executionapi.HostActionInput{Kind: executionapi.HostOpenOriginal, Process: &original, Authorization: authorization}); err != nil {
+		if err = s.executeHostAction(ctx, run, lifecycle, executionbackend.HostActionInput{Kind: executionbackend.HostOpenOriginal, Process: &original, Authorization: authorization}); err != nil {
 			return err
 		}
 		return nil
@@ -530,7 +531,7 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, action s
 		}
 		env.History = append(env.History, *env.Preparation)
 		started := now()
-		env.Preparation = &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: started, Deadline: started.Add(budget)}
+		env.Preparation = &executionmodel.WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: started, Deadline: started.Add(budget)}
 	}
 	env.Blocker = nil
 	execution.RecoveryRequired = false

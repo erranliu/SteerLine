@@ -1,0 +1,42 @@
+{
+  "base_main": "a8ff0f0",
+  "scope": "incoming #38 and #211 behavior preserved; namespace/type ownership conversion only",
+  "files": [
+    {
+      "file": "internal/steerline/console/candidates.go",
+      "same_after_namespace_normalization": true
+    },
+    {
+      "file": "internal/steerline/console/candidates_test.go",
+      "same_after_namespace_normalization": true
+    },
+    {
+      "file": "internal/steerline/console/model.go",
+      "same_after_namespace_normalization": true
+    },
+    {
+      "file": "internal/steerline/console/execution_profile.go",
+      "same_after_namespace_normalization": true
+    },
+    {
+      "file": "internal/steerline/console/preferences.go",
+      "same_after_namespace_normalization": true
+    },
+    {
+      "file": "internal/steerline/console/profile_choice.go",
+      "same_after_namespace_normalization": true
+    },
+    {
+      "file": "internal/steerlineintegration/candidate_console_test.go",
+      "same_after_namespace_normalization": true
+    },
+    {
+      "file": "internal/steerlineintegration/native_environment_cd67_test.go",
+      "same_after_namespace_normalization": true
+    },
+    {
+      "file": "internal/steerlineintegration/requirement_admission_cd67_test.go",
+      "same_after_namespace_normalization": true
+    }
+  ]
+}

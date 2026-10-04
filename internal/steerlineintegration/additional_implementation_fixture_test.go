@@ -11,20 +11,22 @@ import (
 	"sync"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 const additionalKey = "fixture.stream"
-const additionalProtocol executionapi.ExecutionProtocol = "fixture_stream_v1"
+
+const additionalProtocol executionbackend.ExecutionProtocol = "fixture_stream_v1"
 
 // This fake owns only protocol facts and its isolated external ledger. It has
 // no Service, Store or Runtime handle and never commits business transitions.
 type additionalPort struct {
-	setup  executionapi.LifecycleSetup
+	setup  executionbackend.LifecycleSetup
 	ledger *additionalLedger
 }
+
 type additionalLedger struct {
 	mu             sync.Mutex
 	path           string
@@ -32,30 +34,31 @@ type additionalLedger struct {
 	reads          int
 	publicationURL string
 }
+
 type additionalSaved struct {
-	Session      string                                   `json:"session"`
-	Generation   string                                   `json:"generation"`
-	Process      executionapi.ProcessIdentity             `json:"process"`
-	Inputs       map[string]executionapi.TurnInput        `json:"inputs"`
-	Receipts     map[string]executionapi.LifecycleReceipt `json:"receipts"`
-	Answers      map[string]executionapi.FeedbackInput    `json:"answers"`
-	Settled      bool                                     `json:"settled"`
-	CleanupCount int                                      `json:"cleanup_count"`
-	PRCandidates []string                                 `json:"pr_candidates,omitempty"`
+	Session      string                                       `json:"session"`
+	Generation   string                                       `json:"generation"`
+	Process      executionbackend.ProcessIdentity             `json:"process"`
+	Inputs       map[string]executionbackend.TurnInput        `json:"inputs"`
+	Receipts     map[string]executionbackend.LifecycleReceipt `json:"receipts"`
+	Answers      map[string]executionbackend.FeedbackInput    `json:"answers"`
+	Settled      bool                                         `json:"settled"`
+	CleanupCount int                                          `json:"cleanup_count"`
+	PRCandidates []string                                     `json:"pr_candidates,omitempty"`
 }
 
 type additionalBinding struct {
-	Session    string                       `json:"session"`
-	Generation string                       `json:"generation"`
-	Process    executionapi.ProcessIdentity `json:"process"`
-	Target     executionapi.ExecutionTarget `json:"target"`
+	Session    string                           `json:"session"`
+	Generation string                           `json:"generation"`
+	Process    executionbackend.ProcessIdentity `json:"process"`
+	Target     executionbackend.ExecutionTarget `json:"target"`
 }
 
 func (l *additionalLedger) read() (additionalSaved, error) {
 	var value additionalSaved
 	data, err := os.ReadFile(l.path)
 	if os.IsNotExist(err) {
-		return additionalSaved{Inputs: map[string]executionapi.TurnInput{}, Receipts: map[string]executionapi.LifecycleReceipt{}, Answers: map[string]executionapi.FeedbackInput{}}, nil
+		return additionalSaved{Inputs: map[string]executionbackend.TurnInput{}, Receipts: map[string]executionbackend.LifecycleReceipt{}, Answers: map[string]executionbackend.FeedbackInput{}}, nil
 	}
 	if err != nil {
 		return value, err
@@ -63,6 +66,7 @@ func (l *additionalLedger) read() (additionalSaved, error) {
 	err = contracts.DecodeJSON(data, &value)
 	return value, err
 }
+
 func (l *additionalLedger) write(value additionalSaved) error {
 	data, err := json.Marshal(value)
 	if err != nil {
@@ -70,69 +74,78 @@ func (l *additionalLedger) write(value additionalSaved) error {
 	}
 	return AtomicWrite(l.path, data)
 }
-func additionalReport(ref executionapi.ExecutionRef) executionapi.CapabilityReport {
-	return executionapi.CapabilityReport{Version: 1, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Agent: ref.Agent, PlatformVersion: "isolated-fake-v1", CheckedAt: time.Now().UTC(), Capabilities: []executionapi.Capability{
-		{Name: "start", Status: executionapi.CapabilityVerified, Evidence: "isolated in-memory fixture; no native permission authentication"},
-		{Name: "stop", Status: executionapi.CapabilityUnsupported},
+
+func additionalReport(ref executionbackend.ExecutionRef) executionbackend.CapabilityReport {
+	return executionbackend.CapabilityReport{Version: 1, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Agent: ref.Agent, PlatformVersion: "isolated-fake-v1", CheckedAt: time.Now().UTC(), Capabilities: []executionbackend.Capability{
+		{Name: "start", Status: executionbackend.CapabilityVerified, Evidence: "isolated in-memory fixture; no native permission authentication"},
+		{Name: "stop", Status: executionbackend.CapabilityUnsupported},
 	}}
 }
-func (p *additionalPort) Identity() (executionapi.BackendKind, executionapi.ExecutionProtocol) {
+
+func (p *additionalPort) Identity() (executionbackend.BackendKind, executionbackend.ExecutionProtocol) {
 	return "fixture", additionalProtocol
 }
-func (p *additionalPort) Probe(_ context.Context, target executionapi.ExecutionTarget, agent executionapi.AgentSpec) (executionapi.CapabilityReport, error) {
-	return additionalReport(executionapi.ExecutionRef{Backend: "fixture", Protocol: additionalProtocol, Target: target, Agent: agent}), nil
+
+func (p *additionalPort) Probe(_ context.Context, target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec) (executionbackend.CapabilityReport, error) {
+	return additionalReport(executionbackend.ExecutionRef{Backend: "fixture", Protocol: additionalProtocol, Target: target, Agent: agent}), nil
 }
-func (p *additionalPort) Observe(_ context.Context, ref executionapi.ExecutionRef) (executionapi.Observation, error) {
+
+func (p *additionalPort) Observe(_ context.Context, ref executionbackend.ExecutionRef) (executionbackend.Observation, error) {
 	if ref.Target.ID != "fixture:fixed" || ref.Protocol != additionalProtocol {
-		return executionapi.Observation{}, errors.New("fixture target changed")
+		return executionbackend.Observation{}, errors.New("fixture target changed")
 	}
-	return executionapi.Observation{Liveness: "live", Connection: "connected", ObservedAt: time.Now().UTC(), Source: "isolated-fake"}, nil
+	return executionbackend.Observation{Liveness: "live", Connection: "connected", ObservedAt: time.Now().UTC(), Source: "isolated-fake"}, nil
 }
-func (p *additionalPort) InspectWorkspace(ctx context.Context, ref executionapi.ExecutionRef) (executionapi.WorkspaceInspection, error) {
+
+func (p *additionalPort) InspectWorkspace(ctx context.Context, ref executionbackend.ExecutionRef) (executionbackend.WorkspaceInspection, error) {
 	snapshot := p.setup.Snapshot.Clone()
 	snapshot.Ref = ref
 	return p.InspectLifecycleWorkspace(ctx, snapshot)
 }
-func (p *additionalPort) PreflightLifecycle(_ context.Context, setup executionapi.LifecycleSetup) (executionapi.CapabilityReport, error) {
+
+func (p *additionalPort) PreflightLifecycle(_ context.Context, setup executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error) {
 	if setup.Policy.Filesystem.WriteScope != "none" || setup.Policy.Network != "deny" {
-		return executionapi.CapabilityReport{}, errors.New("fixture supports only read-only, offline policy")
+		return executionbackend.CapabilityReport{}, errors.New("fixture supports only read-only, offline policy")
 	}
 	return additionalReport(setup.Snapshot.Ref), nil
 }
-func (p *additionalPort) PolicyCapabilities() executionapi.LifecyclePolicyCapabilities {
+
+func (p *additionalPort) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
 	// The injected builder binds a read-only policy envelope with no write
 	// roots. Session creation still needs this original resource receipt.
-	return executionapi.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
+	return executionbackend.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
 }
-func (p *additionalPort) Next(_ context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.LifecycleCandidate, error) {
+
+func (p *additionalPort) Next(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleCandidate, error) {
 	if snapshot.TaskDelivered {
 		p.ledger.mu.Lock()
 		value, err := p.ledger.read()
 		p.ledger.mu.Unlock()
 		if err != nil {
-			return executionapi.LifecycleCandidate{}, err
+			return executionbackend.LifecycleCandidate{}, err
 		}
 		if value.CleanupCount != 0 {
-			return executionapi.LifecycleCandidate{Done: true}, nil
+			return executionbackend.LifecycleCandidate{Done: true}, nil
 		}
-		return executionapi.LifecycleCandidate{Action: executionapi.LifecycleCleanup, Input: executionapi.LifecycleInput{Cleanup: &executionapi.CleanupInput{Resources: []executionapi.ProcessIdentity{snapshot.Ref.External}}}}, nil
+		return executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleCleanup, Input: executionbackend.LifecycleInput{Cleanup: &executionbackend.CleanupInput{Resources: []executionbackend.ProcessIdentity{snapshot.Ref.External}}}}, nil
 	}
 	if snapshot.Workspace.Path == "" {
 		intent := snapshot.WorkspacePlan
-		return executionapi.LifecycleCandidate{Action: executionapi.LifecyclePrepareWorkspace, Input: executionapi.LifecycleInput{Workspace: &intent}}, nil
+		return executionbackend.LifecycleCandidate{Action: executionbackend.LifecyclePrepareWorkspace, Input: executionbackend.LifecycleInput{Workspace: &intent}}, nil
 	}
 	if snapshot.PendingTurn == nil {
-		return executionapi.LifecycleCandidate{Done: true}, nil
+		return executionbackend.LifecycleCandidate{Done: true}, nil
 	}
 	turn := *snapshot.PendingTurn
-	action := executionapi.LifecycleStartTurn
+	action := executionbackend.LifecycleStartTurn
 	if snapshot.Session.SessionID == "" {
-		action = executionapi.LifecyclePrepareSession
+		action = executionbackend.LifecyclePrepareSession
 	}
-	return executionapi.LifecycleCandidate{Action: action, Input: executionapi.LifecycleInput{Turn: &turn}}, nil
+	return executionbackend.LifecycleCandidate{Action: action, Input: executionbackend.LifecycleInput{Turn: &turn}}, nil
 }
-func (p *additionalPort) Execute(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
-	receipt := executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown}
+
+func (p *additionalPort) Execute(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
+	receipt := executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationUnknown}
 	if err := request.Validate(); err != nil {
 		return receipt, nil, err
 	}
@@ -140,7 +153,7 @@ func (p *additionalPort) Execute(ctx context.Context, request executionapi.Lifec
 		return receipt, nil, errors.New("fixture refused replacement target")
 	}
 	if request.Input.Workspace != nil {
-		git := workspace.Git{Command: executionapi.LaunchCommand{Executable: p.setup.GitExecutable, Args: p.setup.GitArgs}, Timeout: p.setup.CommandTimeout, Start: p.setup.ProcessHost.StartManaged}
+		git := workspace.Git{Command: executionbackend.LaunchCommand{Executable: p.setup.GitExecutable, Args: p.setup.GitArgs}, Timeout: p.setup.CommandTimeout, Start: p.setup.ProcessHost.StartManaged}
 		result, err := workspace.Prepare(ctx, git, workspace.Repository{Path: p.setup.RepositoryPath, CommonDir: request.Snapshot.Session.ProjectID}, filepath.Dir(request.Input.Workspace.Path), request.Input.Workspace)
 		receipt.Disposition, receipt.Workspace = result.Status, result.Inspection
 		return receipt, nil, err
@@ -154,15 +167,15 @@ func (p *additionalPort) Execute(ctx context.Context, request executionapi.Lifec
 	if _, exists := value.Receipts[request.Operation.ID]; exists {
 		return receipt, nil, errors.New("mutation offered twice instead of reconciliation")
 	}
-	switch executionapi.LifecycleAction(request.Operation.Action) {
-	case executionapi.LifecyclePrepareSession:
+	switch executionbackend.LifecycleAction(request.Operation.Action) {
+	case executionbackend.LifecyclePrepareSession:
 		if value.Session != "" {
 			return receipt, nil, errors.New("fixture session already exists")
 		}
 		value.Session, value.Generation = "fixture-original-session", request.Snapshot.ResourceGeneration
-		value.Process = executionapi.ProcessIdentity{Kind: "fixture", RuntimeID: "fixture-runtime", Terminal: "fixture-resource", Incarnation: "fixture-original"}
-		binding, bindingErr := executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{
-			ImplementationKey: additionalKey, CodecVersion: 1, Purpose: executionapi.ImplementationResourcePurpose,
+		value.Process = executionbackend.ProcessIdentity{Kind: "fixture", RuntimeID: "fixture-runtime", Terminal: "fixture-resource", Incarnation: "fixture-original"}
+		binding, bindingErr := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{
+			ImplementationKey: additionalKey, CodecVersion: 1, Purpose: executionbackend.ImplementationResourcePurpose,
 			ProjectID: request.Snapshot.Session.ProjectID, ExecutionID: request.Snapshot.Session.ExecutionID,
 			AttemptID: request.Snapshot.Session.AttemptID, Generation: request.Snapshot.ResourceGeneration,
 			ConfigDigest: request.Snapshot.ConfigurationDigest,
@@ -170,11 +183,11 @@ func (p *additionalPort) Execute(ctx context.Context, request executionapi.Lifec
 		if bindingErr != nil {
 			return receipt, nil, bindingErr
 		}
-		receipt.Implementation = []executionapi.ImplementationDataEnvelope{binding}
-		receipt.Disposition = executionapi.OperationConfirmed
+		receipt.Implementation = []executionbackend.ImplementationDataEnvelope{binding}
+		receipt.Disposition = executionbackend.OperationConfirmed
 		receipt.Process = &value.Process
-		receipt.State = executionapi.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation}
-	case executionapi.LifecycleStartTurn:
+		receipt.State = executionbackend.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation}
+	case executionbackend.LifecycleStartTurn:
 		if value.Session != request.Snapshot.Session.SessionID || value.Generation != request.Snapshot.Session.Generation {
 			return receipt, nil, errors.New("fixture lost original session/generation")
 		}
@@ -186,18 +199,18 @@ func (p *additionalPort) Execute(ctx context.Context, request executionapi.Lifec
 		if p.ledger.publicationURL != "" {
 			value.PRCandidates = []string{p.ledger.publicationURL}
 		}
-		receipt.Disposition = executionapi.OperationAccepted
+		receipt.Disposition = executionbackend.OperationAccepted
 		receipt.Process = &value.Process
-		receipt.State = executionapi.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation, TurnID: turn.CommandID, InputAccepted: true, TurnStarted: true}
-	case executionapi.LifecycleDeliverFeedback:
+		receipt.State = executionbackend.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation, TurnID: turn.CommandID, InputAccepted: true, TurnStarted: true}
+	case executionbackend.LifecycleDeliverFeedback:
 		if request.Snapshot.QuestionRoute == nil || request.Input.Feedback.QuestionID != request.Snapshot.QuestionRoute.QuestionID {
 			return receipt, nil, errors.New("fixture answer changed original question")
 		}
 		value.Answers[request.Input.Feedback.QuestionID] = *request.Input.Feedback
 		value.Settled = true
-		receipt.Disposition = executionapi.OperationConfirmed
-		receipt.State = executionapi.LifecycleStateFacts{InputAccepted: true, TurnID: request.Snapshot.Session.CurrentTurnID}
-	case executionapi.LifecycleCleanup:
+		receipt.Disposition = executionbackend.OperationConfirmed
+		receipt.State = executionbackend.LifecycleStateFacts{InputAccepted: true, TurnID: request.Snapshot.Session.CurrentTurnID}
+	case executionbackend.LifecycleCleanup:
 		if !request.Snapshot.TaskDelivered || !value.Settled || request.Snapshot.Ref.External != value.Process {
 			return receipt, nil, errors.New("fixture cleanup lacks original delivered resource identity")
 		}
@@ -205,10 +218,10 @@ func (p *additionalPort) Execute(ctx context.Context, request executionapi.Lifec
 		if value.CleanupCount != 1 {
 			return receipt, nil, errors.New("fixture cleanup was repeated")
 		}
-		receipt.Disposition = executionapi.OperationConfirmed
-		receipt.State = executionapi.LifecycleStateFacts{WorkerAbsent: true, WritersAbsent: true}
+		receipt.Disposition = executionbackend.OperationConfirmed
+		receipt.State = executionbackend.LifecycleStateFacts{WorkerAbsent: true, WritersAbsent: true}
 	default:
-		return receipt, nil, executionapi.UnsupportedAdapterOperation(request.Operation.Action, "fixture capability is unsupported")
+		return receipt, nil, executionbackend.UnsupportedAdapterOperation(request.Operation.Action, "fixture capability is unsupported")
 	}
 	value.Receipts[request.Operation.ID] = receipt.Clone()
 	if err := p.ledger.write(value); err != nil {
@@ -220,87 +233,94 @@ func (p *additionalPort) Execute(ctx context.Context, request executionapi.Lifec
 		}
 		return receipt, nil, nil
 	}
-	if executionapi.LifecycleAction(request.Operation.Action) == executionapi.LifecycleStartTurn {
+	if executionbackend.LifecycleAction(request.Operation.Action) == executionbackend.LifecycleStartTurn {
 		return receipt, p.observer(request.Snapshot, value, receipt.State.TurnID), nil
 	}
 	return receipt, nil, nil
 }
-func (p *additionalPort) Reconcile(_ context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+
+func (p *additionalPort) Reconcile(_ context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	p.ledger.mu.Lock()
 	defer p.ledger.mu.Unlock()
 	p.ledger.reads++
 	value, err := p.ledger.read()
 	if err != nil {
-		return executionapi.LifecycleReceipt{}, nil, err
+		return executionbackend.LifecycleReceipt{}, nil, err
 	}
 	receipt, exists := value.Receipts[request.Operation.ID]
 	if !exists {
-		return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown}, nil, nil
+		return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationUnknown}, nil, nil
 	}
 	if err := receipt.ValidateFor(request); err != nil {
 		return receipt, nil, err
 	}
 	return receipt.Clone(), nil, nil
 }
-func (p *additionalPort) ObserveLifecycle(_ context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+
+func (p *additionalPort) ObserveLifecycle(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	p.ledger.mu.Lock()
 	defer p.ledger.mu.Unlock()
 	p.ledger.reads++
 	value, err := p.ledger.read()
 	if err != nil {
-		return executionapi.LifecycleReceipt{}, nil, err
+		return executionbackend.LifecycleReceipt{}, nil, err
 	}
 	if snapshot.Session.SessionID != value.Session || snapshot.Session.Generation != value.Generation || snapshot.Ref.External != value.Process {
-		return executionapi.LifecycleReceipt{}, nil, errors.New("fixture observation replaced original identity")
+		return executionbackend.LifecycleReceipt{}, nil, errors.New("fixture observation replaced original identity")
 	}
 	if len(snapshot.Implementation) != 1 {
-		return executionapi.LifecycleReceipt{}, nil, errors.New("fixture observation lost original resource binding")
+		return executionbackend.LifecycleReceipt{}, nil, errors.New("fixture observation lost original resource binding")
 	}
 	envelope := snapshot.Implementation[0]
 	if envelope.ImplementationKey != additionalKey || envelope.CodecVersion != 1 {
-		return executionapi.LifecycleReceipt{}, nil, errors.New("fixture resource binding codec changed")
+		return executionbackend.LifecycleReceipt{}, nil, errors.New("fixture resource binding codec changed")
 	}
 	if err := envelope.ValidateResourceIdentity(snapshot.Session.ProjectID, snapshot.Session.ExecutionID, snapshot.Session.AttemptID, snapshot.ResourceGeneration, snapshot.ConfigurationDigest); err != nil {
-		return executionapi.LifecycleReceipt{}, nil, err
+		return executionbackend.LifecycleReceipt{}, nil, err
 	}
 	var binding additionalBinding
 	if err := contracts.DecodeJSON(envelope.Payload, &binding); err != nil {
-		return executionapi.LifecycleReceipt{}, nil, err
+		return executionbackend.LifecycleReceipt{}, nil, err
 	}
 	if binding.Session != value.Session || binding.Generation != value.Generation || binding.Process != value.Process || binding.Target != snapshot.Ref.Target {
-		return executionapi.LifecycleReceipt{}, nil, errors.New("fixture original binding payload changed")
+		return executionbackend.LifecycleReceipt{}, nil, errors.New("fixture original binding payload changed")
 	}
 	if _, exists := value.Inputs[snapshot.Session.CurrentTurnID]; !exists {
-		return executionapi.LifecycleReceipt{}, nil, errors.New("fixture observation has no persistent original input")
+		return executionbackend.LifecycleReceipt{}, nil, errors.New("fixture observation has no persistent original input")
 	}
 	if value.Settled {
 		turn := snapshot.Session.CurrentTurnID
-		return executionapi.LifecycleReceipt{Disposition: executionapi.OperationConfirmed, Process: &value.Process,
-			State:        executionapi.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation, TurnID: turn, TurnCompleted: true},
-			TurnEvidence: &executionapi.TurnEvidence{SourcePath: p.ledger.path, SessionID: value.Session, TurnID: turn, CommandID: turn, Started: true, Completed: true, Succeeded: true, PRCandidates: append([]string(nil), value.PRCandidates...)}}, nil, nil
+		return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, Process: &value.Process,
+			State:        executionbackend.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation, TurnID: turn, TurnCompleted: true},
+			TurnEvidence: &executionbackend.TurnEvidence{SourcePath: p.ledger.path, SessionID: value.Session, TurnID: turn, CommandID: turn, Started: true, Completed: true, Succeeded: true, PRCandidates: append([]string(nil), value.PRCandidates...)}}, nil, nil
 	}
-	return executionapi.LifecycleReceipt{Disposition: executionapi.OperationConfirmed, Process: &value.Process, State: executionapi.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation, TurnID: snapshot.Session.CurrentTurnID}}, p.observer(snapshot, value, snapshot.Session.CurrentTurnID), nil
+	return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationConfirmed, Process: &value.Process, State: executionbackend.LifecycleStateFacts{SessionID: value.Session, SessionGeneration: value.Generation, TurnID: snapshot.Session.CurrentTurnID}}, p.observer(snapshot, value, snapshot.Session.CurrentTurnID), nil
 }
-func (p *additionalPort) VerifyManualRecovery(_ context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.LifecycleRecoveryEvidence, error) {
+
+func (p *additionalPort) VerifyManualRecovery(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleRecoveryEvidence, error) {
 	p.ledger.mu.Lock()
 	defer p.ledger.mu.Unlock()
 	p.ledger.reads++
 	value, err := p.ledger.read()
 	if err != nil || value.Session != snapshot.Session.SessionID || value.Process != snapshot.Ref.External {
-		return executionapi.LifecycleRecoveryEvidence{}, errors.New("fixture recovery cannot verify original identity")
+		return executionbackend.LifecycleRecoveryEvidence{}, errors.New("fixture recovery cannot verify original identity")
 	}
-	return executionapi.LifecycleRecoveryEvidence{SessionAvailable: true, ManagedProcess: true}, nil
+	return executionbackend.LifecycleRecoveryEvidence{SessionAvailable: true, ManagedProcess: true}, nil
 }
-func (p *additionalPort) BindRecovery(context.Context, executionapi.LifecycleSnapshot, executionapi.LifecycleSnapshot) (executionapi.ImplementationDataEnvelope, error) {
-	return executionapi.ImplementationDataEnvelope{}, errors.New("fixture does not replace sessions")
+
+func (p *additionalPort) BindRecovery(context.Context, executionbackend.LifecycleSnapshot, executionbackend.LifecycleSnapshot) (executionbackend.ImplementationDataEnvelope, error) {
+	return executionbackend.ImplementationDataEnvelope{}, errors.New("fixture does not replace sessions")
 }
-func (p *additionalPort) InspectLifecycleWorkspace(ctx context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.WorkspaceInspection, error) {
+
+func (p *additionalPort) InspectLifecycleWorkspace(ctx context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.WorkspaceInspection, error) {
 	return workspace.InspectLifecycleWorkspace(ctx, p.setup, snapshot)
 }
-func (p *additionalPort) StopLifecycle(_ context.Context, request executionapi.LifecycleRequest, _ executionapi.StopHandle) (executionapi.LifecycleReceipt, error) {
-	return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationRejected}, errors.New("fixture cancellation is unsupported")
+
+func (p *additionalPort) StopLifecycle(_ context.Context, request executionbackend.LifecycleRequest, _ executionbackend.StopHandle) (executionbackend.LifecycleReceipt, error) {
+	return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationRejected}, errors.New("fixture cancellation is unsupported")
 }
-func (p *additionalPort) CleanupLifecycle(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, error) {
+
+func (p *additionalPort) CleanupLifecycle(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, error) {
 	receipt, observer, err := p.Execute(ctx, request)
 	if observer != nil {
 		_ = observer.Close(ctx)
@@ -308,14 +328,18 @@ func (p *additionalPort) CleanupLifecycle(ctx context.Context, request execution
 	return receipt, err
 }
 
-type additionalHandle struct{ identity executionapi.ProcessIdentity }
+type additionalHandle struct {
+	identity executionbackend.ProcessIdentity
+}
 
-func (h additionalHandle) Identity() executionapi.ProcessIdentity { return h.identity }
-func (additionalHandle) Kill()                                    {}
-func (additionalHandle) Close()                                   {}
+func (h additionalHandle) Identity() executionbackend.ProcessIdentity { return h.identity }
+
+func (additionalHandle) Kill() {}
+
+func (additionalHandle) Close() {}
 
 type additionalObserver struct {
-	events     chan executionapi.LifecycleEvent
+	events     chan executionbackend.LifecycleEvent
 	done       chan error
 	closed     chan struct{}
 	completed  chan struct{}
@@ -325,32 +349,37 @@ type additionalObserver struct {
 	finishOnce sync.Once
 }
 
-func (o *additionalObserver) Events() <-chan executionapi.LifecycleEvent { return o.events }
-func (o *additionalObserver) Done() <-chan error                         { return o.done }
-func (o *additionalObserver) StopHandle() executionapi.StopHandle        { return o.handle }
+func (o *additionalObserver) Events() <-chan executionbackend.LifecycleEvent { return o.events }
+
+func (o *additionalObserver) Done() <-chan error { return o.done }
+
+func (o *additionalObserver) StopHandle() executionbackend.StopHandle { return o.handle }
+
 func (o *additionalObserver) Close(context.Context) error {
 	o.once.Do(func() { close(o.closed) })
 	return nil
 }
+
 func (o *additionalObserver) finish() {
 	o.finishOnce.Do(func() { close(o.completed) })
 }
-func (p *additionalPort) observer(snapshot executionapi.LifecycleSnapshot, value additionalSaved, turn string) *additionalObserver {
-	o := &additionalObserver{events: make(chan executionapi.LifecycleEvent, 8), done: make(chan error, 1), closed: make(chan struct{}), completed: make(chan struct{}), handle: additionalHandle{value.Process}, turn: turn}
+
+func (p *additionalPort) observer(snapshot executionbackend.LifecycleSnapshot, value additionalSaved, turn string) *additionalObserver {
+	o := &additionalObserver{events: make(chan executionbackend.LifecycleEvent, 8), done: make(chan error, 1), closed: make(chan struct{}), completed: make(chan struct{}), handle: additionalHandle{value.Process}, turn: turn}
 	p.ledger.observers[snapshot.Session.ExecutionID] = o
-	route, err := executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{ImplementationKey: additionalKey, CodecVersion: 1, Purpose: executionapi.ImplementationQuestionPurpose, ProjectID: snapshot.Session.ProjectID, WorkflowRunID: snapshot.Session.WorkflowRunID, ExecutionID: snapshot.Session.ExecutionID, AttemptID: snapshot.Session.AttemptID, Generation: value.Generation, TurnID: turn, QuestionID: "fixture-question"}, []byte(`{"channel":"fixture"}`))
+	route, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{ImplementationKey: additionalKey, CodecVersion: 1, Purpose: executionbackend.ImplementationQuestionPurpose, ProjectID: snapshot.Session.ProjectID, WorkflowRunID: snapshot.Session.WorkflowRunID, ExecutionID: snapshot.Session.ExecutionID, AttemptID: snapshot.Session.AttemptID, Generation: value.Generation, TurnID: turn, QuestionID: "fixture-question"}, []byte(`{"channel":"fixture"}`))
 	if err != nil {
 		o.done <- err
 		close(o.events)
 		return o
 	}
-	question := executionapi.Question{ExecutionID: snapshot.Session.ExecutionID, AttemptID: snapshot.Session.AttemptID, Generation: value.Generation, TurnID: turn, ID: "fixture-choice", Header: "Fixture", Question: "Continue the original input?", Options: []executionapi.DecisionOption{{ID: "continue", Label: "Continue"}}, AllowFreeText: true}
+	question := executionbackend.Question{ExecutionID: snapshot.Session.ExecutionID, AttemptID: snapshot.Session.AttemptID, Generation: value.Generation, TurnID: turn, ID: "fixture-choice", Header: "Fixture", Question: "Continue the original input?", Options: []executionbackend.DecisionOption{{ID: "continue", Label: "Continue"}}, AllowFreeText: true}
 	go func() {
 		defer close(o.events)
-		for _, fact := range []executionapi.EventFact{{Kind: executionapi.EventStarted, SessionID: value.Session, StartedTurnID: turn}, {Kind: executionapi.EventQuestion, QuestionRoute: &route, Questions: []executionapi.Question{question}}} {
+		for _, fact := range []executionbackend.EventFact{{Kind: executionbackend.EventStarted, SessionID: value.Session, StartedTurnID: turn}, {Kind: executionbackend.EventQuestion, QuestionRoute: &route, Questions: []executionbackend.Question{question}}} {
 			ack := make(chan error, 1)
 			select {
-			case o.events <- executionapi.LifecycleEvent{Fact: fact, Kind: string(fact.Kind), Status: "observed", Title: "Fixture " + string(fact.Kind), Persisted: ack}:
+			case o.events <- executionbackend.LifecycleEvent{Fact: fact, Kind: string(fact.Kind), Status: "observed", Title: "Fixture " + string(fact.Kind), Persisted: ack}:
 			case <-o.closed:
 				return
 			}
@@ -374,7 +403,7 @@ func (p *additionalPort) observer(snapshot executionapi.LifecycleSnapshot, value
 		}
 		ack := make(chan error, 1)
 		select {
-		case o.events <- executionapi.LifecycleEvent{Fact: executionapi.EventFact{Kind: executionapi.EventCompleted, Completed: true, Matched: true, Outcome: "completed", PRCandidates: append([]string(nil), value.PRCandidates...)}, Kind: "completed", Status: "completed", Title: "Fixture completed", Persisted: ack}:
+		case o.events <- executionbackend.LifecycleEvent{Fact: executionbackend.EventFact{Kind: executionbackend.EventCompleted, Completed: true, Matched: true, Outcome: "completed", PRCandidates: append([]string(nil), value.PRCandidates...)}, Kind: "completed", Status: "completed", Title: "Fixture completed", Persisted: ack}:
 		case <-o.closed:
 			return
 		}
@@ -396,26 +425,35 @@ type additionalSources struct{}
 func (additionalSources) MapConversation(contracts.ConversationInput) (contracts.ConversationMappedBatch, error) {
 	return contracts.ConversationMappedBatch{}, nil
 }
+
 func (additionalSources) RestoreMapper(contracts.ConversationMapperSnapshot) contracts.ConversationMapper {
 	return nil
 }
+
 func (additionalSources) JournalSources() []string { return nil }
-func (additionalSources) JournalSource(executionapi.BackendKind, executionapi.ExecutionProtocol) string {
+
+func (additionalSources) JournalSource(executionbackend.BackendKind, executionbackend.ExecutionProtocol) string {
 	return ""
 }
-func (additionalSources) JournalSegment(executionapi.BackendKind, executionapi.ExecutionProtocol, string) string {
+
+func (additionalSources) JournalSegment(executionbackend.BackendKind, executionbackend.ExecutionProtocol, string) string {
 	return ""
 }
+
 func (additionalSources) JournalGeneration(string, string) (uint64, error) { return 0, nil }
+
 func (additionalSources) LiveJournalPath(context.Context, contracts.ConversationJournalPathRequest) (string, error) {
 	return "", nil
 }
+
 func (additionalSources) DiscoverHistory(context.Context, contracts.ConversationDiscovery) (contracts.ConversationDiscoveryResult, error) {
 	return contracts.ConversationDiscoveryResult{}, nil
 }
+
 func (additionalSources) DiscoverJournals(context.Context, contracts.ConversationDiscovery, func(string) (string, error)) ([]contracts.ConversationJournalSource, error) {
 	return nil, nil
 }
-func (additionalSources) ReadHistory(context.Context, contracts.ConversationHistoryReadRequest, func(*exec.Cmd) (executionapi.StopHandle, error)) (contracts.ConversationHistoryBatch, error) {
+
+func (additionalSources) ReadHistory(context.Context, contracts.ConversationHistoryReadRequest, func(*exec.Cmd) (executionbackend.StopHandle, error)) (contracts.ConversationHistoryBatch, error) {
 	return contracts.ConversationHistoryBatch{}, fmt.Errorf("fixture history reading is unsupported")
 }

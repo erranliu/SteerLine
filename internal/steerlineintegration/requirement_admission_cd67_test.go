@@ -2,13 +2,14 @@ package steerlineintegration
 
 import (
 	"context"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"strings"
 	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func TestExecutionRequirementsCannotInferOtherTargetEnvironment(t *testing.T) {
@@ -21,9 +22,9 @@ func TestExecutionRequirementsCannotInferOtherTargetEnvironment(t *testing.T) {
 		} else {
 			setNativeImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex"}, orca)
 		}
-		c.ExecutionRequirements.Tools = []executionapi.ToolRequirement{{ID: "go"}}
+		c.ExecutionRequirements.Tools = []executionbackend.ToolRequirement{{ID: "go"}}
 		e, err := c.EvaluateRequirements(context.Background())
-		if err == nil || len(e.Tools) != 1 || e.Tools[0].Status != executionapi.RequirementUnknown || e.Tools[0].Target != nativeTarget(c) {
+		if err == nil || len(e.Tools) != 1 || e.Tools[0].Status != executionbackend.RequirementUnknown || e.Tools[0].Target != nativeTarget(c) {
 			t.Fatalf("center environment proved another target: %+v %v", e, err)
 		}
 	}
@@ -43,7 +44,7 @@ func TestEmptyExecutionRequirementsKeepMandatoryChecks(t *testing.T) {
 		t.Fatal("empty requirements bypassed mandatory CLI preflight")
 	}
 	c.Host = "orca_supervised"
-	c.PublicationPolicy.Publisher = executionapi.PublisherWorker
+	c.PublicationPolicy.Publisher = executionbackend.PublisherWorker
 	orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}
 	remoteSettings := &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1}
 	worker := nativeProfileSettings(c)

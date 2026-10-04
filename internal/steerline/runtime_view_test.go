@@ -5,6 +5,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func waitingDecisionService(t *testing.T) (*Service, *Run) {
@@ -80,7 +82,7 @@ func TestAnswerChecksDomainRevisionBeforeCheckpointPublication(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
 	commands := CommandService{Store: service.commandStore, Project: service.Config.Identity()}
-	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "continue", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	answer := executionmodel.DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "continue", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	command, _, err := commands.AnswerDecision(ctx, answer.DecisionID, answer.ExpectedDecisionVersion, newID(), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
 	before, _, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
@@ -113,7 +115,7 @@ func TestPublicationPreservesExternallyAcceptedDecision(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
 	commands := CommandService{Store: service.commandStore, Project: service.Config.Identity()}
-	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "keep this answer", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	answer := executionmodel.DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "keep this answer", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	command, _, err := commands.AnswerDecision(ctx, answer.DecisionID, answer.ExpectedDecisionVersion, newID(), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
 	_, _, err = commands.AcceptAnswer(ctx, command, answer)
@@ -131,7 +133,7 @@ func TestWorkerCommitRejectsConflictingDecisionAtomically(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
 	commands := CommandService{Store: service.commandStore, Project: service.Config.Identity()}
-	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "committed answer", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	answer := executionmodel.DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "committed answer", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	command, _, err := commands.AnswerDecision(ctx, answer.DecisionID, answer.ExpectedDecisionVersion, newID(), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
 	_, _, err = commands.AcceptAnswer(ctx, command, answer)
@@ -168,7 +170,7 @@ func TestRuntimeViewRejectsInvalidWorkerAttempts(t *testing.T) {
 		state := service.State
 		state.Attempts = nil
 		for i := 0; i < count; i++ {
-			state.Attempts = append(state.Attempts, StepAttemptRecord{ExecutionID: run.ExecutionID, StepID: "worker", AttemptID: newID(), AttemptNumber: i + 1})
+			state.Attempts = append(state.Attempts, executionmodel.StepAttemptRecord{ExecutionID: run.ExecutionID, StepID: "worker", AttemptID: newID(), AttemptNumber: i + 1})
 		}
 		if err := projectRuntime(&state); err == nil {
 			t.Fatalf("accepted %d worker attempts: %v", count, err)
@@ -180,7 +182,7 @@ func TestWorkerCommitPreservesExternallyAcceptedDecision(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
 	commands := CommandService{Store: service.commandStore, Project: service.Config.Identity()}
-	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "keep this answer", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	answer := executionmodel.DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "keep this answer", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	command, _, err := commands.AnswerDecision(ctx, answer.DecisionID, answer.ExpectedDecisionVersion, newID(), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
 	_, _, err = commands.AcceptAnswer(ctx, command, answer)

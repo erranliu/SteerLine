@@ -9,7 +9,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/projection"
 	queryrules "github.com/erranliu/SteerLine/internal/steerline/query"
-	taskrules "github.com/erranliu/SteerLine/internal/steerline/task"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type ProjectRecords struct {
@@ -29,6 +29,7 @@ func (s Reader) ReadProjectRecords(ctx context.Context, project, selectedTaskID 
 	}
 	return records, nil
 }
+
 func (s Reader) ReadProjectRecordsTx(ctx context.Context, tx *sql.Tx, project, selectedTaskID string, limit int) ProjectRecords {
 	view := contracts.ProjectView{SampledAt: time.Now().UTC()}
 	page, err := s.NativeTaskPageTx(ctx, tx, project, "", "", 0, 0, limit)
@@ -47,7 +48,7 @@ func (s Reader) ReadProjectRecordsTx(ctx context.Context, tx *sql.Tx, project, s
 			view.Ready = &ready
 		}
 		if selectedTaskID != "" {
-			view.SelectedTaskError = taskrules.ValidateID(selectedTaskID)
+			view.SelectedTaskError = taskmodel.ValidateID(selectedTaskID)
 			if view.SelectedTaskError == nil {
 				for i := range page.Tasks {
 					if page.Tasks[i].TaskID == selectedTaskID {
@@ -97,9 +98,11 @@ func (s Reader) ReadProjectView(ctx context.Context, project, selectedTaskID str
 	}
 	return projectView(records), nil
 }
+
 func (s Reader) ReadProjectViewTx(ctx context.Context, tx *sql.Tx, project, selectedTaskID string, limit int) contracts.ProjectView {
 	return projectView(s.ReadProjectRecordsTx(ctx, tx, project, selectedTaskID, limit))
 }
+
 func projectView(records ProjectRecords) contracts.ProjectView {
 	view := records.View
 	if metadata := records.Metadata; metadata != nil {

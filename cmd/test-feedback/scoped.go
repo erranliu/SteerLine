@@ -27,8 +27,15 @@ var quickTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerF
 const boundaryPackage = "github.com/erranliu/SteerLine/internal/steerlineintegration"
 
 var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImplementation"}
+
 var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary",
+	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests",
+	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/task/model",
+	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/model",
+	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/backend",
+	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/product/api",
+	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/storage/ports",
 	"TestCD67CoreBoundary/negative_source_fixtures",
 	"TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
 	"TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
@@ -53,7 +60,8 @@ var quickBoundaryAssigned = []string{
 	"TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
 }
 
-var quickRulePackages = []string{corePackage + "/taskgraph", corePackage + "/taskview", corePackage + "/workerflow", corePackage + "/execution", corePackage + "/contracts", corePackage + "/projection", corePackage + "/query", corePackage + "/sqlite", "github.com/erranliu/SteerLine/internal/testboundary"}
+var quickRulePackages = []string{"github.com/erranliu/SteerLine/internal/task/model", corePackage + "/taskview", "github.com/erranliu/SteerLine/internal/storage/ports", corePackage + "/task", corePackage + "/persistence", corePackage + "/testprotocol", "github.com/erranliu/SteerLine/internal/execution/model", "github.com/erranliu/SteerLine/internal/execution/backend", corePackage + "/contracts", corePackage + "/projection", corePackage + "/query", corePackage + "/sqlite", "github.com/erranliu/SteerLine/internal/testboundary"}
+
 var quickOwnerCases = []struct {
 	ID, Package string
 	Tests       []string
@@ -61,8 +69,9 @@ var quickOwnerCases = []struct {
 	{"quick-owner-remote", corePackage + "/orca_remote_worker", []string{"TestCD63CodecIdentityAndVersion", "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily", "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift", "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch", "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree", "TestSupervisedRunCoordinatorsAreDistinctAndFenced", "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal", "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall", "TestRemoteContinuationRequiresOriginalPeerAndTerminal", "TestRemoteWorkspaceKeepsPeerPathAndRuntime", "TestRemoteReplyRejectsOversizeWithoutMutation", "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending", "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox", "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID", "TestLoadConfigRequiresExplicitRemoteCancellationFalse"}},
 	{"quick-owner-codec", corePackage + "/codexworker", []string{"TestConversationMapperNativeTwoTurnFixture", "TestHistoryAdapterRejectsOversizedNativeCursor", "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt"}},
 	{"quick-owner-identity", corePackage + "/orcaworker", []string{"TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess", "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation", "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost"}},
-	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/steerlineapp", []string{"TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestLocalWindowsSandboxProfileFreezesAndRestores", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile"}},
+	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/steerlineapp", []string{"TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestLocalWindowsSandboxProfileFreezesAndRestores", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile"}},
 }
+
 var quickPackages = func() []string {
 	p := append([]string{corePackage}, quickRulePackages...)
 	p = append(p, boundaryPackage)

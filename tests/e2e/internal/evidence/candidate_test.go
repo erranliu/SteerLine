@@ -1,7 +1,7 @@
 package evidence
 
 import (
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"testing"
 )
 
@@ -10,9 +10,9 @@ func TestCandidateEvidenceDoesNotFollowListOrderOrSibling(t *testing.T) {
 	d.WorkflowRuns[0].WorkflowRunID = "run-a"
 	d.WorkflowRuns[0].ProjectIdentity = "project"
 	d.Executions[0].WorkflowRunID = "run-a"
-	sibling := contracts.ExecutionRecord{ProjectIdentity: "project", ExecutionID: "sibling", WorkflowRunID: "run-b"}
-	d.Executions = append([]contracts.ExecutionRecord{sibling}, d.Executions...)
-	d.WorkflowRuns = append(d.WorkflowRuns, contracts.WorkflowRunRecord{WorkflowRunID: "run-b", ProjectIdentity: "project"})
+	sibling := executionmodel.ExecutionRecord{ProjectIdentity: "project", ExecutionID: "sibling", WorkflowRunID: "run-b"}
+	d.Executions = append([]executionmodel.ExecutionRecord{sibling}, d.Executions...)
+	d.WorkflowRuns = append(d.WorkflowRuns, executionmodel.WorkflowRunRecord{WorkflowRunID: "run-b", ProjectIdentity: "project"})
 	selected, err := Candidate(d, "run-a", "execution")
 	if err != nil {
 		t.Fatal(err)

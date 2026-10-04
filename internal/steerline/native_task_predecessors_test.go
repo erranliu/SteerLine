@@ -6,6 +6,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestAddNativeTaskPredecessorsIsAtomicIdempotentAndBlocksClaim(t *testing.T) {
@@ -61,11 +64,11 @@ func TestAddNativeTaskPredecessorsIsAtomicIdempotentAndBlocksClaim(t *testing.T)
 }
 
 func TestNativePredecessorAdditionRejectsDeliveredAndDiscardedSuccessor(t *testing.T) {
-	graph := taskGraphSnapshot{Authority: ProjectTaskAuthority{ProjectIdentity: "fixture"}, ByID: map[string]TaskRecord{"1": {TaskID: "1", Status: "open"}, "2": {TaskID: "2", Status: "closed"}}, Deliveries: map[string]TaskDeliveryRecord{"2": {TaskID: "2"}}}
+	graph := taskGraphSnapshot{Authority: tasklegacy.ProjectTaskAuthority{ProjectIdentity: "fixture"}, ByID: map[string]taskmodel.TaskRecord{"1": {TaskID: "1", Status: "open"}, "2": {TaskID: "2", Status: "closed"}}, Deliveries: map[string]TaskDeliveryRecord{"2": {TaskID: "2"}}}
 	if err := validateNativePredecessorAddition(graph, "2", []string{"1"}); err == nil || !strings.Contains(err.Error(), "already_merged") {
 		t.Fatalf("delivered successor accepted: %v", err)
 	}
-	graph.ByID["2"] = TaskRecord{TaskID: "2", Status: "discarded"}
+	graph.ByID["2"] = taskmodel.TaskRecord{TaskID: "2", Status: "discarded"}
 	delete(graph.Deliveries, "2")
 	if err := validateNativePredecessorAddition(graph, "2", []string{"1"}); err == nil || !strings.Contains(err.Error(), "task_discarded") {
 		t.Fatalf("discarded successor accepted: %v", err)

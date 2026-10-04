@@ -13,24 +13,24 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 const ControlProtocolVersion = 1
+
 const maxControlRequestBytes = 3 << 20
 
 var controlIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
-type ControlRequest = clientcontracts.ControlRequest
-type ControlPayload = clientcontracts.ControlPayload
-
 func controlRequestPath(runDir, id string) string {
 	return filepath.Join(runDir, "control", "requests", id, "request.json")
 }
+
 func controlReceiptPath(runDir, id string) string {
 	return filepath.Join(runDir, "control", "receipts", id+".json")
 }
+
 func readBoundedFile(path string, limit int64) ([]byte, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -46,12 +46,14 @@ func readBoundedFile(path string, limit int64) ([]byte, error) {
 	}
 	return b, nil
 }
-func requestDigest(req ControlRequest) string {
+
+func requestDigest(req productapi.ControlRequest) string {
 	b, _ := json.Marshal(req)
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
 }
-func publishControlRequest(runDir string, req ControlRequest) error {
+
+func publishControlRequest(runDir string, req productapi.ControlRequest) error {
 	if !controlIDPattern.MatchString(req.RequestID) {
 		return errors.New("request ID must be 32 lowercase hexadecimal characters")
 	}
@@ -67,7 +69,7 @@ func publishControlRequest(runDir string, req ControlRequest) error {
 		return err
 	}
 	if existing, e := readBoundedFile(path, maxControlRequestBytes); e == nil {
-		var old ControlRequest
+		var old productapi.ControlRequest
 		if decode(existing, &old) != nil || requestDigest(old) != requestDigest(req) {
 			return errors.New("request ID conflict: an immutable request with different content already exists")
 		}
@@ -100,7 +102,7 @@ func publishControlRequest(runDir string, req ControlRequest) error {
 		if readErr != nil {
 			return readErr
 		}
-		var old ControlRequest
+		var old productapi.ControlRequest
 		if decode(existing, &old) != nil || requestDigest(old) != requestDigest(req) {
 			return errors.New("request ID conflict: an immutable request with different content already exists")
 		}
@@ -108,8 +110,8 @@ func publishControlRequest(runDir string, req ControlRequest) error {
 	return nil
 }
 
-func readControlRequest(path string) (ControlRequest, error) {
-	var req ControlRequest
+func readControlRequest(path string) (productapi.ControlRequest, error) {
+	var req productapi.ControlRequest
 	b, err := readBoundedFile(path, maxControlRequestBytes)
 	if err != nil {
 		return req, err
@@ -123,7 +125,7 @@ func readControlRequest(path string) (ControlRequest, error) {
 	return req, nil
 }
 
-func validateControlRequest(req ControlRequest, instanceID, repositoryIdentity string, revision uint64, now time.Time) (string, error) {
+func validateControlRequest(req productapi.ControlRequest, instanceID, repositoryIdentity string, revision uint64, now time.Time) (string, error) {
 	if req.ProtocolVersion != ControlProtocolVersion {
 		return "invalid_request", errors.New("unsupported control protocol version")
 	}
@@ -155,6 +157,7 @@ func validateControlRequest(req ControlRequest, instanceID, repositoryIdentity s
 	}
 	return "", nil
 }
+
 func validControlAction(action string) bool {
 	switch action {
 	case "start_task", "start_candidate", "abandon_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment":
@@ -171,8 +174,8 @@ func terminalControlStatus(status string) bool {
 	return false
 }
 
-func decodeControlPayload(req ControlRequest) (ControlPayload, error) {
-	var p ControlPayload
+func decodeControlPayload(req productapi.ControlRequest) (productapi.ControlPayload, error) {
+	var p productapi.ControlPayload
 	var fields map[string]json.RawMessage
 	if len(req.Payload) != 0 {
 		raw := strings.TrimSpace(string(req.Payload))
@@ -207,11 +210,11 @@ func decodeControlPayload(req ControlRequest) (ControlPayload, error) {
 	}
 	switch req.Action {
 	case "start_candidate":
-		if ValidateNativeTaskID(p.TaskID) != nil || p.ExpectedTaskVersion == 0 || p.ExpectedGraphRevision == 0 || len(fields) != 3 && len(fields) != 5 || p.ExecutionProfileID == "" && p.ExecutionProfileDigest != "" || p.ExecutionProfileID != "" && !evidenceDigest(p.ExecutionProfileDigest) {
+		if taskmodel.ValidateID(p.TaskID) != nil || p.ExpectedTaskVersion == 0 || p.ExpectedGraphRevision == 0 || len(fields) != 3 && len(fields) != 5 || p.ExecutionProfileID == "" && p.ExecutionProfileDigest != "" || p.ExecutionProfileID != "" && !evidenceDigest(p.ExecutionProfileDigest) {
 			return p, errors.New("start_candidate requires task_id, current task/graph versions and a complete profile selection")
 		}
 	case "abandon_candidate":
-		if ValidateNativeTaskID(p.TaskID) != nil || !controlIDPattern.MatchString(p.WorkflowRunID) || p.ExpectedTaskVersion == 0 || p.ExpectedCandidateVersion == 0 || strings.TrimSpace(p.Reason) == "" || len(p.Reason) > 4000 || len(fields) != 5 {
+		if taskmodel.ValidateID(p.TaskID) != nil || !controlIDPattern.MatchString(p.WorkflowRunID) || p.ExpectedTaskVersion == 0 || p.ExpectedCandidateVersion == 0 || strings.TrimSpace(p.Reason) == "" || len(p.Reason) > 4000 || len(fields) != 5 {
 			return p, errors.New("abandon_candidate requires exact task/run versions and a reason")
 		}
 	case "open_terminal", "recheck_environment":
@@ -238,5 +241,3 @@ func decodeControlPayload(req ControlRequest) (ControlPayload, error) {
 func DefaultRequestedBy() string {
 	return AnswererName()
 }
-
-type ControlReceipt = contracts.ControlReceipt

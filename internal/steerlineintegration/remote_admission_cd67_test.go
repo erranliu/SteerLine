@@ -2,18 +2,20 @@ package steerlineintegration
 
 import (
 	"context"
+	"strings"
+	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
-	"strings"
-	"testing"
 )
 
 func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
-	c := steerline.Config{WorkflowProtocol: steerline.WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionapi.PublicationPolicy{Publisher: "worker"}, PR: publication.Config{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}, Host: "orca_supervised", Agent: "codex"}
+	c := steerline.Config{WorkflowProtocol: executionmodel.Version, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionbackend.PublicationPolicy{Publisher: "worker"}, PR: publication.Config{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}, Host: "orca_supervised", Agent: "codex"}
 	setNativeImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}, &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote-env", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1})
 	entry, err := c.ExecutionDirectory.Resolve(c)
 	if err != nil || entry.ValidatePublicationPolicy(c.PublicationPolicy, c.PR) != nil {
@@ -37,7 +39,7 @@ func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
 func TestRemotePublicationClaimRequiresPermissionEvidence(t *testing.T) {
 	c, _, store := nativeAdmissionFixture(t)
 	c.Host, c.Agent = "orca_supervised", "codex"
-	c.PublicationPolicy.Publisher = executionapi.PublisherWorker
+	c.PublicationPolicy.Publisher = executionbackend.PublisherWorker
 	c.PR = publication.Config{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}
 	setNativeImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "must-not-be-called", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}, &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote-env", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", ExpectedCodexVersion: "0.159.2", PollInterval: "1s", CapabilityReportVersion: 1})
 	// Missing enforcement evidence must reject before Git, version, or remote

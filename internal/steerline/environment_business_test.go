@@ -3,11 +3,14 @@ package steerline
 import (
 	"context"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"testing"
 	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func answerNeutralEnvironment(t *testing.T, s *Service, run *Run, option, note string) {
@@ -19,15 +22,16 @@ func answerNeutralEnvironment(t *testing.T, s *Service, run *Run, option, note s
 	require(t, s.publishCheckpoint())
 	target, err := clientcontracts.EnvironmentTarget(run)
 	require(t, err)
-	req := ControlRequest{RequestID: newID(), Action: option, RequestedBy: "operator", RunID: run.RunID}
-	payload := ControlPayload{Environment: target}
+	req := productapi.ControlRequest{RequestID: newID(), Action: option, RequestedBy: "operator", RunID: run.RunID}
+	payload := productapi.ControlPayload{Environment: target}
 	op := &ControlOperation{RequestID: req.RequestID, Action: option, RunID: run.RunID}
-	err = s.applyControlAction(context.Background(), req, payload, op, &ControlReceipt{})
-	var rejected *NativeTaskError
+	err = s.applyControlAction(context.Background(), req, payload, op, &productapi.ControlReceipt{})
+	var rejected *taskmodel.Error
 	if err != nil && !(errors.As(err, &rejected) && rejected.Code == "environment_unverified") {
 		require(t, err)
 	}
 }
+
 func neutralPendingPreparation(t *testing.T) (*Service, *Run, *neutralPreparationResolver) {
 	t.Helper()
 	s, run, resolver := neutralPreparationService(t, "success")
@@ -35,6 +39,7 @@ func neutralPendingPreparation(t *testing.T) (*Service, *Run, *neutralPreparatio
 	resolver.turn.Outcome = ""
 	return s, run, resolver
 }
+
 func TestWorkerEnvironmentUnidentifiedAgentKeepsOriginalDeadline(t *testing.T) {
 	s, run, resolver := neutralPendingPreparation(t)
 	e := s.executionRecord(run)
@@ -57,8 +62,8 @@ func TestSimplifiedEnvironmentSavedInputRequiresFreshAnswer(t *testing.T) {
 			e := s.executionRecord(run)
 			require(t, s.finishWorkerPreparation(context.Background(), run, e, &resolver.turn, "succeeded"))
 			require(t, s.eventForRun(run, <-s.workers[run.RunID].Events))
-			resolver.turn = contracts.HostTurnFacts{TurnID: e.CurrentTurnID, Purpose: "business", HasDispatch: true, Deadline: now().Add(time.Minute)}
-			question, err := WriteDecisionRequest(run, DecisionRequest{Question: "Review original work.", AllowFreeText: true})
+			resolver.turn = executionbackend.HostTurnFacts{TurnID: e.CurrentTurnID, Purpose: "business", HasDispatch: true, Deadline: now().Add(time.Minute)}
+			question, err := WriteDecisionRequest(run, executionmodel.DecisionRequest{Question: "Review original work.", AllowFreeText: true})
 			require(t, err)
 			s.setRunDecision(run, question)
 			require(t, s.waitWorkerFlow(run, "Review original work."))
@@ -66,7 +71,7 @@ func TestSimplifiedEnvironmentSavedInputRequiresFreshAnswer(t *testing.T) {
 			require(t, s.publishCheckpoint())
 			oldID := run.Decision.ID
 			originalRequest := recordFingerprint(run.Decision.Request)
-			answer := DecisionAnswer{DecisionID: oldID, RunID: run.RunID, Note: "fresh text", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: s.State.Service.InstanceID, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: run.RecoveryVersion}
+			answer := executionmodel.DecisionAnswer{DecisionID: oldID, RunID: run.RunID, Note: "fresh text", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: s.State.Service.InstanceID, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: run.RecoveryVersion}
 			commands := CommandService{Store: s.commandStore, Project: s.Config.Identity()}
 			command, _, err := commands.AnswerDecisionWithID(context.Background(), newID(), oldID, run.Decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 			require(t, err)
@@ -75,10 +80,10 @@ func TestSimplifiedEnvironmentSavedInputRequiresFreshAnswer(t *testing.T) {
 			require(t, s.refreshNativeSnapshot(context.Background()))
 			run = s.find(run.RunID)
 			if hasInputIntent {
-				_, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+command.CommandID, executionapi.TurnInput{CommandID: command.CommandID, Prompt: answer.Note})
+				_, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+run.ExecutionID+":"+command.CommandID, executionbackend.TurnInput{CommandID: command.CommandID, Prompt: answer.Note})
 				require(t, err)
 			}
-			resolver.fact = contracts.HostFact{Reason: "host_wait", Confidence: "confirmed", Source: "fixture-host"}
+			resolver.fact = executionbackend.HostFact{Reason: "host_wait", Confidence: "confirmed", Source: "fixture-host"}
 			require(t, s.observeWorkerEnvironment(context.Background(), run))
 			stored, err := s.commandStore.Command(context.Background(), s.Config.Identity(), command.CommandID)
 			require(t, err)
@@ -91,7 +96,7 @@ func TestSimplifiedEnvironmentSavedInputRequiresFreshAnswer(t *testing.T) {
 			if stored.Status != "rejected" || run.Decision.ID == oldID || run.Decision.Status != "pending" || recordFingerprint(run.Decision.Request) != originalRequest {
 				t.Fatalf("unsent answer retained or original question changed: %+v / %+v", stored, run.Decision)
 			}
-			resolver.fact = contracts.HostFact{}
+			resolver.fact = executionbackend.HostFact{}
 			answerNeutralEnvironment(t, s, run, "recheck_environment", "")
 			require(t, s.applyDecisions(context.Background()))
 			if len(resolver.feedback) != 0 || len(resolver.inputs) != 1 || run.Decision.Status != "pending" {
@@ -100,6 +105,7 @@ func TestSimplifiedEnvironmentSavedInputRequiresFreshAnswer(t *testing.T) {
 		})
 	}
 }
+
 func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 	s, run, resolver := neutralPreparationService(t, "success")
 	e := s.executionRecord(run)
@@ -107,14 +113,14 @@ func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 	worker := s.workers[run.RunID]
 	require(t, s.eventForRun(run, <-worker.Events))
 	workflow, e := s.workflowRecords(run)
-	resolver.turn = contracts.HostTurnFacts{TurnID: e.CurrentTurnID, TaskID: "fixture-business", Purpose: "business", HasDispatch: true, Deadline: now().Add(2 * time.Minute)}
+	resolver.turn = executionbackend.HostTurnFacts{TurnID: e.CurrentTurnID, TaskID: "fixture-business", Purpose: "business", HasDispatch: true, Deadline: now().Add(2 * time.Minute)}
 	resolver.questionPending = true
 	fixed := workerSessionContext(run, e)
-	question, err := WriteDecisionRequest(run, neutralDecisionFixture(t, *fixed, "original-question", []executionapi.Question{{ID: "business", Question: "Business question", AllowFreeText: true}}))
+	question, err := WriteDecisionRequest(run, neutralDecisionFixture(t, *fixed, "original-question", []executionbackend.Question{{ID: "business", Question: "Business question", AllowFreeText: true}}))
 	require(t, err)
 	s.setRunDecision(run, question)
 	require(t, s.commitWorker(run))
-	resolver.fact = contracts.HostFact{Reason: "host_wait", Confidence: "suspected", Source: "fixture-host", Turn: e.CurrentTurnID}
+	resolver.fact = executionbackend.HostFact{Reason: "host_wait", Confidence: "suspected", Source: "fixture-host", Turn: e.CurrentTurnID}
 	require(t, s.observeWorkerEnvironment(context.Background(), run))
 	if e.Environment.Blocker == nil || e.Environment.Blocker.Fact.Confidence != "suspected" || workflow.Phase != "waiting_decision" || run.Decision == nil || run.Decision.ID != question.ID {
 		t.Fatal("host evidence or original question lost")
@@ -126,7 +132,7 @@ func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 	}
 
 	note := "保留原问题，不要重派任务。"
-	answer := DecisionAnswer{DecisionID: question.ID, RunID: run.RunID, Note: note, Answers: map[string][]string{"business": {note}}, AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: s.State.Service.InstanceID, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: run.RecoveryVersion}
+	answer := executionmodel.DecisionAnswer{DecisionID: question.ID, RunID: run.RunID, Note: note, Answers: map[string][]string{"business": {note}}, AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: s.State.Service.InstanceID, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: run.RecoveryVersion}
 	commands := CommandService{Store: s.commandStore, Project: s.Config.Identity()}
 	command, _, err := commands.AnswerDecisionWithID(context.Background(), newID(), question.ID, question.Version, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
@@ -136,7 +142,7 @@ func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 	if refused.Status != "rejected" || len(resolver.feedback) != 0 || run.Decision.ID != question.ID || run.Decision.Status != "pending" {
 		t.Fatal("blocked feedback was queued/sent or replaced the original question")
 	}
-	resolver.fact = contracts.HostFact{}
+	resolver.fact = executionbackend.HostFact{}
 	answerNeutralEnvironment(t, s, run, "recheck_environment", "")
 	e = s.executionRecord(run)
 	if len(resolver.feedback) != 0 || run.Decision == nil || run.Decision.Request.QuestionRoute == nil || run.Decision.Request.QuestionRoute.QuestionID != "original-question" {
@@ -145,38 +151,40 @@ func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 	workflow, _ = s.workflowRecords(run)
 	workflow.Phase = "waiting_pr_merge"
 	e.Environment.Blocker = nil
-	resolver.fact = contracts.HostFact{Reason: "host_wait", Confidence: "suspected", Source: "fixture-host"}
+	resolver.fact = executionbackend.HostFact{Reason: "host_wait", Confidence: "suspected", Source: "fixture-host"}
 	require(t, s.commitWorker(run))
 	require(t, s.observeWorkerEnvironment(context.Background(), run))
 	if workflow.Phase != "waiting_pr_merge" {
 		t.Fatal("late host diagnostic reopened PR merge waiting")
 	}
 }
+
 func TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch(t *testing.T) {
 	s, run, resolver := neutralPendingPreparation(t)
 	e := s.executionRecord(run)
 	original := *e.Process
 	turn := resolver.turn
 	nonce, deadline := e.Environment.Preparation.Nonce, e.Environment.Preparation.Deadline
-	resolver.fact = contracts.HostFact{Reason: "host_wait", Confidence: "confirmed", Source: "fixture-host", Turn: turn.TurnID}
+	resolver.fact = executionbackend.HostFact{Reason: "host_wait", Confidence: "confirmed", Source: "fixture-host", Turn: turn.TurnID}
 	require(t, s.observeWorkerEnvironment(context.Background(), run))
 	answerNeutralEnvironment(t, s, run, "recheck_environment", "")
 	answerNeutralEnvironment(t, s, run, "recheck_environment", "")
 	if len(resolver.inputs) != 0 {
 		t.Fatal("repeated recheck duplicated original probe")
 	}
-	resolver.fact = contracts.HostFact{}
+	resolver.fact = executionbackend.HostFact{}
 	answerNeutralEnvironment(t, s, run, "recheck_environment", "")
 	e = s.executionRecord(run)
 	if *e.Process != original || resolver.turn != turn || len(resolver.inputs) != 0 || e.Environment.Preparation.Nonce != nonce || !e.Environment.Preparation.Deadline.Equal(deadline) {
 		t.Fatal("recheck replaced original resource, input, nonce or deadline")
 	}
-	resolver.fact = contracts.HostFact{Reason: "identity_mismatch", Confidence: "confirmed", Source: "fixture-original-identity", Turn: turn.TurnID}
+	resolver.fact = executionbackend.HostFact{Reason: "identity_mismatch", Confidence: "confirmed", Source: "fixture-original-identity", Turn: turn.TurnID}
 	require(t, s.observeWorkerEnvironment(context.Background(), run))
 	if e.Environment.Blocker == nil || e.Environment.Blocker.Fact.Reason != "identity_mismatch" {
 		t.Fatal("replacement identity accepted")
 	}
 }
+
 func TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput(t *testing.T) {
 	s, run, resolver := neutralPendingPreparation(t)
 	config := s.Config
@@ -205,17 +213,18 @@ func TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput(t *test
 	}
 	reopened.shutdown()
 }
+
 func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 	s, run, resolver := neutralPendingPreparation(t)
 	e := s.executionRecord(run)
 	nonce, deadline := e.Environment.Preparation.Nonce, e.Environment.Preparation.Deadline
 	original := *e.Process
 	// An unknown original side effect is reconciled by its exact saved request.
-	request := executionapi.TurnInput{CommandID: resolver.turn.TurnID, Prompt: "original fixture preparation"}
+	request := executionbackend.TurnInput{CommandID: resolver.turn.TurnID, Prompt: "original fixture preparation"}
 	resolver.loseReceipt = true
 	lifecycle, _, err := s.lifecycleForRun(run)
 	require(t, err)
-	candidate := executionapi.LifecycleCandidate{Action: executionapi.LifecyclePrepareSession, Input: executionapi.LifecycleInput{Turn: &request}}
+	candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecyclePrepareSession, Input: executionbackend.LifecycleInput{Turn: &request}}
 	err = s.executeLifecycleStep(context.Background(), run, lifecycle, candidate)
 	if !errors.Is(err, errLifecycleNeedsReconciliation) {
 		t.Fatalf("lost receipt did not retain unknown intent: %v", err)
@@ -256,7 +265,7 @@ func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 		t.Fatal("fresh recheck did not accept original complete facts")
 	}
 	business := resolver.inputs[0]
-	resolver.turn = contracts.HostTurnFacts{TurnID: business, TaskID: "fixture-business", Purpose: "business", HasDispatch: true, Deadline: now().Add(-time.Second), IntentAt: now().Add(-3 * time.Minute)}
+	resolver.turn = executionbackend.HostTurnFacts{TurnID: business, TaskID: "fixture-business", Purpose: "business", HasDispatch: true, Deadline: now().Add(-time.Second), IntentAt: now().Add(-3 * time.Minute)}
 	require(t, reopened.observeWorkerEnvironment(context.Background(), run))
 	if e.Environment.Blocker == nil || e.Environment.Blocker.Fact.Reason != "business_start_unverified" {
 		t.Fatal("business start deadline lost original input")
@@ -270,13 +279,14 @@ func TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt(t *testing.T) {
 	}
 	reopened.shutdown()
 }
+
 func TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll(t *testing.T) {
 	s, run, resolver := neutralPendingPreparation(t)
-	resolver.fact = contracts.HostFact{Reason: "host_wait", Confidence: "confirmed", Source: "fixture-host"}
+	resolver.fact = executionbackend.HostFact{Reason: "host_wait", Confidence: "confirmed", Source: "fixture-host"}
 	require(t, s.observeWorkerEnvironment(context.Background(), run))
 	e := s.executionRecord(run)
 	old := e.Environment.Blocker.ID
-	resolver.fact = contracts.HostFact{}
+	resolver.fact = executionbackend.HostFact{}
 	resolver.newFault = true
 	answerNeutralEnvironment(t, s, run, "recheck_environment", "")
 	e = s.executionRecord(run)

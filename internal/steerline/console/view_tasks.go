@@ -1,13 +1,11 @@
 package console
 
-// Task list rendering and the status labels shared by task views.
-
 import (
 	"fmt"
 	"strings"
 	"time"
 
-	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
@@ -71,7 +69,7 @@ func renderRows(m Model, state projectState, width, height int) []string {
 		switch {
 		case !state.snapshotLoaded:
 			out = append(out, "正在读取项目快照…")
-		case snapshot.Connection.State == api.ConnectionOffline || snapshot.Connection.State == api.ConnectionNoRecord:
+		case snapshot.Connection.State == productapi.ConnectionOffline || snapshot.Connection.State == productapi.ConnectionNoRecord:
 			out = append(out, "服务离线；已有运行和日志仍可查看。")
 			out = append(out, "服务入口："+safeTerminalText(serviceWindowInstruction(state.ref)))
 			out = append(out, "配置："+safeTerminalText(state.ref.ConfigPath))

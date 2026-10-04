@@ -1,5 +1,7 @@
 package console
 
+import productapi "github.com/erranliu/SteerLine/internal/product/api"
+
 import (
 	"encoding/json"
 	"errors"
@@ -10,9 +12,6 @@ import (
 	"sort"
 	"strings"
 	"time"
-
-	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 const viewFileVersion = 1
@@ -27,22 +26,22 @@ type FoldChoice struct {
 }
 
 type SavedAction struct {
-	DecisionIdentity       string                      `json:"decision_identity,omitempty"`
-	Payload                api.ControlPayload          `json:"payload,omitempty"`
-	EnvironmentTarget      *contracts.HostActionTarget `json:"environment_target,omitempty"`
-	DecisionDraftOptionID  string                      `json:"draft_option,omitempty"`
-	DecisionDraftNote      string                      `json:"draft_note,omitempty"`
-	DecisionRevision       uint64                      `json:"decision_revision,omitempty"`
-	DecisionVersion        uint64                      `json:"decision_version,omitempty"`
-	Action                 string                      `json:"action,omitempty"`
-	TaskID                 string                      `json:"task_id,omitempty"`
-	ExecutionProfileID     string                      `json:"execution_profile_id,omitempty"`
-	ExecutionProfileDigest string                      `json:"execution_profile_digest,omitempty"`
-	DecisionID             string                      `json:"decision_id,omitempty"`
-	Status                 string                      `json:"status"`
-	RunID                  string                      `json:"run_id,omitempty"`
-	TargetInstance         string                      `json:"target_instance,omitempty"`
-	UpdatedAt              time.Time                   `json:"updated_at,omitempty"`
+	DecisionIdentity       string                       `json:"decision_identity,omitempty"`
+	Payload                productapi.ControlPayload    `json:"payload,omitempty"`
+	EnvironmentTarget      *productapi.HostActionTarget `json:"environment_target,omitempty"`
+	DecisionDraftOptionID  string                       `json:"draft_option,omitempty"`
+	DecisionDraftNote      string                       `json:"draft_note,omitempty"`
+	DecisionRevision       uint64                       `json:"decision_revision,omitempty"`
+	DecisionVersion        uint64                       `json:"decision_version,omitempty"`
+	Action                 string                       `json:"action,omitempty"`
+	TaskID                 string                       `json:"task_id,omitempty"`
+	ExecutionProfileID     string                       `json:"execution_profile_id,omitempty"`
+	ExecutionProfileDigest string                       `json:"execution_profile_digest,omitempty"`
+	DecisionID             string                       `json:"decision_id,omitempty"`
+	Status                 string                       `json:"status"`
+	RunID                  string                       `json:"run_id,omitempty"`
+	TargetInstance         string                       `json:"target_instance,omitempty"`
+	UpdatedAt              time.Time                    `json:"updated_at,omitempty"`
 }
 
 type ProjectView struct {

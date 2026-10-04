@@ -7,12 +7,12 @@ import (
 	"os"
 	"path/filepath"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 // These helpers seed typed binding/operation rows explicitly in test fixtures.
-func (r executionRecords) saveBinding(ref executionapi.ExecutionRef) error {
-	if err := executionapi.ValidateExecutionRef(ref); err != nil {
+func (r executionRecords) saveBinding(ref executionbackend.ExecutionRef) error {
+	if err := executionbackend.ValidateExecutionRef(ref); err != nil {
 		return err
 	}
 	ref.WorkspacePath = canonical(ref.WorkspacePath)
@@ -31,8 +31,9 @@ func (r executionRecords) saveBinding(ref executionapi.ExecutionRef) error {
 	}
 	return r.writeRecord("execution_bindings", ref.RunID, ref.AttemptID, "binding", b)
 }
-func (r executionRecords) saveOperation(op executionapi.Operation) error {
-	if err := executionapi.ValidateExecutionOperation(op); err != nil {
+
+func (r executionRecords) saveOperation(op executionbackend.Operation) error {
+	if err := executionbackend.ValidateExecutionOperation(op); err != nil {
 		return err
 	}
 	if old, err := r.loadOperation(op.RunID, op.AttemptID, op.ID); err == nil {
@@ -48,6 +49,7 @@ func (r executionRecords) saveOperation(op executionapi.Operation) error {
 	}
 	return r.writeRecord("execution_operations", op.RunID, op.AttemptID, op.ID, b)
 }
+
 func (r executionRecords) writeRecord(table, run, attempt, id string, payload []byte) error {
 	s, err := openSQLiteFixture(filepath.Join(r.root, "steerline.db"))
 	if err != nil {

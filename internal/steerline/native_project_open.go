@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func OpenNativeTaskProject(ctx context.Context, c *Config) (persistence.Connection, error) {
@@ -63,7 +65,7 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (persistence.Connecti
 	if err != nil {
 		return nil, err
 	}
-	authority := ProjectTaskAuthority{ProjectIdentity: c.Identity(), Authority: "native", AuthorityVersion: 1, GraphRevision: 0, Repository: targetRepository, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	authority := tasklegacy.ProjectTaskAuthority{ProjectIdentity: c.Identity(), Authority: "native", AuthorityVersion: 1, GraphRevision: 0, Repository: targetRepository, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	var initializer persistence.Projects = db
 	err = initializer.InitializeProject(ctx, authority)
 	if err != nil {
@@ -127,7 +129,7 @@ func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (persistence.Con
 	authority, err := writer.NativeAuthority(ctx, c.Identity())
 	if err != nil {
 		_ = writer.Close()
-		if errors.Is(err, persistence.ErrNotFound) {
+		if errors.Is(err, storageports.ErrNotFound) {
 			return nil, nativeErr("authority_mismatch", "native project binding changed before command admission")
 		}
 		return nil, err

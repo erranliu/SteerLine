@@ -3,12 +3,14 @@ package steerlineintegration
 import (
 	"context"
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/steerline"
 )
 
 func TestProjectPolicyClaimRejectsStaticConflictsBeforeNativeQuery(t *testing.T) {
@@ -18,7 +20,7 @@ func TestProjectPolicyClaimRejectsStaticConflictsBeforeNativeQuery(t *testing.T)
 	codex.Executable = filepath.Join(t.TempDir(), "must-never-be-called.exe")
 	setNativeProfile(t, &c, codex)
 	for _, mutate := range []func(*steerline.Config){
-		func(c *steerline.Config) { c.ExecutionPolicy = executionapi.ExecutionPolicy{} },
+		func(c *steerline.Config) { c.ExecutionPolicy = executionbackend.ExecutionPolicy{} },
 		func(c *steerline.Config) {
 			settings := nativeProfileSettings(*c)
 			settings.Args = []string{"--add-dir=C:/"}
@@ -55,8 +57,8 @@ func TestProjectPolicyNativeReportsRetainOriginalSnapshotDigests(t *testing.T) {
 		raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "execution-isolation-06-policy", name))
 		require(t, err)
 		var report struct {
-			Profile   steerline.FixedExecutionProfile `json:"profile"`
-			Execution steerline.ExecutionRecord       `json:"execution"`
+			Profile   executionmodel.FixedExecutionProfile `json:"profile"`
+			Execution executionmodel.ExecutionRecord       `json:"execution"`
 		}
 		if err := json.Unmarshal(raw, &report); err != nil {
 			// Historical native-shaped receipts are no longer a supported wire format.

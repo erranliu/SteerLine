@@ -74,9 +74,10 @@ func Paginate(snapshot task.Snapshot, request PageRequest) (Page, error) {
 	}
 	page.HasMore = end < len(snapshot.Tasks)
 	selected := map[string]bool{}
+	taskGraph := snapshot.TaskGraph()
 	for _, record := range snapshot.Tasks[offset:end] {
 		selected[record.TaskID] = true
-		page.Nodes = append(page.Nodes, graphNode(record, snapshot))
+		page.Nodes = append(page.Nodes, graphNode(record, snapshot, taskGraph))
 	}
 	for _, edge := range snapshot.Edges {
 		pred, succ := selected[edge.PredecessorID], selected[edge.SuccessorID]

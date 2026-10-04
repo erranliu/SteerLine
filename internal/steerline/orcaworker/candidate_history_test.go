@@ -6,24 +6,24 @@ import (
 	"path/filepath"
 	"testing"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/processhost"
 )
 
 func TestCandidateSessionLaunchKeepsOriginalHistoryIntentAndPolicy(t *testing.T) {
 	root := t.TempDir()
 	workspace := filepath.Join(root, "workspace")
-	policy := execution.ExecutionPolicy{Filesystem: execution.FilesystemPolicy{ReadScope: "host", WriteScope: "host"}, Network: "allow", Escalation: "deny"}
-	snapshot := execution.LifecycleSnapshot{Session: execution.SessionContext{ProjectID: "project", TaskID: "1", WorkflowRunID: stableIDValue(1), ExecutionID: stableIDValue(2), AttemptID: stableIDValue(3)}, Ref: execution.ExecutionRef{Backend: execution.BackendOrca, Protocol: execution.ProtocolOrcaTerminalV2, Target: execution.ExecutionTarget{ID: "native-target", WorktreeID: "native-worktree"}}, ResourceGeneration: "generation", ConfigurationDigest: "config"}
+	policy := executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "host"}, Network: "allow", Escalation: "deny"}
+	snapshot := executionbackend.LifecycleSnapshot{Session: executionbackend.SessionContext{ProjectID: "project", TaskID: "1", WorkflowRunID: stableIDValue(1), ExecutionID: stableIDValue(2), AttemptID: stableIDValue(3)}, Ref: executionbackend.ExecutionRef{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV2, Target: executionbackend.ExecutionTarget{ID: "native-target", WorktreeID: "native-worktree"}}, ResourceGeneration: "generation", ConfigurationDigest: "config"}
 	identity := codexworker.PolicyResourceIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, AttemptID: snapshot.Session.AttemptID, Generation: snapshot.ResourceGeneration, ConfigDigest: snapshot.ConfigurationDigest}
-	settings := execution.LaunchCommand{Executable: "native-codex", WorkingDirectory: workspace, Args: []string{"--model", "gpt-6-luna", "--config", "sandbox_mode=danger-full-access", "--config", "approval_policy=never"}}
+	settings := executionbackend.LaunchCommand{Executable: "native-codex", WorkingDirectory: workspace, Args: []string{"--model", "gpt-6-luna", "--config", "sandbox_mode=danger-full-access", "--config", "approval_policy=never"}}
 	resource, err := codexworker.NewPolicyResourceEnvelope(identity, codexworker.PolicyResourcePayload{NativeVersion: codexworker.PolicyCodexVersion, Contract: codexworker.FullAccessPolicyContract, Settings: settings})
 	if err != nil {
 		t.Fatal(err)
 	}
 	snapshot.PolicyResources = &resource
-	l := ExecutionLifecycle{setup: execution.LifecycleSetup{RunDirectory: root, Policy: policy, ProcessHost: processhost.Host{}}, codex: codexworker.ProfileConfig{Model: "gpt-6-luna"}}
+	l := ExecutionLifecycle{setup: executionbackend.LifecycleSetup{RunDirectory: root, Policy: policy, ProcessHost: processhost.Host{}}, codex: codexworker.ProfileConfig{Model: "gpt-6-luna"}}
 	command, err := l.agentLaunchCommand(snapshot, workspace)
 	if err != nil {
 		t.Fatal(err)

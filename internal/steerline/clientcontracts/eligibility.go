@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 // CandidateFreshness is a display/input guard, not center authorization. The
@@ -20,7 +22,7 @@ func CandidateFreshness(identity string, snapshot ProjectSnapshot, now time.Time
 	if snapshot.TaskError != "" {
 		return false, snapshot.TaskError
 	}
-	if snapshot.Connection.State != ConnectionConnected || !snapshot.Connection.CanControl {
+	if snapshot.Connection.State != productapi.ConnectionConnected || !snapshot.Connection.CanControl {
 		return false, connectionDiagnostic(snapshot.Connection.Diagnostic)
 	}
 	controlRuntime := snapshot.Connection.Snapshot.Runtime
@@ -53,6 +55,7 @@ func canonicalIdentity(path string) string {
 	}
 	return path
 }
+
 func connectionDiagnostic(value string) string {
 	if strings.TrimSpace(value) != "" {
 		return value
@@ -96,6 +99,7 @@ func StartTaskReason(ref ProjectRef, snapshot ProjectSnapshot, now time.Time) st
 	}
 	return "服务未声明 start_task 能力"
 }
+
 func AutoDispatchReason(ref ProjectRef, snapshot ProjectSnapshot) string {
 	if ref.Presentation.DefaultProfileID == "" {
 		return "自动派发需要在全局配置中指定 default_execution_profile"

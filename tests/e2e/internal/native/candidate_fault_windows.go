@@ -5,18 +5,18 @@ package native
 import (
 	"errors"
 	"fmt"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"path/filepath"
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"golang.org/x/sys/windows"
 )
 
 // DisconnectCandidate terminates only the exact isolated app-server handle,
 // inducing a real transport/resource loss. It is a test fault, never a product
 // stop receipt. The original session/worktree/database records remain untouched.
-func DisconnectCandidate(e contracts.ExecutionRecord, ownedRoot string) error {
+func DisconnectCandidate(e executionmodel.ExecutionRecord, ownedRoot string) error {
 	rel, err := filepath.Rel(ownedRoot, e.Workspace.Worktree)
 	if err != nil || rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || filepath.IsAbs(rel) || e.Backend != "local" || e.Process == nil || e.Process.Kind != "os" || e.Process.PID <= 0 {
 		return errors.New("fault target is not an owned local candidate")

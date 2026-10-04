@@ -6,13 +6,14 @@ import (
 	"errors"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func recordFingerprint(value any) string { return operationDigest(mustJSON(value)) }
 
 // Delivery freezes execution evidence; only subsequent diagnostic notes may change.
-func deliveredExecutionFingerprint(v ExecutionRecord) string {
+func deliveredExecutionFingerprint(v executionmodel.ExecutionRecord) string {
 	v.ResourceStopOperationID, v.ResourceStoppedAt = "", nil
 	v.Error, v.LastEvent, v.Summary = nil, nil, nil
 	v.UpdatedAt = v.CreatedAt
@@ -21,25 +22,25 @@ func deliveredExecutionFingerprint(v ExecutionRecord) string {
 
 func controlFingerprint(value any) string {
 	switch v := value.(type) {
-	case WorkflowRunRecord:
+	case executionmodel.WorkflowRunRecord:
 		return recordFingerprint(struct {
 			Phase, Selected, PRURL, PRState string
 			Pending                         int
 			Exit                            any
 			History                         []string
 		}{v.Phase, v.SelectedResult, v.PRURL, v.PRState, v.PendingDecisions, v.Abandonment, v.PRHistory})
-	case ExecutionRecord:
+	case executionmodel.ExecutionRecord:
 		return recordFingerprint(struct {
 			Status, Outcome, Decision, Step                                       string
 			PendingCommand, CurrentCommand, PendingTurn, CurrentTurn, StoppedTurn string
 			TurnNumber                                                            uint64
-			Process                                                               *executionapi.ProcessIdentity
-			Target                                                                executionapi.ExecutionTarget
-			Intent                                                                *executionapi.WorkspaceIntent
+			Process                                                               *executionbackend.ProcessIdentity
+			Target                                                                executionbackend.ExecutionTarget
+			Intent                                                                *executionbackend.WorkspaceIntent
 			Worktree, Branch, Base, Generation, ConfigurationDigest               string
-			ImplementationData                                                    []executionapi.ImplementationDataEnvelope
-			PendingQuestions                                                      []PendingQuestion
-			ManualStop                                                            *ManualStopConfirmation
+			ImplementationData                                                    []executionbackend.ImplementationDataEnvelope
+			PendingQuestions                                                      []executionmodel.PendingQuestion
+			ManualStop                                                            *executionmodel.ManualStopConfirmation
 			Attempt, Owner, Recovery                                              string
 			RecoveryRequired                                                      bool
 			RecoveryVersion                                                       uint64
@@ -48,7 +49,7 @@ func controlFingerprint(value any) string {
 			v.PendingCommandID, v.CurrentCommandID, v.PendingTurnID, v.CurrentTurnID, v.LastStoppedTurnID, v.TurnNumber,
 			v.Process, v.Target, v.WorkspaceIntent, v.Workspace.Worktree, v.Workspace.Branch, v.Workspace.Base, v.Generation, v.ConfigurationDigest, v.ImplementationData, v.PendingQuestions, v.ManualStop,
 			v.CurrentAttemptID, v.OwnerServiceInstanceID, v.RecoveryState, v.RecoveryRequired, v.RecoveryVersion, v.RecoveryMarkedAt})
-	case DecisionRecord:
+	case executionmodel.DecisionRecord:
 		return recordFingerprint(struct {
 			ID, Workflow, Execution, Attempt, Question, Status string
 			Version                                            uint64
@@ -67,22 +68,22 @@ func (t *sqliteTx) advanceControlRevision(table, key, project, id, workflow stri
 	if err == nil {
 		var previous any
 		switch value.(type) {
-		case WorkflowRunRecord:
-			previous = &WorkflowRunRecord{}
-		case ExecutionRecord:
-			previous = &ExecutionRecord{}
-		case DecisionRecord:
-			previous = &DecisionRecord{}
+		case executionmodel.WorkflowRunRecord:
+			previous = &executionmodel.WorkflowRunRecord{}
+		case executionmodel.ExecutionRecord:
+			previous = &executionmodel.ExecutionRecord{}
+		case executionmodel.DecisionRecord:
+			previous = &executionmodel.DecisionRecord{}
 		}
 		if err = json.Unmarshal(body, previous); err != nil {
 			return err
 		}
 		switch p := previous.(type) {
-		case *WorkflowRunRecord:
+		case *executionmodel.WorkflowRunRecord:
 			previous = *p
-		case *ExecutionRecord:
+		case *executionmodel.ExecutionRecord:
 			previous = *p
-		case *DecisionRecord:
+		case *executionmodel.DecisionRecord:
 			previous = *p
 		}
 		if controlFingerprint(previous) == controlFingerprint(value) {

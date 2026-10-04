@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -503,15 +502,12 @@ func lockNativeOrcaState(stateDir string) (func(), error) {
 	path := filepath.Join(stateDir, "native-orca.lock")
 	deadline := time.Now().Add(10 * time.Second)
 	for time.Now().Before(deadline) {
-		file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-		if err == nil {
-			_ = file.Close()
-			return func() { _ = os.Remove(path) }, nil
-		}
-		// Windows can report access denied while the previous owner's lock
-		// file is delete-pending. Wait within the same bounded lock attempt.
-		if !os.IsExist(err) && !(runtime.GOOS == "windows" && os.IsPermission(err)) {
+		unlock, err := tryNativeOrcaStateLock(path)
+		if err != nil {
 			return nil, err
+		}
+		if unlock != nil {
+			return unlock, nil
 		}
 		time.Sleep(5 * time.Millisecond)
 	}

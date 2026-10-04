@@ -2,16 +2,16 @@ package steerline
 
 import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func nativeDeliveryInconsistent(record TaskRecord, graph taskGraphSnapshot) bool {
+func nativeDeliveryInconsistent(record taskmodel.TaskRecord, graph taskGraphSnapshot) bool {
 	_, delivered := graph.Deliveries[record.TaskID]
-	return task.DeliveryInconsistent(record.Status, delivered)
+	return taskmodel.DeliveryInconsistent(record.Status, delivered)
 }
 
-func taskDependencyState(record TaskRecord, graph taskGraphSnapshot) (bool, []TaskDependencyStatus) {
-	return task.DependencyStateForTask(record, graph)
+func taskDependencyState(record taskmodel.TaskRecord, graph taskGraphSnapshot) (bool, []taskmodel.TaskDependencyStatus) {
+	return taskmodel.DependencyStateForTask(record, graph.TaskGraph())
 }
 
 // ReadyNativeTaskSnapshot returns the center's dispatch-order candidates and

@@ -3,10 +3,10 @@ package persistence
 import (
 	"context"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
 type RuntimeReader interface {
@@ -29,10 +29,10 @@ type Connection interface {
 	RuntimeReader
 	Close() error
 	LoadProjection(context.Context, string) ([]byte, uint64, error)
-	BindAuthority(task.ProjectTaskAuthority)
+	BindAuthority(tasklegacy.ProjectTaskAuthority)
 	ValidateStoredFormat(context.Context) error
-	ExecutionBinding(context.Context, string, string) (execution.ExecutionRef, error)
-	ExecutionOperation(context.Context, string, string, string) (execution.Operation, error)
+	ExecutionBinding(context.Context, string, string) (executionbackend.ExecutionRef, error)
+	ExecutionOperation(context.Context, string, string, string) (executionbackend.Operation, error)
 }
 
 // Factory is injected by application composition; the center never chooses a

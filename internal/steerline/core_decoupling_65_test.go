@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
@@ -32,12 +32,12 @@ func TestCD65HistoryAndPreparation(t *testing.T) {
 }
 
 func testCD65HostGateKeepsTrustedActionSeparate(t *testing.T) {
-	process := executionapi.ProcessIdentity{Kind: "fixture", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "generation"}
-	authorization := &executionapi.HostActionAuthorization{ExecutionID: "execution", AttemptID: "attempt", TurnID: "turn", CommandID: "command", BlockerID: "blocker", BlockerVersion: 1}
-	if err := (executionapi.HostActionInput{Kind: executionapi.HostOpenOriginal, Process: &process, Authorization: authorization}).Validate(); err != nil {
+	process := executionbackend.ProcessIdentity{Kind: "fixture", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "generation"}
+	authorization := &executionbackend.HostActionAuthorization{ExecutionID: "execution", AttemptID: "attempt", TurnID: "turn", CommandID: "command", BlockerID: "blocker", BlockerVersion: 1}
+	if err := (executionbackend.HostActionInput{Kind: executionbackend.HostOpenOriginal, Process: &process, Authorization: authorization}).Validate(); err != nil {
 		t.Fatalf("original host action was not accepted by its durable value contract: %v", err)
 	}
-	if err := (executionapi.HostActionInput{Kind: executionapi.HostOpenOriginal, Process: &executionapi.ProcessIdentity{Terminal: "replacement"}}).Validate(); err == nil {
+	if err := (executionbackend.HostActionInput{Kind: executionbackend.HostOpenOriginal, Process: &executionbackend.ProcessIdentity{Terminal: "replacement"}}).Validate(); err == nil {
 		t.Fatal("host action without the original runtime/incarnation was accepted")
 	}
 }
@@ -49,7 +49,7 @@ type testConversationHistoryPort struct {
 	cursors []string
 }
 
-func (p *testConversationHistoryPort) ReadHistory(_ context.Context, request contracts.ConversationHistoryReadRequest, _ func(*exec.Cmd) (executionapi.StopHandle, error)) (contracts.ConversationHistoryBatch, error) {
+func (p *testConversationHistoryPort) ReadHistory(_ context.Context, request contracts.ConversationHistoryReadRequest, _ func(*exec.Cmd) (executionbackend.StopHandle, error)) (contracts.ConversationHistoryBatch, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.visits = append(p.visits, request.Source.Identity)
@@ -190,6 +190,7 @@ type foreignConversationDiscovery struct {
 func (p foreignConversationDiscovery) DiscoverHistory(context.Context, contracts.ConversationDiscovery) (contracts.ConversationDiscoveryResult, error) {
 	return contracts.ConversationDiscoveryResult{Writes: []ConversationWrite{{Event: p.event}}}, nil
 }
+
 func testCD65DiscoveryRejectsForeignOwner(t *testing.T) {
 	store, err := openSQLiteFixture(t.TempDir() + "/discovery-owner.db")
 	require(t, err)

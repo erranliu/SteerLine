@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 // workerMessage is delivered to the single service state machine. Worker
@@ -27,9 +28,9 @@ func (s *Service) registerWorker(run *Run, worker *Worker) {
 		s.workers = make(map[string]*Worker)
 	}
 	s.workers[run.RunID] = worker
-	if owned, ok := worker.proc.(executionapi.OwnedProcessHandle); ok && owned.OwnedProcess() {
+	if owned, ok := worker.proc.(executionbackend.OwnedProcessHandle); ok && owned.OwnedProcess() {
 		if s.ownedProcesses == nil {
-			s.ownedProcesses = make(map[string]executionapi.StopHandle)
+			s.ownedProcesses = make(map[string]executionbackend.StopHandle)
 		}
 		s.ownedProcesses[run.RunID] = owned
 	}
@@ -126,7 +127,7 @@ forwarded:
 func (s *Service) handleWorkerMessage(message workerMessage) error {
 	if message.effect != nil {
 		if err := s.applyLifecycleEffect(message.runID, *message.effect); err != nil {
-			if errors.Is(err, ErrWorkerTurnStale) {
+			if errors.Is(err, executionmodel.ErrTurnStale) {
 				for _, deferred := range s.lifecycleMessages[message.runID] {
 					if deferred.event != nil {
 						rejectUndeliveredWorkerEvent(*deferred.event, err)
@@ -164,7 +165,7 @@ func (s *Service) handleWorkerMessage(message workerMessage) error {
 	}
 	if s.workers[message.runID] != message.worker {
 		if message.event != nil {
-			rejectUndeliveredWorkerEvent(*message.event, ErrWorkerTurnStale)
+			rejectUndeliveredWorkerEvent(*message.event, executionmodel.ErrTurnStale)
 		}
 		return nil // A late observer message cannot change a replacement attempt.
 	}

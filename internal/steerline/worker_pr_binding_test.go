@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
@@ -30,8 +31,8 @@ func TestWorkerPRBindingUsesProviderAndRetainsSession(t *testing.T) {
 	defer server.Close()
 	url := server.URL + "/org/repo/pulls/8"
 	client := publication.Client{Timeout: 5 * time.Second, Config: publication.Config{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}}
-	workflow := WorkflowRunRecord{WorkflowRunID: "wf-8", TaskID: "8", WorkflowVersion: WorkerFlowVersion, Phase: "executing", Branch: "main"}
-	execution := ExecutionRecord{ExecutionID: "exec-8", WorkflowRunID: "wf-8", Workspace: WorkspaceEvidence{Branch: "worker/task-8"}, SessionID: "original-session", CurrentTurnID: "turn-8", LastStoppedTurnID: "turn-8"}
+	workflow := executionmodel.WorkflowRunRecord{WorkflowRunID: "wf-8", TaskID: "8", WorkflowVersion: executionmodel.Version, Phase: "executing", Branch: "main"}
+	execution := executionmodel.ExecutionRecord{ExecutionID: "exec-8", WorkflowRunID: "wf-8", Workspace: executionmodel.WorkspaceEvidence{Branch: "worker/task-8"}, SessionID: "original-session", CurrentTurnID: "turn-8", LastStoppedTurnID: "turn-8"}
 	bind := func() error {
 		info, err := client.Query(context.Background(), url)
 		if err != nil {

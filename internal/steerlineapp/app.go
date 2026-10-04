@@ -5,16 +5,16 @@ import (
 	"errors"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/processhost"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
-func NewProcessHost(timeout time.Duration) executionapi.ManagedProcessHost {
+func NewProcessHost(timeout time.Duration) executionbackend.ManagedProcessHost {
 	return processhost.New(timeout)
 }
 
@@ -26,13 +26,13 @@ func NewService(config steerline.Config) (*steerline.Service, error) {
 
 // NewServiceWithLifecycleResolver permits an explicit decorator around the
 // same catalog's lifecycle ports, while preserving all other app wiring.
-func NewServiceWithLifecycleResolver(config steerline.Config, resolver executionapi.LifecycleResolver) (*steerline.Service, error) {
+func NewServiceWithLifecycleResolver(config steerline.Config, resolver executionbackend.LifecycleResolver) (*steerline.Service, error) {
 	return NewServiceWithPorts(config, resolver, codexworker.NewConversationAdapter())
 }
 
 // NewServiceWithPorts composes explicitly supplied execution and history ports
 // with the directory already accepted by this application instance.
-func NewServiceWithPorts(config steerline.Config, resolver executionapi.LifecycleResolver, sources contracts.ConversationSourcePort) (*steerline.Service, error) {
+func NewServiceWithPorts(config steerline.Config, resolver executionbackend.LifecycleResolver, sources contracts.ConversationSourcePort) (*steerline.Service, error) {
 	if config.ExecutionDirectory == nil || config.ProcessHost == nil {
 		return nil, errors.New("application configuration is missing its execution directory or process host")
 	}
@@ -86,7 +86,7 @@ func RunConfiguredService(ctx context.Context, config steerline.Config, mode, st
 	return steerline.RunConfiguredService(ctx, config, mode, startupID, console, NewService)
 }
 
-func RunSessionLauncher(ctx context.Context, requestPath string, processHost executionapi.ManagedProcessHost) error {
+func RunSessionLauncher(ctx context.Context, requestPath string, processHost executionbackend.ManagedProcessHost) error {
 	if processHost == nil {
 		return errors.New("managed process host is required")
 	}

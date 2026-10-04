@@ -7,18 +7,18 @@ import (
 	"strings"
 	"time"
 
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 )
 
-type SnapshotState = clientcontracts.SnapshotState
 type ObservationSnapshot = clientcontracts.ObservationSnapshot
 
 const (
-	SnapshotNone           = clientcontracts.SnapshotNone
-	SnapshotValid          = clientcontracts.SnapshotValid
-	SnapshotStale          = clientcontracts.SnapshotStale
-	SnapshotReadFailed     = clientcontracts.SnapshotReadFailed
-	SnapshotUnknownVersion = clientcontracts.SnapshotUnknownVersion
+	SnapshotNone           = productapi.SnapshotNone
+	SnapshotValid          = productapi.SnapshotValid
+	SnapshotStale          = productapi.SnapshotStale
+	SnapshotReadFailed     = productapi.SnapshotReadFailed
+	SnapshotUnknownVersion = productapi.SnapshotUnknownVersion
 )
 
 // ReadObservationSnapshot reads the committed SQLite service checkpoint.

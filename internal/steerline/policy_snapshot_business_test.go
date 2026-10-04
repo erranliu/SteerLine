@@ -1,6 +1,10 @@
 package steerline
 
-import "testing"
+import (
+	"testing"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+)
 
 func TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority(t *testing.T) {
 	c := workerContextConfigFixture()
@@ -15,8 +19,8 @@ func TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority(t *testin
 	if restored.ExecutionPolicy.Network != "allow" || neutralProfileSettings(restored).Model != "original" {
 		t.Fatal("current configuration rewrote original authority")
 	}
-	for _, mutate := range []func(*FixedExecutionProfile){
-		func(p *FixedExecutionProfile) { p.Version = 1 }, func(p *FixedExecutionProfile) { p.ExecutionPolicy.Network = "deny" }, func(p *FixedExecutionProfile) { p.ImplementationData[0].Payload[0] = '[' }, func(p *FixedExecutionProfile) { p.AcceptedConfigVersion = "edited" }, func(p *FixedExecutionProfile) { p.PolicyDigest = "edited" },
+	for _, mutate := range []func(*executionmodel.FixedExecutionProfile){
+		func(p *executionmodel.FixedExecutionProfile) { p.Version = 1 }, func(p *executionmodel.FixedExecutionProfile) { p.ExecutionPolicy.Network = "deny" }, func(p *executionmodel.FixedExecutionProfile) { p.ImplementationData[0].Payload[0] = '[' }, func(p *executionmodel.FixedExecutionProfile) { p.AcceptedConfigVersion = "edited" }, func(p *executionmodel.FixedExecutionProfile) { p.PolicyDigest = "edited" },
 	} {
 		candidate := original
 		candidate.ImplementationData = cloneImplementationData(original.ImplementationData)

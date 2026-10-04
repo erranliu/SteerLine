@@ -3,17 +3,18 @@ package steerline
 import (
 	"errors"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func putImplementationEnvelope(record *ExecutionRecord, envelope executionapi.ImplementationDataEnvelope) error {
+func putImplementationEnvelope(record *executionmodel.ExecutionRecord, envelope executionbackend.ImplementationDataEnvelope) error {
 	if record == nil {
 		return errors.New("execution record is required for implementation binding")
 	}
 	if err := envelope.Validate(); err != nil {
 		return err
 	}
-	next := make([]executionapi.ImplementationDataEnvelope, 0, len(record.ImplementationData)+1)
+	next := make([]executionbackend.ImplementationDataEnvelope, 0, len(record.ImplementationData)+1)
 	for _, existing := range record.ImplementationData {
 		if existing.ImplementationKey != envelope.ImplementationKey {
 			next = append(next, existing.Clone())
@@ -24,11 +25,11 @@ func putImplementationEnvelope(record *ExecutionRecord, envelope executionapi.Im
 	return nil
 }
 
-func removeImplementationEnvelope(record *ExecutionRecord, key string) {
+func removeImplementationEnvelope(record *executionmodel.ExecutionRecord, key string) {
 	if record == nil {
 		return
 	}
-	next := make([]executionapi.ImplementationDataEnvelope, 0, len(record.ImplementationData))
+	next := make([]executionbackend.ImplementationDataEnvelope, 0, len(record.ImplementationData))
 	for _, envelope := range record.ImplementationData {
 		if envelope.ImplementationKey != key {
 			next = append(next, envelope.Clone())
@@ -37,7 +38,7 @@ func removeImplementationEnvelope(record *ExecutionRecord, key string) {
 	record.ImplementationData = next
 }
 
-func validateExecutionImplementationData(record *ExecutionRecord) error {
+func validateExecutionImplementationData(record *executionmodel.ExecutionRecord) error {
 	if record == nil {
 		return errors.New("execution record is required for implementation data verification")
 	}
@@ -56,7 +57,7 @@ func validateExecutionImplementationData(record *ExecutionRecord) error {
 
 // A manually confirmed new Attempt can carry the original session before its
 // new process resources exist. This is a generic recovery stage, not a live binding.
-func awaitingRecoveryResources(record *ExecutionRecord) bool {
+func awaitingRecoveryResources(record *executionmodel.ExecutionRecord) bool {
 	if record == nil || record.Process != nil || record.Status != "pending" || record.RecoveryState != "resuming" ||
 		record.RecoveryRequired || record.Generation == "" || record.CurrentTurnID != "" || record.PendingTurnID != "" {
 		return false
@@ -64,7 +65,7 @@ func awaitingRecoveryResources(record *ExecutionRecord) bool {
 	return record.SessionID != "" && record.SessionGeneration == ""
 }
 
-func executionSessionFacts(record *ExecutionRecord) (string, string) {
+func executionSessionFacts(record *executionmodel.ExecutionRecord) (string, string) {
 	if record == nil {
 		return "", ""
 	}

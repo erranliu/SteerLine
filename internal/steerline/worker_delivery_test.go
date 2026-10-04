@@ -9,15 +9,17 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
 	commands := CommandService{Store: store, Project: c.Identity()}
-	input := taskBatchFixture(t, c, commit, batchTasks(8, 9), []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k8"}, Successor: TaskBatchReference{LocalKey: "k9"}}})
+	input := taskBatchFixture(t, c, commit, batchTasks(8, 9), []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k8"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k9"}}})
 	validation, err := commands.ValidateTaskBatch(ctx, c, input)
 	if err != nil || !validation.Valid {
 		t.Fatalf("validate fixture: %+v %v", validation, err)
@@ -36,10 +38,10 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 	}
 	created := time.Now().UTC()
 	url := "https://git.example/o/r/pulls/8"
-	wf := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: created, UpdatedAt: created}
+	wf := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: created, UpdatedAt: created}
 	fixed := c.projectExecutionProfile().Freeze(c.Identity())
 	wf.ExecutionProfile, wf.ConfigDigest = &fixed, fixed.AcceptedConfigVersion
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, CurrentAttemptID: "attempt-8", ConfigurationDigest: wf.ExecutionProfile.Digest, WorkflowRunID: wf.WorkflowRunID, Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "idle", Workspace: WorkspaceEvidence{Branch: "fixture/task-8", Dirty: true}, CreatedAt: created, UpdatedAt: created}
+	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, CurrentAttemptID: "attempt-8", ConfigurationDigest: wf.ExecutionProfile.Digest, WorkflowRunID: wf.WorkflowRunID, Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "idle", Workspace: executionmodel.WorkspaceEvidence{Branch: "fixture/task-8", Dirty: true}, CreatedAt: created, UpdatedAt: created}
 	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	claimed := task
 	claimed.Status = "in_progress"
@@ -95,12 +97,12 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	if out, err := exec.Command("git", "-C", c.Repository, "remote", "set-url", "origin", "https://forge.invalid/org/repo.git").CombinedOutput(); err != nil {
 		t.Fatalf("set isolated remote: %v: %s", err, out)
 	}
-	c.Git = Command{Executable: "git"}
+	c.Git = executionbackend.Command{Executable: "git"}
 	settings := neutralProfileSettings(c)
 	c.PublicationPolicy.Publisher = "worker"
 	setNeutralProfile(t, &c, settings)
-	c.WorkflowProtocol = WorkerFlowVersion
-	c.PR = publication.Config{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo", Query: Command{Executable: "gh"}}
+	c.WorkflowProtocol = executionmodel.Version
+	c.PR = publication.Config{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo", Query: executionbackend.Command{Executable: "gh"}}
 	project, err := OpenNativeTaskProject(ctx, &c)
 	if err != nil {
 		t.Fatal(err)
@@ -114,7 +116,7 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	}
 	defer store.Close()
 	commands := CommandService{Store: store, Project: c.Identity()}
-	input := taskBatchFixture(t, c, commit, batchTasks(8, 9), []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k8"}, Successor: TaskBatchReference{LocalKey: "k9"}}})
+	input := taskBatchFixture(t, c, commit, batchTasks(8, 9), []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k8"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k9"}}})
 	if _, err := commands.CreateTaskBatch(ctx, c, input, strings.Repeat("8", 32), 1, "operator"); err != nil {
 		t.Fatal(err)
 	}
@@ -125,14 +127,14 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	task := graph.ByID["8"]
 	at := time.Now().UTC()
 	url := "https://forge.invalid/org/repo/pulls/8"
-	wf := WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: "8", WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: at, UpdatedAt: at}
+	wf := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: "8", WorkflowVersion: executionmodel.Version, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: at, UpdatedAt: at}
 	require(t, c.bindPublicationTarget(ctx))
 	fixed := c.projectExecutionProfile().Freeze()
 	if !neutralVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("delivery fixture did not freeze a valid execution profile")
 	}
 	wf.ExecutionProfile, wf.ConfigDigest = &fixed, fixed.AcceptedConfigVersion
-	execution := ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, CurrentAttemptID: "attempt-8", ConfigurationDigest: wf.ExecutionProfile.Digest, WorkflowRunID: wf.WorkflowRunID, Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "idle", Workspace: WorkspaceEvidence{Branch: "fixture/task-8"}, CreatedAt: at, UpdatedAt: at}
+	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, CurrentAttemptID: "attempt-8", ConfigurationDigest: wf.ExecutionProfile.Digest, WorkflowRunID: wf.WorkflowRunID, Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "idle", Workspace: executionmodel.WorkspaceEvidence{Branch: "fixture/task-8"}, CreatedAt: at, UpdatedAt: at}
 	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	claimed := task
 	claimed.Status, claimed.Claimant, claimed.Version, claimed.UpdatedAt = "in_progress", "operator", task.Version+1, at
@@ -149,13 +151,13 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 		t.Fatal(err)
 	}
 	mergedAt, mergeCommit := at.Add(time.Minute), commit
-	good := PRInfo{URL: url, Repository: "org/repo", BaseBranch: "main", HeadRepository: "org/repo", HeadBranch: "fixture/task-8", HeadRevision: commit, State: "merged", Merged: true, MergedAt: &mergedAt, MergeCommit: &mergeCommit}
+	good := executionmodel.PRInfo{URL: url, Repository: "org/repo", BaseBranch: "main", HeadRepository: "org/repo", HeadBranch: "fixture/task-8", HeadRevision: commit, State: "merged", Merged: true, MergedAt: &mergedAt, MergeCommit: &mergeCommit}
 	verifier := &fixedTaskDeliveryVerifier{info: good}
-	for name, alter := range map[string]func(*PRInfo){
-		"wrong task branch": func(info *PRInfo) { info.HeadBranch = "fixture/task-9" },
-		"wrong repository":  func(info *PRInfo) { info.Repository = "other/repo" },
-		"wrong base":        func(info *PRInfo) { info.BaseBranch = "develop" },
-		"closed unmerged": func(info *PRInfo) {
+	for name, alter := range map[string]func(*executionmodel.PRInfo){
+		"wrong task branch": func(info *executionmodel.PRInfo) { info.HeadBranch = "fixture/task-9" },
+		"wrong repository":  func(info *executionmodel.PRInfo) { info.Repository = "other/repo" },
+		"wrong base":        func(info *executionmodel.PRInfo) { info.BaseBranch = "develop" },
+		"closed unmerged": func(info *executionmodel.PRInfo) {
 			info.State, info.Merged, info.MergedAt, info.MergeCommit = "closed_unmerged", false, nil, nil
 		},
 	} {
@@ -194,7 +196,7 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 func TestWorkerFlowClaimNeedsNoProjectSteps(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
-	c.WorkflowProtocol = WorkerFlowVersion
+	c.WorkflowProtocol = executionmodel.Version
 	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
 		t.Fatalf("push fixture branch: %v: %s", err, out)
 	}
@@ -228,7 +230,7 @@ func TestWorkerFlowClaimNeedsNoProjectSteps(t *testing.T) {
 		t.Fatal(err)
 	}
 	wf := latestNativeWorkflow(snapshot.WorkflowRuns, "8")
-	if wf == nil || wf.WorkflowVersion != WorkerFlowVersion || wf.Phase != "queued" || wf.SelectedResult != receipt.ExecutionID || len(snapshot.Attempts) != 1 || snapshot.Attempts[0].StepID != "worker" {
+	if wf == nil || wf.WorkflowVersion != executionmodel.Version || wf.Phase != "queued" || wf.SelectedResult != receipt.ExecutionID || len(snapshot.Attempts) != 1 || snapshot.Attempts[0].StepID != "worker" {
 		t.Fatalf("claim did not reserve one worker identity: workflow=%+v attempts=%+v", wf, snapshot.Attempts)
 	}
 }

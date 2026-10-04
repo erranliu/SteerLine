@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 const ConversationVersion = 2
@@ -82,46 +82,46 @@ const (
 // console. Source IDs and turn IDs carry explicit quality; display text and
 // timestamps are never used to infer identity.
 type ConversationEvent struct {
-	Version            int                            `json:"v"`
-	EventID            int64                          `json:"event_id,omitempty"`
-	ProjectID          string                         `json:"project_id"`
-	TaskID             string                         `json:"task_id,omitempty"`
-	WorkflowID         string                         `json:"workflow_id,omitempty"`
-	ExecutionID        string                         `json:"execution_id"`
-	AttemptID          string                         `json:"attempt_id"`
-	Backend            executionapi.BackendKind       `json:"backend,omitempty"`
-	Protocol           executionapi.ExecutionProtocol `json:"protocol,omitempty"`
-	Agent              string                         `json:"agent,omitempty"`
-	TargetID           string                         `json:"target_id,omitempty"`
-	ExternalRef        string                         `json:"external_ref,omitempty"`
-	Source             string                         `json:"source"`
-	SourceRole         ConversationSourceRole         `json:"source_role,omitempty"`
-	SourceSegment      string                         `json:"source_segment"`
-	SourceIdentity     string                         `json:"source_identity,omitempty"`
-	SourceCursor       string                         `json:"source_cursor,omitempty"`
-	SessionID          string                         `json:"session_id,omitempty"`
-	SessionQuality     IdentityQuality                `json:"session_quality"`
-	TurnID             string                         `json:"turn_id,omitempty"`
-	TurnQuality        IdentityQuality                `json:"turn_quality"`
-	ItemID             string                         `json:"item_id,omitempty"`
-	ItemQuality        IdentityQuality                `json:"item_quality"`
-	ItemKey            string                         `json:"item_key,omitempty"`
-	SourceEventID      string                         `json:"source_event_id,omitempty"`
-	SourceEventQuality IdentityQuality                `json:"source_event_quality"`
-	SourceSeq          uint64                         `json:"source_seq,omitempty"`
-	SourceRevision     int64                          `json:"source_revision,omitempty"`
-	LocalSeq           uint64                         `json:"local_seq,omitempty"`
-	Type               ConversationEventType          `json:"type"`
-	Phase              MessagePhase                   `json:"phase,omitempty"`
-	FinalAvailability  FinalAvailability              `json:"final_availability,omitempty"`
-	Status             string                         `json:"status,omitempty"`
-	Body               *ConversationBodyRef           `json:"body,omitempty"`
-	Raw                *ConversationRawRef            `json:"raw,omitempty"`
-	Evidence           map[string]string              `json:"evidence,omitempty"`
-	Attributes         map[string]any                 `json:"attributes,omitempty"`
-	OccurredAt         *time.Time                     `json:"occurred_at,omitempty"`
-	ReceivedAt         time.Time                      `json:"received_at"`
-	Diagnostic         string                         `json:"diagnostic,omitempty"`
+	Version            int                                `json:"v"`
+	EventID            int64                              `json:"event_id,omitempty"`
+	ProjectID          string                             `json:"project_id"`
+	TaskID             string                             `json:"task_id,omitempty"`
+	WorkflowID         string                             `json:"workflow_id,omitempty"`
+	ExecutionID        string                             `json:"execution_id"`
+	AttemptID          string                             `json:"attempt_id"`
+	Backend            executionbackend.BackendKind       `json:"backend,omitempty"`
+	Protocol           executionbackend.ExecutionProtocol `json:"protocol,omitempty"`
+	Agent              string                             `json:"agent,omitempty"`
+	TargetID           string                             `json:"target_id,omitempty"`
+	ExternalRef        string                             `json:"external_ref,omitempty"`
+	Source             string                             `json:"source"`
+	SourceRole         ConversationSourceRole             `json:"source_role,omitempty"`
+	SourceSegment      string                             `json:"source_segment"`
+	SourceIdentity     string                             `json:"source_identity,omitempty"`
+	SourceCursor       string                             `json:"source_cursor,omitempty"`
+	SessionID          string                             `json:"session_id,omitempty"`
+	SessionQuality     IdentityQuality                    `json:"session_quality"`
+	TurnID             string                             `json:"turn_id,omitempty"`
+	TurnQuality        IdentityQuality                    `json:"turn_quality"`
+	ItemID             string                             `json:"item_id,omitempty"`
+	ItemQuality        IdentityQuality                    `json:"item_quality"`
+	ItemKey            string                             `json:"item_key,omitempty"`
+	SourceEventID      string                             `json:"source_event_id,omitempty"`
+	SourceEventQuality IdentityQuality                    `json:"source_event_quality"`
+	SourceSeq          uint64                             `json:"source_seq,omitempty"`
+	SourceRevision     int64                              `json:"source_revision,omitempty"`
+	LocalSeq           uint64                             `json:"local_seq,omitempty"`
+	Type               ConversationEventType              `json:"type"`
+	Phase              MessagePhase                       `json:"phase,omitempty"`
+	FinalAvailability  FinalAvailability                  `json:"final_availability,omitempty"`
+	Status             string                             `json:"status,omitempty"`
+	Body               *ConversationBodyRef               `json:"body,omitempty"`
+	Raw                *ConversationRawRef                `json:"raw,omitempty"`
+	Evidence           map[string]string                  `json:"evidence,omitempty"`
+	Attributes         map[string]any                     `json:"attributes,omitempty"`
+	OccurredAt         *time.Time                         `json:"occurred_at,omitempty"`
+	ReceivedAt         time.Time                          `json:"received_at"`
+	Diagnostic         string                             `json:"diagnostic,omitempty"`
 }
 
 type ConversationBodyRef struct {
@@ -183,7 +183,7 @@ type ConversationMapper interface {
 
 type ConversationInput struct {
 	Event         ConversationEvent
-	Process       *executionapi.ProcessIdentity
+	Process       *executionbackend.ProcessIdentity
 	Source        string
 	Segment       string
 	Identity      string
@@ -215,13 +215,13 @@ type ConversationSourcePort interface {
 	ConversationInputMapper
 	RestoreMapper(ConversationMapperSnapshot) ConversationMapper
 	JournalSources() []string
-	JournalSource(executionapi.BackendKind, executionapi.ExecutionProtocol) string
-	JournalSegment(executionapi.BackendKind, executionapi.ExecutionProtocol, string) string
+	JournalSource(executionbackend.BackendKind, executionbackend.ExecutionProtocol) string
+	JournalSegment(executionbackend.BackendKind, executionbackend.ExecutionProtocol, string) string
 	JournalGeneration(fileIdentity, segment string) (uint64, error)
 	LiveJournalPath(context.Context, ConversationJournalPathRequest) (string, error)
 	DiscoverHistory(context.Context, ConversationDiscovery) (ConversationDiscoveryResult, error)
 	DiscoverJournals(context.Context, ConversationDiscovery, func(string) (string, error)) ([]ConversationJournalSource, error)
-	ReadHistory(context.Context, ConversationHistoryReadRequest, func(*exec.Cmd) (executionapi.StopHandle, error)) (ConversationHistoryBatch, error)
+	ReadHistory(context.Context, ConversationHistoryReadRequest, func(*exec.Cmd) (executionbackend.StopHandle, error)) (ConversationHistoryBatch, error)
 }
 
 type ConversationJournalPathRequest struct {
@@ -240,7 +240,7 @@ type ConversationRunSource struct {
 	RunDirectory string
 	Workspace    string
 	WorkerFlow   bool
-	Process      *executionapi.ProcessIdentity
+	Process      *executionbackend.ProcessIdentity
 	Attempts     []ConversationAttemptSource
 }
 
@@ -290,25 +290,25 @@ type ConversationHistoryBatch struct {
 }
 
 type ConversationCapability struct {
-	Name     string                        `json:"name"`
-	Status   executionapi.CapabilityStatus `json:"status"`
-	Evidence string                        `json:"evidence,omitempty"`
+	Name     string                            `json:"name"`
+	Status   executionbackend.CapabilityStatus `json:"status"`
+	Evidence string                            `json:"evidence,omitempty"`
 }
 
 type ConversationCapabilityReport struct {
-	Version         int                            `json:"version"`
-	Backend         executionapi.BackendKind       `json:"backend"`
-	Protocol        executionapi.ExecutionProtocol `json:"protocol"`
-	Agent           string                         `json:"agent"`
-	AgentVersion    string                         `json:"agent_version,omitempty"`
-	PlatformVersion string                         `json:"platform_version,omitempty"`
-	Target          executionapi.ExecutionTarget   `json:"target"`
-	ExecutionID     string                         `json:"execution_id,omitempty"`
-	AttemptID       string                         `json:"attempt_id,omitempty"`
-	Source          string                         `json:"source,omitempty"`
-	SourceIdentity  string                         `json:"source_identity,omitempty"`
-	CheckedAt       time.Time                      `json:"checked_at"`
-	Capabilities    []ConversationCapability       `json:"capabilities"`
+	Version         int                                `json:"version"`
+	Backend         executionbackend.BackendKind       `json:"backend"`
+	Protocol        executionbackend.ExecutionProtocol `json:"protocol"`
+	Agent           string                             `json:"agent"`
+	AgentVersion    string                             `json:"agent_version,omitempty"`
+	PlatformVersion string                             `json:"platform_version,omitempty"`
+	Target          executionbackend.ExecutionTarget   `json:"target"`
+	ExecutionID     string                             `json:"execution_id,omitempty"`
+	AttemptID       string                             `json:"attempt_id,omitempty"`
+	Source          string                             `json:"source,omitempty"`
+	SourceIdentity  string                             `json:"source_identity,omitempty"`
+	CheckedAt       time.Time                          `json:"checked_at"`
+	Capabilities    []ConversationCapability           `json:"capabilities"`
 }
 
 func (e *ConversationEvent) EventIDFallback(reason string) {

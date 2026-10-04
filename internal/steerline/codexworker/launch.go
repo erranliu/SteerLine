@@ -1,16 +1,17 @@
 package codexworker
 
 import (
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 type LaunchConfig struct {
-	Policy         executionapi.ExecutionPolicy
+	Policy         executionbackend.ExecutionPolicy
 	Executable     string
 	Args           []string
 	Profile        string

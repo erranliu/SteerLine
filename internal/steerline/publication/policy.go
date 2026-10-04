@@ -6,13 +6,13 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 // CheckPolicy validates publication values without selecting an execution
 // implementation. The application directory owns support decisions.
-func CheckPolicy(p executionapi.PublicationPolicy, provider Config) error {
+func CheckPolicy(p executionbackend.PublicationPolicy, provider Config) error {
 	if err := p.Validate(); err != nil {
 		return err
 	}
@@ -44,16 +44,17 @@ func ValidateURL(raw string) error {
 }
 
 var secretArgument = regexp.MustCompile(`(?i)(token|password|passwd|secret|authorization|authentication|credential|extraheader|api[._-]?key|auth[._-]?key|access[_-]?key|private[_-]?key|bearer|^--?user(?:=|$)|^-u$)`)
+
 var envName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
-func ValidateNonSecret(c Config, git contracts.Command) error {
+func ValidateNonSecret(c Config, git executionbackend.Command) error {
 	if err := ValidateURL(c.BaseURL); err != nil {
 		return err
 	}
 	if c.TokenEnv != "" && !envName.MatchString(c.TokenEnv) {
 		return errors.New("authentication reference must be an environment variable name [REDACTED]")
 	}
-	for _, command := range []contracts.Command{c.Query, c.Close, git} {
+	for _, command := range []executionbackend.Command{c.Query, c.Close, git} {
 		for _, arg := range append([]string{command.Executable}, command.Args...) {
 			if strings.ContainsAny(arg, "\r\n\x00") || secretArgument.MatchString(arg) {
 				return errors.New("publication command must not embed authentication values; use references [REDACTED]")
@@ -71,7 +72,7 @@ func ValidateNonSecret(c Config, git contracts.Command) error {
 	return nil
 }
 
-func ValidateSettings(s contracts.PublicationSettings) error {
+func ValidateSettings(s executionmodel.PublicationSettings) error {
 	if err := ValidateNonSecret(Config(s.Provider), s.Git); err != nil {
 		return err
 	}

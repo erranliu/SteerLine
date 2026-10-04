@@ -11,18 +11,18 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/testprocess"
 )
 
 type State struct {
-	GitURL     string           `json:"git_url"`
-	Cwd        string           `json:"cwd"`
-	Session    string           `json:"session"`
-	Sessions   int              `json:"sessions"`
-	Dispatches int              `json:"dispatches"`
-	Turns      []map[string]any `json:"turns"`
-	PR         contracts.PRInfo `json:"pr"`
+	GitURL     string                `json:"git_url"`
+	Cwd        string                `json:"cwd"`
+	Session    string                `json:"session"`
+	Sessions   int                   `json:"sessions"`
+	Dispatches int                   `json:"dispatches"`
+	Turns      []map[string]any      `json:"turns"`
+	PR         executionmodel.PRInfo `json:"pr"`
 }
 
 func Read(path string) (State, error) {
@@ -60,6 +60,7 @@ func Git(ctx context.Context, dir string, args ...string) (string, error) {
 	out, err := gitBytes(ctx, dir, args...)
 	return strings.TrimSpace(string(out)), err
 }
+
 func gitBytes(ctx context.Context, dir string, args ...string) ([]byte, error) {
 	argv := append([]string{"-C", dir}, args...)
 	if path := os.Getenv("STEERLINE_E2E_CONTROLLED_STATE"); path != "" {

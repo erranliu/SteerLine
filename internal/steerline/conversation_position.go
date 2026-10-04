@@ -8,16 +8,18 @@ import (
 	"io"
 	"os"
 
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 // conversationJournalPosition is the committed source position. The two short
 // anchors detect a same-file rewrite before any saved position is reused.
 type conversationJournalPosition = contracts.ConversationJournalPosition
 
-func journalCursorOf(p conversationJournalPosition, path string) JournalCursor {
-	return JournalCursor{Path: path, FileID: p.FileID, Generation: p.Generation, Offset: p.ByteOffset, ScanOffset: p.ByteOffset, HeaderLength: p.HeaderLength, HeaderHash: p.HeaderHash, AnchorOffset: p.AnchorOffset, AnchorLength: p.AnchorLength, AnchorHash: p.AnchorHash, Initialized: true}
+func journalCursorOf(p conversationJournalPosition, path string) productapi.JournalCursor {
+	return productapi.JournalCursor{Path: path, FileID: p.FileID, Generation: p.Generation, Offset: p.ByteOffset, ScanOffset: p.ByteOffset, HeaderLength: p.HeaderLength, HeaderHash: p.HeaderHash, AnchorOffset: p.AnchorOffset, AnchorLength: p.AnchorLength, AnchorHash: p.AnchorHash, Initialized: true}
 }
 
 func currentConversationJournalPosition(ctx context.Context, store persistence.Conversations, project, execution, attempt, source, segment string, generation uint64, path, fileID string, offset int64, seq uint64) (conversationJournalPosition, error) {
@@ -32,7 +34,7 @@ func currentConversationJournalPosition(ctx context.Context, store persistence.C
 			return conversationJournalPosition{}, decodeErr
 		}
 		previous = &position
-	} else if !errors.Is(err, persistence.ErrNotFound) {
+	} else if !errors.Is(err, storageports.ErrNotFound) {
 		return conversationJournalPosition{}, err
 	}
 	return readConversationJournalPosition(path, fileID, offset, seq, generation, previous)

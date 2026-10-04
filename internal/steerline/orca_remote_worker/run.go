@@ -6,7 +6,7 @@ import (
 	"errors"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func (b Client) FindRun(ctx context.Context, objective, centerRuntime, coordinator string) (string, error) {
@@ -34,7 +34,7 @@ func (b Client) CreateCoordinator(ctx context.Context, workflowRunID, centerRunt
 	out, callErr := b.config.Call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "terminal", "create", "--worktree", "path:"+b.config.Repository, "--shell", "powershell", "--title", "SteerLine coordinator "+workflowRunID, "--json")
 	env, parseErr := parseEnvelope(out)
 	if callErr != nil || parseErr != nil {
-		return "", &Error{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "per-Run coordinator creation is uncertain; inspect the original WorkflowRun before retry", Cause: errors.Join(callErr, parseErr)}
+		return "", &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "per-Run coordinator creation is uncertain; inspect the original WorkflowRun before retry", Cause: errors.Join(callErr, parseErr)}
 	}
 	var result struct {
 		Terminal struct {
@@ -42,7 +42,7 @@ func (b Client) CreateCoordinator(ctx context.Context, workflowRunID, centerRunt
 		} `json:"terminal"`
 	}
 	if err := json.Unmarshal(env.Result, &result); err != nil || env.Meta.RuntimeID != centerRuntime || result.Terminal.Handle == "" {
-		return "", &Error{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "per-Run coordinator receipt lacks an exact handle or center runtime", Cause: err}
+		return "", &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "per-Run coordinator receipt lacks an exact handle or center runtime", Cause: err}
 	}
 	return result.Terminal.Handle, nil
 }
@@ -53,13 +53,13 @@ func (b Client) VerifyCoordinator(ctx context.Context, ref Ref) (string, error) 
 		coordinator = b.config.Settings.CoordinatorTerminal
 	}
 	if !stableExecutionID(ref.RunID) || ref.External.OrchestrationRun == "" || ref.External.CoordinatorRuntimeID == "" || coordinator == "" {
-		return "", &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "supervised Run lacks its pinned coordinator binding"}
+		return "", &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "supervised Run lacks its pinned coordinator binding"}
 	}
 	client := Client{config: b.config}
 	out, callErr := client.config.Call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "orchestration", "run-show", "--id", ref.External.OrchestrationRun, "--json")
 	env, parseErr := parseEnvelope(out)
 	if callErr != nil || parseErr != nil {
-		return "", &Error{Code: executionapi.BackendUnreachable, Diagnostic: "original Orca Run cannot be inspected", Cause: errors.Join(callErr, parseErr)}
+		return "", &Error{Code: executionbackend.BackendUnreachable, Diagnostic: "original Orca Run cannot be inspected", Cause: errors.Join(callErr, parseErr)}
 	}
 	var result struct {
 		Run struct {
@@ -68,7 +68,7 @@ func (b Client) VerifyCoordinator(ctx context.Context, ref Ref) (string, error) 
 		} `json:"run"`
 	}
 	if err := json.Unmarshal(env.Result, &result); err != nil || env.Meta.RuntimeID != ref.External.CoordinatorRuntimeID || result.Run.ID != ref.External.OrchestrationRun || result.Run.Coordinator != coordinator {
-		return "", &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "Orca Run is bound to another coordinator", Cause: err}
+		return "", &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "Orca Run is bound to another coordinator", Cause: err}
 	}
 	return coordinator, nil
 }

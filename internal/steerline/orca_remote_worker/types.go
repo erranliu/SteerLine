@@ -9,11 +9,12 @@ import (
 	"regexp"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 type Settings struct{ ConnectionID, EnvironmentID, RepositorySelector, CoordinatorTerminal, ExpectedCodexVersion, PollInterval string }
+
 type Config struct {
 	ExpectedRemoteRuntime                                                string
 	Settings                                                             Settings
@@ -34,20 +35,23 @@ type Client struct{ config Config }
 func New(c Config) Client { return Client{config: c} }
 
 type Message = orcaworker.Message
+
 type Ref struct {
-	Backend                                           executionapi.BackendKind
-	Protocol                                          executionapi.ExecutionProtocol
+	Backend                                           executionbackend.BackendKind
+	Protocol                                          executionbackend.ExecutionProtocol
 	RunID, WorkspacePath, WorkspaceBranch, BaseCommit string
-	Target                                            executionapi.ExecutionTarget
-	External                                          executionapi.ProcessIdentity
+	Target                                            executionbackend.ExecutionTarget
+	External                                          executionbackend.ProcessIdentity
 }
+
 type Workspace struct {
 	Repository, Worktree, Branch, Base, Head string
 	Dirty                                    bool
 	CheckedAt                                time.Time
 }
+
 type Error struct {
-	Code       executionapi.BackendErrorCode
+	Code       executionbackend.BackendErrorCode
 	Diagnostic string
 	Cause      error
 }
@@ -58,25 +62,29 @@ func (e *Error) Error() string {
 	}
 	return string(e.Code) + ": " + e.Diagnostic
 }
+
 func (e *Error) Unwrap() error { return e.Cause }
 
 var commitHash = regexp.MustCompile(`^(?:[0-9a-f]{40}|[0-9a-f]{64})$`)
 
 func now() time.Time { return time.Now().UTC() }
+
 func positiveDuration(s string, d time.Duration) time.Duration {
 	if value, e := time.ParseDuration(s); e == nil && value > 0 {
 		return value
 	}
 	return d
 }
+
 func duration(s string) time.Duration { v, _ := time.ParseDuration(s); return v }
 
 var stableID = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
 func stableExecutionID(s string) bool { return stableID.MatchString(s) }
+
 func validateSupervisedRef(c Config, ref Ref) error {
-	if ref.Backend != executionapi.BackendOrca || ref.Protocol != executionapi.ProtocolOrcaSupervised || ref.Target.ID != "orca-supervised:"+c.Settings.ConnectionID || ref.Target.ConnectionID != c.Settings.ConnectionID || ref.Target.ExternalRuntime != c.Settings.EnvironmentID || ref.Target.OrchestrationRun != ref.External.OrchestrationRun || ref.Target.ExternalTask != ref.External.Task || ref.Target.Dispatch != ref.External.Dispatch || ref.Target.ExecutionHost != ref.External.ExecutionHost || ref.Target.WorktreeID != ref.External.WorktreeID || ref.External.Kind != "orca_supervised" || ref.External.RuntimeID == "" || ref.External.CoordinatorRuntimeID == "" || ref.External.Task == "" || ref.External.Dispatch == "" || ref.External.ExecutionHost != c.Settings.EnvironmentID || ref.External.WorktreeID == "" {
-		return &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote Orca reference differs from its fixed target/Dispatch"}
+	if ref.Backend != executionbackend.BackendOrca || ref.Protocol != executionbackend.ProtocolOrcaSupervised || ref.Target.ID != "orca-supervised:"+c.Settings.ConnectionID || ref.Target.ConnectionID != c.Settings.ConnectionID || ref.Target.ExternalRuntime != c.Settings.EnvironmentID || ref.Target.OrchestrationRun != ref.External.OrchestrationRun || ref.Target.ExternalTask != ref.External.Task || ref.Target.Dispatch != ref.External.Dispatch || ref.Target.ExecutionHost != ref.External.ExecutionHost || ref.Target.WorktreeID != ref.External.WorktreeID || ref.External.Kind != "orca_supervised" || ref.External.RuntimeID == "" || ref.External.CoordinatorRuntimeID == "" || ref.External.Task == "" || ref.External.Dispatch == "" || ref.External.ExecutionHost != c.Settings.EnvironmentID || ref.External.WorktreeID == "" {
+		return &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "remote Orca reference differs from its fixed target/Dispatch"}
 	}
 	return nil
 }
@@ -111,6 +119,7 @@ func parseEnvelope(b []byte) (orcaEnvelope, error) {
 }
 
 const MaxMessageBytes = 8 << 10
+
 const maxSupervisedMessageBytes = MaxMessageBytes
 
 type PreflightResult struct {
@@ -136,7 +145,7 @@ type StartReceipt struct {
 }
 
 type WorkerObservation struct {
-	Identity       executionapi.ProcessIdentity
+	Identity       executionbackend.ProcessIdentity
 	Liveness       string
 	DispatchState  string
 	AgentWaitState string

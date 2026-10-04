@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 // Output is the host process runner. The adapter owns CLI arguments and decoding.
 type Config struct {
 	Repository, CommandTimeout string
-	Target                     executionapi.ExecutionTarget
+	Target                     executionbackend.ExecutionTarget
 	Output                     func(context.Context, time.Duration, ...string) ([]byte, error)
 	AgentVersion               func(context.Context) (string, error)
-	InspectWorkspace           func(context.Context, executionapi.ExecutionRef) (executionapi.WorkspaceInspection, error)
+	InspectWorkspace           func(context.Context, executionbackend.ExecutionRef) (executionbackend.WorkspaceInspection, error)
 }

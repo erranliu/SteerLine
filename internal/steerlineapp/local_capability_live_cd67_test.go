@@ -14,8 +14,8 @@ import (
 	"testing"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // TestLiveLocalCapabilityEvidence is an opt-in probe for the installed Codex
@@ -43,14 +43,14 @@ func TestLiveLocalCapabilityEvidence(t *testing.T) {
 	entry, err := c.ExecutionDirectory.Resolve(c)
 	require(t, err)
 	backend := entry.Backend(c)
-	stopper, ok := backend.(executionapi.ExecutionStopper)
+	stopper, ok := backend.(executionbackend.ExecutionStopper)
 	if !ok {
 		t.Fatal("application backend has no managed stop port")
 	}
 	target := entry.Target(c)
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	probe, err := backend.Probe(ctx, target, executionapi.AgentSpec{Name: c.Agent})
+	probe, err := backend.Probe(ctx, target, executionbackend.AgentSpec{Name: c.Agent})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,8 +73,8 @@ func TestLiveLocalCapabilityEvidence(t *testing.T) {
 			}
 		}
 	}()
-	ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Target: target, Agent: executionapi.AgentSpec{Name: c.Agent}, RunID: runID, AttemptID: runID, External: worker.handle.Identity()}
-	var first executionapi.OutputBatch
+	ref := executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalCodexAppServer, Target: target, Agent: executionbackend.AgentSpec{Name: c.Agent}, RunID: runID, AttemptID: runID, External: worker.handle.Identity()}
+	var first executionbackend.OutputBatch
 	for {
 		first, err = readNativeExecOutput(filepath.Join(runDir, "events.jsonl"), 1<<20)
 		if err == nil && len(first.Data) > 0 {
@@ -88,7 +88,7 @@ func TestLiveLocalCapabilityEvidence(t *testing.T) {
 	if _, err = backend.Observe(ctx, ref); err != nil {
 		t.Fatal(err)
 	}
-	stop, err := stopper.StopExecution(ctx, ref, executionapi.Operation{}, worker.handle)
+	stop, err := stopper.StopExecution(ctx, ref, executionbackend.Operation{}, worker.handle)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -98,7 +98,7 @@ func TestLiveLocalCapabilityEvidence(t *testing.T) {
 	case <-ctx.Done():
 		t.Fatal("local worker did not exit after stop")
 	}
-	stop, err = stopper.StopExecution(ctx, ref, executionapi.Operation{}, worker.handle)
+	stop, err = stopper.StopExecution(ctx, ref, executionbackend.Operation{}, worker.handle)
 	if err != nil || stop.Disposition != "confirmed" {
 		t.Fatalf("original local process stop was not confirmed: %+v / %v", stop, err)
 	}
@@ -113,11 +113,11 @@ func TestLiveLocalCapabilityEvidence(t *testing.T) {
 	sum := sha256.Sum256(read.Data)
 	evidence := map[string]any{
 		"version": 1, "captured_at": time.Now().UTC(), "platform": runtime.GOOS + "/" + runtime.GOARCH,
-		"backend": executionapi.BackendLocal, "protocol": executionapi.ProtocolLocalProcess, "target_id": target.ID,
+		"backend": executionbackend.BackendLocal, "protocol": executionbackend.ProtocolLocalProcess, "target_id": target.ID,
 		"agent": "codex", "codex_version": probe.PlatformVersion,
 		"run_id": runID, "process_identity": ref.External,
 		"output_sha256": hex.EncodeToString(sum[:]), "output_bytes": len(read.Data), "output_source": read.Source,
-		"stop_status": executionapi.OperationConfirmed, "process_absent": true,
+		"stop_status": executionbackend.OperationConfirmed, "process_absent": true,
 	}
 	body, err := json.MarshalIndent(evidence, "", "  ")
 	if err != nil {
@@ -130,7 +130,7 @@ func TestLiveLocalCapabilityEvidence(t *testing.T) {
 }
 
 type nativeExecProbe struct {
-	handle executionapi.StopHandle
+	handle executionbackend.StopHandle
 	Done   chan error
 }
 
@@ -186,12 +186,13 @@ func startNativeExecProbe(ctx context.Context, c Config, executable, repo, runDi
 	}()
 	return probe, nil
 }
-func readNativeExecOutput(path string, limit int) (executionapi.OutputBatch, error) {
+
+func readNativeExecOutput(path string, limit int) (executionbackend.OutputBatch, error) {
 	file, err := os.Open(path)
 	if err != nil {
-		return executionapi.OutputBatch{}, err
+		return executionbackend.OutputBatch{}, err
 	}
 	defer file.Close()
 	raw, err := io.ReadAll(io.LimitReader(file, int64(limit)))
-	return executionapi.OutputBatch{Data: append([]byte(nil), raw...), Source: "local-jsonl", ObservedAt: time.Now().UTC()}, err
+	return executionbackend.OutputBatch{Data: append([]byte(nil), raw...), Source: "local-jsonl", ObservedAt: time.Now().UTC()}, err
 }

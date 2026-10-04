@@ -7,8 +7,8 @@ import (
 	"io"
 	"os"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // AnswerEvidence confirms that the original native tool call completed with
@@ -59,7 +59,7 @@ func AnswerEvidence(path, threadID, turnID, callID string, answers map[string][]
 			if item.Type != "inputText" {
 				continue
 			}
-			var body executionapi.Answer
+			var body executionbackend.Answer
 			if json.Unmarshal([]byte(item.Text), &body) == nil {
 				actual, _ := json.Marshal(body.Answers)
 				if bytes.Equal(actual, expected) {

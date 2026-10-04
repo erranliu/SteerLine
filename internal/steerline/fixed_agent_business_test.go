@@ -3,7 +3,7 @@ package steerline
 import (
 	"testing"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
@@ -16,7 +16,7 @@ func TestFixedProfileRetainsSelectedAgent(t *testing.T) {
 		base := withNeutralProfile(Config{Persistence: sqlite.Factory{}, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}, neutralSettings{Executable: "fixture"})
 		base.ExecutionDirectory, base.Agent = directory, agent
 		profile := ExecutionProfile{ID: "fixture-" + agent, Name: "Fixture " + agent, Host: "local", Agent: agent,
-			ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(neutralSettings{Executable: "fixture"})}}}
+			ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(neutralSettings{Executable: "fixture"})}}}
 		profile = base.bindProjectPolicy(profile)
 		base.ExecutionProfiles = []ExecutionProfile{profile}
 		require(t, validateExecutionProfiles(base))

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
@@ -30,7 +32,7 @@ func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
 	if got := ReadObservationSnapshot(c, clock); got.State != SnapshotNone {
 		t.Fatalf("missing state=%s", got.State)
 	}
-	operation := OperationRecord{ProjectIdentity: c.Identity(), OperationID: newID(), IdempotencyKey: newID(), Kind: "test", Status: "pending", PayloadDigest: strings.Repeat("a", 64), Request: []byte(`{}`), CreatedAt: nowTime, UpdatedAt: nowTime}
+	operation := executionmodel.OperationRecord{ProjectIdentity: c.Identity(), OperationID: newID(), IdempotencyKey: newID(), Kind: "test", Status: "pending", PayloadDigest: strings.Repeat("a", 64), Request: []byte(`{}`), CreatedAt: nowTime, UpdatedAt: nowTime}
 	if err = transactFixture(db, context.Background(), func(tx *fixtureTransaction) error {
 		_, _, putErr := tx.PutOperation(operation)
 		return putErr

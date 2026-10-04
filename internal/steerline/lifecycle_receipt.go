@@ -3,11 +3,11 @@ package steerline
 import (
 	"errors"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-// newLifecycleOperation publishes the intent before returning its original row.
-func (s *Service) newLifecycleOperation(run *Run, kind, key string, value any) (*OperationRecord, error) {
+func (s *Service) newLifecycleOperation(run *Run, kind, key string, value any) (*executionmodel.OperationRecord, error) {
 	id, err := s.startWorkerOperation(run, kind, key, value)
 	if err != nil {
 		return nil, err
@@ -20,7 +20,7 @@ func (s *Service) newLifecycleOperation(run *Run, kind, key string, value any) (
 }
 
 // originalLifecycleOperation never offers an existing external intent to Execute.
-func (s *Service) originalLifecycleOperation(run *Run, kind, key string, value any) (*OperationRecord, bool, error) {
+func (s *Service) originalLifecycleOperation(run *Run, kind, key string, value any) (*executionmodel.OperationRecord, bool, error) {
 	prior := s.operationByKey(key)
 	if prior != nil && prior.Status != "pending" {
 		if prior.Kind != kind {
@@ -32,9 +32,9 @@ func (s *Service) originalLifecycleOperation(run *Run, kind, key string, value a
 	return operation, prior != nil, err
 }
 
-func checkedLifecycleRequest(snapshot executionapi.LifecycleSnapshot, operation *OperationRecord, action executionapi.LifecycleAction, input executionapi.LifecycleInput) (executionapi.LifecycleRequest, error) {
+func checkedLifecycleRequest(snapshot executionbackend.LifecycleSnapshot, operation *executionmodel.OperationRecord, action executionbackend.LifecycleAction, input executionbackend.LifecycleInput) (executionbackend.LifecycleRequest, error) {
 	if err := validateSavedLifecycleOperation(operation, action, input); err != nil {
-		return executionapi.LifecycleRequest{}, err
+		return executionbackend.LifecycleRequest{}, err
 	}
 	request := lifecycleRequest(snapshot, *operation, action, input)
 	return request, request.Validate()
@@ -42,18 +42,18 @@ func checkedLifecycleRequest(snapshot executionapi.LifecycleSnapshot, operation 
 
 // lifecycleOutcome only normalizes the external result. Each action still owns
 // what counts as accepted/confirmed and which business transition may follow.
-func lifecycleOutcome(receipt executionapi.LifecycleReceipt, err error) (string, string) {
+func lifecycleOutcome(receipt executionbackend.LifecycleReceipt, err error) (string, string) {
 	status, diagnostic := string(receipt.Disposition), receipt.Diagnostic
 	if err != nil {
 		diagnostic = err.Error()
-		if receipt.Disposition != executionapi.OperationRejected {
+		if receipt.Disposition != executionbackend.OperationRejected {
 			status = "outcome_unknown"
 		}
 	}
 	return status, diagnostic
 }
 
-func (s *Service) checkedWorkerTurnReceipt(run *Run, request executionapi.LifecycleRequest, receipt executionapi.LifecycleReceipt, action executionapi.LifecycleAction) (workerFlowContext, error) {
+func (s *Service) checkedWorkerTurnReceipt(run *Run, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt, action executionbackend.LifecycleAction) (workerFlowContext, error) {
 	if err := receipt.ValidateFor(request); err != nil {
 		return workerFlowContext{}, err
 	}
@@ -68,7 +68,7 @@ func (s *Service) checkedWorkerTurnReceipt(run *Run, request executionapi.Lifecy
 		request.Snapshot.Session.AttemptID != fixed.execution.CurrentAttemptID || request.Snapshot.Session.Generation != fixed.execution.SessionGeneration ||
 		request.Snapshot.ResourceGeneration != fixed.execution.Generation || request.Snapshot.ConfigurationDigest != fixed.execution.ConfigurationDigest ||
 		request.Operation.PayloadDigest == "" || request.Input.Turn == nil || fixed.execution.PendingCommandID != request.Input.Turn.CommandID {
-		return fixed, ErrWorkerTurnStale
+		return fixed, executionmodel.ErrTurnStale
 	}
 	return fixed, validateSavedLifecycleOperation(snapshotOperation(&s.domain, request.Operation.ID), action, request.Input)
 }

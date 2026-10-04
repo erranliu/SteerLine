@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func (s *Service) projectExecutionConfig() Config {
@@ -50,7 +51,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 		}
 		fixed := *workflow.ExecutionProfile
 		if fixed.ID == "" || !verifyFixedExecutionProfile(fixed, base.ExecutionDirectory) || workflow.ConfigDigest != fixed.AcceptedConfigVersion {
-			return Config{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed execution profile identity is incomplete"}
+			return Config{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "fixed execution profile identity is incomplete"}
 		}
 		config := base.ApplyFixedExecutionProfile(fixed)
 		if err := validateWorkflowConfig(&config, nil); err != nil {
@@ -63,7 +64,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 					return Config{}, errors.New("execution binding differs from its original project or configuration snapshot")
 				}
 				if err := validateExecutionImplementationData(e); err != nil {
-					return Config{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed implementation binding failed verification", Cause: err}
+					return Config{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "fixed implementation binding failed verification", Cause: err}
 				}
 			}
 			if e.WorkflowRunID == workflow.WorkflowRunID && e.PolicyResources == nil && (e.Process != nil || e.SessionID != "") && !awaitingRecoveryResources(e) {
@@ -75,7 +76,7 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 				}
 			}
 		}
-		config.WorkflowProtocol = WorkerFlowVersion
+		config.WorkflowProtocol = executionmodel.Version
 		config.Repository, config.Branch = workflow.Repository, fixed.Publication.BaseBranch
 		if run.WorkspaceIntent != nil {
 			if !filepath.IsAbs(run.WorkspaceIntent.Path) {
@@ -86,11 +87,11 @@ func (s *Service) executionConfigForRun(run *Run) (Config, error) {
 		if fixed.Publication.RemoteURL == "" {
 			return Config{}, errors.New("fixed publication remote URL is missing; preserve original state")
 		}
-		if workflow.WorkflowVersion != WorkerFlowVersion {
+		if workflow.WorkflowVersion != executionmodel.Version {
 			return Config{}, fmt.Errorf("fixed execution profile uses an unsupported workflow version")
 		}
 		entry, err := registrationFor(config)
-		backend, protocol := executionapi.BackendKind(""), executionapi.ExecutionProtocol("")
+		backend, protocol := executionbackend.BackendKind(""), executionbackend.ExecutionProtocol("")
 		if err == nil {
 			backend, protocol = entry.Key.Backend, entry.Key.Protocol
 		}

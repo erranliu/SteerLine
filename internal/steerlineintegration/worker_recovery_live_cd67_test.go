@@ -4,30 +4,33 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerlineapp"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 const liveNativeQuestion = "Call steerline_ask with one question (id choice, header Choice, question Should I reply A or B?, options A and B, allow_free_text false). Wait for the answer. Then reply with the chosen letter only."
 
 type appServerHostExitReceipt struct {
-	Config     steerline.Config             `json:"config"`
-	ConfigPath string                       `json:"config_path"`
-	Home       string                       `json:"home"`
-	RunID      string                       `json:"run_id"`
-	Process    executionapi.ProcessIdentity `json:"process"`
-	ThreadID   string                       `json:"thread_id"`
-	TurnID     string                       `json:"turn_id"`
-	CallID     string                       `json:"call_id"`
-	Workspace  string                       `json:"workspace"`
+	Config     steerline.Config                 `json:"config"`
+	ConfigPath string                           `json:"config_path"`
+	Home       string                           `json:"home"`
+	RunID      string                           `json:"run_id"`
+	Process    executionbackend.ProcessIdentity `json:"process"`
+	ThreadID   string                           `json:"thread_id"`
+	TurnID     string                           `json:"turn_id"`
+	CallID     string                           `json:"call_id"`
+	Workspace  string                           `json:"workspace"`
 }
 
 func newNativeLiveRecoveryProject(t *testing.T) integrationFixture {
@@ -39,7 +42,7 @@ func newNativeLiveRecoveryProject(t *testing.T) integrationFixture {
 	require(t, json.Unmarshal(raw, &global))
 	payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "low", WindowsSandbox: "elevated"})
 	require(t, err)
-	global["execution_profiles"] = mustJSON([]map[string]any{{"id": "fixture", "name": "Native recovery", "host": "local", "agent": "codex", "implementation_configs": []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload}}}})
+	global["execution_profiles"] = mustJSON([]map[string]any{{"id": "fixture", "name": "Native recovery", "host": "local", "agent": "codex", "implementation_configs": []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload}}}})
 	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), mustJSON(global), 0600))
 	projectRaw, err := os.ReadFile(f.configPath)
 	require(t, err)
@@ -65,10 +68,10 @@ func createNativeLiveTask(t *testing.T, ctx context.Context, f *integrationFixtu
 	fixtureGitCommand(t, "-C", f.repository, "-c", "commit.gpgsign=false", "commit", "--quiet", "-m", "native acceptance contract")
 	f.commit = fixtureGitOutput(t, "-C", f.repository, "rev-parse", "HEAD")
 	fixtureGitCommand(t, "-C", f.repository, "push", "--quiet", f.bareRemote, "HEAD:refs/heads/main")
-	contract := steerline.TaskContract{ContractID: fmt.Sprintf("native-live-%d", id), Repository: f.remoteURL, Remote: "origin", Branch: "main", SpecRef: integrationReference(t, f.repository, f.commit, specPath), PlanRef: integrationReference(t, f.repository, f.commit, "docs/spec/integration.plan.md"), CommonRefs: []steerline.FileReference{integrationReference(t, f.repository, f.commit, "docs/spec/native-task-constraints.md")}}
-	contract.AcceptanceRefs = []steerline.FileReference{contract.SpecRef}
+	contract := taskmodel.TaskContract{ContractID: fmt.Sprintf("native-live-%d", id), Repository: f.remoteURL, Remote: "origin", Branch: "main", SpecRef: integrationReference(t, f.repository, f.commit, specPath), PlanRef: integrationReference(t, f.repository, f.commit, "docs/spec/integration.plan.md"), CommonRefs: []taskmodel.FileReference{integrationReference(t, f.repository, f.commit, "docs/spec/native-task-constraints.md")}}
+	contract.AcceptanceRefs = []taskmodel.FileReference{contract.SpecRef}
 	var err error
-	contract.Digest, err = steerline.TaskContractDigest(contract)
+	contract.Digest, err = taskmodel.ContractDigest(contract)
 	require(t, err)
 	store, err := steerline.OpenNativeTaskCommandStore(ctx, &f.config)
 	require(t, err)
@@ -77,7 +80,7 @@ func createNativeLiveTask(t *testing.T, ctx context.Context, f *integrationFixtu
 	authority, err := queries.ReadyNativeTaskSnapshot(ctx)
 	require(t, err)
 	commands := steerline.CommandService{Store: store, Project: f.config.Identity()}
-	batch := steerline.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: f.config.Identity(), Tasks: []steerline.TaskBatchTask{{LocalKey: "fixture", TaskID: id, Title: "Native recovery acceptance", Type: "task", Contract: contract}}, Dependencies: []steerline.TaskBatchEdge{}}
+	batch := taskmodel.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: f.config.Identity(), Tasks: []taskmodel.TaskBatchTask{{LocalKey: "fixture", TaskID: id, Title: "Native recovery acceptance", Type: "task", Contract: contract}}, Dependencies: []taskmodel.TaskBatchEdge{}}
 	_, err = commands.CreateTaskBatch(ctx, f.config, mustJSON(batch), newID(), authority.AuthorityVersion, "operator")
 	require(t, err)
 	page, err := queries.ShowNativeTask(ctx, fmt.Sprint(id))
@@ -92,9 +95,11 @@ func nativeLiveAnswer(t *testing.T, ctx context.Context, c steerline.Config, run
 	_, _, err := steerline.SubmitDecisionAnswer(ctx, c, steerline.AnswerOptions{RunID: run.RunID, DecisionID: run.Decision.ID, ExpectedVersion: run.Decision.Version, Option: option, Note: note, By: "operator"})
 	require(t, err)
 }
-func nativeLiveProcessState(identity *executionapi.ProcessIdentity) string {
+
+func nativeLiveProcessState(identity *executionbackend.ProcessIdentity) string {
 	return steerlineapp.NewProcessHost(time.Second).InspectProcess(identity)
 }
+
 func nativeLiveEnv(base []string, changes map[string]string) []string {
 	out := make([]string, 0, len(base)+len(changes))
 	for _, item := range base {
@@ -108,6 +113,7 @@ func nativeLiveEnv(base []string, changes map[string]string) []string {
 	}
 	return out
 }
+
 func nativeHostExitHelper(t *testing.T, ctx context.Context, root string) appServerHostExitReceipt {
 	t.Helper()
 	executable, err := os.Executable()
@@ -140,7 +146,7 @@ func TestAppServerHostExitHelper(t *testing.T) {
 	createNativeLiveTask(t, ctx, &f, 901, liveNativeQuestion)
 	service := startIntegrationService(t, ctx, f.config, f.config.ExecutionDirectory)
 	claimIntegrationTask(t, ctx, f, 901, service.instanceID)
-	question := waitIntegrationRun(t, ctx, service, f.config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+	question := waitIntegrationRun(t, ctx, service, f.config, func(run *steerline.Run, e *executionmodel.ExecutionRecord) bool {
 		return run.TaskID == "901" && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute != nil
 	})
 	if question.execution.Process == nil {
@@ -164,7 +170,7 @@ func TestLocalCodexManualRecoveryLive(t *testing.T) {
 	require(t, err)
 	service := startIntegrationService(t, ctx, config, config.ExecutionDirectory)
 	defer service.stop(t)
-	recovered := waitIntegrationRun(t, ctx, service, config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+	recovered := waitIntegrationRun(t, ctx, service, config, func(run *steerline.Run, e *executionmodel.ExecutionRecord) bool {
 		return run.RunID == receipt.RunID && e.RecoveryRequired && e.RecoveryState == "interrupted" && run.Decision != nil && run.Decision.Status == "pending"
 	})
 	oldAttempt := recovered.run.AttemptID
@@ -176,13 +182,13 @@ func TestLocalCodexManualRecoveryLive(t *testing.T) {
 	}
 	note := "The old question asked A or B. Choose A. Inspect the current worktree first, then reply with A only."
 	nativeLiveAnswer(t, ctx, config, recovered.run, "continue", note)
-	resumed := waitIntegrationRun(t, ctx, service, config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+	resumed := waitIntegrationRun(t, ctx, service, config, func(run *steerline.Run, e *executionmodel.ExecutionRecord) bool {
 		return run.RunID == receipt.RunID && run.AttemptID != oldAttempt && e.Process != nil && e.CurrentCommandID != ""
 	})
 	if *resumed.execution.Process == receipt.Process || len(resumed.runtime.Attempts) != 2 || resumed.execution.SessionID != receipt.ThreadID || resumed.execution.Workspace.Worktree != receipt.Workspace {
 		t.Fatal("manual successor replaced the session/workspace or lost its distinct Attempt/process")
 	}
-	settled := waitIntegrationRun(t, ctx, service, config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+	settled := waitIntegrationRun(t, ctx, service, config, func(run *steerline.Run, e *executionmodel.ExecutionRecord) bool {
 		return run.RunID == receipt.RunID && e.LastStoppedTurnID != "" && e.LastStoppedTurnID != receipt.TurnID && e.TurnNumber >= 2
 	})
 	t.Logf("manual execution recovery: old_pid=%d new_pid=%d session=%s old_turn=%s new_turn=%s old_attempt=%s new_attempt=%s", receipt.Process.PID, settled.execution.Process.PID, settled.execution.SessionID, receipt.TurnID, settled.execution.LastStoppedTurnID, oldAttempt, settled.run.AttemptID)
@@ -208,14 +214,14 @@ func TestAppServerHostExitRecoveryLive(t *testing.T) {
 	require(t, err)
 	service := startIntegrationService(t, ctx, config, config.ExecutionDirectory)
 	defer service.stop(t)
-	recovered := waitIntegrationRun(t, ctx, service, config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+	recovered := waitIntegrationRun(t, ctx, service, config, func(run *steerline.Run, e *executionmodel.ExecutionRecord) bool {
 		return run.RunID == receipt.RunID && run.Decision != nil && run.Decision.Request.QuestionRoute != nil
 	})
 	if recovered.run.Decision.Request.QuestionRoute.QuestionID != receipt.CallID || recovered.execution.SessionID != receipt.ThreadID || recovered.execution.CurrentTurnID != receipt.TurnID || recovered.execution.Workspace.Worktree != receipt.Workspace || recovered.execution.Process == nil || *recovered.execution.Process != receipt.Process {
 		t.Fatal("new host did not recover the original question, process, thread, turn and worktree")
 	}
 	nativeLiveAnswer(t, ctx, config, recovered.run, "A", "")
-	settled := waitIntegrationRun(t, ctx, service, config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+	settled := waitIntegrationRun(t, ctx, service, config, func(run *steerline.Run, e *executionmodel.ExecutionRecord) bool {
 		return run.RunID == receipt.RunID && e.LastStoppedTurnID == receipt.TurnID && run.Decision != nil && run.Decision.Request.QuestionRoute == nil
 	})
 	t.Logf("host-exit native recovery: process=%d thread=%s turn=%s call=%s", settled.execution.Process.PID, settled.execution.SessionID, settled.execution.CurrentTurnID, receipt.CallID)
@@ -232,7 +238,7 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 	createNativeLiveTask(t, ctx, &f, 902, "Reply READY only. Do not call steerline_ask.")
 	first := startIntegrationService(t, ctx, f.config, f.config.ExecutionDirectory)
 	claimIntegrationTask(t, ctx, f, 901, first.instanceID)
-	question := waitIntegrationRun(t, ctx, first, f.config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+	question := waitIntegrationRun(t, ctx, first, f.config, func(run *steerline.Run, e *executionmodel.ExecutionRecord) bool {
 		return run.TaskID == "901" && run.Decision != nil && run.Decision.Request.QuestionRoute != nil
 	})
 	if question.execution.Process == nil {
@@ -244,31 +250,31 @@ func TestAppServerServiceParallelRecoveryLive(t *testing.T) {
 		t.Fatal("first task lost its process, thread or turn")
 	}
 	claimIntegrationTask(t, ctx, f, 902, first.instanceID)
-	second := waitIntegrationRun(t, ctx, first, f.config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+	second := waitIntegrationRun(t, ctx, first, f.config, func(run *steerline.Run, e *executionmodel.ExecutionRecord) bool {
 		return run.TaskID == "902" && e.LastStoppedTurnID != "" && run.Decision != nil && run.Decision.Request.QuestionRoute == nil
 	})
 	if second.execution.Process == nil || second.execution.Process.PID == original.PID || second.execution.Workspace.Worktree == firstWorkspace || second.execution.SessionID == firstThread || second.execution.CurrentTurnID == "" {
 		t.Fatal("second task lost its independent native process, workspace, thread or turn")
 	}
-	stillWaiting := waitIntegrationRun(t, ctx, first, f.config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+	stillWaiting := waitIntegrationRun(t, ctx, first, f.config, func(run *steerline.Run, e *executionmodel.ExecutionRecord) bool {
 		return run.TaskID == "901" && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute != nil
 	})
 	callID := stillWaiting.run.Decision.Request.QuestionRoute.QuestionID
 	first.stop(t)
 	restarted := startIntegrationService(t, ctx, f.config, f.config.ExecutionDirectory)
 	defer restarted.stop(t)
-	recovered := waitIntegrationRun(t, ctx, restarted, f.config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+	recovered := waitIntegrationRun(t, ctx, restarted, f.config, func(run *steerline.Run, e *executionmodel.ExecutionRecord) bool {
 		return run.TaskID == "901" && run.Decision != nil && run.Decision.Request.QuestionRoute != nil
 	})
 	if recovered.run.Decision.Request.QuestionRoute.QuestionID != callID || recovered.execution.SessionID != firstThread || recovered.execution.CurrentTurnID != firstTurn || recovered.execution.Process == nil || *recovered.execution.Process != original {
 		t.Fatal("restart failed to reattach the original native question/process/thread/turn")
 	}
 	nativeLiveAnswer(t, ctx, f.config, recovered.run, "A", "")
-	settled := waitIntegrationRun(t, ctx, restarted, f.config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+	settled := waitIntegrationRun(t, ctx, restarted, f.config, func(run *steerline.Run, e *executionmodel.ExecutionRecord) bool {
 		return run.TaskID == "901" && e.LastStoppedTurnID == firstTurn && run.Decision != nil && run.Decision.Request.QuestionRoute == nil
 	})
 	nativeLiveAnswer(t, ctx, f.config, settled.run, "continue", "Feedback: reply ACK only.")
-	feedback := waitIntegrationRun(t, ctx, restarted, f.config, func(run *steerline.Run, e *steerline.ExecutionRecord) bool {
+	feedback := waitIntegrationRun(t, ctx, restarted, f.config, func(run *steerline.Run, e *executionmodel.ExecutionRecord) bool {
 		return run.TaskID == "901" && e.TurnNumber == 2 && e.CurrentTurnID != firstTurn && e.CurrentTurnID == e.LastStoppedTurnID
 	})
 	if feedback.execution.SessionID != firstThread || feedback.execution.Workspace.Worktree != firstWorkspace {

@@ -3,8 +3,9 @@ package activityview
 import (
 	"testing"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestDecisionAnswerSummary(t *testing.T) {
@@ -18,8 +19,8 @@ func TestDecisionAnswerSummary(t *testing.T) {
 		{"unknown_option", "old-option", "保留备注", "old-option"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			run := contracts.Run{Decision: &contracts.DecisionState{OptionID: tc.option, Note: tc.note,
-				Request: contracts.DecisionRequest{Options: []execution.DecisionOption{{ID: "continue", Label: "继续"}}}}}
+			run := contracts.Run{Decision: &executionmodel.DecisionState{OptionID: tc.option, Note: tc.note,
+				Request: executionmodel.DecisionRequest{Options: []executionbackend.DecisionOption{{ID: "continue", Label: "继续"}}}}}
 			if got := DecisionAnswerSummary(&run); got != tc.want {
 				t.Fatalf("summary=%q, want %q", got, tc.want)
 			}

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func TestBoundTerminalGateReleasesCanceledWaiter(t *testing.T) {
@@ -20,8 +20,8 @@ func TestBoundTerminalGateReleasesCanceledWaiter(t *testing.T) {
 		}
 		return []byte(`{"ok":true,"result":{"terminal":{"handle":"agent","incarnationId":"inc"}},"_meta":{"runtimeId":"runtime"}}`), nil
 	}})
-	identity := executionapi.ProcessIdentity{Terminal: "agent", RuntimeID: "runtime", Incarnation: "inc"}
-	target := executionapi.ExecutionTarget{ID: "test-gate"}
+	identity := executionbackend.ProcessIdentity{Terminal: "agent", RuntimeID: "runtime", Incarnation: "inc"}
+	target := executionbackend.ExecutionTarget{ID: "test-gate"}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	done := make(chan error, 1)

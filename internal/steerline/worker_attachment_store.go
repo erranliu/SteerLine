@@ -1,14 +1,15 @@
 package steerline
 
 import (
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-func (s *Service) commitWorkerBinding(run *Run, ref executionapi.ExecutionRef) error {
+func (s *Service) commitWorkerBinding(run *Run, ref executionbackend.ExecutionRef) error {
 	return s.commitWorkerAttached(run, workerCommitAttachment{Binding: &ref})
 }
-func (s *Service) commitExecutionOperation(run *Run, op executionapi.Operation, expected string) error {
-	var before *executionapi.Operation
+
+func (s *Service) commitExecutionOperation(run *Run, op executionbackend.Operation, expected string) error {
+	var before *executionbackend.Operation
 	if expected != "" {
 		saved, err := (executionRecords{root: s.Config.RunDir, persistence: s.Config.Persistence}).loadOperation(op.RunID, op.AttemptID, op.ID)
 		if err != nil {
@@ -19,5 +20,5 @@ func (s *Service) commitExecutionOperation(run *Run, op executionapi.Operation, 
 		}
 		before = &saved
 	}
-	return s.commitWorkerAttached(run, workerCommitAttachment{ExecutionOperation: &recordWrite[executionapi.Operation]{Before: before, After: op}})
+	return s.commitWorkerAttached(run, workerCommitAttachment{ExecutionOperation: &recordWrite[executionbackend.Operation]{Before: before, After: op}})
 }
