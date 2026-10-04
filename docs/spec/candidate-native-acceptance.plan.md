@@ -11,6 +11,8 @@
 
 本次真机发现 Orca 生命周期未连接既有 codex-session-launch/history binding，修复唯一路径为 `internal/steerline/orcaworker/lifecycle.go`：原 agent 终端使用既有无模型 bootstrap 写原 session binding，再以冻结权限/模型 resume；规范 collector 只读原生 history 并提交数据库。请求在原资源 Operation 后、创建终端前固定，重对账校验同一请求内容；不扫用户日志或制造正文。该生产接线变更需定向 Orca/Codex/候选代表与当前构建 local 重验，旧 local-02 不可复用为通过。
 
+多轮 live candidates 场景单独采用 15 分钟上限（其他 live 仍 10 分钟），本机后继使用已冻结的 local-codex profile；保留真实双候选、原反馈、落选在途输出和后继，不能以缩减断言来压缩时限。本地 app-server resume 会在新 turn/started 前报告同一 thread 的上一轮 usage 快照；native 适配只在该前缀排除旧轮次，并要求精确新 turn/started，之后任何外会话/晚到外轮次仍拒绝，不更改产品协议/账本。未知 usage 错误立即记录并失败，清理读使用独立 deadline，避免整体超时掩盖诊断。
+
 ## 并行与构建固定
 
 不增加 #73–#82 硬前置。与解耦线并行前固定本任务 commit/产品与 helper 构建、隔离配置/原生资源及场景清单；现场运行中不替换。接收各迁移任务的路径/身份/接线影响清单，按 Spec 规则复用未变证据，只定向重验受影响 CN 场景。#77/#78/#80 的接线变化不能直接沿用旧构建的通过结论。

@@ -267,7 +267,7 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		if bindErr != nil {
 			return u, bindErr
 		}
-		u, usageEvidence, err = native.AppServerUsage(raw, session, e.CurrentTurnID)
+		u, usageEvidence, err = native.AppServerTurnUsage(raw, session, e.CurrentTurnID)
 	} else {
 		// Only this project's home is scanned. Exactly one native session must match
 		// the bound workspace; user/global sessions cannot become usage evidence.

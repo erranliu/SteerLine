@@ -86,6 +86,9 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") || strings.HasPrefix(id, "candidates.") {
 		timeout = 10 * time.Minute
 	}
+	if strings.HasPrefix(id, "candidates.") {
+		timeout = 15 * time.Minute
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	s := &Scenario{Run: run, ID: id, Root: filepath.Join(run.Scratch, id), Output: filepath.Join(run.Output, "scenarios", id), Context: ctx, cancel: cancel, t: t}
 	t.Cleanup(s.cleanup)
@@ -337,12 +340,15 @@ func (p *Project) Claim(key string) {
 	p.Scenario.Must(p.Driver.Control(p.Scenario.Context, p.Scenario.Run.Helper, "start_task", p.Tasks[key].ID))
 }
 func (p *Project) Snapshot() (Snapshot, error) {
+	return p.SnapshotContext(p.Scenario.Context)
+}
+func (p *Project) SnapshotContext(ctx context.Context) (Snapshot, error) {
 	var snap Snapshot
-	page, err := p.Driver.Tasks(p.Scenario.Context)
+	page, err := p.Driver.Tasks(ctx)
 	if err != nil {
 		return snap, err
 	}
-	view, err := openView(p.Scenario.Context, p.Database, page.ProjectID)
+	view, err := openView(ctx, p.Database, page.ProjectID)
 	if err != nil {
 		return snap, err
 	}
@@ -449,7 +455,7 @@ func (s *Scenario) cleanup() {
 			if err := p.captureNativeDiagnostics(); err != nil {
 				failures = append(failures, "native diagnostics: "+err.Error())
 			}
-			snap, err := p.Snapshot()
+			snap, err := p.SnapshotContext(ctx)
 			if err == nil {
 				for _, execution := range snap.Domain.Executions {
 					selected, selectErr := evidence.Candidate(snap.Domain, execution.WorkflowRunID, execution.ExecutionID)

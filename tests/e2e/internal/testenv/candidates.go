@@ -182,6 +182,9 @@ func (p *Project) WaitCandidate(c Candidate, phase string) Snapshot {
 	return result
 }
 func (p *Project) Feedback(c Candidate, marker string) driver.CandidateCommand {
+	return p.FeedbackWithNote(c, marker, "")
+}
+func (p *Project) FeedbackWithNote(c Candidate, marker, extra string) driver.CandidateCommand {
 	snap := p.CandidateSnapshot(c)
 	var decision *contracts.DecisionState
 	var revision uint64
@@ -199,7 +202,7 @@ func (p *Project) Feedback(c Candidate, marker string) driver.CandidateCommand {
 	if len(decision.Request.Options) == 0 || decision.Request.Options[0].ID != "continue" || !decision.Request.AllowFreeText {
 		p.Scenario.t.Fatal("complete option/free text feedback missing")
 	}
-	in := driver.CandidateCommand{Action: "answer_decision", RequestID: requestID(), RunID: c.RunID, ExecutionID: c.ExecutionID, DecisionID: decision.ID, DecisionVersion: decision.Version, RunRevision: revision, InstanceID: snap.Runtime.Service.InstanceID, Option: "continue", Note: "Use exactly this candidate.txt marker: " + marker + ". Publish according to the bound Spec/Plan in this original session."}
+	in := driver.CandidateCommand{Action: "answer_decision", RequestID: requestID(), RunID: c.RunID, ExecutionID: c.ExecutionID, DecisionID: decision.ID, DecisionVersion: decision.Version, RunRevision: revision, InstanceID: snap.Runtime.Service.InstanceID, Option: "continue", Note: "Use exactly this candidate.txt marker: " + marker + ". Publish according to the bound Spec/Plan in this original session. " + extra}
 	r := p.CandidateControl(in)
 	if r.Command == nil {
 		p.Scenario.t.Fatal("original feedback command missing")
@@ -236,6 +239,10 @@ func (p *Project) CandidateUsage(c Candidate, label string) native.Usage {
 		u, err = p.NativeUsage(p.CandidateSnapshot(c), c.RunID+"-"+label)
 		if errors.Is(err, native.ErrNativeTurnPending) {
 			return false, nil
+		}
+		if err != nil {
+			p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, c.RunID+"-"+label+"-usage-error.json"), map[string]string{"error": err.Error()}))
+			p.Scenario.t.Fatal(err)
 		}
 		return err == nil, err
 	})
@@ -355,6 +362,12 @@ func CandidateAcceptance(s *Scenario) {
 			s.t.Fatal("successor started before delivery")
 		}
 	}
+	p.FeedbackWithNote(b, "bravo-late", "Before writing/publishing, execute powershell.exe -NoProfile -Command \"Start-Sleep -Seconds 20\" once. This lets the operator merge the sibling while your original turn remains in flight.")
+	s.Wait("loser original third turn in flight", func() (bool, error) {
+		e := p.CandidateSnapshot(b).Domain.Executions[0]
+		return e.Status == "active" && e.TurnNumber == 3, nil
+	})
+	p.Record("loser-in-flight-before-merge", p.CandidateSnapshot(b))
 	p.MergeCandidate(a)
 	p.WaitCandidate(a, "completed")
 	done := mustSnapshot(p)
@@ -373,7 +386,28 @@ func CandidateAcceptance(s *Scenario) {
 		s.t.Fatal("losing original PR attribution lost")
 	}
 	p.Record("loser-resource-facts", loser)
-	next := p.StartCandidate("b", profiles[0].ID, true)
+	s.Wait("late original loser output after delivery", func() (bool, error) {
+		loser = p.CandidateSnapshot(b)
+		e := loser.Domain.Executions[0]
+		return e.Status != "active" && e.TurnNumber == 3 && e.LastTurnOutcome == "succeeded", nil
+	})
+	le := loser.Domain.Executions[0]
+	lateSession, err := ExecutionSession(le)
+	s.Must(err)
+	if lateSession != bs || le.TurnEndedAt == nil || !le.TurnEndedAt.After(done.Domain.Deliveries[0].RecordedAt) || p.git(le.Workspace.Worktree, "show", "HEAD:candidate.txt") != "bravo-late" || p.CandidatePR(b).URL != pb.URL {
+		s.t.Fatal("late output/publication lost original candidate attribution")
+	}
+	p.Record("late-loser-retained", loser)
+	published[b] = p.CandidateUsage(b, "late-published")
+	// A local successor keeps this multi-turn scenario bounded without adding
+	// another Orca readiness certification to the same acceptance chain.
+	successorProfile := profiles[0].ID
+	for _, profile := range profiles {
+		if profile.Chain == "local-codex" {
+			successorProfile = profile.ID
+		}
+	}
+	next := p.StartCandidate("b", successorProfile, true)
 	ns := p.WaitCandidate(next, "waiting_decision")
 	ne := ns.Domain.Executions[0]
 	p.git(ne.Workspace.Worktree, "merge-base", "--is-ancestor", merge, ne.Workspace.Base)
