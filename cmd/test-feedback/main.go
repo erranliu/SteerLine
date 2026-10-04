@@ -84,6 +84,17 @@ func run(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
+	if parsed.summarizeLog == "" {
+		existing, readErr := os.ReadDir(parsed.out)
+		if readErr != nil && !os.IsNotExist(readErr) {
+			fmt.Fprintf(os.Stderr, "inspect report directory: %v\n", readErr)
+			return 2
+		}
+		if len(existing) != 0 {
+			fmt.Fprintln(os.Stderr, "output directory must be empty; use a new -out path")
+			return 2
+		}
+	}
 	if err = os.MkdirAll(parsed.out, 0755); err != nil {
 		fmt.Fprintf(os.Stderr, "create report directory: %v\n", err)
 		return 2
