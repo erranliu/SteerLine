@@ -18,7 +18,7 @@ import (
 
 type CandidateCommand struct {
 	Action, RequestID, TaskID, ProfileID, RunID, ExecutionID, DecisionID, Option, Note, InstanceID string
-	TaskVersion, CandidateVersion, DecisionVersion, RunRevision                                    uint64
+	TaskVersion, GraphRevision, CandidateVersion, DecisionVersion, RunRevision                     uint64
 }
 type CandidateReceipt struct {
 	Request *steerline.ControlRequest `json:"request,omitempty"`
@@ -157,7 +157,7 @@ func MainCandidate(args []string) error {
 	if in.Action != "start_candidate" && in.Action != "abandon_candidate" && in.Action != "start_task" {
 		return fmt.Errorf("unsupported candidate control")
 	}
-	payload := steerline.ControlPayload{TaskID: in.TaskID, WorkflowRunID: in.RunID, ExpectedTaskVersion: in.TaskVersion, ExpectedCandidateVersion: in.CandidateVersion, Reason: in.Note}
+	payload := steerline.ControlPayload{TaskID: in.TaskID, WorkflowRunID: in.RunID, ExpectedTaskVersion: in.TaskVersion, ExpectedGraphRevision: in.GraphRevision, ExpectedCandidateVersion: in.CandidateVersion, Reason: in.Note}
 	if in.Action != "abandon_candidate" {
 		_, profile, err := c.ResolveExecutionProfile(in.ProfileID, "")
 		if err != nil {

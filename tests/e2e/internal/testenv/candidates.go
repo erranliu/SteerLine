@@ -66,7 +66,7 @@ func (s *Scenario) NewCandidateProject(m native.CandidateManifest) *Project {
 	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), config))
 	spec := `# Candidate native fixture
 
-On the INITIAL business turn only, read this Spec/Plan and the assigned branch, then end the turn with a distinct readiness summary including that branch. Do not change files, publish, ask a native question or invoke another model. The operator will send feedback to this original session through SteerLine.
+On the INITIAL business turn only, read this Spec/Plan and the assigned branch, execute powershell.exe -NoProfile -Command "Start-Sleep -Seconds 20" once to allow the sibling candidate to start, then end the turn with a distinct readiness summary including that branch. Do not change files, publish, ask a native question or invoke another model. The operator will send feedback to this original session through SteerLine.
 
 On each subsequent feedback turn, follow its exact marker. Write result.txt containing exactly real model delivery followed by a newline. Write candidate.txt containing exactly the feedback marker followed by a newline. Verify both. Run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1 once. Publication belongs to you: the script commits, pushes the assigned branch, creates its real GitHub draft PR or updates the same branch's existing PR, and prints its URL. Include the full URL in the final reply/completion relay. Never push the base branch. Keep all other tracked files unchanged. Do not call another model.
 
@@ -103,6 +103,28 @@ func (p *Project) CandidateControl(in driver.CandidateCommand) driver.CandidateR
 	if in.RequestID == "" {
 		in.RequestID = requestID()
 	}
+	if in.Action == "start_candidate" || in.Action == "abandon_candidate" {
+		snap := mustSnapshot(p)
+		for _, t := range snap.Page.Tasks {
+			if t.TaskID == in.TaskID {
+				in.TaskVersion = t.Version
+			}
+		}
+		if in.Action == "start_candidate" {
+			in.GraphRevision = snap.Page.GraphRevision
+		} else {
+			if snap.Runtime != nil {
+				for _, run := range snap.Runtime.Runs {
+					if run.RunID == in.RunID {
+						in.CandidateVersion = run.ControlRevision
+					}
+				}
+			}
+		}
+		if snap.Runtime != nil {
+			in.InstanceID = snap.Runtime.Service.InstanceID
+		}
+	}
 	result, err := p.Driver.Candidate(p.Scenario.Context, p.Scenario.Run.Helper, in)
 	p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, "request-"+in.RequestID+".json"), map[string]any{"input": in, "receipt": result, "error": fmt.Sprint(err)}))
 	p.Scenario.Must(err)
@@ -126,7 +148,7 @@ func (p *Project) StartCandidate(key, profile string, first bool) Candidate {
 		for _, e := range snap.Domain.Executions {
 			if e.WorkflowRunID == receipt.Control.RunID {
 				result = Candidate{RunID: e.WorkflowRunID, ExecutionID: e.ExecutionID, ProfileID: profile}
-				return true, nil
+				return e.TurnNumber > 0, nil
 			}
 		}
 		return false, nil
