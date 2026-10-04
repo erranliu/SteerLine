@@ -23,7 +23,9 @@ manifest schema 固定 version=1、source_commit（实际40位 HEAD）、reposit
 
 本机真机已定位 Orca 生命周期缺少既有 codex-session-launch/history binding 的接线。唯一生产修复为 `internal/steerline/orcaworker/lifecycle.go`：在原资源 Operation 后、外部创建终端前固定 launch 请求，原终端无模型 bootstrap 写原生 session binding，再按冻结权限 resume，规范 collector 提交原 history 正文。重复对账只接受原意图，不从 raw 回填。`internal/steerline/codexworker/history.go` 的 resume 无新提示时不注入空提示。此接线改变须当前构建 local 重验，local-02 失败不能当通过。
 
-native 的 app-server usage 适配要求精确新 turn/started；仅排除其前同一 thread 的 resume 旧 usage 快照，之后外会话/晚到外轮次仍拒绝。未知 usage 错误立即记录失败；清理读使用独立 deadline。候选多轮现场独立采用15分钟上限（其他 live 10分钟），后继使用冻结 local-codex profile。保留真实落选在途输出/PR，不靠缩减断言压缩时限。
+native 的 app-server usage 适配要求精确新 turn/started；仅排除其前同一 thread 的 resume 旧 usage 快照，之后外会话/晚到外轮次仍拒绝。未知 usage 错误立即记录失败；清理读使用独立 deadline。候选多轮现场独立采用20分钟上限（其他 live 10分钟），后继使用冻结 local-codex profile。local-04 已实际用12分钟完成双候选/重启/反馈/晚到/后继，新增同场故障、兄弟额外反馈和替代候选后采用这个明确上限，不靠缩减断言压缩时限。
+
+CN4/CN8 的故障路径由 `native.DisconnectCandidate` 对隔离 local app-server 的同一 Windows handle 校验 PID/creation/executable 和原 session envelope 后终止；真实连接丢失与业务 stop Operation 区分。通过产品提交原 Decision 的 fault-probe，确认原 Execution/session 不替换、turn 不增加；原 Orca 兄弟继续反馈/PR，再按精确 Task/run 当前版本提交放弃。收到实验退出回执立即人工开始新的 local 候选，不等待停止事实，核对原 base/历史/PR保留和新候选正数 usage。晚到验证改用这个新增候选，原故障样本仍保留逐执行证据。
 
 本次实际定向命令：`go run ./cmd/test-feedback -out docs/validation/candidate-native-acceptance/native-wiring-01 -- ./internal/steerline/orcaworker ./internal/steerline/codexworker ./internal/steerline '-run=TestCandidateSessionLaunch|TestMC[56]|TestNativeLifecycle|TestExecution|TestConversation|TestCodex|TestManaged|TestResume' -count=1`，27测试事件通过、无 fail/skip；覆盖原 session launch 意图/权限、CN5/MC5–MC6 和规范采集。适配器最终命令采用下表包、runner/testboundary 与必要场景；每次新空目录，最终精确命令/构建及结果见 [证据入口](../validation/candidate-native-acceptance/README.md)。
 

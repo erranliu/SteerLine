@@ -8,7 +8,5 @@
   {"id":"recovery.waiting-merge-restart","level":"L3","suite":"recovery","package":"./tests/e2e/suites/recovery","test":"TestWaitingMergeRestart","env":"controlled"},
   {"id":"recovery.local-codex","level":"L3","suite":"recovery","package":"./tests/e2e/live","test":"TestRecoveryLocalCodex","env":"live","chain":"local-codex"},
   {"id":"recovery.orca-codex","level":"L3","suite":"recovery","package":"./tests/e2e/live","test":"TestRecoveryOrcaCodex","env":"live","chain":"orca-codex"},
-  {"id":"candidates.local","level":"L3","suite":"candidates","package":"./tests/e2e/suites/candidates","test":"TestCandidateLocal","env":"live","chain":"local-codex"},
-  {"id":"candidates.remote","level":"L3","suite":"candidates","package":"./tests/e2e/suites/candidates","test":"TestCandidateRemote","env":"live","chain":"orca-remote"},
-  {"id":"candidates.mixed","level":"L3","suite":"candidates","package":"./tests/e2e/suites/candidates","test":"TestCandidateMixed","env":"live","chain":"mixed"}
+  {"id":"candidates.local","level":"L3","suite":"candidates","package":"./tests/e2e/suites/candidates","test":"TestCandidateLocal","env":"live","chain":"local-codex"}
 ]

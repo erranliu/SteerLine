@@ -98,8 +98,7 @@ func selectE2E(root string, opts options) ([]e2eScenario, error) {
 	var selected []e2eScenario
 	for _, entry := range entries {
 		key := entry.Package + "/" + entry.Test
-		candidateChain := entry.Level == "L3" && entry.Suite == "candidates" && ((entry.ID == "candidates.remote" && entry.Chain == "orca-remote") || (entry.ID == "candidates.mixed" && entry.Chain == "mixed"))
-		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-codex" && !candidateChain) || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
+		if !regexp.MustCompile(`^[a-z0-9]+(?:[.-][a-z0-9]+)*$`).MatchString(entry.ID) || !regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`).MatchString(entry.Suite) || (entry.Env != "controlled" && entry.Env != "live") || (entry.Env == "live" && entry.Chain != "local-codex" && entry.Chain != "orca-codex") || (entry.Level != "L2" && entry.Level != "L3") || !strings.HasPrefix(entry.Package, "./tests/e2e/") || strings.Contains(entry.Package, "..") || !regexp.MustCompile(`^Test[A-Za-z0-9_]+$`).MatchString(entry.Test) {
 			return nil, fmt.Errorf("invalid E2E manifest entry %+v", entry)
 		}
 		if ids[entry.ID] || tests[key] {

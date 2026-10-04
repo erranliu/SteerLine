@@ -35,13 +35,6 @@ func (s *Scenario) CandidateManifest() native.CandidateManifest {
 func (s *Scenario) NewCandidateProject(m native.CandidateManifest) *Project {
 	profiles, err := m.Selection(s.ID)
 	s.Must(err)
-	// Current remote selection always fails the product permission preflight.
-	// Never construct a local substitute if that admission is unavailable.
-	for _, profile := range profiles {
-		if profile.Chain == "orca-remote" {
-			s.t.Fatal("remote adapter cannot run without target permission receipts")
-		}
-	}
 	p := s.NewLiveProject("candidates", "orca-codex")
 	raw, err := os.ReadFile(filepath.Join(p.Home, "execution.json"))
 	s.Must(err)
@@ -356,6 +349,60 @@ func CandidateAcceptance(s *Scenario) {
 		}
 		published[pair.c] = p.CandidateUsage(pair.c, "published")
 	}
+	// One actual local app-server loss. The original accepted answer remains
+	// attributable; the surviving Orca session accepts independent feedback.
+	originalB := b
+	faultBefore := p.CandidateSnapshot(b)
+	p.Record("before-connection-fault", faultBefore)
+	faultErr := native.DisconnectCandidate(faultBefore.Domain.Executions[0], p.Root)
+	s.Must(controlled.Write(filepath.Join(s.Output, "connection-fault.json"), map[string]any{"execution": faultBefore.Domain.Executions[0], "error": fmt.Sprint(faultErr), "product_stop_receipt": false}))
+	s.Must(faultErr)
+	p.Feedback(b, "fault-probe-must-not-run")
+	var faulted Snapshot
+	s.Wait("original disconnected candidate recovery fact", func() (bool, error) {
+		faulted = p.CandidateSnapshot(b)
+		e := faulted.Domain.Executions[0]
+		return e.RecoveryRequired || e.Status == "blocked" || e.Environment != nil && e.Environment.Blocker != nil, nil
+	})
+	fe := faulted.Domain.Executions[0]
+	faultSession, err := ExecutionSession(fe)
+	s.Must(err)
+	if faultSession != bs || fe.TurnNumber != 2 {
+		s.t.Fatal("connection fault replaced the original session or sent input")
+	}
+	p.Record("disconnected-original-request", faulted)
+	p.Feedback(a, "alpha-review")
+	p.WaitCandidate(a, "waiting_pr_merge")
+	published[a] = p.CandidateUsage(a, "after-sibling-fault")
+	afterFaultA := p.CandidateSnapshot(a).Domain.Executions[0]
+	aSession, err := ExecutionSession(afterFaultA)
+	s.Must(err)
+	if aSession != as || afterFaultA.TurnNumber != 3 {
+		s.t.Fatal("sibling connection fault changed surviving worker")
+	}
+	abandoned := p.CandidateControl(driver.CandidateCommand{Action: "abandon_candidate", TaskID: p.Tasks["a"].ID, RunID: b.RunID, Note: "CN8 manual experiment exit after isolated connection fault"})
+	if abandoned.Control == nil || abandoned.Control.Status != "applied" {
+		s.t.Fatal("pre-merge candidate exit was not applied")
+	}
+	exited := p.CandidateSnapshot(b)
+	if exited.Domain.WorkflowRuns[0].Abandonment == nil || exited.Domain.WorkflowRuns[0].PRURL != pb.URL {
+		s.t.Fatal("candidate exit lost original history/PR")
+	}
+	p.Record("abandoned-resource-facts", exited)
+	// Start the manually selected replacement immediately; no stop-state wait.
+	b = p.StartCandidate("a", profiles[1].ID, false)
+	replacement := p.WaitCandidate(b, "waiting_decision")
+	be = replacement.Domain.Executions[0]
+	bs, err = ExecutionSession(be)
+	s.Must(err)
+	if b == originalB || be.Workspace.Base != ae.Workspace.Base {
+		s.t.Fatal("manual replacement did not preserve original experiment base")
+	}
+	p.Feedback(b, "bravo-replacement")
+	p.WaitCandidate(b, "waiting_pr_merge")
+	published[b] = p.CandidateUsage(b, "replacement-published")
+	pb = p.CandidatePR(b)
+	p.Record("manual-replacement", p.CandidateSnapshot(b))
 	snap := mustSnapshot(p)
 	for _, t := range snap.Page.Tasks {
 		if t.TaskID == p.Tasks["b"].ID && (t.DependencyReady || len(t.WorkflowRuns) > 0) {

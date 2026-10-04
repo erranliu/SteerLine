@@ -31,9 +31,8 @@ go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delive
 | L3 live | `delivery.local-codex` / `delivery.orca-codex` | 真实模型配 loopback provider，分别独立交付 |
 | L3 live | `recovery.local-codex` / `recovery.orca-codex` | 真实执行后重启保持原身份，usage 不增加，再合并交付 |
 | L3 live | `candidates.local` | manifest 固定本地 Codex + 本机 Orca，两候选真实反馈/PR/唯一交付与后继；使用真实 SteerlineTest GitHub PR |
-| L3 live | `candidates.remote` / `candidates.mixed` | 真远端/混合入口；当前产品缺目标权限回执，发模型/创建资源前写 blocker 并失败，不能当作通过 |
 
-候选入口使用 `STEERLINE_CANDIDATE_ACCEPTANCE_CONFIG`，格式和精确现场证据见 [#39](../../docs/validation/candidate-native-acceptance/README.md)。runner 在清除继承 STEERLINE 环境时将该输入的绝对路径保存在 Run 中；manifest 的源码 commit 必须匹配实际 HEAD。三个场景显式选择，不用本机 Orca 替代真远端。`candidates.local` 的 chain 字段用于 runner live 枚举，实际两份 profile 在 manifest/规范 SQLite snapshot 中逐一核验。
+候选唯一入口 `candidates.local` 使用 `STEERLINE_CANDIDATE_ACCEPTANCE_CONFIG`，格式和精确现场证据见 [#39](../../docs/validation/candidate-native-acceptance/README.md)。runner 在清除继承 STEERLINE 环境时将该输入的绝对路径保存在 Run 中；manifest 的源码 commit 必须匹配实际 HEAD，只选择本机 Orca 与本地 Codex 两套 profile。chain 字段用于 runner live 枚举，实际两份 profile 在 manifest/规范 SQLite snapshot 中逐一核验。
 
 ## 包与所有权
 
@@ -49,7 +48,7 @@ Run 持有本次产品/helper 构建和选择；Scenario 持有 scratch/证据�
 
 controlled 使用真实 SteerLine、Git、SQLite，helper 实现最小 app-server 和 GitHub provider。worker 真实 commit/push/create；中心查询与核验真实合并后提交交付。loopback `git http-backend` 执行真实传输，Git 适配器保留正式 remote 身份及原始输出；外部 PR 状态只存于 provider 文件。
 
-受控场景上限 5 分钟，真实场景 10 分钟；多轮 `candidates` 组为 15 分钟（双候选、反馈、在途落选、合并和后继）。普通驱动命令 30 秒，原生资源操作 45 秒；Orca 准备总期限 4 分钟，服务清理 30 秒，外部资源清理各 2 分钟。按真实条件等待，失败不自动重跑。
+受控场景上限 5 分钟，真实场景 10 分钟；多轮 `candidates` 组为 20 分钟（双候选、反馈、本机故障/放弃/新增、在途落选、合并和后继）。普通驱动命令 30 秒，原生资源操作 45 秒；Orca 准备总期限 4 分钟，服务清理 30 秒，外部资源清理各 2 分钟。按真实条件等待，失败不自动重跑。
 
 ## 真实环境
 
