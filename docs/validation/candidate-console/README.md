@@ -21,7 +21,7 @@
 
 亲自复查实际 diff、当前 Spec/Plan 与生产路径：Task/run/Execution/session 选择、规范 Body/Conversation/Activity、草稿/请求持久化、产品控制/反馈、环境动作和回执验证。修复了迟到读取清除新候选 busy、缺页改选兄弟、merged 状态误当获胜、原冻结配置缺少 run 直读、迟到拒绝/开始回执改变当前选择等问题。worker-only 发布、独立 environment blocker、原业务 Decision 和服务 intent/receipt/ack 屏障继续由原服务实现，本 PR 未新增进程 kill、Task 丢弃、资源删除或自动补投路径。
 
-#38 活动 roadmap 收缩为 CC5 原生输入验收残留，已实现 Spec 不作为后续强制必读；尚未完成验收，不解除 #39 前置，也不启动 #39。本 PR 保持 draft，供协调聊天独立复审，不合并。
+#38 仍为未交付活动任务，保留自己的 Spec/Plan 执行入口与固定名称；当前实现待独立复审，CC5 原生输入验收残留单独记录，不解除 #39 前置，也不启动 #39。本 PR 保持 draft，供协调聊天独立复审，不合并。
 
 2026-10-04 追加授权：用户已授权原生终端操作；实际 UI 工具仍返回 `product policy blocks this app: ...powershell.exe`。保存新现场、实际拒绝、公开 Task 查询与进程清理证据；修正 opt-in manifest 未带出受控 Git/history 环境绑定的问题。生产实现未改动，不重跑原生输入或伪造 CC5；本次补充仅选择测试准备能力验证，原最终 L1 不重复。
 

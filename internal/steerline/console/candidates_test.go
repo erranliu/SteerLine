@@ -311,3 +311,29 @@ func TestCC4(t *testing.T) {
 	}
 	t.Log("exit/stop facts remain separate; exact original exit request; pending verification not exit; merged PR closes abandon")
 }
+
+func TestCandidateMergedConflictPresentation(t *testing.T) {
+	m, _ := ccFixture(t, 2)
+	s := &m.projects[0]
+	runs := s.snapshot.Observation.Runtime.Runs
+	runs[0].Abandonment = &contracts.CandidateAbandonment{At: m.clock.Now()}
+	runs[0].PR.State = "merged"
+	text := strings.Join(renderCandidates(m, *s, m.selectedRow(0)), "\n")
+	if !strings.Contains(text, "冲突：已放弃候选 PR 已合并") || !strings.Contains(text, "资源 active") {
+		t.Fatal("abandoned merge conflict or live resource fact missing", text)
+	}
+	runs[0].Abandonment = nil
+	runs[1].PR.State = "merged"
+	text = strings.Join(renderCandidates(m, *s, m.selectedRow(0)), "\n")
+	if !strings.Contains(text, "冲突：多个候选 PR 已合并") || strings.Contains(text, "获胜/唯一交付") {
+		t.Fatal("multiple merges must remain a conflict without a winner", text)
+	}
+	for _, r := range runs {
+		r.TaskStatus = "closed"
+	}
+	s.snapshot.Observation.Runtime.Deliveries = []contracts.TaskDeliveryRecord{{TaskID: "38", SelectedWorkflowRunID: runs[1].RunID}}
+	text = strings.Join(renderCandidates(m, *s, m.selectedRow(0)), "\n")
+	if strings.Count(text, "获胜/唯一交付") != 1 || !strings.Contains(text, "冲突：非交付候选 PR 已合并") || !strings.Contains(text, "资源 active") {
+		t.Fatal("late loser merge must preserve the sole delivery and actual resources", text)
+	}
+}

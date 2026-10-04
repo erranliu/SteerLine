@@ -31,3 +31,15 @@
 | L1 固定最小入口 | runner 自有隔离 STEERLINE_HOME，无原生开关 | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-console/l1-final` | 实现自查与所有定向修复完成后一次 | 固定 quick、产品客户端/边界/UI/守卫代表非零命中且通过 | l1-final/summary.json 和原始日志 |
 
 不选择 Full/L2/L3：变更为候选 TUI 与现有端口接线；真实后端竞争归 #39，版本/24 小时组合归 #42，本次不重启历史任务，不运行全量、真实模型或新的后端矩阵。CC5 缺口不能以这些级别替代。
+
+## 协调复审测试计划
+
+协调同步最新 main 后，修复候选合并冲突展示，并保留 #38 未交付任务的原 Spec/Plan 活动入口。冲突是已提交候选/PR/唯一 Delivery 的只读展示，不生成新的业务状态或胜者。新增 `TestCandidateMergedConflictPresentation`，验证放弃后合并、多个合并、交付后落选合并仍保留准确资源与唯一交付。
+
+以下均在 Windows 隔离环境执行，不请求模型；证据根为 `C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-candidates-20261004-01a10247/`，每次新空目录：
+
+- 定向 Go / 受影响 console 包（包含 CC1–CC4 与上述冲突场景）：`go run ./cmd/test-feedback -out <证据根>/coordinator38-console-01 -- ./internal/steerline/console -count=1`；修复后执行，要求实际非零命中、无 fail/skip，summary.json 与 Go JSON 保存证据。
+- 定向 Go / 实际应用接线：`go run ./cmd/test-feedback -out <证据根>/coordinator38-wiring-01 -- ./internal/steerlineintegration -run '^TestCandidateConsoleWiring$' -count=1`；同步及复审后执行，原新增/反馈/放弃/合并守卫断言保持，两个场景非零命中且无 fail/skip；同目录保存报告和真实服务回执。
+- 最终 L1：`go run ./cmd/test-feedback -level=L1 -out <证据根>/coordinator38-l1-01`；复审修复稳定后一次，七个固定组必须通过，summary.json 记录源码和构建身份。
+
+CC5 仍需上述真实终端/IME/导航/窄窗/滚动证据。此次 Go 回归不替代它；保留 draft，不选择 Full/L2/L3 或扩权限绕过工具产品策略。

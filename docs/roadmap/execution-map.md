@@ -12,7 +12,7 @@
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 38 | 候选观察界面：原生验收残留 | TUI 实现待独立复审；仅余 CC5 Windows 中文组词/选项备注/导航/窄窗/滚动真实证据，未完成前不解除 #39 前置 | `#37` | [当前证据与 blocker](../validation/candidate-console/README.md) |
+| 38 | 候选观察界面 | 候选TUI实现待独立复审，CC5 Windows中文组词/选项备注/导航/窄窗/滚动仍待真实验收；未完成前不解除 #39 前置 | `#37` | [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) |
 | 39 | 多候选本机与远端真机验收 | 多候选本机/远端竞争和混合后端增量验收 | `#38` | [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) |
 | 40 | 固定版本与双入口 | 不可变构建、stable/dev 固定入口和身份 | 无 | [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) |
 | 41 | dev 隔离与 stable 提升 | 独立 home、静止可恢复会话下的受控提升 | `#40`、`#36` | [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) |

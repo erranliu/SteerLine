@@ -261,6 +261,7 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 			profile = r.ExecutionProfile.Name + " [" + r.ExecutionProfile.ID + "]"
 		}
 		outcome := "参与实验"
+		loser := false
 		if r.Abandonment != nil {
 			outcome = "历史/已放弃"
 		} else if r.TaskStatus == "closed" {
@@ -272,6 +273,7 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 							outcome = "获胜/唯一交付"
 						} else {
 							outcome = "落选/保留资源"
+							loser = true
 						}
 					}
 				}
@@ -279,6 +281,26 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 		}
 		if r.FinishTaskStatus == "waiting_decision" {
 			outcome += " · 待决策/冲突请看原问题"
+		}
+		if r.PR.State == "merged" {
+			switch {
+			case r.Abandonment != nil:
+				outcome += " · 冲突：已放弃候选 PR 已合并，需人工核实"
+			case loser:
+				outcome += " · 冲突：非交付候选 PR 已合并，保留原唯一交付"
+			case r.TaskStatus != "closed":
+				merged := 0
+				for _, candidate := range runs {
+					if candidate.PR.State == "merged" {
+						merged++
+					}
+				}
+				if merged > 1 {
+					outcome += " · 冲突：多个候选 PR 已合并，需人工处置"
+				} else {
+					outcome += " · PR 已合并，交付待核验"
+				}
+			}
 		}
 		elapsed := "未知"
 		if !r.CandidateCreatedAt.IsZero() {
