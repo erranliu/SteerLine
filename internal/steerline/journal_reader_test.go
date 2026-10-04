@@ -1,7 +1,6 @@
 package steerline
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,7 +22,7 @@ func TestJournalWaitsForCompleteUTF8CRLFRecord(t *testing.T) {
 	if err := os.WriteFile(path, bytes[:cut], 0600); err != nil {
 		t.Fatal(err)
 	}
-	first, err := ReadJournalBatch(path, JournalCursor{}, JournalOptions{FromStart: true, Activity: true})
+	first, err := ReadJournalBatch(path, JournalCursor{}, JournalOptions{FromStart: true})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +39,7 @@ func TestJournalWaitsForCompleteUTF8CRLFRecord(t *testing.T) {
 	if err = f.Close(); err != nil {
 		t.Fatal(err)
 	}
-	second, err := ReadJournalBatch(path, first.Cursor, JournalOptions{Activity: true})
+	second, err := ReadJournalBatch(path, first.Cursor, JournalOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -50,7 +49,7 @@ func TestJournalWaitsForCompleteUTF8CRLFRecord(t *testing.T) {
 	if second.Cursor.Offset != int64(len(bytes)) {
 		t.Fatalf("offset=%d want actual CRLF byte count %d", second.Cursor.Offset, len(bytes))
 	}
-	third, err := ReadJournalBatch(path, second.Cursor, JournalOptions{Activity: true})
+	third, err := ReadJournalBatch(path, second.Cursor, JournalOptions{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -104,44 +103,20 @@ func TestJournalResetsOnTruncationAndAtomicReplacement(t *testing.T) {
 	}
 }
 
-func TestJournalDeduplicatesSeqAndResetsAtRollback(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "activity.jsonl")
-	rows := []string{
-		`{"seq":3,"kind":"message"}`,
-		`{"seq":3,"kind":"message duplicate"}`,
-		`{"seq":4,"kind":"command"}`,
-		`{"seq":2,"kind":"new generation"}`,
-	}
-	writeJournal(t, path, strings.Join(rows, "\n")+"\n")
-	batch, err := ReadJournalBatch(path, JournalCursor{}, JournalOptions{FromStart: true, Activity: true})
+func TestJournalFramingDoesNotInterpretActivitySequence(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "events.jsonl")
+	contents := "{\"seq\":3}\n{\"seq\":3}\n{\"seq\":4}\n{\"seq\":2}\n"
+	writeJournal(t, path, contents)
+	batch, err := ReadJournalBatch(path, JournalCursor{}, JournalOptions{FromStart: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !batch.Reset || batch.Cursor.Generation != 1 || len(batch.Lines) != 2 {
-		t.Fatalf("records preceding a rollback must be delivered before reset: %+v", batch)
+	if len(batch.Lines) != 4 || batch.Cursor.Generation != 1 || batch.Cursor.Offset != int64(len(contents)) || strings.Join([]string{string(batch.Lines[0]), string(batch.Lines[1]), string(batch.Lines[2]), string(batch.Lines[3])}, "\n")+"\n" != contents {
+		t.Fatal("raw sequence fields filtered records or reset the physical cursor")
 	}
-	next, err := ReadJournalBatch(path, batch.Cursor, JournalOptions{Activity: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !next.Reset || next.Cursor.Generation != 2 || len(next.Lines) != 1 {
-		t.Fatalf("rollback must start a separate generation batch: %+v", next)
-	}
-	var got struct {
-		Seq uint64 `json:"seq"`
-	}
-	if err := json.Unmarshal(next.Lines[0], &got); err != nil || got.Seq != 2 {
-		t.Fatalf("rollback line=%q err=%v", next.Lines[0], err)
-	}
-	if next.Cursor.Offset != int64(len(strings.Join(rows, "\n")+"\n")) {
-		t.Fatalf("rollback moved physical offset backwards: %+v", next.Cursor)
-	}
-	tail, err := ReadJournalBatch(path, next.Cursor, JournalOptions{Activity: true})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(tail.Lines) != 0 {
-		t.Fatalf("rollback prefix was revisited: %q", tail.Lines)
+	data, err := os.ReadFile(path)
+	if err != nil || string(data) != contents {
+		t.Fatal("journal reader rewrote its raw source")
 	}
 }
 

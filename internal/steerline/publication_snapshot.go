@@ -21,7 +21,7 @@ func (c Config) publicationSettings() contracts.PublicationSettings {
 	if c.PR.TokenEnv != "" {
 		refs = append(refs, c.PR.TokenEnv)
 	}
-	return contracts.PublicationSettings{Provider: contracts.PRProviderConfig(c.PR), Create: publication.CreateDescription(c.PublicationPolicy, c.PR), Git: c.Git, Remote: c.Remote, RemoteURL: c.publicationRemoteURL, BaseBranch: c.Branch, AuthenticationRefs: refs}
+	return contracts.PublicationSettings{Provider: contracts.PRProviderConfig(c.PR), Git: c.Git, Remote: c.Remote, RemoteURL: c.publicationRemoteURL, BaseBranch: c.Branch, AuthenticationRefs: refs}
 }
 
 func (c *Config) bindPublicationTarget(ctx context.Context) error {
@@ -64,7 +64,7 @@ func verifyPublicationTargetForRun(ctx context.Context, c Config, run *Run) erro
 
 func fixedWorkflowPublicationConfig(c Config, w WorkflowRunRecord) (Config, error) {
 	if w.ExecutionProfile == nil || !verifyFixedExecutionProfile(*w.ExecutionProfile, c.ExecutionDirectory) || w.ConfigDigest != w.ExecutionProfile.AcceptedConfigVersion || w.Repository == "" || w.Branch != w.ExecutionProfile.Publication.BaseBranch || w.ExecutionProfile.Publication.RemoteURL == "" {
-		return Config{}, errors.New("publication requires the original v5 execution snapshot; preserve original state")
+		return Config{}, errors.New("publication requires the original v6 execution snapshot; preserve original state")
 	}
 	c = c.ApplyFixedExecutionProfile(*w.ExecutionProfile)
 	c.Repository = w.Repository

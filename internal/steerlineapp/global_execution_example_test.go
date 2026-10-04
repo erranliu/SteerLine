@@ -19,7 +19,7 @@ func TestFiveGlobalLunaProfilesLoadAndFreeze(t *testing.T) {
 		t.Fatal(err)
 	}
 	projectPath := filepath.Join(t.TempDir(), "project.json")
-	project, err := json.Marshal(map[string]any{"publication_policy": map[string]string{"publisher": PublisherExecutionProfile}, "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion})
+	project, err := json.Marshal(map[string]any{"publication_policy": map[string]string{"publisher": "worker"}, "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion})
 	if err != nil {
 		t.Fatal(err)
 	}

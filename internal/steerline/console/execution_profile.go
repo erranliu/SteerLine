@@ -46,7 +46,7 @@ func renderFixedRunExecutionProfile(state projectState, run *contracts.Run) []st
 	for _, tool := range []struct {
 		name    string
 		command contracts.Command
-	}{{"Git", fixed.Publication.Git}, {"Query", fixed.Publication.Provider.Query}, {"Create", fixed.Publication.Create}, {"Close", fixed.Publication.Provider.Close}} {
+	}{{"Git", fixed.Publication.Git}, {"Query", fixed.Publication.Provider.Query}, {"Close", fixed.Publication.Provider.Close}} {
 		description := tool.command.Executable + " " + strings.Join(tool.command.Args, " ")
 		if tool.command.Executable == "" {
 			description = "无宿主命令"

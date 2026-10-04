@@ -173,7 +173,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		if fresh[0].Payload[0] == '[' || public[0] == "changed" || fresh[0].ValidateProfileIdentity("project", "profile", "accepted") != nil {
 			t.Fatal("profile data or display leaked between instances")
 		}
-		c := steerline.Config{Repository: "fixture", Branch: "main", Remote: "origin", ExecutionPolicy: policy, PublicationPolicy: executionapi.PublicationPolicy{Publisher: executionapi.PublisherHostService}, PR: publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "org/repo", Query: contracts.Command{Executable: "gh"}}}
+		c := steerline.Config{Repository: "fixture", Branch: "main", Remote: "origin", ExecutionPolicy: policy, PublicationPolicy: executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}, PR: publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "org/repo", Query: contracts.Command{Executable: "gh"}}}
 		c.BindApplicationConfig(first, "explicit", "", "accepted", false)
 		c = c.ApplyExecutionProfile(steerline.ExecutionProfile{ID: "fixture", Name: "Fixture", Host: "local", Agent: "codex", ImplementationConfigs: []executionapi.ImplementationConfigInput{input}})
 		frozen := c.AvailableExecutionProfiles()[0].Freeze()
@@ -191,7 +191,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 	})
 	t.Run("config_loader_rejects_missing_key_before_repository_probe", func(t *testing.T) {
 		t.Setenv("STEERLINE_HOME", t.TempDir())
-		project := map[string]any{"repository": "must-not-be-read", "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion, "execution_policy": policy, "publication_policy": executionapi.PublicationPolicy{Publisher: executionapi.PublisherHostService}, "pr": publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "org/repo", Query: contracts.Command{Executable: "gh"}}}
+		project := map[string]any{"repository": "must-not-be-read", "branch": "main", "task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion, "execution_policy": policy, "publication_policy": executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}, "pr": publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "org/repo", Query: contracts.Command{Executable: "gh"}}}
 		raw, _ := json.Marshal(project)
 		path := filepath.Join(t.TempDir(), "project.json")
 		if err := os.WriteFile(path, raw, 0600); err != nil {
@@ -214,7 +214,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 			host, publisher string
 			provider        publication.Config
 			supported       bool
-		}{{"local", "host_service", github, true}, {"local", "worker", github, false}, {"local", "host_service", gitea, false}, {"orca", "worker", github, true}, {"orca", "worker", gitea, true}, {"orca", "host_service", github, false}, {"orca_supervised", "worker", gitea, true}, {"orca_supervised", "host_service", github, false}, {"other", "worker", github, false}, {"orca", "", github, false}, {"orca", "automatic", github, false}, {"orca", "worker", publication.Config{Kind: "command", BaseURL: github.BaseURL, Repository: github.Repository}, false}} {
+		}{{"local", "host_service", github, false}, {"local", "worker", github, true}, {"local", "worker", gitea, true}, {"local", "host_service", gitea, false}, {"orca", "worker", github, true}, {"orca", "worker", gitea, true}, {"orca", "host_service", github, false}, {"orca_supervised", "worker", gitea, true}, {"orca_supervised", "host_service", github, false}, {"other", "worker", github, false}, {"orca", "", github, false}, {"orca", "automatic", github, false}, {"orca", "worker", publication.Config{Kind: "command", BaseURL: github.BaseURL, Repository: github.Repository}, false}} {
 			selected, err := directory.Resolve(steerline.Config{Host: row.host, Agent: "codex"})
 			if err == nil {
 				err = selected.ValidatePublicationPolicy(executionapi.PublicationPolicy{Publisher: row.publisher}, row.provider)

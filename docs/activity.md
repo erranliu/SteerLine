@@ -1,18 +1,18 @@
-# Activity 契约：activity.jsonl 与 steerline watch
+# Activity 契约：规范事件与诊断镜像
 
-本文是**稳定读取契约**。`activity.jsonl` 是 agent 原始流（`events.jsonl`）的归一化派生物，面向人和外部工具，schema 独立于 codex / pi。渲染样式不是契约，可随时变化；JSONL 字段和语义是契约。
+产品活动和会话只读取 SQLite 中已提交的规范记录。activity.jsonl 是当前活动的可选诊断镜像，不是产品读取或恢复来源。原生历史/日志由对应会话采集器解释；已退役的 Pi/旧 exec stdout normalizer、格式探测和 raw fallback 不再提供。
 
 ## 目的与位置
 
 - 每个运行一个文件：`<run_dir>/runs/<run_id>/activity.jsonl`；retry 写在 `attempts/<attempt_id>/activity.jsonl`（与当次 `events.jsonl` 同目录）。
-- 派生自 `events.jsonl`（原始取证，永不改动）和调度器生命周期。删掉 `activity.jsonl` 不影响任何恢复：它可随时由 `events.jsonl` 重放重建。
+- 派生自 `events.jsonl`（原始取证，永不改动）和调度器生命周期。删掉 `activity.jsonl` 不影响业务恢复；当前产品不从原始文件自动重建该镜像。
 - **单写者**：只有服务写该文件。任何宿主（本地进程、Orca）都不直接写它。
 - **按 run 隔离**：每个 run 一个 writer，PR/合并/结项等 worker 退出后的事件仍写入**该 run 自己**的文件，不会串到别的 run。
 - **不承载控制审计**：control 请求和回执保存在 run_dir 的 `control/requests` 与 `control/receipts`；删除或重建 activity 不会重放、确认或改变控制指令结果。
 - **追加、不截断**：worker 退出后 writer 不关闭，重启后按需重开并续写；`seq` 从文件里已存在的最大值继续，末尾半行会在重开时修复。
 - **每行 flush**，读者可近实时跟随。
 
-PR 4B 增加了单独的 `ConversationEvent` 读模型，保存在当前 `steerline.db` 中，完整消息正文与 raw 行按摘要/修订引用读取。`activity.jsonl` 继续服务于人类活动视图，其 4096 字符 detail 上限不作为会话正文上限。两者不互相导入或重建。
+PR 4B 增加了单独的 `ConversationEvent` 读模型，保存在当前 `steerline.db` 中，完整消息正文与 raw 行按摘要/修订引用读取。产品活动视图使用规范数据库事件，`activity.jsonl` 仅供手动诊断，其 4096 字符 detail 上限不作为会话正文上限。两者不互相导入或重建。
 
 ## 记录 schema（v1）
 
@@ -23,7 +23,7 @@ PR 4B 增加了单独的 `ConversationEvent` 读模型，保存在当前 `steerl
 | v | integer | schema 版本，当前 1 |
 | seq | integer | 本文件内单调递增，从 1 开始，用于排序与去重 |
 | ts | timestamp | 记录时间（RFC3339 UTC）。agent 事件无自带时间，取到达时间 |
-| source | string | `codex` / `pi` / `orca-supervised` / `steer`（调度器生命周期） |
+| source | string | 实现声明的来源或 `steer`（中心生命周期） |
 | run_id / task_id | string | 运行的稳定身份，由写者补齐 |
 | item_id | string/null | agent 内同一个工具调用/消息的关联键，用于把 running 更新折叠到同一项 |
 | kind | string | 见下表 |
@@ -60,27 +60,11 @@ Orca 报告明确的 `agentWait` 对象，或 transcript 出现远端 helper 启
 ### 关键规则
 
 - **前向兼容**：新的 agent 事件类型映射为 `kind=unknown` 并原样放进 `raw`，绝不报错、绝不丢行。读者必须容忍未知字段与未知 kind。
-- **更新语义**：runner 可能对同一 `item_id` 先后发出 `running` 与 `completed`。TTY 渲染可原地替换该行；JSONL 消费者按 `item_id` 自行合并。codex 通常只有 started/completed，pi 有增量 update。
+- **更新语义**：runner 可能对同一 `item_id` 先后发出 `running` 与 `completed`。TTY 渲染可原地替换该行；JSONL 消费者按 `item_id` 自行合并。具体状态由当前原生采集器提供，不通过日志格式探测选择解析器。
 - **有界**：`detail` 截断到 4096 字符，`title` 截断到 240 字符；完整内容在 `events.jsonl`。
-- 读取器只提交换行结束的完整记录，offset 按字节计算并正确处理 UTF-8 与 CRLF。末尾半行会留待补齐；截断、同路径原子替换以及 `seq` 回退会启动新的逻辑读取代次。`seq` 回退从当前记录继续向前，物理 offset 不退回文件头。
-- viewer 与 `watch` 共用有界 JSONL cursor 引擎。每批最多 256 条或约 1 MiB，单条上限 8 MiB；超长行会诊断并跳过到下一个换行，坏 activity JSON 诊断写 stderr。
-
-## 稳定入口：steerline watch
-
-中心生命周期与 worker 活动先随业务状态写入 SQLite events；QueryService 可在服务运行时按 Execution/Attempt 查询。`activity.jsonl` 是展示副本，写入失败不丢弃规范事件，重启不会把日志文件重新导入业务数据库。
-
-```
-steerline watch -config <config.json> [--run-id <id|task-id>] [--follow=true] [--from-start=true] [--json] [--raw]
-```
-
-- 不依赖服务在跑，也不改任何状态：只读 SQLite 中的运行检查点和运行文件。
-- 未给 `--run-id` 时选当前 `execution_status=running` 的运行，否则选最后一个。每次调用固定所选 run 和解析出的日志路径，不会跟随 runtime 改选任务或 retry attempt。
-- 默认读 `activity.jsonl`；若不存在则回退到把 `events.jsonl` 现场归一化（兼容旧二进制与原始宿主采集）。
-- `--json` 输出稳定 schema（`activity.jsonl` 行原样透传；回退路径则输出归一化记录，并在本次调用中补齐 `v=1`、递增 `seq` 与 `ts`）。诊断始终写 stderr，不污染 JSON stdout。
-- `--raw` 输出 `events.jsonl` 中上限内的完整原始行，不按 JSON 解析过滤。
-- `--from-start=false` 从调用时文件末尾开始；若当时存在半行，会跳过到该行结束后再输出新记录。fallback 会读取首条完整原始记录来识别 Codex 或 Pi，即使实际消费从 EOF 开始。
-- activity 初始缺失时本次调用固定读 raw fallback；后续 activity 文件出现时由新一次调用选择。viewer 会切换读取代次并替换旧 fallback 视图。
-- 退出：读到当前末尾即返回；`--follow` 时持续跟随直到 Ctrl+C。服务停止不影响 watch 读已有文件。
+- 产品通过 Activity 查询规范数据库事件，以明确的 Run/Execution/Attempt 和 EventID 游标读取。采集缺口明确显示，不使用原始日志或诊断镜像补画。
+- 会话文件采集保留独立的通用 JSONL framing：只消费换行结束的完整记录，offset 按实际字节计算，处理 UTF-8/CRLF、文件截断与原子替换。每批条数/字节、单记录与扫描预算保持有界；超长行诊断后继续，原始文件不改写。通用读取器不解释活动 seq 或检测 agent 格式。
+- 旧 steerline watch 及自动 raw fallback 已退役，当前 CLI 不提供该入口。镜像格式和服务端控制台输出保持现行用途。
 
 ## 服务端控制台（同一渲染器）
 
@@ -90,26 +74,15 @@ steerline watch -config <config.json> [--run-id <id|task-id>] [--follow=true] [-
 
 ## 示例
 
-codex 原始行 → activity：
+中心写入的诊断镜像行示例（产品读取时以数据库 EventID 排序）：
 
-```
-{"type":"thread.started","thread_id":"01a0..."}
-→ {"v":1,"seq":1,"ts":"...","source":"codex","run_id":"3f9a","task_id":"142","kind":"session","status":"info","title":"codex session","meta":{"thread_id":"01a0..."}}
-
-{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"go test ./...","aggregated_output":"ok\n","exit_code":0,"status":"completed"}}
-→ {"v":1,"seq":4,"ts":"...","source":"codex","run_id":"3f9a","task_id":"142","item_id":"item_1","kind":"command","status":"completed","title":"go test ./...","detail":"ok\n","elapsed_ms":13200,"meta":{"exit_code":0}}
+```json
+{"v":1,"seq":1,"ts":"2026-10-04T00:00:00Z","source":"steer","run_id":"original-run","task_id":"original-task","kind":"decision","status":"pending","title":"worker needs input","meta":{"decision_id":"original-decision"}}
 ```
 
-pi 增量：
-
-```
-{"type":"tool_execution_start","toolCallId":"tc1","toolName":"bash","args":{"command":"ls"}}
-→ {... "source":"pi","item_id":"tc1","kind":"command","status":"started","title":"bash" ...}
-{"type":"tool_execution_update","toolCallId":"tc1","toolName":"bash","partialResult":"a\nb\n"}
-→ {... "source":"pi","item_id":"tc1","kind":"command","status":"running","title":"bash","detail":"a\nb\n" ...}
-```
+实际 agent 事件和原始取证由当前实现的会话 source/mapper 提供，本文不定义从旧 stdout 格式重建活动的转换规则。
 
 ## 版本化
 
-- 破坏性字段变更时提升 `v`，并保留旧版本读取路径。
+- 破坏性字段变更时提升 `v`；依照项目规则明确拒绝旧开发格式，不新增兼容读取或重放路径。
 - 允许新增可选字段与新增 kind/status；读者不得因未知值而失败。

@@ -58,7 +58,7 @@ flowchart LR
 
 ## 固定配置、提交与恢复
 
-项目策略与全局方案分开；发布责任统一为 `worker`，中心只核验交付。应用每次构造独立不可变目录，配置受理、Claim、冻结、恢复和查询使用同一目录。固定 profile v5 / `builtin-execution-v2`、PolicyResources v3、SQLite schema 12、runtime/checkpoint schema 17、conversation event v2 保持。封套固定 key、版本、用途、所属身份、摘要及 64 KiB 上限，载荷深复制并只由实现 codec 解码。旧开发格式明确拒绝，不迁移、双写、重建或回退。
+项目策略与全局方案分开；发布责任统一为 `worker`，中心只核验交付。应用每次构造独立不可变目录，配置受理、Claim、冻结、恢复和查询使用同一目录。固定 profile v6 / `builtin-execution-v2`、PolicyResources v3、SQLite schema 12、runtime/checkpoint schema 17、conversation event v2 保持。封套固定 key、版本、用途、所属身份、摘要及 64 KiB 上限，载荷深复制并只由实现 codec 解码。旧开发格式明确拒绝，不迁移、双写、重建或回退。
 
 中心先提交原 intent 再执行一个动作，原 receipt 与绑定提交后才授权下一步；thread 绑定提交后才发送首轮、资源回执后才派发、消息消费事实提交后才 ack。异步结果核对原 Operation/request digest、target、Execution/Attempt/代次和输入绑定；提交失败恢复私有候选，不发布成功视图。heartbeat 只写服务元数据。
 
@@ -128,7 +128,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 | `internal/steerline/activityview` | 1 | `internal/steerline/contracts` |
 | `internal/steerline/clientcontracts` | 5 | `internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/task`、`internal/steerline/taskview` |
 | `internal/steerline/codexapp` | 4 | 无 |
-| `internal/steerline/codexworker` | 30 | `internal/steerline/codexapp`、`internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/workspace` |
+| `internal/steerline/codexworker` | 29 | `internal/steerline/codexapp`、`internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/workspace` |
 | `internal/steerline/console` | 21 | `internal/steerline/activityview`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/execution` |
 | `internal/steerline/contracts` | 17 | `internal/steerline/execution`、`internal/steerline/task`、`internal/steerline/taskview`、`internal/steerline/workerflow` |
 | `internal/steerline/execution` | 16 | 无 |
@@ -287,7 +287,6 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 
 #### internal/steerline/codexworker
 
-- [activity.go](../../internal/steerline/codexworker/activity.go)
 - [ask.go](../../internal/steerline/codexworker/ask.go)
 - [ask_journal.go](../../internal/steerline/codexworker/ask_journal.go)
 - [backend.go](../../internal/steerline/codexworker/backend.go)

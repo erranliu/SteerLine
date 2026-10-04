@@ -104,7 +104,6 @@ func clonePublicationSettings(p contracts.PublicationSettings) contracts.Publica
 	p.Provider.Query.Args = slices.Clone(p.Provider.Query.Args)
 	p.Provider.Close.Args = slices.Clone(p.Provider.Close.Args)
 	p.Git.Args = slices.Clone(p.Git.Args)
-	p.Create.Args = slices.Clone(p.Create.Args)
 	p.AuthenticationRefs = slices.Clone(p.AuthenticationRefs)
 	return p
 }

@@ -44,39 +44,6 @@ func TestActivityWriterDeduplicatesItemAcrossReopen(t *testing.T) {
 	}
 }
 
-func TestPiNormalizer(t *testing.T) {
-	lines := map[string]string{
-		"session":   `{"type":"session","version":3,"id":"s"}`,
-		"turn":      `{"type":"turn_start"}`,
-		"message":   `{"type":"message_update","usage":{"input_tokens":1},"assistantMessageEvent":{"type":"text_delta","contentIndex":0,"delta":"Hi"}}`,
-		"reasoning": `{"type":"message_update","assistantMessageEvent":{"type":"thinking_delta","contentIndex":0,"delta":"hmm"}}`,
-		"command":   `{"type":"tool_execution_start","toolCallId":"tc1","toolName":"bash","args":{"command":"ls"}}`,
-		"note":      `{"type":"compaction_start"}`,
-	}
-	want := map[string]string{
-		"session":   "session",
-		"turn":      "turn",
-		"message":   "message",
-		"reasoning": "reasoning",
-		"command":   "command",
-		"note":      "note",
-	}
-	n := NewPiNormalizer()
-	for name, line := range lines {
-		got := n.Normalize([]byte(line))
-		if len(got) == 0 {
-			t.Fatalf("%s: no event", name)
-		}
-		if got[0].Kind != want[name] {
-			t.Fatalf("%s: kind=%q want %q", name, got[0].Kind, want[name])
-		}
-	}
-	end := n.Normalize([]byte(`{"type":"tool_execution_end","toolCallId":"tc1","toolName":"bash","result":"ok","isError":false}`))
-	if end[0].Status != "completed" {
-		t.Fatalf("tool end status=%q", end[0].Status)
-	}
-}
-
 func TestActivityWriterRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "activity.jsonl")

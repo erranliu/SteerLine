@@ -28,7 +28,6 @@ type JournalCursor = clientcontracts.JournalCursor
 
 type JournalOptions struct {
 	FromStart  bool
-	Activity   bool
 	KeepCR     bool // Raw exports preserve CRLF bytes; normalized consumers omit CR.
 	MaxRecords int
 	MaxBytes   int
@@ -184,32 +183,6 @@ func ReadJournalBatch(path string, cursor JournalCursor, opts JournalOptions) (J
 			cursor.ScanOffset = lineStart
 			break
 		}
-		if opts.Activity {
-			// Malformed activity is diagnosed by the consumer. Its apparent seq
-			// must not erase valid history or advance the sequence cursor.
-			if record, err := DecodeActivityLine(lineBytes); err == nil {
-				if cursor.HaveSeq && record.Seq == cursor.LastSeq {
-					cursor.Offset = end
-					captureLineAnchor(&cursor, rawLine, end-int64(len(rawLine))-1)
-					continue
-				}
-				if cursor.HaveSeq && record.Seq < cursor.LastSeq {
-					if len(batch.Lines) > 0 {
-						// Expose the generation boundary between batches. Viewers
-						// can reset, while streaming exports retain every record.
-						cursor.ScanOffset = lineStart
-						break
-					}
-					cursor.Generation++
-					if cursor.Generation == 0 {
-						cursor.Generation = 1
-					}
-					batch.Reset = true
-					cursor.LastSeq, cursor.HaveSeq = 0, false
-				}
-				cursor.LastSeq, cursor.HaveSeq = record.Seq, true
-			}
-		}
 		batch.Lines = append(batch.Lines, append([]byte(nil), lineBytes...))
 		batch.Records = append(batch.Records, JournalRecord{Offset: recordStart, Length: end - recordStart, Data: append([]byte(nil), rawLine...)})
 		batchBytes += len(lineBytes)
@@ -310,43 +283,3 @@ func captureLineAnchor(c *JournalCursor, line []byte, offset int64) {
 }
 
 func hashJournalBytes(b []byte) string { sum := sha256.Sum256(b); return fmt.Sprintf("%x", sum[:]) }
-
-// NormalizeFallbackLine adds the stable activity envelope to one normalized
-// raw-host record while keeping sequence state in the same read cursor.
-func NormalizeFallbackLine(normalizer Normalizer, line []byte, cursor *JournalCursor) []ActivityEvent {
-	if normalizer == nil || cursor == nil {
-		return nil
-	}
-	events := normalizer.Normalize(line)
-	for i := range events {
-		cursor.FallbackSeq++
-		events[i].V = ActivityVersion
-		events[i].Seq = cursor.FallbackSeq
-		if events[i].TS.IsZero() {
-			events[i].TS = now()
-		}
-	}
-	return events
-}
-
-// FirstJournalLine reads the first complete record for format detection even
-// when a caller will start consuming at EOF.
-func FirstJournalLine(path string) ([]byte, error) {
-	f, _, err := openJournal(path)
-	if err != nil {
-		return nil, err
-	}
-	defer f.Close()
-	reader := bufio.NewReaderSize(io.LimitReader(f, JournalMaxRecord+2), journalBufferSize)
-	complete, tooLong, _, line, err := readJournalLine(reader, nil, 0)
-	if err != nil && err != io.EOF {
-		return nil, err
-	}
-	if tooLong {
-		return nil, fmt.Errorf("first journal record exceeds %d bytes", JournalMaxRecord)
-	}
-	if !complete {
-		return nil, io.EOF
-	}
-	return bytes.TrimSuffix(line, []byte{'\r'}), nil
-}

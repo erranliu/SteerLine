@@ -13,8 +13,7 @@ import (
 )
 
 const ProjectExecutionProfileID = "project-default"
-const PublisherExecutionProfile = "execution_profile"
-const fixedExecutionProfileVersion = 5
+const fixedExecutionProfileVersion = 6
 
 // ExecutionProfile contains general routing/policy facts and opaque inputs for
 // strict implementation codecs. Native profile fields live in their owners.
@@ -76,7 +75,6 @@ func (p ExecutionProfile) Freeze(projectIDs ...string) FixedExecutionProfile {
 	p.Publication.Provider.Query.Args = slices.Clone(p.Publication.Provider.Query.Args)
 	p.Publication.Provider.Close.Args = slices.Clone(p.Publication.Provider.Close.Args)
 	p.Publication.Git.Args = slices.Clone(p.Publication.Git.Args)
-	p.Publication.Create.Args = slices.Clone(p.Publication.Create.Args)
 	p.Publication.AuthenticationRefs = slices.Clone(p.Publication.AuthenticationRefs)
 	fixed := FixedExecutionProfile{
 		Version: fixedExecutionProfileVersion, ImplementationVersion: p.directory.Version(),
@@ -101,16 +99,13 @@ func verifyFixedExecutionProfile(p FixedExecutionProfile, directory *ExecutionDi
 		p.ImplementationKey == "" || p.ID == "" || p.Name == "" || p.AcceptedConfigVersion == "" ||
 		p.PolicySource == "" || p.Digest == "" || p.Digest != fixedExecutionProfileDigest(p) ||
 		!verifyRequirementsSnapshot(p, directory) ||
-		publication.ValidateSettings(p.Publication, p.PublicationPolicy) != nil || p.ExecutionPolicy.Validate() != nil ||
+		publication.ValidateSettings(p.Publication) != nil || p.ExecutionPolicy.Validate() != nil ||
 		p.PolicyDigest != digestValue(p.ExecutionPolicy) {
 		return false
 	}
 	entry, err := directory.Resolve(Config{ExecutionDirectory: directory, Host: p.Host, Agent: p.Agent})
 	if err != nil || entry.ValidatePublicationPolicy(p.PublicationPolicy, publication.Config(p.Publication.Provider)) != nil {
 		return false
-	}
-	if p.PublicationPolicy.Publisher == PublisherExecutionProfile {
-		return false // a frozen profile stores the selected worker/host publisher.
 	}
 	if len(p.ImplementationData) == 0 {
 		return false
@@ -198,7 +193,7 @@ func (p ExecutionProfile) StaticUnavailableReason() string {
 	if err := entry.ValidatePublicationPolicy(p.PublicationPolicy, publication.Config(p.Publication.Provider)); err != nil {
 		return err.Error()
 	}
-	if err := publication.ValidateSettings(p.Publication, p.PublicationPolicy); err != nil {
+	if err := publication.ValidateSettings(p.Publication); err != nil {
 		return err.Error()
 	}
 	projectID := p.projectIdentity

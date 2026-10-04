@@ -8,7 +8,6 @@ type PublicationPolicy struct {
 }
 
 const PublisherWorker = "worker"
-const PublisherHostService = "host_service"
 
 func (p PublicationPolicy) Validate() error {
 	if p.Publisher != PublisherWorker {

@@ -89,9 +89,6 @@ type JournalCursor struct {
 	Dropping         bool   `json:"dropping,omitempty"`
 	DroppingStart    int64  `json:"dropping_start,omitempty"`
 	SkipUntilNewline bool   `json:"skip_until_newline,omitempty"`
-	LastSeq          uint64 `json:"last_seq,omitempty"`
-	HaveSeq          bool   `json:"have_seq,omitempty"`
-	FallbackSeq      uint64 `json:"fallback_seq,omitempty"`
 	AnchorOffset     int64  `json:"anchor_offset,omitempty"`
 	AnchorLength     int    `json:"anchor_length,omitempty"`
 	AnchorHash       string `json:"anchor_hash,omitempty"`

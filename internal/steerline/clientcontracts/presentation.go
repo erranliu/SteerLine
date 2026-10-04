@@ -27,7 +27,7 @@ func CloneProjectRef(ref ProjectRef) ProjectRef {
 		p := &ref.Presentation.Profiles[i]
 		p.ImplementationDisplay = append([]string(nil), p.ImplementationDisplay...)
 		p.Publication.AuthenticationRefs = append([]string(nil), p.Publication.AuthenticationRefs...)
-		for _, command := range []*contracts.Command{&p.Publication.Git, &p.Publication.Create, &p.Publication.Provider.Query, &p.Publication.Provider.Close} {
+		for _, command := range []*contracts.Command{&p.Publication.Git, &p.Publication.Provider.Query, &p.Publication.Provider.Close} {
 			command.Args = append([]string(nil), command.Args...)
 		}
 	}
