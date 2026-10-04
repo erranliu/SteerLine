@@ -78,13 +78,13 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	require(t, err)
 	priority := 2
 	batch := taskmodel.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: c.Identity(), Tasks: []taskmodel.TaskBatchTask{{LocalKey: "readiness", TaskID: 9001154, Title: "PR154 isolated readiness and business dispatch acceptance", Type: "task", Priority: &priority, Contract: contract}}, Dependencies: []taskmodel.TaskBatchEdge{}}
-	validation, err := commands.ValidateTaskBatch(ctx, c, mustJSON(batch))
+	validation, err := validateTaskBatchFixture(ctx, commands.Store, c, mustJSON(batch))
 	require(t, err)
 	if !resume && !validation.Valid {
 		t.Fatalf("live contract rejected: %+v", validation)
 	}
 	if !resume {
-		_, err = commands.CreateTaskBatch(ctx, c, mustJSON(batch), newID(), validation.AuthorityVersion, "acceptance")
+		_, err = createTaskBatchFixture(ctx, commands.Store, c, mustJSON(batch), newID(), validation.AuthorityVersion, "acceptance")
 		require(t, err)
 		page, err := queries.ShowNativeTask(ctx, "9001154")
 		require(t, err)

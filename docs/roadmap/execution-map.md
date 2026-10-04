@@ -63,7 +63,6 @@ flowchart LR
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 75 | 任务应用用例归包 | 任务创建/依赖/挑选/结果应用归 task | `#74` | [Spec](../spec/three-line-03-task-usecases.spec.md) · [Plan](../spec/three-line-03-task-usecases.plan.md) |
 | 76 | 执行应用用例归包 | 候选/会话/恢复/交付/清理归 execution | `#74` | [Spec](../spec/three-line-04-execution-usecases.spec.md) · [Plan](../spec/three-line-04-execution-usecases.plan.md) |
 | 77 | 产品查询与控制台契约收窄 | 公开 DTO 收窄、唯一 query/client 和 console 归包 | `#74`、`#38` | [Spec](../spec/three-line-05-product-console.spec.md) · [Plan](../spec/three-line-05-product-console.plan.md) |
 | 78 | 执行适配与资源目录归组 | 后端协议与 Git/PR/进程资源归组 | `#76` | [Spec](../spec/three-line-06-adapters-resources.spec.md) · [Plan](../spec/three-line-06-adapters-resources.plan.md) |
@@ -78,7 +77,7 @@ flowchart LR
     C37 --> U38["#38 候选 UI"]
     U38 --> A39["#39 原生验收"]
     M01 --> M02["已具备 #74 选择/结果基础"]
-    M02 --> M03["#75 任务用例"]
+    M02 --> M03["已交付 #75 任务用例候选"]
     M02 --> M04["#76 执行用例"]
     M02 --> M05["#77 产品/控制台"]
     U38 --> M05
@@ -127,3 +126,5 @@ flowchart LR
 不同任务人工并行和自动派发策略沿既有能力；共享工作区、平台宿主、构建或 SQLite 接线时串行协调。新任务只有固定前置整体交付后可领取，没有接口提前完成的放行状态。
 
 #74 已实现的工作/结果/领取/丢弃端口及 Service/CommandService/Config 的实际拆分见[交接清单](../validation/three-line-02-task-execution-boundary/integration-ownership.md)。Task ID 与后继固定硬前置保持；#75/#76 基于实际已接通端口按唯一文件所有者推进，共用构造/CLI/runner/守卫段由 #76 单点顺序集成。#77/#79/#80/#81/#82 按用户当前指令暂停。
+
+#75 已从活动实现条目移出，任务 ID 与后继 #79/#80 的固定基础保留；本次候选仍待协调独立复审/合并，不据此提前放行后继。真实任务能力及 #76 领取文件核验/共同配置接线见[交付与接口交接](../validation/three-line-03-task-usecases/README.md)。

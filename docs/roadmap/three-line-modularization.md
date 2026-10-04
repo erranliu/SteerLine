@@ -4,7 +4,7 @@
 
 本目标把任务、执行、控制台划为三个可以独立开发的业务边界，并把包与目录整理纳入同一轮交付。任务线负责提供与挑选工作；执行线负责容量、派发、交付核验和结项，向任务线提交执行结果；控制台只通过产品契约查询与操作。三条线的日常功能改动应无需修改另外两条线的内部实现，共同业务语义变化通过明确契约协同。
 
-本文维护 #74 的独立复审/合并及剩余 #75–#82 的正式实现安排；#73 的唯一类型基础及残留交接见[验收记录](../validation/three-line-01-types/README.md)。M01–M10 只用于定位阶段，各对应一个独立任务、Spec/Plan 和实现 PR；任务身份及活动规划遵循 [Roadmap 目录约定](readme.md)。正式执行以固定 Spec/Plan 和中心 DAG 为准。
+本文维护 #76–#82 的剩余实现安排；#75 任务应用候选及 #76 必要公共接线见[交付与交接](../validation/three-line-03-task-usecases/README.md)；#73 的唯一类型基础及残留交接见[验收记录](../validation/three-line-01-types/README.md)。M01–M10 只用于定位阶段，各对应一个独立任务、Spec/Plan 和实现 PR；任务身份及活动规划遵循 [Roadmap 目录约定](readme.md)。正式执行以固定 Spec/Plan 和中心 DAG 为准。
 
 本目标服务于 [产品愿景](product-vision.md) 的两个近期交付节点：一阶段加强同任务分叉候选执行与唯一交付，二阶段增加受控规划主agent与原生UI。三条开发线是当前解耦边界，不把未来全部业务强行归入这三个包。
 
@@ -15,7 +15,7 @@
 当前剩余问题如下：
 
 - `internal/steerline` 主包仍同时持有任务、执行、决策、控制、恢复与提交用例。
-- 任务选择与执行结果边界已接通 task 工作/规范结果端口、执行核验和专用原子提交；任务应用用例及执行 actor 的完整迁包仍待 #75/#76。后继消费已固定小端口，执行资格仍以各自硬前置真实交付为准。
+- 任务选择与执行结果边界已接通 task 工作/规范结果端口、执行核验和专用原子提交；任务应用用例已由 #75 迁入 task；执行 actor 的完整迁包及领取文档端口集成仍由 #76 负责。后继消费已固定小端口，执行资格仍以各自硬前置真实交付为准。
 - 产品公共快照仍包含完整 Domain/Runtime 和内部记录，控制台虽已隔离实现 import，仍会受到内部模型形状变化影响。
 - `contracts` 混合任务、执行、展示、宿主与持久类型；业务、后端、查询、存储和测试工具按不同层次平铺，存在职责相近的小包及两处集成测试目录。
 
@@ -206,7 +206,6 @@ product/query 保留唯一查询与分页/正文规则。被存储读取复用�
 
 | 阶段定位 | 正式任务 | 硬前置 | 独立规格 |
 | --- | --- | --- | --- |
-| M03 | #75 任务应用用例归包 | `#74` | [Spec](../spec/three-line-03-task-usecases.spec.md) · [Plan](../spec/three-line-03-task-usecases.plan.md) |
 | M04 | #76 执行应用用例归包 | `#74` | [Spec](../spec/three-line-04-execution-usecases.spec.md) · [Plan](../spec/three-line-04-execution-usecases.plan.md) |
 | M05 | #77 产品查询与控制台契约收窄 | `#74`、`#38` | [Spec](../spec/three-line-05-product-console.spec.md) · [Plan](../spec/three-line-05-product-console.plan.md) |
 | M06 | #78 执行适配与资源目录归组 | `#76` | [Spec](../spec/three-line-06-adapters-resources.spec.md) · [Plan](../spec/three-line-06-adapters-resources.plan.md) |
@@ -225,7 +224,7 @@ flowchart LR
     C37 --> U38["#38 候选 UI"]
     U38 --> A39["#39 原生验收"]
     M01 --> M02["已具备 #74 选择/结果基础"]
-    M02 --> M03["#75 任务用例"]
+    M02 --> M03["已交付 #75 任务用例候选"]
     M02 --> M04["#76 执行用例"]
     M02 --> M05["#77 产品/控制台"]
     U38 --> M05
@@ -285,6 +284,8 @@ flowchart LR
 7. cmd、构建/安装/launcher、runner/suite及测试文档中的路径与最终结构一致；全OS源码索引、所有权图、实际入口和剩余原生限制记录在交付文档中。当前架构页只在实际实现后更新为新结构。
 8. 已交付分叉候选的Task/领取/Workflow/Execution关系和唯一交付不被收窄为单运行；公共操作不能按task_id猜候选。规划来源、受控主agent和WinUI传输有清晰归属，未交付能力不被伪装为可用，也不要求完成全部整理才能开始对应产品任务。
 
-按剩余 #74–#82 的独立 Spec/Plan 顺序实施，活动条目同步维护在 [主 roadmap](roadmap.md) 与 [执行依赖](execution-map.md)。若实际盘点确需进一步拆分，应为新增独立交付重新占用任务 ID、形成独立 Spec/Plan 并同步依赖；不能共用原身份或在实现中默改范围。
+按剩余 #76–#82 的独立 Spec/Plan 顺序实施，活动条目同步维护在 [主 roadmap](roadmap.md) 与 [执行依赖](execution-map.md)。若实际盘点确需进一步拆分，应为新增独立交付重新占用任务 ID、形成独立 Spec/Plan 并同步依赖；不能共用原身份或在实现中默改范围。
 
 #74 的实现与验证候选见[验收记录](../validation/three-line-02-task-execution-boundary/README.md)。#75/#76 在 #74 合并后仅消费已接通的小端口，按文件清单分线；公共定义、app/cmd/runner 段由 #76 单点顺序集成。用户当前暂停 #77/#79/#80/#81/#82，本次不启动其它任务。
+
+#75 已从活动实现条目移出，任务 ID 与后继 #79/#80 的固定基础保留；本次候选仍待协调独立复审/合并，不据此提前放行后继。真实任务能力及 #76 领取文件核验/共同配置接线见[交付与接口交接](../validation/three-line-03-task-usecases/README.md)。
