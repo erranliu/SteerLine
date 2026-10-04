@@ -1,5 +1,7 @@
 # Plan：单 worker 持续执行与统一待决策
 
+维护说明：本页保留原交付/试验契约与证据定位。当前第一阶段只验本地 Codex/本机 Orca，远端相关历史条目不构成当前一期研发或验收前置；活动任务范围见[一期共同约束](phase1-delivery-constraints.md)。
+
 适用说明（2026-09-30）：停服恢复的人工门槛与新 worker 代次由[停服恢复 Plan](worker-service-recovery.plan.md)接续；本文原会话反馈测试保留为普通反馈的回归依据。
 
 任务 ID：36；任务名称：单 worker 持续执行与统一待决策。唯一执行依据：[Spec](worker-flow.spec.md)。无未完成硬前置，一个独立实现 PR 交付。

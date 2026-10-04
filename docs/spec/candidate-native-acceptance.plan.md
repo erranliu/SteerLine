@@ -1,38 +1,31 @@
-# Plan：多候选本机与远端真机验收
+# Plan：多候选本机验收
 
-任务 ID：39；任务名称：多候选本机与远端真机验收。唯一执行依据：[Spec](candidate-native-acceptance.spec.md)。硬前置：#38 实现合入（传递包含 #37/#36），一个实现 PR 交付。用户允许 #38 CC5 单独待人工补验后继续本任务开发，不将该例外扩展为本任务的原生验收豁免。
+任务 ID：39；任务名称：多候选本机验收。唯一执行依据：[Spec](candidate-native-acceptance.spec.md)。硬前置：#38 实现合入（传递包含 #37/#36），一个实现 PR 交付。#38 CC5 单独待人工补验，不阻塞本任务。
 
-1. 核对实际交付和当前受支持目标/认证，固定隔离仓库、SQLite、构建与能力快照。远端权限尚未准入时标明阻塞；不增加远端权限实现，不用本机Orca、mock或skip代替远端通过。
-2. 在 `tests/e2e/suites/candidates/` 编写带e2e tag的场景，经现有driver/native/controlled及证据适配层复用产品入口。场景不直接导入生产facade或平台实现，生产和外层 `internal/steerlineintegration` 不导入 `tests/e2e/internal`；遵守Go internal可见范围与现有测试边界。
-3. 复用现有隔离环境与worker侧发布，不用host_service/旧DeferredFeedback或日志产品回退。分别做本机、远端双候选链及本机/远端混合；原profile、session、消息与PR独立。等待反馈重启和一个候选放弃后的兄弟继续/人工新增合入一组混合现场。
-4. 人合并精确测试PR，核验唯一Delivery与后继包含原merge的base并真实交付；实际提交合并后放弃核验拒绝，命令回执与真实停止事实分开。
-5. CN5及独立blocker/晚到副作用故障复用 #37受控证据，接线变化时只重跑受影响代表；不为故障全排列重复发真实模型请求。停止未支持或待核实如实保留。
-6. 汇总CN1–CN8、阻塞项及前置证据交接 #42。只修本链集成缺陷，不新增业务、名额预留、自动补位或后端支持。
+1. 核对本地 Codex 与本机 Orca 的实际能力/认证，固定隔离仓库、SQLite、产品/helper 构建、两套本机 profile 及来源版本。远端已从本任务范围移除，不增加远端准入、权限实现或远端补验待办。
+2. 在 `tests/e2e/suites/candidates/` 接一个 L3 live 本机场景，复用现有 driver/native/controlled/evidence；两种本机后端在同 Task 内真实重叠工作，逐候选冻结配置/权限、独立会话/worktree/分支/PR。场景不得直接依赖业务 facade/平台实现，也不从生产或外层集成包导入 E2E internal。
+3. 将两份原会话反馈、等待反馈时中心重启、一例本机候选连接故障、合并前放弃及兄弟继续/人工新增合入同一现场。不同配置/后端不扩成全排列，不建第二套状态机或 codec。
+4. 操作者合并精确测试 PR，核验唯一 Delivery、合并前后后继资格、后继包含原 merge 的 base 与实际 PR 交付；合并后实际提交放弃核验拒绝，原命令/Operation 回执与真实停止分开。
+5. 正文、会话、raw 与活动均从规范数据库取证，逐候选核对真实 session/turn、model/effort、权限和正数 usage。已有真实正文/采集/接线失败必须诊断修复，不能用原始日志回填产品结果或改写为待人工补验。
+6. CN5 和独立 blocker/晚到副作用的完整故障边界复用既有受控证据；仅接线改变时定向重验。汇总本机 CN1–CN8 与原资源清理证据交接 #42，远端不再计入本任务覆盖或阻塞。
 
 ## 并行与构建固定
 
-不增加 #73–#82 硬前置。与解耦线并行前固定本任务 commit/产品与 helper 构建、隔离配置/原生资源及场景清单；现场运行中不替换。接收各迁移任务的路径/身份/接线影响清单，按 Spec 规则复用未变证据，只定向重验受影响 CN 场景。#77/#78/#80 的接线变化不能直接沿用旧构建的通过结论。
+不增加 #73–#82 硬前置。与解耦线并行前固定 commit、产品/helper 构建、隔离配置/home/原生资源及本机场景；运行中不替换。路径、身份或接线迁移按 Spec 的实际影响定向重验，未变证据可复用；#77/#78/#80 的变化不能直接沿用旧构建通过结论。
 
-TestMC5/6 当前在 `internal/steerline/candidate_workers_test.go`，使用下表主包命令；#76 将跨模块 MC 断言改为真实 app 外层接线，#81 再归 `tests/integration`，届时同次更新本 Plan 到唯一入口。E2E 包/API 路径变化只改 driver/native/evidence 的实际消费者，不从场景直接依赖业务/adapter 实现。
+TestMC5/6 当前在 `internal/steerline/candidate_workers_test.go`；迁移任务交付后同次更新本 Plan 到唯一入口。E2E 接口/路径变化只改 driver/native/evidence 的实际消费者，不从场景直接依赖业务/adapter 实现。
 
 ## 测试计划
 
-本任务规划新增L3 `candidates` 组，三个live场景如下；包/测试/环境在实施时登记到 `tests/e2e/suites.json`，并更新E2E入口说明。当前未注册，不宣称下面的新场景命令已经可运行。不再从外层集成包创建直接复用E2E内部库的opt-in runner。
+只保留 L3 `candidates.local`（规划包 `tests/e2e/suites/candidates`、测试 `TestCandidateLocal`、env=live）；执行聊天按实际实现更新包/test 名、`tests/e2e/suites.json` 和 E2E README。删除本任务的 `candidates.remote` 与 `candidates.mixed` 远端场景登记及专用门槛，不把它们列作 skip/blocked，也不强制保留无人使用的远端 fixture。保留已有通用生产/适配层的远端准入规则。
 
-- `candidates.local` → `./tests/e2e/suites/candidates` 的 `TestCandidateLocal`，env=live。
-- `candidates.remote` → 同包的 `TestCandidateRemote`，env=live；所需真实远端准入不满足就明确阻塞，不当作通过。
-- `candidates.mixed` → 同包的 `TestCandidateMixed`，env=live；本机/远端精确原身份与配置。
+环境扩展只含一个 Project 的两套本机 profile、精确 WorkflowRun/Execution 控制、逐候选来源/权限/usage 证据。`STEERLINE_CANDIDATE_ACCEPTANCE_CONFIG` 仅表达本机隔离构建、项目、profile 和证据目录；不要求远端目标或远端权限回执。具体 schema 与调用入口按实际实现记录，当前格式不做旧远端 manifest 兼容/回退。沿现有 live 模型/effort 与权限，通过本地 Codex/本机 Orca 后端差异比较方案，不另扩模型/权限矩阵。
 
-必要环境扩展仅包括：在一个Project登记并冻结多套候选profile；driver按精确WorkflowRun/Execution提交新增、反馈、放弃及查询原请求；native/证据适配层逐候选核验来源、model/effort、权限和usage，不能沿用单一当前profile。沿现有live默认模型/effort与权限，差异可先选择不同执行目标/后端，不扩大模型或权限认证矩阵。
-
-`STEERLINE_CANDIDATE_ACCEPTANCE_CONFIG` 规划为本次隔离现场manifest的输入，包含构建/项目、明确profile、远端目标及证据目录，认证只引用既有授权来源，不写正文；能力随 #39实现。远端缺权限/连接等前提在发模型和创建外部资源前报告，不通过补权限或偷偷换本机继续。各场景复用已有Run/Scenario/Project资源管理，保留原模型/工具回执和清理证据，不新增第二套状态机/codec。
-
-| 级别/组或场景ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
+| 级别/组或场景 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
 | --- | --- | --- | --- | --- | --- |
-| 定向Go：复核CN5与 #37 MC5/MC6 | 隔离SQLite、可控provider，无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-native-acceptance/conflict -- ./internal/steerline -run '^TestMC[56]$' -count=1` | 只有集成接线改变相应边界时；否则复用前置证据 | 前置 #37已实现入口实际命中；多合并/放弃PR合并/未知不覆盖Delivery | 原证据索引或conflict/原始状态与Go JSON |
-| L3 candidates.local：CN1–CN3、CN6 | 隔离Windows本地Codex、真实Git/PR链，人工合并 | `go run ./cmd/test-feedback -level=L3 -suite=candidates -env=live '-scenario=candidates.local' -out docs/validation/candidate-native-acceptance/local` | 场景注册且原生环境验证后 | 双候选、原会话、worker实际发布、唯一交付与后继base有真实证据 | local/runner summary、身份、回执、PR及资源记录 |
-| L3 candidates.remote：CN1、CN2、CN4、CN6 | 已认证受支持真实远端与隔离测试仓库 | `go run ./cmd/test-feedback -level=L3 -suite=candidates -env=live '-scenario=candidates.remote' -out docs/validation/candidate-native-acceptance/remote` | 远端实际准入及能力证据满足后 | 真远端双候选/故障/资源归属正确，停止unsupported如实记录 | remote/原工具结果、固定目标/配置及PR证据 |
-| L3 candidates.mixed：CN7、CN8 | 同Task本机/远端两套profile，真实原会话 | `go run ./cmd/test-feedback -level=L3 -suite=candidates -env=live '-scenario=candidates.mixed' -out docs/validation/candidate-native-acceptance/mixed` | 双路径证据可复用且远端前提满足后 | 精确反馈/重启隔离，合并前放弃退出实验、不等停止便可新增，合并后拒绝；规范数据库查询与原身份保持 | mixed/精确请求、profile、重启/放弃/停止回执与runner证据 |
-| L1固定最小入口 | 隔离STEERLINE_HOME，无本次live环境变量 | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-native-acceptance/l1` | 集成修复、自查完成后一次 | 原业务/守卫通过，不意外重跑live，e2e导入边界没有放宽 | l1/summary与原始JSON |
+| 定向 Go：CN5 / MC5、MC6 | 隔离 SQLite、可控 provider，无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-native-acceptance/conflict -- ./internal/steerline -run '^TestMC[56]$' -count=1` | 相应交付/冲突接线有变化时；否则复用原证据 | 实际非零命中；多合并/放弃 PR 合并/未知不覆盖 Delivery | 原证据索引或 conflict/报告与原始 JSON |
+| 定向 Go：候选适配/manifest/证据 | 本机无模型的现有 E2E 适配层 | 按实际改动选择 `go test ./tests/e2e/internal/driver ./tests/e2e/internal/native ./tests/e2e/internal/evidence -count=1` 的必要包/测试，实施时登记精确命令 | 精确候选接口与证据接通后 | profile/Workflow/Execution/session/请求不串线；本机选择与旧远端输入拒绝符合当前 schema；选择包非零命中 | adapters/报告与原始输出 |
+| L3 candidates.local：CN1–CN4、CN6–CN8 | 隔离 Windows，本地 Codex + 本机 Orca、真实模型/Git/PR | `go run ./cmd/test-feedback -level=L3 -suite=candidates -env=live '-scenario=candidates.local' -out docs/validation/candidate-native-acceptance/local` | 场景登记、两种本机能力和固定构建核对后 | 两候选真实重叠、独立反馈/规范正文/正数 usage、唯一交付/后继 base、重启/一例故障与放弃边界有完整原生证据，清理正确 | local/summary、规范状态/回执、原生身份、PR 和资源记录 |
+| L1 固定最小入口 | 隔离 STEERLINE_HOME，无 live 环境变量 | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-native-acceptance/l1` | 自查与集成修复完成后一次 | 原业务/守卫通过，不意外重跑 live，E2E 导入边界未放宽 | l1/summary 与原始 JSON |
 
-前置或包路径变化时更新实际命令到唯一所有者；新增/迁入测试必须非零命中。每次使用新的空证据目录，固定精确配置与合并操作者；环境缺失、零匹配、skip、原生证据/清理不足不能通过。不默认选择完整L2、Full、全部模型或live recovery；24小时和版本提升归 #42，五候选数量与允许偶尔超额复用 #37受控证据。上述 candidates 场景/manifest 能力尚待本任务注册，文档修订不代表测试已执行。
+每次使用新的空证据目录，固定实际合并操作者；零匹配、skip、实际本机环境/原生证据或清理不足不能记为通过。仅尚未执行的人工操作验收按当前规则登记 roadmap 后推进，实际发现的功能/正文失败仍须修复。不默认选择完整 L2、Full、所有模型或 live recovery；24 小时和版本提升归 #42，五候选数量和竞态允许超额复用既有受控证据。本文收缩验收范围，不代表本机场景已通过。
