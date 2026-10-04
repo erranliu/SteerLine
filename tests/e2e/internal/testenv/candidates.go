@@ -65,6 +65,8 @@ On the INITIAL business turn only, read this Spec/Plan and the assigned branch, 
 
 On each subsequent feedback turn, follow its exact marker. Write result.txt containing exactly real model delivery followed by a newline. Write candidate.txt containing exactly the feedback marker followed by a newline. Verify both. Run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1 once. Publication belongs to you: the script commits, pushes the assigned branch, creates its real GitHub draft PR or updates the same branch's existing PR, and prints its URL. Include the full URL in the final reply/completion relay. Never push the base branch. Keep all other tracked files unchanged. Do not call another model.
 
+Copy the publisher's returned URL VERBATIM, including the repository owner, in BOTH your final reply and completion relay body. The only valid form is https://github.com/erranliu/SteerlineTest/pull/<number>. Never omit erranliu, shorten, infer or reconstruct the URL. When continuing an existing PR, query that original URL with gh pr view and report the same complete URL. If publication fails, report the actual error and do not claim a PR exists.
+
 ## Acceptance
 The operator compares independent candidate markers and merges exactly one PR. Preserve the original session across feedback. A successor follows this same contract from its new merged base with a new marker.
 `
@@ -173,6 +175,10 @@ func (p *Project) WaitCandidateCommand(c Candidate, phase, commandID string) Sna
 		p.Record(c.RunID+"-latest", result)
 		if e.Environment != nil && e.Environment.Blocker != nil {
 			return false, fmt.Errorf("original candidate environment blocker %s (no automatic feedback replay)", e.Environment.Blocker.Fact.Reason)
+		}
+		w := result.Domain.WorkflowRuns[0]
+		if phase == "waiting_pr_merge" && w.Phase == "waiting_decision" && w.PRQueryError != nil {
+			p.Scenario.t.Fatalf("candidate PR verification failed: %s; see exact original snapshot", *w.PRQueryError)
 		}
 		return result.Domain.WorkflowRuns[0].Phase == phase && e.Status != "active" && e.PendingCommandID == "" && (commandID == "" || e.CurrentCommandID == commandID), nil
 	})
