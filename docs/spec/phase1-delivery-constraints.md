@@ -4,9 +4,13 @@
 
 ## 权威与执行边界
 
-复用[持续 worker 流程](worker-flow.spec.md)、[原生任务共同约束](native-task-constraints.md)、[服务生命周期](pr-03-service-lifecycle.spec.md)和[会话契约](pr-04b-conversation-events.spec.md)中仍有效的身份、权限、消息与交付要求。SQLite 是 Task、执行、反馈和 TaskDelivery 的唯一权威；UI、运行选择文件及候选汇总不复制业务状态。
+当前基线已具备持续worker、固定身份/权限、原请求对账、服务独立生命周期及规范事件/正文。后续直接保持这些边界，不把已交付Spec作为通用追读前置。SQLite是Task、执行、反馈和TaskDelivery的唯一权威，UI、版本选择文件及候选汇总不复制业务状态；前置Task ID与现有支持限制不变。
 
 worker 依据任务 Spec/Plan 实现、提交和创建 PR。测试、修复、审查及文件提交要求来自该任务契约；中心不维护五步、验证/审查结果链、修复轮数或工作树 dirty 门槛。
+
+发布责任仅worker，中心不commit/push/create，也不接受host_service或方案委托发布。原生能力逐执行目标核验，不能以中心权限或兄弟成功代替。产品活动/会话/正文/raw只读数据库已提交规范记录，诊断日志不是自动回退来源。
+
+环境blocker独立于agent业务Decision，阻断时拒绝新反馈、不队列补投；环境动作绑定原Execution/Attempt/turn/blocker与服务实例。生命周期副作用复用唯一actor的后台单步通道，原intent/receipt/ack提交屏障保持；候选新增/放弃不另建引擎或等待停止的项目级槽位。
 
 #37 明确扩展 #36 的单候选边界：稳定任务可人工增加不同执行配置的候选，每个WorkflowRun保持自己的原worker会话。开始时观察参与数已达5个就拒绝，不建立严格名额、队列或停止确认门槛；并发请求偶尔超出可接受。PR合并前可放弃单个候选，退出实验立即生效，停止与资源事实另行记录；已知PR合并后不允许放弃。一个Task只记录一个真实PR核验过的Delivery，人完成实验比较和合并选择，中心不自动评分/融合，不把放弃或落选等同于停止。一期外部提供稳定roadmap；主agent、审核及正式准入归二期。
 
