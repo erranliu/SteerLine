@@ -3,14 +3,15 @@ package steerlineapp
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
@@ -54,7 +55,7 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 	chosen := client.AvailableExecutionProfiles()
 	service, err := LoadConfig(path)
 	require(t, err)
-	require(t, service.Preflight(context.Background(), true))
+	require(t, steerline.Preflight(context.Background(), &service, true))
 	for _, profile := range chosen {
 		_, selected, err := service.ResolveExecutionProfile(profile.ID, profile.Digest())
 		require(t, err)
@@ -86,7 +87,7 @@ func TestSimplifiedWorkerOnlyPublication(t *testing.T) {
 	if err := (executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}).Validate(); err != nil {
 		t.Fatal(err)
 	}
-	var profile steerline.ExecutionProfile
+	var profile execution.ExecutionProfile
 	if err := contracts.DecodeJSON([]byte(`{"id":"local","name":"Local","publication_policy":{"publisher":"worker"}}`), &profile); err == nil {
 		t.Fatal("per-profile publication override accepted")
 	}

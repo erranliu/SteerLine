@@ -1,0 +1,4048 @@
+[
+  {
+    "package": "cmd/orca-probe",
+    "file": "cmd/orca-probe/main.go",
+    "sha256": "bea9cf07eb339d1404a638ef8d87fcfc9157c0bac2e782b50f1e0d6ffbf2a39c",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "cmd/steerline",
+    "file": "cmd/steerline/main.go",
+    "sha256": "2c4a4de7a28aa7a9fa785b7b5dd2e4194967263c1d130dd857adf415a92be702",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/product/api",
+      "internal/steerline",
+      "internal/steerline/clientcontracts",
+      "internal/steerline/contracts",
+      "internal/steerlineapp",
+      "internal/steerlineclient",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "cmd/steerline",
+    "file": "cmd/steerline/task_commands.go",
+    "sha256": "805a022cf6fff1a4a0c99eb716650d082bbb178eaa3cbcdc28e633767a992622",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/product/api",
+      "internal/steerline",
+      "internal/steerline/clientcontracts",
+      "internal/steerline/contracts",
+      "internal/steerline/taskview",
+      "internal/steerlineapp",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "cmd/test-feedback",
+    "file": "cmd/test-feedback/e2e.go",
+    "sha256": "7e696c0d9d7204cf68a98288e48c990072ba61a4840cdc5b753424fc4329e4da",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/testfeedback"
+    ]
+  },
+  {
+    "package": "cmd/test-feedback",
+    "file": "cmd/test-feedback/main.go",
+    "sha256": "1a9ea9512ff266f161f0b8d8d0cb143d2b4490e66cc0bb944dee5a344dd85e3c",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/testfeedback"
+    ]
+  },
+  {
+    "package": "cmd/test-feedback",
+    "file": "cmd/test-feedback/process_unix.go",
+    "sha256": "e07db50e4a00881bff1475f48a6920e4e545f43ed09363502f0b5cacb35bbc69",
+    "build_constraint": "!windows\r",
+    "project_imports": [
+      "internal/testprocess"
+    ]
+  },
+  {
+    "package": "cmd/test-feedback",
+    "file": "cmd/test-feedback/process_windows.go",
+    "sha256": "f08723112bf773f50b8a73fb50646853d402ccca3ccc0652659f167507cac394",
+    "build_constraint": "windows\r",
+    "project_imports": [
+      "internal/testprocess"
+    ]
+  },
+  {
+    "package": "cmd/test-feedback",
+    "file": "cmd/test-feedback/scoped.go",
+    "sha256": "d2ce0990636795c0d8c1535a718f6cbb56f3979c10f0b7e2583101f818735b65",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/coreboundary",
+      "internal/execution",
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline",
+      "internal/steerlineapp",
+      "internal/steerlineintegration",
+      "internal/storage/ports",
+      "internal/testboundary",
+      "internal/testfeedback"
+    ]
+  },
+  {
+    "package": "cmd/test-feedback",
+    "file": "cmd/test-feedback/task_scope.go",
+    "sha256": "4c770fcb67a04158380fa2c30850b4f716306afacf006d10954dd209d4de10cd",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/task",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/coreboundary",
+    "file": "internal/coreboundary/check.go",
+    "sha256": "c2fd971eb6729e7535bf9a02544ef5a5dbd8d350dcfb3536f587deabe6db83eb",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/application_config.go",
+    "sha256": "df9a67e09d511c77e9d3cf0155a1327482a61a57f52bbc3113f8774dac66798d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/workspace"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/application_config_types.go",
+    "sha256": "582d511a514384c9f253609852a6496277523e08675ba2db83171dd2a8e2ac38",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/steerline/publication"
+    ]
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/backend.go",
+    "sha256": "ccb093204577c4fbb0437f04478f2fbd814231ab83060f0e7b3bac17b07d4d41",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/capability.go",
+    "sha256": "97f1dca6591c31c9822d0cb0652740d4db586f71899fb8f8b224fe7cc7d4d5ae",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/environment.go",
+    "sha256": "f8a334252ca059b88e5be1c1dde05e0698aa75193cc8a45e0d728a270c173942",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/errors.go",
+    "sha256": "71a58a57aed6f234dc0b216446c8b6ce8e25f9a4577b37b2eb85b18cfd86dd6b",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/event.go",
+    "sha256": "1d058c8e159b1ea067a391a6b0390073b6ba78c762df57f0bc899e019a4122c0",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/execution.go",
+    "sha256": "937c68b78d905f0eb699e8bc55140a24db4eea2de760894b961bdf34e17f5835",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/host.go",
+    "sha256": "52613408271c979f53a4c0c5a04b314e6efcb92d653ce3543a69170d4a3faa84",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/implementation_config_input.go",
+    "sha256": "91ce701ce1cfe97e3c3f0dcf6f773569db2bc68d1b33e5468bdf165c027e2358",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/implementation_data.go",
+    "sha256": "7578339abbd93aecf3dcf44337fbd361640943b4d91179c0e0dec8b0d7d63363",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/json.go",
+    "sha256": "f25ec4949fca648c85acb0bbc03e96a79fcfcc20b01652c6eee96926d25fe32b",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/lifecycle.go",
+    "sha256": "d86d37f38ffbaf7d3aa50827ba44d902ed39fb1b97029587af671420bcb677ed",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/operation.go",
+    "sha256": "2c8a562a83f8d9ed7d41c94734e4df052e4fca3a6ab5f2c814613b1b5725254b",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/policy.go",
+    "sha256": "c33dbbdb8855fb70fd0f629524c1f63257cae5ebe2742d32b82e6338a60550b7",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/publication.go",
+    "sha256": "1ab5b738e310ed5b5b796af597f4525431d109f242dbbcc6e47eee6d3ac4ca01",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/question_route.go",
+    "sha256": "5b583d5f25e21532d51fe9e4d0afbf41e2f26d4052fcca7777249949f128ef47",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/record_validation.go",
+    "sha256": "9e5e3e50b459df9018d12806783da28f48b448beb95818980ad853ea7e0bc5d6",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/requirements.go",
+    "sha256": "cf55a96e1ce3e76a18948c7202433dd67895bb1385462ea64fed144ffd4d7b80",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/session.go",
+    "sha256": "01b3f5693ac89e2c9748875d7fdc6e517f46ee03b228a9e3ddd920f4e13801de",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/backend",
+    "file": "internal/execution/backend/workspace.go",
+    "sha256": "347d1f98d89502bbf5bd8aa093b670b002b6bc4c533e89660eb87da0eb2aaf5c",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/candidate_control.go",
+    "sha256": "6c9e025706654ffd31b711c452e8d34a04503e48915f299417a1b1b7cc202284",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/product/api"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/candidate_pr.go",
+    "sha256": "bcd8e3cb92d0bd81e418d46a238937b319655908903aceb2ebaca60de96f981a",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/steerline/publication",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/candidate_resources.go",
+    "sha256": "0cd3154426d9d44890701484d756df8a55579782d55aaee26e257b271fd79072",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/candidate_workers.go",
+    "sha256": "908a9eac15b21781424ac2de52c968e7439b54416fb2099e8fae395ebabf4c7e",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/steerline/publication",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/command_boundary.go",
+    "sha256": "b975a4efd3cb3baec4246de3e4fb5d7767460798957d1992e72beb561913e63d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/persistence",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/command_kinds.go",
+    "sha256": "58d0f780cf24402f71af004515227f3a414e41b9f4df0ebe47821d9a5b1ba96d",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/command_processor.go",
+    "sha256": "d998f920be44d48d9130519e7889717b7703181601b1ff59767e912a68f92c16",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/activityview",
+      "internal/steerline/contracts",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/command_submission.go",
+    "sha256": "16faa046284fab9f7de9bbbcaa75cd4fe505be6001259b1b3705a38f166a61c4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/config_admission.go",
+    "sha256": "6ce0046a5396d8307c0034ba0b407f066397cf0aba525c80083c83b1bde67b5e",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/workspace"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/control_digest.go",
+    "sha256": "c9e61dc7b5f61e9cfc396de626d5cfe073915ea8f1b7d0d0c72d6d866be8b727",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/product/api"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/control_service.go",
+    "sha256": "1d63d0f6f49e5303306fa146c5469869d6b0ecd090ca2b9d26400a7d056a9cfa",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/product/api",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/control_validation.go",
+    "sha256": "55b7f056454395397ba30caf1974986ed0710edf74abdc359cca8e98778f34f1",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/product/api",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/conversation.go",
+    "sha256": "ff5322fcf96241b824a6d64e23b77baa283ea2dac6b42b299ee00db63d379171",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/conversation_identity.go",
+    "sha256": "a82c43f9ee77c9b3ca8308da941804a2f952cda23ce1e1235e0d3c4ba2b03b64",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/conversation_position.go",
+    "sha256": "0c01737b6dd62cbeddc4439944ab93a2fdd257985daf7b9e3f526c45d39b01cb",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/conversation_replay.go",
+    "sha256": "4d8f4c0a51ba66d99f930caeb68669780711d24e77705c84f10967906c780bbd",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/conversation_service.go",
+    "sha256": "60075fbf82c10136ddd7250f81ed602572e5c1969a2576257a0e7812f15c0c9a",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/conversation_sources.go",
+    "sha256": "e4113b8521f67483a99dcb1af5e79754f297be86392d4fcb558f97dc4e9ed01a",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/decision.go",
+    "sha256": "a5972253e64eac9f14be41e12214e509331ab29937c8ed36d4bd9eaef9ba6994",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/execution_backend.go",
+    "sha256": "22c823df3e045a6adf8ed725d16af85b3965681249883bf08efa108e08528896",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/persistence"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/execution_command_runner.go",
+    "sha256": "786204c0fd845b6d79af4ad2bfc4898204d974f87d1166ccf1b3aa66801245f0",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/execution_commands.go",
+    "sha256": "55468c4988c7d964dccf0134eb510a6c8965ff468e5e67a6d19a2e1d7c7a3c06",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/execution_config.go",
+    "sha256": "3b2b49b6b53717d5fc50aaae7c5682f37fd4ea9465a150ca31a871ae9b614b7b",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/publication"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/execution_delivery_poll.go",
+    "sha256": "3afd945f9ed334054bfea3eae39671ec7f764bb61bab17b7baf2ba92cbd946cd",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/execution_directory.go",
+    "sha256": "39a9c0ba32b6dc50896bddee79a97adcb26e758c3782b35031fb3e29637b7c98",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/publication"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/execution_discard_cleanup.go",
+    "sha256": "3700f210d73fd450e7a33f9d72a0246fa3d2d95968a5293a1f63fd3666241f21",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/publication",
+      "internal/steerline/workspace",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/execution_dispatch.go",
+    "sha256": "9a645729675510d13d2e37d14e5b66b8b4c9aabd20410a93254cf4b4e8e5a29e",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/execution_errors.go",
+    "sha256": "9490ca5c9cb606a11284e4fc79b2dc2f55be4db1cf3f5620bb20adc214dde4f3",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/execution_helpers.go",
+    "sha256": "4608322473e18e026289bd49efe00c8d4a658ba672d3606a0d25dd8b6875cecc",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/workspace"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/execution_profiles.go",
+    "sha256": "c2589295cd4bb678681343a5f0aa6cf351232284b98df5e1672a8514ea75b324",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/publication"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/execution_requirements.go",
+    "sha256": "0cfd997051e87629c430058953eddb2f228bacec1ba966d02cf83b5ed1d4fd12",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/execution_snapshot.go",
+    "sha256": "f205bade77c594fca46e96970325349ce1a5db3f6c281c22a7c42dcbb218b696",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/execution_store.go",
+    "sha256": "bf657d055bf5cbab880fb4a6d1a5e34591582593022f4b6ca36149ef62025848",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/persistence",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/host_callbacks.go",
+    "sha256": "6d437d3bf9e4cd548fea4eaa1fc0250628b94a11a29c778280868a0d30e8d35a",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/product/api",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/host_ports.go",
+    "sha256": "8e9d08acd3fb8f0f4107584bd38b48ad42a527635f5371bdd668c905a10d2fc8",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/product/api",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/implementation_bindings.go",
+    "sha256": "a49a371a55a297dc301557b4ea31ffde76365d6262f73542f9663b68586ed5dd",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/journal_cursor.go",
+    "sha256": "e62ebc8dc5f93aa413ed13ef36a325281c9077bb0ab5bc4024958a5bc9262e41",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/journal_platform_linux.go",
+    "sha256": "855f340e1f609b037b3e3329ae00877a03be1db31fb4d11688cd6705fbcffb01",
+    "build_constraint": "linux",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/journal_platform_other.go",
+    "sha256": "314902d0b5cfc1aeff4861a534da9df5298c6bc8b1b8e54a07e7fa4b1c4b0ead",
+    "build_constraint": "!windows && !linux",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/journal_platform_windows.go",
+    "sha256": "b61838884e9fc703b1d5b96109c03907aa331a48ff16daa8ba74f7bdf57b16f4",
+    "build_constraint": "windows",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/journal_reader.go",
+    "sha256": "f726ff08a17fa0c1ea8530941d526b5e57c2385e3f93868be9b417af05e1c95c",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/json_decode.go",
+    "sha256": "12787868d34dc26fe9007e0fec5cb873428d47626aa8e3620bbcdf7eea322c17",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/lifecycle_effect.go",
+    "sha256": "b736b81ae5169f35e6a715eaa04d2a535363a88fba2cbdcac80d39267700eb18",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/lifecycle_receipt.go",
+    "sha256": "73f3296f75cc45e71e616bf19179a80e7f0e048b00b66ddc91e2dd9a41b40e32",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/answer_identity.go",
+    "sha256": "1cf32b3e0cd90d89117cd03acd3614022b57b0829c360ba6fa64071f2c39098a",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/candidate_base.go",
+    "sha256": "ec5948bb70a8e3ea683832f683241194c44f54d87455eff0bd8ab9febe82c41b",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/candidate_set.go",
+    "sha256": "9e258cdf6b747d13e4c8c4ef2e442372a067ac7de2c4d5362d09a04122885256",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/decision_content.go",
+    "sha256": "ca61a5c8a1dd4f3385a1b08067f8d99cf54cd9a35c7c1a73ae6e14c9c642402f",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/discard_facts.go",
+    "sha256": "246cde7bdfc898a5c4b53fcdd4b6e643b77d9ffedd1afe80ae4b4156a5b0b9b1",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/environment.go",
+    "sha256": "1a753b14d06c1187ae4fe43c262a4f999a27d72b9a435ee9eecadb6f1a8c4c44",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/execution.go",
+    "sha256": "29b6f928fd0cd8c36b15cf8b429deadc7f56ba8cfd026ba63a66411ab184c10d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/json.go",
+    "sha256": "8d467761944229c41163fc363544be4e8b9cea060025edd81c76be3a33506b1f",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/operation_rules.go",
+    "sha256": "4cf63413f2626f473c6575a0a900c8000748b4553228b49a3070bb0ec37a2e98",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/pr.go",
+    "sha256": "dcb2ec3d6b46825c6b1030cd3b8f7046e2d38e357326b9e5b1ca7aaaab89387b",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/publication.go",
+    "sha256": "9d0414a25cac48c2801b95990696b4bb74495570ba7fe04105fc42915822e75f",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/records.go",
+    "sha256": "960ef434ed5ecbe3bb1c157e002cdbc9c09db3d3f01c61b538b1ba971e2c54be",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/recovery.go",
+    "sha256": "9ac6b9d402fd6f7951418dde3d68a3931a7d850a775ea3ed67f8534ef6472c0e",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/runtime.go",
+    "sha256": "24e86c490e5e4887b6213ac47f015d62cdeda5f86b88448edd6cc097b4dfe2c6",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/state.go",
+    "sha256": "91d1257f1ac8eade56ecbc188d1727585c80fcc785a4b010f6121bb2a4a3690f",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/task_admission.go",
+    "sha256": "902196a3af74692e5493c9f3ef32304c4cd6f8fdc46016c167a517e533ee8a01",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/task_delivery.go",
+    "sha256": "7cfb7a73393b08ff6469c8f81a2c6acd3ac17894605fa37d3938406d32803fd8",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/task_delivery_gate.go",
+    "sha256": "5a0fcc742b24fee023bf15ca7c35a9e5e0cfc775d1d31d060bac214dafa5e4fb",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/task_delivery_validation.go",
+    "sha256": "a4b3ba45675008e15667be0ef3a823ee672866b473f9c0f0484328f89b085b49",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/task_receipts.go",
+    "sha256": "a7d20a0261592a6b1b12287bdfe1e661b405305ca93c889ea6ab861e684c4454",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/model",
+    "file": "internal/execution/model/verified_pr.go",
+    "sha256": "9e19a97cc0809eec3bc9d5a8971dd2a12dd3c8ff961a62b02dcf5a6f780a3b45",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/native_claim_command.go",
+    "sha256": "5b0997293948c201f1120096ff22fffd69b2f0093b5a7c5a2375f995fcd8ef39",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/native_cleanup.go",
+    "sha256": "defa9309fe84f739600850c04a38b8ab23a07d43bc359d35772801cdfdf8eea4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/persistence",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/native_cleanup_stop.go",
+    "sha256": "6b02ce6f5b9cb65ab97094b752432adc17dc84c1f908a24b7eac925992c0a6f4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/native_delivery_command.go",
+    "sha256": "f10c549f7ac8823b1a697a90548152c4bdd36b80f61f2c3286b91f70e66b10be",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/steerline/publication",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/native_discard_command.go",
+    "sha256": "06db69adce40ec3998baa680dbcc247bfbc56ef26f53b898936b9faea735452d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/native_dispatch_command.go",
+    "sha256": "1d815d95ad5221c75e3e295333ff106e29e570e21d8e450ef08d8ffd5a580a58",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/persistence",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/native_repository_target.go",
+    "sha256": "22dcd69ec93b3a3b8f4012976d704389b4ae192d02aa5d41d77d05bd31f8ece8",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/publication"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/operation.go",
+    "sha256": "43b3fcce3d715afa0e2084d897863159925ebacb84002dc7a639113d3ea4f54c",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/execution/process",
+    "file": "internal/execution/process/facts.go",
+    "sha256": "e859ff6546dbaa603559549caf0b4a3ea3b593505fa140c4ba99ba2010c8c0c9",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution/process",
+    "file": "internal/execution/process/facts_linux.go",
+    "sha256": "0e140e62aac0ae75f533a269b52bf48c809c2e90d299685679031ad171f16b89",
+    "build_constraint": "linux",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/execution/process",
+    "file": "internal/execution/process/facts_windows.go",
+    "sha256": "b96c0c79e859634d38043987a7f994bbaef90e72ef1b6d591be149c1484cc0a0",
+    "build_constraint": "windows",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/profile_data.go",
+    "sha256": "1c2189672302e770bcb203fd576b7f2cf6d3ce4779096cd16a0c8822fd2515da",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/prompt.go",
+    "sha256": "af522309bc03d07a51978b2b4984edb675545814856ec272b2db38fec3a88955",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/publication_snapshot.go",
+    "sha256": "3f0c589a63e82f7c4264653bfeba7bbd61572912a01c76bab8e79360ae6fa75d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/publication"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/read_ports.go",
+    "sha256": "b12443988c08a6f29f89ee6cafe37b2ffb2419eec74030cd91f815ec7fadf88e",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/persistence"
+    ]
+  },
+  {
+    "package": "internal/execution/reconstruction",
+    "file": "internal/execution/reconstruction/run.go",
+    "sha256": "ffd1fd56be05eb9bb3be5b6dbecefdc3360fe8a7ea90a5a3234fe8674ca1494e",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution/reconstruction",
+    "file": "internal/execution/reconstruction/runtime.go",
+    "sha256": "f9b6f0a89a036edb866075159fd76b306226430a5b5dc89d0fe8c48cdfd3959e",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution/reconstruction",
+    "file": "internal/execution/reconstruction/selectors.go",
+    "sha256": "04acbf0683983ed2748eef505fd219c5bd13f4b97f3a280ce8fa6efbfdccee4d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/recovery.go",
+    "sha256": "a72c4d02f5d8497bd4c6702f6d5ec51d80bbf2a99945dff0e7bfffddf39e4bef",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/clientcontracts",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/runtime_view.go",
+    "sha256": "b37546f798d3e56ab8d98fabe89200749994f1eaebf7af9222b8fb1e8acd6941",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/execution/reconstruction",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/scheduler.go",
+    "sha256": "ff4ec73422347a2a900cba8313f2bb1877ba0b262e73638afce3d9593df5a085",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/product/api",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/service_activity.go",
+    "sha256": "582b88c551eba4c676584dc264b194186ae73e37d32fb1aaa9b454fff041b20b",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/contracts",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/service_actor.go",
+    "sha256": "cd654fa745cac490a21eede1ad921b32109cddbf2fa5de7e97fe2f1295f7d1c3",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/service_checkpoint.go",
+    "sha256": "468cac71673466e2fa00219c0b209edda592219b19635c0c60f8b870a406eb95",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/service_commit.go",
+    "sha256": "104098b8a8ff386a35a6faa4e16dc784f6d3a8aca26edce483f0430b0a48ea6f",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/execution/reconstruction",
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/service_construction.go",
+    "sha256": "a3df86feb2cfd087c3ef6cc6f0d929ce06766be1975d3bfe5ce2a3e91f088237",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/service_execution_profiles.go",
+    "sha256": "dc29dad95e01052d8957dce229ee9494f37fe20a2eafc92268091a340fd3ab31",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/service_shutdown.go",
+    "sha256": "d1529b547c67d7dd68052f488b0e836b693dd5208421423403309683fc7c5c31",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/service_state.go",
+    "sha256": "e0f1d3c2bc4c46e873b622f6a575434a0f76f5bba44187d3f1d5ef63b94775be",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/product/api",
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/service_task_snapshot.go",
+    "sha256": "0e3282d8cc0ff3ac7dbe2eb78c8366609bac462324c95a12d0caac593eb8466b",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/execution/reconstruction",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/service_workers.go",
+    "sha256": "d4f04759ee7ecaf94dde7bf09d6e84b43f049a51857404b2538bbbe6e0cca453",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/store.go",
+    "sha256": "005514a4926ea642c125be45bc9884efccd051ec7568a02fb7f6f1c69c66aad4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/stored_execution_validation.go",
+    "sha256": "cc1b2213026303feaa11f64a736a62871aacaffe3bdbdc7590a051950dd27b96",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/utilities.go",
+    "sha256": "d45a2bdfa580ca9fed25c2f91d42bf8967d5e435d5e3c5e20d7555e280bda3b8",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_attachment_store.go",
+    "sha256": "2980225953ba56c40d2f32c4cce09917fbd3b447081381b22f48f73c0b8806d1",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/contracts",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_completion.go",
+    "sha256": "1e95bfc397e5da7f86242100f994869e0a68b5c3c57916564cf3c0f7f27718ea",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_environment.go",
+    "sha256": "ed77eca720e28c867af3c517d0184fd72c99ec835377cf61baec7ec4477052fe",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/product/api",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_environment_host.go",
+    "sha256": "187c41741bbcccd74424af75adcc1afea7a945063769e99a2e837d3d1cdae3d4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_events.go",
+    "sha256": "e3303318f5d4179485b779c4a11e8abb035aeb10724c9adfb9874666e238952b",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_evidence.go",
+    "sha256": "595c8f83bdabd08bcfc193ce6e72a29abe3572fb38e8c3428d1c75ca7b764811",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_execution.go",
+    "sha256": "eb974dfaf36de8f28ae06abc3da879362ed3e9b4cab4a6d197f080679fdb105d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_feedback.go",
+    "sha256": "a65980dda398ecf2d5bbc18ad57f628cf4306bde501138dc4a5f74d7d52e33c8",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_lifecycle.go",
+    "sha256": "af7319222241503791987c81b2edb13852f8e985cc7d0fb35cfa225993b4c73c",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_lifecycle_async.go",
+    "sha256": "9ec25b1cf0cad3e244b338cdc4724659c047671ae5ab3467b94c358d7ac9710a",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_lifecycle_feedback.go",
+    "sha256": "5ed72e3e7130e2707cf6bd0ffea426a4e35a9c235fcde024b7db6a611c4237db",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_lifecycle_recovery.go",
+    "sha256": "ae6abcc0586c0e76bde19acfb7a5682b7df5b38692ae62dbeec6a5e277809d0c",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_pr.go",
+    "sha256": "1ed3b929b14542d5a64bfa1ced9cbe1e9a8185808285fc8352584fc6bf5d944e",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/publication",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_process.go",
+    "sha256": "b3df8a8cdbd67e68748ccb8dfa3525f019b727ae28e5fba72209abb76ce87aad",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_recovery.go",
+    "sha256": "744a0b11b9ff93b06ef6b94f3c72f18bd4292176ba7c0d1152f5c60602097bea",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_resume.go",
+    "sha256": "93a4bfec9eb1b0f59f6772ac4bbad74c011745113f16bbe589cbefe94d7f25f2",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_start.go",
+    "sha256": "215b30af210ac3dc1365679eb18b23dd1fb84a5df76c272a571b7f6e8e4874d6",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_state.go",
+    "sha256": "83338238832997717196efcf333120981b217faccb7e05bb4dcb995a0c8ffc96",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/publication"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/worker_types.go",
+    "sha256": "6fc84fa5e5b048d18df23be675b503434b58c5f82badce8e822cace68d981677",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/execution",
+    "file": "internal/execution/workspace_config.go",
+    "sha256": "bc082d1af0c37f602c4b73ee9d889e659a92cff4bb85b73feddcf690d7235048",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/workspace"
+    ]
+  },
+  {
+    "package": "internal/product/api",
+    "file": "internal/product/api/client.go",
+    "sha256": "fddccc7b95e94f28dcf1db9e51e2a33f9ba92e9b99c6f0396a56ae4fa91fb5ed",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/product/api",
+    "file": "internal/product/api/execution.go",
+    "sha256": "c3096b80c8b4ea3b020c9b1bc6c8475e253d51c73d5503f776f8b545a716776f",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/product/api",
+    "file": "internal/product/api/observations.go",
+    "sha256": "f749a98969ece25d334dad9091b9ee13b0baaf5278ecf348a5939333006ab0c9",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/product/api",
+    "file": "internal/product/api/runtime.go",
+    "sha256": "c8029432d9ae1164c17a84b02182b334b7194e1920e89e665a0ab71efac0e038",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/product/api",
+    "file": "internal/product/api/task_predecessors.go",
+    "sha256": "bb3e52f783088a237d330ad18e4de6150edfacaacd09326d792332073decf489",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/activity.go",
+    "sha256": "1651276d7266051b6e2397c224efc7ac9ccf60368b565bbb24e6b30d3aeacbfc",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/activityview",
+    "file": "internal/steerline/activityview/decision.go",
+    "sha256": "bdcbe4fbf4f1aa3bf48fc1fb3ec22fdcb19fad9b5a08ef1ee323a123daf915d4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/activityview",
+    "file": "internal/steerline/activityview/render.go",
+    "sha256": "4bc8ba9c62f9f4c1884f2670550c644fd145b4c8fc97d574f4372861f9052275",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/application_config.go",
+    "sha256": "a5d384d0cd76f610156303dc3148fa84bcd48412cedfb519a325731417733dce",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution"
+    ]
+  },
+  {
+    "package": "internal/steerline/clientcontracts",
+    "file": "internal/steerline/clientcontracts/client.go",
+    "sha256": "ec55c7e7e3203a9e8a89c014738aa91a2d9e5fcc20878e86abe25c28e5a9a384",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/product/api",
+      "internal/steerline/contracts",
+      "internal/steerline/taskview",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/clientcontracts",
+    "file": "internal/steerline/clientcontracts/eligibility.go",
+    "sha256": "ee3d43cf2df5a8fed4e016a762335d01f7e96ad21fe96046a02a60dfd672e758",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/product/api"
+    ]
+  },
+  {
+    "package": "internal/steerline/clientcontracts",
+    "file": "internal/steerline/clientcontracts/observations.go",
+    "sha256": "b23624fcd9e3badcd771e962d0b4d9e6648c18fc6c66a6c50b71f069d279b50f",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/product/api",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/clientcontracts",
+    "file": "internal/steerline/clientcontracts/presentation.go",
+    "sha256": "67a32b2e570d4f6cc95ebc53b9b1ebf7c2582893411451538da8c75c034bbf0e",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/clientcontracts",
+    "file": "internal/steerline/clientcontracts/recovery.go",
+    "sha256": "c8425826f853107f6b827c006f4ff01ef9d5f983f8df3a5ef056304e1076f683",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexapp",
+    "file": "internal/steerline/codexapp/ask.go",
+    "sha256": "84b8b7149a102e2343ecf91e408bef167b165064486b1bba8b1024286541b503",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/codexapp",
+    "file": "internal/steerline/codexapp/client.go",
+    "sha256": "e4aac14bb7debd9d9d8056cde5f34501219653ed0f72e1bce2aa219a5a1551e1",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/codexapp",
+    "file": "internal/steerline/codexapp/doc.go",
+    "sha256": "481e68ebe0f8374f767d2819518fb9845ff5d8069dac7b9c8b74ecfe4269a212",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/codexapp",
+    "file": "internal/steerline/codexapp/transport.go",
+    "sha256": "1874a55d8074b559e06f85a6f54a1f97e4f09910875e7fd74d7387c8857015dc",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/ask.go",
+    "sha256": "0305c77bdcf144723be50634fe687936140d607407e4653625da25a386464199",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/codexapp"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/ask_journal.go",
+    "sha256": "38c256826671d6daca0acfd70524d7be39300112cda74bb30dca91e5f9abd35d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/codexapp"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/backend.go",
+    "sha256": "8ed690c26bec46a469794bec4fc58dee13caa61b08776074a7ab87ce769eceb3",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/codexapp"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/capability.go",
+    "sha256": "95843d3671456b9edfe2f8b381a21b899a78ce6335eb20a3f3d77b8076151703",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/command.go",
+    "sha256": "744b0536f589df0958124a06be4e3ce72cfd378b8dfe0336a05ed0fc12dd2472",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/config.go",
+    "sha256": "36e365fe52c150fb674f6b6686ef81d96ae3fc80d2926114c70c36b50b4cb801",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/connection.go",
+    "sha256": "6c9a2e3eeccfbf01f661313adc4e73e26b3bd975a1b3c001eb284591e562416d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/codexapp"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/conversation.go",
+    "sha256": "059ef8884ceb08ce4f8c866bfc14c45896f0e90c4719476d5af394b2d952f475",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/conversation_adapter.go",
+    "sha256": "cb39b052b323147d58f81f584d3c07fdbf2c2cf5ff5d3fea87e7b6b635dffe9a",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/doc.go",
+    "sha256": "230c1d61f725738bdc5030c94e63870f88ab80be6a198d61e4eb82cddb2da162",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/event_fact.go",
+    "sha256": "ecb3cc2b87885128d040a635b1ef5fa8b1b74b759a9ce2d1774b9d0bc3990dc3",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/codexapp"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/executable.go",
+    "sha256": "b3760e7a593a2be94da23abcd343745090fae7f25054300611346a35258d9b9a",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/execution_binding.go",
+    "sha256": "a925d7692855f5d64060791781af17b2da97ee6c14beec56b5188d00310f8042",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/codexapp"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/history.go",
+    "sha256": "23eb98749d73f8debdb53aedc1dc877e1052245b154918ce55d521bb35ee6239",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/history_binding.go",
+    "sha256": "41fd0f39f38ebd7abc19c0efe80639de4f4cb3887adad2f3ad1454e35ce73258",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/intent.go",
+    "sha256": "4e6a068f584bea7e20701f1a48cee2cf36f78051234c57adbf839a221b9d0dfa",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/journal.go",
+    "sha256": "47ded0fda55147e55f44177a1e667bfd86f158dfef55b921d01bad283c1dca4d",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/launch.go",
+    "sha256": "671aba9aa1a56355e97c5fa6a9324c69026bc7ba7a18a702d07a57b2a7d35a63",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/lifecycle.go",
+    "sha256": "3ce50d0fb9fa47fa4e202940933e5d494653379316eca5d311bc72f8ccfceab3",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/workspace"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/native_params.go",
+    "sha256": "0469c3817de246ef1679ed9c324b8917a92c847c754905c9abbbf14bd7270541",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/observe.go",
+    "sha256": "99ff7ae752b4aeafa63a961909e25e5d96475ef34fe34a195c0d526cdd5010c1",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/codexapp"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/outcome.go",
+    "sha256": "24cbaebd8cf98221de7cf2f385e9f134e981464794b3ce90429007e056548608",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/codexapp"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/params.go",
+    "sha256": "4bb831f51251f63dd390c88f3c763d0204ad94cf07bd3ac2dabdf0b20696be47",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/permissions.go",
+    "sha256": "96b54bb985ce7c8ba2971953fe25d19d730d4f74c4ef5f797c6d8521d23c0c5f",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/policy.go",
+    "sha256": "dee25278a7fbf430b2eae00fd2b268377125e62443d9b7d15b94251eba0f0752",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/policy_resources.go",
+    "sha256": "7295465466fc5bd97f79cf0521b5220728a5e5c79f757314119fbddcf7133e81",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/profile_config.go",
+    "sha256": "87ee3ed03dae01a859db6977b5c21e664c93a396e16080b6a832837a1681fc08",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/recovery.go",
+    "sha256": "165fcccb76ceb24112a90406bf31ceb4969e7f2481a0f3af07b63dbf153f040f",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/codexapp"
+    ]
+  },
+  {
+    "package": "internal/steerline/codexworker",
+    "file": "internal/steerline/codexworker/session_launcher.go",
+    "sha256": "16c7cd2fb22750501cf065e5f538849dd934859db48d892e90aeffe13247d427",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/command_digest.go",
+    "sha256": "1fba47beb667ee341df408b35a64222d6db98c0f7e2d0694aae9766f3526c6d6",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/command_kinds.go",
+    "sha256": "1473b163f6c17ebf8805ddaf8c94141b1e8fc52c9025339bd160980dd6b5f0f8",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/command_replay.go",
+    "sha256": "d6268e34495b09c80562fcc5fd2f5f6679f069e6b481e5aab1509214703f9bf4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/candidates.go",
+    "sha256": "334663ec9717c5aa84754e36944db651b36a62ef97bd8bc57a3849365b46056b",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/product/api",
+      "internal/steerline/clientcontracts",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/conversation.go",
+    "sha256": "8edbb954737604ef28f19e55febf934cfccb29553742312d0047daccc545dfc3",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/conversation_anchor.go",
+    "sha256": "7158a1290236cafa37f1639dbe10e5b97a6d6a3e80f0c50c0d6445c6513a4fe3",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/execution_profile.go",
+    "sha256": "12aa807c6073acbc73b0378301ba4a2c2c54afa0e7c074fdfccc38bc85d5f964",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/clientcontracts",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/interaction.go",
+    "sha256": "e55b34cc23c9dfb9611509688cfda54948772b68be6a50cf266d5c4d0e10d689",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/model.go",
+    "sha256": "c7b79f0f0a914642b7480c40070c4c18caeb4729abaa68f4f827da7cf9fdcb62",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/product/api",
+      "internal/steerline/clientcontracts",
+      "internal/steerline/contracts",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/model_control.go",
+    "sha256": "a7dbbec5d9ff751f0d06fb1aacfc41349354b98bfbb33bdd61266f9aab452dd5",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/product/api",
+      "internal/steerline/clientcontracts",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/model_keys.go",
+    "sha256": "019e2b0a52ae2ebf8f42c6cd99c7afa0a856545a46ec544df71482f4ad2dd5e9",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/model_navigation.go",
+    "sha256": "ebab411545a7b09171fccb9f3da715a0ad1fec7cdbe456fa7456a2783b687b86",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/model_update_actions.go",
+    "sha256": "9c7f8f4d7f3bd3a93af49df2dabc07845b347f86ab0eddb244b18d9197eaacb4",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/model_update_conversation.go",
+    "sha256": "2a28345b53377b41a648bacb762d75acd161856f15a6f5e916df499b336a44d1",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/model_update_project.go",
+    "sha256": "79fd4b0720d2388d4be3834fc928949538c9c481e0093ab9d2c0b11f2fcc4cd4",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/preferences.go",
+    "sha256": "6f6d9f258aa55b5993b388571053530f4f541c83ebc7575dc6c059c7f244a840",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/product/api"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/preferences_io.go",
+    "sha256": "0fb370c4d3d83e4e0b0de97506b7a0edc3aa5f5e448993fb147682106c51ea62",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/preferences_unix.go",
+    "sha256": "5df3707e17187b4be16ddd1ab6ad440c5303036d3448e96d325346fc8a5d2e77",
+    "build_constraint": "!windows\r",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/preferences_windows.go",
+    "sha256": "53d4989264d7ed0362967444b7c30468c6c36cb6845481016693da8fa1ae5d05",
+    "build_constraint": "windows\r",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/presentation.go",
+    "sha256": "5e93a5fd80a3e5e6106c03a6ccfce406a6555f8ff992d3afdc6e329e5d013695",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/profile_choice.go",
+    "sha256": "7b4233b05044e434a1fb45460453dac449005c1a79b0f44f24761bd0f4e33b38",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/product/api"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/source.go",
+    "sha256": "117ce518616655a5e09e31c2b8d41139064d0ac6eba1989bb50297513225330c",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/clientcontracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/view.go",
+    "sha256": "75902c66fbdc073fa6118a56c2cb8eca04009f1beb4819284823e09d319cf4fd",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/product/api",
+      "internal/steerline/activityview",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/view_conversation.go",
+    "sha256": "94eae29c4784cef137a064394c222e5acb4589783cb3498f3933e003757a6c3d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/activityview",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/view_tasks.go",
+    "sha256": "d0cbc8ea065881f66f73c6cad3fddccc4760222a5b1f57622a2d949cfa537555",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/product/api",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/console",
+    "file": "internal/steerline/console/view_text.go",
+    "sha256": "0a57a4be3c0a6e240eac514397be92e7dcd1a213914ea12a8f7eef66938e5820",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/contracts",
+    "file": "internal/steerline/contracts/activity.go",
+    "sha256": "a4abacd15544545bbe2362d93e335941011df83da3ae6e413686660b451b6730",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/contracts",
+    "file": "internal/steerline/contracts/conversation.go",
+    "sha256": "69914b8fff355972d2422cc40c46c42a8252fbb1f02bfa935b981dfbbf3701e4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/contracts",
+    "file": "internal/steerline/contracts/conversation_position.go",
+    "sha256": "6164e25c202277091cf7b25862d34c15a9b84aaadb7d15210a498c2dd1108940",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/contracts",
+    "file": "internal/steerline/contracts/conversation_query.go",
+    "sha256": "0263c7ef012c7ba4479d0eb134ad3aa97f1fd92f412b6eb76c31f3520f9f34c2",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/contracts",
+    "file": "internal/steerline/contracts/delivery.go",
+    "sha256": "9cfd7248797e145f3421ee0cd92b750fa26bb12df82fa2791a65ea0259ad03db",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/contracts",
+    "file": "internal/steerline/contracts/execution.go",
+    "sha256": "efbf046811ce2c1b9be8bd1498a44d6a1d8198bda814eddb34b8cce98585b2c2",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/contracts",
+    "file": "internal/steerline/contracts/json.go",
+    "sha256": "7b67e356e74b2ff5ee9d62127cef24e188ac1a49b815a05c7ab72fad9dfe8daf",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/contracts",
+    "file": "internal/steerline/contracts/query.go",
+    "sha256": "0bd1cf38b3c5a050c85b66eca0f3f1d248dedec3284c711ceee8ba176bd0acda",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/taskview",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/contracts",
+    "file": "internal/steerline/contracts/runtime.go",
+    "sha256": "b4dfa635b3cef27be24c229677d8554f85f0a24d4550658ba7e465c4ed476245",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/product/api",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/contracts",
+    "file": "internal/steerline/contracts/snapshot.go",
+    "sha256": "fa628c469095bb99dcba29ced2358f98c81cfb3e0dbe7c4a7043275e72b263f6",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/control_client.go",
+    "sha256": "476bd7095bd9ec69764d23a2f1338833ed4beb0a1c5c6af18c46f437f98dab00",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/product/api"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/control_files.go",
+    "sha256": "f5ec80ecbd938d1297782f1838deb46e14349e823c2b6f99f9643fbdfc9cbe22",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/product/api"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/control_protocol.go",
+    "sha256": "8a1bcfd2ffdb14a3f6357b65cf73fb553f6ca2406b43c5080d526776d7b053f1",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/product/api"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/conversation.go",
+    "sha256": "ffcc8de47a44ffb5a3465da4284fb8095aeb0d2818459553a4d5aaa2c3da7899",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/conversation_query.go",
+    "sha256": "8a468bc5fa7808b34e96ea9bf1771c036c75fa2e2e2af6685a942a28c72c3444",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts",
+      "internal/steerline/query"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/decision_client.go",
+    "sha256": "5fea3b2321b27df188873fcb0125d1b132dc7efc59aeb68972bf189157d273fc",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/execution/model",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/domain.go",
+    "sha256": "fe4d1c91fe8e5b36fe58816a68636255bd4c79b9f0b0e2d7a02c4cd77d04b595",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/domain_snapshot.go",
+    "sha256": "d140e59ea609c9180d4687757586b26e50b992f9d4477e3086ad300fa100f32b",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/host",
+    "file": "internal/steerline/host/errors.go",
+    "sha256": "5ced045ce9302e0298e8c51a8a3e3a0984674b60c930514568a388226a39294e",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/host",
+    "file": "internal/steerline/host/loop.go",
+    "sha256": "f1ee5fb227e415e88a654c382eff179463e2852b7b544725f54fc34b3565f2b6",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/product/api"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/host_utilities.go",
+    "sha256": "499a39b0fd6a01383444c58082d97b823c65461b266ea8b4489d11938bdf8eb4",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/json_decode.go",
+    "sha256": "bc97f2e48a8fcfac9a2c0bfe8ff541d2a874141e1d89036a54ce79ac67d35b0f",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/launchers.go",
+    "sha256": "6a5691b94c2b6d8539a2d3e578b5bb76b9d194c9e85fa317070e365cc28e0074",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/model.go",
+    "sha256": "7c7c2fab120306e81b49c0bcf563e5baa0159ddec9256c9aec3799261ec28ea9",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/native_graph_export.go",
+    "sha256": "be062219f88aa422c9061a9f54ea86710babbb346bd41bb470372d30ecd0b0ab",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/taskview"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/native_graph_types.go",
+    "sha256": "19c3461585f0b7d3bf77306f1564145ea01fa358add2db546473b248da3373c7",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/taskview"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/native_project_open.go",
+    "sha256": "1deba826dde6cd6d33ef78919697e85917fa8cb225d4da407f657bd048bdea1b",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/execution/model",
+      "internal/steerline/persistence",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/native_readiness_query.go",
+    "sha256": "5f89db896383aa2f6dac66ad83e585084c746932a2490ce7b16c3930a6f23ae5",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/native_state_preflight.go",
+    "sha256": "fe6227561aa6d8358881a0e94f1bce122a20e8aabc4527313ff6c5353d7ab068",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/execution/backend",
+      "internal/product/api",
+      "internal/steerline/persistence",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/native_task_page.go",
+    "sha256": "7b8d65214629c621ca2643f13817b1bd2988dcdbc7caed1364dda3d841540624",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/observation.go",
+    "sha256": "022e0b5165ad32bf8b90f3b2701345b7a7c6b0bc0be5dcd0be55a40d073662ae",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/product/api",
+      "internal/steerline/clientcontracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/orca_remote_worker",
+    "file": "internal/steerline/orca_remote_worker/backend.go",
+    "sha256": "ed06ec4b30831ef7a0a984a7ddede0c655f878983ab64b372defb095f2c00787",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orca_remote_worker",
+    "file": "internal/steerline/orca_remote_worker/config.go",
+    "sha256": "b7a6db520c05ab191caa818ebade13c0c83e3d9ee5c403091ac72bd40536d7e0",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/orca_remote_worker",
+    "file": "internal/steerline/orca_remote_worker/intent.go",
+    "sha256": "609d04c1b4af1cd6793b3eebd7ec8f428da758b7413c5ed1c5ef26cb50697b44",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/orca_remote_worker",
+    "file": "internal/steerline/orca_remote_worker/lifecycle.go",
+    "sha256": "43b05fc14ad547dee5ae1e08fca814d8466709dd519f40202ded3a576c034db3",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/codexworker",
+      "internal/steerline/orcaworker"
+    ]
+  },
+  {
+    "package": "internal/steerline/orca_remote_worker",
+    "file": "internal/steerline/orca_remote_worker/messaging.go",
+    "sha256": "4ccdd96a994a4525f7d9660f1355c0c825aa8101d5a89c63c81e4eea6f874a91",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orca_remote_worker",
+    "file": "internal/steerline/orca_remote_worker/observation.go",
+    "sha256": "3e74ac6224715611b9272652aabae194b15b3b65afc1f6d83ed145a099ba6c1b",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orca_remote_worker",
+    "file": "internal/steerline/orca_remote_worker/policy.go",
+    "sha256": "efecc037a31cbca157de3207e21d0c8c78d8b6c01a73b1d65636ad66154bdde8",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orca_remote_worker",
+    "file": "internal/steerline/orca_remote_worker/preflight.go",
+    "sha256": "dfae21e2fa870696fe6ab0806be95b32cfb883340e3d2778ccab2d463cbfe3d4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orca_remote_worker",
+    "file": "internal/steerline/orca_remote_worker/profile_config.go",
+    "sha256": "b012a2e619bd50632004d6b14fef04d69ca81e9b0ff9dff1b3af195cdeb8f975",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/codexworker",
+      "internal/steerline/orcaworker"
+    ]
+  },
+  {
+    "package": "internal/steerline/orca_remote_worker",
+    "file": "internal/steerline/orca_remote_worker/run.go",
+    "sha256": "ee87e501622c77dc70f1e8e8cfffce0ce1e4c60cfd70021955b947a3f2b518c2",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orca_remote_worker",
+    "file": "internal/steerline/orca_remote_worker/start.go",
+    "sha256": "47557487688fd5f578bbeb79e1b1fabee5f43cfb3ac27dca619a6d72491d8043",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orca_remote_worker",
+    "file": "internal/steerline/orca_remote_worker/types.go",
+    "sha256": "db68f283bc8606c681351f181fe236d8f341de6b6a7465ce84481a083ba94b10",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/orcaworker"
+    ]
+  },
+  {
+    "package": "internal/steerline/orca_remote_worker",
+    "file": "internal/steerline/orca_remote_worker/version.go",
+    "sha256": "7bd7e41d2e7a301c5b37c7a5c670ce9e45beb2dd9eddd3c97cf36e462c967d6a",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/orca_remote_worker",
+    "file": "internal/steerline/orca_remote_worker/worker.go",
+    "sha256": "749c165092233b8f62e966911d11068af12407a76524280d3e4eab140ef90704",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/orcaworker"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/backend.go",
+    "sha256": "3671b9f587e919b00f2aaa4e5a385d50ab58c3fa5a71ec4b41d91e1120dd56bc",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/binding.go",
+    "sha256": "0fe531d57715c5fc28f157f32c184db80f96780aee5a478060734653b930972a",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/client.go",
+    "sha256": "c59fe478bb18401c481c572e50c0bab0536d2b5cc8f04c7dc9035ff37e631a58",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/command.go",
+    "sha256": "f7738c40b9014149824b48b8b82081a58b47b6c6099345e69a2e0834128b2a99",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/config.go",
+    "sha256": "bdc665b837f285d06ab843267c4860189d106cdd54b82a97e8492d075636a559",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/dispatch_submit.go",
+    "sha256": "7ec9f0ef1d2c96f71e1f14e8c1da8c52d98613a45dbcee483625449338d8fd20",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/environment.go",
+    "sha256": "1573494269a2cd50dcc52b7a95254f6953d38425884a92a19dc169676d87c740",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/event.go",
+    "sha256": "eb38581f24a3d27c9a7a328501b563c2605d403338167dd14093957ae618d26c",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/events.go",
+    "sha256": "3b5746fc4f0cfa17cb1a8169649594e666318426c41a73fb6a5220ec32c3409a",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/execution_state.go",
+    "sha256": "7b21786acdc7524ea2eeaa86d9ac4e742494e2dc649e53de57622efa95aee763",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/host.go",
+    "sha256": "eb3f64166ad571e87306a3ac5450281cffafc624e01e6b102d48b559628d2ebf",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/intent.go",
+    "sha256": "fc328f7238566a1e89d5d03932793fa23fc37f66da653488c38ca4b25d8ad737",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/inventory.go",
+    "sha256": "816808216f53df674935cdc2307dfcba5e4610d0f628a3ff3bfa315f1001ed0c",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/lifecycle.go",
+    "sha256": "6bc53ec4fcd2352cd208065df213b9047e3915dfb2148b9ffdb5cd34cd389aa3",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/codexworker",
+      "internal/steerline/workspace"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/lifecycle_observation.go",
+    "sha256": "a5a5fc8f676d6d2221f69447210d451a8c004b45fde79ddac6864da8482ffbeb",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/lifecycle_resources.go",
+    "sha256": "64fca12b443fe8cf0ae376a96c0a9efa19475f316bc31608804a6a6e39d90a33",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/lifecycle_turns.go",
+    "sha256": "6565b4e52a9e366342623fb83c173af0bc608a669269e9a89267de478d545f2c",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/message.go",
+    "sha256": "0a7d92fc33098d3930966ccb2ec84b2efb2c54833b27d376059dde4aa356c48c",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/mutation.go",
+    "sha256": "181232c1f0d1543dd98303693a177aa0557e30f54407b41222a6fd16efbcf26e",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/orchestration.go",
+    "sha256": "50edb4abf7b4e9a33ff90fe1e987528dae71cb715acda81860fd408b64b97a57",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/output.go",
+    "sha256": "058c349950c75ca5c24593254f72fc713b93dee74db9fc86e10f890e55fa0d54",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/profile_config.go",
+    "sha256": "1f0bc8a66dfe7005f9f3114f7697eedcdb595f667aeee95d0d7fbc1064e537c8",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/codexworker"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/readiness.go",
+    "sha256": "5dcb4fdd9bd91698ee015de8441606ea4f160d88db7a17178755df63f7d92194",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/relay.go",
+    "sha256": "e46b8eeef770e521f2d4273073eedb6a7a794ac52980af0223d3aaa89c5b9dd5",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/saved_receipt.go",
+    "sha256": "383708979f724814cb88971682609917308f21412cd3279fa30d0e70824eee27",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/terminal.go",
+    "sha256": "74f3917bca491ae9af868d5ad255dcaa21aadd6e9b0e3c2eb7507b4ca5009cd9",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/terminal_protocol.go",
+    "sha256": "d9df26f8f3c797c9fb30feaa007bc0772a190976da486e3fdda061df9b9ccedb",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/orcaworker",
+    "file": "internal/steerline/orcaworker/workspace.go",
+    "sha256": "c141615e91a30f13eee759571c3f490e81da61c3a62a7d0657e04c46119b264d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/persistence",
+    "file": "internal/steerline/persistence/connections.go",
+    "sha256": "4c186d741c038c5630b2f28503b504bc9eb8f9d7c29a1fc7139c27c6f8b015e4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/taskview",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerline/persistence",
+    "file": "internal/steerline/persistence/ports.go",
+    "sha256": "9d5c452ac0c4f0cd52f91718ec099314edbab0a44cef03a0f88db60363308917",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/taskview",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/platform_linux.go",
+    "sha256": "e378b3ef0088c9d13cbc734728f04dd7e4235667447d7c70bf415f41470f7358",
+    "build_constraint": "linux",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/process"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/platform_windows.go",
+    "sha256": "5723604f03892db40cf8be0cbbae817a7aa7de230e92c3253fc2301cd900eceb",
+    "build_constraint": "windows",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/process",
+      "internal/steerline/host"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/process_projection.go",
+    "sha256": "84e19a2cabb39fbb54418bf733dce4be1fe3e066c1c835c949c7b48313047350",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/process",
+      "internal/product/api"
+    ]
+  },
+  {
+    "package": "internal/steerline/processhost",
+    "file": "internal/steerline/processhost/host.go",
+    "sha256": "d091c07cef75f3adfdf2327b5129744edf6e22297da63cc085eb6c687a46d3e7",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/processhost",
+    "file": "internal/steerline/processhost/process_other.go",
+    "sha256": "aadf84ff329c6f020d7a412aff6716f6ecc774a4235b334023e941126b0b7ac8",
+    "build_constraint": "!windows && !linux\r",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/processhost",
+    "file": "internal/steerline/processhost/process_unix.go",
+    "sha256": "a5229283f0700a6c8159c16c51c7c410409c4e323f7894632a3547290780853f",
+    "build_constraint": "linux\r",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/processhost",
+    "file": "internal/steerline/processhost/process_windows.go",
+    "sha256": "e8cf77529f7fe9570640af9ea76da2a754976352d81464f4cd52631d9f555b23",
+    "build_constraint": "windows\r",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/project_view.go",
+    "sha256": "0fc8c004c63b4aeae58dd0627f49612519255c6beec5885acbef8fbdce457ee2",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/publication",
+    "file": "internal/steerline/publication/command.go",
+    "sha256": "ae7d248e1e05108c4b903452ff285e2ea68e493bd57c6d22ed2fa0d8208464f2",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/publication",
+    "file": "internal/steerline/publication/gitea.go",
+    "sha256": "318406f41ee563189952b55f64c1ad28b05daa2c122edba3f1a1220e7159c8cf",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/publication",
+    "file": "internal/steerline/publication/identity.go",
+    "sha256": "68a38ce93dbb5a24ae1fbc55e97f9201bb15013b262c8c87d1dd79759ed45dc0",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/publication",
+    "file": "internal/steerline/publication/policy.go",
+    "sha256": "d55b22221a3637b4924c192cf84b9629e5c05d825f15cbcfbbbb908a7c6b3b70",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/publication",
+    "file": "internal/steerline/publication/pr.go",
+    "sha256": "3bf0497a61462500455ca10a92c350412e7ee38b59ca877b594645748cb0cc20",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/publication",
+    "file": "internal/steerline/publication/provider.go",
+    "sha256": "9ef306871c93be438edb51a51d25610434a0fa6c8cdf334a0dda7b74c06da0c3",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/query",
+    "file": "internal/steerline/query/conversation.go",
+    "sha256": "178a4bb13afdfadcc2c2a796a8b262324b62224bdc5abde0d59ddf40c10b1726",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/query",
+    "file": "internal/steerline/query/conversation_ports.go",
+    "sha256": "6e0a7a7e2d93410b0ff5dfc7f7021d406ba35e96021d38cfb9b9d607ef736bd5",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/query",
+    "file": "internal/steerline/query/events.go",
+    "sha256": "1904e0e04281ecd4435424a576f5d1c6f6924eb8ec7bc682eb8d5b611cf292a7",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/query",
+    "file": "internal/steerline/query/ports.go",
+    "sha256": "f200bc588426bc8edd11fa38af92e8b4a8fd063f0fa8605c41715bda5ca8c39a",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts",
+      "internal/steerline/taskview",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerline/query",
+    "file": "internal/steerline/query/project.go",
+    "sha256": "5e5601836cefb4e9469d04735dad855b3de15dc4ddb2650ad8cd54a6386ba43d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/query",
+    "file": "internal/steerline/query/tasks.go",
+    "sha256": "2c5115eef9d939fb7ca7000f1f4e86645955c3f64b95aefd2da35f133fb09018",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts",
+      "internal/steerline/taskview",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/query_construction.go",
+    "sha256": "f5133951837d8568b943d5fddfca10fab840a202abd4daba1dc2e01d88fbf72d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/query"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/render.go",
+    "sha256": "fea873e100ca32ec95646ffb48afea22b3ec5ad96f69d7c5826daf9f4c06198d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/activityview"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/service_client.go",
+    "sha256": "ab01e71a7683c723dbe207c0e3d3c68760f9588619a415ad94e7a1b537ea0b81",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/execution/process",
+      "internal/product/api",
+      "internal/steerline/clientcontracts",
+      "internal/steerline/workspace"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/service_console.go",
+    "sha256": "4b830eb66f15dbbc37e349e88444270cebc908b1798be1dffa1429ad5f6ea6b3",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/service_host.go",
+    "sha256": "313b3d5afb000fa52d6803da43c06e5e1d251a3272ff53c63b9ae04ef3a90b50",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/execution/backend",
+      "internal/execution/process",
+      "internal/product/api"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/service_loop.go",
+    "sha256": "5432fc004d582662c9df64651a7f5669aaba2555735c9bce5b62da5ca5340f0d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/product/api",
+      "internal/steerline/host"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/service_preflight.go",
+    "sha256": "08bf83e88fd2a8e2fa986273966954825acc1d7f39e32e99356ba9610ef2ca04",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/execution/backend",
+      "internal/steerline/publication",
+      "internal/steerline/workspace"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/service_prepare.go",
+    "sha256": "fd78f970d224c39fdaecef59b518386d859d2fb864dfbd0d39e550699926b08b",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/service_startup_publication.go",
+    "sha256": "205b0d234efdee3bd68b9a087f01603d6a99228f6afaf86eba4d6e15db69076e",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/atomic_replay.go",
+    "sha256": "1dffcf37176676ca6b01e69b80f9d1744a0ed5e6d073ad14837b4e3e0b824f56",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/checkpoint.go",
+    "sha256": "275ef65d6b12bba95df9fa16880a41271b0ef799b19220af1c205c7b7fcf9459",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/connections.go",
+    "sha256": "23a99b61d2d846b7914d4449dd15018bc3fc1294c2ca61f90671c0a271e31df3",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/steerline/query",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/conversation.go",
+    "sha256": "20bc62adef4b3074560e528ec78f646b2fc534f1fd97dd1cefde0f051111835c",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/contracts",
+      "internal/steerline/query"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/conversation_store.go",
+    "sha256": "812d2bdf9e6f939f3b244f8f9a563193c39b944c63652747db31b6b68a9d3304",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/steerline/contracts",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/graph.go",
+    "sha256": "221a1489abdbe4f9fd52a64d33e1144eee4df4b2c6dfb5dd8519ca82f4146356",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/taskview",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/helpers.go",
+    "sha256": "ecc5204fe38c2cc66a9903f489e1a5b10e63155c29ef0659156806d4f250cc2e",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/project.go",
+    "sha256": "971c129bb5eb1e53c2ccbb5e6fa3bec4ac9530649de2f8aa344f7e943345f4dd",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/reconstruction",
+      "internal/steerline/contracts",
+      "internal/steerline/query",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/project_view.go",
+    "sha256": "3c8c7f0d734509210bd4051d60efb0c8c87324d4351815bd525618989773dbe1",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/reader.go",
+    "sha256": "eadbcb5052bab34431ead9beecdc323462ee2351894b01b9dda1f6ebd10680e2",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/query"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/record_validation.go",
+    "sha256": "1a0ffe26f785a88528d04eaa295b4b864988f1dfae615b536f9a446c4ec7ff82",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/records.go",
+    "sha256": "99f45b44bf4fd3ee53270476bc9ed025eff4bcfac894ec7440e6a6553351f680",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/query",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/runtime_preflight.go",
+    "sha256": "20eae5fc5d65968b90d75bf7d936dc8a7bd4e3c2f97abeb4774c2a921c19e3af",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/schema_preflight.go",
+    "sha256": "74833f8db155b665f621ae728de6311ca251e4973f043e5e883395ffb3e5e620",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/sqlite_native_authority.go",
+    "sha256": "9c85ccd39d24c081a3d29a2f5a58e0320802f642cffb977709d517a24d662fa6",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/sqlite_runtime_snapshot.go",
+    "sha256": "579996a84d625ea1f0f7788d18c560768b36e38cf42888e9b67e1e85705c7ee4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/reconstruction"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/sqlite_store.go",
+    "sha256": "943f8ef082f7d8f3ea2da51a95348588ed4407bb5449863506e5a3fe7de257bf",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/sqlite_store_checkpoint.go",
+    "sha256": "e2bc4ca03b59ff632be78d05bcc845fad0bb6fdb4b906b264849d977a3f0db12",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/sqlite_store_read.go",
+    "sha256": "f05e602f51726502f6707c5423dcd98d69e910f9a7df42c980574372a89fd2c4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/sqlite_store_schema.go",
+    "sha256": "ba1ac9e5edc1f82812456a161d51476969757d8461f958a851170710a28e70f9",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/sqlite_store_write.go",
+    "sha256": "a9f2e012b1298407bf8bc4d2983512cf4c921c61723b59c60a899975ea2d1982",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/sqlite_store_write_commands.go",
+    "sha256": "58b1ab931757150da4c1307c0814c2e4f35ca1863d743cdff43d8556487dc3e5",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/sqlite_store_write_execution.go",
+    "sha256": "c884462f0a3ec71add7a86c18ea177c210daa5d9ab60412024f0da954f2ffca8",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/sqlite_store_write_native.go",
+    "sha256": "de46b48a32017fdde79a579ee02000d9d287d5812d8dcaeb8abccee1ade7bdc0",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/sqlite_task_graph.go",
+    "sha256": "8bbb3f9fd9af6b9cef05c6da19c9e94a214e010edbe33ada74f70b5750670516",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/sqlite_task_ports.go",
+    "sha256": "e67f2a958b4e72af61a31b0c2a608c2568e6d5ce0b28f1af3bc4e569d7511316",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/sqlite_worker_commit.go",
+    "sha256": "986337f2542c9dc9a12b31e2a10fdadb7bfe0ac8c540815e421d462988d0a362",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/sqlite_write_ports.go",
+    "sha256": "39f7684a7af5da7cbee448e89d72a7bd4d0f3ed4507ef49a9f7cf2479d891022",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/persistence",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/state_revision.go",
+    "sha256": "96cbb5d5e41cd4724052041d3a7f04580c15cc35305c7dbbcf6cbda3abae3df2",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/task_claim_commit.go",
+    "sha256": "1875d3a50c971b1028bec278d12cdaa0d363ec22675a577d6eb006e93bc42b6b",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/task_discard_commit.go",
+    "sha256": "eb0653cbca9ecc4c14ceace0b0c6b961a775dd0d77222b0fb7acf6388913a68f",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/task_result_commit.go",
+    "sha256": "e513dc0979ed1253b8538d0cd1945bc476ab96c86550b90abfc38e3095f43b75",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/tasks.go",
+    "sha256": "c1ab330435f29b8e7bdffdbe0f75d0013e7aa77939b94eaa2e609595749ac236",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/steerline/query",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/values.go",
+    "sha256": "4224622e2ea3eff595552428b87f3a4fe3c70059e864782937dcf98d6d0695a6",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/steerline/query",
+      "internal/steerline/taskview",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerline/sqlite",
+    "file": "internal/steerline/sqlite/worker_attachment_store.go",
+    "sha256": "547bd9b49eb124be268db86d5b1804201afbff3f55756ae07afabba33b00ea5b",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/state_preflight.go",
+    "sha256": "8d2d7740a6de410797e3985578e073c5201f76dcf86829cea774a06699b3524c",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/state_revision.go",
+    "sha256": "b37eeb3fd36b19c54e97c713cf1399d994e13f802df97f377e431710fb4b2820",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/store.go",
+    "sha256": "8e6ed20cee09c0fb5b36946d3c18a53dad63d41bb409f6421f541583cb096ce0",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/task_record_lookup.go",
+    "sha256": "11eb9926bf479074b4808e3b62b9f3f774606eb098f9ea213cb68d590ad4b163",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/taskview",
+    "file": "internal/steerline/taskview/model.go",
+    "sha256": "63f1c917a979308c056246ee3a815e9f3209e3db1b489d4e16c22ce99eecc7aa",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/taskview",
+    "file": "internal/steerline/taskview/page.go",
+    "sha256": "ed05cf84ba17b4ad82b5a59351bb039dcc19b84110e34a31a704e98bc49cb5fa",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/taskview",
+    "file": "internal/steerline/taskview/project.go",
+    "sha256": "0e550f7642febf2252da588df633b1b7ce07db06b545d904da431c3697c775e0",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/taskview",
+    "file": "internal/steerline/taskview/snapshot.go",
+    "sha256": "e70bbd0dcdbb9d4496812d1a859a025be197b6c2117f5a8d8ccd1d582b845ebb",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerline/testprotocol",
+    "file": "internal/steerline/testprotocol/appserver.go",
+    "sha256": "423a51fdcbf5a8c21fb56555be5d9d14154bd1ba8615248fff765b421ad12c09",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/testprotocol",
+    "file": "internal/steerline/testprotocol/native_lock_other.go",
+    "sha256": "05bdf89590311f14f444ef0fb69c2f20ece552a749a338e870a03da33f95bf26",
+    "build_constraint": "!windows\r",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/testprotocol",
+    "file": "internal/steerline/testprotocol/native_lock_windows.go",
+    "sha256": "33980957ab4c00969a68bb5361e67ba060e013abbe700ab9d9ec788748fd3478",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/testprotocol",
+    "file": "internal/steerline/testprotocol/native_orca.go",
+    "sha256": "324b358d60f193ca309833e619b043b636295380d4afbccb0a02f7b6f89c8958",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/testprotocol",
+    "file": "internal/steerline/testprotocol/supervised.go",
+    "sha256": "ee251935d5ca3ee51572d937ad56edc88166967e0231d989cbedf83baa87db3b",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/testprotocol",
+    "file": "internal/steerline/testprotocol/terminal.go",
+    "sha256": "b1f810952563f643c416dc13a59a224710d93d9b716b94e1ce441b80aed58936",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/steerline/workspace",
+    "file": "internal/steerline/workspace/cleanup.go",
+    "sha256": "ae2c6e48f9227b5b5f460843e6264ec1c216daa79e2c419c1df676ca3bd5f374",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/workspace",
+    "file": "internal/steerline/workspace/git.go",
+    "sha256": "64fef854ce6779f2d9b06e1ece152ba6bce95cebeebf9cd0c98cbccba9b66cd6",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/workspace",
+    "file": "internal/steerline/workspace/inspect.go",
+    "sha256": "1aa6dd9b93d43e85195c1594f41d727954e22d010a6e902273f01a3457554eaf",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/workspace",
+    "file": "internal/steerline/workspace/lifecycle.go",
+    "sha256": "7c1b31ff68f2c8e4258720dff3461f419efde682009cbdf92089ff1a59d9111b",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/workspace",
+    "file": "internal/steerline/workspace/prepare.go",
+    "sha256": "047f23fc834ae0b7abd208819173d9a9fc444b8c81ae51993cab31a776ad6129",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline/workspace",
+    "file": "internal/steerline/workspace/resources.go",
+    "sha256": "d63a40636c91a9c070ef9f52b05454eadc6e3942845d794cfaa49bc12ac862a5",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend"
+    ]
+  },
+  {
+    "package": "internal/steerline",
+    "file": "internal/steerline/write_ports.go",
+    "sha256": "ff5ba19fc53ff9d96e7cca0cbcdec3653c374c61528376e3f1ad482601a5c8ce",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/steerline/persistence",
+      "internal/steerline/query",
+      "internal/steerline/taskview",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerlineapp",
+    "file": "internal/steerlineapp/app.go",
+    "sha256": "5fb52d8a51af3c50b05bbb574e0e4c0e1c93205c84c93e7aed0ac3c64064b945",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/execution/backend",
+      "internal/steerline",
+      "internal/steerline/codexworker",
+      "internal/steerline/processhost"
+    ]
+  },
+  {
+    "package": "internal/steerlineapp",
+    "file": "internal/steerlineapp/capability.go",
+    "sha256": "a9284d927e477070bdb68c3f35de603f896d9edf96427b3072ad713ecbd6a8c4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline",
+      "internal/steerline/orca_remote_worker"
+    ]
+  },
+  {
+    "package": "internal/steerlineapp",
+    "file": "internal/steerlineapp/client.go",
+    "sha256": "e4a0bf2cdb298034d21b56210c28476325b76c9dce8d7dc76a5a7bb7ee46b26b",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/product/api",
+      "internal/steerline",
+      "internal/steerline/clientcontracts",
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/steerline/query",
+      "internal/steerlineclient",
+      "internal/storage/ports"
+    ]
+  },
+  {
+    "package": "internal/steerlineapp",
+    "file": "internal/steerlineapp/client_command_wiring.go",
+    "sha256": "bd36ff27aa94ccd813bb0e636c1bffb3b395ba177039709fbc10ed0f3b774bb6",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/steerline",
+      "internal/steerline/persistence"
+    ]
+  },
+  {
+    "package": "internal/steerlineapp",
+    "file": "internal/steerlineapp/client_discard_commands.go",
+    "sha256": "f6ad8373a45dee7c97097b1f0a334b734749e66746cccb34ecb4b367c30d48da",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/product/api",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerlineapp",
+    "file": "internal/steerlineapp/client_task_commands.go",
+    "sha256": "70f47c76f2a934a6fb56fdf8397a05f2a9dd9d75f1c7103d1e6a7caaef844dd4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/product/api",
+      "internal/steerline/persistence",
+      "internal/task",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerlineapp",
+    "file": "internal/steerlineapp/config.go",
+    "sha256": "9c8c9154fe14d0554b89c9c99e269e4e0e4f100a972c82840f3f3471d5f9a6c4",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline",
+      "internal/steerline/contracts",
+      "internal/steerline/publication",
+      "internal/steerline/sqlite",
+      "internal/steerline/workspace"
+    ]
+  },
+  {
+    "package": "internal/steerlineapp",
+    "file": "internal/steerlineapp/console.go",
+    "sha256": "1aa9030df22b5c4120465ab85e92cb95c4845f2a9555379c52ee9c34fbcaf520",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/steerline/clientcontracts",
+      "internal/steerline/console"
+    ]
+  },
+  {
+    "package": "internal/steerlineapp",
+    "file": "internal/steerlineapp/directory.go",
+    "sha256": "b4b3493db2184f27fa62d3592d334a48f2b9b84365852caaa81a005b7a77326d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/execution/backend",
+      "internal/steerline",
+      "internal/steerline/codexworker",
+      "internal/steerline/orca_remote_worker",
+      "internal/steerline/orcaworker",
+      "internal/steerline/publication",
+      "internal/steerline/workspace"
+    ]
+  },
+  {
+    "package": "internal/steerlineapp",
+    "file": "internal/steerlineapp/execution_command_wiring.go",
+    "sha256": "aaad38fbf67935face62ae35e61542023413355f031192933c3399ce51fc0bad",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/steerline/persistence"
+    ]
+  },
+  {
+    "package": "internal/steerlineapp",
+    "file": "internal/steerlineapp/execution_service_wiring.go",
+    "sha256": "993406f372890725b7671c95687177a778f44b1a48eae23fe251ce86037a6cd6",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/execution/backend",
+      "internal/steerline",
+      "internal/steerline/codexworker",
+      "internal/steerline/contracts",
+      "internal/steerline/sqlite"
+    ]
+  },
+  {
+    "package": "internal/steerlineapp",
+    "file": "internal/steerlineapp/task_boundary_wiring.go",
+    "sha256": "13afaea727a0445fb7baaca5dbc78efba6511b8c593dc03f4b923acc02f999cf",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/steerline",
+      "internal/task"
+    ]
+  },
+  {
+    "package": "internal/steerlineapp",
+    "file": "internal/steerlineapp/task_command_store.go",
+    "sha256": "6b2742910b427e54063c33717bacf80729b6855ab1c295ae4714661dd3b63948",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/steerline/persistence",
+      "internal/storage/ports",
+      "internal/task",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerlineapp",
+    "file": "internal/steerlineapp/task_documents.go",
+    "sha256": "94e24dba306fd82f1fb6633de538c6840564525716076e3bf1aaf75532366ff0",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution",
+      "internal/execution/backend",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/steerlineclient",
+    "file": "internal/steerlineclient/client.go",
+    "sha256": "d9b5215be6a37f402940e45d44f0e6518144f8938ff135dfb6bc6eedb2fb2fc0",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/backend",
+      "internal/product/api",
+      "internal/steerline/clientcontracts",
+      "internal/steerline/contracts",
+      "internal/steerline/query",
+      "internal/steerline/taskview",
+      "internal/storage/ports",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/storage/ports",
+    "file": "internal/storage/ports/errors.go",
+    "sha256": "fc416a58ca5b644404458c4ac81627a9a4b4289b632a8045348e173c484441a4",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/storage/ports",
+    "file": "internal/storage/ports/ports.go",
+    "sha256": "d4aae91efb64a34040ce5ad923c2e4579965bb83ff0a18c713216a3b4b0727bb",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model"
+    ]
+  },
+  {
+    "package": "internal/storage/ports",
+    "file": "internal/storage/ports/records.go",
+    "sha256": "a850c68b83de3418f591d767e7ed717db2f966220053d796bc77871532fa003a",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/storage/ports",
+    "file": "internal/storage/ports/task_claim.go",
+    "sha256": "0963c747e8f712ce6f9be323949788400605e2b8d9e4b10bd06a0847e2faf714",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/storage/ports",
+    "file": "internal/storage/ports/task_discard.go",
+    "sha256": "008caf2c7135da2e6ef904a68761153506d1395fe17806cea02052ebf6fb9c3f",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/storage/ports",
+    "file": "internal/storage/ports/task_result.go",
+    "sha256": "2d5118666786d1c525ef84c7027dd8d319b7ee650b3128ebba8c8867cfd9e439",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/execution/model",
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/task",
+    "file": "internal/task/batch.go",
+    "sha256": "2772df52b315c26937569b53312b1f8ae9946daa43fe983b69e50d490fa1467d",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/task",
+    "file": "internal/task/commands.go",
+    "sha256": "f09b3d9b459d395cc97ab002d873be29f0a4b19d80a4cf3430f433c9de37c735",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/task",
+    "file": "internal/task/documents.go",
+    "sha256": "5aa6d0163eb7daea2a897adbf471d668cf9a26188bb145822719ab15af9949bf",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/batch.go",
+    "sha256": "690ffb9a5bb8196648debfc730f338f2105616d39c58194b0b69e2c3859eb63c",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/command_plan.go",
+    "sha256": "9d25cd1f1bad60d8061ccce1f14b32ba498b10fb4027695e2945275e29079735",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/contract.go",
+    "sha256": "c15feafa74412560bff931952ee7bd88eaf4b7f5db58117c4ba034b3ffeb7cf5",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/delivery_gate.go",
+    "sha256": "a98b4d7dbddf9552c46bc2b0970a5b95e5656254356833d32723a7dbbdf39e76",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/discard_intent.go",
+    "sha256": "5c512380ee047084c72cf7321fae5179931d9f3858f8c7b0fa0a24b852afc414",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/document_content.go",
+    "sha256": "002933c3dd21c82391f1b64c700ba666cb476e8ecfd6c0dc4a9c3ef5f48176b6",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/model.go",
+    "sha256": "8308b011f5a2fffcc4d7659695ea0c12c87c36c4e3ec72deba5c059c3e786c26",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/predecessor_command.go",
+    "sha256": "ee7bbbdf21d7e2847ca07484beadc9f520d8e5593fcb68093b4561ade51a78f9",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/predecessors.go",
+    "sha256": "a3f2d14a4a927b24fc68bd8518bc34cf5993fab1c3ba9c72daa5c22bac1bdeb0",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/readiness.go",
+    "sha256": "c35f061c19cd7b200f9e5a6a364af0786fb26614aeac58d754c9b49e37c5b321",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/result.go",
+    "sha256": "46610d40c251780614c77626affb45447474c0f681ea38f5cfdf1fd4ea3c44b7",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/snapshot.go",
+    "sha256": "374f278869e9643d255c4dda43496253e3ecf5b2d4236d88ef57104627190887",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/status.go",
+    "sha256": "9222d258059b6096e0b3f595ee24a3a47a8439985294ecd07c98ddc2f5e482e2",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/taskgraph.go",
+    "sha256": "daba85a7d445685fd508dc914e256189e4570bc3bf9affd0745a2b924278a4b9",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task/model",
+    "file": "internal/task/model/work.go",
+    "sha256": "e0cc1d320adc4e85c5eee829ff441cc637634f70476ea258f8e29cfb017140e7",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/task",
+    "file": "internal/task/predecessors.go",
+    "sha256": "7fc22e0dcba15b8652f4baf413dac2f4196b975dcdab2dad31a928789a602471",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/task",
+    "file": "internal/task/validation.go",
+    "sha256": "30ac67dd72d8c0a491c74a09dfdd1b28ee1792867f67aefc08d3d0cf7859c33a",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/task",
+    "file": "internal/task/work.go",
+    "sha256": "97943bbc614d5a33035af14d519f496af7cdd1e631f975d0c98d53d77136a0b1",
+    "build_constraint": "",
+    "project_imports": [
+      "internal/task/model"
+    ]
+  },
+  {
+    "package": "internal/testfeedback",
+    "file": "internal/testfeedback/summary.go",
+    "sha256": "40f0bec4ae4165651c83216a4ad6f6bc6049479860ca6aa9fb63f2ea0c689bb1",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/testprocess",
+    "file": "internal/testprocess/process.go",
+    "sha256": "71ec55d1a91ee94aadbaf7f7b224bdd39a9de5ac8bb6744ea8b20273621f2f6f",
+    "build_constraint": "",
+    "project_imports": []
+  },
+  {
+    "package": "internal/testprocess",
+    "file": "internal/testprocess/process_unix.go",
+    "sha256": "1594e75ffd35138ddb3411850f6858d75fe51d731aeb8ada9b26838f84aa7543",
+    "build_constraint": "!windows\r",
+    "project_imports": []
+  },
+  {
+    "package": "internal/testprocess",
+    "file": "internal/testprocess/process_windows.go",
+    "sha256": "f5d3380a90a8633bc7ca385083446978f6ac86af713dad9274461bbe9acc6a17",
+    "build_constraint": "windows\r",
+    "project_imports": []
+  }
+]

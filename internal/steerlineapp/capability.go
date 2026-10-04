@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
@@ -44,7 +45,7 @@ type capabilityEvidence struct {
 	StopConfirmed         bool                               `json:"stop_confirmed"`
 }
 
-func CertifyExecutionBackend(ctx context.Context, config steerline.Config, paths []string) (executionbackend.CapabilityReport, error) {
+func CertifyExecutionBackend(ctx context.Context, config execution.Config, paths []string) (executionbackend.CapabilityReport, error) {
 	if config.TaskAuthority != "native" {
 		return executionbackend.CapabilityReport{}, errors.New("task_authority=native is required")
 	}
@@ -169,7 +170,7 @@ func CertifyExecutionBackend(ctx context.Context, config steerline.Config, paths
 			}
 		}
 	}
-	if err := steerline.SaveExecutionCapabilityReport(config, probe); err != nil {
+	if err := execution.SaveExecutionCapabilityReport(config, probe); err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
 	return probe, nil

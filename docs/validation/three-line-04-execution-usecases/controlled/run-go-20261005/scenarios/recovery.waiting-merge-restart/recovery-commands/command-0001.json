@@ -1,0 +1,11 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\8470\\SteerLine\\docs\\validation\\three-line-04-execution-usecases\\controlled\\run-go-20261005\\build\\steerline.exe",
+    "home",
+    "-config",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2307835133\\recovery.waiting-merge-restart\\recovery\\project.json"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "STEERLINE_HOME C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2307835133\\recovery.waiting-merge-restart\\recovery\\home\nbin            C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2307835133\\recovery.waiting-merge-restart\\recovery\\home\\bin\netc            C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2307835133\\recovery.waiting-merge-restart\\recovery\\home\\etc\nstate root     C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2307835133\\recovery.waiting-merge-restart\\recovery\\home\\state\nconfig         C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2307835133\\recovery.waiting-merge-restart\\recovery\\project.json\nrepository     C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2307835133\\recovery.waiting-merge-restart\\recovery\\repo\nrun_dir        C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2307835133\\recovery.waiting-merge-restart\\recovery\\home\\state\\repo-e82c7631870d\nworktree_root  C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2307835133\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\n"
+}

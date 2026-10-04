@@ -1,0 +1,124 @@
+{
+  "scope": "e2e",
+  "level": "L3",
+  "env": "controlled",
+  "environment": {
+    "source_commit": "c3d57013aae4d943e8a2f473a2fd9cb47f51a679",
+    "worktree_status": " M cmd/test-feedback/scoped.go\n M docs/architecture/current-code-architecture.md\n M docs/spec/three-line-04-execution-usecases.plan.md\n M docs/validation/three-line-04-execution-usecases/README.md\n M docs/validation/three-line-04-execution-usecases/file-mapping.json\n M docs/validation/three-line-04-execution-usecases/ownership.md\n M docs/validation/three-line-04-execution-usecases/test-mapping.json\n D internal/steerline/candidate_resume_isolation_test.go\n?? docs/validation/three-line-04-execution-usecases/l1/final-main-20261005/quick-core/stderr.txt\n?? docs/validation/three-line-04-execution-usecases/l1/final-main-20261005/quick-core/test.jsonl\n?? docs/validation/three-line-04-execution-usecases/l1/final-main-20261005/quick-execution/stderr.txt\n?? docs/validation/three-line-04-execution-usecases/l1/final-main-20261005/quick-execution/test.jsonl\n?? docs/validation/three-line-04-execution-usecases/l1/final-main-20261005/quick-rules/stderr.txt\n?? docs/validation/three-line-04-execution-usecases/l1/final-main-20261005/quick-rules/test.jsonl\n?? docs/validation/three-line-04-execution-usecases/recovery/latest-main-20261005/go-test.jsonl\n?? docs/validation/three-line-04-execution-usecases/recovery/latest-main-20261005/go-test.stderr.txt\n?? internal/execution/candidate_resume_isolation_test.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "controlled worker/provider; no model requests"
+  },
+  "selected_scenarios": [
+    {
+      "id": "recovery.waiting-merge-restart",
+      "level": "L3",
+      "suite": "recovery",
+      "package": "./tests/e2e/suites/recovery",
+      "test": "TestWaitingMergeRestart",
+      "env": "controlled"
+    }
+  ],
+  "groups": [
+    {
+      "id": "e2e-1",
+      "command": [
+        "go",
+        "test",
+        "-tags=e2e",
+        "-json",
+        "-count=1",
+        "-p=1",
+        "-parallel=1",
+        "-timeout=6m",
+        "-run=^(TestWaitingMergeRestart)$",
+        "./tests/e2e/suites/recovery"
+      ],
+      "assigned_tests": [
+        "TestWaitingMergeRestart"
+      ],
+      "assigned_packages": [
+        "./tests/e2e/suites/recovery"
+      ],
+      "stdout_json_log": "C:\\Users\\lmas1\\.codex\\worktrees\\8470\\SteerLine\\docs\\validation\\three-line-04-execution-usecases\\controlled\\post-218-20261005\\e2e-1.jsonl",
+      "stderr_log": "C:\\Users\\lmas1\\.codex\\worktrees\\8470\\SteerLine\\docs\\validation\\three-line-04-execution-usecases\\controlled\\post-218-20261005\\e2e-1.stderr.txt",
+      "wall_seconds": 138.1204283,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/recovery",
+            "status": "pass",
+            "elapsed_seconds": 135.301
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/recovery",
+            "name": "TestWaitingMergeRestart",
+            "status": "pass",
+            "elapsed_seconds": 134.36
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/recovery",
+            "name": "TestWaitingMergeRestart",
+            "status": "pass",
+            "elapsed_seconds": 134.36
+          }
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 135.3014827,
+        "has_test_event_wall": true
+      }
+    }
+  ],
+  "build_sha256": {
+    "C:\\Users\\lmas1\\.codex\\worktrees\\8470\\SteerLine\\docs\\validation\\three-line-04-execution-usecases\\controlled\\post-218-20261005\\build\\controlled-helper.exe": "fdacba18a1dbbda0a6bce9a8a3d3d2383065e59d12859bb73f1a111feb69fca8",
+    "C:\\Users\\lmas1\\.codex\\worktrees\\8470\\SteerLine\\docs\\validation\\three-line-04-execution-usecases\\controlled\\post-218-20261005\\build\\steerline.exe": "a9b8800d9d5f09a493e9d5f2234e31d1d23b8ebed1ed82a7b02de00bff95774b"
+  },
+  "preparation_seconds": 7.3714711,
+  "execution_seconds": 138.1576595,
+  "passed": true,
+  "cleanup_complete": true,
+  "errors": null,
+  "started_at": "2026-10-04T22:02:32.097754Z",
+  "finished_at": "2026-10-04T22:04:57.9725432Z",
+  "coverage": "selected-L3"
+}

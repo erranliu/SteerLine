@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
@@ -20,7 +21,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
-	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -71,7 +71,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	store, err := steerline.OpenNativeTaskCommandStore(ctx, &c)
 	require(t, err)
 	queries := steerline.NewQueryService(store, c.Identity())
-	commands := steerline.NewCommandService(store, c.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})
+	commands := appExecutionCommands(t, store, c)
 	spec, plan := liveReadinessReference(t, ctx, repo, commit, "docs/spec/pr154-readiness-gate.spec.md"), liveReadinessReference(t, ctx, repo, commit, "docs/spec/pr154-readiness-gate.plan.md")
 	contract := taskmodel.TaskContract{ContractID: "pr154-readiness-live", Repository: remote, Remote: "origin", Branch: "main", SpecRef: spec, PlanRef: plan, AcceptanceRefs: []taskmodel.FileReference{spec}}
 	contract.Digest, err = taskmodel.ContractDigest(contract)
@@ -89,7 +89,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 		page, err := queries.ShowNativeTask(ctx, "9001154")
 		require(t, err)
 		paused := false
-		_, err = commands.SetNativeDispatchState(ctx, steerline.NativeDispatchUpdate{RequestID: newID(), ExpectedAuthorityVersion: page.AuthorityVersion, Paused: &paused, RequestedBy: "acceptance"})
+		_, err = commands.SetNativeDispatchState(ctx, execution.NativeDispatchUpdate{RequestID: newID(), ExpectedAuthorityVersion: page.AuthorityVersion, Paused: &paused, RequestedBy: "acceptance"})
 		require(t, err)
 	}
 	require(t, store.Close())
@@ -101,7 +101,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 		store, err := steerline.OpenNativeTaskCommandStore(ctx, &c)
 		require(t, err)
 		profiles := c.AvailableExecutionProfiles()
-		_, err = (steerline.NewCommandService(store, c.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})).ClaimNativeTask(ctx, c, steerline.TaskClaimOptions{TaskID: "9001154", RequestID: newID(), ExpectedTaskVersion: page.Tasks[0].Version, ExpectedAuthorityVersion: page.AuthorityVersion, RequestedBy: "acceptance", Explicit: true, ExecutionProfile: &profiles[0], ServiceInstanceID: service.instanceID})
+		_, err = (appExecutionCommands(t, store, c)).ClaimNativeTask(ctx, c, execution.TaskClaimOptions{TaskID: "9001154", RequestID: newID(), ExpectedTaskVersion: page.Tasks[0].Version, ExpectedAuthorityVersion: page.AuthorityVersion, RequestedBy: "acceptance", Explicit: true, ExecutionProfile: &profiles[0], ServiceInstanceID: service.instanceID})
 		require(t, err)
 		require(t, store.Close())
 	}
@@ -160,7 +160,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 				service.stop(t)
 				config := c.ApplyFixedExecutionProfile(findReadinessLiveProfile(t, view.Runtime, run.RunID))
 				client := orcaworker.New(orcaworker.Config{Repository: config.Repository, CommandTimeout: config.CommandTimeout, Target: e.Target, Output: func(callCtx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
-					return (steerline.Runner{Dir: config.Repository, Timeout: timeout}).Output(callCtx, executionbackend.Command{Executable: "orca"}, args...)
+					return (execution.Runner{Dir: config.Repository, Timeout: timeout}).Output(callCtx, executionbackend.Command{Executable: "orca"}, args...)
 				}})
 				closed, err := client.CloseTerminalChecked(ctx, e.Process.Terminal, e.Process.RuntimeID)
 				require(t, err)
@@ -195,7 +195,7 @@ func findReadinessLiveProfile(t *testing.T, runtime *steerline.Runtime, runID st
 	return profile
 }
 
-func startReadinessLiveService(t *testing.T, ctx context.Context, c steerline.Config) *runningIntegrationService {
+func startReadinessLiveService(t *testing.T, ctx context.Context, c execution.Config) *runningIntegrationService {
 	t.Helper()
 	service, err := steerlineapp.NewService(c)
 	require(t, err)
@@ -204,7 +204,7 @@ func startReadinessLiveService(t *testing.T, ctx context.Context, c steerline.Co
 	runCtx, cancel := context.WithCancel(ctx)
 	result := &runningIntegrationService{service: service, config: c, reader: reader, queries: steerline.NewQueryService(reader, c.Identity()), cancel: cancel, done: make(chan error, 1)}
 	t.Cleanup(func() { result.stop(t) })
-	go func() { result.done <- service.RunWithDispatch(runCtx, "manual") }()
+	go func() { result.done <- steerline.RunService(runCtx, service, service.Config, "manual") }()
 	waitFor(t, 30*time.Second, func() bool {
 		view, err := result.queries.ReadProjectView(ctx, "9001154", 100)
 		if err == nil && view.Runtime != nil && view.Runtime.Service.Ready {

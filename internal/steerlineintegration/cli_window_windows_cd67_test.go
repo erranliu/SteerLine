@@ -3,13 +3,14 @@
 package steerlineintegration
 
 import (
-	"golang.org/x/sys/windows"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"syscall"
 	"testing"
+
+	"golang.org/x/sys/windows"
 )
 
 func TestWindowsServiceWindowRejectsMissingConsole(t *testing.T) {

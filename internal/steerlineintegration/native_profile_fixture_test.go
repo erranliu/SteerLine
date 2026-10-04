@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
@@ -20,7 +21,7 @@ import (
 
 // Native fixtures encode configuration values and use the actual app catalog.
 // They contain no copy of its implementation factories or center write state.
-func builtinFixtureConfig(t *testing.T, c steerline.Config, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remoteSettings ...*remote.ProfileConfig) steerline.Config {
+func builtinFixtureConfig(t *testing.T, c execution.Config, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remoteSettings ...*remote.ProfileConfig) execution.Config {
 	t.Helper()
 	host := steerlineapp.NewProcessHost(10 * time.Second)
 	directory, err := steerlineapp.NewBuiltinDirectory(host)
@@ -31,7 +32,7 @@ func builtinFixtureConfig(t *testing.T, c steerline.Config, worker codexworker.P
 		accepted = "fixture-native-accepted-v1"
 	}
 	c.BindApplicationConfig(directory, "fixture-project.json", "fixture-global.json", accepted, true)
-	p := steerline.ExecutionProfile{ID: steerline.ProjectExecutionProfileID, Name: "Native fixture", Host: c.Host, Agent: c.Agent}
+	p := execution.ExecutionProfile{ID: execution.ProjectExecutionProfileID, Name: "Native fixture", Host: c.Host, Agent: c.Agent}
 	payload, err := codexworker.EncodeProfileConfig(worker)
 	require(t, err)
 	p.ImplementationConfigs = append(p.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
@@ -45,7 +46,7 @@ func builtinFixtureConfig(t *testing.T, c steerline.Config, worker codexworker.P
 		require(t, err)
 		p.ImplementationConfigs = append(p.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: remote.ProfileCodecKey, CodecVersion: 1, Payload: payload})
 	}
-	c.ExecutionProfiles = []steerline.ExecutionProfile{p}
+	c.ExecutionProfiles = []execution.ExecutionProfile{p}
 	c.DefaultExecutionProfile = p.ID
 	c = c.ApplyExecutionProfile(p)
 	// A static rejection is still inspected as raw configuration input in
@@ -65,7 +66,7 @@ func builtinFixtureConfig(t *testing.T, c steerline.Config, worker codexworker.P
 	return c
 }
 
-func nativeProfileSettings(c steerline.Config) codexworker.ProfileConfig {
+func nativeProfileSettings(c execution.Config) codexworker.ProfileConfig {
 	data, _ := c.DecodeImplementationConfig(codexworker.ProfileCodecKey)
 	if len(data) == 0 {
 		for _, p := range c.ExecutionProfiles {
@@ -80,7 +81,7 @@ func nativeProfileSettings(c steerline.Config) codexworker.ProfileConfig {
 	return value
 }
 
-func fixtureBoundProfile(c steerline.Config) steerline.ExecutionProfile {
+func fixtureBoundProfile(c execution.Config) execution.ExecutionProfile {
 	for _, p := range c.AvailableExecutionProfiles() {
 		if p.Host == c.Host && p.Agent == c.Agent {
 			return p
@@ -101,11 +102,11 @@ func hostPublicationProviderFixture() publication.Config {
 	return publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: os.Args[0], Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: executionbackend.Command{Executable: os.Args[0], Args: []string{"pr", "close", "{pr_url}"}}}
 }
 
-func setNativeImplementationProfiles(t *testing.T, c *steerline.Config, w codexworker.ProfileConfig, o *orcaworker.ProfileConfig, r ...*remote.ProfileConfig) {
+func setNativeImplementationProfiles(t *testing.T, c *execution.Config, w codexworker.ProfileConfig, o *orcaworker.ProfileConfig, r ...*remote.ProfileConfig) {
 	*c = builtinFixtureConfig(t, *c, w, o, r...)
 }
 
-func setNativeProfile(t *testing.T, c *steerline.Config, w codexworker.ProfileConfig) {
+func setNativeProfile(t *testing.T, c *execution.Config, w codexworker.ProfileConfig) {
 	var o *orcaworker.ProfileConfig
 	var r []*remote.ProfileConfig
 	if c.Host != "local" {
@@ -121,7 +122,7 @@ func setNativeProfile(t *testing.T, c *steerline.Config, w codexworker.ProfileCo
 	setNativeImplementationProfiles(t, c, w, o, r...)
 }
 
-func nativeAdmissionFixture(t *testing.T) (steerline.Config, string, persistence.Connection) {
+func nativeAdmissionFixture(t *testing.T) (execution.Config, string, persistence.Connection) {
 	t.Helper()
 	f := newLifecycleProject(t, "local")
 	store, err := steerline.OpenNativeTaskCommandStore(context.Background(), &f.config)
@@ -130,7 +131,7 @@ func nativeAdmissionFixture(t *testing.T) (steerline.Config, string, persistence
 	return f.config, f.commit, store
 }
 
-func nativeConfigError(c steerline.Config) error {
+func nativeConfigError(c execution.Config) error {
 	if err := c.ValidateProfiles(); err != nil {
 		return err
 	}
@@ -143,10 +144,10 @@ func nativeConfigError(c steerline.Config) error {
 
 func historicalProfileValid(p executionmodel.FixedExecutionProfile) bool {
 	d, err := steerlineapp.NewBuiltinDirectory(steerlineapp.NewProcessHost(time.Second))
-	return err == nil && (steerline.Config{ExecutionDirectory: d}).CheckFixedProfile(p) == nil
+	return err == nil && (execution.Config{ExecutionDirectory: d}).CheckFixedProfile(p) == nil
 }
 
-func historicalResourceError(_ steerline.Config, r *executionmodel.PolicyResources, digest, path string, e *executionmodel.ExecutionRecord) error {
+func historicalResourceError(_ execution.Config, r *executionmodel.PolicyResources, digest, path string, e *executionmodel.ExecutionRecord) error {
 	if r == nil || r.Version != 3 {
 		return errors.New("historical resource wrapper unsupported")
 	}
@@ -156,11 +157,11 @@ func historicalResourceError(_ steerline.Config, r *executionmodel.PolicyResourc
 
 func digestValue(value any) string { return string(mustJSON(value)) }
 
-func nativeRequirementConfig(t *testing.T) steerline.Config {
-	return builtinFixtureConfig(t, steerline.Config{Host: "local", Agent: "codex", WorkflowProtocol: executionmodel.Version, TaskAuthority: "native", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}, codexworker.ProfileConfig{Executable: os.Args[0]}, nil)
+func nativeRequirementConfig(t *testing.T) execution.Config {
+	return builtinFixtureConfig(t, execution.Config{Host: "local", Agent: "codex", WorkflowProtocol: executionmodel.Version, TaskAuthority: "native", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}, codexworker.ProfileConfig{Executable: os.Args[0]}, nil)
 }
 
-func nativeTarget(c steerline.Config) executionbackend.ExecutionTarget {
+func nativeTarget(c execution.Config) executionbackend.ExecutionTarget {
 	entry, err := c.ExecutionDirectory.Resolve(c)
 	if err != nil {
 		return executionbackend.ExecutionTarget{}
@@ -168,7 +169,7 @@ func nativeTarget(c steerline.Config) executionbackend.ExecutionTarget {
 	return entry.Target(c)
 }
 
-func requireNativeFlowCapabilities(ctx context.Context, c steerline.Config) error {
+func requireNativeFlowCapabilities(ctx context.Context, c execution.Config) error {
 	if err := c.ValidateProfiles(); err != nil {
 		return err
 	}

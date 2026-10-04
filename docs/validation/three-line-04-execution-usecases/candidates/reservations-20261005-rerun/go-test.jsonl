@@ -1,0 +1,16 @@
+{"Time":"2026-10-05T05:08:26.520135+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration"}
+{"Time":"2026-10-05T05:08:26.7022264+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC1"}
+{"Time":"2026-10-05T05:08:26.7022264+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC1","Output":"=== RUN   TestMC1\n"}
+{"Time":"2026-10-05T05:08:46.0703189+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC1","Output":"--- PASS: TestMC1 (19.37s)\n"}
+{"Time":"2026-10-05T05:08:46.0703189+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC1","Elapsed":19.37}
+{"Time":"2026-10-05T05:08:46.0703189+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC9"}
+{"Time":"2026-10-05T05:08:46.0703189+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC9","Output":"=== RUN   TestMC9\n"}
+{"Time":"2026-10-05T05:09:10.5158809+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC9","Output":"--- PASS: TestMC9 (24.44s)\n"}
+{"Time":"2026-10-05T05:09:10.5158809+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC9","Elapsed":24.44}
+{"Time":"2026-10-05T05:09:10.5158809+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC7"}
+{"Time":"2026-10-05T05:09:10.5158809+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC7","Output":"=== RUN   TestMC7\n"}
+{"Time":"2026-10-05T05:09:25.0908191+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC7","Output":"--- PASS: TestMC7 (14.57s)\n"}
+{"Time":"2026-10-05T05:09:25.0908191+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestMC7","Elapsed":14.57}
+{"Time":"2026-10-05T05:09:25.0908191+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"PASS\n"}
+{"Time":"2026-10-05T05:09:25.0988675+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerlineintegration\t58.579s\n"}
+{"Time":"2026-10-05T05:09:25.0988675+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Elapsed":58.579}

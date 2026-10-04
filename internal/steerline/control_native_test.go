@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -45,7 +46,7 @@ func TestControlRequestPublicationIsImmutableAcrossClientProcesses(t *testing.T)
 		}
 	}
 	stored, err := readControlRequest(controlRequestPath(runDir, request.RequestID))
-	if err != nil || requestDigest(stored) != requestDigest(request) {
+	if err != nil || execution.RequestDigest(stored) != execution.RequestDigest(request) {
 		t.Fatalf("published request differs from the immutable client payload: stored=%+v err=%v", stored, err)
 	}
 	changed := request
@@ -80,14 +81,14 @@ func TestNativeControlPayloadRejectsUnknownFields(t *testing.T) {
 		{Action: "set_dispatch_mode", Payload: json.RawMessage(`{"mode":"manual","extra":true}`)},
 		{Action: "pause_dispatch", Payload: json.RawMessage(`{"unexpected":true}`)},
 	} {
-		if _, err := decodeControlPayload(request); err == nil {
+		if _, err := execution.DecodeControlPayload(request); err == nil {
 			t.Fatalf("control payload with unknown fields was accepted: %+v", request)
 		}
 	}
-	if _, err := decodeControlPayload(productapi.ControlRequest{Action: "pause_dispatch", Payload: json.RawMessage(`{}`)}); err != nil {
+	if _, err := execution.DecodeControlPayload(productapi.ControlRequest{Action: "pause_dispatch", Payload: json.RawMessage(`{}`)}); err != nil {
 		t.Fatalf("empty object should be a valid payload for pause_dispatch: %v", err)
 	}
-	if _, err := decodeControlPayload(productapi.ControlRequest{Action: "set_dispatch_mode", Payload: json.RawMessage(`{"mode":"auto"}`)}); err != nil {
+	if _, err := execution.DecodeControlPayload(productapi.ControlRequest{Action: "set_dispatch_mode", Payload: json.RawMessage(`{"mode":"auto"}`)}); err != nil {
 		t.Fatalf("valid native dispatch mode was rejected: %v", err)
 	}
 }

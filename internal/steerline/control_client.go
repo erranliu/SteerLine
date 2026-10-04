@@ -10,15 +10,16 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
-func ControlSnapshot(c Config) (*Runtime, error) {
+func ControlSnapshot(c execution.Config) (*Runtime, error) {
 	return controlSnapshot(c, false)
 }
 
-func controlSnapshot(c Config, allowInitializing bool) (*Runtime, error) {
-	if err := requireNativeTaskAuthority(c); err != nil {
+func controlSnapshot(c execution.Config, allowInitializing bool) (*Runtime, error) {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return nil, err
 	}
 	connection := ConnectService(context.Background(), c)
@@ -57,8 +58,8 @@ func serviceHasCapability(rt *Runtime, action string) bool {
 	return false
 }
 
-func ReadTaskSnapshot(c Config) (*TaskSnapshot, error) {
-	if err := requireNativeTaskAuthority(c); err != nil {
+func ReadTaskSnapshot(c execution.Config) (*TaskSnapshot, error) {
+	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return nil, err
 	}
 	if err := c.ResolveIdentity(context.Background()); err != nil {
@@ -69,16 +70,16 @@ func ReadTaskSnapshot(c Config) (*TaskSnapshot, error) {
 		return nil, err
 	}
 	defer store.Close()
-	authority, err := store.NativeAuthority(context.Background(), c.identity)
+	authority, err := store.NativeAuthority(context.Background(), c.Identity())
 	if err != nil {
 		return nil, err
 	}
-	ready, err := (NewQueryService(store, c.identity)).ReadyNativeTasks(context.Background())
+	ready, err := (NewQueryService(store, c.Identity())).ReadyNativeTasks(context.Background())
 	if err != nil {
 		return nil, err
 	}
 	queried := now()
-	snapshot := &TaskSnapshot{Version: 1, RepositoryIdentity: c.identity, QueriedAt: queried, LastSuccessAt: &queried, Tasks: []TaskCandidate{}}
+	snapshot := &TaskSnapshot{Version: 1, RepositoryIdentity: c.Identity(), QueriedAt: queried, LastSuccessAt: &queried, Tasks: []TaskCandidate{}}
 	if authority.DispatchPaused {
 		snapshot.BlockReason = "dispatch is paused"
 	}
@@ -91,21 +92,21 @@ func ReadTaskSnapshot(c Config) (*TaskSnapshot, error) {
 	return snapshot, nil
 }
 
-func SubmitControl(c Config, action string, payload any, requestedBy string) (productapi.ControlRequest, error) {
+func SubmitControl(c execution.Config, action string, payload any, requestedBy string) (productapi.ControlRequest, error) {
 	return SubmitControlWithID(c, action, payload, requestedBy, newID())
 }
 
 // SubmitControlWithID publishes a control action under a caller-allocated ID.
 // The ID is immutable: reusing it with different content is rejected by the
 // request inbox rather than silently replacing the original action.
-func SubmitControlWithID(c Config, action string, payload any, requestedBy, requestID string) (productapi.ControlRequest, error) {
+func SubmitControlWithID(c execution.Config, action string, payload any, requestedBy, requestID string) (productapi.ControlRequest, error) {
 	return SubmitControlTargeted(c, action, payload, requestedBy, requestID, "", nil)
 }
 
 // SubmitControlTargeted binds a UI action to the service instance and optional
 // control revision it displayed. A restart or intervening control change is
 // reported to the caller instead of silently retargeting the action.
-func SubmitControlTargeted(c Config, action string, payload any, requestedBy, requestID, expectedInstance string, expectedRevision *uint64) (productapi.ControlRequest, error) {
+func SubmitControlTargeted(c execution.Config, action string, payload any, requestedBy, requestID, expectedInstance string, expectedRevision *uint64) (productapi.ControlRequest, error) {
 	if !controlIDPattern.MatchString(requestID) {
 		return productapi.ControlRequest{}, errors.New("request ID must be 32 lowercase hexadecimal characters")
 	}
@@ -124,12 +125,12 @@ func SubmitControlTargeted(c Config, action string, payload any, requestedBy, re
 
 // The caller has validated this snapshot. Keep its instance/revision unchanged:
 // a restart between observation and publication must reject, never retarget.
-func submitControlSnapshot(c Config, rt *Runtime, action string, payload any, requestedBy string) (productapi.ControlRequest, error) {
+func submitControlSnapshot(c execution.Config, rt *Runtime, action string, payload any, requestedBy string) (productapi.ControlRequest, error) {
 	return submitControlSnapshotWithID(c, rt, action, payload, requestedBy, newID())
 }
 
-func submitControlSnapshotWithID(c Config, rt *Runtime, action string, payload any, requestedBy, requestID string) (productapi.ControlRequest, error) {
-	if !validControlAction(action) {
+func submitControlSnapshotWithID(c execution.Config, rt *Runtime, action string, payload any, requestedBy, requestID string) (productapi.ControlRequest, error) {
+	if !execution.ValidControlAction(action) {
 		return productapi.ControlRequest{}, errors.New("unsupported control action")
 	}
 	if !controlIDPattern.MatchString(requestID) {
@@ -151,7 +152,7 @@ func submitControlSnapshotWithID(c Config, rt *Runtime, action string, payload a
 	}
 	created := now()
 	req := productapi.ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: requestID, RepositoryIdentity: rt.Repository.Identity, InstanceID: rt.Service.InstanceID, Action: action, Payload: raw, RequestedBy: requestedBy, CreatedAt: created, ExpiresAt: created.Add(2 * time.Minute)}
-	if _, err := decodeControlPayload(req); err != nil {
+	if _, err := execution.DecodeControlPayload(req); err != nil {
 		return productapi.ControlRequest{}, err
 	}
 	if action != "stop_service" {
@@ -166,12 +167,12 @@ func submitControlSnapshotWithID(c Config, rt *Runtime, action string, payload a
 // ReadControlRequest reads the immutable request matching an ID. It is useful
 // when a client reopens and needs to distinguish an unpublished request from a
 // request whose receipt has not arrived yet.
-func ReadControlRequest(c Config, id string) (*productapi.ControlRequest, error) {
+func ReadControlRequest(c execution.Config, id string) (*productapi.ControlRequest, error) {
 	req, _, err := readControlRequestForClient(c, id)
 	return req, err
 }
 
-func readControlRequestForClient(c Config, id string) (*productapi.ControlRequest, [sha256.Size]byte, error) {
+func readControlRequestForClient(c execution.Config, id string) (*productapi.ControlRequest, [sha256.Size]byte, error) {
 	if !controlIDPattern.MatchString(id) {
 		return nil, [sha256.Size]byte{}, errors.New("request ID must be 32 lowercase hexadecimal characters")
 	}
@@ -191,16 +192,16 @@ func readControlRequestForClient(c Config, id string) (*productapi.ControlReques
 	}
 	_, createdOffset := req.CreatedAt.Zone()
 	_, expiryOffset := req.ExpiresAt.Zone()
-	if req.ProtocolVersion != ControlProtocolVersion || !validControlAction(req.Action) || req.InstanceID == "" || req.RepositoryIdentity == "" || strings.TrimSpace(req.RequestedBy) == "" || req.CreatedAt.IsZero() || req.ExpiresAt.IsZero() || createdOffset != 0 || expiryOffset != 0 || !req.ExpiresAt.After(req.CreatedAt) || req.ExpiresAt.Sub(req.CreatedAt) > 2*time.Minute+time.Second {
+	if req.ProtocolVersion != ControlProtocolVersion || !execution.ValidControlAction(req.Action) || req.InstanceID == "" || req.RepositoryIdentity == "" || strings.TrimSpace(req.RequestedBy) == "" || req.CreatedAt.IsZero() || req.ExpiresAt.IsZero() || createdOffset != 0 || expiryOffset != 0 || !req.ExpiresAt.After(req.CreatedAt) || req.ExpiresAt.Sub(req.CreatedAt) > 2*time.Minute+time.Second {
 		return nil, [sha256.Size]byte{}, errors.New("control request has invalid protocol fields or target identity")
 	}
-	if _, err = decodeControlPayload(req); err != nil {
+	if _, err = execution.DecodeControlPayload(req); err != nil {
 		return nil, [sha256.Size]byte{}, err
 	}
 	return &req, sha256.Sum256(raw), nil
 }
 
-func ReadControlReceipt(c Config, id string) (*productapi.ControlReceipt, error) {
+func ReadControlReceipt(c execution.Config, id string) (*productapi.ControlReceipt, error) {
 	if !controlIDPattern.MatchString(id) {
 		return nil, errors.New("request ID must be 32 lowercase hexadecimal characters")
 	}
@@ -218,7 +219,7 @@ func ReadControlReceipt(c Config, id string) (*productapi.ControlReceipt, error)
 	if receipt.RequestID != id {
 		return nil, errors.New("receipt request ID does not match path")
 	}
-	if receipt.Version != ControlProtocolVersion || (receipt.Status != "applying" && !terminalControlStatus(receipt.Status)) {
+	if receipt.Version != ControlProtocolVersion || (receipt.Status != "applying" && !execution.TerminalControlStatus(receipt.Status)) {
 		return nil, errors.New("invalid control receipt version or status")
 	}
 	return &receipt, nil
@@ -227,7 +228,7 @@ func ReadControlReceipt(c Config, id string) (*productapi.ControlReceipt, error)
 // ReadVerifiedControlReceipt binds a receipt back to its immutable request.
 // A caller must not present or act on a terminal result that names a different
 // action, instance or request digest under the same path ID.
-func ReadVerifiedControlReceipt(c Config, id string) (*productapi.ControlReceipt, error) {
+func ReadVerifiedControlReceipt(c execution.Config, id string) (*productapi.ControlReceipt, error) {
 	req, requestFileDigest, err := readControlRequestForClient(c, id)
 	if err != nil {
 		return nil, err
@@ -242,7 +243,7 @@ func ReadVerifiedControlReceipt(c Config, id string) (*productapi.ControlReceipt
 	return receipt, nil
 }
 
-func WaitControlReceipt(ctx context.Context, c Config, id string, poll time.Duration) (*productapi.ControlReceipt, error) {
+func WaitControlReceipt(ctx context.Context, c execution.Config, id string, poll time.Duration) (*productapi.ControlReceipt, error) {
 	if poll <= 0 {
 		poll = 100 * time.Millisecond
 	}

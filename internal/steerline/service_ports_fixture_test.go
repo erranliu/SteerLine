@@ -9,18 +9,21 @@ import (
 	"strings"
 	"time"
 
+	execution "github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type testProcessHost struct{}
 
-func mustTestDirectory() (*ExecutionDirectory, error) { return newNeutralDirectory() }
+func mustTestDirectory() (*execution.ExecutionDirectory, error) { return newNeutralDirectory() }
 
-func testConfigWithDirectory(c Config) Config {
+func testConfigWithDirectory(c execution.Config) execution.Config {
 	if c.ExecutionDirectory == nil {
 		c = withNeutralProfile(c, neutralSettings{Executable: os.Args[0]})
 	}
@@ -37,17 +40,19 @@ func testConfigWithDirectory(c Config) Config {
 	return c
 }
 
-func newTestService(c Config) (*Service, error) { return newNeutralService(testConfigWithDirectory(c)) }
+func newTestService(c execution.Config) (*execution.Service, error) {
+	return newNeutralService(testConfigWithDirectory(c))
+}
 
 // Only the generic bounded raw output test uses this fixture.
-type localExecutionBackend struct{ config Config }
+type localExecutionBackend struct{ config execution.Config }
 
 func (testProcessHost) StartManaged(command *exec.Cmd) (executionbackend.StopHandle, error) {
-	return startProcess(command)
+	return resourceprocess.StartManaged(command)
 }
 
 func (testProcessHost) InspectProcess(identity *executionbackend.ProcessIdentity) string {
-	return inspectProcess(identity)
+	return resourceprocess.InspectProcess(identity)
 }
 
 func (testProcessHost) NewProcessGeneration() string { return newID() }
@@ -57,11 +62,11 @@ func (testProcessHost) WriteExecutionFile(path string, value []byte) error {
 }
 
 func (testProcessHost) OutputCommand(ctx context.Context, command executionbackend.LaunchCommand) ([]byte, error) {
-	return (Runner{Dir: command.WorkingDirectory, Timeout: 30 * time.Second}).Output(ctx, executionbackend.Command{Executable: command.Executable, Args: command.Args})
+	return (execution.Runner{Dir: command.WorkingDirectory, Timeout: 30 * time.Second, ProcessHost: testProcessHost{}}).Output(ctx, executionbackend.Command{Executable: command.Executable, Args: command.Args})
 }
 
-func inspectTestWorkspace(ctx context.Context, c Config, ref executionbackend.ExecutionRef) (executionbackend.WorkspaceInspection, error) {
-	if ref.Incomplete || ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || !commitHash.MatchString(ref.BaseCommit) {
+func inspectTestWorkspace(ctx context.Context, c execution.Config, ref executionbackend.ExecutionRef) (executionbackend.WorkspaceInspection, error) {
+	if ref.Incomplete || ref.WorkspacePath == "" || ref.WorkspaceBranch == "" || !taskmodel.ValidCommit(ref.BaseCommit) {
 		return executionbackend.WorkspaceInspection{}, errors.New("workspace ref is incomplete")
 	}
 	if c.Identity() == "" {
@@ -69,11 +74,11 @@ func inspectTestWorkspace(ctx context.Context, c Config, ref executionbackend.Ex
 			return executionbackend.WorkspaceInspection{}, err
 		}
 	}
-	repository, err := workspaceRepository(c)
+	repository, err := workspace.Repository{Path: c.Repository, CommonDir: c.Identity()}, error(nil)
 	if err != nil {
 		return executionbackend.WorkspaceInspection{}, err
 	}
-	inspection, err := workspace.Inspect(ctx, workspaceGit(c), repository, &executionbackend.WorkspaceIntent{Path: ref.WorkspacePath, Branch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit})
+	inspection, err := workspace.Inspect(ctx, c.WorkspaceGit(), repository, &executionbackend.WorkspaceIntent{Path: ref.WorkspacePath, Branch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit})
 	if err != nil {
 		return executionbackend.WorkspaceInspection{}, err
 	}
@@ -97,16 +102,16 @@ func fixtureGlobalExecutionConfigPath() string {
 	return filepath.Join(testHomePath(), "execution.json")
 }
 
-func fixtureRepositoryStateKey(c Config) (string, error) {
-	repository, err := workspace.ResolveRepository(context.Background(), workspaceGit(testConfigWithDirectory(c)), c.Repository)
+func fixtureRepositoryStateKey(c execution.Config) (string, error) {
+	repository, err := workspace.ResolveRepository(context.Background(), testConfigWithDirectory(c).WorkspaceGit(), c.Repository)
 	if err != nil {
 		return "", err
 	}
 	return RepositoryStateKey(repository.CommonDir), nil
 }
 
-func loadFixtureConfig(path string) (Config, error) {
-	c := Config{Persistence: sqlite.Factory{}, Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: executionbackend.Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
+func loadFixtureConfig(path string) (execution.Config, error) {
+	c := execution.Config{Persistence: sqlite.Factory{}, Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: executionbackend.Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
 	projectPath, err := filepath.Abs(path)
 	if err != nil {
 		return c, err
@@ -142,9 +147,9 @@ func loadFixtureConfig(path string) (Config, error) {
 		return c, err
 	}
 	var global struct {
-		Version           int                `json:"version"`
-		ExecutionProfiles []ExecutionProfile `json:"execution_profiles"`
-		DefaultProfile    string             `json:"default_execution_profile"`
+		Version           int                          `json:"version"`
+		ExecutionProfiles []execution.ExecutionProfile `json:"execution_profiles"`
+		DefaultProfile    string                       `json:"default_execution_profile"`
 	}
 	if err := decode(globalBytes, &global); err != nil {
 		return c, err
@@ -158,7 +163,7 @@ func loadFixtureConfig(path string) (Config, error) {
 	}
 	c.ExecutionDirectory, c.ProcessHost, c.StateRoot = directory, testProcessHost{}, fixtureStateRoot()
 	c.ExecutionProfiles, c.DefaultExecutionProfile = global.ExecutionProfiles, global.DefaultProfile
-	c.BindApplicationConfig(directory, projectPath, globalPath, loadedConfigDigest(projectBytes, globalBytes), true)
+	c.BindApplicationConfig(directory, projectPath, globalPath, operationDigest(append(append([]byte(nil), projectBytes...), globalBytes...)), true)
 	base := filepath.Dir(projectPath)
 	if c.Repository == "" || c.Branch == "" {
 		return c, errors.New("repository and branch are required")
@@ -181,7 +186,7 @@ func loadFixtureConfig(path string) (Config, error) {
 	} else if !filepath.IsAbs(c.WorktreeRoot) {
 		c.WorktreeRoot = filepath.Join(base, c.WorktreeRoot)
 	}
-	if err := validateExecutionProfiles(c); err != nil {
+	if err := c.ValidateProfiles(); err != nil {
 		return c, err
 	}
 	initial := global.ExecutionProfiles[0]
@@ -193,7 +198,7 @@ func loadFixtureConfig(path string) (Config, error) {
 		}
 	}
 	c = c.ApplyExecutionProfile(initial)
-	if err := c.ValidateApplicationPaths(); err != nil {
+	if err := ValidateApplicationPaths(c); err != nil {
 		return c, err
 	}
 	return c, nil
@@ -213,6 +218,6 @@ func testStartService(ctx context.Context, configPath string, options StartServi
 	return StartService(ctx, config, configPath, options)
 }
 
-func testRunConfiguredService(ctx context.Context, config Config, mode, startupID, console string) error {
-	return RunConfiguredService(ctx, testConfigWithDirectory(config), mode, startupID, console, newTestService)
+func testRunConfiguredService(ctx context.Context, config execution.Config, mode, startupID, console string) error {
+	return RunConfiguredService(ctx, testConfigWithDirectory(config), mode, startupID, console, newHostFixtureService)
 }

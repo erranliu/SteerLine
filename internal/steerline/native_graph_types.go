@@ -1,6 +1,8 @@
 package steerline
 
-import "github.com/erranliu/SteerLine/internal/steerline/taskview"
+import (
+	"github.com/erranliu/SteerLine/internal/steerline/taskview"
+)
 
 const nativeTaskGraphProtocol = taskview.Protocol
 

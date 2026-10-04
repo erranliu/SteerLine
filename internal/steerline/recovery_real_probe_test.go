@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	execution "github.com/erranliu/SteerLine/internal/execution"
 )
 
 func TestRealIsolatedRecoveryPreview(t *testing.T) {
@@ -16,7 +18,7 @@ func TestRealIsolatedRecoveryPreview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	preview, err := InspectRecovery(context.Background(), c, runID)
+	preview, err := execution.InspectRecovery(context.Background(), c, runID)
 	if err != nil {
 		t.Fatal(err)
 	}

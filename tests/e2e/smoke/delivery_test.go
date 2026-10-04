@@ -4,8 +4,9 @@ package smoke
 
 import (
 	"encoding/json"
-	"github.com/erranliu/SteerLine/tests/e2e/internal/testenv"
 	"testing"
+
+	"github.com/erranliu/SteerLine/tests/e2e/internal/testenv"
 )
 
 func TestDeliverySmoke(t *testing.T) {

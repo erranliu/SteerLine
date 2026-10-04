@@ -1,0 +1,14 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\8470\\SteerLine\\docs\\validation\\three-line-04-execution-usecases\\controlled\\latest-main-20261005-rerun\\build\\steerline.exe",
+    "task",
+    "validate",
+    "-config",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1127213607\\recovery.waiting-merge-restart\\recovery\\project.json",
+    "-file",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1127213607\\recovery.waiting-merge-restart\\recovery\\tasks.json"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\"valid\":true,\"project_id\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\steerline-e2e-1127213607\\\\recovery.waiting-merge-restart\\\\recovery\\\\repo\\\\.git\",\"task_count\":2,\"dependency_count\":1,\"authority_version\":1,\"graph_revision\":0,\"database_revision\":1,\"database_id\":\"70916a387292c5a32d28cab16de0ae19\",\"sampled_at\":\"2026-10-04T21:46:36.2961718Z\",\"issues\":[]}\n"
+}

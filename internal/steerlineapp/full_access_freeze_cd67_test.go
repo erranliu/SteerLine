@@ -1,9 +1,10 @@
 package steerlineapp
 
 import (
+	"testing"
+
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
-	"testing"
 )
 
 func TestFullAccessProfileFreezeSurvivesClaimValidation(t *testing.T) {

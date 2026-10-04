@@ -6,7 +6,8 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/query"
+	"github.com/erranliu/SteerLine/internal/steerline/taskview"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 type RuntimeReader interface {
@@ -21,11 +22,18 @@ type Connection interface {
 	WorkerMetadata
 	Projects
 	Conversations
-	query.Store
-	query.ConversationEventReader
-	query.ConversationBodyReader
-	query.ConversationRawReader
-	query.ConversationCapabilityReader
+	// Declare provider capabilities structurally; the application-owned
+	// connection must not import the product query use-case package.
+	Query(context.Context, string) (contracts.DomainSnapshot, error)
+	Events(context.Context, string, string, string, int64, int, int) ([]storageports.DomainEvent, error)
+	EventPayload(context.Context, string, int64, int64, int) ([]byte, int64, string, error)
+	NativeTaskPage(context.Context, string, string, string, uint64, int, int) (contracts.NativeTaskPage, error)
+	TaskGraphSnapshot(context.Context, string) (taskview.Snapshot, error)
+	ReadProjectView(context.Context, string, string, int) (contracts.ProjectView, error)
+	NextConversationEvent(context.Context, string, contracts.ConversationFilter, int64) (*contracts.ConversationEventRecord, error)
+	ConversationBody(context.Context, string, contracts.ConversationBodyRef, int) (contracts.ConversationBodyRecord, error)
+	ConversationRaw(context.Context, string, contracts.ConversationRawRef, int) (contracts.ConversationRawRecord, error)
+	ConversationCapabilityReports(context.Context, executionbackend.BackendKind, executionbackend.ExecutionProtocol, string, int) ([]contracts.ConversationCapabilityReport, error)
 	RuntimeReader
 	Close() error
 	LoadProjection(context.Context, string) ([]byte, uint64, error)

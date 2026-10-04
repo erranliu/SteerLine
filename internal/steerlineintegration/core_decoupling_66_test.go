@@ -8,12 +8,13 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
-	taskapp "github.com/erranliu/SteerLine/internal/task"
 )
 
 func TestCD66FixedProfileRecovery(t *testing.T) {
@@ -21,14 +22,14 @@ func TestCD66FixedProfileRecovery(t *testing.T) {
 	t.Run("changed_config_keeps_native_original_identity_and_manual_gate", func(t *testing.T) { testIntegratedNativeSessionGate(t, true) })
 }
 
-func changedIntegrationConfig(t *testing.T, fixture integrationFixture) steerline.Config {
+func changedIntegrationConfig(t *testing.T, fixture integrationFixture) execution.Config {
 	t.Helper()
 	raw, err := os.ReadFile(steerlineapp.GlobalExecutionConfigPath())
 	require(t, err)
 	var global struct {
 		Version  int                          `json:"version"`
 		Default  string                       `json:"default_execution_profile"`
-		Profiles []steerline.ExecutionProfile `json:"execution_profiles"`
+		Profiles []execution.ExecutionProfile `json:"execution_profiles"`
 	}
 	require(t, json.Unmarshal(raw, &global))
 	for i := range global.Profiles {
@@ -82,7 +83,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		config := fixture.config
 		config.ExecutionDirectory = nil
 		config.Git.Executable = "must-not-be-called"
-		_, err = (steerline.NewCommandService(store, config.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})).ClaimNativeTask(ctx, config, steerline.TaskClaimOptions{TaskID: "906", RequestID: strings.Repeat("a", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1})
+		_, err = steerlineapp.NewCommandService(store, config)
 		if err == nil || !strings.Contains(err.Error(), "directory") || strings.Contains(err.Error(), "must-not-be-called") {
 			t.Fatalf("missing directory reached a target or claim: %v", err)
 		}
@@ -131,6 +132,22 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 	})
 	t.Run("capability_evidence_keeps_original_target_and_versions", TestNativeEvidenceCertificationRequiresFixedTargetAndVersion)
 	t.Run("terminal_evidence_keeps_agent_and_resource_proofs", TestOrcaCertificationRequiresAgentAndTerminalEvidence)
+	t.Run("service_entries_reject_missing_catalog_before_target", func(t *testing.T) {
+		state := t.TempDir() + "/absent"
+		config := execution.Config{Persistence: sqlite.Factory{}, TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, Repository: "must-not-be-read", RunDir: state, Git: executionbackend.Command{Executable: "must-not-be-called"}}
+		if _, err := steerline.StartService(context.Background(), config, "unused.json", steerline.StartServiceOptions{}); err == nil || !strings.Contains(err.Error(), "directory") {
+			t.Fatalf("start reached target without directory: %v", err)
+		}
+		if err := steerline.RunConfiguredService(context.Background(), config, "manual", "", "off", func(execution.Config, execution.HostPort) (*execution.Service, error) {
+			t.Fatal("rejected startup called constructor")
+			return nil, nil
+		}); err == nil || !strings.Contains(err.Error(), "directory") {
+			t.Fatalf("run reached target without directory: %v", err)
+		}
+		if _, err := os.Stat(state); !os.IsNotExist(err) {
+			t.Fatal("rejected startup created state")
+		}
+	})
 }
 
 var _ executionbackend.LifecycleResolver = (*integrationLifecycleResolver)(nil)
