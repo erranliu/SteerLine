@@ -81,3 +81,16 @@ func TestPRCluesKeepOrderAndDeduplicate(t *testing.T) {
 		t.Fatalf("ordinary output became a PR clue: %v", got)
 	}
 }
+
+func TestPRCluesSeparateMarkdownLinks(t *testing.T) {
+	want := []string{"https://github.example/o/r/pull/7", "http://git.example/o/r/pulls/9"}
+	for _, text := range []string{
+		`PR: [https://github.example/o/r/pull/7](https://github.example/o/r/pull/7) and [second](http://git.example/o/r/pulls/9)`,
+		"PR: `https://github.example/o/r/pull/7` (`http://git.example/o/r/pulls/9`)",
+		`[https://github.example/o/r/pull/7](http://git.example/o/r/pulls/9)`,
+	} {
+		if got := PRClues(text); !reflect.DeepEqual(got, want) {
+			t.Fatalf("Markdown links were joined or lost: %q: %v", text, got)
+		}
+	}
+}

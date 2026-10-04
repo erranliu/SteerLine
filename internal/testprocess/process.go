@@ -3,17 +3,19 @@ package testprocess
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"sync"
 	"time"
 )
 
 type Process struct {
-	Cmd  *exec.Cmd
-	Done chan struct{}
-	err  error
-	mu   sync.Mutex
-	stop func() error
+	Cmd        *exec.Cmd
+	Done       chan struct{}
+	err        error
+	cleanupErr error
+	mu         sync.Mutex
+	stop       func() error
 }
 
 func (p *Process) Wait(ctx context.Context) error {
@@ -21,7 +23,7 @@ func (p *Process) Wait(ctx context.Context) error {
 	case <-p.Done:
 		p.mu.Lock()
 		defer p.mu.Unlock()
-		return p.err
+		return errors.Join(p.err, p.cleanupErr)
 	case <-ctx.Done():
 		return ctx.Err()
 	}
@@ -29,7 +31,7 @@ func (p *Process) Wait(ctx context.Context) error {
 func (p *Process) Stop(ctx context.Context) error {
 	select {
 	case <-p.Done:
-		return nil
+		return p.cleanupResult()
 	default:
 	}
 	if err := p.stop(); err != nil {
@@ -37,10 +39,15 @@ func (p *Process) Stop(ctx context.Context) error {
 	}
 	select {
 	case <-p.Done:
-		return nil
+		return p.cleanupResult()
 	case <-ctx.Done():
 		return ctx.Err()
 	}
+}
+func (p *Process) cleanupResult() error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.cleanupErr
 }
 func Run(ctx context.Context, cmd *exec.Cmd) error {
 	p, err := Start(cmd)
