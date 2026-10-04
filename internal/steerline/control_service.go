@@ -289,7 +289,11 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	} else if payload.Environment != nil {
 		runID = payload.Environment.RunID
 	}
-	op := &ControlOperation{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, Payload: append(json.RawMessage(nil), req.Payload...), Phase: "applying", RunID: runID, AttemptID: runID, RequestDigest: digest}
+	attemptID := runID
+	if payload.Environment != nil {
+		attemptID = payload.Environment.AttemptID
+	}
+	op := &ControlOperation{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, Payload: append(json.RawMessage(nil), req.Payload...), Phase: "applying", RunID: runID, AttemptID: attemptID, RequestDigest: digest}
 	s.State.Control.Operation = op
 	if err = s.publishCheckpoint(); err != nil {
 		return err
@@ -299,7 +303,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	accepted := checkedAt
 	applying.AcceptedAt = &accepted
 	applying.RunID = runID
-	applying.AttemptID = runID
+	applying.AttemptID = attemptID
 	applying.ControlRevision = s.State.Control.Revision
 	if err = s.writeReceipt(applying); err != nil {
 		return fmt.Errorf("control applying receipt persistence failed; no action dispatched: %w", err)

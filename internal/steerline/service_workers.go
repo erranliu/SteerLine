@@ -126,6 +126,14 @@ forwarded:
 func (s *Service) handleWorkerMessage(message workerMessage) error {
 	if message.effect != nil {
 		if err := s.applyLifecycleEffect(message.runID, *message.effect); err != nil {
+			if errors.Is(err, ErrWorkerTurnStale) {
+				for _, deferred := range s.lifecycleMessages[message.runID] {
+					if deferred.event != nil {
+						rejectUndeliveredWorkerEvent(*deferred.event, err)
+					}
+				}
+				delete(s.lifecycleMessages, message.runID)
+			}
 			return err
 		}
 		for !s.lifecycleEffectPending(message.runID) && len(s.lifecycleMessages[message.runID]) != 0 {

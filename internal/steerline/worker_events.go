@@ -254,6 +254,9 @@ func (s *Service) eventWorkerFlowFor(run *Run, ev WorkerEvent) (resultErr error)
 			return err
 		}
 		if err := s.executeLifecycleStep(context.Background(), run, lifecycle, *completionCandidate); err != nil {
+			if errors.Is(err, errLifecycleEffectPending) || errors.Is(err, errLifecycleNeedsReconciliation) {
+				return nil
+			}
 			return err
 		}
 	}

@@ -2,6 +2,7 @@ package orcaworker
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,29 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
+
+func TestCleanupProgressRequiresConfirmedOriginalResource(t *testing.T) {
+	resource := executionapi.ProcessIdentity{Kind: "orca", Terminal: "original", RuntimeID: "runtime", Incarnation: "incarnation"}
+	snapshot := executionapi.LifecycleSnapshot{Ref: executionapi.ExecutionRef{External: resource}, Session: executionapi.SessionContext{ExecutionID: "execution"}}
+	input, err := json.Marshal(executionapi.CleanupInput{Resources: []executionapi.ProcessIdentity{resource}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	operation := executionapi.Operation{Action: string(executionapi.LifecycleCleanup), Status: executionapi.OperationUnknown, Request: input, Ref: &snapshot.Ref, LifecycleIdentity: &executionapi.LifecycleOperationIdentity{ExecutionID: "execution"}}
+	snapshot.Operations = []executionapi.Operation{operation}
+	if cleanupConfirmed(snapshot, resource) {
+		t.Fatal("unknown cleanup advanced progress")
+	}
+	snapshot.Operations[0].Status = executionapi.OperationConfirmed
+	if !cleanupConfirmed(snapshot, resource) {
+		t.Fatal("committed cleanup did not advance its original resource")
+	}
+	replacement := resource
+	replacement.Incarnation = "replacement"
+	if cleanupConfirmed(snapshot, replacement) {
+		t.Fatal("original receipt closed a replacement resource")
+	}
+}
 
 func TestNativeLifecyclePlansCommittedResourcesAndSeparateInput(t *testing.T) {
 	project, workflow, execution, attempt := stableIDValue(1), stableIDValue(2), stableIDValue(3), stableIDValue(4)

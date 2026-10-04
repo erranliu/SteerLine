@@ -805,7 +805,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 				}
 			}
 		case message := <-s.workerMessages:
-			if err := s.handleWorkerMessage(message); err != nil {
+			if err := s.handleWorkerMessage(message); err != nil && !errors.Is(err, ErrWorkerTurnStale) {
 				return err
 			}
 		case <-decisionTick.C:

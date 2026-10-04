@@ -1,0 +1,344 @@
+{
+  "base": "5aafff4",
+  "runs": [
+    {
+      "evidence": "bin/simplified-product-flow/rebased-quick/summary.json",
+      "report_sha256": "5e1f666156a66d818cd006a9eddd4bac2a0d6e124274d13b2fe5a627ebb329f9",
+      "command": null,
+      "source_commit": "a70594d4936feeb46ebb6c0830fb0594b5bf1c67",
+      "passed": true,
+      "complete": true,
+      "package_count": 15,
+      "test_count": 215,
+      "cleanup_complete": null,
+      "errors": [],
+      "selected_scenarios": null,
+      "build_sha256": null
+    },
+    {
+      "evidence": "bin/simplified-product-flow/focused-final/summary.json",
+      "report_sha256": "4675d817223b2eeb9edecdf7b659090909d0972e3942747a15c9944fe7043f8f",
+      "command": [
+        "go",
+        "test",
+        "./internal/steerline",
+        "./internal/steerline/console",
+        "./internal/steerlineclient",
+        "./internal/steerlineapp",
+        "-run",
+        "^TestSimplified|^TestAppServerLateReply|^TestPublicationOriginal",
+        "-count=1",
+        "-json"
+      ],
+      "source_commit": "7eb02bbae540c9f8e406eb80870b45be0601a9db",
+      "passed": true,
+      "complete": true,
+      "package_count": 4,
+      "test_count": 10,
+      "cleanup_complete": null,
+      "errors": [],
+      "selected_scenarios": null,
+      "build_sha256": null
+    },
+    {
+      "evidence": "bin/simplified-product-flow/environment-final/summary.json",
+      "report_sha256": "87a4c63cc306bf3e508a2562c6974e69c28506e0757db9ced4e7c7770938cf28",
+      "command": [
+        "go",
+        "test",
+        "./internal/steerline",
+        "-run",
+        "^TestSimplifiedEnvironment|^TestEnvironmentRecheck",
+        "-count=1",
+        "-json"
+      ],
+      "source_commit": "7eb02bbae540c9f8e406eb80870b45be0601a9db",
+      "passed": true,
+      "complete": true,
+      "package_count": 1,
+      "test_count": 4,
+      "cleanup_complete": null,
+      "errors": [],
+      "selected_scenarios": null,
+      "build_sha256": null
+    },
+    {
+      "evidence": "bin/simplified-product-flow/rebased-profile-final/summary.json",
+      "report_sha256": "91661728b186208b0fa377f6ea9462f416069703b2e4896da912c949addbe49d",
+      "command": [
+        "go",
+        "test",
+        "./internal/steerlineapp",
+        "-run",
+        "^TestSimplified|^TestProfileSelectionDigestMatchesServicePreflight$|^TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets$",
+        "-count=1",
+        "-json"
+      ],
+      "source_commit": "a70594d4936feeb46ebb6c0830fb0594b5bf1c67",
+      "passed": true,
+      "complete": true,
+      "package_count": 1,
+      "test_count": 3,
+      "cleanup_complete": null,
+      "errors": [],
+      "selected_scenarios": null,
+      "build_sha256": null
+    },
+    {
+      "evidence": "bin/simplified-product-flow/late-receipt-final/summary.json",
+      "report_sha256": "ef9eae40dec93d80842f200aed21a6e9d97acd43952dfcafe7fad33c21e7f7de",
+      "command": [
+        "go",
+        "test",
+        "./internal/steerline",
+        "-run",
+        "^TestSimplifiedLifecycle|^TestAppServerLateReply",
+        "-count=1",
+        "-json"
+      ],
+      "source_commit": "a70594d4936feeb46ebb6c0830fb0594b5bf1c67",
+      "passed": true,
+      "complete": true,
+      "package_count": 1,
+      "test_count": 4,
+      "cleanup_complete": null,
+      "errors": [],
+      "selected_scenarios": null,
+      "build_sha256": null
+    },
+    {
+      "evidence": "bin/simplified-product-flow/frozen-cleanup-unit-final/summary.json",
+      "report_sha256": "dc965d0f526ac7698a52febefb73cc5212f44162f335a9caa937d08f7b7da878",
+      "command": [
+        "go",
+        "test",
+        "./internal/steerline",
+        "-run",
+        "^TestSimplifiedCleanup",
+        "-count=1",
+        "-json"
+      ],
+      "source_commit": "a70594d4936feeb46ebb6c0830fb0594b5bf1c67",
+      "passed": true,
+      "complete": true,
+      "package_count": 1,
+      "test_count": 1,
+      "cleanup_complete": null,
+      "errors": [],
+      "selected_scenarios": null,
+      "build_sha256": null
+    },
+    {
+      "evidence": "bin/simplified-product-flow/cleanup-progress-final/summary.json",
+      "report_sha256": "9c0171862ce8c0533d04f8bf8ec5c83e3e7d47a853d2e09245e94d9d66904db3",
+      "command": [
+        "go",
+        "test",
+        "./internal/steerline/orcaworker",
+        "-run",
+        "^TestCleanupProgressRequiresConfirmedOriginalResource$",
+        "-count=1",
+        "-json"
+      ],
+      "source_commit": "a70594d4936feeb46ebb6c0830fb0594b5bf1c67",
+      "passed": true,
+      "complete": true,
+      "package_count": 1,
+      "test_count": 1,
+      "cleanup_complete": null,
+      "errors": [],
+      "selected_scenarios": null,
+      "build_sha256": null
+    },
+    {
+      "evidence": "bin/simplified-product-flow/boundary-final/summary.json",
+      "report_sha256": "f5b41e0f64a2ff692abe8ca65a975d4b06f663944523ae0102667564a31f8ae2",
+      "command": [
+        "go",
+        "test",
+        "./internal/steerlineintegration",
+        "-run",
+        "^TestCD67CoreBoundary$",
+        "-count=1",
+        "-json"
+      ],
+      "source_commit": "a70594d4936feeb46ebb6c0830fb0594b5bf1c67",
+      "passed": true,
+      "complete": true,
+      "package_count": 1,
+      "test_count": 26,
+      "cleanup_complete": null,
+      "errors": [],
+      "selected_scenarios": null,
+      "build_sha256": null
+    },
+    {
+      "evidence": "bin/simplified-product-flow/rebased-build-final/summary.json",
+      "report_sha256": "b935210bdef1a7262f7be1479d59e34104ac5f340977b23709e3c1f93fb3b3cb",
+      "command": [
+        "go",
+        "test",
+        "./...",
+        "-run=^$",
+        "-count=1",
+        "-timeout",
+        "20m",
+        "-json"
+      ],
+      "source_commit": "a70594d4936feeb46ebb6c0830fb0594b5bf1c67",
+      "passed": true,
+      "complete": true,
+      "package_count": 40,
+      "test_count": 0,
+      "cleanup_complete": null,
+      "errors": [],
+      "selected_scenarios": null,
+      "build_sha256": null
+    },
+    {
+      "evidence": "bin/simplified-product-flow/rebased-controlled/summary.json",
+      "report_sha256": "11ca8d08588ac613bcffb0737728ecdb46e3e3d891e8757d67c8ec2a5e86cbd9",
+      "command": null,
+      "source_commit": "a70594d4936feeb46ebb6c0830fb0594b5bf1c67",
+      "passed": true,
+      "complete": true,
+      "package_count": 2,
+      "test_count": 2,
+      "cleanup_complete": true,
+      "errors": null,
+      "selected_scenarios": [
+        {
+          "id": "delivery.basic",
+          "level": "L3",
+          "suite": "delivery",
+          "package": "./tests/e2e/suites/delivery",
+          "test": "TestBasicDelivery",
+          "env": "controlled"
+        },
+        {
+          "id": "recovery.waiting-merge-restart",
+          "level": "L3",
+          "suite": "recovery",
+          "package": "./tests/e2e/suites/recovery",
+          "test": "TestWaitingMergeRestart",
+          "env": "controlled"
+        }
+      ],
+      "build_sha256": {
+        "C:\\Users\\lmas1\\.codex\\worktrees\\340a\\SteerLine\\bin\\simplified-product-flow\\rebased-controlled\\build\\controlled-helper.exe": "162602e731e1133885b0f8a585f8ca8f7f14c30620b7dd5517b48b0fc2590ece",
+        "C:\\Users\\lmas1\\.codex\\worktrees\\340a\\SteerLine\\bin\\simplified-product-flow\\rebased-controlled\\build\\steerline.exe": "a074d463422d06780d8146e2aaf021e8865eac32440aef37264af6ada804ad59"
+      }
+    },
+    {
+      "evidence": "bin/simplified-product-flow/rebased-live-local/summary.json",
+      "report_sha256": "4164bb63d10c59d57832c17feec08d5a4209194bb0eccaaafd273042746f5fc1",
+      "command": null,
+      "source_commit": "a70594d4936feeb46ebb6c0830fb0594b5bf1c67",
+      "passed": true,
+      "complete": true,
+      "package_count": 1,
+      "test_count": 1,
+      "cleanup_complete": true,
+      "errors": null,
+      "selected_scenarios": [
+        {
+          "id": "delivery.local-codex",
+          "level": "L3",
+          "suite": "delivery",
+          "package": "./tests/e2e/live",
+          "test": "TestDeliveryLocalCodex",
+          "env": "live",
+          "chain": "local-codex"
+        }
+      ],
+      "build_sha256": {
+        "C:\\Users\\lmas1\\.codex\\worktrees\\340a\\SteerLine\\bin\\simplified-product-flow\\rebased-live-local\\build\\controlled-helper.exe": "162602e731e1133885b0f8a585f8ca8f7f14c30620b7dd5517b48b0fc2590ece",
+        "C:\\Users\\lmas1\\.codex\\worktrees\\340a\\SteerLine\\bin\\simplified-product-flow\\rebased-live-local\\build\\steerline.exe": "a074d463422d06780d8146e2aaf021e8865eac32440aef37264af6ada804ad59"
+      }
+    },
+    {
+      "evidence": "bin/simplified-product-flow/frozen-cleanup-live-terminal/summary.json",
+      "report_sha256": "8bc946ba3d8d69695fa08f29279e0f3e6a574c9ffcd1c2bba48a4cd5f0978e39",
+      "command": null,
+      "source_commit": "a70594d4936feeb46ebb6c0830fb0594b5bf1c67",
+      "passed": true,
+      "complete": true,
+      "package_count": 1,
+      "test_count": 1,
+      "cleanup_complete": true,
+      "errors": null,
+      "selected_scenarios": [
+        {
+          "id": "delivery.orca-codex",
+          "level": "L3",
+          "suite": "delivery",
+          "package": "./tests/e2e/live",
+          "test": "TestDeliveryOrcaCodex",
+          "env": "live",
+          "chain": "orca-codex"
+        }
+      ],
+      "build_sha256": {
+        "C:\\Users\\lmas1\\.codex\\worktrees\\340a\\SteerLine\\bin\\simplified-product-flow\\frozen-cleanup-live-terminal\\build\\controlled-helper.exe": "3de0aa6e5c87d45da0397e768779dfc084b40f995a1c78026addc896d2188c76",
+        "C:\\Users\\lmas1\\.codex\\worktrees\\340a\\SteerLine\\bin\\simplified-product-flow\\frozen-cleanup-live-terminal\\build\\steerline.exe": "a62afc333c242c71713e87cc5617e6e328badadbb923cca22fb7b2b418f764e8"
+      }
+    },
+    {
+      "evidence": "bin/simplified-product-flow/stop-binding-final/summary.json",
+      "report_sha256": "8295fb64bf7af02dc3eaf3e1025d64410b8fa087c2759930a11532030c67fbc7",
+      "command": [
+        "go",
+        "test",
+        "./internal/steerline",
+        "-run",
+        "^TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding$|^TestLifecycleReviewStop|^TestNativeDiscard",
+        "-count=1",
+        "-json"
+      ],
+      "source_commit": "a70594d4936feeb46ebb6c0830fb0594b5bf1c67",
+      "passed": true,
+      "complete": true,
+      "package_count": 1,
+      "test_count": 4
+    }
+  ],
+  "native_usage": [
+    {
+      "evidence": "bin/simplified-product-flow/rebased-live-local/scenarios/delivery.local-codex/live-final-usage.json",
+      "model": "gpt-6-luna",
+      "reasoning_effort": "medium",
+      "source": "app-server/thread/tokenUsage/updated",
+      "tokens": {
+        "input_tokens": 78491,
+        "cached_input_tokens": 61184,
+        "output_tokens": 640,
+        "reasoning_output_tokens": 205,
+        "total_tokens": 79131
+      }
+    },
+    {
+      "evidence": "bin/simplified-product-flow/frozen-cleanup-live-terminal/scenarios/delivery.orca-codex/live-final-usage.json",
+      "model": "gpt-6-luna",
+      "reasoning_effort": "medium",
+      "source": "codex/session-jsonl",
+      "tokens": {
+        "input_tokens": 202800,
+        "cached_input_tokens": 160256,
+        "output_tokens": 2137,
+        "reasoning_output_tokens": 424,
+        "total_tokens": 204937
+      }
+    }
+  ],
+  "builds": [
+    {
+      "target": "steerline-windows.exe",
+      "sha256": "a62afc333c242c71713e87cc5617e6e328badadbb923cca22fb7b2b418f764e8"
+    },
+    {
+      "target": "steerline-linux",
+      "sha256": "3a5dc9d50f9a2269a2dd4bbec855ae846b03efbe83acafd0355fdfdaa7eeac5a"
+    }
+  ],
+  "full_tests_selected": false
+}

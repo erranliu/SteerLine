@@ -16,6 +16,43 @@ type simplifiedSlowPort struct {
 	calls            atomic.Int32
 }
 
+type simplifiedCleanupPort struct{ executionapi.LifecyclePort }
+
+func (p simplifiedCleanupPort) Execute(_ context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+	target := request.Snapshot.Ref.Target
+	target.CoordinatorTerminal = "cleanup-private-progress"
+	return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationConfirmed, Target: &target}, nil, nil
+}
+
+func TestSimplifiedCleanupRetainsFrozenDeliveryEvidence(t *testing.T) {
+	s, run := neutralAuditService(t)
+	lifecycle, fixed, err := s.lifecycleForRun(run)
+	require(t, err)
+	original := fixed.execution.Target
+	// A discarded task exercises the same settled evidence guard as delivery.
+	task := nativeTaskRecord(s.domain.Tasks, run.TaskID)
+	_, err = (CommandService{Store: s.commandStore, Project: s.Config.Identity()}).DiscardNativeTask(context.Background(), s.Config, run.TaskID, newID(), task.Version, "fixture settlement", "operator")
+	require(t, err)
+	require(t, s.refreshNativeSnapshot(context.Background()))
+	run.TaskStatus = "discarded"
+	candidate := executionapi.LifecycleCandidate{Action: executionapi.LifecycleCleanup, Input: executionapi.LifecycleInput{Cleanup: &executionapi.CleanupInput{Resources: []executionapi.ProcessIdentity{{Kind: "fixture", Terminal: "original"}}}}}
+	require(t, s.executeLifecycleStep(context.Background(), run, simplifiedCleanupPort{lifecycle}, candidate))
+	stored, err := s.domainStore.Query(context.Background(), s.Config.Identity())
+	require(t, err)
+	if stored.Executions[0].Target != original {
+		t.Fatal("cleanup receipt rewrote delivered execution evidence")
+	}
+	confirmed := false
+	for _, operation := range stored.Operations {
+		if operation.Kind == string(executionapi.LifecycleCleanup) && operation.Status == "confirmed" {
+			confirmed = true
+		}
+	}
+	if !confirmed {
+		t.Fatal("original cleanup receipt was not committed")
+	}
+}
+
 func (p *simplifiedSlowPort) Execute(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
 	p.calls.Add(1)
 	close(p.entered)

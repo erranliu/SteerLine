@@ -172,10 +172,10 @@ func (l *ExecutionLifecycle) Next(ctx context.Context, snapshot executionapi.Lif
 				return executionapi.LifecycleCandidate{Done: true}, nil
 			}
 		}
-		if snapshot.Ref.External.Terminal != "" && !state.AgentClosed {
+		if snapshot.Ref.External.Terminal != "" && !cleanupConfirmed(snapshot, snapshot.Ref.External) {
 			return nativeCleanupCandidate(snapshot.Ref.External), nil
 		}
-		if state.Coordinator.Terminal != "" && !state.CoordinatorClosed {
+		if state.Coordinator.Terminal != "" && !cleanupConfirmed(snapshot, state.Coordinator) {
 			return nativeCleanupCandidate(state.Coordinator), nil
 		}
 		return executionapi.LifecycleCandidate{Done: true}, nil
@@ -267,6 +267,21 @@ func nativeResourceCandidate(purpose, name, objective, turnID string) executiona
 func nativeCleanupCandidate(identity executionapi.ProcessIdentity) executionapi.LifecycleCandidate {
 	return executionapi.LifecycleCandidate{Action: executionapi.LifecycleCleanup,
 		Input: executionapi.LifecycleInput{Cleanup: &executionapi.CleanupInput{Resources: []executionapi.ProcessIdentity{identity}}}}
+}
+
+// Delivery evidence stays frozen. Cleanup progress comes from the actor's
+// committed original operation receipts, not a rewrite of native turn state.
+func cleanupConfirmed(snapshot executionapi.LifecycleSnapshot, identity executionapi.ProcessIdentity) bool {
+	for _, operation := range snapshot.Operations {
+		if operation.Action != string(executionapi.LifecycleCleanup) || operation.Status != executionapi.OperationConfirmed || operation.Ref == nil || *operation.Ref != snapshot.Ref || operation.LifecycleIdentity == nil || operation.LifecycleIdentity.ExecutionID != snapshot.Session.ExecutionID {
+			continue
+		}
+		candidate, err := executionapi.CandidateForOperation(operation)
+		if err == nil && candidate.Input.Cleanup != nil && len(candidate.Input.Cleanup.Resources) == 1 && candidate.Input.Cleanup.Resources[0] == identity {
+			return true
+		}
+	}
+	return false
 }
 
 func (l *ExecutionLifecycle) Execute(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {

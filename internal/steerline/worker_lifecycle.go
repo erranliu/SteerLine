@@ -1087,7 +1087,15 @@ func (s *Service) applyLifecycleStepReceipt(run *Run, request executionapi.Lifec
 		return err
 	}
 	previousProcess := fixed.execution.Process
-	if err := mergeLifecycleExecutionReceipt(fixed.execution, receipt); err != nil {
+	executionForReceipt := fixed.execution
+	if candidate.Action == executionapi.LifecycleCleanup && (run.TaskStatus == "closed" || run.TaskStatus == "discarded") {
+		var frozen ExecutionRecord
+		if err := json.Unmarshal(mustJSON(fixed.execution), &frozen); err != nil {
+			return err
+		}
+		executionForReceipt = &frozen // Validate resource facts, retain delivered evidence.
+	}
+	if err := mergeLifecycleExecutionReceipt(executionForReceipt, receipt); err != nil {
 		return errors.Join(s.waitWorkerFlow(run, "lifecycle receipt changed the fixed resource identity: "+err.Error()), err)
 	}
 	if receipt.Process != nil && fixed.execution.PolicyResources == nil && lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots {
