@@ -24,6 +24,23 @@
 | 52 | 文档审阅与确认原生界面 | `#44`、`#48` | [Spec](phase2-review-ui.spec.md) | [Plan](phase2-review-ui.plan.md) |
 | 53 | 第二阶段完整闭环验收 | `#49`、`#50`、`#51`、`#52`、`#42` | [Spec](phase2-integration.spec.md) | [Plan](phase2-integration.plan.md) |
 
+## 任务执行控制台解耦与目录整理
+
+目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。每项一份独立 Spec/Plan 和实现 PR；共同边界见 [三线解耦共同实现约束](three-line-constraints.spec.md)。#73 可与 #38 并行；#77 等 #38；#39 按固定构建与实际影响定向复核，不增加重构总前置。
+
+| 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
+| --- | --- | --- | --- | --- |
+| 73 | 纯类型与契约归属整理 | `#37` | [Spec](three-line-01-types.spec.md) | [Plan](three-line-01-types.plan.md) |
+| 74 | 任务选择与执行结果边界 | `#73` | [Spec](three-line-02-task-execution-boundary.spec.md) | [Plan](three-line-02-task-execution-boundary.plan.md) |
+| 75 | 任务应用用例归包 | `#74` | [Spec](three-line-03-task-usecases.spec.md) | [Plan](three-line-03-task-usecases.plan.md) |
+| 76 | 执行应用用例归包 | `#74` | [Spec](three-line-04-execution-usecases.spec.md) | [Plan](three-line-04-execution-usecases.plan.md) |
+| 77 | 产品查询与控制台契约收窄 | `#74`、`#38` | [Spec](three-line-05-product-console.spec.md) | [Plan](three-line-05-product-console.plan.md) |
+| 78 | 执行适配与资源目录归组 | `#76` | [Spec](three-line-06-adapters-resources.spec.md) | [Plan](three-line-06-adapters-resources.plan.md) |
+| 79 | 存储目录与消费者端口收口 | `#75`、`#76`、`#77` | [Spec](three-line-07-storage-ports.spec.md) | [Plan](three-line-07-storage-ports.plan.md) |
+| 80 | 应用组装与服务宿主收口 | `#75`、`#76`、`#77`、`#78`、`#79` | [Spec](three-line-08-app-host.spec.md) | [Plan](three-line-08-app-host.plan.md) |
+| 81 | 测试支持与集成目录整理 | `#80` | [Spec](three-line-09-testkit-integration.spec.md) | [Plan](three-line-09-testkit-integration.plan.md) |
+| 82 | 独立开发证明与最终清理 | `#81` | [Spec](three-line-10-independence-cleanup.spec.md) | [Plan](three-line-10-independence-cleanup.plan.md) |
+
 ## 本机 Orca 接入补充
 
 [本机 Orca 原生编排 Spec](worker-flow-orca-native.spec.md) / [Plan](worker-flow-orca-native.plan.md) 承接 #36 延期的本机 Orca 接入。状态：待实施，尚未分配 Task ID；Spec 内记录 2026-09-29 的平台实验、低层 Dispatch 选型及中心验收边界。当前功能支持状态以已交付实现为准。

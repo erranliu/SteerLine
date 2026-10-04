@@ -10,6 +10,12 @@
 4. `internal/steerlineintegration/candidate_console_test.go`：真实应用构造、客户端、服务、SQLite/Git 和受控 app-server 接线；精确 UI 新增、原请求重读、五个参与/第六次开始拒绝、原会话反馈、不可撤销放弃。复用现有 neutral provider fixture 验证真实合并事实及服务拒绝放弃，无生产服务/任务库、无真实模型请求。
 5. 原生 CC5 的工具诊断记录在 `windows/`；用户追加授权后，实际 UI 工具仍拒绝终端启动（`product policy blocks this app`），没有原生通过证据。新增 opt-in 的同一接线 fixture 保持能力 `STEERLINE_CC5_MANIFEST`：写明隔离 home/config/CLI/service 实例和三项受控 Git/history 环境绑定后等待人工操作和 `.stop` 文件；该准备模式本身不证明 CC5。手工模式超时 15 分钟，关闭时清理本次临时服务和 worker；没有新增真实后端矩阵。
 
+## 并行与路径交接
+
+与 #73 并行时只推进本任务候选交互；共同类型/import/app 构造段由 #73 顺序集成，随后更新本任务产品 fixture。#74 如变更资格/结果边界，按精确目标、版本和原回执检查受影响接线。本任务先完成再由 #77 迁完整产品/console；交接实际文件与 CC1–CC5 测试/证据映射，不留下两个 TUI 或宽快照兼容路径。
+
+每次执行固定本任务构建与隔离配置，不在另一验收现场中替换可执行文件。下表使用当前目录；#73 纯类型迁移时只改实际依赖/命令，#77 迁 consumer 后同次改成 `internal/console` 等唯一实际路径。
+
 ## 测试计划
 
 所有 runner 产物使用新的空目录；非零命中、无 fail/skip 才计通过。早期失败记录留作诊断，不作为通过证据。最后实际结果见[验收记录](../validation/candidate-console/README.md)。
