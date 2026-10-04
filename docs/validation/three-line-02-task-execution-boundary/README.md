@@ -26,7 +26,7 @@ Windows / Go 1.26.4，临时 Git/SQLite/受控后端/provider。命令由独立 
 | `recovery/run-01`（L3 controlled；唯一既有 waiting-merge-restart） | 通过 | 场景非零命中；原执行不重派，恢复后交付/清理通过 | [报告](recovery/run-01/summary.json) |
 | Windows/Linux `go build ./...` | 通过 | 仅生产构建，不冒充 Linux 行为 | [Windows](build/windows.log)、[Linux](build/linux.log) |
 
-因为改到 app 重启注入、新提交持久关联及 schema，按 Plan 只追加既有 controlled `recovery.waiting-merge-restart`。没有运行 Full、L2、整组 L3/live 或远端流程；不以本机结果声明远端认证。PR212 的一期本机范围文档将顺序集成，保持用户暂停范围。
+因为改到 app 重启注入、新提交持久关联及 schema，按 Plan 只追加既有 controlled `recovery.waiting-merge-restart`。没有运行 Full、L2、整组 L3/live 或远端流程；不以本机结果声明远端认证。已顺序集成 origin/main `80469d8a7f861d3cdddc0a2debef2b7e27e94b2e`（PR212）的一期本机范围文档；唯一冲突为架构页顶端说明，保留 main 的本机范围与 #74 实际架构说明。该主干集成没有 Go 源码变化，原测试/构建证据保持有效，用户暂停范围保持。
 
 ## 自查修复与历史报告
 
@@ -39,3 +39,5 @@ Windows / Go 1.26.4，临时 Git/SQLite/受控后端/provider。命令由独立 
 - 自查完整实际 diff，恢复与本任务无关的格式改动；旧断言不以镜像实现、零命中、skip 或 mock 能力代替。生产/测试源码指纹见 [source-index.json](source-index.json)。
 
 当前没有已确认但未解决的 #74 实现问题。当前 PR 未合并；完成后执行聊天停止写入，等待协调聊天独立复审、修复与真实合并。#75/#76 只能在其硬前置合并后消费本次接口；本聊天没有启动、接管或催促任何其它任务，#77/#79/#80/#81/#82 保持用户暂停。
+
+controlled 构建的两个可执行文件仅用于本轮验证，仓库保留 [SHA-256/字节数清单](recovery/run-01/build/binary-manifest.json) 与原 summary 构建哈希；不提交编译二进制。

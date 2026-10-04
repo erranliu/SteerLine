@@ -1,5 +1,7 @@
 # 测试总入口
 
+第一阶段的真实执行/验收仅包含本地 Codex 与本机 Orca；`orca-codex` 场景指本机 Orca。存量远端 opt-in 探针只作单独的历史/实验工具，不在一期必需门槛中；静态构建、协议拒绝和依赖守卫可以继续覆盖现有远端代码，不声明远端可运行。
+
 从仓库根目录运行以下命令。日常按改动选择最小必要范围；需要完整基线时选择 Full，涉及原生交付或恢复时选择对应 L2/L3。各入口分别执行，不会因为跑了 L1 或 Full 就自动跑真实模型。
 
 ## 选择范围
@@ -101,7 +103,7 @@ go test -tags=e2e ./tests/e2e/... -run '^$' -count=1
 | 检查 | 前置与范围 | 测试来源 |
 | --- | --- | --- |
 | 本地 Orca host wait | `STEERLINE_ORCA_HOST_WAIT_PROBE` 指向包含原 workspace/terminal/runtime/incarnation 的隔离现场 JSON；检查原终端等待事实 | [TestOrcaNativeHostWait](../internal/steerline/orcaworker/host_wait_live_cd67_test.go) |
-| Orca 远端 P10 reply gate | 显式 `STEERLINE_REAL_P10_REPLY_PROBE=1` 及源码列出的原 Run/Task/Dispatch/question 等字段；会对真实原问题发送回复 | [TestSupervisedOrcaRealP10ReplyGate](../internal/steerline/orca_remote_worker/p10_live_cd67_test.go) |
+| 历史/实验：Orca 远端 P10 reply gate（非一期） | 显式 `STEERLINE_REAL_P10_REPLY_PROBE=1` 及源码列出的原 Run/Task/Dispatch/question 等字段；会对真实原问题发送回复 | [TestSupervisedOrcaRealP10ReplyGate](../internal/steerline/orca_remote_worker/p10_live_cd67_test.go) |
 | 原运行恢复预览 | `STEERLINE_REAL_RECOVERY_CONFIG` / `STEERLINE_REAL_RECOVERY_RUN_ID`；读取隔离原现场 | [TestRealIsolatedRecoveryPreview](../internal/steerline/recovery_real_probe_test.go) |
 | Windows 服务窗口 / Ctrl+C helper | 只由绑定原进程、启动回执和报告路径的专门探针调用 | [Windows 平台测试](../internal/steerline/platform_windows_test.go) |
 | elevated sandbox 凭据检查与设置 | 为显式需要 elevated 的开发场景使用；无 token 的检查和可能触发 UAC 的初始化是两步 | [E2E 指南的 sandbox 工具](../tests/e2e/README.md#真实环境)、[设置脚本](../scripts/setup-e2e-sandbox.ps1) |

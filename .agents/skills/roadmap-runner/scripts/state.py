@@ -70,8 +70,20 @@ def merge_ready(task):
     require(review.get("comment_url"), "PR review record missing")
     require(isinstance(review.get("findings"), list) and review.get("scope"),
             "review scope/findings missing (use [] for no findings)")
-    require(verification.get("status") in {"passed", "accepted_exception"}
+    require(verification.get("status") in {
+                "passed", "passed_with_manual_pending", "accepted_exception"}
             and verification.get("commands"), "required validation not satisfied")
+    if verification["status"] == "passed_with_manual_pending":
+        require(verification.get("non_manual_status") == "passed",
+                "non-manual validation must pass before deferring manual checks")
+        pending = verification.get("manual_pending")
+        require(isinstance(pending, list) and pending,
+                "registered manual checks required")
+        for item in pending:
+            require(isinstance(item, dict) and all(
+                isinstance(item.get(key), str) and item[key].strip()
+                for key in ("check_id", "reason", "roadmap_path")),
+                "manual check identity, reason and roadmap location required")
     if verification["status"] == "accepted_exception":
         require(verification.get("authorization_source"), "exception authorization missing")
     require(gate.get("required_checks") in {"passed", "none"}

@@ -1,5 +1,7 @@
 # Spec 与 Plan 索引
 
+当前第一阶段只交付/验收本地 Codex 和本机 Orca；远端运行、准入及混合流程后续另行规划，不作为一期门槛。历史任务身份、规格索引和证据保留原记录；当前活动任务以已同步的本机范围为准。
+
 当前活动规划按下表执行，每项一份 Spec/Plan 和一个实现 PR。规格/计划不反向依赖 roadmap。新流程由 #36 固定，旧五步、项目验证和应用证明不作为新任务门槛。
 
 ## 当前执行规格
@@ -7,7 +9,7 @@
 | 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |
 | 36 | 单 worker 持续执行与统一待决策 | 无 | [Spec](worker-flow.spec.md) | [Plan](worker-flow.plan.md) |
-| 39 | 多候选本机与远端真机验收 | `#38` | [Spec](candidate-native-acceptance.spec.md) | [Plan](candidate-native-acceptance.plan.md) |
+| 39 | 多候选本机验收 | `#38` | [Spec](candidate-native-acceptance.spec.md) | [Plan](candidate-native-acceptance.plan.md) |
 | 40 | 固定版本与双入口 | 无 | [Spec](versioned-runtime.spec.md) | [Plan](versioned-runtime.plan.md) |
 | 41 | dev 隔离与 stable 提升 | `#40`、`#36` | [Spec](runtime-isolation-promotion.spec.md) | [Plan](runtime-isolation-promotion.plan.md) |
 | 42 | 第一阶段集成验收 | `#39`、`#41` | [Spec](phase1-release-acceptance.spec.md) | [Plan](phase1-release-acceptance.plan.md) |

@@ -8972,5 +8972,7 @@
         "pass": 23
       }
     }
-  }
+  },
+  "integrated_main": "80469d8a7f861d3cdddc0a2debef2b7e27e94b2e",
+  "main_integration": "PR212 docs/skill-only; no Go source changes; one architecture introduction conflict retains both meanings"
 }

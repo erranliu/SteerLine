@@ -156,6 +156,77 @@ class JournalTests(unittest.TestCase):
         with self.assertRaises(journal.StateError):
             journal.validate(fixture)
 
+    def manual_validation(self):
+        verification = copy.deepcopy(self.load()["tasks"][0]["validation"])
+        verification.update(status="passed_with_manual_pending", non_manual_status="passed",
+                            manual_pending=[{"check_id": "manual-input",
+                                             "reason": "awaits human IME interaction",
+                                             "roadmap_path": self.config["roadmap"]}])
+        return verification
+
+    def test_registered_manual_pending_allows_merge_and_next_task(self):
+        self.ready()
+        verification = self.manual_validation()
+        self.patch("A", {"validation": verification})
+        self.reserve("A:merge", "merge_pr", request={"expected_head": "a" * 40})
+        self.merged()
+        self.transact(lambda state: journal.settle(state, "A:merge", "confirmed",
+                                                  {"merged": True}))
+        self.reserve("B:create", task_id="B")
+        saved = self.load()
+        self.assertEqual(saved["tasks"][0]["validation"]["manual_pending"],
+                         verification["manual_pending"])
+        self.assertEqual(saved["tasks"][1]["phase"], "creating")
+        self.ready("B")
+        self.transact(lambda state: journal.settle(state, "B:create", "confirmed",
+                                                  {"thread_id": "worker-B"}))
+        self.merged("B")
+        self.transact(lambda state: journal.apply_patch(state, {"run": {"phase": "complete"}}))
+        self.assertEqual(self.load()["phase"], "complete")
+        self.assertEqual(self.load()["tasks"][0]["validation"]["manual_pending"],
+                         verification["manual_pending"])
+
+    def test_manual_pending_requires_passed_non_manual_checks_and_registration(self):
+        reviewed = self.ready()
+        valid = self.manual_validation()
+        invalid = []
+        for status in (None, "failed", "not_run", "unsupported"):
+            invalid.append(dict(valid, non_manual_status=status))
+        for pending in (None, [], "manual", [None]):
+            invalid.append(dict(valid, manual_pending=pending))
+        for field in ("check_id", "reason", "roadmap_path"):
+            item = dict(valid["manual_pending"][0])
+            item[field] = " "
+            invalid.append(dict(valid, manual_pending=[item]))
+        for verification in invalid:
+            with self.subTest(verification=verification):
+                fixture = copy.deepcopy(reviewed)
+                fixture["tasks"][0]["validation"] = verification
+                with self.assertRaises(journal.StateError):
+                    journal.validate(fixture)
+
+    def test_manual_pending_keeps_review_checks_and_invalidation_gates(self):
+        self.ready()
+        reviewed = self.patch("A", {"validation": self.manual_validation()})
+        for section, field, value in (("review", "comment_url", None),
+                                      ("validation", "head", "wrong"),
+                                      ("merge_gate", "required_checks", "UNKNOWN"),
+                                      ("merge_gate", "mergeable", False)):
+            with self.subTest(section=section, field=field):
+                fixture = copy.deepcopy(reviewed)
+                fixture["tasks"][0][section][field] = value
+                with self.assertRaises(journal.StateError):
+                    journal.validate(fixture)
+        fixture = copy.deepcopy(reviewed)
+        new_pr = dict(fixture["tasks"][0]["pr"], head="d" * 40)
+        journal.apply_patch(fixture, {"tasks": {"A": {"pr": new_pr}}})
+        journal.validate(fixture)
+        task = fixture["tasks"][0]
+        self.assertEqual(task["phase"], "pr_ready")
+        self.assertNotIn("validation", task)
+        self.assertEqual(task["review_history"][0]["validation"]["manual_pending"],
+                         reviewed["tasks"][0]["validation"]["manual_pending"])
+
     def test_concurrent_wakeups_cannot_both_reserve_creation(self):
         def attempt(index):
             try:

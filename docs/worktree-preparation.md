@@ -1,5 +1,7 @@
 # Native task worktree preparation
 
+Current phase-1 worktree preparation/execution cover local Codex and local Orca. Retained remote target definitions are not a phase-1 execution path or gate; repository Git remote still identifies the code/PR destination.
+
 SteerLine owns task claims, execution identities and delivery in the center SQLite database. A project config must set `task_authority` to `native` and `workflow_protocol` to `worker-flow-v1`. The worker uses the prepared worktree and its bound session to implement the task and respond to feedback.
 
 ## State and worktree identity
@@ -14,7 +16,7 @@ The current `worker-flow-v1` claim fixes project, task contract, workflow, execu
 
 The center associates a PR only after querying its repository, target branch and execution branch. A created PR does not complete the task: the center queries the exact PR, then atomically records delivery, closes the native Task and releases ready successors only after real merge evidence matches.
 
-The active local worker's process identity is reconciled against its persisted attempt. Orca adapters and probes remain in the codebase, but new Orca claims are not enabled. A result file or process exit alone cannot advance delivery.
+The active local worker's process identity is reconciled against its persisted attempt. Local Orca uses its fixed native session and worker identity. Retained remote adapters/probes do not enable new remote claims in phase 1. A result file or process exit alone cannot advance delivery.
 
 ## Failure and recovery
 
