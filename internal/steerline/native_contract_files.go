@@ -3,9 +3,6 @@ package steerline
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
-	"regexp"
 	"strings"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -38,31 +35,11 @@ func VerifyTaskContractFiles(ctx context.Context, c Config, v taskmodel.TaskCont
 		if err != nil {
 			return err
 		}
-		sum := sha256.Sum256(b)
-		if !strings.EqualFold(hex.EncodeToString(sum[:]), ref.SHA256) {
-			return nativeErr("contract_mismatch", "committed file SHA-256 does not match pinned reference: "+ref.Path)
-		}
-		if containsReference(v.AcceptanceRefs, ref) {
-			if !hasAcceptanceHeading(b) {
-				return nativeErr("contract_mismatch", "acceptance reference has no acceptance heading: "+ref.Path)
-			}
+		if err := taskmodel.ValidateDocumentContent(ref, b, taskmodel.IsAcceptanceReference(v.AcceptanceRefs, ref)); err != nil {
+			return err
 		}
 	}
 	return nil
-}
-
-func containsReference(refs []taskmodel.FileReference, target taskmodel.FileReference) bool {
-	for _, ref := range refs {
-		if ref == target {
-			return true
-		}
-	}
-	return false
-}
-
-func hasAcceptanceHeading(b []byte) bool {
-	re := regexp.MustCompile(`(?im)^#{1,6}[ \t]+[^\r\n]*(验收|acceptance)[^\r\n]*$`)
-	return re.Match(b)
 }
 
 func readCommittedRegularFile(ctx context.Context, r Runner, git executionbackend.Command, ref taskmodel.FileReference) ([]byte, error) {

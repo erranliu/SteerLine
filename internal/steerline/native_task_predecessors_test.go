@@ -7,9 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestAddNativeTaskPredecessorsIsAtomicIdempotentAndBlocksClaim(t *testing.T) {
@@ -20,6 +18,23 @@ func TestAddNativeTaskPredecessorsIsAtomicIdempotentAndBlocksClaim(t *testing.T)
 	_, err := commands.CreateTaskBatch(ctx, c, batch, newID(), 1, "planner")
 	require(t, err)
 	input := productapi.TaskPredecessorAddInput{TaskID: "102", PredecessorIDs: []string{"103", "101"}, RequestID: newID(), ExpectedTaskVersion: 1, ExpectedGraphRevision: 1, Reason: "task 102 consumes tasks 101 and 103", RequestedBy: "planner"}
+	// The adapter's audit write must remain inside the task transaction. A
+	// failure there rolls back edges, task/graph versions and the receipt.
+	_, err = store.db.ExecContext(ctx, `CREATE TRIGGER fail_predecessor_audit BEFORE INSERT ON operations BEGIN SELECT RAISE(ABORT,'injected audit failure'); END`)
+	require(t, err)
+	if failed, err := commands.AddNativeTaskPredecessors(ctx, c, input); err == nil || failed.Status != "" {
+		t.Fatalf("audit failure published an addition receipt: %+v / %v", failed, err)
+	}
+	before, err := store.TaskGraphSnapshot(ctx, c.Identity())
+	require(t, err)
+	if before.Authority.GraphRevision != 1 || before.ByID["102"].Version != 1 || len(before.Edges) != 0 {
+		t.Fatalf("audit failure left partial task changes: %+v", before)
+	}
+	if _, found, err := store.LookupCommand(ctx, c.Identity(), input.RequestID); err != nil || found {
+		t.Fatalf("audit failure left a command receipt: found=%v err=%v", found, err)
+	}
+	_, err = store.db.ExecContext(ctx, `DROP TRIGGER fail_predecessor_audit`)
+	require(t, err)
 	receipt, err := commands.AddNativeTaskPredecessors(ctx, c, input)
 	require(t, err)
 	if receipt.GraphRevision != 2 || receipt.TaskVersion != 2 || receipt.Status != "open" {
@@ -61,17 +76,5 @@ func TestAddNativeTaskPredecessorsIsAtomicIdempotentAndBlocksClaim(t *testing.T)
 	require(t, err)
 	if page.GraphRevision != 2 || page.Tasks[0].DependencyReady || page.Tasks[0].Version != 2 {
 		t.Fatalf("reopened database lost new dependency: %+v", page)
-	}
-}
-
-func TestNativePredecessorAdditionRejectsDeliveredAndDiscardedSuccessor(t *testing.T) {
-	graph := taskGraphSnapshot{Authority: executionmodel.ProjectTaskAuthority{ProjectIdentity: "fixture"}, ByID: map[string]taskmodel.TaskRecord{"1": {TaskID: "1", Status: "open"}, "2": {TaskID: "2", Status: "closed"}}, Deliveries: map[string]executionmodel.TaskDeliveryRecord{"2": {TaskID: "2"}}}
-	if err := validateNativePredecessorAddition(graph, "2", []string{"1"}); err == nil || !strings.Contains(err.Error(), "already_merged") {
-		t.Fatalf("delivered successor accepted: %v", err)
-	}
-	graph.ByID["2"] = taskmodel.TaskRecord{TaskID: "2", Status: "discarded"}
-	delete(graph.Deliveries, "2")
-	if err := validateNativePredecessorAddition(graph, "2", []string{"1"}); err == nil || !strings.Contains(err.Error(), "task_discarded") {
-		t.Fatalf("discarded successor accepted: %v", err)
 	}
 }

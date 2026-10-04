@@ -1,0 +1,24 @@
+{"Time":"2026-10-04T20:54:06.8781233+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/task"}
+{"Time":"2026-10-04T20:54:07.2424189+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03TaskBatch"}
+{"Time":"2026-10-04T20:54:07.2424189+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03TaskBatch","Output":"=== RUN   TestTM03TaskBatch\n"}
+{"Time":"2026-10-04T20:54:07.2424189+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03TaskBatch/strict_decode"}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03TaskBatch/strict_decode","Output":"=== RUN   TestTM03TaskBatch/strict_decode\n"}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03TaskBatch/strict_decode","Output":"--- PASS: TestTM03TaskBatch/strict_decode (0.00s)\n"}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03TaskBatch/strict_decode","Elapsed":0}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03TaskBatch/original_receipt_without_documents_or_writes"}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03TaskBatch/original_receipt_without_documents_or_writes","Output":"=== RUN   TestTM03TaskBatch/original_receipt_without_documents_or_writes\n"}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03TaskBatch/original_receipt_without_documents_or_writes","Output":"--- PASS: TestTM03TaskBatch/original_receipt_without_documents_or_writes (0.00s)\n"}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03TaskBatch/original_receipt_without_documents_or_writes","Elapsed":0}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03TaskBatch","Output":"--- PASS: TestTM03TaskBatch (0.00s)\n"}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03TaskBatch","Elapsed":0}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03Dependencies"}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03Dependencies","Output":"=== RUN   TestTM03Dependencies\n"}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03Dependencies","Output":"--- PASS: TestTM03Dependencies (0.00s)\n"}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03Dependencies","Elapsed":0}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03Result"}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03Result","Output":"=== RUN   TestTM03Result\n"}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03Result","Output":"--- PASS: TestTM03Result (0.00s)\n"}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/task","Test":"TestTM03Result","Elapsed":0}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/task","Output":"PASS\n"}
+{"Time":"2026-10-04T20:54:07.2477881+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/task","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/task\t0.370s\n"}
+{"Time":"2026-10-04T20:54:07.2483381+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/task","Elapsed":0.37}

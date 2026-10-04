@@ -24,7 +24,7 @@ func TestTaskStatusAndDeliveryEvidence(t *testing.T) {
 	}
 }
 
-func TestBatchPlanAndTaskClaimKeepFixedValues(t *testing.T) {
+func TestTM03Result(t *testing.T) {
 	at := time.Date(2026, 9, 30, 1, 2, 3, 0, time.UTC)
 	goals := []string{"goal-a"}
 	input := taskmodel.TaskBatchInput{ProjectID: "project", Tasks: []taskmodel.TaskBatchTask{{LocalKey: "first", TaskID: 7, Title: "First", Type: "task", GoalIDs: goals, Contract: taskmodel.TaskContract{ContractID: "contract-7"}}}}

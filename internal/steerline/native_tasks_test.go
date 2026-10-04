@@ -603,19 +603,6 @@ func TestTaskContractPinsCommittedBlobsAndRejectsInvalidReferences(t *testing.T)
 	}
 }
 
-func TestAcceptanceHeadingRecognizesChineseAndEnglish(t *testing.T) {
-	for _, content := range []string{"## 9. 验收\n", "### Acceptance Criteria\n"} {
-		if !hasAcceptanceHeading([]byte(content)) {
-			t.Fatalf("acceptance heading was not recognized: %q", content)
-		}
-	}
-	for _, content := range []string{"验收要求见下文\n", "## 设计\n"} {
-		if hasAcceptanceHeading([]byte(content)) {
-			t.Fatalf("non-acceptance heading was recognized: %q", content)
-		}
-	}
-}
-
 func TestTaskContractRejectsCommittedSymlinkReferences(t *testing.T) {
 	ctx := context.Background()
 	c, _ := nativeTaskFixture(t)
