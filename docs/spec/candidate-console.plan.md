@@ -79,15 +79,15 @@ CC5 仍需上述真实终端/IME/导航/窄窗/滚动证据。此次 Go 回归�
 
 ## Rebase 与人工验收收口（2026-10-04）
 
-用户明确要求 rebase、创建新 PR 并记录人工验收通过。基线更新到 main `39059035152a76a8a0d8f0036eb3fa2f6155ac90`；同步 #73 的 execution/model 和 execution/backend 类型，当前 console 实际路径不变。人工结论只覆盖 #38 CC5/本次交互，不替代 #39 的真机矩阵。
+用户明确要求 rebase、创建新 PR 并记录人工验收通过。基线更新到 main `80469d8a7f861d3cdddc0a2debef2b7e27e94b2e`；同步 #73 的 execution/model 和 execution/backend 类型，当前 console 实际路径不变。人工结论只覆盖 #38 CC5/本次交互，不替代 #39 的真机矩阵。
 
 ### 测试计划
 
 | 级别/场景 | 环境 | 命令 | 时点 | 条件 | 证据 |
 | --- | --- | --- | --- | --- | --- |
-| 定向 console 全部代表与 UX1–UX5、CC1–CC4 | Windows，纯端口 fixture | `go run ./cmd/test-feedback -out docs/validation/candidate-interaction-ux/rebase/console -- ./internal/steerline/console -count=1` | 类型冲突修复后 | 当前消费者编译、编号/输入/回执/守卫非零命中，无 fail/skip | rebase/console/summary.json 与 JSONL |
-| 真实应用接线 TestCandidateConsoleWiring | 隔离 Git/SQLite/受控后端，无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-interaction-ux/rebase/wiring -- ./internal/steerlineintegration -run '^TestCandidateConsoleWiring$' -count=1` | rebase 后 | 新归属合同接线及原候选/反馈/合并守卫保持 | rebase/wiring/summary.json 与 JSONL |
-| L1 | runner 隔离 home | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-interaction-ux/rebase/l1` | 最终内容自查完成后一次 | 7 个当前最小组通过 | rebase/l1/summary.json |
+| 定向 console 全部代表与 UX1–UX5、CC1–CC4 | Windows，纯端口 fixture | `go run ./cmd/test-feedback -out docs/validation/candidate-interaction-ux/final-main/console -- ./internal/steerline/console -count=1` | 类型冲突修复后 | 当前消费者编译、编号/输入/回执/守卫非零命中，无 fail/skip | final-main/console/summary.json 与 JSONL |
+| 真实应用接线 TestCandidateConsoleWiring | 隔离 Git/SQLite/受控后端，无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-interaction-ux/final-main/wiring -- ./internal/steerlineintegration -run '^TestCandidateConsoleWiring$' -count=1` | rebase 后 | 新归属合同接线及原候选/反馈/合并守卫保持 | final-main/wiring/summary.json 与 JSONL |
+| L1 | runner 隔离 home | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-interaction-ux/final-main/l1` | 最终内容自查完成后一次 | 7 个当前最小组通过 | final-main/l1/summary.json |
 | 文档 | 当前工作树 | `python scripts/roadmap_task_id.py check`、`git diff --check` | 提交前 | 任务身份/依赖不变，CC5 最新状态与人工记录一致 | PR 验证说明 |
 
 不选 Full/L2/L3 或其他任务真机矩阵。历史测试产物及延期授权不重写；本次人工状态以用户确认作为独立验收来源。

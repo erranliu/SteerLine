@@ -17,3 +17,9 @@ CC5 现已由用户人工确认通过，见[人工确认记录](manual-acceptanc
 编号计算补充：[trigger-order/summary.json](trigger-order/summary.json) 全部受影响 console 回归通过。新增 UX5 核对完整任务历史的触发顺序、独立窗口一致性、部分可见 run、退出历史和同时间戳稳定排序；移除窗口私有编号持久化。编号读取 WorkflowRun.CreatedAt，时间相同以 WorkflowRunID 排序；显示和导航按同一触发顺序，操作仍使用原完整 ID。
 
 Rebase：已整合最新 main `39059035152a76a8a0d8f0036eb3fa2f6155ac90`（#73 类型归属重构），冲突解决保留新的产品 API / execution model 类型归属及本次简化呈现；用户运行中的手工 fixture 文件从变更提交中分离并保留，未停止或改写验收进程。
+
+最终 main：rebase 期间 main 又合入 #212 的一期本机范围调整，本分支再次对齐 `80469d8a7f861d3cdddc0a2debef2b7e27e94b2e`，保留 #39 的新任务名称与本机范围，只更新 #38 CC5 人工通过状态。
+
+最终验证选择：`final-main/console`、`final-main/wiring` 与 `final-main/l1`；`final-main-build.json` 为当前 Linux/amd64 编译代表，Windows 由 Go 测试和产品 fixture 构建覆盖。历史 rebase/ 和此前 l1/ 为各自源码快照，最终报告以后列选择为准。人工通过依据为用户确认，自动结果不替代人工结论。
+
+最终验证结果：console 72 项、真实接线 2 项及最终 L1 7 组全部通过，无 fail/skip；任务身份校验 83 文件通过，git diff --check 通过。新 PR 对 main，CC5 按用户人工确认登记为通过，不合并 PR。
