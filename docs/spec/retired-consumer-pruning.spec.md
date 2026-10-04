@@ -1,6 +1,6 @@
 # Spec：清理退役日志解析与发布元数据
 
-依据：用户要求执行精简建议 1、2 并提新 PR。基线 main e449a09（#202/#203 已合入）。
+依据：用户要求执行精简建议 1、2 并提新 PR。基线 main 9413865（#202/#203/#204 已合入；测试起点 e449a09 至此只有候选文档变更）。
 
 1. 删除没有生产消费者的 Pi/旧 exec stdout normalizer、格式探测、raw fallback 和活动 seq 解释。通用 ReadJournalBatch 的文件身份、UTF-8/CRLF、物理 offset、轮转/截断、记录与扫描预算，以及当前会话采集保留。中心 activity.jsonl 镜像保留，本次不做建议 3。
 2. 删除 PublicationSettings.Create、空 CreateDescription、克隆/校验/展示消费者和退役发布责任常量。worker-only 校验、原 provider/Git/remote/auth 引用冻结及查询/关闭/真实唯一交付保留。
