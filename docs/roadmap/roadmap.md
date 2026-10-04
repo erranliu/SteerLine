@@ -8,13 +8,14 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 38 | 候选观察界面 | 候选TUI实现待独立复审，CC5 Windows中文组词/选项备注/导航/窄窗/滚动仍待真实验收；未完成前不解除 #39 前置 | `#37` | [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) |
 | 39 | 多候选本机与远端真机验收 | 多候选本机/远端竞争和混合后端增量验收 | `#38` | [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) |
 | 40 | 固定版本与双入口 | 不可变构建、stable/dev 固定入口和身份 | 无 | [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) |
 | 41 | dev 隔离与 stable 提升 | 独立 home、静止可恢复会话下的受控提升 | `#40`、`#36` | [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) |
 | 42 | 第一阶段集成验收 | 版本组合、stable 24 小时、dev 并行和提升恢复 | `#39`、`#41` | [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) |
 
 ## 第一阶段残留
+
+- [ ] **候选控制台 CC5 人工补验**：中文组词、选项加备注、候选导航、窄窗口及滚动尚无真实通过证据；用户已允许实现先合入并继续 #39 开发，人工证据仍单独补齐。见[操作与待验记录](../validation/candidate-console/windows/README.md)。
 
 本地 Codex app-server 迁移的 A/B 服务级验收已补齐；保留完成记录便于 #42 第一阶段集成验收复用。定向 race detector 待具备工具链时补跑。剩余范围为具备CGO/C工具链后的定向race detector补验，执行要求由后续验证Plan明确；必要时按需查[现有验收状态](../validation/local-codex-app-server/status.md)。
 

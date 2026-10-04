@@ -1,6 +1,6 @@
 # Plan：候选观察界面
 
-任务 ID：38；任务名称：候选观察界面。唯一执行依据：[Spec](candidate-console.spec.md)。起点 `28b81d82f4afb3e158cf96bd5cbf257fa48b7adc`（#37 已合入）；分支 `codex/candidate-console-38`。本 PR 交付实现，CC5 原生输入验收未通过，等待独立复审。
+任务 ID：38；任务名称：候选观察界面。唯一执行依据：[Spec](candidate-console.spec.md)。起点 `28b81d82f4afb3e158cf96bd5cbf257fa48b7adc`（#37 已合入）；分支 `codex/candidate-console-38`。本 PR 交付已复审实现；按用户明确授权先合入，CC5 保留待人工补验，不声明通过，不阻止 #39 开发。
 
 ## 实际实现
 
@@ -42,6 +42,18 @@
 - 定向 Go / 实际应用接线：`go run ./cmd/test-feedback -out <证据根>/coordinator38-wiring-final-03 -- ./internal/steerlineintegration -run '^TestCandidateConsoleWiring$' -count=1`；同步及复审后执行，原新增/反馈/放弃/合并守卫断言保持，两个场景非零命中且无 fail/skip；同目录保存报告和真实服务回执。
 - 最终 L1：`go run ./cmd/test-feedback -level=L1 -out <证据根>/coordinator38-l1-01`；复审修复稳定后一次，七个固定组必须通过，summary.json 记录源码和构建身份。
 
-CC5 仍需上述真实终端/IME/导航/窄窗/滚动证据。此次 Go 回归不替代它；保留 draft，不选择 Full/L2/L3 或扩权限绕过工具产品策略。
+CC5 仍需上述真实终端/IME/导航/窄窗/滚动证据。此次 Go 回归不替代它；用户已明确允许先合入并继续 #39 开发，不选择 Full/L2/L3 或扩权限绕过工具产品策略。
 
 协调诊断保留 `coordinator38-wiring-01` 的真实失败：正式反馈 API 在 command 准入前拒绝了短暂不同步的 ready-service/SQLite projection，报 stale_instance。诊断轮 `coordinator38-wiring-diagnostic-02` 保留即时状态诊断；最终接线夹具沿现有原问题 fixture 的规则，只对该明确准入前拒绝模拟人工刷新和显式再提交，最多三次，每次先核对原服务实例、Workflow/Execution/session、问题 ID 与 pending 状态、原轮次未改变。未知结果、目标变化或已消费问题仍立即失败；不得自动补投或改用直接 API 绕过 UI。反馈实际原轮次增加、候选数与合并守卫断言不变。最终使用新的 wiring-final-03 证据目录；L1 的最终生产源码不再变，后续只补该未纳入固定 quick 选择的接线 fixture 验证。
+
+## 用户授权合入与最新主线增量
+
+本协调聊天用户明确原句：“合并#38，标记待人工补验即可继续开发#39”。这是 CC5 延后人工补验的限定合入例外；保留 CC5 原条件和未通过事实，不扩大到 #39 的远端/混合验收。
+
+同步 main 的 PR #211 后，production 的 PR 文本链接解析与测试子进程清理消费者需要定向复核。证据仍使用上述 run 根的新目录，Windows 隔离 Git/SQLite/受控后端、不请求模型：
+
+- `go run ./cmd/test-feedback -out <证据根>/coordinator38-main211-targeted-01 -- ./internal/steerline/console ./internal/steerlineintegration ./internal/steerline/execution ./internal/testprocess -run '^TestCC[1-4]$|^TestCandidateMergedConflictPresentation$|^TestCandidateConsoleWiring$|^TestPRClues|^TestOwnedProcessWaitsForDescendants$|^TestProcessReportsDescendantCleanupFailure$' -count=1`；最新主线集成后执行，要求每个选择包非零命中且无 fail/skip，保持原候选/反馈/合并守卫及真实子进程清理断言；summary.json 和 Go JSON 保存证据。
+- `go run ./cmd/test-feedback -level=L1 -out <证据根>/coordinator38-main211-l1-01`；最终内容稳定后一次，七个固定组必须通过，summary.json 记录最终源码/构建身份。
+- 文档变更核验 `python scripts/roadmap_task_id.py check` 与 `git diff --check`；任务身份、剩余前置和本次例外记录一致。
+
+不跑 Full/L2/L3；当前额外验证只覆盖主线集成的实际消费者。CC5 待人工状态见 windows/README.md，合并不产生新的原生通过证据。

@@ -1,4 +1,4 @@
-# #38 候选观察界面：实现待复审，CC5 未通过
+# #38 候选观察界面：实现已复审，CC5 待人工补验
 
 起点：`28b81d82f4afb3e158cf96bd5cbf257fa48b7adc`，与执行开始时最新 `origin/main` 相同；分支：`codex/candidate-console-38`。实现使用当前 #37 服务/客户端合同，无生产服务、生产任务库或模型请求。
 
@@ -21,8 +21,16 @@
 
 亲自复查实际 diff、当前 Spec/Plan 与生产路径：Task/run/Execution/session 选择、规范 Body/Conversation/Activity、草稿/请求持久化、产品控制/反馈、环境动作和回执验证。修复了迟到读取清除新候选 busy、缺页改选兄弟、merged 状态误当获胜、原冻结配置缺少 run 直读、迟到拒绝/开始回执改变当前选择等问题。worker-only 发布、独立 environment blocker、原业务 Decision 和服务 intent/receipt/ack 屏障继续由原服务实现，本 PR 未新增进程 kill、Task 丢弃、资源删除或自动补投路径。
 
-#38 仍为未交付活动任务，保留自己的 Spec/Plan 执行入口与固定名称；当前实现待独立复审，CC5 原生输入验收残留单独记录，不解除 #39 前置，也不启动 #39。本 PR 保持 draft，供协调聊天独立复审，不合并。
+此前因 CC5 原生证据缺失保持 draft。现由用户明确授权实现先合入并继续 #39 开发；CC5 仍为待人工补验，不把该合入例外记为验收通过，历史失败/诊断及固定任务身份保留。
 
 2026-10-04 追加授权：用户已授权原生终端操作；实际 UI 工具仍返回 `product policy blocks this app: ...powershell.exe`。保存新现场、实际拒绝、公开 Task 查询与进程清理证据；修正 opt-in manifest 未带出受控 Git/history 环境绑定的问题。生产实现未改动，不重跑原生输入或伪造 CC5；本次补充仅选择测试准备能力验证，原最终 L1 不重复。
 
 授权补充验证：[同一接线回归](windows/bindings-regression/summary.json) 2 项通过、无 fail/skip；[正式 manifest 的外部 CLI 检查](windows/authorized-bindings-check/check.json) 使用自动写出的三项环境绑定，读取同一 Task 901 / version 2 / 五候选后通过原 stop_file 清理。该准备能力结果不替代 CC5，生产实现未改动。
+
+## 合入授权与人工补验交接
+
+2026-10-04，本协调聊天用户先确认“#38 我来人工补验”，随后明确要求：“合并#38，标记待人工补验即可继续开发#39”。协调按此限定例外记录 accepted_exception 并完成实际平台合并后，才启动 #39；原生条件不删，CC5 仍未通过。该例外不扩大到 #39 CN1–CN8、远端准入或其他尚缺证据。
+
+协调复审修复了放弃/落选/多合并的冲突展示和活动契约入口，67 项 console、最终真实接线（2 项）及 L1 七组已通过；同一 run 中的初始 stale_instance 失败、诊断与最终通过都保留。同步 PR #211 后另按 Plan 核对 PR 文本链接和测试子进程清理的受影响消费者。最终 head/base、实际命令与合并事实在 PR 评论及 run 状态中记录，不用本段文字代替平台证据。
+
+CC5 由用户按 [Windows 人工操作步骤](windows/README.md)完成，取得实际终端/输入法、中文组词、选项加备注、候选导航、窄窗口及滚动证据后，再追加人工通过记录。准备/保持/清理、Go KeyMsg、授权和 PR 合并均不替代这些证据。

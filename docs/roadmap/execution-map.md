@@ -8,11 +8,10 @@
 
 ## 固定前置
 
-已具备持续worker/原会话反馈、各配置独立候选、宽松五候选开始检查、合并前放弃和唯一交付，以及执行需求准入、配置注册和固定原生绑定封套。候选TUI 实现提交独立复审，#38 仅保留 CC5 原生输入验收残留；真实混合方案验收仍由 #39 交付。后续复用这些能力，保持原身份、版本、提交屏障及恢复授权；当前接口归属需要核实时按需查[架构索引](../architecture/current-code-architecture.md)。图中已交付基础节点和原硬前置ID仅表达依赖，不要求阅读历史Spec/Plan，也不解除未完成的原生验收限制。
+已具备持续worker/原会话反馈、各配置独立候选、宽松五候选开始检查、合并前放弃和唯一交付，以及执行需求准入、配置注册和固定原生绑定封套。候选TUI 实现已具备；CC5 由用户人工补验，按明确授权不阻止 #39 开发，真实混合方案验收仍由 #39 交付。后续复用这些能力，保持原身份、版本、提交屏障及恢复授权；当前接口归属需要核实时按需查[架构索引](../architecture/current-code-architecture.md)。图中已交付基础节点和原硬前置ID仅表达依赖，不要求阅读历史Spec/Plan，也不解除未完成的原生验收限制。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 38 | 候选观察界面 | 候选TUI实现待独立复审，CC5 Windows中文组词/选项备注/导航/窄窗/滚动仍待真实验收；未完成前不解除 #39 前置 | `#37` | [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) |
 | 39 | 多候选本机与远端真机验收 | 多候选本机/远端竞争和混合后端增量验收 | `#38` | [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) |
 | 40 | 固定版本与双入口 | 不可变构建、stable/dev 固定入口和身份 | 无 | [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) |
 | 41 | dev 隔离与 stable 提升 | 独立 home、静止可恢复会话下的受控提升 | `#40`、`#36` | [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) |

@@ -1,6 +1,6 @@
 # Spec：候选观察界面
 
-任务 ID：38；任务名称：候选观察界面；目标：`PHASE1-CANDIDATES`。配套 [Plan](candidate-console.plan.md)。状态：实现 PR 待独立复审；CC1–CC4/真实接线已有证据，CC5 原生终端输入验收未通过，不能宣称任务完成。证据见[验收记录](../validation/candidate-console/README.md)。
+任务 ID：38；任务名称：候选观察界面；目标：`PHASE1-CANDIDATES`。配套 [Plan](candidate-console.plan.md)。状态：实现已完成独立复审；用户明确允许先合入，CC5 标记待人工补验，不阻止后续 #39 开发。CC5 没有通过证据，不以合并代替原生验收。证据及授权见[验收记录](../validation/candidate-console/README.md)。
 
 ## 范围与前置
 
