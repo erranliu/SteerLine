@@ -16,6 +16,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -79,9 +80,9 @@ func createNativeLiveTask(t *testing.T, ctx context.Context, f *integrationFixtu
 	queries := steerline.NewQueryService(store, f.config.Identity())
 	authority, err := queries.ReadyNativeTaskSnapshot(ctx)
 	require(t, err)
-	commands := steerline.CommandService{Store: store, Project: f.config.Identity()}
+	commands := steerline.NewCommandService(store, f.config.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})
 	batch := taskmodel.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: f.config.Identity(), Tasks: []taskmodel.TaskBatchTask{{LocalKey: "fixture", TaskID: id, Title: "Native recovery acceptance", Type: "task", Contract: contract}}, Dependencies: []taskmodel.TaskBatchEdge{}}
-	_, err = commands.CreateTaskBatch(ctx, f.config, mustJSON(batch), newID(), authority.AuthorityVersion, "operator")
+	_, err = createTaskBatchFixture(ctx, commands.Store, f.config, mustJSON(batch), newID(), authority.AuthorityVersion, "operator")
 	require(t, err)
 	page, err := queries.ShowNativeTask(ctx, fmt.Sprint(id))
 	require(t, err)

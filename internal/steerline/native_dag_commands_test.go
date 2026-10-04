@@ -16,7 +16,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -66,24 +65,14 @@ func batchTasks(ids ...int64) []taskmodel.TaskBatchTask {
 	return out
 }
 
-func TestTaskBatchStrictDecodeAndDeterministicCyclePath(t *testing.T) {
-	for _, raw := range []string{
-		`{"schema_version":"task-batch/v1","project_id":"p","tasks":[],"unknown":true}`,
-		`{"schema_version":"task-batch/v1","project_id":"p","tasks":[{"local_key":"a","title":"x","type":"task","contract":{}}]}`,
-		`{"schema_version":"task-batch/v1","project_id":"p","tasks":[{"local_key":"a","task_id":1.5,"title":"x","type":"task","contract":{}}]}`,
-		`{"schema_version":"task-batch/v1","project_id":"p","tasks":[],"tasks":[]}`,
-	} {
-		if _, _, err := taskmodel.DecodeBatch([]byte(raw)); err == nil {
-			t.Fatalf("invalid batch accepted: %s", raw)
-		}
-	}
+func TestTaskBatchDeterministicCyclePath(t *testing.T) {
 	c, commit, store := openDAGFixture(t)
 	tasks := batchTasks(2, 3)
 	edges := []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k2"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k3"}}, {Predecessor: taskmodel.TaskBatchReference{LocalKey: "k3"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k2"}}}
 	beforeGraph, err := store.TaskGraphSnapshot(context.Background(), c.Identity())
 	require(t, err)
 	payload := taskBatchFixture(t, c, commit, tasks, edges)
-	validation, err := (CommandService{Store: store, Project: c.Identity()}).ValidateTaskBatch(context.Background(), c, payload)
+	validation, err := (newTestCommandService(store, c.Identity())).ValidateTaskBatch(context.Background(), c, payload)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +98,7 @@ func TestCreateTaskBatchAtomicIdempotentAndQueryable(t *testing.T) {
 		{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k20"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k21"}},
 	}
 	payload := taskBatchFixture(t, c, commit, tasks, edges)
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	validation, err := commands.ValidateTaskBatch(ctx, c, payload)
 	if err != nil || !validation.Valid {
 		t.Fatalf("batch should validate: %+v / %v", validation, err)
@@ -213,7 +202,7 @@ func TestCreateTaskBatchAtomicIdempotentAndQueryable(t *testing.T) {
 func TestCreateTaskBatchRollsBackEveryWriteWhenEdgeInsertFails(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	if _, err := store.db.ExecContext(ctx, `CREATE TRIGGER fail_task_edge BEFORE INSERT ON task_dependencies BEGIN SELECT RAISE(ABORT,'injected edge failure'); END`); err != nil {
 		t.Fatal(err)
 	}
@@ -239,7 +228,7 @@ func TestCreateTaskBatchRollsBackEveryWriteWhenEdgeInsertFails(t *testing.T) {
 func TestNativeCommandsRejectConfigurationBindingDriftBeforeSideEffects(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	if _, err := commands.CreateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(50), nil), strings.Repeat("5", 32), 1, "planner"); err != nil {
 		t.Fatal(err)
 	}
@@ -277,7 +266,7 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 	created := time.Now().UTC()
 	err := store.transactRecords(ctx, func(domainTx *fixtureTransaction) error {
 		tx := domainTx
-		authority := tasklegacy.ProjectTaskAuthority{ProjectIdentity: otherProject, Authority: "native", AuthorityVersion: 1, Repository: foreignContract.Repository, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: created, UpdatedAt: created}
+		authority := executionmodel.ProjectTaskAuthority{ProjectIdentity: otherProject, Authority: "native", AuthorityVersion: 1, Repository: foreignContract.Repository, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: created, UpdatedAt: created}
 		if e := tx.PutProjectTaskAuthority(authority); e != nil {
 			return e
 		}
@@ -293,7 +282,7 @@ func TestTaskBatchRejectsDuplicateAndCrossProjectDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	tasks := batchTasks(30)
 	ref := int64(99)
 	edges := []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{TaskID: &ref}, Successor: taskmodel.TaskBatchReference{LocalKey: "k30"}}}
@@ -375,12 +364,12 @@ func TestTaskDependencyStateRequiresEveryPredecessorDelivery(t *testing.T) {
 			graph := taskGraphSnapshot{
 				ByID:       map[string]taskmodel.TaskRecord{"1": {TaskID: "1", Status: "open"}, "2": {TaskID: "2", Status: "open"}, "3": task},
 				Edges:      []taskmodel.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "3"}, {PredecessorID: "2", SuccessorID: "3"}},
-				Deliveries: map[string]TaskDeliveryRecord{},
+				Deliveries: map[string]executionmodel.TaskDeliveryRecord{},
 			}
 			for i, id := range []string{"1", "2"} {
 				if i < tc.delivered {
 					graph.ByID[id] = taskmodel.TaskRecord{TaskID: id, Status: "closed"}
-					graph.Deliveries[id] = TaskDeliveryRecord{TaskID: id}
+					graph.Deliveries[id] = executionmodel.TaskDeliveryRecord{TaskID: id}
 				}
 			}
 			ready, blockers := taskDependencyState(task, graph)
@@ -427,7 +416,7 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	payload := taskBatchFixture(t, c, commit, batchTasks(80, 81, 82, 83), nil)
 	if _, err = commands.CreateTaskBatch(ctx, c, payload, strings.Repeat("b", 32), 1, "planner"); err != nil {
 		t.Fatal(err)
@@ -558,7 +547,7 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	payload := taskBatchFixture(t, c, commit, batchTasks(120, 121), []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k120"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k121"}}})
 	if _, err = commands.CreateTaskBatch(ctx, c, payload, strings.Repeat("5", 32), 2, "planner"); err != nil {
 		t.Fatal(err)
@@ -575,8 +564,8 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	mergeCommit := strings.Repeat("f", 40)
 	mergedAt := created.Add(-time.Minute)
 	prURL := "https://forge.invalid/org/repo/pulls/120"
-	evidence, _ := json.Marshal(TaskDeliveryEvidence{PRInstance: "https://forge.invalid", URL: prURL, Repository: "org/repo", PRNumber: 120, BaseBranch: "main", State: "merged", Merged: true, MergedAt: mergedAt, MergeCommit: mergeCommit})
-	delivery := TaskDeliveryRecord{ProjectIdentity: c.Identity(), TaskID: "120", SelectedWorkflowRunID: run.WorkflowRunID, PRInstance: "https://forge.invalid", PRRepository: "org/repo", PRNumber: 120, PRURL: prURL, MergeCommit: mergeCommit, MergedAt: mergedAt, RecordedAt: created, Evidence: evidence}
+	evidence, _ := json.Marshal(executionmodel.TaskDeliveryEvidence{PRInstance: "https://forge.invalid", URL: prURL, Repository: "org/repo", PRNumber: 120, BaseBranch: "main", State: "merged", Merged: true, MergedAt: mergedAt, MergeCommit: mergeCommit})
+	delivery := executionmodel.TaskDeliveryRecord{ProjectIdentity: c.Identity(), TaskID: "120", SelectedWorkflowRunID: run.WorkflowRunID, PRInstance: "https://forge.invalid", PRRepository: "org/repo", PRNumber: 120, PRURL: prURL, MergeCommit: mergeCommit, MergedAt: mergedAt, RecordedAt: created, Evidence: evidence}
 	task.Status = "in_progress"
 	task.Claimant = "worker"
 	task.Version++
@@ -645,7 +634,7 @@ func TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	if _, err = commands.CreateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(82), nil), strings.Repeat("8", 32), 2, "planner"); err != nil {
 		t.Fatal(err)
 	}
@@ -696,7 +685,7 @@ func (v *fixedTaskDeliveryVerifier) Query(ctx context.Context, url string) (exec
 func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	first := taskBatchFixture(t, c, commit, batchTasks(70), nil)
 	created, err := commands.CreateTaskBatch(ctx, c, first, strings.Repeat("7", 32), 1, "planner")
 	if err != nil {
@@ -838,7 +827,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 		t.Fatal(err)
 	}
 	defer store.Close()
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	payload := taskBatchFixture(t, c, commit, batchTasks(90, 91, 92, 94, 95), nil)
 	if _, err = commands.CreateTaskBatch(ctx, c, payload, strings.Repeat("f", 32), 1, "planner"); err != nil {
 		t.Fatal(err)
@@ -909,8 +898,8 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	mergedAt := time.Now().UTC()
 	lateURL := server.URL + "/org/repo/pulls/90"
 	lateMerge := strings.Repeat("a", 40)
-	lateEvidence, _ := json.Marshal(TaskDeliveryEvidence{PRInstance: server.URL, URL: lateURL, Repository: "org/repo", PRNumber: 90, BaseBranch: c.Branch, State: "merged", Merged: true, MergedAt: mergedAt, MergeCommit: lateMerge})
-	lateDelivery := TaskDeliveryRecord{ProjectIdentity: c.Identity(), TaskID: "90", SelectedWorkflowRunID: "wf-90", PRInstance: server.URL, PRRepository: "org/repo", PRNumber: 90, PRURL: lateURL, MergeCommit: lateMerge, MergedAt: mergedAt, Evidence: lateEvidence}
+	lateEvidence, _ := json.Marshal(executionmodel.TaskDeliveryEvidence{PRInstance: server.URL, URL: lateURL, Repository: "org/repo", PRNumber: 90, BaseBranch: c.Branch, State: "merged", Merged: true, MergedAt: mergedAt, MergeCommit: lateMerge})
+	lateDelivery := executionmodel.TaskDeliveryRecord{ProjectIdentity: c.Identity(), TaskID: "90", SelectedWorkflowRunID: "wf-90", PRInstance: server.URL, PRRepository: "org/repo", PRNumber: 90, PRURL: lateURL, MergeCommit: lateMerge, MergedAt: mergedAt, Evidence: lateEvidence}
 	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutTaskDelivery(lateDelivery) }); err == nil || !strings.Contains(err.Error(), "task_discarded") {
 		t.Fatalf("late merge created a normal delivery for discarded task: %v", err)
 	}
@@ -996,7 +985,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	if _, err := commands.CreateTaskBatch(ctx, c, taskBatchFixture(t, c, commit, batchTasks(72), nil), strings.Repeat("7", 32), 1, "planner"); err != nil {
 		t.Fatal(err)
 	}

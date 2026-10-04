@@ -337,7 +337,7 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 	if err != nil {
 		return storageports.CommandRecord{}, false, err
 	}
-	return (CommandService{Store: db, Project: c.Identity()}).AnswerDecisionWithID(ctx, commandID, decisionID, version, key, requestedBy, payload)
+	return (NewCommandService(db, c.Identity(), nil, nil)).AnswerDecisionWithID(ctx, commandID, decisionID, version, key, requestedBy, payload)
 }
 
 func runtimeRunByID(runtimeState *Runtime, runID string) *Run {

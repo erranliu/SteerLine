@@ -105,7 +105,7 @@ func TestProjectionRejectsBrokenBindingsWithoutReusingOldViews(t *testing.T) {
 func TestProjectionRetainsDeliveryAndReservationRules(t *testing.T) {
 	snapshot, metadata := projectionFixture(t)
 	snapshot.Tasks[0].Status = "closed"
-	snapshot.Deliveries = []contracts.TaskDeliveryRecord{{TaskID: "task", SelectedWorkflowRunID: "run", PRURL: "https://example.invalid/pull/1", MergeCommit: "merged"}}
+	snapshot.Deliveries = []executionmodel.TaskDeliveryRecord{{TaskID: "task", SelectedWorkflowRunID: "run", PRURL: "https://example.invalid/pull/1", MergeCommit: "merged"}}
 	view, err := Build(snapshot, metadata)
 	if err != nil || view.Runs[0].ExecutionStatus != "succeeded" || view.Runs[0].PR.State != "merged" || *view.Runs[0].PR.MergeCommit != "merged" {
 		t.Fatalf("delivery facts changed: %+v %v", view, err)

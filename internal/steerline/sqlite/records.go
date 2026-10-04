@@ -167,7 +167,7 @@ func QuerySnapshot(ctx context.Context, db QueryContext, project string) (contra
 	}
 	defer rows.Close()
 	for rows.Next() {
-		record := contracts.TaskDeliveryRecord{ProjectIdentity: project}
+		record := executionmodel.TaskDeliveryRecord{ProjectIdentity: project}
 		var merged, recorded string
 		if err = rows.Scan(&record.TaskID, &record.SelectedWorkflowRunID, &record.PRInstance, &record.PRRepository, &record.PRNumber, &record.PRURL, &record.MergeCommit, &merged, &recorded, &record.Evidence); err != nil {
 			return out, err

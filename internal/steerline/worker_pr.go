@@ -51,7 +51,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *Run, task *taskmode
 		if workflow.PRURL == "" {
 			return nil
 		}
-		_, err := (CommandService{Store: s.commandStore, Project: c.identity}).CompleteNativeTask(ctx, c, task.TaskID, task.Version, workflow.WorkflowRunID, publicationClient(c))
+		_, err := (s.commandService(c.identity)).CompleteNativeTask(ctx, c, task.TaskID, task.Version, workflow.WorkflowRunID, publicationClient(c))
 		if isNativeErrorCode(err, "task_discarded") {
 			return nil
 		}

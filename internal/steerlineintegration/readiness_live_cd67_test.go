@@ -20,6 +20,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -70,20 +71,20 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	store, err := steerline.OpenNativeTaskCommandStore(ctx, &c)
 	require(t, err)
 	queries := steerline.NewQueryService(store, c.Identity())
-	commands := steerline.CommandService{Store: store, Project: c.Identity()}
+	commands := steerline.NewCommandService(store, c.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})
 	spec, plan := liveReadinessReference(t, ctx, repo, commit, "docs/spec/pr154-readiness-gate.spec.md"), liveReadinessReference(t, ctx, repo, commit, "docs/spec/pr154-readiness-gate.plan.md")
 	contract := taskmodel.TaskContract{ContractID: "pr154-readiness-live", Repository: remote, Remote: "origin", Branch: "main", SpecRef: spec, PlanRef: plan, AcceptanceRefs: []taskmodel.FileReference{spec}}
 	contract.Digest, err = taskmodel.ContractDigest(contract)
 	require(t, err)
 	priority := 2
 	batch := taskmodel.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: c.Identity(), Tasks: []taskmodel.TaskBatchTask{{LocalKey: "readiness", TaskID: 9001154, Title: "PR154 isolated readiness and business dispatch acceptance", Type: "task", Priority: &priority, Contract: contract}}, Dependencies: []taskmodel.TaskBatchEdge{}}
-	validation, err := commands.ValidateTaskBatch(ctx, c, mustJSON(batch))
+	validation, err := validateTaskBatchFixture(ctx, commands.Store, c, mustJSON(batch))
 	require(t, err)
 	if !resume && !validation.Valid {
 		t.Fatalf("live contract rejected: %+v", validation)
 	}
 	if !resume {
-		_, err = commands.CreateTaskBatch(ctx, c, mustJSON(batch), newID(), validation.AuthorityVersion, "acceptance")
+		_, err = createTaskBatchFixture(ctx, commands.Store, c, mustJSON(batch), newID(), validation.AuthorityVersion, "acceptance")
 		require(t, err)
 		page, err := queries.ShowNativeTask(ctx, "9001154")
 		require(t, err)
@@ -100,7 +101,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 		store, err := steerline.OpenNativeTaskCommandStore(ctx, &c)
 		require(t, err)
 		profiles := c.AvailableExecutionProfiles()
-		_, err = (steerline.CommandService{Store: store, Project: c.Identity()}).ClaimNativeTask(ctx, c, steerline.TaskClaimOptions{TaskID: "9001154", RequestID: newID(), ExpectedTaskVersion: page.Tasks[0].Version, ExpectedAuthorityVersion: page.AuthorityVersion, RequestedBy: "acceptance", Explicit: true, ExecutionProfile: &profiles[0], ServiceInstanceID: service.instanceID})
+		_, err = (steerline.NewCommandService(store, c.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})).ClaimNativeTask(ctx, c, steerline.TaskClaimOptions{TaskID: "9001154", RequestID: newID(), ExpectedTaskVersion: page.Tasks[0].Version, ExpectedAuthorityVersion: page.AuthorityVersion, RequestedBy: "acceptance", Explicit: true, ExecutionProfile: &profiles[0], ServiceInstanceID: service.instanceID})
 		require(t, err)
 		require(t, store.Close())
 	}

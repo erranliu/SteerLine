@@ -13,12 +13,10 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func (t *sqliteTx) PutProjectTaskAuthority(v tasklegacy.ProjectTaskAuthority) error {
+func (t *sqliteTx) PutProjectTaskAuthority(v executionmodel.ProjectTaskAuthority) error {
 	if v.ProjectIdentity == "" || v.Authority != "native" || v.AuthorityVersion == 0 || v.DispatchMode != "manual" || !v.DispatchPaused || v.Repository == "" || v.Remote == "" || v.Branch == "" {
 		return errors.New("native project authority requires identity, target, version and initial manual/paused dispatch")
 	}
@@ -32,11 +30,11 @@ func (t *sqliteTx) PutProjectTaskAuthority(v tasklegacy.ProjectTaskAuthority) er
 	return requireIdentityWrite(result, err, "authority_mismatch: native project authority is immutable without a compare-and-swap")
 }
 
-func (t *sqliteTx) UpdateProjectTaskAuthorityCAS(v tasklegacy.ProjectTaskAuthority, expectedVersion uint64) error {
+func (t *sqliteTx) UpdateProjectTaskAuthorityCAS(v executionmodel.ProjectTaskAuthority, expectedVersion uint64) error {
 	if v.ProjectIdentity == "" || expectedVersion == 0 || v.AuthorityVersion != expectedVersion+1 || v.Authority != "native" || v.DispatchMode != "manual" && v.DispatchMode != "auto" {
 		return nativeErr("authority_mismatch", "project authority update requires a valid next version and dispatch mode")
 	}
-	var old tasklegacy.ProjectTaskAuthority
+	var old executionmodel.ProjectTaskAuthority
 	var paused int
 	var created, updated string
 	err := t.tx.QueryRowContext(t.ctx, `SELECT authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused,created_at,updated_at FROM project_task_authorities WHERE project_identity=?`, v.ProjectIdentity).Scan(&old.Authority, &old.AuthorityVersion, &old.GraphRevision, &old.Repository, &old.Remote, &old.Branch, &old.DispatchMode, &paused, &created, &updated)
@@ -176,7 +174,7 @@ func (t *sqliteTx) PutTaskDependency(v taskmodel.TaskDependencyRecord) error {
 	return err
 }
 
-func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
+func (t *sqliteTx) PutTaskDelivery(v executionmodel.TaskDeliveryRecord) error {
 	if v.RecordedAt.IsZero() {
 		v.RecordedAt = now()
 	}
@@ -221,7 +219,7 @@ func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
 	if err := json.Unmarshal(runPayload, &run); err != nil {
 		return err
 	}
-	var evidence TaskDeliveryEvidence
+	var evidence executionmodel.TaskDeliveryEvidence
 	if err := json.Unmarshal(v.Evidence, &evidence); err != nil {
 		return err
 	}
@@ -247,8 +245,13 @@ func (t *sqliteTx) PutTaskDelivery(v TaskDeliveryRecord) error {
 	return err
 }
 
-func validateNativeTaskDelivery(v TaskDeliveryRecord, targetBranch string) error {
-	return task.ValidateDelivery(v, targetBranch)
+func validateNativeTaskDelivery(v executionmodel.TaskDeliveryRecord, targetBranch string) error {
+	err := executionmodel.ValidateDelivery(v, targetBranch)
+	var rejected *executionmodel.ResultError
+	if errors.As(err, &rejected) {
+		return nativeErr(rejected.Code, rejected.Message)
+	}
+	return err
 }
 
 func (t *sqliteTx) PutTask(v taskmodel.TaskRecord) error {
@@ -413,7 +416,7 @@ func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error 
 	if err != nil {
 		return requiredRecordError(err, "contract_mismatch", "task cannot close without its authoritative selected delivery")
 	}
-	var proof TaskDeliveryEvidence
+	var proof executionmodel.TaskDeliveryEvidence
 	if err = json.Unmarshal(deliveryEvidence, &proof); err != nil {
 		return nativeErr("inconsistent_delivery", "task delivery evidence is unreadable")
 	}
@@ -440,7 +443,7 @@ func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error 
 		if sessionID == "" || execution.Workspace.Branch == "" {
 			return nativeErr("contract_mismatch", "selected worker flow lacks its session or branch")
 		}
-		delivery := TaskDeliveryRecord{TaskID: taskID, SelectedWorkflowRunID: runID, PRURL: proof.URL, MergeCommit: proof.MergeCommit, MergedAt: proof.MergedAt}
+		delivery := executionmodel.TaskDeliveryRecord{TaskID: taskID, SelectedWorkflowRunID: runID, PRURL: proof.URL, MergeCommit: proof.MergeCommit, MergedAt: proof.MergedAt}
 		if err = contracts.MarkWorkerDeliveryCommitted(taskmodel.TaskRecord{TaskID: taskID, Status: "closed"}, &run, delivery); err != nil {
 			return err
 		}

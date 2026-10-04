@@ -8,7 +8,6 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
 	"github.com/erranliu/SteerLine/internal/steerline/taskview"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -84,7 +83,7 @@ type TaskCommands interface {
 	Validate(context.Context, []byte) (taskmodel.TaskBatchValidation, error)
 	Create(context.Context, productapi.CreateInput) (taskmodel.TaskBatchReceipt, error)
 	Discard(context.Context, productapi.DiscardInput) (taskmodel.TaskDiscardReceipt, error)
-	AddPredecessors(context.Context, task.TaskPredecessorAddInput) (task.TaskPredecessorAddReceipt, error)
+	AddPredecessors(context.Context, productapi.TaskPredecessorAddInput) (productapi.TaskPredecessorAddReceipt, error)
 }
 
 type ControlPort interface {
@@ -140,7 +139,7 @@ type TaskClient interface {
 	ValidateTaskBatch(context.Context, []byte) (taskmodel.TaskBatchValidation, error)
 	CreateTaskBatch(context.Context, productapi.CreateInput) (taskmodel.TaskBatchReceipt, error)
 	DiscardTask(context.Context, productapi.DiscardInput) (taskmodel.TaskDiscardReceipt, error)
-	AddPredecessors(context.Context, task.TaskPredecessorAddInput) (task.TaskPredecessorAddReceipt, error)
+	AddPredecessors(context.Context, productapi.TaskPredecessorAddInput) (productapi.TaskPredecessorAddReceipt, error)
 }
 
 type ProjectQueries interface {

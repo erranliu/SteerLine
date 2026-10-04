@@ -6,10 +6,10 @@ import (
 	"fmt"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -31,7 +31,7 @@ func (Factory) OpenReader(path string) (persistence.Connection, error) {
 	return v, nil
 }
 
-func (s *SQLiteStore) BindAuthority(v tasklegacy.ProjectTaskAuthority) {
+func (s *SQLiteStore) BindAuthority(v executionmodel.ProjectTaskAuthority) {
 	s.Reader = NewReader(s.db, &v)
 }
 

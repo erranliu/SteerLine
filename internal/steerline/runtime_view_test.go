@@ -81,7 +81,7 @@ func TestActorProjectionReusesPrivatePointersWithoutPublishingCandidates(t *test
 func TestAnswerChecksDomainRevisionBeforeCheckpointPublication(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
-	commands := CommandService{Store: service.commandStore, Project: service.Config.Identity()}
+	commands := newTestCommandService(service.commandStore, service.Config.Identity())
 	answer := executionmodel.DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "continue", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	command, _, err := commands.AnswerDecision(ctx, answer.DecisionID, answer.ExpectedDecisionVersion, newID(), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
@@ -114,7 +114,7 @@ func TestAnswerChecksDomainRevisionBeforeCheckpointPublication(t *testing.T) {
 func TestPublicationPreservesExternallyAcceptedDecision(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
-	commands := CommandService{Store: service.commandStore, Project: service.Config.Identity()}
+	commands := newTestCommandService(service.commandStore, service.Config.Identity())
 	answer := executionmodel.DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "keep this answer", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	command, _, err := commands.AnswerDecision(ctx, answer.DecisionID, answer.ExpectedDecisionVersion, newID(), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
@@ -132,7 +132,7 @@ func TestPublicationPreservesExternallyAcceptedDecision(t *testing.T) {
 func TestWorkerCommitRejectsConflictingDecisionAtomically(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
-	commands := CommandService{Store: service.commandStore, Project: service.Config.Identity()}
+	commands := newTestCommandService(service.commandStore, service.Config.Identity())
 	answer := executionmodel.DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "committed answer", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	command, _, err := commands.AnswerDecision(ctx, answer.DecisionID, answer.ExpectedDecisionVersion, newID(), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
@@ -181,7 +181,7 @@ func TestRuntimeViewRejectsInvalidWorkerAttempts(t *testing.T) {
 func TestWorkerCommitPreservesExternallyAcceptedDecision(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	ctx := context.Background()
-	commands := CommandService{Store: service.commandStore, Project: service.Config.Identity()}
+	commands := newTestCommandService(service.commandStore, service.Config.Identity())
 	answer := executionmodel.DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "keep this answer", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	command, _, err := commands.AnswerDecision(ctx, answer.DecisionID, answer.ExpectedDecisionVersion, newID(), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)

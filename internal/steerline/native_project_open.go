@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"time"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -65,7 +65,7 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (persistence.Connecti
 	if err != nil {
 		return nil, err
 	}
-	authority := tasklegacy.ProjectTaskAuthority{ProjectIdentity: c.Identity(), Authority: "native", AuthorityVersion: 1, GraphRevision: 0, Repository: targetRepository, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+	authority := executionmodel.ProjectTaskAuthority{ProjectIdentity: c.Identity(), Authority: "native", AuthorityVersion: 1, GraphRevision: 0, Repository: targetRepository, Remote: c.Remote, Branch: c.Branch, DispatchMode: "manual", DispatchPaused: true, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 	var initializer persistence.Projects = db
 	err = initializer.InitializeProject(ctx, authority)
 	if err != nil {

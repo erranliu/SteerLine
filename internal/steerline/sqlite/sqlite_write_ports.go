@@ -9,7 +9,6 @@ import (
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -199,13 +198,6 @@ func (s *SQLiteStore) TransactTaskBatch(ctx context.Context, fn func(persistence
 	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return fn(tx) })
 }
 
-func (s *SQLiteStore) TransactClaim(ctx context.Context, fn func(persistence.ClaimTx) error) error {
-	if fn == nil {
-		return errors.New("transaction callback is required")
-	}
-	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return fn(tx) })
-}
-
 func (s *SQLiteStore) TransactCandidate(ctx context.Context, fn func(persistence.CandidateTx) error) error {
 	if fn == nil {
 		return errors.New("transaction callback is required")
@@ -241,14 +233,7 @@ func (s *SQLiteStore) TransactDiscardPending(ctx context.Context, fn func(persis
 	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return fn(tx) })
 }
 
-func (s *SQLiteStore) TransactDiscard(ctx context.Context, fn func(persistence.DiscardTx) error) error {
-	if fn == nil {
-		return errors.New("transaction callback is required")
-	}
-	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return fn(tx) })
-}
-
-func (s *SQLiteStore) TransactDelivery(ctx context.Context, fn func(persistence.DeliveryTx) error) error {
+func (s *SQLiteStore) TransactDeliveryAudit(ctx context.Context, fn func(persistence.DeliveryAuditTx) error) error {
 	if fn == nil {
 		return errors.New("transaction callback is required")
 	}
@@ -269,7 +254,7 @@ func (s *SQLiteStore) TransactCleanup(ctx context.Context, fn func(persistence.C
 	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return fn(tx) })
 }
 
-func (s *SQLiteStore) InitializeProject(ctx context.Context, authority tasklegacy.ProjectTaskAuthority) error {
+func (s *SQLiteStore) InitializeProject(ctx context.Context, authority executionmodel.ProjectTaskAuthority) error {
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		var count int
 		if err := tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks`).Scan(&count); err != nil {

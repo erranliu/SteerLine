@@ -66,10 +66,32 @@ task 的一级字段按键替换（嵌套对象须提供完整对象）。run �
 - `session`：thread/client ID、host、worktree、branch、base_commit、model、thinking、cursor。未解析真实 ID 时保持 `creating`；获取真实 ID 后 `running`。不能把 client ID 填进 thread ID。
 - `pr`：url、number、head、base_branch、base_commit；head 更新时助手会使旧 review/validation/merge_gate 失效，并保留历史。
 - `review`：head、comment_url、findings（问题/位置/影响/fix commit）、scope、base_commit；只有协调 session 真实独立审核后写入。
-- `validation`：head、status（`passed` 或已有用户明确授权的 `accepted_exception`）、commands/results、exceptions 的用户授权来源；失败不属于可合并状态。
+- `validation`：head、status（`passed`、`passed_with_manual_pending` 或已有用户明确授权的 `accepted_exception`）、commands/results；人工补验和授权例外分别记录，失败不属于可合并状态。
 - `merge_gate`：head、base_commit、required_checks（`passed` 或平台已证实 `none`）、mergeable:true、checked_at。API 的 UNKNOWN 或未查询结果不等于 none；none 意味已核对该分支全部保护/规则，无必需检查。
 - `merge`：head、commit、merged_at；只有平台已确认真实合并后记录。`observed_merge` 可单独记未复审就被外部合并的事实，保留待决。
 - `blocker`、`decisions`：实际失败及待用户决定内容、原始用户批准记录。不得以记录例外替代取得批准。
+
+仅余人工补验时，无需逐项申请 `accepted_exception`。先实际把待验内容写入 roadmap，保留原验收条件、操作步骤及取证位置，并核对记录；然后填写：
+
+```json
+{
+  "head": "reviewed-head",
+  "status": "passed_with_manual_pending",
+  "non_manual_status": "passed",
+  "commands": ["targeted verification: passed"],
+  "manual_pending": [
+    {
+      "check_id": "manual-check-id",
+      "reason": "implemented feature awaits human interaction",
+      "roadmap_path": "/absolute/project/docs/roadmap/roadmap.md#manual-validation"
+    }
+  ]
+}
+```
+
+`non_manual_status` 包括实现复审、必需自动验证及其他非人工前置，必须真实通过；不能把失败、unsupported 或缺能力填成通过。`manual_pending` 是已登记人工项的定位，不是通过证据。状态助手检查元数据完整性，不代替读取清单或实际验证。PR 评论列同一清单，正常合入并推进；run 完成时保留清单及未验事实，不等待人工结果才暂停 heartbeat。用户要求先完成人工验收、或人工验收已出现真实失败时，继续使用原阻塞规则。
+
+已合入 task 的原审核、验证和合并证据仍不可修改；补验结果另写 roadmap/验收记录，也可保存在 run.decisions。原 `manual_pending` 保留的是合入时尚未人工验证的事实。
 
 task phase：`pending → creating → running → pr_ready → reviewing → ready_to_merge → merged`；停顿用 `blocked` 或 `needs_user_decision`。run phase：`active / paused / needs_user_decision / complete`。每次读取/写入都校验基本证据；助手不自动推断 Git 或 session 状态。
 
@@ -108,7 +130,7 @@ kind 可为 `create_session / send_prompt / comment_pr / merge_pr / create_heart
 
 ## 合并证据与恢复
 
-`ready_to_merge` 要求 pr.head、review.head、validation.head、merge_gate.head 相同，review/merge_gate 的 base 与当前记录的 PR base 相同，评论 URL 存在，验证和检查通过。`merged` 额外要求 merge.head 相同、merge commit 及 merged_at 非空。head 或 base 改变会清掉旧证据，退回 pr_ready；不能拿旧审核直接合并。实际合并操作前仍须再次读取平台，JSON 校验不消除竞争窗口。
+`ready_to_merge` 要求 pr.head、review.head、validation.head、merge_gate.head 相同，review/merge_gate 的 base 与当前记录的 PR base 相同，评论 URL 存在，验证满足上述通过/人工登记/已授权例外条件，平台检查通过。`merged` 额外要求 merge.head 相同、merge commit 及 merged_at 非空。head 或 base 改变会清掉旧证据，退回 pr_ready；不能拿旧审核直接合并。实际合并操作前仍须再次读取平台，JSON 校验不消除竞争窗口。
 
 恢复每个任务时核对：session 是否仍写入，worktree 的 HEAD/分支/dirty 状态，PR 最新 head/base/状态/检查；记录与现实矛盾时保留旧证据并记录原因。未经复审的外部合并不自动过关；关闭 PR 不自动另开。暂停/完成时都通过工具更新原 heartbeat，不新增替代 automation。最终任务合并后先将 run 标记 complete，再暂停 automation；暂停响应未知时保留 pending，下次只核对/补完成停用，不再次执行任务。
 

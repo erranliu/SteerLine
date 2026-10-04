@@ -35,7 +35,7 @@ func (m Model) updateActionSubmitted(msg actionSubmittedMsg) (tea.Model, tea.Cmd
 			delete(state.view.Outstanding, action.RequestID)
 		}
 		if index == m.selected {
-			m.status = action.Message
+			m.status = feedbackReceiptStatus(*state, action)
 		}
 		m.saveProjectView(index)
 		if refreshNow {
@@ -53,7 +53,7 @@ func (m Model) updateActionSubmitted(msg actionSubmittedMsg) (tea.Model, tea.Cmd
 	refreshNow := false
 	if responseMismatch {
 		if index == m.selected {
-			m.status = action.Message
+			m.status = feedbackReceiptStatus(*state, action)
 		}
 	} else if msg.err != nil {
 		action.Status, action.Message = "indeterminate", "提交结果待确认："+msg.err.Error()
@@ -68,7 +68,7 @@ func (m Model) updateActionSubmitted(msg actionSubmittedMsg) (tea.Model, tea.Cmd
 			refreshNow = true
 		}
 		if index == m.selected {
-			m.status = action.Message
+			m.status = feedbackReceiptStatus(*state, action)
 		}
 	} else {
 		action.Status, action.Message = "submitted", "请求已提交，等待服务确认"
@@ -108,7 +108,7 @@ func (m Model) updateActionReceipt(msg actionReceiptMsg) (tea.Model, tea.Cmd) {
 			delete(state.view.Outstanding, action.RequestID)
 		}
 		if index == m.selected {
-			m.status = action.Message
+			m.status = feedbackReceiptStatus(*state, action)
 		}
 		m.saveProjectView(index)
 		if refreshNow {
@@ -133,7 +133,7 @@ func (m Model) updateActionReceipt(msg actionReceiptMsg) (tea.Model, tea.Cmd) {
 			action.Status, action.Message, action.Resolved = "indeterminate", "receipt 与原控制动作或实例不匹配；已停止自动跟踪", true
 			m.saveProjectView(index)
 			if index == m.selected {
-				m.status = action.Message
+				m.status = feedbackReceiptStatus(*state, action)
 			}
 			return m, nil
 		}
@@ -158,7 +158,7 @@ func (m Model) updateActionReceipt(msg actionReceiptMsg) (tea.Model, tea.Cmd) {
 			action.Status, action.Message, action.Resolved = "indeterminate", "request_id 内容与原控制动作、payload 或目标不匹配；已停止自动跟踪", true
 			m.saveProjectView(index)
 			if index == m.selected {
-				m.status = action.Message
+				m.status = feedbackReceiptStatus(*state, action)
 			}
 			return m, nil
 		}

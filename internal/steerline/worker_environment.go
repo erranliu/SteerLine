@@ -106,7 +106,7 @@ func (s *Service) rejectUnsentBlockedAnswer(run *Run) error {
 	if err := s.commitWorker(run); err != nil {
 		return err
 	}
-	return (CommandService{Store: s.commandStore, Project: s.Config.identity}).SetStatus(ctx, command, "rejected", mustJSON(map[string]string{"code": "environment_blocked", "error": "unsent answer was cancelled by the environment blocker; review and submit a new answer after recheck"}))
+	return (s.commandService(s.Config.identity)).SetStatus(ctx, command, "rejected", mustJSON(map[string]string{"code": "environment_blocked", "error": "unsent answer was cancelled by the environment blocker; review and submit a new answer after recheck"}))
 }
 
 func (s *Service) observeWorkerEnvironment(ctx context.Context, run *Run) error {

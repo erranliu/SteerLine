@@ -72,7 +72,7 @@ func TestSimplifiedEnvironmentSavedInputRequiresFreshAnswer(t *testing.T) {
 			oldID := run.Decision.ID
 			originalRequest := recordFingerprint(run.Decision.Request)
 			answer := executionmodel.DecisionAnswer{DecisionID: oldID, RunID: run.RunID, Note: "fresh text", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: s.State.Service.InstanceID, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: run.RecoveryVersion}
-			commands := CommandService{Store: s.commandStore, Project: s.Config.Identity()}
+			commands := newTestCommandService(s.commandStore, s.Config.Identity())
 			command, _, err := commands.AnswerDecisionWithID(context.Background(), newID(), oldID, run.Decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 			require(t, err)
 			_, _, err = commands.AcceptAnswer(context.Background(), command, answer)
@@ -133,7 +133,7 @@ func TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR(t *testing.T) {
 
 	note := "保留原问题，不要重派任务。"
 	answer := executionmodel.DecisionAnswer{DecisionID: question.ID, RunID: run.RunID, Note: note, Answers: map[string][]string{"business": {note}}, AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: s.State.Service.InstanceID, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: run.RecoveryVersion}
-	commands := CommandService{Store: s.commandStore, Project: s.Config.Identity()}
+	commands := newTestCommandService(s.commandStore, s.Config.Identity())
 	command, _, err := commands.AnswerDecisionWithID(context.Background(), newID(), question.ID, question.Version, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
 	require(t, s.processCommandsAndDecisions(context.Background()))

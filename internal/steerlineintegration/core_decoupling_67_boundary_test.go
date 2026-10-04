@@ -14,7 +14,7 @@ import (
 
 func TestCD67CoreBoundary(t *testing.T) {
 	t.Run("pure_ownership_all_tags_production_and_tests", func(t *testing.T) {
-		for _, owner := range []string{"task/model", "execution/model", "execution/backend", "product/api", "storage/ports"} {
+		for _, owner := range []string{"steerline/taskview", "task", "task/model", "execution/model", "execution/backend", "product/api", "storage/ports"} {
 			t.Run(owner, func(t *testing.T) {
 				for _, dependency := range []string{"database/sql", "github.com/erranliu/SteerLine/internal/steerline/contracts", "github.com/erranliu/SteerLine/internal/steerline/query", "github.com/erranliu/SteerLine/internal/steerline/sqlite", "github.com/erranliu/SteerLine/internal/steerline/codexworker", "github.com/erranliu/SteerLine/internal/steerlineapp", "github.com/erranliu/SteerLine/internal/helper", "example.org/implementation"} {
 					for _, filename := range []string{"edge_plan9.go", "edge_linux_test.go"} {
@@ -32,7 +32,7 @@ func TestCD67CoreBoundary(t *testing.T) {
 			})
 		}
 		// A model importing another pure domain is still forbidden.
-		for _, edge := range [][2]string{{"task/model", "execution/backend"}, {"execution/model", "task/model"}, {"execution/backend", "execution/model"}, {"product/api", "execution/backend"}, {"storage/ports", "steerline/persistence"}} {
+		for _, edge := range [][2]string{{"task", "storage/ports"}, {"task", "execution/model"}, {"task/model", "execution/backend"}, {"execution/model", "task/model"}, {"execution/backend", "execution/model"}, {"product/api", "execution/backend"}, {"storage/ports", "steerline/persistence"}} {
 			root := t.TempDir()
 			dir := filepath.Join(root, "internal", edge[0])
 			require(t, os.MkdirAll(dir, 0700))
@@ -129,7 +129,7 @@ func TestCD67CoreBoundary(t *testing.T) {
 		raw, err := json.Marshal(report)
 		require(t, err)
 		t.Log(string(raw))
-		for _, owner := range []string{"task/model", "execution/model", "execution/backend", "product/api", "storage/ports"} {
+		for _, owner := range []string{"steerline/taskview", "task", "task/model", "execution/model", "execution/backend", "product/api", "storage/ports"} {
 			if report.PureFiles["github.com/erranliu/SteerLine/internal/"+owner] == 0 {
 				t.Fatalf("empty migrated owner scan: %s", owner)
 			}

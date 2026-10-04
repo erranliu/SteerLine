@@ -36,7 +36,7 @@ func newMCFixture(t *testing.T) mcFixture {
 	c.PR.Query = executionbackend.Command{Executable: os.Args[0], Args: []string{"mc-provider", provider, "{number}"}}
 	c.PR.Close = executionbackend.Command{}
 	setNeutralProfile(t, &c, neutralSettings{Executable: os.Args[0], Model: "candidate-a", ReasoningEffort: "medium"})
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	input := taskBatchFixture(t, c, commit, batchTasks(8, 9), []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k8"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k9"}}})
 	_, err := commands.CreateTaskBatch(context.Background(), c, input, newID(), 1, "operator")
 	require(t, err)
@@ -83,7 +83,7 @@ func (p mcPort) Execute(ctx context.Context, r executionbackend.LifecycleRequest
 	return receipt, observer, err
 }
 
-func (f mcFixture) start(t *testing.T, model string) (TaskClaimReceipt, TaskClaimOptions) {
+func (f mcFixture) start(t *testing.T, model string) (executionmodel.TaskClaimReceipt, TaskClaimOptions) {
 	t.Helper()
 	graph, err := f.store.TaskGraphSnapshot(context.Background(), f.c.Identity())
 	require(t, err)
@@ -297,7 +297,7 @@ func TestMC2(t *testing.T) {
 func mcAnswer(t *testing.T, s *Service, run *Run, note string) {
 	t.Helper()
 	answer := executionmodel.DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: note, AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: s.State.Service.InstanceID}
-	_, _, err := (CommandService{Store: s.commandStore, Project: s.Config.Identity()}).AnswerDecisionWithID(context.Background(), newID(), answer.DecisionID, answer.ExpectedDecisionVersion, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
+	_, _, err := (newTestCommandService(s.commandStore, s.Config.Identity())).AnswerDecisionWithID(context.Background(), newID(), answer.DecisionID, answer.ExpectedDecisionVersion, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
 	require(t, s.processCommandsAndDecisions(context.Background()))
 }
@@ -420,6 +420,11 @@ func TestMC5(t *testing.T) {
 	require(t, err)
 	if len(snapshot.Deliveries) != 0 || nativeTaskRecord(snapshot.Tasks, "8").Status != "in_progress" {
 		t.Fatal("delivery/closed partially committed")
+	}
+	var normalizedResults int
+	require(t, f.store.db.QueryRow(`SELECT COUNT(*) FROM task_results`).Scan(&normalizedResults))
+	if normalizedResults != 0 {
+		t.Fatal("failed close committed a normalized task result")
 	}
 	_, err = f.store.db.Exec(`DROP TRIGGER mc_delivery_rollback`)
 	require(t, err)
@@ -781,7 +786,7 @@ func TestMC8(t *testing.T) {
 
 func TestMC9(t *testing.T) {
 	f := newMCFixture(t)
-	var receipt TaskClaimReceipt
+	var receipt executionmodel.TaskClaimReceipt
 	var options TaskClaimOptions
 	for i := 1; i < 5; i++ {
 		receipt, options = f.start(t, "candidate-b")

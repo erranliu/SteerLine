@@ -31,6 +31,8 @@ var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImp
 var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary",
 	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests",
+	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/steerline/taskview",
+	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/task",
 	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/task/model",
 	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/model",
 	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/backend",
@@ -60,7 +62,7 @@ var quickBoundaryAssigned = []string{
 	"TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
 }
 
-var quickRulePackages = []string{"github.com/erranliu/SteerLine/internal/task/model", corePackage + "/taskview", "github.com/erranliu/SteerLine/internal/storage/ports", corePackage + "/task", corePackage + "/persistence", corePackage + "/testprotocol", "github.com/erranliu/SteerLine/internal/execution/model", "github.com/erranliu/SteerLine/internal/execution/backend", corePackage + "/contracts", corePackage + "/projection", corePackage + "/query", corePackage + "/sqlite", "github.com/erranliu/SteerLine/internal/testboundary"}
+var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{corePackage + "/taskview", "github.com/erranliu/SteerLine/internal/storage/ports", "github.com/erranliu/SteerLine/internal/execution", corePackage + "/persistence", corePackage + "/testprotocol", "github.com/erranliu/SteerLine/internal/execution/model", "github.com/erranliu/SteerLine/internal/execution/backend", corePackage + "/contracts", corePackage + "/projection", corePackage + "/query", corePackage + "/sqlite", "github.com/erranliu/SteerLine/internal/testboundary"}...)
 
 var quickOwnerCases = []struct {
 	ID, Package string

@@ -18,7 +18,7 @@ import (
 func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	input := taskBatchFixture(t, c, commit, batchTasks(8, 9), []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k8"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k9"}}})
 	validation, err := commands.ValidateTaskBatch(ctx, c, input)
 	if err != nil || !validation.Valid {
@@ -60,17 +60,17 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 		t.Fatal(err)
 	}
 	mergedAt := time.Now().UTC()
-	proof := TaskDeliveryEvidence{PRInstance: "https://git.example", URL: url, Repository: "o/r", PRNumber: 8, BaseBranch: "main", State: "merged", Merged: true, MergedAt: mergedAt, MergeCommit: commit}
+	proof := executionmodel.TaskDeliveryEvidence{PRInstance: "https://git.example", URL: url, Repository: "o/r", PRNumber: 8, BaseBranch: "main", State: "merged", Merged: true, MergedAt: mergedAt, MergeCommit: commit}
 	evidence, err := json.Marshal(proof)
 	if err != nil {
 		t.Fatal(err)
 	}
-	delivery := TaskDeliveryRecord{ProjectIdentity: c.Identity(), TaskID: "8", SelectedWorkflowRunID: wf.WorkflowRunID, PRInstance: proof.PRInstance, PRRepository: proof.Repository, PRNumber: 8, PRURL: url, MergeCommit: commit, MergedAt: mergedAt, RecordedAt: created, Evidence: evidence}
+	delivery := executionmodel.TaskDeliveryRecord{ProjectIdentity: c.Identity(), TaskID: "8", SelectedWorkflowRunID: wf.WorkflowRunID, PRInstance: proof.PRInstance, PRRepository: proof.Repository, PRNumber: 8, PRURL: url, MergeCommit: commit, MergedAt: mergedAt, RecordedAt: created, Evidence: evidence}
 	verifiedSnapshot, err := store.Query(ctx, c.Identity())
 	if err != nil {
 		t.Fatal(err)
 	}
-	receipt, err := commands.commitNativeDelivery(ctx, store, graph.Authority.AuthorityVersion, claimed, wf, execution, contract, url, delivery, candidateBindings(verifiedSnapshot, task.TaskID))
+	receipt, err := commands.commitNativeDelivery(ctx, store, graph.Authority.AuthorityVersion, graph.Authority.GraphRevision, claimed, wf, execution, contract, url, delivery, executionmodel.CandidateBindings(verifiedSnapshot.WorkflowRuns, verifiedSnapshot.Executions, task.TaskID))
 	if err != nil || receipt.Status != "closed" {
 		t.Fatalf("commit without step results: receipt=%+v error=%v", receipt, err)
 	}
@@ -115,7 +115,7 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 		t.Fatal(err)
 	}
 	defer store.Close()
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	input := taskBatchFixture(t, c, commit, batchTasks(8, 9), []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k8"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k9"}}})
 	if _, err := commands.CreateTaskBatch(ctx, c, input, strings.Repeat("8", 32), 1, "operator"); err != nil {
 		t.Fatal(err)
@@ -200,7 +200,7 @@ func TestWorkerFlowClaimNeedsNoProjectSteps(t *testing.T) {
 	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
 		t.Fatalf("push fixture branch: %v: %s", err, out)
 	}
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	input := taskBatchFixture(t, c, commit, batchTasks(8), nil)
 	validation, err := commands.ValidateTaskBatch(ctx, c, input)
 	if err != nil || !validation.Valid {

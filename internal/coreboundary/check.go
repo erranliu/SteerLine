@@ -45,6 +45,10 @@ func PureImportsAllowed(owner, dependency string) bool {
 		return true
 	}
 	switch owner {
+	case module + "/internal/steerline/taskview":
+		return dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model"
+	case module + "/internal/task":
+		return dependency == module+"/internal/task/model"
 	case module + "/internal/execution/model":
 		return dependency == module+"/internal/execution/backend"
 	case module + "/internal/storage/ports":
@@ -53,7 +57,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	return false
 }
 
-var purePackages = []string{module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/steerline/taskview", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func purePackage(pkg string) bool {
 	for _, owner := range purePackages {

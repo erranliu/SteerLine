@@ -44,14 +44,14 @@ func Claim(record TaskRecord, claimant string, at time.Time) (TaskRecord, error)
 		return TaskRecord{}, newError("stale_version", "only an open task can be claimed")
 	}
 	next := record
-	if err := SetStatus(&next, "in_progress", false, at); err != nil {
+	if err := SetStatus(&next, "in_progress", at); err != nil {
 		return TaskRecord{}, err
 	}
 	next.Claimant = claimant
 	return next, nil
 }
 
-func Discard(record TaskRecord, reason, requestedBy, requestID string, cleanup []string, mergedPR bool, at time.Time) (TaskRecord, error) {
+func Discard(record TaskRecord, reason, requestedBy, requestID string, cleanup []string, at time.Time) (TaskRecord, error) {
 	if record.Status != "open" && record.Status != "in_progress" {
 		return TaskRecord{}, newError("immutable_task", "only an open or in-progress task can be discarded")
 	}
@@ -59,7 +59,7 @@ func Discard(record TaskRecord, reason, requestedBy, requestID string, cleanup [
 		return TaskRecord{}, newError("immutable_task", "discard requires reason, requester and request identity")
 	}
 	next := record
-	if err := SetStatus(&next, "discarded", mergedPR, at); err != nil {
+	if err := SetStatus(&next, "discarded", at); err != nil {
 		return TaskRecord{}, err
 	}
 	next.DiscardedAt = &at

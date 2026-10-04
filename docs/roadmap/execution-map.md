@@ -10,7 +10,7 @@
 
 第一阶段统一只交付和验收本地 Codex 与本机 Orca。远程准入、派发、反馈、恢复、取消及本机/远端混合流程暂移出一期，也不列作一期阻塞或待补验；后续另行规划。保留既有远端代码、协议定义及历史证据，不将它们声明为当前支持或完成条件。Git remote 和托管 PR 发布仍属于本机交付链。
 
-已具备持续worker/原会话反馈、各配置独立候选、宽松五候选开始检查、合并前放弃和唯一交付，以及执行需求准入、配置注册和固定原生绑定封套。候选TUI 实现已具备；CC5 由用户人工补验，按明确授权不阻止 #39 开发，本机不同后端方案验收仍由 #39 交付。后续复用这些能力，保持原身份、版本、提交屏障及恢复授权；当前接口归属需要核实时按需查[架构索引](../architecture/current-code-architecture.md)。图中已交付基础节点和原硬前置ID仅表达依赖，不要求阅读历史Spec/Plan，也不解除未完成的原生验收限制。
+已具备持续worker/原会话反馈、各配置独立候选、宽松五候选开始检查、合并前放弃和唯一交付，以及执行需求准入、配置注册和固定原生绑定封套。候选TUI 实现已具备；CC5 已于 2026-10-04 由用户人工确认通过，本机不同后端方案验收仍由 #39 交付。后续复用这些能力，保持原身份、版本、提交屏障及恢复授权；当前接口归属需要核实时按需查[架构索引](../architecture/current-code-architecture.md)。图中已交付基础节点和原硬前置ID仅表达依赖，不要求阅读历史Spec/Plan，也不解除未完成的原生验收限制。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
@@ -63,8 +63,6 @@ flowchart LR
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 74 | 任务选择与执行结果边界 | 任务工作/原子领取与规范化结果边界、执行核验归属 | `#73` | [Spec](../spec/three-line-02-task-execution-boundary.spec.md) · [Plan](../spec/three-line-02-task-execution-boundary.plan.md) |
-| 75 | 任务应用用例归包 | 任务创建/依赖/挑选/结果应用归 task | `#74` | [Spec](../spec/three-line-03-task-usecases.spec.md) · [Plan](../spec/three-line-03-task-usecases.plan.md) |
 | 76 | 执行应用用例归包 | 候选/会话/恢复/交付/清理归 execution | `#74` | [Spec](../spec/three-line-04-execution-usecases.spec.md) · [Plan](../spec/three-line-04-execution-usecases.plan.md) |
 | 77 | 产品查询与控制台契约收窄 | 公开 DTO 收窄、唯一 query/client 和 console 归包 | `#74`、`#38` | [Spec](../spec/three-line-05-product-console.spec.md) · [Plan](../spec/three-line-05-product-console.plan.md) |
 | 78 | 执行适配与资源目录归组 | 后端协议与 Git/PR/进程资源归组 | `#76` | [Spec](../spec/three-line-06-adapters-resources.spec.md) · [Plan](../spec/three-line-06-adapters-resources.plan.md) |
@@ -78,8 +76,8 @@ flowchart LR
     C37["#37 候选基础"] --> M01["#73 纯定义基础"]
     C37 --> U38["#38 候选 UI"]
     U38 --> A39["#39 原生验收"]
-    M01 --> M02["#74 选择/结果边界"]
-    M02 --> M03["#75 任务用例"]
+    M01 --> M02["已具备 #74 选择/结果基础"]
+    M02 --> M03["已交付 #75 任务用例候选"]
     M02 --> M04["#76 执行用例"]
     M02 --> M05["#77 产品/控制台"]
     U38 --> M05
@@ -126,3 +124,7 @@ flowchart LR
 #36 验单 worker 持续交互；#39 验多候选竞争；#42 验固定版本、24 小时和提升组合；#53 验完整规划/UI/执行闭环。上游证据可复用，接口或平台改变的部分定向重验，不重复构造已删除的五步与答案应用证明矩阵。
 
 不同任务人工并行和自动派发策略沿既有能力；共享工作区、平台宿主、构建或 SQLite 接线时串行协调。新任务只有固定前置整体交付后可领取，没有接口提前完成的放行状态。
+
+#74 已实现的工作/结果/领取/丢弃端口及 Service/CommandService/Config 的实际拆分见[交接清单](../validation/three-line-02-task-execution-boundary/integration-ownership.md)。Task ID 与后继固定硬前置保持；#75/#76 基于实际已接通端口按唯一文件所有者推进，共用构造/CLI/runner/守卫段由 #76 单点顺序集成。#77/#79/#80/#81/#82 按用户当前指令暂停。
+
+#75 已从活动实现条目移出，任务 ID 与后继 #79/#80 的固定基础保留；本次候选仍待协调独立复审/合并，不据此提前放行后继。真实任务能力及 #76 领取文件核验/共同配置接线见[交付与接口交接](../validation/three-line-03-task-usecases/README.md)。

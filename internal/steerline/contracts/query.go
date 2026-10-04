@@ -21,7 +21,7 @@ type NativeTaskDetail struct {
 	Priority          int                                `json:"priority"`
 	Contract          taskmodel.TaskContract             `json:"contract"`
 	WorkflowRuns      []executionmodel.WorkflowRunRecord `json:"workflow_runs"`
-	Delivery          *TaskDeliveryRecord                `json:"delivery,omitempty"`
+	Delivery          *executionmodel.TaskDeliveryRecord `json:"delivery,omitempty"`
 	Predecessors      []taskmodel.TaskDependencyStatus   `json:"predecessors"`
 	Successors        []string                           `json:"successors"`
 	DependencyReady   bool                               `json:"dependency_ready"`

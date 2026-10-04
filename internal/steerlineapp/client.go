@@ -17,10 +17,8 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
 	"github.com/erranliu/SteerLine/internal/steerlineclient"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func OpenClient(ctx context.Context, path string) (*steerlineclient.Client, error) {
@@ -97,7 +95,7 @@ func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef
 					return nil, err
 				}
 			}
-			commands, err := NewCommandService(s, c)
+			commands, err := newClientCommands(s, c, lock)
 			if err != nil {
 				_ = s.Close()
 				if lock != nil {
@@ -105,7 +103,7 @@ func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef
 				}
 				return nil, err
 			}
-			return &clientCommands{service: commands, config: c, store: s, lock: lock}, nil
+			return commands, nil
 		},
 		Connect: func(ctx context.Context, obs *api.ObservationSnapshot) api.ServiceConnection {
 			if obs == nil {
@@ -185,37 +183,6 @@ func (r *clientReader) Command(ctx context.Context, id string) (storageports.Com
 
 // These compile-time assertions keep the injected port tied to real consumers.
 var _ api.Reader = (*clientReader)(nil)
-
-type clientCommands struct {
-	service steerline.CommandService
-	config  steerline.Config
-	store   persistence.Connection
-	lock    *steerline.RepoLock
-}
-
-func (r *clientCommands) Close() error {
-	err := r.store.Close()
-	if r.lock != nil {
-		r.lock.Close()
-	}
-	return err
-}
-
-func (r *clientCommands) Validate(ctx context.Context, payload []byte) (taskmodel.TaskBatchValidation, error) {
-	return r.service.ValidateTaskBatch(ctx, r.config, payload)
-}
-
-func (r *clientCommands) Create(ctx context.Context, in productapi.CreateInput) (taskmodel.TaskBatchReceipt, error) {
-	return r.service.CreateTaskBatch(ctx, r.config, in.Payload, in.RequestID, in.ExpectedAuthorityVersion, in.RequestedBy)
-}
-
-func (r *clientCommands) Discard(ctx context.Context, in productapi.DiscardInput) (taskmodel.TaskDiscardReceipt, error) {
-	return r.service.DiscardNativeTask(ctx, r.config, in.TaskID, in.RequestID, in.ExpectedVersion, in.Reason, in.RequestedBy)
-}
-
-func (r *clientCommands) AddPredecessors(ctx context.Context, in task.TaskPredecessorAddInput) (task.TaskPredecessorAddReceipt, error) {
-	return r.service.AddNativeTaskPredecessors(ctx, r.config, in)
-}
 
 type clientControl struct{ config steerline.Config }
 

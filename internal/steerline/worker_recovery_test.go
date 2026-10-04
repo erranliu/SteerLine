@@ -49,7 +49,7 @@ func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
 	service.State.Service.Ready = true
 	require(t, service.commitWorker(run))
 	answer := executionmodel.DecisionAnswer{DecisionID: decisionID, RunID: run.RunID, OptionID: "continue", Note: "resume after inspecting files", AnsweredBy: "operator", ExpectedDecisionVersion: decisionVersion, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID, SourceAttemptID: run.AttemptID, ExpectedRecoveryVersion: execution.RecoveryVersion}
-	commands := CommandService{Store: service.commandStore, Project: service.Config.identity}
+	commands := newTestCommandService(service.commandStore, service.Config.identity)
 	command, _, err := commands.AnswerDecisionWithID(context.Background(), newID(), decisionID, decisionVersion, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
 	record, _, err := commands.AcceptAnswer(context.Background(), command, answer)

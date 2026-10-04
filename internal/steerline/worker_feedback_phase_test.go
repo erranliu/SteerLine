@@ -17,7 +17,7 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	require(t, service.commitWorker(run))
 	decision := service.decisionRecord(run)
 	answer := executionmodel.DecisionAnswer{DecisionID: decision.DecisionID, RunID: run.RunID, Note: "continue", AnsweredBy: "operator", AnsweredAt: now(), ExpectedDecisionVersion: decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
-	commands := CommandService{Store: service.commandStore, Project: service.Config.identity}
+	commands := newTestCommandService(service.commandStore, service.Config.identity)
 	command, _, err := commands.AnswerDecisionWithID(ctx, newID(), decision.DecisionID, decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
 	_, _, err = commands.AcceptAnswer(ctx, command, answer)

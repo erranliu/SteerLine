@@ -10,6 +10,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	taskapp "github.com/erranliu/SteerLine/internal/task"
 )
 
 const neutralProfileKey = "fixture.config"
@@ -263,7 +264,7 @@ func newNeutralService(c Config) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	service, err := NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, db)
+	service, err := NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, db, taskapp.Service{Reader: db}, taskapp.Service{Reader: db})
 	if err != nil {
 		_ = db.Close()
 	}

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"sort"
 	"strings"
 	"time"
 
@@ -25,68 +24,11 @@ func participatingCandidates(snapshot DomainSnapshot, taskID string) int {
 	return count
 }
 
-func candidateBase(snapshot DomainSnapshot, taskID string) (string, error) {
-	base := ""
-	for _, w := range snapshot.WorkflowRuns {
-		if w.TaskID != taskID {
-			continue
-		}
-		_, e, err := selectedNativeDeliveryState(snapshot, taskID, w.WorkflowRunID)
-		if err != nil {
-			return "", err
-		}
-		if !taskmodel.ValidCommit(e.Workspace.Base) || base != "" && base != e.Workspace.Base {
-			return "", nativeErr("contract_mismatch", "candidate common base is missing or inconsistent")
-		}
-		base = e.Workspace.Base
-	}
-	if base == "" {
-		return "", nativeErr("task_not_ready", "additional candidate requires the original task claim")
-	}
-	return base, nil
-}
-
-// The set includes historical and abandoned PRs. Sampling/turn diagnostics do
-// not alter this binding comparison; new candidates, PRs or exits do.
-func candidateBindings(snapshot DomainSnapshot, taskID string) string {
-	type binding struct {
-		ID, Selected, PR, Proposed, Profile string
-		History                             []string
-		Exit                                *executionmodel.CandidateAbandonment
-	}
-	values := []binding{}
-	for _, w := range snapshot.WorkflowRuns {
-		if w.TaskID == taskID {
-			values = append(values, binding{w.WorkflowRunID, w.SelectedResult, w.PRURL, w.PRCandidateURL, digestValue(w.ExecutionProfile), w.PRHistory, w.Abandonment})
-		}
-	}
-	sort.Slice(values, func(i, j int) bool { return values[i].ID < values[j].ID })
-	return digestValue(values)
-}
-
-// Start safety rechecks known PR identities, not participation count or the
-// membership of PR-less siblings. Two starts sampled below five may both commit.
-func candidatePRBindings(snapshot DomainSnapshot, taskID string) string {
-	known := DomainSnapshot{}
-	for _, w := range snapshot.WorkflowRuns {
-		if w.TaskID == taskID && (w.PRURL != "" || w.PRCandidateURL != "" || len(w.PRHistory) != 0) {
-			known.WorkflowRuns = append(known.WorkflowRuns, w)
-		}
-	}
-	return candidateBindings(known, taskID)
-}
-
-type verifiedCandidatePR struct {
-	WorkflowID string
-	URL        string
-	Info       executionmodel.PRInfo
-}
-
 // selectedID="" requires every known PR to be verified unmerged. Delivery
 // requires exactly the selected eligible PR merged, with all siblings known.
-func verifyKnownCandidatePRs(ctx context.Context, config Config, snapshot DomainSnapshot, taskID string, verifier TaskDeliveryVerifier, selectedID string) ([]verifiedCandidatePR, error) {
+func verifyKnownCandidatePRs(ctx context.Context, config Config, snapshot DomainSnapshot, taskID string, verifier TaskDeliveryVerifier, selectedID string) ([]executionmodel.VerifiedCandidatePR, error) {
 	seen := map[string]string{}
-	results := []verifiedCandidatePR{}
+	results := []executionmodel.VerifiedCandidatePR{}
 	merged := 0
 	for _, w := range snapshot.WorkflowRuns {
 		if w.TaskID != taskID {
@@ -126,7 +68,7 @@ func verifyKnownCandidatePRs(ctx context.Context, config Config, snapshot Domain
 			if err := publication.ValidateWorkerPRIdentity(info, url, fixed.PR.Repository, w.Branch, e.Workspace.Branch); err != nil {
 				return nil, nativeErr("merge_state_unknown", "known PR differs from its fixed candidate branch: "+url)
 			}
-			results = append(results, verifiedCandidatePR{w.WorkflowRunID, url, info})
+			results = append(results, executionmodel.VerifiedCandidatePR{w.WorkflowRunID, url, info})
 			if info.Merged || info.State == "merged" {
 				merged++
 				if selectedID == "" {
@@ -253,7 +195,7 @@ func (c CommandService) AbandonNativeCandidate(ctx context.Context, config Confi
 		if err != nil {
 			return err
 		}
-		if currentTask == nil || currentTask.Version != task.Version || currentTask.Status != task.Status || w.ControlRevision != workflow.ControlRevision || candidateBindings(current, options.TaskID) != candidateBindings(snapshot, options.TaskID) {
+		if currentTask == nil || currentTask.Version != task.Version || currentTask.Status != task.Status || w.ControlRevision != workflow.ControlRevision || executionmodel.CandidateBindings(current.WorkflowRuns, current.Executions, options.TaskID) != executionmodel.CandidateBindings(snapshot.WorkflowRuns, snapshot.Executions, options.TaskID) {
 			return nativeErr("stale_version", "task, candidate or PR set changed during exit verification")
 		}
 		if status == "accepted" {
@@ -296,9 +238,9 @@ func (s *Service) candidateBusinessClosed(run *Run) bool {
 	return w == nil || w.Abandonment != nil || w.Phase == "abandoned" || w.Phase == "completed" || run.TaskStatus == "closed" || run.TaskStatus == "discarded"
 }
 
-func (c CommandService) recordCandidateMergeConflict(ctx context.Context, snapshot DomainSnapshot, taskID, workflowID, reason string, proofs ...verifiedCandidatePR) error {
+func (c CommandService) recordCandidateMergeConflict(ctx context.Context, snapshot DomainSnapshot, taskID, workflowID, reason string, proofs ...executionmodel.VerifiedCandidatePR) error {
 	err := c.Store.TransactCandidate(ctx, func(tx persistence.CandidateTx) error {
-		_, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, TaskID: taskID, WorkflowRunID: workflowID, ExternalSource: "candidate-delivery", ExternalID: taskID + ":" + candidateBindings(snapshot, taskID) + ":" + digestValue(reason), Type: "task.delivery.conflict", ReceivedAt: now(), Payload: mustJSON(map[string]any{"reason": reason, "known_prs": proofs})})
+		_, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, TaskID: taskID, WorkflowRunID: workflowID, ExternalSource: "candidate-delivery", ExternalID: taskID + ":" + executionmodel.CandidateBindings(snapshot.WorkflowRuns, snapshot.Executions, taskID) + ":" + digestValue(reason), Type: "task.delivery.conflict", ReceivedAt: now(), Payload: mustJSON(map[string]any{"reason": reason, "known_prs": proofs})})
 		return err
 	})
 	if err != nil {

@@ -54,7 +54,7 @@ func TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges(t *testing.T) {
 		t.Fatal(err)
 	}
 	mergedAt := time.Now().UTC()
-	delivery := TaskDeliveryRecord{TaskID: "8", SelectedWorkflowRunID: "wf-8", PRURL: "pr-9", MergeCommit: "merge-9", MergedAt: mergedAt}
+	delivery := executionmodel.TaskDeliveryRecord{TaskID: "8", SelectedWorkflowRunID: "wf-8", PRURL: "pr-9", MergeCommit: "merge-9", MergedAt: mergedAt}
 	if err := contracts.MarkWorkerDeliveryCommitted(taskmodel.TaskRecord{TaskID: "8", Status: "closed"}, &wf, delivery); err != nil || wf.Phase != "completed" {
 		t.Fatalf("committed delivery did not complete: phase=%s error=%v", wf.Phase, err)
 	}

@@ -1,0 +1,8 @@
+{"Time":"2026-10-04T19:01:44.8546553+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/recovery"}
+{"Time":"2026-10-04T19:01:45.9943951+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/recovery","Test":"TestWaitingMergeRestart"}
+{"Time":"2026-10-04T19:01:45.9943951+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/recovery","Test":"TestWaitingMergeRestart","Output":"=== RUN   TestWaitingMergeRestart\n"}
+{"Time":"2026-10-04T19:03:41.1687103+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/recovery","Test":"TestWaitingMergeRestart","Output":"--- PASS: TestWaitingMergeRestart (115.18s)\n"}
+{"Time":"2026-10-04T19:03:41.1692501+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/recovery","Test":"TestWaitingMergeRestart","Elapsed":115.18}
+{"Time":"2026-10-04T19:03:41.1692501+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/recovery","Output":"PASS\n"}
+{"Time":"2026-10-04T19:03:41.1735879+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/recovery","Output":"ok  \tgithub.com/erranliu/SteerLine/tests/e2e/suites/recovery\t116.320s\n"}
+{"Time":"2026-10-04T19:03:41.1735879+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/recovery","Elapsed":116.32}

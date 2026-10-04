@@ -20,6 +20,8 @@
 
 - `python -X utf8 scripts/roadmap_task_id.py check`：83 个任务身份文件通过，当前任务身份与两份活动表一致。
 - `git diff --check`：通过。
-- 修订的 39 份现有 Markdown 检查相对文件链接：无新增断链。架构索引原有 `internal/steerline/orcaworker/message_identity.go` 缺失链接不属于本次范围修订，未扩展修改其历史源码清单。
+- 与最新 #73 主线集成后，45 份变更 Markdown 的相对文件链接检查通过，无新增断链；架构索引保留主线最新代码归属。
+- `python -X utf8 .agents/skills/roadmap-runner/scripts/test_state.py -v`：18 项通过；人工登记后合并/续跑、失败拒绝、审核/检查/head 失效门禁均覆盖。
+- `python -X utf8 C:/Users/lmas1/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/roadmap-runner`：技能校验通过。
 - 复核一期愿景/#42 已无真实远端链、远端 agent 或远端认证完成门槛；#42 两条本机链、至少五个任务、24 小时条件仍在。
 - 本次不删除存量实现、不新增兼容/迁移，不将文档修订或本机结果声明为远端通过；人工补验继续按 roadmap 清单单独记录。

@@ -12,7 +12,7 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, execution executionmodel.ExecutionRecord, attempts []executionmodel.StepAttemptRecord, decisions []executionmodel.DecisionRecord, deliveries []contracts.TaskDeliveryRecord) (contracts.Run, error) {
+func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, execution executionmodel.ExecutionRecord, attempts []executionmodel.StepAttemptRecord, decisions []executionmodel.DecisionRecord, deliveries []executionmodel.TaskDeliveryRecord) (contracts.Run, error) {
 	if workflow.TaskID != task.TaskID || execution.WorkflowRunID != workflow.WorkflowRunID || workflow.SelectedResult != "" && workflow.SelectedResult != execution.ExecutionID {
 		return contracts.Run{}, errors.New("task, workflow and selected execution identity differ")
 	}

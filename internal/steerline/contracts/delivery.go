@@ -8,7 +8,7 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func MarkWorkerDeliveryCommitted(task taskmodel.TaskRecord, workflow *executionmodel.WorkflowRunRecord, delivery TaskDeliveryRecord) error {
+func MarkWorkerDeliveryCommitted(task taskmodel.TaskRecord, workflow *executionmodel.WorkflowRunRecord, delivery executionmodel.TaskDeliveryRecord) error {
 	if workflow == nil {
 		return errors.New("completed worker flow requires committed matching delivery")
 	}
