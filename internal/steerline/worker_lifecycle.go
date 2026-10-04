@@ -809,18 +809,14 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *Run, lifecycle 
 		key, kind = "worker-session:"+fixed.execution.ExecutionID+":"+commandID, "prepare_worker_session"
 	}
 	prior := s.operationByKey(key)
-	opID, err := s.startWorkerOperation(run, kind, key, candidate.Input.Turn)
+	operation, err := s.newLifecycleOperation(run, kind, key, candidate.Input.Turn)
 	if err != nil {
 		return err
 	}
-	operation := s.operationByKey(key)
-	if operation == nil || operation.OperationID != opID {
-		return errors.New("worker action lost its saved operation")
-	}
-	if err := validateSavedLifecycleOperation(operation, candidate.Action, candidate.Input); err != nil {
+	request, err := checkedLifecycleRequest(snapshot, operation, candidate.Action, candidate.Input)
+	if err != nil {
 		return err
 	}
-	request := lifecycleRequest(snapshot, *operation, candidate.Action, candidate.Input)
 	err = s.dispatchWorkerTurnEffect(ctx, run, lifecycle, request, prior != nil)
 	if errors.Is(err, errLifecycleEffectPending) {
 		return nil
@@ -890,31 +886,9 @@ func validateSavedLifecycleOperation(operation *OperationRecord, action executio
 	if operation == nil {
 		return errors.New("lifecycle operation is missing")
 	}
-	if err := input.Validate(action); err != nil {
+	value, err := lifecycleInputValue(action, input)
+	if err != nil {
 		return err
-	}
-	var value any
-	switch action {
-	case executionapi.LifecycleCreateResource:
-		value = input.Resource
-	case executionapi.LifecyclePrepareSession, executionapi.LifecycleStartTurn, executionapi.LifecycleSubmitInput:
-		value = input.Turn
-	case executionapi.LifecycleReportCompletion:
-		value = input.Completion
-	case executionapi.LifecycleDeliverFeedback:
-		value = input.Feedback
-	case executionapi.LifecycleAcknowledge:
-		value = input.Ack
-	case executionapi.LifecycleStopExecution, executionapi.LifecycleStopObservation:
-		value = input.Stop
-	case executionapi.LifecycleCleanup:
-		value = input.Cleanup
-	case executionapi.LifecycleHostAction:
-		value = input.Host
-	case executionapi.LifecyclePrepareWorkspace:
-		value = input.Workspace
-	default:
-		return errors.New("unsupported lifecycle operation action")
 	}
 	wire, err := json.Marshal(value)
 	if err != nil {
@@ -988,24 +962,14 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	} else if candidate.Action == executionapi.LifecycleSubmitInput {
 		key, kind, value = "worker-input:"+fixed.execution.ExecutionID+":"+candidate.Input.Turn.CommandID, "submit_worker_input", candidate.Input.Turn
 	}
-	prior := s.operationByKey(key)
-	var opID string
-	if prior != nil && prior.Status != "pending" {
-		opID = prior.OperationID
-	} else {
-		opID, err = s.startWorkerOperation(run, kind, key, value)
-		if err != nil {
-			return err
-		}
-	}
-	operation := s.operationByKey(key)
-	if operation == nil || operation.OperationID != opID {
-		return errors.New("lifecycle intent was not retained under its original identity")
+	operation, reconcile, err := s.originalLifecycleOperation(run, kind, key, value)
+	if err != nil {
+		return err
 	}
 	if operation.Status == "confirmed" {
 		return nil
 	}
-	if prior != nil && operation.Status == "rejected" {
+	if reconcile && operation.Status == "rejected" {
 		return errors.New("original lifecycle operation was rejected; a new user-authorized intent is required")
 	}
 	input := candidate.Input.Clone()
@@ -1052,7 +1016,7 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 	if err := request.Validate(); err != nil {
 		return err
 	}
-	return s.dispatchLifecycleEffect(ctx, run, lifecycle, request, prior != nil, func(run *Run, result lifecycleEffectResult) error {
+	return s.dispatchLifecycleEffect(ctx, run, lifecycle, request, reconcile, func(run *Run, result lifecycleEffectResult) error {
 		return s.applyLifecycleStepReceipt(run, request, result)
 	})
 }
@@ -1113,14 +1077,8 @@ func (s *Service) applyLifecycleStepReceipt(run *Run, request executionapi.Lifec
 	if receipt.Workspace != nil {
 		applyWorkflowWorkspaceEvidence(run, fixed.execution, fixed.execution.Workspace)
 	}
-	status := string(receipt.Disposition)
-	diagnostic := receipt.Diagnostic
-	if callErr != nil {
-		diagnostic = callErr.Error()
-		if receipt.Disposition != executionapi.OperationRejected {
-			status = "outcome_unknown"
-		}
-	} else if status == "accepted" && receipt.State.ResourceID == "" && receipt.State.WorktreeID == "" && receipt.Process == nil {
+	status, diagnostic := lifecycleOutcome(receipt, callErr)
+	if callErr == nil && status == "accepted" && receipt.State.ResourceID == "" && receipt.State.WorktreeID == "" && receipt.Process == nil {
 		status, diagnostic = "outcome_unknown", "resource lifecycle receipt did not identify its accepted resource"
 	}
 	if err := s.setOperationState(opID, status, receipt.RequestID, mustJSON(receipt), diagnostic); err != nil {
@@ -1298,19 +1256,11 @@ func (s *Service) acknowledgeLifecycleDelivery(run *Run, deliveryID string) erro
 		return ErrWorkerTurnStale
 	}
 	input := executionapi.LifecycleInput{Ack: &executionapi.AcknowledgeInput{DeliveryID: deliveryID}}
-	var opID string
-	if prior != nil && prior.Status != "pending" {
-		opID = prior.OperationID
-	} else {
-		opID, err = s.startWorkerOperation(run, string(executionapi.LifecycleAcknowledge), key, input.Ack)
-		if err != nil {
-			return err
-		}
+	operation, reconcile, err := s.originalLifecycleOperation(run, string(executionapi.LifecycleAcknowledge), key, input.Ack)
+	if err != nil {
+		return err
 	}
-	operation := s.operationByKey(key)
-	if operation == nil || operation.OperationID != opID {
-		return errors.New("lifecycle Delivery acknowledgement lost its persisted Operation")
-	}
+	opID := operation.OperationID
 	if err := validateSavedLifecycleOperation(operation, executionapi.LifecycleAcknowledge, input); err != nil {
 		return err
 	}
@@ -1319,18 +1269,18 @@ func (s *Service) acknowledgeLifecycleDelivery(run *Run, deliveryID string) erro
 		s.refreshRun(run)
 		return s.commitWorker(run, opID)
 	}
-	if prior != nil && operation.Status == "rejected" {
+	if reconcile && operation.Status == "rejected" {
 		return errors.New("original lifecycle Delivery acknowledgement was rejected")
 	}
 	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
 	if err != nil {
 		return err
 	}
-	request := lifecycleRequest(snapshot, *operation, executionapi.LifecycleAcknowledge, input)
-	if err := request.Validate(); err != nil {
+	request, err := checkedLifecycleRequest(snapshot, operation, executionapi.LifecycleAcknowledge, input)
+	if err != nil {
 		return err
 	}
-	err = s.dispatchLifecycleEffect(context.Background(), run, lifecycle, request, prior != nil, func(run *Run, result lifecycleEffectResult) error {
+	err = s.dispatchLifecycleEffect(context.Background(), run, lifecycle, request, reconcile, func(run *Run, result lifecycleEffectResult) error {
 		if result.observer != nil {
 			_ = result.observer.Close(context.Background())
 		}
@@ -1348,10 +1298,9 @@ func (s *Service) acknowledgeLifecycleDelivery(run *Run, deliveryID string) erro
 		if mergeErr := mergeLifecycleExecutionReceipt(fixed.execution, receipt); mergeErr != nil {
 			return mergeErr
 		}
-		status := string(receipt.Disposition)
-		diagnostic := receipt.Diagnostic
+		status, diagnostic := lifecycleOutcome(receipt, callErr)
 		if callErr != nil {
-			status, diagnostic = "outcome_unknown", callErr.Error()
+			status = "outcome_unknown"
 		}
 		if receipt.Disposition != executionapi.OperationConfirmed {
 			if status != "outcome_unknown" {
@@ -1383,23 +1332,8 @@ func (s *Service) acknowledgeLifecycleDelivery(run *Run, deliveryID string) erro
 }
 
 func (s *Service) applyAppServerSessionReceipt(run *Run, request executionapi.LifecycleRequest, receipt executionapi.LifecycleReceipt, executeErr error) (executionapi.LifecycleRequest, bool, error) {
-	if err := receipt.ValidateFor(request); err != nil {
-		return executionapi.LifecycleRequest{}, false, err
-	}
-	if err := s.validateLifecycleResultBinding(run, request); err != nil {
-		return executionapi.LifecycleRequest{}, false, err
-	}
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.checkedWorkerTurnReceipt(run, request, receipt, executionapi.LifecyclePrepareSession)
 	if err != nil {
-		return executionapi.LifecycleRequest{}, false, err
-	}
-	if request.Operation.Action != string(executionapi.LifecyclePrepareSession) || request.Snapshot.Session.ExecutionID != fixed.execution.ExecutionID ||
-		request.Snapshot.Session.AttemptID != fixed.execution.CurrentAttemptID || request.Snapshot.Session.Generation != fixed.execution.SessionGeneration ||
-		request.Snapshot.ResourceGeneration != fixed.execution.Generation || request.Snapshot.ConfigurationDigest != fixed.execution.ConfigurationDigest ||
-		request.Operation.PayloadDigest == "" || fixed.execution.PendingCommandID != request.Input.Turn.CommandID {
-		return executionapi.LifecycleRequest{}, false, ErrWorkerTurnStale
-	}
-	if err := validateSavedLifecycleOperation(snapshotOperation(&s.domain, request.Operation.ID), executionapi.LifecyclePrepareSession, request.Input); err != nil {
 		return executionapi.LifecycleRequest{}, false, err
 	}
 	execution := fixed.execution
@@ -1419,17 +1353,13 @@ func (s *Service) applyAppServerSessionReceipt(run *Run, request executionapi.Li
 		fixed.attempt.EventPath = receipt.EventPath
 		execution.LogPath = ptr(receipt.EventPath)
 	}
-	status := string(receipt.Disposition)
+	status, diagnostic := lifecycleOutcome(receipt, executeErr)
 	proceed := executeErr == nil && receipt.Disposition == executionapi.OperationConfirmed && receipt.State.SessionID != "" && receipt.Process != nil && receipt.State.SessionGeneration != ""
 	if executeErr != nil || !proceed {
 		if status != string(executionapi.OperationRejected) {
 			status = "outcome_unknown"
 		}
 		execution.Status = "blocked"
-		diagnostic := receipt.Diagnostic
-		if executeErr != nil {
-			diagnostic = executeErr.Error()
-		}
 		execution.Error = ptr("Original app-server session preparation is unverified: " + diagnostic)
 	}
 	if err := s.setOperationState(request.Operation.ID, status, receipt.State.SessionID, mustJSON(receipt), receipt.Diagnostic); err != nil {
@@ -1453,13 +1383,9 @@ func (s *Service) applyAppServerSessionReceipt(run *Run, request executionapi.Li
 	}
 	turn := *request.Input.Turn
 	key := "worker-turn:" + execution.ExecutionID + ":" + turn.CommandID
-	operationID, err := s.startWorkerOperation(run, "start_worker_turn", key, &turn)
+	operation, err := s.newLifecycleOperation(run, "start_worker_turn", key, &turn)
 	if err != nil {
 		return executionapi.LifecycleRequest{}, false, err
-	}
-	operation := s.operationByKey(key)
-	if operation == nil || operation.OperationID != operationID {
-		return executionapi.LifecycleRequest{}, false, errors.New("app-server session receipt did not authorize the original turn operation")
 	}
 	workflow, execution := s.workflowRecords(run)
 	attempt := s.workflowAttempt(run, run.AttemptID)
@@ -1467,7 +1393,8 @@ func (s *Service) applyAppServerSessionReceipt(run *Run, request executionapi.Li
 	if err != nil {
 		return executionapi.LifecycleRequest{}, false, err
 	}
-	return lifecycleRequest(snapshot, *operation, executionapi.LifecycleStartTurn, executionapi.LifecycleInput{Turn: &turn}), true, nil
+	request, err = checkedLifecycleRequest(snapshot, operation, executionapi.LifecycleStartTurn, executionapi.LifecycleInput{Turn: &turn})
+	return request, err == nil, err
 }
 
 func lifecycleExecutionRef(run *Run, execution *ExecutionRecord, generation string) executionapi.ExecutionRef {
@@ -1485,35 +1412,8 @@ func lifecycleExecutionRef(run *Run, execution *ExecutionRecord, generation stri
 }
 
 func (s *Service) applyAppServerTurnReceipt(run *Run, request executionapi.LifecycleRequest, receipt executionapi.LifecycleReceipt, observer executionapi.LifecycleObserver, executeErr error) error {
-	if err := receipt.ValidateFor(request); err != nil {
-		if observer != nil {
-			_ = observer.Close(context.Background())
-		}
-		return err
-	}
-	if err := s.validateLifecycleResultBinding(run, request); err != nil {
-		if observer != nil {
-			_ = observer.Close(context.Background())
-		}
-		return err
-	}
-	fixed, err := s.workerFlowContext(run)
+	fixed, err := s.checkedWorkerTurnReceipt(run, request, receipt, executionapi.LifecycleStartTurn)
 	if err != nil {
-		if observer != nil {
-			_ = observer.Close(context.Background())
-		}
-		return err
-	}
-	if request.Operation.Action != string(executionapi.LifecycleStartTurn) || request.Snapshot.Session.ExecutionID != fixed.execution.ExecutionID ||
-		request.Snapshot.Session.AttemptID != fixed.execution.CurrentAttemptID || request.Snapshot.ResourceGeneration != fixed.execution.Generation ||
-		request.Snapshot.ConfigurationDigest != fixed.execution.ConfigurationDigest || request.Snapshot.Session.Generation != fixed.execution.SessionGeneration ||
-		fixed.execution.PendingCommandID != request.Input.Turn.CommandID {
-		if observer != nil {
-			_ = observer.Close(context.Background())
-		}
-		return ErrWorkerTurnStale
-	}
-	if err := validateSavedLifecycleOperation(snapshotOperation(&s.domain, request.Operation.ID), executionapi.LifecycleStartTurn, request.Input); err != nil {
 		if observer != nil {
 			_ = observer.Close(context.Background())
 		}
@@ -1555,15 +1455,11 @@ func (s *Service) applyAppServerTurnReceipt(run *Run, request executionapi.Lifec
 		if worker != nil {
 			_ = worker.detachLocalObservation(context.Background())
 		}
-		status := string(receipt.Disposition)
+		status, diagnostic := lifecycleOutcome(receipt, executeErr)
 		if executeErr != nil || status == string(executionapi.OperationAccepted) {
 			status = "outcome_unknown"
 		}
 		execution.Status = "blocked"
-		diagnostic := receipt.Diagnostic
-		if executeErr != nil {
-			diagnostic = executeErr.Error()
-		}
 		execution.Error = ptr("Original app-server turn start is unverified: " + diagnostic)
 		if err := s.setOperationState(request.Operation.ID, status, receipt.State.TurnID, mustJSON(receipt), diagnostic); err != nil {
 			return err
@@ -1589,9 +1485,7 @@ func (s *Service) applyAppServerTurnReceipt(run *Run, request executionapi.Lifec
 	return nil
 }
 
-// Deferred host feedback retains the same question/turn and Operation. This
-// path never sends input, even when the current business turn has changed.
-
+// Active feedback keeps its original command, separate from native question replies.
 func (s *Service) deliverLifecycleActiveFeedback(ctx context.Context, run *Run, answer DecisionAnswer,
 	commandID string, request DecisionRequest, record *DecisionRecord) error {
 	if run != nil && s.lifecycleEffectPending(run.RunID) {
@@ -1620,19 +1514,11 @@ func (s *Service) deliverLifecycleActiveFeedback(ctx context.Context, run *Run, 
 	if prior != nil && prior.Status == "rejected" {
 		return s.waitWorkerFlow(run, "The original feedback operation was rejected; no duplicate input was sent")
 	}
-	var operationID string
-	if prior != nil && prior.Status != "pending" {
-		operationID = prior.OperationID
-	} else {
-		operationID, err = s.startWorkerOperation(run, string(executionapi.LifecycleDeliverFeedback), key, input.Feedback)
-		if err != nil {
-			return err
-		}
+	operation, reconcile, err := s.originalLifecycleOperation(run, string(executionapi.LifecycleDeliverFeedback), key, input.Feedback)
+	if err != nil {
+		return err
 	}
-	operation := s.operationByKey(key)
-	if operation == nil || operation.OperationID != operationID {
-		return errors.New("active feedback lost its original lifecycle operation")
-	}
+	operationID := operation.OperationID
 	if err := validateSavedLifecycleOperation(operation, executionapi.LifecycleDeliverFeedback, input); err != nil {
 		return err
 	}
@@ -1644,7 +1530,7 @@ func (s *Service) deliverLifecycleActiveFeedback(ctx context.Context, run *Run, 
 	snapshot.QuestionRoute = nil
 	lifecycleRequest := lifecycleRequest(snapshot, *operation, executionapi.LifecycleDeliverFeedback, input)
 	requestDecisionID := record.DecisionID
-	err = s.dispatchLifecycleEffect(ctx, run, lifecycle, lifecycleRequest, prior != nil, func(run *Run, result lifecycleEffectResult) error {
+	err = s.dispatchLifecycleEffect(ctx, run, lifecycle, lifecycleRequest, reconcile, func(run *Run, result lifecycleEffectResult) error {
 		if result.observer != nil {
 			_ = result.observer.Close(context.Background())
 		}
@@ -1656,9 +1542,9 @@ func (s *Service) deliverLifecycleActiveFeedback(ctx context.Context, run *Run, 
 		if err := receipt.ValidateFor(lifecycleRequest); err != nil {
 			return err
 		}
-		status, diagnostic := string(receipt.Disposition), receipt.Diagnostic
+		status, diagnostic := lifecycleOutcome(receipt, callErr)
 		if callErr != nil {
-			status, diagnostic = "outcome_unknown", callErr.Error()
+			status = "outcome_unknown"
 		}
 		if receipt.Disposition != executionapi.OperationConfirmed || !receipt.State.InputAccepted {
 			if status != "outcome_unknown" {

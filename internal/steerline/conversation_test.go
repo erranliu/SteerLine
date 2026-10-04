@@ -170,7 +170,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 			}
 		}
 	}
-	if bodyRef == nil || bodyRef.Bytes <= activityDetailMax {
+	if bodyRef == nil || bodyRef.Bytes <= 4096 {
 		t.Fatalf("replay lost long message content: %+v", bodyRef)
 	}
 	if err = service.replayConversationJournal(ctx, sources[0]); err != nil {

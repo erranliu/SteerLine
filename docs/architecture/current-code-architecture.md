@@ -90,6 +90,8 @@ sequenceDiagram
 
 console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读锚点、折叠、原请求及按配置路径/状态目录隔离的偏好。偏好 OS 锁与原子文件写入归 UI；恢复核验通过 [RecoveryQueries](../../internal/steerline/clientcontracts/recovery.go) 调用原中心只读核验，游标编码复用原 query。`Model.Close` 和外层退出清理只释放 UI/client 资源，不提交 stop。依赖守卫在既有 #67/quick 内同时检查 console 全源码、测试、helper 与 Windows/Linux 生产图。实际接线与断言映射见 [#72 验证记录](../validation/core-decoupling-11-tui/README.md)。
 
+中心活动仅随业务提交写入数据库，不维护 activity.jsonl 镜像或文件 seq。操作准备、请求验证、结果归一化和启动回执的共同身份检查由 [lifecycle_receipt.go](../../internal/steerline/lifecycle_receipt.go) 复用；每种动作仍决定自己的接收条件和下一步，保留 intent/receipt/附件屏障。
+
 ## 会话和客户端读取
 
 中心按预算轮转来源，使用实现提供的 source/mapper 端口；mapper 从已提交事件重建，失败候选 mapper/cursor 丢弃。来源归属 Project/Workflow/Execution/Attempt 必须匹配中心请求。会话事件、正文版本和 source cursor 用独立原子事务，不混入 heartbeat；正文/raw 不累计进实现封套。
@@ -258,6 +260,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [worker_pr.go](../../internal/steerline/worker_pr.go)
 - [worker_process.go](../../internal/steerline/worker_process.go)
 - [lifecycle_effect.go](../../internal/steerline/lifecycle_effect.go)
+- [lifecycle_receipt.go](../../internal/steerline/lifecycle_receipt.go)
 - [worker_recovery.go](../../internal/steerline/worker_recovery.go)
 - [worker_resume.go](../../internal/steerline/worker_resume.go)
 - [worker_start.go](../../internal/steerline/worker_start.go)

@@ -595,7 +595,6 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 	s.executionRecord(run).Error = nil
 	s.refreshRun(run)
 	s.note(run, "steer", "delivery", "completed", "native task delivered after verified PR merge", receipt.Delivery.PRURL, map[string]any{"merge_commit": receipt.Delivery.MergeCommit, "graph_revision": receipt.GraphRevision})
-	s.closeActivity(run)
 	if err := s.commitWorker(run); err != nil {
 		return err
 	}
