@@ -1,0 +1,9 @@
+{"Time":"2026-10-04T18:12:54.0206077+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates"}
+{"Time":"2026-10-04T18:12:54.8208437+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal"}
+{"Time":"2026-10-04T18:12:54.8208437+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Output":"=== RUN   TestCandidateLocal\n"}
+{"Time":"2026-10-04T18:20:44.7968443+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Output":"    candidates.go:381: sibling connection fault changed surviving worker\n"}
+{"Time":"2026-10-04T18:21:10.5460455+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Output":"--- FAIL: TestCandidateLocal (495.74s)\n"}
+{"Time":"2026-10-04T18:21:10.546631+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Elapsed":495.74}
+{"Time":"2026-10-04T18:21:10.546631+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Output":"FAIL\n"}
+{"Time":"2026-10-04T18:21:10.5537334+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Output":"FAIL\tgithub.com/erranliu/SteerLine/tests/e2e/suites/candidates\t496.547s\n"}
+{"Time":"2026-10-04T18:21:10.5537334+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Elapsed":496.547}

@@ -1,0 +1,13 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-03\\build\\controlled-helper.exe",
+    "candidate",
+    "-config",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1515602201\\candidates.local\\candidates\\project.json",
+    "-input",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1515602201\\candidates.local\\candidates\\home\\candidate-66520afbcb1c431db0c181f7d6c357b2.json"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\"command\":{\"project_identity\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\steerline-e2e-1515602201\\\\candidates.local\\\\candidates\\\\repo\\\\.git\",\"command_id\":\"66520afbcb1c431db0c181f7d6c357b2\",\"kind\":\"answer_decision\",\"target_id\":\"a355a773bcc57d9a1400e1e9f8c9d447\",\"expected_version\":1,\"idempotency_key\":\"answer:a355a773bcc57d9a1400e1e9f8c9d447:3ba7f79165cd971e3426a25a0bd1bf355912de77aadc01ec8149d3eac0a72314\",\"requested_by\":\"e2e\",\"payload\":\"eyJkZWNpc2lvbl9pZCI6ImEzNTVhNzczYmNjNTdkOWExNDAwZTFlOWY4YzlkNDQ3IiwicnVuX2lkIjoiZGQwNTEwZGI4YjVjYmJhOGVmYmYxMDQzYTNmMTQwZGQiLCJvcHRpb25faWQiOiJjb250aW51ZSIsIm5vdGUiOiJVc2UgZXhhY3RseSB0aGlzIGNhbmRpZGF0ZS50eHQgbWFya2VyOiBhbHBoYS4gUHVibGlzaCBhY2NvcmRpbmcgdG8gdGhlIGJvdW5kIFNwZWMvUGxhbiBpbiB0aGlzIG9yaWdpbmFsIHNlc3Npb24uIiwiYW5zd2VyZWRfYnkiOiJlMmUiLCJhbnN3ZXJlZF9hdCI6IjIwMjYtMTAtMDRUMDk6NDY6NTUuMTMzNTA1NVoiLCJleHBlY3RlZF9kZWNpc2lvbl92ZXJzaW9uIjoxLCJleHBlY3RlZF9ydW5fcmV2aXNpb24iOjM0LCJzb3VyY2VfYXR0ZW1wdF9pZCI6IjE3NGY1OTgwZGNjZjRlMWFkM2E1MDIyODAzMjdhZWU3IiwiZXhwZWN0ZWRfcmVjb3ZlcnlfdmVyc2lvbiI6Miwic2VydmljZV9pbnN0YW5jZV9pZCI6IjM1ZWUwZmMxMDA5OThmMWNhNzBjOGIyNDljZTA1YTFlIn0=\",\"status\":\"pending\",\"created_at\":\"2026-10-04T09:46:55.1335055Z\",\"updated_at\":\"2026-10-04T09:46:55.1335055Z\"}}\n"
+}

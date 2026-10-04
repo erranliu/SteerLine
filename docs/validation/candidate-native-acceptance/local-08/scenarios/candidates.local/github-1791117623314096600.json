@@ -1,0 +1,16 @@
+{
+  "command": [
+    "gh",
+    "pr",
+    "merge",
+    "https://github.com/erranliu/SteerlineTest/pull/73",
+    "--repo",
+    "erranliu/SteerlineTest",
+    "--merge",
+    "--match-head-commit",
+    "ebad8723ddd980e4f91d33867280d7fba7055cee"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": ""
+}

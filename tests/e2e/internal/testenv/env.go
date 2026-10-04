@@ -17,18 +17,17 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
-
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testprocess"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
+	"github.com/google/uuid"
 )
 
-type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level string }
-
+type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level, CandidateConfig string }
 type Scenario struct {
 	Run              Run
 	ID, Root, Output string
@@ -88,8 +87,11 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		}
 	}
 	timeout := 5 * time.Minute
-	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") {
+	if strings.Contains(id, "local-codex") || strings.Contains(id, "orca-codex") || strings.HasPrefix(id, "candidates.") {
 		timeout = 10 * time.Minute
+	}
+	if strings.HasPrefix(id, "candidates.") {
+		timeout = 20 * time.Minute
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	s := &Scenario{Run: run, ID: id, Root: filepath.Join(run.Scratch, id), Output: filepath.Join(run.Output, "scenarios", id), Context: ctx, cancel: cancel, t: t}
@@ -349,12 +351,15 @@ func (p *Project) Claim(key string) {
 }
 
 func (p *Project) Snapshot() (Snapshot, error) {
+	return p.SnapshotContext(p.Scenario.Context)
+}
+func (p *Project) SnapshotContext(ctx context.Context) (Snapshot, error) {
 	var snap Snapshot
-	page, err := p.Driver.Tasks(p.Scenario.Context)
+	page, err := p.Driver.Tasks(ctx)
 	if err != nil {
 		return snap, err
 	}
-	view, err := openView(p.Scenario.Context, p.Database, page.ProjectID)
+	view, err := openView(ctx, p.Database, page.ProjectID)
 	if err != nil {
 		return snap, err
 	}
@@ -368,7 +373,7 @@ func (p *Project) Snapshot() (Snapshot, error) {
 	snap.Page, snap.Domain = *view.Tasks, *view.Domain
 	snap.Runtime = view.Runtime
 	snap.Helper, err = controlled.Read(p.Provider)
-	if err == nil && p.RealPR {
+	if err == nil && p.RealPR && !strings.HasPrefix(p.Scenario.ID, "candidates.") {
 		snap.Helper.PR, err = p.githubPR(snap)
 	}
 	return snap, err
@@ -438,6 +443,11 @@ func (p *Project) Merge() {
 
 func (p *Project) Record(label string, snap Snapshot) {
 	p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-"+label+".json"), snap))
+	if strings.HasPrefix(p.Scenario.ID, "candidates.") {
+		ops, err := driver.ReadOriginalOperations(p.Scenario.Context, p.Database, snap.Page.ProjectID)
+		p.Scenario.Must(err)
+		p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-"+label+"-operations.json"), ops))
+	}
 }
 
 func (s *Scenario) cleanup() {
@@ -464,10 +474,21 @@ func (s *Scenario) cleanup() {
 			if err := p.captureNativeDiagnostics(); err != nil {
 				failures = append(failures, "native diagnostics: "+err.Error())
 			}
-			snap, err := p.Snapshot()
+			snap, err := p.SnapshotContext(ctx)
 			if err == nil {
-				u, usageErr := p.NativeUsage(snap, "cleanup")
-				_ = controlled.Write(filepath.Join(s.Output, p.Name+"-cleanup-usage-result.json"), map[string]any{"usage": u, "error": fmt.Sprint(usageErr)})
+				for _, execution := range snap.Domain.Executions {
+					selected, selectErr := evidence.Candidate(snap.Domain, execution.WorkflowRunID, execution.ExecutionID)
+					if selectErr != nil {
+						failures = append(failures, selectErr.Error())
+						continue
+					}
+					bound := snap
+					bound.Domain = selected
+					u, usageErr := p.NativeUsage(bound, execution.ExecutionID+"-cleanup")
+					if writeErr := controlled.Write(filepath.Join(s.Output, p.Name+"-"+execution.ExecutionID+"-cleanup-usage-result.json"), map[string]any{"usage": u, "error": fmt.Sprint(usageErr)}); writeErr != nil {
+						failures = append(failures, writeErr.Error())
+					}
+				}
 			}
 		}
 	}

@@ -1,0 +1,13 @@
+{
+  "command": [
+    "gh",
+    "pr",
+    "close",
+    "https://github.com/erranliu/SteerlineTest/pull/66",
+    "--repo",
+    "erranliu/SteerlineTest"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "✓ Closed pull request erranliu/SteerlineTest#66 (SteerLine E2E candidates.local)\n",
+  "stdout": ""
+}

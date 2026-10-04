@@ -1,0 +1,114 @@
+{
+  "error": "\u003cnil\u003e",
+  "execution": {
+    "implementation_data": [
+      {
+        "version": 1,
+        "codec_version": 1,
+        "purpose": "execution-resources",
+        "implementation_key": "codex.app-server-binding",
+        "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "execution_id": "008316e4b8ce92192e7d8ae972cc5da1",
+        "attempt_id": "67026d8955ac51e2cdb99bd9f0d400d4",
+        "generation": "b2465c3230346c8f0097abf7d1ffea80",
+        "config_digest": "81164a0a15381174fb917b3ebd10c13e0cc8e6d5c57544f1e8e467f718b0ae39",
+        "digest": "d9d4260bd7961e1867b577b5d0aad09ee2eac3753d74ccb8d763773c46a63a86",
+        "payload": {
+          "endpoint": "ws://127.0.0.1:59014",
+          "session_id": "01a10669-a46f-75f2-9352-cd0f9e8d6e8c",
+          "generation": "99d9e2dd3a128b7225f6a6e3b4fa404f"
+        }
+      }
+    ],
+    "policy_resources": {
+      "version": 3,
+      "digest": "516f1726223a5dca44d58289cc627336b81a9cea5254fcb143000eb52053f54e",
+      "profile_digest": "81164a0a15381174fb917b3ebd10c13e0cc8e6d5c57544f1e8e467f718b0ae39",
+      "workspace": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\worktrees\\7b2d654721f44570accf902207927daa",
+      "write_roots": null,
+      "temporary_roots": [],
+      "implementation_data": {
+        "version": 1,
+        "codec_version": 1,
+        "purpose": "execution-resources",
+        "implementation_key": "codex.policy-resources",
+        "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "execution_id": "008316e4b8ce92192e7d8ae972cc5da1",
+        "attempt_id": "67026d8955ac51e2cdb99bd9f0d400d4",
+        "generation": "b2465c3230346c8f0097abf7d1ffea80",
+        "config_digest": "81164a0a15381174fb917b3ebd10c13e0cc8e6d5c57544f1e8e467f718b0ae39",
+        "digest": "407eb6e7dad3747e7f021114c1af1b3b350ed1b0294c58275ed1b7ed04341869",
+        "payload": {
+          "native_version": "codex-cli 0.159.2",
+          "contract": "codex-policy-v1:0.159.2:host-write:network-allow:never",
+          "settings": {
+            "Executable": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+            "Args": [
+              "--config",
+              "sandbox_mode=danger-full-access",
+              "--config",
+              "approval_policy=never"
+            ],
+            "WorkingDirectory": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\worktrees\\7b2d654721f44570accf902207927daa",
+            "EnvironmentRefs": null
+          }
+        }
+      }
+    },
+    "recovery_version": 2,
+    "recovery_state": "resuming",
+    "recovery_marked_at": "2026-10-04T10:17:18.6233984Z",
+    "workspace_intent": {
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\worktrees\\7b2d654721f44570accf902207927daa",
+      "branch": "codex/1-7b2d654721f4",
+      "base_commit": "ed2942416e9758779954cc3a986ae3d4c8e90ce9"
+    },
+    "turn_started_at": "2026-10-04T10:18:03.0256783Z",
+    "turn_ended_at": "2026-10-04T10:18:55.8093964Z",
+    "generation": "b2465c3230346c8f0097abf7d1ffea80",
+    "session_id": "01a10669-a46f-75f2-9352-cd0f9e8d6e8c",
+    "session_generation": "99d9e2dd3a128b7225f6a6e3b4fa404f",
+    "configuration_digest": "81164a0a15381174fb917b3ebd10c13e0cc8e6d5c57544f1e8e467f718b0ae39",
+    "last_turn_outcome": "succeeded",
+    "log_path": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\state\\repo-eeb005dde1c9\\runs\\7b2d654721f44570accf902207927daa\\turns\\7fc0e96a54604bb781d8a7ebec113eb2\\appserver.jsonl",
+    "last_event": "turn/completed",
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+    "execution_id": "008316e4b8ce92192e7d8ae972cc5da1",
+    "current_attempt_id": "67026d8955ac51e2cdb99bd9f0d400d4",
+    "owner_service_instance_id": "eb3aa90da70262c02514e65d22ed1e02",
+    "workflow_run_id": "7b2d654721f44570accf902207927daa",
+    "agent": "codex",
+    "backend": "local",
+    "protocol": "local_codex_app_server_v1",
+    "process": {
+      "kind": "os",
+      "pid": 36452,
+      "created": "01dd53e9a29538ce",
+      "executable": "c:\\users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe"
+    },
+    "decision_id": "c5cc0825bb52ad34dfefde93582b9015",
+    "current_command_id": "7fc0e96a54604bb781d8a7ebec113eb2",
+    "current_turn_id": "01a1066b-abad-7c40-84df-43e3f55781a1",
+    "turn_number": 2,
+    "last_stopped_turn_id": "01a1066b-abad-7c40-84df-43e3f55781a1",
+    "target": {
+      "id": "local:windows:liuming-asus",
+      "worktree_id": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\worktrees\\7b2d654721f44570accf902207927daa",
+      "branch": "codex/1-7b2d654721f4",
+      "base_revision": "ed2942416e9758779954cc3a986ae3d4c8e90ce9"
+    },
+    "workspace": {
+      "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo",
+      "worktree": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\worktrees\\7b2d654721f44570accf902207927daa",
+      "branch": "codex/1-7b2d654721f4",
+      "base": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+      "head": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+      "verified_at": "2026-10-04T10:18:00.6381455Z"
+    },
+    "status": "idle",
+    "current_step": "worker",
+    "created_at": "2026-10-04T10:15:42.1514197Z",
+    "updated_at": "2026-10-04T10:18:55.8093964Z"
+  },
+  "product_stop_receipt": false
+}

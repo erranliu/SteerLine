@@ -1,0 +1,17 @@
+{
+  "Action": "answer_decision",
+  "RequestID": "66520afbcb1c431db0c181f7d6c357b2",
+  "TaskID": "",
+  "ProfileID": "",
+  "RunID": "dd0510db8b5cbba8efbf1043a3f140dd",
+  "ExecutionID": "4b96c653955ac00029110855d6ce3eca",
+  "DecisionID": "a355a773bcc57d9a1400e1e9f8c9d447",
+  "Option": "continue",
+  "Note": "Use exactly this candidate.txt marker: alpha. Publish according to the bound Spec/Plan in this original session.",
+  "InstanceID": "35ee0fc100998f1ca70c8b249ce05a1e",
+  "TaskVersion": 0,
+  "GraphRevision": 0,
+  "CandidateVersion": 0,
+  "DecisionVersion": 1,
+  "RunRevision": 34
+}

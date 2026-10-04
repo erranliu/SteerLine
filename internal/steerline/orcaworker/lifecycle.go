@@ -1,9 +1,13 @@
 package orcaworker
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -450,6 +454,44 @@ func (l *ExecutionLifecycle) agentCommand(worktree string) (executionbackend.Lau
 }
 
 func (l *ExecutionLifecycle) agentLaunchCommand(snapshot executionbackend.LifecycleSnapshot, worktree string) (executionbackend.LaunchCommand, error) {
+	command, err := l.fixedAgentCommand(snapshot, worktree)
+	if err != nil {
+		return executionbackend.LaunchCommand{}, err
+	}
+	// Bootstrap the original native Codex session without a model turn inside
+	// the terminal's actual home. The existing canonical history collector then
+	// reads its identity-bound binding; terminal output is never final authority.
+	if !filepath.IsAbs(l.setup.RunDirectory) || l.setup.ProcessHost == nil {
+		return executionbackend.LaunchCommand{}, errors.New("native Orca session launch lacks its owned run directory/process host")
+	}
+	dir := filepath.Join(l.setup.RunDirectory, "runs", snapshot.Session.WorkflowRunID, "turns", snapshot.Session.ExecutionID)
+	requestPath := filepath.Join(dir, "session-launch.json")
+	policy, err := codexworker.CompilePolicy(l.setup.Policy, runtime.GOOS, "orca", "codex", l.codex.WindowsSandbox, l.codex.Profile, l.codex.Args)
+	if err != nil {
+		return executionbackend.LaunchCommand{}, err
+	}
+	launch := codexworker.SessionLaunch{Binding: codexworker.HistoryBinding{Version: 1, ProjectID: snapshot.Session.ProjectID, TaskID: snapshot.Session.TaskID, WorkflowID: snapshot.Session.WorkflowRunID, ExecutionID: snapshot.Session.ExecutionID, AttemptID: snapshot.Session.AttemptID, Backend: snapshot.Ref.Backend, Protocol: snapshot.Ref.Protocol, TargetID: snapshot.Ref.Target.ID, ExternalRef: snapshot.Ref.Target.WorktreeID, Workspace: worktree, Command: executionbackend.Command{Executable: command.Executable}}, BindingPath: filepath.Join(dir, "codex-history.v1.json"), Args: command.Args, Sandbox: policy.Sandbox}
+	raw, err := json.MarshalIndent(launch, "", "  ")
+	if err != nil {
+		return executionbackend.LaunchCommand{}, err
+	}
+	if old, readErr := os.ReadFile(requestPath); readErr == nil {
+		if !bytes.Equal(old, raw) {
+			return executionbackend.LaunchCommand{}, errors.New("original native session launch intent changed")
+		}
+	} else if !os.IsNotExist(readErr) {
+		return executionbackend.LaunchCommand{}, readErr
+	} else if err := l.setup.ProcessHost.WriteExecutionFile(requestPath, raw); err != nil {
+		return executionbackend.LaunchCommand{}, err
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return executionbackend.LaunchCommand{}, err
+	}
+	return executionbackend.LaunchCommand{Executable: executable, Args: []string{"codex-session-launch", "-config", requestPath}, WorkingDirectory: worktree}, nil
+}
+
+func (l *ExecutionLifecycle) fixedAgentCommand(snapshot executionbackend.LifecycleSnapshot, worktree string) (executionbackend.LaunchCommand, error) {
 	if snapshot.PolicyResources == nil {
 		return l.agentCommand(worktree)
 	}

@@ -1,0 +1,20 @@
+{
+  "command": [
+    "gh",
+    "pr",
+    "list",
+    "--repo",
+    "erranliu/SteerlineTest",
+    "--base",
+    "codex/e2e/e51ffba3b7d64f7fb15dd6738b15017f/candidates.local/base",
+    "--state",
+    "all",
+    "--limit",
+    "100",
+    "--json",
+    "url,state,headRefName,baseRefName"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "[{\"baseRefName\":\"codex/e2e/e51ffba3b7d64f7fb15dd6738b15017f/candidates.local/base\",\"headRefName\":\"codex/1-016bec659e71\",\"state\":\"OPEN\",\"url\":\"https://github.com/erranliu/SteerlineTest/pull/71\"},{\"baseRefName\":\"codex/e2e/e51ffba3b7d64f7fb15dd6738b15017f/candidates.local/base\",\"headRefName\":\"erranliu/sl-1-640cff9af020fd44034f85bdd76c2788\",\"state\":\"OPEN\",\"url\":\"https://github.com/erranliu/SteerlineTest/pull/70\"}]\n"
+}

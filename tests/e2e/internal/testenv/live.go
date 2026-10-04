@@ -26,7 +26,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	p.Chain = chain
 	s.Must(native.SeedAuth(s.Run.AuthHome, filepath.Join(p.Home, "codex"), "full-access"))
 	s.Must(native.TrustProject(filepath.Join(p.Home, "codex"), p.Repo))
-	if strings.HasPrefix(s.ID, "smoke.") {
+	if strings.HasPrefix(s.ID, "smoke.") || strings.HasPrefix(s.ID, "candidates.") {
 		p.enableGitHub()
 	}
 	codex, err := native.CodexExecutable("codex")
@@ -257,7 +257,7 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 	}
 	var usageEvidence []byte
 	var err error
-	if p.Chain == "local-codex" {
+	if e.Backend == "local" {
 		path := filepath.Join(filepath.Dir(p.Database), "runs", e.WorkflowRunID, "turns", e.CurrentCommandID, "appserver.jsonl")
 		raw, readErr := os.ReadFile(path)
 		if readErr != nil {
@@ -267,7 +267,7 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		if bindErr != nil {
 			return u, bindErr
 		}
-		u, usageEvidence, err = native.AppServerUsage(raw, session, e.CurrentTurnID)
+		u, usageEvidence, err = native.AppServerTurnUsage(raw, session, e.CurrentTurnID)
 	} else {
 		// Only this project's home is scanned. Exactly one native session must match
 		// the bound workspace; user/global sessions cannot become usage evidence.

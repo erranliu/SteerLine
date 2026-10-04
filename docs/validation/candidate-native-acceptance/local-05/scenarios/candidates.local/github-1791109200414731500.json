@@ -1,0 +1,17 @@
+{
+  "command": [
+    "gh",
+    "pr",
+    "view",
+    "https://github.com/erranliu/SteerlineTest/pull/67",
+    "--repo",
+    "erranliu/SteerlineTest",
+    "--json",
+    "url,state,mergedAt,mergeCommit,headRefName,headRefOid,headRepository,headRepositoryOwner,baseRefName",
+    "--jq",
+    "{url:.url,repository:\"erranliu/SteerlineTest\",base_branch:.baseRefName,head_repository:(.headRepositoryOwner.login + \"/\" + .headRepository.name),head_branch:.headRefName,head_revision:.headRefOid,state:(if .mergedAt != null then \"merged\" elif .state == \"OPEN\" then \"open\" else \"closed_unmerged\" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\"base_branch\":\"codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base\",\"head_branch\":\"erranliu/sl-1-93b52627e191460dfe6feb30eff6d51f\",\"head_repository\":\"erranliu/SteerlineTest\",\"head_revision\":\"408b2db9f102d367f58ace4fe65757f538e31750\",\"merge_commit\":null,\"merged\":false,\"merged_at\":null,\"repository\":\"erranliu/SteerlineTest\",\"state\":\"open\",\"url\":\"https://github.com/erranliu/SteerlineTest/pull/67\"}\n"
+}

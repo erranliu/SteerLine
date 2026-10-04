@@ -1,0 +1,35 @@
+{
+  "error": "\u003cnil\u003e",
+  "input": {
+    "Action": "answer_decision",
+    "RequestID": "9a887cda374b41249038150fef38fef1",
+    "TaskID": "",
+    "ProfileID": "",
+    "RunID": "7b2d654721f44570accf902207927daa",
+    "ExecutionID": "008316e4b8ce92192e7d8ae972cc5da1",
+    "DecisionID": "c5cc0825bb52ad34dfefde93582b9015",
+    "Option": "continue",
+    "Note": "Use exactly this candidate.txt marker: fault-probe-must-not-run. Publish according to the bound Spec/Plan in this original session. ",
+    "InstanceID": "eb3aa90da70262c02514e65d22ed1e02",
+    "TaskVersion": 0,
+    "GraphRevision": 0,
+    "CandidateVersion": 0,
+    "DecisionVersion": 1,
+    "RunRevision": 28
+  },
+  "receipt": {
+    "command": {
+      "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+      "command_id": "9a887cda374b41249038150fef38fef1",
+      "kind": "answer_decision",
+      "target_id": "c5cc0825bb52ad34dfefde93582b9015",
+      "expected_version": 1,
+      "idempotency_key": "answer:c5cc0825bb52ad34dfefde93582b9015:ef4b9d7fc0adac7180ed8d06774fff656623115bbdac5bc70a93509bf52f69ac",
+      "requested_by": "e2e",
+      "payload": "eyJkZWNpc2lvbl9pZCI6ImM1Y2MwODI1YmI1MmFkMzRkZmVmZGU5MzU4MmI5MDE1IiwicnVuX2lkIjoiN2IyZDY1NDcyMWY0NDU3MGFjY2Y5MDIyMDc5MjdkYWEiLCJvcHRpb25faWQiOiJjb250aW51ZSIsIm5vdGUiOiJVc2UgZXhhY3RseSB0aGlzIGNhbmRpZGF0ZS50eHQgbWFya2VyOiBmYXVsdC1wcm9iZS1tdXN0LW5vdC1ydW4uIFB1Ymxpc2ggYWNjb3JkaW5nIHRvIHRoZSBib3VuZCBTcGVjL1BsYW4gaW4gdGhpcyBvcmlnaW5hbCBzZXNzaW9uLiIsImFuc3dlcmVkX2J5IjoiZTJlIiwiYW5zd2VyZWRfYXQiOiIyMDI2LTEwLTA0VDEwOjIwOjI4LjE3MzIzMloiLCJleHBlY3RlZF9kZWNpc2lvbl92ZXJzaW9uIjoxLCJleHBlY3RlZF9ydW5fcmV2aXNpb24iOjI4LCJzb3VyY2VfYXR0ZW1wdF9pZCI6IjY3MDI2ZDg5NTVhYzUxZTJjZGI5OWJkOWYwZDQwMGQ0IiwiZXhwZWN0ZWRfcmVjb3ZlcnlfdmVyc2lvbiI6Miwic2VydmljZV9pbnN0YW5jZV9pZCI6ImViM2FhOTBkYTcwMjYyYzAyNTE0ZTY1ZDIyZWQxZTAyIn0=",
+      "status": "pending",
+      "created_at": "2026-10-04T10:20:28.173232Z",
+      "updated_at": "2026-10-04T10:20:28.173232Z"
+    }
+  }
+}

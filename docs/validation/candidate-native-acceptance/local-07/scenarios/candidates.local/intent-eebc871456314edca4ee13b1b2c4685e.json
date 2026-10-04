@@ -1,0 +1,17 @@
+{
+  "Action": "answer_decision",
+  "RequestID": "eebc871456314edca4ee13b1b2c4685e",
+  "TaskID": "",
+  "ProfileID": "",
+  "RunID": "016bec659e714c31b8649d043537c838",
+  "ExecutionID": "f49158700c6fe101921d3c9dd792689f",
+  "DecisionID": "bfe65deeb649b5497022c485703e6bd8",
+  "Option": "continue",
+  "Note": "Use exactly this candidate.txt marker: bravo. Publish according to the bound Spec/Plan in this original session. ",
+  "InstanceID": "e0399bd5c9149946a019769e8bee94a2",
+  "TaskVersion": 0,
+  "GraphRevision": 0,
+  "CandidateVersion": 0,
+  "DecisionVersion": 1,
+  "RunRevision": 17
+}

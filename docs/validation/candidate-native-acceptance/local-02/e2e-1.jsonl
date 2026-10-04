@@ -1,0 +1,9 @@
+{"Time":"2026-10-04T17:26:58.3133782+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates"}
+{"Time":"2026-10-04T17:26:59.3814492+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal"}
+{"Time":"2026-10-04T17:26:59.3814492+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Output":"=== RUN   TestCandidateLocal\n"}
+{"Time":"2026-10-04T17:31:24.2177787+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Output":"    candidates.go:251: canonical original candidate messages missing\n"}
+{"Time":"2026-10-04T17:31:37.4663382+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Output":"--- FAIL: TestCandidateLocal (278.11s)\n"}
+{"Time":"2026-10-04T17:31:37.4663382+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Elapsed":278.11}
+{"Time":"2026-10-04T17:31:37.4663382+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Output":"FAIL\n"}
+{"Time":"2026-10-04T17:31:37.4707266+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Output":"FAIL\tgithub.com/erranliu/SteerLine/tests/e2e/suites/candidates\t279.178s\n"}
+{"Time":"2026-10-04T17:31:37.4712428+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Elapsed":279.179}

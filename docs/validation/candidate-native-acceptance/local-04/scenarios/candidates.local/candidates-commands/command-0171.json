@@ -1,0 +1,13 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-04\\build\\controlled-helper.exe",
+    "candidate",
+    "-config",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2894246746\\candidates.local\\candidates\\project.json",
+    "-input",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2894246746\\candidates.local\\candidates\\home\\candidate-3db5494b478d4930b10ad8f1418e3b6e.json"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\"command\":{\"project_identity\":\"c:\\\\users\\\\lmas1\\\\appdata\\\\local\\\\temp\\\\steerline-e2e-2894246746\\\\candidates.local\\\\candidates\\\\repo\\\\.git\",\"command_id\":\"3db5494b478d4930b10ad8f1418e3b6e\",\"kind\":\"answer_decision\",\"target_id\":\"ee01950eaf3dabf2dcf7e027af0d77a1\",\"expected_version\":1,\"idempotency_key\":\"answer:ee01950eaf3dabf2dcf7e027af0d77a1:d8111e9c40d46094451da24c8c61db3d6fd330a1b5b9b4aa684e00e6725db3a2\",\"requested_by\":\"e2e\",\"payload\":\"eyJkZWNpc2lvbl9pZCI6ImVlMDE5NTBlYWYzZGFiZjJkY2Y3ZTAyN2FmMGQ3N2ExIiwicnVuX2lkIjoiNDczNjY0NWMzNmM1NGY3ODlmOTQwYzNhNmYyMzkyYTMiLCJvcHRpb25faWQiOiJjb250aW51ZSIsIm5vdGUiOiJVc2UgZXhhY3RseSB0aGlzIGNhbmRpZGF0ZS50eHQgbWFya2VyOiBicmF2by1sYXRlLiBQdWJsaXNoIGFjY29yZGluZyB0byB0aGUgYm91bmQgU3BlYy9QbGFuIGluIHRoaXMgb3JpZ2luYWwgc2Vzc2lvbi4gQmVmb3JlIHdyaXRpbmcvcHVibGlzaGluZywgZXhlY3V0ZSBwb3dlcnNoZWxsLmV4ZSAtTm9Qcm9maWxlIC1Db21tYW5kIFwiU3RhcnQtU2xlZXAgLVNlY29uZHMgMjBcIiBvbmNlLiBUaGlzIGxldHMgdGhlIG9wZXJhdG9yIG1lcmdlIHRoZSBzaWJsaW5nIHdoaWxlIHlvdXIgb3JpZ2luYWwgdHVybiByZW1haW5zIGluIGZsaWdodC4iLCJhbnN3ZXJlZF9ieSI6ImUyZSIsImFuc3dlcmVkX2F0IjoiMjAyNi0xMC0wNFQxMDowNjowMS42NjAwNTY5WiIsImV4cGVjdGVkX2RlY2lzaW9uX3ZlcnNpb24iOjEsImV4cGVjdGVkX3J1bl9yZXZpc2lvbiI6MjgsInNvdXJjZV9hdHRlbXB0X2lkIjoiNDQ0ZDY4MjFmZDBjNTRjNjE0OGIwY2MyM2Q1ODZiODQiLCJleHBlY3RlZF9yZWNvdmVyeV92ZXJzaW9uIjoyLCJzZXJ2aWNlX2luc3RhbmNlX2lkIjoiYzBiNmZmYWQ2NGE1ZDAxZjdkZDBmOTU0MDBmMDRhNjUifQ==\",\"status\":\"pending\",\"created_at\":\"2026-10-04T10:06:01.6600569Z\",\"updated_at\":\"2026-10-04T10:06:01.6600569Z\"}}\n"
+}
