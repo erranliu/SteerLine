@@ -7,6 +7,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/execution"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -113,7 +114,7 @@ func run() error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	var c steerline.Config
+	var c execution.Config
 	var product api.Client
 	var e error
 	switch command {
@@ -389,7 +390,7 @@ func run() error {
 		return steerlineapp.RunConfiguredService(ctx, c, *dispatchMode, *startupID, *console)
 	}
 	if command == "check" {
-		if e = c.Preflight(ctx, true); e != nil {
+		if e = steerline.Preflight(ctx, &c, true); e != nil {
 			return e
 		}
 		fmt.Println("Worker-flow configuration, native authority binding, Git and PR provider verified; no task claimed.")

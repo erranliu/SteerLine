@@ -11,19 +11,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
-	taskapp "github.com/erranliu/SteerLine/internal/task"
 )
 
-func additionalDirectory(t *testing.T, ledger *additionalLedger) *steerline.ExecutionDirectory {
+func additionalDirectory(t *testing.T, ledger *additionalLedger) *execution.ExecutionDirectory {
 	t.Helper()
-	key := steerline.ExecutionRegistrationKey{Backend: "fixture", Protocol: additionalProtocol, Agent: "fixture"}
-	codec := steerline.ImplementationProfileCodec{Key: additionalKey, Version: 1, Normalize: func(data []byte, policy executionbackend.ExecutionPolicy, host, agent string) ([]byte, []string, error) {
+	key := execution.ExecutionRegistrationKey{Backend: "fixture", Protocol: additionalProtocol, Agent: "fixture"}
+	codec := execution.ImplementationProfileCodec{Key: additionalKey, Version: 1, Normalize: func(data []byte, policy executionbackend.ExecutionPolicy, host, agent string) ([]byte, []string, error) {
 		var value struct {
 			Target string `json:"target"`
 		}
@@ -38,29 +38,29 @@ func additionalDirectory(t *testing.T, ledger *additionalLedger) *steerline.Exec
 	port := func(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 		return &additionalPort{setup: setup.Clone(), ledger: ledger}, nil
 	}
-	entry := steerline.ExecutionRegistration{Key: key, ProfileKey: "fixture/stream-v1", WorkspaceBranchPrefix: "fixture", LocalWorkspace: true, ProfileCodecKeys: []string{additionalKey}, QuestionCodecKey: additionalKey, QuestionCodecVersion: 1, Host: "fixture",
-		Lifecycle: port, Target: func(steerline.Config) executionbackend.ExecutionTarget {
+	entry := execution.ExecutionRegistration{Key: key, ProfileKey: "fixture/stream-v1", WorkspaceBranchPrefix: "fixture", LocalWorkspace: true, ProfileCodecKeys: []string{additionalKey}, QuestionCodecKey: additionalKey, QuestionCodecVersion: 1, Host: "fixture",
+		Lifecycle: port, Target: func(execution.Config) executionbackend.ExecutionTarget {
 			return executionbackend.ExecutionTarget{ID: "fixture:fixed"}
-		}, Backend: func(steerline.Config) executionbackend.ExecutionBackend { return &additionalPort{ledger: ledger} },
-		ProbeRequirements: func(_ context.Context, c steerline.Config) (executionbackend.CapabilityReport, error) {
+		}, Backend: func(execution.Config) executionbackend.ExecutionBackend { return &additionalPort{ledger: ledger} },
+		ProbeRequirements: func(_ context.Context, c execution.Config) (executionbackend.CapabilityReport, error) {
 			return additionalReport(executionbackend.ExecutionRef{Backend: key.Backend, Protocol: key.Protocol, Target: executionbackend.ExecutionTarget{ID: "fixture:fixed"}, Agent: executionbackend.AgentSpec{Name: c.Agent}}), nil
 		},
-		QueryTool: func(_ context.Context, _ steerline.Config, id string) executionbackend.RequirementEvidence {
+		QueryTool: func(_ context.Context, _ execution.Config, id string) executionbackend.RequirementEvidence {
 			return executionbackend.RequirementEvidence{ID: id, Site: "target", Target: executionbackend.ExecutionTarget{ID: "fixture:fixed"}, Status: executionbackend.RequirementUnknown, Source: "fixture:tools-unsupported", CheckedAt: time.Now().UTC()}
 		},
-		ValidateConfig: func(context.Context, steerline.Config) error { return nil }, Preflight: func(context.Context, steerline.Config) error { return nil }, PrepareClaim: func(context.Context, steerline.Config) (steerline.ClaimPreparation, error) {
-			return steerline.ClaimPreparation{}, nil
-		}, ReadinessRequired: func(steerline.Config) bool { return false },
-		BuildPolicyResource: func(_ context.Context, r steerline.PolicyResourceBuildRequest) (steerline.PolicyResourceBuildResult, error) {
+		ValidateConfig: func(context.Context, execution.Config) error { return nil }, Preflight: func(context.Context, execution.Config) error { return nil }, PrepareClaim: func(context.Context, execution.Config) (execution.ClaimPreparation, error) {
+			return execution.ClaimPreparation{}, nil
+		}, ReadinessRequired: func(execution.Config) bool { return false },
+		BuildPolicyResource: func(_ context.Context, r execution.PolicyResourceBuildRequest) (execution.PolicyResourceBuildResult, error) {
 			e, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{ImplementationKey: additionalKey, CodecVersion: 1, Purpose: executionbackend.ImplementationResourcePurpose, ProjectID: r.Resource.ProjectID, ExecutionID: r.Resource.ExecutionID, AttemptID: r.Resource.AttemptID, Generation: r.Resource.Generation, ConfigDigest: r.Resource.ConfigDigest}, []byte(`{"policy":"isolated-read-only"}`))
-			return steerline.PolicyResourceBuildResult{Envelope: e}, err
-		}, VerifyPolicyResource: func(e executionbackend.ImplementationDataEnvelope, id steerline.PolicyResourceIdentity) error {
+			return execution.PolicyResourceBuildResult{Envelope: e}, err
+		}, VerifyPolicyResource: func(e executionbackend.ImplementationDataEnvelope, id execution.PolicyResourceIdentity) error {
 			if e.ImplementationKey != additionalKey || e.CodecVersion != 1 {
 				return errors.New("fixture resource codec changed")
 			}
 			return e.ValidateResourceIdentity(id.ProjectID, id.ExecutionID, id.AttemptID, id.Generation, id.ConfigDigest)
 		},
-		LinkedWorktreeWriteArgs: func(context.Context, steerline.Config, string) ([]string, error) { return nil, nil }, ValidTurnID: func(value string) bool { return len(value) == 32 }, CleanupCapabilities: []string{"observe", "resource_settlement"},
+		LinkedWorktreeWriteArgs: func(context.Context, execution.Config, string) ([]string, error) { return nil, nil }, ValidTurnID: func(value string) bool { return len(value) == 32 }, CleanupCapabilities: []string{"observe", "resource_settlement"},
 		ValidateRef: func(ref executionbackend.ExecutionRef) error {
 			if ref.Protocol != additionalProtocol || ref.Target.ID != "fixture:fixed" || ref.External.Kind != "fixture" || ref.External.Incarnation != "fixture-original" {
 				return errors.New("fixture binding identity changed")
@@ -74,7 +74,7 @@ func additionalDirectory(t *testing.T, ledger *additionalLedger) *steerline.Exec
 			return nil
 		},
 	}
-	directory, err := steerline.NewExecutionDirectory("fixture-directory-v1", []steerline.ImplementationProfileCodec{codec}, []steerline.ExecutionRegistration{entry})
+	directory, err := execution.NewExecutionDirectory("fixture-directory-v1", []execution.ImplementationProfileCodec{codec}, []execution.ExecutionRegistration{entry})
 	require(t, err)
 	return directory
 }
@@ -225,8 +225,8 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 		store, err := steerline.OpenNativeTaskCommandStore(ctx, &config2)
 		require(t, err)
 		defer store.Close()
-		command := steerline.NewCommandService(store, config2.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})
-		_, err = command.AbandonNativeCandidate(ctx, config2, steerline.CandidateAbandonOptions{TaskID: "901", WorkflowRunID: first.run.RunID, RequestID: newID(), ExpectedTaskVersion: delivered.Tasks[0].Version, ExpectedCandidateVersion: first.run.ControlRevision, RequestedBy: "operator", Reason: "must reject known merged candidate"})
+		command := appExecutionCommands(t, store, config2)
+		_, err = command.AbandonNativeCandidate(ctx, config2, execution.CandidateAbandonOptions{TaskID: "901", WorkflowRunID: first.run.RunID, RequestID: newID(), ExpectedTaskVersion: delivered.Tasks[0].Version, ExpectedCandidateVersion: first.run.ControlRevision, RequestedBy: "operator", Reason: "must reject known merged candidate"})
 		if err == nil || !strings.Contains(err.Error(), "already_merged") {
 			t.Fatalf("real merged delivery allowed exit: %v", err)
 		}

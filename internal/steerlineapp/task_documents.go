@@ -8,24 +8,25 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 // Git access stays in the app adapter; task sees bytes of an exact regular blob.
 type taskDocuments struct {
-	target     func(context.Context) (string, error)
-	repository string
-	git        executionbackend.Command
-	timeout    time.Duration
+	processHost executionbackend.ManagedProcessHost
+	target      func(context.Context) (string, error)
+	repository  string
+	git         executionbackend.Command
+	timeout     time.Duration
 }
 
 func (a taskDocuments) ReadCommittedRegularFile(ctx context.Context, ref taskmodel.FileReference) ([]byte, error) {
 	if err := taskmodel.ValidateFileReference(ref); err != nil {
 		return nil, err
 	}
-	r := steerline.Runner{Dir: a.repository, Timeout: a.timeout}
+	r := execution.Runner{Dir: a.repository, Timeout: a.timeout, ProcessHost: a.processHost}
 	resolved, err := r.Output(ctx, a.git, "rev-parse", "--verify", ref.Commit+"^{commit}")
 	if err != nil || strings.TrimSpace(string(resolved)) != ref.Commit {
 		return nil, taskDocumentError("pinned Git commit is missing or is not a full canonical commit: " + ref.Commit)

@@ -63,7 +63,7 @@ func (s *Scenario) NewCandidateProject(m native.CandidateManifest) *Project {
 
 On the INITIAL business turn only, read this Spec/Plan and the assigned branch, execute powershell.exe -NoProfile -Command "Start-Sleep -Seconds 20" once to allow the sibling candidate to start, then end the turn with a distinct readiness summary including that branch. Do not change files, publish, ask a native question or invoke another model. The operator will send feedback to this original session through SteerLine.
 
-On each subsequent feedback turn, follow its exact marker. Write result.txt containing exactly real model delivery followed by a newline. Write candidate.txt containing exactly the feedback marker followed by a newline. Verify both. Run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1 once. Publication belongs to you: the script commits, pushes the assigned branch, creates its real GitHub draft PR or updates the same branch's existing PR, and prints its URL. Include the full URL in the final reply/completion relay. Never push the base branch. Keep all other tracked files unchanged. Do not call another model.
+On each subsequent feedback turn, follow its exact marker. The complete result.txt content is the literal string "real model delivery" followed by one LF byte (10), encoded as UTF-8 without BOM. This file contains the literal result, never conversational progress or readiness text. The complete candidate.txt content is the feedback marker followed by one LF byte (10), also UTF-8 without BOM. Write exact literal file contents with System.IO.File.WriteAllText and verify both by reading them back before invoking publication. Run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1 once. Publication belongs to you: the script commits, pushes the assigned branch, creates its real GitHub draft PR or updates the same branch's existing PR, and prints its URL. Include the full URL in the final reply/completion relay. Never push the base branch. Keep all other tracked files unchanged. Do not call another model.
 
 Copy the publisher's returned URL VERBATIM, including the repository owner, in BOTH your final reply and completion relay body. The only valid form is https://github.com/erranliu/SteerlineTest/pull/<number>. Never omit erranliu, shorten, infer or reconstruct the URL. When continuing an existing PR, query that original URL with gh pr view and report the same complete URL. If publication fails, report the actual error and do not claim a PR exists.
 
@@ -180,9 +180,21 @@ func (p *Project) WaitCandidateCommand(c Candidate, phase, commandID string) Sna
 		if phase == "waiting_pr_merge" && w.Phase == "waiting_decision" && w.PRQueryError != nil {
 			p.Scenario.t.Fatalf("candidate PR verification failed: %s; see exact original snapshot", *w.PRQueryError)
 		}
+		if phase == "waiting_pr_merge" && candidatePublicationEndedWithoutPR(w, e, commandID) {
+			diagnostic := "original turn completed without a verified PR"
+			if e.Error != nil {
+				diagnostic = *e.Error
+			}
+			p.Scenario.t.Fatalf("original candidate feedback ended without a verified PR: %s; see exact original snapshot", diagnostic)
+		}
 		return result.Domain.WorkflowRuns[0].Phase == phase && e.Status != "active" && e.PendingCommandID == "" && (commandID == "" || e.CurrentCommandID == commandID), nil
 	})
 	return result
+}
+
+func candidatePublicationEndedWithoutPR(w executionmodel.WorkflowRunRecord, e executionmodel.ExecutionRecord, commandID string) bool {
+	return commandID != "" && e.CurrentCommandID == commandID && w.Phase == "waiting_decision" && e.Status == "idle" &&
+		e.PendingCommandID == "" && e.PendingTurnID == "" && e.CurrentTurnID != "" && e.CurrentTurnID == e.LastStoppedTurnID
 }
 func (p *Project) Feedback(c Candidate, marker string) driver.CandidateCommand {
 	return p.FeedbackWithNote(c, marker, "")
@@ -205,7 +217,8 @@ func (p *Project) FeedbackWithNote(c Candidate, marker, extra string) driver.Can
 	if len(decision.Request.Options) == 0 || decision.Request.Options[0].ID != "continue" || !decision.Request.AllowFreeText {
 		p.Scenario.t.Fatal("complete option/free text feedback missing")
 	}
-	in := driver.CandidateCommand{Action: "answer_decision", RequestID: requestID(), RunID: c.RunID, ExecutionID: c.ExecutionID, DecisionID: decision.ID, DecisionVersion: decision.Version, RunRevision: revision, InstanceID: snap.Runtime.Service.InstanceID, Option: "continue", Note: "Use exactly this candidate.txt marker: " + marker + ". Publish according to the bound Spec/Plan in this original session. " + extra}
+	note := fmt.Sprintf("Resume this original session and publish according to the bound Spec/Plan. Write result.txt with exactly the literal string %q plus one LF byte (10), UTF-8 without BOM; never write progress/readiness text into result.txt. Write candidate.txt with exactly %q plus one LF byte (10), UTF-8 without BOM. Use System.IO.File.WriteAllText for these literal contents, read both back and compare to those exact values before invoking publish.ps1 once. ", "real model delivery", marker)
+	in := driver.CandidateCommand{Action: "answer_decision", RequestID: requestID(), RunID: c.RunID, ExecutionID: c.ExecutionID, DecisionID: decision.ID, DecisionVersion: decision.Version, RunRevision: revision, InstanceID: snap.Runtime.Service.InstanceID, Option: "continue", Note: note + extra}
 	r := p.CandidateControl(in)
 	if r.Command == nil {
 		p.Scenario.t.Fatal("original feedback command missing")
@@ -333,9 +346,9 @@ func CandidateAcceptance(s *Scenario) {
 		}
 	}
 	fa := p.Feedback(a, "alpha")
-	p.Feedback(b, "bravo")
-	p.WaitCandidate(a, "waiting_pr_merge")
-	p.WaitCandidate(b, "waiting_pr_merge")
+	fb := p.Feedback(b, "bravo")
+	p.WaitCandidateCommand(a, "waiting_pr_merge", fa.RequestID)
+	p.WaitCandidateCommand(b, "waiting_pr_merge", fb.RequestID)
 	// A caller that lost its answer response reuses the original command ID/content.
 	replay := p.CandidateControl(fa)
 	if replay.Command == nil || replay.Command.CommandID != fa.RequestID {
@@ -408,8 +421,8 @@ func CandidateAcceptance(s *Scenario) {
 	if b == originalB || be.Workspace.Base != ae.Workspace.Base {
 		s.t.Fatal("manual replacement did not preserve original experiment base")
 	}
-	p.Feedback(b, "bravo-replacement")
-	p.WaitCandidate(b, "waiting_pr_merge")
+	replacementFeedback := p.Feedback(b, "bravo-replacement")
+	p.WaitCandidateCommand(b, "waiting_pr_merge", replacementFeedback.RequestID)
 	published[b] = p.CandidateUsage(b, "replacement-published")
 	pb = p.CandidatePR(b)
 	p.Record("manual-replacement", p.CandidateSnapshot(b))
@@ -468,8 +481,8 @@ func CandidateAcceptance(s *Scenario) {
 	ns := p.WaitCandidate(next, "waiting_decision")
 	ne := ns.Domain.Executions[0]
 	p.git(ne.Workspace.Worktree, "merge-base", "--is-ancestor", merge, ne.Workspace.Base)
-	p.Feedback(next, "successor")
-	p.WaitCandidate(next, "waiting_pr_merge")
+	successorFeedback := p.Feedback(next, "successor")
+	p.WaitCandidateCommand(next, "waiting_pr_merge", successorFeedback.RequestID)
 	published[next] = p.CandidateUsage(next, "published")
 	p.MergeCandidate(next)
 	p.WaitCandidate(next, "completed")

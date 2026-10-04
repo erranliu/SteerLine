@@ -1,0 +1,180 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./internal/execution",
+    "./internal/coreboundary",
+    "-run",
+    "^(TestTaskStatusAndDeliveryEvidence|TestDeliveryGateRequiresSelectedWorker|TestTM04ExecutionBoundary)$",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-04T13:29:54.1552404Z",
+  "finished_at": "2026-10-04T13:29:57.5083264Z",
+  "wall_seconds": 3.3530883,
+  "environment": {
+    "source_commit": "c4650056d701a158353836616668bfad25011552",
+    "worktree_status": " M cmd/steerline/main.go\n M internal/coreboundary/check.go\n M internal/execution/prompt.go\n M internal/execution/task_boundary_test.go\n M internal/steerline/activity.go\n M internal/steerline/application_config.go\n D internal/steerline/application_config_types.go\n D internal/steerline/candidate_control.go\n D internal/steerline/candidate_pr.go\n D internal/steerline/candidate_resources.go\n D internal/steerline/candidate_workers.go\n D internal/steerline/command_boundary.go\n M internal/steerline/command_kinds.go\n D internal/steerline/command_processor.go\n D internal/steerline/command_submission.go\n M internal/steerline/control_client.go\n M internal/steerline/control_protocol.go\n D internal/steerline/control_service.go\n M internal/steerline/conversation.go\n D internal/steerline/conversation_position.go\n M internal/steerline/conversation_query.go\n D internal/steerline/conversation_replay.go\n D internal/steerline/conversation_service.go\n D internal/steerline/conversation_sources.go\n D internal/steerline/decision.go\n M internal/steerline/domain.go\n M internal/steerline/domain_snapshot.go\n D internal/steerline/execution_backend.go\n D internal/steerline/execution_command_runner.go\n D internal/steerline/execution_commands.go\n D internal/steerline/execution_config.go\n D internal/steerline/execution_delivery_poll.go\n D internal/steerline/execution_directory.go\n D internal/steerline/execution_discard_cleanup.go\n D internal/steerline/execution_dispatch.go\n D internal/steerline/execution_errors.go\n D internal/steerline/execution_helpers.go\n D internal/steerline/execution_profiles.go\n D internal/steerline/execution_requirements.go\n D internal/steerline/execution_snapshot.go\n D internal/steerline/execution_store.go\n D internal/steerline/implementation_bindings.go\n D internal/steerline/journal_platform_linux.go\n D internal/steerline/journal_platform_other.go\n D internal/steerline/journal_platform_windows.go\n D internal/steerline/journal_reader.go\n M internal/steerline/json_decode.go\n M internal/steerline/launchers.go\n D internal/steerline/lifecycle_effect.go\n D internal/steerline/lifecycle_receipt.go\n M internal/steerline/model.go\n M internal/steerline/native_batch_command.go\n D internal/steerline/native_claim_command.go\n D internal/steerline/native_cleanup.go\n D internal/steerline/native_cleanup_stop.go\n M internal/steerline/native_contract_files.go\n D internal/steerline/native_delivery_command.go\n D internal/steerline/native_discard_command.go\n D internal/steerline/native_dispatch_command.go\n M internal/steerline/native_graph_export.go\n M internal/steerline/native_graph_types.go\n M internal/steerline/native_project_open.go\n M internal/steerline/native_readiness_query.go\n D internal/steerline/native_repository_target.go\n M internal/steerline/native_state_preflight.go\n M internal/steerline/native_task_page.go\n M internal/steerline/native_task_predecessors.go\n M internal/steerline/observation.go\n D internal/steerline/operation.go\n M internal/steerline/platform_linux.go\n M internal/steerline/platform_windows.go\n D internal/steerline/profile_data.go\n M internal/steerline/project_view.go\n D internal/steerline/publication_snapshot.go\n M internal/steerline/query_construction.go\n D internal/steerline/recovery.go\n M internal/steerline/render.go\n D internal/steerline/runtime_view.go\n D internal/steerline/service_actor.go\n D internal/steerline/service_checkpoint.go\n M internal/steerline/service_client.go\n D internal/steerline/service_commit.go\n M internal/steerline/service_console.go\n D internal/steerline/service_construction.go\n D internal/steerline/service_execution_profiles.go\n M internal/steerline/service_loop.go\n M internal/steerline/service_prepare.go\n D internal/steerline/service_state.go\n D internal/steerline/service_task_snapshot.go\n D internal/steerline/service_workers.go\n M internal/steerline/state_preflight.go\n M internal/steerline/state_revision.go\n M internal/steerline/store.go\n M internal/steerline/task_configuration.go\n M internal/steerline/task_record_lookup.go\n D internal/steerline/worker_attachment_store.go\n D internal/steerline/worker_completion.go\n D internal/steerline/worker_environment.go\n D internal/steerline/worker_environment_host.go\n D internal/steerline/worker_events.go\n D internal/steerline/worker_evidence.go\n D internal/steerline/worker_execution.go\n D internal/steerline/worker_feedback.go\n D internal/steerline/worker_lifecycle.go\n D internal/steerline/worker_lifecycle_async.go\n D internal/steerline/worker_lifecycle_feedback.go\n D internal/steerline/worker_lifecycle_recovery.go\n D internal/steerline/worker_pr.go\n D internal/steerline/worker_process.go\n D internal/steerline/worker_recovery.go\n D internal/steerline/worker_resume.go\n D internal/steerline/worker_start.go\n D internal/steerline/worker_state.go\n D internal/steerline/worker_types.go\n D internal/steerline/workspace_config.go\n M internal/steerline/write_ports.go\n M internal/steerlineapp/app.go\n M internal/steerlineapp/capability.go\n M internal/steerlineapp/client.go\n M internal/steerlineapp/client_command_wiring.go\n M internal/steerlineapp/client_discard_commands.go\n M internal/steerlineapp/client_task_commands.go\n M internal/steerlineapp/config.go\n M internal/steerlineapp/console.go\n M internal/steerlineapp/directory.go\n M internal/steerlineapp/execution_command_wiring.go\n M internal/steerlineapp/execution_service_wiring.go\n M internal/steerlineapp/task_boundary_wiring.go\n?? docs/validation/three-line-04-execution-usecases/file-mapping.json\n?? docs/validation/three-line-04-execution-usecases/interface-handoff.md\n?? docs/validation/three-line-04-execution-usecases/moved-symbols.json\n?? internal/coreboundary/execution_boundary_test.go\n?? internal/execution/application_config.go\n?? internal/execution/application_config_types.go\n?? internal/execution/candidate_control.go\n?? internal/execution/candidate_pr.go\n?? internal/execution/candidate_resources.go\n?? internal/execution/candidate_workers.go\n?? internal/execution/command_boundary.go\n?? internal/execution/command_kinds.go\n?? internal/execution/command_processor.go\n?? internal/execution/command_submission.go\n?? internal/execution/config_admission.go\n?? internal/execution/control_digest.go\n?? internal/execution/control_service.go\n?? internal/execution/control_validation.go\n?? internal/execution/conversation.go\n?? internal/execution/conversation_identity.go\n?? internal/execution/conversation_position.go\n?? internal/execution/conversation_replay.go\n?? internal/execution/conversation_service.go\n?? internal/execution/conversation_sources.go\n?? internal/execution/decision.go\n?? internal/execution/execution_backend.go\n?? internal/execution/execution_command_runner.go\n?? internal/execution/execution_commands.go\n?? internal/execution/execution_config.go\n?? internal/execution/execution_delivery_poll.go\n?? internal/execution/execution_directory.go\n?? internal/execution/execution_discard_cleanup.go\n?? internal/execution/execution_dispatch.go\n?? internal/execution/execution_errors.go\n?? internal/execution/execution_helpers.go\n?? internal/execution/execution_profiles.go\n?? internal/execution/execution_requirements.go\n?? internal/execution/execution_snapshot.go\n?? internal/execution/execution_store.go\n?? internal/execution/host_callbacks.go\n?? internal/execution/host_ports.go\n?? internal/execution/implementation_bindings.go\n?? internal/execution/journal_platform_linux.go\n?? internal/execution/journal_platform_other.go\n?? internal/execution/journal_platform_windows.go\n?? internal/execution/journal_reader.go\n?? internal/execution/json_decode.go\n?? internal/execution/lifecycle_effect.go\n?? internal/execution/lifecycle_receipt.go\n?? internal/execution/native_claim_command.go\n?? internal/execution/native_cleanup.go\n?? internal/execution/native_cleanup_stop.go\n?? internal/execution/native_delivery_command.go\n?? internal/execution/native_discard_command.go\n?? internal/execution/native_dispatch_command.go\n?? internal/execution/native_repository_target.go\n?? internal/execution/operation.go\n?? internal/execution/profile_data.go\n?? internal/execution/publication_snapshot.go\n?? internal/execution/read_ports.go\n?? internal/execution/recovery.go\n?? internal/execution/runtime_view.go\n?? internal/execution/scheduler.go\n?? internal/execution/service_activity.go\n?? internal/execution/service_actor.go\n?? internal/execution/service_checkpoint.go\n?? internal/execution/service_commit.go\n?? internal/execution/service_construction.go\n?? internal/execution/service_execution_profiles.go\n?? internal/execution/service_shutdown.go\n?? internal/execution/service_state.go\n?? internal/execution/service_task_snapshot.go\n?? internal/execution/service_workers.go\n?? internal/execution/store.go\n?? internal/execution/stored_execution_validation.go\n?? internal/execution/utilities.go\n?? internal/execution/worker_attachment_store.go\n?? internal/execution/worker_completion.go\n?? internal/execution/worker_environment.go\n?? internal/execution/worker_environment_host.go\n?? internal/execution/worker_events.go\n?? internal/execution/worker_evidence.go\n?? internal/execution/worker_execution.go\n?? internal/execution/worker_feedback.go\n?? internal/execution/worker_lifecycle.go\n?? internal/execution/worker_lifecycle_async.go\n?? internal/execution/worker_lifecycle_feedback.go\n?? internal/execution/worker_lifecycle_recovery.go\n?? internal/execution/worker_pr.go\n?? internal/execution/worker_process.go\n?? internal/execution/worker_recovery.go\n?? internal/execution/worker_resume.go\n?? internal/execution/worker_start.go\n?? internal/execution/worker_state.go\n?? internal/execution/worker_types.go\n?? internal/execution/workspace_config.go\n?? internal/steerline/control_files.go\n?? internal/steerline/decision_client.go\n?? internal/steerline/host_utilities.go\n?? internal/steerline/service_host.go\n?? internal/steerline/service_preflight.go\n?? internal/steerline/service_startup_publication.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 2,
+    "passed_packages": 2,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 8,
+    "passed_tests": 8,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "status": "pass",
+        "elapsed_seconds": 2.243
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/execution",
+        "status": "pass",
+        "elapsed_seconds": 0.605
+      }
+    ],
+    "tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary",
+        "status": "pass",
+        "elapsed_seconds": 1.73
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/repository_all_tags_windows_linux",
+        "status": "pass",
+        "elapsed_seconds": 1.67
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/concrete_storage_in_helper",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/task_implementation_in_inactive_tag",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/adapter_in_other_os_test",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/old_host_in_other_os",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/execution",
+        "name": "TestDeliveryGateRequiresSelectedWorker",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/execution",
+        "name": "TestTaskStatusAndDeliveryEvidence",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "slowest_tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary",
+        "status": "pass",
+        "elapsed_seconds": 1.73
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/repository_all_tags_windows_linux",
+        "status": "pass",
+        "elapsed_seconds": 1.67
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/concrete_storage_in_helper",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/task_implementation_in_inactive_tag",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/adapter_in_other_os_test",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/old_host_in_other_os",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/execution",
+        "name": "TestDeliveryGateRequiresSelectedWorker",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/execution",
+        "name": "TestTaskStatusAndDeliveryEvidence",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 2.243883,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/three-line-04-execution-usecases/independent-core/go-test.jsonl",
+  "stderr_log": "docs/validation/three-line-04-execution-usecases/independent-core/go-test.stderr.txt"
+}

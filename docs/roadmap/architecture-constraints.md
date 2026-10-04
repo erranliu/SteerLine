@@ -18,7 +18,7 @@ SteerLine 负责任务领取、工作区与 worker 关联、五个主阶段、�
 
 ## 身份与扩展
 
-Task、WorkflowRun、Execution、会话/轮次、用户消息和外部平台身份分别保留归属。任务领取与结项属于任务级；agent、工作区、输出和反馈属于具体会话。业务步骤不构成worker分派状态机。每个WorkflowRun 只有一条持续 worker 会话；后续多候选扩展为一个 Task 下多个独立 WorkflowRun，不为同一候选的反馈重建 worker，中心仍只记录一个 TaskDelivery。
+Task、WorkflowRun、Execution、会话/轮次、用户消息和外部平台身份分别保留归属。任务领取与结项属于任务级；agent、工作区、输出和反馈属于具体会话。业务步骤不构成worker分派状态机。每个WorkflowRun 只有一条持续 worker 会话；同 Task 的本机多候选已使用多个独立 WorkflowRun，不为同一候选的反馈重建 worker，中心仍只记录一个 TaskDelivery。
 
 历史操作固定到派发时的目标及代次，配置变化和迟到消息不能重定向原执行。完成由中心按选用结果和真实交付核验。
 

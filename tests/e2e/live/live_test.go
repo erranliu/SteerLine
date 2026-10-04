@@ -3,8 +3,9 @@
 package live
 
 import (
-	"github.com/erranliu/SteerLine/tests/e2e/internal/testenv"
 	"testing"
+
+	"github.com/erranliu/SteerLine/tests/e2e/internal/testenv"
 )
 
 func TestSmokeLocalCodex(t *testing.T) {

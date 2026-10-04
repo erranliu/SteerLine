@@ -3,10 +3,11 @@ package steerline
 import (
 	"context"
 	"errors"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"time"
 
+	execution "github.com/erranliu/SteerLine/internal/execution"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
@@ -134,23 +135,23 @@ func (a taskPredecessorTx) RecordPredecessorAudit(v taskapp.Command) error {
 }
 
 // NewTaskCommands extracts only fixed task input and injects narrow I/O ports.
-func NewTaskCommands(store persistence.CommandStore, config Config) taskapp.Commands {
+func NewTaskCommands(store persistence.CommandStore, config execution.Config) taskapp.Commands {
 	timeout, _ := time.ParseDuration(config.CommandTimeout)
 	return taskapp.Commands{Store: taskCommandStore{store}, Documents: taskDocuments{config.TaskRepositoryTarget, config.Repository, config.Git, timeout}, Input: taskapp.Input{Project: config.Identity(), Authority: config.TaskAuthority, Remote: config.Remote, Branch: config.Branch, ExecutableTypes: append([]string(nil), config.ExecutableTypes...), DefaultRequestedBy: DefaultRequestedBy()}}
 }
 
-func (c CommandService) ValidateTaskBatch(ctx context.Context, config Config, data []byte) (taskmodel.TaskBatchValidation, error) {
+func (c taskTestCommands) ValidateTaskBatch(ctx context.Context, config execution.Config, data []byte) (taskmodel.TaskBatchValidation, error) {
 	commands := NewTaskCommands(c.Store, config)
 	return commands.ValidateTaskBatch(ctx, data)
 }
-func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data []byte, request string, version uint64, by string) (taskmodel.TaskBatchReceipt, error) {
+func (c taskTestCommands) CreateTaskBatch(ctx context.Context, config execution.Config, data []byte, request string, version uint64, by string) (taskmodel.TaskBatchReceipt, error) {
 	if err := config.ValidateTaskCommandConfiguration(); err != nil {
 		return taskmodel.TaskBatchReceipt{}, err
 	}
 	commands := NewTaskCommands(c.Store, config)
 	return commands.CreateTaskBatch(ctx, data, request, version, by)
 }
-func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Config, in productapi.TaskPredecessorAddInput) (productapi.TaskPredecessorAddReceipt, error) {
+func (c taskTestCommands) AddNativeTaskPredecessors(ctx context.Context, config execution.Config, in productapi.TaskPredecessorAddInput) (productapi.TaskPredecessorAddReceipt, error) {
 	if err := config.ValidateTaskCommandConfiguration(); err != nil {
 		return productapi.TaskPredecessorAddReceipt{}, err
 	}
@@ -158,7 +159,7 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 	receipt, err := commands.AddNativeTaskPredecessors(ctx, taskmodel.PredecessorAddInput(in))
 	return productapi.TaskPredecessorAddReceipt(receipt), err
 }
-func validateTaskBatchAgainstGraph(ctx context.Context, config Config, batch taskmodel.TaskBatchInput, graph taskGraphSnapshot, verify bool) ([]taskmodel.TaskBatchIssue, []string) {
+func validateTaskBatchAgainstGraph(ctx context.Context, config execution.Config, batch taskmodel.TaskBatchInput, graph taskGraphSnapshot, verify bool) ([]taskmodel.TaskBatchIssue, []string) {
 	return taskmodel.ValidateBatchAgainstGraph(batch, graph.TaskGraph(), config.ExecutableTypes, taskmodel.ValidateContract)
 }
 func validateNativePredecessorAddition(graph taskGraphSnapshot, id string, predecessors []string) error {

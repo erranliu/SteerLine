@@ -5,13 +5,14 @@ package testenv
 import (
 	"context"
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/testprocess"
-	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/testprocess"
+	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
 
 func TestTwoProjectsIsolateTasksGitAndCleanup(t *testing.T) {

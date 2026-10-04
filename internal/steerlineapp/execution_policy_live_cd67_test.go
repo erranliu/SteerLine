@@ -19,6 +19,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
@@ -484,8 +485,8 @@ func bindNativePolicyProbeResources(ctx context.Context, c Config, e *executionm
 		return errors.New("accepted native profile data missing")
 	}
 	profile := c.ImplementationData[0]
-	id := steerline.PolicyResourceIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}
-	value, err := entry.BuildPolicyResource(ctx, steerline.PolicyResourceBuildRequest{ProfileData: c.ImplementationData, ProjectID: c.Identity(), ProfileID: profile.ProfileID, AcceptedConfigVersion: profile.AcceptedConfigVersion, Resource: id, Policy: c.ExecutionPolicy, Host: c.Host, Agent: c.Agent, Workspace: path, LinkedWorktreeArgs: linked, RepositoryPath: c.Repository, CommandTimeout: 90 * time.Second})
+	id := execution.PolicyResourceIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}
+	value, err := entry.BuildPolicyResource(ctx, execution.PolicyResourceBuildRequest{ProfileData: c.ImplementationData, ProjectID: c.Identity(), ProfileID: profile.ProfileID, AcceptedConfigVersion: profile.AcceptedConfigVersion, Resource: id, Policy: c.ExecutionPolicy, Host: c.Host, Agent: c.Agent, Workspace: path, LinkedWorktreeArgs: linked, RepositoryPath: c.Repository, CommandTimeout: 90 * time.Second})
 	if err != nil {
 		return err
 	}
@@ -510,7 +511,7 @@ func verifyNativePolicyProbeResources(c Config, e *executionmodel.ExecutionRecor
 	if err != nil {
 		return err
 	}
-	return entry.VerifyPolicyResource(r.ImplementationData, steerline.PolicyResourceIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest})
+	return entry.VerifyPolicyResource(r.ImplementationData, execution.PolicyResourceIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest})
 }
 
 func setNativePolicyBinding(t *testing.T, e *executionmodel.ExecutionRecord, endpoint, generation, session string) {

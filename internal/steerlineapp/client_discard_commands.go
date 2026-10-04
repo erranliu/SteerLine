@@ -3,16 +3,16 @@ package steerlineapp
 import (
 	"context"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type clientDiscardCommands struct {
 	service interface {
-		DiscardNativeTask(context.Context, steerline.Config, string, string, uint64, string, string) (taskmodel.TaskDiscardReceipt, error)
+		DiscardNativeTask(context.Context, execution.Config, string, string, uint64, string, string) (taskmodel.TaskDiscardReceipt, error)
 	}
-	config steerline.Config
+	config execution.Config
 }
 
 func (r *clientDiscardCommands) Discard(ctx context.Context, in productapi.DiscardInput) (taskmodel.TaskDiscardReceipt, error) {

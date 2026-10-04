@@ -1,0 +1,694 @@
+{
+  "schema_version": 1,
+  "base_commit": "df9e2f855a25fca3d82f635b6f04c5d404581ae6",
+  "verified_source": "3ebd521586ba8503158187ace287d4f55a9f872a",
+  "raw_root": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf",
+  "runs": [
+    {
+      "run": "full-freeze-03",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\full-freeze-03\\summary.json",
+      "report_sha256": "faf9e89b2c0e7b0e865c7d792ab9e80ff2997688bb93e756c93c513ac909f92e",
+      "source_commit": "3ebd521586ba8503158187ace287d4f55a9f872a",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "scope": "full",
+      "passed": true,
+      "complete": true,
+      "started_at": "2026-10-04T18:10:42.1386675Z",
+      "finished_at": "2026-10-04T18:54:51.8630548Z",
+      "test_records": 1121,
+      "failed_tests": 0,
+      "skipped_tests": 18,
+      "skipped": [
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerline",
+          "name": "TestRealIsolatedRecoveryPreview"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+          "name": "TestSupervisedOrcaRealP10ReplyGate"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+          "name": "TestOrcaNativeHostWait"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+          "name": "TestExecutionPolicyNativeToolsCollectLive"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+          "name": "TestExecutionPolicyNativeToolsLive"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+          "name": "TestLiveLocalCapabilityEvidence"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestAppServerHostExitHelper"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestAppServerHostExitRecoveryLive"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestAppServerServiceParallelRecoveryLive"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCodexAppServerNativeQuestionLive"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCodexHistoryNativeAcceptance"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCodexHistoryRealFailedAcceptance"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestCodexHistoryRealSourceReplacement"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestLocalCodexManualRecoveryLive"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestStartServiceReportsPreflightFailureAndPendingHandshake"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestStartServiceSerializesSameConfig"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "name": "TestWorkerEnvironmentNativeReadinessLive"
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+          "name": "TestSandboxReadinessExistingAccounts"
+        }
+      ],
+      "commands": [
+        [
+          "go",
+          "tool",
+          "test2json",
+          "-t",
+          "-p",
+          "github.com/erranliu/SteerLine/internal/steerline",
+          "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\full-freeze-03\\core.test.exe",
+          "-test.v=test2json",
+          "-test.count=1",
+          "-test.parallel=1",
+          "-test.timeout=45m",
+          "-test.run=^(TestCreateTaskBatchAtomicIdempotentAndQueryable|TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge|TestTaskGraphViewSnapshotAndBoundary|TestConnectionClassifiesProcessAndSnapshotIndependently|TestWindowsPendingStartupPreservesMismatchClassification|TestWindowsStartServiceRequiresVisibleWindow|TestLifecycleReviewFailedRecordMustBindProcess|TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity|TestLifecycleReviewCorruptStartupCannotBeIgnored|TestNativeCommandsRejectConfigurationBindingDriftBeforeSideEffects|TestNativeAuditReadersCoexistWithWriter|TestWaitForStartupMarksConfirmedEarlyExit|TestNativeTaskReaderRequiresExistingMatchingAuthority|TestNativeCapabilityCheckKeepsFixedAgent|TestNativeTaskCASGuardsAndDeliveryProjection|TestStartupIDAndOutputPathValidation|TestAppServerFailedPreparationKeepsPartialSessionBinding|TestAppServerRecoveryDoesNotRaceInFlightLaunch|TestAppServerStartReplayPreservesNativeSavedAnswer|TestCD62NativeFactsAndQuestionRoute|TestCD64IntentReceiptAndRecoveryGate|TestCD65HistoryAndPreparation|TestCD65SourceCommitAndHostGate|TestCM69CleanupReceiptKeepsTaskAndReceiptAtomic|TestCM69WorkerPortRejectsCandidateWithoutPublishing|TestCandidateResumeErrorDoesNotStarveSibling|TestCheckpointDoesNotSynthesizeControlOperations|TestCurrentRuntimeRetainsSupervisedCoordinatorTerminal|TestEveryRegisteredExecutionUsesTheLifecyclePort|TestExecutionRequirementsDoNotUpgradeProbeToVerified|TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding|TestHostInputWaitPersistsWithoutBusinessDecision|TestMC1|TestMC4|TestMC7|TestManagedFrozenResourceEvidenceIsVerifiedBeforeInput|TestNativeInitializationRejectsBeadsStateAndCustomDatabaseFork|TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority|TestProjectViewConnectionRechecksHeartbeatAtUse|TestPublicationPolicyFrozenConfigurationAndCredentials|TestQueryEventBatchPagingPreservesByteBoundary|TestResolutionAuditProfilesDoNotAliasProjectValues|TestResolutionAuditRestoresOriginalWorkspaceRoot|TestRestartPreflightRetainsOriginalPolicyRoots|TestRuntimeViewCannotWriteBusinessState|TestSimplifiedCleanupRetainsFrozenDeliveryEvidence|TestTM02ResultCAS|TestTaskDependencyStateRequiresEveryPredecessorDelivery|TestWorkerBindingRollsBackWithItsCheckpoint|TestWorkerCommitRejectsConflictingDecisionAtomically|TestWorkerCommitRollsBackRecordsReceiptsEventsAndCheckpoint|TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR|TestWorkerEnvironmentRestartRequiresConfirmationBeforeBusinessInput|TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor|TestWorkerFlowClaimsFreezeIndependentLocalProfiles|TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor|TestWorkerFlowModeUsesFixedExecutionIdentity|TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent|TestWorkerFlowRejectsReplacementsAndLateTurns|TestWorkerPRBindingUsesProviderAndRetainsSession|TestNativeInitializationRefusesExistingBeadsTaskDatabase|TestNewServiceRejectsNonNativeAuthorityBeforeCreatingState|TestExecutionRecordsPinBindingsAndOperations|TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional|TestWindowsServiceWindowMissingConfigIsLiteral|TestJournalBoundsUnterminatedOversizeScan|TestNativeAuditContractRolesAndFixedReferenceVersions|TestCapabilityReportRejectsRetiredWholeRunActions|TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEffects|TestJournalByteBudgetIsolatesLargeRecords|TestJournalWaitsForCompleteUTF8CRLFRecord|TestLocalReadOutputUsesBoundedExecutionCursor|TestNativeDecisionRequestAndAnswerValidation|TestRecoveryConfirmationBasisIsBoundedAndPreserved|TestStartPayloadRequiresCompleteExecutionProfileSelection|TestWindowsServiceWindowProbeHelper)$"
+        ],
+        [
+          "go",
+          "tool",
+          "test2json",
+          "-t",
+          "-p",
+          "github.com/erranliu/SteerLine/internal/steerline",
+          "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\full-freeze-03\\core.test.exe",
+          "-test.v=test2json",
+          "-test.count=1",
+          "-test.parallel=1",
+          "-test.timeout=45m",
+          "-test.run=^(TestNativeClaimAllowsManualParallelButKeepsAutoSlot|TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation|TestCreateTaskBatchRollsBackEveryWriteWhenEdgeInsertFails|TestLifecycleReviewExistingServiceDoesNotNeedInstalledBinary|TestLifecycleReviewStopReportsExitWithoutReceipt|TestLifecycleAuditRejectedStartupPreservesOwnerFiles|TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles|TestLifecycleReviewMultipleLiveAttemptsRefuseLaunch|TestLifecycleReviewStartedProcessEarlyExit|TestNativeProjectInitializesOnceAndRejectsMismatchedBinding|TestLifecycleReviewLauncherCannotRollbackChildHandshake|TestTaskGraphReadCoexistsWithWriter|TestLifecycleReviewChildPublishesIdentityBeforePreflight|TestNativeDiscardCASKeepsAuditAndNeverReusesID|TestNativePreflightAllowsItsEmptyRunLockFile|TestActivityDatabaseSurvivesReopenWithoutMirror|TestActorProjectionReusesPrivatePointersWithoutPublishingCandidates|TestAppServerLateReplyCannotModifyTerminalTask|TestAppServerRejectedEventReleasesObserver|TestAppServerStartedEventCommitsOperationReceipt|TestCD62QuestionReceiptBarrier|TestCD64ReviewReceiptAndRecoveryIsolation|TestCD65HistoryBudgetRotatesSources|TestCD66CandidateResourceIdentityAndCommitRollback|TestCM69CommandPortUsesFixedProjectAndPropagatesRejection|TestCM69WriteConsumersDoNotAccessConcreteTransactions|TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion|TestClaimRechecksAcceptedConfigFiles|TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer|TestExecutionRegistryRejectsDuplicatesAndRequiresLifecyclePorts|TestExecutionRequirementsExistenceAndNonSecretEvidence|TestFixedProfileRetainsSelectedAgent|TestIdleServiceDoesNotPublishOnNoOpPolls|TestMC2|TestMC5|TestMC8|TestNativeAuditPageBatchesRelationsAcrossPageBoundary|TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat|TestProjectPolicyMissingBoundResourcesAreNotReconstructed|TestProjectViewConnectionUsesSampledRuntime|TestPublicationPreservesExternallyAcceptedDecision|TestQueryEventBatchReadCountAndPageLimit|TestResolutionAuditRegistrationRejectsBaseTargetDrift|TestResolutionAuditWorkerCommitCannotReplaceSnapshot|TestRetiredPublicationMetadataRejected|TestRuntimeViewRejectsInvalidWorkerAttempts|TestSimplifiedEnvironmentSavedInputRequiresFreshAnswer|TestTM02TaskWorkPort|TestUnregisteredWorkerFlowConfigurationCannotClaim|TestWorkerCommitChecksSettledTaskInsideTransaction|TestWorkerCommitRejectsSavedAnswerRegression|TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint|TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch|TestWorkerEnvironmentUnidentifiedAgentKeepsOriginalDeadline|TestWorkerFlowAdapterUsesFixedProtocol|TestWorkerFlowContextKeepsFixedRunAndCopiesConfig|TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults|TestWorkerFlowPromptIncludesFixedWorkflowRunID|TestWorkerFlowRejectsOldLocalExecutionProtocol|TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace|TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver|TestNativeStoreRejectsRetiredSQLiteRunProjectionBeforeAuthorityOpen|TestDecisionAnswerSeparateClientProcessesUseOneFirstWinsCommand|TestConversationLiveSourceFailureKeepsGapAndMapperPosition|TestControlRequestPublicationIsImmutableAcrossClientProcesses|TestOperationRecordRejectsCorruptionBeforeUse|TestDecisionSubmissionRequiresNativeAuthorityBeforeStateAccess|TestJournalBoundsBatchesAndSkipsOversizeLine|TestJournalResetsOnTruncationAndAtomicReplacement|TestLifecycleReviewExitedProcessWithRetainedHandle|TestNativeCursorErrorHasStableCode|TestRealIsolatedRecoveryPreview|TestRenderActivity|TestWindowsConsoleCtrlCHelper)$"
+        ],
+        [
+          "go",
+          "tool",
+          "test2json",
+          "-t",
+          "-p",
+          "github.com/erranliu/SteerLine/internal/steerline",
+          "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\full-freeze-03\\core.test.exe",
+          "-test.v=test2json",
+          "-test.count=1",
+          "-test.parallel=1",
+          "-test.timeout=45m",
+          "-test.run=^(TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent|TestTaskBatchRejectsDuplicateAndCrossProjectDependencies|TestAddNativeTaskPredecessorsIsAtomicIdempotentAndBlocksClaim|TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof|TestNativeClaimPersistsChosenExecutionProfile|TestTaskContractPinsCommittedBlobsAndRejectsInvalidReferences|TestStartServiceReobservesExistingPendingAttempt|TestRuntimeCorruptionNotOverwritten|TestLifecycleReviewOfflineWithHeldLockCannotRestart|TestLifecycleReviewStopPublicationKeepsObservedInstance|TestLifecycleReviewWaitTimeoutDiagnosticUsesActualDuration|TestNativeAuditSchemaDefinitionMustMatchVersionStamp|TestTaskGraphLimitsAndExportPublication|TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation|TestTaskContractRejectsCommittedSymlinkReferences|TestRunConfiguredServiceRejectsBeadsBeforeCreatingStartupEvidence|TestAnswerChecksDomainRevisionBeforeCheckpointPublication|TestAppServerLaunchMessagePersistsPolicyResources|TestAppServerSlowRecoveryLeavesServiceWriterAvailable|TestAppServerUnknownTurnDoesNotOfferPostTurnFeedback|TestCD63FrozenConfigAndBinding|TestCD64SourceReplacementRetainsEvidence|TestCD65HistoryCursorCommitsWithItsConversationBatch|TestCD66ExplicitCatalogAndEntrypoints|TestCM69WorkerCommitRejectsSupersededAttempt|TestCandidateOpenPRPollPreservesOriginalPendingInput|TestCheckpointAndReadViewsCannotPublishWorkerCandidates|TestConversationHistoryMissingInjectedHostReturnsError|TestEnvironmentRecheckCannotClearNewFaultObservedDuringPoll|TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot|TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal|TestFreshWorkerFlowRuntimeUsesDistinctFormat|TestJournalFramingDoesNotInterpretActivitySequence|TestMC3|TestMC6|TestMC9|TestNativeFixtureSeedAndCopiesAreIndependent|TestObservationReportsMissingAuthorityAsCorruption|TestProjectRuntimeOmitsSettledDiscardedRuns|TestPublicationOriginalProviderAfterRestartAndRemoteDrift|TestQueryEventBatchDoesNotPrefetchUnusedLargeBodies|TestResolutionAuditEvidenceCannotChangeUnderOriginalProfileDigest|TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents|TestRestartDoesNotSendPreviouslyAcceptedFeedback|TestRoutedDecisionRequiresAllQuestionIDs|TestServiceRecoveryGateRequiresTransactionalOwner|TestSimplifiedLifecycleActorDoesNotWaitForEffect|TestTaskBatchDeterministicCyclePath|TestWindowsOwnedWorkerRunsInJobAndStopsWithOwner|TestWorkerCommitPreservesExternallyAcceptedDecision|TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure|TestWorkerEnvironmentER1ProbeAndSettlementGate|TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt|TestWorkerFeedbackKeepsOptionAndAdditionalText|TestWorkerFlowClaimNeedsNoProjectSteps|TestWorkerFlowContextsDoNotExchangeExecutionProfiles|TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges|TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged|TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation|TestWorkerIntentIsDurableBeforeDispatchAndFailurePreventsDispatch|TestWorkerRecoveryAttemptCommitsAtomically|TestWindowsReplaceFailurePreservesSnapshot|TestConversationJournalReplayIsBoundedAndIdempotent|TestLaunchLockSerializesCompetingClients|TestCommandIdempotencyAndDecisionVersionArbitration|TestConversationChangedLiveBytesCannotBindOrCheckpoint|TestAtomicWriteENOSPCPreservesPreviousSnapshot|TestDecisionAnswerCommandClientProcess|TestJobDiagnosticChildHelper|TestJournalFromStartFalseSkipsOldPartialRecord|TestLifecycleReviewCancelledLaunchDoesNotWrite|TestNativeControlPayloadRejectsUnknownFields|TestProcessProbeSeparatesMatchReuseAndAbsent|TestRecoveryInspectionReadsNativeClaimFromCenter|TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath)$"
+        ],
+        [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "-timeout=45m",
+          "-p",
+          "1",
+          "-parallel",
+          "1",
+          "github.com/erranliu/SteerLine/cmd/orca-probe",
+          "github.com/erranliu/SteerLine/cmd/steerline",
+          "github.com/erranliu/SteerLine/cmd/test-feedback",
+          "github.com/erranliu/SteerLine/docs/validation",
+          "github.com/erranliu/SteerLine/internal/coreboundary",
+          "github.com/erranliu/SteerLine/internal/execution",
+          "github.com/erranliu/SteerLine/internal/execution/backend",
+          "github.com/erranliu/SteerLine/internal/execution/model",
+          "github.com/erranliu/SteerLine/internal/product/api",
+          "github.com/erranliu/SteerLine/internal/steerline/activityview",
+          "github.com/erranliu/SteerLine/internal/steerline/clientcontracts",
+          "github.com/erranliu/SteerLine/internal/steerline/codexapp",
+          "github.com/erranliu/SteerLine/internal/steerline/codexworker",
+          "github.com/erranliu/SteerLine/internal/steerline/console",
+          "github.com/erranliu/SteerLine/internal/steerline/contracts",
+          "github.com/erranliu/SteerLine/internal/steerline/integration",
+          "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker",
+          "github.com/erranliu/SteerLine/internal/steerline/orcaworker",
+          "github.com/erranliu/SteerLine/internal/steerline/persistence",
+          "github.com/erranliu/SteerLine/internal/steerline/processhost",
+          "github.com/erranliu/SteerLine/internal/steerline/projection",
+          "github.com/erranliu/SteerLine/internal/steerline/publication",
+          "github.com/erranliu/SteerLine/internal/steerline/query",
+          "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+          "github.com/erranliu/SteerLine/internal/steerline/taskview",
+          "github.com/erranliu/SteerLine/internal/steerline/testprotocol",
+          "github.com/erranliu/SteerLine/internal/steerline/workspace",
+          "github.com/erranliu/SteerLine/internal/steerlineapp",
+          "github.com/erranliu/SteerLine/internal/steerlineclient",
+          "github.com/erranliu/SteerLine/internal/steerlineintegration",
+          "github.com/erranliu/SteerLine/internal/storage/ports",
+          "github.com/erranliu/SteerLine/internal/task",
+          "github.com/erranliu/SteerLine/internal/task/model",
+          "github.com/erranliu/SteerLine/internal/testboundary",
+          "github.com/erranliu/SteerLine/internal/testfeedback",
+          "github.com/erranliu/SteerLine/internal/testprocess",
+          "github.com/erranliu/SteerLine/tests/e2e/cmd/sandbox-setup",
+          "github.com/erranliu/SteerLine/tests/e2e/internal/controlled",
+          "github.com/erranliu/SteerLine/tests/e2e/internal/driver",
+          "github.com/erranliu/SteerLine/tests/e2e/internal/evidence",
+          "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+          "github.com/erranliu/SteerLine/tests/e2e/internal/testenv"
+        ]
+      ]
+    },
+    {
+      "run": "l1-freeze-03",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\l1-freeze-03\\summary.json",
+      "report_sha256": "ad91b0fa49a824a37bfb960bdb717dc8176847d8d95621258cd961270a9aacd0",
+      "source_commit": "3ebd521586ba8503158187ace287d4f55a9f872a",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "scope": "quick",
+      "passed": true,
+      "complete": true,
+      "started_at": "2026-10-04T18:11:11.2748612Z",
+      "finished_at": "2026-10-04T18:19:27.0042412Z",
+      "test_records": 241,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "skipped": [],
+      "commands": [
+        [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "-timeout=45m",
+          "-p",
+          "1",
+          "-parallel",
+          "1",
+          "-run=^(TestWorkerFlowClaimNeedsNoProjectSteps|TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged|TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt|TestRestartPreflightRetainsOriginalPolicyRoots|TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion)$",
+          "github.com/erranliu/SteerLine/internal/steerline"
+        ],
+        [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "-timeout=45m",
+          "-p",
+          "1",
+          "-parallel",
+          "1",
+          "github.com/erranliu/SteerLine/internal/task/model",
+          "github.com/erranliu/SteerLine/internal/task",
+          "github.com/erranliu/SteerLine/internal/steerline/taskview",
+          "github.com/erranliu/SteerLine/internal/storage/ports",
+          "github.com/erranliu/SteerLine/internal/execution",
+          "github.com/erranliu/SteerLine/internal/steerline/persistence",
+          "github.com/erranliu/SteerLine/internal/steerline/testprotocol",
+          "github.com/erranliu/SteerLine/internal/execution/model",
+          "github.com/erranliu/SteerLine/internal/execution/backend",
+          "github.com/erranliu/SteerLine/internal/steerline/contracts",
+          "github.com/erranliu/SteerLine/internal/steerline/projection",
+          "github.com/erranliu/SteerLine/internal/steerline/query",
+          "github.com/erranliu/SteerLine/internal/steerline/sqlite",
+          "github.com/erranliu/SteerLine/internal/testboundary"
+        ],
+        [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "-timeout=3m",
+          "-p",
+          "1",
+          "-parallel",
+          "1",
+          "-run=^(TestCD63CodecIdentityAndVersion|TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily|TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift|TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch|TestSupervisedOrcaClientRejectsReturnedReplacementWorktree|TestSupervisedRunCoordinatorsAreDistinctAndFenced|TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal|TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall|TestRemoteContinuationRequiresOriginalPeerAndTerminal|TestRemoteWorkspaceKeepsPeerPathAndRuntime|TestRemoteReplyRejectsOversizeWithoutMutation|TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending|TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox|TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID|TestLoadConfigRequiresExplicitRemoteCancellationFalse)$",
+          "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+        ],
+        [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "-timeout=3m",
+          "-p",
+          "1",
+          "-parallel",
+          "1",
+          "-run=^(TestConversationMapperNativeTwoTurnFixture|TestHistoryAdapterRejectsOversizedNativeCursor|TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt)$",
+          "github.com/erranliu/SteerLine/internal/steerline/codexworker"
+        ],
+        [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "-timeout=3m",
+          "-p",
+          "1",
+          "-parallel",
+          "1",
+          "-run=^(TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess|TestFixedOrcaAgentTerminalRejectsReplacedIncarnation|TestAgentBindPendingReceiptDoesNotQualifyOriginalHost)$",
+          "github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+        ],
+        [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "-timeout=3m",
+          "-p",
+          "1",
+          "-parallel",
+          "1",
+          "-run=^(TestCM71ProductDependencyBoundary|TestReadinessNativeLaunchKeepsDefaultModelAndPermissions|TestFullAccessProfileFreezeSurvivesClaimValidation|TestOrcaPreflightRequiresConfiguredCodexPolicyMapping|TestLocalWindowsSandboxProfileFreezesAndRestores|TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority|TestNativeOrcaAgentSelectionUsesFrozenProfile)$",
+          "github.com/erranliu/SteerLine/internal/steerlineapp"
+        ],
+        [
+          "go",
+          "test",
+          "-json",
+          "-count=1",
+          "-timeout=10m",
+          "-p",
+          "1",
+          "-parallel",
+          "1",
+          "-run=^(TestCD67CoreBoundary|TestCD67AdditionalImplementation)$",
+          "github.com/erranliu/SteerLine/internal/steerlineintegration"
+        ]
+      ]
+    },
+    {
+      "run": "infra-freeze-03",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\infra-freeze-03\\summary.json",
+      "report_sha256": "aef9595c5e1728c49299a1662800c2e6924bf4d9bb9d2306a1ea59c8a7ba9385",
+      "source_commit": "3ebd521586ba8503158187ace287d4f55a9f872a",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "scope": "targeted",
+      "passed": true,
+      "complete": true,
+      "started_at": "2026-10-04T18:11:12.1829602Z",
+      "finished_at": "2026-10-04T18:13:11.1123913Z",
+      "test_records": 51,
+      "failed_tests": 0,
+      "skipped_tests": 1,
+      "skipped": [
+        {
+          "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+          "name": "TestSandboxReadinessExistingAccounts"
+        }
+      ],
+      "commands": [
+        [
+          "go",
+          "test",
+          "-tags=e2e",
+          "./tests/e2e/internal/...",
+          "./tests/e2e/cmd/...",
+          "-count=1",
+          "-json"
+        ]
+      ]
+    },
+    {
+      "run": "e2e-compile-freeze03",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\e2e-compile-freeze03\\summary.json",
+      "report_sha256": "2fc7035bd0fc1c6cdbf60b74da3a7d82629d57bcba14ef8e22c22de23cce9d9f",
+      "source_commit": "3ebd521586ba8503158187ace287d4f55a9f872a",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "scope": "targeted",
+      "passed": true,
+      "complete": true,
+      "started_at": "2026-10-04T18:11:59.7074267Z",
+      "finished_at": "2026-10-04T18:12:06.6538451Z",
+      "test_records": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "skipped": [],
+      "commands": [
+        [
+          "go",
+          "test",
+          "-tags=e2e",
+          "./tests/e2e/...",
+          "-run",
+          "^$",
+          "-count=1",
+          "-json"
+        ]
+      ]
+    },
+    {
+      "run": "candidates-freeze-04",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\candidates-freeze-04\\summary.json",
+      "report_sha256": "287a1878017d2b464d5f2c68d2a6ca23be5bf1a01d72aa2a9bb94e322d1948bf",
+      "source_commit": "3ebd521586ba8503158187ace287d4f55a9f872a",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "scope": "e2e",
+      "passed": true,
+      "complete": true,
+      "started_at": "2026-10-04T19:02:34.1026748Z",
+      "finished_at": "2026-10-04T19:20:54.4744192Z",
+      "test_records": 1,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "skipped": [],
+      "commands": [
+        [
+          "go",
+          "test",
+          "-tags=e2e",
+          "-json",
+          "-count=1",
+          "-p=1",
+          "-parallel=1",
+          "-timeout=35m",
+          "-run=^(TestCandidateLocal)$",
+          "./tests/e2e/suites/candidates"
+        ]
+      ],
+      "cleanup_complete": true,
+      "coverage": "selected-L3",
+      "build_sha256": {
+        "controlled-helper.exe": "d1b9a3122eb5b5c56748cb338f4f6b426ff8e0948e2825204e8eae18ce4eec04",
+        "steerline.exe": "54ba1e879de760f561fe1fa7c15bb2b9365bad79e77255806569016a962e3c7a"
+      }
+    },
+    {
+      "run": "l2-freeze-03",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\l2-freeze-03\\summary.json",
+      "report_sha256": "c5711d449678fce9a62614e21de0e637035d50dfd2fbad9696b5c0c9a42794be",
+      "source_commit": "3ebd521586ba8503158187ace287d4f55a9f872a",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "scope": "e2e",
+      "passed": true,
+      "complete": true,
+      "started_at": "2026-10-04T18:38:07.4500717Z",
+      "finished_at": "2026-10-04T18:46:50.3552628Z",
+      "test_records": 3,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "skipped": [],
+      "commands": [
+        [
+          "go",
+          "test",
+          "-tags=e2e",
+          "-json",
+          "-count=1",
+          "-p=1",
+          "-parallel=1",
+          "-timeout=6m",
+          "-run=^(TestDeliverySmoke)$",
+          "./tests/e2e/smoke"
+        ],
+        [
+          "go",
+          "test",
+          "-tags=e2e",
+          "-json",
+          "-count=1",
+          "-p=1",
+          "-parallel=1",
+          "-timeout=35m",
+          "-run=^(TestSmokeLocalCodex|TestSmokeOrcaCodex)$",
+          "./tests/e2e/live"
+        ]
+      ],
+      "cleanup_complete": true,
+      "coverage": "full-L2",
+      "build_sha256": {
+        "controlled-helper.exe": "d1b9a3122eb5b5c56748cb338f4f6b426ff8e0948e2825204e8eae18ce4eec04",
+        "steerline.exe": "54ba1e879de760f561fe1fa7c15bb2b9365bad79e77255806569016a962e3c7a"
+      }
+    },
+    {
+      "run": "l3-controlled-freeze-03",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\l3-controlled-freeze-03\\summary.json",
+      "report_sha256": "a8fd8cda0be2a76cde2651af7673f92d7a05743aa48a896f108d69a9e21aca54",
+      "source_commit": "3ebd521586ba8503158187ace287d4f55a9f872a",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "scope": "e2e",
+      "passed": true,
+      "complete": true,
+      "started_at": "2026-10-04T18:46:50.7939086Z",
+      "finished_at": "2026-10-04T18:50:02.2605145Z",
+      "test_records": 2,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "skipped": [],
+      "commands": [
+        [
+          "go",
+          "test",
+          "-tags=e2e",
+          "-json",
+          "-count=1",
+          "-p=1",
+          "-parallel=1",
+          "-timeout=6m",
+          "-run=^(TestBasicDelivery)$",
+          "./tests/e2e/suites/delivery"
+        ],
+        [
+          "go",
+          "test",
+          "-tags=e2e",
+          "-json",
+          "-count=1",
+          "-p=1",
+          "-parallel=1",
+          "-timeout=6m",
+          "-run=^(TestWaitingMergeRestart)$",
+          "./tests/e2e/suites/recovery"
+        ]
+      ],
+      "cleanup_complete": true,
+      "coverage": "selected-L3",
+      "build_sha256": {
+        "controlled-helper.exe": "d1b9a3122eb5b5c56748cb338f4f6b426ff8e0948e2825204e8eae18ce4eec04",
+        "steerline.exe": "54ba1e879de760f561fe1fa7c15bb2b9365bad79e77255806569016a962e3c7a"
+      }
+    },
+    {
+      "run": "l3-live-freeze-03",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\l3-live-freeze-03\\summary.json",
+      "report_sha256": "b5f0da3bb18373ab5809629fa48394a05c8a1c14404e53d59b2d9e84689efcd0",
+      "source_commit": "3ebd521586ba8503158187ace287d4f55a9f872a",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "scope": "e2e",
+      "passed": true,
+      "complete": true,
+      "started_at": "2026-10-04T18:50:02.6919053Z",
+      "finished_at": "2026-10-04T19:01:54.084852Z",
+      "test_records": 4,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "skipped": [],
+      "commands": [
+        [
+          "go",
+          "test",
+          "-tags=e2e",
+          "-json",
+          "-count=1",
+          "-p=1",
+          "-parallel=1",
+          "-timeout=35m",
+          "-run=^(TestDeliveryLocalCodex|TestDeliveryOrcaCodex|TestRecoveryLocalCodex|TestRecoveryOrcaCodex)$",
+          "./tests/e2e/live"
+        ]
+      ],
+      "cleanup_complete": true,
+      "coverage": "selected-L3",
+      "build_sha256": {
+        "controlled-helper.exe": "d1b9a3122eb5b5c56748cb338f4f6b426ff8e0948e2825204e8eae18ce4eec04",
+        "steerline.exe": "54ba1e879de760f561fe1fa7c15bb2b9365bad79e77255806569016a962e3c7a"
+      }
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "candidates.local",
+      "env": "live",
+      "run": "candidates-freeze-04",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "real_pr": {
+        "url": "https://github.com/erranliu/SteerlineTest/pull/101",
+        "repository": "erranliu/SteerlineTest",
+        "base_branch": "codex/e2e/316d6a8295ee4ee48539e96b4f2a3a96/candidates.local/base",
+        "head_repository": "erranliu/SteerlineTest",
+        "head_branch": "erranliu/sl-1-8ae022a25c0ab24cb006454be6599627",
+        "head_revision": "04b79642a410f6292d8b4296c5c0510e688d379e",
+        "state": "merged",
+        "merged": true,
+        "merged_at": "2026-10-04T19:15:09Z",
+        "merge_commit": "c4edf1769e00a154a8a722396a427ac88b941770"
+      },
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\candidates-freeze-04\\scenarios\\candidates.local\\scenario.json",
+      "report_sha256": "16dc9c67e4a7fb0b5eeeda25b54f51928d8f457dfaed8a0a3d7ff5c3a93053a1"
+    },
+    {
+      "id": "smoke.delivery",
+      "env": "controlled",
+      "run": "l2-freeze-03",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": false,
+      "real_pr": null,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\l2-freeze-03\\scenarios\\smoke.delivery\\scenario.json",
+      "report_sha256": "feeb4f2c7d20fbc7a3f815c5e3b7151254eb15819c22e9e51e3d0fd026c127b4"
+    },
+    {
+      "id": "smoke.local-codex",
+      "env": "live",
+      "run": "l2-freeze-03",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "real_pr": {
+        "url": "https://github.com/erranliu/SteerlineTest/pull/98",
+        "repository": "erranliu/SteerlineTest",
+        "base_branch": "codex/e2e/328746cc8f644ca1abb83c723fc916b1/smoke.local-codex/base",
+        "head_repository": "erranliu/SteerlineTest",
+        "head_branch": "codex/1-ffc813226037",
+        "head_revision": "b15faadc0b2563da54bf256185e8da49b44c9e45",
+        "state": "merged",
+        "merged": true,
+        "merged_at": "2026-10-04T18:41:24Z",
+        "merge_commit": "84c06a30b09f12a849d6c10da9570cd599f90e2d"
+      },
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\l2-freeze-03\\scenarios\\smoke.local-codex\\scenario.json",
+      "report_sha256": "1c5ea041fc33d1ac2b01e2ab34a244adcc6a306ec462e2eea2f845d69cfbdd66"
+    },
+    {
+      "id": "smoke.orca-codex",
+      "env": "live",
+      "run": "l2-freeze-03",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "real_pr": {
+        "url": "https://github.com/erranliu/SteerlineTest/pull/99",
+        "repository": "erranliu/SteerlineTest",
+        "base_branch": "codex/e2e/fa8208de7363494c8c9f0cca1a9f786b/smoke.orca-codex/base",
+        "head_repository": "erranliu/SteerlineTest",
+        "head_branch": "erranliu/sl-1-71dd0b9bdd84b56cfe60346f4c389a87",
+        "head_revision": "69db0834e1ce3c9acea52b7aced2bc219bf065c9",
+        "state": "merged",
+        "merged": true,
+        "merged_at": "2026-10-04T18:46:21Z",
+        "merge_commit": "22e98268d6ee4e93d97ae73515e5af4c35a4455b"
+      },
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\l2-freeze-03\\scenarios\\smoke.orca-codex\\scenario.json",
+      "report_sha256": "09853260fed29fc7ddae8a77058a2743bf879563c816c04d1f2d2388a9d84b81"
+    },
+    {
+      "id": "delivery.basic",
+      "env": "controlled",
+      "run": "l3-controlled-freeze-03",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": false,
+      "real_pr": null,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\l3-controlled-freeze-03\\scenarios\\delivery.basic\\scenario.json",
+      "report_sha256": "d00e2f6189452fa953c2b653f9ffca3138a19f8ef8e300cbb48ff770d3e00c95"
+    },
+    {
+      "id": "recovery.waiting-merge-restart",
+      "env": "controlled",
+      "run": "l3-controlled-freeze-03",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": false,
+      "real_pr": null,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\l3-controlled-freeze-03\\scenarios\\recovery.waiting-merge-restart\\scenario.json",
+      "report_sha256": "9047be94efff07991522b29c21af7b9875945641beea4a9f2921bb9f5323357c"
+    },
+    {
+      "id": "delivery.local-codex",
+      "env": "live",
+      "run": "l3-live-freeze-03",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "real_pr": null,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\l3-live-freeze-03\\scenarios\\delivery.local-codex\\scenario.json",
+      "report_sha256": "ce7be4d9775c55dbdf23448dee28c5a078a0ea37f3865a7733c98b67c18413ee"
+    },
+    {
+      "id": "delivery.orca-codex",
+      "env": "live",
+      "run": "l3-live-freeze-03",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "real_pr": null,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\l3-live-freeze-03\\scenarios\\delivery.orca-codex\\scenario.json",
+      "report_sha256": "7f8b8369fab804c87737bff461b6953c6a15e1372c6170f89024fd23288036d6"
+    },
+    {
+      "id": "recovery.local-codex",
+      "env": "live",
+      "run": "l3-live-freeze-03",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "real_pr": null,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\l3-live-freeze-03\\scenarios\\recovery.local-codex\\scenario.json",
+      "report_sha256": "0c419fac8a47db690a3e5cc9da494d80b0b44a066f9d7d16b3e72c280bb87cf1"
+    },
+    {
+      "id": "recovery.orca-codex",
+      "env": "live",
+      "run": "l3-live-freeze-03",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "real_pr": null,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\l3-live-freeze-03\\scenarios\\recovery.orca-codex\\scenario.json",
+      "report_sha256": "5cc5849cd55a955ab611be7fddaefb682f4eeb751ee66c8b1d230062fb3248c4"
+    }
+  ],
+  "python": {
+    "tests": 18,
+    "passed": true,
+    "log": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-latest-20261004-ea1ed3bf\\python-freeze03.txt",
+    "sha256": "e509ff95a71a6ea1b544af41cd216876729c098e263c5ed9aa3ec05654542eea"
+  }
+}

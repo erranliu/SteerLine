@@ -9,12 +9,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"syscall"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 )
 
 func serviceConsoleWindow() uint64 { return 0 }
@@ -78,40 +76,6 @@ func probeLockFile(path string) (bool, error) {
 	return false, nil
 }
 
-type childProcess struct {
-	identity executionbackend.ProcessIdentity
-}
-
-func (p *childProcess) Identity() executionbackend.ProcessIdentity { return p.identity }
-
-func (*childProcess) OwnedProcess() bool { return true }
-
-func (p *childProcess) Kill() { syscall.Kill(-p.identity.PID, syscall.SIGKILL) }
-
-func (p *childProcess) Close() { p.Kill() }
-
-func startProcess(cmd *exec.Cmd) (*childProcess, error) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
-	if e := cmd.Start(); e != nil {
-		return nil, e
-	}
-	id, e := linuxIdentity(cmd.Process.Pid)
-	if e != nil {
-		cmd.Process.Kill()
-		cmd.Wait()
-		return nil, e
-	}
-	return &childProcess{identity: id}, nil
-}
-
-func workerTreeAbsent(identity executionbackend.ProcessIdentity) bool {
-	if inspectProcess(&identity) != "process absent" {
-		return false
-	}
-	err := syscall.Kill(-identity.PID, 0)
-	return errors.Is(err, syscall.ESRCH)
-}
-
 func startDetachedProcess(cmd *exec.Cmd) (executionbackend.ProcessIdentity, error) {
 	// A separate session detaches the service from the caller's terminal and
 	// process group. Pdeathsig is deliberately unset for this lifecycle.
@@ -119,10 +83,10 @@ func startDetachedProcess(cmd *exec.Cmd) (executionbackend.ProcessIdentity, erro
 	if err := cmd.Start(); err != nil {
 		return executionbackend.ProcessIdentity{}, err
 	}
-	id, err := linuxIdentity(cmd.Process.Pid)
+	id, err := resourceprocess.IdentityForPID(cmd.Process.Pid)
 	if err == nil {
 		var session int
-		session, err = linuxSessionID(cmd.Process.Pid)
+		session, err = resourceprocess.SessionID(cmd.Process.Pid)
 		if err == nil && session != cmd.Process.Pid {
 			err = fmt.Errorf("detached service session verification failed: session=%d pid=%d", session, cmd.Process.Pid)
 		}
@@ -136,87 +100,3 @@ func startDetachedProcess(cmd *exec.Cmd) (executionbackend.ProcessIdentity, erro
 }
 
 func currentJobDiagnostics() (bool, uint32, error) { return false, 0, nil }
-
-func linuxProcFields(pid int) ([]string, error) {
-	b, err := os.ReadFile("/proc/" + strconv.Itoa(pid) + "/stat")
-	if err != nil {
-		return nil, err
-	}
-	text := string(b)
-	end := strings.LastIndex(text, ")")
-	if end < 0 || end+1 >= len(text) {
-		return nil, fmt.Errorf("invalid proc stat")
-	}
-	fields := strings.Fields(text[end+1:])
-	if len(fields) < 20 {
-		return nil, fmt.Errorf("invalid proc stat")
-	}
-	return fields, nil
-}
-
-func linuxSessionID(pid int) (int, error) {
-	fields, err := linuxProcFields(pid)
-	if err != nil {
-		return 0, err
-	}
-	return strconv.Atoi(fields[3])
-}
-
-func linuxIdentity(pid int) (executionbackend.ProcessIdentity, error) {
-	base := "/proc/" + strconv.Itoa(pid)
-	fields, e := linuxProcFields(pid)
-	if e != nil {
-		return executionbackend.ProcessIdentity{}, e
-	}
-	if fields[0] == "Z" {
-		return executionbackend.ProcessIdentity{}, os.ErrNotExist
-	}
-	exe, e := os.Readlink(base + "/exe")
-	if e != nil {
-		return executionbackend.ProcessIdentity{}, e
-	}
-	boot, e := os.ReadFile("/proc/sys/kernel/random/boot_id")
-	if e != nil {
-		return executionbackend.ProcessIdentity{}, e
-	}
-	return executionbackend.ProcessIdentity{Kind: "os", PID: pid, Created: strings.TrimSpace(string(boot)) + ":" + fields[19], Executable: exe}, nil
-}
-
-func currentProcessIdentity() (*executionbackend.ProcessIdentity, error) {
-	id, err := linuxIdentity(os.Getpid())
-	if err != nil {
-		return nil, err
-	}
-	return &id, nil
-}
-
-func inspectProcess(old *executionbackend.ProcessIdentity) string {
-	probe := probeProcess(old)
-	switch probe.State {
-	case ProcessAbsent:
-		return "process absent"
-	case ProcessMatches:
-		return "matching process still exists"
-	case ProcessReused:
-		return "PID belongs to a different process"
-	default:
-		return "process identity unavailable: " + probe.Reason
-	}
-}
-
-func probeProcess(old *executionbackend.ProcessIdentity) productapi.ProcessProbe {
-	if old == nil || old.PID <= 0 || old.Kind != "os" || old.Created == "" || old.Executable == "" {
-		return productapi.ProcessProbe{State: ProcessUnknown, Reason: "process identity is missing or unsupported"}
-	}
-	id, err := linuxIdentity(old.PID)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return productapi.ProcessProbe{State: ProcessAbsent, Reason: "process does not exist"}
-		}
-		return productapi.ProcessProbe{State: ProcessUnknown, Reason: err.Error()}
-	}
-	if id == *old {
-		return productapi.ProcessProbe{State: ProcessMatches, Reason: "process creation identity and executable match"}
-	}
-	return productapi.ProcessProbe{State: ProcessReused, Reason: "PID belongs to a different process identity"}
-}

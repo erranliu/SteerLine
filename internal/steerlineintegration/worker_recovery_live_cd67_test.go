@@ -11,19 +11,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
-	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 const liveNativeQuestion = "Call steerline_ask with one question (id choice, header Choice, question Should I reply A or B?, options A and B, allow_free_text false). Wait for the answer. Then reply with the chosen letter only."
 
 type appServerHostExitReceipt struct {
-	Config     steerline.Config                 `json:"config"`
+	Config     execution.Config                 `json:"config"`
 	ConfigPath string                           `json:"config_path"`
 	Home       string                           `json:"home"`
 	RunID      string                           `json:"run_id"`
@@ -80,18 +80,18 @@ func createNativeLiveTask(t *testing.T, ctx context.Context, f *integrationFixtu
 	queries := steerline.NewQueryService(store, f.config.Identity())
 	authority, err := queries.ReadyNativeTaskSnapshot(ctx)
 	require(t, err)
-	commands := steerline.NewCommandService(store, f.config.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})
+	commands := appExecutionCommands(t, store, f.config)
 	batch := taskmodel.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: f.config.Identity(), Tasks: []taskmodel.TaskBatchTask{{LocalKey: "fixture", TaskID: id, Title: "Native recovery acceptance", Type: "task", Contract: contract}}, Dependencies: []taskmodel.TaskBatchEdge{}}
 	_, err = createTaskBatchFixture(ctx, commands.Store, f.config, mustJSON(batch), newID(), authority.AuthorityVersion, "operator")
 	require(t, err)
 	page, err := queries.ShowNativeTask(ctx, fmt.Sprint(id))
 	require(t, err)
 	paused := false
-	_, err = commands.SetNativeDispatchState(ctx, steerline.NativeDispatchUpdate{RequestID: newID(), ExpectedAuthorityVersion: page.AuthorityVersion, Paused: &paused, RequestedBy: "operator"})
+	_, err = commands.SetNativeDispatchState(ctx, execution.NativeDispatchUpdate{RequestID: newID(), ExpectedAuthorityVersion: page.AuthorityVersion, Paused: &paused, RequestedBy: "operator"})
 	require(t, err)
 }
 
-func nativeLiveAnswer(t *testing.T, ctx context.Context, c steerline.Config, run *steerline.Run, option, note string) {
+func nativeLiveAnswer(t *testing.T, ctx context.Context, c execution.Config, run *steerline.Run, option, note string) {
 	t.Helper()
 	_, _, err := steerline.SubmitDecisionAnswer(ctx, c, steerline.AnswerOptions{RunID: run.RunID, DecisionID: run.Decision.ID, ExpectedVersion: run.Decision.Version, Option: option, Note: note, By: "operator"})
 	require(t, err)

@@ -22,7 +22,11 @@ import (
 
 const corePackage = "github.com/erranliu/SteerLine/internal/steerline"
 
-var quickTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion"}
+var quickTests = []string{"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding"}
+
+const executionPackage = "github.com/erranliu/SteerLine/internal/execution"
+
+var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput", "TestCandidateResumeErrorDoesNotStarveSibling"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/internal/steerlineintegration"
 
@@ -62,12 +66,14 @@ var quickBoundaryAssigned = []string{
 	"TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
 }
 
-var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{corePackage + "/taskview", "github.com/erranliu/SteerLine/internal/storage/ports", "github.com/erranliu/SteerLine/internal/execution", corePackage + "/persistence", corePackage + "/testprotocol", "github.com/erranliu/SteerLine/internal/execution/model", "github.com/erranliu/SteerLine/internal/execution/backend", corePackage + "/contracts", corePackage + "/projection", corePackage + "/query", corePackage + "/sqlite", "github.com/erranliu/SteerLine/internal/testboundary"}...)
+var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{corePackage + "/taskview", "github.com/erranliu/SteerLine/internal/storage/ports", corePackage + "/persistence", corePackage + "/testprotocol", "github.com/erranliu/SteerLine/internal/execution/model", "github.com/erranliu/SteerLine/internal/execution/backend", corePackage + "/contracts", executionPackage + "/reconstruction", corePackage + "/query", corePackage + "/sqlite", "github.com/erranliu/SteerLine/internal/testboundary"}...)
 
 var quickOwnerCases = []struct {
 	ID, Package string
 	Tests       []string
 }{
+	{"quick-execution", executionPackage, quickExecutionTests},
+	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/coreboundary", []string{"TestTM04ExecutionBoundary"}},
 	{"quick-owner-remote", corePackage + "/orca_remote_worker", []string{"TestCD63CodecIdentityAndVersion", "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily", "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift", "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch", "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree", "TestSupervisedRunCoordinatorsAreDistinctAndFenced", "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal", "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall", "TestRemoteContinuationRequiresOriginalPeerAndTerminal", "TestRemoteWorkspaceKeepsPeerPathAndRuntime", "TestRemoteReplyRejectsOversizeWithoutMutation", "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending", "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox", "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID", "TestLoadConfigRequiresExplicitRemoteCancellationFalse"}},
 	{"quick-owner-codec", corePackage + "/codexworker", []string{"TestConversationMapperNativeTwoTurnFixture", "TestHistoryAdapterRejectsOversizedNativeCursor", "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt"}},
 	{"quick-owner-identity", corePackage + "/orcaworker", []string{"TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess", "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation", "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost"}},
@@ -535,7 +541,7 @@ func checkScopedCoverage(report scopedReport) []string {
 			if count != 1 {
 				failures = append(failures, fmt.Sprintf("%s: package %s has %d terminal events", group.ID, pkg, count))
 			}
-			if group.ID == "other-packages" || group.ID == "quick-core" || group.ID == "quick-rules" || (group.ID == "quick-boundary" || strings.HasPrefix(group.ID, "quick-owner-")) {
+			if group.ID == "other-packages" || group.ID == "quick-core" || group.ID == "quick-rules" || (group.ID == "quick-boundary" || strings.HasPrefix(group.ID, "quick-owner-")) || group.ID == "quick-execution" || group.ID == "quick-execution-boundary" {
 				seenPackages[pkg] += count
 			}
 		}

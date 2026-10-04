@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"os"
+	"path/filepath"
+	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -113,8 +116,30 @@ func testIntegratedManagedLaunch(t *testing.T, renamed bool) {
 	})
 	state, err := testprotocol.ReadNativeOrcaState(f.nativeStateDir)
 	require(t, err)
-	if !state.FixedAgentTerminalCreated || state.Dispatches != 2 || !strings.Contains(state.FixedAgentCommand, "'gpt-6-luna'") || state.CreatedWithAgent != "" || len(recovered.execution.Environment.WriteRoots) != 5 {
+	if !state.FixedAgentTerminalCreated || state.Dispatches != 2 || state.CreatedWithAgent != "" || len(recovered.execution.Environment.WriteRoots) != 5 {
 		t.Fatalf("original native launch/binding/policy was not reconciled: state=%+v environment=%+v", state, recovered.execution.Environment)
+	}
+	e := recovered.execution
+	launchPath := filepath.Join(f.config.RunDir, "runs", recovered.run.RunID, "turns", e.ExecutionID, "session-launch.json")
+	launchRaw, err := os.ReadFile(launchPath)
+	require(t, err)
+	var launch codexworker.SessionLaunch
+	require(t, json.Unmarshal(launchRaw, &launch))
+	if !strings.Contains(state.FixedAgentCommand, "'codex-session-launch'") || !strings.Contains(state.FixedAgentCommand, "'"+launchPath+"'") {
+		t.Fatal("original terminal did not launch its bound session configuration")
+	}
+	binding := launch.Binding
+	if binding.Version != 1 || binding.ProjectID != e.ProjectIdentity || binding.TaskID != "901" || binding.WorkflowID != recovered.run.RunID || binding.ExecutionID != e.ExecutionID || binding.AttemptID != e.CurrentAttemptID ||
+		binding.Backend != executionbackend.BackendOrca || binding.Protocol != executionbackend.ProtocolOrcaTerminalV2 || binding.TargetID != e.Target.ID || binding.ExternalRef != e.Process.WorktreeID ||
+		filepath.Clean(filepath.FromSlash(binding.Workspace)) != filepath.Clean(filepath.FromSlash(e.Workspace.Worktree)) || binding.SessionID != "" || launch.Prompt != "" || launch.BindingPath != filepath.Join(filepath.Dir(launchPath), "codex-history.v1.json") {
+		t.Fatal("session launcher changed the original execution, worktree or bootstrap intent")
+	}
+	resources, err := codexworker.DecodePolicyResourceEnvelope(e.PolicyResources.ImplementationData, codexworker.PolicyResourceIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest})
+	require(t, err)
+	modelIndex := slices.Index(launch.Args, "--model")
+	if binding.Command.Executable != resources.Settings.Executable || !reflect.DeepEqual(launch.Args, resources.Settings.Args) || launch.Sandbox != "workspace-write" ||
+		modelIndex < 0 || modelIndex+1 >= len(launch.Args) || launch.Args[modelIndex+1] != "gpt-6-luna" || !slices.Contains(launch.Args, "model_reasoning_effort=high") {
+		t.Fatal("session launcher lost the frozen model, effort or permission arguments")
 	}
 	saved := integratedEnvironmentState(t, recovered.execution)
 	if !saved.AgentBound {

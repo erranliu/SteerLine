@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
@@ -23,7 +24,7 @@ func StartService(ctx context.Context, configPath string, options steerline.Star
 	return StartConfiguredService(ctx, config, configPath, options)
 }
 
-func StartConfiguredService(ctx context.Context, config steerline.Config, configPath string, options steerline.StartServiceOptions) (steerline.ServiceStartResult, error) {
+func StartConfiguredService(ctx context.Context, config execution.Config, configPath string, options steerline.StartServiceOptions) (steerline.ServiceStartResult, error) {
 	if config.ExecutionDirectory == nil || config.ProcessHost == nil {
 		return steerline.ServiceStartResult{}, errors.New("execution directory and process host are required")
 	}
@@ -36,8 +37,8 @@ func StartConfiguredService(ctx context.Context, config steerline.Config, config
 	return steerline.StartService(ctx, config, configPath, options)
 }
 
-func RunConfiguredService(ctx context.Context, config steerline.Config, mode, startupID, console string) error {
-	return steerline.RunConfiguredService(ctx, config, mode, startupID, console, NewService)
+func RunConfiguredService(ctx context.Context, config execution.Config, mode, startupID, console string) error {
+	return steerline.RunConfiguredService(ctx, config, mode, startupID, console, newConfiguredServiceWithHost)
 }
 
 func RunSessionLauncher(ctx context.Context, requestPath string, processHost executionbackend.ManagedProcessHost) error {

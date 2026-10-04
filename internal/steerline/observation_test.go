@@ -9,7 +9,9 @@ import (
 	"testing"
 	"time"
 
+	execution "github.com/erranliu/SteerLine/internal/execution"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
@@ -42,7 +44,7 @@ func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
 	state := Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Identity: c.Identity(), Path: c.Repository, Remote: c.Remote, Branch: c.Branch}, HeartbeatAt: nowTime.Add(-5 * time.Second), Runs: []*Run{}}
 	save := func() {
 		t.Helper()
-		if _, err := db.SaveCheckpoint(context.Background(), runtimeCheckpoint(state)); err != nil {
+		if _, err := db.SaveCheckpoint(context.Background(), reconstruction.Checkpoint(state)); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -67,7 +69,7 @@ func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
 	if got := ReadObservationSnapshot(c, clock); got.State != SnapshotValid || got.FreshnessLimit != 15*time.Second || len(got.Runtime.Operations) != 1 {
 		t.Fatalf("fresh heartbeat classification: %+v", got)
 	}
-	if err = (&Store{Domain: db, Project: c.Identity()}).Heartbeat(); err != nil {
+	if err = (&execution.Store{Domain: db, Project: c.Identity()}).Heartbeat(); err != nil {
 		t.Fatal(err)
 	}
 	updated, revision, err := db.LoadProjection(context.Background(), c.Identity())
@@ -92,7 +94,7 @@ func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
 		t.Fatalf("future heartbeat classification: %+v", got)
 	}
 	state.SchemaVersion = 4
-	checkpointValue := runtimeCheckpoint(state)
+	checkpointValue := reconstruction.Checkpoint(state)
 	checkpointValue.SchemaVersion = 4
 	body, err := json.Marshal(checkpointValue)
 	if err != nil {

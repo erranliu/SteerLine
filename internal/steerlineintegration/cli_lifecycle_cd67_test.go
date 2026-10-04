@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
@@ -171,7 +172,7 @@ func TestRunCommandRejectsLegacyTaskAuthorityBeforeWritingState(t *testing.T) {
 }
 
 type cliLifecycleFixture struct {
-	c    steerline.Config
+	c    execution.Config
 	path string
 }
 
@@ -220,7 +221,7 @@ func buildProductLifecycleCLI(t *testing.T) string {
 
 func cliDetachedChildSupported(t *testing.T) bool { t.Helper(); return runtime.GOOS != "windows" }
 
-func readCLIStartupRecord(c steerline.Config, id string) (steerline.StartupRecord, error) {
+func readCLIStartupRecord(c execution.Config, id string) (steerline.StartupRecord, error) {
 	var r steerline.StartupRecord
 	raw, err := os.ReadFile(filepath.Join(c.RunDir, "service", "startups", id, "startup.json"))
 	if err == nil {
@@ -240,7 +241,7 @@ func terminateCLIProcess(identity *executionbackend.ProcessIdentity) error {
 	return p.Kill()
 }
 
-func observeCLIStartupExit(c steerline.Config, id string, budget time.Duration) (steerline.ServiceConnection, error) {
+func observeCLIStartupExit(c execution.Config, id string, budget time.Duration) (steerline.ServiceConnection, error) {
 	deadline := time.Now().Add(budget)
 	for time.Now().Before(deadline) {
 		connection := steerline.ConnectService(context.Background(), c)

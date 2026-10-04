@@ -2,11 +2,12 @@ package steerlineapp
 
 import (
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 )
 
 func TestProjectPolicyRejectsMissingOrOldConfiguration(t *testing.T) {

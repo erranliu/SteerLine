@@ -15,6 +15,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
@@ -26,7 +27,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
-	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -297,7 +297,7 @@ func sameNativePhysicalProcess(a, b executionbackend.ProcessIdentity) bool {
 
 type integrationFixture struct {
 	configPath     string
-	config         steerline.Config
+	config         execution.Config
 	repository     string
 	bareRemote     string
 	remoteURL      string
@@ -405,7 +405,7 @@ func createIntegrationTask(t *testing.T, ctx context.Context, fixture integratio
 	contract.Digest = digest
 	store, err := steerline.OpenNativeTaskCommandStore(ctx, &fixture.config)
 	require(t, err)
-	commands := steerline.NewCommandService(store, fixture.config.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})
+	commands := appExecutionCommands(t, store, fixture.config)
 	queries := steerline.NewQueryService(store, fixture.config.Identity())
 	authority, err := queries.ReadyNativeTaskSnapshot(ctx)
 	require(t, err)
@@ -420,7 +420,7 @@ func createIntegrationTask(t *testing.T, ctx context.Context, fixture integratio
 	paused := false
 	page, err := queries.ShowNativeTask(ctx, fmt.Sprint(id))
 	require(t, err)
-	changed, err := commands.SetNativeDispatchState(ctx, steerline.NativeDispatchUpdate{
+	changed, err := commands.SetNativeDispatchState(ctx, execution.NativeDispatchUpdate{
 		RequestID: newID(), ExpectedAuthorityVersion: page.AuthorityVersion, Paused: &paused, RequestedBy: "operator",
 	})
 	require(t, err)
@@ -439,20 +439,27 @@ func claimIntegrationTask(t *testing.T, ctx context.Context, fixture integration
 	t.Helper()
 	store, err := steerline.OpenNativeTaskCommandStore(ctx, &fixture.config)
 	require(t, err)
-	commands := steerline.NewCommandService(store, fixture.config.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})
+	commands := appExecutionCommands(t, store, fixture.config)
 	page, err := steerline.NewQueryService(store, fixture.config.Identity()).ShowNativeTask(ctx, fmt.Sprint(taskID))
 	require(t, err)
 	profiles := fixture.config.AvailableExecutionProfiles()
 	if len(profiles) != 1 || len(page.Tasks) != 1 {
 		t.Fatalf("fixture query returned %d tasks and %d execution profiles", len(page.Tasks), len(profiles))
 	}
-	_, err = commands.ClaimNativeTask(ctx, fixture.config, steerline.TaskClaimOptions{
+	_, err = commands.ClaimNativeTask(ctx, fixture.config, execution.TaskClaimOptions{
 		TaskID: fmt.Sprint(taskID), RequestID: newID(), ExpectedTaskVersion: page.Tasks[0].Version,
 		ExpectedAuthorityVersion: page.AuthorityVersion, RequestedBy: "operator", Explicit: true,
 		ExecutionProfile: &profiles[0], ServiceInstanceID: serviceInstanceID,
 	})
 	require(t, err)
 	require(t, store.Close())
+}
+
+func appExecutionCommands(t *testing.T, store persistence.CommandStore, config execution.Config) execution.CommandService {
+	t.Helper()
+	commands, err := steerlineapp.NewCommandService(store, config)
+	require(t, err)
+	return commands
 }
 
 func integrationReference(t *testing.T, repository, commit, name string) taskmodel.FileReference {
@@ -483,7 +490,7 @@ func fixtureGitOutput(t *testing.T, args ...string) string {
 }
 
 type integrationLifecycleResolver struct {
-	directory           *steerline.ExecutionDirectory
+	directory           *execution.ExecutionDirectory
 	mu                  sync.Mutex
 	calls               map[executionbackend.ExecutionProtocol]int
 	beforeNativeExecute func(executionbackend.LifecycleRequest) error
@@ -542,8 +549,8 @@ func (r *integrationLifecycleResolver) count(protocol executionbackend.Execution
 }
 
 type runningIntegrationService struct {
-	service    *steerline.Service
-	config     steerline.Config
+	service    *execution.Service
+	config     execution.Config
 	reader     persistence.Connection
 	queries    steerline.QueryService
 	instanceID string
@@ -553,16 +560,16 @@ type runningIntegrationService struct {
 	closed     bool
 }
 
-func startIntegrationService(t *testing.T, parent context.Context, config steerline.Config, resolver executionbackend.LifecycleResolver) *runningIntegrationService {
+func startIntegrationService(t *testing.T, parent context.Context, config execution.Config, resolver executionbackend.LifecycleResolver) *runningIntegrationService {
 	return startIntegrationServiceWithSources(t, parent, config, resolver, nil)
 }
 
-func startIntegrationServiceWithSources(t *testing.T, parent context.Context, config steerline.Config, resolver executionbackend.LifecycleResolver, sources contracts.ConversationSourcePort) *runningIntegrationService {
+func startIntegrationServiceWithSources(t *testing.T, parent context.Context, config execution.Config, resolver executionbackend.LifecycleResolver, sources contracts.ConversationSourcePort) *runningIntegrationService {
 	t.Helper()
 	if decorated, ok := resolver.(*integrationLifecycleResolver); ok {
 		decorated.directory = config.ExecutionDirectory
 	}
-	var service *steerline.Service
+	var service *execution.Service
 	var err error
 	if sources == nil {
 		service, err = steerlineapp.NewServiceWithLifecycleResolver(config, resolver)
@@ -576,7 +583,7 @@ func startIntegrationServiceWithSources(t *testing.T, parent context.Context, co
 	harness := &runningIntegrationService{service: service, config: config, reader: reader,
 		queries: steerline.NewQueryService(reader, config.Identity()), cancel: cancel, done: make(chan error, 1)}
 	t.Cleanup(func() { harness.stop(t) })
-	go func() { harness.done <- service.RunWithDispatch(ctx, "manual") }()
+	go func() { harness.done <- steerline.RunService(ctx, service, service.Config, "manual") }()
 	waitFor(t, 30*time.Second, func() bool {
 		select {
 		case err := <-harness.done:
@@ -631,7 +638,7 @@ type integrationRunSnapshot struct {
 	execution *executionmodel.ExecutionRecord
 }
 
-func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningIntegrationService, config steerline.Config,
+func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningIntegrationService, config execution.Config,
 	predicate func(*steerline.Run, *executionmodel.ExecutionRecord) bool) integrationRunSnapshot {
 	t.Helper()
 	var result integrationRunSnapshot
@@ -737,7 +744,7 @@ func waitFor(t *testing.T, timeout time.Duration, predicate func() bool) {
 	t.Fatal("timed out waiting for the public lifecycle/query state")
 }
 
-func submitIntegrationAnswer(t *testing.T, ctx context.Context, config steerline.Config, run *steerline.Run) {
+func submitIntegrationAnswer(t *testing.T, ctx context.Context, config execution.Config, run *steerline.Run) {
 	t.Helper()
 	if run == nil || run.Decision == nil || run.Decision.Status != "pending" {
 		t.Fatal("public answer submission lacks the displayed pending decision")
@@ -749,7 +756,7 @@ func submitIntegrationAnswer(t *testing.T, ctx context.Context, config steerline
 	submitIntegrationAnswerOption(t, ctx, config, run, option)
 }
 
-func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config steerline.Config, run *steerline.Run, option string) {
+func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config execution.Config, run *steerline.Run, option string) {
 	t.Helper()
 	if option == "open_terminal" || option == "recheck_environment" {
 		target, err := clientcontracts.EnvironmentTarget(run)
@@ -811,7 +818,7 @@ func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config ste
 	}
 }
 
-func assertQueriedTaskPhase(t *testing.T, ctx context.Context, config steerline.Config, taskID, phase string) {
+func assertQueriedTaskPhase(t *testing.T, ctx context.Context, config execution.Config, taskID, phase string) {
 	t.Helper()
 	reader, err := steerline.OpenNativeTaskReader(ctx, &config)
 	require(t, err)

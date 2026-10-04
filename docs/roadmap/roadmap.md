@@ -14,25 +14,18 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 | 41 | dev 隔离与 stable 提升 | 独立 home、静止可恢复会话下的受控提升 | `#40`、`#36` | [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) |
 | 42 | 第一阶段集成验收 | 本机双链与版本组合、stable 24 小时、dev 并行和提升恢复 | `#39`、`#41` | [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) |
 
-## 第一阶段残留
+## 第一阶段剩余验证
 
-- [x] **候选控制台 CC5 人工验收**：用户于 2026-10-04 明确确认交互通过；中文组词、选项加备注、候选导航、窄窗口与滚动的人工待验项已关闭。见[人工确认记录](../validation/candidate-interaction-ux/manual-acceptance-20261004.md)。
+持续 worker、本机双后端候选、独立原会话反馈/重启、真实 PR 核验、唯一 TaskDelivery 与后继 base 已具备；候选控制台的 CC5 人工输入也已确认通过。#42 按需复用[本机验收入口](../validation/candidate-native-acceptance/README.md)，仍须独立完成固定版本、两条组合链、24 小时及提升验收。
 
-本地 Codex app-server 迁移的 A/B 服务级验收已补齐；保留完成记录便于 #42 第一阶段集成验收复用。定向 race detector 待具备工具链时补跑。剩余范围为具备CGO/C工具链后的定向race detector补验，执行要求由后续验证Plan明确；必要时按需查[现有验收状态](../validation/local-codex-app-server/status.md)。
+以下仅保留尚未被当前证据完整覆盖的范围，后续验证 Plan 按实际改动选择，不重新加入已完成的单会话或真实 PR 链：
 
-- [x] **服务级双任务真机闭环（A）**：真实 SteerLine 服务覆盖并行、运行中问答、原 thread/worktree 结束后反馈和重启恢复；原生身份和答案归属已核对。
-- [x] **独立进程生命周期与隔离（B）**：独立宿主的服务反馈三例通过；真实服务宿主进程退出后，待答 turn 存活，新进程重接并完成原请求。
-- [ ] **并发检测环境补验**：在具备 CGO/C 编译器的环境，对 app-server 并行、恢复和回复路径运行定向 Go race detector。
+- **定向 race detector**：具备 CGO/C 工具链后验证 app-server 并行、恢复与回复；既有 A/B 服务级闭环证据按需从[状态入口](../validation/local-codex-app-server/status.md)核对。
+- **Orca 活动轮次输入（ON3）**：仍需核验活动轮次原 question/message 的纯文字及选项＋备注回复、重复提交与原 Dispatch 归属；轮次结束后的候选反馈与原请求重放已具备。
+- **Orca 消息竞争与故障（ON5、ON7）**：仍需定向覆盖活跃 send/worker_done 竞争、迟到 question/旧 Dispatch、Orca 自身断联、agent 未识别、审批阻断和身份变化。已具备的本地 Codex 连接故障及 Orca 兄弟继续证据可复用。
+- **Orca 输出与独立生命周期（ON8、ON9）**：规范最终正文与本次 owned 资源清理已具备；完整 transcript 边界、中心单独停止观察时的原终端/工作区事实仍需定向核验。
 
-### 本地 Orca 原生 worker 后续验证
-
-同一 worker 的两轮真实 Codex 问答与续聊、中心重启恢复、SQLite 故障回执对账和 provider 归属回归已有[实施证据](../validation/worker-flow/orca-native-implementation-2026-09-29.json)。以下仅列仍需补验的原生边界，沿原Task/session/Dispatch、权限及provider身份记录实际结果；已具备实现不重新作为待开发任务。
-
-- [ ] **真实统一回答入口（ON3）**：通过 UI/CLI 的 `answer_decision` 对运行中的 Orca 中心提交纯文字及选项＋备注，核对回复归属原 question/message ID、重复提交不重复发送，随后继续原 Dispatch。
-- [ ] **真实消息竞争与故障（ON5、ON7）**：记录活跃 `send` 与 `worker_done` 竞争、迟到 question/旧 Dispatch、断联、agent 未识别、审批阻断及身份变化时的可观察结果；核对不串线、不替换原 worker、不误关闭其他 terminal。
-- [ ] **真实输出与清理（ON8、ON9）**：确认当前 Orca 版本可取得的有界输出和 transcript 完整度；在最终交付后核对精确 terminal close、原 worktree 内容及中心停止观察时的资源状态。无法取得完整 transcript 时如实标记。
-- [ ] **隔离仓库真实 PR 链（ON10）**：核对 provider 上的仓库、base、执行分支与 PR 身份；由用户合并测试 PR，随后确认唯一 TaskDelivery、后继 DAG 解锁和清理结果。SQLite/provider 自动化回归已通过。
-- [ ] **第二种真实 agent（ON11）**：本机具备另一种 Orca agent 后，沿相同 Run/Task/Dispatch 与问答路径验收无代码修改切换；当前仅 Codex 可用，参数转发契约已通过。
+第二种 Orca agent 在具备实际目标和环境后另行规划，不属于当前仅 Codex 的一期交付前置。
 
 ## 原生 UI 与受控规划
 
@@ -58,7 +51,7 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。完整范围、目标目录、所有权、阶段依赖与验收方向见 [目标roadmap](three-line-modularization.md)。任务负责挑选工作，执行负责并发派发、交付核验与结项并向任务提交结果，控制台消费稳定产品契约。
 
-[#73 纯定义基础](../validation/three-line-01-types/README.md)承接 #37；#74 可与 #38/#39 产品链并行；#75/#76 在边界接通后分线，#77 另等 #38。#39 使用隔离固定构建，实际受影响入口在迁移后定向重验。#43/#44/#45 不等待全部整理，其他产品任务保持自己的固定前置。
+纯类型、任务选择/结果小端口及 task 应用用例已具备。剩余从 #76 的执行用例迁包继续，产品/控制台、适配、存储和宿主各消费现行小端口；本机候选迁移按实际接线影响定向重验。当前源码归属按需查[架构索引](../architecture/current-code-architecture.md)。#43/#44/#45 不等待全部整理。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
@@ -73,12 +66,12 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 ## 推进顺序
 
 - #40、#43、#44 可在隔离资源上准备；#36 仅作为已具备基础保留，后继仍按各自固定 Spec 开工。
-- 已具备 #37 → #38 → #39 是多候选增量链；#40/#36 → #41，与 #39 一起汇入 #42。
-- [#73 基础](../validation/three-line-01-types/README.md)之后由 #74 接通边界，再分为 #75/#76/#77（#77 另等 #38）；#76 → #78，#75/#76/#77 → #79，相关五项 → #80 → #81 → #82。解耦与产品验收在隔离构建/资源上并行，共同类型与组装段顺序集成。
+- 本机候选基线已具备；#40 → #41，再由 #42 汇合本机候选与版本能力，硬前置 ID 保留在任务表。
+- #76/#77 的固定基础已具备；#76 → #78，#76/#77 完成后满足 #79 的剩余前置，相关任务整体交付后进入 #80 → #81 → #82。共享类型、构造和提交协调段顺序集成。
 - #36 → #45 后分为规划链与执行 UI；#53 汇合原生页面及第一阶段组合验收。
 
 ## 规划约束
 
 [架构约束](architecture-constraints.md) · [控制台约束](console-constraints.md) · [第一阶段交付](phase-1-delivery.md)
 
-#75 已从活动实现条目移出，任务 ID 与后继 #79/#80 的固定基础保留；本次候选仍待协调独立复审/合并，不据此提前放行后继。真实任务能力及 #76 领取文件核验/共同配置接线见[交付与接口交接](../validation/three-line-03-task-usecases/README.md)。
+当前用户暂停的 #77/#79/#80/#81/#82 保持暂停；前置交付不自动解除该安排。#76 的领取文档端口和公共构造接线按[现行接口交接](../validation/three-line-03-task-usecases/interface-handoff.md)集成。

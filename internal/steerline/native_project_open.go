@@ -7,19 +7,20 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-func OpenNativeTaskProject(ctx context.Context, c *Config) (persistence.Connection, error) {
+func OpenNativeTaskProject(ctx context.Context, c *execution.Config) (persistence.Connection, error) {
 	if c == nil {
 		return nil, nativeErr("authority_mismatch", "native project configuration is required")
 	}
-	if requireNativeTaskAuthority(*c) != nil {
+	if c.RequireNativeTaskAuthority() != nil {
 		return nil, nativeErr("authority_mismatch", "configuration must explicitly select task_authority=native")
 	}
-	if err := validateWorkflowConfig(c, nil); err != nil {
+	if err := c.ValidateTaskCommandConfiguration(); err != nil {
 		return nil, err
 	}
 	if c.Persistence == nil {
@@ -57,7 +58,7 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (persistence.Connecti
 	if err := ensureNativeStateClean(c.RunDir, c.Repository); err != nil {
 		return nil, err
 	}
-	targetRepository, err := configuredRepositoryTarget(ctx, *c)
+	targetRepository, err := c.TaskRepositoryTarget(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -80,8 +81,8 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (persistence.Connecti
 
 // OpenNativeTaskReader opens an existing native authority without creating
 // project state. Every read is bound to the configured repository and target.
-func OpenNativeTaskReader(ctx context.Context, c *Config) (persistence.Connection, error) {
-	if c == nil || c.Persistence == nil || requireNativeTaskAuthority(*c) != nil {
+func OpenNativeTaskReader(ctx context.Context, c *execution.Config) (persistence.Connection, error) {
+	if c == nil || c.Persistence == nil || c.RequireNativeTaskAuthority() != nil {
 		return nil, nativeErr("authority_mismatch", "native task reader requires task_authority=native")
 	}
 	if err := validateNativeStateLocation(*c); err != nil {
@@ -100,11 +101,11 @@ func OpenNativeTaskReader(ctx context.Context, c *Config) (persistence.Connectio
 // OpenNativeTaskCommandStore opens the repository's existing native database
 // for a bounded command. The caller must hold the repository identity lock,
 // and the project must already have been initialized and bound.
-func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (persistence.Connection, error) {
-	if c == nil || requireNativeTaskAuthority(*c) != nil {
+func OpenNativeTaskCommandStore(ctx context.Context, c *execution.Config) (persistence.Connection, error) {
+	if c == nil || c.RequireNativeTaskAuthority() != nil {
 		return nil, nativeErr("authority_mismatch", "native task command requires task_authority=native")
 	}
-	if err := validateWorkflowConfig(c, nil); err != nil {
+	if err := c.ValidateTaskCommandConfiguration(); err != nil {
 		return nil, err
 	}
 	if c.Persistence == nil {
@@ -138,12 +139,12 @@ func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (persistence.Con
 		_ = writer.Close()
 		return nil, nativeErr("authority_mismatch", "native project binding changed before command admission")
 	}
-	target, err := configuredRepositoryTarget(ctx, *c)
+	target, err := c.TaskRepositoryTarget(ctx)
 	if err != nil {
 		_ = writer.Close()
 		return nil, err
 	}
-	if !sameRepositoryTarget(authority.Repository, target) {
+	if authority.Repository != target {
 		_ = writer.Close()
 		return nil, nativeErr("authority_mismatch", "repository target differs from the persisted native project")
 	}

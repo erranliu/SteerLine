@@ -1,0 +1,40 @@
+{
+  "cleanup_complete": true,
+  "cleanup_errors": null,
+  "components": {
+    "provider": "controlled",
+    "worker": "controlled"
+  },
+  "context_error": "\u003cnil\u003e",
+  "finished_at": "2026-10-04T21:22:34.6087936Z",
+  "id": "recovery.waiting-merge-restart",
+  "passed": true,
+  "real_pr": null,
+  "resources": [
+    {
+      "created_at": "2026-10-04T21:20:14.1225387Z",
+      "kind": "project",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2307835133\\recovery.waiting-merge-restart\\recovery",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-04T21:20:15.9773909Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\.codex\\worktrees\\8470\\SteerLine\\docs\\validation\\three-line-04-execution-usecases\\controlled\\run-go-20261005\\build\\controlled-helper.exe",
+      "pid": 4204
+    },
+    {
+      "created_at": "2026-10-04T21:20:41.2619549Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\.codex\\worktrees\\8470\\SteerLine\\docs\\validation\\three-line-04-execution-usecases\\controlled\\run-go-20261005\\build\\steerline.exe",
+      "pid": 39176
+    },
+    {
+      "created_at": "2026-10-04T21:21:40.2388152Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\.codex\\worktrees\\8470\\SteerLine\\docs\\validation\\three-line-04-execution-usecases\\controlled\\run-go-20261005\\build\\steerline.exe",
+      "pid": 24044
+    }
+  ],
+  "usage_verified": false
+}

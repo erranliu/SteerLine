@@ -21,6 +21,7 @@ import (
 const module = "github.com/erranliu/SteerLine"
 
 const core = module + "/internal/steerline"
+const execution = module + "/internal/execution"
 
 var platformText = regexp.MustCompile(`(?i)codex|orca`)
 
@@ -30,6 +31,7 @@ type Report struct {
 	PureFiles      map[string]int `json:"pure_files"`
 	ConsoleFiles   int            `json:"console_files"`
 	CoreFiles      int            `json:"core_files"`
+	ExecutionFiles int            `json:"execution_files"`
 	SourcePackages int            `json:"source_packages"`
 	Dependencies   map[string]int `json:"production_dependencies"`
 	Violations     []string       `json:"violations"`
@@ -59,6 +61,13 @@ func PureImportsAllowed(owner, dependency string) bool {
 
 var purePackages = []string{module + "/internal/steerline/taskview", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/product/api", module + "/internal/storage/ports"}
 
+func PureReconstructionImportAllowed(dependency string) bool {
+	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
+		return true
+	}
+	return dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend" || dependency == core+"/contracts"
+}
+
 func purePackage(pkg string) bool {
 	for _, owner := range purePackages {
 		if pkg == owner {
@@ -82,15 +91,30 @@ func forbidden(pkg string) bool {
 }
 
 func consoleForbidden(pkg string) bool {
-	if pkg == core || pkg == "database/sql" || pkg == "modernc.org/sqlite" || strings.HasPrefix(pkg, "modernc.org/sqlite/") || forbidden(pkg) {
+	if pkg == core || pkg == execution || pkg == "database/sql" || pkg == "modernc.org/sqlite" || strings.HasPrefix(pkg, "modernc.org/sqlite/") || forbidden(pkg) {
 		return true
 	}
-	for _, p := range []string{core + "/sqlite", core + "/persistence", core + "/query", core + "/projection", core + "/workspace", core + "/publication", module + "/internal/steerlineclient"} {
+	for _, p := range []string{core + "/sqlite", core + "/persistence", core + "/query", core + "/projection", execution + "/reconstruction", core + "/workspace", core + "/publication", module + "/internal/steerlineclient"} {
 		if pkg == p || strings.HasPrefix(pkg, p+"/") {
 			return true
 		}
 	}
 	return false
+}
+
+// The execution application consumes task/model and injected ports. Task
+// implementations, old-host business access and concrete implementations are
+// forbidden even through a helper or an inactive OS/build-tag file.
+func executionForbidden(pkg string) bool {
+	if pkg == core || pkg == module+"/internal/task" || forbidden(pkg) || pkg == "database/sql" || strings.HasPrefix(pkg, "modernc.org/sqlite") {
+		return true
+	}
+	for _, owner := range []string{core + "/sqlite", core + "/console", core + "/query", core + "/projection", module + "/internal/product/query", module + "/internal/steerlineclient", module + "/internal/testboundary", module + "/internal/testfeedback"} {
+		if pkg == owner || strings.HasPrefix(pkg, owner+"/") {
+			return true
+		}
+	}
+	return strings.HasPrefix(pkg, module+"/internal/task/") && pkg != module+"/internal/task/model"
 }
 
 // ScanSource parses production and test Go files regardless of GOOS or build tags.
@@ -131,6 +155,9 @@ func ScanSource(root string) (Report, error) {
 		if pkg == core+"/console" {
 			report.ConsoleFiles++
 		}
+		if pkg == execution {
+			report.ExecutionFiles++
+		}
 		if purePackage(pkg) {
 			report.PureFiles[pkg]++
 		}
@@ -149,6 +176,12 @@ func ScanSource(root string) (Report, error) {
 			graph[pkg] = append(graph[pkg], value)
 			if purePackage(pkg) && !PureImportsAllowed(pkg, value) {
 				report.Violations = append(report.Violations, "pure ownership dependency: "+filepath.ToSlash(path)+" -> "+value)
+			}
+			if pkg == module+"/internal/execution/reconstruction" && !PureReconstructionImportAllowed(value) {
+				report.Violations = append(report.Violations, "execution reconstruction dependency: "+filepath.ToSlash(path)+" -> "+value)
+			}
+			if pkg == execution && !strings.HasSuffix(entry.Name(), "_test.go") && (value == core+"/query" || value == core+"/projection") {
+				report.Violations = append(report.Violations, "execution product read dependency: "+filepath.ToSlash(path)+" -> "+value)
 			}
 			if !strings.HasSuffix(entry.Name(), "_test.go") {
 				productionGraph[pkg] = append(productionGraph[pkg], value)
@@ -175,15 +208,20 @@ func ScanSource(root string) (Report, error) {
 			report.Violations = append(report.Violations, "concrete storage dependency: "+strings.Join(path, " -> "))
 		}
 	})
+	visitGraph(productionGraph, execution, func(path []string) {
+		if executionForbidden(path[len(path)-1]) {
+			report.Violations = append(report.Violations, "execution forbidden dependency: "+strings.Join(path, " -> "))
+		}
+	})
 	for _, seed := range []string{core + "/sqlite", core + "/persistence"} {
 		visitGraph(graph, seed, func(path []string) {
 			last := path[len(path)-1]
-			if last == core || forbidden(last) || last == module+"/internal/steerlineclient" || strings.HasPrefix(last, module+"/internal/steerlineclient/") || last == core+"/console" || strings.HasPrefix(last, core+"/console/") {
+			if last == core || last == execution || forbidden(last) || last == module+"/internal/steerlineclient" || strings.HasPrefix(last, module+"/internal/steerlineclient/") || last == core+"/console" || strings.HasPrefix(last, core+"/console/") {
 				report.Violations = append(report.Violations, "reverse storage dependency: "+strings.Join(path, " -> "))
 			}
 		})
 	}
-	for _, seed := range append([]string{core, core + "/contracts"}, purePackages...) {
+	for _, seed := range append([]string{core, execution, core + "/contracts"}, purePackages...) {
 		visitGraph(graph, seed, func(path []string) {
 			if forbidden(path[len(path)-1]) {
 				report.Violations = append(report.Violations, "forbidden dependency: "+strings.Join(path, " -> "))
@@ -200,7 +238,7 @@ func ScanSource(root string) (Report, error) {
 			continue
 		}
 		visitGraph(graph, pkg, func(path []string) {
-			if path[len(path)-1] == core {
+			if path[len(path)-1] == core || path[len(path)-1] == execution {
 				report.Violations = append(report.Violations, "reverse dependency: "+strings.Join(path, " -> "))
 			}
 		})
@@ -238,7 +276,7 @@ func Check(ctx context.Context, root string) (Report, error) {
 	for _, target := range []string{"windows", "linux"} {
 		for _, consoleGraph := range []bool{false, true} {
 
-			cmd := exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/steerline", "./internal/steerline/contracts", "./internal/task/model", "./internal/execution/model", "./internal/execution/backend", "./internal/product/api", "./internal/storage/ports")
+			cmd := exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/steerline", "./internal/execution", "./internal/steerline/contracts", "./internal/task/model", "./internal/execution/model", "./internal/execution/backend", "./internal/product/api", "./internal/storage/ports")
 			if consoleGraph {
 				cmd = exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/steerline/console")
 			}
@@ -278,6 +316,13 @@ func Check(ctx context.Context, root string) (Report, error) {
 				}
 				report.Dependencies[graphName]++
 				standards[pkg.ImportPath] = pkg.Standard
+				if pkg.ImportPath == module+"/internal/execution/reconstruction" {
+					for _, dep := range pkg.Imports {
+						if !PureReconstructionImportAllowed(dep) {
+							report.Violations = append(report.Violations, graphName+" reconstruction dependency: "+pkg.ImportPath+" -> "+dep)
+						}
+					}
+				}
 				if purePackage(pkg.ImportPath) {
 					for _, dep := range pkg.Imports {
 						if !PureImportsAllowed(pkg.ImportPath, dep) {
@@ -285,6 +330,13 @@ func Check(ctx context.Context, root string) (Report, error) {
 						}
 					}
 					closures[pkg.ImportPath] = pkg.Deps
+				}
+				if pkg.ImportPath == execution {
+					for _, dep := range append(append([]string{}, pkg.Imports...), pkg.Deps...) {
+						if executionForbidden(dep) {
+							report.Violations = append(report.Violations, graphName+" execution forbidden dependency: "+execution+" -> "+dep)
+						}
+					}
 				}
 				bad := forbidden(pkg.ImportPath) || pkg.ImportPath == core+"/sqlite" || pkg.ImportPath == "database/sql" || strings.HasPrefix(pkg.ImportPath, "modernc.org/sqlite")
 				if consoleGraph {

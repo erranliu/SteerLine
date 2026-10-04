@@ -6,24 +6,25 @@ import (
 	"os"
 	"testing"
 
+	execution "github.com/erranliu/SteerLine/internal/execution"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 // Frozen publication fixtures describe the current supported route before a unit
 // test mutates records. They do not reconstruct missing production snapshots.
-func publicationSnapshotFixture(t *testing.T, c Config) executionmodel.FixedExecutionProfile {
+func publicationSnapshotFixture(t *testing.T, c execution.Config) executionmodel.FixedExecutionProfile {
 	t.Helper()
 	c = withNeutralProfile(c, neutralProfileSettings(c))
-	require(t, validateWorkflowConfig(&c, nil))
-	require(t, c.bindPublicationTarget(context.Background()))
-	p := c.projectExecutionProfile().Freeze()
-	if !verifyFixedExecutionProfile(p, c.ExecutionDirectory) {
+	require(t, c.ValidateTaskCommandConfiguration())
+	require(t, c.BindPublicationTarget(context.Background()))
+	p := c.AvailableExecutionProfiles()[0].Freeze()
+	if !execution.VerifyFixedExecutionProfile(p, c.ExecutionDirectory) {
 		t.Fatal("invalid publication snapshot fixture")
 	}
 	return p
 }
 
-func writeGlobalExecutionFixture(t *testing.T, profiles []ExecutionProfile, defaultID string) {
+func writeGlobalExecutionFixture(t *testing.T, profiles []execution.ExecutionProfile, defaultID string) {
 	t.Helper()
 	data, err := json.Marshal(map[string]any{"version": 2, "execution_profiles": profiles, "default_execution_profile": defaultID})
 	if err != nil {
@@ -36,10 +37,10 @@ func writeGlobalExecutionFixture(t *testing.T, profiles []ExecutionProfile, defa
 
 func localGlobalExecutionFixture(t *testing.T) {
 	t.Helper()
-	writeGlobalExecutionFixture(t, []ExecutionProfile{neutralProfile(t, "local", "Local fixture", neutralSettings{Executable: os.Args[0]})}, "local")
+	writeGlobalExecutionFixture(t, []execution.ExecutionProfile{neutralProfile(t, "local", "Local fixture", neutralSettings{Executable: os.Args[0]})}, "local")
 }
 
-func projectConfigJSON(t *testing.T, c Config) []byte {
+func projectConfigJSON(t *testing.T, c execution.Config) []byte {
 	t.Helper()
 	data, err := json.Marshal(c)
 	if err != nil {

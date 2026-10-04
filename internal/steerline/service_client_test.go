@@ -12,27 +12,31 @@ import (
 	"testing"
 	"time"
 
+	execution "github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	host "github.com/erranliu/SteerLine/internal/steerline/host"
 )
 
 func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	s := controlReviewService(t)
 	c := s.Config
-	id, err := currentProcessIdentity()
+	id, err := resourceprocess.CurrentIdentity()
 	require(t, err)
 	rt := s.State
 	rt.UpdatedAt, rt.HeartbeatAt = now(), now()
 	rt.Service.Mode, rt.Service.Status, rt.Service.Ready = "scheduler", "running", true
 	rt.Service.PID, rt.Service.ProcessIdentity = id.PID, id
-	rt.Service.ConfigDigest = c.configDigest
+	rt.Service.ConfigDigest = c.LoadedConfigDigest()
 	rt.Service.ControlProtocol, rt.Service.Capabilities = ControlProtocolVersion, []string{"stop_service"}
 	write := func(value Runtime) {
 		t.Helper()
-		b, e := json.Marshal(runtimeCheckpoint(value))
+		b, e := json.Marshal(reconstruction.Checkpoint(value))
 		require(t, e)
-		require(t, testSQLite(s).transactRecords(context.Background(), func(tx *fixtureTransaction) error {
+		require(t, fixtureStoreFor(t, s).transactRecords(context.Background(), func(tx *fixtureTransaction) error {
 			return tx.PutProjection(c.Identity(), value.Revision, b)
 		}))
 	}
@@ -74,7 +78,7 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	changed.Service.StartupID = ptr(newID())
 	changed.Service.ConfigDigest = strings.Repeat("f", 64)
 	oldConfig := c
-	oldConfig.configDigest = changed.Service.ConfigDigest
+	oldConfig.BindApplicationConfig(oldConfig.ExecutionDirectory, "", "", changed.Service.ConfigDigest, false)
 	if e := os.MkdirAll(filepath.Join(c.RunDir, "service", "startups", *changed.Service.StartupID), 0700); e != nil {
 		t.Fatal(e)
 	}
@@ -127,22 +131,22 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 }
 
 func TestProcessProbeSeparatesMatchReuseAndAbsent(t *testing.T) {
-	id, err := currentProcessIdentity()
+	id, err := resourceprocess.CurrentIdentity()
 	require(t, err)
-	if got := probeProcess(id); got.State != ProcessMatches {
+	if got := publicProcessProbe(id); got.State != ProcessMatches {
 		t.Fatalf("current process probe=%+v", got)
 	}
 	reused := *id
 	reused.Created += "-different"
-	if got := probeProcess(&reused); got.State != ProcessReused {
+	if got := publicProcessProbe(&reused); got.State != ProcessReused {
 		t.Fatalf("reused PID probe=%+v", got)
 	}
 	absent := *id
 	absent.PID = 2_000_000_000
-	if got := probeProcess(&absent); got.State != ProcessAbsent {
+	if got := publicProcessProbe(&absent); got.State != ProcessAbsent {
 		t.Fatalf("absent process probe=%+v", got)
 	}
-	if got := probeProcess(nil); got.State != ProcessUnknown {
+	if got := publicProcessProbe(nil); got.State != ProcessUnknown {
 		t.Fatalf("missing identity probe=%+v", got)
 	}
 }
@@ -188,7 +192,7 @@ func TestStartServiceReobservesExistingPendingAttempt(t *testing.T) {
 	id := newID()
 	_, _, err := createStartupAttempt(config, id, true)
 	require(t, err)
-	processIdentity, err := currentProcessIdentity()
+	processIdentity, err := resourceprocess.CurrentIdentity()
 	require(t, err)
 	record := initialStartupRecord(config, id)
 	record.ProcessIdentity = processIdentity
@@ -245,15 +249,15 @@ func TestStartupIDAndOutputPathValidation(t *testing.T) {
 	}
 }
 
-func lifecycleConfigFile(t *testing.T, f *fixture, runDir string) (Config, string) {
+func lifecycleConfigFile(t *testing.T, f *fixture, runDir string) (execution.Config, string) {
 	t.Helper()
 	c := f.c
 	c.WorkflowProtocol = executionmodel.Version
 	c.RunDir = runDir
 	c.WorktreeRoot = ""
-	profile := c.projectExecutionProfile()
+	profile := c.AvailableExecutionProfiles()[0]
 	profile.ID, profile.Name = "local", "Local"
-	writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "local")
+	writeGlobalExecutionFixture(t, []execution.ExecutionProfile{profile}, "local")
 	data := projectConfigJSON(t, c)
 	if err := os.MkdirAll(runDir, 0700); err != nil {
 		t.Fatal(err)
@@ -267,7 +271,7 @@ func lifecycleConfigFile(t *testing.T, f *fixture, runDir string) (Config, strin
 }
 
 func terminatePendingTestProcess(identity *executionbackend.ProcessIdentity) error {
-	if identity == nil || probeProcess(identity).State != ProcessMatches {
+	if identity == nil || publicProcessProbe(identity).State != ProcessMatches {
 		return fmt.Errorf("refusing to terminate a process without its matching test identity")
 	}
 	process, err := os.FindProcess(identity.PID)
@@ -284,7 +288,7 @@ func detachedChildSupported(t *testing.T) bool {
 	cmd := exec.Command(exe, "--fake", "sleep")
 	identity, err := startDetachedProcess(cmd)
 	if err != nil {
-		if errors.Is(err, errDetachUnsupported) && os.Getenv("STEERLINE_REQUIRE_DETACHED_TESTS") != "1" {
+		if errors.Is(err, host.ErrDetachUnsupported) && os.Getenv("STEERLINE_REQUIRE_DETACHED_TESTS") != "1" {
 			t.Logf("detached test capability unavailable: %v", err)
 			return false
 		}

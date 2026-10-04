@@ -170,7 +170,7 @@ func TestNativeAuditContractRolesAndFixedReferenceVersions(t *testing.T) {
 		requireNativeAuditCode(t, taskmodel.ValidateContract(v), "contract_mismatch")
 	}
 	for _, bad := range []string{"https://example.invalid/org/repo.git", "https://example.invalid/Org/Repo"} {
-		if sameRepositoryTarget(base.Repository, bad) {
+		if sameFixtureRepositoryTarget(base.Repository, bad) {
 			t.Fatal("remote URL identity was weakened")
 		}
 	}
