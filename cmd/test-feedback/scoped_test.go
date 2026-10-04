@@ -161,7 +161,7 @@ func TestScopedOptionsAndNativeSwitchGate(t *testing.T) {
 			t.Fatalf("accepted invalid options %v", args)
 		}
 	}
-	if _, err := parseOptions([]string{"-quick", "--", "./internal/steerline/taskgraph", "-run=^TestExample$"}); err != nil {
+	if _, err := parseOptions([]string{"-quick", "--", "./internal/task/model", "-run=^TestExample$"}); err != nil {
 		t.Fatalf("focused quick extension rejected: %v", err)
 	}
 	t.Setenv("STEERLINE_REAL_SAMPLE", "1")

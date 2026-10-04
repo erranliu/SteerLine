@@ -11,12 +11,10 @@ import (
 	"os"
 	"path/filepath"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-// The bounded raw output reader is a test utility for generic process evidence.
-
-func (s *Service) requireBackendCapabilities(ctx context.Context, backend executionapi.ExecutionProbe, names ...string) (executionapi.CapabilityReport, error) {
+func (s *Service) requireBackendCapabilities(ctx context.Context, backend executionbackend.ExecutionProbe, names ...string) (executionbackend.CapabilityReport, error) {
 	return s.requireBackendCapabilitiesFor(ctx, backend, targetFor(s.Config), agentFor(s.Config), names...)
 }
 
@@ -28,12 +26,12 @@ type localOutputCursor struct {
 	Prefix    string `json:"p,omitempty"`
 }
 
-func (b localExecutionBackend) ReadOutput(ctx context.Context, ref executionapi.ExecutionRef, cursor string, limit int) (executionapi.OutputBatch, error) {
-	if ref.Backend != executionapi.BackendLocal || ref.Protocol != executionapi.ProtocolLocalProcess || ref.Target != targetFor(b.config) || !executionapi.StableExecutionID(ref.RunID) || !executionapi.StableExecutionID(ref.AttemptID) {
-		return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "output ref does not match the fixed local execution"}
+func (b localExecutionBackend) ReadOutput(ctx context.Context, ref executionbackend.ExecutionRef, cursor string, limit int) (executionbackend.OutputBatch, error) {
+	if ref.Backend != executionbackend.BackendLocal || ref.Protocol != executionbackend.ProtocolLocalProcess || ref.Target != targetFor(b.config) || !executionbackend.StableExecutionID(ref.RunID) || !executionbackend.StableExecutionID(ref.AttemptID) {
+		return executionbackend.OutputBatch{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "output ref does not match the fixed local execution"}
 	}
 	if limit <= 0 || limit > 1<<20 {
-		return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "output limit must be between 1 and 1048576 bytes"}
+		return executionbackend.OutputBatch{}, &executionbackend.BackendError{Code: executionbackend.BackendProtocolInvalid, Diagnostic: "output limit must be between 1 and 1048576 bytes"}
 	}
 	path := filepath.Join(b.config.RunDir, "runs", ref.RunID)
 	if ref.AttemptID != ref.RunID {
@@ -42,7 +40,7 @@ func (b localExecutionBackend) ReadOutput(ctx context.Context, ref executionapi.
 	path = filepath.Join(path, "events.jsonl")
 	select {
 	case <-ctx.Done():
-		return executionapi.OutputBatch{}, ctx.Err()
+		return executionbackend.OutputBatch{}, ctx.Err()
 	default:
 	}
 	offset := int64(0)
@@ -50,24 +48,24 @@ func (b localExecutionBackend) ReadOutput(ctx context.Context, ref executionapi.
 	if cursor != "" {
 		token, decodeErr := base64.RawURLEncoding.DecodeString(cursor)
 		if decodeErr != nil {
-			return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "invalid output cursor", Cause: decodeErr}
+			return executionbackend.OutputBatch{}, &executionbackend.BackendError{Code: executionbackend.BackendProtocolInvalid, Diagnostic: "invalid output cursor", Cause: decodeErr}
 		}
 		var c localOutputCursor
 		if decodeErr = json.Unmarshal(token, &c); decodeErr != nil || c.Version != 1 || c.RunID != ref.RunID || c.AttemptID != ref.AttemptID || c.Offset < 0 {
-			return executionapi.OutputBatch{}, &executionapi.BackendError{Code: executionapi.BackendProtocolInvalid, Diagnostic: "output cursor is malformed or belongs to another execution"}
+			return executionbackend.OutputBatch{}, &executionbackend.BackendError{Code: executionbackend.BackendProtocolInvalid, Diagnostic: "output cursor is malformed or belongs to another execution"}
 		}
 		offset, oldPrefix = c.Offset, c.Prefix
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return executionapi.OutputBatch{}, err
+		return executionbackend.OutputBatch{}, err
 	}
 	defer f.Close()
 	info, err := f.Stat()
 	if err != nil {
-		return executionapi.OutputBatch{}, err
+		return executionbackend.OutputBatch{}, err
 	}
-	batch := executionapi.OutputBatch{Source: "local-jsonl", RetainedFrom: "0", ObservedAt: now()}
+	batch := executionbackend.OutputBatch{Source: "local-jsonl", RetainedFrom: "0", ObservedAt: now()}
 	if offset > info.Size() {
 		batch.Gap = true
 		offset = info.Size()
@@ -75,7 +73,7 @@ func (b localExecutionBackend) ReadOutput(ctx context.Context, ref executionapi.
 	if oldPrefix != "" {
 		prefix, prefixErr := readOutputPrefix(f, offset)
 		if prefixErr != nil {
-			return executionapi.OutputBatch{}, prefixErr
+			return executionbackend.OutputBatch{}, prefixErr
 		}
 		if prefix != oldPrefix {
 			batch.SourceChanged = true
@@ -90,7 +88,7 @@ func (b localExecutionBackend) ReadOutput(ctx context.Context, ref executionapi.
 	if len(chunk) > 0 {
 		n, readErr := f.ReadAt(chunk, offset)
 		if readErr != nil && readErr != io.EOF {
-			return executionapi.OutputBatch{}, readErr
+			return executionbackend.OutputBatch{}, readErr
 		}
 		chunk = chunk[:n]
 	}
@@ -98,7 +96,7 @@ func (b localExecutionBackend) ReadOutput(ctx context.Context, ref executionapi.
 	end = offset + int64(len(chunk))
 	prefix, prefixErr := readOutputPrefix(f, end)
 	if prefixErr != nil {
-		return executionapi.OutputBatch{}, prefixErr
+		return executionbackend.OutputBatch{}, prefixErr
 	}
 	next := localOutputCursor{Version: 1, RunID: ref.RunID, AttemptID: ref.AttemptID, Offset: end, Prefix: prefix}
 	encoded, _ := json.Marshal(next)

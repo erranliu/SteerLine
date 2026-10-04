@@ -6,17 +6,18 @@ import (
 	"os/exec"
 	"testing"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func neutralAuditService(t *testing.T) (*Service, *Run) {
-	return neutralAuditServiceWithRequirements(t, workspacePolicyFixture(), executionapi.ExecutionRequirements{}, "")
+	return neutralAuditServiceWithRequirements(t, workspacePolicyFixture(), executionbackend.ExecutionRequirements{}, "")
 }
 
-func neutralAuditServiceWithRequirements(t *testing.T, policy executionapi.ExecutionPolicy, requirements executionapi.ExecutionRequirements, tokenEnv string) (*Service, *Run) {
+func neutralAuditServiceWithRequirements(t *testing.T, policy executionbackend.ExecutionPolicy, requirements executionbackend.ExecutionRequirements, tokenEnv string) (*Service, *Run) {
 	t.Helper()
 	c, commit, store := openDAGFixture(t)
-	c.WorkflowProtocol, c.Host, c.Agent, c.Claimant = WorkerFlowVersion, "local", "fixture", "operator"
+	c.WorkflowProtocol, c.Host, c.Agent, c.Claimant = executionmodel.Version, "local", "fixture", "operator"
 	c.ExecutionPolicy = policy
 	c.ExecutionRequirements = requirements
 	if tokenEnv != "" {
@@ -59,8 +60,8 @@ func neutralAuditServiceWithRequirements(t *testing.T, policy executionapi.Execu
 	return service, run
 }
 
-func neutralAuditServiceWithPolicy(t *testing.T, p executionapi.ExecutionPolicy) (*Service, *Run) {
-	return neutralAuditServiceWithRequirements(t, p, executionapi.ExecutionRequirements{}, "")
+func neutralAuditServiceWithPolicy(t *testing.T, p executionbackend.ExecutionPolicy) (*Service, *Run) {
+	return neutralAuditServiceWithRequirements(t, p, executionbackend.ExecutionRequirements{}, "")
 }
 
 type neutralReceiptResolver struct {
@@ -68,30 +69,31 @@ type neutralReceiptResolver struct {
 	confirmedAnswer bool
 }
 
-func (r neutralReceiptResolver) ResolveLifecycle(setup executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {
+func (r neutralReceiptResolver) ResolveLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 	return neutralReceiptPort{LifecyclePort: &neutralLifecycle{setup: setup}, resolver: r}, nil
 }
 
 type neutralReceiptPort struct {
-	executionapi.LifecyclePort
+	executionbackend.LifecyclePort
 	resolver neutralReceiptResolver
 }
 
-func (p neutralReceiptPort) PolicyCapabilities() executionapi.LifecyclePolicyCapabilities {
+func (p neutralReceiptPort) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
 	capabilities := p.LifecyclePort.PolicyCapabilities()
 	if p.resolver.entered != nil {
 		capabilities.ResumeActiveObservation = false
 	}
 	return capabilities
 }
-func (p neutralReceiptPort) Reconcile(ctx context.Context, r executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+
+func (p neutralReceiptPort) Reconcile(ctx context.Context, r executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	if p.resolver.entered != nil {
 		close(p.resolver.entered)
 		<-ctx.Done()
-		return executionapi.LifecycleReceipt{Disposition: executionapi.OperationUnknown}, nil, ctx.Err()
+		return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationUnknown}, nil, ctx.Err()
 	}
 	if p.resolver.confirmedAnswer {
-		return executionapi.LifecycleReceipt{Operation: r.Operation, Disposition: executionapi.OperationConfirmed, State: executionapi.LifecycleStateFacts{InputAccepted: true, TurnID: r.Snapshot.Session.CurrentTurnID}}, nil, nil
+		return executionbackend.LifecycleReceipt{Operation: r.Operation, Disposition: executionbackend.OperationConfirmed, State: executionbackend.LifecycleStateFacts{InputAccepted: true, TurnID: r.Snapshot.Session.CurrentTurnID}}, nil, nil
 	}
-	return executionapi.LifecycleReceipt{Operation: r.Operation, Disposition: executionapi.OperationUnknown}, nil, nil
+	return executionbackend.LifecycleReceipt{Operation: r.Operation, Disposition: executionbackend.OperationUnknown}, nil, nil
 }

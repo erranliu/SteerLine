@@ -5,7 +5,8 @@ import (
 	"os"
 	"testing"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
@@ -20,9 +21,9 @@ func TestWorkerFlowContextKeepsFixedRunAndCopiesConfig(t *testing.T) {
 	run.Host, run.Agent, run.Backend, run.Protocol, run.Target = "local", "fixture", "local", string(neutralProtocol), targetFor(config)
 	service := Service{
 		Config: config,
-		domain: DomainSnapshot{WorkflowRuns: []WorkflowRunRecord{{ProjectIdentity: configurationProjectIdentity(config), WorkflowRunID: "run", WorkflowVersion: WorkerFlowVersion, Repository: config.Repository, Branch: config.Branch, ConfigDigest: fixedProfile.AcceptedConfigVersion, ExecutionProfile: &fixedProfile}},
-			Executions: []ExecutionRecord{{ProjectIdentity: configurationProjectIdentity(config), ExecutionID: "execution", WorkflowRunID: "run", CurrentAttemptID: run.AttemptID, ConfigurationDigest: fixedProfile.Digest}},
-			Attempts:   []StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}}},
+		domain: DomainSnapshot{WorkflowRuns: []executionmodel.WorkflowRunRecord{{ProjectIdentity: configurationProjectIdentity(config), WorkflowRunID: "run", WorkflowVersion: executionmodel.Version, Repository: config.Repository, Branch: config.Branch, ConfigDigest: fixedProfile.AcceptedConfigVersion, ExecutionProfile: &fixedProfile}},
+			Executions: []executionmodel.ExecutionRecord{{ProjectIdentity: configurationProjectIdentity(config), ExecutionID: "execution", WorkflowRunID: "run", CurrentAttemptID: run.AttemptID, ConfigurationDigest: fixedProfile.Digest}},
+			Attempts:   []executionmodel.StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}}},
 	}
 	fixed, err := service.workerFlowContext(run)
 	if err != nil || fixed.run != run || fixed.execution.ExecutionID != "execution" {
@@ -51,11 +52,11 @@ func TestWorkerFlowContextsDoNotExchangeExecutionProfiles(t *testing.T) {
 		id := route.ID
 		fixed := base.bindProjectPolicy(route).Freeze(configurationProjectIdentity(base))
 		selected := base.ApplyFixedExecutionProfile(fixed)
-		run := &Run{RunID: id, ExecutionID: id + "-execution", AttemptID: id + "-attempt", Host: "local", Agent: "fixture", Backend: string(executionapi.BackendLocal), Protocol: string(neutralProtocol), Target: targetFor(selected), ExecutionStatus: "pending"}
+		run := &Run{RunID: id, ExecutionID: id + "-execution", AttemptID: id + "-attempt", Host: "local", Agent: "fixture", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Target: targetFor(selected), ExecutionStatus: "pending"}
 		service.State.Runs = append(service.State.Runs, run)
-		service.domain.WorkflowRuns = append(service.domain.WorkflowRuns, WorkflowRunRecord{ProjectIdentity: configurationProjectIdentity(base), WorkflowRunID: id, WorkflowVersion: WorkerFlowVersion, Repository: base.Repository, Branch: base.Branch, ConfigDigest: fixed.AcceptedConfigVersion, ExecutionProfile: &fixed})
-		service.domain.Executions = append(service.domain.Executions, ExecutionRecord{ProjectIdentity: configurationProjectIdentity(base), ExecutionID: run.ExecutionID, WorkflowRunID: id, CurrentAttemptID: run.AttemptID, ConfigurationDigest: fixed.Digest})
-		service.domain.Attempts = append(service.domain.Attempts, StepAttemptRecord{AttemptID: run.AttemptID, ExecutionID: run.ExecutionID})
+		service.domain.WorkflowRuns = append(service.domain.WorkflowRuns, executionmodel.WorkflowRunRecord{ProjectIdentity: configurationProjectIdentity(base), WorkflowRunID: id, WorkflowVersion: executionmodel.Version, Repository: base.Repository, Branch: base.Branch, ConfigDigest: fixed.AcceptedConfigVersion, ExecutionProfile: &fixed})
+		service.domain.Executions = append(service.domain.Executions, executionmodel.ExecutionRecord{ProjectIdentity: configurationProjectIdentity(base), ExecutionID: run.ExecutionID, WorkflowRunID: id, CurrentAttemptID: run.AttemptID, ConfigurationDigest: fixed.Digest})
+		service.domain.Attempts = append(service.domain.Attempts, executionmodel.StepAttemptRecord{AttemptID: run.AttemptID, ExecutionID: run.ExecutionID})
 	}
 	first, err := service.workerFlowContext(service.State.Runs[0])
 	if err != nil {
@@ -75,6 +76,6 @@ func TestWorkerFlowContextsDoNotExchangeExecutionProfiles(t *testing.T) {
 }
 
 func workerContextConfigFixture() Config {
-	config := Config{Persistence: sqlite.Factory{}, Repository: "repo", Branch: "main", Remote: "origin", publicationRemoteURL: "https://github.com/owner/repo.git", Host: "local", Agent: "fixture", WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Git: Command{Executable: "git"}}
+	config := Config{Persistence: sqlite.Factory{}, Repository: "repo", Branch: "main", Remote: "origin", publicationRemoteURL: "https://github.com/owner/repo.git", Host: "local", Agent: "fixture", WorkflowProtocol: executionmodel.Version, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Git: executionbackend.Command{Executable: "git"}}
 	return withNeutralProfile(config, neutralSettings{Executable: os.Args[0]})
 }

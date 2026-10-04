@@ -1,17 +1,19 @@
 package steerline
 
 import (
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"strings"
 	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath(t *testing.T) {
 	const worktreeID = "repo-test::C:/remote/steerline-run"
-	run := &Run{Protocol: string(neutralProtocol), Target: executionapi.ExecutionTarget{WorktreeID: worktreeID}}
-	execution := &ExecutionRecord{Protocol: run.Protocol, Target: run.Target}
+	run := &Run{Protocol: string(neutralProtocol), Target: executionbackend.ExecutionTarget{WorktreeID: worktreeID}}
+	execution := &executionmodel.ExecutionRecord{Protocol: run.Protocol, Target: run.Target}
 	run.Target.WorktreeID = "incorrect-view-only-id"
-	workspace := WorkspaceEvidence{Worktree: "C:/remote/steerline-run", Branch: "erranliu/steerline-run", Base: strings.Repeat("a", 40), Head: strings.Repeat("a", 40)}
+	workspace := executionmodel.WorkspaceEvidence{Worktree: "C:/remote/steerline-run", Branch: "erranliu/steerline-run", Base: strings.Repeat("a", 40), Head: strings.Repeat("a", 40)}
 
 	applyWorkflowWorkspaceEvidence(run, execution, workspace)
 

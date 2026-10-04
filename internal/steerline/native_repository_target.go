@@ -2,9 +2,11 @@ package steerline
 
 import (
 	"context"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"net/url"
 	"strings"
+
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
 func configuredRepositoryTarget(ctx context.Context, c Config) (string, error) {
@@ -43,7 +45,7 @@ func configuredRepositoryTarget(ctx context.Context, c Config) (string, error) {
 	return target, nil
 }
 
-func validateNativeConfiguredTarget(ctx context.Context, c Config, authority ProjectTaskAuthority) error {
+func validateNativeConfiguredTarget(ctx context.Context, c Config, authority tasklegacy.ProjectTaskAuthority) error {
 	if c.Remote != authority.Remote || c.Branch != authority.Branch {
 		return nativeErr("authority_mismatch", "configured remote or branch differs from the registered native project")
 	}

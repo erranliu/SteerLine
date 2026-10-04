@@ -1,0 +1,8 @@
+{"Time":"2026-10-04T15:20:14.5669899+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerline/testprotocol"}
+{"Time":"2026-10-04T15:20:15.0650307+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerline/testprotocol","Test":"TestTM01FixtureLockProcessDeath"}
+{"Time":"2026-10-04T15:20:15.0650307+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline/testprotocol","Test":"TestTM01FixtureLockProcessDeath","Output":"=== RUN   TestTM01FixtureLockProcessDeath\n"}
+{"Time":"2026-10-04T15:20:15.273923+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline/testprotocol","Test":"TestTM01FixtureLockProcessDeath","Output":"--- PASS: TestTM01FixtureLockProcessDeath (0.21s)\n"}
+{"Time":"2026-10-04T15:20:15.2744529+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerline/testprotocol","Test":"TestTM01FixtureLockProcessDeath","Elapsed":0.21}
+{"Time":"2026-10-04T15:20:15.2744529+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline/testprotocol","Output":"PASS\n"}
+{"Time":"2026-10-04T15:20:15.2758469+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline/testprotocol","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerline/testprotocol\t0.708s\n"}
+{"Time":"2026-10-04T15:20:15.2758469+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerline/testprotocol","Elapsed":0.709}

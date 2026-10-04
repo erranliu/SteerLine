@@ -11,15 +11,19 @@ import (
 	"sync"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type Service struct {
 	Config               Config
 	baseConfig           Config
-	lifecycleResolver    executionapi.LifecycleResolver
+	lifecycleResolver    executionbackend.LifecycleResolver
 	conversationSources  contracts.ConversationSourcePort
 	dispatchConfig       *Config
 	dispatchProfile      *ExecutionProfile
@@ -27,7 +31,7 @@ type Service struct {
 	domain               DomainSnapshot
 	committed            DomainSnapshot
 	runs                 []*Run
-	pendingEvents        []DomainEvent
+	pendingEvents        []storageports.DomainEvent
 	pendingOperations    map[string]string
 	workerDecisionWrites map[string]bool
 	store                *Store
@@ -37,7 +41,7 @@ type Service struct {
 	closeStore           func() error
 	// workers owns live observers by authoritative workflow run ID.
 	workers                    map[string]*Worker
-	ownedProcesses             map[string]executionapi.StopHandle
+	ownedProcesses             map[string]executionbackend.StopHandle
 	lifecycleEffects           map[string]pendingLifecycleEffect
 	lifecycleMessages          map[string][]workerMessage
 	appServerRecovering        map[string]bool
@@ -53,7 +57,7 @@ type Service struct {
 	consoleOut        io.Writer
 	consoleSequence   uint64
 	controlSeen       map[string]string
-	stopControl       *ControlRequest
+	stopControl       *productapi.ControlRequest
 	stopAcceptedAt    *time.Time
 	targetTask        string
 	lastDispatched    string
@@ -68,7 +72,7 @@ type Service struct {
 // directory and its conversation source port. Lifecycle operations receive
 // only execution values and already-persisted operation intents. The application
 // calls PrepareServiceConfig before opening and transferring the connection.
-func NewService(c Config, directory *ExecutionDirectory, resolver executionapi.LifecycleResolver, conversationSources contracts.ConversationSourcePort, processHost executionapi.ManagedProcessHost, db persistence.Connection) (_ *Service, retErr error) {
+func NewService(c Config, directory *ExecutionDirectory, resolver executionbackend.LifecycleResolver, conversationSources contracts.ConversationSourcePort, processHost executionbackend.ManagedProcessHost, db persistence.Connection) (_ *Service, retErr error) {
 	if directory == nil || resolver == nil || conversationSources == nil || processHost == nil || c.Persistence == nil || db == nil {
 		return nil, errors.New("execution directory, conversation source, process host and persistence ports are required")
 	}
@@ -84,15 +88,15 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionapi.L
 			_ = db.Close()
 		}
 	}()
-	s := &Service{Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: db, commandStore: db, conversationStore: db, closeStore: db.Close, store: &Store{Domain: db, Project: c.identity}, workers: map[string]*Worker{}, ownedProcesses: map[string]executionapi.StopHandle{}}
+	s := &Service{Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: db, commandStore: db, conversationStore: db, closeStore: db.Close, store: &Store{Domain: db, Project: c.identity}, workers: map[string]*Worker{}, ownedProcesses: map[string]executionbackend.StopHandle{}}
 	old, e := db.LoadRuntime(c.identity, false)
-	if errors.Is(e, persistence.ErrNotFound) {
+	if errors.Is(e, storageports.ErrNotFound) {
 		old, e = nil, nil
 	}
 	if e != nil {
 		return nil, e
 	}
-	s.State = Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []TaskRecord{}, WorkflowRuns: []WorkflowRunRecord{}, Executions: []ExecutionRecord{}, Attempts: []StepAttemptRecord{}, Decisions: []DecisionRecord{}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
+	s.State = Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}, Runs: []*Run{}, Control: ControlState{DispatchMode: "auto", Revision: 1, Blockers: []ControlBlocker{}}}
 	authority, authErr := db.NativeAuthority(context.Background(), c.identity)
 	if authErr != nil {
 		return nil, authErr
@@ -127,7 +131,7 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionapi.L
 		return nil, err
 	}
 	for _, run := range s.runs {
-		if run.WorkflowVersion != WorkerFlowVersion {
+		if run.WorkflowVersion != executionmodel.Version {
 			return nil, nativeErr("unsupported_schema", "unsupported workflow version")
 		}
 		if _, err := s.executionConfigForRun(run); err != nil {
@@ -194,7 +198,7 @@ func (s *Service) recordActivity(r *Run, ev ActivityEvent) {
 		return
 	}
 	domainTask, executionID := r.DomainTaskID, r.ExecutionID
-	if domainTask == "" || executionID == "" || !executionapi.StableExecutionID(r.RunID) || !executionapi.StableExecutionID(r.AttemptID) {
+	if domainTask == "" || executionID == "" || !executionbackend.StableExecutionID(r.RunID) || !executionbackend.StableExecutionID(r.AttemptID) {
 		s.setError(nativeErr("unsupported_schema", "native activity lacks its fixed task, run, execution or attempt identity"))
 		return
 	}
@@ -202,7 +206,7 @@ func (s *Service) recordActivity(r *Run, ev ActivityEvent) {
 	if ev.ItemID != "" {
 		externalID = "activity-" + r.AttemptID + "-" + operationDigest([]byte(ev.Source + "\x00" + ev.ItemID))[:24]
 	}
-	s.pendingEvents = append(s.pendingEvents, DomainEvent{ProjectIdentity: s.Config.identity, TaskID: domainTask, WorkflowRunID: r.RunID, ExecutionID: executionID, AttemptID: r.AttemptID, ExternalSource: "center:" + r.RunID, ExternalID: externalID, Type: "activity." + ev.Kind, ReceivedAt: ev.TS, Payload: payload})
+	s.pendingEvents = append(s.pendingEvents, storageports.DomainEvent{ProjectIdentity: s.Config.identity, TaskID: domainTask, WorkflowRunID: r.RunID, ExecutionID: executionID, AttemptID: r.AttemptID, ExternalSource: "center:" + r.RunID, ExternalID: externalID, Type: "activity." + ev.Kind, ReceivedAt: ev.TS, Payload: payload})
 }
 
 func (s *Service) emitConsole(ev ActivityEvent) {
@@ -234,6 +238,7 @@ func (s *Service) emitConsole(ev ActivityEvent) {
 		fmt.Fprintln(out, RenderActivity(ev, RenderOptions{Color: stdoutColor()}))
 	}
 }
+
 func (s *Service) find(id string) *Run {
 	var selected *Run
 	for _, r := range s.runs {
@@ -258,6 +263,7 @@ func (s *Service) findExecution(id string) *Run {
 	}
 	return nil
 }
+
 func (s *Service) reconcile(ctx context.Context) error {
 	if err := s.refreshNativeSnapshot(ctx); err != nil {
 		return err
@@ -267,10 +273,12 @@ func (s *Service) reconcile(ctx context.Context) error {
 	}
 	return nil
 }
+
 func (s *Service) setError(e error) {
 	s.State.Service.Status = "error"
 	s.State.Service.Error = ptr(clip(e.Error(), 2000))
 }
+
 func (s *Service) dispatch(ctx context.Context) error {
 	return s.dispatchNative(ctx)
 }
@@ -331,6 +339,7 @@ func (s *Service) refreshSlotOccupancy() {
 	projectSlot(&s.State)
 	s.State.SlotOccupied = s.State.SlotOccupied || len(s.workers) != 0
 }
+
 func (s *Service) refreshCandidates(ctx context.Context) error {
 	queried := now()
 	tasks, err := (NewQueryService(s.domainStore, s.Config.identity)).ReadyNativeTasks(ctx)
@@ -351,6 +360,7 @@ func (s *Service) refreshCandidates(ctx context.Context) error {
 	s.candidateSnapshot = &TaskSnapshot{Version: 1, InstanceID: s.State.Service.InstanceID, RepositoryIdentity: s.State.Repository.Identity, QueriedAt: queried, LastSuccessAt: &queried, BlockReason: blockReason, Tasks: candidates}
 	return nil
 }
+
 func decisionMeta(r *Run) map[string]any {
 	if r.Decision == nil {
 		return nil
@@ -374,7 +384,7 @@ func (s *Service) finishedForRun(run *Run, worker *Worker, err error) error {
 			}
 		}
 	}
-	if run == nil || run.WorkflowVersion != WorkerFlowVersion {
+	if run == nil || run.WorkflowVersion != executionmodel.Version {
 		return nativeErr("unsupported_schema", "native service observed a run without the current worker workflow; preserve its execution identity")
 	}
 	if replayErr := s.reconcileConversationRun(run); replayErr != nil {
@@ -389,12 +399,15 @@ func deref(s *string) string {
 	}
 	return *s
 }
+
 func (s *Service) pollPRs(ctx context.Context) error {
 	return s.pollPRsFor(ctx, "")
 }
+
 func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 	return s.pollNativePRs(ctx, runID)
 }
+
 func (s *Service) eventForRun(run *Run, ev WorkerEvent) error {
 	ack := func(err error) error {
 		if ev.Processed != nil {
@@ -416,7 +429,7 @@ func (s *Service) eventForRun(run *Run, ev WorkerEvent) error {
 		}
 		return ack(nil)
 	}
-	if run.WorkflowVersion != WorkerFlowVersion {
+	if run.WorkflowVersion != executionmodel.Version {
 		return ack(nativeErr("unsupported_schema", "worker event belongs to an unsupported workflow"))
 	}
 	return ack(s.eventWorkerFlowFor(run, ev))
@@ -433,7 +446,7 @@ func ackWorkerEventPersistence(ev WorkerEvent, err error) {
 }
 
 func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
-	if !executionapi.StableExecutionID(ev.RunID) || !executionapi.StableExecutionID(ev.AttemptID) || ev.Activity.Kind == "" {
+	if !executionbackend.StableExecutionID(ev.RunID) || !executionbackend.StableExecutionID(ev.AttemptID) || ev.Activity.Kind == "" {
 		if ev.Persisted != nil {
 			return errors.New("conversation source identity is incomplete")
 		}
@@ -453,7 +466,7 @@ func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
 		return nil
 	}
 	// Keep late facts attached to their original attempt in the domain journal.
-	attempt := (*StepAttemptRecord)(nil)
+	attempt := (*executionmodel.StepAttemptRecord)(nil)
 	for i := range s.domain.Attempts {
 		if s.domain.Attempts[i].AttemptID == ev.AttemptID && s.domain.Attempts[i].ExecutionID == run.ExecutionID {
 			attempt = &s.domain.Attempts[i]
@@ -477,12 +490,14 @@ func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
 	if err != nil {
 		return err
 	}
-	s.pendingEvents = append(s.pendingEvents, DomainEvent{ProjectIdentity: s.Config.identity, TaskID: run.DomainTaskID, WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: ev.AttemptID, ExternalSource: "center:" + run.RunID, ExternalID: newID(), Type: "activity." + ev.Activity.Kind, ReceivedAt: ev.Activity.TS, Payload: payload})
+	s.pendingEvents = append(s.pendingEvents, storageports.DomainEvent{ProjectIdentity: s.Config.identity, TaskID: run.DomainTaskID, WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: ev.AttemptID, ExternalSource: "center:" + run.RunID, ExternalID: newID(), Type: "activity." + ev.Activity.Kind, ReceivedAt: ev.Activity.TS, Payload: payload})
 	return s.commitEvents()
 }
+
 func (s *Service) Run(ctx context.Context) (retErr error) {
 	return s.RunWithDispatch(ctx, "auto")
 }
+
 func (s *Service) RunWithDispatch(ctx context.Context, mode string) error {
 	if mode != "manual" && mode != "auto" {
 		return errors.New("dispatch mode must be manual or auto")
@@ -746,7 +761,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 				}
 			}
 		case message := <-s.workerMessages:
-			if err := s.handleWorkerMessage(message); err != nil && !errors.Is(err, ErrWorkerTurnStale) {
+			if err := s.handleWorkerMessage(message); err != nil && !errors.Is(err, executionmodel.ErrTurnStale) {
 				return err
 			}
 		case <-decisionTick.C:

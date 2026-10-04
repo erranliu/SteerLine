@@ -5,27 +5,27 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func (s *Service) hostEnvironmentForRun(run *Run) (contracts.HostEnvironmentPort, executionapi.LifecyclePort, workerFlowContext, executionapi.LifecycleSnapshot, error) {
+func (s *Service) hostEnvironmentForRun(run *Run) (executionbackend.HostEnvironmentPort, executionbackend.LifecyclePort, workerFlowContext, executionbackend.LifecycleSnapshot, error) {
 	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
-		return nil, nil, fixed, executionapi.LifecycleSnapshot{}, err
+		return nil, nil, fixed, executionbackend.LifecycleSnapshot{}, err
 	}
-	host, ok := lifecycle.(contracts.HostEnvironmentPort)
+	host, ok := lifecycle.(executionbackend.HostEnvironmentPort)
 	if !ok {
-		return nil, lifecycle, fixed, executionapi.LifecycleSnapshot{}, errors.New("selected implementation does not provide host evidence")
+		return nil, lifecycle, fixed, executionbackend.LifecycleSnapshot{}, errors.New("selected implementation does not provide host evidence")
 	}
 	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
 	if err != nil {
-		return nil, lifecycle, fixed, executionapi.LifecycleSnapshot{}, err
+		return nil, lifecycle, fixed, executionbackend.LifecycleSnapshot{}, err
 	}
 	return host, lifecycle, fixed, snapshot, nil
 }
 
-func (s *Service) currentHostTurn(run *Run) (*contracts.HostTurnFacts, error) {
+func (s *Service) currentHostTurn(run *Run) (*executionbackend.HostTurnFacts, error) {
 	host, _, _, snapshot, err := s.hostEnvironmentForRun(run)
 	if err != nil {
 		return nil, err
@@ -42,14 +42,14 @@ func (s *Service) resetHostTurnOutput(run *Run, turnID string) error {
 	if err != nil {
 		return err
 	}
-	if err = mergeLifecycleExecutionReceipt(fixed.execution, executionapi.LifecycleReceipt{Implementation: []executionapi.ImplementationDataEnvelope{envelope}}); err != nil {
+	if err = mergeLifecycleExecutionReceipt(fixed.execution, executionbackend.LifecycleReceipt{Implementation: []executionbackend.ImplementationDataEnvelope{envelope}}); err != nil {
 		return err
 	}
 	return s.commitWorker(run)
 }
 
-func (s *Service) executeHostAction(ctx context.Context, run *Run, lifecycle executionapi.LifecyclePort, input executionapi.HostActionInput) error {
-	candidate := executionapi.LifecycleCandidate{Action: executionapi.LifecycleHostAction, Input: executionapi.LifecycleInput{Host: &input}}
+func (s *Service) executeHostAction(ctx context.Context, run *Run, lifecycle executionbackend.LifecyclePort, input executionbackend.HostActionInput) error {
+	candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleHostAction, Input: executionbackend.LifecycleInput{Host: &input}}
 	return s.executeLifecycleStep(ctx, run, lifecycle, candidate)
 }
 
@@ -62,21 +62,21 @@ func (s *Service) readHostOutput(ctx context.Context, run *Run) error {
 	if attempt == nil {
 		return errors.New("host output has no original attempt")
 	}
-	input := contracts.HostReadInput{}
+	input := executionbackend.HostReadInput{}
 	if environment := fixed.execution.Environment; environment != nil && environment.Preparation != nil {
 		p := environment.Preparation
-		input.Probe = &contracts.HostProbeObservation{Command: p.Command, Nonce: p.Nonce, ScriptDigest: p.ScriptDigest, Evidence: p.Evidence}
+		input.Probe = &executionbackend.HostProbeObservation{Command: p.Command, Nonce: p.Nonce, ScriptDigest: p.ScriptDigest, Evidence: p.Evidence}
 	}
 	output, envelope, err := host.ReadWorkerOutput(ctx, snapshot, input)
 	if err != nil {
 		return err
 	}
-	if err = mergeLifecycleExecutionReceipt(fixed.execution, executionapi.LifecycleReceipt{Implementation: []executionapi.ImplementationDataEnvelope{envelope}}); err != nil {
+	if err = mergeLifecycleExecutionReceipt(fixed.execution, executionbackend.LifecycleReceipt{Implementation: []executionbackend.ImplementationDataEnvelope{envelope}}); err != nil {
 		return err
 	}
 	if output.ProbeEvidence != nil {
 		if snapshot.PreparationProbe == nil || fixed.execution.Environment == nil || fixed.execution.Environment.Preparation == nil || fixed.execution.Environment.Preparation.Probe != *snapshot.PreparationProbe {
-			return ErrWorkerTurnStale
+			return executionmodel.ErrTurnStale
 		}
 		fixed.execution.Environment.Preparation.Evidence = *output.ProbeEvidence
 	}
@@ -103,7 +103,7 @@ func (s *Service) readHostOutput(ctx context.Context, run *Run) error {
 	return s.commitWorker(run)
 }
 
-func (s *Service) verifyHostExecutionEvidence(ctx context.Context, run *Run, execution *ExecutionRecord) error {
+func (s *Service) verifyHostExecutionEvidence(ctx context.Context, run *Run, execution *executionmodel.ExecutionRecord) error {
 	if execution == nil || execution.Process == nil {
 		return errors.New("host execution has no original terminal")
 	}
@@ -111,7 +111,7 @@ func (s *Service) verifyHostExecutionEvidence(ctx context.Context, run *Run, exe
 		if execution.PolicyResources == nil || environment.Runtime != execution.Process.RuntimeID || environment.LaunchCommand == "" ||
 			!reflect.DeepEqual(environment.WriteRoots, execution.PolicyResources.WriteRoots) || len(environment.WriteRoots) == 0 ||
 			canonical(environment.WriteRoots[0]) != canonical(execution.Workspace.Worktree) {
-			return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "managed host resource evidence differs from its committed policy snapshot"}
+			return &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "managed host resource evidence differs from its committed policy snapshot"}
 		}
 	}
 	lifecycle, fixed, err := s.lifecycleForRun(run)
@@ -127,7 +127,7 @@ func (s *Service) verifyHostExecutionEvidence(ctx context.Context, run *Run, exe
 		return err
 	}
 	if !evidence.ManagedProcess {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "host process is not managed by its original execution"}
+		return &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "host process is not managed by its original execution"}
 	}
 	return nil
 }

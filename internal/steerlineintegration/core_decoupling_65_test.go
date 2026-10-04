@@ -6,8 +6,9 @@ import (
 	"testing"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestCD65HistoryAndPreparation(t *testing.T) {
@@ -35,7 +36,7 @@ func testCD65HistoryCommitsOnly(t *testing.T) {
 	service := startIntegrationService(t, ctx, fixture.config, resolver)
 	defer service.stop(t)
 	claimIntegrationTask(t, ctx, fixture, 901, service.instanceID)
-	run := waitIntegrationRun(t, ctx, service, fixture.config, func(run *steerline.Run, execution *steerline.ExecutionRecord) bool {
+	run := waitIntegrationRun(t, ctx, service, fixture.config, func(run *steerline.Run, execution *executionmodel.ExecutionRecord) bool {
 		return run.Decision != nil && run.Decision.Status == "pending" && execution.TurnNumber == 1 && execution.CurrentTurnID == execution.LastStoppedTurnID
 	})
 	if run.run.Process == nil || run.execution.SessionID != integrationAppServerSession {
@@ -94,7 +95,7 @@ func testCD65HistoryCommitsOnly(t *testing.T) {
 	if run.run.Decision == nil || run.run.Decision.Status != "pending" {
 		t.Fatal("history collection advanced the pending business decision")
 	}
-	if resolver.count(executionapi.ProtocolLocalCodexAppServer) == 0 {
+	if resolver.count(executionbackend.ProtocolLocalCodexAppServer) == 0 {
 		t.Fatal("history source was collected without resolving the injected implementation")
 	}
 }

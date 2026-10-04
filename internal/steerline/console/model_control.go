@@ -5,6 +5,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
@@ -110,7 +112,7 @@ func (m *Model) readyControlTarget() (*projectState, *contracts.Runtime) {
 	state := &m.projects[m.selected]
 	connection := state.snapshot.Connection
 	runtimeState := connection.Snapshot.Runtime
-	if state.ref.Error != "" || state.ref.Conflict != "" || runtimeState == nil || !connection.CanControl || connection.State != api.ConnectionConnected {
+	if state.ref.Error != "" || state.ref.Conflict != "" || runtimeState == nil || !connection.CanControl || connection.State != productapi.ConnectionConnected {
 		m.status = "服务未就绪，不能提交控制指令：" + firstText(connection.Diagnostic, string(connection.State), "未知状态")
 		return state, nil
 	}

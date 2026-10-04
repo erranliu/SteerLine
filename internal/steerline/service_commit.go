@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/projection"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func copyDomainSnapshot(snapshot DomainSnapshot) (DomainSnapshot, error) {
@@ -49,7 +51,7 @@ func (s *Service) projectActor() error {
 	return nil
 }
 
-func snapshotWorkflow(snapshot *DomainSnapshot, id string) *WorkflowRunRecord {
+func snapshotWorkflow(snapshot *DomainSnapshot, id string) *executionmodel.WorkflowRunRecord {
 	for i := range snapshot.WorkflowRuns {
 		if snapshot.WorkflowRuns[i].WorkflowRunID == id {
 			return &snapshot.WorkflowRuns[i]
@@ -57,7 +59,8 @@ func snapshotWorkflow(snapshot *DomainSnapshot, id string) *WorkflowRunRecord {
 	}
 	return nil
 }
-func snapshotExecution(snapshot *DomainSnapshot, id string) *ExecutionRecord {
+
+func snapshotExecution(snapshot *DomainSnapshot, id string) *executionmodel.ExecutionRecord {
 	for i := range snapshot.Executions {
 		if snapshot.Executions[i].ExecutionID == id {
 			return &snapshot.Executions[i]
@@ -65,7 +68,8 @@ func snapshotExecution(snapshot *DomainSnapshot, id string) *ExecutionRecord {
 	}
 	return nil
 }
-func snapshotAttempt(snapshot *DomainSnapshot, id string) *StepAttemptRecord {
+
+func snapshotAttempt(snapshot *DomainSnapshot, id string) *executionmodel.StepAttemptRecord {
 	for i := range snapshot.Attempts {
 		if snapshot.Attempts[i].AttemptID == id {
 			return &snapshot.Attempts[i]
@@ -73,7 +77,8 @@ func snapshotAttempt(snapshot *DomainSnapshot, id string) *StepAttemptRecord {
 	}
 	return nil
 }
-func snapshotDecision(snapshot *DomainSnapshot, id string) *DecisionRecord {
+
+func snapshotDecision(snapshot *DomainSnapshot, id string) *executionmodel.DecisionRecord {
 	for i := range snapshot.Decisions {
 		if snapshot.Decisions[i].DecisionID == id {
 			return &snapshot.Decisions[i]
@@ -81,7 +86,8 @@ func snapshotDecision(snapshot *DomainSnapshot, id string) *DecisionRecord {
 	}
 	return nil
 }
-func snapshotOperation(snapshot *DomainSnapshot, id string) *OperationRecord {
+
+func snapshotOperation(snapshot *DomainSnapshot, id string) *executionmodel.OperationRecord {
 	for i := range snapshot.Operations {
 		if snapshot.Operations[i].OperationID == id {
 			return &snapshot.Operations[i]
@@ -98,8 +104,8 @@ func (s *Service) commitWorker(run *Run, operationIDs ...string) error {
 }
 
 type workerCommitAttachment struct {
-	Binding            *executionapi.ExecutionRef
-	ExecutionOperation *recordWrite[executionapi.Operation]
+	Binding            *executionbackend.ExecutionRef
+	ExecutionOperation *recordWrite[executionbackend.Operation]
 }
 
 func (s *Service) commitWorkerAttached(run *Run, attachment workerCommitAttachment, operationIDs ...string) error {
@@ -128,9 +134,9 @@ func (s *Service) commitWorkerAttached(run *Run, attachment workerCommitAttachme
 		ControlRevision:   before.ControlRevision,
 		AuthorityRevision: s.State.Control.Revision,
 		ExpectedAttemptID: attempt.AttemptID,
-		Workflow:          &recordWrite[WorkflowRunRecord]{Before: before, After: *workflow},
-		Execution:         &recordWrite[ExecutionRecord]{Before: snapshotExecution(&s.committed, execution.ExecutionID), After: *execution},
-		Attempt:           &recordWrite[StepAttemptRecord]{Before: snapshotAttempt(&s.committed, attempt.AttemptID), After: *attempt},
+		Workflow:          &recordWrite[executionmodel.WorkflowRunRecord]{Before: before, After: *workflow},
+		Execution:         &recordWrite[executionmodel.ExecutionRecord]{Before: snapshotExecution(&s.committed, execution.ExecutionID), After: *execution},
+		Attempt:           &recordWrite[executionmodel.StepAttemptRecord]{Before: snapshotAttempt(&s.committed, attempt.AttemptID), After: *attempt},
 		Checkpoint:        runtimeCheckpoint(s.State)}
 	previousExecution := snapshotExecution(&s.committed, execution.ExecutionID)
 	if previousExecution != nil && previousExecution.CurrentAttemptID != "" && previousExecution.CurrentAttemptID != attempt.AttemptID {
@@ -139,7 +145,7 @@ func (s *Service) commitWorkerAttached(run *Run, attachment workerCommitAttachme
 		if retired == nil {
 			return errors.New("recovery lost the original Attempt")
 		}
-		request.RetiredAttempt = &recordWrite[StepAttemptRecord]{Before: snapshotAttempt(&s.committed, retired.AttemptID), After: *retired}
+		request.RetiredAttempt = &recordWrite[executionmodel.StepAttemptRecord]{Before: snapshotAttempt(&s.committed, retired.AttemptID), After: *retired}
 	}
 	for _, decision := range s.domain.Decisions {
 		if decision.WorkflowRunID != run.RunID {
@@ -147,10 +153,10 @@ func (s *Service) commitWorkerAttached(run *Run, attachment workerCommitAttachme
 		}
 		before := snapshotDecision(&s.committed, decision.DecisionID)
 		if s.workerDecisionWrites[decision.DecisionID] {
-			request.Decisions = append(request.Decisions, recordWrite[DecisionRecord]{Before: before, After: decision})
+			request.Decisions = append(request.Decisions, recordWrite[executionmodel.DecisionRecord]{Before: before, After: decision})
 		} else if decision.DecisionID == execution.DecisionID && before != nil {
 			// Validate the durable answer read without adopting an undeclared candidate.
-			request.Decisions = append(request.Decisions, recordWrite[DecisionRecord]{Before: before, After: *before})
+			request.Decisions = append(request.Decisions, recordWrite[executionmodel.DecisionRecord]{Before: before, After: *before})
 		}
 	}
 	for _, id := range operationIDs {
@@ -170,7 +176,7 @@ func (s *Service) commitWorkerAttached(run *Run, attachment workerCommitAttachme
 		if operation == nil {
 			return errors.New("staged worker operation disappeared")
 		}
-		request.Operations = append(request.Operations, recordWrite[OperationRecord]{Before: snapshotOperation(&s.committed, id), After: *operation})
+		request.Operations = append(request.Operations, recordWrite[executionmodel.OperationRecord]{Before: snapshotOperation(&s.committed, id), After: *operation})
 	}
 	for _, event := range s.pendingEvents {
 		if event.WorkflowRunID == run.RunID {
@@ -218,7 +224,7 @@ func (s *Service) commitDeclared(request workerCommit) error {
 	if request.Execution != nil {
 		*snapshotExecution(&committed, request.ExecutionID) = request.Execution.After
 	}
-	for _, write := range []*recordWrite[StepAttemptRecord]{request.RetiredAttempt, request.Attempt} {
+	for _, write := range []*recordWrite[executionmodel.StepAttemptRecord]{request.RetiredAttempt, request.Attempt} {
 		if write == nil {
 			continue
 		}
@@ -264,7 +270,7 @@ func (s *Service) commitDeclared(request workerCommit) error {
 }
 
 func (s *Service) commitEvents() error {
-	return s.commitDeclared(workerCommit{Project: s.Config.identity, Events: append([]DomainEvent(nil), s.pendingEvents...), Checkpoint: runtimeCheckpoint(s.State)})
+	return s.commitDeclared(workerCommit{Project: s.Config.identity, Events: append([]storageports.DomainEvent(nil), s.pendingEvents...), Checkpoint: runtimeCheckpoint(s.State)})
 }
 
 func (s *Service) stageWorkerOperation(run *Run, id, next, requestID string, receipt []byte, reason string) error {
@@ -333,7 +339,7 @@ func (s *Service) startWorkerOperation(run *Run, kind, key string, payload any) 
 		}
 		return existing.OperationID, s.changeWorkerOperation(run, existing.OperationID, "in_flight", "", nil, "")
 	}
-	operation := OperationRecord{ProjectIdentity: s.Config.identity, OperationID: newID(), IdempotencyKey: key, Kind: kind,
+	operation := executionmodel.OperationRecord{ProjectIdentity: s.Config.identity, OperationID: newID(), IdempotencyKey: key, Kind: kind,
 		Status: "in_flight", PayloadDigest: operationDigest(request), Request: request, CreatedAt: now(), UpdatedAt: now()}
 	if lifecycleOperationKind(kind) {
 		fixed, err := s.workerFlowContext(run)
@@ -344,10 +350,10 @@ func (s *Service) startWorkerOperation(run *Run, kind, key string, payload any) 
 		if err != nil {
 			return "", err
 		}
-		operation.LifecycleIdentity = &executionapi.LifecycleOperationIdentity{
+		operation.LifecycleIdentity = &executionbackend.LifecycleOperationIdentity{
 			ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID,
 			ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration,
-			InputBindingDigest: executionapi.LifecycleBindingDigest(snapshot), Ref: snapshot.Ref,
+			InputBindingDigest: executionbackend.LifecycleBindingDigest(snapshot), Ref: snapshot.Ref,
 		}
 	}
 	s.domain.Operations = append(s.domain.Operations, operation)
@@ -359,7 +365,7 @@ func (s *Service) startWorkerOperation(run *Run, kind, key string, payload any) 
 }
 
 func lifecycleOperationKind(kind string) bool {
-	return knownLifecycleAction(executionapi.LifecycleAction(kind)) || kind == "worker_input_value" || kind == "prepare_worker_session" ||
+	return knownLifecycleAction(executionbackend.LifecycleAction(kind)) || kind == "worker_input_value" || kind == "prepare_worker_session" ||
 		kind == "start_worker_turn" || kind == "submit_worker_input" || kind == "reply_execution_question" || kind == "stop_worker_observation"
 }
 

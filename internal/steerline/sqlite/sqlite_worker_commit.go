@@ -8,7 +8,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func (s *SQLiteStore) CommitWorker(ctx context.Context, request workerCommit) (workerCommitResult, error) {
@@ -122,7 +122,7 @@ func (s *SQLiteStore) CommitWorker(ctx context.Context, request workerCommit) (w
 			if err := checkRecordWrite(tx, "operations", "operation_id", request.Project, v.After.OperationID, v.Before); err != nil {
 				return err
 			}
-			if v.Before != nil && v.Before.Status != v.After.Status && !contracts.OperationTransitionAllowed(v.Before.Status, v.After.Status) {
+			if v.Before != nil && v.Before.Status != v.After.Status && !executionmodel.OperationTransitionAllowed(v.Before.Status, v.After.Status) {
 				return fmt.Errorf("operation transition %s -> %s is not allowed", v.Before.Status, v.After.Status)
 			}
 			if v.Before != nil && recordFingerprint(v.Before.LifecycleIdentity) != recordFingerprint(v.After.LifecycleIdentity) {
@@ -141,7 +141,7 @@ func (s *SQLiteStore) CommitWorker(ctx context.Context, request workerCommit) (w
 			if err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, request.Project, request.WorkflowID).Scan(&workflowBytes); err != nil {
 				return err
 			}
-			var workflow WorkflowRunRecord
+			var workflow executionmodel.WorkflowRunRecord
 			if err := json.Unmarshal(workflowBytes, &workflow); err != nil {
 				return err
 			}
@@ -201,7 +201,7 @@ func (s *SQLiteStore) CommitWorker(ctx context.Context, request workerCommit) (w
 				return err
 			}
 		}
-		for _, v := range []*recordWrite[StepAttemptRecord]{request.RetiredAttempt, request.Attempt} {
+		for _, v := range []*recordWrite[executionmodel.StepAttemptRecord]{request.RetiredAttempt, request.Attempt} {
 			if v != nil && recordWriteChanged(*v) {
 				if err := tx.PutStepAttempt(v.After); err != nil {
 					return err
@@ -282,7 +282,7 @@ func checkRecordWrite[T any](tx *sqliteTx, table, column, project, id string, ex
 		var revision uint64
 		err = tx.tx.QueryRowContext(tx.ctx, `SELECT payload,control_revision FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, project, id).Scan(&body, &revision)
 		if err == nil {
-			var workflow WorkflowRunRecord
+			var workflow executionmodel.WorkflowRunRecord
 			if err = json.Unmarshal(body, &workflow); err != nil {
 				return err
 			}

@@ -7,8 +7,9 @@ import (
 	"os"
 	"strings"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
+	executionusecase "github.com/erranliu/SteerLine/internal/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 // Operations are bound by their saved request and exact identity components,
@@ -102,7 +103,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *Run, mode 
 	}
 	created := now()
 	newAttemptID := newID()
-	s.domain.Attempts = append(s.domain.Attempts, StepAttemptRecord{
+	s.domain.Attempts = append(s.domain.Attempts, executionmodel.StepAttemptRecord{
 		ProjectIdentity: old.ProjectIdentity, AttemptID: newAttemptID, ExecutionID: old.ExecutionID,
 		StepID: "worker", AttemptNumber: old.AttemptNumber + 1, Status: "planned",
 		InputRevision: old.InputRevision, ContractDigest: old.ContractDigest,
@@ -175,7 +176,7 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 			return s.waitWorkerFlow(run, "Original answer send has an unknown outcome; reconcile its native result before confirming again")
 		}
 	}
-	oldInput := "Prior saved answer: " + workerFeedbackText(DecisionAnswer{OptionID: old.OptionID, Note: old.Note}, old.Request)
+	oldInput := "Prior saved answer: " + workerFeedbackText(executionmodel.DecisionAnswer{OptionID: old.OptionID, Note: old.Note}, old.Request)
 	if len(old.Answers) != 0 {
 		oldInput += "\nNative answers: " + string(mustJSON(old.Answers))
 	}
@@ -206,7 +207,7 @@ func (s *Service) refreshSavedRecoveryDecision(run *Run, preserveNative bool, re
 	return s.commitWorker(run)
 }
 
-func (s *Service) startManuallyRecoveredInitialWorker(ctx context.Context, run *Run, answer DecisionAnswer, commandID string) error {
+func (s *Service) startManuallyRecoveredInitialWorker(ctx context.Context, run *Run, answer executionmodel.DecisionAnswer, commandID string) error {
 	if answer.OptionID != "continue" || run.Decision == nil || run.Decision.Request.QuestionRoute != nil {
 		return errors.New("initial local execution requires an explicit continue decision")
 	}
@@ -230,13 +231,13 @@ func (s *Service) startManuallyRecoveredInitialWorker(ctx context.Context, run *
 	if err != nil {
 		return err
 	}
-	prompt, err := workerflow.Prompt(*task, contract, run.RunID, fixed.config.PublicationPolicy)
+	prompt, err := executionusecase.Prompt(*task, contract, run.RunID, fixed.config.PublicationPolicy)
 	if err != nil {
 		return err
 	}
 	prompt += "\n\nThe service reopened before the first worker turn. Inspect the current worktree before acting.\n\n" + workerFeedbackText(answer, run.Decision.Request)
 	key := "worker-workspace:" + execution.ExecutionID
-	var preparation *OperationRecord
+	var preparation *executionmodel.OperationRecord
 	for i := range s.domain.Operations {
 		if s.domain.Operations[i].IdempotencyKey == key {
 			preparation = &s.domain.Operations[i]
@@ -249,9 +250,9 @@ func (s *Service) startManuallyRecoveredInitialWorker(ctx context.Context, run *
 	if execution.Workspace.Worktree == "" {
 		if preparation == nil {
 			opID, err := s.startWorkerOperation(run, "prepare_workspace", key, struct {
-				WorkflowRunID string                       `json:"workflow_run_id"`
-				ExecutionID   string                       `json:"execution_id"`
-				Workspace     executionapi.WorkspaceIntent `json:"workspace"`
+				WorkflowRunID string                           `json:"workflow_run_id"`
+				ExecutionID   string                           `json:"execution_id"`
+				Workspace     executionbackend.WorkspaceIntent `json:"workspace"`
 			}{run.RunID, execution.ExecutionID, *run.WorkspaceIntent})
 			if err != nil {
 				return err
@@ -260,7 +261,7 @@ func (s *Service) startManuallyRecoveredInitialWorker(ctx context.Context, run *
 				preparation, prepareErr := prepareWorktree(ctx, fixed.config, run)
 				if prepareErr != nil {
 					status := string(preparation.Status)
-					if status != string(executionapi.OperationRejected) {
+					if status != string(executionbackend.OperationRejected) {
 						status = "outcome_unknown"
 					}
 					_ = s.changeWorkerOperation(run, opID, status, "", mustJSON(preparation), prepareErr.Error())
@@ -310,7 +311,7 @@ func (s *Service) adoptOrGateServiceExecutions() error {
 
 func (s *Service) markServiceRecoveryGateForPriorOwner() error {
 	for _, run := range s.runs {
-		if run == nil || run.WorkflowVersion != WorkerFlowVersion || run.TaskStatus != "in_progress" {
+		if run == nil || run.WorkflowVersion != executionmodel.Version || run.TaskStatus != "in_progress" {
 			continue
 		}
 		workflow, execution := s.workflowRecords(run)
@@ -342,7 +343,7 @@ func (s *Service) markServiceRecoveryGate() error {
 }
 
 func (s *Service) markOneServiceRecoveryGate(run *Run) {
-	if run == nil || run.WorkflowVersion != WorkerFlowVersion {
+	if run == nil || run.WorkflowVersion != executionmodel.Version {
 		return
 	}
 	task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
@@ -364,7 +365,7 @@ func (s *Service) resumeConfiguredWork(ctx context.Context) error {
 		return err
 	}
 	for _, run := range s.runs {
-		if run == nil || run.WorkflowVersion != WorkerFlowVersion {
+		if run == nil || run.WorkflowVersion != executionmodel.Version {
 			continue
 		}
 		workflow, execution := s.workflowRecords(run)
@@ -394,7 +395,7 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 		return err
 	}
 	for _, run := range s.runs {
-		if run == nil || run.WorkflowVersion != WorkerFlowVersion {
+		if run == nil || run.WorkflowVersion != executionmodel.Version {
 			continue
 		}
 		if s.candidateBusinessClosed(run) {

@@ -6,7 +6,7 @@ import (
 	"errors"
 	"strings"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func FixedAgentTitle(executionID string) string { return "SteerLine agent " + executionID }
@@ -14,7 +14,7 @@ func FixedAgentTitle(executionID string) string { return "SteerLine agent " + ex
 func powershellLiteral(value string) string { return "'" + strings.ReplaceAll(value, "'", "''") + "'" }
 
 // WrapAgentCommand applies only the terminal shell boundary to a fixed argv.
-func WrapAgentCommand(command executionapi.LaunchCommand, shell string) (string, error) {
+func WrapAgentCommand(command executionbackend.LaunchCommand, shell string) (string, error) {
 	if shell != "powershell.exe" && shell != "pwsh.exe" {
 		return "", errors.New("fixed Orca agent launch requires a PowerShell terminal")
 	}

@@ -6,12 +6,13 @@ import (
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestRecoveryInspectionReadsNativeClaimFromCenter(t *testing.T) {
 	project := "repo:native-recovery"
-	task := TaskRecord{ProjectIdentity: project, TaskID: "7", Claimant: "native-claimant", Status: "in_progress"}
-	service := Service{Config: Config{Persistence: sqlite.Factory{}, identity: project}, State: Runtime{}, domain: DomainSnapshot{Tasks: []TaskRecord{task}}}
+	task := taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "7", Claimant: "native-claimant", Status: "in_progress"}
+	service := Service{Config: Config{Persistence: sqlite.Factory{}, identity: project}, State: Runtime{}, domain: DomainSnapshot{Tasks: []taskmodel.TaskRecord{task}}}
 	report := RecoveryInspection{}
 	service.inspectRecoveryClaim(context.Background(), &Run{TaskID: "7", DomainTaskID: "7"}, &report)
 	if report.NativeClaim == nil || report.NativeClaim.TaskID != task.TaskID || report.NativeClaim.Claimant != task.Claimant || report.ClaimError != "" {

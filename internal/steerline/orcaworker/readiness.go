@@ -12,18 +12,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-// ProbeIdentity binds an exact command to one preparation intent, never to a
-// model's assertion or a reusable session health cache.
-type ProbeIdentity = contracts.ProbeIdentity
-
-type ProbeReceipt = contracts.ProbeReceipt
-
-func probeDirectory(p ProbeIdentity) (string, error) {
-	if !executionapi.StableExecutionID(p.Execution) || !executionapi.StableExecutionID(p.Turn) || !executionapi.StableExecutionID(p.Nonce) || !filepath.IsAbs(p.Worktree) || p.ProfileDigest == "" || p.Runtime == "" || p.Terminal == "" || p.Incarnation == "" {
+func probeDirectory(p executionbackend.ProbeIdentity) (string, error) {
+	if !executionbackend.StableExecutionID(p.Execution) || !executionbackend.StableExecutionID(p.Turn) || !executionbackend.StableExecutionID(p.Nonce) || !filepath.IsAbs(p.Worktree) || p.ProfileDigest == "" || p.Runtime == "" || p.Terminal == "" || p.Incarnation == "" {
 		return "", errors.New("readiness probe lacks frozen identity")
 	}
 	return filepath.Join(".steerline-readiness", p.Execution, p.Turn), nil
@@ -80,20 +73,20 @@ Write-Output ('SLREADINESS:' + $p.nonce + ':' + (Get-FileHash -LiteralPath (Join
 
 func sha(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }
 
-func BuildProbe(p ProbeIdentity) (contracts.ProbePlan, error) {
+func BuildProbe(p executionbackend.ProbeIdentity) (executionbackend.ProbePlan, error) {
 	dir, err := probeDirectory(p)
 	if err != nil {
-		return contracts.ProbePlan{}, err
+		return executionbackend.ProbePlan{}, err
 	}
 	input, err := json.Marshal(p)
 	if err != nil {
-		return contracts.ProbePlan{}, err
+		return executionbackend.ProbePlan{}, err
 	}
 	script := []byte(probeScript())
-	return contracts.ProbePlan{Command: "powershell.exe -NoProfile -ExecutionPolicy Bypass -File " + powershellLiteral(filepath.ToSlash(filepath.Join(dir, "probe.ps1"))), InputDigest: sha(input), ScriptDigest: sha(script)}, nil
+	return executionbackend.ProbePlan{Command: "powershell.exe -NoProfile -ExecutionPolicy Bypass -File " + powershellLiteral(filepath.ToSlash(filepath.Join(dir, "probe.ps1"))), InputDigest: sha(input), ScriptDigest: sha(script)}, nil
 }
 
-func WriteProbe(p ProbeIdentity, plan contracts.ProbePlan) error {
+func WriteProbe(p executionbackend.ProbeIdentity, plan executionbackend.ProbePlan) error {
 	expected, err := BuildProbe(p)
 	if err != nil || expected != plan {
 		return errors.Join(err, errors.New("readiness probe plan differs from its original identity"))
@@ -157,7 +150,7 @@ func WriteProbe(p ProbeIdentity, plan contracts.ProbePlan) error {
 	return nil
 }
 
-func CheckProbeFiles(p ProbeIdentity, plan contracts.ProbePlan) (bool, error) {
+func CheckProbeFiles(p executionbackend.ProbeIdentity, plan executionbackend.ProbePlan) (bool, error) {
 	expected, err := BuildProbe(p)
 	if err != nil || expected != plan {
 		return false, errors.Join(err, errors.New("readiness probe plan differs from its original identity"))
@@ -207,7 +200,7 @@ func CheckProbeFiles(p ProbeIdentity, plan contracts.ProbePlan) (bool, error) {
 	return true, nil
 }
 
-func PrepareProbe(p ProbeIdentity) (command, inputDigest, scriptDigest string, err error) {
+func PrepareProbe(p executionbackend.ProbeIdentity) (command, inputDigest, scriptDigest string, err error) {
 	plan, err := BuildProbe(p)
 	if err != nil {
 		return "", "", "", err
@@ -218,7 +211,7 @@ func PrepareProbe(p ProbeIdentity) (command, inputDigest, scriptDigest string, e
 	return plan.Command, plan.InputDigest, plan.ScriptDigest, nil
 }
 
-func ReadProbe(p ProbeIdentity, digest string) (*ProbeReceipt, error) {
+func ReadProbe(p executionbackend.ProbeIdentity, digest string) (*executionbackend.ProbeReceipt, error) {
 	dir, err := probeDirectory(p)
 	if err != nil {
 		return nil, err
@@ -249,7 +242,7 @@ func ReadProbe(p ProbeIdentity, digest string) (*ProbeReceipt, error) {
 		return nil, errors.New("readiness receipt exceeded limit")
 	}
 	data = []byte(strings.TrimPrefix(string(data), "\ufeff"))
-	var receipt ProbeReceipt
+	var receipt executionbackend.ProbeReceipt
 	d := json.NewDecoder(strings.NewReader(string(data)))
 	d.DisallowUnknownFields()
 	if err = d.Decode(&receipt); err != nil {
@@ -262,7 +255,7 @@ func ReadProbe(p ProbeIdentity, digest string) (*ProbeReceipt, error) {
 	return &receipt, nil
 }
 
-func CleanupProbe(p ProbeIdentity) error {
+func CleanupProbe(p executionbackend.ProbeIdentity) error {
 	dir, err := probeDirectory(p)
 	if err != nil {
 		return err
@@ -286,7 +279,7 @@ func CleanupProbe(p ProbeIdentity) error {
 	return nil
 }
 
-func ProbeFilesAbsent(p ProbeIdentity) (bool, error) {
+func ProbeFilesAbsent(p executionbackend.ProbeIdentity) (bool, error) {
 	dir, err := probeDirectory(p)
 	if err != nil {
 		return false, err
@@ -316,11 +309,12 @@ func ProbeFilesAbsent(p ProbeIdentity) (bool, error) {
 	return true, nil
 }
 
-type ProbeToolEvidence = contracts.ProbeToolEvidence
-
 var singleCommandWrapper = regexp.MustCompile(`(?s)^\s*text\(\s*await\s+tools\.exec_command\(\s*(\{.*\})\s*\)\s*\)\s*;?\s*$`)
+
 var savedCommandWrapper = regexp.MustCompile(`(?s)^\s*(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*await\s+tools\.exec_command\(\s*(\{.*\})\s*\)\s*;\s*(?:store\(\s*"[^"\r\n]*"\s*,\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\)\s*;\s*)?text\(\s*(?:([A-Za-z_$][A-Za-z0-9_$]*)|JSON\.stringify\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\s*\))\s*\)\s*;?\s*$`)
+
 var commandObjectKeys = regexp.MustCompile(`([,{]\s*)(cmd|max_output_tokens|yield_time_ms|workdir|shell|login|tty)\s*:`)
+
 var projectedCommandWrapper = regexp.MustCompile(`(?s)^\s*(?:const|let)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*await\s+tools\.exec_command\(\s*(\{.*\})\s*\)\s*;\s*text\(\s*([A-Za-z_$][A-Za-z0-9_$]*)\.output\s*\)\s*;?\s*$`)
 
 func commandInvocation(name, input string) (string, bool) {
@@ -412,17 +406,15 @@ type transcriptMessage struct {
 	} `json:"blocks"`
 }
 
-type ToolContext = contracts.ToolContext
-
 // Business diagnostics require the current native Task's injected user header
 // and a provider command event after its saved intent. Old tails and assistant
 // quotations, as well as ordinary command exit codes, cannot report a fault.
-func ObserveToolInitialization(output WorkerOutput, taskID string, intentMillis int64, prior ToolContext) (ToolContext, bool, error) {
+func ObserveToolInitialization(output WorkerOutput, taskID string, intentMillis int64, prior executionbackend.ToolContext) (executionbackend.ToolContext, bool, error) {
 	if output.Source != "transcript" || !output.SourceExact || output.Provider != "codex" || output.SourceIdentity == "" {
 		return prior, false, nil
 	}
 	if prior.SourceIdentity != output.SourceIdentity {
-		prior = ToolContext{SourceIdentity: output.SourceIdentity}
+		prior = executionbackend.ToolContext{SourceIdentity: output.SourceIdentity}
 	}
 	var transcript struct {
 		Messages []transcriptMessage `json:"messages"`
@@ -478,7 +470,7 @@ func ObserveToolInitialization(output WorkerOutput, taskID string, intentMillis 
 // adapter omits result call IDs; accept only the immediate result of one pending
 // command call, with an independently matching nonce + script hash and exit 0.
 // Persist this small pending association across pages and discard on source gaps.
-func ObserveProbe(output WorkerOutput, command, nonce, scriptDigest string, prior ProbeToolEvidence) (ProbeToolEvidence, error) {
+func ObserveProbe(output WorkerOutput, command, nonce, scriptDigest string, prior executionbackend.ProbeToolEvidence) (executionbackend.ProbeToolEvidence, error) {
 	if prior.FailureCode != "" {
 		return prior, nil
 	}
@@ -486,7 +478,7 @@ func ObserveProbe(output WorkerOutput, command, nonce, scriptDigest string, prio
 		return prior, nil
 	}
 	if prior.SourceIdentity != "" && prior.SourceIdentity != output.SourceIdentity {
-		prior = ProbeToolEvidence{}
+		prior = executionbackend.ProbeToolEvidence{}
 	}
 	var transcript struct {
 		Messages []transcriptMessage `json:"messages"`
@@ -497,7 +489,7 @@ func ObserveProbe(output WorkerOutput, command, nonce, scriptDigest string, prio
 	marker := "SLREADINESS:" + nonce + ":" + scriptDigest
 	for _, message := range transcript.Messages {
 		if message.Source != "transcript" {
-			prior = ProbeToolEvidence{}
+			prior = executionbackend.ProbeToolEvidence{}
 			continue
 		}
 		for _, block := range message.Blocks {
@@ -505,10 +497,10 @@ func ObserveProbe(output WorkerOutput, command, nonce, scriptDigest string, prio
 				if prior.Verified {
 					continue
 				}
-				prior = ProbeToolEvidence{}
+				prior = executionbackend.ProbeToolEvidence{}
 				// Support actual exec_command and the installed Codex exec wrapper.
 				if invoked, ok := commandInvocation(block.Name, block.Input); ok && invoked == command && block.CallID != "" && !strings.Contains(block.Input, "… (truncated)") {
-					prior = ProbeToolEvidence{SourceIdentity: output.SourceIdentity, CallID: block.CallID, Command: command, Marker: marker}
+					prior = executionbackend.ProbeToolEvidence{SourceIdentity: output.SourceIdentity, CallID: block.CallID, Command: command, Marker: marker}
 				}
 			} else if block.Type == "tool-result" && message.Role == "tool" && !prior.Verified && prior.CallID != "" {
 				resultText := block.Output
@@ -527,7 +519,7 @@ func ObserveProbe(output WorkerOutput, command, nonce, scriptDigest string, prio
 				if json.Unmarshal([]byte(resultText), &result) == nil && result.ExitCode != nil && *result.ExitCode == 0 && strings.TrimSpace(result.Output) == marker && (block.CallID == "" || block.CallID == prior.CallID) {
 					prior.Verified, prior.MessageID = true, message.ID
 				} else {
-					prior = ProbeToolEvidence{}
+					prior = executionbackend.ProbeToolEvidence{}
 				}
 			}
 		}

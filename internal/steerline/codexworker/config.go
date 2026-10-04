@@ -2,13 +2,14 @@ package codexworker
 
 import (
 	"fmt"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 // Config is the native implementation input assembled from frozen records.
 // It is never embedded in contracts or read from mutable project state.
 type Config struct {
-	Policy          executionapi.ExecutionPolicy
+	Policy          executionbackend.ExecutionPolicy
 	Executable      string
 	Args            []string
 	Profile         string
@@ -30,21 +31,25 @@ func ValidReasoningEffort(value string) bool {
 	}
 	return false
 }
+
 func ValidSandbox(value string) bool {
 	return value == "read-only" || value == "workspace-write" || value == "danger-full-access"
 }
+
 func LocalWindowsSandboxDefault(goos, sandbox, mode string) string {
 	if goos == "windows" && sandbox != "danger-full-access" && mode == "" {
 		return "elevated"
 	}
 	return mode
 }
+
 func LocalReasoningEffortDefault(effort string) string {
 	if effort == "" {
 		return "high"
 	}
 	return effort
 }
+
 func (c Config) Validate(goos string) error {
 	permissions, err := CompilePolicy(c.Policy, goos, "local", "codex", c.WindowsSandbox, c.Profile, c.Args)
 	if err != nil {

@@ -10,7 +10,9 @@ import (
 	"strings"
 	"testing"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
@@ -60,7 +62,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 		t.Fatalf("selected claim did not persist a workflow: %+v / %v", snapshot, err)
 	}
 	wf, execution := snapshot.WorkflowRuns[0], snapshot.Executions[0]
-	if wf.WorkflowVersion != WorkerFlowVersion || wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !neutralVerifyFixedExecutionProfile(*wf.ExecutionProfile) || !slices.Contains(wf.ExecutionProfile.ImplementationDisplay, "Model：chosen-model") || !slices.Contains(wf.ExecutionProfile.ImplementationDisplay, "Reasoning effort：xhigh") || execution.Backend != string(executionapi.BackendLocal) || execution.CurrentStep != "worker" {
+	if wf.WorkflowVersion != executionmodel.Version || wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !neutralVerifyFixedExecutionProfile(*wf.ExecutionProfile) || !slices.Contains(wf.ExecutionProfile.ImplementationDisplay, "Model：chosen-model") || !slices.Contains(wf.ExecutionProfile.ImplementationDisplay, "Reasoning effort：xhigh") || execution.Backend != string(executionbackend.BackendLocal) || execution.CurrentStep != "worker" {
 		t.Fatalf("chosen execution route was not fixed in the claim: %+v / %+v", wf, execution)
 	}
 	base.ExecutionProfiles[0].ImplementationConfigs[0].Payload = mustJSON(neutralSettings{Executable: os.Args[0], Model: "later-edit", ReasoningEffort: "xhigh"})
@@ -110,7 +112,7 @@ func TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles(t *testi
 func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
-	c.WorkflowProtocol, c.Claimant = WorkerFlowVersion, "operator"
+	c.WorkflowProtocol, c.Claimant = executionmodel.Version, "operator"
 	c.ExecutionProfiles = []ExecutionProfile{
 		neutralProfile(t, "local-first", "First local", neutralSettings{Executable: "fixture", Model: "first-model", ReasoningEffort: "high"}),
 		neutralProfile(t, "local-second", "Second local", neutralSettings{Executable: "fixture", Model: "second-model", ReasoningEffort: "xhigh"}),
@@ -169,20 +171,20 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 		}
 		workflow, execution := reopened.workflowRecords(run)
 		fixed, err := reopened.executionConfigForRun(run)
-		if err != nil || workflow == nil || workflow.WorkflowVersion != WorkerFlowVersion || workflow.ExecutionProfile == nil || workflow.ExecutionProfile.ID != c.ExecutionProfiles[index].ID || execution == nil || execution.ExecutionID != workflow.SelectedResult || neutralProfileSettings(fixed).Model != neutralProfileFromInputs(c.ExecutionProfiles[index].ImplementationConfigs).Model || len(reopened.domain.Attempts) != 2 {
+		if err != nil || workflow == nil || workflow.WorkflowVersion != executionmodel.Version || workflow.ExecutionProfile == nil || workflow.ExecutionProfile.ID != c.ExecutionProfiles[index].ID || execution == nil || execution.ExecutionID != workflow.SelectedResult || neutralProfileSettings(fixed).Model != neutralProfileFromInputs(c.ExecutionProfiles[index].ImplementationConfigs).Model || len(reopened.domain.Attempts) != 2 {
 			t.Fatalf("task %s adopted another local profile or step chain: workflow=%+v execution=%+v config=%+v err=%v", taskID, workflow, execution, fixed, err)
 		}
 	}
 }
 
 func TestStartPayloadRequiresCompleteExecutionProfileSelection(t *testing.T) {
-	valid := ControlRequest{Action: "start_task", Payload: []byte(`{"task_id":"101","execution_profile_id":"local-fast","execution_profile_digest":"` + strings.Repeat("a", 64) + `"}`)}
+	valid := productapi.ControlRequest{Action: "start_task", Payload: []byte(`{"task_id":"101","execution_profile_id":"local-fast","execution_profile_digest":"` + strings.Repeat("a", 64) + `"}`)}
 	parsed, err := decodeControlPayload(valid)
 	if err != nil || parsed.TaskID != "101" || parsed.ExecutionProfileID != "local-fast" {
 		t.Fatalf("profile selection was not decoded: %+v / %v", parsed, err)
 	}
 	for _, payload := range []string{`{"task_id":"101","execution_profile_id":"local-fast"}`, `{"task_id":"101","execution_profile_digest":"digest"}`, `{"task_id":"101","execution_profile_id":"local-fast","execution_profile_digest":"digest","mode":"auto"}`} {
-		if _, err := decodeControlPayload(ControlRequest{Action: "start_task", Payload: json.RawMessage(payload)}); err == nil {
+		if _, err := decodeControlPayload(productapi.ControlRequest{Action: "start_task", Payload: json.RawMessage(payload)}); err == nil {
 			t.Fatalf("incomplete or mixed start payload was accepted: %s", payload)
 		}
 	}

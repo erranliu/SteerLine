@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 var errLifecycleEffectPending = errors.New("lifecycle action accepted and awaiting its original receipt")
@@ -12,37 +13,38 @@ var errLifecycleEffectPending = errors.New("lifecycle action accepted and awaiti
 // Stops bind the original owned handle without exposing it to actor state in
 // the background job. Their results use the same immutable receipt handoff.
 type lifecycleStopEffectPort struct {
-	executionapi.LifecyclePort
-	handle    executionapi.StopHandle
-	stopper   executionapi.ExecutionStopper
-	operation executionapi.Operation
+	executionbackend.LifecyclePort
+	handle    executionbackend.StopHandle
+	stopper   executionbackend.ExecutionStopper
+	operation executionbackend.Operation
 }
 
-func (p lifecycleStopEffectPort) Execute(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (p lifecycleStopEffectPort) Execute(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	if p.stopper == nil {
 		receipt, err := p.LifecyclePort.StopLifecycle(ctx, request, p.handle)
 		return receipt, nil, err
 	}
 	receipt, err := p.stopper.StopExecution(ctx, *p.operation.Ref, p.operation, p.handle)
-	return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationStatus(receipt.Disposition), Diagnostic: receipt.Diagnostic, RequestID: request.Operation.ID}, nil, err
+	return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationStatus(receipt.Disposition), Diagnostic: receipt.Diagnostic, RequestID: request.Operation.ID}, nil, err
 }
 
-func (p lifecycleStopEffectPort) Reconcile(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (p lifecycleStopEffectPort) Reconcile(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	if p.stopper == nil {
 		return p.LifecyclePort.Reconcile(ctx, request)
 	}
 	// The original execution-stop owner verifies process absence on the actor's
 	// next reconciliation pass. An unknown stop is never repeated.
-	return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown}, nil, nil
+	return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationUnknown}, nil, nil
 }
 
 type lifecycleEffectResult struct {
-	request   executionapi.LifecycleRequest
-	receipt   executionapi.LifecycleReceipt
-	observer  executionapi.LifecycleObserver
+	request   executionbackend.LifecycleRequest
+	receipt   executionbackend.LifecycleReceipt
+	observer  executionbackend.LifecycleObserver
 	err       error
 	uncertain bool
 }
+
 type pendingLifecycleEffect struct {
 	runID   string
 	apply   func(*Run, lifecycleEffectResult) error
@@ -60,21 +62,21 @@ func (s *Service) lifecycleEffectPending(runID string) bool {
 
 // invokeLifecycleEffect has no business state or write port. Unknown mutations
 // are only reconciled against this same immutable request, never executed again.
-func invokeLifecycleEffect(ctx context.Context, port executionapi.LifecyclePort, request executionapi.LifecycleRequest, reconcile bool) lifecycleEffectResult {
+func invokeLifecycleEffect(ctx context.Context, port executionbackend.LifecyclePort, request executionbackend.LifecycleRequest, reconcile bool) lifecycleEffectResult {
 	result := lifecycleEffectResult{request: request.Clone()}
 	if reconcile {
 		result.receipt, result.observer, result.err = port.Reconcile(ctx, request.Clone())
 	} else {
 		result.receipt, result.observer, result.err = port.Execute(ctx, request.Clone())
 	}
-	result.uncertain = !reconcile && (result.receipt.Disposition == executionapi.OperationUnknown || result.err != nil && result.receipt.Disposition != executionapi.OperationRejected)
+	result.uncertain = !reconcile && (result.receipt.Disposition == executionbackend.OperationUnknown || result.err != nil && result.receipt.Disposition != executionbackend.OperationRejected)
 	if result.uncertain {
 		if result.observer != nil {
 			_ = result.observer.Close(context.Background())
 			result.observer = nil
 		}
 		receipt, observer, err := port.Reconcile(ctx, request.Clone())
-		if err == nil && receipt.ValidateFor(request) == nil && receipt.Disposition != executionapi.OperationUnknown {
+		if err == nil && receipt.ValidateFor(request) == nil && receipt.Disposition != executionbackend.OperationUnknown {
 			result.receipt, result.observer, result.err = receipt, observer, nil
 		} else {
 			if observer != nil {
@@ -87,7 +89,7 @@ func invokeLifecycleEffect(ctx context.Context, port executionapi.LifecyclePort,
 	return result
 }
 
-func (s *Service) dispatchLifecycleEffect(ctx context.Context, run *Run, port executionapi.LifecyclePort, request executionapi.LifecycleRequest, reconcile bool, apply func(*Run, lifecycleEffectResult) error) error {
+func (s *Service) dispatchLifecycleEffect(ctx context.Context, run *Run, port executionbackend.LifecyclePort, request executionbackend.LifecycleRequest, reconcile bool, apply func(*Run, lifecycleEffectResult) error) error {
 	if err := request.Validate(); err != nil {
 		return err
 	}
@@ -101,7 +103,7 @@ func (s *Service) dispatchLifecycleEffect(ctx context.Context, run *Run, port ex
 		result := make(chan lifecycleEffectResult, 1)
 		go func() { result <- invokeLifecycleEffect(ctx, port, request, reconcile) }()
 		received := <-result
-		if s.candidateBusinessClosed(run) && !retiredResourceAction(executionapi.LifecycleAction(request.Operation.Action), request.Input) {
+		if s.candidateBusinessClosed(run) && !retiredResourceAction(executionbackend.LifecycleAction(request.Operation.Action), request.Input) {
 			return s.applyRetiredLifecycleReceipt(run, received)
 		}
 		return apply(run, received)
@@ -110,7 +112,7 @@ func (s *Service) dispatchLifecycleEffect(ctx context.Context, run *Run, port ex
 		s.lifecycleEffects = make(map[string]pendingLifecycleEffect)
 	}
 	pending := pendingLifecycleEffect{runID: run.RunID, apply: apply}
-	if owner, ok := port.(executionapi.LifecyclePreparationOwner); ok {
+	if owner, ok := port.(executionbackend.LifecyclePreparationOwner); ok {
 		pending.release = owner.ReleasePreparation
 	}
 	s.lifecycleEffects[request.Operation.ID] = pending
@@ -136,7 +138,7 @@ func (s *Service) dispatchLifecycleEffect(ctx context.Context, run *Run, port ex
 			if result.observer != nil {
 				_ = result.observer.Close(context.Background())
 			}
-			if owner, ok := port.(executionapi.LifecyclePreparationOwner); ok {
+			if owner, ok := port.(executionbackend.LifecyclePreparationOwner); ok {
 				owner.ReleasePreparation()
 			}
 		}
@@ -154,7 +156,7 @@ func (s *Service) applyLifecycleEffect(runID string, result lifecycleEffectResul
 		if pending.release != nil {
 			pending.release()
 		}
-		return ErrWorkerTurnStale
+		return executionmodel.ErrTurnStale
 	}
 	if !ok || pending.runID != runID {
 		return discard()
@@ -163,8 +165,8 @@ func (s *Service) applyLifecycleEffect(runID string, result lifecycleEffectResul
 	if run == nil || s.workflowRecord(run) == nil || run.AttemptID != result.request.Snapshot.Session.AttemptID || run.ExecutionID != result.request.Snapshot.Session.ExecutionID {
 		return discard()
 	}
-	action := executionapi.LifecycleAction(result.request.Operation.Action)
-	if s.candidateBusinessClosed(run) && action != executionapi.LifecycleCleanup && action != executionapi.LifecycleStopExecution && action != executionapi.LifecycleStopObservation && action != executionapi.LifecycleAcknowledge && !(action == executionapi.LifecycleHostAction && result.request.Input.Host != nil && (result.request.Input.Host.Kind == executionapi.HostCleanupProbeFiles || result.request.Input.Host.Kind == executionapi.HostRemoveFeedback)) {
+	action := executionbackend.LifecycleAction(result.request.Operation.Action)
+	if s.candidateBusinessClosed(run) && action != executionbackend.LifecycleCleanup && action != executionbackend.LifecycleStopExecution && action != executionbackend.LifecycleStopObservation && action != executionbackend.LifecycleAcknowledge && !(action == executionbackend.LifecycleHostAction && result.request.Input.Host != nil && (result.request.Input.Host.Kind == executionbackend.HostCleanupProbeFiles || result.request.Input.Host.Kind == executionbackend.HostRemoveFeedback)) {
 		return s.applyRetiredLifecycleReceipt(run, result)
 	}
 	err := pending.apply(run, result)

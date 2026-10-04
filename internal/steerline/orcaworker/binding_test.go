@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func TestBindAgentPendingDetectionDoesNotAcceptAnotherAgentOrWorkspace(t *testing.T) {
@@ -42,7 +42,7 @@ func TestBindAgentPendingDetectionDoesNotAcceptAnotherAgentOrWorkspace(t *testin
 func TestVerifyAgentTerminalWaitsOnlyForOriginalAgentDetection(t *testing.T) {
 	path := t.TempDir()
 	term := Terminal{Handle: "agent", WorktreeID: "worktree", WorktreePath: path, Branch: "branch", IncarnationID: "inc", Connected: true}
-	process := executionapi.ProcessIdentity{Terminal: term.Handle, RuntimeID: "runtime", Incarnation: term.IncarnationID, WorktreeID: term.WorktreeID}
+	process := executionbackend.ProcessIdentity{Terminal: term.Handle, RuntimeID: "runtime", Incarnation: term.IncarnationID, WorktreeID: term.WorktreeID}
 	calls := 0
 	call := func(context.Context, ...string) (Result, error) {
 		calls++

@@ -6,7 +6,8 @@ import (
 	"path/filepath"
 	"testing"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
@@ -17,7 +18,7 @@ func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
 	require(t, err)
 	var old ServiceCheckpoint
 	require(t, decode(before, &old))
-	unlisted := OperationRecord{ProjectIdentity: s.Config.identity, OperationID: newID(), IdempotencyKey: newID(), Kind: "unlisted", Status: "in_flight", PayloadDigest: operationDigest([]byte("{}")), Request: []byte("{}"), CreatedAt: now(), UpdatedAt: now()}
+	unlisted := executionmodel.OperationRecord{ProjectIdentity: s.Config.identity, OperationID: newID(), IdempotencyKey: newID(), Kind: "unlisted", Status: "in_flight", PayloadDigest: operationDigest([]byte("{}")), Request: []byte("{}"), CreatedAt: now(), UpdatedAt: now()}
 	s.domain.Operations = append(s.domain.Operations, unlisted)
 	s.decisionRecord(run).Status = "superseded" // A modified but undeclared row stays private to the actor.
 	s.executionRecord(run).LastEvent = ptr("committed worker diagnostic")
@@ -156,7 +157,7 @@ func TestAppServerFailedPreparationKeepsPartialSessionBinding(t *testing.T) {
 	execution.Generation = newID()
 	execution.ConfigurationDigest = workflow.ExecutionProfile.Digest
 	execution.PendingCommandID = commandID
-	input := executionapi.TurnInput{CommandID: commandID, Prompt: "original saved prompt"}
+	input := executionbackend.TurnInput{CommandID: commandID, Prompt: "original saved prompt"}
 	resource := neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	execution.PolicyResources = resource
 	s.refreshRun(run)
@@ -170,10 +171,10 @@ func TestAppServerFailedPreparationKeepsPartialSessionBinding(t *testing.T) {
 	lifeSnapshot, err := lifecycleSnapshot(run, workflow, execution, s.workflowAttempt(run, run.AttemptID), &input)
 	require(t, err)
 	operation := s.operationByKey("worker-session:" + run.ExecutionID + ":" + commandID)
-	request := lifecycleRequest(lifeSnapshot, *operation, executionapi.LifecyclePrepareSession, executionapi.LifecycleInput{Turn: &input})
-	receipt := executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown, Process: identity,
+	request := lifecycleRequest(lifeSnapshot, *operation, executionbackend.LifecyclePrepareSession, executionbackend.LifecycleInput{Turn: &input})
+	receipt := executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationUnknown, Process: identity,
 		Implementation: cloneImplementationData(partial.ImplementationData),
-		State:          executionapi.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "partial-generation"}}
+		State:          executionbackend.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "partial-generation"}}
 	_, _, applyErr := s.applyAppServerSessionReceipt(run, request, receipt, errors.New("session receipt persistence failed"))
 	require(t, applyErr)
 	snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
@@ -195,7 +196,7 @@ func TestWorkerCommitRejectsSavedAnswerRegression(t *testing.T) {
 			s, run := waitingDecisionService(t)
 			t.Cleanup(func() { _ = s.Close() })
 			record := s.decisionRecord(run)
-			answer := DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, Note: "keep this answer", AnsweredBy: "operator", AnsweredAt: now()}
+			answer := executionmodel.DecisionAnswer{DecisionID: record.DecisionID, RunID: run.RunID, Note: "keep this answer", AnsweredBy: "operator", AnsweredAt: now()}
 			record.Status, record.AnsweredBy, record.Answer = "answer_saved", "operator", mustJSON(answer)
 			record.Version++
 			s.markWorkerDecisionWrite(record.DecisionID)

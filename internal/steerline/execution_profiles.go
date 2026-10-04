@@ -7,49 +7,48 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 const ProjectExecutionProfileID = "project-default"
+
 const fixedExecutionProfileVersion = 6
 
 // ExecutionProfile contains general routing/policy facts and opaque inputs for
 // strict implementation codecs. Native profile fields live in their owners.
 type ExecutionProfile struct {
 	directory              *ExecutionDirectory
-	ExecutionRequirements  executionapi.ExecutionRequirements        `json:"-"`
-	RequirementsEvaluation *executionapi.RequirementsEvaluation      `json:"-"`
-	PublicationPolicy      executionapi.PublicationPolicy            `json:"-"`
-	Publication            contracts.PublicationSettings             `json:"-"`
-	ExecutionPolicy        executionapi.ExecutionPolicy              `json:"-"`
-	ImplementationConfigs  []executionapi.ImplementationConfigInput  `json:"implementation_configs"`
-	ImplementationData     []executionapi.ImplementationDataEnvelope `json:"-"`
-	ImplementationDisplay  []string                                  `json:"-"`
-	AcceptedConfigVersion  string                                    `json:"-"`
-	PolicySource           string                                    `json:"-"`
-	ID                     string                                    `json:"id"`
-	Name                   string                                    `json:"name"`
-	Host                   string                                    `json:"host"`
-	Agent                  string                                    `json:"agent"`
+	ExecutionRequirements  executionbackend.ExecutionRequirements        `json:"-"`
+	RequirementsEvaluation *executionbackend.RequirementsEvaluation      `json:"-"`
+	PublicationPolicy      executionbackend.PublicationPolicy            `json:"-"`
+	Publication            executionmodel.PublicationSettings            `json:"-"`
+	ExecutionPolicy        executionbackend.ExecutionPolicy              `json:"-"`
+	ImplementationConfigs  []executionbackend.ImplementationConfigInput  `json:"implementation_configs"`
+	ImplementationData     []executionbackend.ImplementationDataEnvelope `json:"-"`
+	ImplementationDisplay  []string                                      `json:"-"`
+	AcceptedConfigVersion  string                                        `json:"-"`
+	PolicySource           string                                        `json:"-"`
+	ID                     string                                        `json:"id"`
+	Name                   string                                        `json:"name"`
+	Host                   string                                        `json:"host"`
+	Agent                  string                                        `json:"agent"`
 	projectIdentity        string
 }
 
-type FixedExecutionProfile = contracts.FixedExecutionProfile
-
 // CheckFixedProfile reports whether the injected version directory can read
 // this exact frozen profile without replacing its implementation identity.
-func (c Config) CheckFixedProfile(profile FixedExecutionProfile) error {
+func (c Config) CheckFixedProfile(profile executionmodel.FixedExecutionProfile) error {
 	if !verifyFixedExecutionProfile(profile, c.ExecutionDirectory) {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed execution profile key, version, codec or digest is unsupported"}
+		return &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "fixed execution profile key, version, codec or digest is unsupported"}
 	}
 	return nil
 }
 
-func (p ExecutionProfile) Freeze(projectIDs ...string) FixedExecutionProfile {
+func (p ExecutionProfile) Freeze(projectIDs ...string) executionmodel.FixedExecutionProfile {
 	if p.directory == nil {
-		return FixedExecutionProfile{}
+		return executionmodel.FixedExecutionProfile{}
 	}
 	projectID := p.projectIdentity
 	if len(projectIDs) > 0 && projectIDs[0] != "" {
@@ -62,7 +61,7 @@ func (p ExecutionProfile) Freeze(projectIDs ...string) FixedExecutionProfile {
 	if accepted == "" {
 		accepted = "unaccepted-profile-input"
 	}
-	var data []executionapi.ImplementationDataEnvelope
+	var data []executionbackend.ImplementationDataEnvelope
 	var display []string
 	if p.directory != nil {
 		data, display, _ = p.directory.NormalizeProfile(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, accepted)
@@ -76,7 +75,7 @@ func (p ExecutionProfile) Freeze(projectIDs ...string) FixedExecutionProfile {
 	p.Publication.Provider.Close.Args = slices.Clone(p.Publication.Provider.Close.Args)
 	p.Publication.Git.Args = slices.Clone(p.Publication.Git.Args)
 	p.Publication.AuthenticationRefs = slices.Clone(p.Publication.AuthenticationRefs)
-	fixed := FixedExecutionProfile{
+	fixed := executionmodel.FixedExecutionProfile{
 		Version: fixedExecutionProfileVersion, ImplementationVersion: p.directory.Version(),
 		ImplementationKey: profileImplementationKey(p.directory, p.Host, p.Agent), ImplementationData: cloneImplementationData(data),
 		ImplementationDisplay: slices.Clone(display), ExecutionRequirements: p.ExecutionRequirements,
@@ -89,12 +88,12 @@ func (p ExecutionProfile) Freeze(projectIDs ...string) FixedExecutionProfile {
 	return fixed
 }
 
-func fixedExecutionProfileDigest(p FixedExecutionProfile) string {
+func fixedExecutionProfileDigest(p executionmodel.FixedExecutionProfile) string {
 	p.Digest = ""
 	return digestValue(p)
 }
 
-func verifyFixedExecutionProfile(p FixedExecutionProfile, directory *ExecutionDirectory) bool {
+func verifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile, directory *ExecutionDirectory) bool {
 	if directory == nil || p.Version != fixedExecutionProfileVersion || p.ImplementationVersion != directory.Version() ||
 		p.ImplementationKey == "" || p.ID == "" || p.Name == "" || p.AcceptedConfigVersion == "" ||
 		p.PolicySource == "" || p.Digest == "" || p.Digest != fixedExecutionProfileDigest(p) ||
@@ -111,12 +110,12 @@ func verifyFixedExecutionProfile(p FixedExecutionProfile, directory *ExecutionDi
 		return false
 	}
 	projectID := p.ImplementationData[0].ProjectID
-	inputs := make([]executionapi.ImplementationConfigInput, 0, len(p.ImplementationData))
+	inputs := make([]executionbackend.ImplementationConfigInput, 0, len(p.ImplementationData))
 	for _, envelope := range p.ImplementationData {
 		if err := envelope.ValidateProfileIdentity(projectID, p.ID, p.AcceptedConfigVersion); err != nil {
 			return false
 		}
-		inputs = append(inputs, executionapi.ImplementationConfigInput{ImplementationKey: envelope.ImplementationKey, CodecVersion: envelope.CodecVersion, Payload: append([]byte(nil), envelope.Payload...)})
+		inputs = append(inputs, executionbackend.ImplementationConfigInput{ImplementationKey: envelope.ImplementationKey, CodecVersion: envelope.CodecVersion, Payload: append([]byte(nil), envelope.Payload...)})
 	}
 	data, display, err := directory.NormalizeProfile(inputs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, p.AcceptedConfigVersion)
 	if err != nil || digestValue(data) != digestValue(p.ImplementationData) || digestValue(display) != digestValue(p.ImplementationDisplay) {
@@ -125,7 +124,7 @@ func verifyFixedExecutionProfile(p FixedExecutionProfile, directory *ExecutionDi
 	return p.ImplementationKey == profileImplementationKey(directory, p.Host, p.Agent)
 }
 
-func (c Config) ApplyFixedExecutionProfile(p FixedExecutionProfile) Config {
+func (c Config) ApplyFixedExecutionProfile(p executionmodel.FixedExecutionProfile) Config {
 	c.frozenExecutionConfig = true
 	c.ExecutionRequirements = p.ExecutionRequirements.Clone()
 	c.requirementsEvaluation = p.RequirementsEvaluation
@@ -165,7 +164,7 @@ func (p ExecutionProfile) DigestFor(projectID string) string {
 	return p.Freeze(projectID).Digest
 }
 
-func cloneRequirementsEvaluation(value *executionapi.RequirementsEvaluation) *executionapi.RequirementsEvaluation {
+func cloneRequirementsEvaluation(value *executionbackend.RequirementsEvaluation) *executionbackend.RequirementsEvaluation {
 	if value == nil {
 		return nil
 	}
@@ -232,17 +231,19 @@ func (c Config) bindProjectPolicy(p ExecutionProfile) ExecutionProfile {
 	return p
 }
 
-func validateProjectPublicationPolicy(p executionapi.PublicationPolicy) error { return p.Validate() }
+func validateProjectPublicationPolicy(p executionbackend.PublicationPolicy) error {
+	return p.Validate()
+}
 
 func (c Config) acceptedConfigVersion() string {
 	if c.configDigest != "" {
 		return c.configDigest
 	}
 	return digestValue(struct {
-		ExecutionRequirements executionapi.ExecutionRequirements
-		PublicationPolicy     executionapi.PublicationPolicy
-		Publication           contracts.PublicationSettings
-		Policy                executionapi.ExecutionPolicy
+		ExecutionRequirements executionbackend.ExecutionRequirements
+		PublicationPolicy     executionbackend.PublicationPolicy
+		Publication           executionmodel.PublicationSettings
+		Policy                executionbackend.ExecutionPolicy
 		Repository, Branch    string
 	}{c.ExecutionRequirements, c.PublicationPolicy, c.publicationSettings(), c.ExecutionPolicy, c.Repository, c.Branch})
 }
@@ -369,22 +370,22 @@ func profileImplementationKey(directory *ExecutionDirectory, host, agent string)
 	return entry.ProfileKey
 }
 
-func cloneImplementationData(values []executionapi.ImplementationDataEnvelope) []executionapi.ImplementationDataEnvelope {
+func cloneImplementationData(values []executionbackend.ImplementationDataEnvelope) []executionbackend.ImplementationDataEnvelope {
 	if values == nil {
 		return nil
 	}
-	out := make([]executionapi.ImplementationDataEnvelope, len(values))
+	out := make([]executionbackend.ImplementationDataEnvelope, len(values))
 	for i := range values {
 		out[i] = values[i].Clone()
 	}
 	return out
 }
 
-func cloneImplementationInputs(values []executionapi.ImplementationConfigInput) []executionapi.ImplementationConfigInput {
+func cloneImplementationInputs(values []executionbackend.ImplementationConfigInput) []executionbackend.ImplementationConfigInput {
 	if values == nil {
 		return nil
 	}
-	out := make([]executionapi.ImplementationConfigInput, len(values))
+	out := make([]executionbackend.ImplementationConfigInput, len(values))
 	for i, value := range values {
 		out[i] = value
 		out[i].Payload = append([]byte(nil), value.Payload...)

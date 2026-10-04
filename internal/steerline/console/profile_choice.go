@@ -1,11 +1,12 @@
 package console
 
+import productapi "github.com/erranliu/SteerLine/internal/product/api"
+
 import (
 	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 )
 
 func (m Model) handleExecutionProfileChoice(key tea.KeyMsg) (tea.Model, tea.Cmd) {
@@ -58,7 +59,7 @@ func (m Model) handleExecutionProfileChoice(key tea.KeyMsg) (tea.Model, tea.Cmd)
 				m.status = reason
 				return m, nil
 			}
-			p := api.ControlPayload{TaskID: choice.taskID, ExpectedTaskVersion: row.native.Version, ExpectedGraphRevision: state.snapshot.NativeTasks.GraphRevision, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest}
+			p := productapi.ControlPayload{TaskID: choice.taskID, ExpectedTaskVersion: row.native.Version, ExpectedGraphRevision: state.snapshot.NativeTasks.GraphRevision, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest}
 			m.profileChoice = nil
 			return m.submitCandidateAction("start_candidate", p, newRequestID(), choice.instance, choice.revision)
 		}

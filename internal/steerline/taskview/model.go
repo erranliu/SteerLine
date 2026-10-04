@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/task"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 const (
@@ -19,14 +20,14 @@ const (
 )
 
 type Node struct {
-	TaskID          string                      `json:"task_id"`
-	Title           string                      `json:"title"`
-	Status          string                      `json:"status"`
-	Priority        int                         `json:"priority"`
-	DependencyReady bool                        `json:"dependency_ready"`
-	Blockers        []task.TaskDependencyStatus `json:"blockers"`
-	StartupBlockers []string                    `json:"startup_blockers"`
-	Delivery        *task.TaskDeliveryRecord    `json:"delivery,omitempty"`
+	TaskID          string                           `json:"task_id"`
+	Title           string                           `json:"title"`
+	Status          string                           `json:"status"`
+	Priority        int                              `json:"priority"`
+	DependencyReady bool                             `json:"dependency_ready"`
+	Blockers        []taskmodel.TaskDependencyStatus `json:"blockers"`
+	StartupBlockers []string                         `json:"startup_blockers"`
+	Delivery        *task.TaskDeliveryRecord         `json:"delivery,omitempty"`
 }
 
 type Edge struct {

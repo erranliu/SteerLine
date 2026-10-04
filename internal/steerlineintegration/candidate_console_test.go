@@ -1,6 +1,11 @@
 package steerlineintegration
 
 import (
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
+)
+
+import (
 	"context"
 	"encoding/json"
 	"fmt"
@@ -15,7 +20,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/console"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
 
@@ -31,7 +36,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	for i := 0; i < 6; i++ {
 		payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: os.Args[0], Model: fmt.Sprintf("fixture-model-%d", i), WindowsSandbox: "unelevated"})
 		require(t, err)
-		profiles = append(profiles, map[string]any{"id": fmt.Sprintf("p%d", i), "name": fmt.Sprintf("隔离方案%d", i), "host": "local", "agent": "codex", "implementation_configs": []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload}}})
+		profiles = append(profiles, map[string]any{"id": fmt.Sprintf("p%d", i), "name": fmt.Sprintf("隔离方案%d", i), "host": "local", "agent": "codex", "implementation_configs": []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload}}})
 	}
 	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), mustJSON(map[string]any{"version": 2, "default_execution_profile": "p0", "execution_profiles": profiles}), 0600))
 	var err error
@@ -82,7 +87,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	step(tea.KeyMsg{Type: tea.KeyDown})
 	step(tea.KeyMsg{Type: tea.KeyEnter})
 	// The UI's archived request is read through the public control client.
-	var candidateRequest *api.ControlRequest
+	var candidateRequest *productapi.ControlRequest
 	waitFor(t, 30*time.Second, func() bool {
 		snap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
 		if snap.Observation.Runtime == nil {
@@ -100,7 +105,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 		}
 		return false
 	})
-	var p api.ControlPayload
+	var p productapi.ControlPayload
 	require(t, json.Unmarshal(candidateRequest.Payload, &p))
 	if p.TaskID != "901" || p.ExecutionProfileID != "p1" || p.ExpectedTaskVersion == 0 || p.ExpectedGraphRevision == 0 {
 		t.Fatalf("console start lost fixed identity: %+v", p)
@@ -111,7 +116,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 		t.Fatal(r)
 	}
 	revision := candidateRequest.ExpectedControlRevision
-	_, err = client.SubmitControl(ctx, api.ControlInput{Action: api.StartCandidate, Payload: p, RequestID: candidateRequest.RequestID, RequestedBy: candidateRequest.RequestedBy, InstanceID: candidateRequest.InstanceID, ExpectedRevision: &revision})
+	_, err = client.SubmitControl(ctx, productapi.ControlInput{Action: productapi.StartCandidate, Payload: p, RequestID: candidateRequest.RequestID, RequestedBy: candidateRequest.RequestedBy, InstanceID: candidateRequest.InstanceID, ExpectedRevision: &revision})
 	require(t, err)
 	t.Logf("UI start request %s: %s; original receipt: %s", candidateRequest.RequestID, candidateRequest.Payload, mustJSON(r))
 	for i := 2; i < 5; i++ {
@@ -120,7 +125,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 		require(t, err)
 		profile := ref.Presentation.Profiles[i]
 		revision := snap.Connection.Snapshot.Runtime.Control.Revision
-		in := api.ControlInput{Action: api.StartCandidate, RequestID: newID(), InstanceID: svc.instanceID, ExpectedRevision: &revision, Payload: api.ControlPayload{TaskID: "901", ExpectedTaskVersion: page.Tasks[0].Version, ExpectedGraphRevision: page.GraphRevision, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest}}
+		in := productapi.ControlInput{Action: productapi.StartCandidate, RequestID: newID(), InstanceID: svc.instanceID, ExpectedRevision: &revision, Payload: productapi.ControlPayload{TaskID: "901", ExpectedTaskVersion: page.Tasks[0].Version, ExpectedGraphRevision: page.GraphRevision, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest}}
 		_, err = client.SubmitControl(ctx, in)
 		require(t, err)
 		receipt, err := client.WaitControl(ctx, in.RequestID, 100*time.Millisecond)
@@ -138,7 +143,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	limitPage, err := client.ShowTask(ctx, "901")
 	require(t, err)
 	limitRevision := limitSnap.Connection.Snapshot.Runtime.Control.Revision
-	limit := api.ControlInput{Action: api.StartCandidate, RequestID: newID(), InstanceID: svc.instanceID, ExpectedRevision: &limitRevision, Payload: api.ControlPayload{TaskID: "901", ExpectedTaskVersion: limitPage.Tasks[0].Version, ExpectedGraphRevision: limitPage.GraphRevision, ExecutionProfileID: ref.Presentation.Profiles[5].ID, ExecutionProfileDigest: ref.Presentation.Profiles[5].Digest}}
+	limit := productapi.ControlInput{Action: productapi.StartCandidate, RequestID: newID(), InstanceID: svc.instanceID, ExpectedRevision: &limitRevision, Payload: productapi.ControlPayload{TaskID: "901", ExpectedTaskVersion: limitPage.Tasks[0].Version, ExpectedGraphRevision: limitPage.GraphRevision, ExecutionProfileID: ref.Presentation.Profiles[5].ID, ExecutionProfileDigest: ref.Presentation.Profiles[5].Digest}}
 	_, err = client.SubmitControl(ctx, limit)
 	require(t, err)
 	limited, err := client.WaitControl(ctx, limit.RequestID, 100*time.Millisecond)

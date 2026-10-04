@@ -5,18 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func (t *sqliteTx) putExecutionBinding(ref executionapi.ExecutionRef) error {
-	if err := executionapi.ValidateExecutionRef(ref); err != nil {
+func (t *sqliteTx) putExecutionBinding(ref executionbackend.ExecutionRef) error {
+	if err := executionbackend.ValidateExecutionRef(ref); err != nil {
 		return err
 	}
 	var body []byte
 	err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM execution_bindings WHERE run_id=? AND attempt_id=? AND record_id='binding'`, ref.RunID, ref.AttemptID).Scan(&body)
 	if err == nil {
-		var old executionapi.ExecutionRef
+		var old executionbackend.ExecutionRef
 		if err := json.Unmarshal(body, &old); err != nil {
 			return err
 		}
@@ -36,14 +36,14 @@ func (t *sqliteTx) putExecutionBinding(ref executionapi.ExecutionRef) error {
 	return err
 }
 
-func (t *sqliteTx) putExecutionOperation(op executionapi.Operation, expected string) error {
-	if err := executionapi.ValidateExecutionOperation(op); err != nil {
+func (t *sqliteTx) putExecutionOperation(op executionbackend.Operation, expected string) error {
+	if err := executionbackend.ValidateExecutionOperation(op); err != nil {
 		return err
 	}
 	var body []byte
 	err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM execution_operations WHERE run_id=? AND attempt_id=? AND record_id=?`, op.RunID, op.AttemptID, op.ID).Scan(&body)
 	if err == nil {
-		var old executionapi.Operation
+		var old executionbackend.Operation
 		if err := json.Unmarshal(body, &old); err != nil {
 			return err
 		}
@@ -53,7 +53,7 @@ func (t *sqliteTx) putExecutionOperation(op executionapi.Operation, expected str
 		if old.PayloadDigest != op.PayloadDigest || old.Action != op.Action || old.Backend != op.Backend || old.Protocol != op.Protocol || old.Target != op.Target || digestValue(old.Ref) != digestValue(op.Ref) {
 			return errors.New("execution operation fixed identity changed")
 		}
-		if old.Status != op.Status && !contracts.OperationTransitionAllowed(string(old.Status), string(op.Status)) {
+		if old.Status != op.Status && !executionmodel.OperationTransitionAllowed(string(old.Status), string(op.Status)) {
 			return errors.New("execution operation status cannot regress")
 		}
 	} else if !errors.Is(err, sql.ErrNoRows) {

@@ -3,18 +3,20 @@ package steerline
 import (
 	"os"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 type durableWorkerProcess struct {
-	identity executionapi.ProcessIdentity
+	identity executionbackend.ProcessIdentity
 	process  *os.Process
 }
 
-func (p *durableWorkerProcess) Identity() executionapi.ProcessIdentity { return p.identity }
+func (p *durableWorkerProcess) Identity() executionbackend.ProcessIdentity { return p.identity }
+
 func (p *durableWorkerProcess) Kill() {
 	if p.process != nil {
 		_ = p.process.Kill()
 	}
 }
-func (p *durableWorkerProcess) Close() {} // Closing observation never kills the worker.
+
+func (p *durableWorkerProcess) Close() {}

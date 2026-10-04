@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 )
@@ -67,7 +67,7 @@ func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 		c := bindUnitDirectory(t, Config{Host: name, Agent: "codex", Repository: t.TempDir(), CommandTimeout: "2s"})
 		var terminal *orcaworker.ProfileConfig
 		if name == "orca" {
-			c.PublicationPolicy = executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}
+			c.PublicationPolicy = executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}
 			terminal = &orcaworker.ProfileConfig{Executable: os.Args[0], Args: []string{"--terminal-fixture", t.TempDir()}, Shell: "powershell.exe", WaitTimeout: "2s"}
 		}
 		profile := boundProfile(c, testExecutionProfile(t, "probe", "Probe", name, "codex", codexworker.ProfileConfig{Executable: os.Args[0]}, terminal))
@@ -80,13 +80,13 @@ func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 		require(t, err)
 		backend := entry.Backend(c)
 		kind, protocol := backend.Identity()
-		report, err := backend.Probe(context.Background(), entry.Target(c), executionapi.AgentSpec{Name: c.Agent})
+		report, err := backend.Probe(context.Background(), entry.Target(c), executionbackend.AgentSpec{Name: c.Agent})
 		require(t, err)
 		if report.Backend != kind || report.Protocol != protocol || report.CheckedAt.IsZero() {
 			t.Fatalf("production probe lost fixed backend identity: %+v", report)
 		}
 		for _, capability := range report.Capabilities {
-			if capability.Status == executionapi.CapabilityVerified {
+			if capability.Status == executionbackend.CapabilityVerified {
 				t.Fatalf("static declaration claimed verification: %+v", capability)
 			}
 		}
@@ -109,10 +109,10 @@ func TestLocalObservationRejectsReusedPIDIdentity(t *testing.T) {
 	config := Config{Host: "local", Agent: "codex"}
 	entry, err := directory.Resolve(config)
 	require(t, err)
-	ref := executionapi.ExecutionRef{Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Target: entry.Target(config), External: identity}
+	ref := executionbackend.ExecutionRef{Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalCodexAppServer, Target: entry.Target(config), External: identity}
 	_, err = entry.Backend(config).Observe(context.Background(), ref)
-	var backendErr *executionapi.BackendError
-	if !errors.As(err, &backendErr) || backendErr.Code != executionapi.BackendIdentityMismatch {
+	var backendErr *executionbackend.BackendError
+	if !errors.As(err, &backendErr) || backendErr.Code != executionbackend.BackendIdentityMismatch {
 		t.Fatalf("reused PID identity was accepted by the production backend: %v", err)
 	}
 }
@@ -122,8 +122,8 @@ func TestOrcaPreflightRequiresConfiguredCodexPolicyMapping(t *testing.T) {
 	stateDir := t.TempDir()
 	missing := filepath.Join(stateDir, "missing-worker.exe")
 	c.Host, c.Agent = "orca", "codex"
-	c.PublicationPolicy = executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}
-	c.PR.Query, c.PR.Close = Command{Executable: os.Args[0]}, Command{Executable: os.Args[0]}
+	c.PublicationPolicy = executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}
+	c.PR.Query, c.PR.Close = executionbackend.Command{Executable: os.Args[0]}, executionbackend.Command{Executable: os.Args[0]}
 	terminal := &orcaworker.ProfileConfig{Executable: os.Args[0], Args: []string{"--terminal-fixture", stateDir}, Shell: "powershell.exe", WaitTimeout: "5s"}
 	applyProfile := func(worker codexworker.ProfileConfig) {
 		profile := testExecutionProfile(t, "terminal", "Terminal", "orca", "codex", worker, terminal)
@@ -141,7 +141,7 @@ func TestOrcaPreflightRequiresConfiguredCodexPolicyMapping(t *testing.T) {
 	require(t, c.ValidateProfiles())
 	entry, err := c.ExecutionDirectory.Resolve(c)
 	require(t, err)
-	_, err = entry.Backend(c).Probe(context.Background(), entry.Target(c), executionapi.AgentSpec{Name: c.Agent})
+	_, err = entry.Backend(c).Probe(context.Background(), entry.Target(c), executionbackend.AgentSpec{Name: c.Agent})
 	if err == nil || !strings.Contains(err.Error(), "missing-worker.exe") {
 		t.Fatalf("fixed local tool was not required by the native backend: %v", err)
 	}

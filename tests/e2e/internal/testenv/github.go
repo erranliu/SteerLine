@@ -11,16 +11,20 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/google/uuid"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/testprocess"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
-	"github.com/google/uuid"
 )
 
 const githubRepository = "erranliu/SteerlineTest"
+
 const githubURL = "https://github.com/" + githubRepository + ".git"
+
 const githubFields = "url,state,mergedAt,mergeCommit,headRefName,headRefOid,headRepository,headRepositoryOwner,baseRefName"
+
 const githubInfoQuery = `{url:.url,repository:"erranliu/SteerlineTest",base_branch:.baseRefName,head_repository:(.headRepositoryOwner.login + "/" + .headRepository.name),head_branch:.headRefName,head_revision:.headRefOid,state:(if .mergedAt != null then "merged" elif .state == "OPEN" then "open" else "closed_unmerged" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}`
 
 func (p *Project) enableGitHub() {
@@ -84,8 +88,9 @@ func (p *Project) gh(ctx context.Context, args ...string) ([]byte, error) {
 	logErr := controlled.Write(filepath.Join(p.Scenario.Output, fmt.Sprintf("github-%d.json", time.Now().UnixNano())), map[string]any{"command": append([]string{"gh"}, args...), "stdout": stdout.String(), "stderr": stderr.String(), "error": fmt.Sprint(err)})
 	return []byte(stdout.String()), errors.Join(err, logErr)
 }
-func (p *Project) githubPR(snap Snapshot) (contracts.PRInfo, error) {
-	var info contracts.PRInfo
+
+func (p *Project) githubPR(snap Snapshot) (executionmodel.PRInfo, error) {
+	var info executionmodel.PRInfo
 	if len(snap.Domain.WorkflowRuns) != 1 || snap.Domain.WorkflowRuns[0].PRURL == "" {
 		return info, nil
 	}
@@ -103,6 +108,7 @@ func (p *Project) githubPR(snap Snapshot) (contracts.PRInfo, error) {
 	}
 	return info, err
 }
+
 func (p *Project) mergeGitHub() error {
 	snap, err := p.Snapshot()
 	if err != nil {

@@ -9,14 +9,16 @@ import (
 	"strings"
 	"time"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	queryrules "github.com/erranliu/SteerLine/internal/steerline/query"
 	taskrules "github.com/erranliu/SteerLine/internal/steerline/task"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 var requestIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
 
-func nativeErr(code, message string) error { return &taskrules.Error{Code: code, Message: message} }
+func nativeErr(code, message string) error { return &taskmodel.Error{Code: code, Message: message} }
 
 func (s Reader) NativeTaskPage(ctx context.Context, project, taskID, expectedDatabaseID string, expectedDB uint64, offset, limit int) (contracts.NativeTaskPage, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
@@ -97,7 +99,7 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 	if err != nil {
 		return page, err
 	}
-	var all []contracts.TaskRecord
+	var all []taskmodel.TaskRecord
 	for rows.Next() {
 		var id string
 		var status string
@@ -111,7 +113,7 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 			page.HasMore = true
 			continue
 		}
-		var record contracts.TaskRecord
+		var record taskmodel.TaskRecord
 		if err = json.Unmarshal(payload, &record); err != nil {
 			rows.Close()
 			return page, err
@@ -120,11 +122,11 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 			rows.Close()
 			return page, nativeErr("authority_mismatch", "native authority contains a non-native task record")
 		}
-		if record.ProjectIdentity != project || record.TaskID != id || !taskrules.CanonicalDecimalID(record.TaskID) {
+		if record.ProjectIdentity != project || record.TaskID != id || !taskmodel.CanonicalDecimalID(record.TaskID) {
 			rows.Close()
 			return page, nativeErr("contract_mismatch", "native task ID is not canonical")
 		}
-		if record.Status != status || record.Version != version || !taskrules.ValidStatus(record.Status) || record.Version == 0 || record.Type == "" || record.Priority < 0 || record.Priority > 4 {
+		if record.Status != status || record.Version != version || !taskmodel.ValidStatus(record.Status) || record.Version == 0 || record.Type == "" || record.Priority < 0 || record.Priority > 4 {
 			rows.Close()
 			return page, nativeErr("contract_mismatch", "native task record has invalid status, type, priority or version")
 		}
@@ -148,13 +150,13 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 	}
 	// Keep the whole relation snapshot, but decode only paged tasks and their
 	// predecessors so an unrelated damaged task cannot break this page.
-	edges := []contracts.TaskDependencyRecord{}
+	edges := []taskmodel.TaskDependencyRecord{}
 	rows, err = tx.QueryContext(ctx, `SELECT predecessor_id,successor_id FROM task_dependencies WHERE project_identity=? ORDER BY length(predecessor_id),predecessor_id,length(successor_id),successor_id`, project)
 	if err != nil {
 		return page, err
 	}
 	for rows.Next() {
-		var edge contracts.TaskDependencyRecord
+		var edge taskmodel.TaskDependencyRecord
 		edge.ProjectIdentity = project
 		if err = rows.Scan(&edge.PredecessorID, &edge.SuccessorID); err != nil {
 			rows.Close()
@@ -171,7 +173,7 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 	if err != nil {
 		return page, err
 	}
-	incoming := map[string][]contracts.TaskDependencyRecord{}
+	incoming := map[string][]taskmodel.TaskDependencyRecord{}
 	outgoing := map[string][]string{}
 	for _, edge := range edges {
 		incoming[edge.SuccessorID] = append(incoming[edge.SuccessorID], edge)
@@ -182,15 +184,15 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 		return page, err
 	}
 	for _, record := range all {
-		detail := contracts.NativeTaskDetail{TaskRecord: record, ProjectID: project, Priority: record.Priority, WorkflowRuns: []contracts.WorkflowRunRecord{}, Predecessors: []contracts.TaskDependencyStatus{}, Successors: []string{}, UnmetPredecessors: []contracts.TaskDependencyStatus{}, StartupBlockers: []string{}}
+		detail := contracts.NativeTaskDetail{TaskRecord: record, ProjectID: project, Priority: record.Priority, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Predecessors: []taskmodel.TaskDependencyStatus{}, Successors: []string{}, UnmetPredecessors: []taskmodel.TaskDependencyStatus{}, StartupBlockers: []string{}}
 		detail.Successors = append(detail.Successors, outgoing[record.TaskID]...)
-		predecessors := make([]contracts.TaskDependencyStatus, 0, len(incoming[record.TaskID]))
+		predecessors := make([]taskmodel.TaskDependencyStatus, 0, len(incoming[record.TaskID]))
 		for _, edge := range incoming[record.TaskID] {
 			_, delivered := relations.deliveries[edge.PredecessorID]
-			predecessors = append(predecessors, contracts.TaskDependencyStatus{TaskID: edge.PredecessorID, Status: relations.statuses[edge.PredecessorID], Delivered: delivered})
+			predecessors = append(predecessors, taskmodel.TaskDependencyStatus{TaskID: edge.PredecessorID, Status: relations.statuses[edge.PredecessorID], Delivered: delivered})
 		}
 		delivery, hasDelivery := relations.deliveries[record.TaskID]
-		detail.DependencyReady, detail.Predecessors, detail.UnmetPredecessors = taskrules.DependencyState(record.Status, hasDelivery, predecessors)
+		detail.DependencyReady, detail.Predecessors, detail.UnmetPredecessors = taskmodel.DependencyState(record.Status, hasDelivery, predecessors)
 		detail.StartupBlockers = taskrules.StartupBlockers(record.Status, hasDelivery, dispatchPaused != 0, dispatchMode, executionSlotBusy > 0)
 		contractRow, ok := relations.contracts[record.TaskID]
 		if !ok {
@@ -202,7 +204,7 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 		if detail.Contract.ContractID != record.ContractID || contractRow.id != record.ContractID || detail.Contract.Digest != contractRow.digest {
 			return page, nativeErr("contract_mismatch", "task contract identity differs from task record")
 		}
-		if err = taskrules.ValidateContract(detail.Contract); err != nil {
+		if err = taskmodel.ValidateContract(detail.Contract); err != nil {
 			return page, err
 		}
 		if detail.Contract.Repository != targetRepository || detail.Contract.Remote != targetRemote || detail.Contract.Branch != targetBranch {
@@ -227,7 +229,7 @@ type nativePageRelations struct {
 	statuses   map[string]string
 	deliveries map[string]contracts.TaskDeliveryRecord
 	contracts  map[string]nativePageContract
-	runs       map[string][]contracts.WorkflowRunRecord
+	runs       map[string][]executionmodel.WorkflowRunRecord
 }
 
 // Keep IN lists below SQLite's older 999-variable limit, including project_id.
@@ -242,8 +244,8 @@ func nativePageIDFilter(project string, ids []string) (string, []any) {
 	return "project_identity=? AND task_id IN (" + strings.TrimSuffix(strings.Repeat("?,", len(ids)), ",") + ")", args
 }
 
-func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBranch string, tasks []contracts.TaskRecord, edges []contracts.TaskDependencyRecord) (nativePageRelations, error) {
-	out := nativePageRelations{statuses: map[string]string{}, deliveries: map[string]contracts.TaskDeliveryRecord{}, contracts: map[string]nativePageContract{}, runs: map[string][]contracts.WorkflowRunRecord{}}
+func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBranch string, tasks []taskmodel.TaskRecord, edges []taskmodel.TaskDependencyRecord) (nativePageRelations, error) {
+	out := nativePageRelations{statuses: map[string]string{}, deliveries: map[string]contracts.TaskDeliveryRecord{}, contracts: map[string]nativePageContract{}, runs: map[string][]executionmodel.WorkflowRunRecord{}}
 	selected := make(map[string]bool, len(tasks))
 	selectedIDs := make([]string, 0, len(tasks))
 	for _, task := range tasks {
@@ -278,11 +280,11 @@ func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBra
 			if err = rows.Scan(&id, &status, &version, &body); err != nil {
 				break
 			}
-			var task contracts.TaskRecord
+			var task taskmodel.TaskRecord
 			if err = json.Unmarshal(body, &task); err != nil {
 				break
 			}
-			if task.ProjectIdentity != project || task.TaskID != id || task.Source != "native" || !taskrules.CanonicalDecimalID(id) || task.Status != status || task.Version != version || !taskrules.ValidStatus(status) || version == 0 {
+			if task.ProjectIdentity != project || task.TaskID != id || task.Source != "native" || !taskmodel.CanonicalDecimalID(id) || task.Status != status || task.Version != version || !taskmodel.ValidStatus(status) || version == 0 {
 				err = nativeErr("contract_mismatch", "predecessor task identity or status differs from its stored row")
 				break
 			}
@@ -363,7 +365,7 @@ func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBra
 			if err = rows.Scan(&taskID, &runID, &phase, &body); err != nil {
 				break
 			}
-			var run contracts.WorkflowRunRecord
+			var run executionmodel.WorkflowRunRecord
 			if err = json.Unmarshal(body, &run); err != nil {
 				break
 			}

@@ -9,18 +9,22 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 type testProcess struct{ process *os.Process }
 
-func (p testProcess) Identity() execution.ProcessIdentity { return execution.ProcessIdentity{} }
-func (p testProcess) Kill()                               { _ = p.process.Kill() }
-func (p testProcess) Close()                              {}
+func (p testProcess) Identity() executionbackend.ProcessIdentity {
+	return executionbackend.ProcessIdentity{}
+}
+
+func (p testProcess) Kill() { _ = p.process.Kill() }
+
+func (p testProcess) Close() {}
 
 func TestLocalWorkspacePrepareInspectResourcesAndCleanup(t *testing.T) {
 	ctx := context.Background()
-	git := Git{Command: execution.LaunchCommand{Executable: "git"}, Timeout: 15 * time.Second, Start: func(cmd *exec.Cmd) (execution.StopHandle, error) {
+	git := Git{Command: executionbackend.LaunchCommand{Executable: "git"}, Timeout: 15 * time.Second, Start: func(cmd *exec.Cmd) (executionbackend.StopHandle, error) {
 		if err := cmd.Start(); err != nil {
 			return nil, err
 		}
@@ -41,9 +45,9 @@ func TestLocalWorkspacePrepareInspectResourcesAndCleanup(t *testing.T) {
 	}
 	base := strings.TrimSpace(string(baseOutput))
 	worktreeRoot := filepath.Join(root, "worktrees")
-	intent := &Intent{Path: filepath.Join(worktreeRoot, "run-one"), Branch: "codex/fixture", BaseCommit: base}
+	intent := &executionbackend.WorkspaceIntent{Path: filepath.Join(worktreeRoot, "run-one"), Branch: "codex/fixture", BaseCommit: base}
 	prepared, err := Prepare(ctx, git, repository, worktreeRoot, intent)
-	if err != nil || prepared.Status != execution.OperationConfirmed || prepared.Inspection == nil || prepared.Inspection.Head != base {
+	if err != nil || prepared.Status != executionbackend.OperationConfirmed || prepared.Inspection == nil || prepared.Inspection.Head != base {
 		t.Fatalf("prepare result=%+v err=%v", prepared, err)
 	}
 	resources, err := ResolveLinkedResourcesAt(ctx, git, repository, intent.Path)
@@ -70,7 +74,7 @@ func TestLocalWorkspacePrepareInspectResourcesAndCleanup(t *testing.T) {
 		t.Fatal("worktree root inside runtime records was accepted")
 	}
 	cleanup, err := Cleanup(ctx, git, repository, worktreeRoot, intent)
-	if err != nil || cleanup.Status != execution.OperationConfirmed || !cleanup.WorktreeGone || !cleanup.BranchGone {
+	if err != nil || cleanup.Status != executionbackend.OperationConfirmed || !cleanup.WorktreeGone || !cleanup.BranchGone {
 		t.Fatalf("cleanup result=%+v err=%v", cleanup, err)
 	}
 	foreignHead, err := git.Output(ctx, foreignPath, "rev-parse", "HEAD")
@@ -80,7 +84,7 @@ func TestLocalWorkspacePrepareInspectResourcesAndCleanup(t *testing.T) {
 	if out, err := git.Output(ctx, foreignPath, "worktree", "add", "--no-track", "-b", "foreign", "--", intent.Path, strings.TrimSpace(string(foreignHead))); err != nil {
 		t.Fatalf("create foreign worktree fixture: %v: %s", err, out)
 	}
-	if _, err := Inspect(ctx, git, repository, &Intent{Path: intent.Path, Branch: "foreign", BaseCommit: base}); err == nil {
+	if _, err := Inspect(ctx, git, repository, &executionbackend.WorkspaceIntent{Path: intent.Path, Branch: "foreign", BaseCommit: base}); err == nil {
 		t.Fatal("worktree in another repository passed the fixed repository check")
 	}
 	if _, err := git.Output(ctx, foreignPath, "worktree", "remove", "--force", "--", intent.Path); err != nil {
@@ -90,9 +94,9 @@ func TestLocalWorkspacePrepareInspectResourcesAndCleanup(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	partialIntent := &Intent{Path: filepath.Join(worktreeRoot, "run-partial"), Branch: "codex/partial", BaseCommit: strings.Repeat("a", 40)}
+	partialIntent := &executionbackend.WorkspaceIntent{Path: filepath.Join(worktreeRoot, "run-partial"), Branch: "codex/partial", BaseCommit: strings.Repeat("a", 40)}
 	partial, err := Prepare(ctx, git, repository, worktreeRoot, partialIntent)
-	if err == nil || partial.Status != execution.OperationUnknown || !partial.PathCreated {
+	if err == nil || partial.Status != executionbackend.OperationUnknown || !partial.PathCreated {
 		t.Fatalf("partial preparation facts were lost: result=%+v err=%v", partial, err)
 	}
 }
@@ -119,7 +123,7 @@ func prepareGitFixture(t *testing.T, git Git, path string) {
 
 func TestPrepareRejectsHeadChangedByCheckoutHook(t *testing.T) {
 	ctx := context.Background()
-	git := Git{Command: execution.LaunchCommand{Executable: "git"}, Timeout: 15 * time.Second, Start: func(cmd *exec.Cmd) (execution.StopHandle, error) {
+	git := Git{Command: executionbackend.LaunchCommand{Executable: "git"}, Timeout: 15 * time.Second, Start: func(cmd *exec.Cmd) (executionbackend.StopHandle, error) {
 		if err := cmd.Start(); err != nil {
 			return nil, err
 		}
@@ -141,9 +145,9 @@ func TestPrepareRejectsHeadChangedByCheckoutHook(t *testing.T) {
 		t.Fatal(err)
 	}
 	worktreeRoot := filepath.Join(root, "worktrees")
-	intent := &Intent{Path: filepath.Join(worktreeRoot, "hook-run"), Branch: "codex/hook", BaseCommit: strings.TrimSpace(string(head))}
+	intent := &executionbackend.WorkspaceIntent{Path: filepath.Join(worktreeRoot, "hook-run"), Branch: "codex/hook", BaseCommit: strings.TrimSpace(string(head))}
 	result, err := Prepare(ctx, git, repository, worktreeRoot, intent)
-	if err == nil || result.Status == execution.OperationConfirmed {
+	if err == nil || result.Status == executionbackend.OperationConfirmed {
 		t.Fatalf("changed initial HEAD was accepted: result=%+v err=%v", result, err)
 	}
 	if !result.PathCreated || !result.WorktreeRegistered || !result.BranchPresent || result.Inspection == nil || result.Inspection.Head == intent.BaseCommit {

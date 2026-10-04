@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 type Resources struct {
@@ -17,7 +19,7 @@ type Resources struct {
 
 // ResolveLinkedResources returns the four fixed writable Git locations for a
 // verified linked worktree. It never returns an authorization argument.
-func ResolveLinkedResources(ctx context.Context, git Git, repository Repository, intent *Intent) (Resources, error) {
+func ResolveLinkedResources(ctx context.Context, git Git, repository Repository, intent *executionbackend.WorkspaceIntent) (Resources, error) {
 	if err := Verify(ctx, git, repository, intent, false); err != nil {
 		return Resources{}, err
 	}
@@ -96,7 +98,7 @@ func ResolveLinkedResourcesAt(ctx context.Context, git Git, repository Repositor
 	if err != nil {
 		return Resources{}, err
 	}
-	intent := &Intent{Path: path, Branch: strings.TrimSpace(string(branch)), BaseCommit: strings.TrimSpace(string(head))}
+	intent := &executionbackend.WorkspaceIntent{Path: path, Branch: strings.TrimSpace(string(branch)), BaseCommit: strings.TrimSpace(string(head))}
 	return ResolveLinkedResources(ctx, git, repository, intent)
 }
 

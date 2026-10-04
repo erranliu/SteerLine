@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"os"
 	"testing"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 // Frozen publication fixtures describe the current supported route before a unit
 // test mutates records. They do not reconstruct missing production snapshots.
-func publicationSnapshotFixture(t *testing.T, c Config) FixedExecutionProfile {
+func publicationSnapshotFixture(t *testing.T, c Config) executionmodel.FixedExecutionProfile {
 	t.Helper()
 	c = withNeutralProfile(c, neutralProfileSettings(c))
 	require(t, validateWorkflowConfig(&c, nil))

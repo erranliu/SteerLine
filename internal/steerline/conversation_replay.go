@@ -10,8 +10,10 @@ import (
 	"path/filepath"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type conversationJournalSource struct {
@@ -21,8 +23,8 @@ type conversationJournalSource struct {
 	WorkflowID     string
 	ExecutionID    string
 	AttemptID      string
-	Backend        executionapi.BackendKind
-	Protocol       executionapi.ExecutionProtocol
+	Backend        executionbackend.BackendKind
+	Protocol       executionbackend.ExecutionProtocol
 	Agent          string
 	TargetID       string
 	ExternalRef    string
@@ -44,15 +46,15 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 			continue
 		}
 		base := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, AttemptID: run.AttemptID,
-			ExecutionID: run.ExecutionID, Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID}
+			ExecutionID: run.ExecutionID, Backend: executionbackend.BackendKind(run.Backend), Protocol: executionbackend.ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID}
 		runSource := contracts.ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath),
-			WorkerFlow: run.WorkflowVersion == WorkerFlowVersion, Process: conversationProcessSnapshot(run.Process)}
+			WorkerFlow: run.WorkflowVersion == executionmodel.Version, Process: conversationProcessSnapshot(run.Process)}
 		for _, attempt := range s.domain.Attempts {
-			if attempt.ExecutionID != run.ExecutionID || attempt.EventPath == "" || !executionapi.StableExecutionID(attempt.AttemptID) {
+			if attempt.ExecutionID != run.ExecutionID || attempt.EventPath == "" || !executionbackend.StableExecutionID(attempt.AttemptID) {
 				continue
 			}
 			ended := attempt.AttemptID != run.AttemptID || run.EndedAt != nil
-			if run.WorkflowVersion == WorkerFlowVersion && attempt.AttemptID == run.AttemptID {
+			if run.WorkflowVersion == executionmodel.Version && attempt.AttemptID == run.AttemptID {
 				ended = run.TaskStatus == "closed" || run.TaskStatus == "discarded"
 			}
 			runSource.Attempts = append(runSource.Attempts, contracts.ConversationAttemptSource{AttemptID: attempt.AttemptID, EventPath: attempt.EventPath, Ended: ended})
@@ -81,6 +83,7 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 	}
 	return sources
 }
+
 func (s *Service) runConversationReplayQueue(ctx context.Context, requests <-chan []conversationJournalSource, errorsOut chan<- error) {
 	for {
 		select {
@@ -142,7 +145,7 @@ func (s *Service) reconcileConversationRun(run *Run) error {
 
 func (s *Service) replayConversationJournal(ctx context.Context, source conversationJournalSource) error {
 	const batchRecords = 256
-	readCursor := JournalCursor{}
+	readCursor := productapi.JournalCursor{}
 	if s.conversationSources == nil {
 		return errors.New("conversation source port is required")
 	}

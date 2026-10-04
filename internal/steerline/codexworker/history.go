@@ -17,8 +17,8 @@ import (
 	"sync"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 // HistoryClient only uses the public app-server protocol. It never opens
@@ -27,7 +27,7 @@ type HistoryClient struct {
 	input      io.WriteCloser
 	lines      chan []byte
 	done       chan struct{}
-	proc       executionapi.StopHandle
+	proc       executionbackend.StopHandle
 	mu         sync.Mutex
 	next       int
 	err        error
@@ -36,7 +36,7 @@ type HistoryClient struct {
 	platformOS string
 }
 
-func OpenHistory(ctx context.Context, command contracts.Command, dir, home string, start func(*exec.Cmd) (executionapi.StopHandle, error)) (*HistoryClient, error) {
+func OpenHistory(ctx context.Context, command executionbackend.Command, dir, home string, start func(*exec.Cmd) (executionbackend.StopHandle, error)) (*HistoryClient, error) {
 	cmd := exec.Command(command.Executable, append(append([]string{}, command.Args...), "app-server", "--stdio")...)
 	cmd.Dir = dir
 	if home != "" {
@@ -99,7 +99,7 @@ func OpenHistory(ctx context.Context, command contracts.Command, dir, home strin
 	return c, nil
 }
 
-func CheckHistory(ctx context.Context, command contracts.Command, dir string, start func(*exec.Cmd) (executionapi.StopHandle, error)) error {
+func CheckHistory(ctx context.Context, command executionbackend.Command, dir string, start func(*exec.Cmd) (executionbackend.StopHandle, error)) error {
 	probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 	client, err := OpenHistory(probeCtx, command, dir, "", start)
@@ -171,6 +171,7 @@ type HistoryThread struct {
 	Cwd   string        `json:"cwd"`
 	Turns []HistoryTurn `json:"turns"`
 }
+
 type HistoryTurn struct {
 	ID          string            `json:"id"`
 	Status      string            `json:"status"`
@@ -179,6 +180,7 @@ type HistoryTurn struct {
 	ItemsView   string            `json:"itemsView"`
 	CompletedAt *int64            `json:"completedAt"`
 }
+
 type HistoryPage struct {
 	Data            []HistoryTurn `json:"data"`
 	NextCursor      *string       `json:"nextCursor"`
@@ -366,6 +368,7 @@ func canonicalPath(s string) string {
 	}
 	return s
 }
+
 func historyEnvironment(env []string, home string) []string {
 	out := []string{}
 	for _, entry := range env {
@@ -376,11 +379,13 @@ func historyEnvironment(env []string, home string) []string {
 	}
 	return append(out, "CODEX_HOME="+home)
 }
+
 func digestValue(v any) string {
 	b, _ := json.Marshal(v)
 	h := sha256.Sum256(b)
 	return hex.EncodeToString(h[:])
 }
+
 func conversationItemKey(e contracts.ConversationEvent, id string) string {
 	if id == "" {
 		return ""
@@ -389,6 +394,7 @@ func conversationItemKey(e contracts.ConversationEvent, id string) string {
 	h := sha256.Sum256([]byte(e.ItemIdentity()))
 	return hex.EncodeToString(h[:])
 }
+
 func cloneStringMap(v map[string]string) map[string]string {
 	out := map[string]string{}
 	for k, x := range v {
@@ -396,6 +402,7 @@ func cloneStringMap(v map[string]string) map[string]string {
 	}
 	return out
 }
+
 func (c *HistoryClient) UserAgent() string { return c.userAgent }
 
 func (c *HistoryClient) BootstrapSession(ctx context.Context, cwd, sandbox, instruction string) (string, error) {
@@ -419,19 +426,22 @@ func (c *HistoryClient) BootstrapSession(ctx context.Context, cwd, sandbox, inst
 	_, err = c.call(ctx, "thread/inject_items", map[string]any{"threadId": started.Thread.ID, "items": []any{map[string]any{"type": "message", "role": "user", "content": []any{map[string]string{"type": "input_text", "text": instruction}}}}})
 	return started.Thread.ID, err
 }
-func ResumeCommand(command contracts.Command, sessionID string, args []string, prompt, cwd string) executionapi.LaunchCommand {
+
+func ResumeCommand(command executionbackend.Command, sessionID string, args []string, prompt, cwd string) executionbackend.LaunchCommand {
 	argv := append(append([]string{}, command.Args...), "resume", "--include-non-interactive", sessionID)
 	argv = append(argv, args...)
 	argv = append(argv, prompt)
-	return executionapi.LaunchCommand{Executable: command.Executable, Args: argv, WorkingDirectory: cwd}
+	return executionbackend.LaunchCommand{Executable: command.Executable, Args: argv, WorkingDirectory: cwd}
 }
-func ReaderCommand(command contracts.Command, profile string) contracts.Command {
+
+func ReaderCommand(command executionbackend.Command, profile string) executionbackend.Command {
 	command.Args = append([]string(nil), command.Args...)
 	if profile != "" {
 		command.Args = append(command.Args, "--profile", profile)
 	}
 	return command
 }
+
 func EnvironmentHome() string {
 	if path := os.Getenv("CODEX_HOME"); path != "" {
 		return path

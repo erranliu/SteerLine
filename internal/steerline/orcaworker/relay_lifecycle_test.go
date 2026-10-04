@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func TestRelayReconciliationIgnoresOtherTurnHistory(t *testing.T) {
@@ -27,13 +27,13 @@ func TestSecondTurnRelayIsStillProposedAfterFirstReport(t *testing.T) {
 	workflow, execution, attempt := stableIDValue(1), stableIDValue(2), stableIDValue(3)
 	first, second := stableIDValue(4), stableIDValue(5)
 	worktree := t.TempDir()
-	process := executionapi.ProcessIdentity{Kind: "orca", Terminal: "agent", RuntimeID: "runtime", Incarnation: "inc", WorktreeID: "worktree"}
-	snapshot := executionapi.LifecycleSnapshot{
-		Ref:                 executionapi.ExecutionRef{Protocol: executionapi.ProtocolOrcaTerminalV2, Target: executionapi.ExecutionTarget{OrchestrationRun: "native-run", CoordinatorTerminal: "coordinator"}, External: process},
-		Session:             executionapi.SessionContext{ProjectID: "project", WorkflowRunID: workflow, ExecutionID: execution, AttemptID: attempt, CurrentTurnID: second},
-		ConfigurationDigest: "config", ResourceGeneration: "resources", Workspace: executionapi.WorkspaceIntent{Path: worktree},
+	process := executionbackend.ProcessIdentity{Kind: "orca", Terminal: "agent", RuntimeID: "runtime", Incarnation: "inc", WorktreeID: "worktree"}
+	snapshot := executionbackend.LifecycleSnapshot{
+		Ref:                 executionbackend.ExecutionRef{Protocol: executionbackend.ProtocolOrcaTerminalV2, Target: executionbackend.ExecutionTarget{OrchestrationRun: "native-run", CoordinatorTerminal: "coordinator"}, External: process},
+		Session:             executionbackend.SessionContext{ProjectID: "project", WorkflowRunID: workflow, ExecutionID: execution, AttemptID: attempt, CurrentTurnID: second},
+		ConfigurationDigest: "config", ResourceGeneration: "resources", Workspace: executionbackend.WorkspaceIntent{Path: worktree},
 	}
-	state := NativeExecutionState{Coordinator: executionapi.ProcessIdentity{Terminal: "coordinator", RuntimeID: "runtime"},
+	state := NativeExecutionState{Coordinator: executionbackend.ProcessIdentity{Terminal: "coordinator", RuntimeID: "runtime"},
 		Turns: []NativeTurnState{{TurnID: first, TaskID: "old-task", DispatchID: "old-dispatch", Purpose: "business", Settled: true, RelayReported: true},
 			{TurnID: second, TaskID: "task", DispatchID: "dispatch", Purpose: "business"}}}
 	path, err := RelayPath(worktree, workflow, second)
@@ -51,11 +51,11 @@ func TestSecondTurnRelayIsStillProposedAfterFirstReport(t *testing.T) {
 		return []byte(`{"ok":true,"result":{"runId":"native-run","messages":[]},"_meta":{"runtimeId":"runtime"}}`), nil
 	}})}
 	observer := &nativeLifecycleObserver{lifecycle: lifecycle, snapshot: snapshot, state: state, turn: state.Turns[1], cancel: cancel,
-		events: make(chan executionapi.LifecycleEvent, 1), done: make(chan error, 1), closed: make(chan struct{})}
+		events: make(chan executionbackend.LifecycleEvent, 1), done: make(chan error, 1), closed: make(chan struct{})}
 	go observer.observe(ctx)
 	select {
 	case event := <-observer.events:
-		if event.Candidate == nil || event.Candidate.Action != executionapi.LifecycleReportCompletion || event.Candidate.Input.Completion.TurnID != second {
+		if event.Candidate == nil || event.Candidate.Action != executionbackend.LifecycleReportCompletion || event.Candidate.Input.Completion.TurnID != second {
 			t.Fatalf("second relay was skipped or redirected: %+v", event.Candidate)
 		}
 		event.Persisted <- nil

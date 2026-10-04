@@ -11,8 +11,11 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	queryapi "github.com/erranliu/SteerLine/internal/steerline/query"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func openDomainTestStore(t *testing.T) *SQLiteStore {
@@ -135,17 +138,17 @@ func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {
 	s := openDomainTestStore(t)
 	project := "repo:test"
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "17", Status: "in_progress", Version: 1}); err != nil {
+		if err := tx.PutTask(taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "17", Status: "in_progress", Version: 1}); err != nil {
 			return err
 		}
-		if err := tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-1", TaskID: "17", WorkflowVersion: "minimal-v1", Phase: "executing"}); err != nil {
+		if err := tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-1", TaskID: "17", WorkflowVersion: "minimal-v1", Phase: "executing"}); err != nil {
 			return err
 		}
 		for _, id := range []string{"exec-a"} {
-			if err := tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: id, WorkflowRunID: "wf-1", Agent: id, Status: "active", CurrentStep: "implement", Target: executionapi.ExecutionTarget{WorktreeID: "worktree-" + id, Branch: "branch-" + id, Dispatch: "dispatch-" + id}}); err != nil {
+			if err := tx.PutExecution(executionmodel.ExecutionRecord{ProjectIdentity: project, ExecutionID: id, WorkflowRunID: "wf-1", Agent: id, Status: "active", CurrentStep: "implement", Target: executionbackend.ExecutionTarget{WorktreeID: "worktree-" + id, Branch: "branch-" + id, Dispatch: "dispatch-" + id}}); err != nil {
 				return err
 			}
-			if err := tx.PutStepAttempt(StepAttemptRecord{ProjectIdentity: project, AttemptID: "attempt-" + id, ExecutionID: id, StepID: "implement", AttemptNumber: 1, Status: "running"}); err != nil {
+			if err := tx.PutStepAttempt(executionmodel.StepAttemptRecord{ProjectIdentity: project, AttemptID: "attempt-" + id, ExecutionID: id, StepID: "implement", AttemptNumber: 1, Status: "running"}); err != nil {
 				return err
 			}
 		}
@@ -155,7 +158,7 @@ func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		return tx.PutExecution(ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-b", WorkflowRunID: "wf-1", Status: "active", CurrentStep: "verify"})
+		return tx.PutExecution(executionmodel.ExecutionRecord{ProjectIdentity: project, ExecutionID: "exec-b", WorkflowRunID: "wf-1", Status: "active", CurrentStep: "verify"})
 	})
 	if err == nil {
 		t.Fatal("second active execution was accepted")
@@ -174,10 +177,10 @@ func TestSQLiteTransactionRollsBackAllDomainWrites(t *testing.T) {
 	s := openDomainTestStore(t)
 	project := "repo:rollback"
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if err := tx.PutTask(TaskRecord{ProjectIdentity: project, TaskID: "task-a", Status: "open", Version: 1}); err != nil {
+		if err := tx.PutTask(taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "task-a", Status: "open", Version: 1}); err != nil {
 			return err
 		}
-		return tx.PutWorkflowRun(WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-bad", TaskID: "missing-task", Phase: "queued"})
+		return tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "wf-bad", TaskID: "missing-task", Phase: "queued"})
 	})
 	if err == nil {
 		t.Fatal("expected FK violation")
@@ -226,7 +229,7 @@ func TestPreflightRejectsRetiredWholeRunResultCommandWithoutMutation(t *testing.
 	store, err := OpenSQLiteStore(databasePath)
 	require(t, err)
 	commandID, idempotencyKey := newID(), newID()
-	command := CommandRecord{ProjectIdentity: "repo:retired-result", CommandID: commandID, Kind: "accept_result", TargetID: "retired-run", ExpectedVersion: 1, IdempotencyKey: idempotencyKey, RequestedBy: "operator", Payload: []byte(`{}`), Status: "pending", CreatedAt: now()}
+	command := storageports.CommandRecord{ProjectIdentity: "repo:retired-result", CommandID: commandID, Kind: "accept_result", TargetID: "retired-run", ExpectedVersion: 1, IdempotencyKey: idempotencyKey, RequestedBy: "operator", Payload: []byte(`{}`), Status: "pending", CreatedAt: now()}
 	err = store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		_, _, enqueueErr := tx.EnqueueCommand(command)
 		return enqueueErr
@@ -258,11 +261,11 @@ func TestQueryEventCursorAndLargeBodyPaging(t *testing.T) {
 	var firstID int64
 	err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		var err error
-		firstID, err = tx.AppendEvent(DomainEvent{ProjectIdentity: project, ExecutionID: "exec", AttemptID: "attempt", ExternalSource: "test", ExternalID: "1", Type: "conversation.message", Payload: body})
+		firstID, err = tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: project, ExecutionID: "exec", AttemptID: "attempt", ExternalSource: "test", ExternalID: "1", Type: "conversation.message", Payload: body})
 		if err != nil {
 			return err
 		}
-		_, err = tx.AppendEvent(DomainEvent{ProjectIdentity: project, ExecutionID: "exec", AttemptID: "attempt", ExternalSource: "test", ExternalID: "2", Type: "observation", Payload: []byte("small")})
+		_, err = tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: project, ExecutionID: "exec", AttemptID: "attempt", ExternalSource: "test", ExternalID: "2", Type: "observation", Payload: []byte("small")})
 		return err
 	})
 	if err != nil {
@@ -320,7 +323,7 @@ func TestOperationIdempotencyKeepsOneDurableIntent(t *testing.T) {
 	project := "repo:ops"
 	request := []byte(`{"attempt_id":"attempt-1"}`)
 	digest := operationDigest(request)
-	base := OperationRecord{ProjectIdentity: project, OperationID: "operation-1", IdempotencyKey: "start:attempt-1", Kind: "start_execution", Status: "pending", PayloadDigest: digest, Request: request}
+	base := executionmodel.OperationRecord{ProjectIdentity: project, OperationID: "operation-1", IdempotencyKey: "start:attempt-1", Kind: "start_execution", Status: "pending", PayloadDigest: digest, Request: request}
 	err := store.transactSQLite(ctx, func(tx *sqliteTx) error {
 		_, created, err := tx.PutOperation(base)
 		if err == nil && !created {

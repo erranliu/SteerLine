@@ -9,14 +9,16 @@ import (
 	"strconv"
 	"strings"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 const neutralJournalSource = "fixture-journal"
 
 type neutralJournalPort struct{ neutralConversationSources }
+
 type neutralJournalMarker struct{ ProjectID, WorkflowID, ExecutionID, AttemptID, SourceIdentity string }
+
 type neutralRecordMapper struct {
 	snapshot contracts.ConversationMapperSnapshot
 }
@@ -24,13 +26,17 @@ type neutralRecordMapper struct {
 func (p neutralJournalPort) RestoreMapper(s contracts.ConversationMapperSnapshot) contracts.ConversationMapper {
 	return &neutralRecordMapper{snapshot: s}
 }
+
 func (p neutralJournalPort) JournalSources() []string { return []string{neutralJournalSource} }
-func (p neutralJournalPort) JournalSource(executionapi.BackendKind, executionapi.ExecutionProtocol) string {
+
+func (p neutralJournalPort) JournalSource(executionbackend.BackendKind, executionbackend.ExecutionProtocol) string {
 	return neutralJournalSource
 }
-func (p neutralJournalPort) JournalSegment(_ executionapi.BackendKind, _ executionapi.ExecutionProtocol, id string) string {
+
+func (p neutralJournalPort) JournalSegment(_ executionbackend.BackendKind, _ executionbackend.ExecutionProtocol, id string) string {
 	return "fixture-journal-v1:" + id
 }
+
 func (p neutralJournalPort) JournalGeneration(id, segment string) (uint64, error) {
 	prefix := "fixture-journal-v1:" + id
 	if segment == prefix {
@@ -41,6 +47,7 @@ func (p neutralJournalPort) JournalGeneration(id, segment string) (uint64, error
 	}
 	return 0, errors.New("fixture source generation differs")
 }
+
 func (p neutralJournalPort) LiveJournalPath(_ context.Context, r contracts.ConversationJournalPathRequest) (string, error) {
 	if r.LogPath != "" {
 		return r.LogPath, nil
@@ -50,6 +57,7 @@ func (p neutralJournalPort) LiveJournalPath(_ context.Context, r contracts.Conve
 	}
 	return "", errors.New("fixture source path unavailable")
 }
+
 func (p neutralJournalPort) MapConversation(input contracts.ConversationInput) (contracts.ConversationMappedBatch, error) {
 	event := input.Event
 	event.ReceivedAt = now()
@@ -70,6 +78,7 @@ func (p neutralJournalPort) MapConversation(input contracts.ConversationInput) (
 	cp := ConversationCheckpoint{ProjectID: event.ProjectID, ExecutionID: event.ExecutionID, AttemptID: event.AttemptID, Source: event.Source, SourceSegment: event.SourceSegment, SourceIdentity: input.Identity, Generation: input.Identity, Cursor: cursor, LocalSeq: input.SourceSeq}
 	return contracts.ConversationMappedBatch{Writes: []ConversationWrite{write}, Checkpoint: cp, VerifySourcePosition: true}, nil
 }
+
 func (m *neutralRecordMapper) MapRecord(e contracts.ConversationEvent, data []byte) contracts.ConversationWrite {
 	var record struct {
 		Kind    string `json:"kind"`
@@ -108,6 +117,7 @@ func (m *neutralRecordMapper) MapRecord(e contracts.ConversationEvent, data []by
 	w.Event = e
 	return w
 }
+
 func (p neutralJournalPort) DiscoverJournals(_ context.Context, d contracts.ConversationDiscovery, identify func(string) (string, error)) ([]contracts.ConversationJournalSource, error) {
 	var sources []contracts.ConversationJournalSource
 	for _, run := range d.Runs {

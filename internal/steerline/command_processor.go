@@ -6,8 +6,10 @@ import (
 	"errors"
 	"fmt"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/activityview"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func (s *Service) processPendingCommands(ctx context.Context) error {
@@ -40,7 +42,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 				}
 				continue
 			}
-			var answer DecisionAnswer
+			var answer executionmodel.DecisionAnswer
 			if err = decode(command.Payload, &answer); err != nil {
 				result, _ := json.Marshal(map[string]string{"error": "invalid decision answer payload"})
 				if e := service.SetStatus(ctx, command, "rejected", result); e != nil {
@@ -78,7 +80,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 			if run := s.findDecision(command.TargetID); run != nil && run.Decision != nil && run.Decision.Status == "pending" {
 				if err = s.requireDecisionReplyCapability(ctx, run); err != nil {
 					code := "rejected"
-					var backendErr *executionapi.BackendError
+					var backendErr *executionbackend.BackendError
 					if errors.As(err, &backendErr) {
 						code = string(backendErr.Code)
 					}
@@ -101,7 +103,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 			record, _, acceptErr := service.AcceptAnswer(ctx, command, answer)
 			if acceptErr != nil {
 				code := "rejected"
-				if errors.Is(acceptErr, ErrAnswerConflict) {
+				if errors.Is(acceptErr, storageports.ErrAnswerConflict) {
 					code = "answer_conflict"
 				}
 				result, _ := json.Marshal(map[string]string{"code": code, "error": acceptErr.Error()})

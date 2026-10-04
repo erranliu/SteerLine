@@ -5,30 +5,31 @@ import (
 	"context"
 	"encoding/json"
 
-	taskrules "github.com/erranliu/SteerLine/internal/steerline/task"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func (s *SQLiteStore) TaskContract(ctx context.Context, project string, task TaskRecord) (TaskContract, error) {
+func (s *SQLiteStore) TaskContract(ctx context.Context, project string, task taskmodel.TaskRecord) (taskmodel.TaskContract, error) {
 	var body []byte
 	var digest string
 	err := s.db.QueryRowContext(ctx, `SELECT digest,payload FROM task_contracts WHERE project_identity=? AND contract_id=? AND task_id=?`, project, task.ContractID, task.TaskID).Scan(&digest, &body)
 	if err != nil {
-		return TaskContract{}, requiredRecordError(err, "contract_mismatch", "native task has no matching fixed contract")
+		return taskmodel.TaskContract{}, requiredRecordError(err, "contract_mismatch", "native task has no matching fixed contract")
 	}
-	var contract TaskContract
+	var contract taskmodel.TaskContract
 	if err = json.Unmarshal(body, &contract); err != nil {
 		return contract, err
 	}
 	if contract.Digest != digest {
 		return contract, nativeErr("contract_mismatch", "fixed task contract digest differs from its stored row")
 	}
-	if err = taskrules.ValidateContract(contract); err != nil {
+	if err = taskmodel.ValidateContract(contract); err != nil {
 		return contract, err
 	}
 	return contract, nil
 }
 
-func (t *sqliteTx) BumpOpenTaskVersionCAS(next TaskRecord, expectedVersion uint64) error {
+func (t *sqliteTx) BumpOpenTaskVersionCAS(next taskmodel.TaskRecord, expectedVersion uint64) error {
 	if next.Status != "open" || next.Claimant != "" || next.Version != expectedVersion+1 {
 		return nativeErr("contract_mismatch", "predecessor addition requires an unclaimed open task")
 	}
@@ -36,7 +37,7 @@ func (t *sqliteTx) BumpOpenTaskVersionCAS(next TaskRecord, expectedVersion uint6
 	if err := t.tx.QueryRowContext(t.ctx, `SELECT payload FROM tasks WHERE project_identity=? AND task_id=? AND status='open' AND version=?`, next.ProjectIdentity, next.TaskID, expectedVersion).Scan(&oldPayload); err != nil {
 		return requiredRecordError(err, "stale_version", "task changed before predecessor addition")
 	}
-	var old TaskRecord
+	var old taskmodel.TaskRecord
 	if err := json.Unmarshal(oldPayload, &old); err != nil {
 		return err
 	}
@@ -62,39 +63,39 @@ func (t *sqliteTx) BumpOpenTaskVersionCAS(next TaskRecord, expectedVersion uint6
 	return requireIdentityWrite(result, err, "stale_version: task changed before predecessor addition")
 }
 
-func sameTaskRecord(a, b TaskRecord) bool {
+func sameTaskRecord(a, b taskmodel.TaskRecord) bool {
 	x, _ := json.Marshal(a)
 	y, _ := json.Marshal(b)
 	return bytes.Equal(x, y)
 }
 
-func (tx *sqliteTx) TaskContract(ctx context.Context, project string, task TaskRecord) (TaskContract, error) {
+func (tx *sqliteTx) TaskContract(ctx context.Context, project string, task taskmodel.TaskRecord) (taskmodel.TaskContract, error) {
 	var body []byte
 	var digest string
 	err := tx.tx.QueryRowContext(ctx, `SELECT digest,payload FROM task_contracts WHERE project_identity=? AND contract_id=? AND task_id=?`, project, task.ContractID, task.TaskID).Scan(&digest, &body)
 	if err != nil {
-		return TaskContract{}, requiredRecordError(err, "contract_mismatch", "native task has no matching fixed contract")
+		return taskmodel.TaskContract{}, requiredRecordError(err, "contract_mismatch", "native task has no matching fixed contract")
 	}
-	var contract TaskContract
+	var contract taskmodel.TaskContract
 	if err = json.Unmarshal(body, &contract); err != nil {
 		return contract, err
 	}
 	if contract.Digest != digest {
 		return contract, nativeErr("contract_mismatch", "fixed task contract digest differs from its stored row")
 	}
-	if err = taskrules.ValidateContract(contract); err != nil {
+	if err = taskmodel.ValidateContract(contract); err != nil {
 		return contract, err
 	}
 	return contract, nil
 }
 
-func (s *SQLiteStore) Operation(ctx context.Context, project, id string) (OperationRecord, error) {
+func (s *SQLiteStore) Operation(ctx context.Context, project, id string) (executionmodel.OperationRecord, error) {
 	var body []byte
 	err := s.db.QueryRowContext(ctx, `SELECT payload FROM operations WHERE project_identity=? AND operation_id=?`, project, id).Scan(&body)
 	if err != nil {
-		return OperationRecord{}, persistenceError(err)
+		return executionmodel.OperationRecord{}, persistenceError(err)
 	}
-	var op OperationRecord
+	var op executionmodel.OperationRecord
 	if err = json.Unmarshal(body, &op); err != nil {
 		return op, err
 	}

@@ -12,8 +12,11 @@ import (
 	"testing"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type mcFixture struct {
@@ -30,11 +33,11 @@ func newMCFixture(t *testing.T) mcFixture {
 	c, commit, store := openDAGFixture(t)
 	c.Claimant = "operator"
 	provider := t.TempDir()
-	c.PR.Query = Command{Executable: os.Args[0], Args: []string{"mc-provider", provider, "{number}"}}
-	c.PR.Close = Command{}
+	c.PR.Query = executionbackend.Command{Executable: os.Args[0], Args: []string{"mc-provider", provider, "{number}"}}
+	c.PR.Close = executionbackend.Command{}
 	setNeutralProfile(t, &c, neutralSettings{Executable: os.Args[0], Model: "candidate-a", ReasoningEffort: "medium"})
 	commands := CommandService{Store: store, Project: c.Identity()}
-	input := taskBatchFixture(t, c, commit, batchTasks(8, 9), []TaskBatchEdge{{Predecessor: TaskBatchReference{LocalKey: "k8"}, Successor: TaskBatchReference{LocalKey: "k9"}}})
+	input := taskBatchFixture(t, c, commit, batchTasks(8, 9), []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k8"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k9"}}})
 	_, err := commands.CreateTaskBatch(context.Background(), c, input, newID(), 1, "operator")
 	require(t, err)
 	authority, err := store.NativeAuthority(context.Background(), c.Identity())
@@ -61,17 +64,17 @@ func newMCFixture(t *testing.T) mcFixture {
 
 type mcResolver struct{}
 
-func (mcResolver) ResolveLifecycle(setup executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {
+func (mcResolver) ResolveLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 	return mcPort{&neutralLifecycle{setup: setup}}, nil
 }
 
 type mcPort struct{ *neutralLifecycle }
 
-func (p mcPort) Execute(ctx context.Context, r executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (p mcPort) Execute(ctx context.Context, r executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	receipt, observer, err := p.neutralLifecycle.Execute(ctx, r)
-	if r.Operation.Action == string(executionapi.LifecyclePrepareSession) && err == nil {
+	if r.Operation.Action == string(executionbackend.LifecyclePrepareSession) && err == nil {
 		receipt.State.SessionID = "session-" + r.Snapshot.Session.ExecutionID
-		envelope, envelopeErr := executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{ImplementationKey: neutralBindingKey, CodecVersion: 1, Purpose: executionapi.ImplementationResourcePurpose, ProjectID: r.Snapshot.Session.ProjectID, ExecutionID: r.Snapshot.Session.ExecutionID, AttemptID: r.Snapshot.Session.AttemptID, Generation: r.Snapshot.ResourceGeneration, ConfigDigest: r.Snapshot.ConfigurationDigest}, mustJSON(neutralBinding{SessionID: receipt.State.SessionID, Generation: receipt.State.SessionGeneration}))
+		envelope, envelopeErr := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{ImplementationKey: neutralBindingKey, CodecVersion: 1, Purpose: executionbackend.ImplementationResourcePurpose, ProjectID: r.Snapshot.Session.ProjectID, ExecutionID: r.Snapshot.Session.ExecutionID, AttemptID: r.Snapshot.Session.AttemptID, Generation: r.Snapshot.ResourceGeneration, ConfigDigest: r.Snapshot.ConfigurationDigest}, mustJSON(neutralBinding{SessionID: receipt.State.SessionID, Generation: receipt.State.SessionGeneration}))
 		if envelopeErr != nil {
 			return receipt, observer, envelopeErr
 		}
@@ -94,6 +97,7 @@ func (f mcFixture) start(t *testing.T, model string) (TaskClaimReceipt, TaskClai
 	require(t, f.s.refreshNativeSnapshot(context.Background()))
 	return receipt, options
 }
+
 func mcStartTurn(t *testing.T, s *Service, run *Run) {
 	t.Helper()
 	task := nativeTaskRecord(s.domain.Tasks, run.TaskID)
@@ -102,6 +106,7 @@ func mcStartTurn(t *testing.T, s *Service, run *Run) {
 		t.Fatalf("candidate did not launch: %s", deref(run.Error))
 	}
 }
+
 func mcFinishTurn(t *testing.T, s *Service, run *Run) {
 	t.Helper()
 	w := s.workers[run.RunID]
@@ -115,6 +120,7 @@ func mcFinishTurn(t *testing.T, s *Service, run *Run) {
 	delete(s.workers, run.RunID)
 	require(t, s.finishedForRun(run, w, err))
 }
+
 func (f mcFixture) abandon(t *testing.T, run *Run, id string) CandidateAbandonReceipt {
 	t.Helper()
 	task := nativeTaskRecord(f.s.domain.Tasks, run.TaskID)
@@ -125,17 +131,19 @@ func (f mcFixture) abandon(t *testing.T, run *Run, id string) CandidateAbandonRe
 	require(t, f.s.refreshNativeSnapshot(context.Background()))
 	return r
 }
-func (f mcFixture) proof(t *testing.T, run *Run, number int, state string) PRInfo {
+
+func (f mcFixture) proof(t *testing.T, run *Run, number int, state string) executionmodel.PRInfo {
 	t.Helper()
 	e := f.s.executionRecord(run)
-	info := PRInfo{URL: fmt.Sprintf("https://github.com/owner/repo/pull/%d", number), Repository: "owner/repo", BaseBranch: "main", HeadRepository: "owner/repo", HeadBranch: e.Workspace.Branch, HeadRevision: e.Workspace.Base, State: state}
+	info := executionmodel.PRInfo{URL: fmt.Sprintf("https://github.com/owner/repo/pull/%d", number), Repository: "owner/repo", BaseBranch: "main", HeadRepository: "owner/repo", HeadBranch: e.Workspace.Branch, HeadRevision: e.Workspace.Base, State: state}
 	if state == "merged" {
 		info.Merged, info.MergedAt, info.MergeCommit = true, ptr(now()), ptr(e.Workspace.Base)
 	}
 	require(t, os.WriteFile(filepath.Join(f.provider, strconv.Itoa(number)+".json"), mustJSON(info), 0600))
 	return info
 }
-func (f mcFixture) bind(t *testing.T, run *Run, number int, state string) PRInfo {
+
+func (f mcFixture) bind(t *testing.T, run *Run, number int, state string) executionmodel.PRInfo {
 	t.Helper()
 	info := f.proof(t, run, number, state)
 	w, e := f.s.workflowRecords(run)
@@ -177,7 +185,7 @@ func mcSubprocess(args []string) int {
 	if err != nil {
 		return 1
 	}
-	info := PRInfo{URL: "https://github.com/owner/repo/pull/" + number, Repository: "owner/repo", BaseBranch: "main", HeadRepository: "owner/repo", HeadBranch: strings.TrimSpace(string(branch)), HeadRevision: strings.TrimSpace(string(head)), State: "open"}
+	info := executionmodel.PRInfo{URL: "https://github.com/owner/repo/pull/" + number, Repository: "owner/repo", BaseBranch: "main", HeadRepository: "owner/repo", HeadBranch: strings.TrimSpace(string(branch)), HeadRevision: strings.TrimSpace(string(head)), State: "open"}
 	if err := os.WriteFile(filepath.Join(provider, number+".json"), mustJSON(info), 0600); err != nil {
 		return 1
 	}
@@ -268,8 +276,8 @@ func TestMC2(t *testing.T) {
 		graph, err := f.store.TaskGraphSnapshot(context.Background(), f.c.Identity())
 		require(t, err)
 		profile := f.c.projectExecutionProfile()
-		p := ControlPayload{TaskID: "8", ExpectedTaskVersion: 2, ExpectedGraphRevision: graph.Authority.GraphRevision, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest()}
-		req := ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: f.c.Identity(), InstanceID: f.s.State.Service.InstanceID, ExpectedControlRevision: graph.Authority.AuthorityVersion, Action: "start_candidate", Payload: mustJSON(p), RequestedBy: "operator", CreatedAt: now().Add(-3 * time.Minute), ExpiresAt: now().Add(-time.Minute)}
+		p := productapi.ControlPayload{TaskID: "8", ExpectedTaskVersion: 2, ExpectedGraphRevision: graph.Authority.GraphRevision, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest()}
+		req := productapi.ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: f.c.Identity(), InstanceID: f.s.State.Service.InstanceID, ExpectedControlRevision: graph.Authority.AuthorityVersion, Action: "start_candidate", Payload: mustJSON(p), RequestedBy: "operator", CreatedAt: now().Add(-3 * time.Minute), ExpiresAt: now().Add(-time.Minute)}
 		require(t, publishControlRequest(f.c.RunDir, req))
 		digest := rawRequestDigest(controlRequestPath(f.c.RunDir, req.RequestID))
 		// Persist the exact original reservation and simulate losing the inbox
@@ -288,7 +296,7 @@ func TestMC2(t *testing.T) {
 
 func mcAnswer(t *testing.T, s *Service, run *Run, note string) {
 	t.Helper()
-	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: note, AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: s.State.Service.InstanceID}
+	answer := executionmodel.DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: note, AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: s.State.Service.InstanceID}
 	_, _, err := (CommandService{Store: s.commandStore, Project: s.Config.Identity()}).AnswerDecisionWithID(context.Background(), newID(), answer.DecisionID, answer.ExpectedDecisionVersion, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
 	require(t, s.processCommandsAndDecisions(context.Background()))
@@ -306,7 +314,7 @@ func TestMC3(t *testing.T) {
 	f.s.runs[0], f.s.runs[1] = f.s.runs[1], f.s.runs[0]
 	blocked := f.s.executionRecord(second)
 	questionID := second.Decision.ID
-	blocked.Environment = &WorkerEnvironment{ProfileDigest: blocked.ConfigurationDigest, Runtime: blocked.Process.RuntimeID, LaunchCommand: "fixture", WriteRoots: blocked.PolicyResources.WriteRoots, Preparation: &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: now(), Deadline: now().Add(time.Minute)}, Blocker: &WorkerHostBlocker{ID: newID(), Version: 1, TurnID: blocked.CurrentTurnID, Fact: contracts.HostFact{Reason: "host_wait", Source: "mc", Confidence: "confirmed"}}}
+	blocked.Environment = &executionmodel.WorkerEnvironment{ProfileDigest: blocked.ConfigurationDigest, Runtime: blocked.Process.RuntimeID, LaunchCommand: "fixture", WriteRoots: blocked.PolicyResources.WriteRoots, Preparation: &executionmodel.WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: now(), Deadline: now().Add(time.Minute)}, Blocker: &executionmodel.WorkerHostBlocker{ID: newID(), Version: 1, TurnID: blocked.CurrentTurnID, Fact: executionbackend.HostFact{Reason: "host_wait", Source: "mc", Confidence: "confirmed"}}}
 	require(t, f.s.commitWorker(second))
 	mcAnswer(t, f.s, second, "refused candidate B")
 	if f.s.workers[second.RunID] != nil || second.Decision.ID != questionID || second.Decision.Status != "pending" {
@@ -437,13 +445,13 @@ func TestMC5(t *testing.T) {
 	records := executionRecords{root: f.c.RunDir, persistence: f.c.Persistence}
 	ref, err := records.loadBinding(second.RunID, second.AttemptID)
 	require(t, err)
-	op := executionapi.Operation{Version: executionapi.ExecutionRecordVersion, ID: "stop-" + second.AttemptID, RunID: second.RunID, AttemptID: second.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue("mc-original-stop"), Status: executionapi.OperationPending, StartedAt: now(), UpdatedAt: now(), Ref: &ref}
+	op := executionbackend.Operation{Version: executionbackend.ExecutionRecordVersion, ID: "stop-" + second.AttemptID, RunID: second.RunID, AttemptID: second.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue("mc-original-stop"), Status: executionbackend.OperationPending, StartedAt: now(), UpdatedAt: now(), Ref: &ref}
 	require(t, f.s.commitExecutionOperation(second, op, ""))
 	expected := recordFingerprint(op)
-	op.Status = executionapi.OperationInFlight
+	op.Status = executionbackend.OperationInFlight
 	require(t, f.s.commitExecutionOperation(second, op, expected))
 	expected = recordFingerprint(op)
-	op.Status = executionapi.OperationConfirmed
+	op.Status = executionbackend.OperationConfirmed
 	e := f.s.executionRecord(second)
 	e.ResourceStopOperationID, e.ResourceStoppedAt = op.ID, ptr(now())
 	require(t, f.s.commitExecutionOperation(second, op, expected))
@@ -580,36 +588,37 @@ func TestMC7(t *testing.T) {
 }
 
 type mcSlowPort struct {
-	executionapi.LifecyclePort
+	executionbackend.LifecyclePort
 	entered, release chan struct{}
 	unknown          bool
 }
 
-func (p mcSlowPort) Execute(ctx context.Context, r executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (p mcSlowPort) Execute(ctx context.Context, r executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	close(p.entered)
 	select {
 	case <-p.release:
 	case <-ctx.Done():
-		return executionapi.LifecycleReceipt{Operation: r.Operation, Disposition: executionapi.OperationUnknown}, nil, ctx.Err()
+		return executionbackend.LifecycleReceipt{Operation: r.Operation, Disposition: executionbackend.OperationUnknown}, nil, ctx.Err()
 	}
-	receipt := executionapi.LifecycleReceipt{Operation: r.Operation, Disposition: executionapi.OperationConfirmed}
+	receipt := executionbackend.LifecycleReceipt{Operation: r.Operation, Disposition: executionbackend.OperationConfirmed}
 	if p.unknown {
-		receipt.Disposition = executionapi.OperationUnknown
-	} else if r.Operation.Action == string(executionapi.LifecycleCreateResource) {
-		process := executionapi.ProcessIdentity{Kind: "fixture", RuntimeID: r.Snapshot.Session.ExecutionID, Incarnation: r.Snapshot.ResourceGeneration}
+		receipt.Disposition = executionbackend.OperationUnknown
+	} else if r.Operation.Action == string(executionbackend.LifecycleCreateResource) {
+		process := executionbackend.ProcessIdentity{Kind: "fixture", RuntimeID: r.Snapshot.Session.ExecutionID, Incarnation: r.Snapshot.ResourceGeneration}
 		receipt.Process = &process
 		receipt.State.SessionID = "late-original-session"
 		receipt.State.SessionGeneration = r.Snapshot.ResourceGeneration
-		envelope, err := executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{ImplementationKey: neutralBindingKey, CodecVersion: 1, Purpose: executionapi.ImplementationResourcePurpose, ProjectID: r.Snapshot.Session.ProjectID, ExecutionID: r.Snapshot.Session.ExecutionID, AttemptID: r.Snapshot.Session.AttemptID, Generation: r.Snapshot.ResourceGeneration, ConfigDigest: r.Snapshot.ConfigurationDigest}, mustJSON(neutralBinding{SessionID: receipt.State.SessionID, Generation: receipt.State.SessionGeneration}))
+		envelope, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{ImplementationKey: neutralBindingKey, CodecVersion: 1, Purpose: executionbackend.ImplementationResourcePurpose, ProjectID: r.Snapshot.Session.ProjectID, ExecutionID: r.Snapshot.Session.ExecutionID, AttemptID: r.Snapshot.Session.AttemptID, Generation: r.Snapshot.ResourceGeneration, ConfigDigest: r.Snapshot.ConfigurationDigest}, mustJSON(neutralBinding{SessionID: receipt.State.SessionID, Generation: receipt.State.SessionGeneration}))
 		if err != nil {
 			return receipt, nil, err
 		}
-		receipt.Implementation = []executionapi.ImplementationDataEnvelope{envelope}
+		receipt.Implementation = []executionbackend.ImplementationDataEnvelope{envelope}
 	}
 	return receipt, nil, nil
 }
-func (p mcSlowPort) Reconcile(_ context.Context, r executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
-	return executionapi.LifecycleReceipt{Operation: r.Operation, Disposition: executionapi.OperationUnknown}, nil, nil
+
+func (p mcSlowPort) Reconcile(_ context.Context, r executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
+	return executionbackend.LifecycleReceipt{Operation: r.Operation, Disposition: executionbackend.OperationUnknown}, nil, nil
 }
 
 func TestMC8(t *testing.T) {
@@ -624,7 +633,7 @@ func TestMC8(t *testing.T) {
 				lifecycle, fixed, err := f.s.lifecycleForRun(run)
 				require(t, err)
 				intent := *fixed.execution.WorkspaceIntent
-				require(t, f.s.executeLifecycleStep(context.Background(), run, lifecycle, executionapi.LifecycleCandidate{Action: executionapi.LifecyclePrepareWorkspace, Input: executionapi.LifecycleInput{Workspace: &intent}}))
+				require(t, f.s.executeLifecycleStep(context.Background(), run, lifecycle, executionbackend.LifecycleCandidate{Action: executionbackend.LifecyclePrepareWorkspace, Input: executionbackend.LifecycleInput{Workspace: &intent}}))
 				fixed, err = f.s.workerFlowContext(run)
 				require(t, err)
 				require(t, bindPolicyResources(context.Background(), fixed.config, fixed.execution, fixed.execution.Workspace.Worktree, nil))
@@ -634,15 +643,15 @@ func TestMC8(t *testing.T) {
 			defer cancel()
 			f.s.runContext = ctx
 			f.s.workerMessages = make(chan workerMessage, 8)
-			action := executionapi.LifecycleCreateResource
-			input := executionapi.LifecycleInput{Resource: &executionapi.ResourceIntent{Purpose: "fixture"}}
+			action := executionbackend.LifecycleCreateResource
+			input := executionbackend.LifecycleInput{Resource: &executionbackend.ResourceIntent{Purpose: "fixture"}}
 			if mode == "late_feedback" {
-				action = executionapi.LifecycleDeliverFeedback
-				input = executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{DecisionID: newID(), QuestionID: "question", Message: "original answer"}}
+				action = executionbackend.LifecycleDeliverFeedback
+				input = executionbackend.LifecycleInput{Feedback: &executionbackend.FeedbackInput{DecisionID: newID(), QuestionID: "question", Message: "original answer"}}
 			}
 			if mode == "unknown_stop" {
-				action = executionapi.LifecycleStopExecution
-				input = executionapi.LifecycleInput{Stop: &executionapi.StopInput{TurnID: f.s.executionRecord(run).CurrentTurnID}}
+				action = executionbackend.LifecycleStopExecution
+				input = executionbackend.LifecycleInput{Stop: &executionbackend.StopInput{TurnID: f.s.executionRecord(run).CurrentTurnID}}
 			}
 			var value any = input.Resource
 			if mode == "late_feedback" {
@@ -693,7 +702,7 @@ func TestMC8(t *testing.T) {
 			originalOp := f.s.operationByKey(key)
 			t.Logf("original receipt identity and disposition: %s", mustJSON(struct {
 				ID, Kind, Status, PayloadDigest, ReceiptDigest string
-				Identity                                       *executionapi.LifecycleOperationIdentity
+				Identity                                       *executionbackend.LifecycleOperationIdentity
 			}{originalOp.OperationID, originalOp.Kind, originalOp.Status, originalOp.PayloadDigest, digestValue(originalOp.Receipt), originalOp.LifecycleIdentity}))
 			require(t, f.s.Close())
 			restored, err := newNeutralService(f.c)
@@ -726,12 +735,12 @@ func TestMC8(t *testing.T) {
 		f.s.workerMessages = make(chan workerMessage, 8)
 		fixed, err := f.s.workerFlowContext(f.first)
 		require(t, err)
-		input := executionapi.LifecycleInput{Resource: &executionapi.ResourceIntent{Purpose: "fixture"}}
-		id, err := f.s.startWorkerOperation(f.first, string(executionapi.LifecycleCreateResource), "mc-slow-original", input.Resource)
+		input := executionbackend.LifecycleInput{Resource: &executionbackend.ResourceIntent{Purpose: "fixture"}}
+		id, err := f.s.startWorkerOperation(f.first, string(executionbackend.LifecycleCreateResource), "mc-slow-original", input.Resource)
 		require(t, err)
 		snapshot, err := f.s.lifecycleSnapshot(f.first, fixed.workflow, fixed.execution, fixed.attempt, nil)
 		require(t, err)
-		request := lifecycleRequest(snapshot, *f.s.operationByKey("mc-slow-original"), executionapi.LifecycleCreateResource, input)
+		request := lifecycleRequest(snapshot, *f.s.operationByKey("mc-slow-original"), executionbackend.LifecycleCreateResource, input)
 		port := mcSlowPort{entered: make(chan struct{}), release: make(chan struct{})}
 		err = f.s.dispatchLifecycleEffect(ctx, f.first, port, request, false, func(*Run, lifecycleEffectResult) error {
 			return errors.New("retired original must retain facts without authorizing next step")
@@ -742,12 +751,12 @@ func TestMC8(t *testing.T) {
 		<-port.entered
 		defer func() { close(port.release); f.s.forwarders.Wait() }()
 		// Model the original start_task checkpoint still waiting for this effect.
-		originalReq := ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: f.c.Identity(), InstanceID: f.s.State.Service.InstanceID, ExpectedControlRevision: f.s.State.Control.Revision, Action: "start_task", Payload: mustJSON(ControlPayload{TaskID: "8"}), RequestedBy: "operator", CreatedAt: now(), ExpiresAt: now().Add(time.Minute)}
+		originalReq := productapi.ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: f.c.Identity(), InstanceID: f.s.State.Service.InstanceID, ExpectedControlRevision: f.s.State.Control.Revision, Action: "start_task", Payload: mustJSON(productapi.ControlPayload{TaskID: "8"}), RequestedBy: "operator", CreatedAt: now(), ExpiresAt: now().Add(time.Minute)}
 		require(t, publishControlRequest(f.c.RunDir, originalReq))
 		f.s.controlSeen = map[string]string{originalReq.RequestID: "seen"}
 		f.s.State.Control.Operation = &ControlOperation{RequestID: originalReq.RequestID, Action: originalReq.Action, TaskID: "8", RunID: f.first.RunID, Payload: originalReq.Payload, Phase: "applying", RequestDigest: rawRequestDigest(controlRequestPath(f.c.RunDir, originalReq.RequestID))}
-		p := ControlPayload{TaskID: "8", WorkflowRunID: f.first.RunID, ExpectedTaskVersion: 2, ExpectedCandidateVersion: f.first.ControlRevision, Reason: "manual alternative"}
-		req := ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: f.c.Identity(), InstanceID: f.s.State.Service.InstanceID, ExpectedControlRevision: f.s.State.Control.Revision, Action: "abandon_candidate", Payload: mustJSON(p), RequestedBy: "operator", CreatedAt: now(), ExpiresAt: now().Add(time.Minute)}
+		p := productapi.ControlPayload{TaskID: "8", WorkflowRunID: f.first.RunID, ExpectedTaskVersion: 2, ExpectedCandidateVersion: f.first.ControlRevision, Reason: "manual alternative"}
+		req := productapi.ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: f.c.Identity(), InstanceID: f.s.State.Service.InstanceID, ExpectedControlRevision: f.s.State.Control.Revision, Action: "abandon_candidate", Payload: mustJSON(p), RequestedBy: "operator", CreatedAt: now(), ExpiresAt: now().Add(time.Minute)}
 		require(t, publishControlRequest(f.c.RunDir, req))
 		require(t, f.s.pollControl(ctx, cancel))
 		receipt, err := ReadControlReceipt(f.c, req.RequestID)
@@ -757,7 +766,7 @@ func TestMC8(t *testing.T) {
 		}
 		graph, err := f.store.TaskGraphSnapshot(context.Background(), f.c.Identity())
 		require(t, err)
-		p = ControlPayload{TaskID: "8", ExpectedTaskVersion: 2, ExpectedGraphRevision: graph.Authority.GraphRevision}
+		p = productapi.ControlPayload{TaskID: "8", ExpectedTaskVersion: 2, ExpectedGraphRevision: graph.Authority.GraphRevision}
 		req.RequestID, req.Action, req.Payload = newID(), "start_candidate", mustJSON(p)
 		require(t, publishControlRequest(f.c.RunDir, req))
 		require(t, f.s.pollControl(ctx, cancel))

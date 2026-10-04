@@ -12,13 +12,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 type Git struct {
-	Command execution.LaunchCommand
+	Command executionbackend.LaunchCommand
 	Timeout time.Duration
-	Start   func(*exec.Cmd) (execution.StopHandle, error)
+	Start   func(*exec.Cmd) (executionbackend.StopHandle, error)
 }
 
 type outputLimit struct {

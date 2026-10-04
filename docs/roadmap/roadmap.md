@@ -59,11 +59,10 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。完整范围、目标目录、所有权、阶段依赖与验收方向见 [目标roadmap](three-line-modularization.md)。任务负责挑选工作，执行负责并发派发、交付核验与结项并向任务提交结果，控制台消费稳定产品契约。
 
-#37 候选基础已具备，#73 → #74 可与 #38/#39 产品链并行；#75/#76 在边界接通后分线，#77 另等 #38。#39 使用隔离固定构建，实际受影响入口在迁移后定向重验。#43/#44/#45 不等待全部整理，其他产品任务保持自己的固定前置。
+[#73 纯定义基础](../validation/three-line-01-types/README.md)承接 #37；#74 可与 #38/#39 产品链并行；#75/#76 在边界接通后分线，#77 另等 #38。#39 使用隔离固定构建，实际受影响入口在迁移后定向重验。#43/#44/#45 不等待全部整理，其他产品任务保持自己的固定前置。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 73 | 纯类型与契约归属整理 | 纯模型/backend/api/ports 唯一归属与实际消费者迁移 | `#37` | [Spec](../spec/three-line-01-types.spec.md) · [Plan](../spec/three-line-01-types.plan.md) |
 | 74 | 任务选择与执行结果边界 | 任务工作/原子领取与规范化结果边界、执行核验归属 | `#73` | [Spec](../spec/three-line-02-task-execution-boundary.spec.md) · [Plan](../spec/three-line-02-task-execution-boundary.plan.md) |
 | 75 | 任务应用用例归包 | 任务创建/依赖/挑选/结果应用归 task | `#74` | [Spec](../spec/three-line-03-task-usecases.spec.md) · [Plan](../spec/three-line-03-task-usecases.plan.md) |
 | 76 | 执行应用用例归包 | 候选/会话/恢复/交付/清理归 execution | `#74` | [Spec](../spec/three-line-04-execution-usecases.spec.md) · [Plan](../spec/three-line-04-execution-usecases.plan.md) |
@@ -78,7 +77,7 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 - #40、#43、#44 可在隔离资源上准备；#36 仅作为已具备基础保留，后继仍按各自固定 Spec 开工。
 - 已具备 #37 → #38 → #39 是多候选增量链；#40/#36 → #41，与 #39 一起汇入 #42。
-- 已具备 #37 → #73 → #74 后分为 #75/#76/#77（#77 另等 #38）；#76 → #78，#75/#76/#77 → #79，相关五项 → #80 → #81 → #82。解耦与产品验收在隔离构建/资源上并行，共同类型与组装段顺序集成。
+- [#73 基础](../validation/three-line-01-types/README.md)之后由 #74 接通边界，再分为 #75/#76/#77（#77 另等 #38）；#76 → #78，#75/#76/#77 → #79，相关五项 → #80 → #81 → #82。解耦与产品验收在隔离构建/资源上并行，共同类型与组装段顺序集成。
 - #36 → #45 后分为规划链与执行 UI；#53 汇合原生页面及第一阶段组合验收。
 
 ## 规划约束

@@ -3,7 +3,6 @@ package steerlineapp
 import (
 	"context"
 	"database/sql"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,7 +13,9 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerlineclient"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
@@ -55,18 +56,18 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 	defer writer.Close()
 	at := time.Now().UTC()
 	err = writer.TransactTaskBatch(ctx, func(tx persistence.BatchTx) error {
-		if err := tx.PutTaskBatch(steerline.TaskBatchRecord{ProjectIdentity: cfg.Identity(), BatchID: "source-batch", SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("a", 64), CommandID: "source-command", TaskIDs: map[string]string{"a": "2", "b": "10"}, CreatedAt: at}, 1, 0); err != nil {
+		if err := tx.PutTaskBatch(taskmodel.TaskBatchRecord{ProjectIdentity: cfg.Identity(), BatchID: "source-batch", SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("a", 64), CommandID: "source-command", TaskIDs: map[string]string{"a": "2", "b": "10"}, CreatedAt: at}, 1, 0); err != nil {
 			return err
 		}
 		for _, id := range []string{"2", "10"} {
-			reference := steerline.FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
-			contract := steerline.TaskContract{ContractID: "contract-" + id, Repository: "https://github.com/Org/Repo.git", Remote: "origin", Branch: "main", SpecRef: reference, PlanRef: steerline.FileReference{Path: "docs/task.plan.md", Commit: reference.Commit, SHA256: reference.SHA256}, AcceptanceRefs: []steerline.FileReference{reference}}
+			reference := taskmodel.FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
+			contract := taskmodel.TaskContract{ContractID: "contract-" + id, Repository: "https://github.com/Org/Repo.git", Remote: "origin", Branch: "main", SpecRef: reference, PlanRef: taskmodel.FileReference{Path: "docs/task.plan.md", Commit: reference.Commit, SHA256: reference.SHA256}, AcceptanceRefs: []taskmodel.FileReference{reference}}
 			var err error
-			contract.Digest, err = steerline.TaskContractDigest(contract)
+			contract.Digest, err = taskmodel.ContractDigest(contract)
 			if err != nil {
 				return err
 			}
-			task := steerline.TaskRecord{ProjectIdentity: cfg.Identity(), TaskID: id, BatchID: "source-batch", ContractID: contract.ContractID, Title: "Task " + id, Type: "task", Priority: 2, Source: "native", Status: "open", Version: 1, CreatedAt: at, UpdatedAt: at}
+			task := taskmodel.TaskRecord{ProjectIdentity: cfg.Identity(), TaskID: id, BatchID: "source-batch", ContractID: contract.ContractID, Title: "Task " + id, Type: "task", Priority: 2, Source: "native", Status: "open", Version: 1, CreatedAt: at, UpdatedAt: at}
 			if err := tx.PutTask(task); err != nil {
 				return err
 			}
@@ -74,7 +75,7 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 				return err
 			}
 		}
-		return tx.PutTaskDependency(steerline.TaskDependencyRecord{ProjectIdentity: cfg.Identity(), PredecessorID: "2", SuccessorID: "10"})
+		return tx.PutTaskDependency(taskmodel.TaskDependencyRecord{ProjectIdentity: cfg.Identity(), PredecessorID: "2", SuccessorID: "10"})
 	})
 	if err != nil {
 		t.Fatal(err)

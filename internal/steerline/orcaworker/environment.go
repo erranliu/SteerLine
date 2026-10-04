@@ -4,16 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"strings"
-)
 
-type HostFact = contracts.HostFact
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+)
 
 // InspectAgentInput qualifies only a new input, not readiness or settlement.
 // A stale agentIdentity can outlive Codex and refer to its parent shell. Keep
 // source limitations explicit rather than injecting into a startup trust menu.
-func InspectAgentInput(ctx context.Context, call MetaCall, identity TerminalIdentity) (HostFact, bool, error) {
+func InspectAgentInput(ctx context.Context, call MetaCall, identity TerminalIdentity) (executionbackend.HostFact, bool, error) {
 	fact, err := ObserveHost(ctx, call, identity)
 	if err != nil || fact.Reason != "" {
 		return fact, false, err
@@ -84,11 +83,11 @@ func ObserveTurnRunning(ctx context.Context, call MetaCall, identity TerminalIde
 
 // ObserveHost keeps exit and waiting facts even when sending is impossible.
 // Unknown/disconnected observations are gaps, never a fabricated process exit.
-func ObserveHost(ctx context.Context, call MetaCall, identity TerminalIdentity) (HostFact, error) {
+func ObserveHost(ctx context.Context, call MetaCall, identity TerminalIdentity) (executionbackend.HostFact, error) {
 	if identity.Handle == "" || identity.RuntimeID == "" || identity.Incarnation == "" {
-		return HostFact{}, errors.New("host observation has no original terminal identity")
+		return executionbackend.HostFact{}, errors.New("host observation has no original terminal identity")
 	}
-	fact := HostFact{Runtime: identity.RuntimeID, Terminal: identity.Handle, Incarnation: identity.Incarnation, Source: "orca.terminal.show"}
+	fact := executionbackend.HostFact{Runtime: identity.RuntimeID, Terminal: identity.Handle, Incarnation: identity.Incarnation, Source: "orca.terminal.show"}
 	envelope, err := call(ctx, "terminal", "show", "--terminal", identity.Handle, "--json")
 	if err != nil {
 		return fact, err

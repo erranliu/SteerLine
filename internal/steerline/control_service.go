@@ -13,17 +13,21 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 var errClaimConflict = errors.New("native task claim conflict")
+
 var errTaskNotReady = errors.New("target task is no longer ready")
 
 type stopAcceptance struct {
-	Request ControlRequest
+	Request productapi.ControlRequest
 	At      time.Time
 }
 
-func (s *Service) writeReceipt(r ControlReceipt) error {
+func (s *Service) writeReceipt(r productapi.ControlReceipt) error {
 	if !controlIDPattern.MatchString(r.RequestID) {
 		return errors.New("invalid receipt request ID")
 	}
@@ -38,11 +42,11 @@ func (s *Service) writeReceipt(r ControlReceipt) error {
 	return AtomicWrite(path, append(b, '\n'))
 }
 
-func (s *Service) baseReceipt(req ControlRequest, digest string, status, code, message string) ControlReceipt {
-	return ControlReceipt{Version: 1, RequestID: req.RequestID, RequestDigest: digest, InstanceID: req.InstanceID, Action: req.Action, Status: status, Code: code, Message: message, RequestedBy: req.RequestedBy, SubmittedAt: req.CreatedAt}
+func (s *Service) baseReceipt(req productapi.ControlRequest, digest string, status, code, message string) productapi.ControlReceipt {
+	return productapi.ControlReceipt{Version: 1, RequestID: req.RequestID, RequestDigest: digest, InstanceID: req.InstanceID, Action: req.Action, Status: status, Code: code, Message: message, RequestedBy: req.RequestedBy, SubmittedAt: req.CreatedAt}
 }
 
-func (s *Service) rejectControl(req ControlRequest, digest, code string, err error) error {
+func (s *Service) rejectControl(req productapi.ControlRequest, digest, code string, err error) error {
 	message := "request rejected"
 	if err != nil {
 		message = err.Error()
@@ -61,7 +65,7 @@ func (s *Service) rejectControl(req ControlRequest, digest, code string, err err
 	return nil
 }
 
-func (s *Service) finishControl(op *ControlOperation, receipt ControlReceipt) error {
+func (s *Service) finishControl(op *ControlOperation, receipt productapi.ControlReceipt) error {
 	nowAt := now()
 	receipt.CompletedAt = &nowAt
 	receipt.ControlRevision = s.State.Control.Revision + 1
@@ -137,7 +141,7 @@ func (s *Service) controlDirectories() ([]string, error) {
 	return ids, nil
 }
 
-func (s *Service) nextControlRequest() (*ControlRequest, string, error) {
+func (s *Service) nextControlRequest() (*productapi.ControlRequest, string, error) {
 	ids, err := s.controlDirectories()
 	if err != nil {
 		return nil, "", err
@@ -167,7 +171,7 @@ func (s *Service) nextControlRequest() (*ControlRequest, string, error) {
 			if s.controlSeen[id] == digest {
 				continue
 			}
-			bad := ControlRequest{RequestID: id, InstanceID: s.State.Service.InstanceID, Action: "invalid", RequestedBy: "unknown", CreatedAt: now(), ExpiresAt: now()}
+			bad := productapi.ControlRequest{RequestID: id, InstanceID: s.State.Service.InstanceID, Action: "invalid", RequestedBy: "unknown", CreatedAt: now(), ExpiresAt: now()}
 			if e := s.rejectControl(bad, digest, "invalid_request", err); e != nil {
 				return nil, "", e
 			}
@@ -236,7 +240,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 		target := payload.Environment
 		run := s.find(target.RunID)
 		if run == nil || run.RunID != target.RunID || run.ExecutionID != target.ExecutionID || run.AttemptID != target.AttemptID {
-			return s.rejectControl(*req, digest, "stale_target", ErrWorkerTurnStale)
+			return s.rejectControl(*req, digest, "stale_target", executionmodel.ErrTurnStale)
 		}
 	case "start_task":
 		base := s.projectExecutionConfig()
@@ -443,7 +447,7 @@ func (s *Service) validateReadyTarget(ctx context.Context, taskID string) error 
 	return fmt.Errorf("%w: %s is not in the current ready native task set", errTaskNotReady, taskID)
 }
 
-func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, payload ControlPayload, op *ControlOperation, result *ControlReceipt) error {
+func (s *Service) applyControlAction(ctx context.Context, req productapi.ControlRequest, payload productapi.ControlPayload, op *ControlOperation, result *productapi.ControlReceipt) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -451,7 +455,7 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 	case "open_terminal", "recheck_environment":
 		run := s.find(op.RunID)
 		if payload.Environment == nil || run == nil {
-			return ErrWorkerTurnStale
+			return executionmodel.ErrTurnStale
 		}
 		return s.applyEnvironmentAction(ctx, run, req.Action, *payload.Environment, req.RequestID)
 
@@ -518,7 +522,7 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 			if attempt.Status != "planned" {
 				return nativeErr("outcome_unknown", "reserved native start request has no replayable planned attempt; fixed worker identity is retained")
 			}
-			if workflow.WorkflowVersion != WorkerFlowVersion || attempt.StepID != "worker" {
+			if workflow.WorkflowVersion != executionmodel.Version || attempt.StepID != "worker" {
 				return nativeErr("unsupported_schema", "reserved start request has an unsupported workflow")
 			}
 			err := s.resumeWorkerFlow(ctx)
@@ -582,7 +586,7 @@ func (s *Service) recoverControlOperation() error {
 	if err != nil || req.RequestID != op.RequestID || req.Action != op.Action || rawRequestDigest(path) != op.RequestDigest {
 		// The checkpoint owns the operation identity even if its request archive
 		// is missing or damaged. Never take a different receipt path from it.
-		req = ControlRequest{RequestID: op.RequestID, InstanceID: "unknown", Action: op.Action, RequestedBy: "unknown"}
+		req = productapi.ControlRequest{RequestID: op.RequestID, InstanceID: "unknown", Action: op.Action, RequestedBy: "unknown"}
 	}
 	hasRunEvidence := false
 	for _, run := range s.runs {
@@ -628,7 +632,7 @@ func (s *Service) recoverControlOperation() error {
 	return s.publishCheckpoint()
 }
 
-func findStopRequestCached(c Config, instanceID string, seen map[string]bool) (*ControlRequest, string, time.Time) {
+func findStopRequestCached(c Config, instanceID string, seen map[string]bool) (*productapi.ControlRequest, string, time.Time) {
 	root := filepath.Join(c.RunDir, "control", "requests")
 	entries, err := os.ReadDir(root)
 	if err != nil {

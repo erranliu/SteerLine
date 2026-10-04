@@ -11,19 +11,19 @@ import (
 	"strings"
 	"testing"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
 	c := workerContextConfigFixture()
 	c.Repository = t.TempDir()
-	c.ExecutionRequirements = executionapi.ExecutionRequirements{Tools: []executionapi.ToolRequirement{{ID: "git"}}, Credentials: []executionapi.CredentialRequirement{{ID: "pr.token_env", Site: "service"}}}
+	c.ExecutionRequirements = executionbackend.ExecutionRequirements{Tools: []executionbackend.ToolRequirement{{ID: "git"}}, Credentials: []executionbackend.CredentialRequirement{{ID: "pr.token_env", Site: "service"}}}
 	c.PR.TokenEnv = "STEERLINE_REQUIREMENTS_TOKEN"
 	t.Setenv(c.PR.TokenEnv, "secret-requirement-token")
 	e, err := evaluateExecutionRequirements(context.Background(), c)
 	require(t, err)
-	if e.Tools[0].Version == "" || e.Credentials[0].Status != executionapi.RequirementPresent {
+	if e.Tools[0].Version == "" || e.Credentials[0].Status != executionbackend.RequirementPresent {
 		t.Fatalf("incomplete evidence: %+v", e)
 	}
 	data, err := json.Marshal(e)
@@ -49,12 +49,12 @@ func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
 	if _, err = evaluateExecutionRequirements(context.Background(), c); err == nil {
 		t.Fatal("missing token reference accepted")
 	}
-	missing := queryHostRequirementTool(context.Background(), Config{Persistence: sqlite.Factory{}, Repository: c.Repository, Git: Command{Executable: filepath.Join(c.Repository, "missing-tool.exe")}}, "git")
-	if missing.Status != executionapi.RequirementMissing {
+	missing := queryHostRequirementTool(context.Background(), Config{Persistence: sqlite.Factory{}, Repository: c.Repository, Git: executionbackend.Command{Executable: filepath.Join(c.Repository, "missing-tool.exe")}}, "git")
+	if missing.Status != executionbackend.RequirementMissing {
 		t.Fatal("missing tool not reported")
 	}
-	c.Git = Command{Executable: os.Args[0]} // Fixture output is not a Git version.
-	if got := queryHostRequirementTool(context.Background(), c, "git"); got.Status != executionapi.RequirementUnknown || got.Version != "" {
+	c.Git = executionbackend.Command{Executable: os.Args[0]} // Fixture output is not a Git version.
+	if got := queryHostRequirementTool(context.Background(), c, "git"); got.Status != executionbackend.RequirementUnknown || got.Version != "" {
 		t.Fatal("unparsed version became present", got)
 	}
 }
@@ -75,7 +75,7 @@ func TestExecutionRequirementsDoNotUpgradeProbeToVerified(t *testing.T) {
 	require(t, os.WriteFile(evidence, []byte("fixture evidence; not native certification"), 0600))
 	for i := range report.Capabilities {
 		if report.Capabilities[i].Name == "workspace_inspection" {
-			report.Capabilities[i].Status = executionapi.CapabilityVerified
+			report.Capabilities[i].Status = executionbackend.CapabilityVerified
 			report.Capabilities[i].Evidence = evidence + "#sha256=" + fmt.Sprintf("%x", sha256.Sum256([]byte("fixture evidence; not native certification")))
 		}
 	}
@@ -92,7 +92,7 @@ func TestExecutionRequirementsDoNotUpgradeProbeToVerified(t *testing.T) {
 func TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal(t *testing.T) {
 	c := workerContextConfigFixture()
 	c.Repository = t.TempDir()
-	c.ExecutionRequirements.Tools = []executionapi.ToolRequirement{{ID: "git"}}
+	c.ExecutionRequirements.Tools = []executionbackend.ToolRequirement{{ID: "git"}}
 	e, err := evaluateExecutionRequirements(context.Background(), c)
 	require(t, err)
 	c.requirementsEvaluation = &e
@@ -107,7 +107,7 @@ func TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal(t *testing.T) {
 		t.Fatal("freeze aliases requirements or evidence")
 	}
 	current := c
-	current.ExecutionRequirements.Tools = []executionapi.ToolRequirement{{ID: "python"}}
+	current.ExecutionRequirements.Tools = []executionbackend.ToolRequirement{{ID: "python"}}
 	current.Git.Executable = "must-not-run"
 	restored := current.ApplyFixedExecutionProfile(fixed)
 	if restored.ExecutionRequirements.Tools[0].ID != "git" || restored.Git.Executable != "git" {
@@ -133,7 +133,7 @@ func TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal(t *testing.T) {
 func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
-	c.ExecutionRequirements = executionapi.ExecutionRequirements{Tools: []executionapi.ToolRequirement{{ID: "git"}}, Credentials: []executionapi.CredentialRequirement{{ID: "pr.token_env", Site: "service"}}}
+	c.ExecutionRequirements = executionbackend.ExecutionRequirements{Tools: []executionbackend.ToolRequirement{{ID: "git"}}, Credentials: []executionbackend.CredentialRequirement{{ID: "pr.token_env", Site: "service"}}}
 	c.PR.TokenEnv = "STEERLINE_CLAIM_REQUIREMENT_TOKEN"
 	t.Setenv(c.PR.TokenEnv, "private-value")
 	out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput()
@@ -172,7 +172,7 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	entry, err := registrationFor(c)
 	require(t, err)
 	fake := entry
-	fake.QueryTool = func(ctx context.Context, config Config, id string) executionapi.RequirementEvidence {
+	fake.QueryTool = func(ctx context.Context, config Config, id string) executionbackend.RequirementEvidence {
 		e := entry.QueryTool(ctx, config, id)
 		require(t, os.WriteFile(c.policySource, append(projectBytes, ' '), 0600))
 		return e
@@ -210,7 +210,7 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	}
 	snapshot, err := store.Query(ctx, c.Identity())
 	require(t, err)
-	if snapshot.Executions[0].CurrentRequirementsError == nil || snapshot.Executions[0].CurrentRequirementsEvaluation == nil || snapshot.Executions[0].CurrentRequirementsEvaluation.Credentials[0].Status != executionapi.RequirementMissing {
+	if snapshot.Executions[0].CurrentRequirementsError == nil || snapshot.Executions[0].CurrentRequirementsEvaluation == nil || snapshot.Executions[0].CurrentRequirementsEvaluation.Credentials[0].Status != executionbackend.RequirementMissing {
 		t.Fatal("current blocking fact was not persisted")
 	}
 }

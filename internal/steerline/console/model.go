@@ -11,8 +11,12 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 type Clock interface {
@@ -22,7 +26,8 @@ type Clock interface {
 
 type realClock struct{}
 
-func (realClock) Now() time.Time                         { return time.Now() }
+func (realClock) Now() time.Time { return time.Now() }
+
 func (realClock) After(d time.Duration) <-chan time.Time { return time.After(d) }
 
 type Options struct {
@@ -54,8 +59,8 @@ type consoleRow struct {
 
 type actionState struct {
 	DecisionIdentity       string
-	Payload                api.ControlPayload
-	EnvironmentTarget      *contracts.HostActionTarget
+	Payload                productapi.ControlPayload
+	EnvironmentTarget      *productapi.HostActionTarget
 	RequestID              string
 	Action                 string
 	TaskID                 string
@@ -113,7 +118,7 @@ type projectState struct {
 	actions         map[string]*actionState
 
 	activityKey        string
-	activityCursor     api.ActivityCursor
+	activityCursor     productapi.ActivityCursor
 	activityEvents     []contracts.ActivityEvent
 	activityError      string
 	activityInFlight   bool
@@ -170,7 +175,7 @@ type confirmAction struct {
 	requestID    string
 	runID        string
 	decisionID   string
-	payload      api.ControlPayload
+	payload      productapi.ControlPayload
 	basis        string
 }
 
@@ -441,7 +446,7 @@ func (m Model) readBody(index int, event contracts.ConversationEvent, offset int
 func (m Model) submitControl(index int, action, taskID, requestID string, instance string, revision uint64) tea.Cmd {
 	state := &m.projects[index]
 	ref := state.ref
-	payload := api.ControlPayload{}
+	payload := productapi.ControlPayload{}
 	switch action {
 	case "start_candidate", "abandon_candidate":
 		payload = state.actions[requestID].Payload
@@ -452,17 +457,17 @@ func (m Model) submitControl(index int, action, taskID, requestID string, instan
 	case "start_task":
 		profile := state.actions[requestID]
 		if profile != nil && profile.ExecutionProfileID != "" {
-			payload = api.ControlPayload{TaskID: taskID, ExecutionProfileID: profile.ExecutionProfileID, ExecutionProfileDigest: profile.ExecutionProfileDigest}
+			payload = productapi.ControlPayload{TaskID: taskID, ExecutionProfileID: profile.ExecutionProfileID, ExecutionProfileDigest: profile.ExecutionProfileDigest}
 		} else {
-			payload = api.ControlPayload{TaskID: taskID}
+			payload = productapi.ControlPayload{TaskID: taskID}
 		}
 	case "set_dispatch_mode":
-		payload = api.ControlPayload{Mode: taskID}
+		payload = productapi.ControlPayload{Mode: taskID}
 	}
 	query := state.client
 	ctx := m.ctx
 	return func() tea.Msg {
-		request, err := query.SubmitControl(ctx, api.ControlInput{Action: api.ControlAction(action), Payload: payload, RequestID: requestID, InstanceID: instance, ExpectedRevision: &revision})
+		request, err := query.SubmitControl(ctx, productapi.ControlInput{Action: productapi.ControlAction(action), Payload: payload, RequestID: requestID, InstanceID: instance, ExpectedRevision: &revision})
 		return actionSubmittedMsg{projectKey: ref.Key, identity: ref.Identity, instance: instance, requestID: requestID, taskID: taskID, action: action, request: request, err: err}
 	}
 }
@@ -503,21 +508,24 @@ func (m Model) pollAction(index int, action *actionState) tea.Cmd {
 }
 
 type tickMsg time.Time
+
 type projectMsg struct {
 	key, identity         string
 	generation, requestID uint64
 	snapshot              ProjectSnapshot
 }
+
 type activityResultMsg struct {
 	projectKey, identity, key string
 	generation                uint64
-	base                      api.ActivityCursor
+	base                      productapi.ActivityCursor
 	batchActivity             []contracts.ActivityEvent
-	next                      api.ActivityCursor
+	next                      productapi.ActivityCursor
 	reset                     bool
 	diagnostics               []string
 	err                       error
 }
+
 type conversationMsg struct {
 	projectKey, identity, key string
 	generation                uint64
@@ -526,12 +534,14 @@ type conversationMsg struct {
 	page                      contracts.ConversationPage
 	err                       error
 }
+
 type capabilityMsg struct {
 	projectKey, identity, key string
 	generation                uint64
 	reports                   []contracts.ConversationCapabilityReport
 	err                       error
 }
+
 type bodyMsg struct {
 	projectKey, identity, eventKey string
 	generation                     uint64
@@ -540,14 +550,15 @@ type bodyMsg struct {
 	page                           contracts.ConversationBodyPage
 	err                            error
 }
+
 type actionSubmittedMsg struct {
 	projectKey, identity, instance, requestID, taskID, action string
-	request                                                   api.ControlRequest
-	command                                                   *contracts.CommandRecord
+	request                                                   productapi.ControlRequest
+	command                                                   *storageports.CommandRecord
 	err                                                       error
 }
 
-func (m Model) submitDecisionCommand(index int, answer contracts.DecisionAnswer, requestedBy, commandID string) tea.Cmd {
+func (m Model) submitDecisionCommand(index int, answer executionmodel.DecisionAnswer, requestedBy, commandID string) tea.Cmd {
 	state := &m.projects[index]
 	ref := state.ref
 	query := state.client
@@ -682,7 +693,7 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	requestID := newRequestID()
-	answer := contracts.DecisionAnswer{DecisionID: dialog.decisionID, RunID: dialog.runID, OptionID: optionID, Note: note, ExpectedDecisionVersion: dialog.decisionVersion, ExpectedRunRevision: dialog.runRevision, ServiceInstanceID: dialog.instance}
+	answer := executionmodel.DecisionAnswer{DecisionID: dialog.decisionID, RunID: dialog.runID, OptionID: optionID, Note: note, ExpectedDecisionVersion: dialog.decisionVersion, ExpectedRunRevision: dialog.runRevision, ServiceInstanceID: dialog.instance}
 	action := &actionState{RequestID: requestID, Action: "answer_decision", TaskID: run.TaskID, RunID: run.RunID, DecisionID: dialog.decisionID, DecisionIdentity: dialog.identity, DecisionDraftOptionID: optionID, DecisionDraftNote: string(dialog.note), DecisionRevision: dialog.runRevision, DecisionVersion: dialog.decisionVersion, Status: "submitting", Message: "保存 command_id 并提交答案", TargetInstance: dialog.instance, UpdatedAt: m.clock.Now()}
 	state.actions[requestID] = action
 	state.view.Outstanding[requestID] = "decision:" + run.RunID
@@ -699,11 +710,12 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
 
 type actionReceiptMsg struct {
 	projectKey, identity, requestID string
-	receipt                         *api.ControlReceipt
-	request                         *api.ControlRequest
-	command                         *contracts.CommandRecord
+	receipt                         *productapi.ControlReceipt
+	request                         *productapi.ControlRequest
+	command                         *storageports.CommandRecord
 	err                             error
 }
+
 type recoveryInspectionMsg struct {
 	projectKey, identity, runID string
 	generation                  uint64
@@ -722,7 +734,7 @@ func remapDecisionActionID(state *projectState, action *actionState, oldID, newI
 	state.view.Outstanding[newID] = "decision:" + action.RunID
 }
 
-func applyDecisionCommandResult(state *projectState, action *actionState, command *contracts.CommandRecord, commandErr error) (refresh, reopen bool) {
+func applyDecisionCommandResult(state *projectState, action *actionState, command *storageports.CommandRecord, commandErr error) (refresh, reopen bool) {
 	if state == nil || action == nil {
 		return false, false
 	}
@@ -770,7 +782,7 @@ func applyDecisionCommandResult(state *projectState, action *actionState, comman
 	return false, false
 }
 
-func decisionRequestFor(state projectState, runID, decisionID string) (contracts.DecisionRequest, bool) {
+func decisionRequestFor(state projectState, runID, decisionID string) (executionmodel.DecisionRequest, bool) {
 	if runtimeState := state.snapshot.Connection.Snapshot.Runtime; runtimeState != nil {
 		for _, run := range runtimeState.Runs {
 			if run != nil && run.RunID == runID && run.Decision != nil && run.Decision.ID == decisionID {
@@ -788,14 +800,14 @@ func decisionRequestFor(state projectState, runID, decisionID string) (contracts
 	if state.snapshot.Domain != nil {
 		for _, record := range state.snapshot.Domain.Decisions {
 			if record.DecisionID == decisionID && record.WorkflowRunID == runID {
-				var request contracts.DecisionRequest
+				var request executionmodel.DecisionRequest
 				if json.Unmarshal(record.Request, &request) == nil {
 					return request, true
 				}
 			}
 		}
 	}
-	return contracts.DecisionRequest{}, false
+	return executionmodel.DecisionRequest{}, false
 }
 
 func (m *Model) reopenDecisionDraft(index int, action *actionState) {
@@ -849,11 +861,11 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func controlRequestMatchesAction(request *api.ControlRequest, action *actionState, repositoryIdentity string) bool {
+func controlRequestMatchesAction(request *productapi.ControlRequest, action *actionState, repositoryIdentity string) bool {
 	if request == nil || action == nil || request.RequestID != action.RequestID || request.Action != action.Action || request.InstanceID != action.TargetInstance || viewCanonical(request.RepositoryIdentity) != viewCanonical(repositoryIdentity) {
 		return false
 	}
-	var payload api.ControlPayload
+	var payload productapi.ControlPayload
 	if len(request.Payload) > 0 && json.Unmarshal(request.Payload, &payload) != nil {
 		return false
 	}
@@ -1068,6 +1080,7 @@ func panelIndex(name string) int {
 	}
 	return 0
 }
+
 func panelName(index int) string {
 	switch index {
 	case 1:
@@ -1094,6 +1107,7 @@ func rowExists(rows []consoleRow, key string) bool {
 	}
 	return false
 }
+
 func firstRowKey(rows []consoleRow) string {
 	if len(rows) == 0 {
 		return ""
@@ -1144,7 +1158,7 @@ func (m Model) refreshSelectedLogs(index int) (Model, tea.Cmd) {
 	activityKey := strings.Join([]string{run.RunID, run.ExecutionID, attemptID}, "\x00")
 	if state.activityKey != activityKey {
 		state.activityInFlight = false
-		state.activityKey, state.activityCursor = activityKey, api.ActivityCursor{}
+		state.activityKey, state.activityCursor = activityKey, productapi.ActivityCursor{}
 		state.activityEvents, state.activityError = nil, ""
 		state.activityGeneration++
 	}
@@ -1373,7 +1387,7 @@ func (m Model) changeFilter(filter int) (tea.Model, tea.Cmd) {
 
 func (m Model) View() string { return render(m) }
 
-func sameCursor(a, b api.ActivityCursor) bool { return a == b }
+func sameCursor(a, b productapi.ActivityCursor) bool { return a == b }
 
 func stringValue(value *string) string {
 	if value == nil {
@@ -1381,12 +1395,14 @@ func stringValue(value *string) string {
 	}
 	return *value
 }
+
 func displayDash(value string) string {
 	if value == "" {
 		return "—"
 	}
 	return value
 }
+
 func terminalCapabilities() string {
 	if runtime.GOOS == "windows" {
 		return "Windows 服务窗口由用户独立打开"
@@ -1401,10 +1417,10 @@ func projectStatus(ref ProjectRef, snapshot ProjectSnapshot) string {
 	if ref.Conflict != "" {
 		return "关联冲突"
 	}
-	if snapshot.Connection.State == api.ConnectionConnected {
+	if snapshot.Connection.State == productapi.ConnectionConnected {
 		return "已连接"
 	}
-	if snapshot.Connection.State == api.ConnectionOffline || snapshot.Connection.State == api.ConnectionNoRecord {
+	if snapshot.Connection.State == productapi.ConnectionOffline || snapshot.Connection.State == productapi.ConnectionNoRecord {
 		return "离线"
 	}
 	if snapshot.Connection.State == "" {

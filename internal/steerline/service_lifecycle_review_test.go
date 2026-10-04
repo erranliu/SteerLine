@@ -11,8 +11,11 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestLifecycleAuditRejectedStartupPreservesOwnerFiles(t *testing.T) {
@@ -76,7 +79,7 @@ func TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEff
 	if _, err := InspectRecovery(context.Background(), c, "run"); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
 		t.Fatalf("InspectRecovery did not reject missing native authority: %v", err)
 	}
-	assertAuthorityError("VerifyTaskContractFiles", VerifyTaskContractFiles(context.Background(), c, TaskContract{}))
+	assertAuthorityError("VerifyTaskContractFiles", VerifyTaskContractFiles(context.Background(), c, taskmodel.TaskContract{}))
 	if _, err := os.Stat(runDir); !os.IsNotExist(err) {
 		t.Fatalf("rejected direct entrypoint created service state: %v", err)
 	}
@@ -84,7 +87,7 @@ func TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEff
 
 func TestRunConfiguredServiceRejectsBeadsBeforeCreatingStartupEvidence(t *testing.T) {
 	f := newFixture(t)
-	f.c.WorkflowProtocol = WorkerFlowVersion
+	f.c.WorkflowProtocol = executionmodel.Version
 	sentinel := filepath.Join(f.c.Repository, ".beads")
 	require(t, os.Mkdir(sentinel, 0700))
 	err := testRunConfiguredService(context.Background(), f.c, "manual", "", "off")
@@ -99,7 +102,7 @@ func TestRunConfiguredServiceRejectsBeadsBeforeCreatingStartupEvidence(t *testin
 	}
 }
 
-func reviewStartup(t *testing.T, c Config, status string, identity *executionapi.ProcessIdentity) StartupRecord {
+func reviewStartup(t *testing.T, c Config, status string, identity *executionbackend.ProcessIdentity) StartupRecord {
 	t.Helper()
 	id := newID()
 	_, _, err := createStartupAttempt(c, id, true)
@@ -125,7 +128,7 @@ func TestLifecycleReviewMultipleLiveAttemptsRefuseLaunch(t *testing.T) {
 func TestLifecycleReviewStartedProcessEarlyExit(t *testing.T) {
 	s := controlReviewService(t)
 	removeRuntimeProjection(t, s)
-	id := &executionapi.ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "absent", Executable: "absent"}
+	id := &executionbackend.ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "absent", Executable: "absent"}
 	record := reviewStartup(t, s.Config, "started", id)
 	result, err := waitForStartup(context.Background(), s.Config, record.StartupID, "", StartServiceOptions{WaitTimeout: 30 * time.Millisecond, PollInterval: time.Millisecond})
 	require(t, err)
@@ -239,7 +242,7 @@ func TestLifecycleReviewStopPublicationKeepsObservedInstance(t *testing.T) {
 
 func TestLifecycleReviewOfflineWithHeldLockCannotRestart(t *testing.T) {
 	s := controlReviewService(t)
-	absent := &executionapi.ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "absent", Executable: "absent"}
+	absent := &executionbackend.ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "absent", Executable: "absent"}
 	s.State.Service.ProcessIdentity = absent
 	s.State.Service.PID = s.State.Service.ProcessIdentity.PID
 	startup, err := readStartupRecord(s.Config, *s.State.Service.StartupID)
@@ -305,7 +308,7 @@ func TestLifecycleReviewStopReportsExitWithoutReceipt(t *testing.T) {
 	require(t, s.publishCheckpoint())
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	done := make(chan ServiceStopResult, 1)
+	done := make(chan productapi.ServiceStopResult, 1)
 	errors := make(chan error, 1)
 	go func() {
 		result, err := StopService(ctx, s.Config, "review", time.Second)

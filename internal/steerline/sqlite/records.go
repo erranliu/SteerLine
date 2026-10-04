@@ -8,8 +8,11 @@ import (
 	"strings"
 	"time"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	queryrules "github.com/erranliu/SteerLine/internal/steerline/query"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func (s Reader) LoadProjection(ctx context.Context, project string) ([]byte, uint64, error) {
@@ -52,8 +55,8 @@ type CommandRowQuerier interface {
 	QueryRowContext(context.Context, string, ...any) *sql.Row
 }
 
-func ReadCommandByKey(ctx context.Context, query CommandRowQuerier, project, key string) (contracts.CommandRecord, bool, error) {
-	var command contracts.CommandRecord
+func ReadCommandByKey(ctx context.Context, query CommandRowQuerier, project, key string) (storageports.CommandRecord, bool, error) {
+	var command storageports.CommandRecord
 	var created, updated string
 	err := query.QueryRowContext(ctx, `SELECT project_identity,command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=? AND idempotency_key=?`, project, key).Scan(&command.ProjectIdentity, &command.CommandID, &command.Kind, &command.TargetID, &command.ExpectedVersion, &command.IdempotencyKey, &command.RequestedBy, &command.Payload, &command.Status, &command.Result, &created, &updated)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -68,13 +71,13 @@ func ReadCommandByKey(ctx context.Context, query CommandRowQuerier, project, key
 }
 
 func QuerySnapshot(ctx context.Context, db QueryContext, project string) (contracts.DomainSnapshot, error) {
-	out := contracts.DomainSnapshot{ProjectIdentity: project, Tasks: []contracts.TaskRecord{}, WorkflowRuns: []contracts.WorkflowRunRecord{}, Executions: []contracts.ExecutionRecord{}, Attempts: []contracts.StepAttemptRecord{}, Decisions: []contracts.DecisionRecord{}, Operations: []contracts.OperationRecord{}}
+	out := contracts.DomainSnapshot{ProjectIdentity: project, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}, Operations: []executionmodel.OperationRecord{}}
 	queries := []struct {
 		sql    string
 		decode func([]byte) error
 	}{
 		{`SELECT payload FROM tasks WHERE project_identity=? ORDER BY task_id`, func(b []byte) error {
-			var v contracts.TaskRecord
+			var v taskmodel.TaskRecord
 			if err := json.Unmarshal(b, &v); err != nil {
 				return err
 			}
@@ -82,7 +85,7 @@ func QuerySnapshot(ctx context.Context, db QueryContext, project string) (contra
 			return nil
 		}},
 		{`SELECT payload FROM executions WHERE project_identity=? ORDER BY execution_id`, func(b []byte) error {
-			var v contracts.ExecutionRecord
+			var v executionmodel.ExecutionRecord
 			if err := json.Unmarshal(b, &v); err != nil {
 				return err
 			}
@@ -90,7 +93,7 @@ func QuerySnapshot(ctx context.Context, db QueryContext, project string) (contra
 			return nil
 		}},
 		{`SELECT payload FROM step_attempts WHERE project_identity=? ORDER BY execution_id,step_id,attempt_number`, func(b []byte) error {
-			var v contracts.StepAttemptRecord
+			var v executionmodel.StepAttemptRecord
 			if err := json.Unmarshal(b, &v); err != nil {
 				return err
 			}
@@ -98,7 +101,7 @@ func QuerySnapshot(ctx context.Context, db QueryContext, project string) (contra
 			return nil
 		}},
 		{`SELECT payload FROM decisions WHERE project_identity=? ORDER BY decision_id`, func(b []byte) error {
-			var v contracts.DecisionRecord
+			var v executionmodel.DecisionRecord
 			if err := json.Unmarshal(b, &v); err != nil {
 				return err
 			}
@@ -106,7 +109,7 @@ func QuerySnapshot(ctx context.Context, db QueryContext, project string) (contra
 			return nil
 		}},
 		{`SELECT payload FROM operations WHERE project_identity=? ORDER BY operation_id`, func(b []byte) error {
-			var v contracts.OperationRecord
+			var v executionmodel.OperationRecord
 			if err := json.Unmarshal(b, &v); err != nil {
 				return err
 			}
@@ -142,7 +145,7 @@ func QuerySnapshot(ctx context.Context, db QueryContext, project string) (contra
 	}
 	for rows.Next() {
 		var b []byte
-		var record contracts.WorkflowRunRecord
+		var record executionmodel.WorkflowRunRecord
 		if err = rows.Scan(&b, &record.ControlRevision); err != nil {
 			rows.Close()
 			return out, err
@@ -185,7 +188,7 @@ func QuerySnapshot(ctx context.Context, db QueryContext, project string) (contra
 
 // Events reads bounded metadata and materializes only the inline bodies that
 // fit payloadBudget. A zero budget reads metadata only, including lookahead.
-func (s Reader) Events(ctx context.Context, project, execution, attempt string, after int64, limit, payloadBudget int) ([]contracts.DomainEvent, error) {
+func (s Reader) Events(ctx context.Context, project, execution, attempt string, after int64, limit, payloadBudget int) ([]storageports.DomainEvent, error) {
 	if limit < 1 {
 		limit = 200
 	}
@@ -219,9 +222,9 @@ func (s Reader) Events(ctx context.Context, project, execution, attempt string, 
 		return nil, err
 	}
 	defer rows.Close()
-	out := []contracts.DomainEvent{}
+	out := []storageports.DomainEvent{}
 	for rows.Next() {
-		var v contracts.DomainEvent
+		var v storageports.DomainEvent
 		var received string
 		if err = rows.Scan(&v.EventID, &v.ProjectIdentity, &v.TaskID, &v.WorkflowRunID, &v.ExecutionID, &v.AttemptID, &v.ExternalSource, &v.ExternalID, &v.Type, &received, &v.PayloadBytes, &v.PayloadDigest, &v.Payload); err != nil {
 			return nil, err
@@ -250,11 +253,11 @@ func (s Reader) EventPayload(ctx context.Context, project string, eventID int64,
 	return body, total, digest, err
 }
 
-func (s Reader) Commands(ctx context.Context, project, status string, limit int) ([]contracts.CommandRecord, error) {
+func (s Reader) Commands(ctx context.Context, project, status string, limit int) ([]storageports.CommandRecord, error) {
 	return s.CommandsFiltered(ctx, project, status, limit, nil)
 }
 
-func (s Reader) CommandsFiltered(ctx context.Context, project, status string, limit int, kinds []string) ([]contracts.CommandRecord, error) {
+func (s Reader) CommandsFiltered(ctx context.Context, project, status string, limit int, kinds []string) ([]storageports.CommandRecord, error) {
 	if limit < 1 {
 		limit = 200
 	}
@@ -280,9 +283,9 @@ func (s Reader) CommandsFiltered(ctx context.Context, project, status string, li
 		return nil, err
 	}
 	defer rows.Close()
-	out := []contracts.CommandRecord{}
+	out := []storageports.CommandRecord{}
 	for rows.Next() {
-		var v contracts.CommandRecord
+		var v storageports.CommandRecord
 		var created, updated string
 		if err = rows.Scan(&v.CommandID, &v.Kind, &v.TargetID, &v.ExpectedVersion, &v.IdempotencyKey, &v.RequestedBy, &v.Payload, &v.Status, &v.Result, &created, &updated); err != nil {
 			return nil, err
@@ -295,8 +298,8 @@ func (s Reader) CommandsFiltered(ctx context.Context, project, status string, li
 	return out, rows.Err()
 }
 
-func (s Reader) Command(ctx context.Context, project, commandID string) (contracts.CommandRecord, error) {
-	var command contracts.CommandRecord
+func (s Reader) Command(ctx context.Context, project, commandID string) (storageports.CommandRecord, error) {
+	var command storageports.CommandRecord
 	var created, updated string
 	err := s.db.QueryRowContext(ctx, `SELECT project_identity,command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=? AND command_id=?`, project, commandID).Scan(&command.ProjectIdentity, &command.CommandID, &command.Kind, &command.TargetID, &command.ExpectedVersion, &command.IdempotencyKey, &command.RequestedBy, &command.Payload, &command.Status, &command.Result, &created, &updated)
 	if err != nil {
@@ -310,8 +313,8 @@ func (s Reader) Command(ctx context.Context, project, commandID string) (contrac
 	return command, err
 }
 
-func (s Reader) CommandByIdempotency(ctx context.Context, project, idempotencyKey string) (contracts.CommandRecord, error) {
-	var command contracts.CommandRecord
+func (s Reader) CommandByIdempotency(ctx context.Context, project, idempotencyKey string) (storageports.CommandRecord, error) {
+	var command storageports.CommandRecord
 	var created, updated string
 	err := s.db.QueryRowContext(ctx, `SELECT project_identity,command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=? AND idempotency_key=?`, project, idempotencyKey).Scan(&command.ProjectIdentity, &command.CommandID, &command.Kind, &command.TargetID, &command.ExpectedVersion, &command.IdempotencyKey, &command.RequestedBy, &command.Payload, &command.Status, &command.Result, &created, &updated)
 	if err != nil {

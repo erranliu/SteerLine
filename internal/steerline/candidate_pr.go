@@ -5,6 +5,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 // Retired candidates remain PR observation sources. Their provider facts are
@@ -40,7 +41,7 @@ func (s *Service) pollRetiredCandidatePRs(ctx context.Context, run *Run, fixed w
 			}
 		}
 		err = s.commandStore.TransactCandidate(ctx, func(tx persistence.CandidateTx) error {
-			_, err := tx.AppendEvent(DomainEvent{ProjectIdentity: c.identity, TaskID: run.TaskID, WorkflowRunID: run.RunID, ExecutionID: e.ExecutionID, AttemptID: run.AttemptID, ExternalSource: "candidate-pr", ExternalID: url + ":" + info.State + ":" + deref(info.MergeCommit), Type: typeName, ReceivedAt: now(), Payload: mustJSON(info)})
+			_, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.identity, TaskID: run.TaskID, WorkflowRunID: run.RunID, ExecutionID: e.ExecutionID, AttemptID: run.AttemptID, ExternalSource: "candidate-pr", ExternalID: url + ":" + info.State + ":" + deref(info.MergeCommit), Type: typeName, ReceivedAt: now(), Payload: mustJSON(info)})
 			return err
 		})
 		if err != nil {

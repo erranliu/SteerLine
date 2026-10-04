@@ -15,8 +15,8 @@ import (
 	"time"
 	"unicode/utf8"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	queryapi "github.com/erranliu/SteerLine/internal/steerline/query"
 )
 
@@ -483,7 +483,7 @@ func TestConversationCheckpointPreflightRejectsUnanchoredState(t *testing.T) {
 func conversationTestWrite(sourceID string, seq uint64, mode string, body, raw []byte) ConversationWrite {
 	event := ConversationEvent{
 		Version: contracts.ConversationVersion, ProjectID: "project", TaskID: "task", WorkflowID: "workflow",
-		ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess,
+		ExecutionID: "execution", AttemptID: "attempt", Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess,
 		Agent: "fixture", TargetID: "local-test", Source: "fixture-journal", SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment-1",
 		SessionID: "session", SessionQuality: contracts.IdentityNative, TurnID: "turn", TurnQuality: contracts.IdentityDerived,
 		ItemID: "same-item", ItemQuality: contracts.IdentityNative, SourceEventID: sourceID, SourceEventQuality: contracts.IdentityDerived,

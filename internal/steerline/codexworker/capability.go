@@ -2,13 +2,13 @@ package codexworker
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
 
-	"errors"
-	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 type ProbeConfig struct {
@@ -30,6 +30,7 @@ type ProbeError struct {
 }
 
 func (e *ProbeError) Error() string { return e.Diagnostic }
+
 func (e *ProbeError) Unwrap() error { return e.Cause }
 
 func ProbeCapabilities(ctx context.Context, config ProbeConfig, port ProbePort) error {
@@ -72,7 +73,7 @@ func ProbeCapabilities(ctx context.Context, config ProbeConfig, port ProbePort) 
 	return nil
 }
 
-func ProbeManagedCLI(ctx context.Context, command contracts.Command, output func(context.Context, string, []string) ([]byte, error)) error {
+func ProbeManagedCLI(ctx context.Context, command executionbackend.Command, output func(context.Context, string, []string) ([]byte, error)) error {
 	version, err := output(ctx, command.Executable, []string{"--version"})
 	if err != nil {
 		return err

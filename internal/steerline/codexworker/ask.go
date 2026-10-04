@@ -7,9 +7,9 @@ import (
 	"regexp"
 	"strings"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 var nativeID = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$`)
@@ -34,7 +34,7 @@ type AskRouteData struct {
 
 type AskCall struct {
 	Route     AskRouteData
-	Questions []executionapi.Question
+	Questions []executionbackend.Question
 }
 
 // ParseAskEnvelope verifies the native tool and turn binding. The caller
@@ -73,6 +73,7 @@ func ParseAskCall(envelope codexapp.Envelope, threadID, turnID string) (AskCall,
 	}
 	return decodeAskCall(wire)
 }
+
 func decodeAskCall(wire AskEnvelope) (AskCall, error) {
 	questions, err := DecodeQuestions(wire.Arguments)
 	if err != nil {
@@ -91,26 +92,26 @@ func decodeAskCall(wire AskEnvelope) (AskCall, error) {
 			return AskCall{}, fmt.Errorf("Codex ask question %d has invalid identity or text", i+1)
 		}
 		seen[q.ID] = true
-		req := contracts.DecisionRequest{Question: q.Question, Options: q.Options, AllowFreeText: q.AllowFreeText}
-		if err := contracts.NormalizeDecisionContent(&req); err != nil {
+		req := executionmodel.DecisionRequest{Question: q.Question, Options: q.Options, AllowFreeText: q.AllowFreeText}
+		if err := executionmodel.NormalizeDecisionContent(&req); err != nil {
 			return AskCall{}, fmt.Errorf("Codex ask question %q: %w", q.ID, err)
 		}
 		q.Options = req.Options
 	}
 	call := AskCall{Route: AskRouteData{RequestID: append(json.RawMessage(nil), wire.RequestID...), ThreadID: wire.ThreadID, TurnID: wire.TurnID, CallID: wire.CallID}, Questions: questions}
 	request := decisionPresentation(questions)
-	if err := contracts.NormalizeDecisionContent(&request); err != nil {
+	if err := executionmodel.NormalizeDecisionContent(&request); err != nil {
 		return AskCall{}, fmt.Errorf("Codex ask cannot be displayed completely: %w", err)
 	}
 	return call, nil
 }
 
-func decisionPresentation(questions []executionapi.Question) contracts.DecisionRequest {
-	request := contracts.DecisionRequest{FormatVersion: 2, Context: "执行当前问题需要人工回答；提交后将继续原执行。", AllowFreeText: true}
+func decisionPresentation(questions []executionbackend.Question) executionmodel.DecisionRequest {
+	request := executionmodel.DecisionRequest{FormatVersion: 2, Context: "执行当前问题需要人工回答；提交后将继续原执行。", AllowFreeText: true}
 	if len(questions) == 1 {
 		q := questions[0]
 		request.Question = q.Question
-		request.Options = append([]executionapi.DecisionOption(nil), q.Options...)
+		request.Options = append([]executionbackend.DecisionOption(nil), q.Options...)
 		request.AllowFreeText = q.AllowFreeText
 		return request
 	}
@@ -136,37 +137,37 @@ func decisionPresentation(questions []executionapi.Question) contracts.DecisionR
 	return request
 }
 
-func NewQuestionRoute(call AskCall, fixed executionapi.SessionContext) (executionapi.QuestionRoute, error) {
+func NewQuestionRoute(call AskCall, fixed executionbackend.SessionContext) (executionbackend.ImplementationDataEnvelope, error) {
 	fixedTurn := fixed.CurrentTurnID
 	if fixedTurn == "" {
 		fixedTurn = fixed.PendingTurnID
 	}
 	if !ValidNativeID(call.Route.ThreadID) || !ValidNativeID(call.Route.TurnID) || call.Route.CallID == "" ||
 		!json.Valid(call.Route.RequestID) || call.Route.ThreadID != fixed.SessionID || call.Route.TurnID != fixedTurn {
-		return executionapi.QuestionRoute{}, errors.New("native question route differs from its fixed session or turn")
+		return executionbackend.ImplementationDataEnvelope{}, errors.New("native question route differs from its fixed session or turn")
 	}
 	payload, err := json.Marshal(call.Route)
 	if err != nil {
-		return executionapi.QuestionRoute{}, err
+		return executionbackend.ImplementationDataEnvelope{}, err
 	}
-	return executionapi.NewQuestionRoute(QuestionRouteImplementationKey, 1, executionapi.QuestionRouteIdentity{
+	return executionbackend.NewQuestionRoute(QuestionRouteImplementationKey, 1, executionbackend.QuestionRouteIdentity{
 		ProjectID: fixed.ProjectID, WorkflowRunID: fixed.WorkflowRunID, ExecutionID: fixed.ExecutionID,
 		AttemptID: fixed.AttemptID, Generation: fixed.Generation, TurnID: call.Route.TurnID, QuestionID: call.Route.CallID,
 	}, payload)
 }
 
-func DecodeQuestionRoute(route executionapi.QuestionRoute, fixed executionapi.SessionContext) (AskRouteData, error) {
-	want := executionapi.QuestionRouteIdentity{ProjectID: fixed.ProjectID, WorkflowRunID: fixed.WorkflowRunID,
+func DecodeQuestionRoute(route executionbackend.ImplementationDataEnvelope, fixed executionbackend.SessionContext) (AskRouteData, error) {
+	want := executionbackend.QuestionRouteIdentity{ProjectID: fixed.ProjectID, WorkflowRunID: fixed.WorkflowRunID,
 		ExecutionID: fixed.ExecutionID, AttemptID: fixed.AttemptID, Generation: fixed.Generation,
 		TurnID: route.TurnID, QuestionID: route.QuestionID}
-	if route.ImplementationKey != QuestionRouteImplementationKey || route.CodecVersion != 1 || route.Purpose != executionapi.QuestionRouteAnswerPurpose {
+	if route.ImplementationKey != QuestionRouteImplementationKey || route.CodecVersion != 1 || route.Purpose != executionbackend.QuestionRouteAnswerPurpose {
 		return AskRouteData{}, errors.New("unsupported native question route codec")
 	}
 	if err := route.ValidateIdentity(want); err != nil {
 		return AskRouteData{}, err
 	}
 	var data AskRouteData
-	if err := executionapi.DecodeStrictJSON(route.Payload, &data, "native question route has trailing data"); err != nil {
+	if err := executionbackend.DecodeStrictJSON(route.Payload, &data, "native question route has trailing data"); err != nil {
 		return AskRouteData{}, err
 	}
 	if !ValidNativeID(data.ThreadID) || !ValidNativeID(data.TurnID) || data.ThreadID != fixed.SessionID ||

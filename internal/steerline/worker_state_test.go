@@ -5,15 +5,17 @@ import (
 	"testing"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges(t *testing.T) {
-	wf := WorkflowRunRecord{WorkflowRunID: "wf-8", TaskID: "8", WorkflowVersion: WorkerFlowVersion, Phase: "queued", Branch: "main"}
-	exec := ExecutionRecord{ExecutionID: "exec-8", WorkflowRunID: wf.WorkflowRunID, Status: "pending", Workspace: WorkspaceEvidence{Branch: "fixture/task-8"}}
-	pr := func(url, state string) PRInfo {
-		return PRInfo{URL: url, Repository: "o/r", BaseBranch: "main", HeadRepository: "o/r", HeadBranch: "fixture/task-8", HeadRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", State: state}
+	wf := executionmodel.WorkflowRunRecord{WorkflowRunID: "wf-8", TaskID: "8", WorkflowVersion: executionmodel.Version, Phase: "queued", Branch: "main"}
+	exec := executionmodel.ExecutionRecord{ExecutionID: "exec-8", WorkflowRunID: wf.WorkflowRunID, Status: "pending", Workspace: executionmodel.WorkspaceEvidence{Branch: "fixture/task-8"}}
+	pr := func(url, state string) executionmodel.PRInfo {
+		return executionmodel.PRInfo{URL: url, Repository: "o/r", BaseBranch: "main", HeadRepository: "o/r", HeadBranch: "fixture/task-8", HeadRevision: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", State: state}
 	}
 	begin := func(turn string) {
 		t.Helper()
@@ -53,7 +55,7 @@ func TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges(t *testing.T) {
 	}
 	mergedAt := time.Now().UTC()
 	delivery := TaskDeliveryRecord{TaskID: "8", SelectedWorkflowRunID: "wf-8", PRURL: "pr-9", MergeCommit: "merge-9", MergedAt: mergedAt}
-	if err := contracts.MarkWorkerDeliveryCommitted(TaskRecord{TaskID: "8", Status: "closed"}, &wf, delivery); err != nil || wf.Phase != "completed" {
+	if err := contracts.MarkWorkerDeliveryCommitted(taskmodel.TaskRecord{TaskID: "8", Status: "closed"}, &wf, delivery); err != nil || wf.Phase != "completed" {
 		t.Fatalf("committed delivery did not complete: phase=%s error=%v", wf.Phase, err)
 	}
 	if err := BeginWorkerTurn(&wf, &exec, "session-8", "turn-4"); err == nil {
@@ -62,8 +64,8 @@ func TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges(t *testing.T) {
 }
 
 func TestWorkerFlowRejectsReplacementsAndLateTurns(t *testing.T) {
-	wf := WorkflowRunRecord{WorkflowRunID: "wf", WorkflowVersion: WorkerFlowVersion, Phase: "queued"}
-	exec := ExecutionRecord{ExecutionID: "exec", WorkflowRunID: "wf"}
+	wf := executionmodel.WorkflowRunRecord{WorkflowRunID: "wf", WorkflowVersion: executionmodel.Version, Phase: "queued"}
+	exec := executionmodel.ExecutionRecord{ExecutionID: "exec", WorkflowRunID: "wf"}
 	if err := BeginWorkerTurn(&wf, &exec, "session", "turn-1"); err != nil {
 		t.Fatal(err)
 	}
@@ -77,10 +79,10 @@ func TestWorkerFlowRejectsReplacementsAndLateTurns(t *testing.T) {
 		t.Fatal(err)
 	}
 	phase := wf.Phase
-	if err := NoteWorkerQuestion(&wf, &exec, "turn-1"); !errors.Is(err, ErrWorkerTurnStale) || wf.Phase != phase {
+	if err := NoteWorkerQuestion(&wf, &exec, "turn-1"); !errors.Is(err, executionmodel.ErrTurnStale) || wf.Phase != phase {
 		t.Fatalf("late question changed the newer turn: phase=%s error=%v", wf.Phase, err)
 	}
-	if err := StopWorkerTurn(&wf, &exec, "turn-1", false); !errors.Is(err, ErrWorkerTurnStale) || wf.Phase != phase {
+	if err := StopWorkerTurn(&wf, &exec, "turn-1", false); !errors.Is(err, executionmodel.ErrTurnStale) || wf.Phase != phase {
 		t.Fatalf("late stop changed the newer turn: phase=%s error=%v", wf.Phase, err)
 	}
 	if err := BeginWorkerTurn(&wf, &exec, "session", "turn-3"); err == nil {
@@ -89,10 +91,10 @@ func TestWorkerFlowRejectsReplacementsAndLateTurns(t *testing.T) {
 }
 
 func TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults(t *testing.T) {
-	task := TaskRecord{TaskID: "8", ContractID: "contract-8"}
-	contract := TaskContract{ContractID: "contract-8", Digest: "fixed-digest"}
-	wf := WorkflowRunRecord{WorkflowRunID: "wf-8", TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, Phase: "waiting_pr_merge", SelectedResult: "exec-8", PRURL: "https://git.example/o/r/pulls/8"}
-	exec := ExecutionRecord{ExecutionID: "exec-8", CurrentAttemptID: "attempt-8", WorkflowRunID: wf.WorkflowRunID, Protocol: string(neutralProtocol), Workspace: WorkspaceEvidence{Branch: "fixture/task-8", Dirty: true}, Status: "idle"}
+	task := taskmodel.TaskRecord{TaskID: "8", ContractID: "contract-8"}
+	contract := taskmodel.TaskContract{ContractID: "contract-8", Digest: "fixed-digest"}
+	wf := executionmodel.WorkflowRunRecord{WorkflowRunID: "wf-8", TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, Phase: "waiting_pr_merge", SelectedResult: "exec-8", PRURL: "https://git.example/o/r/pulls/8"}
+	exec := executionmodel.ExecutionRecord{ExecutionID: "exec-8", CurrentAttemptID: "attempt-8", WorkflowRunID: wf.WorkflowRunID, Protocol: string(neutralProtocol), Workspace: executionmodel.WorkspaceEvidence{Branch: "fixture/task-8", Dirty: true}, Status: "idle"}
 	setNeutralBinding(t, &exec, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
 	prURL, err := validateNativeDeliveryGates(task, contract, wf, exec)
 	if err != nil || prURL != wf.PRURL {
@@ -106,13 +108,13 @@ func TestWorkerFlowDeliveryGateUsesSessionAndPRWithoutStepResults(t *testing.T) 
 }
 
 func TestWorkerFeedbackKeepsOptionAndAdditionalText(t *testing.T) {
-	request := DecisionRequest{Options: []executionapi.DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true}
-	answer := DecisionAnswer{OptionID: "continue", Note: "Keep the partially committed changes and fix the compiler error."}
+	request := executionmodel.DecisionRequest{Options: []executionbackend.DecisionOption{{ID: "continue", Label: "Continue current work"}}, AllowFreeText: true}
+	answer := executionmodel.DecisionAnswer{OptionID: "continue", Note: "Keep the partially committed changes and fix the compiler error."}
 	message := workerFeedbackText(answer, request)
 	if message != "Selected option: Continue current work\n\nAdditional instructions:\nKeep the partially committed changes and fix the compiler error." {
 		t.Fatalf("feedback lost the option or note: %q", message)
 	}
-	if text := workerFeedbackText(DecisionAnswer{Note: "Pure text"}, request); text != "Pure text" {
+	if text := workerFeedbackText(executionmodel.DecisionAnswer{Note: "Pure text"}, request); text != "Pure text" {
 		t.Fatalf("pure text feedback changed: %q", text)
 	}
 }

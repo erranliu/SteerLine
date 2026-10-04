@@ -2,26 +2,29 @@ package steerline
 
 import (
 	"encoding/json"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/projection"
 	"strings"
 	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/steerline/projection"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 	t.Run("question_ids_are_scoped_to_the_original_turn", func(t *testing.T) {
 		old := simpleQuestionRoute(t, "example.impl", "project", "workflow", "execution", "attempt", "generation", "old-turn", "reused-call")
 		current := simpleQuestionRoute(t, "example.impl", "project", "workflow", "execution", "attempt", "generation", "current-turn", "reused-call")
-		oldQuestions := []executionapi.Question{{ExecutionID: "execution", AttemptID: "attempt", Generation: "generation", TurnID: "old-turn", ID: "choice", Question: "Previous question", AllowFreeText: true}}
+		oldQuestions := []executionbackend.Question{{ExecutionID: "execution", AttemptID: "attempt", Generation: "generation", TurnID: "old-turn", ID: "choice", Question: "Previous question", AllowFreeText: true}}
 		currentQuestions := cloneExecutionQuestions(oldQuestions)
 		currentQuestions[0].TurnID, currentQuestions[0].Question = "current-turn", "New question"
-		request := decisionRequestFromEventFact(executionapi.EventFact{QuestionRoute: &old, Questions: oldQuestions})
-		s := &Service{domain: DomainSnapshot{Decisions: []DecisionRecord{{ExecutionID: "execution", QuestionID: old.QuestionID, Request: mustJSON(request)}}}}
-		seen, err := s.routedQuestionSeen(&Run{}, &ExecutionRecord{ExecutionID: "execution"}, &current, currentQuestions)
+		request := decisionRequestFromEventFact(executionbackend.EventFact{QuestionRoute: &old, Questions: oldQuestions})
+		s := &Service{domain: DomainSnapshot{Decisions: []executionmodel.DecisionRecord{{ExecutionID: "execution", QuestionID: old.QuestionID, Request: mustJSON(request)}}}}
+		seen, err := s.routedQuestionSeen(&Run{}, &executionmodel.ExecutionRecord{ExecutionID: "execution"}, &current, currentQuestions)
 		if err != nil || seen {
 			t.Fatalf("a call ID from an earlier turn conflicts with a new bound question: seen=%t err=%v", seen, err)
 		}
-		if _, err := s.routedQuestionSeen(&Run{}, &ExecutionRecord{ExecutionID: "execution"}, &old, currentQuestions); err == nil {
+		if _, err := s.routedQuestionSeen(&Run{}, &executionmodel.ExecutionRecord{ExecutionID: "execution"}, &old, currentQuestions); err == nil {
 			t.Fatal("changed content for the same original question was accepted")
 		}
 	})
@@ -34,7 +37,7 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 		s.refreshRun(run)
 		_, err := s.startWorkerOperation(run, "start_worker_turn", "worker-turn:"+record.ExecutionID+":"+commandID, map[string]string{"command_id": commandID})
 		require(t, err)
-		event := WorkerEvent{RunID: run.RunID, AttemptID: run.AttemptID, Fact: executionapi.EventFact{Kind: executionapi.EventStarted, SessionID: "opaque-session", StartedTurnID: record.PendingTurnID}}
+		event := WorkerEvent{RunID: run.RunID, AttemptID: run.AttemptID, Fact: executionbackend.EventFact{Kind: executionbackend.EventStarted, SessionID: "opaque-session", StartedTurnID: record.PendingTurnID}}
 		foreign := event
 		foreign.Fact.StartedTurnID = "other-turn"
 		if err := s.eventWorkerFlowFor(run, foreign); err == nil || s.executionRecord(run).TurnNumber != 0 {
@@ -49,35 +52,35 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 		if s.executionRecord(run).TurnNumber != 1 {
 			t.Fatal("replayed start counted a second turn")
 		}
-		event.Fact = executionapi.EventFact{Kind: executionapi.EventGap, Gap: true}
+		event.Fact = executionbackend.EventFact{Kind: executionbackend.EventGap, Gap: true}
 		require(t, s.eventWorkerFlowFor(run, event))
 		if s.executionRecord(run).LastStoppedTurnID != "" || s.workflowRecord(run).Phase != workflow.Phase {
 			t.Fatal("observation gap was treated as a stopped worker")
 		}
 	})
-	identity := executionapi.QuestionRouteIdentity{ProjectID: "project", WorkflowRunID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Generation: "generation", TurnID: "turn", QuestionID: "receipt-1"}
+	identity := executionbackend.QuestionRouteIdentity{ProjectID: "project", WorkflowRunID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Generation: "generation", TurnID: "turn", QuestionID: "receipt-1"}
 	route := simpleQuestionRoute(t, "example.third-party", identity.ProjectID, identity.WorkflowRunID, identity.ExecutionID, identity.AttemptID, identity.Generation, identity.TurnID, identity.QuestionID)
-	question := executionapi.Question{ExecutionID: identity.ExecutionID, AttemptID: identity.AttemptID, Generation: identity.Generation, TurnID: identity.TurnID,
-		ID: "choice", Header: "Choice", Question: "Continue?", Options: []executionapi.DecisionOption{{ID: "yes", Label: "Yes"}}, AllowFreeText: true}
-	fact := executionapi.EventFact{Kind: executionapi.EventQuestion, Questions: []executionapi.Question{question}, QuestionRoute: &route}
+	question := executionbackend.Question{ExecutionID: identity.ExecutionID, AttemptID: identity.AttemptID, Generation: identity.Generation, TurnID: identity.TurnID,
+		ID: "choice", Header: "Choice", Question: "Continue?", Options: []executionbackend.DecisionOption{{ID: "yes", Label: "Yes"}}, AllowFreeText: true}
+	fact := executionbackend.EventFact{Kind: executionbackend.EventQuestion, Questions: []executionbackend.Question{question}, QuestionRoute: &route}
 	request := decisionRequestFromEventFact(fact)
-	if err := validateDecisionRequest(&request); err != nil {
+	if err := executionmodel.ValidateDecisionRequest(&request); err != nil {
 		t.Fatal(err)
 	}
 	run := &Run{RunID: identity.WorkflowRunID, ExecutionID: identity.ExecutionID, AttemptID: identity.AttemptID}
-	execution := &ExecutionRecord{ProjectIdentity: identity.ProjectID, WorkflowRunID: identity.WorkflowRunID, ExecutionID: identity.ExecutionID,
+	execution := &executionmodel.ExecutionRecord{ProjectIdentity: identity.ProjectID, WorkflowRunID: identity.WorkflowRunID, ExecutionID: identity.ExecutionID,
 		CurrentAttemptID: identity.AttemptID, Generation: identity.Generation, CurrentTurnID: identity.TurnID, Protocol: string(neutralProtocol)}
 	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", identity.Generation, workerFlowMockSession)
-	if err := validateQuestionRouteForRun(run, execution, &route, []executionapi.Question{question}, route.ImplementationKey, route.CodecVersion); err != nil {
+	if err := validateQuestionRouteForRun(run, execution, &route, []executionbackend.Question{question}, route.ImplementationKey, route.CodecVersion); err != nil {
 		t.Fatalf("center rejected a fixed generic question route: %v", err)
 	}
 	answerRoute := simpleQuestionRoute(t, "example.inbox", identity.ProjectID, identity.WorkflowRunID, identity.ExecutionID, identity.AttemptID, identity.Generation, identity.TurnID, "message-1")
-	answerFact := executionapi.EventFact{QuestionRoute: &answerRoute, Questions: []executionapi.Question{{
+	answerFact := executionbackend.EventFact{QuestionRoute: &answerRoute, Questions: []executionbackend.Question{{
 		ExecutionID: identity.ExecutionID, AttemptID: identity.AttemptID, Generation: identity.Generation, TurnID: identity.TurnID,
-		ID: "message-1", Header: "Choice", Question: "Continue?", Options: []executionapi.DecisionOption{{ID: "yes", Label: "Yes"}},
+		ID: "message-1", Header: "Choice", Question: "Continue?", Options: []executionbackend.DecisionOption{{ID: "yes", Label: "Yes"}},
 	}}}
 	answerRequest := decisionRequestFromEventFact(answerFact)
-	answer := DecisionAnswer{AnsweredBy: "tester", OptionID: "yes", Note: "Keep going"}
+	answer := executionmodel.DecisionAnswer{AnsweredBy: "tester", OptionID: "yes", Note: "Keep going"}
 	if err := normalizeNativeDecisionAnswer(&answerRequest, &answer); err != nil {
 		t.Fatal(err)
 	}
@@ -86,14 +89,14 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 	}
 	conflict := question
 	conflict.Question = "Changed text"
-	if err := sameRoutedQuestion(&route, []executionapi.Question{question}, &route, []executionapi.Question{conflict}); err == nil {
+	if err := sameRoutedQuestion(&route, []executionbackend.Question{question}, &route, []executionbackend.Question{conflict}); err == nil {
 		t.Fatal("center accepted conflicting content for a duplicate question identity")
 	}
-	if err := validateQuestionRouteForRun(run, execution, &route, []executionapi.Question{question}, "different.implementation", 1); err == nil {
+	if err := validateQuestionRouteForRun(run, execution, &route, []executionbackend.Question{question}, "different.implementation", 1); err == nil {
 		t.Fatal("center accepted a route from another implementation")
 	}
 	question.TurnID = "old-turn"
-	if err := validateQuestionRouteForRun(run, execution, &route, []executionapi.Question{question}, route.ImplementationKey, route.CodecVersion); err == nil {
+	if err := validateQuestionRouteForRun(run, execution, &route, []executionbackend.Question{question}, route.ImplementationKey, route.CodecVersion); err == nil {
 		t.Fatal("center accepted a question from another turn")
 	}
 	changed := route.Clone()
@@ -106,12 +109,12 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 func TestCD62QuestionReceiptBarrier(t *testing.T) {
 	t.Run("all_question_ids_validated", TestRoutedDecisionRequiresAllQuestionIDs)
 	t.Run("legacy_decision_format_is_rejected", func(t *testing.T) {
-		legacy := DecisionRecord{ProjectIdentity: "project", DecisionID: "decision", WorkflowRunID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Version: 1, QuestionID: "question", Request: []byte(`{"question":"old","native_ask":{"call_id":"call"}}`)}
-		_, err := projection.Run(TaskRecord{TaskID: "task"}, WorkflowRunRecord{WorkflowRunID: "workflow", TaskID: "task", WorkflowVersion: WorkerFlowVersion}, ExecutionRecord{ExecutionID: "execution", WorkflowRunID: "workflow", CurrentAttemptID: "attempt", CurrentStep: "worker", DecisionID: "decision"}, []StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution", StepID: "worker"}}, []DecisionRecord{legacy}, nil)
+		legacy := executionmodel.DecisionRecord{ProjectIdentity: "project", DecisionID: "decision", WorkflowRunID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Version: 1, QuestionID: "question", Request: []byte(`{"question":"old","native_ask":{"call_id":"call"}}`)}
+		_, err := projection.Run(taskmodel.TaskRecord{TaskID: "task"}, executionmodel.WorkflowRunRecord{WorkflowRunID: "workflow", TaskID: "task", WorkflowVersion: executionmodel.Version}, executionmodel.ExecutionRecord{ExecutionID: "execution", WorkflowRunID: "workflow", CurrentAttemptID: "attempt", CurrentStep: "worker", DecisionID: "decision"}, []executionmodel.StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution", StepID: "worker"}}, []executionmodel.DecisionRecord{legacy}, nil)
 		if err == nil || !strings.Contains(err.Error(), "unsupported format") {
 			t.Fatalf("legacy native question data was not rejected by the shared projection: %v", err)
 		}
-		var execution ExecutionRecord
+		var execution executionmodel.ExecutionRecord
 		if err := json.Unmarshal([]byte(`{"pending_asks":[]}`), &execution); err == nil {
 			t.Fatal("legacy pending native questions were silently read")
 		}
@@ -119,7 +122,7 @@ func TestCD62QuestionReceiptBarrier(t *testing.T) {
 	t.Run("TestAppServerAnswerRecoveryPersistsBeforeNextQuestion", testAppServerAnswerRecoveryPersistsBeforeNextQuestion)
 }
 
-func routedAnswerText(answer DecisionAnswer, request DecisionRequest) string {
+func routedAnswerText(answer executionmodel.DecisionAnswer, request executionmodel.DecisionRequest) string {
 	if request.QuestionRoute == nil {
 		return workerFeedbackText(answer, request)
 	}

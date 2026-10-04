@@ -7,31 +7,31 @@ import (
 	"strings"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-func (b Client) StartTask(ctx context.Context, runID, taskID, worktreeID string, previous *executionapi.ProcessIdentity) (StartReceipt, error) {
+func (b Client) StartTask(ctx context.Context, runID, taskID, worktreeID string, previous *executionbackend.ProcessIdentity) (StartReceipt, error) {
 	pair, err := Preflight(ctx, b.config)
 	if err != nil {
 		return StartReceipt{}, err
 	}
 	if runID == "" || taskID == "" || !strings.HasPrefix(worktreeID, pair.RepositoryID+"::") {
-		return StartReceipt{}, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote start lacks fixed Run/Task/worktree"}
+		return StartReceipt{}, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "remote start lacks fixed Run/Task/worktree"}
 	}
 	args := []string{"orchestration", "worker-start", "--task", taskID, "--on", b.config.Settings.EnvironmentID, "--worktree", "id:" + worktreeID, "--run", runID, "--from", b.config.Settings.CoordinatorTerminal, "--json"}
 	reuse := previous != nil
 	if reuse {
 		if previous.Kind != "orca_supervised" || previous.RuntimeID != pair.RemoteRuntime || previous.CoordinatorRuntimeID != pair.CenterRuntime || previous.ExecutionHost != pair.EnvironmentID || previous.WorktreeID != worktreeID || previous.Terminal == "" || previous.Incarnation == "" {
-			return StartReceipt{}, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote continuation changed original agent binding"}
+			return StartReceipt{}, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "remote continuation changed original agent binding"}
 		}
 		original, err := b.Show(ctx, StartReceipt{RunID: previous.OrchestrationRun, TaskID: previous.Task, DispatchID: previous.Dispatch, WorktreeID: previous.WorktreeID, CenterRuntimeID: previous.CoordinatorRuntimeID})
 		if err != nil {
 			return StartReceipt{}, err
 		}
 		if original.Identity != *previous || original.Liveness != "live" {
-			return StartReceipt{}, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote continuation requires the original live agent incarnation"}
+			return StartReceipt{}, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "remote continuation requires the original live agent incarnation"}
 		}
-		if _, err := b.Settlement(ctx, Ref{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaSupervised, Target: executionapi.ExecutionTarget{ID: "orca-supervised:" + b.config.Settings.ConnectionID, ConnectionID: b.config.Settings.ConnectionID, ExternalRuntime: pair.EnvironmentID, OrchestrationRun: previous.OrchestrationRun, ExternalTask: previous.Task, Dispatch: previous.Dispatch, ExecutionHost: previous.ExecutionHost, WorktreeID: worktreeID}, External: *previous}, ""); err != nil {
+		if _, err := b.Settlement(ctx, Ref{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaSupervised, Target: executionbackend.ExecutionTarget{ID: "orca-supervised:" + b.config.Settings.ConnectionID, ConnectionID: b.config.Settings.ConnectionID, ExternalRuntime: pair.EnvironmentID, OrchestrationRun: previous.OrchestrationRun, ExternalTask: previous.Task, Dispatch: previous.Dispatch, ExecutionHost: previous.ExecutionHost, WorktreeID: worktreeID}, External: *previous}, ""); err != nil {
 			return StartReceipt{}, err
 		}
 		args = append(args, "--terminal", previous.Terminal)
@@ -47,7 +47,7 @@ func (b Client) start(ctx context.Context, args []string, pair PreflightResult, 
 	out, callErr := b.config.Call(ctx, max(positiveDuration(b.config.CommandTimeout, 30*time.Second), 2*time.Minute), args...)
 	env, parseErr := parseEnvelope(out)
 	if callErr != nil || parseErr != nil {
-		return StartReceipt{}, &Error{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "supervised worker start may have been applied; inspect the exact Run and do not issue another start without a platform request UUID", Cause: errors.Join(callErr, parseErr)}
+		return StartReceipt{}, &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "supervised worker start may have been applied; inspect the exact Run and do not issue another start without a platform request UUID", Cause: errors.Join(callErr, parseErr)}
 	}
 	var result struct {
 		RunID      string `json:"runId"`
@@ -83,17 +83,17 @@ func (b Client) start(ctx context.Context, args []string, pair PreflightResult, 
 		} `json:"mutation"`
 	}
 	if err := json.Unmarshal(env.Result, &result); err != nil {
-		return StartReceipt{}, &Error{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "supervised worker start receipt is malformed", Cause: err}
+		return StartReceipt{}, &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "supervised worker start receipt is malformed", Cause: err}
 	}
 	startReceipt := StartReceipt{RunID: result.RunID, TaskID: result.TaskID, DispatchID: result.DispatchID, WorktreeID: result.Worker.WorktreeID, CenterRuntimeID: pair.CenterRuntime, PlatformRequestID: result.Mutation.RequestID, State: result.State, Stage: result.Stage}
 	if result.RunID != workflowRunID || result.TaskID == "" || result.DispatchID == "" || result.Server.EnvironmentID != b.config.Settings.EnvironmentID || (!reuse && (result.Launch.Effective.Agent != "codex" || result.Launch.Effective.Model != b.config.Model || result.Launch.Effective.Effort != b.config.ReasoningEffort)) || (expectedTask != "" && result.TaskID != expectedTask) {
-		return startReceipt, &Error{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "supervised worker start receipt does not match the fixed Run/environment/launch identity"}
+		return startReceipt, &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "supervised worker start receipt does not match the fixed Run/environment/launch identity"}
 	}
 	if result.Mutation.RequestID == "" {
-		return startReceipt, &Error{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "worker-start receipt omitted Orca's platform request UUID; preserve the exact Task/Dispatch and do not retry with a generated ID"}
+		return startReceipt, &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "worker-start receipt omitted Orca's platform request UUID; preserve the exact Task/Dispatch and do not retry with a generated ID"}
 	}
 	if env.Meta.RuntimeID != pair.CenterRuntime {
-		return startReceipt, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "worker-start receipt came from a different center runtime"}
+		return startReceipt, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "worker-start receipt came from a different center runtime"}
 	}
 	worktreeID := result.Worker.WorktreeID
 	for _, effect := range append(result.Effects, result.Worker.Effects...) {
@@ -102,15 +102,15 @@ func (b Client) start(ctx context.Context, args []string, pair PreflightResult, 
 		}
 	}
 	if worktreeID == "" {
-		return startReceipt, &Error{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "supervised worker start omitted exact worktree identity"}
+		return startReceipt, &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "supervised worker start omitted exact worktree identity"}
 	}
 	startReceipt.WorktreeID = worktreeID
 	if worktreeID != expectedWorktreeID {
-		return startReceipt, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote worker started in a different worktree"}
+		return startReceipt, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "remote worker started in a different worktree"}
 	}
 
 	if result.State != "ready" || result.Stage != "input_accepted" {
-		return StartReceipt{RunID: result.RunID, TaskID: result.TaskID, DispatchID: result.DispatchID, WorktreeID: worktreeID, PlatformRequestID: result.Mutation.RequestID, State: result.State, Stage: result.Stage}, &Error{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "supervised worker did not reach input_accepted; reconcile exact Dispatch before retry"}
+		return StartReceipt{RunID: result.RunID, TaskID: result.TaskID, DispatchID: result.DispatchID, WorktreeID: worktreeID, PlatformRequestID: result.Mutation.RequestID, State: result.State, Stage: result.Stage}, &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "supervised worker did not reach input_accepted; reconcile exact Dispatch before retry"}
 	}
 	return StartReceipt{RunID: result.RunID, TaskID: result.TaskID, DispatchID: result.DispatchID, WorktreeID: worktreeID, CenterRuntimeID: pair.CenterRuntime, PlatformRequestID: result.Mutation.RequestID, State: result.State, Stage: result.Stage}, nil
 }

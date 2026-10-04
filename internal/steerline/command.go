@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"strings"
 	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func validServiceCommandKind(kind string) bool {
@@ -25,6 +27,7 @@ type Runner struct {
 	Environment []string
 	Input       []byte
 }
+
 type limitedBuffer struct {
 	bytes.Buffer
 	max int
@@ -36,7 +39,8 @@ func (b *limitedBuffer) Write(p []byte) (int, error) {
 	}
 	return b.Buffer.Write(p)
 }
-func (r Runner) Output(ctx context.Context, command Command, args ...string) ([]byte, error) {
+
+func (r Runner) Output(ctx context.Context, command executionbackend.Command, args ...string) ([]byte, error) {
 	if e := ctx.Err(); e != nil {
 		return nil, e
 	}
@@ -129,6 +133,7 @@ func unsetEnv(base []string, names []string) []string {
 	}
 	return out
 }
+
 func clip(s string, n int) string {
 	r := []rune(s)
 	if len(r) > n {

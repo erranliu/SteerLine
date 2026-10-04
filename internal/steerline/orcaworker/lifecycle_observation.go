@@ -5,29 +5,29 @@ import (
 	"errors"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-func (l *ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (l *ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	if err := l.validateSnapshot(snapshot); err != nil {
-		return executionapi.LifecycleReceipt{}, nil, err
+		return executionbackend.LifecycleReceipt{}, nil, err
 	}
 	state, found, err := l.readState(snapshot)
 	if err != nil || !found {
-		return executionapi.LifecycleReceipt{Disposition: executionapi.OperationUnknown, Diagnostic: "native Orca observation has no saved implementation state"}, nil, err
+		return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationUnknown, Diagnostic: "native Orca observation has no saved implementation state"}, nil, err
 	}
 	turn := latestBusinessTurn(&state, snapshot)
 	if turn == nil || turn.DispatchID == "" || snapshot.Ref.External.Terminal == "" {
-		return executionapi.LifecycleReceipt{Disposition: executionapi.OperationUnknown, Diagnostic: "native Orca observation has no original Task/Dispatch"}, nil, nil
+		return executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationUnknown, Diagnostic: "native Orca observation has no original Task/Dispatch"}, nil, nil
 	}
 	identity := snapshot.Ref.External
-	receipt := executionapi.LifecycleReceipt{Disposition: executionapi.OperationUnknown,
-		State: executionapi.LifecycleStateFacts{SessionID: SessionID(identity), SessionGeneration: identity.Incarnation, TurnID: turn.TurnID}}
+	receipt := executionbackend.LifecycleReceipt{Disposition: executionbackend.OperationUnknown,
+		State: executionbackend.LifecycleStateFacts{SessionID: SessionID(identity), SessionGeneration: identity.Incarnation, TurnID: turn.TurnID}}
 	if turn.DoneMessageID != "" {
 		settled, settleErr := Settlement(ctx, l.client.MetaCall, nativeDispatchIdentity(snapshot, *turn), turn.Outcome)
 		if settleErr == nil {
 			turn.Settled, turn.Outcome = true, settled
-			receipt.Disposition = executionapi.OperationConfirmed
+			receipt.Disposition = executionbackend.OperationConfirmed
 			receipt.State.TurnCompleted = true
 			receipt.TurnEvidence = nativeTurnEvidence(snapshot, *turn)
 			receipt.Implementation, err = l.targetEnvelope(snapshot, snapshot.Ref.Target, identity, state)
@@ -40,17 +40,17 @@ func (l *ExecutionLifecycle) ObserveLifecycle(ctx context.Context, snapshot exec
 		return receipt, nil, nativeCallError(showErr)
 	}
 	if terminal.RuntimeID != identity.RuntimeID || terminal.IncarnationID != identity.Incarnation || terminal.WorktreeID != identity.WorktreeID {
-		return receipt, nil, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original native Orca terminal or incarnation changed"}
+		return receipt, nil, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "original native Orca terminal or incarnation changed"}
 	}
 	if terminal.Exited() && turn.DoneMessageID == "" {
 		receipt.Diagnostic = "original Orca terminal exited without a persisted worker_done message"
 		return receipt, nil, nil
 	}
-	receipt.Disposition = executionapi.OperationAccepted
+	receipt.Disposition = executionbackend.OperationAccepted
 	return receipt, newNativeObserver(ctx, l, snapshot), nil
 }
 
-func latestBusinessTurn(state *NativeExecutionState, snapshot executionapi.LifecycleSnapshot) *NativeTurnState {
+func latestBusinessTurn(state *NativeExecutionState, snapshot executionbackend.LifecycleSnapshot) *NativeTurnState {
 	// Before the start receipt commits, the center has a Command but no Turn.
 	// This implementation owns the Command-to-native-Turn binding in its codec.
 	if snapshot.Session.PendingCommandID != "" {
@@ -81,47 +81,51 @@ func latestBusinessTurn(state *NativeExecutionState, snapshot executionapi.Lifec
 	return nil
 }
 
-func nativeDispatchIdentity(snapshot executionapi.LifecycleSnapshot, turn NativeTurnState) DispatchIdentity {
+func nativeDispatchIdentity(snapshot executionbackend.LifecycleSnapshot, turn NativeTurnState) DispatchIdentity {
 	identity := snapshot.Ref.External
 	return DispatchIdentity{DispatchID: turn.DispatchID, TaskID: turn.TaskID, RunID: snapshot.Ref.Target.OrchestrationRun,
 		RuntimeID: identity.RuntimeID, Terminal: identity.Terminal, Incarnation: identity.Incarnation, WorktreeID: identity.WorktreeID}
 }
 
-func nativeTurnEvidence(snapshot executionapi.LifecycleSnapshot, turn NativeTurnState) *executionapi.TurnEvidence {
+func nativeTurnEvidence(snapshot executionbackend.LifecycleSnapshot, turn NativeTurnState) *executionbackend.TurnEvidence {
 	started := snapshot.Session.CurrentTurnID == turn.TurnID || snapshot.Session.LastStoppedTurnID == turn.TurnID
 	if turn.Purpose == "readiness" && turn.DoneMessageID != "" {
 		started = true
 	}
-	return &executionapi.TurnEvidence{TurnID: turn.TurnID, CommandID: turn.TurnID, SessionID: SessionID(snapshot.Ref.External),
+	return &executionbackend.TurnEvidence{TurnID: turn.TurnID, CommandID: turn.TurnID, SessionID: SessionID(snapshot.Ref.External),
 		Started: started, Completed: true, Succeeded: turn.Outcome == "succeeded", LastMessage: turn.LastMessage,
 		Failure: map[bool]string{true: turn.LastMessage, false: ""}[turn.Outcome == "failed"], PRCandidates: append([]string(nil), turn.PRCandidates...)}
 }
 
-type nativeStopHandle struct{ identity executionapi.ProcessIdentity }
+type nativeStopHandle struct {
+	identity executionbackend.ProcessIdentity
+}
 
-func (handle *nativeStopHandle) Identity() executionapi.ProcessIdentity { return handle.identity }
-func (*nativeStopHandle) Kill()                                         {}
-func (*nativeStopHandle) Close()                                        {}
+func (handle *nativeStopHandle) Identity() executionbackend.ProcessIdentity { return handle.identity }
+
+func (*nativeStopHandle) Kill() {}
+
+func (*nativeStopHandle) Close() {}
 
 type nativeLifecycleObserver struct {
 	lifecycle *ExecutionLifecycle
-	snapshot  executionapi.LifecycleSnapshot
+	snapshot  executionbackend.LifecycleSnapshot
 	state     NativeExecutionState
 	turn      NativeTurnState
 	stop      *nativeStopHandle
 	cancel    context.CancelFunc
-	events    chan executionapi.LifecycleEvent
+	events    chan executionbackend.LifecycleEvent
 	done      chan error
 	closed    chan struct{}
 }
 
-func newNativeObserver(parent context.Context, lifecycle *ExecutionLifecycle, snapshot executionapi.LifecycleSnapshot) executionapi.LifecycleObserver {
+func newNativeObserver(parent context.Context, lifecycle *ExecutionLifecycle, snapshot executionbackend.LifecycleSnapshot) executionbackend.LifecycleObserver {
 	state, found, err := lifecycle.readState(snapshot)
 	turn := latestBusinessTurn(&state, snapshot)
 	ctx, cancel := context.WithCancel(context.WithoutCancel(parent))
 	observer := &nativeLifecycleObserver{lifecycle: lifecycle, snapshot: snapshot.Clone(), state: state,
 		stop: &nativeStopHandle{identity: snapshot.Ref.External}, cancel: cancel,
-		events: make(chan executionapi.LifecycleEvent, 16), done: make(chan error, 1), closed: make(chan struct{})}
+		events: make(chan executionbackend.LifecycleEvent, 16), done: make(chan error, 1), closed: make(chan struct{})}
 	if err != nil || !found || turn == nil || turn.DispatchID == "" {
 		go func() {
 			defer close(observer.events)
@@ -228,7 +232,7 @@ func (o *nativeLifecycleObserver) processInbox(ctx context.Context) error {
 		if turn == nil {
 			return errors.New("native Orca inbox lost its current turn")
 		}
-		if fact.Kind == executionapi.EventCompleted {
+		if fact.Kind == executionbackend.EventCompleted {
 			turn.DoneMessageID, turn.Outcome, turn.LastMessage = fact.SourceEventID, fact.Outcome, fact.LastMessage
 			turn.PRCandidates = append([]string(nil), fact.PRCandidates...)
 		}
@@ -243,7 +247,7 @@ func (o *nativeLifecycleObserver) processInbox(ctx context.Context) error {
 		if err != nil {
 			return err
 		}
-		event := executionapi.LifecycleEvent{Fact: fact, Implementation: envelopes, DeliveryID: inbox.DeliveryID,
+		event := executionbackend.LifecycleEvent{Fact: fact, Implementation: envelopes, DeliveryID: inbox.DeliveryID,
 			DeliveryFinal: index == len(batch.Facts)-1, Summary: nativeFactSummary(fact), Kind: "execution",
 			Status: string(fact.Kind), Title: nativeFactTitle(fact), Persisted: make(chan error, 1), Processed: make(chan error, 1)}
 		if !o.sendAndWait(ctx, event) {
@@ -276,21 +280,21 @@ func (o *nativeLifecycleObserver) reportRelay(ctx context.Context, turn *NativeT
 	if !o.readinessTurn() && !o.ensureStarted(ctx) {
 		return false
 	}
-	candidate := executionapi.LifecycleCandidate{Action: executionapi.LifecycleReportCompletion,
-		Input: executionapi.LifecycleInput{Completion: &executionapi.CompletionInput{TurnID: turn.TurnID,
+	candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleReportCompletion,
+		Input: executionbackend.LifecycleInput{Completion: &executionbackend.CompletionInput{TurnID: turn.TurnID,
 			Outcome: relay.Outcome, Subject: relay.Subject, Body: relay.Body}}}
 	if err := candidate.Validate(); err != nil {
 		o.done <- err
 		return false
 	}
-	fact := executionapi.EventFact{Kind: executionapi.EventStatus, Source: "native_orca_relay", SourceEventID: "relay:" + turn.TurnID,
+	fact := executionbackend.EventFact{Kind: executionbackend.EventStatus, Source: "native_orca_relay", SourceEventID: "relay:" + turn.TurnID,
 		Matched: true, LastMessage: relay.Subject}
 	envelopes, err := o.lifecycle.targetEnvelope(o.snapshot, o.snapshot.Ref.Target, o.snapshot.Ref.External, o.state)
 	if err != nil {
 		o.done <- err
 		return false
 	}
-	event := executionapi.LifecycleEvent{Fact: fact, Implementation: envelopes, Candidate: &candidate,
+	event := executionbackend.LifecycleEvent{Fact: fact, Implementation: envelopes, Candidate: &candidate,
 		Summary: "native Orca completion report is ready", Kind: "execution", Status: "completion_report",
 		Title: "Worker completion report", Persisted: make(chan error, 1), Processed: make(chan error, 1)}
 	if !o.sendAndWait(ctx, event) {
@@ -310,7 +314,7 @@ func (o *nativeLifecycleObserver) ensureStarted(ctx context.Context) bool {
 	if o.started() {
 		return true
 	}
-	event := executionapi.LifecycleEvent{Fact: executionapi.EventFact{Kind: executionapi.EventStarted,
+	event := executionbackend.LifecycleEvent{Fact: executionbackend.EventFact{Kind: executionbackend.EventStarted,
 		StartedTurnID: o.turn.TurnID, SessionID: SessionID(o.snapshot.Ref.External)},
 		Summary: "native Orca turn start observed", Kind: "execution", Status: "started", Title: "Worker turn started",
 		Persisted: make(chan error, 1), Processed: make(chan error, 1)}
@@ -327,15 +331,15 @@ func (o *nativeLifecycleObserver) emitSettlement(ctx context.Context, turn Nativ
 		o.done <- err
 		return false
 	}
-	fact := executionapi.EventFact{Kind: executionapi.EventStatus, Source: "native_orca_settlement", SourceEventID: "settled:" + turn.DispatchID, Matched: true,
+	fact := executionbackend.EventFact{Kind: executionbackend.EventStatus, Source: "native_orca_settlement", SourceEventID: "settled:" + turn.DispatchID, Matched: true,
 		Outcome: turn.Outcome, Completed: true, LastMessage: turn.LastMessage, PRCandidates: append([]string(nil), turn.PRCandidates...)}
-	event := executionapi.LifecycleEvent{Fact: fact, Implementation: envelopes,
+	event := executionbackend.LifecycleEvent{Fact: fact, Implementation: envelopes,
 		Summary: "native Orca Dispatch settlement verified", Kind: "execution", Status: "settled", Title: "Worker dispatch settled",
 		Persisted: make(chan error, 1), Processed: make(chan error, 1)}
 	return o.sendAndWait(ctx, event)
 }
 
-func (o *nativeLifecycleObserver) sendAndWait(ctx context.Context, event executionapi.LifecycleEvent) bool {
+func (o *nativeLifecycleObserver) sendAndWait(ctx context.Context, event executionbackend.LifecycleEvent) bool {
 	event = event.Clone()
 	select {
 	case o.events <- event:
@@ -363,7 +367,7 @@ func (o *nativeLifecycleObserver) sendAndWait(ctx context.Context, event executi
 	return true
 }
 
-func nativeFactSummary(fact executionapi.EventFact) string {
+func nativeFactSummary(fact executionbackend.EventFact) string {
 	if fact.LastMessage != "" {
 		return fact.LastMessage
 	}
@@ -373,24 +377,27 @@ func nativeFactSummary(fact executionapi.EventFact) string {
 	return string(fact.Kind)
 }
 
-func nativeFactTitle(fact executionapi.EventFact) string {
+func nativeFactTitle(fact executionbackend.EventFact) string {
 	switch fact.Kind {
-	case executionapi.EventQuestion:
+	case executionbackend.EventQuestion:
 		return "Orca worker question"
-	case executionapi.EventCompleted:
+	case executionbackend.EventCompleted:
 		return "Orca worker completion"
-	case executionapi.EventEscalation:
+	case executionbackend.EventEscalation:
 		return "Orca worker escalation"
-	case executionapi.EventStatus:
+	case executionbackend.EventStatus:
 		return "Orca worker status"
 	default:
 		return "Orca worker event"
 	}
 }
 
-func (o *nativeLifecycleObserver) Events() <-chan executionapi.LifecycleEvent { return o.events }
-func (o *nativeLifecycleObserver) Done() <-chan error                         { return o.done }
-func (o *nativeLifecycleObserver) StopHandle() executionapi.StopHandle        { return o.stop }
+func (o *nativeLifecycleObserver) Events() <-chan executionbackend.LifecycleEvent { return o.events }
+
+func (o *nativeLifecycleObserver) Done() <-chan error { return o.done }
+
+func (o *nativeLifecycleObserver) StopHandle() executionbackend.StopHandle { return o.stop }
+
 func (o *nativeLifecycleObserver) Close(ctx context.Context) error {
 	o.cancel()
 	select {
@@ -401,4 +408,4 @@ func (o *nativeLifecycleObserver) Close(ctx context.Context) error {
 	}
 }
 
-var _ executionapi.LifecycleObserver = (*nativeLifecycleObserver)(nil)
+var _ executionbackend.LifecycleObserver = (*nativeLifecycleObserver)(nil)

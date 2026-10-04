@@ -4,17 +4,17 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func TransitionOperation(op *OperationRecord, next string, requestID string, receipt []byte, reason string) error {
+func TransitionOperation(op *executionmodel.OperationRecord, next string, requestID string, receipt []byte, reason string) error {
 	if op == nil {
 		return errors.New("operation is required")
 	}
 	if op.Status == next {
 		return nil
 	}
-	if !contracts.OperationTransitionAllowed(op.Status, next) {
+	if !executionmodel.OperationTransitionAllowed(op.Status, next) {
 		return fmt.Errorf("operation transition %s -> %s is not allowed", op.Status, next)
 	}
 	op.Status = next
@@ -34,7 +34,7 @@ func (s *Service) setOperationState(id, next, requestID string, receipt []byte, 
 	return fmt.Errorf("operation %s not found", id)
 }
 
-func (s *Service) operationByKey(key string) *OperationRecord {
+func (s *Service) operationByKey(key string) *executionmodel.OperationRecord {
 	for i := range s.domain.Operations {
 		if s.domain.Operations[i].IdempotencyKey == key {
 			return &s.domain.Operations[i]

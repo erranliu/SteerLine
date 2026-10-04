@@ -8,23 +8,23 @@ import (
 	"strings"
 	"testing"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestCleanupProgressRequiresConfirmedOriginalResource(t *testing.T) {
-	resource := executionapi.ProcessIdentity{Kind: "orca", Terminal: "original", RuntimeID: "runtime", Incarnation: "incarnation"}
-	snapshot := executionapi.LifecycleSnapshot{Ref: executionapi.ExecutionRef{External: resource}, Session: executionapi.SessionContext{ExecutionID: "execution"}}
-	input, err := json.Marshal(executionapi.CleanupInput{Resources: []executionapi.ProcessIdentity{resource}})
+	resource := executionbackend.ProcessIdentity{Kind: "orca", Terminal: "original", RuntimeID: "runtime", Incarnation: "incarnation"}
+	snapshot := executionbackend.LifecycleSnapshot{Ref: executionbackend.ExecutionRef{External: resource}, Session: executionbackend.SessionContext{ExecutionID: "execution"}}
+	input, err := json.Marshal(executionbackend.CleanupInput{Resources: []executionbackend.ProcessIdentity{resource}})
 	if err != nil {
 		t.Fatal(err)
 	}
-	operation := executionapi.Operation{Action: string(executionapi.LifecycleCleanup), Status: executionapi.OperationUnknown, Request: input, Ref: &snapshot.Ref, LifecycleIdentity: &executionapi.LifecycleOperationIdentity{ExecutionID: "execution"}}
-	snapshot.Operations = []executionapi.Operation{operation}
+	operation := executionbackend.Operation{Action: string(executionbackend.LifecycleCleanup), Status: executionbackend.OperationUnknown, Request: input, Ref: &snapshot.Ref, LifecycleIdentity: &executionbackend.LifecycleOperationIdentity{ExecutionID: "execution"}}
+	snapshot.Operations = []executionbackend.Operation{operation}
 	if cleanupConfirmed(snapshot, resource) {
 		t.Fatal("unknown cleanup advanced progress")
 	}
-	snapshot.Operations[0].Status = executionapi.OperationConfirmed
+	snapshot.Operations[0].Status = executionbackend.OperationConfirmed
 	if !cleanupConfirmed(snapshot, resource) {
 		t.Fatal("committed cleanup did not advance its original resource")
 	}
@@ -38,20 +38,20 @@ func TestCleanupProgressRequiresConfirmedOriginalResource(t *testing.T) {
 func TestNativeLifecyclePlansCommittedResourcesAndSeparateInput(t *testing.T) {
 	project, workflow, execution, attempt := stableIDValue(1), stableIDValue(2), stableIDValue(3), stableIDValue(4)
 	config := ProfileConfig{Executable: "orca", Args: []string{"--native"}, Shell: "powershell.exe", WaitTimeout: "1m"}
-	target := executionapi.ExecutionTarget{ID: nativeTargetID(config)}
-	snapshot := executionapi.LifecycleSnapshot{
-		Ref: executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendOrca,
-			Protocol: executionapi.ProtocolOrcaTerminalV2, Target: target, Agent: executionapi.AgentSpec{Name: "codex"},
+	target := executionbackend.ExecutionTarget{ID: nativeTargetID(config)}
+	snapshot := executionbackend.LifecycleSnapshot{
+		Ref: executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendOrca,
+			Protocol: executionbackend.ProtocolOrcaTerminalV2, Target: target, Agent: executionbackend.AgentSpec{Name: "codex"},
 			RunID: workflow, AttemptID: attempt},
-		Session: executionapi.SessionContext{ProjectID: project, TaskID: "808", WorkflowRunID: workflow, ExecutionID: execution,
-			AttemptID: attempt, Agent: executionapi.AgentSpec{Name: "codex"}, Target: target},
+		Session: executionbackend.SessionContext{ProjectID: project, TaskID: "808", WorkflowRunID: workflow, ExecutionID: execution,
+			AttemptID: attempt, Agent: executionbackend.AgentSpec{Name: "codex"}, Target: target},
 		ConfigurationDigest: "fixed-profile", ResourceGeneration: stableIDValue(5),
-		WorkspacePlan: executionapi.WorkspaceIntent{Path: "C:/repo/worktrees/worker", Branch: "codex/808", BaseCommit: "0123456789012345678901234567890123456789"},
+		WorkspacePlan: executionbackend.WorkspaceIntent{Path: "C:/repo/worktrees/worker", Branch: "codex/808", BaseCommit: "0123456789012345678901234567890123456789"},
 	}
-	lifecycle := &ExecutionLifecycle{setup: executionapi.LifecycleSetup{Snapshot: snapshot},
+	lifecycle := &ExecutionLifecycle{setup: executionbackend.LifecycleSetup{Snapshot: snapshot},
 		config: Config{Target: target}, client: New(Config{}), codex: codexProfileForTest(), orca: config}
 	step, err := lifecycle.Next(context.Background(), snapshot)
-	if err != nil || step.Action != executionapi.LifecyclePrepareWorkspace {
+	if err != nil || step.Action != executionbackend.LifecyclePrepareWorkspace {
 		t.Fatalf("first plan step=%+v error=%v", step, err)
 	}
 
@@ -68,15 +68,15 @@ func TestNativeLifecyclePlansCommittedResourcesAndSeparateInput(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		snapshot.Implementation = []executionapi.ImplementationDataEnvelope{envelope}
+		snapshot.Implementation = []executionbackend.ImplementationDataEnvelope{envelope}
 	}
 	putState()
 	step, err = lifecycle.Next(context.Background(), snapshot)
-	if err != nil || step.Action != executionapi.LifecycleCreateResource || step.Input.Resource.Purpose != "agent-terminal" {
+	if err != nil || step.Action != executionbackend.LifecycleCreateResource || step.Input.Resource.Purpose != "agent-terminal" {
 		t.Fatalf("agent plan step=%+v error=%v", step, err)
 	}
 
-	snapshot.Ref.External = executionapi.ProcessIdentity{Kind: "orca", Terminal: "agent", RuntimeID: "runtime", Incarnation: "agent-inc",
+	snapshot.Ref.External = executionbackend.ProcessIdentity{Kind: "orca", Terminal: "agent", RuntimeID: "runtime", Incarnation: "agent-inc",
 		WorktreeID: snapshot.Ref.Target.WorktreeID}
 	state.AgentBound = true
 	putState()
@@ -85,7 +85,7 @@ func TestNativeLifecyclePlansCommittedResourcesAndSeparateInput(t *testing.T) {
 		t.Fatalf("coordinator plan step=%+v error=%v", step, err)
 	}
 
-	state.Coordinator = executionapi.ProcessIdentity{Kind: "orca-native-coordinator", Terminal: "coordinator", RuntimeID: "runtime", Incarnation: "coord-inc"}
+	state.Coordinator = executionbackend.ProcessIdentity{Kind: "orca-native-coordinator", Terminal: "coordinator", RuntimeID: "runtime", Incarnation: "coord-inc"}
 	snapshot.Ref.Target.CoordinatorTerminal = "coordinator"
 	snapshot.Session.Target = snapshot.Ref.Target
 	putState()
@@ -101,23 +101,23 @@ func TestNativeLifecyclePlansCommittedResourcesAndSeparateInput(t *testing.T) {
 		t.Fatalf("idle plan=%+v error=%v", step, err)
 	}
 
-	pending := &executionapi.TurnInput{CommandID: stableIDValue(6), Prompt: "run the worker task", Purpose: "readiness"}
+	pending := &executionbackend.TurnInput{CommandID: stableIDValue(6), Prompt: "run the worker task", Purpose: "readiness"}
 	snapshot.PendingTurn = pending
 	putState()
 	step, err = lifecycle.Next(context.Background(), snapshot)
-	if err != nil || step.Action != executionapi.LifecycleCreateResource || step.Input.Resource.Purpose != "conversation" || step.Input.Resource.TurnPurpose != "readiness" {
+	if err != nil || step.Action != executionbackend.LifecycleCreateResource || step.Input.Resource.Purpose != "conversation" || step.Input.Resource.TurnPurpose != "readiness" {
 		t.Fatalf("Task plan step=%+v error=%v", step, err)
 	}
 	state.Turns = append(state.Turns, NativeTurnState{TurnID: pending.CommandID, TaskID: "task-fixed", Purpose: "readiness"})
 	putState()
 	step, err = lifecycle.Next(context.Background(), snapshot)
-	if err != nil || step.Action != executionapi.LifecycleStartTurn {
+	if err != nil || step.Action != executionbackend.LifecycleStartTurn {
 		t.Fatalf("Dispatch plan step=%+v error=%v", step, err)
 	}
 	state.Turns[0].DispatchID, state.Turns[0].InputSubmissionPending = "dispatch-fixed", true
 	putState()
 	step, err = lifecycle.Next(context.Background(), snapshot)
-	if err != nil || step.Action != executionapi.LifecycleSubmitInput {
+	if err != nil || step.Action != executionbackend.LifecycleSubmitInput {
 		t.Fatalf("input submission plan step=%+v error=%v", step, err)
 	}
 }
@@ -127,13 +127,13 @@ func TestProbeMutationRunsAsOneDurableLifecycleAction(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(gitDir, "info"), 0700); err != nil {
 		t.Fatal(err)
 	}
-	identity := executionapi.ProbeIdentity{Execution: stableIDValue(7), Turn: stableIDValue(8), Nonce: stableIDValue(9), ProfileDigest: "profile",
+	identity := executionbackend.ProbeIdentity{Execution: stableIDValue(7), Turn: stableIDValue(8), Nonce: stableIDValue(9), ProfileDigest: "profile",
 		Runtime: "runtime", Terminal: "terminal", Incarnation: "incarnation", Worktree: worktree}
-	snapshot := executionapi.LifecycleSnapshot{Ref: executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2,
-		WorkspacePath: worktree, External: executionapi.ProcessIdentity{Kind: "orca", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "incarnation"}},
-		Session:             executionapi.SessionContext{ProjectID: gitDir, ExecutionID: identity.Execution, AttemptID: stableIDValue(10), WorkflowRunID: stableIDValue(11)},
+	snapshot := executionbackend.LifecycleSnapshot{Ref: executionbackend.ExecutionRef{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV2,
+		WorkspacePath: worktree, External: executionbackend.ProcessIdentity{Kind: "orca", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "incarnation"}},
+		Session:             executionbackend.SessionContext{ProjectID: gitDir, ExecutionID: identity.Execution, AttemptID: stableIDValue(10), WorkflowRunID: stableIDValue(11)},
 		ConfigurationDigest: "config", ResourceGeneration: stableIDValue(12)}
-	state := NativeExecutionState{Coordinator: executionapi.ProcessIdentity{Kind: "orca", Terminal: "coordinator", RuntimeID: "runtime", Incarnation: "incarnation"},
+	state := NativeExecutionState{Coordinator: executionbackend.ProcessIdentity{Kind: "orca", Terminal: "coordinator", RuntimeID: "runtime", Incarnation: "incarnation"},
 		Turns: []NativeTurnState{{TurnID: identity.Turn, Purpose: "readiness"}}}
 	snapshot.PreparationProbe = &identity
 	envelope, err := NewExecutionStateEnvelope(ExecutionStateIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID,
@@ -142,12 +142,12 @@ func TestProbeMutationRunsAsOneDurableLifecycleAction(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot.Implementation = []executionapi.ImplementationDataEnvelope{envelope}
-	lifecycle := &ExecutionLifecycle{setup: executionapi.LifecycleSetup{Snapshot: snapshot}, client: New(Config{}), orca: ProfileConfig{WaitTimeout: "1m"}}
-	request := executionapi.LifecycleRequest{Snapshot: snapshot, Operation: executionapi.Operation{ID: "operation", Action: string(executionapi.LifecycleHostAction), PayloadDigest: "digest"},
-		Input: executionapi.LifecycleInput{Host: &executionapi.HostActionInput{Kind: executionapi.HostPrepareProbeFiles, Probe: &identity}}}
+	snapshot.Implementation = []executionbackend.ImplementationDataEnvelope{envelope}
+	lifecycle := &ExecutionLifecycle{setup: executionbackend.LifecycleSetup{Snapshot: snapshot}, client: New(Config{}), orca: ProfileConfig{WaitTimeout: "1m"}}
+	request := executionbackend.LifecycleRequest{Snapshot: snapshot, Operation: executionbackend.Operation{ID: "operation", Action: string(executionbackend.LifecycleHostAction), PayloadDigest: "digest"},
+		Input: executionbackend.LifecycleInput{Host: &executionbackend.HostActionInput{Kind: executionbackend.HostPrepareProbeFiles, Probe: &identity}}}
 	receipt, err := lifecycle.ExecuteHostAction(context.Background(), request)
-	if err != nil || receipt.Disposition != executionapi.OperationConfirmed {
+	if err != nil || receipt.Disposition != executionbackend.OperationConfirmed {
 		t.Fatalf("probe file action receipt=%+v error=%v", receipt, err)
 	}
 	plan, err := BuildProbe(identity)
@@ -162,12 +162,12 @@ func TestProbeMutationRunsAsOneDurableLifecycleAction(t *testing.T) {
 		t.Fatalf("probe ignore rule was not prepared by the action: ignored=%v err=%v", ignored, err)
 	}
 	reconciled, err := lifecycle.ReconcileHostAction(context.Background(), request)
-	if err != nil || reconciled.Disposition != executionapi.OperationConfirmed {
+	if err != nil || reconciled.Disposition != executionbackend.OperationConfirmed {
 		t.Fatalf("probe action receipt could not be reconciled read-only: %+v err=%v", reconciled, err)
 	}
 	cleanup := request
 	cleanup.Operation.ID = "cleanup-operation"
-	cleanup.Input.Host = &executionapi.HostActionInput{Kind: executionapi.HostCleanupProbeFiles, Probe: &identity}
+	cleanup.Input.Host = &executionbackend.HostActionInput{Kind: executionbackend.HostCleanupProbeFiles, Probe: &identity}
 	if _, err = lifecycle.ExecuteHostAction(context.Background(), cleanup); err != nil {
 		t.Fatal(err)
 	}

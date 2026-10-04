@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func (s *Service) waitWorkerFlow(run *Run, reason string, operationIDs ...string) error {
 	workflow, execution := s.workflowRecords(run)
-	if workflow == nil || execution == nil || workflow.WorkflowVersion != WorkerFlowVersion {
+	if workflow == nil || execution == nil || workflow.WorkflowVersion != executionmodel.Version {
 		return errors.New("worker flow wait has no fixed execution")
 	}
 	if s.candidateBusinessClosed(run) {
@@ -23,14 +24,14 @@ func (s *Service) waitWorkerFlow(run *Run, reason string, operationIDs ...string
 		facts.ContextPrefix = "The previous turn ended. Further input will use the same fixed execution session.\n\n"
 	}
 	if execution.RecoveryRequired && (execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed") && execution.Process != nil {
-		facts.Options = []executionapi.DecisionOption{{ID: "continue", Label: "Continue the original session", Detail: "Verify and resume the original session identity"}, {ID: "new_session", Label: "Continue in a new session", Detail: "Use the existing workspace and saved history"}}
+		facts.Options = []executionbackend.DecisionOption{{ID: "continue", Label: "Continue the original session", Detail: "Verify and resume the original session identity"}, {ID: "new_session", Label: "Continue in a new session", Detail: "Use the existing workspace and saved history"}}
 	} else if execution.RecoveryRequired && execution.RecoveryState == "interrupted" {
-		facts.Options = []executionapi.DecisionOption{{ID: "continue", Label: "Continue this execution", Detail: "Verify or prepare its original workspace first"}}
+		facts.Options = []executionbackend.DecisionOption{{ID: "continue", Label: "Continue this execution", Detail: "Verify or prepare its original workspace first"}}
 	}
 	unresolvedNativeTurn := facts.PreserveUnresolvedTurn
 	if !unresolvedNativeTurn && (run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") {
 		contextText := facts.ContextPrefix + reason
-		options := []executionapi.DecisionOption{{ID: "continue", Label: "Continue current work"}}
+		options := []executionbackend.DecisionOption{{ID: "continue", Label: "Continue current work"}}
 		if facts.Options != nil {
 			options = facts.Options
 		}
@@ -39,7 +40,7 @@ func (s *Service) waitWorkerFlow(run *Run, reason string, operationIDs ...string
 			question = "Worker state is unverified. Review the original execution evidence."
 			options = nil
 		}
-		request := DecisionRequest{Question: question, Context: clip(contextText, 7000), Options: options, AllowFreeText: true}
+		request := executionmodel.DecisionRequest{Question: question, Context: clip(contextText, 7000), Options: options, AllowFreeText: true}
 		decision, err := WriteDecisionRequest(run, request)
 		if err != nil {
 			return err
@@ -82,7 +83,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 		return contextErr
 	}
 	c := fixed.config
-	if run == nil || run.WorkflowVersion != WorkerFlowVersion || run.Decision == nil || run.Decision.Status != "answer_saved" {
+	if run == nil || run.WorkflowVersion != executionmodel.Version || run.Decision == nil || run.Decision.Status != "answer_saved" {
 		return nil
 	}
 	workflow, execution := s.workflowRecords(run)
@@ -101,7 +102,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *Run) error {
 		return err
 	}
 	command, err := s.commandStore.CommandByIdempotency(ctx, c.identity, decisionAnswerKey(answer))
-	if err != nil || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID || command.Status != "accepted" || !executionapi.StableExecutionID(command.CommandID) {
+	if err != nil || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID || command.Status != "accepted" || !executionbackend.StableExecutionID(command.CommandID) {
 		return errors.Join(err, errors.New("saved worker feedback has no fixed accepted command identity"))
 	}
 	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {

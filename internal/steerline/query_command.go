@@ -7,8 +7,10 @@ import (
 	"strings"
 	"time"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 type CommandService struct {
@@ -16,7 +18,7 @@ type CommandService struct {
 	Project string
 }
 
-func (c CommandService) Submit(ctx context.Context, command CommandRecord) (CommandRecord, bool, error) {
+func (c CommandService) Submit(ctx context.Context, command storageports.CommandRecord) (storageports.CommandRecord, bool, error) {
 	if c.Store == nil || c.Project == "" {
 		return command, false, errors.New("command service store and project identity are required")
 	}
@@ -24,20 +26,20 @@ func (c CommandService) Submit(ctx context.Context, command CommandRecord) (Comm
 	return c.Store.EnqueueCommand(ctx, command)
 }
 
-func (c CommandService) AnswerDecision(ctx context.Context, decisionID string, expectedVersion uint64, idempotencyKey, requestedBy string, answer []byte) (CommandRecord, bool, error) {
+func (c CommandService) AnswerDecision(ctx context.Context, decisionID string, expectedVersion uint64, idempotencyKey, requestedBy string, answer []byte) (storageports.CommandRecord, bool, error) {
 	return c.AnswerDecisionWithID(ctx, newID(), decisionID, expectedVersion, idempotencyKey, requestedBy, answer)
 }
 
-func (c CommandService) AnswerDecisionWithID(ctx context.Context, commandID, decisionID string, expectedVersion uint64, idempotencyKey, requestedBy string, answer []byte) (CommandRecord, bool, error) {
+func (c CommandService) AnswerDecisionWithID(ctx context.Context, commandID, decisionID string, expectedVersion uint64, idempotencyKey, requestedBy string, answer []byte) (storageports.CommandRecord, bool, error) {
 	if decisionID == "" || expectedVersion == 0 || idempotencyKey == "" || requestedBy == "" {
-		return CommandRecord{}, false, errors.New("decision answer requires decision ID, expected version, idempotency key and requester")
+		return storageports.CommandRecord{}, false, errors.New("decision answer requires decision ID, expected version, idempotency key and requester")
 	}
 	if commandID == "" {
-		return CommandRecord{}, false, errors.New("decision answer requires a stable command ID")
+		return storageports.CommandRecord{}, false, errors.New("decision answer requires a stable command ID")
 	}
-	var value DecisionAnswer
+	var value executionmodel.DecisionAnswer
 	if err := decode(answer, &value); err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
 	value.OptionID = strings.TrimSpace(value.OptionID)
 	// The accepting service validates against the authoritative request. Preserve
@@ -50,30 +52,30 @@ func (c CommandService) AnswerDecisionWithID(ctx context.Context, commandID, dec
 		value.ExpectedDecisionVersion = expectedVersion
 	}
 	if value.ExpectedDecisionVersion != expectedVersion {
-		return CommandRecord{}, false, errors.New("answer payload decision version differs from its command revision")
+		return storageports.CommandRecord{}, false, errors.New("answer payload decision version differs from its command revision")
 	}
 	if value.ExpectedRunRevision == 0 || value.ServiceInstanceID == "" {
-		return CommandRecord{}, false, errors.New("decision answer requires the displayed run revision and service instance")
+		return storageports.CommandRecord{}, false, errors.New("decision answer requires the displayed run revision and service instance")
 	}
 	if value.DecisionID != decisionID || value.RunID == "" || value.AnsweredBy != requestedBy {
-		return CommandRecord{}, false, errors.New("answer identity must match the command target and requester")
+		return storageports.CommandRecord{}, false, errors.New("answer identity must match the command target and requester")
 	}
 	answer, err := json.Marshal(value)
 	if err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
-	return c.Submit(ctx, CommandRecord{CommandID: commandID, Kind: "answer_decision", TargetID: decisionID, ExpectedVersion: expectedVersion, IdempotencyKey: idempotencyKey, RequestedBy: requestedBy, Payload: append([]byte(nil), answer...), Status: "pending", CreatedAt: time.Now().UTC()})
+	return c.Submit(ctx, storageports.CommandRecord{CommandID: commandID, Kind: "answer_decision", TargetID: decisionID, ExpectedVersion: expectedVersion, IdempotencyKey: idempotencyKey, RequestedBy: requestedBy, Payload: append([]byte(nil), answer...), Status: "pending", CreatedAt: time.Now().UTC()})
 }
 
-func (c CommandService) AcceptAnswer(ctx context.Context, command CommandRecord, answer DecisionAnswer) (DecisionRecord, bool, error) {
+func (c CommandService) AcceptAnswer(ctx context.Context, command storageports.CommandRecord, answer executionmodel.DecisionAnswer) (executionmodel.DecisionRecord, bool, error) {
 	if c.Store == nil || c.Project == "" || command.CommandID == "" || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID {
-		return DecisionRecord{}, false, errors.New("accepted decision command identity is incomplete")
+		return executionmodel.DecisionRecord{}, false, errors.New("accepted decision command identity is incomplete")
 	}
 	command.ProjectIdentity = c.Project
 	return c.Store.AcceptDecisionAnswer(ctx, command, answer)
 }
 
-func decisionAnswerKey(answer DecisionAnswer) string {
+func decisionAnswerKey(answer executionmodel.DecisionAnswer) string {
 	return "answer:" + answer.DecisionID + ":" + digestValue(struct {
 		OptionID, Note               string
 		Answers                      map[string][]string
@@ -83,14 +85,14 @@ func decisionAnswerKey(answer DecisionAnswer) string {
 	}{answer.OptionID, strings.TrimSpace(answer.Note), answer.Answers, answer.SourceAttemptID, answer.ExpectedRecoveryVersion, answer.ExpectedDecisionVersion, answer.ExpectedRunRevision})
 }
 
-func (c CommandService) Pending(ctx context.Context, limit int) ([]CommandRecord, error) {
+func (c CommandService) Pending(ctx context.Context, limit int) ([]storageports.CommandRecord, error) {
 	if c.Store == nil || c.Project == "" {
 		return nil, errors.New("command service store and project identity are required")
 	}
 	return c.Store.Commands(ctx, c.Project, "pending", limit)
 }
 
-func (c CommandService) Complete(ctx context.Context, command CommandRecord, result []byte) error {
+func (c CommandService) Complete(ctx context.Context, command storageports.CommandRecord, result []byte) error {
 	if c.Store == nil || c.Project == "" {
 		return errors.New("command service store and project identity are required")
 	}
@@ -100,7 +102,7 @@ func (c CommandService) Complete(ctx context.Context, command CommandRecord, res
 	return c.Store.UpdateCommand(ctx, command)
 }
 
-func (c CommandService) SetStatus(ctx context.Context, command CommandRecord, status string, result []byte) error {
+func (c CommandService) SetStatus(ctx context.Context, command storageports.CommandRecord, status string, result []byte) error {
 	if c.Store == nil || c.Project == "" {
 		return errors.New("command service store and project identity are required")
 	}
@@ -111,14 +113,21 @@ func (c CommandService) SetStatus(ctx context.Context, command CommandRecord, st
 }
 
 type QueryService = query.Service
+
 type EventFilter = query.EventFilter
+
 type EventPage = query.EventPage
+
 type EventBodyPage = query.EventBodyPage
+
 type CursorError = query.CursorError
 
 const DefaultEventPageSize = query.DefaultEventPageSize
+
 const MaxEventPageSize = query.MaxEventPageSize
+
 const MaxEventPageBytes = query.MaxEventPageBytes
+
 const eventReadBatchSize = query.EventReadBatchSize
 
 func NewQueryService(store query.Store, project string) QueryService {

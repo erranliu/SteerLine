@@ -9,7 +9,7 @@ import (
 	"path/filepath"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 const codexHistoryBindingFile = "codex-history.v1.json"
@@ -25,7 +25,7 @@ type SessionLaunch struct {
 	Sandbox     string         `json:"sandbox"`
 }
 
-func RunSessionLauncher(ctx context.Context, requestPath string, start func(*exec.Cmd) (executionapi.StopHandle, error), writeAtomic func(string, []byte) error) error {
+func RunSessionLauncher(ctx context.Context, requestPath string, start func(*exec.Cmd) (executionbackend.StopHandle, error), writeAtomic func(string, []byte) error) error {
 	raw, err := os.ReadFile(requestPath)
 	if err != nil {
 		return err
@@ -39,7 +39,7 @@ func RunSessionLauncher(ctx context.Context, requestPath string, start func(*exe
 	if err != nil {
 		return err
 	}
-	if b.Version != 1 || b.Backend != executionapi.BackendOrca || b.Protocol != executionapi.ProtocolOrcaTerminalV2 || b.SessionID != "" || b.Command.Executable == "" || canonicalPath(cwd) != canonicalPath(b.Workspace) || !filepath.IsAbs(requestPath) || canonicalPath(filepath.Dir(request.BindingPath)) != canonicalPath(filepath.Dir(requestPath)) || filepath.Base(request.BindingPath) != codexHistoryBindingFile {
+	if b.Version != 1 || b.Backend != executionbackend.BackendOrca || b.Protocol != executionbackend.ProtocolOrcaTerminalV2 || b.SessionID != "" || b.Command.Executable == "" || canonicalPath(cwd) != canonicalPath(b.Workspace) || !filepath.IsAbs(requestPath) || canonicalPath(filepath.Dir(request.BindingPath)) != canonicalPath(filepath.Dir(requestPath)) || filepath.Base(request.BindingPath) != codexHistoryBindingFile {
 		return errors.New("invalid Codex session launch binding")
 	}
 	if _, err = os.Stat(request.BindingPath); !os.IsNotExist(err) {

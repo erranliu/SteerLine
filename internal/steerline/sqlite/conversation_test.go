@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
 	readsqlite "github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
@@ -35,7 +35,7 @@ func TestConversationReaderKeepsSourceScopeOnReadOnlyConnection(t *testing.T) {
 	if _, err := writer.CommitConversation(ctx, []contracts.ConversationWrite{{Event: native}, {Event: other}}, contracts.ConversationCheckpoint{}); err != nil {
 		t.Fatal(err)
 	}
-	report := contracts.ConversationCapabilityReport{Version: 1, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalCodexAppServer, Agent: "codex", Target: executionapi.ExecutionTarget{ID: "local"}, CheckedAt: time.Now().UTC(), Capabilities: []contracts.ConversationCapability{{Name: "final_content", Status: executionapi.CapabilityVerified, Evidence: "fixture"}}}
+	report := contracts.ConversationCapabilityReport{Version: 1, Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalCodexAppServer, Agent: "codex", Target: executionbackend.ExecutionTarget{ID: "local"}, CheckedAt: time.Now().UTC(), Capabilities: []contracts.ConversationCapability{{Name: "final_content", Status: executionbackend.CapabilityVerified, Evidence: "fixture"}}}
 	if err := writer.SaveConversationCapabilityReport(ctx, report); err != nil {
 		t.Fatal(err)
 	}

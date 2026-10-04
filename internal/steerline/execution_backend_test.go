@@ -10,13 +10,13 @@ import (
 	"strings"
 	"testing"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestExecutionRecordsPinBindingsAndOperations(t *testing.T) {
 	r := executionRecords{root: t.TempDir(), persistence: sqlite.Factory{}}
-	ref := executionapi.ExecutionRef{Version: 1, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Target: executionapi.ExecutionTarget{ID: "local:test"}, Agent: executionapi.AgentSpec{Name: "fixture"}, RunID: newID(), AttemptID: newID(), WorkspacePath: t.TempDir(), WorkspaceBranch: "fixture/test", BaseCommit: "0123456789abcdef0123456789abcdef01234567", External: executionapi.ProcessIdentity{Kind: "os", PID: 42, Created: "creation-1", Executable: "fixture"}, Generation: "creation-1"}
+	ref := executionbackend.ExecutionRef{Version: 1, Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Target: executionbackend.ExecutionTarget{ID: "local:test"}, Agent: executionbackend.AgentSpec{Name: "fixture"}, RunID: newID(), AttemptID: newID(), WorkspacePath: t.TempDir(), WorkspaceBranch: "fixture/test", BaseCommit: "0123456789abcdef0123456789abcdef01234567", External: executionbackend.ProcessIdentity{Kind: "os", PID: 42, Created: "creation-1", Executable: "fixture"}, Generation: "creation-1"}
 	if err := r.saveBinding(ref); err != nil {
 		t.Fatal(err)
 	}
@@ -37,21 +37,21 @@ func TestExecutionRecordsPinBindingsAndOperations(t *testing.T) {
 		}
 	}
 	changed := ref
-	changed.Target = executionapi.ExecutionTarget{ID: "local:other"}
+	changed.Target = executionbackend.ExecutionTarget{ID: "local:other"}
 	if err := r.saveBinding(changed); err == nil {
 		t.Fatal("expected immutable binding conflict")
 	}
 
-	op := executionapi.Operation{Version: 1, ID: "start-" + ref.RunID, RunID: ref.RunID, AttemptID: ref.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "start", PayloadDigest: digestValue("fixed"), Status: executionapi.OperationPending}
+	op := executionbackend.Operation{Version: 1, ID: "start-" + ref.RunID, RunID: ref.RunID, AttemptID: ref.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "start", PayloadDigest: digestValue("fixed"), Status: executionbackend.OperationPending}
 	if err := r.saveOperation(op); err != nil {
 		t.Fatal(err)
 	}
-	op.Status = executionapi.OperationInFlight
+	op.Status = executionbackend.OperationInFlight
 	if err := r.saveOperation(op); err != nil {
 		t.Fatal(err)
 	}
 	loadedOp, err := r.loadOperation(op.RunID, op.AttemptID, op.ID)
-	if err != nil || loadedOp.Status != executionapi.OperationInFlight {
+	if err != nil || loadedOp.Status != executionbackend.OperationInFlight {
 		t.Fatalf("operation update not persisted: %#v, %v", loadedOp, err)
 	}
 	op.PayloadDigest = digestValue("different")
@@ -65,7 +65,7 @@ func TestExecutionRecordsPinBindingsAndOperations(t *testing.T) {
 
 func TestCapabilityReportRejectsRetiredWholeRunActions(t *testing.T) {
 	for _, name := range []string{"reply_continue", "retry"} {
-		report := executionapi.CapabilityReport{Version: 1, Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Target: executionapi.ExecutionTarget{ID: "local"}, Agent: executionapi.AgentSpec{Name: "fixture"}, PlatformVersion: "fixture", CheckedAt: now(), Capabilities: []executionapi.Capability{{Name: name, Status: executionapi.CapabilityUnsupported}}}
+		report := executionbackend.CapabilityReport{Version: 1, Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Target: executionbackend.ExecutionTarget{ID: "local"}, Agent: executionbackend.AgentSpec{Name: "fixture"}, PlatformVersion: "fixture", CheckedAt: now(), Capabilities: []executionbackend.Capability{{Name: name, Status: executionbackend.CapabilityUnsupported}}}
 		if err := (executionRecords{root: t.TempDir(), persistence: sqlite.Factory{}}).saveCapabilityReport(report); err == nil {
 			t.Fatalf("capability report retained retired whole-run action %q", name)
 		}
@@ -86,7 +86,7 @@ func TestLocalReadOutputUsesBoundedExecutionCursor(t *testing.T) {
 	}
 	cfg := Config{Persistence: sqlite.Factory{}, Host: "local", RunDir: runDir}
 	backend := localExecutionBackend{config: cfg}
-	ref := executionapi.ExecutionRef{Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, Target: targetFor(cfg), RunID: runID, AttemptID: attemptID}
+	ref := executionbackend.ExecutionRef{Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Target: targetFor(cfg), RunID: runID, AttemptID: attemptID}
 	first, err := backend.ReadOutput(context.Background(), ref, "", 4)
 	if err != nil || string(first.Data) != "abcd" || first.NextCursor == "" {
 		t.Fatalf("first bounded read: %#v, %v", first, err)
@@ -136,7 +136,7 @@ func TestNativeCapabilityCheckKeepsFixedAgent(t *testing.T) {
 	require(t, AtomicWrite(evidencePath, data))
 	for i := range report.Capabilities {
 		if report.Capabilities[i].Name == "workspace_inspection" {
-			report.Capabilities[i].Status = executionapi.CapabilityVerified
+			report.Capabilities[i].Status = executionbackend.CapabilityVerified
 			report.Capabilities[i].Evidence = evidencePath + "#sha256=" + hex.EncodeToString(sum[:])
 		}
 	}

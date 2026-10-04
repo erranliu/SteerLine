@@ -6,14 +6,12 @@ import (
 	"path/filepath"
 	"slices"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-// preflightWorkerFlowState is read-only and runs before workspace preparation.
-// A previous schema may represent a still-running external worker;
-// it must not be converted or overwritten on startup.
 func preflightWorkerFlowState(ctx context.Context, c Config) error {
-	if c.WorkflowProtocol != WorkerFlowVersion {
+	if c.WorkflowProtocol != executionmodel.Version {
 		return nil
 	}
 	path := filepath.Join(c.RunDir, "steerline.db")
@@ -42,13 +40,13 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		return err
 	}
 	for _, workflow := range snapshot.WorkflowRuns {
-		if workflow.WorkflowVersion != WorkerFlowVersion || workflow.ExecutionProfile == nil || !verifyFixedExecutionProfile(*workflow.ExecutionProfile, c.ExecutionDirectory) || workflow.ConfigDigest != workflow.ExecutionProfile.AcceptedConfigVersion {
+		if workflow.WorkflowVersion != executionmodel.Version || workflow.ExecutionProfile == nil || !verifyFixedExecutionProfile(*workflow.ExecutionProfile, c.ExecutionDirectory) || workflow.ConfigDigest != workflow.ExecutionProfile.AcceptedConfigVersion {
 			return nativeErr("unsupported_schema", "worker-flow-v1 refuses an old WorkflowRun; preserve the original state and external session")
 		}
 	}
 	for _, execution := range snapshot.Executions {
 		boundSnapshot := false
-		var fixedProfile *FixedExecutionProfile
+		var fixedProfile *executionmodel.FixedExecutionProfile
 		for _, workflow := range snapshot.WorkflowRuns {
 			if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ProjectIdentity == execution.ProjectIdentity && workflow.ExecutionProfile != nil && execution.ConfigurationDigest == workflow.ExecutionProfile.Digest {
 				boundSnapshot = true
@@ -83,7 +81,7 @@ func preflightWorkerFlowState(ctx context.Context, c Config) error {
 		}
 		if entry.ReadinessRequired(fixedConfig) || execution.Environment != nil {
 			env := execution.Environment
-			if env == nil || env.Preparation == nil || !executionapi.StableExecutionID(env.Preparation.TurnID) || !executionapi.StableExecutionID(env.Preparation.Nonce) || env.Preparation.StartedAt.IsZero() || !env.Preparation.Deadline.After(env.Preparation.StartedAt) {
+			if env == nil || env.Preparation == nil || !executionbackend.StableExecutionID(env.Preparation.TurnID) || !executionbackend.StableExecutionID(env.Preparation.Nonce) || env.Preparation.StartedAt.IsZero() || !env.Preparation.Deadline.After(env.Preparation.StartedAt) {
 				return nativeErr("unsupported_schema", "execution readiness lacks its frozen preparation intent")
 			}
 			matched := false

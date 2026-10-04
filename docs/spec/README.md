@@ -27,11 +27,10 @@
 
 ## 任务执行控制台解耦与目录整理
 
-目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。每项一份独立 Spec/Plan 和实现 PR；共同边界见 [三线解耦共同实现约束](three-line-constraints.spec.md)。#73 可与 #38 并行；#77 等 #38；#39 按固定构建与实际影响定向复核，不增加重构总前置。
+目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。每项一份独立 Spec/Plan 和实现 PR；共同边界见 [三线解耦共同实现约束](three-line-constraints.spec.md)。#73 的纯定义基础及后继残留见[验收记录](../validation/three-line-01-types/README.md)；#77 等 #38；#39 按固定构建与实际影响定向复核，不增加重构总前置。
 
 | 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |
-| 73 | 纯类型与契约归属整理 | `#37` | [Spec](three-line-01-types.spec.md) | [Plan](three-line-01-types.plan.md) |
 | 74 | 任务选择与执行结果边界 | `#73` | [Spec](three-line-02-task-execution-boundary.spec.md) | [Plan](three-line-02-task-execution-boundary.plan.md) |
 | 75 | 任务应用用例归包 | `#74` | [Spec](three-line-03-task-usecases.spec.md) | [Plan](three-line-03-task-usecases.plan.md) |
 | 76 | 执行应用用例归包 | `#74` | [Spec](three-line-04-execution-usecases.spec.md) | [Plan](three-line-04-execution-usecases.plan.md) |

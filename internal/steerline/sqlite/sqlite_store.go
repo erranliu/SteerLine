@@ -12,7 +12,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 type SQLiteStore struct {
@@ -115,7 +115,7 @@ func (s *SQLiteStore) abortNewDatabase() {
 
 // transactSQLite is private to the unique SQLite executor.
 func (s *SQLiteStore) transactSQLite(ctx context.Context, fn func(*sqliteTx) error) (retErr error) {
-	defer func() { retErr = storageFailure(retErr, persistence.StorageIO) }()
+	defer func() { retErr = storageFailure(retErr, storageports.StorageIO) }()
 	if s.readOnly {
 		return errors.New("SQLite reader is read-only")
 	}
@@ -136,5 +136,5 @@ func (s *SQLiteStore) transactSQLite(ctx context.Context, fn func(*sqliteTx) err
 	if _, err = tx.ExecContext(ctx, `UPDATE database_state SET revision=revision+1 WHERE singleton=1`); err != nil {
 		return err
 	}
-	return storageFailure(tx.Commit(), persistence.StorageCommitFailed)
+	return storageFailure(tx.Commit(), storageports.StorageCommitFailed)
 }

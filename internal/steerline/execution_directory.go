@@ -8,16 +8,17 @@ import (
 	"strings"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 // ExecutionRegistrationKey is the persisted, generic identity of one execution
 // implementation. Its values are supplied by the application directory.
 type ExecutionRegistrationKey struct {
-	Backend  executionapi.BackendKind
+	Backend  executionbackend.BackendKind
 	Agent    string
-	Protocol executionapi.ExecutionProtocol
+	Protocol executionbackend.ExecutionProtocol
 }
 
 // ImplementationProfileCodec owns the wire format for one profile payload.
@@ -26,7 +27,7 @@ type ExecutionRegistrationKey struct {
 type ImplementationProfileCodec struct {
 	Key       string
 	Version   int
-	Normalize func([]byte, executionapi.ExecutionPolicy, string, string) ([]byte, []string, error)
+	Normalize func([]byte, executionbackend.ExecutionPolicy, string, string) ([]byte, []string, error)
 }
 
 // ClaimPreparation carries only center-owned timing and gate inputs. The
@@ -46,12 +47,12 @@ type PolicyResourceIdentity struct {
 }
 
 type PolicyResourceBuildRequest struct {
-	ProfileData           []executionapi.ImplementationDataEnvelope
+	ProfileData           []executionbackend.ImplementationDataEnvelope
 	ProjectID             string
 	ProfileID             string
 	AcceptedConfigVersion string
 	Resource              PolicyResourceIdentity
-	Policy                executionapi.ExecutionPolicy
+	Policy                executionbackend.ExecutionPolicy
 	Host                  string
 	Agent                 string
 	Workspace             string
@@ -61,7 +62,7 @@ type PolicyResourceBuildRequest struct {
 }
 
 type PolicyResourceBuildResult struct {
-	Envelope   executionapi.ImplementationDataEnvelope
+	Envelope   executionbackend.ImplementationDataEnvelope
 	WriteRoots []string
 }
 
@@ -76,27 +77,27 @@ type ExecutionRegistration struct {
 	QuestionCodecKey          string
 	QuestionCodecVersion      int
 	Host                      string
-	Backend                   func(Config) executionapi.ExecutionBackend
-	Target                    func(Config) executionapi.ExecutionTarget
-	ProbeRequirements         func(context.Context, Config) (executionapi.CapabilityReport, error)
-	QueryTool                 func(context.Context, Config, string) executionapi.RequirementEvidence
-	Lifecycle                 func(executionapi.LifecycleSetup) (executionapi.LifecyclePort, error)
-	ValidateProfileSelection  func(executionapi.ExecutionPolicy, string, map[string][]byte) error
+	Backend                   func(Config) executionbackend.ExecutionBackend
+	Target                    func(Config) executionbackend.ExecutionTarget
+	ProbeRequirements         func(context.Context, Config) (executionbackend.CapabilityReport, error)
+	QueryTool                 func(context.Context, Config, string) executionbackend.RequirementEvidence
+	Lifecycle                 func(executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error)
+	ValidateProfileSelection  func(executionbackend.ExecutionPolicy, string, map[string][]byte) error
 	ValidateConfig            func(context.Context, Config) error
 	Preflight                 func(context.Context, Config) error
 	PrepareClaim              func(context.Context, Config) (ClaimPreparation, error)
 	ReadinessRequired         func(Config) bool
 	BuildPolicyResource       func(context.Context, PolicyResourceBuildRequest) (PolicyResourceBuildResult, error)
-	VerifyPolicyResource      func(executionapi.ImplementationDataEnvelope, PolicyResourceIdentity) error
+	VerifyPolicyResource      func(executionbackend.ImplementationDataEnvelope, PolicyResourceIdentity) error
 	LinkedWorktreeWriteArgs   func(context.Context, Config, string) ([]string, error)
 	ValidTurnID               func(string) bool
 	CleanupCapabilities       []string
-	ValidateRef               func(executionapi.ExecutionRef) error
-	ValidatePublicationPolicy func(executionapi.PublicationPolicy, publication.Config) error
+	ValidateRef               func(executionbackend.ExecutionRef) error
+	ValidatePublicationPolicy func(executionbackend.PublicationPolicy, publication.Config) error
 }
 
-func (directory *ExecutionDirectory) ValidateRef(ref executionapi.ExecutionRef) error {
-	if err := executionapi.ValidateExecutionRef(ref); err != nil {
+func (directory *ExecutionDirectory) ValidateRef(ref executionbackend.ExecutionRef) error {
+	if err := executionbackend.ValidateExecutionRef(ref); err != nil {
 		return err
 	}
 	entry, err := directory.ResolveIdentity(ExecutionRegistrationKey{Backend: ref.Backend, Protocol: ref.Protocol, Agent: ref.Agent.Name})
@@ -193,7 +194,7 @@ func (directory *ExecutionDirectory) Resolve(c Config) (ExecutionRegistration, e
 	}
 	key, ok := directory.routes[directoryRoute(c.hostName(), c.agentName())]
 	if !ok {
-		return ExecutionRegistration{}, &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: fmt.Sprintf("no implementation is configured for host=%s agent=%s", c.hostName(), c.agentName())}
+		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: fmt.Sprintf("no implementation is configured for host=%s agent=%s", c.hostName(), c.agentName())}
 	}
 	entry := directory.entries[key]
 	entry.ProfileCodecKeys = slices.Clone(entry.ProfileCodecKeys)
@@ -207,14 +208,14 @@ func (directory *ExecutionDirectory) ResolveIdentity(key ExecutionRegistrationKe
 	}
 	entry, ok := directory.entries[key]
 	if !ok {
-		return ExecutionRegistration{}, &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "no implementation is registered for the fixed execution identity"}
+		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "no implementation is registered for the fixed execution identity"}
 	}
 	entry.ProfileCodecKeys = slices.Clone(entry.ProfileCodecKeys)
 	entry.CleanupCapabilities = slices.Clone(entry.CleanupCapabilities)
 	return entry, nil
 }
 
-func (directory *ExecutionDirectory) NormalizeProfile(inputs []executionapi.ImplementationConfigInput, policy executionapi.ExecutionPolicy, host, agent, projectID, profileID, acceptedVersion string) ([]executionapi.ImplementationDataEnvelope, []string, error) {
+func (directory *ExecutionDirectory) NormalizeProfile(inputs []executionbackend.ImplementationConfigInput, policy executionbackend.ExecutionPolicy, host, agent, projectID, profileID, acceptedVersion string) ([]executionbackend.ImplementationDataEnvelope, []string, error) {
 	if directory == nil {
 		return nil, nil, errors.New("execution directory is required")
 	}
@@ -223,16 +224,16 @@ func (directory *ExecutionDirectory) NormalizeProfile(inputs []executionapi.Impl
 	}
 	entryKey, ok := directory.routes[directoryRoute(host, agent)]
 	if !ok {
-		return nil, nil, &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: fmt.Sprintf("no implementation is configured for host=%s agent=%s", host, agent)}
+		return nil, nil, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: fmt.Sprintf("no implementation is configured for host=%s agent=%s", host, agent)}
 	}
 	entry := directory.entries[entryKey]
 	inputs = cloneImplementationInputs(inputs)
-	slices.SortFunc(inputs, func(a, b executionapi.ImplementationConfigInput) int {
+	slices.SortFunc(inputs, func(a, b executionbackend.ImplementationConfigInput) int {
 		return strings.Compare(a.ImplementationKey, b.ImplementationKey)
 	})
 	seen := map[string]bool{}
 	payloads := make(map[string][]byte, len(inputs))
-	data := make([]executionapi.ImplementationDataEnvelope, 0, len(inputs))
+	data := make([]executionbackend.ImplementationDataEnvelope, 0, len(inputs))
 	display := []string{}
 	for _, input := range inputs {
 		codec, exists := directory.codecs[input.ImplementationKey]
@@ -244,8 +245,8 @@ func (directory *ExecutionDirectory) NormalizeProfile(inputs []executionapi.Impl
 		if err != nil {
 			return nil, nil, fmt.Errorf("implementation codec %s rejected profile: %w", codec.Key, err)
 		}
-		envelope, err := executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{
-			CodecVersion: codec.Version, Purpose: executionapi.ImplementationConfigPurpose,
+		envelope, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{
+			CodecVersion: codec.Version, Purpose: executionbackend.ImplementationConfigPurpose,
 			ImplementationKey: codec.Key, ProjectID: projectID, ProfileID: profileID,
 			AcceptedConfigVersion: acceptedVersion,
 		}, payload)
@@ -272,11 +273,11 @@ func (directory *ExecutionDirectory) NormalizeProfile(inputs []executionapi.Impl
 	return data, display, nil
 }
 
-func (directory *ExecutionDirectory) DecodeProfile(data []executionapi.ImplementationDataEnvelope, key, projectID, profileID, acceptedVersion string) ([]byte, error) {
+func (directory *ExecutionDirectory) DecodeProfile(data []executionbackend.ImplementationDataEnvelope, key, projectID, profileID, acceptedVersion string) ([]byte, error) {
 	if directory == nil {
 		return nil, errors.New("execution directory is required")
 	}
-	var found *executionapi.ImplementationDataEnvelope
+	var found *executionbackend.ImplementationDataEnvelope
 	for i := range data {
 		if data[i].ImplementationKey != key {
 			continue
@@ -314,11 +315,11 @@ func (directory *ExecutionDirectory) ValidateProfileData(c Config) error {
 	return nil
 }
 
-func (directory *ExecutionDirectory) LifecycleResolver() executionapi.LifecycleResolver {
+func (directory *ExecutionDirectory) LifecycleResolver() executionbackend.LifecycleResolver {
 	return directory
 }
 
-func (directory *ExecutionDirectory) ResolveLifecycle(setup executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {
+func (directory *ExecutionDirectory) ResolveLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 	entry, err := directory.ResolveIdentity(ExecutionRegistrationKey{Backend: setup.Snapshot.Ref.Backend, Agent: setup.Snapshot.Ref.Agent.Name, Protocol: setup.Snapshot.Ref.Protocol})
 	if err != nil {
 		return nil, err
@@ -326,7 +327,7 @@ func (directory *ExecutionDirectory) ResolveLifecycle(setup executionapi.Lifecyc
 	return entry.Lifecycle(setup.Clone())
 }
 
-func equalImplementationData(a, b []executionapi.ImplementationDataEnvelope) bool {
+func equalImplementationData(a, b []executionbackend.ImplementationDataEnvelope) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -345,25 +346,25 @@ func registrationFor(c Config) (ExecutionRegistration, error) {
 	return c.ExecutionDirectory.Resolve(c)
 }
 
-func workerFlowRegistrationFor(config Config, run *Run, execution *ExecutionRecord) (ExecutionRegistration, error) {
+func workerFlowRegistrationFor(config Config, run *Run, execution *executionmodel.ExecutionRecord) (ExecutionRegistration, error) {
 	if run == nil || execution == nil {
-		return ExecutionRegistration{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "worker flow has no fixed run or execution"}
+		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "worker flow has no fixed run or execution"}
 	}
 	entry, err := registrationFor(config)
 	if err != nil {
 		return ExecutionRegistration{}, err
 	}
 	if run.Host != entry.Host || run.Agent != entry.Key.Agent || execution.Agent != run.Agent || run.Backend != string(entry.Key.Backend) || execution.Backend != run.Backend || run.Protocol != string(entry.Key.Protocol) || execution.Protocol != run.Protocol || run.Target != execution.Target || !sameConfiguredExecutionTarget(run.Target, entry.Target(config)) {
-		return ExecutionRegistration{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "fixed worker target differs from its persisted execution"}
+		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "fixed worker target differs from its persisted execution"}
 	}
 	return entry, nil
 }
 
-func sameConfiguredExecutionTarget(actual, configured executionapi.ExecutionTarget) bool {
+func sameConfiguredExecutionTarget(actual, configured executionbackend.ExecutionTarget) bool {
 	return actual.ID != "" && actual.ID == configured.ID && actual.ConnectionID == configured.ConnectionID && actual.ExternalRuntime == configured.ExternalRuntime
 }
 
-func executionUsesLocalWorkspace(c Config, backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, agent string) bool {
+func executionUsesLocalWorkspace(c Config, backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, agent string) bool {
 	if c.ExecutionDirectory == nil {
 		return false
 	}
@@ -373,20 +374,23 @@ func executionUsesLocalWorkspace(c Config, backend executionapi.BackendKind, pro
 
 type rejectedExecutionBackend struct{ err error }
 
-func (b rejectedExecutionBackend) Identity() (executionapi.BackendKind, executionapi.ExecutionProtocol) {
+func (b rejectedExecutionBackend) Identity() (executionbackend.BackendKind, executionbackend.ExecutionProtocol) {
 	return "", ""
 }
-func (b rejectedExecutionBackend) Probe(context.Context, executionapi.ExecutionTarget, executionapi.AgentSpec) (executionapi.CapabilityReport, error) {
-	return executionapi.CapabilityReport{}, b.err
-}
-func (b rejectedExecutionBackend) Observe(context.Context, executionapi.ExecutionRef) (executionapi.Observation, error) {
-	return executionapi.Observation{}, b.err
-}
-func (b rejectedExecutionBackend) InspectWorkspace(context.Context, executionapi.ExecutionRef) (executionapi.WorkspaceInspection, error) {
-	return executionapi.WorkspaceInspection{}, b.err
+
+func (b rejectedExecutionBackend) Probe(context.Context, executionbackend.ExecutionTarget, executionbackend.AgentSpec) (executionbackend.CapabilityReport, error) {
+	return executionbackend.CapabilityReport{}, b.err
 }
 
-func backendFor(c Config) executionapi.ExecutionBackend {
+func (b rejectedExecutionBackend) Observe(context.Context, executionbackend.ExecutionRef) (executionbackend.Observation, error) {
+	return executionbackend.Observation{}, b.err
+}
+
+func (b rejectedExecutionBackend) InspectWorkspace(context.Context, executionbackend.ExecutionRef) (executionbackend.WorkspaceInspection, error) {
+	return executionbackend.WorkspaceInspection{}, b.err
+}
+
+func backendFor(c Config) executionbackend.ExecutionBackend {
 	entry, err := registrationFor(c)
 	if err != nil {
 		return rejectedExecutionBackend{err}
@@ -394,12 +398,14 @@ func backendFor(c Config) executionapi.ExecutionBackend {
 	return entry.Backend(c)
 }
 
-func agentFor(c Config) executionapi.AgentSpec { return executionapi.AgentSpec{Name: c.agentName()} }
+func agentFor(c Config) executionbackend.AgentSpec {
+	return executionbackend.AgentSpec{Name: c.agentName()}
+}
 
-func targetFor(c Config) executionapi.ExecutionTarget {
+func targetFor(c Config) executionbackend.ExecutionTarget {
 	entry, err := registrationFor(c)
 	if err != nil {
-		return executionapi.ExecutionTarget{}
+		return executionbackend.ExecutionTarget{}
 	}
 	return entry.Target(c)
 }
@@ -409,8 +415,8 @@ func (s *Service) workerFlowRegistration(run *Run) (ExecutionRegistration, error
 	if err != nil {
 		return ExecutionRegistration{}, err
 	}
-	if fixed.workflow.WorkflowVersion != WorkerFlowVersion {
-		return ExecutionRegistration{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "unsupported fixed workflow version"}
+	if fixed.workflow.WorkflowVersion != executionmodel.Version {
+		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "unsupported fixed workflow version"}
 	}
 	return workerFlowRegistrationFor(fixed.config, run, fixed.execution)
 }

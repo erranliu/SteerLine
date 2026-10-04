@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestConversationHistoryProtocolHelper(t *testing.T) {
@@ -119,7 +119,7 @@ func TestHistoryDiscoveryDeclaresHostVersionRequirement(t *testing.T) {
 		t.Fatal(err)
 	}
 	binding := historyFixtureBinding(workspace, workflowID, executionID, attemptID, "00000000-0000-0000-0000-000000000004")
-	binding.Backend, binding.Protocol, binding.ExternalRef = executionapi.BackendOrca, executionapi.ProtocolOrcaTerminalV2, "terminal:original@generation"
+	binding.Backend, binding.Protocol, binding.ExternalRef = executionbackend.BackendOrca, executionbackend.ProtocolOrcaTerminalV2, "terminal:original@generation"
 	path := filepath.Join(runDirectory, historyBindingFile)
 	if err := WriteHistoryBinding(path, binding, func(path string, data []byte) error { return os.WriteFile(path, data, 0600) }); err != nil {
 		t.Fatal(err)
@@ -158,8 +158,8 @@ func TestHistoryPageCandidateIsRecreatedAfterDiscardAndLateFinalKeepsTurnIdentit
 	t.Setenv("STEERLINE_CONVERSATION_HISTORY_WORKSPACE", workspace)
 	t.Setenv("STEERLINE_CONVERSATION_HISTORY_STAGE", "initial")
 	binding := HistoryBinding{Version: 1, ProjectID: "project", TaskID: "task", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt",
-		Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace,
-		SessionID: "00000000-0000-0000-0000-000000000001", Command: contracts.Command{Executable: os.Args[0], Args: []string{"-test.run=^TestConversationHistoryProtocolHelper$"}}}
+		Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, TargetID: "local", Workspace: workspace,
+		SessionID: "00000000-0000-0000-0000-000000000001", Command: executionbackend.Command{Executable: os.Args[0], Args: []string{"-test.run=^TestConversationHistoryProtocolHelper$"}}}
 	path := filepath.Join(bindingsDir, "binding.json")
 	if err := WriteHistoryBinding(path, binding, func(path string, data []byte) error { return os.WriteFile(path, data, 0600) }); err != nil {
 		t.Fatal(err)
@@ -220,13 +220,15 @@ func TestHistoryPageCandidateIsRecreatedAfterDiscardAndLateFinalKeepsTurnIdentit
 
 type historyFixtureStop struct{ process *os.Process }
 
-func (p historyFixtureStop) Identity() executionapi.ProcessIdentity {
-	return executionapi.ProcessIdentity{Kind: "fixture", PID: p.process.Pid, Created: "history-fixture"}
+func (p historyFixtureStop) Identity() executionbackend.ProcessIdentity {
+	return executionbackend.ProcessIdentity{Kind: "fixture", PID: p.process.Pid, Created: "history-fixture"}
 }
-func (p historyFixtureStop) Kill()  { _ = p.process.Kill() }
+
+func (p historyFixtureStop) Kill() { _ = p.process.Kill() }
+
 func (p historyFixtureStop) Close() {}
 
-func startHistoryFixtureProcess(command *exec.Cmd) (executionapi.StopHandle, error) {
+func startHistoryFixtureProcess(command *exec.Cmd) (executionbackend.StopHandle, error) {
 	if err := command.Start(); err != nil {
 		return nil, err
 	}
@@ -240,8 +242,8 @@ func historyFixtureTurn(turnID, itemID, phase, text string) map[string]any {
 
 func historyFixtureBinding(workspace, workflow, execution, attempt, session string) HistoryBinding {
 	return HistoryBinding{Version: 1, ProjectID: "project", TaskID: "task", WorkflowID: workflow, ExecutionID: execution, AttemptID: attempt,
-		Backend: executionapi.BackendLocal, Protocol: executionapi.ProtocolLocalProcess, TargetID: "local", Workspace: workspace,
-		SessionID: session, Command: contracts.Command{Executable: os.Args[0], Args: []string{"-test.run=^TestConversationHistoryProtocolHelper$"}}}
+		Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, TargetID: "local", Workspace: workspace,
+		SessionID: session, Command: executionbackend.Command{Executable: os.Args[0], Args: []string{"-test.run=^TestConversationHistoryProtocolHelper$"}}}
 }
 
 func TestHistoryPositionCannotCrossItsOriginalBinding(t *testing.T) {
@@ -322,7 +324,7 @@ func TestHistoryReadRejectsReplacedProjectBeforeOpeningClient(t *testing.T) {
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := NewConversationAdapter().ReadHistory(context.Background(), contracts.ConversationHistoryReadRequest{Source: source}, func(*exec.Cmd) (executionapi.StopHandle, error) {
+	_, err := NewConversationAdapter().ReadHistory(context.Background(), contracts.ConversationHistoryReadRequest{Source: source}, func(*exec.Cmd) (executionbackend.StopHandle, error) {
 		t.Fatal("replaced source opened a reader process")
 		return nil, nil
 	})

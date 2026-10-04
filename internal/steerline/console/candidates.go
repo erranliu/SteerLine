@@ -1,5 +1,7 @@
 package console
 
+import productapi "github.com/erranliu/SteerLine/internal/product/api"
+
 import (
 	"fmt"
 	"sort"
@@ -207,12 +209,12 @@ func (m Model) prepareCandidateAbandon() (tea.Model, tea.Cmd) {
 		m.status = "服务未声明 abandon_candidate 能力"
 		return m, nil
 	}
-	p := api.ControlPayload{TaskID: row.taskID, WorkflowRunID: row.run.RunID, ExpectedTaskVersion: row.native.Version, ExpectedCandidateVersion: row.run.ControlRevision, Reason: "人工方案比较：不可撤销退出实验"}
+	p := productapi.ControlPayload{TaskID: row.taskID, WorkflowRunID: row.run.RunID, ExpectedTaskVersion: row.native.Version, ExpectedCandidateVersion: row.run.ControlRevision, Reason: "人工方案比较：不可撤销退出实验"}
 	m.confirm = &confirmAction{projectKey: s.ref.Key, instance: rt.Service.InstanceID, revision: rt.Control.Revision, action: "abandon_candidate", taskID: row.taskID, runID: row.run.RunID, requestID: newRequestID(), payload: p, basis: strings.Join(renderFixedRunExecutionProfile(*s, row.run), "\n")}
 	return m, nil
 }
 
-func (m Model) submitCandidateAction(action string, p api.ControlPayload, id, instance string, revision uint64) (tea.Model, tea.Cmd) {
+func (m Model) submitCandidateAction(action string, p productapi.ControlPayload, id, instance string, revision uint64) (tea.Model, tea.Cmd) {
 	s := &m.projects[m.selected]
 	for _, a := range s.actions {
 		if a.Action == action && a.TaskID == p.TaskID && !a.Resolved {

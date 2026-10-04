@@ -8,7 +8,9 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 	taskrules "github.com/erranliu/SteerLine/internal/steerline/task"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func (s Reader) TaskGraphSnapshot(ctx context.Context, project string) (taskrules.Snapshot, error) {
@@ -28,8 +30,8 @@ func (s Reader) TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project str
 	return TaskGraphSnapshotTx(ctx, tx, project, s.nativeBinding)
 }
 
-func TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string, binding *taskrules.ProjectTaskAuthority) (taskrules.Snapshot, error) {
-	out := taskrules.Snapshot{ByID: map[string]contracts.TaskRecord{}, RepositoryTaskIDs: map[string]bool{}, ContractIDs: map[string]bool{}, Deliveries: map[string]contracts.TaskDeliveryRecord{}, SampledAt: time.Now().UTC()}
+func TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string, binding *tasklegacy.ProjectTaskAuthority) (taskrules.Snapshot, error) {
+	out := taskrules.Snapshot{ByID: map[string]taskmodel.TaskRecord{}, RepositoryTaskIDs: map[string]bool{}, ContractIDs: map[string]bool{}, Deliveries: map[string]contracts.TaskDeliveryRecord{}, SampledAt: time.Now().UTC()}
 	if project == "" {
 		return out, nativeErr("authority_mismatch", "project identity is required")
 	}
@@ -102,7 +104,7 @@ func TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string, bindin
 		var id, status string
 		var version uint64
 		var body []byte
-		var task contracts.TaskRecord
+		var task taskmodel.TaskRecord
 		if err = rows.Scan(&id, &status, &version, &body); err != nil {
 			rows.Close()
 			return out, err
@@ -111,7 +113,7 @@ func TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string, bindin
 			rows.Close()
 			return out, err
 		}
-		if task.ProjectIdentity != project || task.TaskID != id || task.Source != "native" || !taskrules.CanonicalDecimalID(id) || task.Status != status || task.Version != version || !taskrules.ValidStatus(status) || task.Version == 0 {
+		if task.ProjectIdentity != project || task.TaskID != id || task.Source != "native" || !taskmodel.CanonicalDecimalID(id) || task.Status != status || task.Version != version || !taskmodel.ValidStatus(status) || task.Version == 0 {
 			rows.Close()
 			return out, nativeErr("contract_mismatch", "native task identity or status differs from its stored row")
 		}
@@ -128,7 +130,7 @@ func TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string, bindin
 		return out, err
 	}
 	for rows.Next() {
-		var edge contracts.TaskDependencyRecord
+		var edge taskmodel.TaskDependencyRecord
 		edge.ProjectIdentity = project
 		if err = rows.Scan(&edge.PredecessorID, &edge.SuccessorID); err != nil {
 			rows.Close()

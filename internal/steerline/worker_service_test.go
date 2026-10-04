@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
@@ -27,7 +29,7 @@ func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
 func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openPR bool) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
-	c.WorkflowProtocol, c.Host, c.Agent = WorkerFlowVersion, "local", "fixture"
+	c.WorkflowProtocol, c.Host, c.Agent = executionmodel.Version, "local", "fixture"
 	c.Claimant = "operator"
 	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	if err := c.prepareWorktreeRoot(); err != nil {
@@ -128,7 +130,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if openPR {
 		workflow, execution := service.workflowRecords(run)
 		url := "https://git.example/org/repo/pulls/8"
-		info := PRInfo{URL: url, Repository: "org/repo", BaseBranch: "main", HeadRepository: "org/repo", HeadBranch: *run.WorktreeBranch, HeadRevision: receipt.BaseCommit, State: "open"}
+		info := executionmodel.PRInfo{URL: url, Repository: "org/repo", BaseBranch: "main", HeadRepository: "org/repo", HeadBranch: *run.WorktreeBranch, HeadRevision: receipt.BaseCommit, State: "open"}
 		if err := BindWorkerPR(workflow, execution, info, url, "org/repo", false); err != nil {
 			t.Fatal(err)
 		}
@@ -170,7 +172,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err := service.publishCheckpoint(); err != nil {
 		t.Fatal(err)
 	}
-	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: option, Note: note, AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	answer := executionmodel.DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: option, Note: note, AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	payload, err := json.Marshal(answer)
 	if err != nil {
 		t.Fatal(err)
@@ -183,7 +185,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err != nil {
 		t.Fatal(err)
 	}
-	var saved DecisionAnswer
+	var saved executionmodel.DecisionAnswer
 	if err := json.Unmarshal(record.Answer, &saved); err != nil {
 		t.Fatal(err)
 	}
@@ -236,7 +238,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	}
 	// The next answer has an accepted command, but its send receipt is lost.
 	// Reconciliation must preserve the original request without launching it again.
-	uncertain := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "Do not send twice", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	uncertain := executionmodel.DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, Note: "Do not send twice", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	uncertainPayload, err := json.Marshal(uncertain)
 	if err != nil {
 		t.Fatal(err)
@@ -291,7 +293,7 @@ func TestServiceRecoveryGateRequiresTransactionalOwner(t *testing.T) {
 func TestRestartDoesNotSendPreviouslyAcceptedFeedback(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	defer service.Close()
-	answer := DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "saved before stop", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	answer := executionmodel.DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "saved before stop", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	commands := CommandService{Store: service.commandStore, Project: service.Config.identity}
 	command, _, err := commands.AnswerDecisionWithID(context.Background(), newID(), answer.DecisionID, answer.ExpectedDecisionVersion, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 	if err != nil {

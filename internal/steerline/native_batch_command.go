@@ -12,95 +12,82 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-const taskBatchSchemaVersion = task.BatchSchemaVersion
-
-type TaskBatchInput = task.TaskBatchInput
-type TaskBatchTask = task.TaskBatchTask
-type TaskBatchReference = task.TaskBatchReference
-type TaskBatchEdge = task.TaskBatchEdge
-type TaskBatchIssue = task.TaskBatchIssue
-type TaskBatchValidation = task.TaskBatchValidation
-type TaskBatchReceipt = task.TaskBatchReceipt
-
-func decodeTaskBatch(data []byte) (TaskBatchInput, []byte, error) {
-	return task.DecodeBatch(data)
-}
-
-func (c CommandService) ValidateTaskBatch(ctx context.Context, config Config, data []byte) (TaskBatchValidation, error) {
-	batch, _, err := decodeTaskBatch(data)
+func (c CommandService) ValidateTaskBatch(ctx context.Context, config Config, data []byte) (taskmodel.TaskBatchValidation, error) {
+	batch, _, err := taskmodel.DecodeBatch(data)
 	if err != nil {
-		return TaskBatchValidation{}, err
+		return taskmodel.TaskBatchValidation{}, err
 	}
 	if c.Store == nil || c.Project == "" || config.Identity() != c.Project || batch.ProjectID != c.Project {
-		return TaskBatchValidation{}, nativeErr("authority_mismatch", "batch project_id, command target and configured project must match")
+		return taskmodel.TaskBatchValidation{}, nativeErr("authority_mismatch", "batch project_id, command target and configured project must match")
 	}
 	snapshot, err := c.Store.TaskGraphSnapshot(ctx, c.Project)
 	if err != nil {
-		return TaskBatchValidation{}, err
+		return taskmodel.TaskBatchValidation{}, err
 	}
 	if err = validateNativeConfiguredTarget(ctx, config, snapshot.Authority); err != nil {
-		return TaskBatchValidation{}, err
+		return taskmodel.TaskBatchValidation{}, err
 	}
-	result := TaskBatchValidation{ProjectID: c.Project, TaskCount: len(batch.Tasks), DependencyCount: len(batch.Dependencies), AuthorityVersion: snapshot.Authority.AuthorityVersion, GraphRevision: snapshot.Authority.GraphRevision, DatabaseRevision: snapshot.DatabaseRevision, DatabaseID: snapshot.DatabaseID, SampledAt: snapshot.SampledAt, Issues: []TaskBatchIssue{}}
+	result := taskmodel.TaskBatchValidation{ProjectID: c.Project, TaskCount: len(batch.Tasks), DependencyCount: len(batch.Dependencies), AuthorityVersion: snapshot.Authority.AuthorityVersion, GraphRevision: snapshot.Authority.GraphRevision, DatabaseRevision: snapshot.DatabaseRevision, DatabaseID: snapshot.DatabaseID, SampledAt: snapshot.SampledAt, Issues: []taskmodel.TaskBatchIssue{}}
 	issues, cycle := validateTaskBatchAgainstGraph(ctx, config, batch, snapshot, true)
 	result.Issues, result.Cycle = issues, cycle
 	result.Valid = len(issues) == 0
 	return result, nil
 }
 
-func validateTaskBatchAgainstGraph(ctx context.Context, config Config, batch TaskBatchInput, graph taskGraphSnapshot, verifyFiles bool) ([]TaskBatchIssue, []string) {
-	var verify func(TaskContract) error = ValidateTaskContract
+func validateTaskBatchAgainstGraph(ctx context.Context, config Config, batch taskmodel.TaskBatchInput, graph taskGraphSnapshot, verifyFiles bool) ([]taskmodel.TaskBatchIssue, []string) {
+	var verify func(taskmodel.TaskContract) error = taskmodel.ValidateContract
 	if verifyFiles {
-		verify = func(contract TaskContract) error { return VerifyTaskContractFiles(ctx, config, contract) }
+		verify = func(contract taskmodel.TaskContract) error { return VerifyTaskContractFiles(ctx, config, contract) }
 	}
-	return task.ValidateBatchAgainstGraph(batch, graph, config.ExecutableTypes, verify)
+	return taskmodel.ValidateBatchAgainstGraph(batch, graph.TaskGraph(), config.ExecutableTypes, verify)
 }
 
-type taskBatchReplay struct{ Receipt TaskBatchReceipt }
+type taskBatchReplay struct{ Receipt taskmodel.TaskBatchReceipt }
 
 func (e taskBatchReplay) Error() string { return "task batch command already applied" }
 
 // CreateTaskBatch verifies the fixed Git references before entering SQLite,
 // then persists the batch, tasks, contracts, edges, event and command receipt
 // in one center transaction.
-func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data []byte, requestID string, expectedAuthorityVersion uint64, requestedBy string) (TaskBatchReceipt, error) {
+func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data []byte, requestID string, expectedAuthorityVersion uint64, requestedBy string) (taskmodel.TaskBatchReceipt, error) {
 	if err := validateWorkflowConfig(&config, nil); err != nil {
-		return TaskBatchReceipt{}, err
+		return taskmodel.TaskBatchReceipt{}, err
 	}
-	batch, canonicalPayload, err := decodeTaskBatch(data)
+	batch, canonicalPayload, err := taskmodel.DecodeBatch(data)
 	if err != nil {
-		return TaskBatchReceipt{}, err
+		return taskmodel.TaskBatchReceipt{}, err
 	}
 	sqlite := c.Store
 	if sqlite == nil || c.Project == "" || config.Identity() != c.Project || batch.ProjectID != c.Project {
-		return TaskBatchReceipt{}, nativeErr("authority_mismatch", "batch project_id, command target and configured project must match")
+		return taskmodel.TaskBatchReceipt{}, nativeErr("authority_mismatch", "batch project_id, command target and configured project must match")
 	}
 	if !controlIDPattern.MatchString(requestID) || expectedAuthorityVersion == 0 {
-		return TaskBatchReceipt{}, nativeErr("invalid_batch", "create requires a valid request_id and expected authority version")
+		return taskmodel.TaskBatchReceipt{}, nativeErr("invalid_batch", "create requires a valid request_id and expected authority version")
 	}
 	if strings.TrimSpace(requestedBy) == "" {
 		requestedBy = DefaultRequestedBy()
 	}
 	if existing, found, e := sqlite.LookupCommand(ctx, c.Project, requestID); e != nil {
-		return TaskBatchReceipt{}, e
+		return taskmodel.TaskBatchReceipt{}, e
 	} else if found {
 		return replayTaskBatch(existing, canonicalPayload, batch.ProjectID, requestedBy)
 	}
 	validation, err := c.ValidateTaskBatch(ctx, config, data)
 	if err != nil {
-		return TaskBatchReceipt{}, err
+		return taskmodel.TaskBatchReceipt{}, err
 	}
 	if !validation.Valid {
-		return TaskBatchReceipt{}, taskBatchValidationError(validation.Issues, validation.Cycle)
+		return taskmodel.TaskBatchReceipt{}, taskmodel.BatchValidationError(validation.Issues, validation.Cycle)
 	}
 	if validation.AuthorityVersion != expectedAuthorityVersion {
-		return TaskBatchReceipt{}, nativeErr("stale_version", fmt.Sprintf("expected authority version %d, sampled %d", expectedAuthorityVersion, validation.AuthorityVersion))
+		return taskmodel.TaskBatchReceipt{}, nativeErr("stale_version", fmt.Sprintf("expected authority version %d, sampled %d", expectedAuthorityVersion, validation.AuthorityVersion))
 	}
 	payloadDigest := digestCanonical(canonicalPayload)
-	var receipt TaskBatchReceipt
+	var receipt taskmodel.TaskBatchReceipt
 	err = c.Store.TransactTaskBatch(ctx, func(tx persistence.BatchTx) error {
 		if old, found, e := tx.LookupCommand(ctx, c.Project, requestID); e != nil {
 			return e
@@ -121,9 +108,9 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 		}
 		issues, cycle := validateTaskBatchAgainstGraph(ctx, config, batch, graph, false)
 		if len(issues) > 0 {
-			return taskBatchValidationError(issues, cycle)
+			return taskmodel.BatchValidationError(issues, cycle)
 		}
-		command := CommandRecord{ProjectIdentity: c.Project, CommandID: requestID, Kind: "create_task_batch", TargetID: c.Project, ExpectedVersion: expectedAuthorityVersion, IdempotencyKey: requestID, RequestedBy: requestedBy, Payload: append([]byte(nil), canonicalPayload...), Status: "in_flight", CreatedAt: time.Now().UTC()}
+		command := storageports.CommandRecord{ProjectIdentity: c.Project, CommandID: requestID, Kind: "create_task_batch", TargetID: c.Project, ExpectedVersion: expectedAuthorityVersion, IdempotencyKey: requestID, RequestedBy: requestedBy, Payload: append([]byte(nil), canonicalPayload...), Status: "in_flight", CreatedAt: time.Now().UTC()}
 		createdCommand, created, e := tx.EnqueueCommand(command)
 		if e != nil {
 			return nativeErr("idempotency_conflict", e.Error())
@@ -134,7 +121,7 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 		command = createdCommand
 		batchID := newID()
 		createdAt := time.Now().UTC()
-		plan := task.PlanBatch(batch, batchID, requestID, payloadDigest, createdAt)
+		plan := taskmodel.PlanBatch(batch, batchID, requestID, payloadDigest, createdAt)
 		mapping := plan.Batch.TaskIDs
 		batchRecord := plan.Batch
 		if e = tx.PutTaskBatch(batchRecord, expectedAuthorityVersion, graph.Authority.GraphRevision); e != nil {
@@ -150,7 +137,7 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 				return e
 			}
 			body, _ := json.Marshal(map[string]any{"batch_id": batchID, "local_key": input.LocalKey, "task_id": id, "contract_digest": input.Contract.Digest, "payload_digest": payloadDigest})
-			if _, e = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: id, ExternalSource: "native-task-command", ExternalID: requestID + ":" + input.LocalKey, Type: "task.created", ReceivedAt: createdAt, Payload: body}); e != nil {
+			if _, e = tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, TaskID: id, ExternalSource: "native-task-command", ExternalID: requestID + ":" + input.LocalKey, Type: "task.created", ReceivedAt: createdAt, Payload: body}); e != nil {
 				return e
 			}
 		}
@@ -164,10 +151,10 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 		}
 		graphRevision := graph.Authority.GraphRevision + 1
 		body, _ := json.Marshal(map[string]any{"batch_id": batchID, "task_ids": mapping, "graph_revision": graphRevision, "payload_digest": payloadDigest})
-		if _, e = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, ExternalSource: "native-task-command", ExternalID: requestID, Type: "task.batch.created", ReceivedAt: createdAt, Payload: body}); e != nil {
+		if _, e = tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, ExternalSource: "native-task-command", ExternalID: requestID, Type: "task.batch.created", ReceivedAt: createdAt, Payload: body}); e != nil {
 			return e
 		}
-		receipt = TaskBatchReceipt{RequestID: requestID, BatchID: batchID, TaskIDs: mapping, GraphRevision: graphRevision, PayloadDigest: payloadDigest, Status: "accepted", DispatchNote: "Task creation does not start work. If dispatch is already auto and unpaused, normal polling may consider these tasks."}
+		receipt = taskmodel.TaskBatchReceipt{RequestID: requestID, BatchID: batchID, TaskIDs: mapping, GraphRevision: graphRevision, PayloadDigest: payloadDigest, Status: "accepted", DispatchNote: "Task creation does not start work. If dispatch is already auto and unpaused, normal polling may consider these tasks."}
 		command.Result, _ = json.Marshal(receipt)
 		command.Status = "accepted"
 		if e = tx.UpdateCommand(command); e != nil {
@@ -180,32 +167,24 @@ func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data
 		return replay.Receipt, nil
 	}
 	if err != nil {
-		return TaskBatchReceipt{}, err
+		return taskmodel.TaskBatchReceipt{}, err
 	}
 	return receipt, nil
 }
 
-func resolveTaskBatchEdges(batch TaskBatchInput) []TaskDependencyRecord {
-	return task.ResolveBatchEdges(batch)
-}
-
-func taskBatchValidationError(issues []TaskBatchIssue, cycle []string) error {
-	return task.BatchValidationError(issues, cycle)
-}
-
-func replayTaskBatch(old CommandRecord, payload []byte, project, requestedBy string) (TaskBatchReceipt, error) {
+func replayTaskBatch(old storageports.CommandRecord, payload []byte, project, requestedBy string) (taskmodel.TaskBatchReceipt, error) {
 	if old.Kind != "create_task_batch" || old.TargetID != project || old.RequestedBy != requestedBy || !bytes.Equal(old.Payload, payload) {
-		return TaskBatchReceipt{}, nativeErr("idempotency_conflict", "request_id was already used with different command content")
+		return taskmodel.TaskBatchReceipt{}, nativeErr("idempotency_conflict", "request_id was already used with different command content")
 	}
 	if old.Status != "accepted" || len(old.Result) == 0 {
-		return TaskBatchReceipt{}, nativeErr("idempotency_conflict", "request_id has no committed task batch receipt")
+		return taskmodel.TaskBatchReceipt{}, nativeErr("idempotency_conflict", "request_id has no committed task batch receipt")
 	}
-	var receipt TaskBatchReceipt
+	var receipt taskmodel.TaskBatchReceipt
 	if err := json.Unmarshal(old.Result, &receipt); err != nil {
 		return receipt, nativeErr("unsupported_schema", "saved task batch receipt is unreadable")
 	}
 	if receipt.RequestID != old.CommandID || receipt.Status != "accepted" {
-		return TaskBatchReceipt{}, nativeErr("unsupported_schema", "saved task batch receipt identity is inconsistent")
+		return taskmodel.TaskBatchReceipt{}, nativeErr("unsupported_schema", "saved task batch receipt identity is inconsistent")
 	}
 	return receipt, nil
 }

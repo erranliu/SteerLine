@@ -2,10 +2,6 @@ package codexworker_test
 
 import (
 	"context"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/processhost"
-	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -13,6 +9,11 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/processhost"
+	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 func TestCodexLinkedWorktreeWriteArgsOnlyGrantsFixedGitPaths(t *testing.T) {
@@ -37,7 +38,7 @@ func TestCodexLinkedWorktreeWriteArgsOnlyGrantsFixedGitPaths(t *testing.T) {
 	runGit("-C", repo, "add", "base.txt")
 	runGit("-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "commit", "-qm", "base")
 	runGit("-C", repo, "worktree", "add", "-qb", "validation", worktree)
-	git := workspace.Git{Command: executionapi.LaunchCommand{Executable: "git"}, Timeout: 10 * time.Second, Start: processhost.New(time.Second).StartManaged}
+	git := workspace.Git{Command: executionbackend.LaunchCommand{Executable: "git"}, Timeout: 10 * time.Second, Start: processhost.New(time.Second).StartManaged}
 	c, err := workspace.ResolveRepository(ctx, git, repo)
 	require(t, err)
 	args, err := linkedWriteArgs(ctx, git, c, worktree)
@@ -59,6 +60,7 @@ func TestCodexLinkedWorktreeWriteArgsOnlyGrantsFixedGitPaths(t *testing.T) {
 		t.Fatal("foreign repository identity was allowed to grant Git metadata write access")
 	}
 }
+
 func linkedWriteArgs(ctx context.Context, git workspace.Git, repo workspace.Repository, path string) ([]string, error) {
 	r, err := workspace.ResolveLinkedResourcesAt(ctx, git, repo, path)
 	if err != nil {
@@ -66,6 +68,7 @@ func linkedWriteArgs(ctx context.Context, git workspace.Git, repo workspace.Repo
 	}
 	return codexworker.LinkedWorktreeWriteArgs(r.Objects, r.Refs, r.Logs, r.Admin)
 }
+
 func canonicalPath(path string) string {
 	value, err := filepath.Abs(path)
 	if err == nil {

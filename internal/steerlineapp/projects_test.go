@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func minimalConfig(repo string) Config {
@@ -14,7 +16,7 @@ func minimalConfig(repo string) Config {
 		TaskAuthority:    "native",
 		WorkflowProtocol: WorkerFlowVersion,
 		Repository:       repo,
-		Git:              Command{Executable: "git"},
+		Git:              executionbackend.Command{Executable: "git"},
 		Remote:           "origin",
 		Branch:           "main",
 		ExecutableTypes:  []string{"task"},

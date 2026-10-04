@@ -4,15 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
-	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 )
 
 func TestMain(m *testing.M) {
@@ -23,9 +24,10 @@ func TestMain(m *testing.M) {
 	}
 	os.Exit(m.Run())
 }
+
 func terminalBackendConfig(t *testing.T, dir string) orcaworker.Config {
 	t.Helper()
-	return orcaworker.Config{Repository: dir, CommandTimeout: "5s", Target: executionapi.ExecutionTarget{ID: "orca:fixed-terminal-fixture"},
+	return orcaworker.Config{Repository: dir, CommandTimeout: "5s", Target: executionbackend.ExecutionTarget{ID: "orca:fixed-terminal-fixture"},
 		Output: func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
 			ctx, cancel := context.WithTimeout(ctx, timeout)
 			defer cancel()
@@ -37,13 +39,16 @@ func terminalBackendConfig(t *testing.T, dir string) orcaworker.Config {
 }
 
 type orcaStopHandleFixture struct {
-	identity       executionapi.ProcessIdentity
+	identity       executionbackend.ProcessIdentity
 	closed, killed bool
 }
 
-func (h *orcaStopHandleFixture) Identity() executionapi.ProcessIdentity { return h.identity }
-func (h *orcaStopHandleFixture) Kill()                                  { h.killed = true }
-func (h *orcaStopHandleFixture) Close()                                 { h.closed = true }
+func (h *orcaStopHandleFixture) Identity() executionbackend.ProcessIdentity { return h.identity }
+
+func (h *orcaStopHandleFixture) Kill() { h.killed = true }
+
+func (h *orcaStopHandleFixture) Close() { h.closed = true }
+
 func TestOrcaTerminalExitCauseConfirmsCommandExit(t *testing.T) {
 	var term orcaworker.Terminal
 	if err := json.Unmarshal([]byte(`{"handle":"term-exit","connected":false,"exitCause":{"kind":"exited","exitCode":0}}`), &term); err != nil {
@@ -66,10 +71,10 @@ func TestOrcaStopExecutionConfirmsFixedTerminalExit(t *testing.T) {
 		t.Fatal(err)
 	}
 	runID, attemptID := strings.Repeat("a", 32), strings.Repeat("b", 32)
-	ref := executionapi.ExecutionRef{Version: 1, Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: cfg.Target, Agent: executionapi.AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, External: executionapi.ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-stop", Executable: os.Args[0]}}
+	ref := executionbackend.ExecutionRef{Version: 1, Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV2, Target: cfg.Target, Agent: executionbackend.AgentSpec{Name: "codex"}, RunID: runID, AttemptID: attemptID, External: executionbackend.ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-stop", Executable: os.Args[0]}}
 	backend := orcaworker.NewBackend(cfg)
 	observer := &orcaStopHandleFixture{identity: ref.External}
-	receipt, err := backend.StopExecution(context.Background(), ref, executionapi.Operation{ID: "stop-" + attemptID}, observer)
+	receipt, err := backend.StopExecution(context.Background(), ref, executionbackend.Operation{ID: "stop-" + attemptID}, observer)
 	if err != nil || receipt.Disposition != "confirmed" {
 		t.Fatalf("stop receipt=%#v err=%v", receipt, err)
 	}
@@ -89,11 +94,11 @@ func TestOrcaStopFailureDoesNotConfirmExit(t *testing.T) {
 	if err := testprotocol.WriteTerminalFixtureState(dir, testprotocol.TerminalFixtureState{Handle: handle, Incarnation: "inc-failure"}); err != nil {
 		t.Fatal(err)
 	}
-	ref := executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: cfg.Target, External: executionapi.ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-failure"}}
+	ref := executionbackend.ExecutionRef{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV2, Target: cfg.Target, External: executionbackend.ProcessIdentity{Kind: "orca", Terminal: handle, RuntimeID: "fake-runtime", Incarnation: "inc-failure"}}
 	t.Setenv("STEERLINE_FAKE_ORCA_CLOSE_FAIL", "1")
-	receipt, err := (orcaworker.NewBackend(cfg)).StopExecution(context.Background(), ref, executionapi.Operation{}, nil)
-	var backendErr *executionapi.BackendError
-	if receipt.Disposition == "confirmed" || !errors.As(err, &backendErr) || backendErr.Code != executionapi.BackendOutcomeUnknown {
+	receipt, err := (orcaworker.NewBackend(cfg)).StopExecution(context.Background(), ref, executionbackend.Operation{}, nil)
+	var backendErr *executionbackend.BackendError
+	if receipt.Disposition == "confirmed" || !errors.As(err, &backendErr) || backendErr.Code != executionbackend.BackendOutcomeUnknown {
 		t.Fatalf("stop failure was misconfirmed: %#v, %v", receipt, err)
 	}
 	obs, err := (orcaworker.NewBackend(cfg)).Observe(context.Background(), ref)
@@ -107,13 +112,13 @@ func TestSlowOrcaObservationDoesNotBlockOtherRefStop(t *testing.T) {
 	cfg := terminalBackendConfig(t, dir)
 	cfg.CommandTimeout = "10s"
 	backend := orcaworker.NewBackend(cfg)
-	refFor := func(handle string) executionapi.ExecutionRef {
+	refFor := func(handle string) executionbackend.ExecutionRef {
 		t.Helper()
-		identity := executionapi.ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: handle, Incarnation: "inc-" + handle}
+		identity := executionbackend.ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: handle, Incarnation: "inc-" + handle}
 		if err := testprotocol.WriteTerminalFixtureState(dir, testprotocol.TerminalFixtureState{Handle: handle, Incarnation: identity.Incarnation}); err != nil {
 			t.Fatal(err)
 		}
-		return executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: cfg.Target, External: identity}
+		return executionbackend.ExecutionRef{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV2, Target: cfg.Target, External: identity}
 	}
 	slow, stopped := refFor("slow-observe"), refFor("quick-stop")
 	marker := filepath.Join(dir, "slow-show-started")
@@ -137,7 +142,7 @@ func TestSlowOrcaObservationDoesNotBlockOtherRefStop(t *testing.T) {
 	stopCtx, cancelStop := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancelStop()
 	started := time.Now()
-	receipt, err := backend.StopExecution(stopCtx, stopped, executionapi.Operation{}, nil)
+	receipt, err := backend.StopExecution(stopCtx, stopped, executionbackend.Operation{}, nil)
 	if err != nil || receipt.Disposition != "confirmed" || time.Since(started) >= 3*time.Second {
 		t.Fatalf("other ref stop waited for slow observation: %#v %v", receipt, err)
 	}
@@ -158,11 +163,11 @@ func TestOrcaSameRefObservationsDoNotOverlapOrLeakGate(t *testing.T) {
 	cfg := terminalBackendConfig(t, dir)
 	backend := orcaworker.NewBackend(cfg)
 	handle := "same-ref-observe"
-	identity := executionapi.ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: handle, Incarnation: "inc-same-ref"}
+	identity := executionbackend.ProcessIdentity{Kind: "orca", RuntimeID: "fake-runtime", Terminal: handle, Incarnation: "inc-same-ref"}
 	if err := testprotocol.WriteTerminalFixtureState(dir, testprotocol.TerminalFixtureState{Handle: handle, Incarnation: identity.Incarnation}); err != nil {
 		t.Fatal(err)
 	}
-	ref := executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: cfg.Target, External: identity}
+	ref := executionbackend.ExecutionRef{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV2, Target: cfg.Target, External: identity}
 	marker := filepath.Join(dir, "first-show-started")
 	t.Setenv("STEERLINE_FAKE_ORCA_SLOW_SHOW_HANDLE", handle)
 	t.Setenv("STEERLINE_FAKE_ORCA_SLOW_SHOW_STARTED", marker)
@@ -197,19 +202,19 @@ func TestOrcaObservationRejectsReplacedIncarnationAndConnection(t *testing.T) {
 	if err := testprotocol.WriteTerminalFixtureState(dir, testprotocol.TerminalFixtureState{Handle: "term-fixed", Incarnation: "inc-original"}); err != nil {
 		t.Fatal(err)
 	}
-	ref := executionapi.ExecutionRef{Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Target: cfg.Target, Agent: executionapi.AgentSpec{Name: "codex"}, External: executionapi.ProcessIdentity{Kind: "orca", Terminal: "term-fixed", RuntimeID: "fake-runtime", Incarnation: "inc-original"}}
+	ref := executionbackend.ExecutionRef{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV2, Target: cfg.Target, Agent: executionbackend.AgentSpec{Name: "codex"}, External: executionbackend.ProcessIdentity{Kind: "orca", Terminal: "term-fixed", RuntimeID: "fake-runtime", Incarnation: "inc-original"}}
 	backend := orcaworker.NewBackend(cfg)
 	if obs, err := backend.Observe(context.Background(), ref); err != nil || obs.Liveness != "live" {
 		t.Fatalf("fixed terminal was not live: %#v, %v", obs, err)
 	}
 	t.Setenv("STEERLINE_FAKE_ORCA_INCARNATION", "inc-replacement")
-	var mismatch *executionapi.BackendError
-	if _, err := backend.Observe(context.Background(), ref); !errors.As(err, &mismatch) || mismatch.Code != executionapi.BackendIdentityMismatch {
+	var mismatch *executionbackend.BackendError
+	if _, err := backend.Observe(context.Background(), ref); !errors.As(err, &mismatch) || mismatch.Code != executionbackend.BackendIdentityMismatch {
 		t.Fatalf("replacement incarnation was accepted: %v", err)
 	}
 	t.Setenv("STEERLINE_FAKE_ORCA_INCARNATION", "")
 	cfg.Target.ID += "-different-connection"
-	if _, err := (orcaworker.NewBackend(cfg)).Observe(context.Background(), ref); !errors.As(err, &mismatch) || mismatch.Code != executionapi.BackendIdentityMismatch {
+	if _, err := (orcaworker.NewBackend(cfg)).Observe(context.Background(), ref); !errors.As(err, &mismatch) || mismatch.Code != executionbackend.BackendIdentityMismatch {
 		t.Fatalf("changed connection was accepted: %v", err)
 	}
 }

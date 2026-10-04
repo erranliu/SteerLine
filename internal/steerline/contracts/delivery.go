@@ -4,18 +4,19 @@ import (
 	"errors"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func MarkWorkerDeliveryCommitted(task TaskRecord, workflow *WorkflowRunRecord, delivery TaskDeliveryRecord) error {
+func MarkWorkerDeliveryCommitted(task taskmodel.TaskRecord, workflow *executionmodel.WorkflowRunRecord, delivery TaskDeliveryRecord) error {
 	if workflow == nil {
 		return errors.New("completed worker flow requires committed matching delivery")
 	}
-	state := workerflow.State{
+	state := executionmodel.State{
 		WorkflowRunID: workflow.WorkflowRunID, TaskID: workflow.TaskID, WorkflowVersion: workflow.WorkflowVersion,
 		Phase: workflow.Phase, PRURL: workflow.PRURL, PRState: workflow.PRState, WorkflowUpdatedAt: workflow.UpdatedAt,
 	}
-	next, err := workerflow.Complete(state, task.TaskID, task.Status, workerflow.Delivery{
+	next, err := executionmodel.Complete(state, task.TaskID, task.Status, executionmodel.Delivery{
 		TaskID: delivery.TaskID, WorkflowRunID: delivery.SelectedWorkflowRunID, PRURL: delivery.PRURL,
 		MergeCommit: delivery.MergeCommit, MergedAt: delivery.MergedAt,
 	}, time.Now().UTC())

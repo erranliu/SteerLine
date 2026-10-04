@@ -5,12 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
-	"github.com/erranliu/SteerLine/internal/steerlineapp"
 	"net/url"
 	"os"
 	"os/exec"
@@ -18,6 +12,15 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 // The original opt-in requires a registered isolated repository and pinned
@@ -52,11 +55,11 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	require(t, err)
 	terminal, err := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "4m"})
 	require(t, err)
-	inputs := []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: terminal}}
+	inputs := []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: terminal}}
 	require(t, os.MkdirAll(filepath.Dir(steerlineapp.GlobalExecutionConfigPath()), 0700))
 	global := map[string]any{"version": 2, "default_execution_profile": "readiness", "execution_profiles": []map[string]any{{"id": "readiness", "name": "Registered isolated readiness", "host": "orca", "agent": "codex", "implementation_configs": inputs}}}
 	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), mustJSON(global), 0600))
-	project := map[string]any{"task_authority": "native", "workflow_protocol": steerline.WorkerFlowVersion, "repository": repo, "remote": "origin", "branch": "main", "claimant": "readiness-acceptance", "executable_types": []string{"task"}, "git": steerline.Command{Executable: "git"}, "command_timeout": "10s", "task_poll": "10s", "pr_poll": "30s", "heartbeat": "5s", "shutdown_grace": "10s", "execution_policy": workspacePolicyFixture(), "publication_policy": executionapi.PublicationPolicy{Publisher: "worker"}, "pr": publication.Config{Kind: "command", BaseURL: "https://" + host, Repository: repository, Query: steerline.Command{Executable: "git", Args: []string{"status"}}}}
+	project := map[string]any{"task_authority": "native", "workflow_protocol": executionmodel.Version, "repository": repo, "remote": "origin", "branch": "main", "claimant": "readiness-acceptance", "executable_types": []string{"task"}, "git": executionbackend.Command{Executable: "git"}, "command_timeout": "10s", "task_poll": "10s", "pr_poll": "30s", "heartbeat": "5s", "shutdown_grace": "10s", "execution_policy": workspacePolicyFixture(), "publication_policy": executionbackend.PublicationPolicy{Publisher: "worker"}, "pr": publication.Config{Kind: "command", BaseURL: "https://" + host, Repository: repository, Query: executionbackend.Command{Executable: "git", Args: []string{"status"}}}}
 	configPath := filepath.Join(home, "readiness-project.json")
 	require(t, os.WriteFile(configPath, mustJSON(project), 0600))
 	c, err := steerlineapp.LoadConfig(configPath)
@@ -69,11 +72,11 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	queries := steerline.NewQueryService(store, c.Identity())
 	commands := steerline.CommandService{Store: store, Project: c.Identity()}
 	spec, plan := liveReadinessReference(t, ctx, repo, commit, "docs/spec/pr154-readiness-gate.spec.md"), liveReadinessReference(t, ctx, repo, commit, "docs/spec/pr154-readiness-gate.plan.md")
-	contract := steerline.TaskContract{ContractID: "pr154-readiness-live", Repository: remote, Remote: "origin", Branch: "main", SpecRef: spec, PlanRef: plan, AcceptanceRefs: []steerline.FileReference{spec}}
-	contract.Digest, err = steerline.TaskContractDigest(contract)
+	contract := taskmodel.TaskContract{ContractID: "pr154-readiness-live", Repository: remote, Remote: "origin", Branch: "main", SpecRef: spec, PlanRef: plan, AcceptanceRefs: []taskmodel.FileReference{spec}}
+	contract.Digest, err = taskmodel.ContractDigest(contract)
 	require(t, err)
 	priority := 2
-	batch := steerline.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: c.Identity(), Tasks: []steerline.TaskBatchTask{{LocalKey: "readiness", TaskID: 9001154, Title: "PR154 isolated readiness and business dispatch acceptance", Type: "task", Priority: &priority, Contract: contract}}, Dependencies: []steerline.TaskBatchEdge{}}
+	batch := taskmodel.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: c.Identity(), Tasks: []taskmodel.TaskBatchTask{{LocalKey: "readiness", TaskID: 9001154, Title: "PR154 isolated readiness and business dispatch acceptance", Type: "task", Priority: &priority, Contract: contract}}, Dependencies: []taskmodel.TaskBatchEdge{}}
 	validation, err := commands.ValidateTaskBatch(ctx, c, mustJSON(batch))
 	require(t, err)
 	if !resume && !validation.Valid {
@@ -116,7 +119,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 			if run.TaskID != "9001154" {
 				continue
 			}
-			var e *steerline.ExecutionRecord
+			var e *executionmodel.ExecutionRecord
 			for i := range view.Runtime.Executions {
 				if view.Runtime.Executions[i].ExecutionID == run.ExecutionID {
 					e = &view.Runtime.Executions[i]
@@ -156,7 +159,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 				service.stop(t)
 				config := c.ApplyFixedExecutionProfile(findReadinessLiveProfile(t, view.Runtime, run.RunID))
 				client := orcaworker.New(orcaworker.Config{Repository: config.Repository, CommandTimeout: config.CommandTimeout, Target: e.Target, Output: func(callCtx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
-					return (steerline.Runner{Dir: config.Repository, Timeout: timeout}).Output(callCtx, steerline.Command{Executable: "orca"}, args...)
+					return (steerline.Runner{Dir: config.Repository, Timeout: timeout}).Output(callCtx, executionbackend.Command{Executable: "orca"}, args...)
 				}})
 				closed, err := client.CloseTerminalChecked(ctx, e.Process.Terminal, e.Process.RuntimeID)
 				require(t, err)
@@ -176,19 +179,21 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	t.Fatalf("real readiness acceptance did not settle; preserve original isolated resources: %s", home)
 }
 
-func liveReadinessReference(t *testing.T, ctx context.Context, repo, commit, path string) steerline.FileReference {
+func liveReadinessReference(t *testing.T, ctx context.Context, repo, commit, path string) taskmodel.FileReference {
 	t.Helper()
 	raw, err := exec.CommandContext(ctx, "git", "-C", repo, "show", commit+":"+path).Output()
 	require(t, err)
 	sum := sha256.Sum256(raw)
-	return steerline.FileReference{Path: path, Commit: commit, SHA256: hex.EncodeToString(sum[:])}
+	return taskmodel.FileReference{Path: path, Commit: commit, SHA256: hex.EncodeToString(sum[:])}
 }
-func findReadinessLiveProfile(t *testing.T, runtime *steerline.Runtime, runID string) steerline.FixedExecutionProfile {
+
+func findReadinessLiveProfile(t *testing.T, runtime *steerline.Runtime, runID string) executionmodel.FixedExecutionProfile {
 	t.Helper()
-	var profile steerline.FixedExecutionProfile
+	var profile executionmodel.FixedExecutionProfile
 	require(t, json.Unmarshal(integrationFixedProfileJSON(t, runtime, runID), &profile))
 	return profile
 }
+
 func startReadinessLiveService(t *testing.T, ctx context.Context, c steerline.Config) *runningIntegrationService {
 	t.Helper()
 	service, err := steerlineapp.NewService(c)

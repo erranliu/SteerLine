@@ -9,30 +9,20 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
-
-// Decision questions and accepted answers are records in the current SQLite
-// authority. Clients append answer_decision commands; the single service writer
-// validates and accepts them before applyDecisions considers continuation.
-
-var ErrAnswerConflict = persistence.ErrAnswerConflict
-
-func validateDecisionRequest(req *DecisionRequest) error {
-	return contracts.ValidateDecisionRequest(req)
-}
 
 // WriteDecisionRequest creates a new decision identity in the service-owned
 // runtime projection. The caller persists it to SQLite with the run transition.
-func WriteDecisionRequest(r *Run, req DecisionRequest) (*DecisionState, error) {
+func WriteDecisionRequest(r *Run, req executionmodel.DecisionRequest) (*executionmodel.DecisionState, error) {
 	return writeDecisionRequestWithID(r, req, newID())
 }
 
-func decisionRequestFromEventFact(fact executionapi.EventFact) DecisionRequest {
-	request := DecisionRequest{FormatVersion: contracts.DecisionRequestFormatVersion, Question: fact.QuestionText,
-		Context: fact.QuestionContext, Options: append([]executionapi.DecisionOption(nil), fact.QuestionOptions...), AllowFreeText: fact.AllowFreeText}
+func decisionRequestFromEventFact(fact executionbackend.EventFact) executionmodel.DecisionRequest {
+	request := executionmodel.DecisionRequest{FormatVersion: executionmodel.DecisionRequestFormatVersion, Question: fact.QuestionText,
+		Context: fact.QuestionContext, Options: append([]executionbackend.DecisionOption(nil), fact.QuestionOptions...), AllowFreeText: fact.AllowFreeText}
 	if len(fact.Questions) == 0 {
 		return request
 	}
@@ -44,7 +34,7 @@ func decisionRequestFromEventFact(fact executionapi.EventFact) DecisionRequest {
 	if len(fact.Questions) == 1 {
 		question := fact.Questions[0]
 		request.Question = question.Question
-		request.Options = append([]executionapi.DecisionOption(nil), question.Options...)
+		request.Options = append([]executionbackend.DecisionOption(nil), question.Options...)
 		request.AllowFreeText = question.AllowFreeText
 		if request.Context == "" && fact.QuestionRoute != nil {
 			request.Context = "A human answer is required to continue the original execution."
@@ -78,12 +68,12 @@ func decisionRequestFromEventFact(fact executionapi.EventFact) DecisionRequest {
 	return request
 }
 
-func writeDecisionRequestWithID(r *Run, req DecisionRequest, decisionID string) (*DecisionState, error) {
+func writeDecisionRequestWithID(r *Run, req executionmodel.DecisionRequest, decisionID string) (*executionmodel.DecisionState, error) {
 	if r == nil || strings.TrimSpace(decisionID) == "" {
 		return nil, errors.New("decision requires a run and stable ID")
 	}
-	req.FormatVersion = contracts.DecisionRequestFormatVersion
-	if e := validateDecisionRequest(&req); e != nil {
+	req.FormatVersion = executionmodel.DecisionRequestFormatVersion
+	if e := executionmodel.ValidateDecisionRequest(&req); e != nil {
 		return nil, e
 	}
 	if req.QuestionRoute != nil && (req.QuestionRoute.WorkflowRunID != r.RunID || req.QuestionRoute.ExecutionID != r.ExecutionID || req.QuestionRoute.AttemptID != r.AttemptID) {
@@ -94,7 +84,7 @@ func writeDecisionRequestWithID(r *Run, req DecisionRequest, decisionID string) 
 		route := req.QuestionRoute.Clone()
 		req.QuestionRoute = &route
 	}
-	st := &DecisionState{
+	st := &executionmodel.DecisionState{
 		ID:        decisionID,
 		AttemptID: r.AttemptID,
 		Version:   1,
@@ -104,17 +94,13 @@ func writeDecisionRequestWithID(r *Run, req DecisionRequest, decisionID string) 
 	return st, nil
 }
 
-func validateDecisionAnswer(req *DecisionRequest, a *DecisionAnswer) error {
-	return contracts.ValidateDecisionAnswer(req, a)
-}
-
-func normalizeNativeDecisionAnswer(req *DecisionRequest, answer *DecisionAnswer) error {
-	if req == nil || len(decisionQuestions(req)) == 0 || answer == nil {
+func normalizeNativeDecisionAnswer(req *executionmodel.DecisionRequest, answer *executionmodel.DecisionAnswer) error {
+	if req == nil || len(executionmodel.DecisionQuestions(req)) == 0 || answer == nil {
 		return errors.New("native answer has no fixed question")
 	}
-	questions := decisionQuestions(req)
+	questions := executionmodel.DecisionQuestions(req)
 	if len(answer.Answers) != 0 {
-		return validateDecisionAnswer(req, answer)
+		return executionmodel.ValidateDecisionAnswer(req, answer)
 	}
 	note := strings.TrimSpace(answer.Note)
 	if strings.HasPrefix(note, "{") {
@@ -144,18 +130,14 @@ func normalizeNativeDecisionAnswer(req *DecisionRequest, answer *DecisionAnswer)
 	} else {
 		return errors.New("answer all native questions using -note JSON, keyed by question ID")
 	}
-	return validateDecisionAnswer(req, answer)
+	return executionmodel.ValidateDecisionAnswer(req, answer)
 }
 
-func decisionQuestions(req *DecisionRequest) []executionapi.Question {
-	return contracts.DecisionQuestions(req)
-}
-
-func cloneExecutionQuestions(questions []executionapi.Question) []executionapi.Question {
-	copy := make([]executionapi.Question, len(questions))
+func cloneExecutionQuestions(questions []executionbackend.Question) []executionbackend.Question {
+	copy := make([]executionbackend.Question, len(questions))
 	for i := range questions {
 		copy[i] = questions[i]
-		copy[i].Options = append([]executionapi.DecisionOption(nil), questions[i].Options...)
+		copy[i].Options = append([]executionbackend.DecisionOption(nil), questions[i].Options...)
 	}
 	return copy
 }
@@ -163,20 +145,20 @@ func cloneExecutionQuestions(questions []executionapi.Question) []executionapi.Q
 // ReadDecisionAnswer returns the answer already committed to the current
 // service projection. A pending decision has no answer; clients cannot create
 // one by writing a file.
-func ReadDecisionAnswer(r *Run) (DecisionAnswer, error) {
+func ReadDecisionAnswer(r *Run) (executionmodel.DecisionAnswer, error) {
 	if r.Decision == nil {
-		return DecisionAnswer{}, errors.New("run has no decision")
+		return executionmodel.DecisionAnswer{}, errors.New("run has no decision")
 	}
 	if r.Decision.Status == "pending" {
-		return DecisionAnswer{}, errors.New("decision has no accepted answer")
+		return executionmodel.DecisionAnswer{}, errors.New("decision has no accepted answer")
 	}
-	a := DecisionAnswer{DecisionID: r.Decision.ID, RunID: r.RunID, OptionID: r.Decision.OptionID, Note: r.Decision.Note, Answers: r.Decision.Answers, AnsweredBy: r.Decision.AnsweredBy, SourceAttemptID: r.Decision.SourceAttemptID, ExpectedRecoveryVersion: r.Decision.RecoveryVersion}
+	a := executionmodel.DecisionAnswer{DecisionID: r.Decision.ID, RunID: r.RunID, OptionID: r.Decision.OptionID, Note: r.Decision.Note, Answers: r.Decision.Answers, AnsweredBy: r.Decision.AnsweredBy, SourceAttemptID: r.Decision.SourceAttemptID, ExpectedRecoveryVersion: r.Decision.RecoveryVersion}
 	a.ExpectedDecisionVersion, a.ExpectedRunRevision = r.Decision.AnswerDecisionVersion, r.Decision.AnswerRunRevision
 	if r.Decision.AnsweredAt != nil {
 		a.AnsweredAt = *r.Decision.AnsweredAt
 	}
-	if e := validateDecisionAnswer(&r.Decision.Request, &a); e != nil {
-		return DecisionAnswer{}, e
+	if e := executionmodel.ValidateDecisionAnswer(&r.Decision.Request, &a); e != nil {
+		return executionmodel.DecisionAnswer{}, e
 	}
 	return a, nil
 }
@@ -194,47 +176,47 @@ type AnswerOptions struct {
 
 // SubmitAnswerDecision publishes one immutable answer command to the live
 // service's SQLite authority. It never falls back to a file or offline writer.
-func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, optionID, note, requestedBy string, expectedDecisionVersion, expectedRunRevision uint64, expectedInstance, commandID string) (CommandRecord, bool, error) {
+func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, optionID, note, requestedBy string, expectedDecisionVersion, expectedRunRevision uint64, expectedInstance, commandID string) (storageports.CommandRecord, bool, error) {
 	if strings.TrimSpace(runID) == "" {
-		return CommandRecord{}, false, errors.New("answer requires a run ID")
+		return storageports.CommandRecord{}, false, errors.New("answer requires a run ID")
 	}
 	if err := requireNativeTaskAuthority(c); err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
 	if err := preflightNativeStatePath(c); err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
 	if err := c.ResolveIdentity(ctx); err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
 	snapshot, err := LoadDatabaseRuntime(c)
 	if err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
 	if snapshot == nil {
-		return CommandRecord{}, false, errors.New("no runtime snapshot")
+		return storageports.CommandRecord{}, false, errors.New("no runtime snapshot")
 	}
 	run := runtimeRunByID(snapshot, runID)
 	if run == nil {
-		return CommandRecord{}, false, fmt.Errorf("run %s not found", runID)
+		return storageports.CommandRecord{}, false, fmt.Errorf("run %s not found", runID)
 	}
 	if run.Decision != nil && (run.Decision.RequestPath != "" || run.Decision.AnswerPath != "") {
-		return CommandRecord{}, false, errors.New("decision uses the removed sidecar-answer format; preserve state and do not import answer files")
+		return storageports.CommandRecord{}, false, errors.New("decision uses the removed sidecar-answer format; preserve state and do not import answer files")
 	}
 	if decisionID == "" && run.Decision != nil {
 		decisionID = run.Decision.ID
 	}
 	if decisionID == "" {
-		return CommandRecord{}, false, fmt.Errorf("run %s has no decision identity", runID)
+		return storageports.CommandRecord{}, false, fmt.Errorf("run %s has no decision identity", runID)
 	}
 	if requestedBy == "" {
 		requestedBy = answererName()
 	}
-	answer := DecisionAnswer{DecisionID: decisionID, RunID: run.RunID, OptionID: strings.TrimSpace(optionID), Note: note, AnsweredBy: requestedBy, ExpectedDecisionVersion: expectedDecisionVersion, ExpectedRunRevision: expectedRunRevision, ServiceInstanceID: expectedInstance}
+	answer := executionmodel.DecisionAnswer{DecisionID: decisionID, RunID: run.RunID, OptionID: strings.TrimSpace(optionID), Note: note, AnsweredBy: requestedBy, ExpectedDecisionVersion: expectedDecisionVersion, ExpectedRunRevision: expectedRunRevision, ServiceInstanceID: expectedInstance}
 	answer.SourceAttemptID, answer.ExpectedRecoveryVersion = run.AttemptID, run.RecoveryVersion
-	if run.Decision != nil && run.Decision.ID == decisionID && len(decisionQuestions(&run.Decision.Request)) > 0 {
+	if run.Decision != nil && run.Decision.ID == decisionID && len(executionmodel.DecisionQuestions(&run.Decision.Request)) > 0 {
 		if err := normalizeNativeDecisionAnswer(&run.Decision.Request, &answer); err != nil {
-			return CommandRecord{}, false, err
+			return storageports.CommandRecord{}, false, err
 		}
 	}
 	if answer.ExpectedDecisionVersion == 0 && run.Decision != nil {
@@ -248,19 +230,19 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 	key := decisionAnswerKey(answer)
 	reader, err := c.Persistence.OpenReader(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
 	existing, lookupErr := reader.CommandByIdempotency(ctx, c.Identity(), key)
 	_ = reader.Close()
 	if lookupErr == nil {
-		var previous DecisionAnswer
-		if existing.Kind != "answer_decision" || existing.TargetID != decisionID || decode(existing.Payload, &previous) != nil || !contracts.SameDecisionAnswer(previous, answer) {
-			return CommandRecord{}, false, errors.New("answer idempotency identity conflicts with a different command")
+		var previous executionmodel.DecisionAnswer
+		if existing.Kind != "answer_decision" || existing.TargetID != decisionID || decode(existing.Payload, &previous) != nil || !executionmodel.SameDecisionAnswer(previous, answer) {
+			return storageports.CommandRecord{}, false, errors.New("answer idempotency identity conflicts with a different command")
 		}
 		return existing, false, nil
 	}
-	if !errors.Is(lookupErr, persistence.ErrNotFound) {
-		return CommandRecord{}, false, lookupErr
+	if !errors.Is(lookupErr, storageports.ErrNotFound) {
+		return storageports.CommandRecord{}, false, lookupErr
 	}
 	connection := ConnectService(ctx, c)
 	if !connection.CanControl || connection.Snapshot.Runtime == nil {
@@ -268,32 +250,32 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 		if diagnostic == "" {
 			diagnostic = string(connection.State)
 		}
-		return CommandRecord{}, false, fmt.Errorf("service is offline or not ready for decision commands: %s", diagnostic)
+		return storageports.CommandRecord{}, false, fmt.Errorf("service is offline or not ready for decision commands: %s", diagnostic)
 	}
 	serviceRuntime := connection.Snapshot.Runtime
 	if !serviceHasCapability(serviceRuntime, "answer_decision") {
-		return CommandRecord{}, false, errors.New("service does not advertise answer_decision capability")
+		return storageports.CommandRecord{}, false, errors.New("service does not advertise answer_decision capability")
 	}
 	snapshot, err = LoadDatabaseRuntime(c)
 	if err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
 	if snapshot == nil || snapshot.Service.InstanceID != serviceRuntime.Service.InstanceID || snapshot.Service.Status != "running" || !snapshot.Service.Ready {
-		return CommandRecord{}, false, errors.New("stale_instance: SQLite projection does not match the ready service instance")
+		return storageports.CommandRecord{}, false, errors.New("stale_instance: SQLite projection does not match the ready service instance")
 	}
 	run = runtimeRunByID(snapshot, runID)
 	if run == nil {
-		return CommandRecord{}, false, fmt.Errorf("run %s not found", runID)
+		return storageports.CommandRecord{}, false, fmt.Errorf("run %s not found", runID)
 	}
 	if run.AttemptID != answer.SourceAttemptID || run.RecoveryVersion != answer.ExpectedRecoveryVersion {
-		return CommandRecord{}, false, errors.New("stale_recovery: worker Attempt or recovery version changed; refresh before answering")
+		return storageports.CommandRecord{}, false, errors.New("stale_recovery: worker Attempt or recovery version changed; refresh before answering")
 	}
 	if expectedRunRevision == 0 {
 		expectedRunRevision = run.ControlRevision
 	}
 	answer.ExpectedRunRevision = expectedRunRevision
 	answer.ServiceInstanceID = serviceRuntime.Service.InstanceID
-	var decisionRecord *DecisionRecord
+	var decisionRecord *executionmodel.DecisionRecord
 	for i := range snapshot.Decisions {
 		if snapshot.Decisions[i].DecisionID == decisionID {
 			decisionRecord = &snapshot.Decisions[i]
@@ -301,51 +283,51 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 		}
 	}
 	if decisionRecord == nil {
-		return CommandRecord{}, false, errors.New("decision is missing from the authoritative SQLite store")
+		return storageports.CommandRecord{}, false, errors.New("decision is missing from the authoritative SQLite store")
 	}
 	if decisionRecord.Status != "pending" {
-		var saved DecisionAnswer
-		if len(decisionRecord.Answer) == 0 || decode(decisionRecord.Answer, &saved) != nil || !contracts.SameDecisionAnswer(saved, answer) {
-			return CommandRecord{}, false, ErrAnswerConflict
+		var saved executionmodel.DecisionAnswer
+		if len(decisionRecord.Answer) == 0 || decode(decisionRecord.Answer, &saved) != nil || !executionmodel.SameDecisionAnswer(saved, answer) {
+			return storageports.CommandRecord{}, false, storageports.ErrAnswerConflict
 		}
-		return CommandRecord{}, false, fmt.Errorf("decision is already %s but its original idempotency command is missing", decisionRecord.Status)
+		return storageports.CommandRecord{}, false, fmt.Errorf("decision is already %s but its original idempotency command is missing", decisionRecord.Status)
 	}
-	if run.FinishTaskStatus != "waiting_decision" && !(run.WorkflowVersion == WorkerFlowVersion && run.FinishTaskStatus == "waiting_pr_merge") || run.Decision == nil {
-		return CommandRecord{}, false, fmt.Errorf("run %s is not waiting for a decision (status %s)", run.TaskID, run.FinishTaskStatus)
+	if run.FinishTaskStatus != "waiting_decision" && !(run.WorkflowVersion == executionmodel.Version && run.FinishTaskStatus == "waiting_pr_merge") || run.Decision == nil {
+		return storageports.CommandRecord{}, false, fmt.Errorf("run %s is not waiting for a decision (status %s)", run.TaskID, run.FinishTaskStatus)
 	}
 	if expectedInstance != "" && serviceRuntime.Service.InstanceID != expectedInstance {
-		return CommandRecord{}, false, errors.New("stale_instance: service instance changed; refresh before answering")
+		return storageports.CommandRecord{}, false, errors.New("stale_instance: service instance changed; refresh before answering")
 	}
 	if expectedRunRevision == 0 || run.ControlRevision != expectedRunRevision {
-		return CommandRecord{}, false, errors.New("stale_revision: run changed; refresh before answering")
+		return storageports.CommandRecord{}, false, errors.New("stale_revision: run changed; refresh before answering")
 	}
 	if run.Decision.ID != decisionID || run.Decision.Status != "pending" {
-		return CommandRecord{}, false, errors.New("stale_revision: the displayed decision is no longer current")
+		return storageports.CommandRecord{}, false, errors.New("stale_revision: the displayed decision is no longer current")
 	}
 	if expectedDecisionVersion != 0 && run.Decision.Version != expectedDecisionVersion {
-		return CommandRecord{}, false, errors.New("stale_revision: decision version changed; refresh before answering")
+		return storageports.CommandRecord{}, false, errors.New("stale_revision: decision version changed; refresh before answering")
 	}
 	for _, e := range snapshot.Executions {
 		if e.ExecutionID == run.ExecutionID && e.Environment != nil && e.Environment.Blocker != nil {
-			return CommandRecord{}, false, nativeErr("environment_blocked", "resolve the environment blocker before sending feedback")
+			return storageports.CommandRecord{}, false, nativeErr("environment_blocked", "resolve the environment blocker before sending feedback")
 		}
 	}
 	if err = DecisionReplyEligibility(ctx, c, run); err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
-	if err = validateDecisionAnswer(&run.Decision.Request, &answer); err != nil {
-		return CommandRecord{}, false, err
+	if err = executionmodel.ValidateDecisionAnswer(&run.Decision.Request, &answer); err != nil {
+		return storageports.CommandRecord{}, false, err
 	}
 	version := decisionRecord.Version
 	if version == 0 {
-		return CommandRecord{}, false, errors.New("decision is missing from the authoritative SQLite store")
+		return storageports.CommandRecord{}, false, errors.New("decision is missing from the authoritative SQLite store")
 	}
 	if expectedDecisionVersion == 0 {
 		answer.ExpectedDecisionVersion = version
 	}
 	db, err := c.Persistence.OpenWriter(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
 	defer db.Close()
 	if commandID == "" {
@@ -353,7 +335,7 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 	}
 	payload, err := json.Marshal(answer)
 	if err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
 	return (CommandService{Store: db, Project: c.Identity()}).AnswerDecisionWithID(ctx, commandID, decisionID, version, key, requestedBy, payload)
 }
@@ -377,25 +359,25 @@ func AnswerDecision(c Config, o AnswerOptions) error {
 	return err
 }
 
-func SubmitDecisionAnswer(ctx context.Context, c Config, o AnswerOptions) (CommandRecord, bool, error) {
+func SubmitDecisionAnswer(ctx context.Context, c Config, o AnswerOptions) (storageports.CommandRecord, bool, error) {
 	if strings.TrimSpace(o.RunID) == "" {
-		return CommandRecord{}, false, errors.New("answer requires a run ID or task ID")
+		return storageports.CommandRecord{}, false, errors.New("answer requires a run ID or task ID")
 	}
 	if err := requireNativeTaskAuthority(c); err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
 	if err := preflightNativeStatePath(c); err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
 	if err := c.ResolveIdentity(ctx); err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
 	snapshot, err := LoadDatabaseRuntime(c)
 	if err != nil {
-		return CommandRecord{}, false, err
+		return storageports.CommandRecord{}, false, err
 	}
 	if snapshot == nil {
-		return CommandRecord{}, false, errors.New("no runtime snapshot")
+		return storageports.CommandRecord{}, false, errors.New("no runtime snapshot")
 	}
 	runID := o.RunID
 	var selected *Run
@@ -406,7 +388,7 @@ func SubmitDecisionAnswer(ctx context.Context, c Config, o AnswerOptions) (Comma
 		}
 		if run != nil && run.TaskID == o.RunID {
 			if selected != nil {
-				return CommandRecord{}, false, nativeErr("ambiguous_execution", "task has multiple candidates; select workflow_run_id")
+				return storageports.CommandRecord{}, false, nativeErr("ambiguous_execution", "task has multiple candidates; select workflow_run_id")
 			}
 			selected = run
 		}
@@ -463,16 +445,17 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	if run.EnvironmentBlocker != nil {
 		return nativeErr("environment_blocked", "resolve the environment blocker before sending feedback")
 	}
-	if run.WorkflowVersion != WorkerFlowVersion || !executionapi.StableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "feedback does not belong to the fixed worker execution"}
+	if run.WorkflowVersion != executionmodel.Version || !executionbackend.StableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
+		return &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "feedback does not belong to the fixed worker execution"}
 	}
 
 	if run.RecoveryRequired && (run.RecoveryState == "unverified" || run.RecoveryState == "" ||
 		run.RecoveryState == "interrupted" && run.Decision.Request.QuestionRoute != nil) {
-		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "original worker state or native question is not verified; wait for a recovery decision"}
+		return &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "original worker state or native question is not verified; wait for a recovery decision"}
 	}
 	return ctx.Err()
 }
+
 func (s *Service) applyDecisions(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -491,7 +474,7 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		if blocked {
 			continue
 		}
-		if run.WorkflowVersion != WorkerFlowVersion {
+		if run.WorkflowVersion != executionmodel.Version {
 			return nativeErr("unsupported_schema", "saved decision is not bound to a current worker execution")
 		}
 		if err := s.applyWorkerFlowDecision(ctx, run); err != nil {
