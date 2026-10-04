@@ -37,6 +37,9 @@ func render(m Model) string {
 		return header + "\n" + renderEmptyProjects(m.applicationEtc)
 	}
 	state := &m.projects[m.selected]
+	if headline := candidateHeadline(*state, m.selectedRow(m.selected)); headline != "" {
+		header = styleHead.Render(truncate(headline, m.width))
+	}
 	projects := renderProjectStrip(m)
 	status := renderStatusLine(m, *state)
 	footerLines := wrapLines(strings.Split(renderFooter(m, *state), "\n"), m.width)
@@ -143,6 +146,19 @@ func renderStatusLine(m Model, state projectState) string {
 		mode = strings.Replace(mode, "auto", "自动", 1)
 	}
 	ready, cached, running, decision, merge, attention := projectCounts(state, m.clock.Now())
+	if candidateHeadline(state, m.selectedRow(m.selected)) != "" {
+		parts := []string{"服务 " + service, "派发 " + mode}
+		if m.status != "" {
+			parts = append([]string{safeTerminalInlineText(m.status)}, parts...)
+		}
+		if executionConfigMismatch(state.ref, state.snapshot) {
+			parts = append(parts, "执行配置待核对")
+		}
+		if diagnostic := state.snapshot.Connection.Diagnostic; diagnostic != "" {
+			parts = append(parts, safeTerminalText(diagnostic))
+		}
+		return truncate(strings.Join(parts, " · "), m.width)
+	}
 	parts := []string{"服务 " + service, "派发 " + mode, fmt.Sprintf("Ready %d", ready)}
 	if executionConfigMismatch(state.ref, state.snapshot) {
 		parts = append(parts, "执行配置待核对")
@@ -274,6 +290,9 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
 	run := row.run
+	if !full {
+		return scrollLines(wrapLines(append(lines, renderInteractionSummary(state, row)...), width), state.detailScroll, height)
+	}
 	if state.snapshot.Connection.State == productapi.ConnectionOffline || state.snapshot.Connection.State == productapi.ConnectionNoRecord {
 		lines = append(lines, "服务入口："+safeTerminalText(serviceWindowInstruction(state.ref)), "配置："+safeTerminalText(state.ref.ConfigPath))
 	}
@@ -569,7 +588,7 @@ func renderEmptySelection(state projectState) []string {
 func renderActivity(state projectState, row *consoleRow, width, height int) []string {
 	title := "活动 · 执行过程"
 	if row != nil && row.run != nil {
-		title += " · execution " + safeTerminalText(row.run.ExecutionID) + " · attempt " + safeTerminalText(selectedAttempt(state, row.run))
+		title += " · " + candidateLabel(state, row.run) + " · session " + shortSession(row.run.SessionID)
 	}
 	lines := []string{styleLabel.Render(title)}
 	if state.activityError != "" {
@@ -825,7 +844,7 @@ func renderStopConfirmation(m Model, state projectState, height int) string {
 	return strings.Join(visible, "\n")
 }
 
-func renderAnswerDialog(m Model, state projectState, height int) string {
+func renderAnswerDetails(m Model, state projectState, height int) string {
 	dialog := m.answer
 	if dialog == nil {
 		return ""
@@ -917,7 +936,10 @@ func renderFooter(m Model, state projectState) string {
 		return "↑↓/PgUp/PgDn 阅读完整确认内容 · Enter/y 确认 · Esc/n 取消"
 	}
 	if m.answer != nil {
-		return "↑↓ 选择声明选项/移动光标 · Tab 切换选项与说明 · Enter 换到说明/插入换行 · F2 明确提交 · PgUp/PgDn 浏览完整问题 · Esc 保留草稿并关闭"
+		if m.answer.details {
+			return "F8 返回输入 · PgUp/PgDn 完整背景/身份 · Esc 关闭"
+		}
+		return "↑↓ 选择 · Tab 选项/输入 · F2 提交 · F8 背景/身份 · Esc 保留草稿"
 	}
 	if m.detailExpanded {
 		return "↑↓/PgUp/PgDn 阅读完整详情 · d / Enter / Esc 返回 · q 退出"
@@ -928,7 +950,7 @@ func renderFooter(m Model, state projectState) string {
 	parts := []string{"←→ 项目", "Tab 列表/动态", "1–7 筛选", "↑↓ 选择/滚动", "d 详情"}
 	row := m.selectedRow(m.selected)
 	if row != nil && len(candidateRuns(state, row.taskID)) > 0 {
-		parts = append(parts, "{ / } 候选")
+		parts = append(parts, "F6/F7 并行")
 		if candidateStartReason(state, row, m.clock.Now()) == "" {
 			parts = append(parts, "b 新增")
 		}
@@ -940,7 +962,9 @@ func renderFooter(m Model, state projectState) string {
 		parts = append(parts, "s 选方案")
 	}
 	if row != nil && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" && strings.HasPrefix(decisionAnswerAvailability(state, row), "提交后") {
-		parts = append(parts, "a 回答")
+		if !feedbackInProgress(state, row.run) {
+			parts = append(parts, "a/Enter 回复")
+		}
 	}
 	if row != nil && row.run != nil && row.run.Abandonment == nil && row.run.EnvironmentBlocker != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" {
 		parts = append(parts, "a 保留草稿")
@@ -959,7 +983,7 @@ func renderFooter(m Model, state projectState) string {
 }
 
 func renderHelp(state projectState) []string {
-	lines := []string{"快捷键", "", "←/→  切换项目", "Tab  在任务列表与任务动态间切换", "↑/↓  选择任务或滚动动态", "d/Enter  打开完整只读详情；Esc 返回", "{ / }  按 workflow_run_id 切换候选", "b    选择不同冻结配置新增候选（开始时5个检查）", "z    不可撤销退出实验（需确认，停止独立核实）", "q    退出控制台；服务继续运行"}
+	lines := []string{"快捷键", "", "←/→  切换项目", "Tab  在任务列表与任务动态间切换", "↑/↓  选择任务或滚动动态", "a/Enter  回复当前并行；没有待交互问题时 Enter 查看会话", "d    完整详情；Esc 返回", "F6/F7（或 { / }）  切换稳定编号的并行", "F8  在输入页查看完整背景/身份", "b    选择不同冻结配置新增候选（开始时5个检查）", "z    不可撤销退出实验（需确认，停止独立核实）", "q    退出控制台；服务继续运行"}
 	if state.ref.Presentation.NativeWorkflow {
 		return append(lines,
 			"", "任务与服务", "1 全部 · 2 Ready · 3 进行中", "4 待决策 · 5 待合并", "6 需处理 · 7 历史", "s    选择已配置方案并开始 Ready 任务", "m    切换手动/自动派发", "x    停止服务（需确认）",

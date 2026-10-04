@@ -15,7 +15,7 @@ func renderSession(state projectState, row *consoleRow, width, height int, now t
 	if row == nil || row.run == nil {
 		return append(lines, "选择一个 run 后查看会话。")
 	}
-	lines = append(lines, "execution："+safeTerminalText(row.run.ExecutionID)+" · attempt："+safeTerminalText(selectedAttempt(state, row.run)))
+	lines = append(lines, candidateLabel(state, row.run)+" · session "+shortSession(row.run.SessionID))
 	if state.conversationError != "" {
 		lines = append(lines, styleAlert.Render("会话读取错误："+safeTerminalText(state.conversationError)))
 	}
@@ -72,12 +72,11 @@ func renderSession(state projectState, row *consoleRow, width, height int, now t
 		lines = append(lines, styleAlert.Render("轮次外提示 · "+safeTerminalText(firstText(warning.Diagnostic, warning.Status, string(warning.Type)))))
 	}
 	if row.run.Decision != nil && row.run.Decision.Status == "pending" {
-		lines = append(lines, renderDecisionIdentity(state, row.run, now)...)
-		lines = append(lines, "业务待决策 · 折叠区外保留", "问题："+safeTerminalText(row.run.Decision.Request.Question), "上下文："+safeTerminalText(row.run.Decision.Request.Context))
-		for i, option := range row.run.Decision.Request.Options {
-			lines = append(lines, fmt.Sprintf("选项 %d · %s：%s", i+1, safeTerminalText(option.ID), safeTerminalText(option.Label)), "  详情："+safeTerminalText(option.Detail))
+		if feedbackInProgress(state, row.run) {
+			lines = append(lines, candidateHumanStatus(state, row.run))
+		} else {
+			lines = append(lines, "需要你的回复 · a/Enter 打开交互", "问题："+safeTerminalText(row.run.Decision.Request.Question))
 		}
-		lines = append(lines, decisionAnswerStatusLines(state, row)...)
 	} else if row.run.Decision != nil {
 		lines = append(lines, renderDecisionIdentity(state, row.run, now)...)
 		lines = append(lines, "决策阶段："+decisionStatusLabel(row.run.Decision.Status), "当前答案："+safeTerminalText(activityview.DecisionAnswerSummary(row.run)))

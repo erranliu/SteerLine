@@ -38,7 +38,12 @@ func candidateRuns(state projectState, taskID string) []*contracts.Run {
 			}
 		}
 	}
-	sort.Slice(runs, func(i, j int) bool { return runs[i].RunID < runs[j].RunID })
+	sort.Slice(runs, func(i, j int) bool {
+		if runs[i].CandidateCreatedAt.Equal(runs[j].CandidateCreatedAt) {
+			return runs[i].RunID < runs[j].RunID
+		}
+		return runs[i].CandidateCreatedAt.Before(runs[j].CandidateCreatedAt)
+	})
 	return runs
 }
 
@@ -312,7 +317,7 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 			}
 			elapsed = max(time.Duration(0), end.Sub(r.CandidateCreatedAt)).Round(time.Second).String()
 		}
-		lines = append(lines, safeTerminalText(marker+r.RunID+" · "+profile+" · "+runStatus(r)+" · "+outcome), safeTerminalText("  session "+displayDash(r.SessionID)+" · 资源 "+firstText(r.ResourceStatus, "未知/待核实")+" · 耗时 "+elapsed))
+		lines = append(lines, safeTerminalText(marker+candidateLabel(s, r)+" · "+r.RunID+" · "+profile+" · "+runStatus(r)+" · "+outcome), safeTerminalText("  session "+displayDash(r.SessionID)+" · 资源 "+firstText(r.ResourceStatus, "未知/待核实")+" · 耗时 "+elapsed))
 		if r.ExecutionProfile != nil {
 			lines = append(lines, safeTerminalText("  冻结："+strings.Join(r.ExecutionProfile.ImplementationDisplay, " · ")))
 		}
