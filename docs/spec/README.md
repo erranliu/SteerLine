@@ -7,7 +7,6 @@
 | 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |
 | 36 | 单 worker 持续执行与统一待决策 | 无 | [Spec](worker-flow.spec.md) | [Plan](worker-flow.plan.md) |
-| 37 | 多候选会话与唯一PR交付 | `#36` | [Spec](candidate-workers.spec.md) | [Plan](candidate-workers.plan.md) |
 | 38 | 候选观察界面 | `#37` | [Spec](candidate-console.spec.md) | [Plan](candidate-console.plan.md) |
 | 39 | 多候选本机与远端真机验收 | `#38` | [Spec](candidate-native-acceptance.spec.md) | [Plan](candidate-native-acceptance.plan.md) |
 | 40 | 固定版本与双入口 | 无 | [Spec](versioned-runtime.spec.md) | [Plan](versioned-runtime.plan.md) |

@@ -8,11 +8,10 @@
 
 ## 固定前置
 
-已具备持续worker/原会话反馈、执行需求准入、配置注册和固定原生绑定封套。后续复用这些能力，保持原身份、版本、提交屏障及恢复授权；当前接口归属需要核实时按需查[架构索引](../architecture/current-code-architecture.md)。图中已交付基础节点和原硬前置ID仅表达依赖，不要求阅读历史Spec/Plan，也不解除未完成的原生验收限制。
+已具备持续worker/原会话反馈、各配置独立候选、宽松五候选开始检查、合并前放弃和唯一交付，以及执行需求准入、配置注册和固定原生绑定封套。候选TUI及真实混合方案验收仍待交付。后续复用这些能力，保持原身份、版本、提交屏障及恢复授权；当前接口归属需要核实时按需查[架构索引](../architecture/current-code-architecture.md)。图中已交付基础节点和原硬前置ID仅表达依赖，不要求阅读历史Spec/Plan，也不解除未完成的原生验收限制。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 37 | 多候选会话与唯一PR交付 | 不同配置人工实验、宽松开始检查、合并前放弃与唯一交付 | `#36` | [Spec](../spec/candidate-workers.spec.md) · [Plan](../spec/candidate-workers.plan.md) |
 | 38 | 候选观察界面 | 配置/结果、候选选择、反馈/放弃的TUI增量 | `#37` | [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) |
 | 39 | 多候选本机与远端真机验收 | 多候选本机/远端竞争和混合后端增量验收 | `#38` | [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) |
 | 40 | 固定版本与双入口 | 不可变构建、stable/dev 固定入口和身份 | 无 | [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) |
@@ -61,7 +60,7 @@ flowchart LR
 
 | 所有者 | 交接内容 | 集成规则 |
 | --- | --- | --- |
-| #36 | 主阶段、原会话输入/输出、PR 关联和 TaskDelivery | #37/#41/#45 消费；不另建步骤或专用恢复状态机 |
+| #36 | 主阶段、原会话输入/输出、PR 关联和 TaskDelivery | #41/#45 消费；不另建步骤或专用恢复状态机 |
 | #37 | 各配置固定身份、宽松五候选检查、单候选放弃与唯一交付 | #38/#39消费；数量不用预留/硬槽，放弃不保证停止；#45初版不依赖分叉 |
 | #40/#41 | 固定版本选择、真实工作轮次及恢复条件 | 配置/服务恢复入口串行集成；空闲会话不被直接视作活动进程 |
 | #43/#47 | 规划 agent 的权限、受控工具及会话 | 可复用底层会话能力，规划 guard 与任务 worker 权限分别管理 |
