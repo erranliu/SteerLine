@@ -78,15 +78,33 @@ func Build(snapshot contracts.DomainSnapshot, metadata Metadata) (contracts.Runt
 // The center alone decides whether to apply these values to existing private Run pointers.
 func Runs(snapshot contracts.DomainSnapshot) ([]*contracts.Run, error) {
 	runs := make([]*contracts.Run, 0, len(snapshot.WorkflowRuns))
-	for _, task := range snapshot.Tasks {
-		workflow := LatestWorkflow(snapshot.WorkflowRuns, task.TaskID)
-		if workflow == nil {
-			continue
+	for i := range snapshot.WorkflowRuns {
+		workflow := &snapshot.WorkflowRuns[i]
+		var task contracts.TaskRecord
+		found := false
+		for _, record := range snapshot.Tasks {
+			if record.TaskID == workflow.TaskID {
+				task, found = record, true
+				break
+			}
+		}
+		if !found {
+			return nil, errors.New("workflow has no task record")
 		}
 		if task.Status == "discarded" && workflow.Phase == "abandoned" {
 			continue
 		}
 		execution := LatestExecution(snapshot.Executions, workflow.WorkflowRunID)
+		if workflow.SelectedResult != "" {
+			execution = nil
+			for i := range snapshot.Executions {
+				e := &snapshot.Executions[i]
+				if e.WorkflowRunID == workflow.WorkflowRunID && e.ExecutionID == workflow.SelectedResult {
+					execution = e
+					break
+				}
+			}
+		}
 		if execution == nil {
 			return nil, errors.New("workflow has no execution record")
 		}

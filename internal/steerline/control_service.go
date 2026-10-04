@@ -193,6 +193,9 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	if err != nil || req == nil {
 		return err
 	}
+	if replay, err := s.replayCandidateControl(ctx, *req, digest); replay || err != nil {
+		return err
+	}
 	checkedAt := now()
 	code, validationErr := validateControlRequest(*req, s.State.Service.InstanceID, s.State.Repository.Identity, s.State.Control.Revision, checkedAt)
 	if validationErr != nil {
@@ -218,6 +221,9 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	}
 	if (s.State.Service.Status != "running" && s.State.Service.Status != "error") || !s.State.Service.Ready {
 		return s.rejectControl(*req, digest, "stale_instance", errors.New("service is stopping or not ready"))
+	}
+	if req.Action == "start_candidate" || req.Action == "abandon_candidate" {
+		return s.processCandidateControl(ctx, *req, payload, digest)
 	}
 	if s.State.Control.Operation != nil {
 		return s.rejectControl(*req, digest, "slot_busy", errors.New("another control operation has not settled"))
@@ -356,6 +362,9 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 // repeating its action. Keep supervision and stop handling alive while the
 // receipt destination is unavailable, but do not accept further mutations.
 func (s *Service) pollControl(ctx context.Context, cancel context.CancelFunc) error {
+	if err := s.pollCandidateControlReceipts(ctx); err != nil {
+		return err
+	}
 	if op := s.State.Control.Operation; op != nil && op.Phase == "applying" {
 		req, err := readControlRequest(controlRequestPath(s.Config.RunDir, op.RequestID))
 		if err == nil && req.InstanceID == s.State.Service.InstanceID {
@@ -365,7 +374,7 @@ func (s *Service) pollControl(ctx context.Context, cancel context.CancelFunc) er
 				return errors.New("immutable admitted control request changed")
 			}
 			if s.lifecycleEffectPending(op.RunID) {
-				return nil
+				return s.retainControlPublicationFailure(s.processNextControl(ctx, cancel))
 			}
 			payload, err := decodeControlPayload(req)
 			if err != nil {
@@ -472,12 +481,16 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 		if profileID == "" {
 			profileID = ProjectExecutionProfileID
 		}
-		if run := s.find(payload.TaskID); run != nil {
+		if run := s.find(op.RunID); run != nil {
 			if s.lifecycleEffectPending(run.RunID) {
 				return errLifecycleEffectPending
 			}
 			if run.RunID != op.RunID {
 				return errAlreadyManaged
+			}
+			if s.candidateBusinessClosed(run) {
+				result.Message = "original start reservation retained; candidate no longer participates"
+				return nil
 			}
 			workflow, execution := s.workflowRecords(run)
 			if workflow == nil || workflow.ExecutionProfile != nil && (workflow.ExecutionProfile.ID != profileID) {

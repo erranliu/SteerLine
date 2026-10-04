@@ -794,7 +794,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 		state := states[number]
 		mergedAt := lateMergedAt
 		statesMu.RUnlock()
-		body := map[string]any{"html_url": server.URL + "/org/repo/pulls/" + number, "number": numberValue, "state": "open", "merged": false, "base": map[string]any{"ref": "main", "repo": map[string]string{"full_name": "org/repo"}}, "head": map[string]string{"sha": strings.Repeat("a", 40)}}
+		body := map[string]any{"html_url": server.URL + "/org/repo/pulls/" + number, "number": numberValue, "state": "open", "merged": false, "base": map[string]any{"ref": "main", "repo": map[string]string{"full_name": "org/repo"}}, "head": map[string]any{"sha": strings.Repeat("a", 40), "ref": "fixture/" + number, "repo": map[string]string{"full_name": "org/repo"}}}
 		switch state {
 		case "merged":
 			body["state"] = "closed"

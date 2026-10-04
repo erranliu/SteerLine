@@ -9,8 +9,6 @@ import (
 
 const domainSchemaVersion = SchemaVersion
 
-const activeWorkflowIndexV5 = `CREATE UNIQUE INDEX one_active_workflow_per_task ON workflow_runs(project_identity,task_id) WHERE phase NOT IN ('completed','abandoned')`
-
 func (s *SQLiteStore) ensureSchema(ctx context.Context, createNew bool) error {
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -86,7 +84,6 @@ var domainExecutionSchema = []string{
 	`CREATE UNIQUE INDEX task_external_identity ON tasks(project_identity,external_provider,external_project,external_id) WHERE external_id <> ''`,
 	`CREATE TABLE workflow_runs (project_identity TEXT NOT NULL, workflow_run_id TEXT NOT NULL, task_id TEXT NOT NULL, phase TEXT NOT NULL, control_revision INTEGER NOT NULL DEFAULT 1 CHECK(control_revision>0), payload BLOB NOT NULL, PRIMARY KEY(project_identity, workflow_run_id), FOREIGN KEY(project_identity, task_id) REFERENCES tasks(project_identity, task_id))`,
 	`CREATE INDEX workflow_runs_task_idx ON workflow_runs(project_identity, task_id)`,
-	activeWorkflowIndexV5,
 	`CREATE TABLE executions (project_identity TEXT NOT NULL, execution_id TEXT NOT NULL, workflow_run_id TEXT NOT NULL, status TEXT NOT NULL, current_step TEXT NOT NULL DEFAULT '', target_json BLOB NOT NULL, payload BLOB NOT NULL, PRIMARY KEY(project_identity, execution_id), FOREIGN KEY(project_identity, workflow_run_id) REFERENCES workflow_runs(project_identity, workflow_run_id))`,
 	`CREATE INDEX executions_workflow_idx ON executions(project_identity, workflow_run_id)`,
 	`CREATE UNIQUE INDEX one_active_execution_per_workflow ON executions(project_identity,workflow_run_id) WHERE status IN ('pending','active','waiting_decision','blocked')`,

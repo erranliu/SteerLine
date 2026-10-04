@@ -47,8 +47,9 @@ func run() error {
 	runID := fs.String("run-id", "", "run to answer")
 	dispatchMode := fs.String("dispatch", "auto", "run dispatch mode: auto|manual")
 	startupID := fs.String("startup-id", "", "internal startup attempt ID")
-	taskID := fs.String("task-id", "", "control start_task target")
-	executionProfile := fs.String("execution-profile", "", "control start_task execution profile ID")
+	taskID := fs.String("task-id", "", "control task target")
+	executionProfile := fs.String("execution-profile", "", "control start_task/start_candidate execution profile ID")
+	candidateReason := fs.String("reason", "", "abandon_candidate: irreversible experiment exit reason")
 	controlMode := fs.String("mode", "", "control set_dispatch_mode value: auto|manual")
 	requestID := fs.String("request-id", "", "control request to query")
 	waitReceipt := fs.Bool("wait", false, "control: wait for a terminal receipt")
@@ -67,8 +68,11 @@ func run() error {
 	if fs.NArg() != 0 {
 		return fmt.Errorf("unexpected positional arguments")
 	}
-	if *executionProfile != "" && (command != "control" || *action != "start_task" || *requestID != "") {
-		return fmt.Errorf("-execution-profile is only valid with control -action start_task")
+	if *executionProfile != "" && (command != "control" || *action != "start_task" && *action != "start_candidate" || *requestID != "") {
+		return fmt.Errorf("-execution-profile is only valid with control -action start_task|start_candidate")
+	}
+	if *candidateReason != "" && (command != "control" || *action != "abandon_candidate" || *requestID != "") {
+		return fmt.Errorf("-reason is only valid with control -action abandon_candidate")
 	}
 	if command == "codex-session-launch" {
 		return steerlineapp.RunSessionLauncher(context.Background(), *config, steerlineapp.NewProcessHost(30*time.Second))
@@ -207,7 +211,50 @@ func run() error {
 			return fmt.Errorf("control requires -action or -request-id")
 		}
 		var payload api.ControlPayload
+		var candidateRevision *uint64
+		var candidateInstance string
 		switch *action {
+		case "start_candidate":
+			if *taskID == "" || *controlMode != "" || *runID != "" {
+				return fmt.Errorf("start_candidate requires -task-id and does not accept -mode/-run-id")
+			}
+			payload, e = product.StartTaskPayload(ctx, *taskID, *executionProfile)
+			if e != nil {
+				return e
+			}
+			snapshot := product.ReadProject(ctx, *taskID, api.ProjectSnapshot{})
+			if snapshot.SelectedNative == nil || snapshot.NativeTasks == nil || snapshot.Connection.Snapshot.Runtime == nil {
+				return fmt.Errorf("current native task/service snapshot is unavailable")
+			}
+			payload.ExpectedTaskVersion, payload.ExpectedGraphRevision = snapshot.SelectedNative.Version, snapshot.NativeTasks.GraphRevision
+			candidateRevision, candidateInstance = &snapshot.NativeTasks.AuthorityVersion, snapshot.Connection.Snapshot.Runtime.Service.InstanceID
+		case "abandon_candidate":
+			if *runID == "" || strings.TrimSpace(*candidateReason) == "" || *controlMode != "" {
+				return fmt.Errorf("abandon_candidate requires exact -run-id and -reason")
+			}
+			snapshot := product.ReadProject(ctx, *taskID, api.ProjectSnapshot{})
+			runtimeState := snapshot.Connection.Snapshot.Runtime
+			if runtimeState == nil {
+				return fmt.Errorf("service snapshot is unavailable")
+			}
+			var target *contracts.Run
+			for _, run := range runtimeState.Runs {
+				if run.RunID == *runID {
+					target = run
+					break
+				}
+			}
+			if target == nil || *taskID != "" && *taskID != target.TaskID {
+				return fmt.Errorf("exact candidate does not belong to the requested task")
+			}
+			payload = api.ControlPayload{TaskID: target.TaskID, WorkflowRunID: target.RunID, ExpectedCandidateVersion: target.ControlRevision, Reason: *candidateReason}
+			for _, task := range runtimeState.Tasks {
+				if task.TaskID == target.TaskID {
+					payload.ExpectedTaskVersion = task.Version
+					break
+				}
+			}
+			candidateRevision, candidateInstance = &runtimeState.Control.Revision, runtimeState.Service.InstanceID
 		case "start_task":
 			if *taskID == "" {
 				return fmt.Errorf("start_task requires -task-id")
@@ -262,7 +309,7 @@ func run() error {
 			return fmt.Errorf("unsupported control action %q", *action)
 		}
 		id := steerlineclient.NewRequestID()
-		req, err := product.SubmitControl(ctx, api.ControlInput{Action: api.ControlAction(*action), Payload: payload, RequestID: id, RequestedBy: *by})
+		req, err := product.SubmitControl(ctx, api.ControlInput{Action: api.ControlAction(*action), Payload: payload, RequestID: id, RequestedBy: *by, ExpectedRevision: candidateRevision, InstanceID: candidateInstance})
 		if err != nil {
 			fmt.Println("request_id", id)
 			return err

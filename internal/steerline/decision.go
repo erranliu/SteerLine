@@ -398,11 +398,21 @@ func SubmitDecisionAnswer(ctx context.Context, c Config, o AnswerOptions) (Comma
 		return CommandRecord{}, false, errors.New("no runtime snapshot")
 	}
 	runID := o.RunID
+	var selected *Run
 	for _, run := range snapshot.Runs {
-		if run != nil && (run.RunID == o.RunID || run.TaskID == o.RunID) {
-			runID = run.RunID
+		if run != nil && run.RunID == o.RunID {
+			selected = run
 			break
 		}
+		if run != nil && run.TaskID == o.RunID {
+			if selected != nil {
+				return CommandRecord{}, false, nativeErr("ambiguous_execution", "task has multiple candidates; select workflow_run_id")
+			}
+			selected = run
+		}
+	}
+	if selected != nil {
+		runID = selected.RunID
 	}
 	if o.By == "" {
 		o.By = answererName()
@@ -447,6 +457,9 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	if run == nil || run.Decision == nil || run.Decision.Status != "pending" {
 		return errors.New("decision is not pending on the current native run")
 	}
+	if run.Abandonment != nil || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
+		return nativeErr("candidate_inactive", "candidate no longer accepts feedback")
+	}
 	if run.EnvironmentBlocker != nil {
 		return nativeErr("environment_blocked", "resolve the environment blocker before sending feedback")
 	}
@@ -464,16 +477,13 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if s.State.Control.Operation != nil {
-		return nil
-	}
 	for _, run := range s.runs {
 		if run == nil || run.FinishTaskStatus != "waiting_decision" && run.FinishTaskStatus != "waiting_pr_merge" || run.Decision == nil || run.Decision.Status != "answer_saved" {
 			continue
 		}
 		blocked := false
 		for _, blocker := range s.State.Control.Blockers {
-			if blocker.RunID == run.RunID || blocker.TaskID == run.TaskID {
+			if blocker.RunID == run.RunID || blocker.RunID == "" && blocker.TaskID == run.TaskID {
 				blocked = true
 				break
 			}

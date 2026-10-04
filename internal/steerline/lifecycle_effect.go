@@ -100,7 +100,11 @@ func (s *Service) dispatchLifecycleEffect(ctx context.Context, run *Run, port ex
 	if s.workerMessages == nil {
 		result := make(chan lifecycleEffectResult, 1)
 		go func() { result <- invokeLifecycleEffect(ctx, port, request, reconcile) }()
-		return apply(run, <-result)
+		received := <-result
+		if s.candidateBusinessClosed(run) && !retiredResourceAction(executionapi.LifecycleAction(request.Operation.Action), request.Input) {
+			return s.applyRetiredLifecycleReceipt(run, received)
+		}
+		return apply(run, received)
 	}
 	if s.lifecycleEffects == nil {
 		s.lifecycleEffects = make(map[string]pendingLifecycleEffect)
@@ -156,12 +160,12 @@ func (s *Service) applyLifecycleEffect(runID string, result lifecycleEffectResul
 		return discard()
 	}
 	run := s.find(runID)
-	if run == nil || run.AttemptID != result.request.Snapshot.Session.AttemptID || run.ExecutionID != result.request.Snapshot.Session.ExecutionID {
+	if run == nil || s.workflowRecord(run) == nil || run.AttemptID != result.request.Snapshot.Session.AttemptID || run.ExecutionID != result.request.Snapshot.Session.ExecutionID {
 		return discard()
 	}
 	action := executionapi.LifecycleAction(result.request.Operation.Action)
-	if (run.TaskStatus == "closed" || run.TaskStatus == "discarded") && action != executionapi.LifecycleCleanup && action != executionapi.LifecycleStopExecution && action != executionapi.LifecycleStopObservation && action != executionapi.LifecycleAcknowledge && !(action == executionapi.LifecycleHostAction && result.request.Input.Host != nil && (result.request.Input.Host.Kind == executionapi.HostCleanupProbeFiles || result.request.Input.Host.Kind == executionapi.HostRemoveFeedback)) {
-		return discard()
+	if s.candidateBusinessClosed(run) && action != executionapi.LifecycleCleanup && action != executionapi.LifecycleStopExecution && action != executionapi.LifecycleStopObservation && action != executionapi.LifecycleAcknowledge && !(action == executionapi.LifecycleHostAction && result.request.Input.Host != nil && (result.request.Input.Host.Kind == executionapi.HostCleanupProbeFiles || result.request.Input.Host.Kind == executionapi.HostRemoveFeedback)) {
+		return s.applyRetiredLifecycleReceipt(run, result)
 	}
 	err := pending.apply(run, result)
 	if errors.Is(err, errLifecycleEffectPending) || errors.Is(err, errLifecycleNeedsReconciliation) || errors.Is(err, errLifecycleResourcePending) {

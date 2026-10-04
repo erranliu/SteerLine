@@ -103,16 +103,21 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	if err != nil {
 		return TaskDeliveryReceipt{}, err
 	}
-	discardPlan, _, err := taskDiscardPlanFromSnapshot(snapshot, taskID)
-	if err != nil {
+	known, verificationErr := verifyKnownCandidatePRs(ctx, config, snapshot, taskID, verifier, workflowRunID)
+	if err := verificationErr; err != nil {
+		if isNativeErrorCode(err, "inconsistent_delivery") {
+			_ = c.recordCandidateMergeConflict(ctx, snapshot, taskID, workflowRunID, err.Error(), known...)
+		}
 		return TaskDeliveryReceipt{}, err
 	}
-	if discardPlan.UncertainPR || discardPlan.PRURL != prURL {
-		return TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "task has another unresolved or mismatched PR publication")
+	var info PRInfo
+	for _, pr := range known {
+		if pr.WorkflowID == workflowRunID && pr.URL == prURL {
+			info = pr.Info
+			break
+		}
 	}
-	if info, err := verifier.Query(ctx, prURL); err != nil {
-		return TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "PR merge state could not be verified: "+clip(err.Error(), 1000))
-	} else if info.State == "unknown" {
+	if info.State == "unknown" {
 		return TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "PR provider returned an unknown merge state")
 	} else if !info.Merged || info.State != "merged" {
 		return TaskDeliveryReceipt{}, nativeErr("task_not_ready", "selected PR does not have complete verified merged evidence")
@@ -133,84 +138,65 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 		evidence := TaskDeliveryEvidence{PRInstance: strings.TrimSuffix(config.PR.BaseURL, "/"), URL: info.URL, Repository: info.Repository, PRNumber: int64(number), BaseBranch: info.BaseBranch, State: info.State, Merged: true, MergedAt: *info.MergedAt, MergeCommit: *info.MergeCommit}
 		evidenceBytes, _ := json.Marshal(evidence)
 		record := TaskDeliveryRecord{ProjectIdentity: c.Project, TaskID: taskID, SelectedWorkflowRunID: workflowRunID, PRInstance: evidence.PRInstance, PRRepository: evidence.Repository, PRNumber: evidence.PRNumber, PRURL: evidence.URL, MergeCommit: evidence.MergeCommit, MergedAt: evidence.MergedAt, RecordedAt: time.Now().UTC(), Evidence: evidenceBytes}
-		return c.commitNativeDelivery(ctx, sqlite, graph.Authority.AuthorityVersion, task, workflow, execution, contract, prURL, record)
+		return c.commitNativeDelivery(ctx, sqlite, graph.Authority.AuthorityVersion, task, workflow, execution, contract, prURL, record, candidateBindings(snapshot, taskID))
 	}
 }
 
 // recordDiscardedMergeConflict keeps a late platform merge as audit evidence
 // without converting a discarded task into a normal delivery.
 func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s persistence.CommandStore, config Config, task TaskRecord, workflowRunID string, verifier TaskDeliveryVerifier, authority ProjectTaskAuthority) error {
-	owned, err := s.WorkflowOwned(ctx, c.Project, workflowRunID, task.TaskID)
+	snapshot, err := s.Query(ctx, c.Project)
 	if err != nil {
 		return err
 	}
-	if !owned {
+	workflow, execution, err := selectedNativeDeliveryState(snapshot, task.TaskID, workflowRunID)
+	if err != nil {
 		return nativeErr("task_discarded", "discarded task cannot be completed by an unrelated workflow")
 	}
-	plan, current, err := taskDiscardPlanFromStore(ctx, s, c.Project, task.TaskID)
-	if err != nil {
-		return err
-	}
-	if current.Status != "discarded" || current.Version != task.Version || plan.PRURL == "" || plan.UncertainPR {
-		return nativeErr("task_discarded", "discarded task has no conclusive PR binding to reconcile")
-	}
-	target, err := configuredRepositoryTarget(ctx, config)
-	if err != nil || !sameRepositoryTarget(target, authority.Repository) || config.PR.ValidateRemote(target) != nil {
-		return nativeErr("authority_mismatch", "PR configuration does not match the discarded task repository")
-	}
-	info, err := verifier.Query(ctx, plan.PRURL)
-	if err != nil || info.State == "unknown" {
-		return nativeErr("merge_state_unknown", "discarded task PR merge state could not be verified")
-	}
-	if !info.Merged || info.State != "merged" {
-		return nativeErr("task_discarded", "discarded task PR is not verified merged")
-	}
-	if info.URL != plan.PRURL || info.Repository != config.PR.Repository || info.BaseBranch != authority.Branch || info.MergedAt == nil || info.MergedAt.IsZero() || info.MergeCommit == nil || !validCommit(*info.MergeCommit) {
-		return nativeErr("merge_state_unknown", "discarded task PR merge identity or evidence is incomplete")
-	}
-	if _, err = config.PR.PRNumber(info.URL); err != nil {
-		return nativeErr("merge_state_unknown", "discarded task PR URL does not match its fixed platform identity")
-	}
-	conflict := struct {
-		TaskID           string     `json:"task_id"`
-		WorkflowRunID    string     `json:"workflow_run_id"`
-		DiscardRequestID string     `json:"discard_request_id"`
-		DiscardedAt      *time.Time `json:"discarded_at,omitempty"`
-		PRURL            string     `json:"pr_url"`
-		PRHead           string     `json:"pr_head"`
-		MergeCommit      string     `json:"merge_commit"`
-		MergedAt         time.Time  `json:"merged_at"`
-	}{task.TaskID, workflowRunID, task.DiscardRequestID, task.DiscardedAt, info.URL, info.HeadRevision, *info.MergeCommit, *info.MergedAt}
-	body, err := json.Marshal(conflict)
-	if err != nil {
-		return err
-	}
-	err = s.TransactDelivery(ctx, func(tx persistence.DeliveryTx) error {
-		graph, e := tx.TaskGraphSnapshot(ctx, c.Project)
-		if e != nil {
-			return e
+	urls := uniqueSorted(append(append(append([]string(nil), workflow.PRHistory...), workflow.PRURL), workflow.PRCandidateURL))
+	merged := false
+	for _, url := range urls {
+		info, err := verifier.Query(ctx, url)
+		if err != nil || info.State == "unknown" {
+			return nativeErr("merge_state_unknown", "discarded candidate PR merge state could not be verified")
 		}
-		stored, exists := graph.ByID[task.TaskID]
-		if !exists || stored.Status != "discarded" || stored.Version != task.Version || graph.Authority.AuthorityVersion != authority.AuthorityVersion {
-			return nativeErr("stale_version", "discarded task changed during PR merge reconciliation")
+		if err := publication.ValidateWorkerPRIdentity(info, url, config.PR.Repository, authority.Branch, execution.Workspace.Branch); err != nil {
+			return nativeErr("merge_state_unknown", "discarded candidate PR identity differs from its original worker")
 		}
-		if _, delivered := graph.Deliveries[task.TaskID]; delivered {
-			return nativeErr("inconsistent_delivery", "discarded task already has a normal delivery")
+		if !info.Merged || info.State != "merged" {
+			continue
 		}
-		fixed, _, e := taskDiscardPlanTx(ctx, tx, c.Project, task.TaskID)
-		if e != nil {
-			return e
+		if info.MergedAt == nil || info.MergedAt.IsZero() || info.MergeCommit == nil || !validCommit(*info.MergeCommit) {
+			return nativeErr("merge_state_unknown", "discarded candidate merge evidence is incomplete")
 		}
-		if fixed.PRURL != plan.PRURL || fixed.UncertainPR {
-			return nativeErr("merge_state_unknown", "discarded task PR binding changed during reconciliation")
+		err = s.TransactDelivery(ctx, func(tx persistence.DeliveryTx) error {
+			graph, err := tx.TaskGraphSnapshot(ctx, c.Project)
+			if err != nil {
+				return err
+			}
+			current, ok := graph.ByID[task.TaskID]
+			if !ok || current.Status != "discarded" || current.Version != task.Version || graph.Authority.AuthorityVersion != authority.AuthorityVersion {
+				return nativeErr("stale_version", "discarded task changed during merge reconciliation")
+			}
+			currentSnapshot, err := tx.Query(ctx, c.Project)
+			if err != nil {
+				return err
+			}
+			if candidateBindings(currentSnapshot, task.TaskID) != candidateBindings(snapshot, task.TaskID) {
+				return nativeErr("stale_version", "candidate PR set changed during merge reconciliation")
+			}
+			_, err = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: task.TaskID, WorkflowRunID: workflowRunID, ExecutionID: execution.ExecutionID, ExternalSource: "native-task-delivery", ExternalID: task.TaskID + ":late-merge:" + url + ":" + *info.MergeCommit, Type: "task.delivery.conflict", ReceivedAt: time.Now().UTC(), Payload: mustJSON(map[string]any{"task_id": task.TaskID, "workflow_run_id": workflowRunID, "pr_url": info.URL, "pr_head": info.HeadRevision, "merge_commit": *info.MergeCommit, "merged_at": *info.MergedAt, "pr": info, "discard_request_id": task.DiscardRequestID, "discarded_at": task.DiscardedAt})})
+			return err
+		})
+		if err != nil {
+			return err
 		}
-		_, e = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: task.TaskID, WorkflowRunID: workflowRunID, ExternalSource: "native-task-delivery", ExternalID: task.TaskID + ":late-merge:" + *info.MergeCommit, Type: "task.delivery.conflict", ReceivedAt: time.Now().UTC(), Payload: body})
-		return e
-	})
-	if err != nil {
-		return err
+		merged = true
 	}
-	return nativeErr("inconsistent_delivery", "discarded task has a merged PR; manual verification is required")
+	if merged {
+		return nativeErr("inconsistent_delivery", "discarded candidate has a merged PR; manual verification is required")
+	}
+	return nativeErr("task_discarded", "discarded candidate PR is not verified merged")
 }
 
 func selectedNativeDeliveryState(snapshot DomainSnapshot, taskID, workflowRunID string) (WorkflowRunRecord, ExecutionRecord, error) {
@@ -253,7 +239,10 @@ func validateNativeDeliveryGates(record TaskRecord, contract TaskContract, workf
 	}, WorkerFlowVersion)
 }
 
-func (c CommandService) commitNativeDelivery(ctx context.Context, s persistence.CommandStore, expectedAuthorityVersion uint64, task TaskRecord, workflow WorkflowRunRecord, execution ExecutionRecord, contract TaskContract, prURL string, delivery TaskDeliveryRecord) (TaskDeliveryReceipt, error) {
+func (c CommandService) commitNativeDelivery(ctx context.Context, s persistence.CommandStore, expectedAuthorityVersion uint64, task TaskRecord, workflow WorkflowRunRecord, execution ExecutionRecord, contract TaskContract, prURL string, delivery TaskDeliveryRecord, expectedBindings string) (TaskDeliveryReceipt, error) {
+	if expectedBindings == "" {
+		return TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "delivery requires its verified candidate and PR binding set")
+	}
 	var receipt TaskDeliveryReceipt
 	err := s.TransactDelivery(ctx, func(tx persistence.DeliveryTx) error {
 		graph, err := tx.TaskGraphSnapshot(ctx, c.Project)
@@ -290,6 +279,9 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s persistence.
 		if err != nil {
 			return nativeErr("immutable_task", "selected workflow run changed during PR verification")
 		}
+		if currentWorkflow.Abandonment != nil {
+			return nativeErr("immutable_task", "abandoned candidate cannot deliver")
+		}
 		currentExecution, err := tx.Execution(ctx, c.Project, execution.ExecutionID, workflow.WorkflowRunID)
 		if err != nil {
 			return nativeErr("inconsistent_delivery", "selected execution changed during PR verification")
@@ -310,12 +302,12 @@ func (c CommandService) commitNativeDelivery(ctx context.Context, s persistence.
 			currentExecution.Workspace.Branch != execution.Workspace.Branch {
 			return nativeErr("immutable_task", "selected result or PR binding changed during platform verification")
 		}
-		discardPlan, _, err := taskDiscardPlanTx(ctx, tx, c.Project, task.TaskID)
+		currentSnapshot, err := tx.Query(ctx, c.Project)
 		if err != nil {
 			return err
 		}
-		if discardPlan.UncertainPR || discardPlan.PRURL != prURL {
-			return nativeErr("merge_state_unknown", "task publication became unresolved during PR verification")
+		if candidateBindings(currentSnapshot, task.TaskID) != expectedBindings {
+			return nativeErr("stale_version", "candidate eligibility or known PR set changed during verification")
 		}
 		reused, err := tx.PRBindingsOnOtherTasks(ctx, c.Project, task.TaskID, delivery.PRURL)
 		if err != nil {

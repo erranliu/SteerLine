@@ -76,6 +76,8 @@ const (
 	OpenTerminal       ControlAction = "open_terminal"
 	RecheckEnvironment ControlAction = "recheck_environment"
 	StartTask          ControlAction = "start_task"
+	StartCandidate     ControlAction = "start_candidate"
+	AbandonCandidate   ControlAction = "abandon_candidate"
 	SetDispatchMode    ControlAction = "set_dispatch_mode"
 	PauseDispatch      ControlAction = "pause_dispatch"
 	ResumeDispatch     ControlAction = "resume_dispatch"

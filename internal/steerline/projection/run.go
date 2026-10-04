@@ -30,6 +30,10 @@ func Run(task contracts.TaskRecord, workflow contracts.WorkflowRunRecord, execut
 		}
 	}
 	run := contracts.Run{TaskID: task.TaskID, DomainTaskID: task.TaskID, Title: task.Title, TaskStatus: task.Status,
+		CandidateTiming: "wall_since_reservation",
+		ResourceStatus:  execution.Status,
+		SessionID:       execution.SessionID, SessionGeneration: execution.SessionGeneration, TurnNumber: execution.TurnNumber, CurrentTurnID: execution.CurrentTurnID,
+		Abandonment: workflow.Abandonment, ExecutionProfile: workflow.ExecutionProfile, PRHistory: workflow.PRHistory, CandidateCreatedAt: workflow.CreatedAt,
 		RecoveryRequired: execution.RecoveryRequired, RecoveryState: execution.RecoveryState, RecoveryVersion: execution.RecoveryVersion,
 		RunID: workflow.WorkflowRunID, WorkflowVersion: workflow.WorkflowVersion, WorkflowConfigDigest: workflow.ConfigDigest,
 		ControlRevision: workflow.ControlRevision, ExecutionID: execution.ExecutionID, Claimant: task.Claimant,
@@ -45,6 +49,12 @@ func Run(task contracts.TaskRecord, workflow contracts.WorkflowRunRecord, execut
 			return contracts.Run{}, errors.New("worker flow current attempt pointer differs from latest worker generation")
 		}
 		run.AttemptID, run.DomainAttemptNumber = attempt.AttemptID, attempt.AttemptNumber
+	}
+	if workflow.Abandonment != nil {
+		run.CandidateEndedAt = ptr(workflow.Abandonment.At)
+	}
+	if execution.ResourceStoppedAt != nil && execution.ResourceStopOperationID != "" {
+		run.ResourceStatus = "stopped"
 	}
 	if execution.Environment != nil && execution.Environment.Blocker != nil {
 		blocker := *execution.Environment.Blocker
@@ -74,9 +84,12 @@ func Run(task contracts.TaskRecord, workflow contracts.WorkflowRunRecord, execut
 		}
 	}
 	if task.Status == "closed" {
-		run.ExecutionStatus = "succeeded"
 		for _, delivery := range deliveries {
 			if delivery.TaskID == task.TaskID && delivery.SelectedWorkflowRunID == workflow.WorkflowRunID {
+				run.ExecutionStatus = "succeeded"
+				if !delivery.RecordedAt.IsZero() {
+					run.CandidateEndedAt = ptr(delivery.RecordedAt)
+				}
 				run.PR = contracts.PRState{URL: ptr(delivery.PRURL), State: "merged", MergedAt: ptr(delivery.MergedAt), MergeCommit: ptr(delivery.MergeCommit)}
 			}
 		}

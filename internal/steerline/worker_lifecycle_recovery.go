@@ -70,7 +70,7 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 		}
 		task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
 		workflow, execution := s.workflowRecords(run)
-		if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Phase == "completed" || execution.PendingCommandID == "" && (execution.CurrentTurnID == "" || execution.CurrentTurnID == execution.LastStoppedTurnID) {
+		if task == nil || workflow == nil || execution == nil || s.candidateBusinessClosed(run) || execution.PendingCommandID == "" && (execution.CurrentTurnID == "" || execution.CurrentTurnID == execution.LastStoppedTurnID) {
 			continue
 		}
 		lifecycle, fixed, err := s.lifecycleForRun(run)

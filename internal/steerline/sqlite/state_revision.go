@@ -13,6 +13,7 @@ func recordFingerprint(value any) string { return operationDigest(mustJSON(value
 
 // Delivery freezes execution evidence; only subsequent diagnostic notes may change.
 func deliveredExecutionFingerprint(v ExecutionRecord) string {
+	v.ResourceStopOperationID, v.ResourceStoppedAt = "", nil
 	v.Error, v.LastEvent, v.Summary = nil, nil, nil
 	v.UpdatedAt = v.CreatedAt
 	return recordFingerprint(v)
@@ -24,7 +25,9 @@ func controlFingerprint(value any) string {
 		return recordFingerprint(struct {
 			Phase, Selected, PRURL, PRState string
 			Pending                         int
-		}{v.Phase, v.SelectedResult, v.PRURL, v.PRState, v.PendingDecisions})
+			Exit                            any
+			History                         []string
+		}{v.Phase, v.SelectedResult, v.PRURL, v.PRState, v.PendingDecisions, v.Abandonment, v.PRHistory})
 	case ExecutionRecord:
 		return recordFingerprint(struct {
 			Status, Outcome, Decision, Step                                       string

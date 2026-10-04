@@ -809,6 +809,9 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *Run, lifecycle 
 		key, kind = "worker-session:"+fixed.execution.ExecutionID+":"+commandID, "prepare_worker_session"
 	}
 	prior := s.operationByKey(key)
+	if s.candidateBusinessClosed(run) && !retiredResourceAction(candidate.Action, candidate.Input) && (prior == nil || prior.Status == "pending") {
+		return nativeErr("candidate_inactive", "retired candidate cannot authorize another lifecycle action")
+	}
 	opID, err := s.startWorkerOperation(run, kind, key, candidate.Input.Turn)
 	if err != nil {
 		return err
@@ -989,6 +992,9 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *Run, lifecycle 
 		key, kind, value = "worker-input:"+fixed.execution.ExecutionID+":"+candidate.Input.Turn.CommandID, "submit_worker_input", candidate.Input.Turn
 	}
 	prior := s.operationByKey(key)
+	if s.candidateBusinessClosed(run) && !retiredResourceAction(candidate.Action, candidate.Input) && (prior == nil || prior.Status == "pending") {
+		return nativeErr("candidate_inactive", "retired candidate cannot authorize another lifecycle action")
+	}
 	var opID string
 	if prior != nil && prior.Status != "pending" {
 		opID = prior.OperationID

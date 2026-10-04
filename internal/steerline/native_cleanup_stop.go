@@ -8,6 +8,72 @@ import (
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
+type stopReconciliationPort struct {
+	executionapi.LifecyclePort
+	backend executionapi.ExecutionBackend
+	ref     executionapi.ExecutionRef
+}
+
+func (p stopReconciliationPort) Reconcile(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+	observation, err := p.backend.Observe(ctx, p.ref)
+	status := executionapi.OperationUnknown
+	if err == nil && observation.Liveness == "exited" {
+		status = executionapi.OperationConfirmed
+	}
+	return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: status, Diagnostic: observation.Diagnostic}, nil, err
+}
+
+// Observe the original stop request through the shared background channel;
+// reconciliation cannot repeat Kill or occupy a project control checkpoint.
+func (s *Service) reconcileRunStop(ctx context.Context, run *Run, op executionapi.Operation) error {
+	if op.Ref == nil || s.lifecycleEffectPending(run.RunID) {
+		return nil
+	}
+	lifecycle, fixed, err := s.lifecycleForRun(run)
+	if err != nil {
+		return err
+	}
+	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
+	if err != nil {
+		return err
+	}
+	requestOp := op
+	requestOp.Action = string(executionapi.LifecycleStopExecution)
+	requestOp.LifecycleIdentity = &executionapi.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionapi.LifecycleBindingDigest(snapshot), Ref: *op.Ref}
+	request := executionapi.LifecycleRequest{Snapshot: snapshot, Operation: requestOp, Input: executionapi.LifecycleInput{Stop: &executionapi.StopInput{TurnID: snapshot.Session.CurrentTurnID}}}
+	records := executionRecords{root: fixed.config.RunDir, persistence: fixed.config.Persistence}
+	err = s.dispatchLifecycleEffect(ctx, run, stopReconciliationPort{LifecyclePort: lifecycle, backend: backendFor(fixed.config), ref: *op.Ref}, request, true, func(run *Run, result lifecycleEffectResult) error {
+		if err := result.receipt.ValidateFor(request); err != nil {
+			return err
+		}
+		saved, err := records.loadOperation(op.RunID, op.AttemptID, op.ID)
+		if err != nil {
+			return err
+		}
+		expected := recordFingerprint(saved)
+		if saved.Ref == nil || digestValue(*saved.Ref) != digestValue(*op.Ref) || saved.PayloadDigest != op.PayloadDigest {
+			return ErrWorkerTurnStale
+		}
+		saved.Status, saved.Diagnostic, saved.UpdatedAt = result.receipt.Disposition, result.receipt.Diagnostic, now()
+		if result.err != nil {
+			saved.Status, saved.Diagnostic = executionapi.OperationUnknown, result.err.Error()
+		}
+		if saved.Status == executionapi.OperationConfirmed {
+			e := s.executionRecord(run)
+			e.ResourceStopOperationID, e.ResourceStoppedAt = saved.ID, ptr(now())
+			if s.workflowRecord(run).Phase != "completed" {
+				e.Status = "stopped"
+			}
+			s.refreshRun(run)
+		}
+		return s.commitExecutionOperation(run, saved, expected)
+	})
+	if errors.Is(err, errLifecycleEffectPending) {
+		return nil
+	}
+	return err
+}
+
 func (s *Service) stopRunExecution(ctx context.Context, r *Run, worker *Worker) (executionapi.Operation, error) {
 	if r == nil || worker == nil || worker.proc == nil {
 		return executionapi.Operation{}, errors.New("there is no active execution to stop")

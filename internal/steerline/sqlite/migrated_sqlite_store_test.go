@@ -36,12 +36,11 @@ func TestSQLiteV3IsRejectedWithoutUpgrade(t *testing.T) {
 	_, err = tx.Exec(`CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)`)
 	require(t, err)
 	for _, stmt := range append(append([]string{}, domainExecutionSchema...), nativeTaskSchema...) {
-		if stmt == activeWorkflowIndexV5 {
-			stmt = oldActiveWorkflowIndex
-		}
 		_, err = tx.Exec(stmt)
 		require(t, err)
 	}
+	_, err = tx.Exec(oldActiveWorkflowIndex)
+	require(t, err)
 	_, err = tx.Exec(`INSERT INTO schema_migrations(version,applied_at) VALUES(3,?)`, time.Now().UTC().Format(time.RFC3339Nano))
 	require(t, err)
 	require(t, tx.Commit())
@@ -55,8 +54,6 @@ func TestSQLiteV4IsRejectedWithoutUpgrade(t *testing.T) {
 	require(t, err)
 	require(t, store.Close())
 	raw, err := sql.Open("sqlite", path)
-	require(t, err)
-	_, err = raw.Exec(`DROP INDEX one_active_workflow_per_task`)
 	require(t, err)
 	_, err = raw.Exec(oldActiveWorkflowIndex)
 	require(t, err)
@@ -118,6 +115,19 @@ func TestSQLiteV5IsRejectedWithoutUpgrade(t *testing.T) {
 	require(t, err)
 	require(t, raw.Close())
 	assertOldSQLiteRejectedUnchanged(t, path, 5)
+}
+
+func TestSQLiteV12IsRejectedWithoutUpgrade(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "steerline.db")
+	store, err := OpenSQLiteStore(path)
+	require(t, err)
+	require(t, store.Close())
+	raw, err := sql.Open("sqlite", path)
+	require(t, err)
+	_, err = raw.Exec(`UPDATE schema_migrations SET version=12 WHERE version=?`, domainSchemaVersion)
+	require(t, err)
+	require(t, raw.Close())
+	assertOldSQLiteRejectedUnchanged(t, path, 12)
 }
 
 func TestSQLiteRejectsParallelExecutionsInOneWorkflow(t *testing.T) {

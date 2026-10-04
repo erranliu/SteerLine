@@ -276,8 +276,9 @@ func (t *sqliteTx) AcceptDecisionAnswer(command CommandRecord, answer DecisionAn
 	}
 	var revision uint64
 	var phase string
+	var workflowBytes []byte
 	var executionBytes []byte
-	err = t.tx.QueryRowContext(t.ctx, `SELECT w.control_revision,w.phase,e.payload FROM workflow_runs w JOIN executions e ON e.project_identity=w.project_identity AND e.workflow_run_id=w.workflow_run_id WHERE w.project_identity=? AND w.workflow_run_id=? AND e.execution_id=?`, command.ProjectIdentity, answer.RunID, record.ExecutionID).Scan(&revision, &phase, &executionBytes)
+	err = t.tx.QueryRowContext(t.ctx, `SELECT w.control_revision,w.phase,w.payload,e.payload FROM workflow_runs w JOIN executions e ON e.project_identity=w.project_identity AND e.workflow_run_id=w.workflow_run_id WHERE w.project_identity=? AND w.workflow_run_id=? AND e.execution_id=?`, command.ProjectIdentity, answer.RunID, record.ExecutionID).Scan(&revision, &phase, &workflowBytes, &executionBytes)
 	if err != nil {
 		if !errors.Is(err, sql.ErrNoRows) {
 			return record, false, persistenceError(err)
@@ -285,6 +286,13 @@ func (t *sqliteTx) AcceptDecisionAnswer(command CommandRecord, answer DecisionAn
 		return record, false, errors.New("stale_revision: decision workflow or execution no longer exists")
 	}
 	var execution ExecutionRecord
+	var workflow WorkflowRunRecord
+	if err := decode(workflowBytes, &workflow); err != nil {
+		return record, false, err
+	}
+	if workflow.Abandonment != nil {
+		return record, false, nativeErr("candidate_inactive", "abandoned candidate cannot accept feedback")
+	}
 	if err = decode(executionBytes, &execution); err != nil {
 		return record, false, err
 	}

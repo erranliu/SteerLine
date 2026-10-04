@@ -64,7 +64,11 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 		t.Fatal(err)
 	}
 	delivery := TaskDeliveryRecord{ProjectIdentity: c.Identity(), TaskID: "8", SelectedWorkflowRunID: wf.WorkflowRunID, PRInstance: proof.PRInstance, PRRepository: proof.Repository, PRNumber: 8, PRURL: url, MergeCommit: commit, MergedAt: mergedAt, RecordedAt: created, Evidence: evidence}
-	receipt, err := commands.commitNativeDelivery(ctx, store, graph.Authority.AuthorityVersion, claimed, wf, execution, contract, url, delivery)
+	verifiedSnapshot, err := store.Query(ctx, c.Identity())
+	if err != nil {
+		t.Fatal(err)
+	}
+	receipt, err := commands.commitNativeDelivery(ctx, store, graph.Authority.AuthorityVersion, claimed, wf, execution, contract, url, delivery, candidateBindings(verifiedSnapshot, task.TaskID))
 	if err != nil || receipt.Status != "closed" {
 		t.Fatalf("commit without step results: receipt=%+v error=%v", receipt, err)
 	}

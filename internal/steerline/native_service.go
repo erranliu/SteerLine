@@ -114,7 +114,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 				continue
 			}
 			executionID := strings.TrimPrefix(item, "execution_stop_manual:")
-			if run := s.find(task.TaskID); run != nil && run.ExecutionID == executionID && s.workers[run.RunID] != nil {
+			if run := s.findExecution(executionID); run != nil && s.workers[run.RunID] != nil {
 				config, configErr := s.executionConfigForRun(run)
 				if configErr != nil {
 					return configErr
@@ -198,14 +198,24 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 
 func (s *Service) reconcileNativePRCleanup(ctx context.Context, task TaskRecord, cleanupItem string) error {
 	prURL := strings.TrimPrefix(cleanupItem, "pull_request_close:")
-	run := s.find(task.TaskID)
+	var run *Run
+	for _, candidate := range s.runs {
+		if candidate == nil || candidate.TaskID != task.TaskID {
+			continue
+		}
+		w := s.workflowRecord(candidate)
+		if w.PRURL == prURL || contains(w.PRHistory, prURL) {
+			run = candidate
+			break
+		}
+	}
 	if run == nil {
 		return nativeErr("inconsistent_delivery", "discarded PR cleanup has no reconstructed workflow run")
 	}
 	workflow, execution := s.workflowRecords(run)
 	attempt := s.workflowAttempt(run, run.AttemptID)
 	sessionID, _ := executionSessionFacts(execution)
-	if workflow == nil || execution == nil || attempt == nil || workflow.WorkflowVersion != WorkerFlowVersion || attempt.StepID != "worker" || workflow.PRURL != prURL || sessionID == "" {
+	if workflow == nil || execution == nil || attempt == nil || workflow.WorkflowVersion != WorkerFlowVersion || attempt.StepID != "worker" || workflow.PRURL != prURL && !contains(workflow.PRHistory, prURL) || sessionID == "" {
 		return nativeErr("authority_mismatch", "discarded PR cleanup lacks its fixed worker flow, session and PR URL")
 	}
 	fixed, err := s.workerFlowContext(run)
@@ -502,7 +512,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if err = s.refreshNativeSnapshot(ctx); err != nil {
 			return err
 		}
-		run := s.find(task.TaskID)
+		run := s.find(receipt.WorkflowRunID)
 		workflow, execution := s.workflowRecords(run)
 		attempt := s.workflowAttempt(run, run.AttemptID)
 		if run == nil || workflow == nil || execution == nil || attempt == nil {
@@ -588,7 +598,7 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *Run) error 
 	if err = s.refreshNativeSnapshot(ctx); err != nil {
 		return err
 	}
-	run = s.find(receipt.TaskID)
+	run = s.find(receipt.WorkflowRunID)
 	if run == nil {
 		return nativeErr("inconsistent_delivery", "closed native task disappeared from the execution projection")
 	}

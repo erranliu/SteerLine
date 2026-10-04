@@ -14,7 +14,7 @@ type Repository struct {
 	Identity string `json:"identity"`
 }
 
-const WorkerFlowRuntimeSchema = 17
+const WorkerFlowRuntimeSchema = 18
 const DecisionRequestFormatVersion = 2
 
 type PendingQuestion struct {
@@ -126,6 +126,17 @@ type TaskCandidate struct {
 // ProcessIdentity is a host-neutral identity of a running worker. Concrete
 // process and session bindings are stored in implementation data envelopes.
 type Run struct {
+	SessionID            string                        `json:"session_id,omitempty"`
+	SessionGeneration    string                        `json:"session_generation,omitempty"`
+	TurnNumber           uint64                        `json:"turn_number"`
+	CurrentTurnID        string                        `json:"current_turn_id,omitempty"`
+	Abandonment          *CandidateAbandonment         `json:"abandonment,omitempty"`
+	ExecutionProfile     *FixedExecutionProfile        `json:"execution_profile,omitempty"`
+	PRHistory            []string                      `json:"pr_history,omitempty"`
+	CandidateCreatedAt   time.Time                     `json:"candidate_created_at"`
+	CandidateEndedAt     *time.Time                    `json:"candidate_ended_at,omitempty"`
+	CandidateTiming      string                        `json:"candidate_timing"`
+	ResourceStatus       string                        `json:"resource_status"`
 	EnvironmentBlocker   *WorkerHostBlocker            `json:"environment_blocker,omitempty"`
 	RecoveryRequired     bool                          `json:"recovery_required,omitempty"`
 	RecoveryState        string                        `json:"recovery_state,omitempty"`

@@ -22,6 +22,9 @@ func (s *Service) environmentTurn(run *Run) string {
 }
 
 func (s *Service) blockWorkerEnvironment(run *Run, fact contracts.HostFact) error {
+	if s.candidateBusinessClosed(run) {
+		return nil
+	}
 	workflow, execution := s.workflowRecords(run)
 	if execution == nil || execution.Environment == nil || workflow.Phase == "completed" || workflow.Phase == "abandoned" || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nil
@@ -156,6 +159,9 @@ func (s *Service) observeWorkerEnvironment(ctx context.Context, run *Run) error 
 // Preparation owns one persisted budget spanning resource creation and host
 // settlement. Each actor pass performs bounded work; restarts reuse its intent.
 func (s *Service) advanceWorkerPreparation(ctx context.Context, run *Run) error {
+	if s.candidateBusinessClosed(run) {
+		return nil
+	}
 	if s.lifecycleEffectPending(run.RunID) {
 		return nil
 	}

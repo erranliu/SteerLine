@@ -24,11 +24,20 @@ type TaskClaimOptions struct {
 	RequestID                string
 	ExpectedTaskVersion      uint64
 	ExpectedAuthorityVersion uint64
+	ExpectedGraphRevision    uint64
 	RequestedBy              string
 	Explicit                 bool
 	WorkflowRunID            string
 	ExecutionProfile         *ExecutionProfile
 	ServiceInstanceID        string
+	startCandidate           bool
+	controlRequestDigest     string
+}
+
+// StartNativeCandidate preserves the original claim and fixed experiment base.
+func (c CommandService) StartNativeCandidate(ctx context.Context, config Config, options TaskClaimOptions) (TaskClaimReceipt, error) {
+	options.startCandidate, options.Explicit = true, true
+	return c.ClaimNativeTask(ctx, config, options)
 }
 
 func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, options TaskClaimOptions) (TaskClaimReceipt, error) {
@@ -66,13 +75,24 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		options.RequestedBy = DefaultRequestedBy()
 	}
 	requestBody := struct {
-		TaskID        string `json:"task_id"`
-		RequestedBy   string `json:"requested_by"`
-		Explicit      bool   `json:"explicit"`
-		WorkflowRunID string `json:"workflow_run_id,omitempty"`
-		ProfileID     string `json:"execution_profile_id,omitempty"`
-		ProfileDigest string `json:"execution_profile_digest,omitempty"`
+		TaskID               string `json:"task_id"`
+		RequestedBy          string `json:"requested_by"`
+		Explicit             bool   `json:"explicit"`
+		WorkflowRunID        string `json:"workflow_run_id,omitempty"`
+		ProfileID            string `json:"execution_profile_id,omitempty"`
+		ProfileDigest        string `json:"execution_profile_digest,omitempty"`
+		TaskVersion          uint64 `json:"task_version,omitempty"`
+		AuthorityVersion     uint64 `json:"authority_version,omitempty"`
+		GraphRevision        uint64 `json:"graph_revision,omitempty"`
+		ControlRequestDigest string `json:"control_request_digest,omitempty"`
 	}{TaskID: options.TaskID, RequestedBy: options.RequestedBy, Explicit: options.Explicit, WorkflowRunID: options.WorkflowRunID}
+	kind, expectedStatus := "claim_task", "open"
+	if options.startCandidate {
+		kind, expectedStatus = "start_candidate", "in_progress"
+		requestBody.TaskVersion, requestBody.AuthorityVersion = options.ExpectedTaskVersion, options.ExpectedAuthorityVersion
+		requestBody.GraphRevision = options.ExpectedGraphRevision
+		requestBody.ControlRequestDigest = options.controlRequestDigest
+	}
 	if options.ExecutionProfile != nil {
 		requestBody.ProfileID = options.ExecutionProfile.ID
 		requestBody.ProfileDigest = options.ExecutionProfile.Digest()
@@ -85,7 +105,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if old, found, e := sqlite.LookupCommand(ctx, c.Project, options.RequestID); e != nil {
 		return TaskClaimReceipt{}, e
 	} else if found {
-		return replayTaskClaim(old, requestPayload, options.TaskID, options.RequestedBy)
+		return replayTaskStart(old, requestPayload, options.TaskID, options.RequestedBy, kind)
 	}
 
 	if !config.ExecutionRequirements.Empty() {
@@ -116,6 +136,9 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if graph.Authority.AuthorityVersion != options.ExpectedAuthorityVersion {
 		return TaskClaimReceipt{}, nativeErr("stale_version", fmt.Sprintf("expected authority version %d, found %d", options.ExpectedAuthorityVersion, graph.Authority.AuthorityVersion))
 	}
+	if options.startCandidate && (options.ExpectedGraphRevision == 0 || graph.Authority.GraphRevision != options.ExpectedGraphRevision) {
+		return TaskClaimReceipt{}, nativeErr("stale_version", "candidate start requires current graph revision")
+	}
 	if err = validateNativeConfiguredTarget(ctx, config, graph.Authority); err != nil {
 		return TaskClaimReceipt{}, err
 	}
@@ -126,7 +149,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if task.Status == "discarded" {
 		return TaskClaimReceipt{}, nativeErr("task_discarded", "discarded task cannot be claimed")
 	}
-	if task.Status != "open" || task.Version != options.ExpectedTaskVersion {
+	if task.Status != expectedStatus || task.Version != options.ExpectedTaskVersion {
 		return TaskClaimReceipt{}, nativeErr("stale_version", fmt.Sprintf("task is %s at version %d", task.Status, task.Version))
 	}
 	if nativeDeliveryInconsistent(task, graph) {
@@ -135,10 +158,14 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if graph.Authority.DispatchPaused {
 		return TaskClaimReceipt{}, nativeErr("dispatch_paused", "dispatch is paused")
 	}
-	if options.Explicit && graph.Authority.DispatchMode != "manual" || !options.Explicit && graph.Authority.DispatchMode != "auto" {
+	if !options.startCandidate && (options.Explicit && graph.Authority.DispatchMode != "manual" || !options.Explicit && graph.Authority.DispatchMode != "auto") {
 		return TaskClaimReceipt{}, nativeErr("wrong_mode", "claim mode does not match project dispatch mode")
 	}
-	if ready, blockers := taskDependencyState(task, graph); !ready {
+	eligibilityTask := task
+	if options.startCandidate {
+		eligibilityTask.Status = "open"
+	}
+	if ready, blockers := taskDependencyState(eligibilityTask, graph); !ready {
 		return TaskClaimReceipt{}, nativeDependencyClaimError(blockers)
 	}
 	allowed := map[string]bool{}
@@ -159,9 +186,33 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err = VerifyTaskContractFiles(ctx, config, contract); err != nil {
 		return TaskClaimReceipt{}, err
 	}
+	var candidateSnapshot DomainSnapshot
+	var commonBase string
+	if options.startCandidate {
+		candidateSnapshot, err = sqlite.Query(ctx, c.Project)
+		if err != nil {
+			return TaskClaimReceipt{}, err
+		}
+		if participatingCandidates(candidateSnapshot, task.TaskID) >= 5 {
+			return TaskClaimReceipt{}, nativeErr("candidate_limit_reached", "five candidates already participate in this task experiment")
+		}
+		commonBase, err = candidateBase(candidateSnapshot, task.TaskID)
+		if err != nil {
+			return TaskClaimReceipt{}, err
+		}
+		if _, err = verifyKnownCandidatePRs(ctx, config, candidateSnapshot, task.TaskID, nil, ""); err != nil {
+			return TaskClaimReceipt{}, err
+		}
+	}
 	base, err := acquireNativeBase(ctx, config)
 	if err != nil {
 		return TaskClaimReceipt{}, nativeErr("task_not_ready", "fixed target branch base could not be acquired: "+err.Error())
+	}
+	if options.startCandidate {
+		base = commonBase
+		if _, err := (Runner{Dir: config.Repository, Timeout: duration(config.CommandTimeout)}).Output(ctx, config.Git, "cat-file", "-e", base+"^{commit}"); err != nil {
+			return TaskClaimReceipt{}, nativeErr("base_missing_delivery", "selected execution cannot acquire the experiment's common base")
+		}
 	}
 	predecessorMerges := map[string]string{}
 	for _, edge := range graph.Edges {
@@ -213,9 +264,12 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		return TaskClaimReceipt{}, err
 	}
 	attempt := StepAttemptRecord{ProjectIdentity: c.Project, AttemptID: attemptID, ExecutionID: executionID, StepID: "worker", AttemptNumber: 1, Status: "planned", InputRevision: base, ContractDigest: contract.Digest, ExternalBinding: target, CreatedAt: created, UpdatedAt: created}
-	nextTask, err := taskdomain.Claim(task, claimant, created)
-	if err != nil {
-		return TaskClaimReceipt{}, err
+	nextTask := task
+	if !options.startCandidate {
+		nextTask, err = taskdomain.Claim(task, claimant, created)
+		if err != nil {
+			return TaskClaimReceipt{}, err
+		}
 	}
 	operationRequest, _ := json.Marshal(map[string]any{"task_id": task.TaskID, "task_version": options.ExpectedTaskVersion, "authority_version": options.ExpectedAuthorityVersion, "workflow_run_id": workflowRunID, "execution_id": executionID, "attempt_id": attemptID, "base_commit": base, "predecessor_merge_commits": predecessorMerges, "requested_by": options.RequestedBy})
 	var receipt TaskClaimReceipt
@@ -223,7 +277,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		if old, found, e := tx.LookupCommand(ctx, c.Project, options.RequestID); e != nil {
 			return e
 		} else if found {
-			r, e := replayTaskClaim(old, requestPayload, options.TaskID, options.RequestedBy)
+			r, e := replayTaskStart(old, requestPayload, options.TaskID, options.RequestedBy, kind)
 			if e != nil {
 				return e
 			}
@@ -250,7 +304,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 				return nativeErr("stale_profile", "selected Profile changed before atomic claim")
 			}
 		}
-		if current.Authority.AuthorityVersion != options.ExpectedAuthorityVersion || current.Authority.GraphRevision != graph.Authority.GraphRevision || currentTask.Version != options.ExpectedTaskVersion || currentTask.Status != "open" {
+		if current.Authority.AuthorityVersion != options.ExpectedAuthorityVersion || current.Authority.GraphRevision != graph.Authority.GraphRevision || currentTask.Version != options.ExpectedTaskVersion || currentTask.Status != expectedStatus {
 			return nativeErr("stale_version", "task or project authority changed during claim preflight")
 		}
 		if nativeDeliveryInconsistent(currentTask, current) {
@@ -259,10 +313,30 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		if current.Authority.DispatchPaused {
 			return nativeErr("dispatch_paused", "dispatch was paused before claim")
 		}
-		if options.Explicit && current.Authority.DispatchMode != "manual" || !options.Explicit && current.Authority.DispatchMode != "auto" {
+		if !options.startCandidate && (options.Explicit && current.Authority.DispatchMode != "manual" || !options.Explicit && current.Authority.DispatchMode != "auto") {
 			return nativeErr("wrong_mode", "project dispatch mode changed before claim")
 		}
-		ready, blockers := taskDependencyState(currentTask, current)
+		if options.startCandidate {
+			stored, e := tx.Query(ctx, c.Project)
+			if e != nil {
+				return e
+			}
+			if candidatePRBindings(stored, task.TaskID) != candidatePRBindings(candidateSnapshot, task.TaskID) {
+				return nativeErr("stale_version", "known PR bindings changed during start verification")
+			}
+			storedBase, err := candidateBase(stored, task.TaskID)
+			if err != nil {
+				return err
+			}
+			if storedBase != commonBase {
+				return nativeErr("contract_mismatch", "experiment common base changed during start verification")
+			}
+		}
+		currentEligibility := currentTask
+		if options.startCandidate {
+			currentEligibility.Status = "open"
+		}
+		ready, blockers := taskDependencyState(currentEligibility, current)
 		if !ready {
 			return nativeDependencyClaimError(blockers)
 		}
@@ -278,7 +352,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		if occupied > 0 && !options.Explicit {
 			return nativeErr("slot_busy", "native execution slot is occupied or uncertain")
 		}
-		command := CommandRecord{ProjectIdentity: c.Project, CommandID: options.RequestID, Kind: "claim_task", TargetID: task.TaskID, ExpectedVersion: options.ExpectedTaskVersion, IdempotencyKey: options.RequestID, RequestedBy: options.RequestedBy, Payload: requestPayload, Status: "in_flight", CreatedAt: created}
+		command := CommandRecord{ProjectIdentity: c.Project, CommandID: options.RequestID, Kind: kind, TargetID: task.TaskID, ExpectedVersion: options.ExpectedTaskVersion, IdempotencyKey: options.RequestID, RequestedBy: options.RequestedBy, Payload: requestPayload, Status: "in_flight", CreatedAt: created}
 		var made bool
 		command, made, e = tx.EnqueueCommand(command)
 		if e != nil {
@@ -287,14 +361,16 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		if !made {
 			return nativeErr("idempotency_conflict", "claim request ID is already in use")
 		}
-		operation := OperationRecord{ProjectIdentity: c.Project, OperationID: options.RequestID, IdempotencyKey: options.RequestID, Kind: "claim_task", Status: "pending", PayloadDigest: digestCanonical(operationRequest), Request: operationRequest, CreatedAt: created, UpdatedAt: created}
+		operation := OperationRecord{ProjectIdentity: c.Project, OperationID: options.RequestID, IdempotencyKey: options.RequestID, Kind: kind, Status: "pending", PayloadDigest: digestCanonical(operationRequest), Request: operationRequest, CreatedAt: created, UpdatedAt: created}
 		if _, made, e = tx.PutOperation(operation); e != nil {
 			return e
 		} else if !made {
 			return nativeErr("idempotency_conflict", "claim operation request ID is already in use")
 		}
-		if e = tx.UpdateNativeTaskCAS(nextTask, options.ExpectedTaskVersion); e != nil {
-			return e
+		if !options.startCandidate {
+			if e = tx.UpdateNativeTaskCAS(nextTask, options.ExpectedTaskVersion); e != nil {
+				return e
+			}
 		}
 		if e = tx.PutWorkflowRun(wfr); e != nil {
 			return e
@@ -312,7 +388,11 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 			return e
 		}
 		body, _ := json.Marshal(receipt)
-		_, e = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: task.TaskID, WorkflowRunID: workflowRunID, ExecutionID: executionID, AttemptID: attemptID, ExternalSource: "native-task-command", ExternalID: options.RequestID, Type: "task.claim.reserved", ReceivedAt: created, Payload: body})
+		eventType := "task.claim.reserved"
+		if options.startCandidate {
+			eventType = "candidate.start.reserved"
+		}
+		_, e = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: task.TaskID, WorkflowRunID: workflowRunID, ExecutionID: executionID, AttemptID: attemptID, ExternalSource: "native-task-command", ExternalID: options.RequestID, Type: eventType, ReceivedAt: created, Payload: body})
 		return e
 	})
 	var replay taskBatchReplay
@@ -327,7 +407,11 @@ func nativeDependencyClaimError(blockers []TaskDependencyStatus) error {
 }
 
 func replayTaskClaim(old CommandRecord, payload []byte, taskID string, requestedBy string) (TaskClaimReceipt, error) {
-	if old.Kind != "claim_task" || old.TargetID != taskID || old.RequestedBy != requestedBy || !bytes.Equal(old.Payload, payload) {
+	return replayTaskStart(old, payload, taskID, requestedBy, "claim_task")
+}
+
+func replayTaskStart(old CommandRecord, payload []byte, taskID string, requestedBy, kind string) (TaskClaimReceipt, error) {
+	if old.Kind != kind || old.TargetID != taskID || old.RequestedBy != requestedBy || !bytes.Equal(old.Payload, payload) {
 		return TaskClaimReceipt{}, nativeErr("idempotency_conflict", "request ID was reused with different claim content")
 	}
 	if old.Status != "accepted" || len(old.Result) == 0 {

@@ -11,12 +11,30 @@
 
 ## 测试计划
 
-下面TestMC1–TestMC9是本任务规划新增或迁入的顶层用例，当前不是已存在入口。优先复用已有单候选、事务、会话和恢复断言；实施时只补缺口，记录旧到新映射。若前置解耦已经改变包路径，开工Plan按实际唯一所有者更新命令，不保留第二测试路径。
+TestMC1–TestMC9 的共享业务所有者是 `internal/steerline/candidate_workers_test.go`，不是原规划的适配器集成包。使用真实临时 SQLite、Git、单步 Lifecycle port、worker 子进程和 PR provider 子进程；不请求模型。原生混合方案和 TUI 继续分别归 #39/#38。生产路径为 `native_claim_command.go`（首个领取及新增）、`candidate_control.go`（独立控制回执）、`candidate_workers.go`（退出及完整 PR 集合）、`candidate_resources.go`（原回执与资源观察）、`native_delivery_command.go` / `native_discard_command.go`（事务仲裁）和 `projection`（全部候选）。SQLite 格式 13、runtime 格式 18；拒绝旧开发格式，保留原文件，无迁移。
 
 | 级别/组或场景ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
 | --- | --- | --- | --- | --- | --- |
-| 定向Go：MC1、MC2、MC7、MC9 | Windows；临时SQLite、Git和中性后端；无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-workers/identity-count -- ./internal/steerlineintegration -run '^TestMC[1279]$' -count=1` | 身份、开始检查和格式路径接通后 | 实际命中各ID及子测试；领取一次、串行第6次拒绝、放弃后再增；不要求数量并发严格不超额 | 对应输出目录的summary/Go JSON与固定身份记录 |
-| 定向Go：MC3–MC6、MC8 | 隔离真实服务/SQLite，可控来源与PR provider；无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-workers/flow-abandon -- ./internal/steerlineintegration -run '^TestMC[34568]$' -count=1` | 反馈、放弃与唯一交付接通后 | 原身份/请求、退出实验与真实停止区分、合并后拒绝、回滚及迟到事实正确；无fail/skip或零匹配 | 原始事件、PR/Delivery/停止回执与测试JSON |
-| L1固定最小入口 | 本次隔离STEERLINE_HOME，无原生开关 | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-workers/l1` | 定向稳定、自查完成后一次 | 守卫/原单候选代表命中且整体通过，记录源码及构建身份 | l1/summary.json与原始日志 |
+| 定向Go：MC1、MC2、MC7、MC9 | Windows；临时SQLite、Git和中性后端；无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-workers/identity-count-01 -- ./internal/steerline -run '^TestMC[1279]$' -count=1` | 身份、开始检查和格式路径接通后 | 实际命中各ID及子测试；领取一次、串行第6次拒绝、放弃后再增；不要求数量并发严格不超额 | 对应输出目录的summary/Go JSON与固定身份记录 |
+| 定向Go：MC3–MC6、MC8 | Windows；隔离Service/SQLite，可控来源与PR provider；无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-workers/flow-abandon-01 -- ./internal/steerline -run '^TestMC[34568]$' -count=1` | 反馈、放弃与唯一交付接通后 | 原身份/请求、退出实验与真实停止区分、合并后拒绝、回滚及迟到事实正确；无fail/skip或零匹配 | 原始事件、PR/Delivery/停止回执与测试JSON |
+| 定向Go：当前数据库、旧格式拒绝、投影 | Windows；隔离 SQLite；无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-workers/storage-02 -- ./internal/steerline/sqlite ./internal/steerline/projection -run 'TestSQLiteV(3|4|5|12)|TestNativeDatabaseInitializesCurrentSchema|TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding|TestBuildOwnsRecords|TestProjection' -count=1` | 格式与完整投影接通后 | 当前 reader/writer 与非迁移拒绝通过；每个选择包实际非零命中 | storage-02/summary.json 与 Go JSON |
+| 定向Go：最终停止/迟到回执增量 | Windows；原 Service/SQLite、原 Operation；无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-workers/receipt-final-02 -- ./internal/steerline -run '^TestMC[58]$|^TestSimplifiedCleanup|^TestAppServerLateReply' -count=1` | 自查修复资源事实后 | 唯一交付不被真实停止覆盖；原回执事务屏障、退出后重启/不重发、无 fail/skip/零匹配 | receipt-final-02/summary.json、Go JSON |
+| 定向Go：完整丢弃与原交付消费者 | Windows；原隔离 Git/SQLite/provider；无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-workers/settlement-final-02 -- ./internal/steerline -run '^TestMC7$|^TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor$|^TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent$' -count=1` | 自查修复历史 PR 消费者后 | 原断言保留；完整已知集合、未结算动作、迟到合并时间/归属、唯一交付通过 | settlement-final-02/summary.json、Go JSON |
+| L1固定最小入口 | 本次测试 runner/fixture 隔离STEERLINE_HOME，无原生开关 | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-workers/l1-02` | 定向稳定、自查完成后一次 | 守卫/原单候选代表命中且整体通过，记录源码及构建身份 | l1-02/summary.json与原始日志 |
+| 跨 OS 编译代表 | Windows 主机、GOOS=linux；无运行、无模型 | `$taskOriginalGoOS=$env:GOOS; $taskLinuxOutput=Join-Path $env:TEMP ('candidate-workers-37-'+[guid]::NewGuid().ToString('N')+'.test'); try { $env:GOOS='linux'; go test -c -o $taskLinuxOutput ./internal/steerline } finally { if ($null -eq $taskOriginalGoOS) { Remove-Item Env:GOOS } else { $env:GOOS=$taskOriginalGoOS } }` | 生产调用链自查后 | Linux 代表源码及依赖可编译；不将其称为原生平台通过 | `docs/validation/candidate-workers/cross-os-final.txt` |
 
 新用例复用当前隔离环境与worker侧发布fixture，不使用已退役host_service发布或旧DeferredDecision/Feedback。MC3覆盖一个blocker下拒绝/解除不补投与兄弟继续；MC4核对worker发布和raw日志不参与产品读取；MC8用受控慢/unsupported/unknown停止及晚到启动/反馈结果验证原回执屏障。复用既有断言，只补候选归属缺口，不增加全套单worker故障矩阵。证据目录每次使用新的空目录，重跑不得覆盖旧证据。数量边界不启动五个真实模型；不选择Full/L2/L3或新的权限认证矩阵，真实后端增量归 #39。
+
+### 旧到新断言映射
+
+| 原断言入口 | 新入口与保留/新增范围 |
+| --- | --- |
+| `TestWorkerFlowClaimNeedsNoProjectSteps` / `TestWorkerFlowContextsDoNotExchangeExecutionProfiles` | MC7 / MC2 迁入调用；MC1/MC9 新增五个不同冻结方案、独立 worktree/分支/session、领取一次、先重放再检查、退出后再增 |
+| `TestSimplifiedLifecycleActorDoesNotWaitForEffect` | MC2 迁入原回执/错误 Attempt 屏障；MC8 新增退出期间的晚到启动/反馈、未知停止、原请求与兄弟新增 |
+| `TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR` / `TestSimplifiedEnvironmentSavedInputRequiresFreshAnswer` | MC3 迁入独立 blocker/无补投断言；新增同 Task 两候选交错反馈与精确选择 |
+| `TestPublicationPolicyFrozenConfigurationAndCredentials` / `TestConversationLiveSourceFailureKeepsGapAndMapperPosition` | MC4 迁入 worker-only 权限与规范数据库缺口断言；新增两个 worker 子进程真实 commit/push/create 与 PR 归属核验 |
+| `TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged` / `TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor` | 原入口保留；MC5 新增多候选完整 PR 集合、事务回滚、唯一 winner/解锁与 replay；MC6 新增多合并/放弃合并/未知兄弟/交付后迟到冲突 |
+| SQLite V3/V4/V5/V12 拒绝和当前 reader/writer、projection 断言 | storage 定向入口保留；MC7 新增全候选退出后的原 claim/base 重启与整体丢弃 |
+
+
+实测回归还保留 `TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent` 的未结算 PR/迟到冲突字段断言；夹具只补真实 head repository/branch 身份。未削弱断言。此前失败产物保留在 validation 目录，最终通过位置以本表为准。
