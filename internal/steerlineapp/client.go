@@ -4,19 +4,23 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"os"
 	"path/filepath"
 	"runtime"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
 	"github.com/erranliu/SteerLine/internal/steerlineclient"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func OpenClient(ctx context.Context, path string) (*steerlineclient.Client, error) {
@@ -40,6 +44,7 @@ func ClientResources(ctx context.Context, ref api.ProjectRef) (api.Resources, er
 	}
 	return clientResources(ctx, c, ref)
 }
+
 func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef) (api.Resources, error) {
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return api.Resources{}, err
@@ -119,15 +124,15 @@ func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef
 			}
 			return steerline.ReadTaskSnapshot(c)
 		},
-		ResolveStartTask: func(ctx context.Context, id, profileID string) (api.ControlPayload, error) {
+		ResolveStartTask: func(ctx context.Context, id, profileID string) (productapi.ControlPayload, error) {
 			if profileID == "" {
-				return api.ControlPayload{}, errors.New("start_task requires -execution-profile")
+				return productapi.ControlPayload{}, errors.New("start_task requires -execution-profile")
 			}
 			_, p, err := c.ResolveExecutionProfile(profileID, "")
 			if err != nil {
-				return api.ControlPayload{}, err
+				return productapi.ControlPayload{}, err
 			}
-			return api.ControlPayload{TaskID: id, ExecutionProfileID: p.ID, ExecutionProfileDigest: p.Digest()}, nil
+			return productapi.ControlPayload{TaskID: id, ExecutionProfileID: p.ID, ExecutionProfileDigest: p.Digest()}, nil
 		},
 		InspectRecovery: func(ctx context.Context, id string) (api.RecoveryInspection, error) {
 			return steerline.InspectRecovery(ctx, c, id)
@@ -145,7 +150,7 @@ func clientResources(ctx context.Context, c steerline.Config, ref api.ProjectRef
 			if c.ExecutionDirectory == nil {
 				return "执行目录不可用；不能续跑原问题"
 			}
-			if _, err := c.ExecutionDirectory.ResolveIdentity(steerline.ExecutionRegistrationKey{Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol), Agent: run.Agent}); err != nil {
+			if _, err := c.ExecutionDirectory.ResolveIdentity(steerline.ExecutionRegistrationKey{Backend: executionbackend.BackendKind(run.Backend), Protocol: executionbackend.ExecutionProtocol(run.Protocol), Agent: run.Agent}); err != nil {
 				return "原执行后端/协议不支持决策续跑"
 			}
 			return ""
@@ -161,16 +166,19 @@ type clientReader struct {
 }
 
 func (r *clientReader) Close() error { return r.store.Close() }
+
 func (r *clientReader) Domain(ctx context.Context) (contracts.DomainSnapshot, error) {
 	return r.store.Query(ctx, r.project)
 }
+
 func (r *clientReader) DatabaseVersion(ctx context.Context) (string, uint64, error) {
 	return r.store.DatabaseVersion(ctx)
 }
-func (r *clientReader) Command(ctx context.Context, id string) (contracts.CommandRecord, error) {
+
+func (r *clientReader) Command(ctx context.Context, id string) (storageports.CommandRecord, error) {
 	v, err := r.store.Command(ctx, r.project, id)
-	if errors.Is(err, persistence.ErrNotFound) {
-		return v, errors.Join(api.ErrRecordNotFound, err)
+	if errors.Is(err, storageports.ErrNotFound) {
+		return v, errors.Join(productapi.ErrRecordNotFound, err)
 	}
 	return v, err
 }
@@ -192,32 +200,37 @@ func (r *clientCommands) Close() error {
 	}
 	return err
 }
-func (r *clientCommands) Validate(ctx context.Context, payload []byte) (task.TaskBatchValidation, error) {
+
+func (r *clientCommands) Validate(ctx context.Context, payload []byte) (taskmodel.TaskBatchValidation, error) {
 	return r.service.ValidateTaskBatch(ctx, r.config, payload)
 }
-func (r *clientCommands) Create(ctx context.Context, in api.CreateInput) (task.TaskBatchReceipt, error) {
+
+func (r *clientCommands) Create(ctx context.Context, in productapi.CreateInput) (taskmodel.TaskBatchReceipt, error) {
 	return r.service.CreateTaskBatch(ctx, r.config, in.Payload, in.RequestID, in.ExpectedAuthorityVersion, in.RequestedBy)
 }
-func (r *clientCommands) Discard(ctx context.Context, in api.DiscardInput) (task.TaskDiscardReceipt, error) {
+
+func (r *clientCommands) Discard(ctx context.Context, in productapi.DiscardInput) (taskmodel.TaskDiscardReceipt, error) {
 	return r.service.DiscardNativeTask(ctx, r.config, in.TaskID, in.RequestID, in.ExpectedVersion, in.Reason, in.RequestedBy)
 }
+
 func (r *clientCommands) AddPredecessors(ctx context.Context, in task.TaskPredecessorAddInput) (task.TaskPredecessorAddReceipt, error) {
 	return r.service.AddNativeTaskPredecessors(ctx, r.config, in)
 }
 
 type clientControl struct{ config steerline.Config }
 
-func (r clientControl) Submit(ctx context.Context, in api.ControlInput) (api.ControlRequest, error) {
+func (r clientControl) Submit(ctx context.Context, in productapi.ControlInput) (productapi.ControlRequest, error) {
 	if err := ctx.Err(); err != nil {
-		return api.ControlRequest{}, err
+		return productapi.ControlRequest{}, err
 	}
 	var payload any
-	if in.Payload != (api.ControlPayload{}) {
+	if in.Payload != (productapi.ControlPayload{}) {
 		payload = in.Payload
 	}
 	return steerline.SubmitControlTargeted(r.config, string(in.Action), payload, in.RequestedBy, in.RequestID, in.InstanceID, in.ExpectedRevision)
 }
-func (r clientControl) Receipt(ctx context.Context, id string) (*api.ControlReceipt, error) {
+
+func (r clientControl) Receipt(ctx context.Context, id string) (*productapi.ControlReceipt, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -226,7 +239,8 @@ func (r clientControl) Receipt(ctx context.Context, id string) (*api.ControlRece
 	}
 	return steerline.ReadVerifiedControlReceipt(r.config, id)
 }
-func (r clientControl) Request(ctx context.Context, id string) (*api.ControlRequest, error) {
+
+func (r clientControl) Request(ctx context.Context, id string) (*productapi.ControlRequest, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
@@ -236,7 +250,8 @@ func (r clientControl) Request(ctx context.Context, id string) (*api.ControlRequ
 	}
 	return req, err
 }
-func (r clientControl) Stop(ctx context.Context, by string, timeout time.Duration) (api.ServiceStopResult, error) {
+
+func (r clientControl) Stop(ctx context.Context, by string, timeout time.Duration) (productapi.ServiceStopResult, error) {
 	return steerline.StopService(ctx, r.config, by, timeout)
 }
 
@@ -245,18 +260,20 @@ type clientDecision struct{ config steerline.Config }
 func (r clientDecision) Eligibility(ctx context.Context, run *contracts.Run) error {
 	return steerline.DecisionReplyEligibility(ctx, r.config, run)
 }
-func (r clientDecision) Submit(ctx context.Context, in api.DecisionInput) (contracts.CommandRecord, bool, error) {
+
+func (r clientDecision) Submit(ctx context.Context, in api.DecisionInput) (storageports.CommandRecord, bool, error) {
 	a := in.Answer
 	return steerline.SubmitAnswerDecision(ctx, r.config, a.RunID, a.DecisionID, a.OptionID, a.Note, in.RequestedBy, a.ExpectedDecisionVersion, a.ExpectedRunRevision, a.ServiceInstanceID, in.CommandID)
 }
-func (r clientDecision) Answer(ctx context.Context, in api.AnswerInput) (contracts.CommandRecord, bool, error) {
+
+func (r clientDecision) Answer(ctx context.Context, in productapi.AnswerInput) (storageports.CommandRecord, bool, error) {
 	return steerline.SubmitDecisionAnswer(ctx, r.config, steerline.AnswerOptions{RunID: in.RunID, DecisionID: in.DecisionID, Option: in.Option, Note: in.Note, By: in.RequestedBy, ExpectedVersion: in.ExpectedVersion, CommandID: in.CommandID})
 }
 
 // projectPresentation exposes only accepted non-secret display fields and fixed
 // profile digests. Configuration compilation stays with the original owner.
 func projectPresentation(c steerline.Config) api.ProjectPresentation {
-	result := api.ProjectPresentation{NativeWorkflow: c.WorkflowProtocol == steerline.WorkerFlowVersion, ConfigDigest: c.LoadedConfigDigest(), TaskAuthority: c.TaskAuthority, WorkflowProtocol: c.WorkflowProtocol, ShutdownGrace: c.ShutdownGrace, DefaultProfileID: c.DefaultProfileID()}
+	result := api.ProjectPresentation{NativeWorkflow: c.WorkflowProtocol == executionmodel.Version, ConfigDigest: c.LoadedConfigDigest(), TaskAuthority: c.TaskAuthority, WorkflowProtocol: c.WorkflowProtocol, ShutdownGrace: c.ShutdownGrace, DefaultProfileID: c.DefaultProfileID()}
 	for _, p := range c.AvailableExecutionProfiles() {
 		reason := p.StaticUnavailableReason()
 		if reason == "" {
@@ -284,6 +301,6 @@ func clientServiceInstruction(ref api.ProjectRef) string {
 	return launcher
 }
 
-func (r *clientReader) ActivityEvents(ctx context.Context, execution, attempt string, after int64) ([]contracts.DomainEvent, error) {
+func (r *clientReader) ActivityEvents(ctx context.Context, execution, attempt string, after int64) ([]storageports.DomainEvent, error) {
 	return r.store.Events(ctx, r.project, execution, attempt, after, query.DefaultEventPageSize, query.MaxEventPageBytes)
 }

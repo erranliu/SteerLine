@@ -8,9 +8,12 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func consoleLocalProfile(id, name, model, effort string) api.ExecutionProfileSummary {
@@ -45,24 +48,24 @@ func TestReadyStartChoosesConfiguredProfileAndBindsRequest(t *testing.T) {
 	result := cmd()
 	updated, _ = m.Update(result)
 	m = updated.(Model)
-	var payload api.ControlPayload
+	var payload productapi.ControlPayload
 	if err := json.Unmarshal(control.request.Payload, &payload); err != nil || payload.TaskID != "task-B" || payload.ExecutionProfileID != other.ID || payload.ExecutionProfileDigest != other.Digest {
 		t.Fatalf("start request changed the selected profile: %+v / %v", payload, err)
 	}
 	for _, action := range m.projects[0].actions {
-		if !controlRequestMatchesAction(&api.ControlRequest{RequestID: action.RequestID, Action: action.Action, InstanceID: action.TargetInstance, RepositoryIdentity: ref.Identity, Payload: control.request.Payload}, action, ref.Identity) {
+		if !controlRequestMatchesAction(&productapi.ControlRequest{RequestID: action.RequestID, Action: action.Action, InstanceID: action.TargetInstance, RepositoryIdentity: ref.Identity, Payload: control.request.Payload}, action, ref.Identity) {
 			t.Fatal("saved request did not retain the selected profile identity")
 		}
 	}
 }
 
 func TestRunDetailUsesItsFixedProfileAfterProjectConfigChanges(t *testing.T) {
-	fixed := contracts.FixedExecutionProfile{ID: "orca-remote", Name: "远程审查", Host: "orca_supervised", Agent: "codex", ImplementationDisplay: []string{"Model：fixed-model", "Reasoning effort：xhigh", "目标环境：remote-env", "连接：fixed-connection"}, PublicationPolicy: executionapi.PublicationPolicy{Publisher: "worker"}, Publication: contracts.PublicationSettings{}}
+	fixed := executionmodel.FixedExecutionProfile{ID: "orca-remote", Name: "远程审查", Host: "orca_supervised", Agent: "codex", ImplementationDisplay: []string{"Model：fixed-model", "Reasoning effort：xhigh", "目标环境：remote-env", "连接：fixed-connection"}, PublicationPolicy: executionbackend.PublicationPolicy{Publisher: "worker"}, Publication: executionmodel.PublicationSettings{}}
 	fixed.Publication.Provider.Kind, fixed.Publication.Provider.BaseURL, fixed.Publication.Provider.Repository = "gitea", "https://fixed.invalid", "org/repo"
 	fixed.Publication.Remote, fixed.Publication.RemoteURL, fixed.Publication.BaseBranch = "origin", "ssh://git@fixed.invalid/org/repo.git", "main"
 	fixed.Publication.AuthenticationRefs = []string{"FIXED_TOKEN"}
 	run := &contracts.Run{RunID: "run-1", TaskID: "101", Backend: "orca", Agent: "codex"}
-	state := projectState{ref: ProjectRef{Presentation: api.ProjectPresentation{Profiles: []api.ExecutionProfileSummary{{Host: "local", Agent: "agent", ImplementationDisplay: []string{"Model：new-project-default"}}}}}, snapshot: ProjectSnapshot{Domain: &contracts.DomainSnapshot{WorkflowRuns: []contracts.WorkflowRunRecord{{WorkflowRunID: run.RunID, ExecutionProfile: &fixed}}}}}
+	state := projectState{ref: ProjectRef{Presentation: api.ProjectPresentation{Profiles: []api.ExecutionProfileSummary{{Host: "local", Agent: "agent", ImplementationDisplay: []string{"Model：new-project-default"}}}}}, snapshot: ProjectSnapshot{Domain: &contracts.DomainSnapshot{WorkflowRuns: []executionmodel.WorkflowRunRecord{{WorkflowRunID: run.RunID, ExecutionProfile: &fixed}}}}}
 	shown := strings.Join(renderFixedRunExecutionProfile(state, run), "\n")
 	for _, want := range []string{"远程审查", "orca-remote", "orca_supervised", "fixed-model", "xhigh", "发布责任：worker", "https://fixed.invalid/org/repo", "ssh://git@fixed.invalid/org/repo.git", "FIXED_TOKEN"} {
 		if !strings.Contains(shown, want) {

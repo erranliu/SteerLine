@@ -4,13 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func TestPRRequiresExactIdentityAndMergeEvidence(t *testing.T) {
@@ -44,6 +45,7 @@ func TestPRRequiresExactIdentityAndMergeEvidence(t *testing.T) {
 		})
 	}
 }
+
 func TestPRURLsAndRemotes(t *testing.T) {
 	c := Config{Kind: "gitea", BaseURL: "http://host:3000", Repository: "owner/repo"}
 	require(t, c.ValidateRemote("http://host:3000/owner/repo.git"))
@@ -58,16 +60,16 @@ func TestPRURLsAndRemotes(t *testing.T) {
 func TestWorkerPRIdentityRequiresExecutionBranch(t *testing.T) {
 	url := "https://git.example/o/r/pulls/8"
 	head := strings.Repeat("a", 40)
-	base := contracts.PRInfo{URL: url, Repository: "o/r", BaseBranch: "main", HeadRepository: "o/r", HeadBranch: "codex/task-8", HeadRevision: head, State: "open"}
+	base := executionmodel.PRInfo{URL: url, Repository: "o/r", BaseBranch: "main", HeadRepository: "o/r", HeadBranch: "codex/task-8", HeadRevision: head, State: "open"}
 	if err := ValidateWorkerPRIdentity(base, url, "o/r", "main", "codex/task-8"); err != nil {
 		t.Fatal(err)
 	}
-	for name, mutate := range map[string]func(*contracts.PRInfo){
-		"wrong repository":  func(p *contracts.PRInfo) { p.Repository = "o/other" },
-		"wrong base":        func(p *contracts.PRInfo) { p.BaseBranch = "develop" },
-		"fork head":         func(p *contracts.PRInfo) { p.HeadRepository = "other/r" },
-		"other task branch": func(p *contracts.PRInfo) { p.HeadBranch = "codex/task-9" },
-		"missing head":      func(p *contracts.PRInfo) { p.HeadRevision = "" },
+	for name, mutate := range map[string]func(*executionmodel.PRInfo){
+		"wrong repository":  func(p *executionmodel.PRInfo) { p.Repository = "o/other" },
+		"wrong base":        func(p *executionmodel.PRInfo) { p.BaseBranch = "develop" },
+		"fork head":         func(p *executionmodel.PRInfo) { p.HeadRepository = "other/r" },
+		"other task branch": func(p *executionmodel.PRInfo) { p.HeadBranch = "codex/task-9" },
+		"missing head":      func(p *executionmodel.PRInfo) { p.HeadRevision = "" },
 	} {
 		t.Run(name, func(t *testing.T) {
 			pr := base
@@ -156,15 +158,16 @@ func require(t *testing.T, err error) {
 
 type failingCommandRunner struct{ err error }
 
-func (r failingCommandRunner) Output(context.Context, contracts.Command, ...string) ([]byte, error) {
+func (r failingCommandRunner) Output(context.Context, executionbackend.Command, ...string) ([]byte, error) {
 	return nil, r.err
 }
+
 func TestCommandProviderErrorsRedactReferencedCredential(t *testing.T) {
 	const name = "STEERLINE_TEST_PUBLICATION_TOKEN"
 	const secret = "credential-value-that-must-not-escape"
 	t.Setenv(name, secret)
 	client := NewClient(Config{TokenEnv: name}, failingCommandRunner{err: errors.New("command echoed " + secret)}, time.Second)
-	_, err := client.command(context.Background(), contracts.Command{Executable: "gh"})
+	_, err := client.command(context.Background(), executionbackend.Command{Executable: "gh"})
 	if err == nil || strings.Contains(err.Error(), secret) || !strings.Contains(err.Error(), "[REDACTED]") {
 		t.Fatalf("provider command error leaked its credential: %v", err)
 	}

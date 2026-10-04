@@ -5,35 +5,36 @@ import (
 	"testing"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func projectionFixture(t *testing.T) (contracts.DomainSnapshot, Metadata) {
 	t.Helper()
 	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
-	implementationData, err := executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{CodecVersion: 1, Purpose: executionapi.ImplementationConfigPurpose, ImplementationKey: "codex.worker-profile", ProjectID: "project", ProfileID: "default", AcceptedConfigVersion: "accepted-v2"}, []byte(`{"args":["original"]}`))
+	implementationData, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{CodecVersion: 1, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: "codex.worker-profile", ProjectID: "project", ProfileID: "default", AcceptedConfigVersion: "accepted-v2"}, []byte(`{"args":["original"]}`))
 	if err != nil {
 		t.Fatal(err)
 	}
-	request, err := json.Marshal(contracts.DecisionRequest{FormatVersion: contracts.DecisionRequestFormatVersion, Question: "Continue?", AllowFreeText: true})
+	request, err := json.Marshal(executionmodel.DecisionRequest{FormatVersion: executionmodel.DecisionRequestFormatVersion, Question: "Continue?", AllowFreeText: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	answer, err := json.Marshal(contracts.DecisionAnswer{DecisionID: "decision", RunID: "run", Note: " continue ", AnsweredBy: "operator"})
+	answer, err := json.Marshal(executionmodel.DecisionAnswer{DecisionID: "decision", RunID: "run", Note: " continue ", AnsweredBy: "operator"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	snapshot := contracts.DomainSnapshot{
 		ProjectIdentity: "project",
-		Tasks:           []contracts.TaskRecord{{TaskID: "task", Title: "Task", Status: "in_progress"}},
-		WorkflowRuns: []contracts.WorkflowRunRecord{{WorkflowRunID: "run", TaskID: "task", WorkflowVersion: workerflow.Version, SelectedResult: "execution", Phase: "waiting_decision", ControlRevision: 42,
-			ExecutionProfile: &contracts.FixedExecutionProfile{Version: 5, Host: "local", ImplementationData: []executionapi.ImplementationDataEnvelope{implementationData}}}},
-		Executions: []contracts.ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run", CurrentStep: "worker", CurrentAttemptID: "attempt", Backend: string(executionapi.BackendLocal), Protocol: string(executionapi.ProtocolLocalCodexAppServer), Agent: "codex", Status: "active", DecisionID: "decision",
-			Process: &executionapi.ProcessIdentity{Kind: "codex", PID: 12}, WorkspaceIntent: &executionapi.WorkspaceIntent{Path: "/work/tree", Branch: "codex/task"}, TurnStartedAt: &at}},
-		Attempts:  []contracts.StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution", StepID: "worker", AttemptNumber: 1}},
-		Decisions: []contracts.DecisionRecord{{DecisionID: "decision", QuestionID: "decision", ProjectIdentity: "project", WorkflowRunID: "run", ExecutionID: "execution", AttemptID: "attempt", Version: 2, Status: "answer_saved", Request: request, Answer: answer}},
+		Tasks:           []taskmodel.TaskRecord{{TaskID: "task", Title: "Task", Status: "in_progress"}},
+		WorkflowRuns: []executionmodel.WorkflowRunRecord{{WorkflowRunID: "run", TaskID: "task", WorkflowVersion: executionmodel.Version, SelectedResult: "execution", Phase: "waiting_decision", ControlRevision: 42,
+			ExecutionProfile: &executionmodel.FixedExecutionProfile{Version: 5, Host: "local", ImplementationData: []executionbackend.ImplementationDataEnvelope{implementationData}}}},
+		Executions: []executionmodel.ExecutionRecord{{ExecutionID: "execution", WorkflowRunID: "run", CurrentStep: "worker", CurrentAttemptID: "attempt", Backend: string(executionbackend.BackendLocal), Protocol: string(executionbackend.ProtocolLocalCodexAppServer), Agent: "codex", Status: "active", DecisionID: "decision",
+			Process: &executionbackend.ProcessIdentity{Kind: "codex", PID: 12}, WorkspaceIntent: &executionbackend.WorkspaceIntent{Path: "/work/tree", Branch: "codex/task"}, TurnStartedAt: &at}},
+		Attempts:  []executionmodel.StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution", StepID: "worker", AttemptNumber: 1}},
+		Decisions: []executionmodel.DecisionRecord{{DecisionID: "decision", QuestionID: "decision", ProjectIdentity: "project", WorkflowRunID: "run", ExecutionID: "execution", AttemptID: "attempt", Version: 2, Status: "answer_saved", Request: request, Answer: answer}},
 	}
 	metadata := Metadata{Checkpoint: contracts.ServiceCheckpoint{SchemaVersion: contracts.WorkerFlowRuntimeSchema, Revision: 7, HeartbeatAt: at,
 		Repository: contracts.Repository{Identity: "project"}, Service: contracts.ServiceState{Capabilities: []string{"answer_decision"}},
@@ -123,9 +124,9 @@ func TestProjectionRetainsDeliveryAndReservationRules(t *testing.T) {
 }
 
 func TestExecutionProjectionKeepsRemotePathAndWhitespaceSemantics(t *testing.T) {
-	execution := contracts.ExecutionRecord{Backend: string(executionapi.BackendOrca), Protocol: string(executionapi.ProtocolOrcaSupervised), Target: executionapi.ExecutionTarget{ConnectionID: "peer", ExternalRuntime: "remote"}, WorkspaceIntent: &executionapi.WorkspaceIntent{Path: "service-local-path", Branch: "codex/task"}, Status: "idle", LastTurnOutcome: " "}
+	execution := executionmodel.ExecutionRecord{Backend: string(executionbackend.BackendOrca), Protocol: string(executionbackend.ProtocolOrcaSupervised), Target: executionbackend.ExecutionTarget{ConnectionID: "peer", ExternalRuntime: "remote"}, WorkspaceIntent: &executionbackend.WorkspaceIntent{Path: "service-local-path", Branch: "codex/task"}, Status: "idle", LastTurnOutcome: " "}
 	run := Execution(contracts.Run{}, execution)
-	if run.WorktreePath != nil || *run.WorktreeBranch != "codex/task" || executionViewStatus(execution) != " " || workflowExecutionHost(contracts.WorkflowRunRecord{ExecutionProfile: &contracts.FixedExecutionProfile{Host: "orca_supervised"}}) != "orca_supervised" {
+	if run.WorktreePath != nil || *run.WorktreeBranch != "codex/task" || executionViewStatus(execution) != " " || workflowExecutionHost(executionmodel.WorkflowRunRecord{ExecutionProfile: &executionmodel.FixedExecutionProfile{Host: "orca_supervised"}}) != "orca_supervised" {
 		t.Fatal("remote intent was shown as an actual local workspace or whitespace fallback changed")
 	}
 }

@@ -16,9 +16,11 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 // fakeDB is the isolated PR-provider state used by native workflow tests.
@@ -31,9 +33,9 @@ type fakeDB struct {
 }
 
 func TestProjectRuntimeOmitsSettledDiscardedRuns(t *testing.T) {
-	state := Runtime{Tasks: []TaskRecord{{TaskID: "14", Status: "discarded"}, {TaskID: "17", Status: "in_progress"}, {TaskID: "18", Status: "discarded"}},
-		WorkflowRuns: []WorkflowRunRecord{{TaskID: "14", WorkflowRunID: "old", Phase: "abandoned"}, {TaskID: "17", WorkflowRunID: "active", Phase: "executing"}, {TaskID: "18", WorkflowRunID: "pending-stop", Phase: "blocked"}},
-		Executions:   []ExecutionRecord{{WorkflowRunID: "active", ExecutionID: "active-execution", Status: "active"}, {WorkflowRunID: "pending-stop", ExecutionID: "stopping-execution", Status: "blocked"}},
+	state := Runtime{Tasks: []taskmodel.TaskRecord{{TaskID: "14", Status: "discarded"}, {TaskID: "17", Status: "in_progress"}, {TaskID: "18", Status: "discarded"}},
+		WorkflowRuns: []executionmodel.WorkflowRunRecord{{TaskID: "14", WorkflowRunID: "old", Phase: "abandoned"}, {TaskID: "17", WorkflowRunID: "active", Phase: "executing"}, {TaskID: "18", WorkflowRunID: "pending-stop", Phase: "blocked"}},
+		Executions:   []executionmodel.ExecutionRecord{{WorkflowRunID: "active", ExecutionID: "active-execution", Status: "active"}, {WorkflowRunID: "pending-stop", ExecutionID: "stopping-execution", Status: "blocked"}},
 		SlotOccupied: true, CurrentTask: ptr("14")}
 	require(t, projectRuntime(&state))
 	if len(state.Runs) != 2 || state.Runs[0].RunID != "active" || state.Runs[1].RunID != "pending-stop" || !state.SlotOccupied || state.CurrentTask != nil {
@@ -160,7 +162,7 @@ func newFixture(t *testing.T) *fixture {
 
 	f.c.Remote, f.c.Branch = "origin", "main"
 	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", remotePath)
-	f.c.Git = Command{Executable: executable, Args: []string{"--fake", "git-proxy", git}}
+	f.c.Git = executionbackend.Command{Executable: executable, Args: []string{"--fake", "git-proxy", git}}
 	if output, err := exec.Command("git", "-C", f.c.Repository, "remote", "set-url", "origin", f.server.URL+"/owner/repo.git").CombinedOutput(); err != nil {
 		t.Fatalf("set native fixture remote: %v: %s", err, output)
 	}
@@ -168,7 +170,7 @@ func newFixture(t *testing.T) *fixture {
 	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll, f.c.CommandTimeout, f.c.ShutdownGrace = "100ms", "100ms", "100ms", "5s", "1s"
 	f.c.PR = publication.Config{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}
 	setNeutralProfile(t, &f.c, neutralSettings{Executable: executable})
-	f.c.WorkflowProtocol = WorkerFlowVersion
+	f.c.WorkflowProtocol = executionmodel.Version
 	if err = f.c.ResolveIdentity(context.Background()); err != nil {
 		t.Fatal(err)
 	}
@@ -372,7 +374,7 @@ func fakeMain(args []string) int {
 		if state == "" {
 			state = "open"
 		}
-		info := PRInfo{URL: args[2], Repository: args[3], BaseBranch: "main", HeadRevision: db.PRHeadRevision, State: state, Merged: db.PRMerged, MergedAt: db.PRMergedAt}
+		info := executionmodel.PRInfo{URL: args[2], Repository: args[3], BaseBranch: "main", HeadRevision: db.PRHeadRevision, State: state, Merged: db.PRMerged, MergedAt: db.PRMergedAt}
 		if db.PRMergeCommit != "" {
 			info.MergeCommit = ptr(db.PRMergeCommit)
 		}
@@ -383,7 +385,7 @@ func fakeMain(args []string) int {
 		db.PRState, db.PRMerged = "closed_unmerged", false
 		db.PRMergedAt, db.PRMergeCommit = nil, ""
 		writeFake(args[1], db)
-		info := PRInfo{URL: args[2], Repository: args[3], BaseBranch: "main", HeadRevision: db.PRHeadRevision, State: "closed_unmerged"}
+		info := executionmodel.PRInfo{URL: args[2], Repository: args[3], BaseBranch: "main", HeadRevision: db.PRHeadRevision, State: "closed_unmerged"}
 		_ = json.NewEncoder(os.Stdout).Encode(info)
 		return 0
 	case "sleep":
@@ -448,10 +450,10 @@ func seedFakeCapabilities(t *testing.T, c Config) {
 			continue
 		}
 		if name == "resource_settlement" {
-			report.Capabilities[i].Status = executionapi.CapabilityUnsupported
+			report.Capabilities[i].Status = executionbackend.CapabilityUnsupported
 			continue
 		}
-		report.Capabilities[i].Status = executionapi.CapabilityVerified
+		report.Capabilities[i].Status = executionbackend.CapabilityVerified
 		report.Capabilities[i].Evidence = evidence
 	}
 	if err := (executionRecords{root: c.RunDir, persistence: sqlite.Factory{}}).saveCapabilityReport(report); err != nil {

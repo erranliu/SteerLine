@@ -1,6 +1,9 @@
 package task
 
-// DeliveryGate contains the selected worker facts read from center authority.
+import (
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+)
+
 type DeliveryGate struct {
 	WorkflowVersion     string
 	WorkflowTaskID      string
@@ -15,7 +18,7 @@ type DeliveryGate struct {
 }
 
 // DeliveryPR checks the selected worker identity before external merge proof is read.
-func DeliveryPR(record TaskRecord, contract TaskContract, gate DeliveryGate, workflowVersion string) (string, error) {
+func DeliveryPR(record taskmodel.TaskRecord, contract taskmodel.TaskContract, gate DeliveryGate, workflowVersion string) (string, error) {
 	if gate.WorkflowVersion != workflowVersion {
 		return "", newError("unsupported_schema", "selected workflow uses an unsupported protocol")
 	}
@@ -28,17 +31,4 @@ func DeliveryPR(record TaskRecord, contract TaskContract, gate DeliveryGate, wor
 		return "", newError("task_not_ready", "selected worker flow has no bound session, execution branch or PR")
 	}
 	return gate.PRURL, nil
-}
-
-// DependencyClaimError maps an unmet predecessor to its stable command error.
-func DependencyClaimError(blockers []TaskDependencyStatus) error {
-	for _, blocker := range blockers {
-		switch blocker.Blocker {
-		case "discarded_predecessor":
-			return newError("discarded_predecessor", "a discarded predecessor blocks this task")
-		case "inconsistent_delivery":
-			return newError("inconsistent_delivery", "a predecessor's state conflicts with its delivery record")
-		}
-	}
-	return newError("task_not_ready", "one or more predecessors lack verified delivery")
 }

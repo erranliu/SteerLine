@@ -3,16 +3,17 @@ package steerlineapp
 import (
 	"context"
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
@@ -37,10 +38,10 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 	require(t, err)
 	require(t, os.WriteFile(GlobalExecutionConfigPath(), global, 0600))
 	provider := hostPublicationProviderFixture()
-	provider.Close = Command{Executable: "gh", Args: []string{"pr", "close", "{pr_url}", "--repo", "{repository}"}}
+	provider.Close = executionbackend.Command{Executable: "gh", Args: []string{"pr", "close", "{pr_url}", "--repo", "{repository}"}}
 	project, err := json.Marshal(map[string]any{
 		"repository": repository, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion,
-		"git": Command{Executable: "git"}, "execution_policy": workspacePolicyFixture(),
+		"git": executionbackend.Command{Executable: "git"}, "execution_policy": workspacePolicyFixture(),
 		"publication_policy": map[string]string{"publisher": "worker"}, "pr": provider,
 	})
 	require(t, err)
@@ -71,18 +72,18 @@ func mixedPublicationProfiles() []ExecutionProfile {
 	orcaCodex, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex.exe", WindowsSandbox: "unelevated"})
 	orcaOptions, _ := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{Executable: "orca.exe", Shell: "powershell.exe", WaitTimeout: "15m"})
 	return []ExecutionProfile{
-		{ID: "local", Name: "Local", Host: "local", Agent: "codex", ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: localCodex}}},
-		{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaCodex}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaOptions}}},
+		{ID: "local", Name: "Local", Host: "local", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: localCodex}}},
+		{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaCodex}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaOptions}}},
 	}
 }
 
 func TestSimplifiedWorkerOnlyPublication(t *testing.T) {
 	for _, publisher := range []string{"host_service", "execution_profile", ""} {
-		if (executionapi.PublicationPolicy{Publisher: publisher}).Validate() == nil {
+		if (executionbackend.PublicationPolicy{Publisher: publisher}).Validate() == nil {
 			t.Fatalf("retired publisher accepted: %q", publisher)
 		}
 	}
-	if err := (executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}).Validate(); err != nil {
+	if err := (executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}).Validate(); err != nil {
 		t.Fatal(err)
 	}
 	var profile steerline.ExecutionProfile

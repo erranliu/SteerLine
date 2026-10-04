@@ -9,12 +9,13 @@ import (
 	"strings"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	taskdomain "github.com/erranliu/SteerLine/internal/steerline/task"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
-
-// TaskClaimReceipt records reservation, not worker start. The existing
 
 // start_task applied receipt remains gated on a persisted worker identity.
 type TaskClaimReceipt = taskdomain.TaskClaimReceipt
@@ -46,7 +47,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if sqlite == nil || c.Project == "" || config.Identity() != c.Project {
 		return TaskClaimReceipt{}, nativeErr("authority_mismatch", "claim requires the configured native project")
 	}
-	if config.WorkflowProtocol != WorkerFlowVersion {
+	if config.WorkflowProtocol != executionmodel.Version {
 		return TaskClaimReceipt{}, nativeErr("unsupported_schema", "only worker-flow-v1 may claim a task")
 	}
 	if err := validateWorkflowConfig(&config, nil); err != nil {
@@ -59,13 +60,13 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err := config.prepareWorktreeRoot(); err != nil {
 		return TaskClaimReceipt{}, err
 	}
-	if err := ValidateNativeTaskID(options.TaskID); err != nil {
+	if err := taskmodel.ValidateID(options.TaskID); err != nil {
 		return TaskClaimReceipt{}, err
 	}
-	if !controlIDPattern.MatchString(options.RequestID) || options.ExpectedTaskVersion == 0 || options.ExpectedAuthorityVersion == 0 || options.WorkflowRunID != "" && !executionapi.StableExecutionID(options.WorkflowRunID) {
+	if !controlIDPattern.MatchString(options.RequestID) || options.ExpectedTaskVersion == 0 || options.ExpectedAuthorityVersion == 0 || options.WorkflowRunID != "" && !executionbackend.StableExecutionID(options.WorkflowRunID) {
 		return TaskClaimReceipt{}, nativeErr("invalid_batch", "claim requires request ID and current task/project versions")
 	}
-	if options.ServiceInstanceID != "" && !executionapi.StableExecutionID(options.ServiceInstanceID) {
+	if options.ServiceInstanceID != "" && !executionbackend.StableExecutionID(options.ServiceInstanceID) {
 		return TaskClaimReceipt{}, nativeErr("invalid_batch", "claim service instance identity is invalid")
 	}
 	if options.ExecutionProfile != nil && !options.ExecutionProfile.MatchesConfig(config) {
@@ -98,7 +99,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		requestBody.ProfileDigest = options.ExecutionProfile.Digest()
 	}
 	requestRaw, _ := json.Marshal(requestBody)
-	requestPayload, err := CanonicalJSON(requestRaw)
+	requestPayload, err := taskmodel.CanonicalJSON(requestRaw)
 	if err != nil {
 		return TaskClaimReceipt{}, err
 	}
@@ -166,7 +167,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		eligibilityTask.Status = "open"
 	}
 	if ready, blockers := taskDependencyState(eligibilityTask, graph); !ready {
-		return TaskClaimReceipt{}, nativeDependencyClaimError(blockers)
+		return TaskClaimReceipt{}, taskmodel.DependencyClaimError(blockers)
 	}
 	allowed := map[string]bool{}
 	types := config.ExecutableTypes
@@ -242,7 +243,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if workflowRunID == "" {
 		workflowRunID = newID()
 	}
-	wfr := WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: WorkerFlowVersion, ConfigDigest: config.acceptedConfigVersion(), Phase: "queued", Repository: config.Repository, Branch: config.Branch, SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
+	wfr := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, ConfigDigest: config.acceptedConfigVersion(), Phase: "queued", Repository: config.Repository, Branch: config.Branch, SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
 	if options.ExecutionProfile != nil {
 		fixed := options.ExecutionProfile.Freeze(config.identity)
 		wfr.ExecutionProfile = &fixed
@@ -251,22 +252,22 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		fixed := config.projectExecutionProfile().Freeze(config.identity)
 		wfr.ExecutionProfile = &fixed
 	}
-	execution := ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, CurrentAttemptID: attemptID, Generation: newID(), ConfigurationDigest: wfr.ExecutionProfile.Digest, OwnerServiceInstanceID: options.ServiceInstanceID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}
+	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, CurrentAttemptID: attemptID, Generation: newID(), ConfigurationDigest: wfr.ExecutionProfile.Digest, OwnerServiceInstanceID: options.ServiceInstanceID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: executionmodel.WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}
 	if claimPreparation.RequiresReadiness {
 		timeout := claimPreparation.WaitTimeout
 		if timeout <= 0 {
 			timeout = 2 * time.Minute
 		}
-		execution.Environment = &WorkerEnvironment{ProfileDigest: wfr.ExecutionProfile.Digest, Preparation: &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: created, Deadline: created.Add(timeout)}}
+		execution.Environment = &executionmodel.WorkerEnvironment{ProfileDigest: wfr.ExecutionProfile.Digest, Preparation: &executionmodel.WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: created, Deadline: created.Add(timeout)}}
 	}
 	execution.WorkspaceIntent, err = planWorkspace(config, task.TaskID, workflowRunID, base)
 	if err != nil {
 		return TaskClaimReceipt{}, err
 	}
-	attempt := StepAttemptRecord{ProjectIdentity: c.Project, AttemptID: attemptID, ExecutionID: executionID, StepID: "worker", AttemptNumber: 1, Status: "planned", InputRevision: base, ContractDigest: contract.Digest, ExternalBinding: target, CreatedAt: created, UpdatedAt: created}
+	attempt := executionmodel.StepAttemptRecord{ProjectIdentity: c.Project, AttemptID: attemptID, ExecutionID: executionID, StepID: "worker", AttemptNumber: 1, Status: "planned", InputRevision: base, ContractDigest: contract.Digest, ExternalBinding: target, CreatedAt: created, UpdatedAt: created}
 	nextTask := task
 	if !options.startCandidate {
-		nextTask, err = taskdomain.Claim(task, claimant, created)
+		nextTask, err = taskmodel.Claim(task, claimant, created)
 		if err != nil {
 			return TaskClaimReceipt{}, err
 		}
@@ -282,7 +283,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 				return e
 			}
 			receipt = r
-			return taskBatchReplay{Receipt: TaskBatchReceipt{RequestID: options.RequestID, Status: "accepted"}}
+			return taskBatchReplay{Receipt: taskmodel.TaskBatchReceipt{RequestID: options.RequestID, Status: "accepted"}}
 		}
 		if e := verifyClaimConfigFiles(config); e != nil {
 			return e
@@ -338,7 +339,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		}
 		ready, blockers := taskDependencyState(currentEligibility, current)
 		if !ready {
-			return nativeDependencyClaimError(blockers)
+			return taskmodel.DependencyClaimError(blockers)
 		}
 		for pred, merge := range predecessorMerges {
 			if current.Deliveries[pred].MergeCommit != merge {
@@ -352,7 +353,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		if occupied > 0 && !options.Explicit {
 			return nativeErr("slot_busy", "native execution slot is occupied or uncertain")
 		}
-		command := CommandRecord{ProjectIdentity: c.Project, CommandID: options.RequestID, Kind: kind, TargetID: task.TaskID, ExpectedVersion: options.ExpectedTaskVersion, IdempotencyKey: options.RequestID, RequestedBy: options.RequestedBy, Payload: requestPayload, Status: "in_flight", CreatedAt: created}
+		command := storageports.CommandRecord{ProjectIdentity: c.Project, CommandID: options.RequestID, Kind: kind, TargetID: task.TaskID, ExpectedVersion: options.ExpectedTaskVersion, IdempotencyKey: options.RequestID, RequestedBy: options.RequestedBy, Payload: requestPayload, Status: "in_flight", CreatedAt: created}
 		var made bool
 		command, made, e = tx.EnqueueCommand(command)
 		if e != nil {
@@ -361,7 +362,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		if !made {
 			return nativeErr("idempotency_conflict", "claim request ID is already in use")
 		}
-		operation := OperationRecord{ProjectIdentity: c.Project, OperationID: options.RequestID, IdempotencyKey: options.RequestID, Kind: kind, Status: "pending", PayloadDigest: digestCanonical(operationRequest), Request: operationRequest, CreatedAt: created, UpdatedAt: created}
+		operation := executionmodel.OperationRecord{ProjectIdentity: c.Project, OperationID: options.RequestID, IdempotencyKey: options.RequestID, Kind: kind, Status: "pending", PayloadDigest: digestCanonical(operationRequest), Request: operationRequest, CreatedAt: created, UpdatedAt: created}
 		if _, made, e = tx.PutOperation(operation); e != nil {
 			return e
 		} else if !made {
@@ -392,7 +393,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		if options.startCandidate {
 			eventType = "candidate.start.reserved"
 		}
-		_, e = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: task.TaskID, WorkflowRunID: workflowRunID, ExecutionID: executionID, AttemptID: attemptID, ExternalSource: "native-task-command", ExternalID: options.RequestID, Type: eventType, ReceivedAt: created, Payload: body})
+		_, e = tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, TaskID: task.TaskID, WorkflowRunID: workflowRunID, ExecutionID: executionID, AttemptID: attemptID, ExternalSource: "native-task-command", ExternalID: options.RequestID, Type: eventType, ReceivedAt: created, Payload: body})
 		return e
 	})
 	var replay taskBatchReplay
@@ -402,15 +403,11 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	return receipt, err
 }
 
-func nativeDependencyClaimError(blockers []TaskDependencyStatus) error {
-	return taskdomain.DependencyClaimError(blockers)
-}
-
-func replayTaskClaim(old CommandRecord, payload []byte, taskID string, requestedBy string) (TaskClaimReceipt, error) {
+func replayTaskClaim(old storageports.CommandRecord, payload []byte, taskID string, requestedBy string) (TaskClaimReceipt, error) {
 	return replayTaskStart(old, payload, taskID, requestedBy, "claim_task")
 }
 
-func replayTaskStart(old CommandRecord, payload []byte, taskID string, requestedBy, kind string) (TaskClaimReceipt, error) {
+func replayTaskStart(old storageports.CommandRecord, payload []byte, taskID string, requestedBy, kind string) (TaskClaimReceipt, error) {
 	if old.Kind != kind || old.TargetID != taskID || old.RequestedBy != requestedBy || !bytes.Equal(old.Payload, payload) {
 		return TaskClaimReceipt{}, nativeErr("idempotency_conflict", "request ID was reused with different claim content")
 	}
@@ -436,7 +433,7 @@ func acquireNativeBase(ctx context.Context, c Config) (string, error) {
 		return "", err
 	}
 	base := strings.TrimSpace(string(output))
-	if !validCommit(base) {
+	if !taskmodel.ValidCommit(base) {
 		return "", errors.New("remote branch did not resolve to a full commit")
 	}
 	return base, nil

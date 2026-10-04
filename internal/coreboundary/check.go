@@ -19,6 +19,7 @@ import (
 )
 
 const module = "github.com/erranliu/SteerLine"
+
 const core = module + "/internal/steerline"
 
 var platformText = regexp.MustCompile(`(?i)codex|orca`)
@@ -26,11 +27,41 @@ var platformText = regexp.MustCompile(`(?i)codex|orca`)
 // Report contains deterministic source diagnostics, including the full path
 // through a helper when a forbidden dependency is transitive.
 type Report struct {
+	PureFiles      map[string]int `json:"pure_files"`
 	ConsoleFiles   int            `json:"console_files"`
 	CoreFiles      int            `json:"core_files"`
 	SourcePackages int            `json:"source_packages"`
 	Dependencies   map[string]int `json:"production_dependencies"`
 	Violations     []string       `json:"violations"`
+}
+
+// PureImportsAllowed encodes the ownership matrix for definitions already
+// migrated by #73. Transitional aggregations are checked by the existing guards.
+func PureImportsAllowed(owner, dependency string) bool {
+	if dependency == "database/sql" {
+		return false
+	}
+	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
+		return true
+	}
+	switch owner {
+	case module + "/internal/execution/model":
+		return dependency == module+"/internal/execution/backend"
+	case module + "/internal/storage/ports":
+		return dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend" || dependency == module+"/internal/product/api"
+	}
+	return false
+}
+
+var purePackages = []string{module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/product/api", module + "/internal/storage/ports"}
+
+func purePackage(pkg string) bool {
+	for _, owner := range purePackages {
+		if pkg == owner {
+			return true
+		}
+	}
+	return false
 }
 
 func implementation(pkg string) bool {
@@ -58,10 +89,9 @@ func consoleForbidden(pkg string) bool {
 	return false
 }
 
-// ScanSource parses every production Go file regardless of GOOS or build tags.
-// Root tests are included as dependency roots as well as in the text scan.
+// ScanSource parses production and test Go files regardless of GOOS or build tags.
 func ScanSource(root string) (Report, error) {
-	report := Report{Dependencies: map[string]int{}}
+	report := Report{Dependencies: map[string]int{}, PureFiles: map[string]int{}}
 	graph := map[string][]string{}
 	productionGraph := map[string][]string{}
 	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
@@ -97,8 +127,8 @@ func ScanSource(root string) (Report, error) {
 		if pkg == core+"/console" {
 			report.ConsoleFiles++
 		}
-		if strings.HasSuffix(entry.Name(), "_test.go") && pkg != core && pkg != core+"/console" {
-			return nil
+		if purePackage(pkg) {
+			report.PureFiles[pkg]++
 		}
 		parsed, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
 		if err != nil {
@@ -113,6 +143,9 @@ func ScanSource(root string) (Report, error) {
 				return err
 			}
 			graph[pkg] = append(graph[pkg], value)
+			if purePackage(pkg) && !PureImportsAllowed(pkg, value) {
+				report.Violations = append(report.Violations, "pure ownership dependency: "+filepath.ToSlash(path)+" -> "+value)
+			}
 			if !strings.HasSuffix(entry.Name(), "_test.go") {
 				productionGraph[pkg] = append(productionGraph[pkg], value)
 			}
@@ -146,7 +179,7 @@ func ScanSource(root string) (Report, error) {
 			}
 		})
 	}
-	for _, seed := range []string{core, core + "/execution", core + "/contracts"} {
+	for _, seed := range append([]string{core, core + "/contracts"}, purePackages...) {
 		visitGraph(graph, seed, func(path []string) {
 			if forbidden(path[len(path)-1]) {
 				report.Violations = append(report.Violations, "forbidden dependency: "+strings.Join(path, " -> "))
@@ -201,7 +234,7 @@ func Check(ctx context.Context, root string) (Report, error) {
 	for _, target := range []string{"windows", "linux"} {
 		for _, consoleGraph := range []bool{false, true} {
 
-			cmd := exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/steerline", "./internal/steerline/execution", "./internal/steerline/contracts")
+			cmd := exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/steerline", "./internal/steerline/contracts", "./internal/task/model", "./internal/execution/model", "./internal/execution/backend", "./internal/product/api", "./internal/storage/ports")
 			if consoleGraph {
 				cmd = exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/steerline/console")
 			}
@@ -218,9 +251,14 @@ func Check(ctx context.Context, root string) (Report, error) {
 				return report, fmt.Errorf("%s production dependencies: %w", target, err)
 			}
 			decoder := json.NewDecoder(strings.NewReader(string(data)))
+			standards := map[string]bool{}
+			closures := map[string][]string{}
 			for decoder.More() {
 				var pkg struct {
 					ImportPath string
+					Standard   bool
+					Imports    []string
+					Deps       []string
 					Error      *struct{ Err string }
 					DepsErrors []struct{ Err string }
 				}
@@ -235,12 +273,28 @@ func Check(ctx context.Context, root string) (Report, error) {
 					graphName += "-console"
 				}
 				report.Dependencies[graphName]++
+				standards[pkg.ImportPath] = pkg.Standard
+				if purePackage(pkg.ImportPath) {
+					for _, dep := range pkg.Imports {
+						if !PureImportsAllowed(pkg.ImportPath, dep) {
+							report.Violations = append(report.Violations, graphName+" pure ownership dependency: "+pkg.ImportPath+" -> "+dep)
+						}
+					}
+					closures[pkg.ImportPath] = pkg.Deps
+				}
 				bad := forbidden(pkg.ImportPath) || pkg.ImportPath == core+"/sqlite" || pkg.ImportPath == "database/sql" || strings.HasPrefix(pkg.ImportPath, "modernc.org/sqlite")
 				if consoleGraph {
 					bad = consoleForbidden(pkg.ImportPath)
 				}
 				if bad {
 					report.Violations = append(report.Violations, graphName+" production dependency: "+pkg.ImportPath)
+				}
+			}
+			for owner, deps := range closures {
+				for _, dep := range deps {
+					if !standards[dep] && !purePackage(dep) || dep == "database/sql" {
+						report.Violations = append(report.Violations, target+" pure transitive dependency: "+owner+" -> "+dep)
+					}
 				}
 			}
 		}

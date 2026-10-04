@@ -7,11 +7,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-func (t *sqliteTx) PutDecision(v DecisionRecord) error {
+func (t *sqliteTx) PutDecision(v executionmodel.DecisionRecord) error {
 	if v.ProjectIdentity == "" || v.DecisionID == "" || v.QuestionID == "" || v.Status == "" || v.Scope == "" {
 		return errors.New("decision identity, scope, question and status are required")
 	}
@@ -28,7 +28,8 @@ func (t *sqliteTx) PutDecision(v DecisionRecord) error {
 	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO decisions(project_identity,decision_id,scope,workflow_run_id,execution_id,attempt_id,question_id,status,version,payload) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_identity,decision_id) DO UPDATE SET scope=excluded.scope,workflow_run_id=excluded.workflow_run_id,execution_id=excluded.execution_id,attempt_id=excluded.attempt_id,question_id=excluded.question_id,status=excluded.status,version=excluded.version,payload=excluded.payload`, v.ProjectIdentity, v.DecisionID, v.Scope, nullIfEmpty(v.WorkflowRunID), nullIfEmpty(v.ExecutionID), nullIfEmpty(v.AttemptID), v.QuestionID, v.Status, v.Version, b)
 	return err
 }
-func (t *sqliteTx) AppendEvent(v DomainEvent) (int64, error) {
+
+func (t *sqliteTx) AppendEvent(v storageports.DomainEvent) (int64, error) {
 	if v.ProjectIdentity == "" || v.Type == "" {
 		return 0, errors.New("event project and type are required")
 	}
@@ -52,7 +53,8 @@ func (t *sqliteTx) AppendEvent(v DomainEvent) (int64, error) {
 	id, err := res.LastInsertId()
 	return id, err
 }
-func (t *sqliteTx) PutOperation(v OperationRecord) (OperationRecord, bool, error) {
+
+func (t *sqliteTx) PutOperation(v executionmodel.OperationRecord) (executionmodel.OperationRecord, bool, error) {
 	if v.ProjectIdentity == "" || v.OperationID == "" || v.IdempotencyKey == "" || v.Kind == "" || v.PayloadDigest == "" {
 		return v, false, errors.New("operation identity, idempotency key, kind and digest are required")
 	}
@@ -65,7 +67,7 @@ func (t *sqliteTx) PutOperation(v OperationRecord) (OperationRecord, bool, error
 		if oldDigest != v.PayloadDigest {
 			return v, false, errors.New("idempotency key reused with different operation content")
 		}
-		var existing OperationRecord
+		var existing executionmodel.OperationRecord
 		if err = json.Unmarshal([]byte(payload), &existing); err != nil {
 			return v, false, err
 		}
@@ -94,7 +96,8 @@ func (t *sqliteTx) PutOperation(v OperationRecord) (OperationRecord, bool, error
 	_, err = t.tx.ExecContext(t.ctx, `INSERT INTO operations(project_identity,operation_id,idempotency_key,kind,status,payload_digest,platform_request_id,payload) VALUES(?,?,?,?,?,?,?,?)`, v.ProjectIdentity, v.OperationID, v.IdempotencyKey, v.Kind, v.Status, v.PayloadDigest, v.PlatformRequestID, b)
 	return v, err == nil, err
 }
-func (t *sqliteTx) UpdateOperation(v OperationRecord) error {
+
+func (t *sqliteTx) UpdateOperation(v executionmodel.OperationRecord) error {
 	if v.ProjectIdentity == "" || v.OperationID == "" || v.IdempotencyKey == "" || v.PayloadDigest == "" || v.Status == "" {
 		return errors.New("operation identity, digest and status are required")
 	}
@@ -105,7 +108,7 @@ func (t *sqliteTx) UpdateOperation(v OperationRecord) error {
 	if digest != v.PayloadDigest {
 		return errors.New("operation payload digest cannot change")
 	}
-	var original OperationRecord
+	var original executionmodel.OperationRecord
 	if err := json.Unmarshal([]byte(originalPayload), &original); err != nil {
 		return err
 	}
@@ -126,11 +129,12 @@ func (t *sqliteTx) UpdateOperation(v OperationRecord) error {
 	}
 	return err
 }
-func (t *sqliteTx) EnqueueCommand(v CommandRecord) (CommandRecord, bool, error) {
+
+func (t *sqliteTx) EnqueueCommand(v storageports.CommandRecord) (storageports.CommandRecord, bool, error) {
 	if v.ProjectIdentity == "" || v.CommandID == "" || v.Kind == "" || v.TargetID == "" || v.IdempotencyKey == "" || v.RequestedBy == "" {
 		return v, false, errors.New("command identity, kind, target, idempotency key and requester are required")
 	}
-	var old CommandRecord
+	var old storageports.CommandRecord
 	var payload []byte
 	var created, updated string
 	err := t.tx.QueryRowContext(t.ctx, `SELECT command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=? AND idempotency_key=?`, v.ProjectIdentity, v.IdempotencyKey).Scan(&old.CommandID, &old.Kind, &old.TargetID, &old.ExpectedVersion, &old.IdempotencyKey, &old.RequestedBy, &payload, &old.Status, &old.Result, &created, &updated)
@@ -139,8 +143,8 @@ func (t *sqliteTx) EnqueueCommand(v CommandRecord) (CommandRecord, bool, error) 
 			return v, false, errors.New("idempotency key reused with different command content")
 		}
 		if old.Kind == "answer_decision" {
-			var oldAnswer, newAnswer DecisionAnswer
-			if decode(payload, &oldAnswer) != nil || decode(v.Payload, &newAnswer) != nil || !contracts.SameDecisionAnswer(oldAnswer, newAnswer) {
+			var oldAnswer, newAnswer executionmodel.DecisionAnswer
+			if decode(payload, &oldAnswer) != nil || decode(v.Payload, &newAnswer) != nil || !executionmodel.SameDecisionAnswer(oldAnswer, newAnswer) {
 				return v, false, errors.New("idempotency key reused with a different decision answer")
 			}
 		} else if old.ExpectedVersion != v.ExpectedVersion || old.RequestedBy != v.RequestedBy || string(payload) != string(v.Payload) {
@@ -162,9 +166,9 @@ func (t *sqliteTx) EnqueueCommand(v CommandRecord) (CommandRecord, bool, error) 
 		if err := t.tx.QueryRowContext(t.ctx, `SELECT version,status,payload FROM decisions WHERE project_identity=? AND decision_id=?`, v.ProjectIdentity, v.TargetID).Scan(&version, &status, &recordBytes); err != nil {
 			return v, false, err
 		}
-		var record DecisionRecord
-		var answer DecisionAnswer
-		var request DecisionRequest
+		var record executionmodel.DecisionRecord
+		var answer executionmodel.DecisionAnswer
+		var request executionmodel.DecisionRequest
 		if err := decode(recordBytes, &record); err != nil {
 			return v, false, err
 		}
@@ -177,24 +181,24 @@ func (t *sqliteTx) EnqueueCommand(v CommandRecord) (CommandRecord, bool, error) 
 		if answer.DecisionID != v.TargetID || answer.RunID != record.WorkflowRunID || answer.AnsweredBy != v.RequestedBy {
 			return v, false, errors.New("answer target or requester mismatch")
 		}
-		if err := contracts.ValidateDecisionAnswer(&request, &answer); err != nil {
+		if err := executionmodel.ValidateDecisionAnswer(&request, &answer); err != nil {
 			return v, false, err
 		}
 		var acceptedCommandID string
 		acceptedErr := t.tx.QueryRowContext(t.ctx, `SELECT command_id FROM decision_answers WHERE project_identity=? AND decision_id=? ORDER BY decision_version LIMIT 1`, v.ProjectIdentity, v.TargetID).Scan(&acceptedCommandID)
 		if acceptedErr == nil {
-			var first CommandRecord
+			var first storageports.CommandRecord
 			var firstPayload, firstResult []byte
 			var firstCreated, firstUpdated string
 			if err := t.tx.QueryRowContext(t.ctx, `SELECT command_id,kind,target_id,expected_version,idempotency_key,requested_by,payload,status,result,created_at,updated_at FROM commands WHERE project_identity=? AND command_id=?`, v.ProjectIdentity, acceptedCommandID).Scan(&first.CommandID, &first.Kind, &first.TargetID, &first.ExpectedVersion, &first.IdempotencyKey, &first.RequestedBy, &firstPayload, &first.Status, &firstResult, &firstCreated, &firstUpdated); err != nil {
 				return v, false, err
 			}
-			var firstAnswer DecisionAnswer
+			var firstAnswer executionmodel.DecisionAnswer
 			if err := decode(firstPayload, &firstAnswer); err != nil {
 				return v, false, err
 			}
-			if !contracts.SameDecisionAnswer(firstAnswer, answer) {
-				return v, false, persistence.ErrAnswerConflict
+			if !executionmodel.SameDecisionAnswer(firstAnswer, answer) {
+				return v, false, storageports.ErrAnswerConflict
 			}
 			first.ProjectIdentity, first.Payload, first.Result = v.ProjectIdentity, firstPayload, firstResult
 			first.CreatedAt, _ = time.Parse(time.RFC3339Nano, firstCreated)
@@ -219,8 +223,8 @@ func (t *sqliteTx) EnqueueCommand(v CommandRecord) (CommandRecord, bool, error) 
 	return v, err == nil, err
 }
 
-func (t *sqliteTx) AcceptDecisionAnswer(command CommandRecord, answer DecisionAnswer) (DecisionRecord, bool, error) {
-	var record DecisionRecord
+func (t *sqliteTx) AcceptDecisionAnswer(command storageports.CommandRecord, answer executionmodel.DecisionAnswer) (executionmodel.DecisionRecord, bool, error) {
+	var record executionmodel.DecisionRecord
 	var version uint64
 	var status string
 	var recordBytes []byte
@@ -240,12 +244,12 @@ func (t *sqliteTx) AcceptDecisionAnswer(command CommandRecord, answer DecisionAn
 		if status == "pending" {
 			return record, false, errors.New("unsupported prior answer reservation exists while this decision remains pending; preserve the state without importing it")
 		}
-		var previous DecisionAnswer
+		var previous executionmodel.DecisionAnswer
 		if err = decode(previousPayload, &previous); err != nil {
 			return record, false, err
 		}
-		if !contracts.SameDecisionAnswer(previous, answer) {
-			return record, false, persistence.ErrAnswerConflict
+		if !executionmodel.SameDecisionAnswer(previous, answer) {
+			return record, false, storageports.ErrAnswerConflict
 		}
 		result := mustJSON(map[string]any{"decision_id": command.TargetID, "status": record.Status, "version": record.Version, "original_command_id": previousCommandID, "idempotent": true})
 		command.Status, command.Result = "accepted", result
@@ -285,8 +289,8 @@ func (t *sqliteTx) AcceptDecisionAnswer(command CommandRecord, answer DecisionAn
 		}
 		return record, false, errors.New("stale_revision: decision workflow or execution no longer exists")
 	}
-	var execution ExecutionRecord
-	var workflow WorkflowRunRecord
+	var execution executionmodel.ExecutionRecord
+	var workflow executionmodel.WorkflowRunRecord
 	if err := decode(workflowBytes, &workflow); err != nil {
 		return record, false, err
 	}
@@ -306,11 +310,11 @@ func (t *sqliteTx) AcceptDecisionAnswer(command CommandRecord, answer DecisionAn
 	if err != nil || currentAttempt != record.AttemptID {
 		return record, false, errors.New("stale_revision: decision attempt changed")
 	}
-	var request DecisionRequest
+	var request executionmodel.DecisionRequest
 	if err = decode(record.Request, &request); err != nil {
 		return record, false, err
 	}
-	if err = contracts.ValidateDecisionAnswer(&request, &answer); err != nil {
+	if err = executionmodel.ValidateDecisionAnswer(&request, &answer); err != nil {
 		return record, false, err
 	}
 	answer.AnsweredAt = now()
@@ -335,7 +339,8 @@ func (t *sqliteTx) AcceptDecisionAnswer(command CommandRecord, answer DecisionAn
 	}
 	return record, false, nil
 }
-func (t *sqliteTx) UpdateCommand(v CommandRecord) error {
+
+func (t *sqliteTx) UpdateCommand(v storageports.CommandRecord) error {
 	if v.Status == "" {
 		return errors.New("command status is required")
 	}
@@ -350,6 +355,7 @@ func (t *sqliteTx) UpdateCommand(v CommandRecord) error {
 	}
 	return err
 }
+
 func (t *sqliteTx) PutProjection(project string, revision uint64, payload []byte) error {
 	if project == "" || len(payload) == 0 {
 		return errors.New("projection identity and payload are required")

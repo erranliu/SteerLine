@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func TestConversationMapperKeepsTurnAndPhaseEvidenceExplicit(t *testing.T) {
@@ -135,8 +135,8 @@ func TestHistoryTerminalOutcomeFixturesKeepFailureAndCancellationDistinct(t *tes
 		}
 		return fixture.Thread
 	}
-	base := contracts.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: executionapi.BackendLocal,
-		Protocol: executionapi.ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native"}
+	base := contracts.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: executionbackend.BackendLocal,
+		Protocol: executionbackend.ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native"}
 	cancelled := read("pr-04b-native-cancelled-2026-09-25.json")
 	if len(cancelled.Turns) != 1 || cancelled.Turns[0].CompletedAt == nil {
 		t.Fatal("cancelled fixture lacks native completion evidence")

@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-
-	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
+	executionusecase "github.com/erranliu/SteerLine/internal/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *Run) error {
+func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskRecord, run *Run) error {
 	if s.candidateBusinessClosed(run) {
 		return nil
 	}
@@ -17,7 +18,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	if err != nil {
 		return err
 	}
-	if fixed.workflow.WorkflowVersion != WorkerFlowVersion || fixed.attempt.StepID != "worker" || run.WorkspaceIntent == nil {
+	if fixed.workflow.WorkflowVersion != executionmodel.Version || fixed.attempt.StepID != "worker" || run.WorkspaceIntent == nil {
 		return nativeErr("inconsistent_delivery", "worker preparation has no fixed claim and workspace intent")
 	}
 	if fixed.execution.RecoveryRequired {
@@ -51,23 +52,23 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task TaskRecord, run *R
 	return s.prepareWorkerWorkspace(ctx, task, run)
 }
 
-func validateLifecycleStartCapability(ref executionapi.ExecutionRef, report executionapi.CapabilityReport) error {
+func validateLifecycleStartCapability(ref executionbackend.ExecutionRef, report executionbackend.CapabilityReport) error {
 	if report.Version <= 0 || report.Backend != ref.Backend || report.Protocol != ref.Protocol || report.Target != ref.Target || report.Agent != ref.Agent {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "lifecycle preflight report differs from the fixed execution target"}
+		return &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "lifecycle preflight report differs from the fixed execution target"}
 	}
 	for _, capability := range report.Capabilities {
-		if capability.Name == "start" && capability.Status == executionapi.CapabilityVerified {
+		if capability.Name == "start" && capability.Status == executionbackend.CapabilityVerified {
 			return nil
 		}
 	}
-	return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "lifecycle preflight did not verify start capability"}
+	return &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "lifecycle preflight did not verify start capability"}
 }
 
 type workerWorkspacePreparationInput struct {
-	WorkflowRunID string                       `json:"workflow_run_id"`
-	ExecutionID   string                       `json:"execution_id"`
-	RemoteName    string                       `json:"remote_name,omitempty"`
-	Workspace     executionapi.WorkspaceIntent `json:"workspace"`
+	WorkflowRunID string                           `json:"workflow_run_id"`
+	ExecutionID   string                           `json:"execution_id"`
+	RemoteName    string                           `json:"remote_name,omitempty"`
+	Workspace     executionbackend.WorkspaceIntent `json:"workspace"`
 }
 
 func workerWorkspaceRequest(run *Run) (workerWorkspacePreparationInput, error) {
@@ -76,7 +77,8 @@ func workerWorkspaceRequest(run *Run) (workerWorkspacePreparationInput, error) {
 	}
 	return workerWorkspacePreparationInput{WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, Workspace: *run.WorkspaceIntent}, nil
 }
-func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, run *Run) error {
+
+func (s *Service) prepareWorkerWorkspace(ctx context.Context, task taskmodel.TaskRecord, run *Run) error {
 	input, err := workerWorkspaceRequest(run)
 	if err != nil {
 		return err
@@ -93,7 +95,7 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, r
 	if err != nil {
 		return err
 	}
-	if !pending || candidate.Action != executionapi.LifecyclePrepareWorkspace {
+	if !pending || candidate.Action != executionbackend.LifecyclePrepareWorkspace {
 		candidate, err = lifecycle.Next(ctx, snapshot.Clone())
 		if err != nil {
 			return err
@@ -119,8 +121,8 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, r
 			}
 			prepared, err = prepareLocalWorkerWorkspace(s, ctx, run, opID)
 		}
-	} else if candidate.Action == executionapi.LifecyclePrepareWorkspace {
-		workspaceIntent := executionapi.WorkspaceIntent{Path: input.Workspace.Path, Branch: input.Workspace.Branch, BaseCommit: input.Workspace.BaseCommit}
+	} else if candidate.Action == executionbackend.LifecyclePrepareWorkspace {
+		workspaceIntent := executionbackend.WorkspaceIntent{Path: input.Workspace.Path, Branch: input.Workspace.Branch, BaseCommit: input.Workspace.BaseCommit}
 		if candidate.Input.Workspace == nil || *candidate.Input.Workspace != workspaceIntent {
 			return errors.New("lifecycle planner changed the saved workspace intent")
 		}
@@ -148,7 +150,7 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, r
 	return s.startInitialWorkerFlowTurn(ctx, task, run)
 }
 
-func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task TaskRecord, run *Run) error {
+func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task taskmodel.TaskRecord, run *Run) error {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
@@ -158,7 +160,7 @@ func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task TaskRecor
 	if err != nil {
 		return s.waitWorkerFlow(run, "Fixed task contract is unavailable: "+err.Error())
 	}
-	prompt, err := workerflow.Prompt(task, contract, run.RunID, c.PublicationPolicy)
+	prompt, err := executionusecase.Prompt(task, contract, run.RunID, c.PublicationPolicy)
 	if err != nil {
 		return s.waitWorkerFlow(run, err.Error())
 	}
@@ -190,7 +192,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 	// preparation identity; it does not allocate another turn or bypass a gate.
 	resumePreparation := readinessTurn && execution.PendingCommandID == turnID &&
 		execution.PendingTurnID == "" && s.workers[run.RunID] == nil
-	if workflow.WorkflowVersion != WorkerFlowVersion || !executionapi.StableExecutionID(turnID) ||
+	if workflow.WorkflowVersion != executionmodel.Version || !executionbackend.StableExecutionID(turnID) ||
 		execution.PendingTurnID != "" || execution.PendingCommandID != "" && !resumePreparation || sessionID != "" && execution.CurrentTurnID != "" && execution.LastStoppedTurnID != execution.CurrentTurnID {
 		return errors.New("worker turn cannot start without one idle original session")
 	}

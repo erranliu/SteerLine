@@ -8,8 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/codexapp"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type Recovery struct {
@@ -56,7 +56,7 @@ func (b Backend) Reattach(ctx context.Context, fixed Binding, commandID, turnID 
 	if !ValidNativeID(fixed.SessionID) {
 		return result, errors.New("original app-server thread identity is unverified")
 	}
-	if !executionapi.StableExecutionID(commandID) {
+	if !executionbackend.StableExecutionID(commandID) {
 		return result, errors.New("original app-server command identity is unverified")
 	}
 	dir := filepath.Join(b.Config.RunDir, "runs", b.Config.RunID, "turns", commandID)
@@ -125,6 +125,7 @@ func (b Backend) Reattach(ctx context.Context, fixed Binding, commandID, turnID 
 	closeClient = false
 	return result, nil
 }
+
 func PendingAskEvents(path, threadID, turnID string, knownCalls []string) ([]codexapp.Envelope, error) {
 	journal, err := ReadAskJournal(path, threadID, turnID, func(e codexapp.Envelope) error { _, err := ParseAskCall(e, threadID, turnID); return err })
 	if err != nil {
@@ -143,11 +144,12 @@ func PendingAskEvents(path, threadID, turnID string, knownCalls []string) ([]cod
 	}
 	return replay, nil
 }
+
 func (b Backend) Recover(ctx context.Context, fixed Binding, commandID, turnID string, knownCalls []string) (Recovery, error) {
 	result, err := b.Reattach(ctx, fixed, commandID, turnID, knownCalls)
 	if err != nil && b.ManagedProcessAbsent(result.Binding) {
 		result.Dead = true
-		if executionapi.StableExecutionID(commandID) && ValidNativeID(result.Binding.SessionID) && ValidNativeID(result.TurnID) {
+		if executionbackend.StableExecutionID(commandID) && ValidNativeID(result.Binding.SessionID) && ValidNativeID(result.TurnID) {
 			path := filepath.Join(b.Config.RunDir, "runs", b.Config.RunID, "turns", commandID, "appserver.jsonl")
 			if outcome, readErr := ReadAppServerOutcome(path, result.Binding.SessionID, result.TurnID); readErr == nil && outcome.Completed {
 				result.Completed = true

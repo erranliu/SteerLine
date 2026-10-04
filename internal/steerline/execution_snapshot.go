@@ -6,15 +6,15 @@ import (
 	"fmt"
 	"reflect"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func policyResourceDigest(p contracts.PolicyResources) string {
+func policyResourceDigest(p executionmodel.PolicyResources) string {
 	p.Digest = ""
 	return digestValue(p)
 }
 
-func verifyPolicyResources(c Config, p *contracts.PolicyResources, profileDigest, workspace string, records ...*ExecutionRecord) error {
+func verifyPolicyResources(c Config, p *executionmodel.PolicyResources, profileDigest, workspace string, records ...*executionmodel.ExecutionRecord) error {
 	if p == nil || p.Version != 3 || p.Digest != policyResourceDigest(*p) || p.ProfileDigest != profileDigest || p.Workspace != workspace || len(p.TemporaryRoots) != 0 || p.ImplementationData.ConfigDigest != profileDigest {
 		return errors.New("execution policy resource snapshot differs from original settings or identity")
 	}
@@ -47,7 +47,7 @@ func verifyPolicyResources(c Config, p *contracts.PolicyResources, profileDigest
 	return nil
 }
 
-func bindPolicyResources(ctx context.Context, c Config, e *ExecutionRecord, workspace string, linkedArgs []string) error {
+func bindPolicyResources(ctx context.Context, c Config, e *executionmodel.ExecutionRecord, workspace string, linkedArgs []string) error {
 	manualRestart := awaitingRecoveryResources(e)
 	if e.PolicyResources == nil && (e.Process != nil || e.SessionID != "") && !manualRestart {
 		return errors.New("original execution policy resource snapshot is missing; preserve the external session")
@@ -91,7 +91,7 @@ func bindPolicyResources(ctx context.Context, c Config, e *ExecutionRecord, work
 	if err := entry.VerifyPolicyResource(bound.Envelope.Clone(), identity); err != nil {
 		return err
 	}
-	evidence := contracts.PolicyResources{Version: 3, ProfileDigest: profileDigest, Workspace: workspace,
+	evidence := executionmodel.PolicyResources{Version: 3, ProfileDigest: profileDigest, Workspace: workspace,
 		WriteRoots: append([]string(nil), bound.WriteRoots...), TemporaryRoots: []string{}, ImplementationData: bound.Envelope.Clone()}
 	evidence.Digest = policyResourceDigest(evidence)
 	if e.PolicyResources != nil {

@@ -7,27 +7,32 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 const neutralProfileKey = "fixture.config"
+
 const neutralBindingKey = "fixture.binding"
+
 const neutralQuestionKey = "fixture.question"
+
 const neutralPolicyKey = "fixture.policy"
-const neutralProtocol executionapi.ExecutionProtocol = "fixture_stream_v1"
+
+const neutralProtocol executionbackend.ExecutionProtocol = "fixture_stream_v1"
 
 // The business fixture has one implementation and one codec. Its payload
 // describes test input; it compiles no native command or permission mapping.
 type neutralSettings struct {
-	Executable      string                       `json:"executable"`
-	Args            []string                     `json:"args,omitempty"`
-	Model           string                       `json:"model,omitempty"`
-	ReasoningEffort string                       `json:"reasoning_effort,omitempty"`
-	InputMode       string                       `json:"input_mode,omitempty"`
-	Target          executionapi.ExecutionTarget `json:"target,omitempty"`
+	Executable      string                           `json:"executable"`
+	Args            []string                         `json:"args,omitempty"`
+	Model           string                           `json:"model,omitempty"`
+	ReasoningEffort string                           `json:"reasoning_effort,omitempty"`
+	InputMode       string                           `json:"input_mode,omitempty"`
+	Target          executionbackend.ExecutionTarget `json:"target,omitempty"`
 }
+
 type neutralBinding struct {
 	Endpoint   string `json:"endpoint,omitempty"`
 	Generation string `json:"generation,omitempty"`
@@ -35,7 +40,7 @@ type neutralBinding struct {
 }
 
 func neutralCodecs() []ImplementationProfileCodec {
-	return []ImplementationProfileCodec{{Key: neutralProfileKey, Version: 1, Normalize: func(data []byte, policy executionapi.ExecutionPolicy, host, agent string) ([]byte, []string, error) {
+	return []ImplementationProfileCodec{{Key: neutralProfileKey, Version: 1, Normalize: func(data []byte, policy executionbackend.ExecutionPolicy, host, agent string) ([]byte, []string, error) {
 		var value neutralSettings
 		if err := decode(data, &value); err != nil {
 			return nil, nil, err
@@ -56,28 +61,29 @@ func neutralCodecs() []ImplementationProfileCodec {
 		return mustJSON(value), display, nil
 	}}}
 }
+
 func newNeutralDirectory(agents ...string) (*ExecutionDirectory, error) {
-	key := ExecutionRegistrationKey{Backend: executionapi.BackendLocal, Protocol: neutralProtocol, Agent: "fixture"}
+	key := ExecutionRegistrationKey{Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Agent: "fixture"}
 	entry := ExecutionRegistration{Key: key, ProfileKey: "fixture/stream-v1", Host: "local", WorkspaceBranchPrefix: "fixture", LocalWorkspace: true, ProfileCodecKeys: []string{neutralProfileKey}, QuestionCodecKey: neutralQuestionKey, QuestionCodecVersion: 1,
-		Target: func(c Config) executionapi.ExecutionTarget {
+		Target: func(c Config) executionbackend.ExecutionTarget {
 			target := neutralProfileSettings(c).Target
 			if target.ID == "" {
 				target.ID = "fixture:fixed"
 			}
 			return target
 		},
-		Backend: func(c Config) executionapi.ExecutionBackend { return neutralBackend{config: c} },
-		Lifecycle: func(setup executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {
+		Backend: func(c Config) executionbackend.ExecutionBackend { return neutralBackend{config: c} },
+		Lifecycle: func(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 			return &neutralLifecycle{setup: setup.Clone()}, nil
 		},
-		ProbeRequirements: func(_ context.Context, c Config) (executionapi.CapabilityReport, error) {
+		ProbeRequirements: func(_ context.Context, c Config) (executionbackend.CapabilityReport, error) {
 			return capabilityReport(key.Backend, key.Protocol, targetFor(c), agentFor(c), "fixture-version-1"), nil
 		},
 		QueryTool:      queryHostRequirementTool,
 		ValidateConfig: func(context.Context, Config) error { return nil }, Preflight: func(context.Context, Config) error { return nil }, PrepareClaim: func(context.Context, Config) (ClaimPreparation, error) { return ClaimPreparation{}, nil }, ReadinessRequired: func(Config) bool { return false },
 		BuildPolicyResource: neutralBuildPolicyResource, VerifyPolicyResource: neutralVerifyPolicyResource,
 		LinkedWorktreeWriteArgs: func(context.Context, Config, string) ([]string, error) { return nil, nil }, ValidTurnID: func(value string) bool { return value != "" }, CleanupCapabilities: []string{"start", "observe", "stop", "workspace_inspection", "output_reading"},
-		ValidateRef: func(ref executionapi.ExecutionRef) error {
+		ValidateRef: func(ref executionbackend.ExecutionRef) error {
 			if ref.External.Kind == "os" && (ref.External.PID <= 0 || ref.External.Created == "" || ref.External.Executable == "") {
 				return errors.New("fixture process identity is incomplete")
 			}
@@ -85,7 +91,7 @@ func newNeutralDirectory(agents ...string) (*ExecutionDirectory, error) {
 				return errors.New("fixture resource kind is unsupported")
 			}
 			return nil
-		}, ValidatePublicationPolicy: func(policy executionapi.PublicationPolicy, provider publication.Config) error {
+		}, ValidatePublicationPolicy: func(policy executionbackend.PublicationPolicy, provider publication.Config) error {
 			if err := policy.Validate(); err != nil {
 				return err
 			}
@@ -106,6 +112,7 @@ func newNeutralDirectory(agents ...string) (*ExecutionDirectory, error) {
 	}
 	return NewExecutionDirectory("fixture-directory-v1", neutralCodecs(), entries)
 }
+
 func neutralProfileSettings(c Config) neutralSettings {
 	data, err := c.DecodeImplementationConfig(neutralProfileKey)
 	if err != nil {
@@ -115,12 +122,14 @@ func neutralProfileSettings(c Config) neutralSettings {
 	_ = decode(data, &value)
 	return value
 }
+
 func neutralProfile(t *testing.T, id, name string, value neutralSettings) ExecutionProfile {
 	t.Helper()
 	directory, err := newNeutralDirectory()
 	require(t, err)
-	return ExecutionProfile{directory: directory, ID: id, Name: name, Host: "local", Agent: "fixture", ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(value)}}}
+	return ExecutionProfile{directory: directory, ID: id, Name: name, Host: "local", Agent: "fixture", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(value)}}}
 }
+
 func withNeutralProfile(c Config, value neutralSettings) Config {
 	directory, err := newNeutralDirectory()
 	if err != nil {
@@ -141,7 +150,7 @@ func withNeutralProfile(c Config, value neutralSettings) Config {
 	if c.Identity() != "" {
 		c.RepositoryStateKey = RepositoryStateKey(c.Identity())
 	}
-	data, _, err := directory.NormalizeProfile([]executionapi.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(value)}}, c.ExecutionPolicy, c.Host, c.Agent, configurationProjectIdentity(c), ProjectExecutionProfileID, c.configDigest)
+	data, _, err := directory.NormalizeProfile([]executionbackend.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(value)}}, c.ExecutionPolicy, c.Host, c.Agent, configurationProjectIdentity(c), ProjectExecutionProfileID, c.configDigest)
 	if err != nil {
 		panic(err)
 	}
@@ -154,23 +163,27 @@ func withNeutralProfile(c Config, value neutralSettings) Config {
 	c.WorkspaceBranchPrefix = "fixture"
 	return c
 }
+
 func setNeutralProfile(t *testing.T, c *Config, value neutralSettings) {
 	t.Helper()
 	*c = withNeutralProfile(*c, value)
 }
+
 func neutralBuildPolicyResource(_ context.Context, r PolicyResourceBuildRequest) (PolicyResourceBuildResult, error) {
-	e, err := executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{ImplementationKey: neutralPolicyKey, CodecVersion: 1, Purpose: executionapi.ImplementationResourcePurpose, ProjectID: r.Resource.ProjectID, ExecutionID: r.Resource.ExecutionID, AttemptID: r.Resource.AttemptID, Generation: r.Resource.Generation, ConfigDigest: r.Resource.ConfigDigest}, mustJSON(struct {
+	e, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{ImplementationKey: neutralPolicyKey, CodecVersion: 1, Purpose: executionbackend.ImplementationResourcePurpose, ProjectID: r.Resource.ProjectID, ExecutionID: r.Resource.ExecutionID, AttemptID: r.Resource.AttemptID, Generation: r.Resource.Generation, ConfigDigest: r.Resource.ConfigDigest}, mustJSON(struct {
 		Workspace string `json:"workspace"`
 	}{r.Workspace}))
 	return PolicyResourceBuildResult{Envelope: e, WriteRoots: []string{r.Workspace}}, err
 }
-func neutralVerifyPolicyResource(e executionapi.ImplementationDataEnvelope, id PolicyResourceIdentity) error {
+
+func neutralVerifyPolicyResource(e executionbackend.ImplementationDataEnvelope, id PolicyResourceIdentity) error {
 	if e.ImplementationKey != neutralPolicyKey || e.CodecVersion != 1 {
 		return errors.New("fixture policy codec differs")
 	}
 	return e.ValidateResourceIdentity(id.ProjectID, id.ExecutionID, id.AttemptID, id.Generation, id.ConfigDigest)
 }
-func setNeutralBinding(t *testing.T, e *ExecutionRecord, endpoint, generation, session string) {
+
+func setNeutralBinding(t *testing.T, e *executionmodel.ExecutionRecord, endpoint, generation, session string) {
 	t.Helper()
 	if e.ProjectIdentity == "" {
 		e.ProjectIdentity = "test-project"
@@ -187,12 +200,13 @@ func setNeutralBinding(t *testing.T, e *ExecutionRecord, endpoint, generation, s
 	if e.Generation == "" {
 		e.Generation = "test-resource-generation"
 	}
-	envelope, err := executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{ImplementationKey: neutralBindingKey, CodecVersion: 1, Purpose: executionapi.ImplementationResourcePurpose, ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, mustJSON(neutralBinding{endpoint, generation, session}))
+	envelope, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{ImplementationKey: neutralBindingKey, CodecVersion: 1, Purpose: executionbackend.ImplementationResourcePurpose, ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, mustJSON(neutralBinding{endpoint, generation, session}))
 	require(t, err)
 	require(t, putImplementationEnvelope(e, envelope))
 	e.SessionID, e.SessionGeneration = session, generation
 }
-func decodeNeutralBinding(envelope executionapi.ImplementationDataEnvelope, record *ExecutionRecord) (neutralBinding, error) {
+
+func decodeNeutralBinding(envelope executionbackend.ImplementationDataEnvelope, record *executionmodel.ExecutionRecord) (neutralBinding, error) {
 	var value neutralBinding
 	err := envelope.ValidateResourceIdentity(record.ProjectIdentity, record.ExecutionID, record.CurrentAttemptID, record.Generation, record.ConfigurationDigest)
 	if err == nil {
@@ -200,15 +214,17 @@ func decodeNeutralBinding(envelope executionapi.ImplementationDataEnvelope, reco
 	}
 	return value, err
 }
-func neutralDecisionFixture(t *testing.T, fixed executionapi.SessionContext, id string, questions []executionapi.Question) DecisionRequest {
+
+func neutralDecisionFixture(t *testing.T, fixed executionbackend.SessionContext, id string, questions []executionbackend.Question) executionmodel.DecisionRequest {
 	t.Helper()
 	for i := range questions {
 		questions[i].ExecutionID, questions[i].AttemptID, questions[i].Generation, questions[i].TurnID = fixed.ExecutionID, fixed.AttemptID, fixed.Generation, fixed.CurrentTurnID
 	}
 	route := simpleQuestionRoute(t, neutralQuestionKey, fixed.ProjectID, fixed.WorkflowRunID, fixed.ExecutionID, fixed.AttemptID, fixed.Generation, fixed.CurrentTurnID, id)
-	return decisionRequestFromEventFact(executionapi.EventFact{QuestionRoute: &route, Questions: questions})
+	return decisionRequestFromEventFact(executionbackend.EventFact{QuestionRoute: &route, Questions: questions})
 }
-func neutralPolicyReceipt(profile, path string, e *ExecutionRecord) *contracts.PolicyResources {
+
+func neutralPolicyReceipt(profile, path string, e *executionmodel.ExecutionRecord) *executionmodel.PolicyResources {
 	if e.ProjectIdentity == "" {
 		e.ProjectIdentity = "test-project"
 	}
@@ -228,10 +244,11 @@ func neutralPolicyReceipt(profile, path string, e *ExecutionRecord) *contracts.P
 	if err != nil {
 		panic(err)
 	}
-	r := &contracts.PolicyResources{Version: 3, ProfileDigest: profile, Workspace: path, WriteRoots: []string{path}, TemporaryRoots: []string{}, ImplementationData: result.Envelope}
+	r := &executionmodel.PolicyResources{Version: 3, ProfileDigest: profile, Workspace: path, WriteRoots: []string{path}, TemporaryRoots: []string{}, ImplementationData: result.Envelope}
 	r.Digest = policyResourceDigest(*r)
 	return r
 }
+
 func newNeutralService(c Config) (*Service, error) {
 	if c.ExecutionDirectory == nil {
 		c = withNeutralProfile(c, neutralSettings{Executable: os.Args[0]})
@@ -253,7 +270,7 @@ func newNeutralService(c Config) (*Service, error) {
 	return service, err
 }
 
-func neutralVerifyFixedExecutionProfile(p FixedExecutionProfile) bool {
+func neutralVerifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile) bool {
 	d, err := newNeutralDirectory()
 	return err == nil && verifyFixedExecutionProfile(p, d)
 }
@@ -272,7 +289,7 @@ func neutralDirectoryWithReplacement(t *testing.T, d *ExecutionDirectory, replac
 	return clone
 }
 
-func neutralProfileFromInputs(inputs []executionapi.ImplementationConfigInput) neutralSettings {
+func neutralProfileFromInputs(inputs []executionbackend.ImplementationConfigInput) neutralSettings {
 	for _, input := range inputs {
 		if input.ImplementationKey == neutralProfileKey {
 			var value neutralSettings

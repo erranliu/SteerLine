@@ -4,16 +4,17 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"strings"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 func publicationTargetInstruction(c Config) string {
 	return fmt.Sprintf("\nFixed publication responsibility: %s. Provider: %s %s/%s. Git remote: %s (%s). Target branch: %s. Use these original targets throughout this execution; report a mismatch before publishing.\n", c.PublicationPolicy.Publisher, c.PR.Kind, c.PR.BaseURL, c.PR.Repository, c.Remote, c.publicationRemoteURL, c.Branch)
 }
 
-func (c Config) publicationSettings() contracts.PublicationSettings {
+func (c Config) publicationSettings() executionmodel.PublicationSettings {
 	refs := []string{"SSH_AUTH_SOCK", "GIT_CONFIG_GLOBAL", "GIT_SSH_COMMAND"}
 	if c.PR.Kind == "command" {
 		refs = append(refs, "GH_TOKEN", "GITHUB_TOKEN", "GH_CONFIG_DIR")
@@ -21,7 +22,7 @@ func (c Config) publicationSettings() contracts.PublicationSettings {
 	if c.PR.TokenEnv != "" {
 		refs = append(refs, c.PR.TokenEnv)
 	}
-	return contracts.PublicationSettings{Provider: contracts.PRProviderConfig(c.PR), Git: c.Git, Remote: c.Remote, RemoteURL: c.publicationRemoteURL, BaseBranch: c.Branch, AuthenticationRefs: refs}
+	return executionmodel.PublicationSettings{Provider: executionmodel.PRProviderConfig(c.PR), Git: c.Git, Remote: c.Remote, RemoteURL: c.publicationRemoteURL, BaseBranch: c.Branch, AuthenticationRefs: refs}
 }
 
 func (c *Config) bindPublicationTarget(ctx context.Context) error {
@@ -62,7 +63,7 @@ func verifyPublicationTargetForRun(ctx context.Context, c Config, run *Run) erro
 	return c.bindPublicationTarget(ctx)
 }
 
-func fixedWorkflowPublicationConfig(c Config, w WorkflowRunRecord) (Config, error) {
+func fixedWorkflowPublicationConfig(c Config, w executionmodel.WorkflowRunRecord) (Config, error) {
 	if w.ExecutionProfile == nil || !verifyFixedExecutionProfile(*w.ExecutionProfile, c.ExecutionDirectory) || w.ConfigDigest != w.ExecutionProfile.AcceptedConfigVersion || w.Repository == "" || w.Branch != w.ExecutionProfile.Publication.BaseBranch || w.ExecutionProfile.Publication.RemoteURL == "" {
 		return Config{}, errors.New("publication requires the original v6 execution snapshot; preserve original state")
 	}

@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 const maxConversationCursorBytes = 64 << 10
@@ -75,7 +75,7 @@ func decodeHistoryPosition(binding HistoryBinding, raw string) (codexHistoryCurs
 	if len(raw) > maxConversationCursorBytes {
 		return codexHistoryCursor{}, errors.New("persisted history source cursor exceeds the read budget")
 	}
-	if err := executionapi.DecodeStrictJSON([]byte(raw), &value, "conversation source binding has trailing data"); err != nil {
+	if err := executionbackend.DecodeStrictJSON([]byte(raw), &value, "conversation source binding has trailing data"); err != nil {
 		return codexHistoryCursor{}, err
 	}
 	digest := value.Digest
@@ -110,7 +110,7 @@ func (a *ConversationAdapter) MapConversation(input contracts.ConversationInput)
 	}
 	batch, err := a.MapRealtime(input)
 	if err == nil {
-		batch.VerifySourcePosition = input.Event.Backend == executionapi.BackendLocal
+		batch.VerifySourcePosition = input.Event.Backend == executionbackend.BackendLocal
 	}
 	return batch, err
 }
@@ -121,11 +121,11 @@ func (l *ExecutionLifecycle) MapConversation(input contracts.ConversationInput) 
 
 func (a *ConversationAdapter) JournalSources() []string { return []string{ConversationJSONLSource} }
 
-func (a *ConversationAdapter) JournalSource(backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol) string {
+func (a *ConversationAdapter) JournalSource(backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol) string {
 	return JournalSource(backend, protocol)
 }
 
-func (a *ConversationAdapter) JournalSegment(backend executionapi.BackendKind, protocol executionapi.ExecutionProtocol, identity string) string {
+func (a *ConversationAdapter) JournalSegment(backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, identity string) string {
 	return JournalSegment(backend, protocol, identity)
 }
 
@@ -202,7 +202,7 @@ func (a *ConversationAdapter) LiveJournalPath(ctx context.Context, request contr
 				continue
 			}
 			var marker ConversationSourceMarker
-			if executionapi.DecodeStrictJSON(markerData, &marker, "conversation source binding has trailing data") == nil && marker.Validate() == nil && marker.SourceIdentity == request.SourceIdentity &&
+			if executionbackend.DecodeStrictJSON(markerData, &marker, "conversation source binding has trailing data") == nil && marker.Validate() == nil && marker.SourceIdentity == request.SourceIdentity &&
 				marker.WorkflowID == request.WorkflowID && marker.ExecutionID == request.ExecutionID && marker.AttemptID == request.AttemptID {
 				return filepath.Join(dir, "events.jsonl"), nil
 			}
@@ -298,13 +298,13 @@ func (a *ConversationAdapter) DiscoverHistory(ctx context.Context, discovery con
 					result.Writes = append(result.Writes, bindingGap(base, attempt.AttemptID, bindingPath, cause))
 					continue
 				}
-				if binding.Backend == executionapi.BackendOrca && binding.ExternalRef == "" {
+				if binding.Backend == executionbackend.BackendOrca && binding.ExternalRef == "" {
 					continue
 				}
 				binding.Ended = attempt.Ended
 				identity := binding.Identity() + ":" + binding.AttemptID
 				result.Sources = append(result.Sources, contracts.ConversationHistorySource{Identity: identity, BindingPath: bindingPath, Workspace: binding.Workspace, Event: binding.Event(), Ended: binding.Ended,
-					RequiresPlatformVersion: binding.Backend == executionapi.BackendOrca})
+					RequiresPlatformVersion: binding.Backend == executionbackend.BackendOrca})
 			}
 		}
 	}
@@ -373,7 +373,7 @@ func (a *ConversationAdapter) DiscoverJournals(ctx context.Context, discovery co
 				continue
 			}
 			var marker ConversationSourceMarker
-			if err := executionapi.DecodeStrictJSON(markerData, &marker, "conversation source binding has trailing data"); err != nil {
+			if err := executionbackend.DecodeStrictJSON(markerData, &marker, "conversation source binding has trailing data"); err != nil {
 				source.Diagnostic = fmt.Sprintf("source marker is invalid: %v", err)
 			} else if err = marker.Validate(); err != nil {
 				source.Diagnostic = err.Error()
@@ -388,7 +388,7 @@ func (a *ConversationAdapter) DiscoverJournals(ctx context.Context, discovery co
 	return sources, nil
 }
 
-func (a *ConversationAdapter) ReadHistory(ctx context.Context, request contracts.ConversationHistoryReadRequest, start func(*exec.Cmd) (executionapi.StopHandle, error)) (contracts.ConversationHistoryBatch, error) {
+func (a *ConversationAdapter) ReadHistory(ctx context.Context, request contracts.ConversationHistoryReadRequest, start func(*exec.Cmd) (executionbackend.StopHandle, error)) (contracts.ConversationHistoryBatch, error) {
 	binding, err := ReadHistoryBinding(request.Source.BindingPath)
 	event := request.Source.Event
 	if err != nil || request.Source.Identity != binding.Identity()+":"+binding.AttemptID || event.ProjectID != binding.ProjectID || event.TaskID != binding.TaskID || event.WorkflowID != binding.WorkflowID || event.ExecutionID != binding.ExecutionID || event.AttemptID != binding.AttemptID || event.Backend != binding.Backend || event.Protocol != binding.Protocol || event.TargetID != binding.TargetID || event.ExternalRef != binding.ExternalRef || event.SessionID != binding.SessionID || event.SourceIdentity != binding.Identity() || event.SourceSegment != binding.Identity() || canonicalPath(request.Source.Workspace) != canonicalPath(binding.Workspace) {
@@ -514,14 +514,14 @@ func (a *ConversationAdapter) ReadHistory(ctx context.Context, request contracts
 	}
 	version := clip(client.UserAgent(), 256)
 	platformVersion := version
-	if binding.Backend == executionapi.BackendOrca {
+	if binding.Backend == executionbackend.BackendOrca {
 		platformVersion = strings.TrimSpace(request.PlatformVersion)
 		if platformVersion == "" {
 			return contracts.ConversationHistoryBatch{}, errors.New("host implementation version is unavailable for capability reporting")
 		}
 	}
 	report := &contracts.ConversationCapabilityReport{Version: 1, Backend: binding.Backend, Protocol: binding.Protocol, Agent: "codex", AgentVersion: version,
-		PlatformVersion: platformVersion, Target: executionapi.ExecutionTarget{ID: binding.TargetID}, ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID,
+		PlatformVersion: platformVersion, Target: executionbackend.ExecutionTarget{ID: binding.TargetID}, ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID,
 		Source: "codex-app-server", SourceIdentity: binding.Identity(), CheckedAt: time.Now().UTC()}
 	report.Capabilities = historyCapabilities(binding, page, request.HasCheckpoint)
 	return contracts.ConversationHistoryBatch{Writes: writes, Cursor: encoded, Sequence: cursor.Sequence, Settled: settled, More: page.NextCursor != nil && *page.NextCursor != "", Capabilities: report}, nil
@@ -529,37 +529,37 @@ func (a *ConversationAdapter) ReadHistory(ctx context.Context, request contracts
 
 func historyCapabilities(binding HistoryBinding, page HistoryPage, hadCheckpoint bool) []contracts.ConversationCapability {
 	values := map[string]contracts.ConversationCapability{
-		"turn_boundaries":      {Name: "turn_boundaries", Status: executionapi.CapabilityNotTested, Evidence: "No completed native turn observed yet"},
-		"message_phase":        {Name: "message_phase", Status: executionapi.CapabilityNotTested, Evidence: "No phase-bearing assistant message observed yet"},
-		"final_content":        {Name: "final_content", Status: executionapi.CapabilityNotTested, Evidence: "No complete native final message observed yet"},
-		"stable_item_identity": {Name: "stable_item_identity", Status: executionapi.CapabilityNotTested, Evidence: "No native item observed yet"},
-		"incremental_read":     {Name: "incremental_read", Status: executionapi.CapabilityNotTested, Evidence: "A saved turn cursor has not been resumed yet"},
-		"history_replay":       {Name: "history_replay", Status: executionapi.CapabilityNotTested, Evidence: "A persisted checkpoint has not been replayed yet"},
-		"input_wait":           {Name: "input_wait", Status: executionapi.CapabilityNotTested, Evidence: "A host input-wait object has not been observed"},
+		"turn_boundaries":      {Name: "turn_boundaries", Status: executionbackend.CapabilityNotTested, Evidence: "No completed native turn observed yet"},
+		"message_phase":        {Name: "message_phase", Status: executionbackend.CapabilityNotTested, Evidence: "No phase-bearing assistant message observed yet"},
+		"final_content":        {Name: "final_content", Status: executionbackend.CapabilityNotTested, Evidence: "No complete native final message observed yet"},
+		"stable_item_identity": {Name: "stable_item_identity", Status: executionbackend.CapabilityNotTested, Evidence: "No native item observed yet"},
+		"incremental_read":     {Name: "incremental_read", Status: executionbackend.CapabilityNotTested, Evidence: "A saved turn cursor has not been resumed yet"},
+		"history_replay":       {Name: "history_replay", Status: executionbackend.CapabilityNotTested, Evidence: "A persisted checkpoint has not been replayed yet"},
+		"input_wait":           {Name: "input_wait", Status: executionbackend.CapabilityNotTested, Evidence: "A host input-wait object has not been observed"},
 	}
-	if binding.Backend == executionapi.BackendLocal {
-		values["input_wait"] = contracts.ConversationCapability{Name: "input_wait", Status: executionapi.CapabilityUnsupported, Evidence: "local_process Reply is unsupported by the execution backend"}
+	if binding.Backend == executionbackend.BackendLocal {
+		values["input_wait"] = contracts.ConversationCapability{Name: "input_wait", Status: executionbackend.CapabilityUnsupported, Evidence: "local_process Reply is unsupported by the execution backend"}
 	}
 	for _, turn := range page.Data {
 		if turn.CompletedAt != nil {
-			values["turn_boundaries"] = contracts.ConversationCapability{Name: "turn_boundaries", Status: executionapi.CapabilityVerified, Evidence: "Native turn ID, terminal status and completedAt were observed through full turn history"}
+			values["turn_boundaries"] = contracts.ConversationCapability{Name: "turn_boundaries", Status: executionbackend.CapabilityVerified, Evidence: "Native turn ID, terminal status and completedAt were observed through full turn history"}
 		}
 		if len(turn.Items) > 0 {
-			values["stable_item_identity"] = contracts.ConversationCapability{Name: "stable_item_identity", Status: executionapi.CapabilityVerified, Evidence: "Native session, turn and item IDs were observed through full turn history"}
+			values["stable_item_identity"] = contracts.ConversationCapability{Name: "stable_item_identity", Status: executionbackend.CapabilityVerified, Evidence: "Native session, turn and item IDs were observed through full turn history"}
 		}
 		native, err := InspectHistoryTurn(turn)
 		if err == nil && native.HasPhase {
-			values["message_phase"] = contracts.ConversationCapability{Name: "message_phase", Status: executionapi.CapabilityVerified, Evidence: "Native agentMessage.phase was observed through full turn history"}
+			values["message_phase"] = contracts.ConversationCapability{Name: "message_phase", Status: executionbackend.CapabilityVerified, Evidence: "Native agentMessage.phase was observed through full turn history"}
 		}
 		if err == nil && native.CompleteFinal {
-			values["final_content"] = contracts.ConversationCapability{Name: "final_content", Status: executionapi.CapabilityVerified, Evidence: "A completed native final_answer item has a persisted full body reference"}
+			values["final_content"] = contracts.ConversationCapability{Name: "final_content", Status: executionbackend.CapabilityVerified, Evidence: "A completed native final_answer item has a persisted full body reference"}
 		}
 	}
 	if hadCheckpoint && (page.NextCursor != nil || page.BackwardsCursor != nil) {
-		values["incremental_read"] = contracts.ConversationCapability{Name: "incremental_read", Status: executionapi.CapabilityVerified, Evidence: "A persisted opaque turn cursor was resumed with a bounded full-item page"}
+		values["incremental_read"] = contracts.ConversationCapability{Name: "incremental_read", Status: executionbackend.CapabilityVerified, Evidence: "A persisted opaque turn cursor was resumed with a bounded full-item page"}
 	}
 	if hadCheckpoint && len(page.Data) > 0 {
-		values["history_replay"] = contracts.ConversationCapability{Name: "history_replay", Status: executionapi.CapabilityVerified, Evidence: "A new public app-server process replayed native history from the persisted source checkpoint"}
+		values["history_replay"] = contracts.ConversationCapability{Name: "history_replay", Status: executionbackend.CapabilityVerified, Evidence: "A new public app-server process replayed native history from the persisted source checkpoint"}
 	}
 	names := []string{"turn_boundaries", "message_phase", "final_content", "stable_item_identity", "incremental_read", "history_replay", "input_wait"}
 	result := make([]contracts.ConversationCapability, 0, len(names))
@@ -573,7 +573,7 @@ func bindingMatches(b HistoryBinding, base contracts.ConversationEvent, workspac
 	if b.ProjectID != base.ProjectID || b.WorkflowID != base.WorkflowID || b.ExecutionID != base.ExecutionID || b.AttemptID != attempt || b.TargetID != base.TargetID || b.Backend != base.Backend || b.Protocol != base.Protocol || canonicalPath(b.Workspace) != canonicalPath(workspace) {
 		return false
 	}
-	if b.Backend == executionapi.BackendOrca {
+	if b.Backend == executionbackend.BackendOrca {
 		return filename == historyBindingFile
 	}
 	return filename == filepath.Base(localConversationHistoryBindingPath(directory, b.SessionID))
@@ -619,7 +619,7 @@ func directoryExists(path string) bool {
 	return err == nil && info.IsDir()
 }
 
-func conversationExternalRef(identity *executionapi.ProcessIdentity) string {
+func conversationExternalRef(identity *executionbackend.ProcessIdentity) string {
 	if identity == nil {
 		return ""
 	}

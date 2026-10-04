@@ -13,14 +13,20 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type testClock struct{ now time.Time }
 
-func (c *testClock) Now() time.Time                       { return c.now }
+func (c *testClock) Now() time.Time { return c.now }
+
 func (c *testClock) After(time.Duration) <-chan time.Time { return make(chan time.Time) }
 
 type testQuerySource struct {
@@ -35,13 +41,13 @@ type testControlClient struct {
 	calls           int
 	receipts        int
 	requests        int
-	request         api.ControlRequest
+	request         productapi.ControlRequest
 	err             error
 	instance        string
 	revision        *uint64
 	decisionCalls   int
-	decisionAnswer  contracts.DecisionAnswer
-	decisionCommand contracts.CommandRecord
+	decisionAnswer  executionmodel.DecisionAnswer
+	decisionCommand storageports.CommandRecord
 	decisionErr     error
 	eligibilityErr  error
 }
@@ -59,9 +65,9 @@ func readySnapshot(ref ProjectRef, now time.Time) ProjectSnapshot {
 		Control:       contracts.ControlState{DispatchMode: "manual", Revision: 7},
 		Runs:          []*contracts.Run{},
 	}
-	obs := api.ObservationSnapshot{Runtime: runtime, State: api.SnapshotValid, SampledAt: now}
+	obs := api.ObservationSnapshot{Runtime: runtime, State: productapi.SnapshotValid, SampledAt: now}
 	return ProjectSnapshot{
-		Connection:      api.ServiceConnection{State: api.ConnectionConnected, CanControl: true, CanStop: true, IdentityMatched: true, Snapshot: obs},
+		Connection:      api.ServiceConnection{State: productapi.ConnectionConnected, CanControl: true, CanStop: true, IdentityMatched: true, Snapshot: obs},
 		Observation:     obs,
 		DecisionReasons: map[string]string{},
 		Tasks:           &contracts.TaskSnapshot{Version: 1, InstanceID: runtime.Service.InstanceID, RepositoryIdentity: ref.Identity, QueriedAt: now, LastSuccessAt: &last, Tasks: []contracts.TaskCandidate{{TaskID: "task-B", Title: "Build B"}}},
@@ -81,11 +87,11 @@ func decisionSnapshot(ref ProjectRef, now time.Time) (ProjectSnapshot, *contract
 	snapshot := readySnapshot(ref, now)
 	runtime := snapshot.Connection.Snapshot.Runtime
 	runtime.Service.Capabilities = append(runtime.Service.Capabilities, "answer_decision")
-	options := make([]executionapi.DecisionOption, 12)
+	options := make([]executionbackend.DecisionOption, 12)
 	for i := range options {
-		options[i] = executionapi.DecisionOption{ID: fmt.Sprintf("o%d", i), Label: fmt.Sprintf("选项 %d", i+1), Detail: fmt.Sprintf("详细说明 %02d：完整内容", i+1)}
+		options[i] = executionbackend.DecisionOption{ID: fmt.Sprintf("o%d", i), Label: fmt.Sprintf("选项 %d", i+1), Detail: fmt.Sprintf("详细说明 %02d：完整内容", i+1)}
 	}
-	run := &contracts.Run{TaskID: "task-decision", RunID: "0123456789abcdef0123456789abcdef", AttemptID: "fedcba9876543210fedcba9876543210", ControlRevision: 9, WorkflowVersion: fixtureWorkflowVersion, ExecutionID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Host: "local", Agent: "codex", Backend: "local", Protocol: "local_process", FinishTaskStatus: "waiting_decision", ExecutionStatus: "succeeded", Decision: &contracts.DecisionState{ID: "decision-0123456789abcdef0123456789ab", AttemptID: "fedcba9876543210fedcba9876543210", Version: 3, Status: "pending", Request: contracts.DecisionRequest{Question: strings.Repeat("问题", 24), Context: "背景第一行\n背景第二行", Options: options, Recommended: "o10", AllowFreeText: true}}}
+	run := &contracts.Run{TaskID: "task-decision", RunID: "0123456789abcdef0123456789abcdef", AttemptID: "fedcba9876543210fedcba9876543210", ControlRevision: 9, WorkflowVersion: fixtureWorkflowVersion, ExecutionID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Host: "local", Agent: "codex", Backend: "local", Protocol: "local_process", FinishTaskStatus: "waiting_decision", ExecutionStatus: "succeeded", Decision: &executionmodel.DecisionState{ID: "decision-0123456789abcdef0123456789ab", AttemptID: "fedcba9876543210fedcba9876543210", Version: 3, Status: "pending", Request: executionmodel.DecisionRequest{Question: strings.Repeat("问题", 24), Context: "背景第一行\n背景第二行", Options: options, Recommended: "o10", AllowFreeText: true}}}
 	runtime.Runs = []*contracts.Run{run}
 	snapshot.DecisionReasons[run.RunID] = "提交后核对原会话接收与工作轮次开始"
 	snapshot.Connection.Snapshot.Runtime = runtime
@@ -337,7 +343,7 @@ func TestUnavailableControlActionKeepsItsReasonInReturnedModel(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("alpha")
 	snapshot := readySnapshot(ref, now)
-	snapshot.Connection = api.ServiceConnection{State: api.ConnectionOffline, Diagnostic: "service window is closed"}
+	snapshot.Connection = api.ServiceConnection{State: productapi.ConnectionOffline, Diagnostic: "service window is closed"}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	updated, cmd := m.toggleMode()
 	m = updated.(Model)
@@ -391,7 +397,7 @@ func TestProjectResponseCannotUpdateNewProjectView(t *testing.T) {
 	previousSample := now.Add(-time.Hour)
 	m.projects[0].snapshot.Observation.SampledAt = previousSample
 	m.projects[0].refreshID = 1
-	old := projectMsg{key: a.Key, identity: a.Identity, generation: m.generation, requestID: 1, snapshot: ProjectSnapshot{Observation: api.ObservationSnapshot{State: api.SnapshotReadFailed, SampledAt: now}}}
+	old := projectMsg{key: a.Key, identity: a.Identity, generation: m.generation, requestID: 1, snapshot: ProjectSnapshot{Observation: api.ObservationSnapshot{State: productapi.SnapshotReadFailed, SampledAt: now}}}
 	updated, _ := m.moveProject(1)
 	m = updated.(Model)
 	updated, _ = m.Update(old)
@@ -437,14 +443,14 @@ func TestFailedRefreshKeepsLastGoodReadOnlyDataAndCurrentError(t *testing.T) {
 	now := time.Now().UTC()
 	ref := testProject("alpha")
 	previous := readySnapshot(ref, now.Add(-time.Minute))
-	domain := &contracts.DomainSnapshot{ProjectIdentity: ref.Identity, Executions: []contracts.ExecutionRecord{{ExecutionID: "execution-old"}}}
+	domain := &contracts.DomainSnapshot{ProjectIdentity: ref.Identity, Executions: []executionmodel.ExecutionRecord{{ExecutionID: "execution-old"}}}
 	previous.Domain = domain
-	next := ProjectSnapshot{Connection: api.ServiceConnection{State: api.ConnectionCorrupt, Diagnostic: "runtime schema is unsupported"}, Observation: api.ObservationSnapshot{State: api.SnapshotUnknownVersion, SampledAt: now, Error: "runtime schema is unsupported"}, TaskError: "candidate cache belongs to another instance", DomainError: "database read failed"}
+	next := ProjectSnapshot{Connection: api.ServiceConnection{State: productapi.ConnectionCorrupt, Diagnostic: "runtime schema is unsupported"}, Observation: api.ObservationSnapshot{State: productapi.SnapshotUnknownVersion, SampledAt: now, Error: "runtime schema is unsupported"}, TaskError: "candidate cache belongs to another instance", DomainError: "database read failed"}
 	got := preserveLastGood(previous, next)
 	if got.Observation.Runtime != previous.Observation.Runtime || !got.Observation.SampledAt.Equal(previous.Observation.SampledAt) || got.Tasks != previous.Tasks || got.Domain != domain {
 		t.Fatal("failed refresh erased the last successful read-only snapshot")
 	}
-	if got.Connection.State != api.ConnectionCorrupt || got.TaskError == "" || got.DomainError == "" {
+	if got.Connection.State != productapi.ConnectionCorrupt || got.TaskError == "" || got.DomainError == "" {
 		t.Fatalf("current read errors or control state were hidden: %+v", got)
 	}
 	if valid, _ := api.CandidateFreshness(ref.Identity, got, now); valid {
@@ -630,7 +636,7 @@ func TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript(t *testing.T) {
 			for turnIndex, turn := range sample.Thread.Turns {
 				startTime := time.Unix(turn.StartedAt, 0).UTC()
 				endTime := time.Unix(turn.CompletedAt, 0).UTC()
-				base := contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: "native-project", WorkflowID: "native-workflow", ExecutionID: "native-execution", AttemptID: "native-attempt", Backend: executionapi.BackendKind(sample.Backend), Protocol: executionapi.ExecutionProtocol(sample.Protocol), Agent: "codex", TargetID: "native-target", Source: sample.Source, SourceSegment: "native-segment", SourceIdentity: "native-source", SessionID: sample.Thread.ID, SessionQuality: contracts.IdentityNative, TurnID: turn.ID, TurnQuality: contracts.IdentityNative, Phase: contracts.MessagePhaseUnknown, OccurredAt: &startTime, ReceivedAt: startTime}
+				base := contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: "native-project", WorkflowID: "native-workflow", ExecutionID: "native-execution", AttemptID: "native-attempt", Backend: executionbackend.BackendKind(sample.Backend), Protocol: executionbackend.ExecutionProtocol(sample.Protocol), Agent: "codex", TargetID: "native-target", Source: sample.Source, SourceSegment: "native-segment", SourceIdentity: "native-source", SessionID: sample.Thread.ID, SessionQuality: contracts.IdentityNative, TurnID: turn.ID, TurnQuality: contracts.IdentityNative, Phase: contracts.MessagePhaseUnknown, OccurredAt: &startTime, ReceivedAt: startTime}
 				started := base
 				started.EventID = int64(len(events) + 1)
 				started.Type = contracts.ConversationTurnStarted
@@ -689,7 +695,7 @@ func TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript(t *testing.T) {
 			if finals != 2 || commentary < 1 {
 				t.Fatalf("native message phases were lost: finals=%d commentary=%d", finals, commentary)
 			}
-			if sample.Backend == string(executionapi.BackendOrca) && tools < 2 {
+			if sample.Backend == string(executionbackend.BackendOrca) && tools < 2 {
 				t.Fatalf("Orca tool activity lost: %d", tools)
 			}
 			state := projectState{view: ProjectView{Groups: choices, Follow: true}, conversationEvents: events}
@@ -740,7 +746,7 @@ func TestRunStatusKeepsBusinessExecutionAndUnknownAxesSeparate(t *testing.T) {
 		{&contracts.Run{ExecutionStatus: "running", FinishTaskStatus: "waiting_pr_merge"}, "待合并"},
 		{&contracts.Run{ExecutionStatus: "unknown", FinishTaskStatus: "completed"}, "需处理"},
 		{&contracts.Run{ExecutionStatus: "failed", FinishTaskStatus: "completed"}, "需处理"},
-		{&contracts.Run{ExecutionStatus: "succeeded", FinishTaskStatus: "completed", PR: contracts.PRState{QueryError: stringPointer("provider unavailable")}}, "需处理"},
+		{&contracts.Run{ExecutionStatus: "succeeded", FinishTaskStatus: "completed", PR: executionmodel.PRState{QueryError: stringPointer("provider unavailable")}}, "需处理"},
 		{&contracts.Run{ExecutionStatus: "succeeded", FinishTaskStatus: "completed"}, "completed"},
 	}
 	for _, tc := range cases {
@@ -1035,7 +1041,7 @@ func TestEmptyRunningFilterExplainsWhyNativeTasksAreHidden(t *testing.T) {
 	ref := testProject("native")
 	snapshot := readySnapshot(ref, now)
 	snapshot.Tasks.Tasks = nil
-	snapshot.NativeTasks = &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{{TaskRecord: contracts.TaskRecord{TaskID: "103", Title: "Waiting for merge", Status: "in_progress"}}}}
+	snapshot.NativeTasks = &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{{TaskRecord: taskmodel.TaskRecord{TaskID: "103", Title: "Waiting for merge", Status: "in_progress"}}}}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].filter = 2
 	empty := strings.Join(renderRows(m, m.projects[0], 80, 8), "\n")
@@ -1061,8 +1067,8 @@ func TestNativeTaskViewKeepsOffPageSelectionAndEscapesText(t *testing.T) {
 	for i := 1; i <= 501; i++ {
 		snapshot.Tasks.Tasks = append(snapshot.Tasks.Tasks, contracts.TaskCandidate{TaskID: fmt.Sprint(i), Title: "candidate"})
 	}
-	snapshot.NativeTasks = &contracts.NativeTaskPage{SampledAt: now, HasMore: true, Tasks: []contracts.NativeTaskDetail{{TaskRecord: contracts.TaskRecord{TaskID: "1", Title: "first", Status: "open"}}}}
-	snapshot.SelectedNative = &contracts.NativeTaskDetail{TaskRecord: contracts.TaskRecord{TaskID: "501", Title: "中文标题\x1b[2J\n伪造按钮\u202e<script>", Status: "open"}, Predecessors: []contracts.TaskDependencyStatus{{TaskID: "1", Status: "discarded", Blocker: "discarded_predecessor"}}}
+	snapshot.NativeTasks = &contracts.NativeTaskPage{SampledAt: now, HasMore: true, Tasks: []contracts.NativeTaskDetail{{TaskRecord: taskmodel.TaskRecord{TaskID: "1", Title: "first", Status: "open"}}}}
+	snapshot.SelectedNative = &contracts.NativeTaskDetail{TaskRecord: taskmodel.TaskRecord{TaskID: "501", Title: "中文标题\x1b[2J\n伪造按钮\u202e<script>", Status: "open"}, Predecessors: []taskmodel.TaskDependencyStatus{{TaskID: "1", Status: "discarded", Blocker: "discarded_predecessor"}}}
 	snapshot.NativeTaskError = "只读取前 500 个任务；剩余任务不在此快照中"
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "task:501"
@@ -1089,7 +1095,7 @@ func TestNativeTaskViewKeepsOffPageSelectionAndEscapesText(t *testing.T) {
 		t.Fatalf("refresh lost the stable task selection: %q", m.projects[0].selectedKey)
 	}
 	m.projects[0].refreshID = 2
-	updated, _ = m.Update(projectMsg{key: ref.Key, identity: ref.Identity, requestID: 2, snapshot: ProjectSnapshot{Connection: api.ServiceConnection{State: api.ConnectionOffline}, NativeTaskError: "database unavailable"}})
+	updated, _ = m.Update(projectMsg{key: ref.Key, identity: ref.Identity, requestID: 2, snapshot: ProjectSnapshot{Connection: api.ServiceConnection{State: productapi.ConnectionOffline}, NativeTaskError: "database unavailable"}})
 	m = updated.(Model)
 	if m.projects[0].selectedKey != "task:501" || m.selectedRow(0) == nil || m.selectedRow(0).native == nil {
 		t.Fatal("offline refresh lost the selected task's last readable detail")
@@ -1187,7 +1193,7 @@ func TestReconciliationRejectsChangedRequestPayload(t *testing.T) {
 	requestID := "0123456789abcdef0123456789abcdef"
 	m.projects[0].actions[requestID] = &actionState{RequestID: requestID, Action: "start_task", TaskID: "task-B", Status: "indeterminate", TargetInstance: "instance-alpha", UpdatedAt: now}
 	wrongPayload, _ := json.Marshal(map[string]string{"task_id": "task-A"})
-	request := &api.ControlRequest{ProtocolVersion: 1, RequestID: requestID, RepositoryIdentity: ref.Identity, InstanceID: "instance-alpha", Action: "start_task", Payload: wrongPayload}
+	request := &productapi.ControlRequest{ProtocolVersion: 1, RequestID: requestID, RepositoryIdentity: ref.Identity, InstanceID: "instance-alpha", Action: "start_task", Payload: wrongPayload}
 	updated, _ := m.Update(actionReceiptMsg{projectKey: ref.Key, identity: ref.Identity, requestID: requestID, request: request})
 	m = updated.(Model)
 	action := m.projects[0].actions[requestID]

@@ -6,17 +6,18 @@ import (
 	"strings"
 	"testing"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
-func workspacePolicyFixture() executionapi.ExecutionPolicy {
-	return executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
+func workspacePolicyFixture() executionbackend.ExecutionPolicy {
+	return executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
 }
 
 func TestProjectPolicyMissingBoundResourcesAreNotReconstructed(t *testing.T) {
 	c := Config{Persistence: sqlite.Factory{}, ExecutionPolicy: workspacePolicyFixture()}
-	e := ExecutionRecord{Generation: "original-generation", Process: &executionapi.ProcessIdentity{Kind: "local"}}
+	e := executionmodel.ExecutionRecord{Generation: "original-generation", Process: &executionbackend.ProcessIdentity{Kind: "local"}}
 	if err := bindPolicyResources(context.Background(), c, &e, "workspace", nil); err == nil || !strings.Contains(err.Error(), "snapshot is missing") {
 		t.Fatalf("missing original resources were reconstructed: %v", err)
 	}
@@ -30,13 +31,13 @@ func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
 		s, run := neutralAuditService(t)
 		workflow, execution := s.workflowRecords(run)
 		path := run.WorkspaceIntent.Path
-		execution.Workspace = WorkspaceEvidence{Worktree: path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
+		execution.Workspace = executionmodel.WorkspaceEvidence{Worktree: path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
 		commandID := newID()
 		execution.Generation = newID()
 		execution.PendingCommandID = commandID
 		execution.ConfigurationDigest = workflow.ExecutionProfile.Digest
 		s.refreshRun(run)
-		input := executionapi.TurnInput{CommandID: commandID, Prompt: "fixed task instruction"}
+		input := executionbackend.TurnInput{CommandID: commandID, Prompt: "fixed task instruction"}
 		key := "worker-session:" + run.ExecutionID + ":" + commandID
 		opID, err := s.startWorkerOperation(run, "prepare_worker_session", key, &input)
 		require(t, err)
@@ -50,12 +51,12 @@ func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
 		snapshot, err := lifecycleSnapshot(run, s.workflowRecord(run), s.executionRecord(run), s.workflowAttempt(run, run.AttemptID), &input)
 		require(t, err)
 		operation := s.operationByKey(key)
-		request := lifecycleRequest(snapshot, *operation, executionapi.LifecyclePrepareSession, executionapi.LifecycleInput{Turn: &input})
-		receipt := executionapi.LifecycleReceipt{
-			Operation: request.Operation, Disposition: executionapi.OperationUnknown,
+		request := lifecycleRequest(snapshot, *operation, executionbackend.LifecyclePrepareSession, executionbackend.LifecycleInput{Turn: &input})
+		receipt := executionbackend.LifecycleReceipt{
+			Operation: request.Operation, Disposition: executionbackend.OperationUnknown,
 			RequestID: workerFlowMockSession, Process: identity,
 			Implementation: partial.ImplementationData,
-			State:          executionapi.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "policy-generation"},
+			State:          executionbackend.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "policy-generation"},
 		}
 		_, _, applyErr := s.applyAppServerSessionReceipt(run, request, receipt, errors.New("session receipt persistence failed"))
 		require(t, applyErr)
@@ -76,7 +77,7 @@ func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
 		s, run := neutralAuditService(t)
 		workflow, execution := s.workflowRecords(run)
 		path := run.WorkspaceIntent.Path
-		execution.Workspace = WorkspaceEvidence{Worktree: path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
+		execution.Workspace = executionmodel.WorkspaceEvidence{Worktree: path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
 		commandID := newID()
 		execution.PendingCommandID = commandID
 		identity, err := currentProcessIdentity()
@@ -87,16 +88,16 @@ func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
 		resource := neutralPolicyReceipt(workflow.ExecutionProfile.Digest, path, execution)
 		execution.PolicyResources = resource
 		s.refreshRun(run)
-		input := executionapi.TurnInput{CommandID: commandID, Prompt: "fixed task instruction"}
+		input := executionbackend.TurnInput{CommandID: commandID, Prompt: "fixed task instruction"}
 		key := "worker-turn:" + run.ExecutionID + ":" + commandID
 		opID, err := s.startWorkerOperation(run, "start_worker_turn", key, &input)
 		require(t, err)
 		snapshot, err := lifecycleSnapshot(run, s.workflowRecord(run), execution, s.workflowAttempt(run, run.AttemptID), &input)
 		require(t, err)
 		operation := s.operationByKey(key)
-		request := lifecycleRequest(snapshot, *operation, executionapi.LifecycleStartTurn, executionapi.LifecycleInput{Turn: &input})
-		receipt := executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown, RequestID: workerFlowMockSession, Process: identity,
-			Implementation: cloneImplementationData(execution.ImplementationData), State: executionapi.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "policy-generation"}}
+		request := lifecycleRequest(snapshot, *operation, executionbackend.LifecycleStartTurn, executionbackend.LifecycleInput{Turn: &input})
+		receipt := executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationUnknown, RequestID: workerFlowMockSession, Process: identity,
+			Implementation: cloneImplementationData(execution.ImplementationData), State: executionbackend.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "policy-generation"}}
 		applyErr := s.applyAppServerTurnReceipt(run, request, receipt, nil, errors.New("turn receipt persistence failed"))
 		require(t, applyErr)
 		snapshotResult, err := s.domainStore.Query(context.Background(), s.Config.identity)

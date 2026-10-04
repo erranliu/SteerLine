@@ -9,39 +9,40 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func queryCredentialRequirement(c Config, r executionapi.CredentialRequirement) executionapi.RequirementEvidence {
-	e := executionapi.RequirementEvidence{ID: r.ID, Site: r.Site, Version: "provider-reference-v1", Target: targetFor(c), Status: executionapi.RequirementUnknown, Source: "provider:reference-unavailable", CheckedAt: now()}
+func queryCredentialRequirement(c Config, r executionbackend.CredentialRequirement) executionbackend.RequirementEvidence {
+	e := executionbackend.RequirementEvidence{ID: r.ID, Site: r.Site, Version: "provider-reference-v1", Target: targetFor(c), Status: executionbackend.RequirementUnknown, Source: "provider:reference-unavailable", CheckedAt: now()}
 	if r.ID != "pr.token_env" || r.Site != "service" {
 		return e
 	}
 	if c.PR.TokenEnv == "" {
-		e.Status = executionapi.RequirementMissing
+		e.Status = executionbackend.RequirementMissing
 		return e
 	}
 	e.Source = "provider:environment-reference:" + c.PR.TokenEnv
-	e.Status = executionapi.RequirementMissing
+	e.Status = executionbackend.RequirementMissing
 	if value, ok := os.LookupEnv(c.PR.TokenEnv); ok && strings.TrimSpace(value) != "" {
-		e.Status = executionapi.RequirementPresent
+		e.Status = executionbackend.RequirementPresent
 	}
 	return e
 }
 
 // Evaluation is deliberately separate from the mandatory worker preflight.
 // Reports loaded here have already had their native evidence references checked.
-func evaluateExecutionRequirements(ctx context.Context, c Config) (executionapi.RequirementsEvaluation, error) {
+func evaluateExecutionRequirements(ctx context.Context, c Config) (executionbackend.RequirementsEvaluation, error) {
 	entry, err := registrationFor(c)
 	if err != nil {
-		return executionapi.RequirementsEvaluation{}, err
+		return executionbackend.RequirementsEvaluation{}, err
 	}
 	if err = c.ExecutionRequirements.Validate(); err != nil {
-		return executionapi.RequirementsEvaluation{}, err
+		return executionbackend.RequirementsEvaluation{}, err
 	}
-	key := executionapi.CapabilityReport{Version: 1, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol, Target: entry.Target(c), Agent: agentFor(c)}
-	e := executionapi.RequirementsEvaluation{Version: 1, Backend: key.Backend, Protocol: key.Protocol, Target: key.Target, Agent: key.Agent, CheckedAt: now()}
+	key := executionbackend.CapabilityReport{Version: 1, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol, Target: entry.Target(c), Agent: agentFor(c)}
+	e := executionbackend.RequirementsEvaluation{Version: 1, Backend: key.Backend, Protocol: key.Protocol, Target: key.Target, Agent: key.Agent, CheckedAt: now()}
 	if len(c.ExecutionRequirements.Capabilities) > 0 {
 		key, err = entry.ProbeRequirements(ctx, c)
 		if err != nil {
@@ -65,16 +66,18 @@ func evaluateExecutionRequirements(ctx context.Context, c Config) (executionapi.
 
 // EvaluateRequirements reads the selected target's requirement evidence using
 // the configuration's explicit directory. It grants no mutation authority.
-func (c Config) EvaluateRequirements(ctx context.Context) (executionapi.RequirementsEvaluation, error) {
+func (c Config) EvaluateRequirements(ctx context.Context) (executionbackend.RequirementsEvaluation, error) {
 	return evaluateExecutionRequirements(ctx, c)
 }
-func requirementsEvidenceDigest(e *executionapi.RequirementsEvaluation) string {
+
+func requirementsEvidenceDigest(e *executionbackend.RequirementsEvaluation) string {
 	if e == nil {
 		return ""
 	}
 	return digestValue(e)
 }
-func verifyRequirementsSnapshot(p FixedExecutionProfile, directory *ExecutionDirectory) bool {
+
+func verifyRequirementsSnapshot(p executionmodel.FixedExecutionProfile, directory *ExecutionDirectory) bool {
 	if p.ExecutionRequirements.Validate() != nil || requirementsEvidenceDigest(p.RequirementsEvaluation) != p.RequirementsEvidenceDigest {
 		return false
 	}
@@ -91,7 +94,7 @@ func verifyRequirementsSnapshot(p FixedExecutionProfile, directory *ExecutionDir
 	if err != nil {
 		return false
 	}
-	key := executionapi.CapabilityReport{Version: 1, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol, Target: targetFor(c), Agent: agentFor(c)}
+	key := executionbackend.CapabilityReport{Version: 1, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol, Target: targetFor(c), Agent: agentFor(c)}
 	if e.Capabilities != nil {
 		key.PlatformVersion = e.Capabilities.PlatformVersion
 		key.AgentVersion = e.Capabilities.AgentVersion
@@ -100,7 +103,8 @@ func verifyRequirementsSnapshot(p FixedExecutionProfile, directory *ExecutionDir
 	}
 	return p.ExecutionRequirements.Match(e, key) == nil
 }
-func clonePublicationSettings(p contracts.PublicationSettings) contracts.PublicationSettings {
+
+func clonePublicationSettings(p executionmodel.PublicationSettings) executionmodel.PublicationSettings {
 	p.Provider.Query.Args = slices.Clone(p.Provider.Query.Args)
 	p.Provider.Close.Args = slices.Clone(p.Provider.Close.Args)
 	p.Git.Args = slices.Clone(p.Git.Args)
@@ -127,6 +131,7 @@ func verifyClaimConfigFiles(c Config) error {
 	}
 	return nil
 }
+
 func loadedConfigDigest(project, global []byte) string {
 	h := sha256.New()
 	h.Write(project)
@@ -158,7 +163,7 @@ func (s *Service) checkCurrentExecutionRequirements(ctx context.Context, fixed w
 	return errors.Join(err, s.commitWorker(fixed.run))
 }
 
-func (s *Service) resumeRegisteredWorkerFlow(ctx context.Context, task *TaskRecord, run *Run, entry ExecutionRegistration) (bool, error) {
+func (s *Service) resumeRegisteredWorkerFlow(ctx context.Context, task *taskmodel.TaskRecord, run *Run, entry ExecutionRegistration) (bool, error) {
 	if _, err := s.workerFlowContext(run); err != nil {
 		return false, err
 	}

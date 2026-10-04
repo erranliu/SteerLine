@@ -1,15 +1,13 @@
 package console
 
-// Conversation groups, event summaries and paged message body rendering.
-
 import (
 	"fmt"
 	"strings"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/activityview"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func renderSession(state projectState, row *consoleRow, width, height int, now time.Time) []string {
@@ -94,7 +92,7 @@ func renderSession(state projectState, row *consoleRow, width, height int, now t
 		for _, report := range state.capabilities {
 			lines = append(lines, "能力："+safeTerminalText(string(report.Backend)+" / "+string(report.Protocol)+" / "+report.Agent)+" · 来源 "+safeTerminalText(report.Source+"/"+report.SourceIdentity)+" · 检查 "+report.CheckedAt.Local().Format(timeLayout))
 			for _, capability := range report.Capabilities {
-				if capability.Status != executionapi.CapabilityVerified {
+				if capability.Status != executionbackend.CapabilityVerified {
 					lines = append(lines, "  "+safeTerminalText(capability.Name)+" = "+safeTerminalText(string(capability.Status))+" · "+safeTerminalText(capability.Evidence))
 				}
 			}

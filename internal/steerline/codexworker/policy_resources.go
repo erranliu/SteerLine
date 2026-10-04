@@ -6,7 +6,7 @@ import (
 	"errors"
 	"strings"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 const PolicyResourcesCodecKey = "codex.policy-resources"
@@ -26,10 +26,10 @@ type ProfileConfigIdentity struct {
 }
 
 type PolicyResourceBuildRequest struct {
-	ProfileData      []executionapi.ImplementationDataEnvelope
+	ProfileData      []executionbackend.ImplementationDataEnvelope
 	ProfileIdentity  ProfileConfigIdentity
 	ResourceIdentity PolicyResourceIdentity
-	Policy           executionapi.ExecutionPolicy
+	Policy           executionbackend.ExecutionPolicy
 	Host             string
 	Agent            string
 	GOOS             string
@@ -40,32 +40,32 @@ type PolicyResourceBuildRequest struct {
 type PolicyVersionProbe func(context.Context, string) (string, error)
 
 type BoundPolicyResources struct {
-	Envelope   executionapi.ImplementationDataEnvelope
+	Envelope   executionbackend.ImplementationDataEnvelope
 	WriteRoots []string
 }
 
 // PolicyResourcePayload contains native version, permission contract and launch
 // settings. The center stores it as opaque, identity-bound codec data.
 type PolicyResourcePayload struct {
-	NativeVersion string                     `json:"native_version"`
-	Contract      string                     `json:"contract"`
-	Settings      executionapi.LaunchCommand `json:"settings"`
+	NativeVersion string                         `json:"native_version"`
+	Contract      string                         `json:"contract"`
+	Settings      executionbackend.LaunchCommand `json:"settings"`
 }
 
-func NewPolicyResourceEnvelope(identity PolicyResourceIdentity, payload PolicyResourcePayload) (executionapi.ImplementationDataEnvelope, error) {
+func NewPolicyResourceEnvelope(identity PolicyResourceIdentity, payload PolicyResourcePayload) (executionbackend.ImplementationDataEnvelope, error) {
 	encoded, err := json.Marshal(payload)
 	if err != nil {
-		return executionapi.ImplementationDataEnvelope{}, err
+		return executionbackend.ImplementationDataEnvelope{}, err
 	}
-	return executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{
-		CodecVersion: 1, Purpose: executionapi.ImplementationResourcePurpose,
+	return executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{
+		CodecVersion: 1, Purpose: executionbackend.ImplementationResourcePurpose,
 		ImplementationKey: PolicyResourcesCodecKey, ProjectID: identity.ProjectID,
 		ExecutionID: identity.ExecutionID, AttemptID: identity.AttemptID,
 		Generation: identity.Generation, ConfigDigest: identity.ConfigDigest,
 	}, encoded)
 }
 
-func DecodeProfileConfigEnvelope(data []executionapi.ImplementationDataEnvelope, identity ProfileConfigIdentity) (ProfileConfig, error) {
+func DecodeProfileConfigEnvelope(data []executionbackend.ImplementationDataEnvelope, identity ProfileConfigIdentity) (ProfileConfig, error) {
 	return profileConfigFromEnvelopes(data, identity)
 }
 
@@ -100,10 +100,10 @@ func BuildPolicyResourceEnvelope(ctx context.Context, request PolicyResourceBuil
 	if permissions.Sandbox == "workspace-write" {
 		roots = append([]string{request.Workspace}, roots...)
 	}
-	var command executionapi.LaunchCommand
+	var command executionbackend.LaunchCommand
 	switch request.Host {
 	case "local":
-		command = executionapi.LaunchCommand{Executable: native, Args: append(append([]string(nil), settings.Args...), permissions.Args()...), WorkingDirectory: request.Workspace}
+		command = executionbackend.LaunchCommand{Executable: native, Args: append(append([]string(nil), settings.Args...), permissions.Args()...), WorkingDirectory: request.Workspace}
 	case "orca":
 		command, err = ManagedCommand(ManagedCommandOptions{
 			Policy: request.Policy, Host: request.Host, Agent: request.Agent, Executable: native,
@@ -125,8 +125,8 @@ func BuildPolicyResourceEnvelope(ctx context.Context, request PolicyResourceBuil
 	return BoundPolicyResources{Envelope: envelope, WriteRoots: roots}, nil
 }
 
-func profileConfigFromEnvelopes(data []executionapi.ImplementationDataEnvelope, identity ProfileConfigIdentity) (ProfileConfig, error) {
-	var found *executionapi.ImplementationDataEnvelope
+func profileConfigFromEnvelopes(data []executionbackend.ImplementationDataEnvelope, identity ProfileConfigIdentity) (ProfileConfig, error) {
+	var found *executionbackend.ImplementationDataEnvelope
 	for i := range data {
 		if data[i].ImplementationKey != ProfileCodecKey {
 			continue
@@ -148,7 +148,7 @@ func profileConfigFromEnvelopes(data []executionapi.ImplementationDataEnvelope, 
 	return DecodeProfileConfig(found.Payload)
 }
 
-func DecodePolicyResourceEnvelope(envelope executionapi.ImplementationDataEnvelope, identity PolicyResourceIdentity) (PolicyResourcePayload, error) {
+func DecodePolicyResourceEnvelope(envelope executionbackend.ImplementationDataEnvelope, identity PolicyResourceIdentity) (PolicyResourcePayload, error) {
 	if envelope.ImplementationKey != PolicyResourcesCodecKey || envelope.CodecVersion != 1 {
 		return PolicyResourcePayload{}, errors.New("unsupported permission resource codec")
 	}
@@ -156,7 +156,7 @@ func DecodePolicyResourceEnvelope(envelope executionapi.ImplementationDataEnvelo
 		return PolicyResourcePayload{}, err
 	}
 	var payload PolicyResourcePayload
-	if err := executionapi.DecodeStrictJSON(envelope.Payload, &payload, "permission resource payload has trailing JSON"); err != nil {
+	if err := executionbackend.DecodeStrictJSON(envelope.Payload, &payload, "permission resource payload has trailing JSON"); err != nil {
 		return PolicyResourcePayload{}, err
 	}
 	if (payload.Contract != PolicyContract && payload.Contract != FullAccessPolicyContract) || VerifyPolicyVersion(payload.NativeVersion) != nil || payload.Settings.Executable == "" {

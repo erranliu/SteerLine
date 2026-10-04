@@ -8,30 +8,29 @@ import (
 	"strings"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 // ExecutionLifecycle owns native Orca requests and interprets their receipts.
 // It receives only immutable setup and one center-persisted action at a time.
 type ExecutionLifecycle struct {
-	setup  executionapi.LifecycleSetup
+	setup  executionbackend.LifecycleSetup
 	config Config
 	client Client
 	codex  codexworker.ProfileConfig
 	orca   ProfileConfig
 }
 
-func NewExecutionLifecycle(setup executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {
+func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 	setup = setup.Clone()
 	ref := setup.Snapshot.Ref
-	if ref.Backend != executionapi.BackendOrca || ref.Protocol != executionapi.ProtocolOrcaTerminalV2 || ref.Agent.Name != "codex" || setup.ProcessHost == nil {
-		return nil, &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "native Orca lifecycle setup differs from its fixed target"}
+	if ref.Backend != executionbackend.BackendOrca || ref.Protocol != executionbackend.ProtocolOrcaTerminalV2 || ref.Agent.Name != "codex" || setup.ProcessHost == nil {
+		return nil, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "native Orca lifecycle setup differs from its fixed target"}
 	}
 	profile := func(key string) ([]byte, error) {
-		var found *executionapi.ImplementationDataEnvelope
+		var found *executionbackend.ImplementationDataEnvelope
 		for i := range setup.ProfileData {
 			if setup.ProfileData[i].ImplementationKey != key {
 				continue
@@ -47,7 +46,7 @@ func NewExecutionLifecycle(setup executionapi.LifecycleSetup) (executionapi.Life
 		if err := found.ValidateProfileIdentity(setup.Snapshot.Session.ProjectID, setup.ProfileID, setup.AcceptedConfigVersion); err != nil {
 			return nil, err
 		}
-		if found.CodecVersion != 1 || found.Purpose != executionapi.ImplementationConfigPurpose {
+		if found.CodecVersion != 1 || found.Purpose != executionbackend.ImplementationConfigPurpose {
 			return nil, fmt.Errorf("unsupported implementation profile %q", key)
 		}
 		return append([]byte(nil), found.Payload...), nil
@@ -72,7 +71,7 @@ func NewExecutionLifecycle(setup executionapi.LifecycleSetup) (executionapi.Life
 		return nil, err
 	}
 	if ref.Target.ID != nativeTargetID(orca) {
-		return nil, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native Orca profile differs from the fixed target"}
+		return nil, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "native Orca profile differs from the fixed target"}
 	}
 	timeout := setup.CommandTimeout
 	if timeout <= 0 {
@@ -85,14 +84,14 @@ func NewExecutionLifecycle(setup executionapi.LifecycleSetup) (executionapi.Life
 			defer cancel()
 		}
 		all := append(append([]string(nil), orca.Args...), args...)
-		return setup.ProcessHost.OutputCommand(ctx, executionapi.LaunchCommand{
+		return setup.ProcessHost.OutputCommand(ctx, executionbackend.LaunchCommand{
 			Executable: orca.Executable, Args: all, WorkingDirectory: setup.RepositoryPath,
 		})
 	}
 	config := Config{Repository: setup.RepositoryPath, CommandTimeout: timeout.String(), Target: ref.Target, Output: output}
 	if codex.Model != "" {
 		config.AgentVersion = func(ctx context.Context) (string, error) {
-			out, err := setup.ProcessHost.OutputCommand(ctx, executionapi.LaunchCommand{
+			out, err := setup.ProcessHost.OutputCommand(ctx, executionbackend.LaunchCommand{
 				Executable: codex.Executable, Args: append(append([]string(nil), codex.Args...), "--version"), WorkingDirectory: setup.RepositoryPath,
 			})
 			return strings.TrimSpace(string(out)), err
@@ -108,32 +107,32 @@ func nativeTargetID(config ProfileConfig) string {
 	}{config.Executable, append([]string(nil), config.Args...)})[:24]
 }
 
-func (l *ExecutionLifecycle) PolicyCapabilities() executionapi.LifecyclePolicyCapabilities {
-	return executionapi.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true, SeparateTurnStart: true, ActiveTurnFeedback: true, ResumeActiveObservation: true}
+func (l *ExecutionLifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
+	return executionbackend.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true, SeparateTurnStart: true, ActiveTurnFeedback: true, ResumeActiveObservation: true}
 }
 
-func (l *ExecutionLifecycle) PreflightLifecycle(ctx context.Context, setup executionapi.LifecycleSetup) (executionapi.CapabilityReport, error) {
+func (l *ExecutionLifecycle) PreflightLifecycle(ctx context.Context, setup executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error) {
 	if err := sameNativeTarget(l.setup.Snapshot.Ref, setup.Snapshot.Ref); err != nil {
-		return executionapi.CapabilityReport{}, err
+		return executionbackend.CapabilityReport{}, err
 	}
 	if err := ValidateProfileSelection(setup.Policy, setup.Snapshot.Ref.Agent.Name, mustEncodeCodex(l.codex), mustEncodeOrca(l.orca)); err != nil {
-		return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: err.Error(), Cause: err}
+		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: err.Error(), Cause: err}
 	}
 	if err := CheckStatus(ctx, l.client.Call); err != nil {
-		return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendUnreachable, Diagnostic: "Orca status probe failed", Cause: err}
+		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendUnreachable, Diagnostic: "Orca status probe failed", Cause: err}
 	}
 	if _, err := FindRepo(ctx, l.client.Call, setup.RepositoryPath); err != nil {
-		return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: err.Error(), Cause: err}
+		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: err.Error(), Cause: err}
 	}
 	if l.fixedAgentLaunch() {
 		command, err := l.agentCommand(setup.RepositoryPath)
 		if err != nil {
-			return executionapi.CapabilityReport{}, &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: err.Error(), Cause: err}
+			return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: err.Error(), Cause: err}
 		}
-		if err := codexworker.ProbeManagedCLI(ctx, contracts.Command{Executable: command.Executable, Args: command.Args}, func(ctx context.Context, executable string, args []string) ([]byte, error) {
-			return l.setup.ProcessHost.OutputCommand(ctx, executionapi.LaunchCommand{Executable: executable, Args: append([]string(nil), args...), WorkingDirectory: setup.RepositoryPath})
+		if err := codexworker.ProbeManagedCLI(ctx, executionbackend.Command{Executable: command.Executable, Args: command.Args}, func(ctx context.Context, executable string, args []string) ([]byte, error) {
+			return l.setup.ProcessHost.OutputCommand(ctx, executionbackend.LaunchCommand{Executable: executable, Args: append([]string(nil), args...), WorkingDirectory: setup.RepositoryPath})
 		}); err != nil {
-			return executionapi.CapabilityReport{}, err
+			return executionbackend.CapabilityReport{}, err
 		}
 	}
 	report, err := NewBackend(l.config).Probe(ctx, setup.Snapshot.Ref.Target, setup.Snapshot.Ref.Agent)
@@ -142,7 +141,7 @@ func (l *ExecutionLifecycle) PreflightLifecycle(ctx context.Context, setup execu
 	}
 	for i := range report.Capabilities {
 		if report.Capabilities[i].Name == "start" {
-			report.Capabilities[i].Status = executionapi.CapabilityVerified
+			report.Capabilities[i].Status = executionbackend.CapabilityVerified
 			report.Capabilities[i].Evidence = "native Orca lifecycle preflight"
 		}
 	}
@@ -153,23 +152,24 @@ func mustEncodeCodex(config codexworker.ProfileConfig) []byte {
 	value, _ := codexworker.EncodeProfileConfig(config)
 	return value
 }
+
 func mustEncodeOrca(config ProfileConfig) []byte {
 	value, _ := EncodeProfileConfig(config)
 	return value
 }
 
-func (l *ExecutionLifecycle) Next(ctx context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.LifecycleCandidate, error) {
+func (l *ExecutionLifecycle) Next(ctx context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleCandidate, error) {
 	if err := l.validateSnapshot(snapshot); err != nil {
-		return executionapi.LifecycleCandidate{}, err
+		return executionbackend.LifecycleCandidate{}, err
 	}
 	state, _, err := l.readState(snapshot)
 	if err != nil {
-		return executionapi.LifecycleCandidate{}, err
+		return executionbackend.LifecycleCandidate{}, err
 	}
 	if snapshot.WorkflowPhase == "completed" && snapshot.TaskDelivered {
 		for _, turn := range state.Turns {
 			if !turn.Settled {
-				return executionapi.LifecycleCandidate{Done: true}, nil
+				return executionbackend.LifecycleCandidate{Done: true}, nil
 			}
 		}
 		if snapshot.Ref.External.Terminal != "" && !cleanupConfirmed(snapshot, snapshot.Ref.External) {
@@ -178,33 +178,33 @@ func (l *ExecutionLifecycle) Next(ctx context.Context, snapshot executionapi.Lif
 		if state.Coordinator.Terminal != "" && !cleanupConfirmed(snapshot, state.Coordinator) {
 			return nativeCleanupCandidate(state.Coordinator), nil
 		}
-		return executionapi.LifecycleCandidate{Done: true}, nil
+		return executionbackend.LifecycleCandidate{Done: true}, nil
 	}
 	if snapshot.Workspace.Path == "" {
 		if snapshot.WorkspacePlan.BaseCommit == "" {
-			return executionapi.LifecycleCandidate{}, errors.New("native Orca has no fixed workspace plan")
+			return executionbackend.LifecycleCandidate{}, errors.New("native Orca has no fixed workspace plan")
 		}
-		candidate := executionapi.LifecycleCandidate{Action: executionapi.LifecyclePrepareWorkspace,
-			Input: executionapi.LifecycleInput{Workspace: nativeWorkspace(&snapshot.WorkspacePlan)}}
+		candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecyclePrepareWorkspace,
+			Input: executionbackend.LifecycleInput{Workspace: nativeWorkspace(&snapshot.WorkspacePlan)}}
 		return candidate, candidate.Validate()
 	}
 	if snapshot.Ref.Target.WorktreeID == "" {
-		return executionapi.LifecycleCandidate{}, errors.New("native Orca workspace receipt has no Worktree identity")
+		return executionbackend.LifecycleCandidate{}, errors.New("native Orca workspace receipt has no Worktree identity")
 	}
 	if !state.AgentBound {
 		if snapshot.Ref.External.Terminal != "" {
 			terminal, err := ShowTerminal(ctx, l.client.MetaCall, snapshot.Ref.External.Terminal)
 			if err != nil {
-				return executionapi.LifecycleCandidate{}, err
+				return executionbackend.LifecycleCandidate{}, err
 			}
 			if terminal.Handle != snapshot.Ref.External.Terminal || terminal.RuntimeID != snapshot.Ref.External.RuntimeID || terminal.IncarnationID != snapshot.Ref.External.Incarnation || terminal.WorktreeID != snapshot.Ref.Target.WorktreeID {
-				return executionapi.LifecycleCandidate{}, errors.New("original starting terminal identity changed")
+				return executionbackend.LifecycleCandidate{}, errors.New("original starting terminal identity changed")
 			}
 			if terminal.AgentIdentity == "" {
-				return executionapi.LifecycleCandidate{Done: true}, nil
+				return executionbackend.LifecycleCandidate{Done: true}, nil
 			}
 			if terminal.AgentIdentity != "codex" {
-				return executionapi.LifecycleCandidate{}, errors.New("original starting terminal detected another agent")
+				return executionbackend.LifecycleCandidate{}, errors.New("original starting terminal detected another agent")
 			}
 		}
 		purpose := "agent-bind"
@@ -223,7 +223,7 @@ func (l *ExecutionLifecycle) Next(ctx context.Context, snapshot executionapi.Lif
 		return nativeResourceCandidate("relay-ignore", "", "", ""), nil
 	}
 	if snapshot.PendingTurn == nil {
-		return executionapi.LifecycleCandidate{Done: true}, nil
+		return executionbackend.LifecycleCandidate{Done: true}, nil
 	}
 	turn := nativeTurn(&state, snapshot.PendingTurn.CommandID)
 	if turn == nil || turn.TaskID == "" {
@@ -232,17 +232,17 @@ func (l *ExecutionLifecycle) Next(ctx context.Context, snapshot executionapi.Lif
 		return candidate, candidate.Validate()
 	}
 	if turn.DispatchID == "" {
-		candidate := executionapi.LifecycleCandidate{Action: executionapi.LifecycleStartTurn, Input: executionapi.LifecycleInput{Turn: nativeTurnInput(snapshot.PendingTurn)}}
+		candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleStartTurn, Input: executionbackend.LifecycleInput{Turn: nativeTurnInput(snapshot.PendingTurn)}}
 		return candidate, candidate.Validate()
 	}
 	if turn.InputSubmissionPending {
-		candidate := executionapi.LifecycleCandidate{Action: executionapi.LifecycleSubmitInput, Input: executionapi.LifecycleInput{Turn: nativeTurnInput(snapshot.PendingTurn)}}
+		candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleSubmitInput, Input: executionbackend.LifecycleInput{Turn: nativeTurnInput(snapshot.PendingTurn)}}
 		return candidate, candidate.Validate()
 	}
-	return executionapi.LifecycleCandidate{Done: true}, nil
+	return executionbackend.LifecycleCandidate{Done: true}, nil
 }
 
-func nativeWorkspace(value *executionapi.WorkspaceIntent) *executionapi.WorkspaceIntent {
+func nativeWorkspace(value *executionbackend.WorkspaceIntent) *executionbackend.WorkspaceIntent {
 	if value == nil {
 		return nil
 	}
@@ -250,7 +250,7 @@ func nativeWorkspace(value *executionapi.WorkspaceIntent) *executionapi.Workspac
 	return &copy
 }
 
-func nativeTurnInput(value *executionapi.TurnInput) *executionapi.TurnInput {
+func nativeTurnInput(value *executionbackend.TurnInput) *executionbackend.TurnInput {
 	if value == nil {
 		return nil
 	}
@@ -259,24 +259,24 @@ func nativeTurnInput(value *executionapi.TurnInput) *executionapi.TurnInput {
 	return &copy
 }
 
-func nativeResourceCandidate(purpose, name, objective, turnID string) executionapi.LifecycleCandidate {
-	return executionapi.LifecycleCandidate{Action: executionapi.LifecycleCreateResource,
-		Input: executionapi.LifecycleInput{Resource: &executionapi.ResourceIntent{Purpose: purpose, Name: name, Objective: objective, TurnID: turnID}}}
+func nativeResourceCandidate(purpose, name, objective, turnID string) executionbackend.LifecycleCandidate {
+	return executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleCreateResource,
+		Input: executionbackend.LifecycleInput{Resource: &executionbackend.ResourceIntent{Purpose: purpose, Name: name, Objective: objective, TurnID: turnID}}}
 }
 
-func nativeCleanupCandidate(identity executionapi.ProcessIdentity) executionapi.LifecycleCandidate {
-	return executionapi.LifecycleCandidate{Action: executionapi.LifecycleCleanup,
-		Input: executionapi.LifecycleInput{Cleanup: &executionapi.CleanupInput{Resources: []executionapi.ProcessIdentity{identity}}}}
+func nativeCleanupCandidate(identity executionbackend.ProcessIdentity) executionbackend.LifecycleCandidate {
+	return executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleCleanup,
+		Input: executionbackend.LifecycleInput{Cleanup: &executionbackend.CleanupInput{Resources: []executionbackend.ProcessIdentity{identity}}}}
 }
 
 // Delivery evidence stays frozen. Cleanup progress comes from the actor's
 // committed original operation receipts, not a rewrite of native turn state.
-func cleanupConfirmed(snapshot executionapi.LifecycleSnapshot, identity executionapi.ProcessIdentity) bool {
+func cleanupConfirmed(snapshot executionbackend.LifecycleSnapshot, identity executionbackend.ProcessIdentity) bool {
 	for _, operation := range snapshot.Operations {
-		if operation.Action != string(executionapi.LifecycleCleanup) || operation.Status != executionapi.OperationConfirmed || operation.Ref == nil || *operation.Ref != snapshot.Ref || operation.LifecycleIdentity == nil || operation.LifecycleIdentity.ExecutionID != snapshot.Session.ExecutionID {
+		if operation.Action != string(executionbackend.LifecycleCleanup) || operation.Status != executionbackend.OperationConfirmed || operation.Ref == nil || *operation.Ref != snapshot.Ref || operation.LifecycleIdentity == nil || operation.LifecycleIdentity.ExecutionID != snapshot.Session.ExecutionID {
 			continue
 		}
-		candidate, err := executionapi.CandidateForOperation(operation)
+		candidate, err := executionbackend.CandidateForOperation(operation)
 		if err == nil && candidate.Input.Cleanup != nil && len(candidate.Input.Cleanup.Resources) == 1 && candidate.Input.Cleanup.Resources[0] == identity {
 			return true
 		}
@@ -284,94 +284,94 @@ func cleanupConfirmed(snapshot executionapi.LifecycleSnapshot, identity executio
 	return false
 }
 
-func (l *ExecutionLifecycle) Execute(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (l *ExecutionLifecycle) Execute(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	if err := request.Validate(); err != nil {
-		return nativeReceipt(request, executionapi.OperationRejected), nil, err
+		return nativeReceipt(request, executionbackend.OperationRejected), nil, err
 	}
 	if err := l.validateSnapshot(request.Snapshot); err != nil {
-		return nativeReceipt(request, executionapi.OperationRejected), nil, err
+		return nativeReceipt(request, executionbackend.OperationRejected), nil, err
 	}
-	switch executionapi.LifecycleAction(request.Operation.Action) {
-	case executionapi.LifecyclePrepareWorkspace:
+	switch executionbackend.LifecycleAction(request.Operation.Action) {
+	case executionbackend.LifecyclePrepareWorkspace:
 		receipt, err := l.prepareWorkspace(ctx, request)
 		return receipt, nil, err
-	case executionapi.LifecycleCreateResource:
+	case executionbackend.LifecycleCreateResource:
 		receipt, err := l.createResource(ctx, request)
 		return receipt, nil, err
-	case executionapi.LifecycleStartTurn:
+	case executionbackend.LifecycleStartTurn:
 		return l.startTurn(ctx, request)
-	case executionapi.LifecycleSubmitInput:
+	case executionbackend.LifecycleSubmitInput:
 		return l.submitInput(ctx, request)
-	case executionapi.LifecycleReportCompletion:
+	case executionbackend.LifecycleReportCompletion:
 		receipt, err := l.reportCompletion(ctx, request)
 		return receipt, nil, err
-	case executionapi.LifecycleDeliverFeedback:
+	case executionbackend.LifecycleDeliverFeedback:
 		receipt, err := l.deliverFeedback(ctx, request)
 		return receipt, nil, err
-	case executionapi.LifecycleAcknowledge:
+	case executionbackend.LifecycleAcknowledge:
 		receipt, err := l.acknowledge(ctx, request)
 		return receipt, nil, err
-	case executionapi.LifecycleCleanup:
+	case executionbackend.LifecycleCleanup:
 		receipt, err := l.cleanup(ctx, request)
 		return receipt, nil, err
-	case executionapi.LifecycleHostAction:
+	case executionbackend.LifecycleHostAction:
 		receipt, err := l.ExecuteHostAction(ctx, request)
 		return receipt, nil, err
 	default:
-		return nativeReceipt(request, executionapi.OperationRejected), nil,
-			executionapi.UnsupportedAdapterOperation(request.Operation.Action, "native Orca action is unsupported")
+		return nativeReceipt(request, executionbackend.OperationRejected), nil,
+			executionbackend.UnsupportedAdapterOperation(request.Operation.Action, "native Orca action is unsupported")
 	}
 }
 
-func (l *ExecutionLifecycle) Reconcile(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (l *ExecutionLifecycle) Reconcile(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	if err := request.Validate(); err != nil {
-		return nativeReceipt(request, executionapi.OperationRejected), nil, err
+		return nativeReceipt(request, executionbackend.OperationRejected), nil, err
 	}
 	if err := l.validateSnapshot(request.Snapshot); err != nil {
-		return nativeReceipt(request, executionapi.OperationRejected), nil, err
+		return nativeReceipt(request, executionbackend.OperationRejected), nil, err
 	}
-	switch executionapi.LifecycleAction(request.Operation.Action) {
-	case executionapi.LifecyclePrepareWorkspace:
+	switch executionbackend.LifecycleAction(request.Operation.Action) {
+	case executionbackend.LifecyclePrepareWorkspace:
 		return l.reconcileWorkspace(ctx, request)
-	case executionapi.LifecycleCreateResource:
+	case executionbackend.LifecycleCreateResource:
 		return l.reconcileResource(ctx, request)
-	case executionapi.LifecycleStartTurn:
+	case executionbackend.LifecycleStartTurn:
 		return l.reconcileStart(ctx, request)
-	case executionapi.LifecycleSubmitInput:
+	case executionbackend.LifecycleSubmitInput:
 		return l.reconcileInput(ctx, request)
-	case executionapi.LifecycleReportCompletion:
+	case executionbackend.LifecycleReportCompletion:
 		return l.reconcileCompletion(ctx, request)
-	case executionapi.LifecycleDeliverFeedback:
+	case executionbackend.LifecycleDeliverFeedback:
 		return l.reconcileFeedback(ctx, request)
-	case executionapi.LifecycleAcknowledge:
+	case executionbackend.LifecycleAcknowledge:
 		return l.reconcileAck(ctx, request)
-	case executionapi.LifecycleCleanup:
+	case executionbackend.LifecycleCleanup:
 		return l.reconcileCleanup(ctx, request)
-	case executionapi.LifecycleHostAction:
+	case executionbackend.LifecycleHostAction:
 		receipt, err := l.ReconcileHostAction(ctx, request)
 		return receipt, nil, err
 	default:
-		return nativeReceipt(request, executionapi.OperationUnknown), nil, nil
+		return nativeReceipt(request, executionbackend.OperationUnknown), nil, nil
 	}
 }
 
-func (l *ExecutionLifecycle) validateSnapshot(snapshot executionapi.LifecycleSnapshot) error {
-	if snapshot.Ref.Backend != executionapi.BackendOrca || snapshot.Ref.Protocol != executionapi.ProtocolOrcaTerminalV2 ||
+func (l *ExecutionLifecycle) validateSnapshot(snapshot executionbackend.LifecycleSnapshot) error {
+	if snapshot.Ref.Backend != executionbackend.BackendOrca || snapshot.Ref.Protocol != executionbackend.ProtocolOrcaTerminalV2 ||
 		snapshot.Ref.Agent.Name != "codex" || snapshot.Ref.Target.ID != nativeTargetID(l.orca) ||
 		snapshot.ConfigurationDigest == "" || snapshot.ResourceGeneration == "" ||
 		snapshot.Session.ProjectID == "" || snapshot.Session.ExecutionID == "" || snapshot.Session.WorkflowRunID == "" ||
 		snapshot.Session.AttemptID == "" || snapshot.Session.TaskID == "" {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native Orca snapshot differs from the fixed execution"}
+		return &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "native Orca snapshot differs from the fixed execution"}
 	}
 	if snapshot.Ref.RunID != "" && snapshot.Ref.RunID != snapshot.Session.WorkflowRunID ||
 		snapshot.Ref.AttemptID != "" && snapshot.Ref.AttemptID != snapshot.Session.AttemptID {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native Orca snapshot Run or Attempt changed"}
+		return &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "native Orca snapshot Run or Attempt changed"}
 	}
 	if snapshot.Ref.External.Kind != "" && snapshot.Ref.External.Kind != "orca" {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native Orca process kind is not generic"}
+		return &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "native Orca process kind is not generic"}
 	}
 	if snapshot.Workspace.Path != "" && snapshot.Ref.WorkspacePath != "" && snapshot.Workspace.Path != snapshot.Ref.WorkspacePath {
-		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native Orca workspace differs from its fixed reference"}
+		return &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "native Orca workspace differs from its fixed reference"}
 	}
 	if snapshot.PendingTurn != nil && (snapshot.PendingTurn.CommandID == "" || snapshot.PendingTurn.Prompt == "") {
 		return errors.New("native Orca input has no stable command or prompt")
@@ -380,8 +380,8 @@ func (l *ExecutionLifecycle) validateSnapshot(snapshot executionapi.LifecycleSna
 	return err
 }
 
-func (l *ExecutionLifecycle) readState(snapshot executionapi.LifecycleSnapshot) (NativeExecutionState, bool, error) {
-	var found *executionapi.ImplementationDataEnvelope
+func (l *ExecutionLifecycle) readState(snapshot executionbackend.LifecycleSnapshot) (NativeExecutionState, bool, error) {
+	var found *executionbackend.ImplementationDataEnvelope
 	for i := range snapshot.Implementation {
 		if snapshot.Implementation[i].ImplementationKey != ExecutionStateCodecKey {
 			continue
@@ -402,54 +402,54 @@ func (l *ExecutionLifecycle) readState(snapshot executionapi.LifecycleSnapshot) 
 	return state, true, err
 }
 
-func (l *ExecutionLifecycle) stateEnvelope(snapshot executionapi.LifecycleSnapshot, target executionapi.ExecutionTarget,
-	process executionapi.ProcessIdentity, state NativeExecutionState) (executionapi.ImplementationDataEnvelope, error) {
+func (l *ExecutionLifecycle) stateEnvelope(snapshot executionbackend.LifecycleSnapshot, target executionbackend.ExecutionTarget,
+	process executionbackend.ProcessIdentity, state NativeExecutionState) (executionbackend.ImplementationDataEnvelope, error) {
 	return NewExecutionStateEnvelope(ExecutionStateIdentity{ProjectID: snapshot.Session.ProjectID,
 		ExecutionID: snapshot.Session.ExecutionID, AttemptID: snapshot.Session.AttemptID,
 		Generation: snapshot.ResourceGeneration, ConfigDigest: snapshot.ConfigurationDigest,
 		Protocol: snapshot.Ref.Protocol, Process: process, CoordinatorTerminal: target.CoordinatorTerminal}, state)
 }
 
-func (l *ExecutionLifecycle) targetEnvelope(snapshot executionapi.LifecycleSnapshot, target executionapi.ExecutionTarget,
-	process executionapi.ProcessIdentity, state NativeExecutionState) ([]executionapi.ImplementationDataEnvelope, error) {
+func (l *ExecutionLifecycle) targetEnvelope(snapshot executionbackend.LifecycleSnapshot, target executionbackend.ExecutionTarget,
+	process executionbackend.ProcessIdentity, state NativeExecutionState) ([]executionbackend.ImplementationDataEnvelope, error) {
 	envelope, err := l.stateEnvelope(snapshot, target, process, state)
 	if err != nil {
 		return nil, err
 	}
-	return []executionapi.ImplementationDataEnvelope{envelope}, nil
+	return []executionbackend.ImplementationDataEnvelope{envelope}, nil
 }
 
-func nativeReceipt(request executionapi.LifecycleRequest, disposition executionapi.OperationStatus) executionapi.LifecycleReceipt {
-	return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: disposition}
+func nativeReceipt(request executionbackend.LifecycleRequest, disposition executionbackend.OperationStatus) executionbackend.LifecycleReceipt {
+	return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: disposition}
 }
 
 func (l *ExecutionLifecycle) fixedAgentLaunch() bool {
 	return l.codex.Model != "" || l.codex.WindowsSandbox != ""
 }
 
-func (l *ExecutionLifecycle) agentCommand(worktree string) (executionapi.LaunchCommand, error) {
+func (l *ExecutionLifecycle) agentCommand(worktree string) (executionbackend.LaunchCommand, error) {
 	permissions, err := codexworker.CompilePolicy(l.setup.Policy, runtime.GOOS, "orca", "codex", l.codex.WindowsSandbox, l.codex.Profile, l.codex.Args)
 	if err != nil {
-		return executionapi.LaunchCommand{}, err
+		return executionbackend.LaunchCommand{}, err
 	}
 	if err := codexworker.ValidateManagedArgs(l.codex.Args); err != nil {
-		return executionapi.LaunchCommand{}, err
+		return executionbackend.LaunchCommand{}, err
 	}
 	executable, err := codexworker.NativeExecutable(l.codex.Executable)
 	if err != nil {
-		return executionapi.LaunchCommand{}, err
+		return executionbackend.LaunchCommand{}, err
 	}
 	command, err := codexworker.ManagedCommand(codexworker.ManagedCommandOptions{Policy: l.setup.Policy,
 		WorkingDirectory: worktree, Host: "orca", Agent: "codex", Model: l.codex.Model,
 		ReasoningEffort: l.codex.ReasoningEffort, Executable: executable, Args: l.codex.Args,
 		Sandbox: permissions.Sandbox, WindowsSandbox: permissions.WindowsSandbox})
 	if err != nil {
-		return executionapi.LaunchCommand{}, err
+		return executionbackend.LaunchCommand{}, err
 	}
 	return command, nil
 }
 
-func (l *ExecutionLifecycle) agentLaunchCommand(snapshot executionapi.LifecycleSnapshot, worktree string) (executionapi.LaunchCommand, error) {
+func (l *ExecutionLifecycle) agentLaunchCommand(snapshot executionbackend.LifecycleSnapshot, worktree string) (executionbackend.LaunchCommand, error) {
 	if snapshot.PolicyResources == nil {
 		return l.agentCommand(worktree)
 	}
@@ -457,15 +457,15 @@ func (l *ExecutionLifecycle) agentLaunchCommand(snapshot executionapi.LifecycleS
 		AttemptID: snapshot.Session.AttemptID, Generation: snapshot.ResourceGeneration, ConfigDigest: snapshot.ConfigurationDigest}
 	resources, err := codexworker.DecodePolicyResourceEnvelope(*snapshot.PolicyResources, identity)
 	if err != nil {
-		return executionapi.LaunchCommand{}, err
+		return executionbackend.LaunchCommand{}, err
 	}
 	if resources.Settings.WorkingDirectory != worktree {
-		return executionapi.LaunchCommand{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "native Orca launch command is bound to a different Worktree"}
+		return executionbackend.LaunchCommand{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "native Orca launch command is bound to a different Worktree"}
 	}
 	return resources.Settings, nil
 }
 
-func (l *ExecutionLifecycle) worktreeName(snapshot executionapi.LifecycleSnapshot) (string, error) {
+func (l *ExecutionLifecycle) worktreeName(snapshot executionbackend.LifecycleSnapshot) (string, error) {
 	return WorkerWorktreeName(snapshot.Session.TaskID, snapshot.Session.WorkflowRunID)
 }
 
@@ -473,14 +473,14 @@ func (l *ExecutionLifecycle) repositoryID(ctx context.Context) (string, error) {
 	return FindRepo(ctx, l.client.Call, l.setup.RepositoryPath)
 }
 
-func (l *ExecutionLifecycle) processGeneration(snapshot executionapi.LifecycleSnapshot) string {
+func (l *ExecutionLifecycle) processGeneration(snapshot executionbackend.LifecycleSnapshot) string {
 	if snapshot.Ref.External.Incarnation != "" {
 		return snapshot.Ref.External.Incarnation
 	}
 	return snapshot.ResourceGeneration
 }
 
-func (l *ExecutionLifecycle) boundProcess(snapshot executionapi.LifecycleSnapshot, target executionapi.ExecutionTarget, turn *NativeTurnState) executionapi.ProcessIdentity {
+func (l *ExecutionLifecycle) boundProcess(snapshot executionbackend.LifecycleSnapshot, target executionbackend.ExecutionTarget, turn *NativeTurnState) executionbackend.ProcessIdentity {
 	process := snapshot.Ref.External
 	process.Kind = "orca"
 	process.WorktreeID = target.WorktreeID
@@ -491,8 +491,8 @@ func (l *ExecutionLifecycle) boundProcess(snapshot executionapi.LifecycleSnapsho
 	return process
 }
 
-var _ executionapi.LifecyclePort = (*ExecutionLifecycle)(nil)
+var _ executionbackend.LifecyclePort = (*ExecutionLifecycle)(nil)
 
-func (l *ExecutionLifecycle) InspectLifecycleWorkspace(ctx context.Context, snapshot executionapi.LifecycleSnapshot) (executionapi.WorkspaceInspection, error) {
+func (l *ExecutionLifecycle) InspectLifecycleWorkspace(ctx context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.WorkspaceInspection, error) {
 	return workspace.InspectLifecycleWorkspace(ctx, l.setup, snapshot)
 }

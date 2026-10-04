@@ -6,26 +6,27 @@ import (
 	"errors"
 	"path/filepath"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) error {
 	if run == nil || len(source.Raw) == 0 && !source.SourceGap && !source.InputWait || s.conversationStore == nil {
 		return nil
 	}
-	if !executionapi.StableExecutionID(run.ExecutionID) {
+	if !executionbackend.StableExecutionID(run.ExecutionID) {
 		return nativeErr("contract_mismatch", "conversation event has no fixed execution identity")
 	}
 	attemptID := source.AttemptID
 	if attemptID == "" {
 		attemptID = run.AttemptID
 	}
-	if !executionapi.StableExecutionID(attemptID) {
+	if !executionbackend.StableExecutionID(attemptID) {
 		return nativeErr("contract_mismatch", "conversation event has no fixed attempt identity")
 	}
 	base := ConversationEvent{Version: ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID,
-		ExecutionID: run.ExecutionID, AttemptID: attemptID, Backend: executionapi.BackendKind(run.Backend), Protocol: executionapi.ExecutionProtocol(run.Protocol),
+		ExecutionID: run.ExecutionID, AttemptID: attemptID, Backend: executionbackend.BackendKind(run.Backend), Protocol: executionbackend.ExecutionProtocol(run.Protocol),
 		Agent: run.Agent, TargetID: run.Target.ID, SourceEventID: source.SourceEventID, SessionQuality: IdentityUnknown, TurnQuality: IdentityUnknown, ItemQuality: IdentityUnknown}
 	input := contracts.ConversationInput{Event: base, Process: run.Process, Source: source.Source, Segment: source.SourceSegment, Identity: source.SourceIdentity,
 		Cursor: source.SourceCursor, Generation: processGeneration(run.Process), Session: source.Session, SourceSeq: source.SourceSeq,
@@ -55,7 +56,7 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) error {
 		if implementationMapper, ok := lifecycle.(contracts.ConversationInputMapper); ok {
 			mapper = implementationMapper
 		}
-	} else if run.WorkflowVersion == WorkerFlowVersion {
+	} else if run.WorkflowVersion == executionmodel.Version {
 		return lifecycleErr
 	}
 	batch, err := mapper.MapConversation(input)
@@ -81,7 +82,7 @@ func (s *Service) recordConversationEvent(run *Run, source WorkerEvent) error {
 		}
 		path, pathErr := s.conversationSources.LiveJournalPath(context.Background(), contracts.ConversationJournalPathRequest{
 			RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: attemptID,
-			SourceIdentity: source.SourceIdentity, LogPath: deref(run.LogPath), EventPaths: paths, WorkerFlow: run.WorkflowVersion == WorkerFlowVersion})
+			SourceIdentity: source.SourceIdentity, LogPath: deref(run.LogPath), EventPaths: paths, WorkerFlow: run.WorkflowVersion == executionmodel.Version})
 		if pathErr != nil {
 			return pathErr
 		}
@@ -137,14 +138,14 @@ func verifyConversationSourceBytes(path, expectedFileID string, offset, length i
 	return nil
 }
 
-func processGeneration(process *executionapi.ProcessIdentity) string {
+func processGeneration(process *executionbackend.ProcessIdentity) string {
 	if process == nil {
 		return ""
 	}
 	return process.Incarnation
 }
 
-func conversationProcessSnapshot(process *executionapi.ProcessIdentity) *executionapi.ProcessIdentity {
+func conversationProcessSnapshot(process *executionbackend.ProcessIdentity) *executionbackend.ProcessIdentity {
 	if process == nil {
 		return nil
 	}

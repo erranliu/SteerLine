@@ -4,14 +4,15 @@ import (
 	"fmt"
 	"strings"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 const executionConfigChanged = api.ExecutionConfigChanged
 
-func renderRequirementsEvaluation(e *executionapi.RequirementsEvaluation, label string) []string {
+func renderRequirementsEvaluation(e *executionbackend.RequirementsEvaluation, label string) []string {
 	if e == nil {
 		return nil
 	}
@@ -21,7 +22,7 @@ func renderRequirementsEvaluation(e *executionapi.RequirementsEvaluation, label 
 			lines = append(lines, "能力："+safeTerminalInlineText(cap.Name)+" · "+safeTerminalInlineText(string(cap.Status))+" · 版本 "+safeTerminalInlineText(e.Capabilities.PlatformVersion))
 		}
 	}
-	for _, values := range [][]executionapi.RequirementEvidence{e.Tools, e.Credentials} {
+	for _, values := range [][]executionbackend.RequirementEvidence{e.Tools, e.Credentials} {
 		for _, item := range values {
 			lines = append(lines, "需求证据："+safeTerminalInlineText(item.Site+"/"+item.ID)+" · "+safeTerminalInlineText(string(item.Status))+" · "+safeTerminalInlineText(item.Version)+" · "+safeTerminalInlineText(item.Source))
 		}
@@ -45,7 +46,7 @@ func renderFixedRunExecutionProfile(state projectState, run *contracts.Run) []st
 	lines = append(lines, "发布责任："+safeTerminalInlineText(fixed.PublicationPolicy.Publisher), "冻结发布目标："+safeTerminalInlineText(fixed.Publication.Provider.Kind)+" · "+safeTerminalInlineText(fixed.Publication.Provider.BaseURL)+"/"+safeTerminalInlineText(fixed.Publication.Provider.Repository)+" · base "+safeTerminalInlineText(fixed.Publication.BaseBranch), "Git remote："+safeTerminalInlineText(fixed.Publication.Remote)+" · "+safeTerminalInlineText(fixed.Publication.RemoteURL), "发布工具："+safeTerminalInlineText(fixed.Publication.Git.Executable)+" · query "+safeTerminalInlineText(fixed.Publication.Provider.Query.Executable)+" · close "+safeTerminalInlineText(fixed.Publication.Provider.Close.Executable), "认证引用："+safeTerminalInlineText(strings.Join(fixed.Publication.AuthenticationRefs, ", ")))
 	for _, tool := range []struct {
 		name    string
-		command contracts.Command
+		command executionbackend.Command
 	}{{"Git", fixed.Publication.Git}, {"Query", fixed.Publication.Provider.Query}, {"Close", fixed.Publication.Provider.Close}} {
 		description := tool.command.Executable + " " + strings.Join(tool.command.Args, " ")
 		if tool.command.Executable == "" {
@@ -113,11 +114,11 @@ func renderRunExecutionProfileSummary(state projectState, run *contracts.Run) []
 	return []string{"执行方案：" + safeTerminalInlineText(fixed.Host) + " · " + safeTerminalInlineText(fixed.Agent) + " · " + safeTerminalInlineText(strings.Join(fixed.ImplementationDisplay, " · "))}
 }
 
-func fixedRunExecutionProfile(state projectState, run *contracts.Run) *contracts.FixedExecutionProfile {
+func fixedRunExecutionProfile(state projectState, run *contracts.Run) *executionmodel.FixedExecutionProfile {
 	if run == nil {
 		return nil
 	}
-	workflows := []contracts.WorkflowRunRecord(nil)
+	workflows := []executionmodel.WorkflowRunRecord(nil)
 	if state.snapshot.Domain != nil {
 		workflows = state.snapshot.Domain.WorkflowRuns
 	}

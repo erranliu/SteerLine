@@ -6,20 +6,22 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/task"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestGraphViewUsesOneSnapshot(t *testing.T) {
 	at := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	records := []task.TaskRecord{
+	records := []taskmodel.TaskRecord{
 		{TaskID: "1", Title: "merged", Status: "closed"},
 		{TaskID: "2", Title: "ready", Status: "open"},
 		{TaskID: "3", Title: "other", Status: "open"},
 	}
 	snapshot := task.Snapshot{
-		Authority:  task.ProjectTaskAuthority{AuthorityVersion: 2, GraphRevision: 3},
+		Authority:  tasklegacy.ProjectTaskAuthority{AuthorityVersion: 2, GraphRevision: 3},
 		DatabaseID: strings.Repeat("a", 32), DatabaseRevision: 4, SampledAt: at,
-		Tasks: records, ByID: map[string]task.TaskRecord{"1": records[0], "2": records[1], "3": records[2]},
-		Edges:      []task.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "2"}},
+		Tasks: records, ByID: map[string]taskmodel.TaskRecord{"1": records[0], "2": records[1], "3": records[2]},
+		Edges:      []taskmodel.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "2"}},
 		Deliveries: map[string]task.TaskDeliveryRecord{"1": {TaskID: "1"}},
 	}
 	filter, err := NormalizeFilter("project", Filter{CenterTaskID: "1", Direction: "downstream", Depth: 1})

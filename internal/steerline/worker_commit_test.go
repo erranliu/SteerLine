@@ -5,6 +5,8 @@ import (
 	"context"
 	"strings"
 	"testing"
+
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func TestWorkerCommitRollsBackRecordsReceiptsEventsAndCheckpoint(t *testing.T) {
@@ -14,7 +16,7 @@ func TestWorkerCommitRollsBackRecordsReceiptsEventsAndCheckpoint(t *testing.T) {
 	require(t, err)
 	original, err := copyDomainSnapshot(service.committed)
 	require(t, err)
-	event := DomainEvent{ProjectIdentity: service.Config.Identity(), TaskID: run.DomainTaskID, WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, ExternalSource: "commit-test", ExternalID: newID(), Type: "worker.test", ReceivedAt: now(), Payload: mustJSON(map[string]string{"receipt": "must roll back"})}
+	event := storageports.DomainEvent{ProjectIdentity: service.Config.Identity(), TaskID: run.DomainTaskID, WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, ExternalSource: "commit-test", ExternalID: newID(), Type: "worker.test", ReceivedAt: now(), Payload: mustJSON(map[string]string{"receipt": "must roll back"})}
 	service.pendingEvents = append(service.pendingEvents, event)
 	service.executionRecord(run).LastEvent = ptr("must roll back")
 	service.setDecisionStatus(run, "superseded")
@@ -65,7 +67,7 @@ func TestCheckpointAndReadViewsCannotPublishWorkerCandidates(t *testing.T) {
 		t.Fatal("public read views alias private worker records")
 	}
 	service.executionRecord(run).LastEvent = ptr("uncommitted candidate")
-	service.pendingEvents = append(service.pendingEvents, DomainEvent{ProjectIdentity: service.Config.Identity(), ExternalSource: "unpublished", ExternalID: newID(), Type: "worker.test", ReceivedAt: now(), Payload: mustJSON(map[string]bool{"pending": true})})
+	service.pendingEvents = append(service.pendingEvents, storageports.DomainEvent{ProjectIdentity: service.Config.Identity(), ExternalSource: "unpublished", ExternalID: newID(), Type: "worker.test", ReceivedAt: now(), Payload: mustJSON(map[string]bool{"pending": true})})
 	require(t, service.publishCheckpoint())
 	require(t, service.store.Heartbeat())
 	durable, err := service.domainStore.Query(ctx, service.Config.Identity())

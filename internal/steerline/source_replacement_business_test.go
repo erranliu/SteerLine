@@ -3,51 +3,62 @@ package steerline
 import (
 	"context"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"testing"
 	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 type neutralOutputResolver struct{ changed bool }
+
 type neutralOutputPort struct {
-	executionapi.LifecyclePort
+	executionbackend.LifecyclePort
 	changed bool
 }
 
-func (r *neutralOutputResolver) ResolveLifecycle(setup executionapi.LifecycleSetup) (executionapi.LifecyclePort, error) {
+func (r *neutralOutputResolver) ResolveLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 	return neutralOutputPort{LifecyclePort: &neutralLifecycle{setup: setup.Clone()}, changed: r.changed}, nil
 }
+
 func (p neutralOutputPort) PreparationBudget() time.Duration { return time.Minute }
+
 func (p neutralOutputPort) PlatformVersion(context.Context) (string, error) {
 	return "fixture-version-1", nil
 }
-func (p neutralOutputPort) ObserveHost(context.Context, executionapi.ProcessIdentity) (contracts.HostFact, error) {
-	return contracts.HostFact{}, nil
+
+func (p neutralOutputPort) ObserveHost(context.Context, executionbackend.ProcessIdentity) (executionbackend.HostFact, error) {
+	return executionbackend.HostFact{}, nil
 }
-func (p neutralOutputPort) InspectAgentInput(context.Context, executionapi.ProcessIdentity) (contracts.HostInputObservation, error) {
-	return contracts.HostInputObservation{}, errors.New("source fixture accepts no input")
+
+func (p neutralOutputPort) InspectAgentInput(context.Context, executionbackend.ProcessIdentity) (executionbackend.HostInputObservation, error) {
+	return executionbackend.HostInputObservation{}, errors.New("source fixture accepts no input")
 }
-func (p neutralOutputPort) CurrentTurn(s executionapi.LifecycleSnapshot) (*contracts.HostTurnFacts, error) {
-	return &contracts.HostTurnFacts{TurnID: s.Session.CurrentTurnID}, nil
+
+func (p neutralOutputPort) CurrentTurn(s executionbackend.LifecycleSnapshot) (*executionbackend.HostTurnFacts, error) {
+	return &executionbackend.HostTurnFacts{TurnID: s.Session.CurrentTurnID}, nil
 }
-func (p neutralOutputPort) ResetTurnOutput(executionapi.LifecycleSnapshot, string) (executionapi.ImplementationDataEnvelope, error) {
-	return executionapi.ImplementationDataEnvelope{}, errors.New("source fixture cannot reset output")
+
+func (p neutralOutputPort) ResetTurnOutput(executionbackend.LifecycleSnapshot, string) (executionbackend.ImplementationDataEnvelope, error) {
+	return executionbackend.ImplementationDataEnvelope{}, errors.New("source fixture cannot reset output")
 }
-func (p neutralOutputPort) PrepareProbe(contracts.ProbeIdentity) (contracts.ProbePlan, error) {
-	return contracts.ProbePlan{}, errors.New("source fixture has no probe")
+
+func (p neutralOutputPort) PrepareProbe(executionbackend.ProbeIdentity) (executionbackend.ProbePlan, error) {
+	return executionbackend.ProbePlan{}, errors.New("source fixture has no probe")
 }
-func (p neutralOutputPort) ProbePrompt(contracts.ProbePlan, string, string) string { return "" }
-func (p neutralOutputPort) ReadProbe(contracts.ProbeIdentity, string) (*contracts.ProbeReceipt, error) {
+
+func (p neutralOutputPort) ProbePrompt(executionbackend.ProbePlan, string, string) string { return "" }
+
+func (p neutralOutputPort) ReadProbe(executionbackend.ProbeIdentity, string) (*executionbackend.ProbeReceipt, error) {
 	return nil, errors.New("source fixture has no probe")
 }
-func (p neutralOutputPort) ReadWorkerOutput(_ context.Context, s executionapi.LifecycleSnapshot, _ contracts.HostReadInput) (contracts.HostOutput, executionapi.ImplementationDataEnvelope, error) {
+
+func (p neutralOutputPort) ReadWorkerOutput(_ context.Context, s executionbackend.LifecycleSnapshot, _ executionbackend.HostReadInput) (executionbackend.HostOutput, executionbackend.ImplementationDataEnvelope, error) {
 	source, cursor := "buffer", "original:4"
 	if p.changed {
 		source, cursor = "transcript", "replacement:7"
 	}
-	output := contracts.HostOutput{Source: source, Cursor: cursor, Content: "original complete content", ContentComplete: true, ContentChanged: true, SourceChanged: p.changed, UpdateAttemptCursor: true}
-	envelope, err := executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{ImplementationKey: "fixture.output", CodecVersion: 1, Purpose: executionapi.ImplementationResourcePurpose, ProjectID: s.Session.ProjectID, ExecutionID: s.Session.ExecutionID, AttemptID: s.Session.AttemptID, Generation: s.ResourceGeneration, ConfigDigest: s.ConfigurationDigest}, mustJSON(struct {
+	output := executionbackend.HostOutput{Source: source, Cursor: cursor, Content: "original complete content", ContentComplete: true, ContentChanged: true, SourceChanged: p.changed, UpdateAttemptCursor: true}
+	envelope, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{ImplementationKey: "fixture.output", CodecVersion: 1, Purpose: executionbackend.ImplementationResourcePurpose, ProjectID: s.Session.ProjectID, ExecutionID: s.Session.ExecutionID, AttemptID: s.Session.AttemptID, Generation: s.ResourceGeneration, ConfigDigest: s.ConfigurationDigest}, mustJSON(struct {
 		Source, Cursor string
 		Complete       bool
 	}{source, cursor, true}))

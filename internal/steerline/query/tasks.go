@@ -9,6 +9,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
 	"github.com/erranliu/SteerLine/internal/steerline/taskview"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 const NativeTaskProtocol = "native-tasks/v1"
@@ -23,7 +24,7 @@ type TaskCursor struct {
 	Offset           int    `json:"o"`
 }
 
-func nativeErr(code, message string) error { return &task.Error{Code: code, Message: message} }
+func nativeErr(code, message string) error { return &taskmodel.Error{Code: code, Message: message} }
 
 func (q Service) ListNativeTasks(ctx context.Context, cursor string, limit int) (contracts.NativeTaskPage, error) {
 	if q.Tasks == nil || q.Project == "" {
@@ -78,7 +79,7 @@ func (q Service) ShowNativeTask(ctx context.Context, id string) (contracts.Nativ
 	if q.Tasks == nil || q.Project == "" {
 		return contracts.NativeTaskPage{}, errors.New("query service store and project identity are required")
 	}
-	if err := task.ValidateID(id); err != nil {
+	if err := taskmodel.ValidateID(id); err != nil {
 		return contracts.NativeTaskPage{}, err
 	}
 	page, err := q.Tasks.NativeTaskPage(ctx, q.Project, id, "", 0, 0, 1)
@@ -150,11 +151,11 @@ func (q Service) readTaskGraph(ctx context.Context) (task.Snapshot, error) {
 }
 
 func ReadySnapshot(graph task.Snapshot) contracts.NativeReadyTaskSnapshot {
-	return contracts.NativeReadyTaskSnapshot{ProjectID: graph.Authority.ProjectIdentity, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, DatabaseID: graph.DatabaseID, DatabaseRevision: graph.DatabaseRevision, SampledAt: graph.SampledAt, Tasks: task.ReadyTasks(graph)}
+	return contracts.NativeReadyTaskSnapshot{ProjectID: graph.Authority.ProjectIdentity, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, DatabaseID: graph.DatabaseID, DatabaseRevision: graph.DatabaseRevision, SampledAt: graph.SampledAt, Tasks: taskmodel.ReadyTasks(graph.TaskGraph())}
 }
 
 // ReadyNativeTasks preserves the candidate API used by dispatch and control.
-func (q Service) ReadyNativeTasks(ctx context.Context) ([]contracts.TaskRecord, error) {
+func (q Service) ReadyNativeTasks(ctx context.Context) ([]taskmodel.TaskRecord, error) {
 	snapshot, err := q.ReadyNativeTaskSnapshot(ctx)
 	if err != nil {
 		return nil, err

@@ -14,9 +14,10 @@ import (
 	"strings"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
@@ -43,25 +44,31 @@ func HomeDir() string {
 	return filepath.Join(os.TempDir(), "steerline")
 }
 
-func BinDir() string                    { return filepath.Join(HomeDir(), "bin") }
-func EtcDir() string                    { return filepath.Join(HomeDir(), "etc") }
+func BinDir() string { return filepath.Join(HomeDir(), "bin") }
+
+func EtcDir() string { return filepath.Join(HomeDir(), "etc") }
+
 func GlobalExecutionConfigPath() string { return filepath.Join(HomeDir(), "execution.json") }
-func StateRoot() string                 { return filepath.Join(HomeDir(), "state") }
+
+func StateRoot() string { return filepath.Join(HomeDir(), "state") }
 
 // LoadConfig reads the project file and fixed execution catalog as one
 // application configuration. The returned catalog belongs to this config
 // instance and is reused by all of its entry paths.
-func LoadConfig(path string) (steerline.Config, error)      { return loadConfig(path, nil, nil, true) }
+func LoadConfig(path string) (steerline.Config, error) { return loadConfig(path, nil, nil, true) }
+
 func LoadQueryConfig(path string) (steerline.Config, error) { return loadConfig(path, nil, nil, false) }
-func LoadConfigWithDirectory(path string, directory *steerline.ExecutionDirectory, host executionapi.ManagedProcessHost) (steerline.Config, error) {
+
+func LoadConfigWithDirectory(path string, directory *steerline.ExecutionDirectory, host executionbackend.ManagedProcessHost) (steerline.Config, error) {
 	if directory == nil || host == nil {
 		return steerline.Config{}, errors.New("execution directory and process host are required")
 	}
 	return loadConfig(path, directory, host, true)
 }
-func loadConfig(path string, directory *steerline.ExecutionDirectory, processHost executionapi.ManagedProcessHost, requireSupport bool) (steerline.Config, error) {
+
+func loadConfig(path string, directory *steerline.ExecutionDirectory, processHost executionbackend.ManagedProcessHost, requireSupport bool) (steerline.Config, error) {
 	config := steerline.Config{Persistence: sqlite.Factory{}, Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s",
-		Git: steerline.Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
+		Git: executionbackend.Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
 	projectPath, err := filepath.Abs(path)
 	if err != nil {
 		return config, err
@@ -76,7 +83,7 @@ func loadConfig(path string, directory *steerline.ExecutionDirectory, processHos
 	if config.TaskAuthority != "native" {
 		return config, errors.New("task_authority must be explicitly set to native; Beads is not supported")
 	}
-	if config.WorkflowProtocol != steerline.WorkerFlowVersion {
+	if config.WorkflowProtocol != executionmodel.Version {
 		return config, errors.New("workflow_protocol must be worker-flow-v1; older configurations are unsupported and their state is preserved")
 	}
 	if err := config.ExecutionPolicy.Validate(); err != nil {
@@ -221,9 +228,9 @@ func validateQueryProfiles(config steerline.Config) error {
 	return nil
 }
 
-func repositoryStateKey(config steerline.Config, processHost executionapi.ManagedProcessHost) (string, error) {
+func repositoryStateKey(config steerline.Config, processHost executionbackend.ManagedProcessHost) (string, error) {
 	repository, err := workspace.ResolveRepository(context.Background(), workspace.Git{
-		Command: executionapi.LaunchCommand{Executable: config.Git.Executable, Args: append([]string(nil), config.Git.Args...)},
+		Command: executionbackend.LaunchCommand{Executable: config.Git.Executable, Args: append([]string(nil), config.Git.Args...)},
 		Timeout: positiveDuration(config.CommandTimeout, 30*time.Second), Start: processHost.StartManaged,
 	}, config.Repository)
 	if err != nil {

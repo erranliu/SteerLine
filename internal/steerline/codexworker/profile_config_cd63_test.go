@@ -3,7 +3,7 @@ package codexworker
 import (
 	"testing"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func TestCD63CodecIdentityAndVersion(t *testing.T) {
@@ -21,7 +21,7 @@ func TestCD63CodecIdentityAndVersion(t *testing.T) {
 	if err != nil || settings.Executable != "codex" || settings.Args[0] != "--search" {
 		t.Fatalf("valid profile payload did not decode: %+v / %v", settings, err)
 	}
-	policy := executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
+	policy := executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
 	normalized, err := NormalizeProfileConfig(settings, policy, "windows", "local", "codex")
 	if err != nil || normalized.WindowsSandbox != "elevated" || normalized.ReasoningEffort != "high" {
 		t.Fatalf("implementation defaults were not normalized: %+v / %v", normalized, err)

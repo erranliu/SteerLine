@@ -4,7 +4,8 @@ import (
 	"context"
 	"errors"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 // Receipt handling after experiment exit retains physical facts and the
@@ -48,14 +49,14 @@ func (s *Service) applyRetiredLifecycleReceipt(run *Run, result lifecycleEffectR
 	if fixed.workflow.Phase == "completed" && receipt.TurnEvidence != nil {
 		evidence := receipt.TurnEvidence
 		if evidence.SessionID != fixed.execution.SessionID || evidence.TurnID != fixed.execution.CurrentTurnID && evidence.TurnID != fixed.execution.PendingTurnID {
-			return ErrWorkerTurnStale
+			return executionmodel.ErrTurnStale
 		}
 		fixed.execution.Summary = ptr(evidence.LastMessage)
 	}
 	if receipt.Handle != nil {
-		if owned, ok := receipt.Handle.(executionapi.OwnedProcessHandle); ok && owned.OwnedProcess() {
+		if owned, ok := receipt.Handle.(executionbackend.OwnedProcessHandle); ok && owned.OwnedProcess() {
 			if s.ownedProcesses == nil {
-				s.ownedProcesses = map[string]executionapi.StopHandle{}
+				s.ownedProcesses = map[string]executionbackend.StopHandle{}
 			}
 			s.ownedProcesses[run.RunID] = owned
 		}
@@ -78,10 +79,10 @@ func (s *Service) applyRetiredLifecycleReceipt(run *Run, result lifecycleEffectR
 func (s *Service) recordRetiredWorkerEvent(run *Run, ev WorkerEvent) error {
 	w, e := s.workflowRecords(run)
 	if e == nil || w == nil {
-		return ErrWorkerTurnStale
+		return executionmodel.ErrTurnStale
 	}
 	if ev.Fact.SessionID != "" && e.SessionID != "" && ev.Fact.SessionID != e.SessionID {
-		return ErrWorkerTurnStale
+		return executionmodel.ErrTurnStale
 	}
 	if ev.Activity.Kind != "" {
 		if err := s.recordConversationEvent(run, ev); err != nil {
@@ -99,7 +100,7 @@ func (s *Service) recordRetiredWorkerEvent(run *Run, ev WorkerEvent) error {
 				return err
 			}
 		}
-		if ev.Fact.Kind == executionapi.EventStarted && ev.Fact.StartedTurnID != "" {
+		if ev.Fact.Kind == executionbackend.EventStarted && ev.Fact.StartedTurnID != "" {
 			phase, updated := w.Phase, w.UpdatedAt
 			commandID := e.PendingCommandID
 			if commandID == "" {
@@ -107,7 +108,7 @@ func (s *Service) recordRetiredWorkerEvent(run *Run, ev WorkerEvent) error {
 			}
 			op := s.operationByKey("worker-turn:" + e.ExecutionID + ":" + commandID)
 			if op == nil {
-				return ErrWorkerTurnStale
+				return executionmodel.ErrTurnStale
 			}
 			if err := BeginWorkerTurn(w, e, ev.Fact.SessionID, ev.Fact.StartedTurnID); err != nil {
 				return err
@@ -132,8 +133,8 @@ func (s *Service) recordRetiredWorkerEvent(run *Run, ev WorkerEvent) error {
 	}
 	if w.Phase != "completed" && ev.Candidate != nil {
 		candidate := ev.Candidate.Clone()
-		if candidate.Action != executionapi.LifecycleReportCompletion || candidate.Input.Completion == nil || candidate.Input.Completion.TurnID != e.CurrentTurnID && candidate.Input.Completion.TurnID != e.PendingTurnID {
-			return ErrWorkerTurnStale
+		if candidate.Action != executionbackend.LifecycleReportCompletion || candidate.Input.Completion == nil || candidate.Input.Completion.TurnID != e.CurrentTurnID && candidate.Input.Completion.TurnID != e.PendingTurnID {
+			return executionmodel.ErrTurnStale
 		}
 		lifecycle, _, err := s.lifecycleForRun(run)
 		if err != nil {
@@ -149,7 +150,7 @@ func (s *Service) recordRetiredWorkerEvent(run *Run, ev WorkerEvent) error {
 	return nil
 }
 
-func (s *Service) finishRetiredCandidate(run *Run, lifecycle executionapi.LifecyclePort, fixed workerFlowContext) error {
+func (s *Service) finishRetiredCandidate(run *Run, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext) error {
 	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
 	if err != nil {
 		return err
@@ -161,7 +162,7 @@ func (s *Service) finishRetiredCandidate(run *Run, lifecycle executionapi.Lifecy
 	if observer != nil {
 		if fixed.execution.Process == nil || observer.StopHandle() == nil || observer.StopHandle().Identity() != *fixed.execution.Process {
 			_ = observer.Close(context.Background())
-			return ErrWorkerTurnStale
+			return executionmodel.ErrTurnStale
 		}
 		s.registerWorker(run, workerFromLifecycle(run.RunID, run.AttemptID, observer))
 		return nil
@@ -169,7 +170,7 @@ func (s *Service) finishRetiredCandidate(run *Run, lifecycle executionapi.Lifecy
 	if fixed.workflow.Phase == "completed" && receipt.TurnEvidence != nil {
 		evidence := receipt.TurnEvidence
 		if evidence.SessionID != fixed.execution.SessionID || evidence.TurnID != fixed.execution.CurrentTurnID && evidence.TurnID != fixed.execution.PendingTurnID {
-			return ErrWorkerTurnStale
+			return executionmodel.ErrTurnStale
 		}
 		fixed.execution.Summary = ptr(evidence.LastMessage)
 	}
@@ -180,7 +181,7 @@ func (s *Service) finishRetiredCandidate(run *Run, lifecycle executionapi.Lifecy
 		if evidence := receipt.TurnEvidence; evidence != nil && evidence.Completed {
 			e := fixed.execution
 			if e.SessionID != evidence.SessionID || e.CurrentTurnID != evidence.TurnID && e.PendingTurnID != evidence.TurnID {
-				return ErrWorkerTurnStale
+				return executionmodel.ErrTurnStale
 			}
 			e.Status, e.LastStoppedTurnID, e.TurnEndedAt = "idle", evidence.TurnID, ptr(now())
 			e.Summary = ptr(evidence.LastMessage)
@@ -217,9 +218,9 @@ func (s *Service) resumeRetiredCandidate(ctx context.Context, run *Run) error {
 	// Reconcile only already-dispatched original operations, never pending
 	// intents which had not crossed the dispatch boundary before exit.
 	for _, op := range snapshot.Operations {
-		if op.Status != executionapi.OperationPending && op.Status != executionapi.OperationConfirmed && op.Status != executionapi.OperationRejected {
+		if op.Status != executionbackend.OperationPending && op.Status != executionbackend.OperationConfirmed && op.Status != executionbackend.OperationRejected {
 			one := snapshot.Clone()
-			one.Operations = []executionapi.Operation{op}
+			one.Operations = []executionbackend.Operation{op}
 			candidate, found, err := unresolvedLifecycleCandidate(one)
 			if err != nil {
 				return err
@@ -254,12 +255,12 @@ func (s *Service) resumeRetiredCandidate(ctx context.Context, run *Run) error {
 			}
 			return nil
 		}
-		if op.Status == executionapi.OperationConfirmed {
+		if op.Status == executionbackend.OperationConfirmed {
 			fixed.execution.Status = "stopped"
 			s.refreshRun(run)
 			return s.commitWorker(run)
 		}
-		if op.Status != executionapi.OperationRejected {
+		if op.Status != executionbackend.OperationRejected {
 			return s.reconcileRunStop(ctx, run, op)
 		}
 		return nil
@@ -274,7 +275,7 @@ func (s *Service) resumeRetiredCandidate(ctx context.Context, run *Run) error {
 		if observer != nil {
 			if fixed.execution.Process == nil || observer.StopHandle() == nil || observer.StopHandle().Identity() != *fixed.execution.Process {
 				_ = observer.Close(context.Background())
-				return ErrWorkerTurnStale
+				return executionmodel.ErrTurnStale
 			}
 			s.registerWorker(run, workerFromLifecycle(run.RunID, run.AttemptID, observer))
 			return nil
@@ -286,6 +287,6 @@ func (s *Service) resumeRetiredCandidate(ctx context.Context, run *Run) error {
 	return nil
 }
 
-func retiredResourceAction(action executionapi.LifecycleAction, input executionapi.LifecycleInput) bool {
-	return action == executionapi.LifecycleCleanup || action == executionapi.LifecycleStopExecution || action == executionapi.LifecycleStopObservation || action == executionapi.LifecycleAcknowledge || action == executionapi.LifecycleReportCompletion || action == executionapi.LifecycleHostAction && input.Host != nil && (input.Host.Kind == executionapi.HostCleanupProbeFiles || input.Host.Kind == executionapi.HostRemoveFeedback)
+func retiredResourceAction(action executionbackend.LifecycleAction, input executionbackend.LifecycleInput) bool {
+	return action == executionbackend.LifecycleCleanup || action == executionbackend.LifecycleStopExecution || action == executionbackend.LifecycleStopObservation || action == executionbackend.LifecycleAcknowledge || action == executionbackend.LifecycleReportCompletion || action == executionbackend.LifecycleHostAction && input.Host != nil && (input.Host.Kind == executionbackend.HostCleanupProbeFiles || input.Host.Kind == executionbackend.HostRemoveFeedback)
 }

@@ -4,11 +4,13 @@ import (
 	"fmt"
 	"strings"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 const PolicyContract = "codex-policy-v1:0.159.2:explicit-roots:no-temp:never"
+
 const FullAccessPolicyContract = "codex-policy-v1:0.159.2:host-write:network-allow:never"
+
 const PolicyCodexVersion = "codex-cli 0.159.2"
 
 type Permissions struct {
@@ -21,7 +23,7 @@ type Permissions struct {
 
 // CompilePolicy rejects unsupported combinations before any native operation.
 // Version verification is separate from settings and actual worker tool proof.
-func CompilePolicy(p executionapi.ExecutionPolicy, goos, host, agent, windowsMode, profile string, args []string) (Permissions, error) {
+func CompilePolicy(p executionbackend.ExecutionPolicy, goos, host, agent, windowsMode, profile string, args []string) (Permissions, error) {
 	if err := p.Validate(); err != nil {
 		return Permissions{}, err
 	}

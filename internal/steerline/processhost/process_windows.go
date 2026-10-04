@@ -13,19 +13,21 @@ import (
 	"time"
 	"unsafe"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"golang.org/x/sys/windows"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 type processHandle struct {
 	mu       sync.Mutex
 	job      windows.Handle
-	identity executionapi.ProcessIdentity
+	identity executionbackend.ProcessIdentity
 }
 
 func (*processHandle) OwnedProcess() bool { return true }
 
-func (handle *processHandle) Identity() executionapi.ProcessIdentity { return handle.identity }
+func (handle *processHandle) Identity() executionbackend.ProcessIdentity { return handle.identity }
+
 func (handle *processHandle) Kill() {
 	handle.mu.Lock()
 	defer handle.mu.Unlock()
@@ -33,6 +35,7 @@ func (handle *processHandle) Kill() {
 		_ = windows.TerminateJobObject(handle.job, 1)
 	}
 }
+
 func (handle *processHandle) Close() {
 	handle.mu.Lock()
 	defer handle.mu.Unlock()
@@ -42,7 +45,7 @@ func (handle *processHandle) Close() {
 	}
 }
 
-func startManaged(command *exec.Cmd) (executionapi.StopHandle, error) {
+func startManaged(command *exec.Cmd) (executionbackend.StopHandle, error) {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
 		return nil, err
@@ -58,7 +61,7 @@ func startManaged(command *exec.Cmd) (executionapi.StopHandle, error) {
 		_ = windows.CloseHandle(job)
 		return nil, err
 	}
-	fail := func(cause error) (executionapi.StopHandle, error) {
+	fail := func(cause error) (executionbackend.StopHandle, error) {
 		_ = command.Process.Kill()
 		_ = command.Wait()
 		_ = windows.CloseHandle(job)
@@ -105,7 +108,7 @@ func startManaged(command *exec.Cmd) (executionapi.StopHandle, error) {
 	return fail(fmt.Errorf("cannot locate suspended initial thread: %w", err))
 }
 
-func inspectProcess(old *executionapi.ProcessIdentity) string {
+func inspectProcess(old *executionbackend.ProcessIdentity) string {
 	if old == nil || old.PID <= 0 || old.Kind != "os" || old.Created == "" || old.Executable == "" {
 		return "process identity is missing or unsupported"
 	}
@@ -134,18 +137,18 @@ func inspectProcess(old *executionapi.ProcessIdentity) string {
 	return "PID belongs to a different process"
 }
 
-func identityFromHandle(process windows.Handle, pid int) (executionapi.ProcessIdentity, error) {
+func identityFromHandle(process windows.Handle, pid int) (executionbackend.ProcessIdentity, error) {
 	var created, exit, kernel, user windows.Filetime
 	if err := windows.GetProcessTimes(process, &created, &exit, &kernel, &user); err != nil {
-		return executionapi.ProcessIdentity{}, err
+		return executionbackend.ProcessIdentity{}, err
 	}
 	image := make([]uint16, 32768)
 	length := uint32(len(image))
 	if err := windows.QueryFullProcessImageName(process, 0, &image[0], &length); err != nil {
-		return executionapi.ProcessIdentity{}, err
+		return executionbackend.ProcessIdentity{}, err
 	}
 	executable := strings.ToLower(filepath.Clean(windows.UTF16ToString(image[:length])))
-	return executionapi.ProcessIdentity{Kind: "os", PID: pid, Created: fmt.Sprintf("%08x%08x", created.HighDateTime, created.LowDateTime), Executable: executable}, nil
+	return executionbackend.ProcessIdentity{Kind: "os", PID: pid, Created: fmt.Sprintf("%08x%08x", created.HighDateTime, created.LowDateTime), Executable: executable}, nil
 }
 
 func replaceFile(from, to string) error {

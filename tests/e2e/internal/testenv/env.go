@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,15 +17,18 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testprocess"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
-	"github.com/google/uuid"
 )
 
 type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level string }
+
 type Scenario struct {
 	Run              Run
 	ID, Root, Output string
@@ -39,6 +41,7 @@ type Scenario struct {
 	resources        []map[string]any
 	usageVerified    bool
 }
+
 type Project struct {
 	Scenario                                                              *Scenario
 	Name, Root, Home, Repo, Remote, RemoteURL, Config, Database, Provider string
@@ -50,12 +53,14 @@ type Project struct {
 	Chain, OrcaExecutable, OrcaRepoID, OrcaSetupID                        string
 	RealPR                                                                bool
 	BaseBranch, DefaultBranch                                             string
-	RealPRProof                                                           *contracts.PRInfo
+	RealPRProof                                                           *executionmodel.PRInfo
 }
+
 type Task struct {
 	ID       string
-	Contract task.TaskContract
+	Contract taskmodel.TaskContract
 }
+
 type Snapshot struct {
 	Page    contracts.NativeTaskPage `json:"page"`
 	Domain  contracts.DomainSnapshot `json:"domain"`
@@ -71,6 +76,7 @@ func NewScenario(t *testing.T, id string) *Scenario {
 	}
 	return newScenario(t, id, run)
 }
+
 func newScenario(t *testing.T, id string, run Run) *Scenario {
 	t.Helper()
 	if id == "" || filepath.Base(id) != id || id == "." || id == ".." {
@@ -102,10 +108,12 @@ func (s *Scenario) Must(err error) {
 		s.t.Fatal(err)
 	}
 }
+
 func (s *Scenario) register(kind, path string, pid int) {
 	s.resources = append(s.resources, map[string]any{"kind": kind, "path": path, "pid": pid, "created_at": time.Now().UTC()})
 	s.Must(controlled.Write(filepath.Join(s.Output, "resources.json"), s.resources))
 }
+
 func (s *Scenario) start(cmd *exec.Cmd, name string) *testprocess.Process {
 	s.t.Helper()
 	f, err := os.Create(filepath.Join(s.Output, name+".log"))
@@ -220,6 +228,7 @@ func (p *Project) git(dir string, args ...string) string {
 	p.Scenario.Must(err)
 	return out
 }
+
 func (s *Scenario) Wait(label string, condition func() (bool, error)) {
 	s.t.Helper()
 	var last error
@@ -245,24 +254,24 @@ func (p *Project) CreateTasks() {
 	s := p.Scenario
 	s.t.Helper()
 	head := p.git(p.Repo, "rev-parse", "HEAD")
-	ref := func(name string) task.FileReference {
+	ref := func(name string) taskmodel.FileReference {
 		raw, err := os.ReadFile(filepath.Join(p.Repo, "docs", "spec", name))
 		s.Must(err)
 		sum := sha256.Sum256(raw)
-		return task.FileReference{Path: "docs/spec/" + name, Commit: head, SHA256: hex.EncodeToString(sum[:])}
+		return taskmodel.FileReference{Path: "docs/spec/" + name, Commit: head, SHA256: hex.EncodeToString(sum[:])}
 	}
 	spec, plan := ref("task.spec.md"), ref("task.plan.md")
 	// task validate is the product's project initialization and validation path.
-	batch := task.TaskBatchInput{SchemaVersion: task.BatchSchemaVersion}
+	batch := taskmodel.TaskBatchInput{SchemaVersion: taskmodel.BatchSchemaVersion}
 	for i, key := range []string{"a", "b"} {
-		contract := task.TaskContract{ContractID: "e2e-" + key, Repository: p.RemoteURL, Remote: "origin", Branch: p.BaseBranch, SpecRef: spec, PlanRef: plan, CommonRefs: []task.FileReference{}, AcceptanceRefs: []task.FileReference{spec}}
-		digest, err := task.ContractDigest(contract)
+		contract := taskmodel.TaskContract{ContractID: "e2e-" + key, Repository: p.RemoteURL, Remote: "origin", Branch: p.BaseBranch, SpecRef: spec, PlanRef: plan, CommonRefs: []taskmodel.FileReference{}, AcceptanceRefs: []taskmodel.FileReference{spec}}
+		digest, err := taskmodel.ContractDigest(contract)
 		s.Must(err)
 		contract.Digest = digest
-		batch.Tasks = append(batch.Tasks, task.TaskBatchTask{LocalKey: key, TaskID: int64(i + 1), Title: "E2E " + key, Type: "task", Contract: contract})
+		batch.Tasks = append(batch.Tasks, taskmodel.TaskBatchTask{LocalKey: key, TaskID: int64(i + 1), Title: "E2E " + key, Type: "task", Contract: contract})
 		p.Tasks[key] = Task{ID: strconv.Itoa(i + 1), Contract: contract}
 	}
-	batch.Dependencies = []task.TaskBatchEdge{{Predecessor: task.TaskBatchReference{LocalKey: "a"}, Successor: task.TaskBatchReference{LocalKey: "b"}}}
+	batch.Dependencies = []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "a"}, Successor: taskmodel.TaskBatchReference{LocalKey: "b"}}}
 	// Resolve project identity through the documented common Git directory contract.
 	common := p.git(p.Repo, "rev-parse", "--path-format=absolute", "--git-common-dir")
 	batch.ProjectID = strings.ToLower(filepath.Clean(filepath.FromSlash(common)))
@@ -270,14 +279,14 @@ func (p *Project) CreateTasks() {
 	s.Must(controlled.Write(input, batch))
 	raw, err := p.Driver.Run(s.Context, "task", "validate", "-config", p.Config, "-file", input)
 	s.Must(err)
-	var validation task.TaskBatchValidation
+	var validation taskmodel.TaskBatchValidation
 	s.Must(json.Unmarshal(raw, &validation))
 	if !validation.Valid {
 		s.t.Fatalf("invalid task batch: %+v", validation)
 	}
 	raw, err = p.Driver.Run(s.Context, "task", "create", "-config", p.Config, "-file", input, "-request-id", strings.ReplaceAll(uuid.NewString(), "-", ""), "-expected-authority-version", strconv.FormatUint(validation.AuthorityVersion, 10), "-by", "e2e")
 	s.Must(err)
-	var receipt task.TaskBatchReceipt
+	var receipt taskmodel.TaskBatchReceipt
 	s.Must(json.Unmarshal(raw, &receipt))
 	if receipt.Status != "accepted" {
 		s.t.Fatalf("unexpected create receipt: %+v", receipt)
@@ -317,6 +326,7 @@ func (p *Project) StartService() {
 		return reader.Runtime != nil && reader.Runtime.Service.Ready, nil
 	})
 }
+
 func (p *Project) StopService() {
 	p.Scenario.t.Helper()
 	if p.Service == nil {
@@ -329,12 +339,15 @@ func (p *Project) StopService() {
 	p.Scenario.Must(p.Service.Wait(ctx))
 	p.Service = nil
 }
+
 func (p *Project) RestartService() { p.StopService(); p.StartService() }
+
 func (p *Project) Claim(key string) {
 	p.Scenario.t.Helper()
 	p.Scenario.Must(p.Driver.Control(p.Scenario.Context, p.Scenario.Run.Helper, "resume_dispatch", ""))
 	p.Scenario.Must(p.Driver.Control(p.Scenario.Context, p.Scenario.Run.Helper, "start_task", p.Tasks[key].ID))
 }
+
 func (p *Project) Snapshot() (Snapshot, error) {
 	var snap Snapshot
 	page, err := p.Driver.Tasks(p.Scenario.Context)
@@ -360,6 +373,7 @@ func (p *Project) Snapshot() (Snapshot, error) {
 	}
 	return snap, err
 }
+
 func (p *Project) WaitPhase(phase string) Snapshot {
 	var result Snapshot
 	lastPhase := ""
@@ -413,6 +427,7 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 	})
 	return result
 }
+
 func (p *Project) Merge() {
 	if p.RealPR {
 		p.Scenario.Must(p.mergeGitHub())
@@ -420,6 +435,7 @@ func (p *Project) Merge() {
 	}
 	p.Scenario.Must(controlled.Merge(p.Scenario.Context, p.Provider, p.Repo))
 }
+
 func (p *Project) Record(label string, snap Snapshot) {
 	p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-"+label+".json"), snap))
 }
@@ -487,7 +503,7 @@ func (s *Scenario) cleanup() {
 	}
 	worker := "controlled"
 	provider := "controlled"
-	var realPR *contracts.PRInfo
+	var realPR *executionmodel.PRInfo
 	for _, p := range s.projects {
 		if p.Chain != "" {
 			worker = p.Chain

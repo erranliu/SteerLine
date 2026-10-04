@@ -7,19 +7,23 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/task"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 type WorkflowReader interface {
 	Query(context.Context, string) (contracts.DomainSnapshot, error)
 }
+
 type EventReader interface {
-	Events(context.Context, string, string, string, int64, int, int) ([]contracts.DomainEvent, error)
+	Events(context.Context, string, string, string, int64, int, int) ([]storageports.DomainEvent, error)
 	EventPayload(context.Context, string, int64, int64, int) ([]byte, int64, string, error)
 }
+
 type TaskReader interface {
 	NativeTaskPage(context.Context, string, string, string, uint64, int, int) (contracts.NativeTaskPage, error)
 	TaskGraphSnapshot(context.Context, string) (task.Snapshot, error)
 }
+
 type ProjectReader interface {
 	ReadProjectView(context.Context, string, string, int) (contracts.ProjectView, error)
 }

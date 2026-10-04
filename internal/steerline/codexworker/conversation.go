@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 )
 
 type ConversationMapper struct {
@@ -47,7 +47,7 @@ func (m *ConversationMapper) MapCodexJSONL(ctx contracts.ConversationEvent, raw 
 	}
 	ctx.Version = contracts.ConversationVersion
 	if ctx.Backend == "" && ctx.Protocol == "" {
-		ctx.Backend, ctx.Protocol = executionapi.BackendLocal, executionapi.ProtocolLocalProcess
+		ctx.Backend, ctx.Protocol = executionbackend.BackendLocal, executionbackend.ProtocolLocalProcess
 	}
 	ctx.Source = "codex-jsonl"
 	ctx.SourceRole = contracts.ConversationSourceFallback
@@ -282,6 +282,7 @@ func int64Field(fields map[string]json.RawMessage, name string) int64 {
 }
 
 func firstNonEmpty(values ...string) string { return nonEmpty(values...) }
+
 func sourceEventFallback(e contracts.ConversationEvent, raw []byte) string {
 	if e.SourceSeq != 0 {
 		return fmt.Sprintf("seq:%d", e.SourceSeq)
@@ -298,11 +299,14 @@ func sourceEventFallback(e contracts.ConversationEvent, raw []byte) string {
 	return "unidentified:" + newSourceID()
 }
 
-func newSourceID() string                         { var b [16]byte; _, _ = rand.Read(b[:]); return hex.EncodeToString(b[:]) }
+func newSourceID() string { var b [16]byte; _, _ = rand.Read(b[:]); return hex.EncodeToString(b[:]) }
+
 func (m *ConversationMapper) CurrentTurn() string { return m.currentTurn }
+
 func (m *ConversationMapper) RestoreSession(e contracts.ConversationEvent) {
 	m.sessionID, m.sessionQuality = e.SessionID, e.SessionQuality
 }
+
 func (m *ConversationMapper) RestoreTurn(e contracts.ConversationEvent, finalSeen bool) {
 	m.currentTurn, m.turnQuality = e.TurnID, e.TurnQuality
 	if m.turnFinalSeen == nil {
@@ -310,6 +314,7 @@ func (m *ConversationMapper) RestoreTurn(e contracts.ConversationEvent, finalSee
 	}
 	m.turnFinalSeen[e.TurnID] = finalSeen
 }
+
 func (m *ConversationMapper) Clone() *ConversationMapper {
 	copy := *m
 	if m.turnFinalSeen != nil {

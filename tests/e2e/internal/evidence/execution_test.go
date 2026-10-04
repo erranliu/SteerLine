@@ -2,11 +2,13 @@ package evidence
 
 import (
 	"encoding/json"
+	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
-	"testing"
 )
 
 const thread = "00000000-0000-0000-0000-000000000008"
@@ -21,20 +23,20 @@ func must[T any](t *testing.T, value T, err error) T {
 
 func fixture(t *testing.T) contracts.DomainSnapshot {
 	t.Helper()
-	e := contracts.ExecutionRecord{ProjectIdentity: "project", ExecutionID: "execution", CurrentAttemptID: "attempt", Generation: "generation", ConfigurationDigest: "config", Protocol: string(executionapi.ProtocolLocalCodexAppServer)}
-	policy := executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "host"}, Network: "allow", Escalation: "deny"}
-	profile := &contracts.FixedExecutionProfile{ID: "profile", AcceptedConfigVersion: "accepted", Host: "local", Agent: "codex", ExecutionPolicy: policy}
+	e := executionmodel.ExecutionRecord{ProjectIdentity: "project", ExecutionID: "execution", CurrentAttemptID: "attempt", Generation: "generation", ConfigurationDigest: "config", Protocol: string(executionbackend.ProtocolLocalCodexAppServer)}
+	policy := executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "host"}, Network: "allow", Escalation: "deny"}
+	profile := &executionmodel.FixedExecutionProfile{ID: "profile", AcceptedConfigVersion: "accepted", Host: "local", Agent: "codex", ExecutionPolicy: policy}
 	payload, err := json.Marshal(codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "medium"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := executionapi.NewImplementationDataEnvelope(executionapi.ImplementationDataEnvelope{CodecVersion: 1, Purpose: executionapi.ImplementationConfigPurpose, ImplementationKey: codexworker.ProfileCodecKey, ProjectID: e.ProjectIdentity, ProfileID: profile.ID, AcceptedConfigVersion: profile.AcceptedConfigVersion}, payload)
-	profile.ImplementationData = []executionapi.ImplementationDataEnvelope{must(t, data, err)}
-	resource, err := codexworker.NewPolicyResourceEnvelope(codexworker.PolicyResourceIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, codexworker.PolicyResourcePayload{NativeVersion: codexworker.PolicyCodexVersion, Contract: codexworker.FullAccessPolicyContract, Settings: executionapi.LaunchCommand{Executable: "codex"}})
-	e.PolicyResources = &contracts.PolicyResources{ImplementationData: must(t, resource, err)}
+	data, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{CodecVersion: 1, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: codexworker.ProfileCodecKey, ProjectID: e.ProjectIdentity, ProfileID: profile.ID, AcceptedConfigVersion: profile.AcceptedConfigVersion}, payload)
+	profile.ImplementationData = []executionbackend.ImplementationDataEnvelope{must(t, data, err)}
+	resource, err := codexworker.NewPolicyResourceEnvelope(codexworker.PolicyResourceIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, codexworker.PolicyResourcePayload{NativeVersion: codexworker.PolicyCodexVersion, Contract: codexworker.FullAccessPolicyContract, Settings: executionbackend.LaunchCommand{Executable: "codex"}})
+	e.PolicyResources = &executionmodel.PolicyResources{ImplementationData: must(t, resource, err)}
 	binding, err := codexworker.NewAppServerBindingEnvelope(codexworker.AppServerBindingIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, codexworker.AppServerBinding{Endpoint: "ws://127.0.0.1:12345", SessionID: thread, Generation: "native-generation"})
-	e.ImplementationData = []executionapi.ImplementationDataEnvelope{must(t, binding, err)}
-	return contracts.DomainSnapshot{Executions: []contracts.ExecutionRecord{e}, WorkflowRuns: []contracts.WorkflowRunRecord{{ExecutionProfile: profile}}}
+	e.ImplementationData = []executionbackend.ImplementationDataEnvelope{must(t, binding, err)}
+	return contracts.DomainSnapshot{Executions: []executionmodel.ExecutionRecord{e}, WorkflowRuns: []executionmodel.WorkflowRunRecord{{ExecutionProfile: profile}}}
 }
 
 func TestExecutionEvidencePreservesBoundIdentityAndAuthority(t *testing.T) {
@@ -84,17 +86,17 @@ func TestExecutionEvidencePreservesBoundIdentityAndAuthority(t *testing.T) {
 	}
 }
 
-func orcaFixture(t *testing.T, succeeded bool) contracts.ExecutionRecord {
+func orcaFixture(t *testing.T, succeeded bool) executionmodel.ExecutionRecord {
 	e := fixture(t).Executions[0]
-	e.Protocol = string(executionapi.ProtocolOrcaTerminalV2)
-	e.Process = &executionapi.ProcessIdentity{Kind: "orca", RuntimeID: "runtime", Terminal: "agent", Incarnation: "incarnation", WorktreeID: "worktree"}
-	state := orcaworker.NativeExecutionState{Coordinator: executionapi.ProcessIdentity{RuntimeID: "runtime", Terminal: "coordinator"}, Turns: []orcaworker.NativeTurnState{{TurnID: "readiness", Purpose: "readiness", Settled: true, Outcome: "succeeded"}, {TurnID: "business", Purpose: "business", Settled: true, Outcome: "succeeded"}}}
+	e.Protocol = string(executionbackend.ProtocolOrcaTerminalV2)
+	e.Process = &executionbackend.ProcessIdentity{Kind: "orca", RuntimeID: "runtime", Terminal: "agent", Incarnation: "incarnation", WorktreeID: "worktree"}
+	state := orcaworker.NativeExecutionState{Coordinator: executionbackend.ProcessIdentity{RuntimeID: "runtime", Terminal: "coordinator"}, Turns: []orcaworker.NativeTurnState{{TurnID: "readiness", Purpose: "readiness", Settled: true, Outcome: "succeeded"}, {TurnID: "business", Purpose: "business", Settled: true, Outcome: "succeeded"}}}
 	if !succeeded {
 		state.Turns[1].Outcome = "failed"
 	}
 	data, err := orcaworker.NewExecutionStateEnvelope(orcaworker.ExecutionStateIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, state)
-	e.ImplementationData = []executionapi.ImplementationDataEnvelope{must(t, data, err)}
-	e.Environment = &contracts.WorkerEnvironment{Ready: true, Preparation: &contracts.WorkerPreparation{Verified: true}}
+	e.ImplementationData = []executionbackend.ImplementationDataEnvelope{must(t, data, err)}
+	e.Environment = &executionmodel.WorkerEnvironment{Ready: true, Preparation: &executionmodel.WorkerPreparation{Verified: true}}
 	return e
 }
 

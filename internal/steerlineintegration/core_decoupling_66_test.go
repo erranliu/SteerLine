@@ -8,9 +8,9 @@ import (
 	"strings"
 	"testing"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
@@ -132,4 +132,4 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 	t.Run("terminal_evidence_keeps_agent_and_resource_proofs", TestOrcaCertificationRequiresAgentAndTerminalEvidence)
 }
 
-var _ executionapi.LifecycleResolver = (*integrationLifecycleResolver)(nil)
+var _ executionbackend.LifecycleResolver = (*integrationLifecycleResolver)(nil)

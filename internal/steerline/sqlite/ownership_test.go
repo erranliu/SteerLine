@@ -10,7 +10,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func databaseFiles(t *testing.T, path string) map[string][]byte {
@@ -32,8 +33,8 @@ func TestCM70ReadOnlyOpenPreservesFiles(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.db")
 	writer, err := OpenSQLiteStore(path)
 	require(t, err)
-	require(t, writer.InitializeProject(ctx, ProjectTaskAuthority{ProjectIdentity: "project", Authority: "native", AuthorityVersion: 1, Repository: "repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}))
-	command, _, err := writer.EnqueueCommand(ctx, CommandRecord{ProjectIdentity: "project", CommandID: newID(), Kind: "test", TargetID: "project", RequestedBy: "operator", IdempotencyKey: newID(), Status: "pending", Payload: []byte(`{}`)})
+	require(t, writer.InitializeProject(ctx, tasklegacy.ProjectTaskAuthority{ProjectIdentity: "project", Authority: "native", AuthorityVersion: 1, Repository: "repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}))
+	command, _, err := writer.EnqueueCommand(ctx, storageports.CommandRecord{ProjectIdentity: "project", CommandID: newID(), Kind: "test", TargetID: "project", RequestedBy: "operator", IdempotencyKey: newID(), Status: "pending", Payload: []byte(`{}`)})
 	require(t, err)
 	checkpoint, err := writer.SaveCheckpoint(ctx, ServiceCheckpoint{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Identity: "project"}})
 	require(t, err)
@@ -68,7 +69,7 @@ func TestCM70ReadOnlyOpenPreservesFiles(t *testing.T) {
 	require(t, err)
 	beforeDomain, err := reader.Query(ctx, "project")
 	require(t, err)
-	if _, _, err = reader.EnqueueCommand(ctx, CommandRecord{ProjectIdentity: "project", CommandID: newID(), Kind: "test", TargetID: "project", RequestedBy: "operator", IdempotencyKey: newID(), Status: "pending", Payload: []byte(`{}`)}); err == nil {
+	if _, _, err = reader.EnqueueCommand(ctx, storageports.CommandRecord{ProjectIdentity: "project", CommandID: newID(), Kind: "test", TargetID: "project", RequestedBy: "operator", IdempotencyKey: newID(), Status: "pending", Payload: []byte(`{}`)}); err == nil {
 		t.Fatal("read-only connection admitted a command")
 	}
 	command.Status = "completed"
@@ -147,17 +148,17 @@ func TestCM70WindowsCloseReleasesHandlesAndMissingReaderCannotCreate(t *testing.
 func TestCM70StorageFailuresRemainDistinctFromMissingRecords(t *testing.T) {
 	store := openDomainTestStore(t)
 	_, err := store.NativeAuthority(context.Background(), "missing")
-	if !errors.Is(err, persistence.ErrNotFound) {
+	if !errors.Is(err, storageports.ErrNotFound) {
 		t.Fatalf("missing authority lost pure no-row classification: %v", err)
 	}
 	require(t, store.Close())
 	_, err = store.Query(context.Background(), "project")
-	if err == nil || errors.Is(err, persistence.ErrNotFound) {
+	if err == nil || errors.Is(err, storageports.ErrNotFound) {
 		t.Fatalf("closed connection became a missing record: %v", err)
 	}
 	_, err = (Factory{}).OpenReader(filepath.Join(t.TempDir(), "missing.db"))
-	var failure *persistence.StorageError
-	if !errors.As(err, &failure) || failure.Code != persistence.StorageIO {
+	var failure *storageports.StorageError
+	if !errors.As(err, &failure) || failure.Code != storageports.StorageIO {
 		t.Fatalf("open failure lost storage classification: %v", err)
 	}
 }
@@ -180,9 +181,9 @@ func TestCM70WriterLockHasPureClassificationAndNoCommandWrite(t *testing.T) {
 	_, err = conn.ExecContext(ctx, "BEGIN IMMEDIATE")
 	require(t, err)
 	defer conn.ExecContext(ctx, "ROLLBACK")
-	_, _, err = blocked.EnqueueCommand(ctx, CommandRecord{ProjectIdentity: "project", CommandID: newID(), Kind: "test", IdempotencyKey: newID(), Status: "pending"})
-	var failure *persistence.StorageError
-	if !errors.As(err, &failure) || failure.Code != persistence.StorageLocked || errors.Is(err, persistence.ErrNotFound) {
+	_, _, err = blocked.EnqueueCommand(ctx, storageports.CommandRecord{ProjectIdentity: "project", CommandID: newID(), Kind: "test", IdempotencyKey: newID(), Status: "pending"})
+	var failure *storageports.StorageError
+	if !errors.As(err, &failure) || failure.Code != storageports.StorageLocked || errors.Is(err, storageports.ErrNotFound) {
 		t.Fatalf("writer lock became another outcome: %v", err)
 	}
 	var count int

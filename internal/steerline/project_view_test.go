@@ -6,7 +6,8 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 func TestProjectViewConnectionUsesSampledRuntime(t *testing.T) {
@@ -26,8 +27,8 @@ func TestProjectViewConnectionUsesSampledRuntime(t *testing.T) {
 	if current := ConnectService(ctx, service.Config); current.State != ConnectionInitializing {
 		t.Fatal("fixture did not publish a different service checkpoint")
 	}
-	unknown := connectServiceFromSnapshot(ctx, service.Config, observation, func(*executionapi.ProcessIdentity) ProcessProbe {
-		return ProcessProbe{State: ProcessUnknown, Reason: "unavailable"}
+	unknown := connectServiceFromSnapshot(ctx, service.Config, observation, func(*executionbackend.ProcessIdentity) productapi.ProcessProbe {
+		return productapi.ProcessProbe{State: ProcessUnknown, Reason: "unavailable"}
 	})
 	if unknown.State != ConnectionUnknown || unknown.CanControl {
 		t.Fatal("sampled runtime replaced the independent process check")
@@ -44,7 +45,7 @@ func TestProjectViewConnectionRechecksHeartbeatAtUse(t *testing.T) {
 		name      string
 		heartbeat time.Time
 		sampledAt time.Time
-		want      ServiceConnectionState
+		want      productapi.ServiceConnectionState
 		clockSkew bool
 	}{
 		{name: "expired since sampling", heartbeat: now().Add(-time.Hour), sampledAt: now().Add(-time.Hour).Add(time.Second), want: ConnectionStale},
@@ -71,6 +72,7 @@ func TestProjectViewConnectionRechecksHeartbeatAtUse(t *testing.T) {
 		t.Fatal("failed identity check discarded the supplied read-only snapshot")
 	}
 }
+
 func requireProjectView(t *testing.T, view ProjectView) {
 	t.Helper()
 	for _, err := range []error{view.TaskError, view.SelectedTaskError, view.DomainError, view.RuntimeError} {

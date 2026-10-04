@@ -1,0 +1,337 @@
+{
+  "task": 73,
+  "environment": "Windows amd64, Go 1.26.4; isolated STEERLINE_HOME; no native opt-in",
+  "tests": [
+    {
+      "old_file": "internal/steerline/execution/contracts_test.go",
+      "new_file": "internal/execution/backend/contracts_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestExecutionRecordsKeepWireIdentity",
+      "new_parent": "TestExecutionRecordsKeepWireIdentity",
+      "assertion_owner": "internal/execution/backend/contracts_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/execution/contracts_test.go",
+      "new_file": "internal/execution/backend/contracts_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestAdapterAndBackendErrorsPreserveCause",
+      "new_parent": "TestAdapterAndBackendErrorsPreserveCause",
+      "assertion_owner": "internal/execution/backend/contracts_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/execution/contracts_test.go",
+      "new_file": "internal/execution/backend/contracts_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestPRCluesKeepOrderAndDeduplicate",
+      "new_parent": "TestPRCluesKeepOrderAndDeduplicate",
+      "assertion_owner": "internal/execution/backend/contracts_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/execution/implementation_data_test.go",
+      "new_file": "internal/execution/backend/implementation_data_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestCD63CodecIdentityAndVersion",
+      "new_parent": "TestCD63CodecIdentityAndVersion",
+      "assertion_owner": "internal/execution/backend/implementation_data_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/execution/implementation_data_test.go",
+      "new_file": "internal/execution/backend/implementation_data_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestImplementationDataEnvelopeBindsScopeAndCopiesPayload",
+      "new_parent": "TestImplementationDataEnvelopeBindsScopeAndCopiesPayload",
+      "assertion_owner": "internal/execution/backend/implementation_data_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/execution/implementation_data_test.go",
+      "new_file": "internal/execution/backend/implementation_data_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestImplementationDataEnvelopeRejectsBadIdentityVersionAndSize",
+      "new_parent": "TestImplementationDataEnvelopeRejectsBadIdentityVersionAndSize",
+      "assertion_owner": "internal/execution/backend/implementation_data_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/execution/json_test.go",
+      "new_file": "internal/execution/backend/json_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestDecodeStrictJSON",
+      "new_parent": "TestDecodeStrictJSON",
+      "assertion_owner": "internal/execution/backend/json_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/execution/lifecycle_test.go",
+      "new_file": "internal/execution/backend/lifecycle_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestHostMutationRequiresOneFixedOriginalTarget",
+      "new_parent": "TestHostMutationRequiresOneFixedOriginalTarget",
+      "assertion_owner": "internal/execution/backend/lifecycle_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/execution/lifecycle_test.go",
+      "new_file": "internal/execution/backend/lifecycle_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestLifecycleCandidateRequiresOneMatchingInput",
+      "new_parent": "TestLifecycleCandidateRequiresOneMatchingInput",
+      "assertion_owner": "internal/execution/backend/lifecycle_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/execution/lifecycle_test.go",
+      "new_file": "internal/execution/backend/lifecycle_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestLifecycleRequestRequiresOriginalDurableOperation",
+      "new_parent": "TestLifecycleRequestRequiresOriginalDurableOperation",
+      "assertion_owner": "internal/execution/backend/lifecycle_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/execution/lifecycle_test.go",
+      "new_file": "internal/execution/backend/lifecycle_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestLifecycleReceiptCloneOwnsImplementationPayloadAndFacts",
+      "new_parent": "TestLifecycleReceiptCloneOwnsImplementationPayloadAndFacts",
+      "assertion_owner": "internal/execution/backend/lifecycle_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/execution/policy_test.go",
+      "new_file": "internal/execution/backend/policy_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestExecutionPolicyRequiresExplicitAuthority",
+      "new_parent": "TestExecutionPolicyRequiresExplicitAuthority",
+      "assertion_owner": "internal/execution/backend/policy_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/execution/question_route_test.go",
+      "new_file": "internal/execution/backend/question_route_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestQuestionRouteVersionIdentityDigestAndLimit",
+      "new_parent": "TestQuestionRouteVersionIdentityDigestAndLimit",
+      "assertion_owner": "internal/execution/backend/question_route_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/execution/requirements_test.go",
+      "new_file": "internal/execution/backend/requirements_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestRequirementsMatchBoundEvidence",
+      "new_parent": "TestRequirementsMatchBoundEvidence",
+      "assertion_owner": "internal/execution/backend/requirements_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/execution/requirements_test.go",
+      "new_file": "internal/execution/backend/requirements_test.go",
+      "old_package": "internal/steerline/execution",
+      "new_package": "internal/execution/backend",
+      "old_parent": "TestRequirementsRejectUnregisteredAndDuplicateItems",
+      "new_parent": "TestRequirementsRejectUnregisteredAndDuplicateItems",
+      "assertion_owner": "internal/execution/backend/requirements_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/task/task_test.go",
+      "new_file": "internal/task/model/task_test.go",
+      "old_package": "internal/steerline/task",
+      "new_package": "internal/task/model",
+      "old_parent": "TestContractDigestAndReferenceBoundary",
+      "new_parent": "TestContractDigestAndReferenceBoundary",
+      "assertion_owner": "internal/task/model/task_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/task/task_test.go",
+      "new_file": "internal/task/model/task_test.go",
+      "old_package": "internal/steerline/task",
+      "new_package": "internal/task/model",
+      "old_parent": "TestBatchValidationAndReadinessShareTaskRules",
+      "new_parent": "TestBatchValidationAndReadinessShareTaskRules",
+      "assertion_owner": "internal/task/model/task_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/taskgraph/taskgraph_test.go",
+      "new_file": "internal/task/model/taskgraph_test.go",
+      "old_package": "internal/steerline/taskgraph",
+      "new_package": "internal/task/model",
+      "old_parent": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint",
+      "new_parent": "TestCycleIsDeterministicAndIncludesRepeatedEndpoint",
+      "assertion_owner": "internal/task/model/taskgraph_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/taskgraph/taskgraph_test.go",
+      "new_file": "internal/task/model/taskgraph_test.go",
+      "old_package": "internal/steerline/taskgraph",
+      "new_package": "internal/task/model",
+      "old_parent": "TestStableTaskOrderUsesPriorityTimeAndNumericID",
+      "new_parent": "TestStableTaskOrderUsesPriorityTimeAndNumericID",
+      "assertion_owner": "internal/task/model/taskgraph_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/taskgraph/taskgraph_test.go",
+      "new_file": "internal/task/model/taskgraph_test.go",
+      "old_package": "internal/steerline/taskgraph",
+      "new_package": "internal/task/model",
+      "old_parent": "TestProjectNeighborhoodKeepsBranchesMergesAndDisconnects",
+      "new_parent": "TestProjectNeighborhoodKeepsBranchesMergesAndDisconnects",
+      "assertion_owner": "internal/task/model/taskgraph_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/taskgraph/taskgraph_test.go",
+      "new_file": "internal/task/model/taskgraph_test.go",
+      "old_package": "internal/steerline/taskgraph",
+      "new_package": "internal/task/model",
+      "old_parent": "TestProjectSortsNumericIDsAndReportsNodeLimit",
+      "new_parent": "TestProjectSortsNumericIDsAndReportsNodeLimit",
+      "assertion_owner": "internal/task/model/taskgraph_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/taskgraph/taskgraph_test.go",
+      "new_file": "internal/task/model/taskgraph_test.go",
+      "old_package": "internal/steerline/taskgraph",
+      "new_package": "internal/task/model",
+      "old_parent": "TestProjectStatusFilterRetainsAnchorAndMarksOmittedBoundary",
+      "new_parent": "TestProjectStatusFilterRetainsAnchorAndMarksOmittedBoundary",
+      "assertion_owner": "internal/task/model/taskgraph_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/taskgraph/taskgraph_test.go",
+      "new_file": "internal/task/model/taskgraph_test.go",
+      "old_package": "internal/steerline/taskgraph",
+      "new_package": "internal/task/model",
+      "old_parent": "TestProjectDepthLimitAndBoundaryEdgeCap",
+      "new_parent": "TestProjectDepthLimitAndBoundaryEdgeCap",
+      "assertion_owner": "internal/task/model/taskgraph_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/workerflow/recovery_test.go",
+      "new_file": "internal/execution/model/recovery_test.go",
+      "old_package": "internal/steerline/workerflow",
+      "new_package": "internal/execution/model",
+      "old_parent": "TestClassifyRecovery",
+      "new_parent": "TestClassifyRecovery",
+      "assertion_owner": "internal/execution/model/recovery_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/workerflow/state_test.go",
+      "new_file": "internal/execution/model/state_test.go",
+      "old_package": "internal/steerline/workerflow",
+      "new_package": "internal/execution/model",
+      "old_parent": "TestTwoTurnsKeepOriginalSessionAndPR",
+      "new_parent": "TestTwoTurnsKeepOriginalSessionAndPR",
+      "assertion_owner": "internal/execution/model/state_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/workerflow/state_test.go",
+      "new_file": "internal/execution/model/state_test.go",
+      "old_package": "internal/steerline/workerflow",
+      "new_package": "internal/execution/model",
+      "old_parent": "TestLateTurnCannotChangeCurrentState",
+      "new_parent": "TestLateTurnCannotChangeCurrentState",
+      "assertion_owner": "internal/execution/model/state_test.go",
+      "subtests": "unchanged; actual run/pass names recorded in coverage.json"
+    },
+    {
+      "old_file": "internal/steerline/task/task_test.go",
+      "new_file": "internal/steerline/task/task_test.go",
+      "old_parent": "TestTaskStatusAndDeliveryEvidence",
+      "new_parent": "TestTaskStatusAndDeliveryEvidence",
+      "assertion_owner": "legacy #74 gates plus task/model facts",
+      "subtests": "unchanged"
+    },
+    {
+      "old_file": "internal/steerline/task/task_test.go",
+      "new_file": "internal/steerline/task/task_test.go",
+      "old_parent": "TestDeliveryGateRequiresSelectedWorker",
+      "new_parent": "TestDeliveryGateRequiresSelectedWorker",
+      "assertion_owner": "legacy #74 gates plus task/model facts",
+      "subtests": "unchanged"
+    },
+    {
+      "old_file": "internal/steerline/task/task_test.go",
+      "new_file": "internal/steerline/task/task_test.go",
+      "old_parent": "TestBatchPlanAndTaskClaimKeepFixedValues",
+      "new_parent": "TestBatchPlanAndTaskClaimKeepFixedValues",
+      "assertion_owner": "legacy #74 gates plus task/model facts",
+      "subtests": "unchanged"
+    },
+    {
+      "old_file": "internal/steerline/persistence/ports_test.go",
+      "new_file": "internal/storage/ports/ports_test.go",
+      "old_parent": "TestCM69PurePortDependencies",
+      "new_parent": "TestTM01StoragePortDependencies",
+      "assertion_owner": "new narrow ports with legacy aggregation exceptions removed; original CM69 remains for #79"
+    }
+  ],
+  "production_construction": [
+    "internal/steerlineapp/app.go",
+    "internal/steerlineapp/client.go",
+    "internal/steerlineapp/directory.go",
+    "cmd/steerline/main.go"
+  ],
+  "rules_packages": [
+    "internal/task/model",
+    "internal/execution/model",
+    "internal/execution/backend",
+    "internal/storage/ports"
+  ],
+  "consumer_selection": {
+    "package": "internal/steerline",
+    "parents": [
+      "TestMC1",
+      "TestMC4",
+      "TestMC8",
+      "TestMC9"
+    ],
+    "assertion_owner": "candidate_workers_test.go (unchanged identity/unique delivery/late result/limit assertions)"
+  },
+  "boundary_parent": "TestCD67CoreBoundary",
+  "boundary_added_subtests": [
+    "pure_ownership_all_tags_production_and_tests/task/model",
+    "pure_ownership_all_tags_production_and_tests/execution/model",
+    "pure_ownership_all_tags_production_and_tests/execution/backend",
+    "pure_ownership_all_tags_production_and_tests/product/api",
+    "pure_ownership_all_tags_production_and_tests/storage/ports"
+  ],
+  "l1_owner_change": "old taskgraph -> task/model; workerflow -> execution/model; execution -> execution/backend; add storage/ports + old task/persistence; app owner includes CM71; exact new CD67 parent/subtest assignments; Windows fixture process-death assertion included in testprotocol rule package",
+  "evidence": "run-20261004/{rules,boundary,consumers,fixture-lock,fixture-recovery,l1-after-fixture-fix}; first l1 failure retained; coverage.json records actual nonzero run/pass and zero skip for final groups",
+  "fixture_repair": {
+    "cause": "Service cancellation kills a fixture subprocess while it owns an O_EXCL pathname lock; deferred unlock does not run",
+    "scope": "Windows testprotocol only; exclusive/delete-on-close handle, non-Windows fixture unchanged",
+    "new_parent": "TestTM01FixtureLockProcessDeath",
+    "retested_parent": "TestCD67AdditionalImplementation",
+    "retested_subtest": "supported_terminal_recovery_and_original_identity",
+    "l1_evidence": "l1 first failure retained; l1-after-fixture-fix is separate final run"
+  }
+}

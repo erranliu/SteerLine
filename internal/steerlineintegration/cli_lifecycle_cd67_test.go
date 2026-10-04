@@ -4,9 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerlineapp"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,6 +12,10 @@ import (
 	"sync"
 	"testing"
 	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
 
 func TestStartServiceSerializesSameConfig(t *testing.T) {
@@ -95,7 +96,7 @@ func TestStartServiceReportsPreflightFailureAndPendingHandshake(t *testing.T) {
 	})
 
 	t.Run("timeout keeps startup identity and does not repeat launch", func(t *testing.T) {
-		var pendingIdentity *executionapi.ProcessIdentity
+		var pendingIdentity *executionbackend.ProcessIdentity
 		t.Cleanup(func() {
 			if pendingIdentity != nil {
 				_ = terminateCLIProcess(pendingIdentity)
@@ -179,6 +180,7 @@ func newCLILifecycleFixture(t *testing.T) *cliLifecycleFixture {
 	f := newLifecycleProject(t, "local")
 	return &cliLifecycleFixture{c: f.config, path: f.configPath}
 }
+
 func (f *cliLifecycleFixture) save(t *testing.T) {
 	t.Helper()
 	raw, err := os.ReadFile(f.path)
@@ -190,7 +192,9 @@ func (f *cliLifecycleFixture) save(t *testing.T) {
 }
 
 var cliBuildOnce sync.Once
+
 var cliBuildPath string
+
 var cliBuildErr error
 
 func buildProductLifecycleCLI(t *testing.T) string {
@@ -213,7 +217,9 @@ func buildProductLifecycleCLI(t *testing.T) string {
 	require(t, cliBuildErr)
 	return cliBuildPath
 }
+
 func cliDetachedChildSupported(t *testing.T) bool { t.Helper(); return runtime.GOOS != "windows" }
+
 func readCLIStartupRecord(c steerline.Config, id string) (steerline.StartupRecord, error) {
 	var r steerline.StartupRecord
 	raw, err := os.ReadFile(filepath.Join(c.RunDir, "service", "startups", id, "startup.json"))
@@ -222,7 +228,8 @@ func readCLIStartupRecord(c steerline.Config, id string) (steerline.StartupRecor
 	}
 	return r, err
 }
-func terminateCLIProcess(identity *executionapi.ProcessIdentity) error {
+
+func terminateCLIProcess(identity *executionbackend.ProcessIdentity) error {
 	if identity == nil || steerlineapp.NewProcessHost(time.Second).InspectProcess(identity) != "matching process still exists" {
 		return fmt.Errorf("original test process identity differs")
 	}
@@ -232,6 +239,7 @@ func terminateCLIProcess(identity *executionapi.ProcessIdentity) error {
 	}
 	return p.Kill()
 }
+
 func observeCLIStartupExit(c steerline.Config, id string, budget time.Duration) (steerline.ServiceConnection, error) {
 	deadline := time.Now().Add(budget)
 	for time.Now().Before(deadline) {

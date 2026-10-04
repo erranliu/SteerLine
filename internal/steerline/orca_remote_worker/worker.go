@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -26,7 +26,7 @@ func (b Client) centerPayload(runtimeID string) orcaworker.Call {
 	return func(ctx context.Context, args ...string) (json.RawMessage, error) {
 		env, err := b.CenterCall(ctx, args...)
 		if err == nil && env.RuntimeID != runtimeID {
-			err = &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "center runtime changed"}
+			err = &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "center runtime changed"}
 		}
 		return env.Payload, err
 	}
@@ -73,12 +73,12 @@ func (b Client) RecoverStart(ctx context.Context, runID, taskID, worktreeID, run
 		return StartReceipt{}, err
 	}
 	if id == "" || run != runID {
-		return StartReceipt{}, &Error{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "original remote Task has no unique Dispatch"}
+		return StartReceipt{}, &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "original remote Task has no unique Dispatch"}
 	}
 	return StartReceipt{RunID: runID, TaskID: taskID, DispatchID: id, WorktreeID: worktreeID, CenterRuntimeID: runtimeID}, nil
 }
 
-func SessionID(identity executionapi.ProcessIdentity) string {
+func SessionID(identity executionbackend.ProcessIdentity) string {
 	return "orca-remote:" + identity.ExecutionHost + ":" + identity.RuntimeID + ":" + identity.Terminal + ":" + identity.Incarnation
 }
 
@@ -86,29 +86,29 @@ func SessionID(identity executionapi.ProcessIdentity) string {
 func (b Client) workspaceCall(pair PreflightResult) orcaworker.Call {
 	return func(ctx context.Context, args ...string) (json.RawMessage, error) {
 		if pair.EnvironmentID != b.config.Settings.EnvironmentID || pair.RemoteRuntime == "" || (b.config.ExpectedRemoteRuntime != "" && pair.RemoteRuntime != b.config.ExpectedRemoteRuntime) {
-			return nil, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "workspace target differs from fixed peer"}
+			return nil, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "workspace target differs from fixed peer"}
 		}
 		args = append(args, "--environment", pair.EnvironmentID)
 		env, err := b.CenterCall(ctx, args...)
 		if err == nil && env.RuntimeID != pair.RemoteRuntime {
-			err = &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote workspace runtime changed"}
+			err = &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "remote workspace runtime changed"}
 		}
 		return env.Payload, err
 	}
 }
 
-func (b Client) ShowCoordinator(ctx context.Context, handle, runtimeID string) (executionapi.ProcessIdentity, error) {
+func (b Client) ShowCoordinator(ctx context.Context, handle, runtimeID string) (executionbackend.ProcessIdentity, error) {
 	term, err := orcaworker.ShowTerminal(ctx, b.CenterCall, handle)
 	if err != nil {
-		return executionapi.ProcessIdentity{}, err
+		return executionbackend.ProcessIdentity{}, err
 	}
 	if term.RuntimeID != runtimeID || term.AgentIdentity != "" {
-		return executionapi.ProcessIdentity{}, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "center coordinator runtime or owner changed"}
+		return executionbackend.ProcessIdentity{}, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "center coordinator runtime or owner changed"}
 	}
-	return executionapi.ProcessIdentity{Kind: "orca-remote-coordinator", Terminal: term.Handle, RuntimeID: term.RuntimeID, Incarnation: term.IncarnationID}, nil
+	return executionbackend.ProcessIdentity{Kind: "orca-remote-coordinator", Terminal: term.Handle, RuntimeID: term.RuntimeID, Incarnation: term.IncarnationID}, nil
 }
 
-func (b Client) CloseCoordinator(ctx context.Context, ref Ref, original executionapi.ProcessIdentity, uncertain bool) (json.RawMessage, error) {
+func (b Client) CloseCoordinator(ctx context.Context, ref Ref, original executionbackend.ProcessIdentity, uncertain bool) (json.RawMessage, error) {
 	if _, err := b.VerifyCoordinator(ctx, ref); err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func (b Client) CloseCoordinator(ctx context.Context, ref Ref, original executio
 		return nil, err
 	}
 	if shown != original {
-		return nil, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "original coordinator incarnation changed"}
+		return nil, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "original coordinator incarnation changed"}
 	}
 	inbox, err := orcaworker.CheckInbox(ctx, b.CenterCall, original.Terminal, ref.External.OrchestrationRun)
 	if err != nil {
@@ -150,7 +150,7 @@ func (b Client) CloseCoordinator(ctx context.Context, ref Ref, original executio
 
 func validateWorktree(value orcaworker.Worktree, pair PreflightResult, name, base string) error {
 	if value.ID != pair.RepositoryID+"::"+value.Path || value.RepoID != pair.RepositoryID || value.DisplayName != name || value.Path == "" || strings.TrimPrefix(value.Branch, "refs/heads/") == "" || value.Head != base || value.BaseRef != base {
-		return &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "remote worktree differs from fixed repository/name/base"}
+		return &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "remote worktree differs from fixed repository/name/base"}
 	}
 	return nil
 }
@@ -191,7 +191,7 @@ func (b Client) CreateWorktree(ctx context.Context, pair PreflightResult, name, 
 	}
 	raw, err := b.workspaceCall(pair)(ctx, "worktree", "create", "--repo", "id:"+pair.RepositoryID, "--name", name, "--base-branch", base, "--no-parent", "--setup", "skip", "--json")
 	if err != nil {
-		return orcaworker.Worktree{}, &Error{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "remote worktree creation receipt unavailable", Cause: err}
+		return orcaworker.Worktree{}, &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "remote worktree creation receipt unavailable", Cause: err}
 	}
 	var result struct{ Worktree orcaworker.Worktree }
 	if err := json.Unmarshal(raw, &result); err != nil {
@@ -218,7 +218,7 @@ func (b Client) Release(ctx context.Context, ref Ref) (orcaworker.MutationReceip
 		return orcaworker.MutationReceipt{}, err
 	}
 	if env.RuntimeID != ref.External.CoordinatorRuntimeID || result.DispatchID != ref.External.Dispatch || (result.State != "released" && result.State != "already_released") || len(result.ResidualResources) > 0 || result.Mutation.RequestID == "" {
-		return orcaworker.MutationReceipt{}, &Error{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "remote release did not confirm exact settled Dispatch"}
+		return orcaworker.MutationReceipt{}, &Error{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "remote release did not confirm exact settled Dispatch"}
 	}
 	return orcaworker.MutationReceipt{RequestID: result.Mutation.RequestID, Payload: env.Payload}, nil
 }
@@ -240,7 +240,7 @@ func (b Client) ReleaseAcknowledged(ctx context.Context, ref Ref) (bool, error) 
 			return false, err
 		}
 		if result.RuntimeID != ref.External.CoordinatorRuntimeID {
-			return false, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "worker inventory came from a different coordinator runtime"}
+			return false, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "worker inventory came from a different coordinator runtime"}
 		}
 		var listing struct {
 			Workers []struct {
@@ -257,7 +257,7 @@ func (b Client) ReleaseAcknowledged(ctx context.Context, ref Ref) (bool, error) 
 				continue
 			}
 			if worker.RunID != ref.External.OrchestrationRun || worker.TaskID != ref.External.Task || worker.WorktreeID != ref.External.WorktreeID {
-				return false, &Error{Code: executionapi.BackendIdentityMismatch, Diagnostic: "worker inventory changed the original Run/Task/worktree identity"}
+				return false, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "worker inventory changed the original Run/Task/worktree identity"}
 			}
 			if worker.State == "released" || worker.TerminalState == "released" {
 				return true, nil

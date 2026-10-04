@@ -1,7 +1,7 @@
 package testenv
 
 import (
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
 )
 
@@ -14,4 +14,4 @@ func (p *Project) AssertFullAccess(snapshot Snapshot) {
 	p.Scenario.Must(evidence.FullAccess(snapshot.Domain))
 }
 
-func ExecutionSession(e contracts.ExecutionRecord) (string, error) { return evidence.Session(e) }
+func ExecutionSession(e executionmodel.ExecutionRecord) (string, error) { return evidence.Session(e) }

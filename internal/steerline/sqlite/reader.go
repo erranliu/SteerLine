@@ -6,17 +6,17 @@ import (
 	"database/sql"
 
 	"github.com/erranliu/SteerLine/internal/steerline/query"
-	taskrules "github.com/erranliu/SteerLine/internal/steerline/task"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
 const SchemaVersion = 13
 
 type Reader struct {
 	db            *sql.DB
-	nativeBinding *taskrules.ProjectTaskAuthority
+	nativeBinding *tasklegacy.ProjectTaskAuthority
 }
 
-func NewReader(db *sql.DB, binding *taskrules.ProjectTaskAuthority) Reader {
+func NewReader(db *sql.DB, binding *tasklegacy.ProjectTaskAuthority) Reader {
 	if binding != nil {
 		fixed := *binding
 		binding = &fixed
@@ -25,7 +25,9 @@ func NewReader(db *sql.DB, binding *taskrules.ProjectTaskAuthority) Reader {
 }
 
 var _ query.WorkflowReader = Reader{}
+
 var _ query.EventReader = Reader{}
+
 var _ query.TaskReader = Reader{}
 
 var _ query.ProjectReader = Reader{}

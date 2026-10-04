@@ -7,8 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/testprocess"
 	"io"
 	"net"
 	"net/http"
@@ -19,6 +17,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/testprocess"
 )
 
 // gitServer is a loopback CGI transport for the real Git http-backend.
@@ -60,7 +61,7 @@ func gitServer(root, addressFile, statePath string) error {
 				http.Error(w, "PR head was not pushed", 409)
 				return
 			}
-			state.PR = contracts.PRInfo{URL: "https://github.com/e2e/project/pull/1", Repository: "e2e/project", BaseBranch: "main", HeadRepository: "e2e/project", HeadBranch: input.Branch, HeadRevision: head, State: "open"}
+			state.PR = executionmodel.PRInfo{URL: "https://github.com/e2e/project/pull/1", Repository: "e2e/project", BaseBranch: "main", HeadRepository: "e2e/project", HeadBranch: input.Branch, HeadRevision: head, State: "open"}
 			if err := Write(statePath, state); err != nil {
 				http.Error(w, err.Error(), 500)
 				return

@@ -12,16 +12,17 @@ import (
 	"strings"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
 
-func executionStopperFor(c Config) (executionapi.ExecutionStopper, error) {
+func executionStopperFor(c Config) (executionbackend.ExecutionStopper, error) {
 	entry, err := registrationFor(c)
 	if err != nil {
 		return nil, err
 	}
-	stopper, ok := entry.Backend(c).(executionapi.ExecutionStopper)
+	stopper, ok := entry.Backend(c).(executionbackend.ExecutionStopper)
 	if !ok {
 		return nil, unsupported("StopExecution")
 	}
@@ -29,7 +30,7 @@ func executionStopperFor(c Config) (executionapi.ExecutionStopper, error) {
 }
 
 func unsupported(name string) error {
-	return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: name + " is not supported by this backend"}
+	return &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: name + " is not supported by this backend"}
 }
 
 func evidenceDigest(value string) bool {
@@ -39,6 +40,7 @@ func evidenceDigest(value string) bool {
 	_, err := hex.DecodeString(value)
 	return err == nil
 }
+
 func digestValue(v any) string {
 	b, _ := json.Marshal(v)
 	h := sha256.Sum256(b)
@@ -52,7 +54,7 @@ type executionRecords struct {
 
 // SaveExecutionCapabilityReport persists one already verified, generic report
 // using the center's capability record format.
-func SaveExecutionCapabilityReport(c Config, report executionapi.CapabilityReport) error {
+func SaveExecutionCapabilityReport(c Config, report executionbackend.CapabilityReport) error {
 	if c.RunDir == "" {
 		return errors.New("run directory is required for a capability report")
 	}
@@ -63,12 +65,12 @@ func SaveExecutionCapabilityReport(c Config, report executionapi.CapabilityRepor
 	return records.saveCapabilityReport(report)
 }
 
-func capabilityReportKey(report executionapi.CapabilityReport) string {
+func capabilityReportKey(report executionbackend.CapabilityReport) string {
 	return digestValue(struct {
-		Backend              executionapi.BackendKind
-		Protocol             executionapi.ExecutionProtocol
-		Target               executionapi.ExecutionTarget
-		Agent                executionapi.AgentSpec
+		Backend              executionbackend.BackendKind
+		Protocol             executionbackend.ExecutionProtocol
+		Target               executionbackend.ExecutionTarget
+		Agent                executionbackend.AgentSpec
 		CenterVersion        string
 		Version              string
 		ExpectedAgentVersion string
@@ -98,20 +100,20 @@ func verifyCapabilityEvidence(value string) error {
 	return nil
 }
 
-func (r executionRecords) capabilityPath(report executionapi.CapabilityReport) string {
+func (r executionRecords) capabilityPath(report executionbackend.CapabilityReport) string {
 	return filepath.Join(r.root, "execution", "v1", "capabilities", capabilityReportKey(report)+".json")
 }
 
-func (r executionRecords) saveCapabilityReport(report executionapi.CapabilityReport) error {
+func (r executionRecords) saveCapabilityReport(report executionbackend.CapabilityReport) error {
 	if report.Version != 1 || report.Backend == "" || report.Protocol == "" || report.Target.ID == "" || report.Agent.Name == "" || report.PlatformVersion == "" || report.CheckedAt.IsZero() {
 		return errors.New("incomplete capability report")
 	}
 	seen := map[string]bool{}
 	for _, cap := range report.Capabilities {
-		if cap.Name == "" || retiredExecutionCapabilityName(cap.Name) || seen[cap.Name] || cap.Status != executionapi.CapabilityVerified && cap.Status != executionapi.CapabilityUnsupported && cap.Status != executionapi.CapabilityNotTested || cap.Status == executionapi.CapabilityVerified && cap.Evidence == "" {
+		if cap.Name == "" || retiredExecutionCapabilityName(cap.Name) || seen[cap.Name] || cap.Status != executionbackend.CapabilityVerified && cap.Status != executionbackend.CapabilityUnsupported && cap.Status != executionbackend.CapabilityNotTested || cap.Status == executionbackend.CapabilityVerified && cap.Evidence == "" {
 			return errors.New("capability report has invalid or unevidenced status")
 		}
-		if cap.Status == executionapi.CapabilityVerified {
+		if cap.Status == executionbackend.CapabilityVerified {
 			if err := verifyCapabilityEvidence(cap.Evidence); err != nil {
 				return err
 			}
@@ -129,12 +131,12 @@ func (r executionRecords) saveCapabilityReport(report executionapi.CapabilityRep
 	return AtomicWrite(p, append(b, '\n'))
 }
 
-func (r executionRecords) loadCapabilityReport(key executionapi.CapabilityReport) (executionapi.CapabilityReport, error) {
+func (r executionRecords) loadCapabilityReport(key executionbackend.CapabilityReport) (executionbackend.CapabilityReport, error) {
 	b, err := os.ReadFile(r.capabilityPath(key))
 	if err != nil {
-		return executionapi.CapabilityReport{}, err
+		return executionbackend.CapabilityReport{}, err
 	}
-	var report executionapi.CapabilityReport
+	var report executionbackend.CapabilityReport
 	if err = decode(b, &report); err != nil {
 		return report, fmt.Errorf("invalid capability report; preserve it: %w", err)
 	}
@@ -146,10 +148,10 @@ func (r executionRecords) loadCapabilityReport(key executionapi.CapabilityReport
 	}
 	seen := map[string]bool{}
 	for _, cap := range report.Capabilities {
-		if cap.Name == "" || retiredExecutionCapabilityName(cap.Name) || seen[cap.Name] || cap.Status != executionapi.CapabilityVerified && cap.Status != executionapi.CapabilityUnsupported && cap.Status != executionapi.CapabilityNotTested || cap.Status == executionapi.CapabilityVerified && cap.Evidence == "" {
+		if cap.Name == "" || retiredExecutionCapabilityName(cap.Name) || seen[cap.Name] || cap.Status != executionbackend.CapabilityVerified && cap.Status != executionbackend.CapabilityUnsupported && cap.Status != executionbackend.CapabilityNotTested || cap.Status == executionbackend.CapabilityVerified && cap.Evidence == "" {
 			return report, errors.New("capability report contains invalid or unevidenced status")
 		}
-		if cap.Status == executionapi.CapabilityVerified {
+		if cap.Status == executionbackend.CapabilityVerified {
 			if err := verifyCapabilityEvidence(cap.Evidence); err != nil {
 				return report, err
 			}
@@ -159,46 +161,48 @@ func (r executionRecords) loadCapabilityReport(key executionapi.CapabilityReport
 	return report, nil
 }
 
-func capabilityStatus(report executionapi.CapabilityReport, name string) executionapi.CapabilityStatus {
+func capabilityStatus(report executionbackend.CapabilityReport, name string) executionbackend.CapabilityStatus {
 	for _, cap := range report.Capabilities {
 		if cap.Name == name {
 			return cap.Status
 		}
 	}
-	return executionapi.CapabilityNotTested
+	return executionbackend.CapabilityNotTested
 }
 
-func (s *Service) requireBackendCapabilitiesFor(ctx context.Context, backend executionapi.ExecutionProbe, target executionapi.ExecutionTarget, agent executionapi.AgentSpec, names ...string) (executionapi.CapabilityReport, error) {
+func (s *Service) requireBackendCapabilitiesFor(ctx context.Context, backend executionbackend.ExecutionProbe, target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec, names ...string) (executionbackend.CapabilityReport, error) {
 	probe, err := backend.Probe(ctx, target, agent)
 	if err != nil {
-		return executionapi.CapabilityReport{}, err
+		return executionbackend.CapabilityReport{}, err
 	}
 	records := executionRecords{root: s.Config.RunDir, persistence: s.Config.Persistence}
 	report, err := records.loadCapabilityReport(probe)
 	if os.IsNotExist(err) {
 		if saveErr := records.saveCapabilityReport(probe); saveErr != nil {
-			return executionapi.CapabilityReport{}, saveErr
+			return executionbackend.CapabilityReport{}, saveErr
 		}
 		report = probe
 	} else if err != nil {
-		return executionapi.CapabilityReport{}, err
+		return executionbackend.CapabilityReport{}, err
 	}
 	for _, name := range names {
-		if capabilityStatus(report, name) != executionapi.CapabilityVerified {
-			return report, &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: fmt.Sprintf("%s capability is %s for %s/%s target %s version %s", name, capabilityStatus(report, name), report.Backend, report.Protocol, report.Target.ID, report.PlatformVersion)}
+		if capabilityStatus(report, name) != executionbackend.CapabilityVerified {
+			return report, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: fmt.Sprintf("%s capability is %s for %s/%s target %s version %s", name, capabilityStatus(report, name), report.Backend, report.Protocol, report.Target.ID, report.PlatformVersion)}
 		}
 	}
 	return report, nil
 }
+
 func retiredExecutionCapabilityName(name string) bool {
 	return name == "reply_continue" || name == "retry"
 }
-func (s *Service) readRunWorkspace(ctx context.Context, run *Run) (executionapi.WorkspaceInspection, error) {
-	if run == nil || run.WorkflowVersion != WorkerFlowVersion {
-		return executionapi.WorkspaceInspection{}, &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "workspace inspection requires its fixed worker-flow-v1 identity"}
+
+func (s *Service) readRunWorkspace(ctx context.Context, run *Run) (executionbackend.WorkspaceInspection, error) {
+	if run == nil || run.WorkflowVersion != executionmodel.Version {
+		return executionbackend.WorkspaceInspection{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "workspace inspection requires its fixed worker-flow-v1 identity"}
 	}
 	w, err := s.inspectWorkflowWorkspace(ctx, run)
-	return executionapi.WorkspaceInspection{Repository: w.Repository, Worktree: w.Worktree, Branch: w.Branch, Base: w.Base, Head: w.Head, Dirty: w.Dirty, CheckedAt: w.VerifiedAt}, err
+	return executionbackend.WorkspaceInspection{Repository: w.Repository, Worktree: w.Worktree, Branch: w.Branch, Base: w.Base, Head: w.Head, Dirty: w.Dirty, CheckedAt: w.VerifiedAt}, err
 }
 
 func (s *Service) inspectRunProcess(run *Run) string {

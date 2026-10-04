@@ -5,8 +5,9 @@ import (
 	"sort"
 	"strings"
 
+	runewidth "github.com/mattn/go-runewidth"
+
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/mattn/go-runewidth"
 )
 
 // RenderOptions controls human rendering of activity records. Rendering never

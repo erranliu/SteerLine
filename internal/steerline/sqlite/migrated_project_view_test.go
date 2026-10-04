@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func requireProjectView(t *testing.T, view ProjectView) {
@@ -68,7 +69,7 @@ func TestProjectViewSharesTransactionAcrossWriterCommit(t *testing.T) {
 		if err := tx.UpdateProjectTaskAuthorityCAS(authority, authority.AuthorityVersion-1); err != nil {
 			return err
 		}
-		if err := tx.PutTaskDependency(TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "2", SuccessorID: "10"}); err != nil {
+		if err := tx.PutTaskDependency(taskmodel.TaskDependencyRecord{ProjectIdentity: project, PredecessorID: "2", SuccessorID: "10"}); err != nil {
 			return err
 		}
 		if _, err := tx.AdvanceTaskGraphRevision(project, authority.AuthorityVersion, authority.GraphRevision); err != nil {

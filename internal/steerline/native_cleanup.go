@@ -10,16 +10,19 @@ import (
 	"strings"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type NativeStopCleanupReceipt struct {
-	WorkflowRunID string                   `json:"workflow_run_id"`
-	ExecutionID   string                   `json:"execution_id"`
-	AttemptID     string                   `json:"attempt_id"`
-	Operation     executionapi.Operation   `json:"operation"`
-	Observation   executionapi.Observation `json:"observation"`
+	WorkflowRunID string                       `json:"workflow_run_id"`
+	ExecutionID   string                       `json:"execution_id"`
+	AttemptID     string                       `json:"attempt_id"`
+	Operation     executionbackend.Operation   `json:"operation"`
+	Observation   executionbackend.Observation `json:"observation"`
 }
 
 type NativePRCleanupReceipt struct {
@@ -54,16 +57,16 @@ func (c CommandService) RecordNativeWorkspaceCleanupProgress(ctx context.Context
 		return nativeErr("contract_mismatch", "workspace cleanup progress requires a fixed request and JSON receipt")
 	}
 	var evidence NativeWorkspaceCleanupReceipt
-	if err := decode(receipt, &evidence); err != nil || evidence.WorkflowRunID == "" || evidence.ExecutionID == "" || evidence.Repository == "" || evidence.Branch == "" || !filepath.IsAbs(evidence.Worktree) || canonical(strings.TrimPrefix(cleanupItem, "workspace_cleanup:")) != canonical(evidence.Worktree) || !strings.HasPrefix(cleanupItem, "workspace_cleanup:") || !validCommit(evidence.BaseCommit) || evidence.ObservedAt.IsZero() {
+	if err := decode(receipt, &evidence); err != nil || evidence.WorkflowRunID == "" || evidence.ExecutionID == "" || evidence.Repository == "" || evidence.Branch == "" || !filepath.IsAbs(evidence.Worktree) || canonical(strings.TrimPrefix(cleanupItem, "workspace_cleanup:")) != canonical(evidence.Worktree) || !strings.HasPrefix(cleanupItem, "workspace_cleanup:") || !taskmodel.ValidCommit(evidence.BaseCommit) || evidence.ObservedAt.IsZero() {
 		return nativeErr("contract_mismatch", "workspace cleanup progress does not match the exact pending local resources")
 	}
-	if err := ValidateNativeTaskID(taskID); err != nil {
+	if err := taskmodel.ValidateID(taskID); err != nil {
 		return err
 	}
 	if strings.TrimSpace(requestedBy) == "" {
 		requestedBy = DefaultRequestedBy()
 	}
-	request, err := CanonicalJSON(mustJSON(struct {
+	request, err := taskmodel.CanonicalJSON(mustJSON(struct {
 		TaskID      string `json:"task_id"`
 		CleanupItem string `json:"cleanup_item"`
 		RequestedBy string `json:"requested_by"`
@@ -75,7 +78,7 @@ func (c CommandService) RecordNativeWorkspaceCleanupProgress(ctx context.Context
 	return c.Store.TransactCleanupProgress(ctx, func(tx persistence.CleanupProgressTx) error {
 		task, err := tx.Task(ctx, c.Project, taskID)
 		if err != nil {
-			if errors.Is(err, persistence.ErrNotFound) {
+			if errors.Is(err, storageports.ErrNotFound) {
 				return nativeErr("task_not_found", "discarded native task was not found")
 			}
 			return err
@@ -87,7 +90,7 @@ func (c CommandService) RecordNativeWorkspaceCleanupProgress(ctx context.Context
 		if task.Source != "native" || task.Status != "discarded" || task.Version != expectedVersion || !pending {
 			return nativeErr("stale_version", "workspace cleanup progress requires its current discarded task and pending item")
 		}
-		op := OperationRecord{
+		op := executionmodel.OperationRecord{
 			ProjectIdentity: c.Project, OperationID: "native-cleanup-progress:" + requestID,
 			IdempotencyKey: "native-cleanup-progress:" + requestID, Kind: "native_cleanup_progress",
 			Status: "outcome_unknown", PayloadDigest: digestCanonical(request), Request: request,
@@ -100,33 +103,33 @@ func (c CommandService) RecordNativeWorkspaceCleanupProgress(ctx context.Context
 
 // RecordNativeCleanupReceipt settles one exact cleanup item from a discarded
 // native task. It never changes task identity, discarded status, or readiness.
-func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, requestID string, expectedVersion uint64, cleanupItem, requestedBy string, receipt json.RawMessage) (TaskRecord, error) {
+func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, requestID string, expectedVersion uint64, cleanupItem, requestedBy string, receipt json.RawMessage) (taskmodel.TaskRecord, error) {
 	sqlite := c.Store
 	if sqlite == nil || c.Project == "" || !controlIDPattern.MatchString(requestID) || expectedVersion == 0 || cleanupItem == "" || !json.Valid(receipt) {
-		return TaskRecord{}, nativeErr("contract_mismatch", "native cleanup receipt requires project, request, version, cleanup identity and JSON evidence")
+		return taskmodel.TaskRecord{}, nativeErr("contract_mismatch", "native cleanup receipt requires project, request, version, cleanup identity and JSON evidence")
 	}
-	if err := ValidateNativeTaskID(taskID); err != nil {
-		return TaskRecord{}, err
+	if err := taskmodel.ValidateID(taskID); err != nil {
+		return taskmodel.TaskRecord{}, err
 	}
 	if strings.TrimSpace(requestedBy) == "" {
 		requestedBy = DefaultRequestedBy()
 	}
-	request, err := CanonicalJSON(mustJSON(struct {
+	request, err := taskmodel.CanonicalJSON(mustJSON(struct {
 		TaskID      string          `json:"task_id"`
 		CleanupItem string          `json:"cleanup_item"`
 		RequestedBy string          `json:"requested_by"`
 		Receipt     json.RawMessage `json:"receipt"`
 	}{taskID, cleanupItem, requestedBy, receipt}))
 	if err != nil {
-		return TaskRecord{}, err
+		return taskmodel.TaskRecord{}, err
 	}
 	if old, found, lookupErr := sqlite.LookupCommand(ctx, c.Project, requestID); lookupErr != nil {
-		return TaskRecord{}, lookupErr
+		return taskmodel.TaskRecord{}, lookupErr
 	} else if found {
 		return replayNativeCleanupReceipt(old, request, c.Project, taskID, requestedBy)
 	}
 	nowAt := time.Now().UTC()
-	var result TaskRecord
+	var result taskmodel.TaskRecord
 	err = sqlite.TransactCleanup(ctx, func(tx persistence.CleanupTx) error {
 		if old, found, lookupErr := tx.LookupCommand(ctx, c.Project, requestID); lookupErr != nil {
 			return lookupErr
@@ -136,11 +139,11 @@ func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, 
 				return replayErr
 			}
 			result = replayed
-			return taskBatchReplay{Receipt: TaskBatchReceipt{RequestID: requestID, Status: "accepted"}}
+			return taskBatchReplay{Receipt: taskmodel.TaskBatchReceipt{RequestID: requestID, Status: "accepted"}}
 		}
 		oldTask, err := tx.Task(ctx, c.Project, taskID)
 		if err != nil {
-			if errors.Is(err, persistence.ErrNotFound) {
+			if errors.Is(err, storageports.ErrNotFound) {
 				return nativeErr("task_not_found", "discarded native task was not found")
 			}
 			return err
@@ -192,13 +195,13 @@ func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, 
 		if err = tx.UpdateDiscardedTaskCAS(oldTask, expectedVersion); err != nil {
 			return err
 		}
-		operation := OperationRecord{ProjectIdentity: c.Project, OperationID: requestID, IdempotencyKey: requestID, Kind: "native_cleanup", Status: "confirmed", PayloadDigest: digestCanonical(request), Request: request, Receipt: append([]byte(nil), receipt...), CreatedAt: nowAt, UpdatedAt: nowAt}
+		operation := executionmodel.OperationRecord{ProjectIdentity: c.Project, OperationID: requestID, IdempotencyKey: requestID, Kind: "native_cleanup", Status: "confirmed", PayloadDigest: digestCanonical(request), Request: request, Receipt: append([]byte(nil), receipt...), CreatedAt: nowAt, UpdatedAt: nowAt}
 		if _, made, err := tx.PutOperation(operation); err != nil {
 			return err
 		} else if !made {
 			return nativeErr("idempotency_conflict", "cleanup request ID is already in use")
 		}
-		command := CommandRecord{ProjectIdentity: c.Project, CommandID: requestID, Kind: "record_task_cleanup", TargetID: taskID, ExpectedVersion: expectedVersion, IdempotencyKey: requestID, RequestedBy: requestedBy, Payload: request, Result: newPayload, Status: "accepted", CreatedAt: nowAt, UpdatedAt: nowAt}
+		command := storageports.CommandRecord{ProjectIdentity: c.Project, CommandID: requestID, Kind: "record_task_cleanup", TargetID: taskID, ExpectedVersion: expectedVersion, IdempotencyKey: requestID, RequestedBy: requestedBy, Payload: request, Result: newPayload, Status: "accepted", CreatedAt: nowAt, UpdatedAt: nowAt}
 		if _, made, err := tx.EnqueueCommand(command); err != nil {
 			return nativeErr("idempotency_conflict", err.Error())
 		} else if !made {
@@ -208,7 +211,7 @@ func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, 
 			return err
 		}
 		body, _ := json.Marshal(map[string]any{"task_id": taskID, "cleanup_item": cleanupItem, "request_id": requestID, "receipt": receipt})
-		if _, err := tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: taskID, ExternalSource: "native-task-cleanup", ExternalID: requestID, Type: "task.cleanup.confirmed", ReceivedAt: nowAt, Payload: body}); err != nil {
+		if _, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, TaskID: taskID, ExternalSource: "native-task-cleanup", ExternalID: requestID, Type: "task.cleanup.confirmed", ReceivedAt: nowAt, Payload: body}); err != nil {
 			return err
 		}
 		result = oldTask
@@ -221,9 +224,9 @@ func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, 
 	return result, err
 }
 
-func commitNativePRCleanupReceipt(ctx context.Context, tx persistence.CleanupTx, project string, task TaskRecord, cleanupItem string, receipt json.RawMessage) error {
+func commitNativePRCleanupReceipt(ctx context.Context, tx persistence.CleanupTx, project string, task taskmodel.TaskRecord, cleanupItem string, receipt json.RawMessage) error {
 	var evidence NativePRCleanupReceipt
-	if err := decode(receipt, &evidence); err != nil || evidence.PRURL == "" || cleanupItem != "pull_request_close:"+evidence.PRURL || evidence.WorkflowRunID == "" || evidence.ExecutionID == "" || evidence.AttemptID == "" || evidence.State != "closed_unmerged" || evidence.Merged || evidence.ObservedAt.IsZero() || !validCommit(evidence.HeadRevision) {
+	if err := decode(receipt, &evidence); err != nil || evidence.PRURL == "" || cleanupItem != "pull_request_close:"+evidence.PRURL || evidence.WorkflowRunID == "" || evidence.ExecutionID == "" || evidence.AttemptID == "" || evidence.State != "closed_unmerged" || evidence.Merged || evidence.ObservedAt.IsZero() || !taskmodel.ValidCommit(evidence.HeadRevision) {
 		return nativeErr("contract_mismatch", "native PR cleanup receipt does not prove the exact unmerged PR was closed")
 	}
 	if evidence.Repository == "" || evidence.BaseBranch == "" {
@@ -242,7 +245,7 @@ func commitNativePRCleanupReceipt(ctx context.Context, tx persistence.CleanupTx,
 		return nativeErr("contract_mismatch", "native PR cleanup attempt is not the fixed worker attempt")
 	}
 	sessionID, _ := executionSessionFacts(&execution)
-	if workflow.WorkflowVersion != WorkerFlowVersion || workflow.TaskID != task.TaskID || workflow.Repository != evidence.Repository || workflow.Branch != evidence.BaseBranch || workflow.SelectedResult != evidence.ExecutionID || workflow.PRURL != evidence.PRURL && !contains(workflow.PRHistory, evidence.PRURL) || execution.ExecutionID != evidence.ExecutionID || execution.WorkflowRunID != evidence.WorkflowRunID || sessionID == "" || execution.Workspace.Branch == "" || attempt.StepID != "worker" || attempt.ExecutionID != evidence.ExecutionID || attempt.AttemptID != evidence.AttemptID {
+	if workflow.WorkflowVersion != executionmodel.Version || workflow.TaskID != task.TaskID || workflow.Repository != evidence.Repository || workflow.Branch != evidence.BaseBranch || workflow.SelectedResult != evidence.ExecutionID || workflow.PRURL != evidence.PRURL && !contains(workflow.PRHistory, evidence.PRURL) || execution.ExecutionID != evidence.ExecutionID || execution.WorkflowRunID != evidence.WorkflowRunID || sessionID == "" || execution.Workspace.Branch == "" || attempt.StepID != "worker" || attempt.ExecutionID != evidence.ExecutionID || attempt.AttemptID != evidence.AttemptID {
 		return nativeErr("authority_mismatch", "native PR cleanup receipt does not match the fixed worker flow and PR")
 	}
 	authority, err := tx.NativeAuthority(ctx, project)
@@ -252,9 +255,9 @@ func commitNativePRCleanupReceipt(ctx context.Context, tx persistence.CleanupTx,
 	return nil
 }
 
-func commitNativeWorkspaceCleanupReceipt(ctx context.Context, tx persistence.CleanupTx, project string, task TaskRecord, cleanupItem string, receipt json.RawMessage) error {
+func commitNativeWorkspaceCleanupReceipt(ctx context.Context, tx persistence.CleanupTx, project string, task taskmodel.TaskRecord, cleanupItem string, receipt json.RawMessage) error {
 	var evidence NativeWorkspaceCleanupReceipt
-	if err := decode(receipt, &evidence); err != nil || evidence.WorkflowRunID == "" || evidence.ExecutionID == "" || evidence.Repository == "" || evidence.Branch == "" || !filepath.IsAbs(evidence.Worktree) || !strings.HasPrefix(cleanupItem, "workspace_cleanup:") || canonical(strings.TrimPrefix(cleanupItem, "workspace_cleanup:")) != canonical(evidence.Worktree) || !validCommit(evidence.BaseCommit) || !evidence.WorktreeGone || !evidence.BranchGone || evidence.ObservedAt.IsZero() {
+	if err := decode(receipt, &evidence); err != nil || evidence.WorkflowRunID == "" || evidence.ExecutionID == "" || evidence.Repository == "" || evidence.Branch == "" || !filepath.IsAbs(evidence.Worktree) || !strings.HasPrefix(cleanupItem, "workspace_cleanup:") || canonical(strings.TrimPrefix(cleanupItem, "workspace_cleanup:")) != canonical(evidence.Worktree) || !taskmodel.ValidCommit(evidence.BaseCommit) || !evidence.WorktreeGone || !evidence.BranchGone || evidence.ObservedAt.IsZero() {
 		return nativeErr("contract_mismatch", "native workspace cleanup receipt lacks the exact absent worktree and branch identities")
 	}
 	workflow, err := tx.Workflow(ctx, project, evidence.WorkflowRunID, task.TaskID)
@@ -269,7 +272,7 @@ func commitNativeWorkspaceCleanupReceipt(ctx context.Context, tx persistence.Cle
 	if fixedWorktree == "" {
 		fixedWorktree = execution.Workspace.Worktree
 	}
-	if workflow.TaskID != task.TaskID || execution.WorkflowRunID != evidence.WorkflowRunID || execution.Backend != string(executionapi.BackendLocal) || execution.Target.ID != evidence.Repository || fixedWorktree == "" || canonical(fixedWorktree) != canonical(evidence.Worktree) || execution.Workspace.Worktree != "" && canonical(execution.Workspace.Worktree) != canonical(evidence.Worktree) || execution.Target.Branch != evidence.Branch || execution.Target.BaseRevision != evidence.BaseCommit {
+	if workflow.TaskID != task.TaskID || execution.WorkflowRunID != evidence.WorkflowRunID || execution.Backend != string(executionbackend.BackendLocal) || execution.Target.ID != evidence.Repository || fixedWorktree == "" || canonical(fixedWorktree) != canonical(evidence.Worktree) || execution.Workspace.Worktree != "" && canonical(execution.Workspace.Worktree) != canonical(evidence.Worktree) || execution.Target.Branch != evidence.Branch || execution.Target.BaseRevision != evidence.BaseCommit {
 		return nativeErr("authority_mismatch", "native workspace cleanup receipt differs from the fixed local execution")
 	}
 	if _, err := os.Lstat(evidence.Worktree); !os.IsNotExist(err) {
@@ -278,13 +281,13 @@ func commitNativeWorkspaceCleanupReceipt(ctx context.Context, tx persistence.Cle
 	return nil
 }
 
-func commitNativeExecutionStopReceipt(ctx context.Context, tx persistence.CleanupTx, project string, task TaskRecord, cleanupItem string, receipt json.RawMessage) error {
+func commitNativeExecutionStopReceipt(ctx context.Context, tx persistence.CleanupTx, project string, task taskmodel.TaskRecord, cleanupItem string, receipt json.RawMessage) error {
 	var evidence NativeStopCleanupReceipt
 	if err := decode(receipt, &evidence); err != nil || evidence.ExecutionID == "" || cleanupItem != "execution_stop_manual:"+evidence.ExecutionID || evidence.WorkflowRunID == "" || evidence.AttemptID == "" {
 		return nativeErr("contract_mismatch", "native stop receipt does not match the pending execution identity")
 	}
 	op := evidence.Operation
-	if op.Status != executionapi.OperationConfirmed || op.Action != "stop" || op.RunID != evidence.WorkflowRunID || op.AttemptID != evidence.AttemptID || op.Ref == nil || op.Ref.RunID != op.RunID || op.Ref.AttemptID != op.AttemptID || op.Ref.External.Kind != "os" {
+	if op.Status != executionbackend.OperationConfirmed || op.Action != "stop" || op.RunID != evidence.WorkflowRunID || op.AttemptID != evidence.AttemptID || op.Ref == nil || op.Ref.RunID != op.RunID || op.Ref.AttemptID != op.AttemptID || op.Ref.External.Kind != "os" {
 		return nativeErr("contract_mismatch", "native stop receipt lacks a confirmed fixed local worker identity")
 	}
 	if evidence.Observation.Liveness != "exited" || evidence.Observation.ObservedAt.IsZero() || evidence.Observation.Source == "" {
@@ -320,13 +323,13 @@ func commitNativeExecutionStopReceipt(ctx context.Context, tx persistence.Cleanu
 	return nil
 }
 
-func replayNativeCleanupReceipt(old CommandRecord, request []byte, project, taskID, requestedBy string) (TaskRecord, error) {
+func replayNativeCleanupReceipt(old storageports.CommandRecord, request []byte, project, taskID, requestedBy string) (taskmodel.TaskRecord, error) {
 	if old.ProjectIdentity != project || old.Kind != "record_task_cleanup" || old.TargetID != taskID || old.RequestedBy != requestedBy || old.Status != "accepted" || !bytes.Equal(old.Payload, request) || len(old.Result) == 0 {
-		return TaskRecord{}, nativeErr("idempotency_conflict", "cleanup request ID was used for different task evidence")
+		return taskmodel.TaskRecord{}, nativeErr("idempotency_conflict", "cleanup request ID was used for different task evidence")
 	}
-	var task TaskRecord
+	var task taskmodel.TaskRecord
 	if err := decode(old.Result, &task); err != nil || task.TaskID != taskID || task.Status != "discarded" {
-		return TaskRecord{}, nativeErr("unsupported_schema", "saved native cleanup receipt is invalid")
+		return taskmodel.TaskRecord{}, nativeErr("unsupported_schema", "saved native cleanup receipt is invalid")
 	}
 	return task, nil
 }

@@ -3,14 +3,15 @@ package steerlineintegration
 import (
 	"context"
 	"encoding/json"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerlineapp"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
 	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
 
 func TestNativeEvidenceCertificationRequiresFixedTargetAndVersion(t *testing.T) {
@@ -38,11 +39,11 @@ func TestNativeEvidenceCertificationRequiresFixedTargetAndVersion(t *testing.T) 
 		t.Fatal(err)
 	}
 	for _, name := range []string{"start", "observe", "stop", "output_reading"} {
-		if integrationCapabilityStatus(report, name) != executionapi.CapabilityVerified {
+		if integrationCapabilityStatus(report, name) != executionbackend.CapabilityVerified {
 			t.Fatalf("%s not verified from native evidence: %#v", name, report)
 		}
 	}
-	if integrationCapabilityStatus(report, "retry") != executionapi.CapabilityNotTested {
+	if integrationCapabilityStatus(report, "retry") != executionbackend.CapabilityNotTested {
 		t.Fatalf("legacy backend retry capability was retained: %#v", report.Capabilities)
 	}
 	c.ExecutionRequirements.Capabilities = []string{"workspace_inspection"}
@@ -102,17 +103,17 @@ func TestOrcaCertificationRequiresAgentAndTerminalEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"start", "observe", "stop", "output_reading", "workspace_inspection"} {
-		if integrationCapabilityStatus(report, name) != executionapi.CapabilityVerified {
+		if integrationCapabilityStatus(report, name) != executionbackend.CapabilityVerified {
 			t.Fatalf("%s not verified: %#v", name, report)
 		}
 	}
 }
 
-func integrationCapabilityStatus(report executionapi.CapabilityReport, name string) executionapi.CapabilityStatus {
+func integrationCapabilityStatus(report executionbackend.CapabilityReport, name string) executionbackend.CapabilityStatus {
 	for _, capability := range report.Capabilities {
 		if capability.Name == name {
 			return capability.Status
 		}
 	}
-	return executionapi.CapabilityNotTested
+	return executionbackend.CapabilityNotTested
 }

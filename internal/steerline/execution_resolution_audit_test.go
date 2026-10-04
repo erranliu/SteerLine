@@ -7,13 +7,14 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
 	c := workerContextConfigFixture()
-	c.requirementsEvaluation = &executionapi.RequirementsEvaluation{Tools: []executionapi.RequirementEvidence{{Source: "original"}}}
+	c.requirementsEvaluation = &executionbackend.RequirementsEvaluation{Tools: []executionbackend.RequirementEvidence{{Source: "original"}}}
 	before := c.PR.Query.Args[0]
 	p := c.AvailableExecutionProfiles()[0]
 	p.Publication.Provider.Query.Args[0] = "changed"
@@ -24,10 +25,10 @@ func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
 }
 
 func TestResolutionAuditRegistrationRejectsBaseTargetDrift(t *testing.T) {
-	c := withNeutralProfile(Config{Persistence: sqlite.Factory{}, ExecutionPolicy: workspacePolicyFixture()}, neutralSettings{Executable: "fixture-agent", Target: executionapi.ExecutionTarget{ID: "fixture:peer", ConnectionID: "peer", ExternalRuntime: "original"}})
+	c := withNeutralProfile(Config{Persistence: sqlite.Factory{}, ExecutionPolicy: workspacePolicyFixture()}, neutralSettings{Executable: "fixture-agent", Target: executionbackend.ExecutionTarget{ID: "fixture:peer", ConnectionID: "peer", ExternalRuntime: "original"}})
 	target := targetFor(c)
 	run := &Run{Host: c.Host, Agent: c.Agent, Backend: "fixture", Protocol: string(neutralProtocol), Target: target}
-	record := &ExecutionRecord{Agent: c.Agent, Backend: run.Backend, Protocol: run.Protocol, Target: target}
+	record := &executionmodel.ExecutionRecord{Agent: c.Agent, Backend: run.Backend, Protocol: run.Protocol, Target: target}
 	for _, field := range []string{"connection", "runtime"} {
 		r, e := *run, *record
 		if field == "connection" {
@@ -61,7 +62,7 @@ func TestResolutionAuditRestoresOriginalWorkspaceRoot(t *testing.T) {
 func TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents(t *testing.T) {
 	tokenEnv := "STEERLINE_AUDIT_TOKEN"
 	t.Setenv(tokenEnv, "reference-present")
-	r := executionapi.ExecutionRequirements{Credentials: []executionapi.CredentialRequirement{{ID: "pr.token_env", Site: "service"}}}
+	r := executionbackend.ExecutionRequirements{Credentials: []executionbackend.CredentialRequirement{{ID: "pr.token_env", Site: "service"}}}
 	s, run := neutralAuditServiceWithRequirements(t, workspacePolicyFixture(), r, tokenEnv)
 	t.Setenv(tokenEnv, "")
 	entry, err := s.workerFlowRegistration(run)
@@ -90,7 +91,7 @@ func TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents(t *testing.T) {
 func TestResolutionAuditEvidenceCannotChangeUnderOriginalProfileDigest(t *testing.T) {
 	c := workerContextConfigFixture()
 	c.Repository = t.TempDir()
-	c.ExecutionRequirements.Tools = []executionapi.ToolRequirement{{ID: "git"}}
+	c.ExecutionRequirements.Tools = []executionbackend.ToolRequirement{{ID: "git"}}
 	e, err := evaluateExecutionRequirements(context.Background(), c)
 	require(t, err)
 	c.requirementsEvaluation = &e

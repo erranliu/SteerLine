@@ -3,9 +3,12 @@ package steerline
 import (
 	"context"
 	"os"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func (s *Service) resumeWorkerWorkspace(ctx context.Context, task *TaskRecord, run *Run) (bool, error) {
+func (s *Service) resumeWorkerWorkspace(ctx context.Context, task *taskmodel.TaskRecord, run *Run) (bool, error) {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return false, err
@@ -32,7 +35,7 @@ func (s *Service) resumeWorkerWorkspace(ctx context.Context, task *TaskRecord, r
 	if execution.RecoveryRequired {
 		return true, s.waitWorkerFlow(run, "原 worker 已停，等待手动继续")
 	}
-	var preparation *OperationRecord
+	var preparation *executionmodel.OperationRecord
 	for i := range s.domain.Operations {
 		if s.domain.Operations[i].IdempotencyKey == "worker-workspace:"+execution.ExecutionID {
 			preparation = &s.domain.Operations[i]

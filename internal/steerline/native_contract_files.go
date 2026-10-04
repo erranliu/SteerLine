@@ -8,24 +8,18 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/steerline/task"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
-
-func validSHA256(s string) bool { return task.ValidSHA256(s) }
-func validCommit(s string) bool { return task.ValidCommit(s) }
-
-func TaskContractDigest(v TaskContract) (string, error)  { return task.ContractDigest(v) }
-func ValidateTaskContract(v TaskContract) error          { return task.ValidateContract(v) }
-func validateFileReferenceShape(ref FileReference) error { return task.ValidateFileReference(ref) }
 
 // VerifyTaskContractFiles validates pinned committed blobs. TASK-DAG must also
 // check the actual execution workspace before claim/implementation; this check
 // alone is never a startup permission.
-func VerifyTaskContractFiles(ctx context.Context, c Config, v TaskContract) error {
+func VerifyTaskContractFiles(ctx context.Context, c Config, v taskmodel.TaskContract) error {
 	if err := requireNativeTaskAuthority(c); err != nil {
 		return err
 	}
-	if err := ValidateTaskContract(v); err != nil {
+	if err := taskmodel.ValidateContract(v); err != nil {
 		return err
 	}
 	target, err := configuredRepositoryTarget(ctx, c)
@@ -36,7 +30,7 @@ func VerifyTaskContractFiles(ctx context.Context, c Config, v TaskContract) erro
 		return nativeErr("contract_mismatch", "contract repository, remote or branch differs from the configured project")
 	}
 	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}
-	refs := []FileReference{v.SpecRef, v.PlanRef}
+	refs := []taskmodel.FileReference{v.SpecRef, v.PlanRef}
 	refs = append(refs, v.CommonRefs...)
 	refs = append(refs, v.AcceptanceRefs...)
 	for _, ref := range refs {
@@ -57,7 +51,7 @@ func VerifyTaskContractFiles(ctx context.Context, c Config, v TaskContract) erro
 	return nil
 }
 
-func containsReference(refs []FileReference, target FileReference) bool {
+func containsReference(refs []taskmodel.FileReference, target taskmodel.FileReference) bool {
 	for _, ref := range refs {
 		if ref == target {
 			return true
@@ -65,13 +59,14 @@ func containsReference(refs []FileReference, target FileReference) bool {
 	}
 	return false
 }
+
 func hasAcceptanceHeading(b []byte) bool {
 	re := regexp.MustCompile(`(?im)^#{1,6}[ \t]+[^\r\n]*(验收|acceptance)[^\r\n]*$`)
 	return re.Match(b)
 }
 
-func readCommittedRegularFile(ctx context.Context, r Runner, git Command, ref FileReference) ([]byte, error) {
-	if err := validateFileReferenceShape(ref); err != nil {
+func readCommittedRegularFile(ctx context.Context, r Runner, git executionbackend.Command, ref taskmodel.FileReference) ([]byte, error) {
+	if err := taskmodel.ValidateFileReference(ref); err != nil {
 		return nil, err
 	}
 	resolved, err := r.Output(ctx, git, "rev-parse", "--verify", ref.Commit+"^{commit}")
@@ -100,9 +95,3 @@ func readCommittedRegularFile(ctx context.Context, r Runner, git Command, ref Fi
 	}
 	return b, nil
 }
-
-func ValidateTaskContractJSON(data []byte) (TaskContract, error) {
-	return task.ValidateContractJSON(data)
-}
-
-func CanonicalJSON(data []byte) ([]byte, error) { return task.CanonicalJSON(data) }

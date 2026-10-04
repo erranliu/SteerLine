@@ -10,11 +10,11 @@ import (
 	"strings"
 	"time"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
-
-type TaskDiscardReceipt = task.TaskDiscardReceipt
 
 type taskDiscardIntent struct {
 	TaskID            string   `json:"task_id"`
@@ -28,8 +28,8 @@ type taskDiscardIntent struct {
 	CleanupPending    []string `json:"cleanup_pending,omitempty"`
 }
 
-func discardTaskRecord(record TaskRecord, reason, requestedBy, requestID string, cleanup []string, at time.Time) (TaskRecord, error) {
-	return task.Discard(record, reason, requestedBy, requestID, cleanup, false, at)
+func discardTaskRecord(record taskmodel.TaskRecord, reason, requestedBy, requestID string, cleanup []string, at time.Time) (taskmodel.TaskRecord, error) {
+	return taskmodel.Discard(record, reason, requestedBy, requestID, cleanup, false, at)
 }
 
 type taskDiscardPlan struct {
@@ -40,25 +40,25 @@ type taskDiscardPlan struct {
 	CleanupPending    []string
 }
 
-func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, taskID, requestID string, expectedVersion uint64, reason, requestedBy string) (TaskDiscardReceipt, error) {
+func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, taskID, requestID string, expectedVersion uint64, reason, requestedBy string) (taskmodel.TaskDiscardReceipt, error) {
 	if err := validateWorkflowConfig(&config, nil); err != nil {
-		return TaskDiscardReceipt{}, err
+		return taskmodel.TaskDiscardReceipt{}, err
 	}
 	if c.Store == nil || c.Project == "" || config.Identity() != c.Project {
-		return TaskDiscardReceipt{}, nativeErr("authority_mismatch", "discard requires the configured native project")
+		return taskmodel.TaskDiscardReceipt{}, nativeErr("authority_mismatch", "discard requires the configured native project")
 	}
-	if err := ValidateNativeTaskID(taskID); err != nil {
-		return TaskDiscardReceipt{}, err
+	if err := taskmodel.ValidateID(taskID); err != nil {
+		return taskmodel.TaskDiscardReceipt{}, err
 	}
 	if !controlIDPattern.MatchString(requestID) || expectedVersion == 0 || strings.TrimSpace(reason) == "" {
-		return TaskDiscardReceipt{}, nativeErr("immutable_task", "discard requires request identity, expected version and reason")
+		return taskmodel.TaskDiscardReceipt{}, nativeErr("immutable_task", "discard requires request identity, expected version and reason")
 	}
 	if strings.TrimSpace(requestedBy) == "" {
 		requestedBy = DefaultRequestedBy()
 	}
 	reason = strings.TrimSpace(reason)
 	if len(reason) > 4000 {
-		return TaskDiscardReceipt{}, nativeErr("immutable_task", "discard reason exceeds 4000 bytes")
+		return taskmodel.TaskDiscardReceipt{}, nativeErr("immutable_task", "discard reason exceeds 4000 bytes")
 	}
 	sqlite := c.Store
 	request := struct {
@@ -68,19 +68,19 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		RequestedBy     string `json:"requested_by"`
 	}{taskID, expectedVersion, reason, requestedBy}
 	requestJSON, _ := json.Marshal(request)
-	canonicalRequest, err := CanonicalJSON(requestJSON)
+	canonicalRequest, err := taskmodel.CanonicalJSON(requestJSON)
 	if err != nil {
-		return TaskDiscardReceipt{}, err
+		return taskmodel.TaskDiscardReceipt{}, err
 	}
 	if old, found, e := sqlite.LookupCommand(ctx, c.Project, requestID); e != nil {
-		return TaskDiscardReceipt{}, e
+		return taskmodel.TaskDiscardReceipt{}, e
 	} else if found {
 		if old.Kind != "discard_task" || old.TargetID != taskID || old.ExpectedVersion != expectedVersion || old.RequestedBy != requestedBy || !bytes.Equal(old.Payload, canonicalRequest) {
-			return TaskDiscardReceipt{}, nativeErr("idempotency_conflict", "request_id was already used with different discard content")
+			return taskmodel.TaskDiscardReceipt{}, nativeErr("idempotency_conflict", "request_id was already used with different discard content")
 		}
 		if old.Status == "accepted" || old.Status == "rejected" || old.Status == "pending_verification" {
 			if old.Status != "pending_verification" {
-				var saved TaskDiscardReceipt
+				var saved taskmodel.TaskDiscardReceipt
 				if json.Unmarshal(old.Result, &saved) == nil {
 					return saved, nil
 				}
@@ -89,32 +89,32 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	}
 	snapshot, err := sqlite.Query(ctx, c.Project)
 	if err != nil {
-		return TaskDiscardReceipt{}, err
+		return taskmodel.TaskDiscardReceipt{}, err
 	}
 	if w := latestNativeWorkflow(snapshot.WorkflowRuns, taskID); w != nil {
 		config, err = fixedWorkflowPublicationConfig(config, *w)
 		if err != nil {
-			return TaskDiscardReceipt{}, err
+			return taskmodel.TaskDiscardReceipt{}, err
 		}
 	}
 	authority, err := sqlite.NativeAuthority(ctx, c.Project)
 	if err != nil {
-		return TaskDiscardReceipt{}, err
+		return taskmodel.TaskDiscardReceipt{}, err
 	}
 	if err = validateNativeConfiguredTarget(ctx, config, authority); err != nil {
-		return TaskDiscardReceipt{}, err
+		return taskmodel.TaskDiscardReceipt{}, err
 	}
 	plan, task, err := taskDiscardPlanFromStore(ctx, sqlite, c.Project, taskID)
 	if err != nil {
-		return TaskDiscardReceipt{}, err
+		return taskmodel.TaskDiscardReceipt{}, err
 	}
 	if task.Version != expectedVersion {
-		return TaskDiscardReceipt{}, nativeErr("stale_version", fmt.Sprintf("expected task version %d, found %d", expectedVersion, task.Version))
+		return taskmodel.TaskDiscardReceipt{}, nativeErr("stale_version", fmt.Sprintf("expected task version %d, found %d", expectedVersion, task.Version))
 	}
 	intent := taskDiscardIntent{TaskID: taskID, ExpectedVersion: expectedVersion, Reason: reason, RequestedBy: requestedBy, PRURL: plan.PRURL, PRURLs: plan.PRURLs, CandidateBindings: plan.CandidateBindings, UncertainPR: plan.UncertainPR, CleanupPending: uniqueSorted(plan.CleanupPending)}
 	intentBytes, _ := json.Marshal(intent)
-	canonicalIntent, _ := CanonicalJSON(intentBytes)
-	var staged OperationRecord
+	canonicalIntent, _ := taskmodel.CanonicalJSON(intentBytes)
+	var staged executionmodel.OperationRecord
 	err = sqlite.TransactDiscardIntent(ctx, func(tx persistence.DiscardIntentTx) error {
 		if old, found, e := tx.LookupCommand(ctx, c.Project, requestID); e != nil {
 			return e
@@ -122,7 +122,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 			if old.Kind != "discard_task" || old.TargetID != taskID || old.ExpectedVersion != expectedVersion || old.RequestedBy != requestedBy || !bytes.Equal(old.Payload, canonicalRequest) {
 				return nativeErr("idempotency_conflict", "request_id was already used with different discard content")
 			}
-			return taskBatchReplay{Receipt: TaskBatchReceipt{RequestID: requestID, Status: "accepted"}}
+			return taskBatchReplay{Receipt: taskmodel.TaskBatchReceipt{RequestID: requestID, Status: "accepted"}}
 		}
 		current, e := tx.Task(ctx, c.Project, taskID)
 		if e != nil {
@@ -142,7 +142,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		if status != "open" && status != "in_progress" {
 			return nativeErr("immutable_task", "only open or in_progress native tasks can be discarded")
 		}
-		command := CommandRecord{ProjectIdentity: c.Project, CommandID: requestID, Kind: "discard_task", TargetID: taskID, ExpectedVersion: expectedVersion, IdempotencyKey: requestID, RequestedBy: requestedBy, Payload: canonicalRequest, Status: "in_flight", CreatedAt: time.Now().UTC()}
+		command := storageports.CommandRecord{ProjectIdentity: c.Project, CommandID: requestID, Kind: "discard_task", TargetID: taskID, ExpectedVersion: expectedVersion, IdempotencyKey: requestID, RequestedBy: requestedBy, Payload: canonicalRequest, Status: "in_flight", CreatedAt: time.Now().UTC()}
 		var created bool
 		command, created, e = tx.EnqueueCommand(command)
 		if e != nil {
@@ -151,62 +151,62 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		if !created {
 			return nativeErr("idempotency_conflict", "request_id already belongs to another discard command")
 		}
-		staged = OperationRecord{ProjectIdentity: c.Project, OperationID: requestID, IdempotencyKey: requestID, Kind: "discard_task", Status: "pending", PayloadDigest: digestCanonical(canonicalRequest), Request: canonicalIntent, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
+		staged = executionmodel.OperationRecord{ProjectIdentity: c.Project, OperationID: requestID, IdempotencyKey: requestID, Kind: "discard_task", Status: "pending", PayloadDigest: digestCanonical(canonicalRequest), Request: canonicalIntent, CreatedAt: time.Now().UTC(), UpdatedAt: time.Now().UTC()}
 		if _, created, e = tx.PutOperation(staged); e != nil {
 			return e
 		} else if !created {
 			return nativeErr("idempotency_conflict", "discard operation identity is already in use")
 		}
-		_, e = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: taskID, ExternalSource: "native-task-command", ExternalID: requestID + ":intent", Type: "task.discard.intent", ReceivedAt: time.Now().UTC(), Payload: canonicalIntent})
+		_, e = tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, TaskID: taskID, ExternalSource: "native-task-command", ExternalID: requestID + ":intent", Type: "task.discard.intent", ReceivedAt: time.Now().UTC(), Payload: canonicalIntent})
 		return e
 	})
 	if replay, ok := err.(taskBatchReplay); ok && replay.Receipt.Status == "accepted" {
 		old, found, e := sqlite.LookupCommand(ctx, c.Project, requestID)
 		if e != nil {
-			return TaskDiscardReceipt{}, e
+			return taskmodel.TaskDiscardReceipt{}, e
 		}
 		if !found {
-			return TaskDiscardReceipt{}, nativeErr("unsupported_schema", "discard command checkpoint disappeared")
+			return taskmodel.TaskDiscardReceipt{}, nativeErr("unsupported_schema", "discard command checkpoint disappeared")
 		}
 		if old.Status == "accepted" || old.Status == "rejected" {
-			var saved TaskDiscardReceipt
+			var saved taskmodel.TaskDiscardReceipt
 			if e = json.Unmarshal(old.Result, &saved); e != nil {
-				return TaskDiscardReceipt{}, e
+				return taskmodel.TaskDiscardReceipt{}, e
 			}
 			return saved, nil
 		}
 		staged, e = sqlite.Operation(ctx, c.Project, requestID)
 		if e != nil {
-			return TaskDiscardReceipt{}, e
+			return taskmodel.TaskDiscardReceipt{}, e
 		}
 		if e = json.Unmarshal(staged.Request, &intent); e != nil {
-			return TaskDiscardReceipt{}, nativeErr("unsupported_schema", "discard operation intent is unreadable")
+			return taskmodel.TaskDiscardReceipt{}, nativeErr("unsupported_schema", "discard operation intent is unreadable")
 		}
 	} else if err != nil {
-		return TaskDiscardReceipt{}, err
+		return taskmodel.TaskDiscardReceipt{}, err
 	}
 	if staged.OperationID == "" {
 		staged, err = sqlite.Operation(ctx, c.Project, requestID)
 		if err != nil {
-			return TaskDiscardReceipt{}, err
+			return taskmodel.TaskDiscardReceipt{}, err
 		}
 		if err = json.Unmarshal(staged.Request, &intent); err != nil {
-			return TaskDiscardReceipt{}, nativeErr("unsupported_schema", "discard operation intent is unreadable")
+			return taskmodel.TaskDiscardReceipt{}, nativeErr("unsupported_schema", "discard operation intent is unreadable")
 		}
 	}
 	if len(staged.Receipt) > 0 {
 		var checkpoint taskDiscardIntent
 		if err = json.Unmarshal(staged.Receipt, &checkpoint); err != nil {
-			return TaskDiscardReceipt{}, nativeErr("unsupported_schema", "discard reconciliation checkpoint is unreadable")
+			return taskmodel.TaskDiscardReceipt{}, nativeErr("unsupported_schema", "discard reconciliation checkpoint is unreadable")
 		}
 		intent = checkpoint
 	}
 	currentPlan, currentTask, err := taskDiscardPlanFromStore(ctx, sqlite, c.Project, taskID)
 	if err != nil {
-		return TaskDiscardReceipt{}, err
+		return taskmodel.TaskDiscardReceipt{}, err
 	}
 	if currentTask.Version != expectedVersion {
-		return TaskDiscardReceipt{}, nativeErr("stale_version", fmt.Sprintf("expected task version %d, found %d", expectedVersion, currentTask.Version))
+		return taskmodel.TaskDiscardReceipt{}, nativeErr("stale_version", fmt.Sprintf("expected task version %d, found %d", expectedVersion, currentTask.Version))
 	}
 	if intent.PRURL != "" && currentPlan.PRURL != intent.PRURL {
 		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "the fixed PR binding no longer matches the task's recorded publication")
@@ -218,10 +218,10 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		intent.UncertainPR = currentPlan.UncertainPR
 		intent.CleanupPending = currentCleanup
 		if err = updateDiscardIntentReceipt(ctx, sqlite, &staged, intent); err != nil {
-			return TaskDiscardReceipt{}, err
+			return taskmodel.TaskDiscardReceipt{}, err
 		}
 	}
-	var prInfo *PRInfo
+	var prInfo *executionmodel.PRInfo
 	if intent.UncertainPR {
 		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "publication outcome is not conclusive")
 	}
@@ -233,7 +233,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	}
 	knownSnapshot, err := sqlite.Query(ctx, c.Project)
 	if err != nil {
-		return TaskDiscardReceipt{}, err
+		return taskmodel.TaskDiscardReceipt{}, err
 	}
 	if candidateBindings(knownSnapshot, taskID) != intent.CandidateBindings {
 		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "candidate bindings changed before full PR verification")
@@ -259,7 +259,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	return c.commitDiscard(ctx, sqlite, requestID, staged, intent, prInfo, config.PR.Repository, known)
 }
 
-func updateDiscardIntentReceipt(ctx context.Context, s persistence.CommandStore, op *OperationRecord, intent taskDiscardIntent) error {
+func updateDiscardIntentReceipt(ctx context.Context, s persistence.CommandStore, op *executionmodel.OperationRecord, intent taskDiscardIntent) error {
 	data, err := json.Marshal(intent)
 	if err != nil {
 		return err
@@ -275,16 +275,16 @@ func updateDiscardIntentReceipt(ctx context.Context, s persistence.CommandStore,
 	return nil
 }
 
-func taskDiscardPlanFromStore(ctx context.Context, s persistence.CommandStore, project, taskID string) (taskDiscardPlan, TaskRecord, error) {
+func taskDiscardPlanFromStore(ctx context.Context, s persistence.CommandStore, project, taskID string) (taskDiscardPlan, taskmodel.TaskRecord, error) {
 	snapshot, err := s.Query(ctx, project)
 	if err != nil {
-		return taskDiscardPlan{}, TaskRecord{}, err
+		return taskDiscardPlan{}, taskmodel.TaskRecord{}, err
 	}
 	return taskDiscardPlanFromSnapshot(snapshot, taskID)
 }
 
-func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDiscardPlan, TaskRecord, error) {
-	var task TaskRecord
+func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDiscardPlan, taskmodel.TaskRecord, error) {
+	var task taskmodel.TaskRecord
 	found := false
 	for _, candidate := range snapshot.Tasks {
 		if candidate.TaskID == taskID {
@@ -302,7 +302,7 @@ func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDi
 			runs[run.WorkflowRunID] = true
 		}
 	}
-	executions := map[string]ExecutionRecord{}
+	executions := map[string]executionmodel.ExecutionRecord{}
 	for _, execution := range snapshot.Executions {
 		if runs[execution.WorkflowRunID] {
 			executions[execution.ExecutionID] = execution
@@ -365,11 +365,11 @@ func uniqueSorted(values []string) []string {
 	return out
 }
 
-func persistDiscardPending(ctx context.Context, s persistence.CommandStore, project, requestID string, op OperationRecord, intent taskDiscardIntent, code, message string) (TaskDiscardReceipt, error) {
-	receipt := TaskDiscardReceipt{RequestID: requestID, TaskID: intent.TaskID, Status: "pending_verification", Code: code, Message: message, CleanupPending: uniqueSorted(intent.CleanupPending)}
+func persistDiscardPending(ctx context.Context, s persistence.CommandStore, project, requestID string, op executionmodel.OperationRecord, intent taskDiscardIntent, code, message string) (taskmodel.TaskDiscardReceipt, error) {
+	receipt := taskmodel.TaskDiscardReceipt{RequestID: requestID, TaskID: intent.TaskID, Status: "pending_verification", Code: code, Message: message, CleanupPending: uniqueSorted(intent.CleanupPending)}
 	checkpoint, err := json.Marshal(intent)
 	if err != nil {
-		return TaskDiscardReceipt{}, err
+		return taskmodel.TaskDiscardReceipt{}, err
 	}
 	err = s.TransactDiscardPending(ctx, func(tx persistence.DiscardPendingTx) error {
 		op.Status = "outcome_unknown"
@@ -380,19 +380,19 @@ func persistDiscardPending(ctx context.Context, s persistence.CommandStore, proj
 			return e
 		}
 		raw, _ := json.Marshal(receipt)
-		cmd := CommandRecord{ProjectIdentity: project, CommandID: requestID, Status: "pending_verification", Result: raw}
+		cmd := storageports.CommandRecord{ProjectIdentity: project, CommandID: requestID, Status: "pending_verification", Result: raw}
 		if e := tx.UpdateCommand(cmd); e != nil {
 			return e
 		}
 		body, _ := json.Marshal(receipt)
-		_, e := tx.AppendEvent(DomainEvent{ProjectIdentity: project, TaskID: intent.TaskID, ExternalSource: "native-task-command", ExternalID: requestID + ":verification-unknown", Type: "task.discard.verification_unknown", ReceivedAt: time.Now().UTC(), Payload: body})
+		_, e := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: project, TaskID: intent.TaskID, ExternalSource: "native-task-command", ExternalID: requestID + ":verification-unknown", Type: "task.discard.verification_unknown", ReceivedAt: time.Now().UTC(), Payload: body})
 		return e
 	})
 	return receipt, err
 }
 
-func (c CommandService) commitDiscard(ctx context.Context, s persistence.CommandStore, requestID string, op OperationRecord, intent taskDiscardIntent, info *PRInfo, expectedPRRepository string, known []verifiedCandidatePR) (TaskDiscardReceipt, error) {
-	var receipt TaskDiscardReceipt
+func (c CommandService) commitDiscard(ctx context.Context, s persistence.CommandStore, requestID string, op executionmodel.OperationRecord, intent taskDiscardIntent, info *executionmodel.PRInfo, expectedPRRepository string, known []verifiedCandidatePR) (taskmodel.TaskDiscardReceipt, error) {
+	var receipt taskmodel.TaskDiscardReceipt
 	err := s.TransactDiscard(ctx, func(tx persistence.DiscardTx) error {
 		graph, e := tx.TaskGraphSnapshot(ctx, c.Project)
 		if e != nil {
@@ -419,7 +419,7 @@ func (c CommandService) commitDiscard(ctx context.Context, s persistence.Command
 			return nativeErr("merge_state_unknown", "PR binding or target branch changed during discard verification")
 		}
 		if info != nil && info.Merged || info != nil && info.State == "merged" {
-			receipt = TaskDiscardReceipt{RequestID: requestID, TaskID: intent.TaskID, Status: "rejected", Code: "already_merged", Message: "task PR is already merged", GraphRevision: graph.Authority.GraphRevision}
+			receipt = taskmodel.TaskDiscardReceipt{RequestID: requestID, TaskID: intent.TaskID, Status: "rejected", Code: "already_merged", Message: "task PR is already merged", GraphRevision: graph.Authority.GraphRevision}
 			return finishDiscardCommand(tx, op, requestID, receipt, "rejected", false)
 		}
 		if intent.UncertainPR {
@@ -453,9 +453,9 @@ func (c CommandService) commitDiscard(ctx context.Context, s persistence.Command
 		if e = tx.UpdateNativeTaskCAS(task, intent.ExpectedVersion); e != nil {
 			return e
 		}
-		receipt = TaskDiscardReceipt{RequestID: requestID, TaskID: intent.TaskID, Status: "discarded", GraphRevision: graph.Authority.GraphRevision + 1, CleanupPending: cleanup}
+		receipt = taskmodel.TaskDiscardReceipt{RequestID: requestID, TaskID: intent.TaskID, Status: "discarded", GraphRevision: graph.Authority.GraphRevision + 1, CleanupPending: cleanup}
 		body, _ := json.Marshal(map[string]any{"task_id": intent.TaskID, "request_id": requestID, "reason": intent.Reason, "discarded_by": intent.RequestedBy, "discarded_at": discardedAt, "cleanup_pending": cleanup})
-		if _, e = tx.AppendEvent(DomainEvent{ProjectIdentity: c.Project, TaskID: intent.TaskID, ExternalSource: "native-task-command", ExternalID: requestID + ":discarded", Type: "task.discarded", ReceivedAt: discardedAt, Payload: body}); e != nil {
+		if _, e = tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, TaskID: intent.TaskID, ExternalSource: "native-task-command", ExternalID: requestID + ":discarded", Type: "task.discarded", ReceivedAt: discardedAt, Payload: body}); e != nil {
 			return e
 		}
 		return finishDiscardCommand(tx, op, requestID, receipt, "accepted", true)
@@ -463,12 +463,12 @@ func (c CommandService) commitDiscard(ctx context.Context, s persistence.Command
 	return receipt, err
 }
 
-func finishDiscardCommand(tx persistence.DiscardPendingTx, op OperationRecord, requestID string, receipt TaskDiscardReceipt, status string, confirmed bool) error {
+func finishDiscardCommand(tx persistence.DiscardPendingTx, op executionmodel.OperationRecord, requestID string, receipt taskmodel.TaskDiscardReceipt, status string, confirmed bool) error {
 	receiptBytes, err := json.Marshal(receipt)
 	if err != nil {
 		return err
 	}
-	command := CommandRecord{ProjectIdentity: op.ProjectIdentity, CommandID: requestID, Status: status, Result: receiptBytes}
+	command := storageports.CommandRecord{ProjectIdentity: op.ProjectIdentity, CommandID: requestID, Status: status, Result: receiptBytes}
 	if err = tx.UpdateCommand(command); err != nil {
 		return err
 	}
@@ -486,10 +486,10 @@ func finishDiscardCommand(tx persistence.DiscardPendingTx, op OperationRecord, r
 
 func taskDiscardPlanTx(ctx context.Context, tx interface {
 	Query(context.Context, string) (DomainSnapshot, error)
-}, project, taskID string) (taskDiscardPlan, TaskRecord, error) {
+}, project, taskID string) (taskDiscardPlan, taskmodel.TaskRecord, error) {
 	snapshot, err := tx.Query(ctx, project)
 	if err != nil {
-		return taskDiscardPlan{}, TaskRecord{}, err
+		return taskDiscardPlan{}, taskmodel.TaskRecord{}, err
 	}
 	return taskDiscardPlanFromSnapshot(snapshot, taskID)
 }

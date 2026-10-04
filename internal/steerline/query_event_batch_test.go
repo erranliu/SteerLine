@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/steerline/query"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 type countingEventStore struct {
@@ -15,7 +16,7 @@ type countingEventStore struct {
 	maxPayloadBytesRead int
 }
 
-func (s *countingEventStore) Events(ctx context.Context, project, execution, attempt string, after int64, limit, payloadBudget int) ([]DomainEvent, error) {
+func (s *countingEventStore) Events(ctx context.Context, project, execution, attempt string, after int64, limit, payloadBudget int) ([]storageports.DomainEvent, error) {
 	s.calls++
 	events, err := s.Store.Events(ctx, project, execution, attempt, after, limit, payloadBudget)
 	bytes := 0
@@ -34,18 +35,18 @@ func TestQueryEventBatchPagingPreservesByteBoundary(t *testing.T) {
 	ids := []int64{}
 	require(t, store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		for i, body := range bodies {
-			id, err := tx.AppendEvent(DomainEvent{ProjectIdentity: project, ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "batch", ExternalID: fmt.Sprint(i), Type: "message", Payload: []byte(body)})
+			id, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: project, ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "batch", ExternalID: fmt.Sprint(i), Type: "message", Payload: []byte(body)})
 			if err != nil {
 				return err
 			}
 			ids = append(ids, id)
 		}
 		for i, scope := range []EventFilter{{ExecutionID: "other", AttemptID: "attempt"}, {ExecutionID: "execution", AttemptID: "other"}} {
-			if _, err := tx.AppendEvent(DomainEvent{ProjectIdentity: project, ExecutionID: scope.ExecutionID, AttemptID: scope.AttemptID, ExternalSource: "batch", ExternalID: fmt.Sprint(i + 10), Type: "message", Payload: []byte("wrong scope")}); err != nil {
+			if _, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: project, ExecutionID: scope.ExecutionID, AttemptID: scope.AttemptID, ExternalSource: "batch", ExternalID: fmt.Sprint(i + 10), Type: "message", Payload: []byte("wrong scope")}); err != nil {
 				return err
 			}
 		}
-		_, err := tx.AppendEvent(DomainEvent{ProjectIdentity: "other-project", ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "batch", ExternalID: "other", Type: "message", Payload: []byte("wrong project")})
+		_, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: "other-project", ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "batch", ExternalID: "other", Type: "message", Payload: []byte("wrong project")})
 		return err
 	}))
 	counted := &countingEventStore{Store: store}
@@ -83,7 +84,7 @@ func TestQueryEventBatchReadCountAndPageLimit(t *testing.T) {
 	const project = "event-count"
 	require(t, store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		for i := 0; i < MaxEventPageSize+1; i++ {
-			if _, err := tx.AppendEvent(DomainEvent{ProjectIdentity: project, ExecutionID: "execution", ExternalSource: "count", ExternalID: fmt.Sprint(i), Type: "message", Payload: []byte("small")}); err != nil {
+			if _, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: project, ExecutionID: "execution", ExternalSource: "count", ExternalID: fmt.Sprint(i), Type: "message", Payload: []byte("small")}); err != nil {
 				return err
 			}
 		}
@@ -121,7 +122,7 @@ func TestQueryEventBatchDoesNotPrefetchUnusedLargeBodies(t *testing.T) {
 	ids := []int64{}
 	require(t, store.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		for i := 0; i < 4; i++ {
-			id, err := tx.AppendEvent(DomainEvent{ProjectIdentity: project, ExecutionID: "execution", ExternalSource: "budget", ExternalID: fmt.Sprint(i), Type: "message", Payload: body})
+			id, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: project, ExecutionID: "execution", ExternalSource: "budget", ExternalID: fmt.Sprint(i), Type: "message", Payload: body})
 			if err != nil {
 				return err
 			}

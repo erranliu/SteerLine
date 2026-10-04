@@ -1,8 +1,10 @@
 package steerlineapp
 
 import (
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"testing"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 )
 
 func TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority(t *testing.T) {
@@ -20,8 +22,8 @@ func TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority(t *testin
 	if restored.ExecutionPolicy.Network != "allow" || codexProfileSettings(restored).WindowsSandbox != "elevated" {
 		t.Fatal("current config rewrote existing authority")
 	}
-	for _, mutate := range []func(*FixedExecutionProfile){
-		func(p *FixedExecutionProfile) { p.Version = 1 }, func(p *FixedExecutionProfile) { p.ExecutionPolicy.Network = "deny" }, func(p *FixedExecutionProfile) { p.ImplementationData[0].Payload[0] = '[' }, func(p *FixedExecutionProfile) { p.AcceptedConfigVersion = "edited" }, func(p *FixedExecutionProfile) { p.PolicyDigest = "edited" },
+	for _, mutate := range []func(*executionmodel.FixedExecutionProfile){
+		func(p *executionmodel.FixedExecutionProfile) { p.Version = 1 }, func(p *executionmodel.FixedExecutionProfile) { p.ExecutionPolicy.Network = "deny" }, func(p *executionmodel.FixedExecutionProfile) { p.ImplementationData[0].Payload[0] = '[' }, func(p *executionmodel.FixedExecutionProfile) { p.AcceptedConfigVersion = "edited" }, func(p *executionmodel.FixedExecutionProfile) { p.PolicyDigest = "edited" },
 	} {
 		copy := original
 		copy.ImplementationData = append(copy.ImplementationData[:0:0], original.ImplementationData...)

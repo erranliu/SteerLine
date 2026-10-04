@@ -10,12 +10,14 @@ import (
 	"strings"
 	"testing"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 )
 
 func fakeHostGH(args []string) int {
 	file := os.Getenv("STEERLINE_TEST_HOST_GH_FILE")
-	var saved PRInfo
+	var saved executionmodel.PRInfo
 	if raw, err := os.ReadFile(file); err == nil {
 		_ = json.Unmarshal(raw, &saved)
 	}
@@ -58,7 +60,7 @@ func fakeHostGH(args []string) int {
 		if err != nil {
 			return 1
 		}
-		saved = PRInfo{URL: "https://github.com/owner/repo/pull/1", Repository: "owner/repo", BaseBranch: "main", HeadRepository: "owner/repo", HeadBranch: strings.TrimSpace(string(branch)), HeadRevision: strings.TrimSpace(string(head)), State: "open"}
+		saved = executionmodel.PRInfo{URL: "https://github.com/owner/repo/pull/1", Repository: "owner/repo", BaseBranch: "main", HeadRepository: "owner/repo", HeadBranch: strings.TrimSpace(string(branch)), HeadRevision: strings.TrimSpace(string(head)), State: "open"}
 		raw, _ := json.Marshal(saved)
 		if err := os.WriteFile(file, raw, 0600); err != nil {
 			return 1
@@ -92,7 +94,7 @@ func newLocalWorkerPublicationFixture(t *testing.T) localWorkerPublicationFixtur
 		t.Fatal(err)
 	}
 	t.Setenv("STEERLINE_TEST_HOST_GH_FILE", filepath.Join(t.TempDir(), "pr.json"))
-	c.PR = publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: Command{Executable: exe, Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: Command{Executable: exe, Args: []string{"pr", "close", "{pr_url}"}}}
+	c.PR = publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: exe, Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: executionbackend.Command{Executable: exe, Args: []string{"pr", "close", "{pr_url}"}}}
 	turnID := "00000000-0000-0000-0000-000000000001"
 	branch, worktree := run.WorkspaceIntent.Branch, run.WorkspaceIntent.Path
 	require(t, c.prepareWorktreeRoot())
@@ -117,7 +119,7 @@ func newLocalWorkerPublicationFixture(t *testing.T) localWorkerPublicationFixtur
 	workflow, execution := s.workflowRecords(run)
 	workflow.Phase = "waiting_decision"
 	execution.Status, execution.CurrentTurnID, execution.LastStoppedTurnID = "idle", turnID, turnID
-	execution.Workspace = WorkspaceEvidence{Worktree: worktree, Branch: branch, Base: base}
+	execution.Workspace = executionmodel.WorkspaceEvidence{Worktree: worktree, Branch: branch, Base: base}
 	execution.Target.WorktreeID, execution.Target.Branch = worktree, branch
 	s.refreshRun(run)
 	require(t, s.commitWorker(run))

@@ -3,13 +3,13 @@ package steerline
 import (
 	"errors"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-func implementationInputsFromData(data []executionapi.ImplementationDataEnvelope) []executionapi.ImplementationConfigInput {
-	out := make([]executionapi.ImplementationConfigInput, 0, len(data))
+func implementationInputsFromData(data []executionbackend.ImplementationDataEnvelope) []executionbackend.ImplementationConfigInput {
+	out := make([]executionbackend.ImplementationConfigInput, 0, len(data))
 	for _, envelope := range data {
-		out = append(out, executionapi.ImplementationConfigInput{
+		out = append(out, executionbackend.ImplementationConfigInput{
 			ImplementationKey: envelope.ImplementationKey,
 			CodecVersion:      envelope.CodecVersion,
 			Payload:           append([]byte(nil), envelope.Payload...),

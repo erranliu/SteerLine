@@ -6,8 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 // Capability evidence files stay with the center; durable bindings and receipts
@@ -25,32 +26,34 @@ func (r executionRecords) openReader() (persistence.Connection, error) {
 	}
 	return reader, err
 }
-func (r executionRecords) loadBinding(run, attempt string) (executionapi.ExecutionRef, error) {
-	if !executionapi.StableExecutionID(run) || !executionapi.StableExecutionID(attempt) {
-		return executionapi.ExecutionRef{}, errors.New("invalid execution binding path identity")
+
+func (r executionRecords) loadBinding(run, attempt string) (executionbackend.ExecutionRef, error) {
+	if !executionbackend.StableExecutionID(run) || !executionbackend.StableExecutionID(attempt) {
+		return executionbackend.ExecutionRef{}, errors.New("invalid execution binding path identity")
 	}
 	reader, err := r.openReader()
 	if err != nil {
-		return executionapi.ExecutionRef{}, err
+		return executionbackend.ExecutionRef{}, err
 	}
 	defer reader.Close()
 	value, err := reader.ExecutionBinding(context.Background(), run, attempt)
-	if errors.Is(err, persistence.ErrNotFound) {
+	if errors.Is(err, storageports.ErrNotFound) {
 		err = os.ErrNotExist
 	}
 	return value, err
 }
-func (r executionRecords) loadOperation(run, attempt, id string) (executionapi.Operation, error) {
-	if !executionapi.StableExecutionID(run) || !executionapi.StableExecutionID(attempt) || !executionapi.StableOperationID(id) {
-		return executionapi.Operation{}, errors.New("invalid operation path identity")
+
+func (r executionRecords) loadOperation(run, attempt, id string) (executionbackend.Operation, error) {
+	if !executionbackend.StableExecutionID(run) || !executionbackend.StableExecutionID(attempt) || !executionbackend.StableOperationID(id) {
+		return executionbackend.Operation{}, errors.New("invalid operation path identity")
 	}
 	reader, err := r.openReader()
 	if err != nil {
-		return executionapi.Operation{}, err
+		return executionbackend.Operation{}, err
 	}
 	defer reader.Close()
 	value, err := reader.ExecutionOperation(context.Background(), run, attempt, id)
-	if errors.Is(err, persistence.ErrNotFound) {
+	if errors.Is(err, storageports.ErrNotFound) {
 		err = os.ErrNotExist
 	}
 	return value, err

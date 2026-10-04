@@ -1,9 +1,10 @@
 package steerlineapp
 
 import (
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"testing"
 	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
@@ -11,8 +12,8 @@ func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
 	require(t, err)
 	for _, test := range []struct {
 		host string
-		want executionapi.ExecutionProtocol
-	}{{"local", executionapi.ProtocolLocalCodexAppServer}, {"orca", executionapi.ProtocolOrcaTerminalV2}, {"orca_supervised", executionapi.ProtocolOrcaSupervised}} {
+		want executionbackend.ExecutionProtocol
+	}{{"local", executionbackend.ProtocolLocalCodexAppServer}, {"orca", executionbackend.ProtocolOrcaTerminalV2}, {"orca_supervised", executionbackend.ProtocolOrcaSupervised}} {
 		t.Run(test.host, func(t *testing.T) {
 			entry, err := d.Resolve(Config{Host: test.host, Agent: "codex"})
 			require(t, err)

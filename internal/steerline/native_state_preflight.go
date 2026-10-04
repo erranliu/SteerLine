@@ -10,8 +10,10 @@ import (
 	"regexp"
 	"strings"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func validateNativeStateLocation(c Config) error {
@@ -66,7 +68,7 @@ func openBoundNativeStore(ctx context.Context, c Config, path string) (_ persist
 		return nil, err
 	}
 	authority, err := db.NativeAuthority(ctx, c.Identity())
-	if errors.Is(err, persistence.ErrNotFound) {
+	if errors.Is(err, storageports.ErrNotFound) {
 		return nil, nativeErr("authority_mismatch", "database has no native authority for this project; preserve existing state")
 	}
 	if err != nil {
@@ -279,7 +281,7 @@ func validateNativeControlTree(runDir string) error {
 				continue
 			}
 			if section.Name() == "requests" {
-				if !executionapi.StableExecutionID(entry.Name()) || !entry.IsDir() {
+				if !executionbackend.StableExecutionID(entry.Name()) || !entry.IsDir() {
 					return nativeErr("authority_mismatch", "native control request has an invalid identity")
 				}
 				dir := filepath.Join(sectionPath, entry.Name())
@@ -302,11 +304,11 @@ func validateNativeControlTree(runDir string) error {
 				}
 				continue
 			}
-			if !strings.HasSuffix(entry.Name(), ".json") || !executionapi.StableExecutionID(strings.TrimSuffix(entry.Name(), ".json")) || entry.IsDir() {
+			if !strings.HasSuffix(entry.Name(), ".json") || !executionbackend.StableExecutionID(strings.TrimSuffix(entry.Name(), ".json")) || entry.IsDir() {
 				return nativeErr("authority_mismatch", "native control receipt has an invalid identity")
 			}
 			data, readErr := readBoundedFile(filepath.Join(sectionPath, entry.Name()), maxControlRequestBytes)
-			var receipt ControlReceipt
+			var receipt productapi.ControlReceipt
 			if readErr != nil || decode(data, &receipt) != nil || receipt.RequestID != strings.TrimSuffix(entry.Name(), ".json") || receipt.Version != ControlProtocolVersion {
 				return nativeErr("authority_mismatch", "native control receipt is invalid or mismatched")
 			}
@@ -357,7 +359,7 @@ func validateNativeExecutionArtifacts(root string) error {
 				}
 				continue
 			}
-			var report executionapi.CapabilityReport
+			var report executionbackend.CapabilityReport
 			if decode(data, &report) != nil || report.Version != 1 || entry.Name() != capabilityReportKey(report)+".json" {
 				return nativeErr("authority_mismatch", "native capability report identity or digest is invalid")
 			}
@@ -382,7 +384,7 @@ func validateNativeRunDirectories(root string) error {
 		return err
 	}
 	for _, entry := range entries {
-		if !executionapi.StableExecutionID(entry.Name()) || !entry.IsDir() {
+		if !executionbackend.StableExecutionID(entry.Name()) || !entry.IsDir() {
 			return nativeErr("authority_mismatch", "native run/worktree state contains an unknown identity: "+entry.Name())
 		}
 		childInfo, statErr := os.Lstat(filepath.Join(root, entry.Name()))
@@ -422,7 +424,7 @@ func validateNativeServiceTree(runDir, repository string) error {
 		return err
 	}
 	for _, startup := range startups {
-		if !executionapi.StableExecutionID(startup.Name()) || !startup.IsDir() {
+		if !executionbackend.StableExecutionID(startup.Name()) || !startup.IsDir() {
 			return nativeErr("authority_mismatch", "native startup directory contains an unknown identity: "+startup.Name())
 		}
 		dir := filepath.Join(startupRoot, startup.Name())

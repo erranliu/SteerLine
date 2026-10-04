@@ -5,8 +5,8 @@ import (
 	"errors"
 	"sync"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 // A crash can happen after a native request is journaled but before its
@@ -14,16 +14,16 @@ import (
 type appServerRecoveryResult struct {
 	runID     string
 	attemptID string
-	request   executionapi.LifecycleRequest
-	receipt   executionapi.LifecycleReceipt
-	execution ExecutionRecord
+	request   executionbackend.LifecycleRequest
+	receipt   executionbackend.LifecycleReceipt
+	execution executionmodel.ExecutionRecord
 	worker    *Worker
 	completed bool
 	dead      bool
 	err       error
 }
 
-func recoverAppServerExecution(ctx context.Context, lifecycle executionapi.LifecyclePort, request executionapi.LifecycleRequest, execution ExecutionRecord) appServerRecoveryResult {
+func recoverAppServerExecution(ctx context.Context, lifecycle executionbackend.LifecyclePort, request executionbackend.LifecycleRequest, execution executionmodel.ExecutionRecord) appServerRecoveryResult {
 	receipt, observer, err := lifecycle.Reconcile(ctx, request.Clone())
 	result := appServerRecoveryResult{
 		runID: request.Snapshot.Session.WorkflowRunID, attemptID: request.Snapshot.Session.AttemptID,
@@ -40,8 +40,8 @@ func recoverAppServerExecution(ctx context.Context, lifecycle executionapi.Lifec
 		result.worker = workerFromLifecycle(result.runID, result.attemptID, observer)
 	}
 	if result.err == nil && result.worker == nil && !result.dead && !result.completed &&
-		(receipt.Disposition == executionapi.OperationUnknown || receipt.Disposition == executionapi.OperationRejected) {
-		result.err = &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: receipt.Diagnostic}
+		(receipt.Disposition == executionbackend.OperationUnknown || receipt.Disposition == executionbackend.OperationRejected) {
+		result.err = &executionbackend.BackendError{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: receipt.Diagnostic}
 	}
 	return result
 }
@@ -65,7 +65,7 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 	}()
 	count := 0
 	for _, run := range s.runs {
-		if run == nil || run.WorkflowVersion != WorkerFlowVersion || s.workers[run.RunID] != nil || s.lifecycleEffectPending(run.RunID) || s.appServerRecovering[run.RunID] {
+		if run == nil || run.WorkflowVersion != executionmodel.Version || s.workers[run.RunID] != nil || s.lifecycleEffectPending(run.RunID) || s.appServerRecovering[run.RunID] {
 			continue
 		}
 		task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
@@ -184,10 +184,10 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 			delete(s.ownedProcesses, run.RunID)
 		}
 		if !workerTreeAbsent(*execution.Process) {
-			execution.RecoveryState = string(workerflow.RecoveryUnverified)
+			execution.RecoveryState = string(executionmodel.RecoveryUnverified)
 			return s.waitWorkerFlow(run, "Original worker descendants may still write to the worktree")
 		}
-		execution.RecoveryState = string(workerflow.ClassifyRecovery(workerflow.RecoveryFacts{WorkerAbsent: true, WritersAbsent: true, Completed: result.completed}))
+		execution.RecoveryState = string(executionmodel.ClassifyRecovery(executionmodel.RecoveryFacts{WorkerAbsent: true, WritersAbsent: true, Completed: result.completed}))
 		if result.completed {
 			if execution.SessionID == "" || execution.SessionGeneration == "" {
 				return s.waitWorkerFlow(run, "Original app-server session identity could not be committed")
@@ -232,7 +232,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		return nil
 	}
 	if result.err != nil {
-		execution.RecoveryState = string(workerflow.RecoveryUnverified)
+		execution.RecoveryState = string(executionmodel.RecoveryUnverified)
 		execution.Status = "blocked"
 		return s.waitWorkerFlow(run, "Original app-server turn cannot be reconciled: "+result.err.Error())
 	}
@@ -249,7 +249,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 		process := *result.execution.Process
 		execution.Process = &process
 	}
-	execution.RecoveryState = string(workerflow.ClassifyRecovery(workerflow.RecoveryFacts{WorkerLive: true, QuestionPending: run.Decision != nil && run.Decision.Request.QuestionRoute != nil}))
+	execution.RecoveryState = string(executionmodel.ClassifyRecovery(executionmodel.RecoveryFacts{WorkerLive: true, QuestionPending: run.Decision != nil && run.Decision.Request.QuestionRoute != nil}))
 	s.refreshRun(run)
 	if execution.PendingCommandID != "" {
 		execution.PendingTurnID = result.execution.PendingTurnID
@@ -296,10 +296,10 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 	return nil
 }
 
-func clonePendingQuestions(values []PendingQuestion) []PendingQuestion {
-	copy := make([]PendingQuestion, len(values))
+func clonePendingQuestions(values []executionmodel.PendingQuestion) []executionmodel.PendingQuestion {
+	copy := make([]executionmodel.PendingQuestion, len(values))
 	for i := range values {
-		copy[i] = PendingQuestion{Questions: cloneExecutionQuestions(values[i].Questions), Route: values[i].Route.Clone()}
+		copy[i] = executionmodel.PendingQuestion{Questions: cloneExecutionQuestions(values[i].Questions), Route: values[i].Route.Clone()}
 	}
 	return copy
 }

@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 type DoneRequest struct {
@@ -114,7 +114,7 @@ func ensureIgnored(repositoryGitDir, pattern string) error {
 }
 
 func RelayPath(worktree, runID, turnID string) (string, error) {
-	if !filepath.IsAbs(worktree) || !executionapi.StableExecutionID(runID) || !executionapi.StableExecutionID(turnID) {
+	if !filepath.IsAbs(worktree) || !executionbackend.StableExecutionID(runID) || !executionbackend.StableExecutionID(turnID) {
 		return "", errors.New("native Orca relay has no fixed worktree and turn")
 	}
 	return filepath.Join(worktree, ".steerline-relay", runID, turnID+".json"), nil

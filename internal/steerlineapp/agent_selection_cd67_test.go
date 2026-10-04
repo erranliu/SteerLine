@@ -1,15 +1,16 @@
 package steerlineapp
 
 import (
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"strings"
 	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func TestNativeOrcaAgentSelectionUsesFrozenProfile(t *testing.T) {
-	base := bindUnitDirectory(t, Config{Host: "orca", Agent: "codex", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}})
+	base := bindUnitDirectory(t, Config{Host: "orca", Agent: "codex", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}})
 	for _, agent := range []string{"codex", "opencode"} {
 		codex := codexworker.ProfileConfig{Executable: "codex.exe"}
 		orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "2m"}

@@ -3,14 +3,15 @@ package orcaworker_test
 import (
 	"context"
 	"encoding/json"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"testing"
 	"time"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
 func require(t *testing.T, err error) {
@@ -19,6 +20,7 @@ func require(t *testing.T, err error) {
 		t.Fatal(err)
 	}
 }
+
 func TestOrcaNativeHostWait(t *testing.T) {
 	path := os.Getenv("STEERLINE_ORCA_HOST_WAIT_PROBE")
 	if path == "" {
@@ -38,7 +40,7 @@ func TestOrcaNativeHostWait(t *testing.T) {
 	}
 	exe, err := exec.LookPath("orca")
 	require(t, err)
-	target := executionapi.ExecutionTarget{ID: "orca:isolated-host-wait"}
+	target := executionbackend.ExecutionTarget{ID: "orca:isolated-host-wait"}
 	config := orcaworker.Config{Repository: probe.Workspace, Target: target, CommandTimeout: "15s",
 		Output: func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
 			ctx, cancel := context.WithTimeout(ctx, timeout)
@@ -48,7 +50,7 @@ func TestOrcaNativeHostWait(t *testing.T) {
 			return command.Output()
 		},
 	}
-	identity := executionapi.ProcessIdentity{Kind: "orca", Terminal: probe.Terminal, RuntimeID: probe.Runtime, Incarnation: probe.Incarnation, Executable: exe}
+	identity := executionbackend.ProcessIdentity{Kind: "orca", Terminal: probe.Terminal, RuntimeID: probe.Runtime, Incarnation: probe.Incarnation, Executable: exe}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
 	term, err := orcaworker.New(config).InspectBoundTerminal(ctx, target, identity)
@@ -66,7 +68,7 @@ func TestOrcaNativeHostWait(t *testing.T) {
 	}
 
 	batch, err := orcaworker.MapTerminalConversation(contracts.ConversationInput{
-		Event:   contracts.ConversationEvent{ProjectID: "isolated-project", WorkflowID: "isolated-workflow", ExecutionID: "isolated-execution", AttemptID: "isolated-attempt", Backend: executionapi.BackendOrca, Protocol: executionapi.ProtocolOrcaTerminalV2, Agent: term.AgentIdentity, TargetID: target.ID, SourceEventID: "host-wait:probe"},
+		Event:   contracts.ConversationEvent{ProjectID: "isolated-project", WorkflowID: "isolated-workflow", ExecutionID: "isolated-execution", AttemptID: "isolated-attempt", Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV2, Agent: term.AgentIdentity, TargetID: target.ID, SourceEventID: "host-wait:probe"},
 		Process: &identity, Source: "orca-terminal-v2", Segment: "orca-host-wait-v1:probe", Identity: "terminal:" + probe.Runtime + ":" + probe.Terminal + ":" + probe.Incarnation, SourceSeq: 1, Session: "terminal:" + probe.Terminal + ":" + probe.Incarnation, InputWait: true,
 	})
 	require(t, err)

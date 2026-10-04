@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 )
 
@@ -37,7 +37,7 @@ func TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt(t *testing.T) {
 				}
 			}()
 			endpoint := "ws://" + listener.Addr().String()
-			identity := executionapi.ProcessIdentity{Kind: "os", PID: 123, Created: "fixture-process", Executable: "fixture-process"}
+			identity := executionbackend.ProcessIdentity{Kind: "os", PID: 123, Created: "fixture-process", Executable: "fixture-process"}
 			serverDir := filepath.Join(runDir, "runs", runID, "app-server")
 			require(t, os.MkdirAll(serverDir, 0700))
 			require(t, AtomicWrite(filepath.Join(serverDir, "process.json"), mustJSON(codexworker.ProcessReceipt{Endpoint: endpoint, Generation: "generation", Identity: identity})))
@@ -57,7 +57,7 @@ func TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt(t *testing.T) {
 			if exists {
 				require(t, AtomicWrite(filepath.Join(turnDir, "turn-start.json"), mustJSON(map[string]any{"turn": map[string]string{"id": second}})))
 			}
-			backend := codexworker.Backend{Config: codexworker.Config{Workspace: workspace, RunDir: runDir, RunID: runID, ServerDir: serverDir}, Process: codexworker.ProcessPort{Inspect: func(*executionapi.ProcessIdentity) string { return "matching process still exists" }}}
+			backend := codexworker.Backend{Config: codexworker.Config{Workspace: workspace, RunDir: runDir, RunID: runID, ServerDir: serverDir}, Process: codexworker.ProcessPort{Inspect: func(*executionbackend.ProcessIdentity) string { return "matching process still exists" }}}
 			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 			defer cancel()
 			recovered, err := backend.Reattach(ctx, codexworker.Binding{Endpoint: endpoint, Generation: "generation", SessionID: testprotocol.AppServerSession, Process: &identity}, command, "", nil)

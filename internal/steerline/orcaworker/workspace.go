@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func WorkerWorktreeName(taskID, workflowRunID string) (string, error) {
 	number, err := strconv.ParseUint(taskID, 10, 64)
-	if err != nil || number == 0 || strconv.FormatUint(number, 10) != taskID || !executionapi.StableExecutionID(workflowRunID) {
+	if err != nil || number == 0 || strconv.FormatUint(number, 10) != taskID || !executionbackend.StableExecutionID(workflowRunID) {
 		return "", errors.New("Orca worktree requires a canonical task number and stable workflow identity")
 	}
 	return "sl-" + taskID + "-" + workflowRunID, nil
@@ -36,12 +36,12 @@ type Worktree struct {
 
 // WorkspaceBinding preserves native path values, including remote paths whose
 // syntax belongs to a different host. Local filesystem validation is separate.
-func WorkspaceBinding(value Worktree, repository, base string) (executionapi.WorkspaceInspection, error) {
+func WorkspaceBinding(value Worktree, repository, base string) (executionbackend.WorkspaceInspection, error) {
 	branch := strings.TrimPrefix(value.Branch, "refs/heads/")
 	if branch == "" || value.Path == "" || value.Head != base {
-		return executionapi.WorkspaceInspection{}, errors.New("remote worker worktree identity is incomplete")
+		return executionbackend.WorkspaceInspection{}, errors.New("remote worker worktree identity is incomplete")
 	}
-	return executionapi.WorkspaceInspection{Repository: repository, Worktree: value.Path, Branch: branch, Base: base, Head: base, CheckedAt: time.Now().UTC()}, nil
+	return executionbackend.WorkspaceInspection{Repository: repository, Worktree: value.Path, Branch: branch, Base: base, Head: base, CheckedAt: time.Now().UTC()}, nil
 }
 
 func ValidateWorktree(value Worktree, name, repoID, base string) error {

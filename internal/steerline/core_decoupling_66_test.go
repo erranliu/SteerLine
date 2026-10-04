@@ -6,8 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
@@ -35,7 +37,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 	})
 	t.Run("service_entries_reject_missing_catalog_before_target", func(t *testing.T) {
 		state := t.TempDir() + "/absent"
-		config := Config{Persistence: sqlite.Factory{}, TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, Repository: "must-not-be-read", RunDir: state, Git: Command{Executable: "must-not-be-called"}}
+		config := Config{Persistence: sqlite.Factory{}, TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, Repository: "must-not-be-read", RunDir: state, Git: executionbackend.Command{Executable: "must-not-be-called"}}
 		if _, err := StartService(context.Background(), config, "unused.json", StartServiceOptions{}); err == nil || !strings.Contains(err.Error(), "directory") {
 			t.Fatalf("start reached target without directory: %v", err)
 		}
@@ -68,7 +70,7 @@ func TestCD66CandidateResourceIdentityAndCommitRollback(t *testing.T) {
 			return PolicyResourceBuildResult{Envelope: result.Envelope, WriteRoots: result.WriteRoots}, err
 		}
 		config.ExecutionDirectory = neutralDirectoryWithReplacement(t, config.ExecutionDirectory, entry)
-		record := ExecutionRecord{ProjectIdentity: "project", ExecutionID: newID(), CurrentAttemptID: newID(), Generation: newID()}
+		record := executionmodel.ExecutionRecord{ProjectIdentity: "project", ExecutionID: newID(), CurrentAttemptID: newID(), Generation: newID()}
 		if err := bindPolicyResources(context.Background(), config, &record, "workspace", nil); err == nil {
 			t.Fatal("foreign resource owner was accepted")
 		}
@@ -78,8 +80,8 @@ func TestCD66CandidateResourceIdentityAndCommitRollback(t *testing.T) {
 	})
 	t.Run("invalid_binding_restores_private_candidates", func(t *testing.T) {
 		config := workerContextConfigFixture()
-		service := Service{Config: config, committed: DomainSnapshot{Tasks: []TaskRecord{{TaskID: "task", Status: "open"}}}, domain: DomainSnapshot{Tasks: []TaskRecord{{TaskID: "task", Status: "closed"}}}, pendingOperations: map[string]string{"pending": "run"}}
-		ref := executionapi.ExecutionRef{Version: executionapi.ExecutionRecordVersion, Backend: executionapi.BackendLocal, Protocol: neutralProtocol, Agent: executionapi.AgentSpec{Name: "fixture"}, Target: targetFor(config), RunID: newID(), AttemptID: newID(), WorkspacePath: "workspace", WorkspaceBranch: "fixture/task", BaseCommit: strings.Repeat("a", 40), External: executionapi.ProcessIdentity{Kind: "os", Created: "original", Executable: "never-run"}}
+		service := Service{Config: config, committed: DomainSnapshot{Tasks: []taskmodel.TaskRecord{{TaskID: "task", Status: "open"}}}, domain: DomainSnapshot{Tasks: []taskmodel.TaskRecord{{TaskID: "task", Status: "closed"}}}, pendingOperations: map[string]string{"pending": "run"}}
+		ref := executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Agent: executionbackend.AgentSpec{Name: "fixture"}, Target: targetFor(config), RunID: newID(), AttemptID: newID(), WorkspacePath: "workspace", WorkspaceBranch: "fixture/task", BaseCommit: strings.Repeat("a", 40), External: executionbackend.ProcessIdentity{Kind: "os", Created: "original", Executable: "never-run"}}
 		if err := service.commitWorkerAttached(&Run{RunID: "run"}, workerCommitAttachment{Binding: &ref}, "pending"); err == nil {
 			t.Fatal("incomplete resource identity was committed")
 		}

@@ -2,15 +2,10 @@ package steerline
 
 import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-type TaskDependencyStatus = task.TaskDependencyStatus
-
-type NativeTaskError = task.Error
-
-func nativeErr(code, message string) error { return &task.Error{Code: code, Message: message} }
-func ValidateNativeTaskID(id string) error { return task.ValidateID(id) }
+func nativeErr(code, message string) error { return &taskmodel.Error{Code: code, Message: message} }
 
 type NativeTaskCapabilities = contracts.NativeTaskCapabilities
 

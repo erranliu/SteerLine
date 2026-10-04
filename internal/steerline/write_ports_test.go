@@ -13,20 +13,23 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type commandPortProbe struct {
 	persistence.CommandStore
-	submitted CommandRecord
-	updated   CommandRecord
+	submitted storageports.CommandRecord
+	updated   storageports.CommandRecord
 	failure   error
 }
 
-func (p *commandPortProbe) EnqueueCommand(_ context.Context, v CommandRecord) (CommandRecord, bool, error) {
+func (p *commandPortProbe) EnqueueCommand(_ context.Context, v storageports.CommandRecord) (storageports.CommandRecord, bool, error) {
 	p.submitted = v
 	return v, true, p.failure
 }
-func (p *commandPortProbe) UpdateCommand(_ context.Context, v CommandRecord) error {
+
+func (p *commandPortProbe) UpdateCommand(_ context.Context, v storageports.CommandRecord) error {
 	p.updated = v
 	return p.failure
 }
@@ -35,7 +38,7 @@ func TestCM69CommandPortUsesFixedProjectAndPropagatesRejection(t *testing.T) {
 	rejected := errors.New("rejected request")
 	port := &commandPortProbe{failure: rejected}
 	service := CommandService{Store: port, Project: "fixed-project"}
-	original := CommandRecord{ProjectIdentity: "untrusted", CommandID: "original-request", IdempotencyKey: "same-request", ExpectedVersion: 7, Payload: []byte(`{"value":1}`)}
+	original := storageports.CommandRecord{ProjectIdentity: "untrusted", CommandID: "original-request", IdempotencyKey: "same-request", ExpectedVersion: 7, Payload: []byte(`{"value":1}`)}
 	_, _, err := service.Submit(context.Background(), original)
 	if !errors.Is(err, rejected) || port.submitted.ProjectIdentity != "fixed-project" || port.submitted.CommandID != original.CommandID || port.submitted.IdempotencyKey != original.IdempotencyKey || port.submitted.ExpectedVersion != 7 || string(port.submitted.Payload) != string(original.Payload) {
 		t.Fatal("command port lost fixed project, request identity, precondition or rejection")
@@ -179,7 +182,7 @@ func TestCM69CleanupReceiptKeepsTaskAndReceiptAtomic(t *testing.T) {
 			}
 			command, err := db.Command(ctx, project, request)
 			require(t, err)
-			var saved TaskRecord
+			var saved taskmodel.TaskRecord
 			require(t, json.Unmarshal(command.Result, &saved))
 			if command.Status != "accepted" || recordFingerprint(saved) != recordFingerprint(receipt) {
 				t.Fatal("cleanup receipt differs from its committed task")

@@ -9,8 +9,10 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/activityview"
-	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
@@ -156,7 +158,7 @@ func renderStatusLine(m Model, state projectState) string {
 			parts = append(parts, fmt.Sprintf("%s %d", item.label, item.count))
 		}
 	}
-	if state.snapshot.Connection.State != api.ConnectionConnected && !state.snapshot.Observation.SampledAt.IsZero() {
+	if state.snapshot.Connection.State != productapi.ConnectionConnected && !state.snapshot.Observation.SampledAt.IsZero() {
 		parts = append(parts, "采样于 "+sampleTime(state.snapshot))
 	}
 	if m.status != "" {
@@ -265,7 +267,7 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
 	run := row.run
-	if state.snapshot.Connection.State == api.ConnectionOffline || state.snapshot.Connection.State == api.ConnectionNoRecord {
+	if state.snapshot.Connection.State == productapi.ConnectionOffline || state.snapshot.Connection.State == productapi.ConnectionNoRecord {
 		lines = append(lines, "服务入口："+safeTerminalText(serviceWindowInstruction(state.ref)), "配置："+safeTerminalText(state.ref.ConfigPath))
 	}
 	lines = append(lines, "任务 "+safeTerminalInlineText(run.TaskID)+" · "+safeTerminalInlineText(run.Title))
@@ -297,7 +299,7 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 	if run.Summary != nil && *run.Summary != "" {
 		lines = append(lines, "摘要："+safeTerminalText(*run.Summary))
 	}
-	if state.snapshot.Connection.State != api.ConnectionConnected {
+	if state.snapshot.Connection.State != productapi.ConnectionConnected {
 		lines = append(lines, "采样于 "+sampleTime(state.snapshot))
 	}
 	if verified := executionVerifiedAt(state, run); verified != "未知" && verified != "—" {
@@ -387,7 +389,7 @@ func renderNativeTaskDetail(state projectState, task contracts.NativeTaskDetail)
 
 func renderNativeTaskRelations(state projectState, task contracts.NativeTaskDetail) []string {
 	var lines []string
-	if state.snapshot.Connection.State == api.ConnectionOffline || state.snapshot.Connection.State == api.ConnectionNoRecord {
+	if state.snapshot.Connection.State == productapi.ConnectionOffline || state.snapshot.Connection.State == productapi.ConnectionNoRecord {
 		lines = append(lines, "离线只读快照 · 采样于 "+sampleTime(state.snapshot))
 	}
 	if state.snapshot.NativeTaskError != "" {
@@ -529,7 +531,7 @@ func displayActionReason(reason string) string {
 const timeLayout = "2006-01-02 15:04:05"
 
 func renderEmptySelection(state projectState) []string {
-	if state.snapshot.Connection.State == api.ConnectionOffline || state.snapshot.Connection.State == api.ConnectionNoRecord {
+	if state.snapshot.Connection.State == productapi.ConnectionOffline || state.snapshot.Connection.State == productapi.ConnectionNoRecord {
 		return []string{"服务离线 · 可以查看已有 runs 与日志", "服务入口：" + safeTerminalText(serviceWindowInstruction(state.ref)), "配置路径：" + safeTerminalText(state.ref.ConfigPath), terminalCapabilities()}
 	}
 	if state.snapshot.Connection.Diagnostic != "" {
@@ -639,7 +641,7 @@ func renderDecisionHistory(state projectState, row *consoleRow, width, height in
 		lines = append(lines, "SQLite 决策历史不可用："+safeTerminalText(state.snapshot.DomainError))
 		return scrollLines(wrapLines(lines, width), state.detailScroll, height)
 	}
-	records := make([]contracts.DecisionRecord, 0)
+	records := make([]executionmodel.DecisionRecord, 0)
 	for _, record := range state.snapshot.Domain.Decisions {
 		if record.WorkflowRunID == run.RunID {
 			records = append(records, record)
@@ -655,7 +657,7 @@ func renderDecisionHistory(state projectState, row *consoleRow, width, height in
 		lines = append(lines, "当前 run 没有持久化决策记录。")
 	}
 	for _, record := range records {
-		var request contracts.DecisionRequest
+		var request executionmodel.DecisionRequest
 		if err := json.Unmarshal(record.Request, &request); err != nil {
 			lines = append(lines, "", "decision_id："+safeTerminalText(record.DecisionID), "问题记录格式未知；原记录保留，未猜测或导入。")
 			continue
@@ -677,7 +679,7 @@ func renderDecisionHistory(state projectState, row *consoleRow, width, height in
 			lines = append(lines, fmt.Sprintf("选项 %d · %s：%s%s", i+1, safeTerminalText(option.ID), safeTerminalText(option.Label), recommended), "  详情："+safeTerminalText(option.Detail))
 		}
 		if len(record.Answer) > 0 {
-			var answer contracts.DecisionAnswer
+			var answer executionmodel.DecisionAnswer
 			if err := json.Unmarshal(record.Answer, &answer); err == nil {
 				lines = append(lines, "答案 · option_id："+safeTerminalText(displayDash(answer.OptionID))+" · by："+safeTerminalText(answer.AnsweredBy), "补充说明："+safeTerminalText(answer.Note))
 			}
@@ -894,7 +896,7 @@ func renderFooter(m Model, state projectState) string {
 		parts = append(parts, "a 回答")
 	}
 	connection := state.snapshot.Connection
-	if rt := connection.Snapshot.Runtime; rt != nil && connection.State == api.ConnectionConnected && connection.CanControl {
+	if rt := connection.Snapshot.Runtime; rt != nil && connection.State == productapi.ConnectionConnected && connection.CanControl {
 		if hasCapability(rt, "set_dispatch_mode") {
 			parts = append(parts, "m 模式")
 		}
@@ -1006,7 +1008,7 @@ func sampleTime(snapshot ProjectSnapshot) string {
 		return "未知"
 	}
 	suffix := ""
-	if snapshot.Observation.State == api.SnapshotStale || snapshot.Observation.State == api.SnapshotReadFailed || snapshot.Observation.State == api.SnapshotUnknownVersion {
+	if snapshot.Observation.State == productapi.SnapshotStale || snapshot.Observation.State == productapi.SnapshotReadFailed || snapshot.Observation.State == productapi.SnapshotUnknownVersion {
 		suffix = " · 缓存/未验证"
 	}
 	return snapshot.Observation.SampledAt.Local().Format(timeLayout) + suffix

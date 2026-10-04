@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 type WorkerEvent struct {
@@ -26,9 +26,9 @@ type WorkerEvent struct {
 	SourceChanged  bool
 	InputWait      bool
 	Diagnostic     string
-	Fact           executionapi.EventFact
-	Implementation []executionapi.ImplementationDataEnvelope
-	Candidate      *executionapi.LifecycleCandidate
+	Fact           executionbackend.EventFact
+	Implementation []executionbackend.ImplementationDataEnvelope
+	Candidate      *executionbackend.LifecycleCandidate
 	DeliveryID     string
 	DeliveryFinal  bool
 	Persisted      chan error
@@ -40,7 +40,7 @@ type WorkerEvent struct {
 }
 
 type Worker struct {
-	proc              executionapi.StopHandle
+	proc              executionbackend.StopHandle
 	Events            chan WorkerEvent
 	Done              chan error
 	cancelObservation context.CancelFunc
@@ -49,10 +49,11 @@ type Worker struct {
 	RemoteOutcome     string
 }
 
-func (w *Worker) Kill()  { w.proc.Kill() }
+func (w *Worker) Kill() { w.proc.Kill() }
+
 func (w *Worker) Close() { w.proc.Close() }
 
-func workerFromLifecycle(runID, attemptID string, observer executionapi.LifecycleObserver) *Worker {
+func workerFromLifecycle(runID, attemptID string, observer executionbackend.LifecycleObserver) *Worker {
 	if observer == nil {
 		return nil
 	}

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"testing"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
@@ -14,7 +16,7 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	workflow.Phase, workflow.PRURL, workflow.PRState = "waiting_pr_merge", "https://git.example/org/repo/pulls/8", "open"
 	require(t, service.commitWorker(run))
 	decision := service.decisionRecord(run)
-	answer := DecisionAnswer{DecisionID: decision.DecisionID, RunID: run.RunID, Note: "continue", AnsweredBy: "operator", AnsweredAt: now(), ExpectedDecisionVersion: decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
+	answer := executionmodel.DecisionAnswer{DecisionID: decision.DecisionID, RunID: run.RunID, Note: "continue", AnsweredBy: "operator", AnsweredAt: now(), ExpectedDecisionVersion: decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
 	commands := CommandService{Store: service.commandStore, Project: service.Config.identity}
 	command, _, err := commands.AnswerDecisionWithID(ctx, newID(), decision.DecisionID, decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 	require(t, err)
@@ -47,7 +49,7 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	require(t, BeginWorkerFeedbackDelivery(&nextWorkflow, expectedExecution, expectedDecision, now()))
 	attempt := *service.workflowAttempt(run, run.AttemptID)
 	request := workerCommit{Project: service.Config.Identity(), TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, ControlRevision: expectedWorkflow.ControlRevision,
-		Workflow: &recordWrite[WorkflowRunRecord]{Before: &expectedWorkflow, After: nextWorkflow}, Execution: &recordWrite[ExecutionRecord]{Before: &expectedExecution, After: expectedExecution}, Attempt: &recordWrite[StepAttemptRecord]{Before: &attempt, After: attempt}, Decisions: []recordWrite[DecisionRecord]{{Before: &expectedDecision, After: expectedDecision}}, Checkpoint: runtimeCheckpoint(service.State)}
+		Workflow: &recordWrite[executionmodel.WorkflowRunRecord]{Before: &expectedWorkflow, After: nextWorkflow}, Execution: &recordWrite[executionmodel.ExecutionRecord]{Before: &expectedExecution, After: expectedExecution}, Attempt: &recordWrite[executionmodel.StepAttemptRecord]{Before: &attempt, After: attempt}, Decisions: []recordWrite[executionmodel.DecisionRecord]{{Before: &expectedDecision, After: expectedDecision}}, Checkpoint: runtimeCheckpoint(service.State)}
 	result, err := testSQLite(service).CommitWorker(ctx, request)
 	committed := nextWorkflow
 	committed.ControlRevision = result.ControlRevision

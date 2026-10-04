@@ -16,7 +16,9 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
 	readsqlite "github.com/erranliu/SteerLine/internal/steerline/sqlite"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding(t *testing.T) {
@@ -27,24 +29,24 @@ func TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer writer.Close()
-	authority := task.ProjectTaskAuthority{ProjectIdentity: "project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
+	authority := tasklegacy.ProjectTaskAuthority{ProjectIdentity: "project", Authority: "native", AuthorityVersion: 1, Repository: "https://example.invalid/repo.git", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}
 	at := time.Now().UTC()
 	large := []byte(strings.Repeat("x", query.MaxEventPageBytes))
 	if err = writer.InitializeProject(ctx, authority); err != nil {
 		t.Fatal(err)
 	}
 	err = writer.TransactTaskBatch(ctx, func(tx persistence.BatchTx) error {
-		if err := tx.PutTaskBatch(task.TaskBatchRecord{ProjectIdentity: "project", BatchID: "batch", SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("a", 64), CommandID: "command", TaskIDs: map[string]string{"a": "1", "b": "2"}, CreatedAt: at}, 1, 0); err != nil {
+		if err := tx.PutTaskBatch(taskmodel.TaskBatchRecord{ProjectIdentity: "project", BatchID: "batch", SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("a", 64), CommandID: "command", TaskIDs: map[string]string{"a": "1", "b": "2"}, CreatedAt: at}, 1, 0); err != nil {
 			return err
 		}
 		for _, id := range []string{"1", "2"} {
-			ref := task.FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
-			contract := task.TaskContract{ContractID: "contract-" + id, Repository: authority.Repository, Remote: authority.Remote, Branch: authority.Branch, SpecRef: ref, PlanRef: task.FileReference{Path: "docs/task.plan.md", Commit: ref.Commit, SHA256: ref.SHA256}, AcceptanceRefs: []task.FileReference{ref}}
-			contract.Digest, err = task.ContractDigest(contract)
+			ref := taskmodel.FileReference{Path: "docs/task.spec.md", Commit: strings.Repeat("a", 40), SHA256: strings.Repeat("b", 64)}
+			contract := taskmodel.TaskContract{ContractID: "contract-" + id, Repository: authority.Repository, Remote: authority.Remote, Branch: authority.Branch, SpecRef: ref, PlanRef: taskmodel.FileReference{Path: "docs/task.plan.md", Commit: ref.Commit, SHA256: ref.SHA256}, AcceptanceRefs: []taskmodel.FileReference{ref}}
+			contract.Digest, err = taskmodel.ContractDigest(contract)
 			if err != nil {
 				return err
 			}
-			record := task.TaskRecord{ProjectIdentity: "project", TaskID: id, BatchID: "batch", ContractID: contract.ContractID, Title: "Task " + id, Type: "task", Priority: 2, Source: "native", Status: "open", Version: 1, CreatedAt: at, UpdatedAt: at}
+			record := taskmodel.TaskRecord{ProjectIdentity: "project", TaskID: id, BatchID: "batch", ContractID: contract.ContractID, Title: "Task " + id, Type: "task", Priority: 2, Source: "native", Status: "open", Version: 1, CreatedAt: at, UpdatedAt: at}
 			if err := tx.PutTask(record); err != nil {
 				return err
 			}
@@ -52,11 +54,11 @@ func TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding(t *testing.T) {
 				return err
 			}
 		}
-		if err := tx.PutTaskDependency(task.TaskDependencyRecord{ProjectIdentity: "project", PredecessorID: "1", SuccessorID: "2"}); err != nil {
+		if err := tx.PutTaskDependency(taskmodel.TaskDependencyRecord{ProjectIdentity: "project", PredecessorID: "1", SuccessorID: "2"}); err != nil {
 			return err
 		}
 		for i, body := range [][]byte{large, []byte("tail")} {
-			if _, err := tx.AppendEvent(contracts.DomainEvent{ProjectIdentity: "project", ExecutionID: "execution", ExternalSource: "reader", ExternalID: fmt.Sprint(i), Type: "message", Payload: body}); err != nil {
+			if _, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: "project", ExecutionID: "execution", ExternalSource: "reader", ExternalID: fmt.Sprint(i), Type: "message", Payload: body}); err != nil {
 				return err
 			}
 		}
@@ -115,7 +117,7 @@ func TestReaderPortsUseCurrentDatabaseAndPreserveReadOnlyBinding(t *testing.T) {
 	changed := authority
 	changed.Branch = "other"
 	_, err = readsqlite.NewReader(db, &changed).NativeTaskPage(ctx, "project", "", "", 0, 0, 1)
-	var coded *task.Error
+	var coded *taskmodel.Error
 	if !errors.As(err, &coded) || coded.Code != "authority_mismatch" {
 		t.Fatalf("bound reader accepted a different target: %v", err)
 	}

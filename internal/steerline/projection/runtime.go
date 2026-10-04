@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 // Metadata combines service-owned checkpoint fields with the independently read task authority.
@@ -80,7 +81,7 @@ func Runs(snapshot contracts.DomainSnapshot) ([]*contracts.Run, error) {
 	runs := make([]*contracts.Run, 0, len(snapshot.WorkflowRuns))
 	for i := range snapshot.WorkflowRuns {
 		workflow := &snapshot.WorkflowRuns[i]
-		var task contracts.TaskRecord
+		var task taskmodel.TaskRecord
 		found := false
 		for _, record := range snapshot.Tasks {
 			if record.TaskID == workflow.TaskID {
@@ -137,6 +138,7 @@ func Slot(v contracts.Runtime) (bool, *string) {
 	}
 	return occupied, current
 }
+
 func unclaimedReservation(v contracts.Runtime) bool {
 	return v.SlotOccupied && v.CurrentTask != nil && LatestWorkflow(v.WorkflowRuns, *v.CurrentTask) == nil
 }

@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestNativeTaskAndItsRunShareOneListRow(t *testing.T) {
@@ -15,11 +16,11 @@ func TestNativeTaskAndItsRunShareOneListRow(t *testing.T) {
 	ref.Presentation.TaskAuthority = "native"
 	snapshot := readySnapshot(ref, now)
 	snapshot.Tasks.Tasks = []contracts.TaskCandidate{{TaskID: "102", Title: "Native branch A"}}
-	run := &contracts.Run{RunID: strings.Repeat("a", 32), TaskID: "102", DomainTaskID: "102", Title: "Native branch A", TaskStatus: "in_progress", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &executionapi.ProcessIdentity{Kind: "orca", Terminal: "term-native-102"}}
+	run := &contracts.Run{RunID: strings.Repeat("a", 32), TaskID: "102", DomainTaskID: "102", Title: "Native branch A", TaskStatus: "in_progress", ExecutionStatus: "running", FinishTaskStatus: "pending", Process: &executionbackend.ProcessIdentity{Kind: "orca", Terminal: "term-native-102"}}
 	snapshot.Observation.Runtime.Runs = []*contracts.Run{run}
 	snapshot.NativeTasks = &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{
-		{TaskRecord: contracts.TaskRecord{TaskID: "102", Title: "Native branch A", Status: "in_progress"}, Successors: []string{"104"}},
-		{TaskRecord: contracts.TaskRecord{TaskID: "103", Title: "Native branch B", Status: "open"}},
+		{TaskRecord: taskmodel.TaskRecord{TaskID: "102", Title: "Native branch A", Status: "in_progress"}, Successors: []string{"104"}},
+		{TaskRecord: taskmodel.TaskRecord{TaskID: "103", Title: "Native branch B", Status: "open"}},
 	}}
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "task:102"

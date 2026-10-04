@@ -8,8 +8,10 @@ import (
 	"testing"
 	"time"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestConsoleFollowsCurrentAttemptUntilHistoryIsSelected(t *testing.T) {
@@ -18,7 +20,7 @@ func TestConsoleFollowsCurrentAttemptUntilHistoryIsSelected(t *testing.T) {
 		selectedKey: "run:run",
 		snapshot: ProjectSnapshot{
 			Observation: api.ObservationSnapshot{Runtime: &contracts.Runtime{Runs: []*contracts.Run{run}}},
-			NativeTasks: &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{{TaskRecord: contracts.TaskRecord{TaskID: "task"}}}},
+			NativeTasks: &contracts.NativeTaskPage{Tasks: []contracts.NativeTaskDetail{{TaskRecord: taskmodel.TaskRecord{TaskID: "task"}}}},
 		},
 	}
 	m := Model{projects: []projectState{state}}
@@ -32,7 +34,7 @@ func TestConsoleFollowsCurrentAttemptUntilHistoryIsSelected(t *testing.T) {
 		t.Fatal("new current attempt did not replace the followed activity and detail")
 	}
 	created := time.Now().UTC()
-	m.projects[0].snapshot.Domain = &contracts.DomainSnapshot{Attempts: []contracts.StepAttemptRecord{
+	m.projects[0].snapshot.Domain = &contracts.DomainSnapshot{Attempts: []executionmodel.StepAttemptRecord{
 		{ExecutionID: "execution", AttemptID: "first", AttemptNumber: 1, CreatedAt: created},
 		{ExecutionID: "execution", AttemptID: "second", AttemptNumber: 2, CreatedAt: created.Add(time.Second)},
 	}}

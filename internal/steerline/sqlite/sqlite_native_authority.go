@@ -3,18 +3,20 @@ package sqlite
 import (
 	"context"
 	"time"
+
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
-func (s *SQLiteStore) NativeAuthority(ctx context.Context, project string) (ProjectTaskAuthority, error) {
+func (s *SQLiteStore) NativeAuthority(ctx context.Context, project string) (tasklegacy.ProjectTaskAuthority, error) {
 	return readNativeAuthority(ctx, s.db, project)
 }
 
-func (tx *sqliteTx) NativeAuthority(ctx context.Context, project string) (ProjectTaskAuthority, error) {
+func (tx *sqliteTx) NativeAuthority(ctx context.Context, project string) (tasklegacy.ProjectTaskAuthority, error) {
 	return readNativeAuthority(ctx, tx.tx, project)
 }
 
-func readNativeAuthority(ctx context.Context, q CommandRowQuerier, project string) (ProjectTaskAuthority, error) {
-	var v ProjectTaskAuthority
+func readNativeAuthority(ctx context.Context, q CommandRowQuerier, project string) (tasklegacy.ProjectTaskAuthority, error) {
+	var v tasklegacy.ProjectTaskAuthority
 	var paused int
 	var created, updated string
 	err := q.QueryRowContext(ctx, `SELECT authority,authority_version,graph_revision,repository,remote,branch,dispatch_mode,dispatch_paused,created_at,updated_at FROM project_task_authorities WHERE project_identity=?`, project).Scan(&v.Authority, &v.AuthorityVersion, &v.GraphRevision, &v.Repository, &v.Remote, &v.Branch, &v.DispatchMode, &paused, &created, &updated)

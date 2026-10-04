@@ -10,17 +10,18 @@ import (
 	"strings"
 	"testing"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestUnregisteredWorkerFlowConfigurationCannotClaim(t *testing.T) {
 	for _, host := range []string{"unregistered-a", "unregistered-b"} {
 		t.Run(host, func(t *testing.T) {
-			c := Config{Persistence: sqlite.Factory{}, ExecutionDirectory: neutralExecutionDirectory(t), WorkflowProtocol: WorkerFlowVersion, Host: host, Agent: "fixture"}
+			c := Config{Persistence: sqlite.Factory{}, ExecutionDirectory: neutralExecutionDirectory(t), WorkflowProtocol: executionmodel.Version, Host: host, Agent: "fixture"}
 			err := requireWorkerFlowCapabilities(context.Background(), c)
-			var backend *executionapi.BackendError
-			if !errors.As(err, &backend) || backend.Code != executionapi.BackendUnsupported {
+			var backend *executionbackend.BackendError
+			if !errors.As(err, &backend) || backend.Code != executionbackend.BackendUnsupported {
 				t.Fatalf("unregistered configuration reached an external claim path: %v", err)
 			}
 		})
@@ -39,7 +40,7 @@ func TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	c.WorkflowProtocol = WorkerFlowVersion
+	c.WorkflowProtocol = executionmodel.Version
 	workspaceRoot := filepath.Join(c.RunDir, "worktrees")
 	if _, err := newTestService(c); err == nil || !strings.Contains(err.Error(), "unsupported_schema") {
 		t.Fatalf("old state was not rejected: %v", err)
@@ -55,7 +56,7 @@ func TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation(t *testing.T) {
 
 func TestFreshWorkerFlowRuntimeUsesDistinctFormat(t *testing.T) {
 	c, _ := nativeTaskFixture(t)
-	c.WorkflowProtocol = WorkerFlowVersion
+	c.WorkflowProtocol = executionmodel.Version
 	project, err := OpenNativeTaskProject(context.Background(), &c)
 	if err != nil {
 		t.Fatal(err)
@@ -89,7 +90,7 @@ func TestFreshWorkerFlowRuntimeUsesDistinctFormat(t *testing.T) {
 func TestWorkerFlowRejectsOldLocalExecutionProtocol(t *testing.T) {
 	c, commit, store := openDAGFixture(t)
 	ctx := context.Background()
-	c.WorkflowProtocol, c.Host, c.Agent, c.Claimant = WorkerFlowVersion, "local", "fixture", "operator"
+	c.WorkflowProtocol, c.Host, c.Agent, c.Claimant = executionmodel.Version, "local", "fixture", "operator"
 	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
 		t.Fatalf("push fixture base: %v: %s", err, out)
 	}
@@ -121,7 +122,7 @@ func TestWorkerFlowRejectsOldLocalExecutionProtocol(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var old ExecutionRecord
+	var old executionmodel.ExecutionRecord
 	for _, execution := range snapshot.Executions {
 		if execution.ExecutionID == receipt.ExecutionID {
 			old = execution
@@ -130,7 +131,7 @@ func TestWorkerFlowRejectsOldLocalExecutionProtocol(t *testing.T) {
 	if old.ExecutionID == "" {
 		t.Fatal("claimed execution is missing")
 	}
-	old.Protocol = string(executionapi.ProtocolLocalProcess)
+	old.Protocol = string(executionbackend.ProtocolLocalProcess)
 	if err := store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutExecution(old) }); err != nil {
 		t.Fatal(err)
 	}

@@ -7,11 +7,13 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func TestProbeContentBuildIsPureAndWritesAreExplicit(t *testing.T) {
 	worktree := t.TempDir()
-	identity := ProbeIdentity{Execution: strings.Repeat("a", 32), Turn: strings.Repeat("b", 32), Nonce: strings.Repeat("c", 32),
+	identity := executionbackend.ProbeIdentity{Execution: strings.Repeat("a", 32), Turn: strings.Repeat("b", 32), Nonce: strings.Repeat("c", 32),
 		ProfileDigest: "profile", Runtime: "runtime", Terminal: "terminal", Incarnation: "incarnation", Worktree: worktree}
 	plan, err := BuildProbe(identity)
 	if err != nil {
@@ -41,17 +43,17 @@ func TestReadinessEvidenceUsesActualPlatformToolBlocks(t *testing.T) {
 		t.Fatal(err)
 	}
 	var fixture struct {
-		Command      string          `json:"command"`
-		ScriptDigest string          `json:"probe_sha256"`
-		Messages     json.RawMessage `json:"messages"`
-		Receipt      ProbeReceipt    `json:"receipt"`
+		Command      string                        `json:"command"`
+		ScriptDigest string                        `json:"probe_sha256"`
+		Messages     json.RawMessage               `json:"messages"`
+		Receipt      executionbackend.ProbeReceipt `json:"receipt"`
 	}
 	if err := json.Unmarshal(data, &fixture); err != nil {
 		t.Fatal(err)
 	}
 	transcript, _ := json.Marshal(map[string]any{"messages": fixture.Messages})
 	output := WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "actual-platform-source", Transcript: transcript}
-	fact, err := ObserveProbe(output, fixture.Command, fixture.Receipt.Nonce, fixture.ScriptDigest, ProbeToolEvidence{})
+	fact, err := ObserveProbe(output, fixture.Command, fixture.Receipt.Nonce, fixture.ScriptDigest, executionbackend.ProbeToolEvidence{})
 	if err != nil || !fact.Verified || fact.CallID == "" || fact.MessageID == "" {
 		t.Fatalf("real tool event was not recognized: %+v / %v", fact, err)
 	}
@@ -72,7 +74,7 @@ func TestReadinessEvidenceUsesActualPlatformToolBlocks(t *testing.T) {
 			case "apply_patch":
 				changed.Transcript = []byte(strings.ReplaceAll(string(transcript), `"name":"exec"`, `"name":"apply_patch"`))
 			}
-			fact, err := ObserveProbe(changed, fixture.Command, nonce, fixture.ScriptDigest, ProbeToolEvidence{})
+			fact, err := ObserveProbe(changed, fixture.Command, nonce, fixture.ScriptDigest, executionbackend.ProbeToolEvidence{})
 			if err != nil || fact.Verified {
 				t.Fatalf("unsupported evidence accepted: %+v / %v", fact, err)
 			}
@@ -115,7 +117,7 @@ func TestProbeInitializationFailureCannotBeOverwrittenByRetry(t *testing.T) {
 	}
 	data, _ := json.Marshal(map[string]any{"messages": []any{call, result("helper_unknown_error: setup refresh had errors"), call, result(string(success))}})
 	output := WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "source", Transcript: data}
-	fact, err := ObserveProbe(output, command, nonce, digest, ProbeToolEvidence{})
+	fact, err := ObserveProbe(output, command, nonce, digest, executionbackend.ProbeToolEvidence{})
 	if err != nil || fact.FailureCode == "" || fact.Verified {
 		t.Fatalf("confirmed fault was overwritten: %+v / %v", fact, err)
 	}
@@ -141,7 +143,7 @@ func TestActualSavedCommandWrapperProvidesProbeEvidence(t *testing.T) {
 	}
 	transcript, _ := json.Marshal(map[string]any{"messages": fixture.Messages})
 	output := WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "source", Transcript: transcript}
-	fact, err := ObserveProbe(output, fixture.Command, fixture.Nonce, fixture.Digest, ProbeToolEvidence{})
+	fact, err := ObserveProbe(output, fixture.Command, fixture.Nonce, fixture.Digest, executionbackend.ProbeToolEvidence{})
 	if err != nil || !fact.Verified {
 		t.Fatalf("real saved wrapper rejected: %+v / %v", fact, err)
 	}
@@ -165,7 +167,7 @@ func TestActualStringifiedCommandWrapperProvidesProbeEvidence(t *testing.T) {
 		t.Fatal(err)
 	}
 	transcript, _ := json.Marshal(map[string]any{"messages": fixture.Messages})
-	fact, err := ObserveProbe(WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "actual-source", Transcript: transcript}, fixture.Command, fixture.Nonce, fixture.Digest, ProbeToolEvidence{})
+	fact, err := ObserveProbe(WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "actual-source", Transcript: transcript}, fixture.Command, fixture.Nonce, fixture.Digest, executionbackend.ProbeToolEvidence{})
 	if err != nil || !fact.Verified {
 		t.Fatalf("actual serialized command result was not recognized: %+v / %v", fact, err)
 	}
@@ -193,7 +195,7 @@ func TestBusinessToolFactsRequireCurrentTaskAndActualCommand(t *testing.T) {
 			messages := []any{map[string]any{"role": "user", "source": "transcript", "timestamp": 1000, "blocks": []any{map[string]string{"type": "text", "text": "Your task ID is: " + tc.task}}}, map[string]any{"role": "assistant", "source": "transcript", "timestamp": 1001, "blocks": []any{map[string]string{"type": "tool-call", "name": name, "input": tc.invocation, "callId": "original-call"}}}, map[string]any{"role": tc.role, "source": "transcript", "timestamp": 1002, "blocks": []any{map[string]string{"type": "tool-result", "output": tc.result}}}}
 			data, _ := json.Marshal(map[string]any{"messages": messages})
 			output := WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "current-source", Transcript: data}
-			_, fault, err := ObserveToolInitialization(output, "current", 1000, ToolContext{})
+			_, fault, err := ObserveToolInitialization(output, "current", 1000, executionbackend.ToolContext{})
 			if err != nil || fault != tc.want {
 				t.Fatalf("business tool classification: %v / %v", fault, err)
 			}
@@ -219,22 +221,22 @@ func TestProjectedCommandOutputOnlyProvesBusinessAttempt(t *testing.T) {
 		map[string]any{"role": "assistant", "source": "transcript", "timestamp": 1001, "blocks": []any{map[string]string{"type": "tool-call", "name": "exec", "input": input, "callId": "call"}}},
 		map[string]any{"role": "tool", "source": "transcript", "timestamp": 1002, "blocks": []any{map[string]string{"type": "tool-result", "output": "helper_unknown_error: setup refresh had errors"}}},
 	}})
-	state, fault, err := ObserveToolInitialization(WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "source", Transcript: data}, "current", 1000, ToolContext{})
+	state, fault, err := ObserveToolInitialization(WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "source", Transcript: data}, "current", 1000, executionbackend.ToolContext{})
 	if err != nil || !state.Started || fault {
 		t.Fatalf("stdout was treated as native failure or attempt was lost: %+v / %v / %v", state, fault, err)
 	}
 }
 
 func TestReadinessReceiptRejectsStaleAndEscapingFiles(t *testing.T) {
-	p := ProbeIdentity{Execution: strings.Repeat("a", 32), Turn: strings.Repeat("b", 32), Nonce: strings.Repeat("c", 32), ProfileDigest: "digest", Runtime: "runtime", Terminal: "terminal", Incarnation: "incarnation", Worktree: t.TempDir()}
+	p := executionbackend.ProbeIdentity{Execution: strings.Repeat("a", 32), Turn: strings.Repeat("b", 32), Nonce: strings.Repeat("c", 32), ProfileDigest: "digest", Runtime: "runtime", Terminal: "terminal", Incarnation: "incarnation", Worktree: t.TempDir()}
 	_, digest, _, err := PrepareProbe(p)
 	if err != nil {
 		t.Fatal(err)
 	}
 	dir, _ := probeDirectory(p)
 	path := filepath.Join(p.Worktree, dir, "receipt.json")
-	r := ProbeReceipt{ProbeIdentity: p, InputSHA256: digest, GitHead: strings.Repeat("d", 40), Read: true, Write: true, Delete: true}
-	write := func(r ProbeReceipt) {
+	r := executionbackend.ProbeReceipt{ProbeIdentity: p, InputSHA256: digest, GitHead: strings.Repeat("d", 40), Read: true, Write: true, Delete: true}
+	write := func(r executionbackend.ProbeReceipt) {
 		t.Helper()
 		data, _ := json.Marshal(r)
 		if err := os.WriteFile(path, data, 0600); err != nil {
@@ -290,7 +292,7 @@ func TestProbeEvidenceAcceptsNativeExecPragmaWithoutChangingCommand(t *testing.T
 		map[string]any{"id": "call", "source": "transcript", "role": "assistant", "blocks": []any{map[string]any{"type": "tool-call", "name": "exec", "callId": "original-call", "input": input}}},
 		map[string]any{"id": "result", "source": "transcript", "role": "tool", "blocks": []any{map[string]any{"type": "tool-result", "callId": "original-call", "output": result}}},
 	}})
-	evidence, err := ObserveProbe(WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "original-source", Transcript: transcript}, command, nonce, digest, ProbeToolEvidence{})
+	evidence, err := ObserveProbe(WorkerOutput{Source: "transcript", SourceExact: true, Provider: "codex", SourceIdentity: "original-source", Transcript: transcript}, command, nonce, digest, executionbackend.ProbeToolEvidence{})
 	if err != nil || !evidence.Verified {
 		t.Fatalf("native pragma lost tool evidence: %+v / %v", evidence, err)
 	}

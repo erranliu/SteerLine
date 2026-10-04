@@ -7,21 +7,22 @@ import (
 	"testing"
 	"time"
 
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 type simplifiedSlowPort struct {
-	executionapi.LifecyclePort
+	executionbackend.LifecyclePort
 	entered, release chan struct{}
 	calls            atomic.Int32
 }
 
-type simplifiedCleanupPort struct{ executionapi.LifecyclePort }
+type simplifiedCleanupPort struct{ executionbackend.LifecyclePort }
 
-func (p simplifiedCleanupPort) Execute(_ context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (p simplifiedCleanupPort) Execute(_ context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	target := request.Snapshot.Ref.Target
 	target.CoordinatorTerminal = "cleanup-private-progress"
-	return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationConfirmed, Target: &target}, nil, nil
+	return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationConfirmed, Target: &target}, nil, nil
 }
 
 func TestSimplifiedCleanupRetainsFrozenDeliveryEvidence(t *testing.T) {
@@ -35,7 +36,7 @@ func TestSimplifiedCleanupRetainsFrozenDeliveryEvidence(t *testing.T) {
 	require(t, err)
 	require(t, s.refreshNativeSnapshot(context.Background()))
 	run.TaskStatus = "discarded"
-	candidate := executionapi.LifecycleCandidate{Action: executionapi.LifecycleCleanup, Input: executionapi.LifecycleInput{Cleanup: &executionapi.CleanupInput{Resources: []executionapi.ProcessIdentity{{Kind: "fixture", Terminal: "original"}}}}}
+	candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleCleanup, Input: executionbackend.LifecycleInput{Cleanup: &executionbackend.CleanupInput{Resources: []executionbackend.ProcessIdentity{{Kind: "fixture", Terminal: "original"}}}}}
 	require(t, s.executeLifecycleStep(context.Background(), run, simplifiedCleanupPort{lifecycle}, candidate))
 	stored, err := s.domainStore.Query(context.Background(), s.Config.Identity())
 	require(t, err)
@@ -44,7 +45,7 @@ func TestSimplifiedCleanupRetainsFrozenDeliveryEvidence(t *testing.T) {
 	}
 	confirmed := false
 	for _, operation := range stored.Operations {
-		if operation.Kind == string(executionapi.LifecycleCleanup) && operation.Status == "confirmed" {
+		if operation.Kind == string(executionbackend.LifecycleCleanup) && operation.Status == "confirmed" {
 			confirmed = true
 		}
 	}
@@ -53,32 +54,33 @@ func TestSimplifiedCleanupRetainsFrozenDeliveryEvidence(t *testing.T) {
 	}
 }
 
-func (p *simplifiedSlowPort) Execute(ctx context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
+func (p *simplifiedSlowPort) Execute(ctx context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
 	p.calls.Add(1)
 	close(p.entered)
 	select {
 	case <-p.release:
 	case <-ctx.Done():
-		return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown}, nil, ctx.Err()
+		return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationUnknown}, nil, ctx.Err()
 	}
-	return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationConfirmed}, nil, nil
+	return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationConfirmed}, nil, nil
 }
-func (p *simplifiedSlowPort) Reconcile(_ context.Context, request executionapi.LifecycleRequest) (executionapi.LifecycleReceipt, executionapi.LifecycleObserver, error) {
-	return executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown}, nil, nil
+
+func (p *simplifiedSlowPort) Reconcile(_ context.Context, request executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {
+	return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationUnknown}, nil, nil
 }
 
 func TestSimplifiedLifecycleActorDoesNotWaitForEffect(t *testing.T) {
 	for _, stale := range []bool{false, true} {
 		t.Run(map[bool]string{false: "original_receipt", true: "stale_attempt"}[stale], func(t *testing.T) {
 			s, run := neutralAuditService(t)
-			input := executionapi.LifecycleInput{Resource: &executionapi.ResourceIntent{Purpose: "fixture"}}
-			_, err := s.startWorkerOperation(run, string(executionapi.LifecycleCreateResource), "slow-effect", input.Resource)
+			input := executionbackend.LifecycleInput{Resource: &executionbackend.ResourceIntent{Purpose: "fixture"}}
+			_, err := s.startWorkerOperation(run, string(executionbackend.LifecycleCreateResource), "slow-effect", input.Resource)
 			require(t, err)
 			fixed, err := s.workerFlowContext(run)
 			require(t, err)
 			snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
 			require(t, err)
-			request := lifecycleRequest(snapshot, *s.operationByKey("slow-effect"), executionapi.LifecycleCreateResource, input)
+			request := lifecycleRequest(snapshot, *s.operationByKey("slow-effect"), executionbackend.LifecycleCreateResource, input)
 			ctx, cancel := context.WithCancel(context.Background())
 			defer cancel()
 			s.runContext = ctx
@@ -119,7 +121,7 @@ func TestSimplifiedLifecycleActorDoesNotWaitForEffect(t *testing.T) {
 			case message := <-s.workerMessages:
 				err = s.handleWorkerMessage(message)
 				if stale {
-					if !errors.Is(err, ErrWorkerTurnStale) || applied != 0 {
+					if !errors.Is(err, executionmodel.ErrTurnStale) || applied != 0 {
 						t.Fatalf("stale receipt applied: %v / %d", err, applied)
 					}
 				} else {

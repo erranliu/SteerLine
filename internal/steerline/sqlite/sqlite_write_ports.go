@@ -7,28 +7,37 @@ import (
 	"errors"
 	"slices"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 var _ persistence.Projects = (*SQLiteStore)(nil)
+
 var _ persistence.CommandStore = (*SQLiteStore)(nil)
+
 var _ persistence.WorkerMetadata = (*SQLiteStore)(nil)
+
 var _ persistence.Conversations = (*SQLiteStore)(nil)
 
 func persistenceError(err error) error {
 	if errors.Is(err, sql.ErrNoRows) {
-		return errors.Join(persistence.ErrNotFound, err)
+		return errors.Join(storageports.ErrNotFound, err)
 	}
-	return storageFailure(err, persistence.StorageIO)
+	return storageFailure(err, storageports.StorageIO)
 }
-func (s *SQLiteStore) EnqueueCommand(ctx context.Context, v CommandRecord) (CommandRecord, bool, error) {
-	var result CommandRecord
+
+func (s *SQLiteStore) EnqueueCommand(ctx context.Context, v storageports.CommandRecord) (storageports.CommandRecord, bool, error) {
+	var result storageports.CommandRecord
 	var created bool
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error { var e error; result, created, e = tx.EnqueueCommand(v); return e })
 	return result, created, err
 }
-func (s *SQLiteStore) AcceptDecisionAnswer(ctx context.Context, command CommandRecord, answer DecisionAnswer) (DecisionRecord, bool, error) {
-	var result DecisionRecord
+
+func (s *SQLiteStore) AcceptDecisionAnswer(ctx context.Context, command storageports.CommandRecord, answer executionmodel.DecisionAnswer) (executionmodel.DecisionRecord, bool, error) {
+	var result executionmodel.DecisionRecord
 	var accepted bool
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		var e error
@@ -37,46 +46,55 @@ func (s *SQLiteStore) AcceptDecisionAnswer(ctx context.Context, command CommandR
 	})
 	return result, accepted, err
 }
-func (s *SQLiteStore) UpdateCommand(ctx context.Context, v CommandRecord) error {
+
+func (s *SQLiteStore) UpdateCommand(ctx context.Context, v storageports.CommandRecord) error {
 	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.UpdateCommand(v) })
 }
-func (s *SQLiteStore) UpdateDiscardReceipt(ctx context.Context, v OperationRecord) error {
+
+func (s *SQLiteStore) UpdateDiscardReceipt(ctx context.Context, v executionmodel.OperationRecord) error {
 	if v.Kind != "discard_task" {
 		return errors.New("discard receipt requires its fixed discard operation")
 	}
 	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.UpdateOperation(v) })
 }
+
 func (s *SQLiteStore) Heartbeat(ctx context.Context, project string) error {
 	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return tx.heartbeatProjection(project) })
 }
+
 func (tx *sqliteTx) Query(ctx context.Context, project string) (DomainSnapshot, error) {
 	return QuerySnapshot(ctx, tx.tx, project)
 }
+
 func (s *SQLiteStore) WorkflowOwned(ctx context.Context, project, workflow, task string) (bool, error) {
 	var count int
 	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_runs WHERE project_identity=? AND workflow_run_id=? AND task_id=?`, project, workflow, task).Scan(&count)
 	return count == 1, err
 }
+
 func (tx *sqliteTx) OccupiedExecutions(ctx context.Context, project string) (int, error) {
 	var count int
 	err := tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM executions e JOIN workflow_runs w ON w.project_identity=e.project_identity AND w.workflow_run_id=e.workflow_run_id WHERE e.project_identity=? AND e.status IN ('pending','active','waiting_decision','blocked')`, project).Scan(&count)
 	return count, err
 }
+
 func (tx *sqliteTx) DeliveryCount(ctx context.Context, project, task string) (int, error) {
 	var count int
 	err := tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM task_deliveries WHERE project_identity=? AND task_id=?`, project, task).Scan(&count)
 	return count, err
 }
+
 func (tx *sqliteTx) PRBindingsOnOtherTasks(ctx context.Context, project, task, url string) (int, error) {
 	var count int
 	err := tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM workflow_runs w WHERE project_identity=? AND task_id<>? AND (json_extract(payload,'$.pr_url')=? OR EXISTS (SELECT 1 FROM json_each(w.payload,'$.pr_history') h WHERE h.value=?))`, project, task, url, url).Scan(&count)
 	return count, err
 }
-func (tx *sqliteTx) Task(ctx context.Context, project, id string) (TaskRecord, error) {
+
+func (tx *sqliteTx) Task(ctx context.Context, project, id string) (taskmodel.TaskRecord, error) {
 	var payload []byte
 	var version uint64
 	var status string
-	var v TaskRecord
+	var v taskmodel.TaskRecord
 	err := tx.tx.QueryRowContext(ctx, `SELECT payload,status,version FROM tasks WHERE project_identity=? AND task_id=?`, project, id).Scan(&payload, &status, &version)
 	if err != nil {
 		return v, persistenceError(err)
@@ -89,9 +107,10 @@ func (tx *sqliteTx) Task(ctx context.Context, project, id string) (TaskRecord, e
 	}
 	return v, nil
 }
-func (tx *sqliteTx) Workflow(ctx context.Context, project, id, task string) (WorkflowRunRecord, error) {
+
+func (tx *sqliteTx) Workflow(ctx context.Context, project, id, task string) (executionmodel.WorkflowRunRecord, error) {
 	var payload []byte
-	var v WorkflowRunRecord
+	var v executionmodel.WorkflowRunRecord
 	err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM workflow_runs WHERE project_identity=? AND workflow_run_id=? AND task_id=?`, project, id, task).Scan(&payload)
 	if err != nil {
 		return v, persistenceError(err)
@@ -104,9 +123,10 @@ func (tx *sqliteTx) Workflow(ctx context.Context, project, id, task string) (Wor
 	}
 	return v, nil
 }
-func (tx *sqliteTx) Execution(ctx context.Context, project, id, workflow string) (ExecutionRecord, error) {
+
+func (tx *sqliteTx) Execution(ctx context.Context, project, id, workflow string) (executionmodel.ExecutionRecord, error) {
 	var payload []byte
-	var v ExecutionRecord
+	var v executionmodel.ExecutionRecord
 	err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM executions WHERE project_identity=? AND execution_id=? AND workflow_run_id=?`, project, id, workflow).Scan(&payload)
 	if err != nil {
 		return v, persistenceError(err)
@@ -119,9 +139,10 @@ func (tx *sqliteTx) Execution(ctx context.Context, project, id, workflow string)
 	}
 	return v, nil
 }
-func (tx *sqliteTx) Attempt(ctx context.Context, project, id, execution string) (StepAttemptRecord, error) {
+
+func (tx *sqliteTx) Attempt(ctx context.Context, project, id, execution string) (executionmodel.StepAttemptRecord, error) {
 	var payload []byte
-	var v StepAttemptRecord
+	var v executionmodel.StepAttemptRecord
 	err := tx.tx.QueryRowContext(ctx, `SELECT payload FROM step_attempts WHERE project_identity=? AND attempt_id=? AND execution_id=?`, project, id, execution).Scan(&payload)
 	if err != nil {
 		return v, persistenceError(err)
@@ -134,7 +155,8 @@ func (tx *sqliteTx) Attempt(ctx context.Context, project, id, execution string) 
 	}
 	return v, nil
 }
-func (tx *sqliteTx) UpdateDiscardedTaskCAS(v TaskRecord, expected uint64) error {
+
+func (tx *sqliteTx) UpdateDiscardedTaskCAS(v taskmodel.TaskRecord, expected uint64) error {
 	if v.Status != "discarded" || v.Source != "native" || expected == 0 || v.Version != expected+1 {
 		return nativeErr("contract_mismatch", "cleanup requires the next discarded task version")
 	}
@@ -247,7 +269,7 @@ func (s *SQLiteStore) TransactCleanup(ctx context.Context, fn func(persistence.C
 	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return fn(tx) })
 }
 
-func (s *SQLiteStore) InitializeProject(ctx context.Context, authority ProjectTaskAuthority) error {
+func (s *SQLiteStore) InitializeProject(ctx context.Context, authority tasklegacy.ProjectTaskAuthority) error {
 	err := s.transactSQLite(ctx, func(tx *sqliteTx) error {
 		var count int
 		if err := tx.tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM tasks`).Scan(&count); err != nil {

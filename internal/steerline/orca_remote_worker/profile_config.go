@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 )
 
@@ -22,7 +22,7 @@ func NormalizeProfilePayload(payload []byte) ([]byte, []string, error) {
 	return encoded, []string{"目标环境：" + settings.EnvironmentID, "连接：" + settings.ConnectionID}, err
 }
 
-func ValidateProfileSelection(policy executionapi.ExecutionPolicy, agent string, codexPayload, orcaPayload, remotePayload []byte) error {
+func ValidateProfileSelection(policy executionbackend.ExecutionPolicy, agent string, codexPayload, orcaPayload, remotePayload []byte) error {
 	codex, err := codexworker.DecodeProfileConfig(codexPayload)
 	if err != nil {
 		return err
@@ -70,7 +70,7 @@ type profileConfigWire struct {
 
 func (c *ProfileConfig) UnmarshalJSON(data []byte) error {
 	var wire profileConfigWire
-	if err := executionapi.DecodeStrictJSON(data, &wire, "remote profile configuration has trailing JSON"); err != nil {
+	if err := executionbackend.DecodeStrictJSON(data, &wire, "remote profile configuration has trailing JSON"); err != nil {
 		return err
 	}
 	if wire.RemoteCancelAvailable == nil {
@@ -84,7 +84,7 @@ func (c *ProfileConfig) UnmarshalJSON(data []byte) error {
 
 func DecodeProfileConfig(payload []byte) (ProfileConfig, error) {
 	var config ProfileConfig
-	if err := executionapi.DecodeStrictJSON(payload, &config, "remote profile configuration has trailing JSON"); err != nil {
+	if err := executionbackend.DecodeStrictJSON(payload, &config, "remote profile configuration has trailing JSON"); err != nil {
 		return ProfileConfig{}, err
 	}
 	if err := config.Validate(); err != nil {
