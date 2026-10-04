@@ -2,9 +2,21 @@
 
 任务 ID：37；任务名称：多候选会话与唯一PR交付。唯一执行依据：[Spec](candidate-workers.spec.md)。硬前置：#36，一个独立实现 PR 交付。
 
-1. 从 #36 的持续 worker、主阶段、反馈和真实 PR 交付接口盘点 Task 单运行假设；复用现有 WorkflowRun、Execution、会话、Query/Command 与 SQLite，不先建立通用候选调度器或步骤规则包。
-2. 固定新格式的 single/multiple 策略、同一 claim 的共同 base 和精确候选 DTO；实现 start_candidate、版本竞争、启动意图和原请求对账，保留默认 single 路径。
-3. 所有执行/反馈/正文/恢复按精确候选及原会话定位，列表按 Task 聚合；补齐多候选交错、分页和当前/历史领取区分。
-4. 将 #36 的 PR 关联扩展到候选集合，接唯一 Delivery 事务及获胜/落选资格。候选启动与交付一并完成后启用 multiple 功能，不发布中心禁止 worker 提 PR 的半成品入口。
-5. 处理已知多合并、查询不明、交付后在途输出与迟到 PR；落选仅限制中心新增推进，停止和清理沿平台实际能力。聚合全部候选核验明确丢弃，保留历史和后继阻塞。
-6. 执行 MC1–MC7、共同约束回归和受影响 single/持久会话测试。记录请求、session、PR/Delivery 和残留资源证据，向 #38/#39 交接查询、命令与夹具。
+1. 盘点Task单运行假设，复用WorkflowRun、Execution、Query/Command、SQLite与持续worker；Task为实验组，不增加Candidate/Experiment权威或single/multiple模式。
+2. 接首个领取和人工start_candidate，各自冻结执行配置、共同base、独立原会话与工作区。开始时读取参与数，已达5个拒绝；不增加数量预留/CAS/槽位/队列，保留普通业务版本与幂等。
+3. 接人工abandon_candidate：核验已知PR未合并与前值，原请求持久退出实验；停止能力按原生命周期调用，未知或不支持不回滚放弃、不阻塞新实验。保留全部候选历史与未结算资源，重启不复活。
+4. 查询/反馈/正文精确绑定候选，提供配置、状态、耗时、最终回复与PR定位。仅人工对比，缺数据如实标明。
+5. 接包含放弃历史的PR集合核验和唯一Delivery；处理新增/放弃/交付竞争、多合并和迟到事实，区别单候选放弃与整体Task丢弃。
+6. 迁移完整消费者与代表测试，删旧单运行假设和重复实现；向 #38/#39交接真实查询/命令与中性夹具。实现后同步实际路径和版本，不修改已创建任务的固定契约或运行时DAG。
+
+## 测试计划
+
+下面TestMC1–TestMC9是本任务规划新增或迁入的顶层用例，当前不是已存在入口。优先复用已有单候选、事务、会话和恢复断言；实施时只补缺口，记录旧到新映射。若前置解耦已经改变包路径，开工Plan按实际唯一所有者更新命令，不保留第二测试路径。
+
+| 级别/组或场景ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
+| --- | --- | --- | --- | --- | --- |
+| 定向Go：MC1、MC2、MC7、MC9 | Windows；临时SQLite、Git和中性后端；无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-workers/identity-count -- ./internal/steerlineintegration -run '^TestMC[1279]$' -count=1` | 身份、开始检查和格式路径接通后 | 实际命中各ID及子测试；领取一次、串行第6次拒绝、放弃后再增；不要求数量并发严格不超额 | 对应输出目录的summary/Go JSON与固定身份记录 |
+| 定向Go：MC3–MC6、MC8 | 隔离真实服务/SQLite，可控来源与PR provider；无模型 | `go run ./cmd/test-feedback -out docs/validation/candidate-workers/flow-abandon -- ./internal/steerlineintegration -run '^TestMC[34568]$' -count=1` | 反馈、放弃与唯一交付接通后 | 原身份/请求、退出实验与真实停止区分、合并后拒绝、回滚及迟到事实正确；无fail/skip或零匹配 | 原始事件、PR/Delivery/停止回执与测试JSON |
+| L1固定最小入口 | 本次隔离STEERLINE_HOME，无原生开关 | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-workers/l1` | 定向稳定、自查完成后一次 | 守卫/原单候选代表命中且整体通过，记录源码及构建身份 | l1/summary.json与原始日志 |
+
+新用例复用已有隔离环境。用受控停止返回unsupported/unknown验证放弃与资源语义，用普通版本/请求竞争验证宽松数量，不建设五名额调度器。证据目录每次使用新的空目录，重跑不得覆盖旧证据。数量边界不启动五个真实模型；不选择Full/L2/L3或新的权限认证矩阵，真实后端增量归 #39。

@@ -2,14 +2,18 @@
 
 本图对应[主 roadmap](roadmap.md)中的活动规划。每项执行以独立 Spec/Plan 为准，运行时资格以中心 DAG 为权威。
 
+新增目标级规划 [任务执行控制台解耦与目录整理](three-line-modularization.md) 单独维护阶段依赖和共享修改条件。该目标尚无执行Spec/Plan，不把阶段编号登记为本页的任务或运行时前置；正式任务形成时再同步本页。
+
+[二期草稿与审核准入](phase2-draft-roadmap-admission.md)仅登记目标，主agent、独立审核和成熟度等待不成为一期前置，也不自动新增本页的正式任务或DAG边。#43–#53图示仍为原固定基础关系；受新准入机制影响的范围需在实施前重新固定对应Spec/Plan与正式依赖。
+
 ## 固定前置
 
 #36 的持续 worker 功能、#61 的执行需求/注册基础和 #63 的配置/原生绑定封套是后继可复用能力，不再作为活动实施任务；原验收范围分别以[持续 worker Spec](../spec/worker-flow.spec.md)、[执行隔离验收](../validation/execution-isolation-08-resolution/README.md)和[#63 Spec/Plan](../spec/core-decoupling-02-bindings.spec.md)为准。图中基础节点只表示后继依赖，未完成的原生验收限制不据此解除。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 37 | 多候选会话与唯一PR交付 | 候选创建与完整运行、反馈隔离、唯一交付及落选事实 | `#36` | [Spec](../spec/candidate-workers.spec.md) · [Plan](../spec/candidate-workers.plan.md) |
-| 38 | 候选观察界面 | 候选列表/选择和原会话反馈的 TUI 增量 | `#37` | [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) |
+| 37 | 多候选会话与唯一PR交付 | 不同配置人工实验、宽松开始检查、合并前放弃与唯一交付 | `#36` | [Spec](../spec/candidate-workers.spec.md) · [Plan](../spec/candidate-workers.plan.md) |
+| 38 | 候选观察界面 | 配置/结果、候选选择、反馈/放弃的TUI增量 | `#37` | [Spec](../spec/candidate-console.spec.md) · [Plan](../spec/candidate-console.plan.md) |
 | 39 | 多候选本机与远端真机验收 | 多候选本机/远端竞争和混合后端增量验收 | `#38` | [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) |
 | 40 | 固定版本与双入口 | 不可变构建、stable/dev 固定入口和身份 | 无 | [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) |
 | 41 | dev 隔离与 stable 提升 | 独立 home、静止可恢复会话下的受控提升 | `#40`、`#36` | [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) |
@@ -58,7 +62,7 @@ flowchart LR
 | 所有者 | 交接内容 | 集成规则 |
 | --- | --- | --- |
 | #36 | 主阶段、原会话输入/输出、PR 关联和 TaskDelivery | #37/#41/#45 消费；不另建步骤或专用恢复状态机 |
-| #37 | 精确候选身份、查询/反馈和唯一交付 | #38/#39 消费；#45 初版不依赖多候选 |
+| #37 | 各配置固定身份、宽松五候选检查、单候选放弃与唯一交付 | #38/#39消费；数量不用预留/硬槽，放弃不保证停止；#45初版不依赖分叉 |
 | #40/#41 | 固定版本选择、真实工作轮次及恢复条件 | 配置/服务恢复入口串行集成；空闲会话不被直接视作活动进程 |
 | #43/#47 | 规划 agent 的权限、受控工具及会话 | 可复用底层会话能力，规划 guard 与任务 worker 权限分别管理 |
 | #45/#46/#48 | 传输、草稿权威、正式发布与中心创建 | 复用 Query/Command；发布/反馈各自按同一个写者和原请求对账 |

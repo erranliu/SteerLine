@@ -4,7 +4,7 @@
 
 ## 目标与边界
 
-第二阶段让人在 SteerLine 原生 UI 中与 Codex 主 agent 讨论目标、审阅规划草稿和影响，明确确认任务创建与执行决策，并追溯目标、Spec/Plan、DAG、运行、PR 和交付证据。主 agent 仅支持 Codex，不提供多 agent 协作或子 agent 调用。任务执行仍沿用本机 Codex 与 Orca 远端两条后端；主 agent 会话和任务 worker 的执行身份分开。
+第二阶段让人在 SteerLine 原生 UI 中与 Codex 主 agent 讨论目标、审阅规划草稿和影响，明确确认任务创建与执行决策，并追溯目标、Spec/Plan、DAG、运行、PR 和交付证据。主agent仅支持Codex；后续[草稿审核目标](../roadmap/phase2-draft-roadmap-admission.md)增加由服务独立调度的固定审核角色，判断Spec内容与前置成熟度，不开放主agent调用子agent或通用多agent编排。以下协议/Publication细节是现有基础方案，受新准入流程影响的部分在正式实施前修订，并非已实现审核。任务执行仍沿用本机 Codex 与 Orca 远端两条后端；主 agent 会话和任务 worker 的执行身份分开。
 
 每个项目为主 agent 绑定一个持久的规划 worktree。新 session 使用同一目录的新 Codex thread，不继承旧 session 的消息、摘要或 fork 历史；worktree 中的文件状态保持原样。多个历史 session 可浏览，但同一规划 worktree 的写入轮次必须串行，避免两个 session 同时修改同一套文档。任务 worker 使用其执行身份绑定的工作区，不借用规划 worktree。
 
