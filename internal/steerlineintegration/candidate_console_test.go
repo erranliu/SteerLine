@@ -251,7 +251,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 		return false
 	})
 	step(key('r'))
-	step(tea.KeyMsg{Type: tea.KeyEnter})
+	step(key('d')) // Enter now opens interaction/session; d owns full history facts.
 	if !containsConsoleText(m.View(), "已放弃") {
 		t.Fatal("UI lost original exit/stop facts", m.View())
 	}

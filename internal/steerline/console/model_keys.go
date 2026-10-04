@@ -51,7 +51,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.scrollExpandedDetail(-8)
 		case "pgdown":
 			return m.scrollExpandedDetail(8)
-		case "s", "a", "m", "p", "x", "i", "{", "}", "b", "z":
+		case "s", "a", "m", "p", "x", "i", "{", "}", "f6", "f7", "b", "z":
 			m.detailExpanded = false
 		default:
 			return m, nil
@@ -78,9 +78,9 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 	switch key.String() {
-	case "{":
+	case "{", "f6":
 		return m.cycleCandidate(-1)
-	case "}":
+	case "}", "f7":
 		return m.cycleCandidate(1)
 	case "b":
 		return m.startAdditionalCandidate()
@@ -110,6 +110,13 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		state.lastRefresh = time.Time{}
 		return m, m.readProject(m.selected)
 	case "enter":
+		if row := m.selectedRow(m.selected); row != nil && row.run != nil {
+			if row.run.Decision != nil && row.run.Decision.Status == "pending" && row.run.Abandonment == nil && row.run.TaskStatus != "closed" && !feedbackInProgress(*state, row.run) {
+				return m.answerSelectedDecision()
+			}
+			state.panel, state.focus = 2, 1
+			return m, nil
+		}
 		m.detailExpanded = true
 		m.expandedDetailScroll = 0
 		return m, nil
@@ -228,6 +235,11 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleDecisionAnswerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	dialog := m.answer
 	if dialog == nil {
+		return m, nil
+	}
+	if key.String() == "f8" {
+		dialog.details = !dialog.details
+		dialog.scroll = 0
 		return m, nil
 	}
 	keyName := key.String()

@@ -1,0 +1,7 @@
+{
+  "status": "passed",
+  "platform": "linux/amd64 cross build",
+  "source_head": "b053ae30084f37427b242a8bea0c3af2a2aec4b6",
+  "sha256": "48A3E20771CA15F2CDC11E435EBB362FD12AEEB4E0A69B7BAF544F66F474E9F3",
+  "native_acceptance": "user confirmed separately"
+}

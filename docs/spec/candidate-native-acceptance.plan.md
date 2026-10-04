@@ -1,6 +1,6 @@
 # Plan：多候选本机验收
 
-任务 ID：39；任务名称：多候选本机验收。唯一执行依据：[Spec](candidate-native-acceptance.spec.md)。硬前置：#38 实现合入（传递包含 #37/#36），一个实现 PR 交付。#38 CC5 单独待人工补验，不阻塞本任务。
+任务 ID：39；任务名称：多候选本机验收。唯一执行依据：[Spec](candidate-native-acceptance.spec.md)。硬前置：#38 实现合入（传递包含 #37/#36），一个实现 PR 交付。#38 CC5 已由用户人工确认通过，不豁免本任务的本机 CN1–CN8 条件。
 
 1. 核对本地 Codex 与本机 Orca 的实际能力/认证，固定隔离仓库、SQLite、产品/helper 构建、两套本机 profile 及来源版本。远端已从本任务范围移除，不增加远端准入、权限实现或远端补验待办。
 2. 在 `tests/e2e/suites/candidates/` 接一个 L3 live 本机场景，复用现有 driver/native/controlled/evidence；两种本机后端在同 Task 内真实重叠工作，逐候选冻结配置/权限、独立会话/worktree/分支/PR。场景不得直接依赖业务 facade/平台实现，也不从生产或外层集成包导入 E2E internal。
