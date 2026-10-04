@@ -288,6 +288,9 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 	if run.PR.QueryError != nil && *run.PR.QueryError != "" {
 		lines = append(lines, "PR 查询失败："+safeTerminalText(*run.PR.QueryError))
 	}
+	if run.EnvironmentBlocker != nil {
+		lines = append(lines, "环境阻断："+safeTerminalText(run.EnvironmentBlocker.Fact.Reason+" · "+run.EnvironmentBlocker.Fact.Detail), "Ctrl+E 重新检查 · Ctrl+O 打开原终端；反馈草稿保留，环境就绪后再发送")
+	}
 	if run.Error != nil && *run.Error != "" {
 		lines = append(lines, "错误："+safeTerminalText(*run.Error))
 	}
@@ -321,7 +324,7 @@ func renderDetailContent(m Model, state projectState, row *consoleRow, width, he
 			lines = append(lines, renderDecisionIdentity(state, run, m.clock.Now())...)
 		}
 		lines = append(lines, "决策阶段："+decisionStatusLabel(run.Decision.Status), "当前答案："+safeTerminalText(activityview.DecisionAnswerSummary(run)))
-	} else if run.FinishTaskStatus == "waiting_decision" {
+	} else if run.FinishTaskStatus == "waiting_decision" && run.EnvironmentBlocker == nil {
 		lines = append(lines, "待决策状态存在，但当前 decision_id/问题记录缺失或尚未同步；答案通道未启用。")
 	}
 	if state.ref.Presentation.TaskAuthority == "native" {

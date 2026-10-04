@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline"
+	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
@@ -192,16 +193,16 @@ func testIntegratedNativeSessionGate(t *testing.T, changeConfig bool) {
 		submitIntegrationAnswer(t, ctx, fixture.config, current.run)
 		answeredHosts := map[string]bool{}
 		current = waitIntegrationRun(t, ctx, secondService, fixture.config, func(run *steerline.Run, execution *steerline.ExecutionRecord) bool {
-			if run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.HostTarget != nil && !answeredHosts[run.Decision.ID] {
-				answeredHosts[run.Decision.ID] = true
+			if run.EnvironmentBlocker != nil && !answeredHosts[run.EnvironmentBlocker.ID] {
+				answeredHosts[run.EnvironmentBlocker.ID] = true
 				submitIntegrationAnswerOption(t, ctx, fixture.config, run, "recheck_environment")
 			}
-			if next.loss == "send" && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute == nil && run.Decision.Request.HostTarget == nil && execution.Target.Dispatch == "ctx-4" && execution.CurrentTurnID != execution.LastStoppedTurnID && !answeredHosts[run.Decision.ID] {
+			if next.loss == "send" && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute == nil && run.EnvironmentBlocker == nil && execution.Target.Dispatch == "ctx-4" && execution.CurrentTurnID != execution.LastStoppedTurnID && !answeredHosts[run.Decision.ID] {
 				answeredHosts[run.Decision.ID] = true
 				submitIntegrationAnswer(t, ctx, fixture.config, run)
 			}
 			return execution.Target.Dispatch == fmt.Sprintf("ctx-%d", next.dispatch) && execution.CurrentTurnID == execution.LastStoppedTurnID &&
-				run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.HostTarget == nil && run.Decision.Request.QuestionRoute == nil
+				run.Decision != nil && run.Decision.Status == "pending" && run.EnvironmentBlocker == nil && run.Decision.Request.QuestionRoute == nil
 		})
 		state, err := testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
 		require(t, err)
@@ -335,7 +336,7 @@ func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) inte
 	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", bare)
 
 	policy := executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "none"}, Network: "deny", Escalation: "deny"}
-	publisher := executionapi.PublisherHostService
+	publisher := executionapi.PublisherWorker
 	if host == "orca" {
 		policy.Filesystem.WriteScope, policy.Filesystem.GitMetadataWrite, policy.Network = "workspace", true, "allow"
 		publisher = executionapi.PublisherWorker
@@ -742,6 +743,19 @@ func submitIntegrationAnswer(t *testing.T, ctx context.Context, config steerline
 
 func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config steerline.Config, run *steerline.Run, option string) {
 	t.Helper()
+	if option == "open_terminal" || option == "recheck_environment" {
+		target, err := clientcontracts.EnvironmentTarget(run)
+		require(t, err)
+		request, err := steerline.SubmitControlTargeted(config, option, steerline.ControlPayload{Environment: target}, "fixture", newID(), "", nil)
+		require(t, err)
+		receipt, err := steerline.WaitControlReceipt(ctx, config, request.RequestID, 10*time.Millisecond)
+		require(t, err)
+		if receipt.Status != "applied" && receipt.Status != "failed" {
+			t.Fatalf("environment command: %+v", receipt)
+		}
+		return
+	}
+
 	answer := steerline.AnswerOptions{
 		RunID: run.RunID, DecisionID: run.Decision.ID, Option: option, Note: "Continue the original work.",
 		By: "operator", ExpectedVersion: run.Decision.Version,

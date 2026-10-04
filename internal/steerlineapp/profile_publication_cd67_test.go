@@ -3,15 +3,15 @@ package steerlineapp
 import (
 	"context"
 	"encoding/json"
+	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"testing"
 )
 
@@ -41,7 +41,7 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 	project, err := json.Marshal(map[string]any{
 		"repository": repository, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion,
 		"git": Command{Executable: "git"}, "execution_policy": workspacePolicyFixture(),
-		"publication_policy": map[string]string{"publisher": PublisherExecutionProfile}, "pr": provider,
+		"publication_policy": map[string]string{"publisher": "worker"}, "pr": provider,
 	})
 	require(t, err)
 	path := filepath.Join(t.TempDir(), "project.json")
@@ -67,109 +67,26 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 }
 
 func mixedPublicationProfiles() []ExecutionProfile {
-	host := executionapi.PublicationPolicy{Publisher: "host_service"}
-	worker := executionapi.PublicationPolicy{Publisher: "worker"}
 	localCodex, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex.exe", WindowsSandbox: "elevated"})
 	orcaCodex, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex.exe", WindowsSandbox: "unelevated"})
 	orcaOptions, _ := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{Executable: "orca.exe", Shell: "powershell.exe", WaitTimeout: "15m"})
 	return []ExecutionProfile{
-		{ID: "local", Name: "Local", Host: "local", Agent: "codex", ConfiguredPublicationPolicy: &host, ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: localCodex}}},
-		{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ConfiguredPublicationPolicy: &worker, ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaCodex}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaOptions}}},
+		{ID: "local", Name: "Local", Host: "local", Agent: "codex", ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: localCodex}}},
+		{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ImplementationConfigs: []executionapi.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaCodex}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaOptions}}},
 	}
 }
 
-func TestProfilePublicationMixedRoutesAndFrozenResponsibility(t *testing.T) {
-	if runtime.GOOS != "windows" {
-		t.Skip("current execution policy mappings require Windows")
-	}
-	t.Setenv("STEERLINE_HOME", t.TempDir())
-	writeJSON := func(path string, value any) {
-		t.Helper()
-		data, err := json.Marshal(value)
-		require(t, err)
-		require(t, os.WriteFile(path, data, 0600))
-	}
-	profiles := mixedPublicationProfiles()
-	writeJSON(GlobalExecutionConfigPath(), map[string]any{"version": 2, "default_execution_profile": "local", "execution_profiles": profiles})
-	path := filepath.Join(t.TempDir(), "project.json")
-	writeJSON(path, map[string]any{
-		"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion,
-		"execution_policy": workspacePolicyFixture(), "publication_policy": map[string]string{"publisher": PublisherExecutionProfile}, "pr": hostPublicationProviderFixture(),
-	})
-	c, err := LoadConfig(path)
-	require(t, err)
-	if c.PublicationPolicy.Publisher != "host_service" {
-		t.Fatal("default route did not resolve its explicit publisher")
-	}
-	for _, profile := range c.AvailableExecutionProfiles() {
-		original := *profile.ConfiguredPublicationPolicy
-		profile.ConfiguredPublicationPolicy.Publisher = "changed"
-		for _, fresh := range c.AvailableExecutionProfiles() {
-			if fresh.ID == profile.ID && *fresh.ConfiguredPublicationPolicy != original {
-				t.Fatal("returned profile aliases the configured publication responsibility")
-			}
-		}
-		*profile.ConfiguredPublicationPolicy = original
-		selected, bound, err := c.ResolveExecutionProfile(profile.ID, profile.Digest())
-		require(t, err)
-		if bound.PublicationPolicy != *profile.ConfiguredPublicationPolicy || selected.PublicationPolicy != bound.PublicationPolicy || !bound.MatchesConfig(selected) {
-			t.Fatal("selected route lost its publication responsibility")
-		}
-		if (bound.Publication.Create.Executable != "") != (bound.Host == "local") {
-			t.Fatal("publication create command was bound using another route's policy")
-		}
-		fixed := bound.Freeze()
-		if !testVerifyFixedExecutionProfile(fixed) {
-			t.Fatal("resolved profile cannot be restored from its execution snapshot")
-		}
-		before := bound.Digest()
-		unconfigured := bound
-		unconfigured.ConfiguredPublicationPolicy = nil
-		if unconfigured.Digest() != before {
-			t.Fatal("configuration-only policy changed the frozen digest")
-		}
-		changed := c
-		changed.PublicationPolicy = executionapi.PublicationPolicy{Publisher: "worker"}
-		changed.PR = publication.Config{Kind: "gitea", BaseURL: "https://changed.invalid", Repository: "changed/repo"}
-		restored := changed.ApplyFixedExecutionProfile(fixed)
-		if restored.PublicationPolicy != fixed.PublicationPolicy || digestValue(restored.PR) != digestValue(fixed.Publication.Provider) || digestValue(restored.Git) != digestValue(fixed.Publication.Git) || restored.Remote != fixed.Publication.Remote || restored.Branch != fixed.Publication.BaseBranch || !boundProfile(restored, profile).MatchesConfig(restored) {
-			t.Fatal("current profile/project changed the original execution publisher/provider")
+func TestSimplifiedWorkerOnlyPublication(t *testing.T) {
+	for _, publisher := range []string{"host_service", "execution_profile", ""} {
+		if (executionapi.PublicationPolicy{Publisher: publisher}).Validate() == nil {
+			t.Fatalf("retired publisher accepted: %q", publisher)
 		}
 	}
-	// Switching repeatedly on a resolved Config must still consult each profile.
-	orca, _, err := c.ResolveExecutionProfile("orca", "")
-	require(t, err)
-	local, _, err := orca.ResolveExecutionProfile("local", "")
-	require(t, err)
-	if local.PublicationPolicy.Publisher != "host_service" || orca.PublicationPolicy.Publisher != "worker" {
-		t.Fatal("last selected publisher leaked into another profile")
+	if err := (executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}).Validate(); err != nil {
+		t.Fatal(err)
 	}
-}
-
-func TestProfilePublicationRequiresExplicitProjectAndProfilePolicies(t *testing.T) {
-	c := Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionapi.PublicationPolicy{Publisher: PublisherExecutionProfile}, PR: hostPublicationProviderFixture(), ExecutionProfiles: mixedPublicationProfiles()}
-	c = bindUnitDirectory(t, c)
-	for _, publisher := range []string{"", PublisherExecutionProfile, "automatic"} {
-		profiles := mixedPublicationProfiles()
-		profiles[1].ConfiguredPublicationPolicy = &executionapi.PublicationPolicy{Publisher: publisher}
-		c.ExecutionProfiles = profiles
-		if err := c.ValidateProfiles(); err == nil || !strings.Contains(err.Error(), "publication_policy.publisher") {
-			t.Fatalf("invalid unresolved publisher accepted: %q / %v", publisher, err)
-		}
-	}
-	c.ExecutionProfiles = mixedPublicationProfiles()
-	c.ExecutionProfiles[1].ConfiguredPublicationPolicy = nil
-	if err := c.ValidateProfiles(); err == nil || !strings.Contains(err.Error(), "requires publication_policy") {
-		t.Fatalf("missing profile responsibility accepted: %v", err)
-	}
-	c.PublicationPolicy.Publisher = "host_service"
-	c.ExecutionProfiles = mixedPublicationProfiles()
-	for _, profile := range c.AvailableExecutionProfiles() {
-		if profile.PublicationPolicy.Publisher != "host_service" {
-			t.Fatal("global profile silently overrode a fixed project policy")
-		}
-	}
-	if err := (executionapi.PublicationPolicy{Publisher: PublisherExecutionProfile}).Validate(); err == nil {
-		t.Fatal("unresolved project selection accepted as an execution responsibility")
+	var profile steerline.ExecutionProfile
+	if err := contracts.DecodeJSON([]byte(`{"id":"local","name":"Local","publication_policy":{"publisher":"worker"}}`), &profile); err == nil {
+		t.Fatal("per-profile publication override accepted")
 	}
 }

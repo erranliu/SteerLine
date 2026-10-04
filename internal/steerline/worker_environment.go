@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
@@ -23,8 +22,8 @@ func (s *Service) environmentTurn(run *Run) string {
 }
 
 func (s *Service) blockWorkerEnvironment(run *Run, fact contracts.HostFact) error {
-	wf, execution := s.workflowRecords(run)
-	if execution == nil || execution.Environment == nil || wf.Phase == "completed" || wf.Phase == "abandoned" || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
+	workflow, execution := s.workflowRecords(run)
+	if execution == nil || execution.Environment == nil || workflow.Phase == "completed" || workflow.Phase == "abandoned" || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nil
 	}
 	env := execution.Environment
@@ -35,49 +34,75 @@ func (s *Service) blockWorkerEnvironment(run *Run, fact contracts.HostFact) erro
 	if fact.Runtime != "" && execution.Process != nil && (fact.Runtime != execution.Process.RuntimeID || fact.Terminal != execution.Process.Terminal || fact.Incarnation != execution.Process.Incarnation) && fact.Reason != "identity_mismatch" {
 		return nil
 	}
-	existing := env.Blocker
-	sameBlocker := existing != nil && existing.TurnID == turnID && existing.Fact.Reason == fact.Reason && existing.Fact.Source == fact.Source
-	if sameBlocker && (wf.Phase == "waiting_pr_merge" || run.Decision != nil && run.Decision.Request.HostTarget != nil && run.Decision.Request.HostTarget.BlockerID == existing.ID) {
-		return nil
-	}
 	if fact.Reason == "tool_initialization_failed" || fact.Reason == "preparation_failed" {
 		env.Ready = false
 		env.Preparation.Invalidated = true
 	}
-	if env.Blocker != nil && run.Decision != nil && run.Decision.Request.HostTarget != nil && run.Decision.Status == "pending" {
-		s.setDecisionStatus(run, "superseded")
+	if env.Blocker == nil || env.Blocker.TurnID != turnID || env.Blocker.Fact.Reason != fact.Reason || env.Blocker.Fact.Source != fact.Source {
+		env.Blocker = &WorkerHostBlocker{ID: newID(), Version: 1, Fact: fact, TurnID: turnID, ObservedAt: now()}
+	} else if env.Blocker.Fact != fact {
+		env.Blocker.Fact, env.Blocker.ObservedAt = fact, now()
+		env.Blocker.Version++
 	}
-	env.Blocker = &WorkerHostBlocker{ID: newID(), Fact: fact, TurnID: turnID, ObservedAt: now()}
-	if sameBlocker {
-		env.Blocker.ID = existing.ID
-		env.Blocker.ObservedAt = existing.ObservedAt
-		env.Blocker.RecheckOperationID = existing.RecheckOperationID
+	if workflow.Phase != "waiting_pr_merge" {
+		workflow.Phase, workflow.UpdatedAt = "waiting_decision", now()
 	}
-	// PR observation and settled delivery outrank late terminal diagnostics.
-	if wf.Phase == "waiting_pr_merge" && (run.Decision == nil || run.Decision.Status != "answer_saved") {
-		return s.commitWorker(run)
+	execution.Error = ptr("Worker environment blocked: " + fact.Reason + ": " + fact.Detail)
+	s.refreshRun(run)
+	s.note(run, "steer", "environment", fact.Confidence, "worker environment blocked", fact.Reason, map[string]any{"source": fact.Source, "turn_id": turnID})
+	if run.Decision != nil && run.Decision.Status == "answer_saved" {
+		return s.rejectUnsentBlockedAnswer(run)
 	}
-	if run.Decision != nil && run.Decision.Request.HostTarget == nil && (run.Decision.Status == "pending" || run.Decision.Status == "answer_saved") {
-		if env.DeferredDecisionID == "" {
-			env.DeferredDecisionID = run.Decision.ID
-		}
-	}
-	options := []executionapi.DecisionOption{{ID: "recheck_environment", Label: "重新检查环境", Receiver: "center", Action: "recheck_environment"}}
-	if execution.Process != nil || env.OriginalTerminal != nil {
-		options = append([]executionapi.DecisionOption{{ID: "open_terminal", Label: "打开原 terminal", Receiver: "center", Action: "open_terminal"}}, options...)
-	}
-	request := DecisionRequest{Question: "Worker 环境需要核实", Context: fmt.Sprintf("原因：%s\n可信程度：%s\n来源：%s\n%s\n请在原生界面处理必要授权，然后重新检查。", fact.Reason, fact.Confidence, fact.Source, fact.Detail), Options: options, AllowFreeText: true, HostTarget: &HostActionTarget{ExecutionID: execution.ExecutionID, TurnID: turnID, BlockerID: env.Blocker.ID}}
-	decision, err := WriteDecisionRequest(run, request)
+	return s.commitWorker(run)
+}
+
+// A saved answer without an input intent is not a delivery queue. Preserve its
+// audit record and original question, but require a new answer after recheck.
+// Once an input could have been sent, only its original receipt may settle it.
+func (s *Service) rejectUnsentBlockedAnswer(run *Run) error {
+	answer, err := ReadDecisionAnswer(run)
 	if err != nil {
 		return err
 	}
-	s.setRunDecision(run, decision)
-	env.Blocker.DecisionID = decision.ID
-	wf.Phase, wf.UpdatedAt = "waiting_decision", now()
-	execution.Error = ptr(request.Context)
-	s.refreshRun(run)
-	s.note(run, "steer", "environment", fact.Confidence, "worker environment blocked", fact.Reason, map[string]any{"source": fact.Source, "turn_id": turnID})
-	return s.commitWorker(run)
+	ctx := context.Background()
+	command, err := s.commandStore.CommandByIdempotency(ctx, s.Config.identity, decisionAnswerKey(answer))
+	if err != nil {
+		return err
+	}
+	e := s.executionRecord(run)
+	for _, key := range []string{"worker-turn:" + e.ExecutionID + ":" + command.CommandID, "worker-live-feedback:" + e.ExecutionID + ":" + command.CommandID, "worker-question-answer:" + e.ExecutionID + ":" + answer.DecisionID} {
+		if s.operationByKey(key) != nil {
+			return s.commitWorker(run)
+		}
+	}
+	for _, operation := range s.domain.Operations {
+		if operation.Kind != string(executionapi.LifecycleCreateResource) || operation.LifecycleIdentity == nil || operation.LifecycleIdentity.ExecutionID != e.ExecutionID || operation.LifecycleIdentity.Ref.AttemptID != run.AttemptID {
+			continue
+		}
+		var resource executionapi.ResourceIntent
+		if json.Unmarshal(operation.Request, &resource) == nil && resource.TurnID == command.CommandID {
+			return s.commitWorker(run)
+		}
+	}
+	if s.lifecycleEffectPending(run.RunID) || s.hasUnknownWorkerOperation(run) {
+		return s.commitWorker(run)
+	}
+	old := *run.Decision
+	s.setDecisionStatus(run, "superseded")
+	s.setRunDecision(run, nil)
+	question, err := WriteDecisionRequest(run, old.Request)
+	if err != nil {
+		return err
+	}
+	s.setRunDecision(run, question)
+	s.decisionRecord(run).RecoveryOfDecision = old.ID
+	if e.PendingCommandID == command.CommandID {
+		e.PendingCommandID, e.PendingTurnID = "", ""
+	}
+	if err := s.commitWorker(run); err != nil {
+		return err
+	}
+	return (CommandService{Store: s.commandStore, Project: s.Config.identity}).SetStatus(ctx, command, "rejected", mustJSON(map[string]string{"code": "environment_blocked", "error": "unsent answer was cancelled by the environment blocker; review and submit a new answer after recheck"}))
 }
 
 func (s *Service) observeWorkerEnvironment(ctx context.Context, run *Run) error {
@@ -117,9 +142,6 @@ func (s *Service) observeWorkerEnvironment(ctx context.Context, run *Run) error 
 			return err
 		}
 	}
-	if env.Blocker != nil && wf.Phase != "waiting_pr_merge" && (run.Decision == nil || run.Decision.Request.HostTarget == nil) {
-		return s.blockWorkerEnvironment(run, env.Blocker.Fact)
-	}
 	if !env.Preparation.Verified && !now().Before(env.Preparation.Deadline) {
 		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "preparation_unverified", Confidence: "unverified", Source: "preparation.deadline", Turn: env.Preparation.TurnID})
 	}
@@ -134,6 +156,9 @@ func (s *Service) observeWorkerEnvironment(ctx context.Context, run *Run) error 
 // Preparation owns one persisted budget spanning resource creation and host
 // settlement. Each actor pass performs bounded work; restarts reuse its intent.
 func (s *Service) advanceWorkerPreparation(ctx context.Context, run *Run) error {
+	if s.lifecycleEffectPending(run.RunID) {
+		return nil
+	}
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
@@ -238,6 +263,9 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *Run) error 
 		return s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "identity_mismatch", Confidence: "confirmed", Source: "readiness.probe.identity"})
 	}
 	if err = s.executeHostAction(prepareCtx, run, lifecycle, executionapi.HostActionInput{Kind: executionapi.HostPrepareProbeFiles, Probe: &identity}); err != nil {
+		if errors.Is(err, errLifecycleEffectPending) {
+			return nil
+		}
 		if ctx.Err() != nil {
 			return nil
 		}
@@ -336,7 +364,7 @@ func (s *Service) finishWorkerPreparation(ctx context.Context, run *Run, executi
 		if run.Decision.Status == "pending" {
 			s.setDecisionStatus(run, "superseded")
 		}
-		s.restoreEnvironmentDecision(run)
+		s.setRunDecision(run, nil)
 	}
 	if !now().Before(p.Deadline) && !execution.Environment.Ready && execution.Environment.Blocker == nil {
 		if err := s.blockWorkerEnvironment(run, contracts.HostFact{Reason: "preparation_unverified", Confidence: "unverified", Source: "preparation.deadline", Turn: turn.TurnID}); err != nil {
@@ -354,6 +382,9 @@ func (s *Service) finishWorkerPreparation(ctx context.Context, run *Run, executi
 		}
 		return s.executeHostAction(ctx, run, lifecycle, hostInput)
 	}(); err != nil {
+		if errors.Is(err, errLifecycleEffectPending) {
+			return nil
+		}
 		execution.LastEvent = ptr("准备证据已保存；文件清理待核实：" + err.Error())
 	}
 	if _, lifecycle, _, _, hostErr := s.hostEnvironmentForRun(run); hostErr == nil {
@@ -366,36 +397,17 @@ func (s *Service) finishWorkerPreparation(ctx context.Context, run *Run, executi
 	return s.advanceWorkerPreparation(ctx, run)
 }
 
-func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer DecisionAnswer, commandID string) error {
+func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, action string, input HostActionTarget, commandID string) error {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
 	}
 	execution, env := fixed.execution, fixed.execution.Environment
-	target := run.Decision.Request.HostTarget
-	if env == nil || env.Blocker == nil || target == nil || target.ExecutionID != execution.ExecutionID || target.TurnID != env.Blocker.TurnID || target.BlockerID != env.Blocker.ID || run.Decision.ID != env.Blocker.DecisionID {
-		return nativeErr("stale_version", "host action target is no longer current")
+	target := input
+	if env == nil || env.Blocker == nil || target.ExecutionID != execution.ExecutionID || target.RunID != run.RunID || target.AttemptID != run.AttemptID || target.TurnID != env.Blocker.TurnID || target.BlockerID != env.Blocker.ID || target.Version != env.Blocker.Version {
+		return nativeErr("stale_version", "environment action target is no longer current")
 	}
-	if answer.OptionID != "open_terminal" && answer.OptionID != "recheck_environment" {
-		seen := false
-		for _, feedback := range env.DeferredFeedback {
-			if feedback.DecisionID == answer.DecisionID {
-				seen = true
-			}
-		}
-		if !seen {
-			env.DeferredFeedback = append(env.DeferredFeedback, EnvironmentFeedback{DecisionID: answer.DecisionID, TurnID: target.TurnID, CommandID: commandID})
-		}
-		request := run.Decision.Request
-		decision, err := WriteDecisionRequest(run, request)
-		if err != nil {
-			return err
-		}
-		s.setRunDecision(run, decision)
-		env.Blocker.DecisionID = decision.ID
-		return s.commitWorker(run)
-	} // Saved text stays pending; never inject into a host menu.
-	if answer.OptionID == "open_terminal" {
+	if action == "open_terminal" {
 		identity := execution.Process
 		if identity == nil {
 			identity = env.OriginalTerminal
@@ -416,19 +428,17 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		}
 		original := *identity
 		authorization := &executionapi.HostActionAuthorization{ExecutionID: target.ExecutionID, AttemptID: run.AttemptID, TurnID: target.TurnID,
-			DecisionID: answer.DecisionID, BlockerID: target.BlockerID, DecisionVersion: run.Decision.Version}
+			CommandID: commandID, BlockerID: target.BlockerID, BlockerVersion: target.Version}
 		if err = s.executeHostAction(ctx, run, lifecycle, executionapi.HostActionInput{Kind: executionapi.HostOpenOriginal, Process: &original, Authorization: authorization}); err != nil {
 			return err
 		}
-		return s.renewEnvironmentDecision(run)
+		return nil
 	}
 	blocker := env.Blocker
-	actionDecisionID := run.Decision.ID
-	actionDecisionVersion := run.Decision.Version
 	key := "environment-recheck:" + execution.ExecutionID + ":" + blocker.ID
 	op := s.operationByKey(key)
 	if op == nil {
-		id, err := s.startWorkerOperation(run, "environment_recheck", key, *target)
+		id, err := s.startWorkerOperation(run, "environment_recheck", key, target)
 		if err != nil {
 			return err
 		}
@@ -445,23 +455,23 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		}
 		fact, err := host.ObserveHost(ctx, *execution.Process)
 		if err != nil || fact.Reason != "" {
-			return s.renewEnvironmentDecision(run)
+			return nativeErr("environment_unverified", "original environment is not ready; no input was sent")
 		}
 		if err := s.verifyHostExecutionEvidence(ctx, run, execution); err != nil {
-			return s.renewEnvironmentDecision(run)
+			return nativeErr("environment_unverified", "original environment is not ready; no input was sent")
 		}
 	}
 	turn, turnErr := s.currentHostTurn(run)
 	if turnErr != nil {
-		return s.renewEnvironmentDecision(run)
+		return nativeErr("environment_unverified", "original environment is not ready; no input was sent")
 	}
 	if turn != nil && !turn.HasDispatch && turn.TaskID != "" && execution.Process != nil {
 		lifecycle, _, err := s.lifecycleForRun(run)
 		if err != nil {
-			return s.renewEnvironmentDecision(run)
+			return nativeErr("environment_unverified", "original environment is not ready; no input was sent")
 		}
 		if _, err := s.reconcilePendingLifecycleSteps(ctx, run, lifecycle); err != nil {
-			return s.renewEnvironmentDecision(run)
+			return nativeErr("environment_unverified", "original environment is not ready; no input was sent")
 		}
 		turn, _ = s.currentHostTurn(run)
 	}
@@ -480,7 +490,7 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		}
 		turn, _ = s.currentHostTurn(run)
 		if !env.Preparation.Verified && !now().Before(env.Preparation.Deadline) {
-			return s.renewEnvironmentDecision(run)
+			return nativeErr("environment_unverified", "original environment is not ready; no input was sent")
 		}
 	}
 	if blocker.Fact.Reason == "business_start_unverified" && turn != nil && execution.CurrentTurnID != turn.TurnID {
@@ -491,18 +501,18 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		}
 		turn, _ = s.currentHostTurn(run)
 		if turn == nil || execution.CurrentTurnID != turn.TurnID && !turn.Settled {
-			return s.renewEnvironmentDecision(run)
+			return nativeErr("environment_unverified", "original environment is not ready; no input was sent")
 		}
 	}
 	// Polling can install a newer blocker; an old action cannot clear it.
-	if env.Blocker == nil || env.Blocker.ID != blocker.ID || run.Decision == nil || run.Decision.ID != actionDecisionID || run.Decision.Version != actionDecisionVersion || s.environmentTurn(run) != target.TurnID {
+	if env.Blocker == nil || env.Blocker.ID != blocker.ID || env.Blocker.Version != target.Version || s.environmentTurn(run) != target.TurnID {
 		return s.changeWorkerOperation(run, op.OperationID, "confirmed", commandID, mustJSON(map[string]string{"result": "stale_target", "blocker_id": blocker.ID}), "")
 	}
 	// Reconcile original resource/Dispatch operations through their exact saved
 	// keys. No retry creates another terminal or Task when a result is unknown.
 	if env.Preparation.Invalidated {
 		if turn == nil || !turn.Settled {
-			return s.renewEnvironmentDecision(run)
+			return nativeErr("environment_unverified", "original environment is not ready; no input was sent")
 		}
 		host, _, _, _, hostErr := s.hostEnvironmentForRun(run)
 		if hostErr != nil {
@@ -516,14 +526,7 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		started := now()
 		env.Preparation = &WorkerPreparation{TurnID: newID(), Nonce: newID(), StartedAt: started, Deadline: started.Add(budget)}
 	}
-	if ok, err := s.reconcileEnvironmentQuestion(ctx, run); err != nil {
-		return err
-	} else if !ok {
-		return s.renewEnvironmentDecision(run)
-	}
-	s.setDecisionStatus(run, "applied")
 	env.Blocker = nil
-	s.restoreEnvironmentDecision(run)
 	execution.RecoveryRequired = false
 	if fixed.workflow.Phase == "waiting_decision" && execution.DecisionID == "" {
 		fixed.workflow.Phase = "queued"
@@ -532,9 +535,6 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		}
 	}
 	if err := s.changeWorkerOperation(run, op.OperationID, "confirmed", commandID, mustJSON(map[string]string{"blocker_id": blocker.ID}), ""); err != nil {
-		return err
-	}
-	if err := s.flushEnvironmentFeedback(ctx, run); err != nil {
 		return err
 	}
 	if env.Preparation.Verified && !env.Preparation.Invalidated {
@@ -548,172 +548,4 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *Run, answer D
 		}
 	}
 	return s.advanceWorkerPreparation(ctx, run)
-}
-
-func (s *Service) reconcileEnvironmentQuestion(ctx context.Context, run *Run) (bool, error) {
-	e := s.executionRecord(run)
-	env := e.Environment
-	if env.DeferredDecisionID == "" {
-		return true, nil
-	}
-	var record *DecisionRecord
-	for i := range s.domain.Decisions {
-		if s.domain.Decisions[i].DecisionID == env.DeferredDecisionID {
-			record = &s.domain.Decisions[i]
-			break
-		}
-	}
-	if record == nil {
-		return false, errors.New("original host-blocked question disappeared")
-	}
-	var request DecisionRequest
-	if json.Unmarshal(record.Request, &request) != nil {
-		return false, errors.New("original question request is invalid")
-	}
-	if request.QuestionRoute == nil {
-		return true, nil
-	}
-	settled := e.LastStoppedTurnID == request.QuestionRoute.TurnID ||
-		env.Preparation != nil && env.Preparation.Verified && env.Preparation.TurnID == request.QuestionRoute.TurnID
-	if !settled {
-		return true, nil
-	}
-	status := "superseded"
-	if record.Status == "answer_saved" {
-		var answer DecisionAnswer
-		if json.Unmarshal(record.Answer, &answer) != nil {
-			return false, errors.New("original saved answer is invalid")
-		}
-		op := s.operationByKey("worker-question-answer:" + e.ExecutionID + ":" + record.DecisionID)
-		if op != nil {
-			if op.Status != "confirmed" && op.Status != "accepted" {
-				input := executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{DecisionID: record.DecisionID, QuestionID: request.QuestionRoute.QuestionID,
-					Message: workerFeedbackText(answer, request), Answer: &executionapi.Answer{Answers: answer.Answers}}}
-				confirmed, err := s.reconcileDeferredLifecycleFeedback(ctx, run, op, input, request.QuestionRoute, request.QuestionRoute.TurnID)
-				if err != nil || !confirmed {
-					return false, err
-				}
-			}
-			status = "reply_accepted"
-		}
-	}
-	if record.Status == "pending" || record.Status == "answer_saved" {
-		record.Status = status
-		record.Version++
-		record.UpdatedAt = now()
-		s.markWorkerDecisionWrite(record.DecisionID)
-	}
-	env.DeferredDecisionID = ""
-	return true, nil
-}
-
-func (s *Service) restoreEnvironmentDecision(run *Run) {
-	execution := s.executionRecord(run)
-	env := execution.Environment
-	turn, turnErr := s.currentHostTurn(run)
-	if turnErr != nil || turn == nil {
-		return
-	}
-	execution.DecisionID = env.DeferredDecisionID
-	env.DeferredDecisionID = ""
-	s.refreshRun(run)
-	if run.Decision != nil && run.Decision.Request.QuestionRoute != nil {
-		active := turn.TurnID == run.Decision.Request.QuestionRoute.TurnID && !turn.Settled
-		if !active && run.Decision.Status == "pending" {
-			s.setDecisionStatus(run, "superseded")
-			execution.DecisionID = ""
-			s.refreshRun(run)
-		}
-	}
-}
-
-func (s *Service) renewEnvironmentDecision(run *Run) error {
-	// Preserve the accepted answer and remark in history; a new question allows
-	// another explicit check without changing the blocker or operation identity.
-	request := run.Decision.Request
-	s.setDecisionStatus(run, "applied")
-	decision, err := WriteDecisionRequest(run, request)
-	if err != nil {
-		return err
-	}
-	s.setRunDecision(run, decision)
-	s.executionRecord(run).Environment.Blocker.DecisionID = decision.ID
-	return s.commitWorker(run)
-}
-
-func (s *Service) flushEnvironmentFeedback(ctx context.Context, run *Run) error {
-	wf, e := s.workflowRecords(run)
-	if e == nil || e.Environment == nil || ctx.Err() != nil || wf.Phase == "completed" || wf.Phase == "abandoned" {
-		return nil
-	}
-	env := e.Environment
-	if env.Blocker != nil || !env.Ready || len(env.DeferredFeedback) == 0 {
-		return nil
-	}
-	feedback := env.DeferredFeedback[0]
-	var record *DecisionRecord
-	for i := range s.domain.Decisions {
-		if s.domain.Decisions[i].DecisionID == feedback.DecisionID {
-			record = &s.domain.Decisions[i]
-			break
-		}
-	}
-	if record == nil {
-		return errors.New("deferred feedback lost its original Decision")
-	}
-	var answer DecisionAnswer
-	var request DecisionRequest
-	if json.Unmarshal(record.Answer, &answer) != nil || json.Unmarshal(record.Request, &request) != nil || record.ExecutionID != e.ExecutionID {
-		return errors.New("deferred feedback identity differs from the original execution")
-	}
-	op := s.operationByKey("worker-environment-feedback:" + e.ExecutionID + ":" + feedback.CommandID)
-	active := feedback.TurnID != "" && feedback.TurnID == e.CurrentTurnID && feedback.TurnID != e.LastStoppedTurnID &&
-		(env.Preparation == nil || feedback.TurnID != env.Preparation.TurnID)
-	if !active {
-		// An unknown old send is read-only and remains on its original turn.
-		if op != nil && op.Status != "confirmed" && op.Status != "accepted" && op.Status != "rejected" {
-			input := executionapi.LifecycleInput{Feedback: &executionapi.FeedbackInput{DecisionID: record.DecisionID,
-				Message: workerFeedbackText(answer, request), Answer: &executionapi.Answer{Answers: answer.Answers}}}
-			confirmed, err := s.reconcileDeferredLifecycleFeedback(ctx, run, op, input, nil, feedback.TurnID)
-			if err != nil || !confirmed {
-				return err
-			}
-		}
-		status := "superseded"
-		if op != nil && (op.Status == "confirmed" || op.Status == "accepted") {
-			status = "reply_accepted"
-		}
-		if record.Status != status {
-			record.Status = status
-			record.Version++
-			record.UpdatedAt = now()
-			s.markWorkerDecisionWrite(record.DecisionID)
-		}
-		e.LastEvent = ptr("宿主等待期间的文字保留了原目标；过期反馈未改投新轮次。")
-	} else {
-		host, _, _, _, hostErr := s.hostEnvironmentForRun(run)
-		if hostErr != nil {
-			return hostErr
-		}
-		fact, err := host.ObserveHost(ctx, *e.Process)
-		if err != nil {
-			e.LastEvent = ptr("待投递文字的原宿主观察未核实：" + clip(err.Error(), 500))
-			return s.commitWorker(run)
-		}
-		if fact.Reason != "" {
-			return s.blockWorkerEnvironment(run, fact)
-		}
-		if err := s.verifyHostExecutionEvidence(ctx, run, e); err != nil {
-			e.LastEvent = ptr("待投递文字的原会话未核实：" + clip(err.Error(), 500))
-			return s.commitWorker(run)
-		}
-		if err := s.deliverLifecycleEnvironmentFeedback(ctx, run, answer, feedback.CommandID, request, record); err != nil {
-			return err
-		}
-		if record.Status != "reply_accepted" {
-			return nil
-		}
-	}
-	env.DeferredFeedback = env.DeferredFeedback[1:]
-	return s.commitWorker(run)
 }

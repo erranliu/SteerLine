@@ -191,7 +191,7 @@ func (s *Scenario) NewProject(name string) *Project {
 	}
 	s.Must(controlled.Write(p.Config, map[string]any{
 		"repository": p.Repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v1", "worktree_root": filepath.Join(p.Home, "worktrees"), "claimant": "e2e", "git": map[string]any{"executable": s.Run.Helper, "args": []string{"git"}},
-		"publication_policy": map[string]any{"publisher": "host_service"}, "execution_policy": policy,
+		"publication_policy": map[string]any{"publisher": "worker"}, "execution_policy": policy,
 		"pr": map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "e2e/project", "query": query, "close": query}, "task_poll": "100ms", "pr_poll": "100ms", "heartbeat": "100ms", "command_timeout": "30s", "shutdown_grace": "5s",
 	}))
 	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 2, "execution_profiles": []any{map[string]any{"id": "controlled", "name": "Controlled E2E", "host": "local", "agent": "codex", "implementation_configs": []any{map[string]any{"implementation_key": "codex.worker-profile", "codec_version": 1, "payload": map[string]any{"executable": s.Run.Helper}}}}}, "default_execution_profile": "controlled"}))

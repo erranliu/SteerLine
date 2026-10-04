@@ -96,23 +96,15 @@ type HostFact struct {
 }
 
 type WorkerEnvironment struct {
-	OriginalTerminal   *executionapi.ProcessIdentity `json:"original_terminal,omitempty"`
-	ProfileDigest      string                        `json:"profile_digest"`
-	LaunchCommand      string                        `json:"launch_command,omitempty"`
-	WriteRoots         []string                      `json:"write_roots,omitempty"`
-	Runtime            string                        `json:"runtime,omitempty"`
-	Preparation        *WorkerPreparation            `json:"preparation"`
-	History            []WorkerPreparation           `json:"history,omitempty"`
-	Blocker            *WorkerHostBlocker            `json:"blocker,omitempty"`
-	DeferredDecisionID string                        `json:"deferred_decision_id,omitempty"`
-	DeferredFeedback   []EnvironmentFeedback         `json:"deferred_feedback,omitempty"`
-	Ready              bool                          `json:"ready"`
-}
-
-type EnvironmentFeedback struct {
-	DecisionID string `json:"decision_id"`
-	TurnID     string `json:"turn_id"`
-	CommandID  string `json:"command_id"`
+	OriginalTerminal *executionapi.ProcessIdentity `json:"original_terminal,omitempty"`
+	ProfileDigest    string                        `json:"profile_digest"`
+	LaunchCommand    string                        `json:"launch_command,omitempty"`
+	WriteRoots       []string                      `json:"write_roots,omitempty"`
+	Runtime          string                        `json:"runtime,omitempty"`
+	Preparation      *WorkerPreparation            `json:"preparation"`
+	History          []WorkerPreparation           `json:"history,omitempty"`
+	Blocker          *WorkerHostBlocker            `json:"blocker,omitempty"`
+	Ready            bool                          `json:"ready"`
 }
 
 type WorkerPreparation struct {
@@ -135,6 +127,6 @@ type WorkerHostBlocker struct {
 	Fact               HostFact  `json:"fact"`
 	ObservedAt         time.Time `json:"observed_at"`
 	TurnID             string    `json:"turn_id"`
-	DecisionID         string    `json:"decision_id,omitempty"`
+	Version            uint64    `json:"version"`
 	RecheckOperationID string    `json:"recheck_operation_id,omitempty"`
 }

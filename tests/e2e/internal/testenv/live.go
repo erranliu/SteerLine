@@ -31,7 +31,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	}
 	codex, err := native.CodexExecutable("codex")
 	s.Must(err)
-	publisher, host := "host_service", "local"
+	publisher, host := "worker", "local"
 	var orcaConfig map[string]any
 	if chain == "orca-codex" {
 		host, publisher = "orca", "worker"
@@ -93,11 +93,8 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "AGENTS.md"), []byte("# Isolated SteerLine E2E fixture\n\nFor a readiness-only Dispatch, run only its exact probe command and report the result; do not inspect business task references. Preserve the COMPLETE native command tool result, including its exit_code and output. If using the exec JavaScript wrapper, use exactly `const r = await tools.exec_command({cmd: <exact probe command>, login: false}); text(r);`. Do not project r.output, stringify individual fields, add exit= text, or transform the result: the readiness verifier consumes the full native JSON result. For business work, only implement the bound task. Invoke shell tools with login=false to disable unrelated user shell profiles. Initially HEAD equals the reference commit: confirm with git rev-parse HEAD, then use Get-FileHash directly on docs/spec/task.spec.md and task.plan.md. Read those original files. Do not reconstruct files from git show text or PowerShell pipelines: newline conversion changes their hashes. Any scratch work must stay inside this assigned worktree, and must not be staged. No questions or other tasks are needed: the fixture contract specifies the entire output and publication action.\n"), 0600))
 	spec := "# Live delivery fixture\n\nCreate result.txt containing exactly `real model delivery` followed by a newline. Verify the file. Stage only result.txt. Do not modify any other tracked file.\n\n"
-	if chain == "local-codex" {
-		spec += "The host service publishes. End your final reply with the exact STEERLINE_PUBLISH_READY line provided in the task instruction. Do not commit, push, or run publish.ps1.\n"
-	} else {
-		if p.RealPR {
-			script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
+	if p.RealPR {
+		script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
 if ((Get-Content -LiteralPath 'result.txt' -Raw).Trim() -cne 'real model delivery') { throw 'result differs' }
 $env:GH_TOKEN = (Get-Content -LiteralPath '%s' -Raw).Trim()
 git add -- result.txt
@@ -109,13 +106,13 @@ if ($LASTEXITCODE -ne 0) { throw 'push failed' }
 gh pr create --repo '%s' --base '%s' --head $branch --draft --title 'SteerLine E2E %s' --body 'Isolated native gpt-6-luna medium delivery test. Disposable test branches.'
 if ($LASTEXITCODE -ne 0) { throw 'PR create failed' }
 `, filepath.Join(p.Home, "github-token"), githubRepository, p.BaseBranch, s.ID)
-			s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(script), 0600))
-			spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. It commits, pushes to the real test repository and creates a real GitHub draft PR. Copy its returned URL verbatim into your final reply and completion relay body, including the repository owner. The URL must have the form https://github.com/erranliu/SteerlineTest/pull/<number>; do not shorten or reconstruct it.\n"
-		} else {
-			state, err := controlled.Read(p.Provider)
-			s.Must(err)
-			base := strings.TrimSuffix(state.GitURL, "/e2e/project.git")
-			script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
+		s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(script), 0600))
+		spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. It commits, pushes to the real test repository and creates a real GitHub draft PR. Copy its returned URL verbatim into your final reply and completion relay body, including the repository owner. The URL must have the form https://github.com/erranliu/SteerlineTest/pull/<number>; do not shorten or reconstruct it.\n"
+	} else {
+		state, err := controlled.Read(p.Provider)
+		s.Must(err)
+		base := strings.TrimSuffix(state.GitURL, "/e2e/project.git")
+		script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
 if ((Get-Content -LiteralPath 'result.txt' -Raw).Trim() -cne 'real model delivery') { throw 'result differs' }
 git add -- result.txt
 if ($LASTEXITCODE -ne 0) { throw 'stage failed' }
@@ -130,9 +127,8 @@ $body = @{branch=$branch; head=$head} | ConvertTo-Json -Compress
 $receipt = Invoke-RestMethod -Method Post -Uri '%s/__e2e/pull' -ContentType 'application/json' -Body $body
 Write-Output $receipt.url
 `, state.GitURL, base)
-			s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(script), 0600))
-			spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. The assigned working branch is the PR HEAD; main in the dispatch is the PR BASE, never a request to push to main. The origin URL remains the dispatch's https://github.com/e2e/project.git identity; only the script's single push command uses url.insteadOf to route its transport to the loopback server. This does not change repository config or the remote identity seen by task validation. The explicitly authorized loopback PR endpoint represents that same fixture provider. The script commits, pushes origin's assigned head and creates the fixture PR. Report its returned URL in your final reply. Do not call gh or real GitHub.\n"
-		}
+		s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(script), 0600))
+		spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. The assigned working branch is the PR HEAD; main in the dispatch is the PR BASE, never a request to push to main. The origin URL remains the dispatch's https://github.com/e2e/project.git identity; only the script's single push command uses url.insteadOf to route its transport to the loopback server. This does not change repository config or the remote identity seen by task validation. The explicitly authorized loopback PR endpoint represents that same fixture provider. The script commits, pushes origin's assigned head and creates the fixture PR. Report its returned URL in your final reply. Do not call gh or real GitHub.\n"
 	}
 	spec += "\n## Acceptance\n\nThe committed result.txt equals the specified content and is delivered after the fixture PR merges.\n"
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.spec.md"), []byte(spec), 0600))

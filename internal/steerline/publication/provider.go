@@ -23,7 +23,6 @@ type CommandRunner interface {
 type Provider interface {
 	Query(context.Context, string) (contracts.PRInfo, error)
 	Close(context.Context, string) (contracts.PRInfo, error)
-	Create(context.Context, Request, string) (string, error)
 }
 type Client struct {
 	Config  Config

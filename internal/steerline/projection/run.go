@@ -46,6 +46,11 @@ func Run(task contracts.TaskRecord, workflow contracts.WorkflowRunRecord, execut
 		}
 		run.AttemptID, run.DomainAttemptNumber = attempt.AttemptID, attempt.AttemptNumber
 	}
+	if execution.Environment != nil && execution.Environment.Blocker != nil {
+		blocker := *execution.Environment.Blocker
+		run.EnvironmentBlocker = &blocker
+	}
+
 	run = Execution(run, execution)
 	if workflow.PRURL != "" {
 		run.PR.URL = ptr(workflow.PRURL)
@@ -165,6 +170,7 @@ func decisionView(record contracts.DecisionRecord) (*contracts.DecisionState, er
 		}
 		decision.OptionID, decision.Note, decision.Answers, decision.AnsweredBy = answer.OptionID, answer.Note, answer.Answers, answer.AnsweredBy
 		decision.SourceAttemptID, decision.RecoveryVersion = answer.SourceAttemptID, answer.ExpectedRecoveryVersion
+		decision.AnswerDecisionVersion, decision.AnswerRunRevision = answer.ExpectedDecisionVersion, answer.ExpectedRunRevision
 		if !answer.AnsweredAt.IsZero() {
 			decision.AnsweredAt = &answer.AnsweredAt
 		}

@@ -91,7 +91,7 @@ func workspacePolicyFixture() executionapi.ExecutionPolicy {
 	return executionapi.ExecutionPolicy{Filesystem: executionapi.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
 }
 func executionPublicationFixture() executionapi.PublicationPolicy {
-	return executionapi.PublicationPolicy{Publisher: executionapi.PublisherHostService}
+	return executionapi.PublicationPolicy{Publisher: executionapi.PublisherWorker}
 }
 func hostPublicationProviderFixture() publication.Config {
 	return publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: steerline.Command{Executable: os.Args[0], Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: steerline.Command{Executable: os.Args[0], Args: []string{"pr", "close", "{pr_url}"}}}

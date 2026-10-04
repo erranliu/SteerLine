@@ -158,12 +158,26 @@ func (m Model) createActionWithProfile(action, taskID string, profile *api.Execu
 			return m, nil
 		}
 	}
+	if action == "open_terminal" || action == "recheck_environment" {
+		row := m.selectedRow(m.selected)
+		if row == nil || row.run == nil || row.run.EnvironmentBlocker == nil {
+			m.status = "当前没有环境阻断"
+			return m, nil
+		}
+		taskID = row.run.RunID
+	}
 	requestID := newRequestID()
 	instance := runtimeState.Service.InstanceID
 	revision := runtimeState.Control.Revision
 	newAction := &actionState{RequestID: requestID, Action: action, TaskID: taskID, Status: "submitting", Message: "准备提交", TargetInstance: instance, UpdatedAt: m.clock.Now()}
 	if profile != nil {
 		newAction.ExecutionProfileID, newAction.ExecutionProfileDigest = profile.ID, profile.Digest
+	}
+	if action == "open_terminal" || action == "recheck_environment" {
+		row := m.selectedRow(m.selected)
+		if row != nil {
+			newAction.EnvironmentTarget, _ = api.EnvironmentTarget(row.run)
+		}
 	}
 	state.actions[requestID] = newAction
 	state.view.Outstanding[requestID] = "task:" + taskID

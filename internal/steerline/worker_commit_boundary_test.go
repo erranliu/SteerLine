@@ -174,8 +174,8 @@ func TestAppServerFailedPreparationKeepsPartialSessionBinding(t *testing.T) {
 	receipt := executionapi.LifecycleReceipt{Operation: request.Operation, Disposition: executionapi.OperationUnknown, Process: identity,
 		Implementation: cloneImplementationData(partial.ImplementationData),
 		State:          executionapi.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "partial-generation"}}
-	message := &appServerLaunchMessage{phase: "session_prepared", request: request, receipt: receipt, err: errors.New("session receipt persistence failed")}
-	require(t, s.handleAppServerLaunchMessage(run.RunID, message))
+	_, _, applyErr := s.applyAppServerSessionReceipt(run, request, receipt, errors.New("session receipt persistence failed"))
+	require(t, applyErr)
 	snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
 	require(t, err)
 	got := snapshot.Executions[0]

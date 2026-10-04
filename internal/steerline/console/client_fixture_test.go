@@ -26,7 +26,7 @@ func (c *testClient) ReadProject(_ context.Context, selected string, _ api.Proje
 	c.query.selected = selected
 	return c.query.snapshot
 }
-func (c *testClient) Activity(context.Context, string, string, string, string, api.JournalCursor) (api.LogBatch, error) {
+func (c *testClient) Activity(context.Context, string, string, string, api.ActivityCursor) (api.LogBatch, error) {
 	return c.query.activity, nil
 }
 func (c *testClient) Conversation(context.Context, contracts.ConversationFilter, string) (contracts.ConversationPage, error) {

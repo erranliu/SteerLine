@@ -39,7 +39,8 @@ type Service struct {
 	// workers owns live observers by authoritative workflow run ID.
 	workers             map[string]*Worker
 	ownedProcesses      map[string]executionapi.StopHandle
-	appServerLaunching  map[string]string // In-flight goroutines, never persisted execution authority.
+	lifecycleEffects    map[string]pendingLifecycleEffect
+	lifecycleMessages   map[string][]workerMessage
 	appServerRecovering map[string]bool
 	workerMessages      chan workerMessage
 	runContext          context.Context
@@ -138,7 +139,7 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionapi.L
 		}
 	}
 	s.State.SchemaVersion = WorkerFlowRuntimeSchema
-	capabilities := []string{"answer_decision", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
+	capabilities := []string{"answer_decision", "open_terminal", "recheck_environment", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
 	s.State.Service = ServiceState{ExecutionPolicy: c.ExecutionPolicy, PolicySource: c.policySource, InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: capabilities, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
 	identity, err := currentProcessIdentity()
 	if err != nil {
@@ -298,7 +299,7 @@ func (s *Service) emitConsole(ev ActivityEvent) {
 }
 func (s *Service) find(id string) *Run {
 	for _, r := range s.runs {
-		if r.TaskID == id {
+		if r != nil && (r.TaskID == id || r.RunID == id) {
 			return r
 		}
 	}
@@ -804,7 +805,7 @@ func (s *Service) run(ctx context.Context, dispatchMode string) (retErr error) {
 				}
 			}
 		case message := <-s.workerMessages:
-			if err := s.handleWorkerMessage(message); err != nil {
+			if err := s.handleWorkerMessage(message); err != nil && !errors.Is(err, ErrWorkerTurnStale) {
 				return err
 			}
 		case <-decisionTick.C:
@@ -870,6 +871,17 @@ func (s *Service) shutdown() {
 		s.forwarders.Wait()
 		s.drainWorkerMessages()
 	}
+	for _, messages := range s.lifecycleMessages {
+		for _, message := range messages {
+			if message.event != nil {
+				rejectUndeliveredWorkerEvent(*message.event, context.Canceled)
+			}
+		}
+	}
+	s.lifecycleMessages, s.lifecycleEffects = nil, nil
+	// The actor has stopped. Final owned-resource work still uses the same
+	// background result path, awaited here because no message loop remains.
+	s.workerMessages = nil
 	for len(s.workers) != 0 {
 		var runID string
 		for id := range s.workers {

@@ -68,6 +68,9 @@ func (s *Service) finishControl(op *ControlOperation, receipt ControlReceipt) er
 	if op.RunID != "" {
 		receipt.RunID = op.RunID
 		receipt.AttemptID = op.AttemptID
+		if run := s.find(op.RunID); run != nil {
+			receipt.AttemptID, receipt.RunRevision = run.AttemptID, run.ControlRevision
+		}
 	}
 	op.Phase = "completed"
 	copy := receipt
@@ -220,6 +223,15 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 		return s.rejectControl(*req, digest, "slot_busy", errors.New("another control operation has not settled"))
 	}
 	switch req.Action {
+	case "open_terminal", "recheck_environment":
+		if payload.Environment == nil {
+			return s.rejectControl(*req, digest, "invalid_request", errors.New("environment target required"))
+		}
+		target := payload.Environment
+		run := s.find(target.RunID)
+		if run == nil || run.RunID != target.RunID || run.ExecutionID != target.ExecutionID || run.AttemptID != target.AttemptID {
+			return s.rejectControl(*req, digest, "stale_target", ErrWorkerTurnStale)
+		}
 	case "start_task":
 		base := s.projectExecutionConfig()
 		profileID := payload.ExecutionProfileID
@@ -274,8 +286,14 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	var runID string
 	if req.Action == "start_task" {
 		runID = newID()
+	} else if payload.Environment != nil {
+		runID = payload.Environment.RunID
 	}
-	op := &ControlOperation{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, Payload: append(json.RawMessage(nil), req.Payload...), Phase: "applying", RunID: runID, AttemptID: runID, RequestDigest: digest}
+	attemptID := runID
+	if payload.Environment != nil {
+		attemptID = payload.Environment.AttemptID
+	}
+	op := &ControlOperation{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, Payload: append(json.RawMessage(nil), req.Payload...), Phase: "applying", RunID: runID, AttemptID: attemptID, RequestDigest: digest}
 	s.State.Control.Operation = op
 	if err = s.publishCheckpoint(); err != nil {
 		return err
@@ -285,7 +303,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	accepted := checkedAt
 	applying.AcceptedAt = &accepted
 	applying.RunID = runID
-	applying.AttemptID = runID
+	applying.AttemptID = attemptID
 	applying.ControlRevision = s.State.Control.Revision
 	if err = s.writeReceipt(applying); err != nil {
 		return fmt.Errorf("control applying receipt persistence failed; no action dispatched: %w", err)
@@ -294,7 +312,9 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	s.controlSeen[req.RequestID] = digest
 	result := s.baseReceipt(*req, digest, "applied", "applied", "control action applied")
 	result.AcceptedAt = &accepted
-	if err = s.applyControlAction(ctx, *req, payload, op, &result); err != nil {
+	if err = s.applyControlAction(ctx, *req, payload, op, &result); errors.Is(err, errLifecycleEffectPending) {
+		return nil
+	} else if err != nil {
 		if errors.Is(err, errClaimConflict) {
 			result.Status, result.Code, result.Message = "rejected", "claim_conflict", err.Error()
 		} else if errors.Is(err, errAlreadyManaged) {
@@ -336,6 +356,34 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 // repeating its action. Keep supervision and stop handling alive while the
 // receipt destination is unavailable, but do not accept further mutations.
 func (s *Service) pollControl(ctx context.Context, cancel context.CancelFunc) error {
+	if op := s.State.Control.Operation; op != nil && op.Phase == "applying" {
+		req, err := readControlRequest(controlRequestPath(s.Config.RunDir, op.RequestID))
+		if err == nil && req.InstanceID == s.State.Service.InstanceID {
+			stored := req
+			stored.Payload = op.Payload
+			if rawRequestDigest(controlRequestPath(s.Config.RunDir, op.RequestID)) != op.RequestDigest || requestDigest(stored) != requestDigest(req) {
+				return errors.New("immutable admitted control request changed")
+			}
+			if s.lifecycleEffectPending(op.RunID) {
+				return nil
+			}
+			payload, err := decodeControlPayload(req)
+			if err != nil {
+				return err
+			}
+			result := s.baseReceipt(req, op.RequestDigest, "applied", "applied", "control action applied")
+			if original, readErr := ReadControlReceipt(s.Config, op.RequestID); readErr == nil {
+				result.AcceptedAt = original.AcceptedAt
+			}
+			if err = s.applyControlAction(ctx, req, payload, op, &result); errors.Is(err, errLifecycleEffectPending) {
+				return nil
+			} else if err != nil {
+				result.Status, result.Code, result.Message = "failed", controlFailureCode(err), err.Error()
+			}
+			return s.finishControl(op, result)
+		}
+	}
+
 	if ctx.Err() != nil {
 		return nil
 	}
@@ -391,6 +439,13 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 		return err
 	}
 	switch req.Action {
+	case "open_terminal", "recheck_environment":
+		run := s.find(op.RunID)
+		if payload.Environment == nil || run == nil {
+			return ErrWorkerTurnStale
+		}
+		return s.applyEnvironmentAction(ctx, run, req.Action, *payload.Environment, req.RequestID)
+
 	case "set_dispatch_mode", "pause_dispatch", "resume_dispatch":
 		authority, err := s.domainStore.NativeAuthority(ctx, s.Config.identity)
 		if err != nil {
@@ -418,11 +473,14 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 			profileID = ProjectExecutionProfileID
 		}
 		if run := s.find(payload.TaskID); run != nil {
+			if s.lifecycleEffectPending(run.RunID) {
+				return errLifecycleEffectPending
+			}
 			if run.RunID != op.RunID {
 				return errAlreadyManaged
 			}
 			workflow, execution := s.workflowRecords(run)
-			if workflow == nil || workflow.ExecutionProfile != nil && (workflow.ExecutionProfile.ID != profileID || workflow.ExecutionProfile.Digest != payload.ExecutionProfileDigest) {
+			if workflow == nil || workflow.ExecutionProfile != nil && (workflow.ExecutionProfile.ID != profileID) {
 				return nativeErr("contract_mismatch", "reserved start request differs from the fixed execution profile")
 			}
 			if _, err := s.executionConfigForRun(run); err != nil {
@@ -437,6 +495,13 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 			if task == nil || workflow == nil || execution == nil || attempt == nil {
 				return nativeErr("inconsistent_delivery", "reserved native start request cannot be recovered from center records")
 			}
+			if execution.TurnNumber > 0 && execution.SessionID != "" && execution.Process != nil {
+				started := s.operationByKey("worker-turn:" + execution.ExecutionID + ":" + execution.CurrentCommandID)
+				if started != nil && started.Status == "confirmed" {
+					result.Message = "original worker start is durably confirmed"
+					return nil
+				}
+			}
 			if attempt.Status != "planned" {
 				return nativeErr("outcome_unknown", "reserved native start request has no replayable planned attempt; fixed worker identity is retained")
 			}
@@ -446,6 +511,9 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 			err := s.resumeWorkerFlow(ctx)
 			if err != nil {
 				return err
+			}
+			if s.lifecycleEffectPending(run.RunID) {
+				return errLifecycleEffectPending
 			}
 			result.Message = "native task worker reservation was resumed"
 			return nil
@@ -460,6 +528,9 @@ func (s *Service) applyControlAction(ctx context.Context, req ControlRequest, pa
 		defer func() { s.targetTask = ""; s.explicitDispatch = false; s.reservedRunID = "" }()
 		if err := s.dispatch(ctx); err != nil {
 			return err
+		}
+		if run := s.find(payload.TaskID); run != nil && s.lifecycleEffectPending(run.RunID) {
+			return errLifecycleEffectPending
 		}
 		if s.lastDispatched != payload.TaskID {
 			if run := s.find(payload.TaskID); run != nil && run.RunID == op.RunID {

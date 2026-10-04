@@ -204,9 +204,27 @@ func handleRPC(path string, raw []byte, send func(any) error) error {
 		if _, err := Git(ctx, s.Cwd, "add", "result.txt"); err != nil {
 			return err
 		}
+		if _, err := Git(ctx, s.Cwd, "commit", "-m", "controlled worker result"); err != nil {
+			return err
+		}
+		branch, err := Git(ctx, s.Cwd, "symbolic-ref", "--short", "HEAD")
+		if err != nil {
+			return err
+		}
+		if _, err := Git(ctx, s.Cwd, "push", "origin", branch); err != nil {
+			return err
+		}
+		if err := githubCommand(path, []string{"pr", "create", "--repo", "e2e/project", "--base", "main", "--head", branch, "--draft", "--title", "controlled worker result", "--body", "worker-owned publication"}); err != nil {
+			return err
+		}
+		published, err := Read(path)
+		if err != nil {
+			return err
+		}
+		s.PR = published.PR
 		s.Dispatches++
 		turnID := uuid.NewString()
-		item := map[string]any{"type": "agentMessage", "id": "message-" + turnID, "phase": "final_answer", "text": "Staged result.\nSTEERLINE_PUBLISH_READY " + os.Getenv("STEERLINE_WORKFLOW_RUN_ID")}
+		item := map[string]any{"type": "agentMessage", "id": "message-" + turnID, "phase": "final_answer", "text": "Published by worker: " + s.PR.URL}
 		turn := map[string]any{"id": turnID, "status": "completed", "completedAt": time.Now().Unix(), "items": []any{item}}
 		s.Turns = append(s.Turns, turn)
 		if err := Write(path, s); err != nil {

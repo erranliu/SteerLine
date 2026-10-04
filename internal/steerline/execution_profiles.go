@@ -19,23 +19,22 @@ const fixedExecutionProfileVersion = 5
 // ExecutionProfile contains general routing/policy facts and opaque inputs for
 // strict implementation codecs. Native profile fields live in their owners.
 type ExecutionProfile struct {
-	directory                   *ExecutionDirectory
-	ConfiguredPublicationPolicy *executionapi.PublicationPolicy           `json:"publication_policy,omitempty"`
-	ExecutionRequirements       executionapi.ExecutionRequirements        `json:"-"`
-	RequirementsEvaluation      *executionapi.RequirementsEvaluation      `json:"-"`
-	PublicationPolicy           executionapi.PublicationPolicy            `json:"-"`
-	Publication                 contracts.PublicationSettings             `json:"-"`
-	ExecutionPolicy             executionapi.ExecutionPolicy              `json:"-"`
-	ImplementationConfigs       []executionapi.ImplementationConfigInput  `json:"implementation_configs"`
-	ImplementationData          []executionapi.ImplementationDataEnvelope `json:"-"`
-	ImplementationDisplay       []string                                  `json:"-"`
-	AcceptedConfigVersion       string                                    `json:"-"`
-	PolicySource                string                                    `json:"-"`
-	ID                          string                                    `json:"id"`
-	Name                        string                                    `json:"name"`
-	Host                        string                                    `json:"host"`
-	Agent                       string                                    `json:"agent"`
-	projectIdentity             string
+	directory              *ExecutionDirectory
+	ExecutionRequirements  executionapi.ExecutionRequirements        `json:"-"`
+	RequirementsEvaluation *executionapi.RequirementsEvaluation      `json:"-"`
+	PublicationPolicy      executionapi.PublicationPolicy            `json:"-"`
+	Publication            contracts.PublicationSettings             `json:"-"`
+	ExecutionPolicy        executionapi.ExecutionPolicy              `json:"-"`
+	ImplementationConfigs  []executionapi.ImplementationConfigInput  `json:"implementation_configs"`
+	ImplementationData     []executionapi.ImplementationDataEnvelope `json:"-"`
+	ImplementationDisplay  []string                                  `json:"-"`
+	AcceptedConfigVersion  string                                    `json:"-"`
+	PolicySource           string                                    `json:"-"`
+	ID                     string                                    `json:"id"`
+	Name                   string                                    `json:"name"`
+	Host                   string                                    `json:"host"`
+	Agent                  string                                    `json:"agent"`
+	projectIdentity        string
 }
 
 type FixedExecutionProfile = contracts.FixedExecutionProfile
@@ -135,7 +134,6 @@ func (c Config) ApplyFixedExecutionProfile(p FixedExecutionProfile) Config {
 	c.frozenExecutionConfig = true
 	c.ExecutionRequirements = p.ExecutionRequirements.Clone()
 	c.requirementsEvaluation = p.RequirementsEvaluation
-	c.profilePublication = false
 	c.PublicationPolicy = p.PublicationPolicy
 	c.PR, c.Git, c.Remote, c.publicationRemoteURL, c.Branch = publication.Config(p.Publication.Provider), p.Publication.Git, p.Publication.Remote, p.Publication.RemoteURL, p.Publication.BaseBranch
 	c.Host, c.Agent = p.Host, p.Agent
@@ -219,23 +217,11 @@ func (p ExecutionProfile) StaticUnavailableReason() string {
 
 func (c Config) bindProjectPolicy(p ExecutionProfile) ExecutionProfile {
 	p.directory = c.ExecutionDirectory
-	if p.ConfiguredPublicationPolicy != nil {
-		policy := *p.ConfiguredPublicationPolicy
-		p.ConfiguredPublicationPolicy = &policy
-	}
 	p.ImplementationConfigs = cloneImplementationInputs(p.ImplementationConfigs)
 	p.ExecutionRequirements = c.ExecutionRequirements.Clone()
 	p.RequirementsEvaluation = cloneRequirementsEvaluation(c.requirementsEvaluation)
 	p.PublicationPolicy = c.PublicationPolicy
-	if c.publicationUsesProfile() {
-		p.PublicationPolicy = executionapi.PublicationPolicy{}
-		if p.ConfiguredPublicationPolicy != nil {
-			p.PublicationPolicy = *p.ConfiguredPublicationPolicy
-		}
-	}
-	publicationConfig := c
-	publicationConfig.PublicationPolicy = p.PublicationPolicy
-	p.Publication = clonePublicationSettings(publicationConfig.publicationSettings())
+	p.Publication = clonePublicationSettings(c.publicationSettings())
 	p.ExecutionPolicy, p.AcceptedConfigVersion, p.PolicySource = c.ExecutionPolicy, c.acceptedConfigVersion(), c.policySource
 	if p.PolicySource == "" {
 		p.PolicySource = "service:explicit-config"
@@ -251,16 +237,7 @@ func (c Config) bindProjectPolicy(p ExecutionProfile) ExecutionProfile {
 	return p
 }
 
-func (c Config) publicationUsesProfile() bool {
-	return c.profilePublication || c.PublicationPolicy.Publisher == PublisherExecutionProfile
-}
-
-func validateProjectPublicationPolicy(p executionapi.PublicationPolicy) error {
-	if p.Publisher == PublisherExecutionProfile {
-		return nil
-	}
-	return p.Validate()
-}
+func validateProjectPublicationPolicy(p executionapi.PublicationPolicy) error { return p.Validate() }
 
 func (c Config) acceptedConfigVersion() string {
 	if c.configDigest != "" {
@@ -278,10 +255,6 @@ func (c Config) acceptedConfigVersion() string {
 func (c Config) projectExecutionProfile() ExecutionProfile {
 	inputs := implementationInputsFromData(c.ImplementationData)
 	p := ExecutionProfile{ID: ProjectExecutionProfileID, Name: "项目默认", Host: c.hostName(), Agent: c.agentName(), ImplementationConfigs: inputs}
-	if c.publicationUsesProfile() && c.PublicationPolicy.Publisher != PublisherExecutionProfile {
-		policy := c.PublicationPolicy
-		p.ConfiguredPublicationPolicy = &policy
-	}
 	return c.bindProjectPolicy(p)
 }
 
@@ -337,7 +310,6 @@ func (c Config) ResolveExecutionProfile(id, expectedDigest string) (Config, Exec
 func (c Config) ApplyExecutionProfile(p ExecutionProfile) Config {
 	c.frozenExecutionConfig = false
 	p = c.bindProjectPolicy(p)
-	c.profilePublication = c.publicationUsesProfile()
 	c.PublicationPolicy = p.PublicationPolicy
 	c.Host, c.Agent = p.Host, p.Agent
 	if c.ExecutionDirectory != nil {
@@ -376,14 +348,6 @@ func validateExecutionProfiles(c Config) error {
 	}
 	pattern := regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`)
 	for _, profile := range c.ExecutionProfiles {
-		if c.publicationUsesProfile() && profile.ConfiguredPublicationPolicy == nil {
-			return fmt.Errorf("execution profile %s requires publication_policy when the project publisher is execution_profile", profile.ID)
-		}
-		if profile.ConfiguredPublicationPolicy != nil {
-			if err := profile.ConfiguredPublicationPolicy.Validate(); err != nil {
-				return fmt.Errorf("execution profile %s: %w", profile.ID, err)
-			}
-		}
 		if !pattern.MatchString(profile.ID) || ids[profile.ID] || strings.TrimSpace(profile.Name) == "" {
 			return fmt.Errorf("execution profile ID or name is invalid: %q", profile.ID)
 		}

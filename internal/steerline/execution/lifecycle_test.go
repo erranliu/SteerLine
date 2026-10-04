@@ -13,7 +13,7 @@ func TestHostMutationRequiresOneFixedOriginalTarget(t *testing.T) {
 	if err := (HostActionInput{Kind: HostPrepareProbeFiles, Probe: &probe, Process: &ProcessIdentity{Kind: "orca"}}).Validate(); err == nil {
 		t.Fatal("ambiguous host mutation union was accepted")
 	}
-	authorization := &HostActionAuthorization{ExecutionID: "execution", AttemptID: "attempt", TurnID: "turn", DecisionID: "decision", BlockerID: "blocker", DecisionVersion: 1}
+	authorization := &HostActionAuthorization{ExecutionID: "execution", AttemptID: "attempt", TurnID: "turn", CommandID: "command", BlockerID: "blocker", BlockerVersion: 1}
 	if err := (HostActionInput{Kind: HostOpenOriginal, Process: &ProcessIdentity{Kind: "orca", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "incarnation"}, Authorization: authorization}).Validate(); err != nil {
 		t.Fatalf("fixed original host target rejected: %v", err)
 	}

@@ -50,7 +50,7 @@ flowchart LR
 | `projection` | 从同一持久快照复制并构建 Runtime/Run，按当前 Step 和 AttemptNumber 选择候选；workerflow 路径另核对非空 CurrentAttemptID，不匹配时拒绝投影，无 I/O。 |
 | `persistence` | #69 的窄声明提交、纯错误及注入连接工厂；消费者只持有自己的端口，不暴露 SQL/任意事务。 |
 | `query` / `sqlite` | query 拥有只读应用契约；sqlite 是连接、schema 11、SQL、声明提交及读写事务的唯一实现，复用既有 Reader。应用选择并注入 Factory，中心不依赖 SQL/具体存储。 |
-| `workspace` / `publication` | 固定 Git 工作区及发布/PR provider 操作和事实；中心决定资格、受理与唯一交付。 |
+| `workspace` / `publication` | 固定 Git 工作区及 PR 查询/关闭和事实；中心决定资格、受理与唯一交付。 |
 | `clientcontracts` / `steerlineclient` | 纯产品 DTO/小接口与唯一客户端；配置/资源工厂由 app 注入，读取复用 query/projection，变更调用原 CommandService/control。 |
 | `console` | TUI 输入/导航/视图和独立偏好；按项目消费注入的 `clientcontracts.ConsoleClient`。全 OS/tag 生产与测试不依赖中心、存储、平台、adapter 或 app。 |
 | `activityview` | 唯一纯活动格式化；CLI/中心入口和 console 共用 [render.go](../../internal/steerline/activityview/render.go)，没有产品 I/O。 |
@@ -58,11 +58,11 @@ flowchart LR
 
 ## 固定配置、提交与恢复
 
-项目策略与全局方案分开；发布责任保持 `worker` / `host_service` 或项目显式委托 `execution_profile`。应用每次构造独立不可变目录，配置受理、Claim、冻结、恢复和查询使用同一目录。固定 profile v5 / `builtin-execution-v2`、PolicyResources v3、SQLite schema 11、runtime/checkpoint schema 16、conversation event v2 保持。封套固定 key、版本、用途、所属身份、摘要及 64 KiB 上限，载荷深复制并只由实现 codec 解码。旧开发格式明确拒绝，不迁移、双写、重建或回退。
+项目策略与全局方案分开；发布责任统一为 `worker`，中心只核验交付。应用每次构造独立不可变目录，配置受理、Claim、冻结、恢复和查询使用同一目录。固定 profile v5 / `builtin-execution-v2`、PolicyResources v3、SQLite schema 12、runtime/checkpoint schema 17、conversation event v2 保持。封套固定 key、版本、用途、所属身份、摘要及 64 KiB 上限，载荷深复制并只由实现 codec 解码。旧开发格式明确拒绝，不迁移、双写、重建或回退。
 
 中心先提交原 intent 再执行一个动作，原 receipt 与绑定提交后才授权下一步；thread 绑定提交后才发送首轮、资源回执后才派发、消息消费事实提交后才 ack。异步结果核对原 Operation/request digest、target、Execution/Attempt/代次和输入绑定；提交失败恢复私有候选，不发布成功视图。heartbeat 只写服务元数据。
 
-未知 start/reply/send/ack 保持原请求并只读对账，不重派或换会话。准备 nonce/deadline、准备与业务用途、工具/收据、DeferredDecision/Feedback 和人工恢复门槛仍由中心拥有。重启不自动解除人工门槛；当前配置不能重写原 profile/session/process/incarnation/workspace。TaskDelivery 按真实 provider 的原 PR/repository/head/base/merge 事实唯一提交，清理失败不撤销交付。
+未知 start/reply/send/ack 保持原请求并只读对账，不重派或换会话。准备 nonce/deadline、准备与业务用途、工具/收据、独立环境 blocker 和人工恢复门槛由中心拥有；阻断时拒绝新输入，不保留自动补投队列。生命周期副作用经同一后台单步结果通道，actor 提交原回执后才允许下一步。重启不自动解除人工门槛；当前配置不能重写原 profile/session/process/incarnation/workspace。TaskDelivery 按真实 provider 的原 PR/repository/head/base/merge 事实唯一提交，清理失败不撤销交付。
 
 ```mermaid
 sequenceDiagram
@@ -137,7 +137,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 | `internal/steerline/persistence` | 3 | `internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/query`、`internal/steerline/task` |
 | `internal/steerline/processhost` | 4 | `internal/steerline/execution` |
 | `internal/steerline/projection` | 3 | `internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/workerflow` |
-| `internal/steerline/publication` | 7 | `internal/steerline/contracts`、`internal/steerline/execution` |
+| `internal/steerline/publication` | 6 | `internal/steerline/contracts`、`internal/steerline/execution` |
 | `internal/steerline/query` | 6 | `internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/task`、`internal/steerline/taskview` |
 | `internal/steerline/sqlite` | 31 | `internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/persistence`、`internal/steerline/projection`、`internal/steerline/query`、`internal/steerline/task`、`internal/steerline/workerflow` |
 | `internal/steerline/task` | 10 | `internal/steerline/taskgraph` |
@@ -147,7 +147,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 | `internal/steerline/workerflow` | 3 | `internal/steerline/execution`、`internal/steerline/task` |
 | `internal/steerline/workspace` | 6 | `internal/steerline/execution` |
 | `internal/steerlineapp` | 6 | `internal/steerline`、`internal/steerline/clientcontracts`、`internal/steerline/codexworker`、`internal/steerline/console`、`internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/orca_remote_worker`、`internal/steerline/orcaworker`、`internal/steerline/persistence`、`internal/steerline/processhost`、`internal/steerline/publication`、`internal/steerline/query`、`internal/steerline/sqlite`、`internal/steerline/task`、`internal/steerline/workspace`、`internal/steerlineclient` |
-| `internal/steerlineclient` | 2 | `internal/steerline`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/query`、`internal/steerline/task`、`internal/steerline/taskview` |
+| `internal/steerlineclient` | 1 | `internal/steerline`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/execution`、`internal/steerline/query`、`internal/steerline/task`、`internal/steerline/taskview` |
 | `internal/testfeedback` | 1 | 无 |
 | `internal/testprocess` | 3 | 无 |
 
@@ -257,7 +257,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [worker_lifecycle_recovery.go](../../internal/steerline/worker_lifecycle_recovery.go)
 - [worker_pr.go](../../internal/steerline/worker_pr.go)
 - [worker_process.go](../../internal/steerline/worker_process.go)
-- [worker_publish_local.go](../../internal/steerline/worker_publish_local.go)
+- [lifecycle_effect.go](../../internal/steerline/lifecycle_effect.go)
 - [worker_recovery.go](../../internal/steerline/worker_recovery.go)
 - [worker_resume.go](../../internal/steerline/worker_resume.go)
 - [worker_start.go](../../internal/steerline/worker_start.go)
@@ -456,8 +456,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [policy.go](../../internal/steerline/publication/policy.go)
 - [pr.go](../../internal/steerline/publication/pr.go)
 - [provider.go](../../internal/steerline/publication/provider.go)
-- [publish.go](../../internal/steerline/publication/publish.go)
-- [request.go](../../internal/steerline/publication/request.go)
+- [identity.go](../../internal/steerline/publication/identity.go)
 
 #### internal/steerline/query
 
@@ -558,7 +557,6 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 
 #### internal/steerlineclient
 
-- [activity.go](../../internal/steerlineclient/activity.go)
 - [client.go](../../internal/steerlineclient/client.go)
 
 #### internal/testfeedback

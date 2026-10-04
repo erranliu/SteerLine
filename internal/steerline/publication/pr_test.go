@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
+
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -151,25 +151,6 @@ func require(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
-	}
-}
-
-func TestPublicationRequestDigestBindsCandidate(t *testing.T) {
-	base := Request{Version: 2, RunID: strings.Repeat("a", 32), ExecutionID: "exec-1", TurnID: "00000000-0000-0000-0000-000000000001", TaskID: "42", Workspace: executionapi.WorkspaceIntent{Path: t.TempDir(), Branch: "codex/42-123456789abc", BaseCommit: strings.Repeat("b", 40)}, GitCommonDir: t.TempDir(), Remote: "origin", RemoteURL: "https://github.com/owner/repo.git", BaseBranch: "main", Provider: ProviderIdentity(Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: contracts.Command{Executable: "gh"}})}
-	base.StartingHead, base.IndexTree = strings.Repeat("c", 40), strings.Repeat("d", 40)
-	base.Digest = requestDigest(base)
-	if err := base.ValidateCandidate(); err != nil {
-		t.Fatal(err)
-	}
-	base.Remote = "other"
-	if err := base.ValidateCandidate(); err == nil {
-		t.Fatal("accepted a changed publication request with the old digest")
-	}
-	provider := Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: contracts.Command{Executable: "gh", Args: []string{"api", "repos/{repository}/pulls/{number}"}}}
-	identity := ProviderIdentity(provider)
-	provider.Query.Args[1] = "repos/another/repository"
-	if identity.Matches(provider) {
-		t.Fatal("provider identity accepted changed PR query arguments")
 	}
 }
 

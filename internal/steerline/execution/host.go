@@ -36,8 +36,8 @@ type HostActionInput struct {
 }
 
 type HostActionAuthorization struct {
-	ExecutionID, AttemptID, TurnID, DecisionID, BlockerID string
-	DecisionVersion                                        uint64
+	ExecutionID, AttemptID, TurnID, CommandID, BlockerID string
+	BlockerVersion                                       uint64
 }
 
 func (input HostActionInput) Validate() error {
@@ -50,7 +50,7 @@ func (input HostActionInput) Validate() error {
 	case HostOpenOriginal:
 		valid = input.Process != nil && input.Process.Kind != "" && input.Process.Terminal != "" && input.Process.RuntimeID != "" && input.Process.Incarnation != "" &&
 			input.Authorization != nil && input.Authorization.ExecutionID != "" && input.Authorization.AttemptID != "" && input.Authorization.TurnID != "" &&
-			input.Authorization.DecisionID != "" && input.Authorization.BlockerID != "" && input.Authorization.DecisionVersion > 0 &&
+			input.Authorization.CommandID != "" && input.Authorization.BlockerID != "" && input.Authorization.BlockerVersion > 0 &&
 			input.Probe == nil && input.Worktree == "" && input.WorkflowRun == "" && input.TurnID == ""
 	case HostRemoveFeedback:
 		valid = input.Probe == nil && input.Process == nil && input.Authorization == nil && filepath.IsAbs(input.Worktree) && input.WorkflowRun != "" && input.TurnID != ""

@@ -3,6 +3,7 @@ package clientcontracts
 
 import (
 	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
@@ -116,8 +117,18 @@ type ControlRequest struct {
 }
 
 type ControlPayload struct {
-	TaskID                 string `json:"task_id,omitempty"`
-	Mode                   string `json:"mode,omitempty"`
-	ExecutionProfileID     string `json:"execution_profile_id,omitempty"`
-	ExecutionProfileDigest string `json:"execution_profile_digest,omitempty"`
+	Environment            *contracts.HostActionTarget `json:"environment,omitempty"`
+	TaskID                 string                      `json:"task_id,omitempty"`
+	Mode                   string                      `json:"mode,omitempty"`
+	ExecutionProfileID     string                      `json:"execution_profile_id,omitempty"`
+	ExecutionProfileDigest string                      `json:"execution_profile_digest,omitempty"`
+}
+
+// EnvironmentTarget keeps a side action bound to the blocker the user saw.
+func EnvironmentTarget(run *contracts.Run) (*contracts.HostActionTarget, error) {
+	if run == nil || run.EnvironmentBlocker == nil {
+		return nil, fmt.Errorf("run has no environment blocker")
+	}
+	b := run.EnvironmentBlocker
+	return &contracts.HostActionTarget{RunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, TurnID: b.TurnID, BlockerID: b.ID, Version: b.Version}, nil
 }

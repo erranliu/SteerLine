@@ -10,35 +10,13 @@ import (
 // workerMessage is delivered to the single service state machine. Worker
 // observers may run concurrently, but only that state machine changes runs.
 type workerMessage struct {
+	effect   *lifecycleEffectResult
 	runID    string
 	worker   *Worker
 	event    *WorkerEvent
 	done     bool
 	err      error
-	launch   *appServerLaunchMessage
-	reply    *lifecycleReplyMessage
 	recovery *appServerRecoveryResult
-}
-
-type appServerLaunchMessage struct {
-	phase    string
-	request  executionapi.LifecycleRequest
-	receipt  executionapi.LifecycleReceipt
-	observer executionapi.LifecycleObserver
-	worker   *Worker
-	err      error
-	ack      chan appServerLaunchAck
-}
-
-type appServerLaunchAck struct {
-	Proceed bool
-	Request executionapi.LifecycleRequest
-}
-
-type lifecycleReplyMessage struct {
-	request executionapi.LifecycleRequest
-	receipt executionapi.LifecycleReceipt
-	err     error
 }
 
 func (s *Service) registerWorker(run *Run, worker *Worker) {
@@ -146,15 +124,43 @@ forwarded:
 }
 
 func (s *Service) handleWorkerMessage(message workerMessage) error {
+	if message.effect != nil {
+		if err := s.applyLifecycleEffect(message.runID, *message.effect); err != nil {
+			if errors.Is(err, ErrWorkerTurnStale) {
+				for _, deferred := range s.lifecycleMessages[message.runID] {
+					if deferred.event != nil {
+						rejectUndeliveredWorkerEvent(*deferred.event, err)
+					}
+				}
+				delete(s.lifecycleMessages, message.runID)
+			}
+			return err
+		}
+		for !s.lifecycleEffectPending(message.runID) && len(s.lifecycleMessages[message.runID]) != 0 {
+			next := s.lifecycleMessages[message.runID][0]
+			s.lifecycleMessages[message.runID] = s.lifecycleMessages[message.runID][1:]
+			if err := s.handleWorkerMessage(next); err != nil {
+				return err
+			}
+		}
+		if len(s.lifecycleMessages[message.runID]) == 0 {
+			delete(s.lifecycleMessages, message.runID)
+		}
+		return nil
+	}
+	// Observer envelopes replace opaque resource state. Apply them only after
+	// this run's original effect receipt, so an acknowledgement cannot overwrite
+	// newer source cursors or an observer overwrite its pending Delivery.
+	if s.lifecycleEffectPending(message.runID) {
+		if s.lifecycleMessages == nil {
+			s.lifecycleMessages = make(map[string][]workerMessage)
+		}
+		s.lifecycleMessages[message.runID] = append(s.lifecycleMessages[message.runID], message)
+		return nil
+	}
 	if message.recovery != nil {
 		delete(s.appServerRecovering, message.runID)
 		return s.applyAppServerRecovery(*message.recovery)
-	}
-	if message.launch != nil {
-		return s.handleAppServerLaunchMessage(message.runID, message.launch)
-	}
-	if message.reply != nil {
-		return s.handleLifecycleFeedbackMessage(message.runID, message.reply)
 	}
 	if s.workers[message.runID] != message.worker {
 		if message.event != nil {

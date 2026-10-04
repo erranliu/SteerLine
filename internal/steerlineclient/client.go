@@ -6,10 +6,12 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"time"
@@ -240,10 +242,14 @@ func (c *Client) SubmitControl(ctx context.Context, in api.ControlInput) (api.Co
 	if in.RequestedBy == "" {
 		in.RequestedBy = c.resources.DefaultRequestedBy
 	}
+	if in.Payload.Environment != nil {
+		target := *in.Payload.Environment
+		in.Payload.Environment = &target
+	}
 	old, err := c.resources.Control.Request(ctx, in.RequestID)
 	if err == nil {
 		var payload api.ControlPayload
-		if old == nil || old.RepositoryIdentity != c.Project().Identity || old.Action != string(in.Action) || contracts.DecodeJSON(old.Payload, &payload) != nil && len(old.Payload) != 0 || payload != in.Payload || old.RequestedBy != in.RequestedBy || in.InstanceID != "" && old.InstanceID != in.InstanceID || in.ExpectedRevision != nil && old.ExpectedControlRevision != *in.ExpectedRevision {
+		if old == nil || old.RepositoryIdentity != c.Project().Identity || old.Action != string(in.Action) || contracts.DecodeJSON(old.Payload, &payload) != nil && len(old.Payload) != 0 || !reflect.DeepEqual(payload, in.Payload) || old.RequestedBy != in.RequestedBy || in.InstanceID != "" && old.InstanceID != in.InstanceID || in.ExpectedRevision != nil && old.ExpectedControlRevision != *in.ExpectedRevision {
 			return api.ControlRequest{}, errors.New("request ID conflict: immutable request has different content or identity")
 		}
 		return *old, nil
@@ -517,48 +523,64 @@ func ReusableProjectSnapshot(ctx context.Context, ref api.ProjectRef, selected s
 	id, rev, err := version(ctx, filepath.Join(ref.RunDir, "steerline.db"))
 	return err == nil && id == previous.NativeTasks.DatabaseID && rev == previous.NativeTasks.DatabaseRevision
 }
-func (c *Client) Activity(ctx context.Context, runID, executionID, attemptID, currentPath string, cursor api.JournalCursor) (api.LogBatch, error) {
-	if strings.TrimSpace(runID) == "" || strings.TrimSpace(executionID) == "" || strings.TrimSpace(attemptID) == "" {
+func (c *Client) Activity(ctx context.Context, runID, executionID, attemptID string, cursor api.ActivityCursor) (api.LogBatch, error) {
+	if runID == "" || executionID == "" || attemptID == "" {
 		return api.LogBatch{}, errors.New("activity query identity is missing")
 	}
-	domain, err := read(ctx, c, func(r api.Reader) (contracts.DomainSnapshot, error) { return r.Domain(ctx) })
-	if err != nil {
-		return api.LogBatch{}, err
+	if cursor.Initialized && (cursor.RunID != runID || cursor.ExecutionID != executionID || cursor.AttemptID != attemptID) {
+		return api.LogBatch{}, errors.New("activity cursor belongs to another execution or attempt")
 	}
-	matched := false
-	for _, e := range domain.Executions {
-		if e.ExecutionID == executionID && e.WorkflowRunID == runID {
-			matched = true
-			break
+	return read(ctx, c, func(reader api.Reader) (api.LogBatch, error) {
+		domain, err := reader.Domain(ctx)
+		if err != nil {
+			return api.LogBatch{}, err
 		}
-	}
-	if !matched {
-		return api.LogBatch{}, errors.New("activity execution does not belong to the requested run")
-	}
-	path := ""
-	for _, a := range domain.Attempts {
-		if a.ExecutionID == executionID && a.AttemptID == attemptID {
-			path = a.EventPath
-			break
+		owned := false
+		for _, e := range domain.Executions {
+			if e.ExecutionID == executionID && e.WorkflowRunID == runID {
+				owned = true
+				break
+			}
 		}
-	}
-	if path == "" {
-		return api.LogBatch{}, fmt.Errorf("attempt %s has no queryable activity record", attemptID)
-	}
-	if !filepath.IsAbs(path) {
-		path = filepath.Join(c.Project().RunDir, path)
-	}
-	if currentPath != "" && filepath.Clean(currentPath) != filepath.Clean(path) {
-		return api.LogBatch{}, errors.New("activity path does not match the fixed attempt")
-	}
-	if err := c.begin(ctx); err != nil {
-		return api.LogBatch{}, err
-	}
-	defer c.mu.RUnlock()
-	if c.resources.ReadLog == nil {
-		return api.LogBatch{}, errors.New("activity reader is unavailable")
-	}
-	return c.resources.ReadLog(path, cursor)
+		if !owned {
+			return api.LogBatch{}, errors.New("activity execution does not belong to the requested run")
+		}
+		owned = false
+		for _, a := range domain.Attempts {
+			if a.ExecutionID == executionID && a.AttemptID == attemptID {
+				owned = true
+				break
+			}
+		}
+		if !owned {
+			return api.LogBatch{}, errors.New("activity attempt does not belong to the requested execution")
+		}
+		events, err := reader.ActivityEvents(ctx, executionID, attemptID, cursor.AfterEventID)
+		if err != nil {
+			return api.LogBatch{}, err
+		}
+		batch := api.LogBatch{Cursor: api.ActivityCursor{RunID: runID, ExecutionID: executionID, AttemptID: attemptID, AfterEventID: cursor.AfterEventID, Initialized: true}}
+		for _, event := range events {
+			if event.ProjectIdentity != c.Project().Identity || event.ExecutionID != executionID || event.AttemptID != attemptID || event.WorkflowRunID != runID || event.EventID <= batch.Cursor.AfterEventID {
+				return api.LogBatch{}, errors.New("canonical activity page changed its fixed identity or order")
+			}
+			batch.Cursor.AfterEventID = event.EventID
+			if !strings.HasPrefix(event.Type, "activity.") {
+				continue
+			}
+			var activity contracts.ActivityEvent
+			if len(event.Payload) == 0 || json.Unmarshal(event.Payload, &activity) != nil {
+				batch.Diagnostics = append(batch.Diagnostics, "规范活动尚未完整采集；原始文件仅供手动诊断")
+				continue
+			}
+			activity.Seq = uint64(event.EventID)
+			batch.Activity = append(batch.Activity, activity)
+		}
+		if !cursor.Initialized && len(batch.Activity) == 0 {
+			batch.Diagnostics = append(batch.Diagnostics, "数据库中暂无已采集活动；不会从原始日志补画")
+		}
+		return batch, nil
+	})
 }
 
 func (c *Client) CursorAfter(filter contracts.ConversationFilter, after int64) (string, error) {

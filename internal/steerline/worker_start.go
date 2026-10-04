@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	executionapi "github.com/erranliu/SteerLine/internal/steerline/execution"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
+
 	"github.com/erranliu/SteerLine/internal/steerline/workerflow"
 )
 
@@ -128,7 +128,7 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task TaskRecord, r
 		return errors.New("lifecycle resource planning must prepare its workspace before other resources")
 	}
 	if !prepared || err != nil {
-		if errors.Is(err, errLifecycleNeedsReconciliation) {
+		if errors.Is(err, errLifecycleNeedsReconciliation) || errors.Is(err, errLifecycleEffectPending) {
 			return nil
 		}
 		return err
@@ -163,6 +163,9 @@ func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task TaskRecor
 }
 
 func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, turnID string) error {
+	if s.lifecycleEffectPending(run.RunID) {
+		return nil
+	}
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
@@ -199,9 +202,6 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *Run, prompt, tur
 		return err
 	}
 	prompt += publicationTargetInstruction(c)
-	if fixed.config.PublicationPolicy.Publisher == executionapi.PublisherHostService {
-		prompt += publication.WorkerInstruction(run.RunID)
-	}
 	execution.PendingTurnID, execution.PendingCommandID = "", turnID
 	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {

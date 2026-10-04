@@ -171,6 +171,7 @@ func ReadDecisionAnswer(r *Run) (DecisionAnswer, error) {
 		return DecisionAnswer{}, errors.New("decision has no accepted answer")
 	}
 	a := DecisionAnswer{DecisionID: r.Decision.ID, RunID: r.RunID, OptionID: r.Decision.OptionID, Note: r.Decision.Note, Answers: r.Decision.Answers, AnsweredBy: r.Decision.AnsweredBy, SourceAttemptID: r.Decision.SourceAttemptID, ExpectedRecoveryVersion: r.Decision.RecoveryVersion}
+	a.ExpectedDecisionVersion, a.ExpectedRunRevision = r.Decision.AnswerDecisionVersion, r.Decision.AnswerRunRevision
 	if r.Decision.AnsweredAt != nil {
 		a.AnsweredAt = *r.Decision.AnsweredAt
 	}
@@ -235,6 +236,14 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 		if err := normalizeNativeDecisionAnswer(&run.Decision.Request, &answer); err != nil {
 			return CommandRecord{}, false, err
 		}
+	}
+	if answer.ExpectedDecisionVersion == 0 && run.Decision != nil {
+		answer.ExpectedDecisionVersion = run.Decision.Version
+		expectedDecisionVersion = run.Decision.Version
+	}
+	if answer.ExpectedRunRevision == 0 {
+		answer.ExpectedRunRevision = run.ControlRevision
+		expectedRunRevision = run.ControlRevision
 	}
 	key := decisionAnswerKey(answer)
 	reader, err := c.Persistence.OpenReader(filepath.Join(c.RunDir, "steerline.db"))
@@ -315,6 +324,11 @@ func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, opti
 	}
 	if expectedDecisionVersion != 0 && run.Decision.Version != expectedDecisionVersion {
 		return CommandRecord{}, false, errors.New("stale_revision: decision version changed; refresh before answering")
+	}
+	for _, e := range snapshot.Executions {
+		if e.ExecutionID == run.ExecutionID && e.Environment != nil && e.Environment.Blocker != nil {
+			return CommandRecord{}, false, nativeErr("environment_blocked", "resolve the environment blocker before sending feedback")
+		}
 	}
 	if err = DecisionReplyEligibility(ctx, c, run); err != nil {
 		return CommandRecord{}, false, err
@@ -433,15 +447,13 @@ func DecisionReplyEligibility(ctx context.Context, c Config, run *Run) error {
 	if run == nil || run.Decision == nil || run.Decision.Status != "pending" {
 		return errors.New("decision is not pending on the current native run")
 	}
+	if run.EnvironmentBlocker != nil {
+		return nativeErr("environment_blocked", "resolve the environment blocker before sending feedback")
+	}
 	if run.WorkflowVersion != WorkerFlowVersion || !executionapi.StableExecutionID(run.ExecutionID) || run.AttemptID == "" || run.Decision.AttemptID != run.AttemptID {
 		return &executionapi.BackendError{Code: executionapi.BackendIdentityMismatch, Diagnostic: "feedback does not belong to the fixed worker execution"}
 	}
-	if target := run.Decision.Request.HostTarget; target != nil {
-		if target.ExecutionID != run.ExecutionID || !executionapi.StableExecutionID(target.TurnID) || !executionapi.StableExecutionID(target.BlockerID) {
-			return errors.New("host action has an invalid fixed execution target")
-		}
-		return ctx.Err()
-	}
+
 	if run.RecoveryRequired && (run.RecoveryState == "unverified" || run.RecoveryState == "" ||
 		run.RecoveryState == "interrupted" && run.Decision.Request.QuestionRoute != nil) {
 		return &executionapi.BackendError{Code: executionapi.BackendUnsupported, Diagnostic: "original worker state or native question is not verified; wait for a recovery decision"}
@@ -466,7 +478,7 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 				break
 			}
 		}
-		if blocked && run.Decision.Request.HostTarget == nil {
+		if blocked {
 			continue
 		}
 		if run.WorkflowVersion != WorkerFlowVersion {

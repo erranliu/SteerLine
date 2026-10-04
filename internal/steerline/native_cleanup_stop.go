@@ -57,39 +57,41 @@ func (s *Service) stopRunExecution(ctx context.Context, r *Run, worker *Worker) 
 	if err = s.commitExecutionOperation(r, op, expected); err != nil {
 		return executionapi.Operation{}, err
 	}
-	receipt, stopErr := stopper.StopExecution(ctx, ref, op, worker.proc)
-	expected = recordFingerprint(op)
-	if stopErr != nil {
-		var be *executionapi.BackendError
-		if errors.As(stopErr, &be) && (be.Code == executionapi.BackendOutcomeUnknown || be.Code == executionapi.BackendUnreachable || be.Code == executionapi.BackendIdentityMismatch) {
-			op.Status = executionapi.OperationUnknown
-		} else {
-			op.Status = executionapi.OperationRejected
-		}
-		op.Diagnostic, op.UpdatedAt = stopErr.Error(), now()
-		if saveErr := s.commitExecutionOperation(r, op, expected); saveErr != nil {
-			return op, errors.Join(stopErr, saveErr)
-		}
-		return op, stopErr
-	}
-	switch receipt.Disposition {
-	case "confirmed":
-		op.Status = executionapi.OperationConfirmed
-	case "accepted":
-		op.Status = executionapi.OperationAccepted
-	case "rejected":
-		op.Status = executionapi.OperationRejected
-	default:
-		op.Status = executionapi.OperationUnknown
-	}
-	op.Diagnostic, op.UpdatedAt = receipt.Diagnostic, now()
-	if err = s.commitExecutionOperation(r, op, expected); err != nil {
+	lifecycle, fixed, err := s.lifecycleForRun(r)
+	if err != nil {
 		return op, err
 	}
-	if op.Status == executionapi.OperationUnknown || op.Status == executionapi.OperationRejected {
-		return op, &executionapi.BackendError{Code: executionapi.BackendOutcomeUnknown, Diagnostic: "stop request did not confirm an accepted stop"}
+	snapshot, err := s.lifecycleSnapshot(r, fixed.workflow, fixed.execution, fixed.attempt, nil)
+	if err != nil {
+		return op, err
 	}
-	return op, nil
+	requestOperation := op
+	requestOperation.Action = string(executionapi.LifecycleStopExecution)
+	requestOperation.LifecycleIdentity = &executionapi.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionapi.LifecycleBindingDigest(snapshot), Ref: *op.Ref}
+	request := executionapi.LifecycleRequest{Snapshot: snapshot, Operation: requestOperation, Input: executionapi.LifecycleInput{Stop: &executionapi.StopInput{TurnID: snapshot.Session.CurrentTurnID}}}
+	port := lifecycleStopEffectPort{LifecyclePort: lifecycle, handle: worker.proc, stopper: stopper, operation: op}
+	err = s.dispatchLifecycleEffect(ctx, r, port, request, false, func(run *Run, result lifecycleEffectResult) error {
+		if err := result.receipt.ValidateFor(request); err != nil {
+			return err
+		}
+		saved, err := records.loadOperation(op.RunID, op.AttemptID, op.ID)
+		if err != nil {
+			return err
+		}
+		expected := recordFingerprint(saved)
+		saved.Status, saved.Diagnostic, saved.UpdatedAt = result.receipt.Disposition, result.receipt.Diagnostic, now()
+		if result.err != nil || saved.Status != executionapi.OperationConfirmed && saved.Status != executionapi.OperationAccepted && saved.Status != executionapi.OperationRejected {
+			saved.Status = executionapi.OperationUnknown
+			if result.err != nil {
+				saved.Diagnostic = result.err.Error()
+			}
+		}
+		return s.commitExecutionOperation(run, saved, expected)
+	})
+	if err != nil {
+		return op, err
+	}
+	return records.loadOperation(op.RunID, op.AttemptID, op.ID)
 }
 
 func (s *Service) confirmExecutionStop(op executionapi.Operation) (bool, error) {
@@ -101,7 +103,7 @@ func (s *Service) confirmExecutionStop(op executionapi.Operation) (bool, error) 
 		return false, errors.New("stop operation is missing")
 	}
 	records := executionRecords{root: config.RunDir, persistence: config.Persistence}
-	run := s.localWorkerRun(op.RunID)
+	run := s.find(op.RunID)
 	if run == nil {
 		return false, errors.New("execution stop has no fixed workflow")
 	}
