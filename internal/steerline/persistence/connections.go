@@ -4,9 +4,9 @@ import (
 	"context"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
 type RuntimeReader interface {
@@ -29,7 +29,7 @@ type Connection interface {
 	RuntimeReader
 	Close() error
 	LoadProjection(context.Context, string) ([]byte, uint64, error)
-	BindAuthority(tasklegacy.ProjectTaskAuthority)
+	BindAuthority(executionmodel.ProjectTaskAuthority)
 	ValidateStoredFormat(context.Context) error
 	ExecutionBinding(context.Context, string, string) (executionbackend.ExecutionRef, error)
 	ExecutionOperation(context.Context, string, string, string) (executionbackend.Operation, error)

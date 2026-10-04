@@ -1,6 +1,6 @@
 # 当前代码架构与源码索引
 
-核对日期：2026-10-04。本页反映 main 的 #37/#38 候选基础和 #211 测试修复，与 #73 纯类型迁移集成的工作树；[归属/验证记录](../validation/three-line-01-types/README.md)保留实际源码、构造、残留后继和测试证据。原生能力证据不因搬包而扩大。
+核对日期：2026-10-04。本页反映 main 的 #37/#38 候选基础和 #211 测试修复，与 #73 纯类型迁移集成并实现 #74 选择/结果边界的候选工作树；[归属/验证记录](../validation/three-line-01-types/README.md)保留实际源码、构造、残留后继和测试证据。原生能力证据不因搬包而扩大。
 
 ## 系统与业务权威
 
@@ -39,10 +39,11 @@ flowchart LR
 | --- | --- |
 | `internal/steerline` | Task/Workflow/Execution/Decision/Operation/TaskDelivery 用例、通用协调、提交和恢复。显式 [execution_directory.go](../../internal/steerline/execution_directory.go)、[worker_lifecycle.go](../../internal/steerline/worker_lifecycle.go)、[service_commit.go](../../internal/steerline/service_commit.go)；#69 已通过 [persistence/ports.go](../../internal/steerline/persistence/ports.go) 收窄生产写消费者，SQL/连接/schema/原子事务由唯一 sqlite 模块持有，应用注入实际连接；#73 同次切换了纯记录、backend、API 和声明消费者。 |
 | `internal/execution/backend` | 通用身份、闭集操作、事实/问题/回执、策略/需求、不可变有界封套和实现证据；仅标准库。[lifecycle.go](../../internal/execution/backend/lifecycle.go)、[implementation_data.go](../../internal/execution/backend/implementation_data.go)。 |
-| `internal/execution/model` / `internal/execution` | 前者拥有 Workflow/Execution/Attempt/Decision/Operation、冻结 profile/PR/资源和 workerflow 纯状态/恢复；只依赖 backend。后者当前只有 [prompt.go](../../internal/execution/prompt.go)，任务提示不进入执行纯模型。 |
+| `internal/execution/model` / `internal/execution` | 前者拥有 Workflow/Execution/Attempt/Decision/Operation、冻结 profile/PR/资源和 workerflow 纯状态/恢复；只依赖 backend。后者持任务提示构造；执行模型新增调度资格、固定交付证据/回执、候选绑定/base/丢弃事实，仍不依赖 task/model。任务提示不进入执行纯模型。 |
+| `internal/task` | 固定工作挑选/排序与任务结果/丢弃声明；app 注入 WorkPort/ResultPort，Reader 只返回任务快照与固定契约。schema 14 的领取/唯一结果/丢弃由 storage/ports 专用声明一次 SQLite 事务组合重检；共享字段/实际拆分见[交接清单](../validation/three-line-02-task-execution-boundary/integration-ownership.md)。 |
 | `internal/task/model` | 固定任务/契约、批次/生命周期、DAG 与资格唯一规则；仅标准库。GraphAuthority/DeliveryFact 不含派发、session、PR 明细。 |
 | `internal/product/api` | 独立状态标量、用户输入、游标、错误、控制目标和回执；仅标准库，不含 Domain/Runtime/持久记录。 |
-| `internal/storage/ports` | RecordWrite 前值声明、Commands 纯读写契约、CommandRecord/DomainEvent 和存储错误；只消费纯模型/API/backend。 |
+| `internal/storage/ports` | RecordWrite 前值声明、Commands 纯读写契约、CommandRecord/DomainEvent、ClaimCommit/ResultCommit/DiscardCommit 和存储错误；只消费纯模型/API/backend。 |
 | `contracts` | 尚未迁的宽 Domain/Runtime/产品视图、会话来源/存储组合与宿主记录；每字段唯一后继见[残留清单](../validation/three-line-01-types/residual-ownership.json)。纯执行记录和相关旧别名已删除。 |
 | `codexworker` / `codexapp` | 前者拥有原生 codec、配置/命令/权限、生命周期、history/source/mapper；后者拥有 WebSocket/JSON-RPC 和原生问题传输。不给实现 Store 或可写 Service。 |
 | `orcaworker` | 原生配置/绑定/资源/terminal/Dispatch/message、宿主准备和输出、观察及原操作对账。[lifecycle_resources.go](../../internal/steerline/orcaworker/lifecycle_resources.go)、[lifecycle_observation.go](../../internal/steerline/orcaworker/lifecycle_observation.go)。 |
@@ -127,36 +128,38 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 | 包 | 文件数 | 项目内直接依赖 |
 | --- | --- | --- |
 | `cmd/orca-probe` | 1 | 无 |
-| `cmd/steerline` | 1 | `internal/product/api`、`internal/steerline`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/task`、`internal/steerline/taskview`、`internal/steerlineapp`、`internal/steerlineclient`、`internal/storage/ports`、`internal/task/model` |
-| `cmd/test-feedback` | 5 | `internal/testfeedback`、`internal/testprocess` |
+| `cmd/steerline` | 2 | `internal/product/api`、`internal/steerline`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/taskview`、`internal/steerlineapp`、`internal/steerlineclient`、`internal/storage/ports`、`internal/task/model` |
+| `cmd/test-feedback` | 6 | `internal/execution`、`internal/execution/backend`、`internal/execution/model`、`internal/steerline`、`internal/steerlineapp`、`internal/steerlineintegration`、`internal/storage/ports`、`internal/task`、`internal/task/model`、`internal/testboundary`、`internal/testfeedback`、`internal/testprocess` |
 | `internal/coreboundary` | 1 | 无 |
 | `internal/execution` | 1 | `internal/execution/backend`、`internal/task/model` |
 | `internal/execution/backend` | 19 | 无 |
-| `internal/execution/model` | 12 | `internal/execution/backend` |
-| `internal/product/api` | 4 | 无 |
-| `internal/steerline` | 94 | `internal/execution`、`internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/activityview`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/persistence`、`internal/steerline/projection`、`internal/steerline/publication`、`internal/steerline/query`、`internal/steerline/task`、`internal/steerline/taskview`、`internal/steerline/workspace`、`internal/storage/ports`、`internal/task/model` |
+| `internal/execution/model` | 21 | `internal/execution/backend` |
+| `internal/product/api` | 5 | 无 |
+| `internal/steerline` | 112 | `internal/execution`、`internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/activityview`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/persistence`、`internal/steerline/projection`、`internal/steerline/publication`、`internal/steerline/query`、`internal/steerline/taskview`、`internal/steerline/workspace`、`internal/storage/ports`、`internal/task`、`internal/task/model` |
 | `internal/steerline/activityview` | 2 | `internal/steerline/contracts` |
-| `internal/steerline/clientcontracts` | 5 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/contracts`、`internal/steerline/task`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
+| `internal/steerline/clientcontracts` | 5 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/contracts`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
 | `internal/steerline/codexapp` | 4 | 无 |
 | `internal/steerline/codexworker` | 29 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/codexapp`、`internal/steerline/contracts`、`internal/steerline/workspace` |
 | `internal/steerline/console` | 22 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/activityview`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/storage/ports` |
-| `internal/steerline/contracts` | 11 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/task`、`internal/steerline/taskview`、`internal/task/model` |
+| `internal/steerline/contracts` | 10 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline/taskview`、`internal/task/model` |
 | `internal/steerline/orca_remote_worker` | 14 | `internal/execution/backend`、`internal/steerline/codexworker`、`internal/steerline/orcaworker` |
 | `internal/steerline/orcaworker` | 28 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/codexworker`、`internal/steerline/contracts`、`internal/steerline/workspace` |
-| `internal/steerline/persistence` | 2 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts`、`internal/steerline/query`、`internal/steerline/task`、`internal/storage/ports`、`internal/task/model` |
+| `internal/steerline/persistence` | 2 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts`、`internal/steerline/query`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
 | `internal/steerline/processhost` | 4 | `internal/execution/backend` |
 | `internal/steerline/projection` | 3 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts`、`internal/task/model` |
 | `internal/steerline/publication` | 6 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts` |
-| `internal/steerline/query` | 6 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts`、`internal/steerline/task`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
-| `internal/steerline/sqlite` | 31 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts`、`internal/steerline/persistence`、`internal/steerline/projection`、`internal/steerline/query`、`internal/steerline/task`、`internal/storage/ports`、`internal/task/model` |
-| `internal/steerline/task` | 10 | `internal/task/model` |
-| `internal/steerline/taskview` | 3 | `internal/steerline/task`、`internal/task/model` |
+| `internal/steerline/query` | 6 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
+| `internal/steerline/sqlite` | 35 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts`、`internal/steerline/persistence`、`internal/steerline/projection`、`internal/steerline/query`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
+| `internal/steerline/task` | 10 | `internal/task` | 固定工作挑选/排序与任务结果/丢弃声明；app 注入 WorkPort/ResultPort，Reader 只返回任务快照与固定契约。schema 14 的领取/唯一结果/丢弃由 storage/ports 专用声明一次 SQLite 事务组合重检；共享字段/实际拆分见[交接清单](../validation/three-line-02-task-execution-boundary/integration-ownership.md)。 |
+| `internal/task/model` |
+| `internal/steerline/taskview` | 4 | `internal/execution/model`、`internal/task/model` |
 | `internal/steerline/testprotocol` | 6 | 无 |
 | `internal/steerline/workspace` | 6 | `internal/execution/backend` |
-| `internal/steerlineapp` | 6 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline`、`internal/steerline/clientcontracts`、`internal/steerline/codexworker`、`internal/steerline/console`、`internal/steerline/contracts`、`internal/steerline/orca_remote_worker`、`internal/steerline/orcaworker`、`internal/steerline/persistence`、`internal/steerline/processhost`、`internal/steerline/publication`、`internal/steerline/query`、`internal/steerline/sqlite`、`internal/steerline/task`、`internal/steerline/workspace`、`internal/steerlineclient`、`internal/storage/ports`、`internal/task/model` |
-| `internal/steerlineclient` | 1 | `internal/execution/backend`、`internal/product/api`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/query`、`internal/steerline/task`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
-| `internal/storage/ports` | 3 | `internal/execution/model` |
-| `internal/task/model` | 10 | 无 |
+| `internal/steerlineapp` | 12 | `internal/execution/backend`、`internal/execution/model`、`internal/product/api`、`internal/steerline`、`internal/steerline/clientcontracts`、`internal/steerline/codexworker`、`internal/steerline/console`、`internal/steerline/contracts`、`internal/steerline/orca_remote_worker`、`internal/steerline/orcaworker`、`internal/steerline/persistence`、`internal/steerline/processhost`、`internal/steerline/publication`、`internal/steerline/query`、`internal/steerline/sqlite`、`internal/steerline/workspace`、`internal/steerlineclient`、`internal/storage/ports`、`internal/task`、`internal/task/model` |
+| `internal/steerlineclient` | 1 | `internal/execution/backend`、`internal/product/api`、`internal/steerline/clientcontracts`、`internal/steerline/contracts`、`internal/steerline/query`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
+| `internal/storage/ports` | 6 | `internal/execution/model`、`internal/task/model` |
+| `internal/task` | 固定工作挑选/排序与任务结果/丢弃声明；app 注入 WorkPort/ResultPort，Reader 只返回任务快照与固定契约。schema 14 的领取/唯一结果/丢弃由 storage/ports 专用声明一次 SQLite 事务组合重检；共享字段/实际拆分见[交接清单](../validation/three-line-02-task-execution-boundary/integration-ownership.md)。 |
+| `internal/task/model` | 12 | 无 |
 | `internal/testfeedback` | 1 | 无 |
 | `internal/testprocess` | 3 | 无 |
 
@@ -614,3 +617,5 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [process.go](../../internal/testprocess/process.go)
 - [process_unix.go](../../internal/testprocess/process_unix.go)
 - [process_windows.go](../../internal/testprocess/process_windows.go)
+
+#74 新调用链与实际验证见[边界验收记录](../validation/three-line-02-task-execution-boundary/README.md)。本页描述当前候选代码，不表示该 PR 已独立审核或合并；#75/#76 的全面用例迁包、#77 的产品收窄和 #79/#80 后继保持原范围。

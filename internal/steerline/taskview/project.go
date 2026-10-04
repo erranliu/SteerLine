@@ -3,7 +3,7 @@ package taskview
 import (
 	"fmt"
 
-	"github.com/erranliu/SteerLine/internal/steerline/task"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -60,7 +60,7 @@ func NormalizeFilter(project string, filter Filter) (Filter, error) {
 }
 
 // Project uses one verified snapshot for graph shape, delivery and readiness.
-func Project(snapshot task.Snapshot, filter Filter) (Page, error) {
+func Project(snapshot Snapshot, filter Filter) (Page, error) {
 	byID := snapshot.ByID
 	if filter.CenterTaskID != "" {
 		if _, ok := byID[filter.CenterTaskID]; !ok {
@@ -106,13 +106,13 @@ func Project(snapshot task.Snapshot, filter Filter) (Page, error) {
 	return page, nil
 }
 
-func graphNode(record taskmodel.TaskRecord, snapshot task.Snapshot, taskGraph taskmodel.Snapshot) Node {
+func graphNode(record taskmodel.TaskRecord, snapshot Snapshot, taskGraph taskmodel.Snapshot) Node {
 	_, delivered := snapshot.Deliveries[record.TaskID]
 	ready, blockers := taskmodel.DependencyStateForTask(record, taskGraph)
 	node := Node{
 		TaskID: record.TaskID, Title: record.Title, Status: record.Status, Priority: record.Priority,
 		DependencyReady: ready, Blockers: blockers,
-		StartupBlockers: task.StartupBlockers(record.Status, delivered, snapshot.Authority.DispatchPaused, snapshot.Authority.DispatchMode, snapshot.ExecutionSlotBusy),
+		StartupBlockers: executionmodel.StartupBlockers(record.Status, delivered, snapshot.Authority.DispatchPaused, snapshot.Authority.DispatchMode, snapshot.ExecutionSlotBusy),
 	}
 	if delivery, ok := snapshot.Deliveries[record.TaskID]; ok {
 		copy := delivery

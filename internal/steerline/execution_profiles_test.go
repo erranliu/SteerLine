@@ -35,7 +35,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	commands := CommandService{Store: store, Project: base.Identity()}
+	commands := newTestCommandService(store, base.Identity())
 	if _, err = commands.CreateTaskBatch(ctx, base, taskBatchFixture(t, base, commit, batchTasks(501), nil), strings.Repeat("1", 32), 1, "planner"); err != nil {
 		t.Fatal(err)
 	}
@@ -89,7 +89,7 @@ func TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles(t *testi
 	if err != nil {
 		t.Fatal(err)
 	}
-	commands := CommandService{Store: store, Project: base.Identity()}
+	commands := newTestCommandService(store, base.Identity())
 	mode := "auto"
 	if _, err := commands.SetNativeDispatchState(ctx, NativeDispatchUpdate{RequestID: strings.Repeat("e", 32), ExpectedAuthorityVersion: 1, Mode: &mode, RequestedBy: "operator"}); err != nil {
 		t.Fatal(err)
@@ -120,7 +120,7 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
 		t.Fatalf("push isolated fixture: %v: %s", err, out)
 	}
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	input := taskBatchFixture(t, c, commit, batchTasks(611, 612), nil)
 	validation, err := commands.ValidateTaskBatch(ctx, c, input)
 	if err != nil || !validation.Valid {

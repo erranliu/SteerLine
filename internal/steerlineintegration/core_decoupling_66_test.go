@@ -13,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	taskapp "github.com/erranliu/SteerLine/internal/task"
 )
 
 func TestCD66FixedProfileRecovery(t *testing.T) {
@@ -81,7 +82,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		config := fixture.config
 		config.ExecutionDirectory = nil
 		config.Git.Executable = "must-not-be-called"
-		_, err = (steerline.CommandService{Store: store, Project: config.Identity()}).ClaimNativeTask(ctx, config, steerline.TaskClaimOptions{TaskID: "906", RequestID: strings.Repeat("a", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1})
+		_, err = (steerline.NewCommandService(store, config.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})).ClaimNativeTask(ctx, config, steerline.TaskClaimOptions{TaskID: "906", RequestID: strings.Repeat("a", 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1})
 		if err == nil || !strings.Contains(err.Error(), "directory") || strings.Contains(err.Error(), "must-not-be-called") {
 			t.Fatalf("missing directory reached a target or claim: %v", err)
 		}

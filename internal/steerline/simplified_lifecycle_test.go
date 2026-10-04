@@ -32,7 +32,7 @@ func TestSimplifiedCleanupRetainsFrozenDeliveryEvidence(t *testing.T) {
 	original := fixed.execution.Target
 	// A discarded task exercises the same settled evidence guard as delivery.
 	task := nativeTaskRecord(s.domain.Tasks, run.TaskID)
-	_, err = (CommandService{Store: s.commandStore, Project: s.Config.Identity()}).DiscardNativeTask(context.Background(), s.Config, run.TaskID, newID(), task.Version, "fixture settlement", "operator")
+	_, err = (newTestCommandService(s.commandStore, s.Config.Identity())).DiscardNativeTask(context.Background(), s.Config, run.TaskID, newID(), task.Version, "fixture settlement", "operator")
 	require(t, err)
 	require(t, s.refreshNativeSnapshot(context.Background()))
 	run.TaskStatus = "discarded"

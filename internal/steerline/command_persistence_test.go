@@ -16,7 +16,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -49,7 +48,7 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	commands := CommandService{Store: s, Project: project}
+	commands := newTestCommandService(s, project)
 	require(t, s.db.QueryRow(`SELECT control_revision FROM workflow_runs WHERE project_identity=? AND workflow_run_id=?`, project, "wf").Scan(&run.ControlRevision))
 	answer := executionmodel.DecisionAnswer{DecisionID: "decision", RunID: "wf", Note: "yes", AnsweredBy: "alice", ExpectedDecisionVersion: 1, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: projection.Service.InstanceID}
 	first, created, err := commands.AnswerDecision(ctx, "decision", 1, "answer-key-a", "alice", mustJSON(answer))
@@ -103,8 +102,8 @@ func TestDecisionAnswerFirstWinsIdempotencyAndConflictAreTransactional(t *testin
 	db2, err := openSQLiteFixture(filepath.Join(dir, "steerline.db"))
 	require(t, err)
 	defer db2.Close()
-	commands1 := CommandService{Store: db, Project: project}
-	commands2 := CommandService{Store: db2, Project: project}
+	commands1 := newTestCommandService(db, project)
+	commands2 := newTestCommandService(db2, project)
 	answer := executionmodel.DecisionAnswer{DecisionID: decisionID, RunID: runID, OptionID: "yes", Note: "same", AnsweredBy: "alice", ExpectedDecisionVersion: 1, ExpectedRunRevision: 4, ServiceInstanceID: "service-instance"}
 	answerFromSecondClient := answer
 	answerFromSecondClient.AnsweredBy = "bob"
@@ -173,7 +172,7 @@ func TestDecisionAnswerCommandClientProcess(t *testing.T) {
 	if err = json.Unmarshal([]byte(os.Getenv("STEERLINE_PR5_ANSWER_PAYLOAD")), &answer); err != nil {
 		t.Fatal(err)
 	}
-	command, created, submitErr := (CommandService{Store: db, Project: project}).AnswerDecisionWithID(context.Background(), commandID, decisionID, answer.ExpectedDecisionVersion, decisionAnswerKey(answer), requester, mustJSON(answer))
+	command, created, submitErr := (newTestCommandService(db, project)).AnswerDecisionWithID(context.Background(), commandID, decisionID, answer.ExpectedDecisionVersion, decisionAnswerKey(answer), requester, mustJSON(answer))
 	result := decisionChildResult{CommandID: command.CommandID, Created: created}
 	if submitErr != nil {
 		result.Error = submitErr.Error()
@@ -251,7 +250,7 @@ func seedNativeDecision(t *testing.T, db *sqliteFixture, project, runID, decisio
 	ctx := context.Background()
 	nowTime := now()
 	request := executionmodel.DecisionRequest{Question: "Choose", Options: []executionbackend.DecisionOption{{ID: "yes", Label: "Yes"}, {ID: "no", Label: "No"}}}
-	err := db.InitializeProject(ctx, tasklegacy.ProjectTaskAuthority{ProjectIdentity: project, Authority: "native", AuthorityVersion: 1, Repository: "repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true, CreatedAt: nowTime, UpdatedAt: nowTime})
+	err := db.InitializeProject(ctx, executionmodel.ProjectTaskAuthority{ProjectIdentity: project, Authority: "native", AuthorityVersion: 1, Repository: "repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true, CreatedAt: nowTime, UpdatedAt: nowTime})
 	require(t, err)
 	raw, err := db.db.BeginTx(ctx, nil)
 	require(t, err)

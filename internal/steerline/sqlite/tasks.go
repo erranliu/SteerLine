@@ -12,7 +12,6 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	queryrules "github.com/erranliu/SteerLine/internal/steerline/query"
-	taskrules "github.com/erranliu/SteerLine/internal/steerline/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -193,7 +192,7 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 		}
 		delivery, hasDelivery := relations.deliveries[record.TaskID]
 		detail.DependencyReady, detail.Predecessors, detail.UnmetPredecessors = taskmodel.DependencyState(record.Status, hasDelivery, predecessors)
-		detail.StartupBlockers = taskrules.StartupBlockers(record.Status, hasDelivery, dispatchPaused != 0, dispatchMode, executionSlotBusy > 0)
+		detail.StartupBlockers = executionmodel.StartupBlockers(record.Status, hasDelivery, dispatchPaused != 0, dispatchMode, executionSlotBusy > 0)
 		contractRow, ok := relations.contracts[record.TaskID]
 		if !ok {
 			return page, nativeErr("contract_mismatch", "native task has no matching fixed contract")
@@ -227,7 +226,7 @@ type nativePageContract struct {
 
 type nativePageRelations struct {
 	statuses   map[string]string
-	deliveries map[string]contracts.TaskDeliveryRecord
+	deliveries map[string]executionmodel.TaskDeliveryRecord
 	contracts  map[string]nativePageContract
 	runs       map[string][]executionmodel.WorkflowRunRecord
 }
@@ -245,7 +244,7 @@ func nativePageIDFilter(project string, ids []string) (string, []any) {
 }
 
 func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBranch string, tasks []taskmodel.TaskRecord, edges []taskmodel.TaskDependencyRecord) (nativePageRelations, error) {
-	out := nativePageRelations{statuses: map[string]string{}, deliveries: map[string]contracts.TaskDeliveryRecord{}, contracts: map[string]nativePageContract{}, runs: map[string][]executionmodel.WorkflowRunRecord{}}
+	out := nativePageRelations{statuses: map[string]string{}, deliveries: map[string]executionmodel.TaskDeliveryRecord{}, contracts: map[string]nativePageContract{}, runs: map[string][]executionmodel.WorkflowRunRecord{}}
 	selected := make(map[string]bool, len(tasks))
 	selectedIDs := make([]string, 0, len(tasks))
 	for _, task := range tasks {
@@ -306,7 +305,7 @@ func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBra
 			return out, err
 		}
 		for rows.Next() {
-			var delivery contracts.TaskDeliveryRecord
+			var delivery executionmodel.TaskDeliveryRecord
 			var merged, recorded string
 			delivery.ProjectIdentity = project
 			if err = rows.Scan(&delivery.TaskID, &delivery.SelectedWorkflowRunID, &delivery.PRInstance, &delivery.PRRepository, &delivery.PRNumber, &delivery.PRURL, &delivery.MergeCommit, &merged, &recorded, &delivery.Evidence); err != nil {
@@ -320,7 +319,7 @@ func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBra
 				err = nativeErr("inconsistent_delivery", "native task delivery recording time is invalid")
 				break
 			}
-			if err = taskrules.ValidateDelivery(delivery, targetBranch); err != nil {
+			if err = executionmodel.ValidateDelivery(delivery, targetBranch); err != nil {
 				break
 			}
 			out.deliveries[delivery.TaskID] = delivery

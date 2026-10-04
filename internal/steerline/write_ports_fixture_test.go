@@ -9,7 +9,6 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -24,19 +23,19 @@ type fixtureTx interface {
 	EnqueueCommand(v storageports.CommandRecord) (storageports.CommandRecord, bool, error)
 	Execution(ctx context.Context, project, id, workflow string) (executionmodel.ExecutionRecord, error)
 	LookupCommand(ctx context.Context, project, key string) (storageports.CommandRecord, bool, error)
-	NativeAuthority(ctx context.Context, project string) (tasklegacy.ProjectTaskAuthority, error)
+	NativeAuthority(ctx context.Context, project string) (executionmodel.ProjectTaskAuthority, error)
 	OccupiedExecutions(ctx context.Context, project string) (int, error)
 	PRBindingsOnOtherTasks(ctx context.Context, project, task, url string) (int, error)
 	PutDecision(v executionmodel.DecisionRecord) error
 	PutExecution(v executionmodel.ExecutionRecord) error
 	PutOperation(v executionmodel.OperationRecord) (executionmodel.OperationRecord, bool, error)
-	PutProjectTaskAuthority(v tasklegacy.ProjectTaskAuthority) error
+	PutProjectTaskAuthority(v executionmodel.ProjectTaskAuthority) error
 	PutProjection(project string, revision uint64, payload []byte) error
 	PutStepAttempt(v executionmodel.StepAttemptRecord) error
 	PutTask(v taskmodel.TaskRecord) error
 	PutTaskBatch(v taskmodel.TaskBatchRecord, expectedAuthorityVersion, expectedGraphRevision uint64) error
 	PutTaskContract(project, taskID string, v taskmodel.TaskContract) error
-	PutTaskDelivery(v TaskDeliveryRecord) error
+	PutTaskDelivery(v executionmodel.TaskDeliveryRecord) error
 	PutTaskDependency(v taskmodel.TaskDependencyRecord) error
 	PutWorkflowRun(v executionmodel.WorkflowRunRecord) error
 	Query(ctx context.Context, project string) (DomainSnapshot, error)
@@ -47,7 +46,7 @@ type fixtureTx interface {
 	UpdateDiscardedTaskCAS(v taskmodel.TaskRecord, expected uint64) error
 	UpdateNativeTaskCAS(v taskmodel.TaskRecord, expectedVersion uint64) error
 	UpdateOperation(v executionmodel.OperationRecord) error
-	UpdateProjectTaskAuthorityCAS(v tasklegacy.ProjectTaskAuthority, expectedVersion uint64) error
+	UpdateProjectTaskAuthorityCAS(v executionmodel.ProjectTaskAuthority, expectedVersion uint64) error
 	Workflow(ctx context.Context, project, id, task string) (executionmodel.WorkflowRunRecord, error)
 }
 
@@ -95,7 +94,7 @@ func errorsJoin(a, b error) error {
 }
 
 func (s *sqliteFixture) transactRecords(ctx context.Context, fn func(*fixtureTransaction) error) error {
-	return s.TransactClaim(ctx, func(tx persistence.ClaimTx) error {
+	return s.TransactTaskBatch(ctx, func(tx persistence.BatchTx) error {
 		return fn(&fixtureTransaction{fixtureTx: tx.(fixtureTx)})
 	})
 }
@@ -113,5 +112,5 @@ func openDomainTestStore(t *testing.T) *sqliteFixture {
 }
 
 func transactFixture(s persistence.Connection, ctx context.Context, fn func(*fixtureTransaction) error) error {
-	return s.TransactClaim(ctx, func(tx persistence.ClaimTx) error { return fn(&fixtureTransaction{fixtureTx: tx.(fixtureTx)}) })
+	return s.TransactTaskBatch(ctx, func(tx persistence.BatchTx) error { return fn(&fixtureTransaction{fixtureTx: tx.(fixtureTx)}) })
 }

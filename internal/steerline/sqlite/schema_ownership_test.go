@@ -27,7 +27,7 @@ func TestNativeDatabaseInitializesCurrentSchema(t *testing.T) {
 	if version != domainSchemaVersion {
 		t.Fatalf("schema version=%d", version)
 	}
-	for _, table := range []string{"project_task_authorities", "task_contracts", "task_batches", "task_dependencies", "task_deliveries", "database_state"} {
+	for _, table := range []string{"project_task_authorities", "task_contracts", "task_batches", "task_dependencies", "task_deliveries", "task_results", "database_state"} {
 		var count int
 		if err = db.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, table).Scan(&count); err != nil || count != 1 {
 			t.Fatalf("missing table %s: count=%d err=%v", table, count, err)
@@ -36,6 +36,26 @@ func TestNativeDatabaseInitializesCurrentSchema(t *testing.T) {
 	var revision uint64
 	if err = db.db.QueryRow(`SELECT revision FROM database_state WHERE singleton=1`).Scan(&revision); err != nil || revision != 0 {
 		t.Fatalf("unexpected initial DB revision %d: %v", revision, err)
+	}
+}
+
+func TestTM02PreviousResultSchemaRejected(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "previous.db")
+	db, err := OpenSQLiteStore(path)
+	require(t, err)
+	_, err = db.db.Exec(`UPDATE schema_migrations SET version=13`)
+	require(t, err)
+	require(t, db.Close())
+	before := databaseFiles(t, path)
+	if opened, err := OpenSQLiteStore(path); err == nil {
+		opened.Close()
+		t.Fatal("previous result schema admitted")
+	} else {
+		requireNativeAuditCode(t, err, "unsupported_schema")
+	}
+	after := databaseFiles(t, path)
+	if !bytes.Equal(before[""], after[""]) {
+		t.Fatal("schema rejection mutated the database")
 	}
 }
 

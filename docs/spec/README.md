@@ -104,3 +104,5 @@
 | 72 | TUI与中心实现解耦 | #71 | [Spec](core-decoupling-11-tui.spec.md) | [Plan](core-decoupling-11-tui.plan.md) | [PR196](https://github.com/erranliu/SteerLine/pull/196) · [验收记录](../validation/core-decoupling-11-tui/README.md) |
 
 [L2/L3 真实执行 Spec](live-tiered-e2e.spec.md) / [Plan](live-tiered-e2e.plan.md)：L2 受控门槛后执行本地 Codex 与 Orca+Codex，使用真实 SteerlineTest GitHub PR；L3 delivery/recovery 按环境和场景独立选择，固定 gpt-6-luna/medium，校验原生 token usage。
+
+#74 已实现的工作/结果/领取/丢弃端口及 Service/CommandService/Config 的实际拆分见[交接清单](../validation/three-line-02-task-execution-boundary/integration-ownership.md)。当前待协调聊天独立复审并真实合并，不重新规划 #74；Task ID 与硬前置保持。#75/#76 合并后按其唯一文件所有者推进，共用构造/CLI/runner/守卫段由 #76 单点顺序集成。#77/#79/#80/#81/#82 按用户当前指令暂停。

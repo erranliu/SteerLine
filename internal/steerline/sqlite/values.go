@@ -4,7 +4,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/query"
-	"github.com/erranliu/SteerLine/internal/steerline/task"
+	taskview "github.com/erranliu/SteerLine/internal/steerline/taskview"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -40,17 +40,13 @@ type Runtime = contracts.Runtime
 
 type ServiceCheckpoint = contracts.ServiceCheckpoint
 
-type TaskDeliveryEvidence = contracts.TaskDeliveryEvidence
-
-type TaskDeliveryRecord = contracts.TaskDeliveryRecord
-
 type workerCommit = persistence.WorkerCommit
 
 type workerCommitResult = persistence.WorkerCommitResult
 
 type recordWrite[T any] = storageports.RecordWrite[T]
 
-type taskGraphSnapshot = task.Snapshot
+type taskGraphSnapshot = taskview.Snapshot
 
 const WorkerFlowRuntimeSchema = contracts.WorkerFlowRuntimeSchema
 

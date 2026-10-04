@@ -20,6 +20,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -70,7 +71,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	store, err := steerline.OpenNativeTaskCommandStore(ctx, &c)
 	require(t, err)
 	queries := steerline.NewQueryService(store, c.Identity())
-	commands := steerline.CommandService{Store: store, Project: c.Identity()}
+	commands := steerline.NewCommandService(store, c.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})
 	spec, plan := liveReadinessReference(t, ctx, repo, commit, "docs/spec/pr154-readiness-gate.spec.md"), liveReadinessReference(t, ctx, repo, commit, "docs/spec/pr154-readiness-gate.plan.md")
 	contract := taskmodel.TaskContract{ContractID: "pr154-readiness-live", Repository: remote, Remote: "origin", Branch: "main", SpecRef: spec, PlanRef: plan, AcceptanceRefs: []taskmodel.FileReference{spec}}
 	contract.Digest, err = taskmodel.ContractDigest(contract)
@@ -100,7 +101,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 		store, err := steerline.OpenNativeTaskCommandStore(ctx, &c)
 		require(t, err)
 		profiles := c.AvailableExecutionProfiles()
-		_, err = (steerline.CommandService{Store: store, Project: c.Identity()}).ClaimNativeTask(ctx, c, steerline.TaskClaimOptions{TaskID: "9001154", RequestID: newID(), ExpectedTaskVersion: page.Tasks[0].Version, ExpectedAuthorityVersion: page.AuthorityVersion, RequestedBy: "acceptance", Explicit: true, ExecutionProfile: &profiles[0], ServiceInstanceID: service.instanceID})
+		_, err = (steerline.NewCommandService(store, c.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})).ClaimNativeTask(ctx, c, steerline.TaskClaimOptions{TaskID: "9001154", RequestID: newID(), ExpectedTaskVersion: page.Tasks[0].Version, ExpectedAuthorityVersion: page.AuthorityVersion, RequestedBy: "acceptance", Explicit: true, ExecutionProfile: &profiles[0], ServiceInstanceID: service.instanceID})
 		require(t, err)
 		require(t, store.Close())
 	}

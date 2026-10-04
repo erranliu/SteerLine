@@ -10,7 +10,7 @@ import (
 	"reflect"
 	"testing"
 
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -33,7 +33,7 @@ func TestCM70ReadOnlyOpenPreservesFiles(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "state.db")
 	writer, err := OpenSQLiteStore(path)
 	require(t, err)
-	require(t, writer.InitializeProject(ctx, tasklegacy.ProjectTaskAuthority{ProjectIdentity: "project", Authority: "native", AuthorityVersion: 1, Repository: "repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}))
+	require(t, writer.InitializeProject(ctx, executionmodel.ProjectTaskAuthority{ProjectIdentity: "project", Authority: "native", AuthorityVersion: 1, Repository: "repo", Remote: "origin", Branch: "main", DispatchMode: "manual", DispatchPaused: true}))
 	command, _, err := writer.EnqueueCommand(ctx, storageports.CommandRecord{ProjectIdentity: "project", CommandID: newID(), Kind: "test", TargetID: "project", RequestedBy: "operator", IdempotencyKey: newID(), Status: "pending", Payload: []byte(`{}`)})
 	require(t, err)
 	checkpoint, err := writer.SaveCheckpoint(ctx, ServiceCheckpoint{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Identity: "project"}})

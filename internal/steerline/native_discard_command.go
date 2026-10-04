@@ -28,18 +28,6 @@ type taskDiscardIntent struct {
 	CleanupPending    []string `json:"cleanup_pending,omitempty"`
 }
 
-func discardTaskRecord(record taskmodel.TaskRecord, reason, requestedBy, requestID string, cleanup []string, at time.Time) (taskmodel.TaskRecord, error) {
-	return taskmodel.Discard(record, reason, requestedBy, requestID, cleanup, false, at)
-}
-
-type taskDiscardPlan struct {
-	PRURL             string
-	PRURLs            []string
-	CandidateBindings string
-	UncertainPR       bool
-	CleanupPending    []string
-}
-
 func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, taskID, requestID string, expectedVersion uint64, reason, requestedBy string) (taskmodel.TaskDiscardReceipt, error) {
 	if err := validateWorkflowConfig(&config, nil); err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err
@@ -61,12 +49,13 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		return taskmodel.TaskDiscardReceipt{}, nativeErr("immutable_task", "discard reason exceeds 4000 bytes")
 	}
 	sqlite := c.Store
-	request := struct {
-		TaskID          string `json:"task_id"`
-		ExpectedVersion uint64 `json:"expected_version"`
-		Reason          string `json:"reason"`
-		RequestedBy     string `json:"requested_by"`
-	}{taskID, expectedVersion, reason, requestedBy}
+	if c.taskResults == nil {
+		return taskmodel.TaskDiscardReceipt{}, nativeErr("authority_mismatch", "task intent port is required")
+	}
+	request, err := c.taskResults.Intent(taskmodel.DiscardIntent{TaskID: taskID, ExpectedVersion: expectedVersion, Reason: reason, RequestedBy: requestedBy})
+	if err != nil {
+		return taskmodel.TaskDiscardReceipt{}, err
+	}
 	requestJSON, _ := json.Marshal(request)
 	canonicalRequest, err := taskmodel.CanonicalJSON(requestJSON)
 	if err != nil {
@@ -235,7 +224,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	if err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err
 	}
-	if candidateBindings(knownSnapshot, taskID) != intent.CandidateBindings {
+	if executionmodel.CandidateBindings(knownSnapshot.WorkflowRuns, knownSnapshot.Executions, taskID) != intent.CandidateBindings {
 		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "candidate bindings changed before full PR verification")
 	}
 	known, verifyErr := verifyKnownCandidatePRs(ctx, config, knownSnapshot, taskID, nil, "")
@@ -275,15 +264,15 @@ func updateDiscardIntentReceipt(ctx context.Context, s persistence.CommandStore,
 	return nil
 }
 
-func taskDiscardPlanFromStore(ctx context.Context, s persistence.CommandStore, project, taskID string) (taskDiscardPlan, taskmodel.TaskRecord, error) {
+func taskDiscardPlanFromStore(ctx context.Context, s persistence.CommandStore, project, taskID string) (executionmodel.DiscardFacts, taskmodel.TaskRecord, error) {
 	snapshot, err := s.Query(ctx, project)
 	if err != nil {
-		return taskDiscardPlan{}, taskmodel.TaskRecord{}, err
+		return executionmodel.DiscardFacts{}, taskmodel.TaskRecord{}, err
 	}
 	return taskDiscardPlanFromSnapshot(snapshot, taskID)
 }
 
-func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDiscardPlan, taskmodel.TaskRecord, error) {
+func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (executionmodel.DiscardFacts, taskmodel.TaskRecord, error) {
 	var task taskmodel.TaskRecord
 	found := false
 	for _, candidate := range snapshot.Tasks {
@@ -294,62 +283,9 @@ func taskDiscardPlanFromSnapshot(snapshot DomainSnapshot, taskID string) (taskDi
 		}
 	}
 	if !found {
-		return taskDiscardPlan{}, task, nativeErr("task_not_found", "native task was not found")
+		return executionmodel.DiscardFacts{}, task, nativeErr("task_not_found", "native task was not found")
 	}
-	runs := map[string]bool{}
-	for _, run := range snapshot.WorkflowRuns {
-		if run.TaskID == taskID {
-			runs[run.WorkflowRunID] = true
-		}
-	}
-	executions := map[string]executionmodel.ExecutionRecord{}
-	for _, execution := range snapshot.Executions {
-		if runs[execution.WorkflowRunID] {
-			executions[execution.ExecutionID] = execution
-		}
-	}
-	plan := taskDiscardPlan{CleanupPending: []string{}}
-	prs := map[string]bool{}
-	for _, run := range snapshot.WorkflowRuns {
-		if run.TaskID != taskID {
-			continue
-		}
-		for _, url := range append(append(append([]string(nil), run.PRHistory...), run.PRURL), run.PRCandidateURL) {
-			if url != "" {
-				prs[url] = true
-			}
-		}
-		if run.PRURL != "" && (run.PRState == "" || run.PRState == "unknown") {
-			plan.UncertainPR = true
-		}
-		if run.PRURL == "" && run.PRCandidateURL == "" && run.Phase != "queued" {
-			// A started worker may have published a PR before the center saw a
-			// link. Discard cannot assume that no external PR exists.
-			plan.UncertainPR = true
-		}
-	}
-	for _, execution := range executions {
-		if execution.Workspace.Worktree != "" || execution.Target.WorktreeID != "" {
-			id := execution.Target.WorktreeID
-			if id == "" {
-				id = execution.Workspace.Worktree
-			}
-			plan.CleanupPending = append(plan.CleanupPending, "workspace_cleanup:"+id)
-		}
-		if execution.Status == "active" || execution.Status == "waiting_decision" || execution.Status == "blocked" || execution.Status == "pending" || execution.Process != nil && execution.Status != "stopped" {
-			plan.CleanupPending = append(plan.CleanupPending, "execution_stop_manual:"+execution.ExecutionID)
-		}
-	}
-	for url := range prs {
-		plan.PRURLs = append(plan.PRURLs, url)
-	}
-	plan.PRURLs = uniqueSorted(plan.PRURLs)
-	if len(plan.PRURLs) != 0 {
-		plan.PRURL = plan.PRURLs[0]
-	}
-	plan.CandidateBindings = candidateBindings(snapshot, taskID)
-	plan.CleanupPending = uniqueSorted(plan.CleanupPending)
-	return plan, task, nil
+	return executionmodel.CandidateDiscardFacts(snapshot.WorkflowRuns, snapshot.Executions, taskID), task, nil
 }
 
 func uniqueSorted(values []string) []string {
@@ -391,105 +327,32 @@ func persistDiscardPending(ctx context.Context, s persistence.CommandStore, proj
 	return receipt, err
 }
 
-func (c CommandService) commitDiscard(ctx context.Context, s persistence.CommandStore, requestID string, op executionmodel.OperationRecord, intent taskDiscardIntent, info *executionmodel.PRInfo, expectedPRRepository string, known []verifiedCandidatePR) (taskmodel.TaskDiscardReceipt, error) {
-	var receipt taskmodel.TaskDiscardReceipt
-	err := s.TransactDiscard(ctx, func(tx persistence.DiscardTx) error {
-		graph, e := tx.TaskGraphSnapshot(ctx, c.Project)
-		if e != nil {
-			return e
-		}
-		task, ok := graph.ByID[intent.TaskID]
-		if !ok {
-			return nativeErr("task_not_found", "native task was not found")
-		}
-		if task.Version != intent.ExpectedVersion {
-			return nativeErr("stale_version", fmt.Sprintf("expected task version %d, found %d", intent.ExpectedVersion, task.Version))
-		}
-		deliveries, e := tx.DeliveryCount(ctx, c.Project, intent.TaskID)
-		if e != nil {
-			return e
-		}
-		if deliveries > 0 {
-			return nativeErr("already_merged", "task already has a verified delivery")
-		}
-		if task.Status != "open" && task.Status != "in_progress" {
-			return nativeErr("immutable_task", "only open or in_progress native tasks can be discarded")
-		}
-		if intent.PRURL != "" && (info == nil || !info.Merged && info.URL != intent.PRURL || expectedPRRepository != "" && info.Repository != expectedPRRepository || info.BaseBranch != graph.Authority.Branch) {
-			return nativeErr("merge_state_unknown", "PR binding or target branch changed during discard verification")
-		}
-		if info != nil && info.Merged || info != nil && info.State == "merged" {
-			receipt = taskmodel.TaskDiscardReceipt{RequestID: requestID, TaskID: intent.TaskID, Status: "rejected", Code: "already_merged", Message: "task PR is already merged", GraphRevision: graph.Authority.GraphRevision}
-			return finishDiscardCommand(tx, op, requestID, receipt, "rejected", false)
-		}
-		if intent.UncertainPR {
-			return nativeErr("merge_state_unknown", "PR publication state remains unknown")
-		}
-		currentPlan, currentTask, e := taskDiscardPlanTx(ctx, tx, c.Project, intent.TaskID)
-		if e != nil {
-			return e
-		}
-		if currentTask.Version != intent.ExpectedVersion {
-			return nativeErr("stale_version", "task version changed during PR verification")
-		}
-		if currentPlan.UncertainPR || currentPlan.PRURL != intent.PRURL || !slices.Equal(currentPlan.PRURLs, intent.PRURLs) || currentPlan.CandidateBindings != intent.CandidateBindings {
-			return nativeErr("merge_state_unknown", "published PR binding changed or remains uncertain")
-		}
-		if info != nil && info.State != "open" && info.State != "closed_unmerged" {
-			return nativeErr("merge_state_unknown", "PR provider did not confirm an unmerged PR state")
-		}
-		cleanup := append([]string(nil), currentPlan.CleanupPending...)
-		for _, pr := range known {
-			if pr.Info.State == "open" {
-				cleanup = append(cleanup, "pull_request_close:"+pr.URL)
-			}
-		}
-		cleanup = uniqueSorted(cleanup)
-		discardedAt := time.Now().UTC()
-		task, e = discardTaskRecord(task, intent.Reason, intent.RequestedBy, requestID, cleanup, discardedAt)
-		if e != nil {
-			return e
-		}
-		if e = tx.UpdateNativeTaskCAS(task, intent.ExpectedVersion); e != nil {
-			return e
-		}
-		receipt = taskmodel.TaskDiscardReceipt{RequestID: requestID, TaskID: intent.TaskID, Status: "discarded", GraphRevision: graph.Authority.GraphRevision + 1, CleanupPending: cleanup}
-		body, _ := json.Marshal(map[string]any{"task_id": intent.TaskID, "request_id": requestID, "reason": intent.Reason, "discarded_by": intent.RequestedBy, "discarded_at": discardedAt, "cleanup_pending": cleanup})
-		if _, e = tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, TaskID: intent.TaskID, ExternalSource: "native-task-command", ExternalID: requestID + ":discarded", Type: "task.discarded", ReceivedAt: discardedAt, Payload: body}); e != nil {
-			return e
-		}
-		return finishDiscardCommand(tx, op, requestID, receipt, "accepted", true)
-	})
-	return receipt, err
-}
-
-func finishDiscardCommand(tx persistence.DiscardPendingTx, op executionmodel.OperationRecord, requestID string, receipt taskmodel.TaskDiscardReceipt, status string, confirmed bool) error {
-	receiptBytes, err := json.Marshal(receipt)
+func (c CommandService) commitDiscard(ctx context.Context, s persistence.CommandStore, requestID string, op executionmodel.OperationRecord, intent taskDiscardIntent, info *executionmodel.PRInfo, expectedPRRepository string, known []executionmodel.VerifiedCandidatePR) (taskmodel.TaskDiscardReceipt, error) {
+	graph, err := s.TaskGraphSnapshot(ctx, c.Project)
 	if err != nil {
-		return err
+		return taskmodel.TaskDiscardReceipt{}, err
 	}
-	command := storageports.CommandRecord{ProjectIdentity: op.ProjectIdentity, CommandID: requestID, Status: status, Result: receiptBytes}
-	if err = tx.UpdateCommand(command); err != nil {
-		return err
+	before, found := graph.ByID[intent.TaskID]
+	if !found {
+		return taskmodel.TaskDiscardReceipt{}, nativeErr("task_not_found", "discard task missing")
 	}
-	if confirmed {
-		op.Status = "confirmed"
-	} else {
-		op.Status = "rejected"
-	}
-	op.UpdatedAt = time.Now().UTC()
-	if err = tx.UpdateOperation(op); err != nil {
-		return err
-	}
-	return nil
-}
-
-func taskDiscardPlanTx(ctx context.Context, tx interface {
-	Query(context.Context, string) (DomainSnapshot, error)
-}, project, taskID string) (taskDiscardPlan, taskmodel.TaskRecord, error) {
-	snapshot, err := tx.Query(ctx, project)
+	facts, _, err := taskDiscardPlanFromStore(ctx, s, c.Project, intent.TaskID)
 	if err != nil {
-		return taskDiscardPlan{}, taskmodel.TaskRecord{}, err
+		return taskmodel.TaskDiscardReceipt{}, err
 	}
-	return taskDiscardPlanFromSnapshot(snapshot, taskID)
+	if facts.CandidateBindings != intent.CandidateBindings || facts.PRURL != intent.PRURL || !slices.Equal(facts.PRURLs, intent.PRURLs) || facts.UncertainPR != intent.UncertainPR {
+		return taskmodel.TaskDiscardReceipt{}, nativeErr("merge_state_unknown", "candidate bindings changed during discard verification")
+	}
+	taskIntent := taskmodel.DiscardIntent{TaskID: intent.TaskID, ExpectedVersion: intent.ExpectedVersion, Reason: intent.Reason, RequestedBy: intent.RequestedBy}
+	cleanup := append([]string(nil), facts.CleanupPending...)
+	for _, pr := range known {
+		if pr.Info.State == "open" {
+			cleanup = append(cleanup, "pull_request_close:"+pr.URL)
+		}
+	}
+	after, err := c.taskResults.Discard(before, taskIntent, requestID, uniqueSorted(cleanup), time.Now().UTC())
+	if err != nil {
+		return taskmodel.TaskDiscardReceipt{}, err
+	}
+	return s.CommitTaskDiscard(ctx, storageports.DiscardCommit{Before: before, After: after, Intent: taskIntent, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, Facts: facts, Known: known, Operation: op})
 }

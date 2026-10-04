@@ -20,13 +20,27 @@
 
 | 级别/组或场景 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
 | --- | --- | --- | --- | --- | --- |
-| 定向 Go：TM02.1 | Windows；隔离 SQLite、可控后端 | `go run ./cmd/test-feedback -out docs/validation/three-line-02-task-execution-boundary/claim -- ./internal/steerline -run '^(TestMC1\|TestMC2\|TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation\|TestNativeClaimAllowsManualParallelButKeepsAutoSlot)$' -count=1` | 真实启动切换后 | 保留首次/后续身份与领取/模式代表断言，全部非零命中 | `docs/validation/three-line-02-task-execution-boundary/claim/` |
-| 定向 Go：TM02.2–TM02.3 | Windows；隔离 SQLite/provider，无模型 | `go run ./cmd/test-feedback -out docs/validation/three-line-02-task-execution-boundary/result -- ./internal/steerline -run '^(TestMC5\|TestMC6\|TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor\|TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof\|TestTM02ResultCAS)$' -count=1` | 结果和丢弃同事务接通后 | 已有交付/冲突代表通过；补结果去重、旧版本及交付/丢弃竞争缺口 | `docs/validation/three-line-02-task-execution-boundary/result/` |
-| L1 固定最小入口 | Windows；隔离 STEERLINE_HOME，无原生 opt-in | `go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-02-task-execution-boundary/l1` | 自查/定向修复完成后一次 | 现有规则/构造/守卫代表非零命中且通过，无意外 live | `docs/validation/three-line-02-task-execution-boundary/l1/` |
+| 定向 Go：TM02.1 | Windows；隔离 SQLite、可控后端 | `go run ./cmd/test-feedback -out docs/validation/three-line-02-task-execution-boundary/claim/run-03 -- ./internal/steerline -run '^(TestMC1\|TestMC2\|TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation\|TestNativeClaimAllowsManualParallelButKeepsAutoSlot\|TestTM02TaskWorkPort)$' -count=1` | 真实启动切换后 | 保留首次/后续身份与领取/模式代表断言，全部非零命中 | `docs/validation/three-line-02-task-execution-boundary/claim/` |
+| 定向 Go：TM02.2–TM02.3 | Windows；隔离 SQLite/provider，无模型 | `go run ./cmd/test-feedback -out docs/validation/three-line-02-task-execution-boundary/result/run-03 -- ./internal/steerline -run '^(TestMC5\|TestMC6\|TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor\|TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof\|TestTM02ResultCAS)$' -count=1` | 结果和丢弃同事务接通后 | 已有交付/冲突代表通过；补结果去重、旧版本及交付/丢弃竞争缺口 | `docs/validation/three-line-02-task-execution-boundary/result/` |
+| L1 固定最小入口 | Windows；隔离 STEERLINE_HOME，无原生 opt-in | `go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-02-task-execution-boundary/l1/run-03` | 自查/定向修复完成后一次 | 现有规则/构造/守卫代表非零命中且通过，无意外 live | `docs/validation/three-line-02-task-execution-boundary/l1/` |
 
 边界类变更在本阶段同步既有守卫/负向注入及 L1 选择；扫描全 OS/build tag 源码，核对 Windows/Linux 生产直接及传递依赖。跨系统只做依赖图/编译不冒充运行行为。新增场景或环境能力须先登记包/测试/ID与命令，再执行；当前已注册 E2E 入口和环境约定见 [E2E README](../../tests/e2e/README.md)。
 
 不选 Full/L2/live：身份/事务责任变化由受控实际生产接线验；不重跑原生权限矩阵。L3 组合留 #82；若新发现恢复路径受影响则只追加 recovery.waiting-merge-restart。
+
+实施后的精确命令与父/子断言清单见 [test-mapping.json](../validation/three-line-02-task-execution-boundary/test-mapping.json)。首次领取原预留重放的版本前值语义保持原断言；规范结果的旧任务/图/集合版本及异内容重放拒绝分别由 TestTM02ResultCAS 验证。task 原测试按断言所有者迁到 `internal/task/work_test.go` 与 `internal/execution/task_boundary_test.go`，PR 拒绝与任务声明分开；原 merged-discard 断言迁入真实 SQLite/生产执行协调的 `TestTM02ResultCAS/merged_discard_rejected`，没有削弱该检查。
+
+补充最小测试计划（实际构造与 schema 14 涉及重启重新注入及新结果持久关联，只加既有 waiting-merge controlled 场景）：
+
+| 级别/组或场景 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
+| --- | --- | --- | --- | --- | --- |
+| 定向规则/格式/原生小端口代表 | Windows；隔离 Git/SQLite/provider，无模型 | `go run ./cmd/test-feedback -out docs/validation/three-line-02-task-execution-boundary/extra/run-02 -- ./internal/task ./internal/execution ./internal/steerline/sqlite ./internal/steerline -run '^(TestTaskStatusAndDeliveryEvidence\|TestDeliveryGateRequiresSelectedWorker\|TestBatchPlanAndTaskClaimKeepFixedValues\|TestNativeDatabaseInitializesCurrentSchema\|TestTM02PreviousResultSchemaRejected\|TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged\|TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent\|TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity\|TestNativeClaimPersistsChosenExecutionProfile\|TestWorkerFlowClaimsFreezeIndependentLocalProfiles)$' -count=1` | 共享拆分与构造完成后 | 原迁入断言、旧 schema 拒绝、选中 profile/PR 和丢弃精确证明实际非零命中，无 skip | `docs/validation/three-line-02-task-execution-boundary/extra/run-02/` |
+| L3 controlled：recovery.waiting-merge-restart | Windows；独立临时项目，真实 CLI/Git/SQLite 与受控 provider/helper | `go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled -scenario=recovery.waiting-merge-restart -out docs/validation/three-line-02-task-execution-boundary/recovery/run-01` | 新提交/构造稳定后 | 重启保留原 Task/Workflow/Execution/workspace；不重派，正常交付且清理完成，0 fail/skip | `docs/validation/three-line-02-task-execution-boundary/recovery/run-01/` |
+| Windows/Linux 生产编译与图 | 独立 GOOS 子进程，不冒充 Linux 执行行为 | `go build ./...`（Windows）；`$env:GOOS='linux'; go build ./...`；L1 的 coreboundary 直接/传递图 | L1 后 | 两个生产目标编译成功，所有 tag/OS 源码守卫及依赖图通过 | `docs/validation/three-line-02-task-execution-boundary/build/`、`l1/run-03/` |
+
+测试入口每次使用新空子目录。首次失败报告保持原文，修复后按受影响入口重跑，不能将旧失败或零匹配覆盖成通过。不选 Full/L2/live，也不运行整个 L3；没有新增原生权限、协议、远端准入或模型请求。
+
+L1 首次运行确认 task 包无测试产生 package skip，且旧 CM69 仍指向已删除的 Snapshot owner。修复仅迁入原任务断言并更新实际纯投影所有者；taskview 新增全 OS/tag 禁止依赖负向覆盖。精确修复命令为 `go run ./cmd/test-feedback -out docs/validation/three-line-02-task-execution-boundary/l1-repair/run-01 -- ./internal/task ./internal/execution ./internal/steerline/persistence ./internal/steerlineintegration -run '^(TestTaskStatusAndDeliveryEvidence\|TestDeliveryGateRequiresSelectedWorker\|TestBatchPlanAndTaskClaimKeepFixedValues\|TestCM69PurePortDependencies\|TestCD67CoreBoundary)$' -count=1`，随后重跑同一 L1 固定入口，保留失败报告，不放宽 skip/零命中/禁止依赖判定。
 
 ## 自查与交付
 

@@ -17,6 +17,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	taskapp "github.com/erranliu/SteerLine/internal/task"
 )
 
 func additionalDirectory(t *testing.T, ledger *additionalLedger) *steerline.ExecutionDirectory {
@@ -224,7 +225,7 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 		store, err := steerline.OpenNativeTaskCommandStore(ctx, &config2)
 		require(t, err)
 		defer store.Close()
-		command := steerline.CommandService{Store: store, Project: config2.Identity()}
+		command := steerline.NewCommandService(store, config2.Identity(), taskapp.Service{Reader: store}, taskapp.Service{Reader: store})
 		_, err = command.AbandonNativeCandidate(ctx, config2, steerline.CandidateAbandonOptions{TaskID: "901", WorkflowRunID: first.run.RunID, RequestID: newID(), ExpectedTaskVersion: delivered.Tasks[0].Version, ExpectedCandidateVersion: first.run.ControlRevision, RequestedBy: "operator", Reason: "must reject known merged candidate"})
 		if err == nil || !strings.Contains(err.Error(), "already_merged") {
 			t.Fatalf("real merged delivery allowed exit: %v", err)

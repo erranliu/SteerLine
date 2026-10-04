@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestWorkerCommitRollsBackRecordsReceiptsEventsAndCheckpoint(t *testing.T) {
@@ -89,7 +90,7 @@ func TestWorkerCommitChecksSettledTaskInsideTransaction(t *testing.T) {
 	ctx := context.Background()
 	// A concurrent discard cannot be inferred from the actor's cached task.
 	task := *nativeTaskRecord(service.domain.Tasks, run.DomainTaskID)
-	discarded, err := discardTaskRecord(task, "concurrent settlement", "operator", newID(), nil, now())
+	discarded, err := taskmodel.Discard(task, "concurrent settlement", "operator", newID(), nil, now())
 	require(t, err)
 	require(t, testSQLite(service).transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.UpdateNativeTaskCAS(discarded, task.Version) }))
 	before, revision, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())

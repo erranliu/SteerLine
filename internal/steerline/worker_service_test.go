@@ -38,7 +38,7 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
 		t.Fatalf("push isolated fixture: %v: %s", err, out)
 	}
-	commands := CommandService{Store: store, Project: c.Identity()}
+	commands := newTestCommandService(store, c.Identity())
 	input := taskBatchFixture(t, c, commit, batchTasks(8), nil)
 	validation, err := commands.ValidateTaskBatch(ctx, c, input)
 	if err != nil || !validation.Valid {
@@ -177,11 +177,11 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err != nil {
 		t.Fatal(err)
 	}
-	command, _, err := (CommandService{Store: service.commandStore, Project: c.Identity()}).AnswerDecisionWithID(ctx, strings.Repeat("1", 32), answer.DecisionID, run.Decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, payload)
+	command, _, err := (newTestCommandService(service.commandStore, c.Identity())).AnswerDecisionWithID(ctx, strings.Repeat("1", 32), answer.DecisionID, run.Decision.Version, decisionAnswerKey(answer), answer.AnsweredBy, payload)
 	if err != nil {
 		t.Fatal(err)
 	}
-	record, _, err := (CommandService{Store: service.commandStore, Project: c.Identity()}).AcceptAnswer(ctx, command, answer)
+	record, _, err := (newTestCommandService(service.commandStore, c.Identity())).AcceptAnswer(ctx, command, answer)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,11 +243,11 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	if err != nil {
 		t.Fatal(err)
 	}
-	uncertainCommand, _, err := (CommandService{Store: service.commandStore, Project: c.Identity()}).AnswerDecisionWithID(ctx, strings.Repeat("2", 32), uncertain.DecisionID, run.Decision.Version, decisionAnswerKey(uncertain), uncertain.AnsweredBy, uncertainPayload)
+	uncertainCommand, _, err := (newTestCommandService(service.commandStore, c.Identity())).AnswerDecisionWithID(ctx, strings.Repeat("2", 32), uncertain.DecisionID, run.Decision.Version, decisionAnswerKey(uncertain), uncertain.AnsweredBy, uncertainPayload)
 	if err != nil {
 		t.Fatal(err)
 	}
-	uncertainRecord, _, err := (CommandService{Store: service.commandStore, Project: c.Identity()}).AcceptAnswer(ctx, uncertainCommand, uncertain)
+	uncertainRecord, _, err := (newTestCommandService(service.commandStore, c.Identity())).AcceptAnswer(ctx, uncertainCommand, uncertain)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -294,7 +294,7 @@ func TestRestartDoesNotSendPreviouslyAcceptedFeedback(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	defer service.Close()
 	answer := executionmodel.DecisionAnswer{DecisionID: run.Decision.ID, RunID: run.RunID, OptionID: "continue", Note: "saved before stop", AnsweredBy: "operator", ExpectedDecisionVersion: run.Decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
-	commands := CommandService{Store: service.commandStore, Project: service.Config.identity}
+	commands := newTestCommandService(service.commandStore, service.Config.identity)
 	command, _, err := commands.AnswerDecisionWithID(context.Background(), newID(), answer.DecisionID, answer.ExpectedDecisionVersion, decisionAnswerKey(answer), answer.AnsweredBy, mustJSON(answer))
 	if err != nil {
 		t.Fatal(err)

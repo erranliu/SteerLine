@@ -5,8 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
-
-	"github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
 type cursor struct {
@@ -51,7 +49,7 @@ func NormalizePage(project, encodedCursor string, limit int) (PageRequest, error
 }
 
 // Paginate preserves the version-bound cursor and boundary semantics.
-func Paginate(snapshot task.Snapshot, request PageRequest) (Page, error) {
+func Paginate(snapshot Snapshot, request PageRequest) (Page, error) {
 	expected := request.expected
 	if request.cursor != "" && (expected.AuthorityVersion != snapshot.Authority.AuthorityVersion || expected.GraphRevision != snapshot.Authority.GraphRevision || expected.DatabaseRevision != snapshot.DatabaseRevision || expected.DatabaseID != snapshot.DatabaseID) {
 		return Page{}, viewError("cursor_invalidated", "database or project graph changed between pages")

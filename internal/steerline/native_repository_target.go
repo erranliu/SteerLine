@@ -5,8 +5,8 @@ import (
 	"net/url"
 	"strings"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/publication"
-	tasklegacy "github.com/erranliu/SteerLine/internal/steerline/task"
 )
 
 func configuredRepositoryTarget(ctx context.Context, c Config) (string, error) {
@@ -45,7 +45,7 @@ func configuredRepositoryTarget(ctx context.Context, c Config) (string, error) {
 	return target, nil
 }
 
-func validateNativeConfiguredTarget(ctx context.Context, c Config, authority tasklegacy.ProjectTaskAuthority) error {
+func validateNativeConfiguredTarget(ctx context.Context, c Config, authority executionmodel.ProjectTaskAuthority) error {
 	if c.Remote != authority.Remote || c.Branch != authority.Branch {
 		return nativeErr("authority_mismatch", "configured remote or branch differs from the registered native project")
 	}

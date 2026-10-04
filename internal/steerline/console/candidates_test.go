@@ -1,13 +1,6 @@
 package console
 
 import (
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-)
-
-import (
 	"context"
 	"encoding/json"
 	"fmt"
@@ -18,8 +11,12 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func ccFixture(t *testing.T, count int) (Model, *testControlClient) {
@@ -338,7 +335,7 @@ func TestCandidateMergedConflictPresentation(t *testing.T) {
 	for _, r := range runs {
 		r.TaskStatus = "closed"
 	}
-	s.snapshot.Observation.Runtime.Deliveries = []contracts.TaskDeliveryRecord{{TaskID: "38", SelectedWorkflowRunID: runs[1].RunID}}
+	s.snapshot.Observation.Runtime.Deliveries = []executionmodel.TaskDeliveryRecord{{TaskID: "38", SelectedWorkflowRunID: runs[1].RunID}}
 	text = strings.Join(renderCandidates(m, *s, m.selectedRow(0)), "\n")
 	if strings.Count(text, "获胜/唯一交付") != 1 || !strings.Contains(text, "冲突：非交付候选 PR 已合并") || !strings.Contains(text, "资源 active") {
 		t.Fatal("late loser merge must preserve the sole delivery and actual resources", text)
