@@ -430,7 +430,9 @@ func (c *HistoryClient) BootstrapSession(ctx context.Context, cwd, sandbox, inst
 func ResumeCommand(command executionbackend.Command, sessionID string, args []string, prompt, cwd string) executionbackend.LaunchCommand {
 	argv := append(append([]string{}, command.Args...), "resume", "--include-non-interactive", sessionID)
 	argv = append(argv, args...)
-	argv = append(argv, prompt)
+	if prompt != "" {
+		argv = append(argv, prompt)
+	}
 	return executionbackend.LaunchCommand{Executable: command.Executable, Args: argv, WorkingDirectory: cwd}
 }
 

@@ -92,7 +92,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *contracts.Run, task
 		}
 		return s.commitWorker(run)
 	}
-	pendingQuestion := run.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "pending" && run.Decision.Request.Question != "The worker stopped. What should it do next?")
+	pendingQuestion := execution.PendingCommandID != "" || execution.PendingTurnID != "" || run.Decision != nil && (run.Decision.Status == "answer_saved" || run.Decision.Status == "pending" && run.Decision.Request.Question != "The worker stopped. What should it do next?")
 	previousPRURL := workflow.PRURL
 	if err := BindWorkerPR(workflow, execution, info, url, c.PR.Repository, pendingQuestion); err != nil {
 		return s.waitWorkerFlow(run, "Several PRs or conflicting PR identities need a user decision: "+err.Error())

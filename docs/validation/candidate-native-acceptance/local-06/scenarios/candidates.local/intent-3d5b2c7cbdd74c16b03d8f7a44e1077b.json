@@ -1,0 +1,17 @@
+{
+  "Action": "start_candidate",
+  "RequestID": "3d5b2c7cbdd74c16b03d8f7a44e1077b",
+  "TaskID": "1",
+  "ProfileID": "candidate-local",
+  "RunID": "",
+  "ExecutionID": "",
+  "DecisionID": "",
+  "Option": "",
+  "Note": "",
+  "InstanceID": "79069bac59bdcf9612bc48e038d3fcce",
+  "TaskVersion": 2,
+  "GraphRevision": 1,
+  "CandidateVersion": 0,
+  "DecisionVersion": 0,
+  "RunRevision": 0
+}

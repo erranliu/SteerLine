@@ -4,7 +4,7 @@
 
 ## 范围与前置
 
-硬前置：#39、#41。#39 传递包含 #38/#37/#36，#41 传递汇合 #40。依赖[多候选真机验收](candidate-native-acceptance.spec.md)、[环境隔离与提升](runtime-isolation-promotion.spec.md)，遵守[共同约束](phase1-delivery-constraints.md)。
+硬前置：#39、#41。#39 传递包含 #38/#37/#36，#41 传递汇合 #40。复用已交付的[本机多候选证据](../validation/candidate-native-acceptance/README.md)，依赖[环境隔离与提升](runtime-isolation-promotion.spec.md)，遵守[共同约束](phase1-delivery-constraints.md)。
 
 本任务给出第一阶段可持续使用版本的交付判定，交付集成验收脚本/记录、运行入口说明、未结算资源清单和维护指引。第一阶段统一只包含本地 Codex 与本机 Orca，不包含远端准入、派发、反馈、恢复、取消或远端组合验收，也不把远端列作本任务阻塞/待补验。只修复本机组合运行的接线缺陷；版本管理或本机权限的缺失实现仍归原任务。第一阶段采用 CLI/TUI；WinUI 和主 agent 规划闭环仍归第二阶段，远端流程另行规划。
 

@@ -1,0 +1,50 @@
+[
+  {
+    "created_at": "2026-10-04T09:58:51.9367815Z",
+    "kind": "project",
+    "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2894246746\\candidates.local\\candidates",
+    "pid": 0
+  },
+  {
+    "created_at": "2026-10-04T09:58:52.9510544Z",
+    "kind": "process",
+    "path": "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-04\\build\\controlled-helper.exe",
+    "pid": 11960
+  },
+  {
+    "created_at": "2026-10-04T09:58:59.0373187Z",
+    "kind": "github-base-branch",
+    "path": "codex/e2e/811aa05b772c44c9bcae9042d50deeb1/candidates.local/base",
+    "pid": 0
+  },
+  {
+    "created_at": "2026-10-04T09:59:05.1502548Z",
+    "kind": "orca-repo",
+    "path": "6d21451f-6771-4839-bdc0-a40f883f8f1f",
+    "pid": 0
+  },
+  {
+    "created_at": "2026-10-04T09:59:15.3301649Z",
+    "kind": "process",
+    "path": "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-04\\build\\steerline.exe",
+    "pid": 30596
+  },
+  {
+    "created_at": "2026-10-04T10:03:04.9451844Z",
+    "kind": "process",
+    "path": "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-04\\build\\steerline.exe",
+    "pid": 24592
+  },
+  {
+    "created_at": "2026-10-04T10:10:31.3175716Z",
+    "kind": "orca-worktree",
+    "path": "6d21451f-6771-4839-bdc0-a40f883f8f1f::C:/Users/lmas1/AppData/Local/Temp/steerline-e2e-2894246746/candidates.local/candidates/repo",
+    "pid": 0
+  },
+  {
+    "created_at": "2026-10-04T10:10:31.691319Z",
+    "kind": "orca-worktree",
+    "path": "6d21451f-6771-4839-bdc0-a40f883f8f1f::C:/Users/lmas1/orca/workspaces/repo/sl-1-802c1419b7addccda9dfc912ecac8257",
+    "pid": 0
+  }
+]

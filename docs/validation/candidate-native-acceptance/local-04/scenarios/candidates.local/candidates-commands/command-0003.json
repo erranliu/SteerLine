@@ -1,0 +1,20 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-04\\build\\steerline.exe",
+    "task",
+    "create",
+    "-config",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2894246746\\candidates.local\\candidates\\project.json",
+    "-file",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-2894246746\\candidates.local\\candidates\\tasks.json",
+    "-request-id",
+    "08d8b24193934ad68c37e216ec09ccac",
+    "-expected-authority-version",
+    "1",
+    "-by",
+    "e2e"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\"request_id\":\"08d8b24193934ad68c37e216ec09ccac\",\"batch_id\":\"1481ba12c86abcf3225f2996be54436b\",\"task_ids\":{\"a\":\"1\",\"b\":\"2\"},\"graph_revision\":1,\"payload_digest\":\"899cb1ed235285b2c65862505fa3cf9a5c41360b1485191ec4fd9a2f2003a0e5\",\"status\":\"accepted\",\"dispatch_note\":\"Task creation does not start work. If dispatch is already auto and unpaused, normal polling may consider these tasks.\"}\n"
+}

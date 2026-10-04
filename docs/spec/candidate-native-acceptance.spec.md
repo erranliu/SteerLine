@@ -1,6 +1,6 @@
 # Spec：多候选本机验收
 
-任务 ID：39；任务名称：多候选本机验收；目标：`PHASE1-CANDIDATES`。配套 [Plan](candidate-native-acceptance.plan.md)。状态：开发与验收中，一个独立实现 PR 交付。
+任务 ID：39；任务名称：多候选本机验收；目标：`PHASE1-CANDIDATES`。配套 [Plan](candidate-native-acceptance.plan.md)。状态：本机验收与协调复审完成；实现合入状态见 [PR #216](https://github.com/erranliu/SteerLine/pull/216)。
 
 ## 范围与前置
 

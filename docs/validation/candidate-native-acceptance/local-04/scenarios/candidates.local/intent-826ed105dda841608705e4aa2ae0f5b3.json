@@ -1,0 +1,17 @@
+{
+  "Action": "abandon_candidate",
+  "RequestID": "826ed105dda841608705e4aa2ae0f5b3",
+  "TaskID": "1",
+  "ProfileID": "",
+  "RunID": "802c1419b7addccda9dfc912ecac8257",
+  "ExecutionID": "",
+  "DecisionID": "",
+  "Option": "",
+  "Note": "CN8 actual merged candidate rejection",
+  "InstanceID": "c0b6ffad64a5d01f7dd0f95400f04a65",
+  "TaskVersion": 3,
+  "GraphRevision": 0,
+  "CandidateVersion": 52,
+  "DecisionVersion": 0,
+  "RunRevision": 0
+}

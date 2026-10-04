@@ -1,0 +1,13 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\AppData\\Local\\Programs\\orca\\resources\\bin\\orca.exe",
+    "repo",
+    "add",
+    "--path",
+    "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1231837869\\candidates.local\\candidates\\repo",
+    "--json"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\n  \"id\": \"c7f662fd-e9c1-4618-b064-d869b461e7b4\",\n  \"ok\": true,\n  \"result\": {\n    \"repo\": {\n      \"id\": \"b3856c7e-6ca8-4e53-b95a-598eaa099a2d\",\n      \"path\": \"C:\\\\Users\\\\lmas1\\\\AppData\\\\Local\\\\Temp\\\\steerline-e2e-1231837869\\\\candidates.local\\\\candidates\\\\repo\",\n      \"displayName\": \"repo\",\n      \"badgeColor\": \"#737373\",\n      \"addedAt\": 1791106033691,\n      \"kind\": \"git\",\n      \"externalWorktreeVisibilityLegacy\": false,\n      \"repoIcon\": {\n        \"type\": \"image\",\n        \"src\": \"https://github.com/erranliu.png?size=64\",\n        \"source\": \"github\",\n        \"label\": \"erranliu/SteerlineTest\"\n      },\n      \"upstream\": null,\n      \"gitRemoteIdentity\": {\n        \"canonicalKey\": \"github.com/erranliu/SteerlineTest\",\n        \"remoteName\": \"origin\",\n        \"remoteUrl\": \"https://github.com/erranliu/SteerlineTest.git\"\n      },\n      \"gitUsername\": \"\",\n      \"hookSettings\": {\n        \"mode\": \"auto\",\n        \"setupRunPolicy\": \"run-by-default\",\n        \"setupAgentStartupPolicy\": \"start-immediately\",\n        \"scripts\": {\n          \"setup\": \"\",\n          \"archive\": \"\"\n        }\n      },\n      \"externalWorktreeVisibility\": \"hide\"\n    }\n  },\n  \"_meta\": {\n    \"runtimeId\": \"5eedc7aa-7395-4127-ad2f-724894efe596\"\n  }\n}\n"
+}

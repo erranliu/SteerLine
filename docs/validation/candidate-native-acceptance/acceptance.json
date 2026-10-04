@@ -1,0 +1,136 @@
+{
+  "task_id": 39,
+  "task_name": "多候选本机验收",
+  "start_commit": "a8ff0f01d38299d77ecc9cd4463b78a1286e1bec",
+  "source_commit": "6c3e1735b7b71adba834f4fdbb2145a9881d8e12",
+  "build_sha256": {
+    "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-08\\build\\controlled-helper.exe": "6d7fd1d0ad497126ca256d7c7646565626abdd6c37dd18302c47e202fca0a038",
+    "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-08\\build\\steerline.exe": "28d59e43b36f1cc132e421c52f31a53556ef9b3ef3cece6258e468b18fc9f1e8"
+  },
+  "local_passed": true,
+  "cleanup_complete": true,
+  "deliveries": [
+    {
+      "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-72047947\\candidates.local\\candidates\\repo\\.git",
+      "task_id": "1",
+      "selected_workflow_run_id": "536eb03d57bd1c982b83111e363c75c4",
+      "pr_instance": "https://github.com",
+      "pr_repository": "erranliu/SteerlineTest",
+      "pr_number": 73,
+      "pr_url": "https://github.com/erranliu/SteerlineTest/pull/73",
+      "merge_commit": "bb353357646d4cd525403d652d55246d19c54884",
+      "merged_at": "2026-10-04T12:40:22Z",
+      "recorded_at": "2026-10-04T12:40:30.2703768Z",
+      "evidence": {
+        "pr_instance": "https://github.com",
+        "url": "https://github.com/erranliu/SteerlineTest/pull/73",
+        "repository": "erranliu/SteerlineTest",
+        "number": 73,
+        "base_branch": "codex/e2e/133ec4f766c94fe98a260f405e5cbf6b/candidates.local/base",
+        "state": "merged",
+        "merged": true,
+        "merged_at": "2026-10-04T12:40:22Z",
+        "merge_commit": "bb353357646d4cd525403d652d55246d19c54884"
+      }
+    },
+    {
+      "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-72047947\\candidates.local\\candidates\\repo\\.git",
+      "task_id": "2",
+      "selected_workflow_run_id": "ec009605cfd8d25cda05e36853a106ea",
+      "pr_instance": "https://github.com",
+      "pr_repository": "erranliu/SteerlineTest",
+      "pr_number": 75,
+      "pr_url": "https://github.com/erranliu/SteerlineTest/pull/75",
+      "merge_commit": "343dea960ebaf24476e22ec66aa39e8361d44dd0",
+      "merged_at": "2026-10-04T12:44:36Z",
+      "recorded_at": "2026-10-04T12:44:39.7141244Z",
+      "evidence": {
+        "pr_instance": "https://github.com",
+        "url": "https://github.com/erranliu/SteerlineTest/pull/75",
+        "repository": "erranliu/SteerlineTest",
+        "number": 75,
+        "base_branch": "codex/e2e/133ec4f766c94fe98a260f405e5cbf6b/candidates.local/base",
+        "state": "merged",
+        "merged": true,
+        "merged_at": "2026-10-04T12:44:36Z",
+        "merge_commit": "343dea960ebaf24476e22ec66aa39e8361d44dd0"
+      }
+    }
+  ],
+  "candidate_usage": [
+    {
+      "file": "candidates-536eb03d57bd1c982b83111e363c75c4-final-usage.json",
+      "source": "codex/session-jsonl",
+      "session_id": "01a106e2-e546-74b1-88f4-eb88df4b383f",
+      "turn_id": "01a106e9-34a8-7120-be99-cec2ef8b714d",
+      "cwd": "C:/Users/lmas1/orca/workspaces/repo/sl-1-536eb03d57bd1c982b83111e363c75c4",
+      "model": "gpt-6-luna",
+      "reasoning_effort": "medium",
+      "tokens": {
+        "input_tokens": 906622,
+        "cached_input_tokens": 855040,
+        "output_tokens": 6214,
+        "reasoning_output_tokens": 1939,
+        "total_tokens": 912836
+      }
+    },
+    {
+      "file": "candidates-c72304798278450f8477607b98972961-final-usage.json",
+      "source": "app-server/thread/tokenUsage/updated",
+      "session_id": "01a106eb-15a5-7122-8fa6-cd1d5dfe28af",
+      "turn_id": "01a106ed-4349-7aa1-a9e2-0edb70b0d418",
+      "model": "gpt-6-luna",
+      "reasoning_effort": "medium",
+      "tokens": {
+        "input_tokens": 246411,
+        "cached_input_tokens": 200448,
+        "output_tokens": 1903,
+        "reasoning_output_tokens": 375,
+        "total_tokens": 248314
+      }
+    },
+    {
+      "file": "candidates-d84caea2f0764635aa12fbd10a010788-final-usage.json",
+      "source": "app-server/thread/tokenUsage/updated",
+      "session_id": "01a106e4-af63-7cf2-b703-814903d5d1d1",
+      "turn_id": "01a106e6-a0d8-7e40-98d9-d27c908773c4",
+      "model": "gpt-6-luna",
+      "reasoning_effort": "medium",
+      "tokens": {
+        "input_tokens": 224959,
+        "cached_input_tokens": 199424,
+        "output_tokens": 1667,
+        "reasoning_output_tokens": 611,
+        "total_tokens": 226626
+      }
+    },
+    {
+      "file": "candidates-ec009605cfd8d25cda05e36853a106ea-final-usage.json",
+      "source": "app-server/thread/tokenUsage/updated",
+      "session_id": "01a106ee-8e2f-72c2-9cd4-ff4f68b53305",
+      "turn_id": "01a106ef-ee2f-7ac3-a8f1-238a5f226d38",
+      "model": "gpt-6-luna",
+      "reasoning_effort": "medium",
+      "tokens": {
+        "input_tokens": 240376,
+        "cached_input_tokens": 214784,
+        "output_tokens": 2463,
+        "reasoning_output_tokens": 1407,
+        "total_tokens": 242839
+      }
+    }
+  ],
+  "CN": {
+    "CN1": "local-08: both-waiting, original sessions and original PRs",
+    "CN2": "local-08: selected-delivery/final-deliveries, successor merged base, repeated polling",
+    "CN3": "local-08: original feedback replay, exact command/Execution; #37 controlled late/receipt boundaries",
+    "CN4": "local-08: connection-fault/disconnected-original-request/after-sibling-fault; original restart identities",
+    "CN5": "native-wiring-01: TestMC5/TestMC6, 27 events, no fail/skip; existing #37 fault samples",
+    "CN6": "local-08: loser-in-flight-before-merge/late-loser-retained/native usage and original Operations",
+    "CN7": "local-08: frozen profiles, canonical conversations/bodies, exact native model/effort/permissions and positive usage",
+    "CN8": "local-08: abandoned-resource-facts/manual-replacement; actual merged abandonment rejection"
+  },
+  "manual_pending": [],
+  "remote_in_scope": false,
+  "l1": "l1-final/summary.json"
+}

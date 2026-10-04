@@ -1,0 +1,61 @@
+{
+  "id": "d771142d-3e98-42bb-8c3f-1056c6e345b7",
+  "ok": true,
+  "result": {
+    "terminal": {
+      "handle": "term_64892acc-0fc0-4782-b962-82eae5cc1f64",
+      "status": "running",
+      "tail": [
+        "  Spec: docs/spec/task.spec.md at",
+        "  ed2942416e9758779954cc3a986ae3d4c8e90ce9 (SHA-256",
+        "  77fe2614e7f176387f92b0e9e10e351ba7bd7de6299b1f6441c308bd74f",
+        "  31d87)",
+        "  Plan: docs/spec/task.plan.md at",
+        "  ed2942416e9758779954cc3a986ae3d4c8e90ce9 (SHA-256",
+        "  3326fbb2ad49b6eaa85058b304e366cf452c543ff6f0627be45cb1bbfd2",
+        "  6e934)",
+        "  Acceptance reference: docs/spec/task.spec.md at",
+        "  ed2942416e9758779954cc3a986ae3d4c8e90ce9 (SHA-256",
+        "  77fe2614e7f176387f92b0e9e10e351ba7bd7de6299b1f6441c308bd74f",
+        "  31d87)",
+        "  Fixed publication responsibility: worker. Provider: command",
+        "  https://github.com/erranliu/SteerlineTest. Git remote:",
+        "  origin (https://github.com/erranliu/SteerlineTest.git).",
+        "  Target branch: codex/e2e/bd1a3e130829406e862779e50ed57098/",
+        "  candidates.local/base. Use these original targets",
+        "  throughout this execution; report a mismatch before",
+        "  publishing.",
+        "  Windows workspace-write delivery: Orca CLI cannot connect",
+        "  to its runtime pipe from this sandbox. For your final",
+        "  worker_done, write one UTF-8 JSON file atomically",
+        "  at .steerline-relay/93b52627e191460dfe6feb30eff6d51f/",
+        "  e7b33f1dd877212aa75a43b55c6b7dfc.json in this worktree. Use",
+        "  the Orca Task and Dispatch IDs and the --dispatch-",
+        "  capability value from the original injected Orca preamble.",
+        "  Fields: workflow_run_id=\"93b52627e191460dfe6feb30eff6d51f\",",
+        "  turn_id=\"e7b33f1dd877212aa75a43b55c6b7dfc\", orca_task_id,",
+        "  dispatch_id, dispatch_capability (the preamble's dcap_",
+        "  value; never print it), outcome (succeeded or failed),",
+        "  subject, body. The center will forward this exact result",
+        "  through Orca from your bound terminal and verify",
+        "  settlement. Do not commit this relay file. Do not claim",
+        "  that delivery succeeded merely because the file was",
+        "  written.",
+        "• Working (0s • esc to interrupt) · Running hook",
+        "› Ask Codex to do anything",
+        "  GPT-6-Luna medium · ~\\orca\\workspaces\\repo\\sl-1-93b52627e19…",
+        "  ? for shortcuts"
+      ],
+      "truncated": true,
+      "limited": false,
+      "oldestCursor": "0",
+      "nextCursor": "1",
+      "latestCursor": "1",
+      "returnedLineCount": 39,
+      "source": "screen"
+    }
+  },
+  "_meta": {
+    "runtimeId": "5eedc7aa-7395-4127-ad2f-724894efe596"
+  }
+}

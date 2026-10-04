@@ -1,0 +1,1170 @@
+{
+  "domain": {
+    "deliveries": null,
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+    "tasks": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "task_id": "1",
+        "batch_id": "d7311bf500a8d4c7062f707a94addac6",
+        "title": "E2E a",
+        "type": "task",
+        "priority": 2,
+        "contract_id": "e2e-a",
+        "claimant": "e2e",
+        "source": "native",
+        "status": "in_progress",
+        "version": 2,
+        "created_at": "2026-10-04T10:13:22.7509915Z",
+        "updated_at": "2026-10-04T10:13:43.7251965Z"
+      }
+    ],
+    "workflow_runs": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "workflow_run_id": "7b2d654721f44570accf902207927daa",
+        "task_id": "1",
+        "workflow_version": "worker-flow-v1",
+        "config_digest": "1f737cd252e7d4928ed7ef0b9e22355a1176ebbd8bd0cc6fe96fb0514bbbb0f2",
+        "execution_profile": {
+          "execution_requirements": {},
+          "implementation_version": "builtin-execution-v2",
+          "implementation_key": "local/local_codex_app_server_v1/codex",
+          "implementation_data": [
+            {
+              "version": 1,
+              "codec_version": 1,
+              "purpose": "profile-config",
+              "implementation_key": "codex.worker-profile",
+              "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+              "profile_id": "candidate-local",
+              "accepted_config_version": "1f737cd252e7d4928ed7ef0b9e22355a1176ebbd8bd0cc6fe96fb0514bbbb0f2",
+              "digest": "51bc980b74de67d374e1da6b06388a102d96db77d423eea07293551a20b84c6d",
+              "payload": {
+                "executable": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+                "args": null,
+                "model": "gpt-6-luna",
+                "reasoning_effort": "medium"
+              }
+            }
+          ],
+          "implementation_display": [
+            "权限：danger-full-access",
+            "Model：gpt-6-luna",
+            "Reasoning effort：medium"
+          ],
+          "publication_policy": {
+            "publisher": "worker"
+          },
+          "publication": {
+            "provider": {
+              "kind": "command",
+              "base_url": "https://github.com",
+              "repository": "erranliu/SteerlineTest",
+              "token_env": "",
+              "query": {
+                "executable": "C:\\Program Files\\GitHub CLI\\gh.exe",
+                "args": [
+                  "pr",
+                  "view",
+                  "{pr_url}",
+                  "--repo",
+                  "{repository}",
+                  "--json",
+                  "url,state,mergedAt,mergeCommit,headRefName,headRefOid,headRepository,headRepositoryOwner,baseRefName",
+                  "--jq",
+                  "{url:.url,repository:\"erranliu/SteerlineTest\",base_branch:.baseRefName,head_repository:(.headRepositoryOwner.login + \"/\" + .headRepository.name),head_branch:.headRefName,head_revision:.headRefOid,state:(if .mergedAt != null then \"merged\" elif .state == \"OPEN\" then \"open\" else \"closed_unmerged\" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}"
+                ]
+              },
+              "close": {
+                "executable": "C:\\Program Files\\GitHub CLI\\gh.exe",
+                "args": [
+                  "pr",
+                  "close",
+                  "{pr_url}",
+                  "--repo",
+                  "{repository}"
+                ]
+              }
+            },
+            "git": {
+              "executable": "C:\\Program Files\\Git\\cmd\\git.exe",
+              "args": null
+            },
+            "remote": "origin",
+            "remote_url": "https://github.com/erranliu/SteerlineTest.git",
+            "base_branch": "codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base",
+            "authentication_refs": [
+              "SSH_AUTH_SOCK",
+              "GIT_CONFIG_GLOBAL",
+              "GIT_SSH_COMMAND",
+              "GH_TOKEN",
+              "GITHUB_TOKEN",
+              "GH_CONFIG_DIR"
+            ]
+          },
+          "version": 6,
+          "execution_policy": {
+            "filesystem": {
+              "read_scope": "host",
+              "write_scope": "host",
+              "git_metadata_write": false
+            },
+            "network": "allow",
+            "escalation": "deny"
+          },
+          "policy_digest": "7002c25862277355d7674338184ad9ef54ad96b52c8e5c7c887933b160373f3a",
+          "accepted_config_version": "1f737cd252e7d4928ed7ef0b9e22355a1176ebbd8bd0cc6fe96fb0514bbbb0f2",
+          "policy_source": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\project.json",
+          "id": "candidate-local",
+          "name": "Candidate local Codex",
+          "digest": "81164a0a15381174fb917b3ebd10c13e0cc8e6d5c57544f1e8e467f718b0ae39",
+          "host": "local",
+          "agent": "codex"
+        },
+        "phase": "waiting_decision",
+        "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo",
+        "branch": "codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base",
+        "selected_result_id": "008316e4b8ce92192e7d8ae972cc5da1",
+        "pr_url": "https://github.com/erranliu/SteerlineTest/pull/66",
+        "pr_candidate_url": "https://github.com/erranliu/SteerlineTest/pull/66",
+        "pr_state": "open",
+        "pr_queried_at": "2026-10-04T10:20:44.0835279Z",
+        "created_at": "2026-10-04T10:15:42.1514197Z",
+        "updated_at": "2026-10-04T10:20:45.3208893Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "workflow_run_id": "93b52627e191460dfe6feb30eff6d51f",
+        "task_id": "1",
+        "workflow_version": "worker-flow-v1",
+        "config_digest": "1f737cd252e7d4928ed7ef0b9e22355a1176ebbd8bd0cc6fe96fb0514bbbb0f2",
+        "execution_profile": {
+          "execution_requirements": {},
+          "implementation_version": "builtin-execution-v2",
+          "implementation_key": "orca/orca_terminal_v2/codex",
+          "implementation_data": [
+            {
+              "version": 1,
+              "codec_version": 1,
+              "purpose": "profile-config",
+              "implementation_key": "codex.worker-profile",
+              "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+              "profile_id": "candidate-orca",
+              "accepted_config_version": "1f737cd252e7d4928ed7ef0b9e22355a1176ebbd8bd0cc6fe96fb0514bbbb0f2",
+              "digest": "9f46b5d69aa636237538d74802d7f9a340b99f0ebb37c159672fb45a30430bb5",
+              "payload": {
+                "executable": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+                "args": [
+                  "--no-daemon"
+                ],
+                "model": "gpt-6-luna",
+                "reasoning_effort": "medium"
+              }
+            },
+            {
+              "version": 1,
+              "codec_version": 1,
+              "purpose": "profile-config",
+              "implementation_key": "orca.worker-profile",
+              "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+              "profile_id": "candidate-orca",
+              "accepted_config_version": "1f737cd252e7d4928ed7ef0b9e22355a1176ebbd8bd0cc6fe96fb0514bbbb0f2",
+              "digest": "a7f03d046ce9265b4b4bc0538b2358a9d5462462661f28269c25f625e8051633",
+              "payload": {
+                "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\bin\\orca-env.exe",
+                "args": null,
+                "shell": "powershell.exe",
+                "wait_timeout": "4m",
+                "keep_terminal": false,
+                "activate": false
+              }
+            }
+          ],
+          "implementation_display": [
+            "权限：danger-full-access",
+            "Model：gpt-6-luna",
+            "Reasoning effort：medium"
+          ],
+          "publication_policy": {
+            "publisher": "worker"
+          },
+          "publication": {
+            "provider": {
+              "kind": "command",
+              "base_url": "https://github.com",
+              "repository": "erranliu/SteerlineTest",
+              "token_env": "",
+              "query": {
+                "executable": "C:\\Program Files\\GitHub CLI\\gh.exe",
+                "args": [
+                  "pr",
+                  "view",
+                  "{pr_url}",
+                  "--repo",
+                  "{repository}",
+                  "--json",
+                  "url,state,mergedAt,mergeCommit,headRefName,headRefOid,headRepository,headRepositoryOwner,baseRefName",
+                  "--jq",
+                  "{url:.url,repository:\"erranliu/SteerlineTest\",base_branch:.baseRefName,head_repository:(.headRepositoryOwner.login + \"/\" + .headRepository.name),head_branch:.headRefName,head_revision:.headRefOid,state:(if .mergedAt != null then \"merged\" elif .state == \"OPEN\" then \"open\" else \"closed_unmerged\" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}"
+                ]
+              },
+              "close": {
+                "executable": "C:\\Program Files\\GitHub CLI\\gh.exe",
+                "args": [
+                  "pr",
+                  "close",
+                  "{pr_url}",
+                  "--repo",
+                  "{repository}"
+                ]
+              }
+            },
+            "git": {
+              "executable": "C:\\Program Files\\Git\\cmd\\git.exe",
+              "args": null
+            },
+            "remote": "origin",
+            "remote_url": "https://github.com/erranliu/SteerlineTest.git",
+            "base_branch": "codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base",
+            "authentication_refs": [
+              "SSH_AUTH_SOCK",
+              "GIT_CONFIG_GLOBAL",
+              "GIT_SSH_COMMAND",
+              "GH_TOKEN",
+              "GITHUB_TOKEN",
+              "GH_CONFIG_DIR"
+            ]
+          },
+          "version": 6,
+          "execution_policy": {
+            "filesystem": {
+              "read_scope": "host",
+              "write_scope": "host",
+              "git_metadata_write": false
+            },
+            "network": "allow",
+            "escalation": "deny"
+          },
+          "policy_digest": "7002c25862277355d7674338184ad9ef54ad96b52c8e5c7c887933b160373f3a",
+          "accepted_config_version": "1f737cd252e7d4928ed7ef0b9e22355a1176ebbd8bd0cc6fe96fb0514bbbb0f2",
+          "policy_source": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\project.json",
+          "id": "candidate-orca",
+          "name": "Candidate local Orca",
+          "digest": "0165f348aa9b9c0499217293fbac00fd4a9f87b454ae065aecbada044d93fe7d",
+          "host": "orca",
+          "agent": "codex"
+        },
+        "phase": "waiting_decision",
+        "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo",
+        "branch": "codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base",
+        "selected_result_id": "61e98ff739c9ea82080390151aae44e2",
+        "pr_url": "https://github.com/erranliu/SteerlineTest/pull/67",
+        "pr_candidate_url": "https://github.com/erranliu/SteerlineTest/pull/67",
+        "pr_state": "open",
+        "pr_queried_at": "2026-10-04T10:20:42.2584455Z",
+        "created_at": "2026-10-04T10:13:43.7251965Z",
+        "updated_at": "2026-10-04T10:20:43.3121493Z"
+      }
+    ],
+    "executions": [
+      {
+        "implementation_data": [
+          {
+            "version": 1,
+            "codec_version": 1,
+            "purpose": "execution-resources",
+            "implementation_key": "codex.app-server-binding",
+            "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+            "execution_id": "008316e4b8ce92192e7d8ae972cc5da1",
+            "attempt_id": "67026d8955ac51e2cdb99bd9f0d400d4",
+            "generation": "b2465c3230346c8f0097abf7d1ffea80",
+            "config_digest": "81164a0a15381174fb917b3ebd10c13e0cc8e6d5c57544f1e8e467f718b0ae39",
+            "digest": "d9d4260bd7961e1867b577b5d0aad09ee2eac3753d74ccb8d763773c46a63a86",
+            "payload": {
+              "endpoint": "ws://127.0.0.1:59014",
+              "session_id": "01a10669-a46f-75f2-9352-cd0f9e8d6e8c",
+              "generation": "99d9e2dd3a128b7225f6a6e3b4fa404f"
+            }
+          }
+        ],
+        "policy_resources": {
+          "version": 3,
+          "digest": "516f1726223a5dca44d58289cc627336b81a9cea5254fcb143000eb52053f54e",
+          "profile_digest": "81164a0a15381174fb917b3ebd10c13e0cc8e6d5c57544f1e8e467f718b0ae39",
+          "workspace": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\worktrees\\7b2d654721f44570accf902207927daa",
+          "write_roots": null,
+          "temporary_roots": [],
+          "implementation_data": {
+            "version": 1,
+            "codec_version": 1,
+            "purpose": "execution-resources",
+            "implementation_key": "codex.policy-resources",
+            "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+            "execution_id": "008316e4b8ce92192e7d8ae972cc5da1",
+            "attempt_id": "67026d8955ac51e2cdb99bd9f0d400d4",
+            "generation": "b2465c3230346c8f0097abf7d1ffea80",
+            "config_digest": "81164a0a15381174fb917b3ebd10c13e0cc8e6d5c57544f1e8e467f718b0ae39",
+            "digest": "407eb6e7dad3747e7f021114c1af1b3b350ed1b0294c58275ed1b7ed04341869",
+            "payload": {
+              "native_version": "codex-cli 0.159.2",
+              "contract": "codex-policy-v1:0.159.2:host-write:network-allow:never",
+              "settings": {
+                "Executable": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+                "Args": [
+                  "--config",
+                  "sandbox_mode=danger-full-access",
+                  "--config",
+                  "approval_policy=never"
+                ],
+                "WorkingDirectory": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\worktrees\\7b2d654721f44570accf902207927daa",
+                "EnvironmentRefs": null
+              }
+            }
+          }
+        },
+        "recovery_version": 2,
+        "recovery_state": "interrupted",
+        "recovery_marked_at": "2026-10-04T10:17:18.6233984Z",
+        "workspace_intent": {
+          "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\worktrees\\7b2d654721f44570accf902207927daa",
+          "branch": "codex/1-7b2d654721f4",
+          "base_commit": "ed2942416e9758779954cc3a986ae3d4c8e90ce9"
+        },
+        "turn_started_at": "2026-10-04T10:18:03.0256783Z",
+        "turn_ended_at": "2026-10-04T10:18:55.8093964Z",
+        "generation": "b2465c3230346c8f0097abf7d1ffea80",
+        "session_id": "01a10669-a46f-75f2-9352-cd0f9e8d6e8c",
+        "session_generation": "99d9e2dd3a128b7225f6a6e3b4fa404f",
+        "configuration_digest": "81164a0a15381174fb917b3ebd10c13e0cc8e6d5c57544f1e8e467f718b0ae39",
+        "last_turn_outcome": "succeeded",
+        "log_path": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\state\\repo-eeb005dde1c9\\runs\\7b2d654721f44570accf902207927daa\\turns\\7fc0e96a54604bb781d8a7ebec113eb2\\appserver.jsonl",
+        "last_event": "turn/completed",
+        "error": "Feedback delivery remains unverified at the original request ID; no duplicate message was sent",
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "execution_id": "008316e4b8ce92192e7d8ae972cc5da1",
+        "current_attempt_id": "67026d8955ac51e2cdb99bd9f0d400d4",
+        "owner_service_instance_id": "eb3aa90da70262c02514e65d22ed1e02",
+        "workflow_run_id": "7b2d654721f44570accf902207927daa",
+        "agent": "codex",
+        "backend": "local",
+        "protocol": "local_codex_app_server_v1",
+        "process": {
+          "kind": "os",
+          "pid": 36452,
+          "created": "01dd53e9a29538ce",
+          "executable": "c:\\users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe"
+        },
+        "decision_id": "c5cc0825bb52ad34dfefde93582b9015",
+        "pending_command_id": "9a887cda374b41249038150fef38fef1",
+        "current_command_id": "7fc0e96a54604bb781d8a7ebec113eb2",
+        "current_turn_id": "01a1066b-abad-7c40-84df-43e3f55781a1",
+        "turn_number": 2,
+        "last_stopped_turn_id": "01a1066b-abad-7c40-84df-43e3f55781a1",
+        "target": {
+          "id": "local:windows:liuming-asus",
+          "worktree_id": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\worktrees\\7b2d654721f44570accf902207927daa",
+          "branch": "codex/1-7b2d654721f4",
+          "base_revision": "ed2942416e9758779954cc3a986ae3d4c8e90ce9"
+        },
+        "workspace": {
+          "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo",
+          "worktree": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\worktrees\\7b2d654721f44570accf902207927daa",
+          "branch": "codex/1-7b2d654721f4",
+          "base": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+          "head": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+          "verified_at": "2026-10-04T10:18:00.6381455Z"
+        },
+        "status": "blocked",
+        "current_step": "worker",
+        "created_at": "2026-10-04T10:15:42.1514197Z",
+        "updated_at": "2026-10-04T10:18:55.8093964Z"
+      },
+      {
+        "implementation_data": [
+          {
+            "version": 1,
+            "codec_version": 9,
+            "purpose": "execution-resources",
+            "implementation_key": "orca.execution-state",
+            "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+            "execution_id": "61e98ff739c9ea82080390151aae44e2",
+            "attempt_id": "5892e58cb0fdffb62e3231f4de6c7557",
+            "generation": "510a3f6828bc54bce54119a55ab8d6b5",
+            "config_digest": "0165f348aa9b9c0499217293fbac00fd4a9f87b454ae065aecbada044d93fe7d",
+            "digest": "4bd47d86541e524e6822e95587b0935a7271f191da122f53d1271836f2fabac8",
+            "payload": {
+              "repository_id": "b6c28d88-89cf-408e-be73-2de898cb9937",
+              "coordinator": {
+                "kind": "orca-native-coordinator",
+                "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\bin\\orca-env.exe",
+                "terminal": "term_765192c8-45a1-4b13-8aa7-cd3ab2290043",
+                "runtime_id": "5eedc7aa-7395-4127-ad2f-724894efe596",
+                "incarnation": "20c7a38f-f37a-4361-890a-c53326db1e4f"
+              },
+              "turns": [
+                {
+                  "relay_reported": true,
+                  "tool_context": {},
+                  "purpose": "readiness",
+                  "intent_at": "2026-10-04T10:14:22.7131915Z",
+                  "settled": true,
+                  "turn_id": "5c6bba203e173f169f06515bc30fb268",
+                  "task_id": "task_ac7826771c35",
+                  "dispatch_id": "ctx_a9b7a95331fb",
+                  "task_request_id": "57631704-e1ee-4a7a-be81-b7b5e826e593",
+                  "dispatch_request_id": "d72dd1ee-8635-4107-b71d-c2c1af61f77d",
+                  "done_message_id": "msg_9e31361d948d",
+                  "outcome": "succeeded",
+                  "last_message": "I ran the assigned readiness probe once in the original worktree. It exited 0 and produced the exact required SLREADINESS output. No files were changed; the required result relay has been written, and no further work remains.",
+                  "output_source": "transcript",
+                  "output_clipping": [
+                    "transcript_payload"
+                  ],
+                  "output_digest": "20accdd59cd145f1d18c2277f0e59d3e84be8489b72ce7eb3f4b1bd63e48f095"
+                },
+                {
+                  "relay_reported": true,
+                  "tool_context": {},
+                  "purpose": "business",
+                  "intent_at": "2026-10-04T10:15:10.2079661Z",
+                  "settled": true,
+                  "turn_id": "e7b33f1dd877212aa75a43b55c6b7dfc",
+                  "task_id": "task_0b2cb4eb11f2",
+                  "dispatch_id": "ctx_77e9346277c4",
+                  "task_request_id": "3c5650a8-0cf6-4761-a0c9-de6b0c0c9365",
+                  "dispatch_request_id": "2c5cd58f-1e7e-4e63-b203-10205d5f29b1",
+                  "done_message_id": "msg_3564d618b460",
+                  "outcome": "succeeded",
+                  "last_message": "I verified the assigned spec and plan at the requested reference commit, and both SHA-256 values matched. I identified the assigned branch as erranliu/sl-1-93b52627e191460dfe6feb30eff6d51f and completed the required one-time 20-second startup wait without changing project files. The initial readiness step is complete, and the remaining contract steps await operator feedback."
+                },
+                {
+                  "relay_reported": true,
+                  "tool_context": {},
+                  "purpose": "business",
+                  "intent_at": "2026-10-04T10:17:53.9536958Z",
+                  "settled": true,
+                  "turn_id": "4f6a383cadc74411900dbc02b1bf9a6c",
+                  "task_id": "task_1fbd35d2a827",
+                  "dispatch_id": "ctx_b2dfffc28a18",
+                  "task_request_id": "22b5e022-164e-4781-81c9-fabca61b84a8",
+                  "dispatch_request_id": "631a6bfb-3b9f-408a-974b-ca16a202760b",
+                  "done_message_id": "msg_ae48a85f9e51",
+                  "outcome": "succeeded",
+                  "last_message": "I wrote and verified result.txt and candidate.txt with the required exact contents, then ran the supplied publisher once. It committed 408b2db and opened draft PR https://github.com/erranliu/SteerlineTest/pull/67 with the assigned branch as head and the fixed target as base. Publication is complete, and no additional work remains for this feedback.",
+                  "pr_candidates": [
+                    "https://github.com/erranliu/SteerlineTest/pull/67"
+                  ]
+                },
+                {
+                  "tool_context": {},
+                  "purpose": "business",
+                  "intent_at": "2026-10-04T10:20:37.9579948Z",
+                  "turn_id": "db9bb492f1f74fbe9186a902cabe2e80",
+                  "task_id": "task_a66b3c0714cf",
+                  "dispatch_id": "",
+                  "task_request_id": "fdf437ef-c912-401a-8972-f54151f25156"
+                }
+              ],
+              "seen_messages": [
+                "msg_9e31361d948d",
+                "msg_3564d618b460",
+                "msg_ae48a85f9e51"
+              ],
+              "relay_ignored": true,
+              "agent_bound": true,
+              "agent_launch_command": "\u0026 'C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-05\\build\\steerline.exe' 'codex-session-launch' '-config' 'c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\state\\repo-eeb005dde1c9\\runs\\93b52627e191460dfe6feb30eff6d51f\\turns\\61e98ff739c9ea82080390151aae44e2\\session-launch.json'"
+            }
+          }
+        ],
+        "policy_resources": {
+          "version": 3,
+          "digest": "61caa8787235b1e4249a0d2b75cd30d6754cb0841b93d48c7fc3dfdd7daa32a5",
+          "profile_digest": "0165f348aa9b9c0499217293fbac00fd4a9f87b454ae065aecbada044d93fe7d",
+          "workspace": "C:/Users/lmas1/orca/workspaces/repo/sl-1-93b52627e191460dfe6feb30eff6d51f",
+          "write_roots": null,
+          "temporary_roots": [],
+          "implementation_data": {
+            "version": 1,
+            "codec_version": 1,
+            "purpose": "execution-resources",
+            "implementation_key": "codex.policy-resources",
+            "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+            "execution_id": "61e98ff739c9ea82080390151aae44e2",
+            "attempt_id": "5892e58cb0fdffb62e3231f4de6c7557",
+            "generation": "510a3f6828bc54bce54119a55ab8d6b5",
+            "config_digest": "0165f348aa9b9c0499217293fbac00fd4a9f87b454ae065aecbada044d93fe7d",
+            "digest": "32e8366cf43a2b6f7c40df8696cd365d7153ac1aef3dc48c8cc1d4c291eeda4b",
+            "payload": {
+              "native_version": "codex-cli 0.159.2",
+              "contract": "codex-policy-v1:0.159.2:host-write:network-allow:never",
+              "settings": {
+                "Executable": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+                "Args": [
+                  "--no-daemon",
+                  "--model",
+                  "gpt-6-luna",
+                  "--config",
+                  "model_reasoning_effort=medium",
+                  "--strict-config",
+                  "--config",
+                  "sandbox_mode=danger-full-access",
+                  "--config",
+                  "approval_policy=never",
+                  "--cd",
+                  "C:/Users/lmas1/orca/workspaces/repo/sl-1-93b52627e191460dfe6feb30eff6d51f"
+                ],
+                "WorkingDirectory": "C:/Users/lmas1/orca/workspaces/repo/sl-1-93b52627e191460dfe6feb30eff6d51f",
+                "EnvironmentRefs": null
+              }
+            }
+          }
+        },
+        "recovery_version": 2,
+        "recovery_state": "live",
+        "recovery_marked_at": "2026-10-04T10:17:18.6567635Z",
+        "workspace_intent": {
+          "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\worktrees\\93b52627e191460dfe6feb30eff6d51f",
+          "branch": "codex/1-93b52627e191",
+          "base_commit": "ed2942416e9758779954cc3a986ae3d4c8e90ce9"
+        },
+        "turn_started_at": "2026-10-04T10:18:26.5708912Z",
+        "turn_ended_at": "2026-10-04T10:19:50.3125557Z",
+        "generation": "510a3f6828bc54bce54119a55ab8d6b5",
+        "session_id": "orca-terminal:5eedc7aa-7395-4127-ad2f-724894efe596:term_64892acc-0fc0-4782-b962-82eae5cc1f64:6d3a2f56-c51a-4973-83b9-08b60479bf76",
+        "session_generation": "6d3a2f56-c51a-4973-83b9-08b60479bf76",
+        "configuration_digest": "0165f348aa9b9c0499217293fbac00fd4a9f87b454ae065aecbada044d93fe7d",
+        "last_turn_outcome": "succeeded",
+        "last_event": "native Orca Dispatch settlement verified",
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "execution_id": "61e98ff739c9ea82080390151aae44e2",
+        "current_attempt_id": "5892e58cb0fdffb62e3231f4de6c7557",
+        "owner_service_instance_id": "eb3aa90da70262c02514e65d22ed1e02",
+        "workflow_run_id": "93b52627e191460dfe6feb30eff6d51f",
+        "agent": "codex",
+        "backend": "orca",
+        "protocol": "orca_terminal_v2",
+        "process": {
+          "kind": "orca",
+          "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\bin\\orca-env.exe",
+          "terminal": "term_64892acc-0fc0-4782-b962-82eae5cc1f64",
+          "runtime_id": "5eedc7aa-7395-4127-ad2f-724894efe596",
+          "incarnation": "6d3a2f56-c51a-4973-83b9-08b60479bf76",
+          "orchestration_run": "run_d4fbc1b690de",
+          "task": "task_1fbd35d2a827",
+          "dispatch": "ctx_b2dfffc28a18",
+          "worktree_id": "b6c28d88-89cf-408e-be73-2de898cb9937::C:/Users/lmas1/orca/workspaces/repo/sl-1-93b52627e191460dfe6feb30eff6d51f"
+        },
+        "environment": {
+          "original_terminal": {
+            "kind": "orca",
+            "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\bin\\orca-env.exe",
+            "terminal": "term_64892acc-0fc0-4782-b962-82eae5cc1f64",
+            "runtime_id": "5eedc7aa-7395-4127-ad2f-724894efe596",
+            "incarnation": "6d3a2f56-c51a-4973-83b9-08b60479bf76",
+            "orchestration_run": "run_d4fbc1b690de",
+            "task": "task_1fbd35d2a827",
+            "dispatch": "ctx_b2dfffc28a18",
+            "worktree_id": "b6c28d88-89cf-408e-be73-2de898cb9937::C:/Users/lmas1/orca/workspaces/repo/sl-1-93b52627e191460dfe6feb30eff6d51f"
+          },
+          "profile_digest": "0165f348aa9b9c0499217293fbac00fd4a9f87b454ae065aecbada044d93fe7d",
+          "launch_command": "\u0026 'C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\local-05\\build\\steerline.exe' 'codex-session-launch' '-config' 'c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\state\\repo-eeb005dde1c9\\runs\\93b52627e191460dfe6feb30eff6d51f\\turns\\61e98ff739c9ea82080390151aae44e2\\session-launch.json'",
+          "runtime": "5eedc7aa-7395-4127-ad2f-724894efe596",
+          "preparation": {
+            "turn_id": "5c6bba203e173f169f06515bc30fb268",
+            "nonce": "30ade48640404e2012f26ab99a521534",
+            "started_at": "2026-10-04T10:13:43.7251965Z",
+            "deadline": "2026-10-04T10:17:43.7251965Z",
+            "probe": {
+              "execution": "61e98ff739c9ea82080390151aae44e2",
+              "turn": "5c6bba203e173f169f06515bc30fb268",
+              "nonce": "30ade48640404e2012f26ab99a521534",
+              "profile_digest": "0165f348aa9b9c0499217293fbac00fd4a9f87b454ae065aecbada044d93fe7d",
+              "runtime": "5eedc7aa-7395-4127-ad2f-724894efe596",
+              "terminal": "term_64892acc-0fc0-4782-b962-82eae5cc1f64",
+              "incarnation": "6d3a2f56-c51a-4973-83b9-08b60479bf76",
+              "worktree": "C:/Users/lmas1/orca/workspaces/repo/sl-1-93b52627e191460dfe6feb30eff6d51f"
+            },
+            "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.steerline-readiness/61e98ff739c9ea82080390151aae44e2/5c6bba203e173f169f06515bc30fb268/probe.ps1'",
+            "input_digest": "affc12a0811dd5e383e5ce9bb9ce01edafd3f4c1c41fa47fafe9612439d4442c",
+            "script_digest": "87ca5ef8b402a42cf40d86f330e390f864f7078220d9b45748d4ff4a3d6ddef0",
+            "receipt": {
+              "execution": "61e98ff739c9ea82080390151aae44e2",
+              "turn": "5c6bba203e173f169f06515bc30fb268",
+              "nonce": "30ade48640404e2012f26ab99a521534",
+              "profile_digest": "0165f348aa9b9c0499217293fbac00fd4a9f87b454ae065aecbada044d93fe7d",
+              "runtime": "5eedc7aa-7395-4127-ad2f-724894efe596",
+              "terminal": "term_64892acc-0fc0-4782-b962-82eae5cc1f64",
+              "incarnation": "6d3a2f56-c51a-4973-83b9-08b60479bf76",
+              "worktree": "C:/Users/lmas1/orca/workspaces/repo/sl-1-93b52627e191460dfe6feb30eff6d51f",
+              "input_sha256": "affc12a0811dd5e383e5ce9bb9ce01edafd3f4c1c41fa47fafe9612439d4442c",
+              "git_head": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+              "read": true,
+              "write": true,
+              "delete": true
+            },
+            "evidence": {
+              "source_identity": "5EmuIG7dNhYijyG8-iLBcjZsdQRrerQL",
+              "call_id": "call_JoOQS51D4A5AMnJMbUkxV36S",
+              "message_id": "ctco_01a10668-a8fe-7f62-a716-fb105bd51607",
+              "command": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File '.steerline-readiness/61e98ff739c9ea82080390151aae44e2/5c6bba203e173f169f06515bc30fb268/probe.ps1'",
+              "marker": "SLREADINESS:30ade48640404e2012f26ab99a521534:87ca5ef8b402a42cf40d86f330e390f864f7078220d9b45748d4ff4a3d6ddef0",
+              "verified": true
+            },
+            "verified": true
+          },
+          "ready": true
+        },
+        "decision_id": "13960d6708a306aa55999e3a724f4946",
+        "pending_command_id": "db9bb492f1f74fbe9186a902cabe2e80",
+        "current_command_id": "4f6a383cadc74411900dbc02b1bf9a6c",
+        "current_turn_id": "4f6a383cadc74411900dbc02b1bf9a6c",
+        "turn_number": 2,
+        "last_stopped_turn_id": "4f6a383cadc74411900dbc02b1bf9a6c",
+        "target": {
+          "id": "orca:a154ed2fd7b87e8474f4c74f",
+          "worktree_id": "b6c28d88-89cf-408e-be73-2de898cb9937::C:/Users/lmas1/orca/workspaces/repo/sl-1-93b52627e191460dfe6feb30eff6d51f",
+          "branch": "erranliu/sl-1-93b52627e191460dfe6feb30eff6d51f",
+          "base_revision": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+          "orchestration_run": "run_d4fbc1b690de",
+          "orchestration_run_request_id": "9eeb1d9a-a623-4d10-ae7b-8e8c33c5a8f0",
+          "coordinator_terminal": "term_765192c8-45a1-4b13-8aa7-cd3ab2290043",
+          "external_task": "task_a66b3c0714cf",
+          "dispatch": "ctx_b2dfffc28a18"
+        },
+        "workspace": {
+          "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo",
+          "worktree": "C:/Users/lmas1/orca/workspaces/repo/sl-1-93b52627e191460dfe6feb30eff6d51f",
+          "branch": "erranliu/sl-1-93b52627e191460dfe6feb30eff6d51f",
+          "base": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+          "head": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+          "verified_at": "2026-10-04T10:13:49.8218977Z"
+        },
+        "status": "idle",
+        "current_step": "worker",
+        "created_at": "2026-10-04T10:13:43.7251965Z",
+        "updated_at": "2026-10-04T10:19:50.3125557Z"
+      }
+    ],
+    "attempts": [
+      {
+        "worker_process": {
+          "kind": "os",
+          "pid": 29080,
+          "created": "01dd53e953b5a962",
+          "executable": "c:\\users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe"
+        },
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "attempt_id": "e6f6278dd660c4685226855c96139b9c",
+        "execution_id": "008316e4b8ce92192e7d8ae972cc5da1",
+        "step_id": "worker",
+        "attempt_number": 1,
+        "event_path": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\state\\repo-eeb005dde1c9\\runs\\7b2d654721f44570accf902207927daa\\turns\\c370dccb81a309edb91faeafcdbcd18a\\appserver.jsonl",
+        "status": "stopped",
+        "input_revision": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+        "contract_digest": "8b09c936b4c93f4b43f188eb054b7c194929e30ea01789f851de5b5d0e585697",
+        "external_binding": {
+          "id": "local:windows:liuming-asus",
+          "branch": "codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base",
+          "base_revision": "ed2942416e9758779954cc3a986ae3d4c8e90ce9"
+        },
+        "created_at": "2026-10-04T10:15:42.1514197Z",
+        "updated_at": "2026-10-04T10:18:00.6381455Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "attempt_id": "67026d8955ac51e2cdb99bd9f0d400d4",
+        "execution_id": "008316e4b8ce92192e7d8ae972cc5da1",
+        "step_id": "worker",
+        "attempt_number": 2,
+        "event_path": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\state\\repo-eeb005dde1c9\\runs\\7b2d654721f44570accf902207927daa\\turns\\7fc0e96a54604bb781d8a7ebec113eb2\\appserver.jsonl",
+        "status": "running",
+        "input_revision": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+        "contract_digest": "8b09c936b4c93f4b43f188eb054b7c194929e30ea01789f851de5b5d0e585697",
+        "external_binding": {
+          "id": "local:windows:liuming-asus",
+          "branch": "codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base",
+          "base_revision": "ed2942416e9758779954cc3a986ae3d4c8e90ce9"
+        },
+        "created_at": "2026-10-04T10:18:00.6386769Z",
+        "updated_at": "2026-10-04T10:18:03.0256783Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "attempt_id": "5892e58cb0fdffb62e3231f4de6c7557",
+        "execution_id": "61e98ff739c9ea82080390151aae44e2",
+        "step_id": "worker",
+        "attempt_number": 1,
+        "status": "running",
+        "input_revision": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+        "contract_digest": "8b09c936b4c93f4b43f188eb054b7c194929e30ea01789f851de5b5d0e585697",
+        "external_binding": {
+          "id": "orca:a154ed2fd7b87e8474f4c74f",
+          "branch": "codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base",
+          "base_revision": "ed2942416e9758779954cc3a986ae3d4c8e90ce9"
+        },
+        "created_at": "2026-10-04T10:13:43.7251965Z",
+        "updated_at": "2026-10-04T10:18:26.5708912Z"
+      }
+    ],
+    "decisions": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "decision_id": "13960d6708a306aa55999e3a724f4946",
+        "scope": "execution",
+        "workflow_run_id": "93b52627e191460dfe6feb30eff6d51f",
+        "execution_id": "61e98ff739c9ea82080390151aae44e2",
+        "attempt_id": "5892e58cb0fdffb62e3231f4de6c7557",
+        "question_id": "13960d6708a306aa55999e3a724f4946",
+        "request": "eyJmb3JtYXRfdmVyc2lvbiI6MiwicXVlc3Rpb24iOiJUaGUgd29ya2VyIHN0b3BwZWQuIFdoYXQgc2hvdWxkIGl0IGRvIG5leHQ/IiwiY29udGV4dCI6IlBSIOW3suaguOWunuW5tuetieW+heWQiOW5tuOAguacrOi9ruW3sue7k+adn++8jOaPkOS6pOWPjemmiOWQjuWwhuWcqOWOnyB3b3JrZXIg5Lya6K+d5byA5aeL5LiL5LiA6L2u44CCIiwib3B0aW9ucyI6W3siaWQiOiJjb250aW51ZSIsImxhYmVsIjoiQ29udGludWUgY3VycmVudCB3b3JrIn1dLCJhbGxvd19mcmVlX3RleHQiOnRydWV9",
+        "answer": "eyJkZWNpc2lvbl9pZCI6IjEzOTYwZDY3MDhhMzA2YWE1NTk5OWUzYTcyNGY0OTQ2IiwicnVuX2lkIjoiOTNiNTI2MjdlMTkxNDYwZGZlNmZlYjMwZWZmNmQ1MWYiLCJvcHRpb25faWQiOiJjb250aW51ZSIsIm5vdGUiOiJVc2UgZXhhY3RseSB0aGlzIGNhbmRpZGF0ZS50eHQgbWFya2VyOiBhbHBoYS1yZXZpZXcuIFB1Ymxpc2ggYWNjb3JkaW5nIHRvIHRoZSBib3VuZCBTcGVjL1BsYW4gaW4gdGhpcyBvcmlnaW5hbCBzZXNzaW9uLiIsImFuc3dlcmVkX2J5IjoiZTJlIiwiYW5zd2VyZWRfYXQiOiIyMDI2LTEwLTA0VDEwOjIwOjM3LjQzMjY1NTRaIiwiZXhwZWN0ZWRfZGVjaXNpb25fdmVyc2lvbiI6MSwiZXhwZWN0ZWRfcnVuX3JldmlzaW9uIjo1MCwic291cmNlX2F0dGVtcHRfaWQiOiI1ODkyZTU4Y2IwZmRmZmI2MmUzMjMxZjRkZTZjNzU1NyIsImV4cGVjdGVkX3JlY292ZXJ5X3ZlcnNpb24iOjIsInNlcnZpY2VfaW5zdGFuY2VfaWQiOiJlYjNhYTkwZGE3MDI2MmMwMjUxNGU2NWQyMmVkMWUwMiJ9",
+        "answered_by": "e2e",
+        "status": "answer_saved",
+        "version": 2,
+        "created_at": "2026-10-04T10:19:50.3125557Z",
+        "updated_at": "2026-10-04T10:20:37.4326554Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "decision_id": "1be9a7683970330fd8d13c80d6cd6977",
+        "scope": "execution",
+        "workflow_run_id": "93b52627e191460dfe6feb30eff6d51f",
+        "execution_id": "61e98ff739c9ea82080390151aae44e2",
+        "attempt_id": "5892e58cb0fdffb62e3231f4de6c7557",
+        "question_id": "1be9a7683970330fd8d13c80d6cd6977",
+        "request": "eyJmb3JtYXRfdmVyc2lvbiI6MiwicXVlc3Rpb24iOiJUaGUgd29ya2VyIHN0b3BwZWQuIFdoYXQgc2hvdWxkIGl0IGRvIG5leHQ/IiwiY29udGV4dCI6IlRoZSBwcmV2aW91cyB0dXJuIGVuZGVkLiBGdXJ0aGVyIGlucHV0IHdpbGwgdXNlIHRoZSBzYW1lIGZpeGVkIGV4ZWN1dGlvbiBzZXNzaW9uLlxuXG5JIHZlcmlmaWVkIHRoZSBhc3NpZ25lZCBzcGVjIGFuZCBwbGFuIGF0IHRoZSByZXF1ZXN0ZWQgcmVmZXJlbmNlIGNvbW1pdCwgYW5kIGJvdGggU0hBLTI1NiB2YWx1ZXMgbWF0Y2hlZC4gSSBpZGVudGlmaWVkIHRoZSBhc3NpZ25lZCBicmFuY2ggYXMgZXJyYW5saXUvc2wtMS05M2I1MjYyN2UxOTE0NjBkZmU2ZmViMzBlZmY2ZDUxZiBhbmQgY29tcGxldGVkIHRoZSByZXF1aXJlZCBvbmUtdGltZSAyMC1zZWNvbmQgc3RhcnR1cCB3YWl0IHdpdGhvdXQgY2hhbmdpbmcgcHJvamVjdCBmaWxlcy4gVGhlIGluaXRpYWwgcmVhZGluZXNzIHN0ZXAgaXMgY29tcGxldGUsIGFuZCB0aGUgcmVtYWluaW5nIGNvbnRyYWN0IHN0ZXBzIGF3YWl0IG9wZXJhdG9yIGZlZWRiYWNrLiIsIm9wdGlvbnMiOlt7ImlkIjoiY29udGludWUiLCJsYWJlbCI6IkNvbnRpbnVlIGN1cnJlbnQgd29yayJ9XSwiYWxsb3dfZnJlZV90ZXh0Ijp0cnVlfQ==",
+        "answer": "eyJkZWNpc2lvbl9pZCI6IjFiZTlhNzY4Mzk3MDMzMGZkOGQxM2M4MGQ2Y2Q2OTc3IiwicnVuX2lkIjoiOTNiNTI2MjdlMTkxNDYwZGZlNmZlYjMwZWZmNmQ1MWYiLCJvcHRpb25faWQiOiJjb250aW51ZSIsIm5vdGUiOiJVc2UgZXhhY3RseSB0aGlzIGNhbmRpZGF0ZS50eHQgbWFya2VyOiBhbHBoYS4gUHVibGlzaCBhY2NvcmRpbmcgdG8gdGhlIGJvdW5kIFNwZWMvUGxhbiBpbiB0aGlzIG9yaWdpbmFsIHNlc3Npb24uIiwiYW5zd2VyZWRfYnkiOiJlMmUiLCJhbnN3ZXJlZF9hdCI6IjIwMjYtMTAtMDRUMTA6MTc6NTMuMTMyMTExOVoiLCJleHBlY3RlZF9kZWNpc2lvbl92ZXJzaW9uIjoxLCJleHBlY3RlZF9ydW5fcmV2aXNpb24iOjM0LCJzb3VyY2VfYXR0ZW1wdF9pZCI6IjU4OTJlNThjYjBmZGZmYjYyZTMyMzFmNGRlNmM3NTU3IiwiZXhwZWN0ZWRfcmVjb3ZlcnlfdmVyc2lvbiI6Miwic2VydmljZV9pbnN0YW5jZV9pZCI6ImViM2FhOTBkYTcwMjYyYzAyNTE0ZTY1ZDIyZWQxZTAyIn0=",
+        "answered_by": "e2e",
+        "status": "reply_accepted",
+        "version": 3,
+        "created_at": "2026-10-04T10:16:38.8102888Z",
+        "updated_at": "2026-10-04T10:18:26.5708912Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "decision_id": "86e1caefa8f0128c15859d9a2afb7169",
+        "scope": "execution",
+        "workflow_run_id": "7b2d654721f44570accf902207927daa",
+        "execution_id": "008316e4b8ce92192e7d8ae972cc5da1",
+        "attempt_id": "e6f6278dd660c4685226855c96139b9c",
+        "question_id": "86e1caefa8f0128c15859d9a2afb7169",
+        "request": "eyJmb3JtYXRfdmVyc2lvbiI6MiwicXVlc3Rpb24iOiJUaGUgd29ya2VyIHN0b3BwZWQuIFdoYXQgc2hvdWxkIGl0IGRvIG5leHQ/IiwiY29udGV4dCI6IlRoZSBwcmV2aW91cyB0dXJuIGVuZGVkLiBGdXJ0aGVyIGlucHV0IHdpbGwgdXNlIHRoZSBzYW1lIGZpeGVkIGV4ZWN1dGlvbiBzZXNzaW9uLlxuXG5SZWFkaW5lc3MgY29tcGxldGUuIFRoZSBhc3NpZ25lZCBicmFuY2ggaXMgYGNvZGV4LzEtN2IyZDY1NDcyMWY0YDsgSEVBRCBhbmQgYm90aCByZWZlcmVuY2UgaGFzaGVzIG1hdGNoIHRoZSBjb250cmFjdC4gVGhlIG9uZS10aW1lIHN0YXJ0dXAgd2FpdCBjb21wbGV0ZWQgc3VjY2Vzc2Z1bGx5LiBJ4oCZbGwgY29udGludWUgdGhpcyBzZXNzaW9uIHdoZW4gb3BlcmF0b3IgZmVlZGJhY2sgYXJyaXZlcy4iLCJvcHRpb25zIjpbeyJpZCI6ImNvbnRpbnVlIiwibGFiZWwiOiJDb250aW51ZSBjdXJyZW50IHdvcmsifV0sImFsbG93X2ZyZWVfdGV4dCI6dHJ1ZX0=",
+        "status": "superseded",
+        "version": 2,
+        "created_at": "2026-10-04T10:16:51.075988Z",
+        "updated_at": "2026-10-04T10:17:19.2039893Z"
+      },
+      {
+        "recovery_version": 2,
+        "recovery_state": "completed",
+        "recovery_of_decision": "86e1caefa8f0128c15859d9a2afb7169",
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "decision_id": "93560933b48138fc27d19222a631da58",
+        "scope": "execution",
+        "workflow_run_id": "7b2d654721f44570accf902207927daa",
+        "execution_id": "008316e4b8ce92192e7d8ae972cc5da1",
+        "attempt_id": "e6f6278dd660c4685226855c96139b9c",
+        "question_id": "93560933b48138fc27d19222a631da58",
+        "request": "eyJmb3JtYXRfdmVyc2lvbiI6MiwicXVlc3Rpb24iOiJUaGUgd29ya2VyIHN0b3BwZWQuIFdoYXQgc2hvdWxkIGl0IGRvIG5leHQ/IiwiY29udGV4dCI6IlRoZSBwcmV2aW91cyB0dXJuIGVuZGVkLiBGdXJ0aGVyIGlucHV0IHdpbGwgdXNlIHRoZSBzYW1lIGZpeGVkIGV4ZWN1dGlvbiBzZXNzaW9uLlxuXG7ljp8gd29ya2VyIOW3sumAgOWHuu+8jOWOn+i9ruasoeW3sue7k+adn+OAguaguOWvueW9k+WJjeaIkOaenOWQjumAieaLqeWOnyB0aHJlYWQg5oiW5piO56Gu5L2/55So5paw5Lya6K+d57un57ut44CCIiwib3B0aW9ucyI6W3siaWQiOiJjb250aW51ZSIsImxhYmVsIjoiQ29udGludWUgdGhlIG9yaWdpbmFsIHNlc3Npb24iLCJkZXRhaWwiOiJWZXJpZnkgYW5kIHJlc3VtZSB0aGUgb3JpZ2luYWwgc2Vzc2lvbiBpZGVudGl0eSJ9LHsiaWQiOiJuZXdfc2Vzc2lvbiIsImxhYmVsIjoiQ29udGludWUgaW4gYSBuZXcgc2Vzc2lvbiIsImRldGFpbCI6IlVzZSB0aGUgZXhpc3Rpbmcgd29ya3NwYWNlIGFuZCBzYXZlZCBoaXN0b3J5In1dLCJhbGxvd19mcmVlX3RleHQiOnRydWV9",
+        "answer": "eyJkZWNpc2lvbl9pZCI6IjkzNTYwOTMzYjQ4MTM4ZmMyN2QxOTIyMmE2MzFkYTU4IiwicnVuX2lkIjoiN2IyZDY1NDcyMWY0NDU3MGFjY2Y5MDIyMDc5MjdkYWEiLCJvcHRpb25faWQiOiJjb250aW51ZSIsIm5vdGUiOiJVc2UgZXhhY3RseSB0aGlzIGNhbmRpZGF0ZS50eHQgbWFya2VyOiBicmF2by4gUHVibGlzaCBhY2NvcmRpbmcgdG8gdGhlIGJvdW5kIFNwZWMvUGxhbiBpbiB0aGlzIG9yaWdpbmFsIHNlc3Npb24uIiwiYW5zd2VyZWRfYnkiOiJlMmUiLCJhbnN3ZXJlZF9hdCI6IjIwMjYtMTAtMDRUMTA6MTc6NTkuMjkxMTUwM1oiLCJleHBlY3RlZF9kZWNpc2lvbl92ZXJzaW9uIjoxLCJleHBlY3RlZF9ydW5fcmV2aXNpb24iOjE3LCJzb3VyY2VfYXR0ZW1wdF9pZCI6ImU2ZjYyNzhkZDY2MGM0Njg1MjI2ODU1Yzk2MTM5YjljIiwiZXhwZWN0ZWRfcmVjb3ZlcnlfdmVyc2lvbiI6Miwic2VydmljZV9pbnN0YW5jZV9pZCI6ImViM2FhOTBkYTcwMjYyYzAyNTE0ZTY1ZDIyZWQxZTAyIn0=",
+        "answered_by": "e2e",
+        "status": "applied",
+        "version": 3,
+        "created_at": "2026-10-04T10:17:19.2293339Z",
+        "updated_at": "2026-10-04T10:18:00.6381455Z"
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "decision_id": "c5cc0825bb52ad34dfefde93582b9015",
+        "scope": "execution",
+        "workflow_run_id": "7b2d654721f44570accf902207927daa",
+        "execution_id": "008316e4b8ce92192e7d8ae972cc5da1",
+        "attempt_id": "67026d8955ac51e2cdb99bd9f0d400d4",
+        "question_id": "c5cc0825bb52ad34dfefde93582b9015",
+        "request": "eyJmb3JtYXRfdmVyc2lvbiI6MiwicXVlc3Rpb24iOiJUaGUgd29ya2VyIHN0b3BwZWQuIFdoYXQgc2hvdWxkIGl0IGRvIG5leHQ/IiwiY29udGV4dCI6IlBSIOW3suaguOWunuW5tuetieW+heWQiOW5tuOAguacrOi9ruW3sue7k+adn++8jOaPkOS6pOWPjemmiOWQjuWwhuWcqOWOnyB3b3JrZXIg5Lya6K+d5byA5aeL5LiL5LiA6L2u44CCIiwib3B0aW9ucyI6W3siaWQiOiJjb250aW51ZSIsImxhYmVsIjoiQ29udGludWUgY3VycmVudCB3b3JrIn1dLCJhbGxvd19mcmVlX3RleHQiOnRydWV9",
+        "answer": "eyJkZWNpc2lvbl9pZCI6ImM1Y2MwODI1YmI1MmFkMzRkZmVmZGU5MzU4MmI5MDE1IiwicnVuX2lkIjoiN2IyZDY1NDcyMWY0NDU3MGFjY2Y5MDIyMDc5MjdkYWEiLCJvcHRpb25faWQiOiJjb250aW51ZSIsIm5vdGUiOiJVc2UgZXhhY3RseSB0aGlzIGNhbmRpZGF0ZS50eHQgbWFya2VyOiBmYXVsdC1wcm9iZS1tdXN0LW5vdC1ydW4uIFB1Ymxpc2ggYWNjb3JkaW5nIHRvIHRoZSBib3VuZCBTcGVjL1BsYW4gaW4gdGhpcyBvcmlnaW5hbCBzZXNzaW9uLiIsImFuc3dlcmVkX2J5IjoiZTJlIiwiYW5zd2VyZWRfYXQiOiIyMDI2LTEwLTA0VDEwOjIwOjI4Ljc5OTIyODNaIiwiZXhwZWN0ZWRfZGVjaXNpb25fdmVyc2lvbiI6MSwiZXhwZWN0ZWRfcnVuX3JldmlzaW9uIjoyOCwic291cmNlX2F0dGVtcHRfaWQiOiI2NzAyNmQ4OTU1YWM1MWUyY2RiOTliZDlmMGQ0MDBkNCIsImV4cGVjdGVkX3JlY292ZXJ5X3ZlcnNpb24iOjIsInNlcnZpY2VfaW5zdGFuY2VfaWQiOiJlYjNhYTkwZGE3MDI2MmMwMjUxNGU2NWQyMmVkMWUwMiJ9",
+        "answered_by": "e2e",
+        "status": "answer_saved",
+        "version": 2,
+        "created_at": "2026-10-04T10:18:55.8093964Z",
+        "updated_at": "2026-10-04T10:20:28.7992283Z"
+      }
+    ],
+    "operations": null
+  },
+  "page": {
+    "protocol": "native-tasks/v1",
+    "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+    "authority_version": 2,
+    "graph_revision": 1,
+    "database_revision": 5327,
+    "database_id": "d5ecd9e633b77a79abbd858bfd099d26",
+    "sampled_at": "2026-10-04T10:20:46.2749988Z",
+    "capabilities": {
+      "dependency_readiness": "provided",
+      "dependency_blockers": "provided",
+      "startup_blockers": "provided"
+    },
+    "tasks": [
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "task_id": "1",
+        "batch_id": "d7311bf500a8d4c7062f707a94addac6",
+        "title": "E2E a",
+        "type": "task",
+        "contract_id": "e2e-a",
+        "claimant": "e2e",
+        "source": "native",
+        "status": "in_progress",
+        "version": 2,
+        "created_at": "2026-10-04T10:13:22.7509915Z",
+        "updated_at": "2026-10-04T10:13:43.7251965Z",
+        "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "priority": 2,
+        "contract": {
+          "contract_id": "e2e-a",
+          "repository": "https://github.com/erranliu/SteerlineTest.git",
+          "remote": "origin",
+          "branch": "codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base",
+          "spec_ref": {
+            "path": "docs/spec/task.spec.md",
+            "commit": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+            "sha256": "77fe2614e7f176387f92b0e9e10e351ba7bd7de6299b1f6441c308bd74f31d87"
+          },
+          "plan_ref": {
+            "path": "docs/spec/task.plan.md",
+            "commit": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+            "sha256": "3326fbb2ad49b6eaa85058b304e366cf452c543ff6f0627be45cb1bbfd26e934"
+          },
+          "common_refs": [],
+          "acceptance_refs": [
+            {
+              "path": "docs/spec/task.spec.md",
+              "commit": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+              "sha256": "77fe2614e7f176387f92b0e9e10e351ba7bd7de6299b1f6441c308bd74f31d87"
+            }
+          ],
+          "digest": "8b09c936b4c93f4b43f188eb054b7c194929e30ea01789f851de5b5d0e585697"
+        },
+        "workflow_runs": [
+          {
+            "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+            "workflow_run_id": "7b2d654721f44570accf902207927daa",
+            "task_id": "1",
+            "workflow_version": "worker-flow-v1",
+            "config_digest": "1f737cd252e7d4928ed7ef0b9e22355a1176ebbd8bd0cc6fe96fb0514bbbb0f2",
+            "execution_profile": {
+              "execution_requirements": {},
+              "implementation_version": "builtin-execution-v2",
+              "implementation_key": "local/local_codex_app_server_v1/codex",
+              "implementation_data": [
+                {
+                  "version": 1,
+                  "codec_version": 1,
+                  "purpose": "profile-config",
+                  "implementation_key": "codex.worker-profile",
+                  "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+                  "profile_id": "candidate-local",
+                  "accepted_config_version": "1f737cd252e7d4928ed7ef0b9e22355a1176ebbd8bd0cc6fe96fb0514bbbb0f2",
+                  "digest": "51bc980b74de67d374e1da6b06388a102d96db77d423eea07293551a20b84c6d",
+                  "payload": {
+                    "executable": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+                    "args": null,
+                    "model": "gpt-6-luna",
+                    "reasoning_effort": "medium"
+                  }
+                }
+              ],
+              "implementation_display": [
+                "权限：danger-full-access",
+                "Model：gpt-6-luna",
+                "Reasoning effort：medium"
+              ],
+              "publication_policy": {
+                "publisher": "worker"
+              },
+              "publication": {
+                "provider": {
+                  "kind": "command",
+                  "base_url": "https://github.com",
+                  "repository": "erranliu/SteerlineTest",
+                  "token_env": "",
+                  "query": {
+                    "executable": "C:\\Program Files\\GitHub CLI\\gh.exe",
+                    "args": [
+                      "pr",
+                      "view",
+                      "{pr_url}",
+                      "--repo",
+                      "{repository}",
+                      "--json",
+                      "url,state,mergedAt,mergeCommit,headRefName,headRefOid,headRepository,headRepositoryOwner,baseRefName",
+                      "--jq",
+                      "{url:.url,repository:\"erranliu/SteerlineTest\",base_branch:.baseRefName,head_repository:(.headRepositoryOwner.login + \"/\" + .headRepository.name),head_branch:.headRefName,head_revision:.headRefOid,state:(if .mergedAt != null then \"merged\" elif .state == \"OPEN\" then \"open\" else \"closed_unmerged\" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}"
+                    ]
+                  },
+                  "close": {
+                    "executable": "C:\\Program Files\\GitHub CLI\\gh.exe",
+                    "args": [
+                      "pr",
+                      "close",
+                      "{pr_url}",
+                      "--repo",
+                      "{repository}"
+                    ]
+                  }
+                },
+                "git": {
+                  "executable": "C:\\Program Files\\Git\\cmd\\git.exe",
+                  "args": null
+                },
+                "remote": "origin",
+                "remote_url": "https://github.com/erranliu/SteerlineTest.git",
+                "base_branch": "codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base",
+                "authentication_refs": [
+                  "SSH_AUTH_SOCK",
+                  "GIT_CONFIG_GLOBAL",
+                  "GIT_SSH_COMMAND",
+                  "GH_TOKEN",
+                  "GITHUB_TOKEN",
+                  "GH_CONFIG_DIR"
+                ]
+              },
+              "version": 6,
+              "execution_policy": {
+                "filesystem": {
+                  "read_scope": "host",
+                  "write_scope": "host",
+                  "git_metadata_write": false
+                },
+                "network": "allow",
+                "escalation": "deny"
+              },
+              "policy_digest": "7002c25862277355d7674338184ad9ef54ad96b52c8e5c7c887933b160373f3a",
+              "accepted_config_version": "1f737cd252e7d4928ed7ef0b9e22355a1176ebbd8bd0cc6fe96fb0514bbbb0f2",
+              "policy_source": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\project.json",
+              "id": "candidate-local",
+              "name": "Candidate local Codex",
+              "digest": "81164a0a15381174fb917b3ebd10c13e0cc8e6d5c57544f1e8e467f718b0ae39",
+              "host": "local",
+              "agent": "codex"
+            },
+            "phase": "waiting_decision",
+            "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo",
+            "branch": "codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base",
+            "selected_result_id": "008316e4b8ce92192e7d8ae972cc5da1",
+            "pr_url": "https://github.com/erranliu/SteerlineTest/pull/66",
+            "pr_candidate_url": "https://github.com/erranliu/SteerlineTest/pull/66",
+            "pr_state": "open",
+            "pr_queried_at": "2026-10-04T10:20:44.0835279Z",
+            "created_at": "2026-10-04T10:15:42.1514197Z",
+            "updated_at": "2026-10-04T10:20:45.3208893Z"
+          },
+          {
+            "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+            "workflow_run_id": "93b52627e191460dfe6feb30eff6d51f",
+            "task_id": "1",
+            "workflow_version": "worker-flow-v1",
+            "config_digest": "1f737cd252e7d4928ed7ef0b9e22355a1176ebbd8bd0cc6fe96fb0514bbbb0f2",
+            "execution_profile": {
+              "execution_requirements": {},
+              "implementation_version": "builtin-execution-v2",
+              "implementation_key": "orca/orca_terminal_v2/codex",
+              "implementation_data": [
+                {
+                  "version": 1,
+                  "codec_version": 1,
+                  "purpose": "profile-config",
+                  "implementation_key": "codex.worker-profile",
+                  "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+                  "profile_id": "candidate-orca",
+                  "accepted_config_version": "1f737cd252e7d4928ed7ef0b9e22355a1176ebbd8bd0cc6fe96fb0514bbbb0f2",
+                  "digest": "9f46b5d69aa636237538d74802d7f9a340b99f0ebb37c159672fb45a30430bb5",
+                  "payload": {
+                    "executable": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+                    "args": [
+                      "--no-daemon"
+                    ],
+                    "model": "gpt-6-luna",
+                    "reasoning_effort": "medium"
+                  }
+                },
+                {
+                  "version": 1,
+                  "codec_version": 1,
+                  "purpose": "profile-config",
+                  "implementation_key": "orca.worker-profile",
+                  "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+                  "profile_id": "candidate-orca",
+                  "accepted_config_version": "1f737cd252e7d4928ed7ef0b9e22355a1176ebbd8bd0cc6fe96fb0514bbbb0f2",
+                  "digest": "a7f03d046ce9265b4b4bc0538b2358a9d5462462661f28269c25f625e8051633",
+                  "payload": {
+                    "executable": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\home\\bin\\orca-env.exe",
+                    "args": null,
+                    "shell": "powershell.exe",
+                    "wait_timeout": "4m",
+                    "keep_terminal": false,
+                    "activate": false
+                  }
+                }
+              ],
+              "implementation_display": [
+                "权限：danger-full-access",
+                "Model：gpt-6-luna",
+                "Reasoning effort：medium"
+              ],
+              "publication_policy": {
+                "publisher": "worker"
+              },
+              "publication": {
+                "provider": {
+                  "kind": "command",
+                  "base_url": "https://github.com",
+                  "repository": "erranliu/SteerlineTest",
+                  "token_env": "",
+                  "query": {
+                    "executable": "C:\\Program Files\\GitHub CLI\\gh.exe",
+                    "args": [
+                      "pr",
+                      "view",
+                      "{pr_url}",
+                      "--repo",
+                      "{repository}",
+                      "--json",
+                      "url,state,mergedAt,mergeCommit,headRefName,headRefOid,headRepository,headRepositoryOwner,baseRefName",
+                      "--jq",
+                      "{url:.url,repository:\"erranliu/SteerlineTest\",base_branch:.baseRefName,head_repository:(.headRepositoryOwner.login + \"/\" + .headRepository.name),head_branch:.headRefName,head_revision:.headRefOid,state:(if .mergedAt != null then \"merged\" elif .state == \"OPEN\" then \"open\" else \"closed_unmerged\" end),merged:(.mergedAt != null),merged_at:.mergedAt,merge_commit:.mergeCommit.oid}"
+                    ]
+                  },
+                  "close": {
+                    "executable": "C:\\Program Files\\GitHub CLI\\gh.exe",
+                    "args": [
+                      "pr",
+                      "close",
+                      "{pr_url}",
+                      "--repo",
+                      "{repository}"
+                    ]
+                  }
+                },
+                "git": {
+                  "executable": "C:\\Program Files\\Git\\cmd\\git.exe",
+                  "args": null
+                },
+                "remote": "origin",
+                "remote_url": "https://github.com/erranliu/SteerlineTest.git",
+                "base_branch": "codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base",
+                "authentication_refs": [
+                  "SSH_AUTH_SOCK",
+                  "GIT_CONFIG_GLOBAL",
+                  "GIT_SSH_COMMAND",
+                  "GH_TOKEN",
+                  "GITHUB_TOKEN",
+                  "GH_CONFIG_DIR"
+                ]
+              },
+              "version": 6,
+              "execution_policy": {
+                "filesystem": {
+                  "read_scope": "host",
+                  "write_scope": "host",
+                  "git_metadata_write": false
+                },
+                "network": "allow",
+                "escalation": "deny"
+              },
+              "policy_digest": "7002c25862277355d7674338184ad9ef54ad96b52c8e5c7c887933b160373f3a",
+              "accepted_config_version": "1f737cd252e7d4928ed7ef0b9e22355a1176ebbd8bd0cc6fe96fb0514bbbb0f2",
+              "policy_source": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\project.json",
+              "id": "candidate-orca",
+              "name": "Candidate local Orca",
+              "digest": "0165f348aa9b9c0499217293fbac00fd4a9f87b454ae065aecbada044d93fe7d",
+              "host": "orca",
+              "agent": "codex"
+            },
+            "phase": "waiting_decision",
+            "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo",
+            "branch": "codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base",
+            "selected_result_id": "61e98ff739c9ea82080390151aae44e2",
+            "pr_url": "https://github.com/erranliu/SteerlineTest/pull/67",
+            "pr_candidate_url": "https://github.com/erranliu/SteerlineTest/pull/67",
+            "pr_state": "open",
+            "pr_queried_at": "2026-10-04T10:20:42.2584455Z",
+            "created_at": "2026-10-04T10:13:43.7251965Z",
+            "updated_at": "2026-10-04T10:20:43.3121493Z"
+          }
+        ],
+        "predecessors": [],
+        "successors": [
+          "2"
+        ],
+        "dependency_ready": false,
+        "unmet_predecessors": [],
+        "startup_blockers": [
+          "task_not_open"
+        ]
+      },
+      {
+        "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "task_id": "2",
+        "batch_id": "d7311bf500a8d4c7062f707a94addac6",
+        "title": "E2E b",
+        "type": "task",
+        "contract_id": "e2e-b",
+        "source": "native",
+        "status": "open",
+        "version": 1,
+        "created_at": "2026-10-04T10:13:22.7509915Z",
+        "updated_at": "2026-10-04T10:13:22.7509915Z",
+        "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-340710984\\candidates.local\\candidates\\repo\\.git",
+        "priority": 2,
+        "contract": {
+          "contract_id": "e2e-b",
+          "repository": "https://github.com/erranliu/SteerlineTest.git",
+          "remote": "origin",
+          "branch": "codex/e2e/bd1a3e130829406e862779e50ed57098/candidates.local/base",
+          "spec_ref": {
+            "path": "docs/spec/task.spec.md",
+            "commit": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+            "sha256": "77fe2614e7f176387f92b0e9e10e351ba7bd7de6299b1f6441c308bd74f31d87"
+          },
+          "plan_ref": {
+            "path": "docs/spec/task.plan.md",
+            "commit": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+            "sha256": "3326fbb2ad49b6eaa85058b304e366cf452c543ff6f0627be45cb1bbfd26e934"
+          },
+          "common_refs": [],
+          "acceptance_refs": [
+            {
+              "path": "docs/spec/task.spec.md",
+              "commit": "ed2942416e9758779954cc3a986ae3d4c8e90ce9",
+              "sha256": "77fe2614e7f176387f92b0e9e10e351ba7bd7de6299b1f6441c308bd74f31d87"
+            }
+          ],
+          "digest": "13ca3b6fe84e75ef44d7a18b8e0fc8b65c3d3bbdf8afdba2ffc09e09c4065091"
+        },
+        "workflow_runs": [],
+        "predecessors": [
+          {
+            "task_id": "1",
+            "status": "in_progress",
+            "delivered": false,
+            "blocker": "predecessor_not_delivered"
+          }
+        ],
+        "successors": [],
+        "dependency_ready": false,
+        "unmet_predecessors": [
+          {
+            "task_id": "1",
+            "status": "in_progress",
+            "delivered": false,
+            "blocker": "predecessor_not_delivered"
+          }
+        ],
+        "startup_blockers": []
+      }
+    ],
+    "has_more": false
+  }
+}

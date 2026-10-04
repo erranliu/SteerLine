@@ -1,0 +1,17 @@
+{
+  "Action": "answer_decision",
+  "RequestID": "610dddfb6cd44c3b80bac0d5fbe1cddb",
+  "TaskID": "",
+  "ProfileID": "",
+  "RunID": "016bec659e714c31b8649d043537c838",
+  "ExecutionID": "f49158700c6fe101921d3c9dd792689f",
+  "DecisionID": "e94a0112a653d76e12c54af71a28e0bb",
+  "Option": "continue",
+  "Note": "Use exactly this candidate.txt marker: fault-probe-must-not-run. Publish according to the bound Spec/Plan in this original session. ",
+  "InstanceID": "e0399bd5c9149946a019769e8bee94a2",
+  "TaskVersion": 0,
+  "GraphRevision": 0,
+  "CandidateVersion": 0,
+  "DecisionVersion": 1,
+  "RunRevision": 28
+}

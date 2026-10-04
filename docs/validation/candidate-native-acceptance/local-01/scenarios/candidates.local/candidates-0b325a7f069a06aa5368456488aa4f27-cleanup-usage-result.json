@@ -1,0 +1,16 @@
+{
+  "error": "GetFileAttributesEx C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-704194279\\candidates.local\\candidates\\home\\codex\\sessions: The system cannot find the file specified.",
+  "usage": {
+    "source": "",
+    "session_id": "",
+    "model": "",
+    "reasoning_effort": "",
+    "tokens": {
+      "input_tokens": 0,
+      "cached_input_tokens": 0,
+      "output_tokens": 0,
+      "reasoning_output_tokens": 0,
+      "total_tokens": 0
+    }
+  }
+}

@@ -1,0 +1,185 @@
+{
+  "scope": "e2e",
+  "level": "L3",
+  "env": "live",
+  "environment": {
+    "source_commit": "ecb5a1bee149ebf8de44c7ca08848cf1a8ebdfdb",
+    "worktree_status": "?? docs/validation/candidate-native-acceptance/adapters-01/go-test.jsonl\n?? docs/validation/candidate-native-acceptance/adapters-01/go-test.stderr.txt\n?? docs/validation/candidate-native-acceptance/adapters-01/summary.json\n?? docs/validation/candidate-native-acceptance/local-01/build/controlled-helper.exe.log\n?? docs/validation/candidate-native-acceptance/local-01/build/steerline.exe.log\n?? docs/validation/candidate-native-acceptance/local-01/e2e-1.jsonl\n?? docs/validation/candidate-native-acceptance/local-01/e2e-1.stderr.txt\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-0b325a7f069a06aa5368456488aa4f27-cleanup-usage-result.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-commands/command-0001.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-commands/command-0002.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-commands/command-0003.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-commands/command-0004.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-commands/command-0005.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-commands/command-0006.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-commands/command-0007.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-commands/command-0008.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-commands/command-0009.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-commands/command-0010.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-commands/command-0011.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-commands/command-0012.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-commands/command-0013.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-commands/command-0014.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-final.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-git-server.log\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-orca/orca-1791105907822964800.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-orca/orca-1791105909860076600.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/candidates-service-1.log\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/github-1791105925874727000.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/github-1791105927065878400.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/github-1791105928815000800.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/github-prs.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/manifest.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/orca-call-1791105864169470700.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/orca-call-1791105869609511000.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/orca-call-1791105870037685200.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/orca-call-1791105870464657400.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/orca-call-1791105920833267500.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/orca-call-1791105921229482800.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/orca-call-1791105922792877100.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/orca-call-1791105923574645200.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/orca-call-1791105924005637800.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/orca-call-1791105924390980700.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/orca-call-1791105924771835300.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/request-237eacd738e74c1995eb90ed1c56c7d4.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/request-bcd6454858c94b679adc3172de5846d9.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/resources.json\n?? docs/validation/candidate-native-acceptance/local-01/scenarios/candidates.local/scenario.json\n?? docs/validation/candidate-native-acceptance/local-01/summary.json\n?? docs/validation/candidate-native-acceptance/local-02/build/controlled-helper.exe.log\n?? docs/validation/candidate-native-acceptance/local-02/build/steerline.exe.log\n?? docs/validation/candidate-native-acceptance/local-02/e2e-1.jsonl\n?? docs/validation/candidate-native-acceptance/local-02/e2e-1.stderr.txt\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0001.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0002.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0003.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0004.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0005.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0006.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0007.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0008.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0009.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0010.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0011.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0012.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0013.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0014.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0015.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0016.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0017.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0018.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0019.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0020.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0021.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0022.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0023.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0024.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0025.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0026.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0027.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0028.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0029.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0030.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0031.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0032.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0033.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0034.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0035.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0036.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0037.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0038.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0039.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0040.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0041.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0042.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0043.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0044.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0045.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0046.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0047.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0048.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0049.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0050.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0051.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0052.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0053.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0054.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0055.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0056.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0057.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0058.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0059.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0060.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0061.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0062.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0063.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-commands/command-0064.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-ed53dc46a103dda213ad5bd2daa1763b-latest.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-git-server.log\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-orca/after-submit-1791106123035405600.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-orca/input-screen-1791106122091220600.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-orca/input-screen-1791106171604885500.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-orca/orca-1791106073704111500.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-orca/orca-1791106075851860400.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-orca/orca-1791106088356040300.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-orca/orca-1791106123036514000.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-orca/orca-1791106171605962800.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-orca/submit-1791106122522994500.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/candidates-service-1.log\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/manifest.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/orca-call-1791106028104810000.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/orca-call-1791106033766602000.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/orca-call-1791106034238026500.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/orca-call-1791106034653698900.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/request-7e0189e8297946ed9d2ca8dc6fb26e94.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/request-84ea8e36b28b4f898016d0d78690bbd4.json\n?? docs/validation/candidate-native-acceptance/local-02/scenarios/candidates.local/resources.json",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native gpt-6-luna/medium; exact multi-profile admission; real SteerlineTest PRs"
+  },
+  "selected_scenarios": [
+    {
+      "id": "candidates.remote",
+      "level": "L3",
+      "suite": "candidates",
+      "package": "./tests/e2e/suites/candidates",
+      "test": "TestCandidateRemote",
+      "env": "live",
+      "chain": "orca-remote"
+    },
+    {
+      "id": "candidates.mixed",
+      "level": "L3",
+      "suite": "candidates",
+      "package": "./tests/e2e/suites/candidates",
+      "test": "TestCandidateMixed",
+      "env": "live",
+      "chain": "mixed"
+    }
+  ],
+  "groups": [
+    {
+      "id": "e2e-1",
+      "command": [
+        "go",
+        "test",
+        "-tags=e2e",
+        "-json",
+        "-count=1",
+        "-p=1",
+        "-parallel=1",
+        "-timeout=35m",
+        "-run=^(TestCandidateRemote|TestCandidateMixed)$",
+        "./tests/e2e/suites/candidates"
+      ],
+      "assigned_tests": [
+        "TestCandidateRemote",
+        "TestCandidateMixed"
+      ],
+      "assigned_packages": [
+        "./tests/e2e/suites/candidates"
+      ],
+      "stdout_json_log": "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\remote-mixed-01\\e2e-1.jsonl",
+      "stderr_log": "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\remote-mixed-01\\e2e-1.stderr.txt",
+      "wall_seconds": 3.9865346,
+      "exit_code": 1,
+      "error": "exit status 1",
+      "summary": {
+        "status": "failed",
+        "passed": false,
+        "complete": true,
+        "command_exit_code": 1,
+        "package_count": 1,
+        "passed_packages": 0,
+        "failed_packages": [
+          "github.com/erranliu/SteerLine/tests/e2e/suites/candidates"
+        ],
+        "skipped_packages": [],
+        "test_count": 2,
+        "passed_tests": 0,
+        "failed_tests": 2,
+        "skipped_tests": 0,
+        "packages": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/candidates",
+            "status": "fail",
+            "elapsed_seconds": 1.208
+          }
+        ],
+        "tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/candidates",
+            "name": "TestCandidateMixed",
+            "status": "fail",
+            "elapsed_seconds": 0.01
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/candidates",
+            "name": "TestCandidateRemote",
+            "status": "fail",
+            "elapsed_seconds": 0.01
+          }
+        ],
+        "slowest_tests": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/candidates",
+            "name": "TestCandidateMixed",
+            "status": "fail",
+            "elapsed_seconds": 0.01
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/candidates",
+            "name": "TestCandidateRemote",
+            "status": "fail",
+            "elapsed_seconds": 0.01
+          }
+        ],
+        "failures": [
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/candidates",
+            "name": "TestCandidateMixed",
+            "status": "fail",
+            "elapsed_seconds": 0.01
+          },
+          {
+            "package": "github.com/erranliu/SteerLine/tests/e2e/suites/candidates",
+            "name": "TestCandidateRemote",
+            "status": "fail",
+            "elapsed_seconds": 0.01
+          }
+        ],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 1.207964,
+        "has_test_event_wall": true
+      }
+    }
+  ],
+  "build_sha256": {
+    "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\remote-mixed-01\\build\\controlled-helper.exe": "2e7a503d8edd853e38e857610fc71db099879013797251f0c86a745d04ce4189",
+    "C:\\Users\\lmas1\\.codex\\worktrees\\d831\\SteerLine\\docs\\validation\\candidate-native-acceptance\\remote-mixed-01\\build\\steerline.exe": "94e1339bf7461f5a2522d8c99b8d850797f06846dc47afe914ad71e65bdfeb0e"
+  },
+  "preparation_seconds": 6.2806755,
+  "execution_seconds": 4.0213098,
+  "passed": false,
+  "cleanup_complete": true,
+  "errors": [
+    "e2e-1: failed/incomplete/skipped tests"
+  ],
+  "started_at": "2026-10-04T09:30:05.696892Z",
+  "finished_at": "2026-10-04T09:30:16.4023239Z",
+  "blocked_scenarios": [
+    {
+      "id": "candidates.remote",
+      "level": "L3",
+      "suite": "candidates",
+      "package": "./tests/e2e/suites/candidates",
+      "test": "TestCandidateRemote",
+      "env": "live",
+      "chain": "orca-remote"
+    },
+    {
+      "id": "candidates.mixed",
+      "level": "L3",
+      "suite": "candidates",
+      "package": "./tests/e2e/suites/candidates",
+      "test": "TestCandidateMixed",
+      "env": "live",
+      "chain": "mixed"
+    }
+  ],
+  "coverage": "selected-L3"
+}

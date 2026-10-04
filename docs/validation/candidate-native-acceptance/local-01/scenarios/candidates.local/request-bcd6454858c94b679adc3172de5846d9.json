@@ -1,0 +1,20 @@
+{
+  "error": "CLI [candidate -config C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-704194279\\candidates.local\\candidates\\project.json -input C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-704194279\\candidates.local\\candidates\\home\\candidate-bcd6454858c94b679adc3172de5846d9.json]: exit status 1: start_candidate requires task_id, current task/graph versions and a complete profile selection\n",
+  "input": {
+    "Action": "start_candidate",
+    "RequestID": "bcd6454858c94b679adc3172de5846d9",
+    "TaskID": "1",
+    "ProfileID": "candidate-local",
+    "RunID": "",
+    "ExecutionID": "",
+    "DecisionID": "",
+    "Option": "",
+    "Note": "",
+    "InstanceID": "",
+    "TaskVersion": 0,
+    "CandidateVersion": 0,
+    "DecisionVersion": 0,
+    "RunRevision": 0
+  },
+  "receipt": {}
+}

@@ -1,0 +1,29 @@
+{
+  "version": 1,
+  "source_commit": "1b361a8ecdec56e64ea8bd5cad1de3330d0677ec",
+  "repository": "erranliu/SteerlineTest",
+  "profiles": [
+    {
+      "id": "candidate-orca",
+      "chain": "orca-codex"
+    },
+    {
+      "id": "candidate-local",
+      "chain": "local-codex"
+    }
+  ],
+  "scenarios": {
+    "candidates.local": [
+      "candidate-orca",
+      "candidate-local"
+    ],
+    "candidates.mixed": [
+      "candidate-orca",
+      "candidate-local"
+    ],
+    "candidates.remote": [
+      "candidate-orca",
+      "candidate-local"
+    ]
+  }
+}

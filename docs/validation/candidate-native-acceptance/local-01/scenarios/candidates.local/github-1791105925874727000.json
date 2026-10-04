@@ -1,0 +1,20 @@
+{
+  "command": [
+    "gh",
+    "pr",
+    "list",
+    "--repo",
+    "erranliu/SteerlineTest",
+    "--base",
+    "codex/e2e/b691431b6de4488f8ab66d7cf36db3e4/candidates.local/base",
+    "--state",
+    "all",
+    "--limit",
+    "100",
+    "--json",
+    "url,state,headRefName,baseRefName"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "[]\n"
+}

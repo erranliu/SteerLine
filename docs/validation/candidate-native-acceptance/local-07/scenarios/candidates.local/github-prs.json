@@ -1,0 +1,14 @@
+[
+  {
+    "URL": "https://github.com/erranliu/SteerlineTest/pull/71",
+    "State": "OPEN",
+    "HeadRefName": "codex/1-016bec659e71",
+    "BaseRefName": "codex/e2e/e51ffba3b7d64f7fb15dd6738b15017f/candidates.local/base"
+  },
+  {
+    "URL": "https://github.com/erranliu/SteerlineTest/pull/70",
+    "State": "OPEN",
+    "HeadRefName": "erranliu/sl-1-640cff9af020fd44034f85bdd76c2788",
+    "BaseRefName": "codex/e2e/e51ffba3b7d64f7fb15dd6738b15017f/candidates.local/base"
+  }
+]
