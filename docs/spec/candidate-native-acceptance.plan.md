@@ -23,7 +23,7 @@ TestMC5/6 当前在 `internal/steerline/candidate_workers_test.go`；迁移任�
 
 manifest schema 固定 version=1、source_commit（实际40位 HEAD）、repository=erranliu/SteerlineTest、两份本机 profiles（不同 ID、local-codex 与 orca-codex）、local profile 顺序；runner 的 Run 固定产品/helper SHA-256、out/scratch、AuthHome。本次 Project 在 scratch 创建独立 config/home/SQLite，实际配置、目标和原会话/回执见规范 snapshot。只有本机字段，不兼容旧远端输入。live 固定 gpt-6-luna/medium 与 danger-full-access/never，不扩认证矩阵。
 
-本机真机已定位 Orca 生命周期缺少既有 codex-session-launch/history binding 的接线。唯一生产修复为 `internal/steerline/orcaworker/lifecycle.go`：在原资源 Operation 后、外部创建终端前固定 launch 请求，原终端无模型 bootstrap 写原生 session binding，再按冻结权限 resume，规范 collector 提交原 history 正文。重复对账只接受原意图，不从 raw 回填。`internal/steerline/codexworker/history.go` 的 resume 无新提示时不注入空提示。此接线改变须当前构建 local 重验，local-02 失败不能当通过。
+本机真机已定位 Orca 生命周期缺少既有 codex-session-launch/history binding 的接线。Orca 正文接线修复位于 `internal/steerline/orcaworker/lifecycle.go`：在原资源 Operation 后、外部创建终端前固定 launch 请求，原终端无模型 bootstrap 写原生 session binding，再按冻结权限 resume，规范 collector 提交原 history 正文。重复对账只接受原意图，不从 raw 回填。`internal/steerline/codexworker/history.go` 的 resume 无新提示时不注入空提示。此接线改变须当前构建 local 重验，local-02 失败不能当通过。
 
 native 的 app-server usage 适配要求精确新 turn/started；仅排除其前同一 thread 的 resume 旧 usage 快照，之后外会话/晚到外轮次仍拒绝。未知 usage 错误立即记录失败；清理读使用独立 deadline。候选多轮现场独立采用20分钟上限（其他 live 10分钟），后继使用冻结 local-codex profile。local-04 已实际用12分钟完成双候选/重启/反馈/晚到/后继，新增同场故障、兄弟额外反馈和替代候选后采用这个明确上限，不靠缩减断言压缩时限。
 
@@ -42,4 +42,8 @@ CN4/CN8 的故障路径由 `native.DisconnectCandidate` 对隔离 local app-serv
 | L3 candidates.local：CN1–CN4、CN6–CN8 | 隔离 Windows，本地 Codex + 本机 Orca、真实模型/Git/PR | `go run ./cmd/test-feedback -level=L3 -suite=candidates -env=live '-scenario=candidates.local' -out docs/validation/candidate-native-acceptance/local` | 场景登记、两种本机能力和固定构建核对后 | 两候选真实重叠、独立反馈/规范正文/正数 usage、唯一交付/后继 base、重启/一例故障与放弃边界有完整原生证据，清理正确 | local/summary、规范状态/回执、原生身份、PR 和资源记录 |
 | L1 固定最小入口 | 隔离 STEERLINE_HOME，无 live 环境变量 | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-native-acceptance/l1` | 自查与集成修复完成后一次 | 原业务/守卫通过，不意外重跑 live，E2E 导入边界未放宽 | l1/summary 与原始 JSON |
 
-每次使用新的空证据目录，固定实际合并操作者；零匹配、skip、实际本机环境/原生证据或清理不足不能记为通过。仅尚未执行的人工操作验收按当前规则登记 roadmap 后推进，实际发现的功能/正文失败仍须修复。不默认选择完整 L2、Full、所有模型或 live recovery；24 小时和版本提升归 #42，五候选数量和竞态允许超额复用既有受控证据。本文收缩验收范围，不代表本机场景已通过。
+每次使用新的空证据目录，固定实际合并操作者；零匹配、skip、实际本机环境/原生证据或清理不足不能记为通过。仅尚未执行的人工操作验收按当前规则登记 roadmap 后推进，实际发现的功能/正文失败仍须修复。不默认选择完整 L2、Full、所有模型或 live recovery；24 小时和版本提升归 #42，五候选数量和竞态允许超额复用既有受控证据。本机验收及协调复审的实际构建、命令和结果见[证据入口](../validation/candidate-native-acceptance/README.md)。
+
+## 协调最终验证
+
+集成 #74/#75 后固定 `919a4ce755eb6d56759efa479608b75bef34749c`：运行同一 `candidates.local` 场景、上表 L1，以及受影响 worker/history/候选适配/边界的定向测试；通过条件为原 CN1–CN8、正数 usage、规范正文校验和、真实 PR/后继交付、无 fail/skip 且清理完成。实际命令及证据位置见 [coordinator-final.json](../validation/candidate-native-acceptance/coordinator-final.json) 和证据入口；不跑 Full 或无关平台矩阵。仅整理文档后的最终 head 与该构建的 Go/场景源码相同。

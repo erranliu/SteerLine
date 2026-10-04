@@ -10,11 +10,10 @@
 
 第一阶段统一只交付和验收本地 Codex 与本机 Orca。远程准入、派发、反馈、恢复、取消及本机/远端混合流程暂移出一期，也不列作一期阻塞或待补验；后续另行规划。保留既有远端代码、协议定义及历史证据，不将它们声明为当前支持或完成条件。Git remote 和托管 PR 发布仍属于本机交付链。
 
-已具备持续worker/原会话反馈、各配置独立候选、宽松五候选开始检查、合并前放弃和唯一交付，以及执行需求准入、配置注册和固定原生绑定封套。候选TUI 实现已具备；CC5 已于 2026-10-04 由用户人工确认通过，本机不同后端方案验收仍由 #39 交付。后续复用这些能力，保持原身份、版本、提交屏障及恢复授权；当前接口归属需要核实时按需查[架构索引](../architecture/current-code-architecture.md)。图中已交付基础节点和原硬前置ID仅表达依赖，不要求阅读历史Spec/Plan，也不解除未完成的原生验收限制。
+已具备持续worker/原会话反馈、各配置独立候选、宽松五候选开始检查、合并前放弃和唯一交付，以及执行需求准入、配置注册和固定原生绑定封套。候选TUI 实现已具备；CC5 已于 2026-10-04 由用户人工确认通过，本机不同后端方案验收已完成（#39），按需复用[当前证据](../validation/candidate-native-acceptance/README.md)。后续复用这些能力，保持原身份、版本、提交屏障及恢复授权；当前接口归属需要核实时按需查[架构索引](../architecture/current-code-architecture.md)。图中已交付基础节点和原硬前置ID仅表达依赖，不要求阅读历史Spec/Plan，也不解除未完成的原生验收限制。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 39 | 多候选本机验收 | 本地 Codex/本机 Orca 双候选竞争、反馈隔离、唯一交付与恢复/放弃验收 | `#38` | [Spec](../spec/candidate-native-acceptance.spec.md) · [Plan](../spec/candidate-native-acceptance.plan.md) |
 | 40 | 固定版本与双入口 | 不可变构建、stable/dev 固定入口和身份 | 无 | [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) |
 | 41 | dev 隔离与 stable 提升 | 独立 home、静止可恢复会话下的受控提升 | `#40`、`#36` | [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) |
 | 42 | 第一阶段集成验收 | 本机双链与版本组合、stable 24 小时、dev 并行和提升恢复 | `#39`、`#41` | [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) |
@@ -59,7 +58,7 @@ flowchart LR
 
 ## 任务执行控制台解耦与目录整理
 
-目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。#73 的纯定义和实际消费者基线见[验收记录](../validation/three-line-01-types/README.md)；#77 为避免共同 TUI 重写另等 #38。#39 不成为本目标硬前置；它仍按自己的范围与能力门槛验收。
+目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。#73 的纯定义和实际消费者基线见[验收记录](../validation/three-line-01-types/README.md)；#77 为避免共同 TUI 重写另等 #38。#39 不成为本目标硬前置；其本机范围已验收；迁移仅重验实际受影响入口。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
@@ -106,7 +105,7 @@ flowchart LR
 
 #74 必须交付实际 Service/CommandService 拆分、字段与文件所有权清单，并先拆共同协调段。每项自己完成真实消费者/构造/测试/守卫切换，不能把编译修复留给 #80；迁出定义不留永久 alias、转发或第二写路径。公共类型变更先顺序集成，再推进消费者。
 
-本表是规划安排；具体职责/前置/证据规则已落实在每份 Spec/Plan 与 #38/#39 规格中。Git 文档任务身份不代表中心 DAG 已创建，本次不启动实现或向中心创建任务。
+本表是规划安排；具体职责/前置/证据规则已落实在每份 Spec/Plan 与当前交付证据中。Git 文档任务身份不代表中心 DAG 已创建，本次不启动实现或向中心创建任务。
 
 ## 接口和共享修改
 

@@ -50,3 +50,13 @@
 local-05 的 open PR 反馈旧状态等待错误已改为原 command ID 等待；local-06 的 worker PR URL 缺 owner 被产品正确拒绝，fixture 现明确逐字完整 URL，原连接恢复仍走原身份；local-07 暴露 pending 第三轮资源创建被旧 PR 轮询重置，已增加真实 provider 定向回归并在 local-08 修复重验。pending-pr-01 是测试夹具非法 Decision 状态跳转，已按规范前值修正，未放宽产品守卫。所有失败/原始 JSON/stderr/清理证据保留，不覆盖或当作通过。
 
 #39 尚未执行的人工操作待办为空；本轮所需测试 PR 已由操作者精确合并。活动 Spec/Plan 保留至独立复审/合入，不声明协调已合并实现 PR。
+
+## 协调最终复审与当前主线集成
+
+协调确认执行聊天停写后，独立复核完整实现差异、Spec/Plan、Orca 原 launch/history、pending feedback/PR poll 和 Task result 调用路径。集成主线 #74/#75 与 CC5 人工确认记录，解决七处文档冲突，保留当前任务用例归属和原验收要求；未发现需要追加修改的生产问题。此前 CC5 待验描述保留为原合入/执行时事实，当前已由用户人工确认通过，见[原确认记录](../candidate-interaction-ux/manual-acceptance-20261004.md)。
+
+最终组合固定源码 `919a4ce755eb6d56759efa479608b75bef34749c`、main `73e5692258414166c37bea1663f45fce8008d219`，由协调独立运行：定向 41 项通过（driver 编译及真实现场覆盖）、L1 七组通过（278.2 秒）、完整 `candidates.local` 通过（1153.3 秒）。均无 fail/skip；规范数据库正文的 36 个完整 Body 页校验和核对通过，逐候选 usage 为正，清理完成。
+
+组合现场胜出 [PR #77](https://github.com/erranliu/SteerlineTest/pull/77) 合并 `a542e49b9a6088b6a55dd94922a1616e234522f8`，后继 [PR #79](https://github.com/erranliu/SteerlineTest/pull/79) 合并 `4be230d60f90e8b77fd827e60df10cd7ea6f9fde`；中心唯一 Delivery、原反馈重启、故障兄弟继续、放弃/新增、合并后拒绝和落选在途更新均有当前构建证据。#39 人工待验为空，远端不在范围。
+
+精确构建、结果和原始证据定位见 [coordinator-final.json](coordinator-final.json)。协调原始记录保存在本 run 的 task-state 目录，分别为 `coordinator39-targeted-01`、`coordinator39-l1-01` 和 `coordinator39-local-01`；保留实现聊天全部早期失败。后续只改动证据索引和 roadmap，Go/场景源码保持此组合构建，文档修改不再触发模型重跑。正式实现合入以 [PR #216](https://github.com/erranliu/SteerLine/pull/216) 平台状态为准。
