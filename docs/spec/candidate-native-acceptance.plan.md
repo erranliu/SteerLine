@@ -17,6 +17,8 @@ TestMC5/6 当前在 `internal/steerline/candidate_workers_test.go`；迁移任�
 
 ## 测试计划
 
+本次实际发现已有 open PR 的 pending feedback 被轮询提前恢复等待合并的接线问题；`internal/steerline/worker_pr.go` 在原 pending command/turn 存在时保留其等待反馈门槛。定向入口 `TestCandidateOpenPRPollPreservesOriginalPendingInput` 调用真实隔离 provider poll，核对原 Decision、pending command 与 PR 归属，不仅测试局部状态函数；并复核既有 `TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor`。命令：`go run ./cmd/test-feedback -out docs/validation/candidate-native-acceptance/pending-pr-02 -- ./internal/steerline '-run=^TestCandidateOpenPRPollPreservesOriginalPendingInput$|^TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor$' -count=1`。最终现场重验此增量，并经 driver 的原 public reader Query 采集原 Operations/receipts（常规产品 Workflow 视图只提供筛选业务记录）。
+
 已实现的唯一入口：`tests/e2e/suites.json` → `tests/e2e/suites/candidates/candidates_test.go:TestCandidateLocal` → `tests/e2e/internal/testenv/candidates.go:CandidateAcceptance`。driver 的 `MainCandidate` 提交当前 Task/graph/run 版本、精确 Execution/Decision 和原 command ID，reader 读取规范 Conversation/完整 Body；native 负责本机 manifest/模型/usage，evidence 按精确 WorkflowRun/Execution 解码原 profile/resource/session。无生产或外层 E2E internal 依赖。
 
 manifest schema 固定 version=1、source_commit（实际40位 HEAD）、repository=erranliu/SteerlineTest、两份本机 profiles（不同 ID、local-codex 与 orca-codex）、local profile 顺序；runner 的 Run 固定产品/helper SHA-256、out/scratch、AuthHome。本次 Project 在 scratch 创建独立 config/home/SQLite，实际配置、目标和原会话/回执见规范 snapshot。只有本机字段，不兼容旧远端输入。live 固定 gpt-6-luna/medium 与 danger-full-access/never，不扩认证矩阵。

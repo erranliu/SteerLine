@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"os"
@@ -54,6 +55,16 @@ func (c *Client) Candidate(ctx context.Context, helper string, in CandidateComma
 type CandidateConversation struct {
 	Events []contracts.ConversationEvent    `json:"events"`
 	Bodies []contracts.ConversationBodyPage `json:"bodies"`
+}
+
+func ReadOriginalOperations(ctx context.Context, database, project string) ([]executionmodel.OperationRecord, error) {
+	reader, err := (sqlite.Factory{}).OpenReader(database)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	domain, err := reader.Query(ctx, project)
+	return domain.Operations, err
 }
 
 func ReadCandidateConversation(ctx context.Context, database, project, runID, executionID string) (CandidateConversation, error) {

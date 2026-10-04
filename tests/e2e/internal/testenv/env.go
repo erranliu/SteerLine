@@ -443,6 +443,11 @@ func (p *Project) Merge() {
 
 func (p *Project) Record(label string, snap Snapshot) {
 	p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-"+label+".json"), snap))
+	if strings.HasPrefix(p.Scenario.ID, "candidates.") {
+		ops, err := driver.ReadOriginalOperations(p.Scenario.Context, p.Database, snap.Page.ProjectID)
+		p.Scenario.Must(err)
+		p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, p.Name+"-"+label+"-operations.json"), ops))
+	}
 }
 
 func (s *Scenario) cleanup() {
