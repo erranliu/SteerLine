@@ -164,16 +164,49 @@ func adapterForbidden(pkg string) bool {
 		strings.HasPrefix(pkg, module+"/internal/steerlineintegration")
 }
 
-func adapterDirectForbidden(pkg string) bool {
-	if adapterForbidden(pkg) {
-		return true
-	}
+func adapterContractValue(pkg string) bool {
 	for _, pure := range []string{module + "/internal/product/api", core + "/taskview"} {
 		if pkg == pure || strings.HasPrefix(pkg, pure+"/") {
 			return true
 		}
 	}
 	return false
+}
+
+func adapterDirectForbidden(pkg string) bool {
+	return adapterForbidden(pkg) || adapterContractValue(pkg)
+}
+
+// Track both routes to a value package: a shorter permitted contract route
+// must not hide a forbidden route through an unrelated helper.
+func inspectAdapterGraph(graph map[string][]string, seed string, reject func([]string)) {
+	type route struct {
+		pkg              string
+		throughContracts bool
+	}
+	type entry struct {
+		path  []string
+		route route
+	}
+	first := route{pkg: seed}
+	seen := map[route]bool{first: true}
+	queue := []entry{{path: []string{seed}, route: first}}
+	for len(queue) != 0 {
+		current := queue[0]
+		queue = queue[1:]
+		for _, next := range graph[current.route.pkg] {
+			nextRoute := route{pkg: next, throughContracts: current.route.throughContracts || next == core+"/contracts"}
+			if seen[nextRoute] {
+				continue
+			}
+			seen[nextRoute] = true
+			path := append(append([]string(nil), current.path...), next)
+			if adapterForbidden(next) || adapterContractValue(next) && !nextRoute.throughContracts {
+				reject(path)
+			}
+			queue = append(queue, entry{path: path, route: nextRoute})
+		}
+	}
 }
 
 // ScanSource parses production and test Go files regardless of GOOS or build tags.
@@ -279,10 +312,8 @@ func ScanSource(root string) (Report, error) {
 		if !strings.HasPrefix(pkg, executionAdapters+"/") {
 			continue
 		}
-		visitGraph(productionGraph, pkg, func(path []string) {
-			if adapterForbidden(path[len(path)-1]) {
-				report.Violations = append(report.Violations, "execution adapter forbidden dependency: "+strings.Join(path, " -> "))
-			}
+		inspectAdapterGraph(productionGraph, pkg, func(path []string) {
+			report.Violations = append(report.Violations, "execution adapter forbidden dependency: "+strings.Join(path, " -> "))
 		})
 	}
 	for _, seed := range []string{core + "/sqlite", core + "/persistence"} {
@@ -440,6 +471,7 @@ func Check(ctx context.Context, root string) (Report, error) {
 			return report, fmt.Errorf("%s adapter dependencies: %w", target, err)
 		}
 		adapterDecoder := json.NewDecoder(strings.NewReader(string(adapterData)))
+		adapterGraph := map[string][]string{}
 		for adapterDecoder.More() {
 			var pkg struct {
 				ImportPath string
@@ -457,14 +489,15 @@ func Check(ctx context.Context, root string) (Report, error) {
 			if len(pkg.DepsErrors) > 0 {
 				return report, fmt.Errorf("%s adapter package %s: %s", target, pkg.ImportPath, pkg.DepsErrors[0].Err)
 			}
-			if strings.HasPrefix(pkg.ImportPath, executionAdapters+"/") {
-				for _, dep := range append(append([]string{}, pkg.Imports...), pkg.Deps...) {
-					if adapterForbidden(dep) {
-						report.Violations = append(report.Violations, target+" adapter forbidden dependency: "+pkg.ImportPath+" -> "+dep)
-					}
-				}
-			}
+			adapterGraph[pkg.ImportPath] = pkg.Imports
 			report.Dependencies[target+"-adapters"]++
+		}
+		for pkg := range adapterGraph {
+			if implementation(pkg) {
+				inspectAdapterGraph(adapterGraph, pkg, func(path []string) {
+					report.Violations = append(report.Violations, target+" adapter forbidden dependency: "+strings.Join(path, " -> "))
+				})
+			}
 		}
 	}
 

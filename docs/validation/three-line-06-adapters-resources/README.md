@@ -51,3 +51,7 @@ go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-06-adapters
 首轮之后的 `run-20261005-02` 曾通过 12 groups/309 events；自查又补了生产 adapter 不能直接导入 testkit 的负例，最终以当前 `run-20261005-03` 重跑。首轮失败的原因及保留证据见上文。任务/DAG、MC1–MC9 精确候选、五个宽松检查、candidate exit 不停止执行、唯一 provider delivery 与 UI 关闭不代替 worker stop 的原 assertions 仍由 #76 的 `internal/execution/candidate_workers_test.go` 和现有 app integration parents 唯一拥有；映射见 [test-mapping.json](test-mapping.json)。本次没有重写、复制或缩弱这些 assertions。
 
 本次不重跑原生模型流程：进程句柄、Codex session、Orca identity、参数、权限和协议 wire behavior 未改变。#39 未失效证据定位见 [native impact](native-impact.md)；remote 只验证迁移编译、原协议代表和拒绝保护。
+
+## 协调独立复审
+
+原候选复审与路径例外漏洞修复、失败复现及最终守卫验证见 [coordinator-review](coordinator-review/README.md)。上述 worker 报告保留其真实原候选状态；最终 TM06.4 已加入 L1 固定选择。

@@ -170,3 +170,77 @@ func TestTM06AdapterBoundary(t *testing.T) {
 		}
 	})
 }
+
+// Pure product values are reachable only through the existing conversation
+// contracts. A helper must not turn that migration exception into a bypass.
+func TestTM06ContractValueClosure(t *testing.T) {
+	for _, dependency := range []string{module + "/internal/product/api", core + "/taskview"} {
+		for _, withContract := range []bool{false, true} {
+			name := strings.TrimPrefix(dependency, module+"/internal/")
+			if withContract {
+				name += "/alongside_allowed_contract_path"
+			}
+			t.Run(name, func(t *testing.T) {
+				root := t.TempDir()
+				source := "package codexworker\nimport _ \"" + module + "/internal/helper\"\n"
+				files := map[string]string{
+					"internal/helper/edge.go":            "package helper\nimport _ \"" + module + "/internal/otherhelper\"\n",
+					"internal/otherhelper/edge_plan9.go": "//go:build never_enabled\n\npackage otherhelper\nimport _ \"" + dependency + "\"\n",
+				}
+				if withContract {
+					source += "import _ \"" + core + "/contracts\"\n"
+					files["internal/steerline/contracts/edge.go"] = "package contracts\nimport _ \"" + dependency + "\"\n"
+				}
+				files["internal/execution/adapters/codex/edge.go"] = source
+				for name, source := range files {
+					path := filepath.Join(root, name)
+					if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(path, []byte(source), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				report, err := ScanSource(root)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !strings.Contains(strings.Join(report.Violations, "\n"), "execution adapter forbidden dependency") {
+					t.Fatalf("unrelated helper escaped contract-value boundary: %+v", report)
+				}
+				// Exercise the actual Windows/Linux go-list graphs as well as
+				// the inactive-tag scan, including competing legal/illegal paths.
+				if err := os.Remove(filepath.Join(root, "internal/otherhelper/edge_plan9.go")); err != nil {
+					t.Fatal(err)
+				}
+				files = map[string]string{
+					"go.mod":                       "module " + module + "\n\ngo 1.23\n",
+					"internal/otherhelper/edge.go": "package otherhelper\nimport _ \"" + dependency + "\"\n",
+				}
+				for _, pkg := range []string{"internal/steerline", "internal/execution", "internal/steerline/contracts", "internal/task/model", "internal/execution/model", "internal/execution/backend", "internal/product/api", "internal/storage/ports", "internal/steerline/taskview", "internal/steerline/console"} {
+					path := filepath.Join(root, pkg, "empty.go")
+					if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(path, []byte("package "+filepath.Base(pkg)+"\n"), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				for name, source := range files {
+					if err := os.WriteFile(filepath.Join(root, name), []byte(source), 0600); err != nil {
+						t.Fatal(err)
+					}
+				}
+				report, err = Check(context.Background(), root)
+				if err != nil {
+					t.Fatal(err)
+				}
+				for _, target := range []string{"windows", "linux"} {
+					if !strings.Contains(strings.Join(report.Violations, "\n"), target+" adapter forbidden dependency") {
+						t.Fatalf("%s production helper escaped boundary: %+v", target, report)
+					}
+				}
+			})
+		}
+	}
+}

@@ -3988,5 +3988,14 @@
       "status": "unchanged_by_#78"
     }
   ],
-  "selection_note": "Only parents listed in docs/spec/three-line-06-adapters-resources.plan.md are marked for this task run. Live opt-in parents and the wider #39 failure matrix retain their original owners and are not re-labeled as passed by a directory move."
+  "selection_note": "Only parents listed in docs/spec/three-line-06-adapters-resources.plan.md are marked for this task run. Live opt-in parents and the wider #39 failure matrix retain their original owners and are not re-labeled as passed by a directory move.",
+  "coordinator_added_tests": [
+    {
+      "parent": "TestTM06ContractValueClosure",
+      "file": "internal/coreboundary/execution_boundary_test.go",
+      "scenario": "TM06.4",
+      "assertions": "Reject API/taskview through unrelated helper, including a shorter allowed contract path; all-tag AST and Windows/Linux go-list graphs; 4 subcases",
+      "l1_group": "quick-execution-boundary"
+    }
+  ]
 }
