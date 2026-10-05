@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./internal/coreboundary",
+    "-run",
+    "^TestTM08AppHostBoundary$",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-05T21:19:23.9292018Z",
+  "finished_at": "2026-10-05T21:19:28.4951164Z",
+  "wall_seconds": 4.5662457,
+  "environment": {
+    "source_commit": "16422d2173bc040681213e048066294241faa6ae",
+    "worktree_status": "?? docs/validation/three-line-08-app-host/host/review-fixes-01/go-test.jsonl\n?? docs/validation/three-line-08-app-host/host/review-fixes-01/go-test.stderr.txt\n?? docs/validation/three-line-08-app-host/review-fixes/app-final-01/go-test.jsonl\n?? docs/validation/three-line-08-app-host/review-fixes/app-final-01/go-test.stderr.txt",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 1,
+    "passed_packages": 1,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 2,
+    "passed_tests": 2,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "status": "pass",
+        "elapsed_seconds": 3.396
+      }
+    ],
+    "tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM08AppHostBoundary",
+        "status": "pass",
+        "elapsed_seconds": 2.89
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM08AppHostBoundary/transitive_execution_workspace",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "slowest_tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM08AppHostBoundary",
+        "status": "pass",
+        "elapsed_seconds": 2.89
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM08AppHostBoundary/transitive_execution_workspace",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 3.395416,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/three-line-08-app-host/review-fixes/boundary-final-01/go-test.jsonl",
+  "stderr_log": "docs/validation/three-line-08-app-host/review-fixes/boundary-final-01/go-test.stderr.txt"
+}

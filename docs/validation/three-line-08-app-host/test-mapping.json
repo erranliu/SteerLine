@@ -327,6 +327,99 @@
           "subtests": []
         }
       ]
+    },
+    {
+      "id": "F1-F4.app-review-fixes-01",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/review-fixes/app-final-01 -- ./internal/app -run '^(TestNativeProjectInitializesOnceAndRejectsMismatchedBinding|TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM|TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites|TestRunConfiguredServiceClosesTransferredStoreOnReturn)$' -count=1",
+      "source_commit": "16422d2173bc040681213e048066294241faa6ae",
+      "runner_summary": "docs/validation/three-line-08-app-host/review-fixes/app-final-01/summary.json",
+      "command_exit_code": 0,
+      "status": "passed",
+      "test_count": 4,
+      "passed_tests": 4,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "actual_tests": [
+        {"parent": "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "status": "pass"},
+        {"parent": "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "status": "pass"},
+        {"parent": "TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites", "status": "pass"},
+        {"parent": "TestRunConfiguredServiceClosesTransferredStoreOnReturn", "status": "pass"}
+      ]
+    },
+    {
+      "id": "TM08.host-lifetime-and-control-review-fixes-01",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/host/review-fixes-01 -- ./internal/app/host -run '^(TestTM08(ControlIdentity|Heartbeat|Shutdown)|TestServiceLifetimeCloseOnRunError)$' -count=1",
+      "source_commit": "16422d2173bc040681213e048066294241faa6ae",
+      "runner_summary": "docs/validation/three-line-08-app-host/host/review-fixes-01/summary.json",
+      "command_exit_code": 0,
+      "status": "passed",
+      "test_count": 4,
+      "passed_tests": 4,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "actual_tests": [
+        {"parent": "TestTM08ControlIdentity", "status": "pass"},
+        {"parent": "TestTM08Heartbeat", "status": "pass"},
+        {"parent": "TestTM08Shutdown", "status": "pass"},
+        {"parent": "TestServiceLifetimeCloseOnRunError", "status": "pass"}
+      ]
+    },
+    {
+      "id": "F1.host-closure-review-fixes-01",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/review-fixes/boundary-final-01 -- ./internal/coreboundary -run '^TestTM08AppHostBoundary$' -count=1",
+      "source_commit": "16422d2173bc040681213e048066294241faa6ae",
+      "runner_summary": "docs/validation/three-line-08-app-host/review-fixes/boundary-final-01/summary.json",
+      "command_exit_code": 0,
+      "status": "passed",
+      "test_count": 2,
+      "passed_tests": 2,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "actual_tests": [
+        {"parent": "TestTM08AppHostBoundary", "status": "pass"},
+        {"parent": "TestTM08AppHostBoundary/transitive_execution_workspace", "status": "pass"}
+      ]
+    },
+    {
+      "id": "L1-review-fixes-01",
+      "command": "go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1/review-fixes-01",
+      "source_commit": "16422d2173bc040681213e048066294241faa6ae",
+      "runner_summary": "docs/validation/three-line-08-app-host/l1/review-fixes-01/summary.json",
+      "command_exit_code": 0,
+      "status": "passed",
+      "execution_seconds": 775.8430247,
+      "group_count": 12,
+      "package_count": 27,
+      "test_count": 450,
+      "passed_tests": 450,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "groups": [
+        {"id": "quick-core", "passed_tests": 4, "failed_tests": 0, "skipped_tests": 0},
+        {"id": "quick-rules", "passed_tests": 256, "failed_tests": 0, "skipped_tests": 0},
+        {"id": "quick-execution", "passed_tests": 16, "failed_tests": 0, "skipped_tests": 0},
+        {"id": "quick-execution-boundary", "passed_tests": 45, "failed_tests": 0, "skipped_tests": 0},
+        {"id": "quick-owner-remote", "passed_tests": 15, "failed_tests": 0, "skipped_tests": 0},
+        {"id": "quick-owner-codec", "passed_tests": 14, "failed_tests": 0, "skipped_tests": 0},
+        {"id": "quick-owner-identity", "passed_tests": 17, "failed_tests": 0, "skipped_tests": 0},
+        {"id": "quick-owner-codexapp", "passed_tests": 4, "failed_tests": 0, "skipped_tests": 0},
+        {"id": "quick-owner-workspace", "passed_tests": 2, "failed_tests": 0, "skipped_tests": 0},
+        {"id": "quick-owner-publication", "passed_tests": 9, "failed_tests": 0, "skipped_tests": 0},
+        {"id": "quick-owner-app", "passed_tests": 12, "failed_tests": 0, "skipped_tests": 0},
+        {"id": "quick-boundary", "passed_tests": 56, "failed_tests": 0, "skipped_tests": 0}
+      ],
+      "required_test_hits": [
+        {"parent": "TestTM04ExecutionWiring", "subtests": ["claim_transaction_failure_and_original_receipt", "intent_binding_and_two_original_turns", "original_request_ack_and_manual_recovery"], "status": "pass"},
+        {"parent": "TestTM08AppHostWiring", "subtests": ["default_app_host_composition"], "status": "pass"},
+        {"parent": "TestTM08AppHostBoundary", "subtests": ["transitive_execution_workspace"], "status": "pass"},
+        {"parent": "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "subtests": [], "status": "pass"},
+        {"parent": "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "subtests": [], "status": "pass"},
+        {"parent": "TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites", "subtests": [], "status": "pass"},
+        {"parent": "TestRunConfiguredServiceClosesTransferredStoreOnReturn", "subtests": [], "status": "pass"},
+        {"parent": "TestServiceLifetimeCloseOnRunError", "subtests": [], "status": "pass"},
+        {"parent": "TestRunStopsActorAndWaitsForSourcesOnCancellation", "subtests": [], "status": "pass"},
+        {"parent": "TestRunRejectsUnknownDispatchModeBeforeStartingActor", "subtests": [], "status": "pass"}
+      ]
     }
   ],
   "migrated_test_ownership": {
@@ -344,7 +437,7 @@
     },
     "AppJSON.StrictDecoder": {
       "package": "github.com/erranliu/SteerLine/internal/app",
-      "file": "internal/app/native_project_open_test.go",
+      "file": "internal/app/json_decode_test.go",
       "previous_parent": "TestContractDecoderPreservesStrictFieldsAndSingleValue",
       "previous_file": "internal/steerline/contracts/json_test.go",
       "assertions": [
@@ -371,6 +464,15 @@
       "assertions": [
         "real app service can write heartbeat before host return",
         "the same service store rejects a heartbeat after the lock-owning host returns"
+      ]
+    },
+    "TM08.ServiceLifetimeCloseOnRunError": {
+      "package": "github.com/erranliu/SteerLine/internal/app/host",
+      "file": "internal/app/host/service_lifecycle_review_test.go",
+      "parent": "TestServiceLifetimeCloseOnRunError",
+      "assertions": [
+        "a Run error still invokes Close exactly once",
+        "both Run and Close errors are returned"
       ]
     },
     "MC1-MC9": {
