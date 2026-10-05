@@ -137,7 +137,7 @@ func (a taskPredecessorTx) RecordPredecessorAudit(v taskapp.Command) error {
 // NewTaskCommands extracts only fixed task input and injects narrow I/O ports.
 func NewTaskCommands(store persistence.CommandStore, config execution.Config) taskapp.Commands {
 	timeout, _ := time.ParseDuration(config.CommandTimeout)
-	return taskapp.Commands{Store: taskCommandStore{store}, Documents: taskDocuments{config.TaskRepositoryTarget, config.Repository, config.Git, timeout}, Input: taskapp.Input{Project: config.Identity(), Authority: config.TaskAuthority, Remote: config.Remote, Branch: config.Branch, ExecutableTypes: append([]string(nil), config.ExecutableTypes...), DefaultRequestedBy: DefaultRequestedBy()}}
+	return taskapp.Commands{Store: taskCommandStore{store}, Documents: taskDocuments{target: config.TaskRepositoryTarget, repository: config.Repository, git: config.Git, timeout: timeout, processHost: config.ProcessHost}, Input: taskapp.Input{Project: config.Identity(), Authority: config.TaskAuthority, Remote: config.Remote, Branch: config.Branch, ExecutableTypes: append([]string(nil), config.ExecutableTypes...), DefaultRequestedBy: DefaultRequestedBy()}}
 }
 
 func (c taskTestCommands) ValidateTaskBatch(ctx context.Context, config execution.Config, data []byte) (taskmodel.TaskBatchValidation, error) {
