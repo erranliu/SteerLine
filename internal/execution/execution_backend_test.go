@@ -126,6 +126,7 @@ func TestOperationRecordRejectsCorruptionBeforeUse(t *testing.T) {
 func TestNativeCapabilityCheckKeepsFixedAgent(t *testing.T) {
 	c := workerContextConfigFixture()
 	c.RunDir = t.TempDir()
+	c.Resources = fixtureResources{}
 	backend := BackendFor(c)
 	fixedTarget, fixedAgent := TargetFor(c), AgentFor(c)
 	report, err := backend.Probe(context.Background(), fixedTarget, fixedAgent)
@@ -140,7 +141,7 @@ func TestNativeCapabilityCheckKeepsFixedAgent(t *testing.T) {
 			report.Capabilities[i].Evidence = evidencePath + "#sha256=" + hex.EncodeToString(sum[:])
 		}
 	}
-	require(t, (executionRecords{root: c.RunDir, persistence: sqlite.Factory{}}).saveCapabilityReport(report))
+	require(t, (executionRecords{root: c.RunDir, persistence: sqlite.Factory{}, resources: c.Resources}).saveCapabilityReport(report))
 	c.Agent = "changed-default"
 	s := &Service{Config: c}
 	if _, err := s.requireBackendCapabilitiesFor(context.Background(), backend, fixedTarget, fixedAgent, "workspace_inspection"); err != nil {
