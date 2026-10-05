@@ -7,3 +7,5 @@
 首轮集成 L1 12组中仅 quick-execution-boundary 失败：TM06 临时模块仍按迁出 console/query roots 建立，真实仓库图与其他组通过。失败报告保留为 review77-l1-integrated.json，未记通过。修正临时模块种子为当前实际目录，最后再跑 review77-l1-final；最终结果另附，不覆盖失败。
 
 已通过定向：final-targeted2 九包/183事件、SQL/app 两包/7事件、真实候选控制台 wiring 两事件/141秒、恢复的候选排序与最终事务两事件，全部0fail/skip。报告保存于本目录，原命令/版本与原始Go JSON位于本 run task-state。最后只新增测试的非零命中断言，额外定向通过；未改变已验业务代码。不启用 Full/L2/L3/live 或远端准入；#39 本机协议/权限/native启动和停机实现证据仍有效。
+
+最终 L1：12/12 组、425/425 events passed，0 fail/skip，420.2 秒执行；[实际 summary](review77-l1-final.json)。运行开始时工作树正在集成，实际 Go 生产内容对应最终 `b974fd66de45f41df05f21ac0e60c840a265492b`；其后只补已定向验证的测试断言与文档，最终提交全部生产内容复核一致。首轮失败没有覆盖。
