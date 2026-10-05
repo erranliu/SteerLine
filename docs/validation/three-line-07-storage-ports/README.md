@@ -18,9 +18,9 @@
 
 | 组 | 命中与结果 | 报告 |
 | --- | --- | --- |
-| `project-snapshot-01` | 2/2 通过；SQLite WAL writer interleave 与未更改的 `TestFileQuerySourceReadsCombinedProjectView` | [summary](project-snapshot-01-20261005T170812/summary.json) · [Go JSON](project-snapshot-01-20261005T170812/stdout.jsonl) |
-| `runtime-snapshot-01` | 2/2 通过；真实 app Runtime 使用采样 authority/checkpoint，worker fixture 使用 atomic execution snapshot | [summary](runtime-snapshot-01-20261005T170829/summary.json) · [Go JSON](runtime-snapshot-01-20261005T170829/stdout.jsonl) |
-| `mainline-e2e-01` | 12/12 通过；包含 `TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions` | [summary](mainline-e2e-01-20261005T170854/summary.json) · [Go JSON](mainline-e2e-01-20261005T170854/stdout.jsonl) |
+| `project-snapshot-01` | 2/2 通过；SQLite WAL writer interleave 与未更改的 `TestFileQuerySourceReadsCombinedProjectView` | [summary](project-snapshot-01-20261005T170812/summary.json) · [Go JSON](project-snapshot-01-20261005T170812/go-test.jsonl) |
+| `runtime-snapshot-01` | 2/2 通过；真实 app Runtime 使用采样 authority/checkpoint，worker fixture 使用 atomic execution snapshot | [summary](runtime-snapshot-01-20261005T170829/summary.json) · [Go JSON](runtime-snapshot-01-20261005T170829/go-test.jsonl) |
+| `mainline-e2e-01` | 12/12 通过；包含 `TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions` | [summary](mainline-e2e-01-20261005T170854/summary.json) · [Go JSON](mainline-e2e-01-20261005T170854/go-test.jsonl) |
 
 ## 最新候选定向回归
 
