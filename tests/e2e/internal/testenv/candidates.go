@@ -504,6 +504,7 @@ func CandidateAcceptance(s *Scenario) {
 	proof := p.CandidatePR(a)
 	p.RealPRProof = &proof
 	s.usageVerified = true
+	s.Must(s.finishBody())
 	p.StopService()
 }
 func mustSnapshot(p *Project) Snapshot { snap, err := p.Snapshot(); p.Scenario.Must(err); return snap }
