@@ -22,6 +22,10 @@
 
 最终 L1 的所有组 ID、父/子测试实际命中、各组通过数和原始 JSON 均在 [L1 summary](L1-20261005T043100Z/summary.json) 与同目录各组 `test.jsonl` 中。
 
+## 主干集成与证据复用
+
+最终集成 base 为 `origin/main` `f8b5959462679faa4f00972f8f9e232044b6ab6c`，L1/定向证据的验证源 commit 为 `b49dec2cc27455fbf8044651a9975d28293aa372`。从该验证基线到新 main 的实际 diff 只有 4 个 `.agents/skills/roadmap-runner` 指令/metadata 文件，无 Go、SQL、配置或产品路径变化；rebase 无冲突，代码树与验证基线一致，因此按 Plan 复用上述通过证据，没有重跑 L1。Spec SHA-256 为 `A26308A7919B822AEED91382D542660EE92D9BD90A674CD3E8CD2ADABEA6D606`。
+
 ## 修复和诊断轨迹
 
 实施中保留了失败报告，不覆盖 `-out`：

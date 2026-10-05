@@ -2,6 +2,8 @@
 
 任务 ID：79；任务名称：存储目录与消费者端口收口。唯一执行依据：[Spec](three-line-07-storage-ports.spec.md)。硬前置：#75、#76、#77。一个独立实现 PR 交付。
 
+Spec 路径：`docs/spec/three-line-07-storage-ports.spec.md`。Spec SHA-256：`A26308A7919B822AEED91382D542660EE92D9BD90A674CD3E8CD2ADABEA6D606`。集成后的代码基线：`origin/main` `f8b5959462679faa4f00972f8f9e232044b6ab6c`；#79 原始测试基线：`b49dec2cc27455fbf8044651a9975d28293aa372`。
+
 ## 实施步骤
 
 1. 按三线实际需求收窄端口/声明，移动 query 依赖的读取契约到 ports，保持生产闭包无反向依赖。

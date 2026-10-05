@@ -2,6 +2,10 @@
   "schema_version": 1,
   "task_id": 79,
   "plan": "docs/spec/three-line-07-storage-ports.plan.md",
+  "spec": "docs/spec/three-line-07-storage-ports.spec.md",
+  "spec_sha256": "A26308A7919B822AEED91382D542660EE92D9BD90A674CD3E8CD2ADABEA6D606",
+  "integration_base": "f8b5959462679faa4f00972f8f9e232044b6ab6c",
+  "validation_source_commit": "b49dec2cc27455fbf8044651a9975d28293aa372",
   "status": "passed",
   "groups": [
     {
