@@ -12,9 +12,6 @@ import (
 
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/taskview"
 	steerlineapp "github.com/erranliu/SteerLine/internal/steerlineapp"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -155,15 +152,12 @@ func runNativeTaskCommand(args []string) error {
 	}
 	ctx := context.Background()
 	opened, err := steerlineapp.OpenClient(ctx, *config)
-	var product interface {
-		api.Lifecycle
-		api.TaskClient
-	} = opened
+	product := opened
 	if err != nil {
 		return err
 	}
 	defer product.Close()
-	var result contracts.NativeTaskPage
+	var result productapi.TaskPage
 	switch subcommand {
 	case "show":
 		result, err = product.ShowTask(ctx, *taskID)
@@ -219,13 +213,13 @@ func runNativeTaskCommand(args []string) error {
 			}
 			return json.NewEncoder(os.Stdout).Encode(graph)
 		}
-		graph, graphErr := product.QueryTaskGraph(ctx, taskview.Filter{Status: *status, CenterTaskID: *taskID, Direction: *direction, Depth: *depth, Limit: effectiveLimit})
+		graph, graphErr := product.QueryTaskGraph(ctx, productapi.GraphFilter{Status: *status, CenterTaskID: *taskID, Direction: *direction, Depth: *depth, Limit: effectiveLimit})
 		if graphErr != nil {
 			return graphErr
 		}
 		return json.NewEncoder(os.Stdout).Encode(graph)
 	case "export":
-		graph, graphErr := product.QueryTaskGraph(ctx, taskview.Filter{Status: *status, CenterTaskID: *taskID, Direction: *direction, Depth: *depth, Limit: effectiveLimit})
+		graph, graphErr := product.QueryTaskGraph(ctx, productapi.GraphFilter{Status: *status, CenterTaskID: *taskID, Direction: *direction, Depth: *depth, Limit: effectiveLimit})
 		if graphErr != nil {
 			return graphErr
 		}

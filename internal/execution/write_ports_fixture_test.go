@@ -10,7 +10,6 @@ import (
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
-	taskview "github.com/erranliu/SteerLine/internal/steerline/taskview"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -43,7 +42,7 @@ type fixtureTx interface {
 	Query(ctx context.Context, project string) (contracts.DomainSnapshot, error)
 	Task(ctx context.Context, project, id string) (taskmodel.TaskRecord, error)
 	TaskContract(ctx context.Context, project string, task taskmodel.TaskRecord) (taskmodel.TaskContract, error)
-	TaskGraphSnapshot(ctx context.Context, project string) (taskview.Snapshot, error)
+	TaskGraphSnapshot(ctx context.Context, project string) (storageports.TaskGraphSnapshot, error)
 	UpdateCommand(v storageports.CommandRecord) error
 	UpdateDiscardedTaskCAS(v taskmodel.TaskRecord, expected uint64) error
 	UpdateNativeTaskCAS(v taskmodel.TaskRecord, expectedVersion uint64) error

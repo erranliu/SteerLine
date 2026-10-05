@@ -11,12 +11,10 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/erranliu/SteerLine/internal/console"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/steerline/console"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
 
@@ -45,7 +43,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	require(t, err)
 	defer client.Close()
 	ref := client.Project()
-	m, err := console.NewModel(ctx, []api.ProjectRef{ref}, console.Options{Clients: map[string]api.ConsoleClient{ref.Key: client}, ApplicationHome: steerlineapp.HomeDir()})
+	m, err := console.NewModel(ctx, []productapi.ProjectRef{ref}, console.Options{Clients: map[string]console.ConsoleClient{ref.Key: client}, ApplicationHome: steerlineapp.HomeDir()})
 	require(t, err)
 	defer m.Close()
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 80})
@@ -64,13 +62,13 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	step(tea.KeyMsg{Type: tea.KeyDown})
 	step(key('s'))
 	step(tea.KeyMsg{Type: tea.KeyEnter})
-	var primary *contracts.Run
+	var primary *productapi.CandidateSummary
 	waitFor(t, 30*time.Second, func() bool {
-		snap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
-		if snap.Observation.Runtime == nil {
+		snap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
+		if snap.Observation.Page == nil {
 			return false
 		}
-		for _, r := range snap.Observation.Runtime.Runs {
+		for _, r := range snap.Observation.Page.Runs {
 			if r.Decision != nil && r.SessionID != "" {
 				primary = r
 				return true
@@ -85,11 +83,11 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	// The UI's archived request is read through the public control client.
 	var candidateRequest *productapi.ControlRequest
 	waitFor(t, 30*time.Second, func() bool {
-		snap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
-		if snap.Observation.Runtime == nil {
+		snap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
+		if snap.Observation.Page == nil {
 			return false
 		}
-		for _, r := range snap.Observation.Runtime.Runs {
+		for _, r := range snap.Observation.Page.Runs {
 			if r.RunID == primary.RunID || r.SessionID == "" {
 				continue
 			}
@@ -116,11 +114,11 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	require(t, err)
 	t.Logf("UI start request %s: %s; original receipt: %s", candidateRequest.RequestID, candidateRequest.Payload, mustJSON(r))
 	for i := 2; i < 5; i++ {
-		snap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
+		snap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
 		page, err := client.ShowTask(ctx, "901")
 		require(t, err)
 		profile := ref.Presentation.Profiles[i]
-		revision := snap.Connection.Snapshot.Runtime.Control.Revision
+		revision := snap.Connection.Snapshot.Page.Control.Revision
 		in := productapi.ControlInput{Action: productapi.StartCandidate, RequestID: newID(), InstanceID: svc.instanceID, ExpectedRevision: &revision, Payload: productapi.ControlPayload{TaskID: "901", ExpectedTaskVersion: page.Tasks[0].Version, ExpectedGraphRevision: page.GraphRevision, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest}}
 		_, err = client.SubmitControl(ctx, in)
 		require(t, err)
@@ -135,10 +133,10 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	if !containsConsoleText(m.View(), "已达5个") {
 		t.Fatal("UI did not show start-time participation limit", m.View())
 	}
-	limitSnap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
+	limitSnap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
 	limitPage, err := client.ShowTask(ctx, "901")
 	require(t, err)
-	limitRevision := limitSnap.Connection.Snapshot.Runtime.Control.Revision
+	limitRevision := limitSnap.Connection.Snapshot.Page.Control.Revision
 	limit := productapi.ControlInput{Action: productapi.StartCandidate, RequestID: newID(), InstanceID: svc.instanceID, ExpectedRevision: &limitRevision, Payload: productapi.ControlPayload{TaskID: "901", ExpectedTaskVersion: limitPage.Tasks[0].Version, ExpectedGraphRevision: limitPage.GraphRevision, ExecutionProfileID: ref.Presentation.Profiles[5].ID, ExecutionProfileDigest: ref.Presentation.Profiles[5].Digest}}
 	_, err = client.SubmitControl(ctx, limit)
 	require(t, err)
@@ -188,11 +186,11 @@ func TestCandidateConsoleWiring(t *testing.T) {
 		// refreshing and explicitly resubmitting the same unsent draft; never
 		// retry unknown outcomes or a changed worker/question/turn.
 		waitFor(t, 30*time.Second, func() bool {
-			diagnostic := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
-			if diagnostic.Observation.Runtime == nil {
+			diagnostic := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
+			if diagnostic.Observation.Page == nil {
 				return false
 			}
-			rt := diagnostic.Observation.Runtime
+			rt := diagnostic.Observation.Page
 			if rt.Service.InstanceID != svc.instanceID {
 				t.Fatal("known rejection changed the original service instance")
 			}
@@ -216,18 +214,18 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	}
 	t.Logf("feedback submission UI: %s", m.View())
 	if strings.Contains(m.View(), "stale_revision") || strings.Contains(m.View(), "stale_instance") || strings.Contains(m.View(), "答案命令结果待确认") {
-		diagnostic := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
-		if diagnostic.Connection.Snapshot.Runtime != nil {
-			t.Logf("feedback connection service: %s", mustJSON(diagnostic.Connection.Snapshot.Runtime.Service))
+		diagnostic := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
+		if diagnostic.Connection.Snapshot.Page != nil {
+			t.Logf("feedback connection service: %s", mustJSON(diagnostic.Connection.Snapshot.Page.Service))
 		}
-		if diagnostic.Observation.Runtime != nil {
-			t.Logf("feedback canonical service: %s", mustJSON(diagnostic.Observation.Runtime.Service))
+		if diagnostic.Observation.Page != nil {
+			t.Logf("feedback canonical service: %s", mustJSON(diagnostic.Observation.Page.Service))
 		}
 		t.Fatal("feedback did not reach its exact original identity", m.View())
 	}
 	waitFor(t, 30*time.Second, func() bool {
-		snap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
-		for _, r := range snap.Observation.Runtime.Runs {
+		snap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
+		for _, r := range snap.Observation.Page.Runs {
 			if r.RunID == primary.RunID && r.TurnNumber >= 2 {
 				return true
 			}
@@ -238,8 +236,8 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	step(key('z'))
 	step(tea.KeyMsg{Type: tea.KeyEnter})
 	waitFor(t, 30*time.Second, func() bool {
-		snap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
-		for _, r := range snap.Observation.Runtime.Runs {
+		snap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
+		for _, r := range snap.Observation.Page.Runs {
 			if r.RunID == primary.RunID {
 				return r.Abandonment != nil
 			}
@@ -251,9 +249,9 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	if !containsConsoleText(m.View(), "已放弃") {
 		t.Fatal("UI lost original exit/stop facts", m.View())
 	}
-	snap := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
-	t.Logf("canonical five-candidate snapshot after exact feedback/exit: %s", mustJSON(snap.Observation.Runtime.Runs))
-	if len(snap.Observation.Runtime.Runs) != 5 {
+	snap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
+	t.Logf("canonical five-candidate snapshot after exact feedback/exit: %s", mustJSON(snap.Observation.Page.Runs))
+	if len(snap.Observation.Page.Runs) != 5 {
 		t.Fatal("duplicate request created another candidate")
 	}
 	// A sixth start is rejected by the real service before exit (the UI test above

@@ -17,11 +17,10 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/host"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	"github.com/erranliu/SteerLine/internal/steerline/query"
-	"github.com/erranliu/SteerLine/internal/steerline/taskview"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -274,6 +273,6 @@ var _ HostPort = fixtureHost{}
 func newFixtureConversationQuery(store persistence.Connection, project string) query.ConversationService {
 	return query.ConversationService{Project: project, Events: store, Bodies: store, Raw: store, Capabilities: store}
 }
-func taskDependencyState(record taskmodel.TaskRecord, graph taskview.Snapshot) (bool, []taskmodel.TaskDependencyStatus) {
+func taskDependencyState(record taskmodel.TaskRecord, graph storageports.TaskGraphSnapshot) (bool, []taskmodel.TaskDependencyStatus) {
 	return taskmodel.DependencyStateForTask(record, graph.TaskGraph())
 }

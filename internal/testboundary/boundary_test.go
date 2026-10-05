@@ -149,7 +149,7 @@ func TestE2EScenariosUseTestAdapters(t *testing.T) {
 }
 
 func TestBoundaryRulesRejectTransitiveLeaksAndDirectImplementationImports(t *testing.T) {
-	app, lib, fake := module+"/cmd/steerline", module+"/internal/steerline/query", module+"/tests/e2e/internal/controlled"
+	app, lib, fake := module+"/cmd/steerline", module+"/internal/product/query", module+"/tests/e2e/internal/controlled"
 	graph := map[string][]string{app: {lib}, lib: {fake}}
 	if got := violations(graph, []string{app}); len(got) != 1 || got[0] != app+" -> "+lib+" -> "+fake {
 		t.Fatalf("transitive dependency was not reported: %v", got)

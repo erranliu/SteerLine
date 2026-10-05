@@ -8,14 +8,14 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	taskview "github.com/erranliu/SteerLine/internal/steerline/taskview"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func (s Reader) TaskGraphSnapshot(ctx context.Context, project string) (taskview.Snapshot, error) {
+func (s Reader) TaskGraphSnapshot(ctx context.Context, project string) (storageports.TaskGraphSnapshot, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		return taskview.Snapshot{}, err
+		return storageports.TaskGraphSnapshot{}, err
 	}
 	defer tx.Rollback()
 	out, err := s.TaskGraphSnapshotTx(ctx, tx, project)
@@ -25,12 +25,12 @@ func (s Reader) TaskGraphSnapshot(ctx context.Context, project string) (taskview
 	return out, tx.Commit()
 }
 
-func (s Reader) TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string) (taskview.Snapshot, error) {
+func (s Reader) TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string) (storageports.TaskGraphSnapshot, error) {
 	return TaskGraphSnapshotTx(ctx, tx, project, s.nativeBinding)
 }
 
-func TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string, binding *executionmodel.ProjectTaskAuthority) (taskview.Snapshot, error) {
-	out := taskview.Snapshot{ByID: map[string]taskmodel.TaskRecord{}, RepositoryTaskIDs: map[string]bool{}, ContractIDs: map[string]bool{}, Deliveries: map[string]executionmodel.TaskDeliveryRecord{}, SampledAt: time.Now().UTC()}
+func TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string, binding *executionmodel.ProjectTaskAuthority) (storageports.TaskGraphSnapshot, error) {
+	out := storageports.TaskGraphSnapshot{ByID: map[string]taskmodel.TaskRecord{}, RepositoryTaskIDs: map[string]bool{}, ContractIDs: map[string]bool{}, Deliveries: map[string]executionmodel.TaskDeliveryRecord{}, SampledAt: time.Now().UTC()}
 	if project == "" {
 		return out, nativeErr("authority_mismatch", "project identity is required")
 	}

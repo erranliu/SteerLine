@@ -9,10 +9,19 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/execution"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-type ObservationSnapshot = clientcontracts.ObservationSnapshot
+// ObservationSnapshot is a private host sample consumed by service control.
+// It is never returned by the product client.
+type ObservationSnapshot struct {
+	Runtime                      *contracts.Runtime
+	State                        productapi.SnapshotState
+	SampledAt                    time.Time
+	HeartbeatAge, FreshnessLimit time.Duration
+	ClockSkew                    bool
+	Error                        string
+}
 
 const (
 	SnapshotNone           = productapi.SnapshotNone

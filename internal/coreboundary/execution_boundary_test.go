@@ -71,8 +71,8 @@ func TestTM04ConsoleQueryBoundary(t *testing.T) {
 		t.Run(strings.TrimPrefix(dependency, module+"/internal/"), func(t *testing.T) {
 			root := t.TempDir()
 			files := map[string]string{
-				"internal/steerline/console/edge_linux_test.go": "package console\nimport _ \"" + module + "/internal/helper\"\n",
-				"internal/helper/query_plan9.go":                "//go:build never_enabled\n\npackage helper\nimport _ \"" + dependency + "\"\n",
+				"internal/console/edge_linux_test.go": "package console\nimport _ \"" + module + "/internal/helper\"\n",
+				"internal/helper/query_plan9.go":      "//go:build never_enabled\n\npackage helper\nimport _ \"" + dependency + "\"\n",
 			}
 			for name, source := range files {
 				path := filepath.Join(root, name)
@@ -104,6 +104,8 @@ func TestTM06AdapterBoundary(t *testing.T) {
 		module + "/internal/steerline/testprotocol",
 		module + "/internal/steerlineapp",
 		module + "/internal/steerline/console",
+		console,
+		console + "/activityrender",
 		module + "/internal/product/api",
 		module + "/internal/steerline/taskview",
 	} {
@@ -171,8 +173,8 @@ func TestTM06AdapterBoundary(t *testing.T) {
 	})
 }
 
-// Pure product values are reachable only through the existing conversation
-// contracts. A helper must not turn that migration exception into a bypass.
+// Public API values are reachable only through the existing conversation
+// contracts; old taskview imports remain forbidden after its migration. A helper must not turn that migration exception into a bypass.
 func TestTM06ContractValueClosure(t *testing.T) {
 	for _, dependency := range []string{module + "/internal/product/api", core + "/taskview"} {
 		for _, withContract := range []bool{false, true} {
@@ -217,7 +219,7 @@ func TestTM06ContractValueClosure(t *testing.T) {
 					"go.mod":                       "module " + module + "\n\ngo 1.23\n",
 					"internal/otherhelper/edge.go": "package otherhelper\nimport _ \"" + dependency + "\"\n",
 				}
-				for _, pkg := range []string{"internal/steerline", "internal/execution", "internal/steerline/contracts", "internal/task/model", "internal/execution/model", "internal/execution/backend", "internal/product/api", "internal/storage/ports", "internal/steerline/taskview", "internal/steerline/console"} {
+				for _, pkg := range []string{"internal/steerline", "internal/execution", "internal/steerline/contracts", "internal/task/model", "internal/execution/model", "internal/execution/backend", "internal/product/api", "internal/storage/ports", "internal/steerline/taskview", "internal/product/query", "internal/product/query/taskgraph", "internal/console"} {
 					path := filepath.Join(root, pkg, "empty.go")
 					if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 						t.Fatal(err)
@@ -242,5 +244,27 @@ func TestTM06ContractValueClosure(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestTM05ProductQueryBoundary(t *testing.T) {
+	for _, dependency := range []string{execution, console, executionAdapters + "/codex", "database/sql", module + "/internal/helper"} {
+		t.Run(dependency, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, "internal/product/query/edge_plan9.go")
+			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte("//go:build never_enabled\n\npackage query\nimport _ \""+dependency+"\"\n"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			report, err := ScanSource(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(strings.Join(report.Violations, "\n"), "product query forbidden dependency") {
+				t.Fatalf("inactive query import escaped: %+v", report)
+			}
+		})
 	}
 }

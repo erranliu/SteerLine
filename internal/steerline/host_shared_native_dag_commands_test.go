@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"encoding/json"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"path/filepath"
 	"strconv"
 	"testing"
@@ -109,7 +110,7 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c execution.Conf
 	if !neutralVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("published discard fixture has no valid frozen profile")
 	}
-	page, err := (NewQueryService(store, c.Identity())).ShowNativeTask(ctx, taskID)
+	page, err := (productquery.NewService(store, c.Identity())).ShowNativeTask(ctx, taskID)
 	if err != nil {
 		t.Fatal(err)
 	}

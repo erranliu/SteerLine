@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/product/query"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/query"
 )
 
 func TestActivityDatabaseSurvivesReopenWithoutMirror(t *testing.T) {

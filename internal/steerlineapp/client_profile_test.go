@@ -9,12 +9,12 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution"
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
-	"github.com/erranliu/SteerLine/internal/steerlineclient"
+	api "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/product/client"
 )
 
 func TestCLIExecutionProfileIsBoundIntoStartTaskRequest(t *testing.T) {
@@ -44,7 +44,7 @@ func TestCLIExecutionProfileIsBoundIntoStartTaskRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	client, err := steerlineclient.Open(context.Background(), resources.Project, func(context.Context, api.ProjectRef) (api.Resources, error) { return resources, nil })
+	client, err := client.Open(context.Background(), resources.Project, func(context.Context, api.ProjectRef) (client.Resources, error) { return resources, nil })
 	if err != nil {
 		t.Fatal(err)
 	}

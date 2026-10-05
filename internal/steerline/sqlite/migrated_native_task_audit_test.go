@@ -8,14 +8,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/query"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestNativeAuditPaginationBoundsAndDatabaseIdentity(t *testing.T) {
 	ctx := context.Background()
 	s, project, _ := nativeAuditStore(t)
-	q := NewQueryService(s, project)
+	q := productquery.NewService(s, project)
 	first, err := q.ListNativeTasks(ctx, "", 1)
 	require(t, err)
 	if first.Tasks[0].TaskID != "2" || first.NextCursor == "" || first.Capabilities.StartupBlockers != "provided" {
@@ -32,7 +32,7 @@ func TestNativeAuditPaginationBoundsAndDatabaseIdentity(t *testing.T) {
 	}
 	raw, err := base64.RawURLEncoding.DecodeString(first.NextCursor)
 	require(t, err)
-	var cursor query.TaskCursor
+	var cursor productquery.TaskCursor
 	require(t, json.Unmarshal(raw, &cursor))
 	cursor.Offset = int(^uint(0) >> 1)
 	raw, err = json.Marshal(cursor)
@@ -40,7 +40,7 @@ func TestNativeAuditPaginationBoundsAndDatabaseIdentity(t *testing.T) {
 	_, err = q.ListNativeTasks(ctx, base64.RawURLEncoding.EncodeToString(raw), 500)
 	requireNativeAuditCode(t, err, "cursor_invalidated")
 	other, _, _ := nativeAuditStore(t)
-	_, err = (NewQueryService(other, project)).ListNativeTasks(ctx, first.NextCursor, 1)
+	_, err = (productquery.NewService(other, project)).ListNativeTasks(ctx, first.NextCursor, 1)
 	requireNativeAuditCode(t, err, "cursor_invalidated")
 	// Corruption outside the requested page must not cause a full-project decode.
 	_, err = s.db.Exec(`UPDATE tasks SET payload='invalid JSON' WHERE task_id='99'`)
@@ -65,7 +65,7 @@ func TestNativeAuditPageDecodesOnlyDirectPredecessors(t *testing.T) {
 	}))
 	_, err := store.db.ExecContext(ctx, `UPDATE tasks SET payload='invalid JSON' WHERE project_identity=? AND task_id='2'`, project)
 	require(t, err)
-	page, err := (NewQueryService(store, project)).ShowNativeTask(ctx, "99")
+	page, err := (productquery.NewService(store, project)).ShowNativeTask(ctx, "99")
 	require(t, err)
 	if len(page.Tasks) != 1 || len(page.Tasks[0].UnmetPredecessors) != 1 || page.Tasks[0].UnmetPredecessors[0].TaskID != "10" {
 		t.Fatalf("task detail lost its direct predecessor: %+v", page.Tasks)
@@ -121,7 +121,7 @@ func TestNativeAuditQueryRejectsPayloadIdentityDrift(t *testing.T) {
 			}
 			_, err := s.db.Exec(`UPDATE tasks SET payload=json_set(payload,?,?) WHERE task_id='2'`, "$."+field, value)
 			require(t, err)
-			_, err = (NewQueryService(s, project)).ShowNativeTask(context.Background(), "2")
+			_, err = (productquery.NewService(s, project)).ShowNativeTask(context.Background(), "2")
 			requireNativeAuditCode(t, err, "contract_mismatch")
 		})
 	}

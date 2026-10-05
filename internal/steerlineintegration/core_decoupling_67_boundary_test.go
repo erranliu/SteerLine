@@ -14,9 +14,9 @@ import (
 
 func TestCD67CoreBoundary(t *testing.T) {
 	t.Run("pure_ownership_all_tags_production_and_tests", func(t *testing.T) {
-		for _, owner := range []string{"steerline/taskview", "task", "task/model", "execution/model", "execution/backend", "product/api", "storage/ports"} {
+		for _, owner := range []string{"product/query/taskgraph", "task", "task/model", "execution/model", "execution/backend", "product/api", "storage/ports"} {
 			t.Run(owner, func(t *testing.T) {
-				for _, dependency := range []string{"database/sql", "github.com/erranliu/SteerLine/internal/steerline/contracts", "github.com/erranliu/SteerLine/internal/steerline/query", "github.com/erranliu/SteerLine/internal/steerline/sqlite", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/steerlineapp", "github.com/erranliu/SteerLine/internal/helper", "example.org/implementation"} {
+				for _, dependency := range []string{"database/sql", "github.com/erranliu/SteerLine/internal/steerline/contracts", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/steerline/sqlite", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/steerlineapp", "github.com/erranliu/SteerLine/internal/helper", "example.org/implementation"} {
 					for _, filename := range []string{"edge_plan9.go", "edge_linux_test.go"} {
 						root := t.TempDir()
 						dir := filepath.Join(root, "internal", owner)
@@ -89,11 +89,11 @@ func TestCD67CoreBoundary(t *testing.T) {
 	})
 
 	t.Run("console_negative_all_tags_production_and_tests", func(t *testing.T) {
-		for _, dependency := range []string{"github.com/erranliu/SteerLine/internal/steerline", "database/sql", "modernc.org/sqlite", "github.com/erranliu/SteerLine/internal/steerline/sqlite", "github.com/erranliu/SteerLine/internal/steerline/persistence", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", "github.com/erranliu/SteerLine/internal/execution/process", "github.com/erranliu/SteerLine/internal/execution/workspace", "github.com/erranliu/SteerLine/internal/execution/publication", "github.com/erranliu/SteerLine/internal/steerlineclient", "github.com/erranliu/SteerLine/internal/steerlineapp"} {
+		for _, dependency := range []string{"github.com/erranliu/SteerLine/internal/steerline", "database/sql", "modernc.org/sqlite", "github.com/erranliu/SteerLine/internal/steerline/sqlite", "github.com/erranliu/SteerLine/internal/steerline/persistence", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", "github.com/erranliu/SteerLine/internal/execution/process", "github.com/erranliu/SteerLine/internal/steerlineclient", "github.com/erranliu/SteerLine/internal/product/client", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/execution/workspace", "github.com/erranliu/SteerLine/internal/execution/publication", "github.com/erranliu/SteerLine/internal/steerlineapp"} {
 			t.Run(dependency, func(t *testing.T) {
 				for _, file := range []string{"edge_plan9.go", "edge_linux_test.go"} {
 					root := t.TempDir()
-					dir := filepath.Join(root, "internal/steerline/console")
+					dir := filepath.Join(root, "internal/console")
 					require(t, os.MkdirAll(dir, 0700))
 					require(t, os.WriteFile(filepath.Join(dir, file), []byte("//go:build never_enabled\n\npackage console\nimport _ \""+dependency+"\"\n"), 0600))
 					report, err := coreboundary.ScanSource(root)
@@ -106,7 +106,7 @@ func TestCD67CoreBoundary(t *testing.T) {
 		}
 		t.Run("transitive_test_helper", func(t *testing.T) {
 			root := t.TempDir()
-			for path, source := range map[string]string{"internal/steerline/console/edge_darwin_test.go": "package console\nimport _ \"github.com/erranliu/SteerLine/internal/helper\"\n", "internal/helper/edge_freebsd.go": "package helper\nimport _ \"github.com/erranliu/SteerLine/internal/steerlineclient\"\n"} {
+			for path, source := range map[string]string{"internal/console/edge_darwin_test.go": "package console\nimport _ \"github.com/erranliu/SteerLine/internal/helper\"\n", "internal/helper/edge_freebsd.go": "package helper\nimport _ \"github.com/erranliu/SteerLine/internal/product/client\"\n"} {
 				file := filepath.Join(root, path)
 				require(t, os.MkdirAll(filepath.Dir(file), 0700))
 				require(t, os.WriteFile(file, []byte(source), 0600))
@@ -129,7 +129,7 @@ func TestCD67CoreBoundary(t *testing.T) {
 		raw, err := json.Marshal(report)
 		require(t, err)
 		t.Log(string(raw))
-		for _, owner := range []string{"steerline/taskview", "task", "task/model", "execution/model", "execution/backend", "product/api", "storage/ports"} {
+		for _, owner := range []string{"product/query/taskgraph", "task", "task/model", "execution/model", "execution/backend", "product/api", "storage/ports"} {
 			if report.PureFiles["github.com/erranliu/SteerLine/internal/"+owner] == 0 {
 				t.Fatalf("empty migrated owner scan: %s", owner)
 			}

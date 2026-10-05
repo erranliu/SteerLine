@@ -1,0 +1,1246 @@
+{
+  "cmd/orca-probe": {
+    "files": [
+      "cmd/orca-probe/main.go"
+    ],
+    "imports": [],
+    "sha256": {
+      "cmd/orca-probe/main.go": "bea9cf07eb339d1404a638ef8d87fcfc9157c0bac2e782b50f1e0d6ffbf2a39c"
+    }
+  },
+  "cmd/steerline": {
+    "files": [
+      "cmd/steerline/main.go",
+      "cmd/steerline/task_commands.go"
+    ],
+    "imports": [
+      "internal/execution",
+      "internal/product/api",
+      "internal/product/client",
+      "internal/steerline",
+      "internal/steerlineapp",
+      "internal/task/model"
+    ],
+    "sha256": {
+      "cmd/steerline/main.go": "a132864a2c425b18a7aac69bb650a03ac9e93d71f4ba5295af6b94c5169ec33c",
+      "cmd/steerline/task_commands.go": "4127294d99fc9b021d6bea539676cb9de31113a5da4579a15888f425b3d480d1"
+    }
+  },
+  "cmd/test-feedback": {
+    "files": [
+      "cmd/test-feedback/e2e.go",
+      "cmd/test-feedback/main.go",
+      "cmd/test-feedback/process_unix.go",
+      "cmd/test-feedback/process_windows.go",
+      "cmd/test-feedback/scoped.go",
+      "cmd/test-feedback/task_scope.go"
+    ],
+    "imports": [
+      "internal/testfeedback",
+      "internal/testprocess"
+    ],
+    "sha256": {
+      "cmd/test-feedback/e2e.go": "7e696c0d9d7204cf68a98288e48c990072ba61a4840cdc5b753424fc4329e4da",
+      "cmd/test-feedback/main.go": "1a9ea9512ff266f161f0b8d8d0cb143d2b4490e66cc0bb944dee5a344dd85e3c",
+      "cmd/test-feedback/process_unix.go": "e07db50e4a00881bff1475f48a6920e4e545f43ed09363502f0b5cacb35bbc69",
+      "cmd/test-feedback/process_windows.go": "f08723112bf773f50b8a73fb50646853d402ccca3ccc0652659f167507cac394",
+      "cmd/test-feedback/scoped.go": "c2d8694f0cb57532d9df6215c6fbf88990e4690c318b6c64cf1f5670168ece35",
+      "cmd/test-feedback/task_scope.go": "4c770fcb67a04158380fa2c30850b4f716306afacf006d10954dd209d4de10cd"
+    }
+  },
+  "internal/console": {
+    "files": [
+      "internal/console/activity_decision.go",
+      "internal/console/candidates.go",
+      "internal/console/conversation.go",
+      "internal/console/conversation_anchor.go",
+      "internal/console/execution_profile.go",
+      "internal/console/interaction.go",
+      "internal/console/interfaces.go",
+      "internal/console/model.go",
+      "internal/console/model_control.go",
+      "internal/console/model_keys.go",
+      "internal/console/model_navigation.go",
+      "internal/console/model_update_actions.go",
+      "internal/console/model_update_conversation.go",
+      "internal/console/model_update_project.go",
+      "internal/console/preferences.go",
+      "internal/console/preferences_io.go",
+      "internal/console/preferences_unix.go",
+      "internal/console/preferences_windows.go",
+      "internal/console/presentation.go",
+      "internal/console/profile_choice.go",
+      "internal/console/source.go",
+      "internal/console/view.go",
+      "internal/console/view_conversation.go",
+      "internal/console/view_tasks.go",
+      "internal/console/view_text.go"
+    ],
+    "imports": [
+      "internal/console/activityrender",
+      "internal/product/api"
+    ],
+    "sha256": {
+      "internal/console/activity_decision.go": "9801ca43c330c17d29a392d26ab00417cc9b203d2165690db2b618ef3270edfc",
+      "internal/console/candidates.go": "e624ef1d3cc88c40da22bde0fa24fc086f1702ef10325f9a54ce22d29f2208ba",
+      "internal/console/conversation.go": "e288a26a59f5b43cd07a06644235da55ff80db2921fe9746f87152aa1b76e6e8",
+      "internal/console/conversation_anchor.go": "82fb0809db622b95c2e733a26992cee389396ffef071c2814577f7af256edaef",
+      "internal/console/execution_profile.go": "0f10c6e627efe292f9614e2db0614d163910ee30601880fd9bb8863f7d3fe854",
+      "internal/console/interaction.go": "2550b6d289d45df12d259640891534366d5059577a2ea382f2531e95c0d69198",
+      "internal/console/interfaces.go": "762d6b1d401c9e33c803ed2fadf09d50652a15197409de89d9e6052fd17bf31d",
+      "internal/console/model.go": "0b354b1eebccf09fb44e4a0c544a80c317ad8ca76957641cbf78b6bd2abd66a9",
+      "internal/console/model_control.go": "c3ec2eff4fa6ff251eaaeb15012bb4eb410a131093af95ec3ebc655cf4200e0f",
+      "internal/console/model_keys.go": "abcdd9a3081e813fd879ca68b301582a78f0d5f838d4d42b216b6d260229e4b9",
+      "internal/console/model_navigation.go": "af1f1ff22297403bc7a4a845c228e10929feca1800846c42e9517c8d25c2a666",
+      "internal/console/model_update_actions.go": "4086f6a8f221e2200aa0fb5c11f9bdecacf6c5d8bf67ee6b7f953fed4f9d30dc",
+      "internal/console/model_update_conversation.go": "4ba65bf59a79d10d6171cda4745ffe93d3c719597c9ee3296b642d3ff07b42f0",
+      "internal/console/model_update_project.go": "d4e3a99edbfa7c793c804e90f0eb20d2101d05a81b68c860a9bbd205813aa933",
+      "internal/console/preferences.go": "662ef2da3791ea604d3aae191eb3b3cbb3ede2d7ca4bf8ebac965e038a866a2e",
+      "internal/console/preferences_io.go": "7ab99143eb30315c2f3e49789cdebca570365a53883b0791f10a02888cbfaa8b",
+      "internal/console/preferences_unix.go": "5598aeaffd6a23be2ea1f839d40560280c00fbcd95c33f63292d619a81b4438f",
+      "internal/console/preferences_windows.go": "fd436fca5cd943d45df835edddc58d350a72b5075c02cac98d021407ad0a99e4",
+      "internal/console/presentation.go": "bd5468dd875b401e3d8f689118a55d00a7614ee65669796784837a25b03054a6",
+      "internal/console/profile_choice.go": "7fb9d0e02df2fd383b9219edb0f4a0c43ca0f08d75b7d946415293f42ffb6716",
+      "internal/console/source.go": "49cd8cc7501699a8713fe01a03b3a3d71f24608309b5afd002b2121d22488ed2",
+      "internal/console/view.go": "bf089e7bd1561191d5024450db8d0cbecaa674f63bf6241d6f78a133c91769d7",
+      "internal/console/view_conversation.go": "8a5da6e9abc7aa5e7fffe6972e05184073b644142333625c450b304528d798e2",
+      "internal/console/view_tasks.go": "ad006ab7f125e4b2eeb7957fecae1d0b32e69b40a96a6c2ebc77c4a93004df41",
+      "internal/console/view_text.go": "541ee22ee708cfc09fd2d74cdb8a0d52f1f0ff5aac156152fec8d024cbe71142"
+    }
+  },
+  "internal/console/activityrender": {
+    "files": [
+      "internal/console/activityrender/render.go"
+    ],
+    "imports": [
+      "internal/product/api"
+    ],
+    "sha256": {
+      "internal/console/activityrender/render.go": "e1971c115c1e1cf8f3303f42ee63efd3c8cd15913006cbc77c32724cdd251580"
+    }
+  },
+  "internal/coreboundary": {
+    "files": [
+      "internal/coreboundary/check.go"
+    ],
+    "imports": [],
+    "sha256": {
+      "internal/coreboundary/check.go": "8cf51915949e8989998e0cdcc0d741e5db3a6625d9f638f28088dbcb75d4c73f"
+    }
+  },
+  "internal/execution": {
+    "files": [
+      "internal/execution/activity_format.go",
+      "internal/execution/application_config.go",
+      "internal/execution/application_config_types.go",
+      "internal/execution/candidate_control.go",
+      "internal/execution/candidate_pr.go",
+      "internal/execution/candidate_resources.go",
+      "internal/execution/candidate_workers.go",
+      "internal/execution/command_boundary.go",
+      "internal/execution/command_kinds.go",
+      "internal/execution/command_processor.go",
+      "internal/execution/command_submission.go",
+      "internal/execution/config_admission.go",
+      "internal/execution/control_digest.go",
+      "internal/execution/control_service.go",
+      "internal/execution/control_validation.go",
+      "internal/execution/conversation.go",
+      "internal/execution/conversation_identity.go",
+      "internal/execution/conversation_position.go",
+      "internal/execution/conversation_replay.go",
+      "internal/execution/conversation_service.go",
+      "internal/execution/conversation_sources.go",
+      "internal/execution/decision.go",
+      "internal/execution/execution_backend.go",
+      "internal/execution/execution_command_runner.go",
+      "internal/execution/execution_commands.go",
+      "internal/execution/execution_config.go",
+      "internal/execution/execution_delivery_poll.go",
+      "internal/execution/execution_directory.go",
+      "internal/execution/execution_discard_cleanup.go",
+      "internal/execution/execution_dispatch.go",
+      "internal/execution/execution_errors.go",
+      "internal/execution/execution_helpers.go",
+      "internal/execution/execution_profiles.go",
+      "internal/execution/execution_requirements.go",
+      "internal/execution/execution_snapshot.go",
+      "internal/execution/execution_store.go",
+      "internal/execution/host_callbacks.go",
+      "internal/execution/host_ports.go",
+      "internal/execution/implementation_bindings.go",
+      "internal/execution/journal_cursor.go",
+      "internal/execution/journal_platform_linux.go",
+      "internal/execution/journal_platform_other.go",
+      "internal/execution/journal_platform_windows.go",
+      "internal/execution/journal_reader.go",
+      "internal/execution/json_decode.go",
+      "internal/execution/lifecycle_effect.go",
+      "internal/execution/lifecycle_receipt.go",
+      "internal/execution/native_claim_command.go",
+      "internal/execution/native_cleanup.go",
+      "internal/execution/native_cleanup_stop.go",
+      "internal/execution/native_delivery_command.go",
+      "internal/execution/native_discard_command.go",
+      "internal/execution/native_dispatch_command.go",
+      "internal/execution/native_repository_target.go",
+      "internal/execution/operation.go",
+      "internal/execution/profile_data.go",
+      "internal/execution/prompt.go",
+      "internal/execution/publication_snapshot.go",
+      "internal/execution/read_ports.go",
+      "internal/execution/recovery.go",
+      "internal/execution/recovery_inspection.go",
+      "internal/execution/runtime_view.go",
+      "internal/execution/scheduler.go",
+      "internal/execution/service_activity.go",
+      "internal/execution/service_actor.go",
+      "internal/execution/service_checkpoint.go",
+      "internal/execution/service_commit.go",
+      "internal/execution/service_construction.go",
+      "internal/execution/service_execution_profiles.go",
+      "internal/execution/service_shutdown.go",
+      "internal/execution/service_state.go",
+      "internal/execution/service_task_snapshot.go",
+      "internal/execution/service_workers.go",
+      "internal/execution/store.go",
+      "internal/execution/stored_execution_validation.go",
+      "internal/execution/utilities.go",
+      "internal/execution/worker_attachment_store.go",
+      "internal/execution/worker_completion.go",
+      "internal/execution/worker_environment.go",
+      "internal/execution/worker_environment_host.go",
+      "internal/execution/worker_events.go",
+      "internal/execution/worker_evidence.go",
+      "internal/execution/worker_execution.go",
+      "internal/execution/worker_feedback.go",
+      "internal/execution/worker_lifecycle.go",
+      "internal/execution/worker_lifecycle_async.go",
+      "internal/execution/worker_lifecycle_feedback.go",
+      "internal/execution/worker_lifecycle_recovery.go",
+      "internal/execution/worker_pr.go",
+      "internal/execution/worker_process.go",
+      "internal/execution/worker_recovery.go",
+      "internal/execution/worker_resume.go",
+      "internal/execution/worker_start.go",
+      "internal/execution/worker_state.go",
+      "internal/execution/worker_types.go",
+      "internal/execution/workspace_config.go"
+    ],
+    "imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/execution/publication",
+      "internal/execution/reconstruction",
+      "internal/execution/workspace",
+      "internal/product/api",
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/storage/ports",
+      "internal/task/model"
+    ],
+    "sha256": {
+      "internal/execution/activity_format.go": "0cd3ff405f7fbdcdb0d04a5979c7d3de50301fd41944db3a4b949ad8029a9c0b",
+      "internal/execution/application_config.go": "3632f15fbce8d6ec70f44d3af4379cbdecb666d710f247798b4355fdae38d6ec",
+      "internal/execution/application_config_types.go": "18064bed47d18532ab9e8645b62793aa53e83bec0d7b06ea9595e815d5ef50cd",
+      "internal/execution/candidate_control.go": "5186a5c3edb4da15ff6b8428da2df54bd7b512ace1306f2f3feacfeda6d64212",
+      "internal/execution/candidate_pr.go": "fe6a2b81ed330fc9bd62f4c97cf7f0507439086b82343e96fc989a1ddc29c981",
+      "internal/execution/candidate_resources.go": "9ffec26dad177a806a0747bd85463c6850d16cbd28dc9c9af9c509284ac5176f",
+      "internal/execution/candidate_workers.go": "70f0cd4d687bfcbdaf0535810c64cb9c82d3f8a476bbef6e54399e4d7cb52596",
+      "internal/execution/command_boundary.go": "195de77adc0e583e4260a94c455bb5f8bbf0c4d57a109dd69ef9b1fe63a72332",
+      "internal/execution/command_kinds.go": "c2187000e0b639498887aba6f71118d38a7b34935cf5261491cc15d19e65b01a",
+      "internal/execution/command_processor.go": "04b5b34a17ec62e8f29a2302fffa45e51e4a580ad82c39c6863b06f249ff5a36",
+      "internal/execution/command_submission.go": "819e60362e6a10067e6057893d69f5c4a6805036a61c472c122dacaf2179f716",
+      "internal/execution/config_admission.go": "ac412f22b48f73c9e8ce90768a5b4eaf55408601a52b2ee2776b804eb59150bc",
+      "internal/execution/control_digest.go": "2fe6ab4466a8b395530c7feab00981e43de39d2bbe9805808b2c7c953013910e",
+      "internal/execution/control_service.go": "c8db8881ea207d69c0fd6eca59829a6016964b15889213d6f2172e348030a6e9",
+      "internal/execution/control_validation.go": "e7a825a464b0f22aada9a8420cac5946d4bb8c660bd1ae7fa014cad42096275f",
+      "internal/execution/conversation.go": "1d2f4f5c5c355b9eed979b3ca277abdb5690e5a129e21bcea0eff3e4a577d28d",
+      "internal/execution/conversation_identity.go": "b19f831af8af6bc070cd9166cd14d88e55181f5c1be580406257e81e322ca5e9",
+      "internal/execution/conversation_position.go": "79ed81effac69ebe0f0d108f355a8519090e4e5ffe0387d09e276340c0ba193f",
+      "internal/execution/conversation_replay.go": "51bc0d0cd10f159a799e6e261e77cdb4ad240be06c10362102b0aa71c1c973bb",
+      "internal/execution/conversation_service.go": "4a10fd24a87452579bdfa4c30d065c77fbe9f62e2d18a9ffe353feec3ea93497",
+      "internal/execution/conversation_sources.go": "4a24fd7c24225d6294ff428e505f81a4f958fac69d8b133576121b4e3759edbe",
+      "internal/execution/decision.go": "699f8fdeb2592b6a049f18af95c88a98f0a867285e72b17fedaddc1cf9700e1e",
+      "internal/execution/execution_backend.go": "c61dbf4f0731c7fa8dee51353fa485472e97f1984e836ecde06852fc48355fe8",
+      "internal/execution/execution_command_runner.go": "1a5cfbf56a72f9ef1c77a9473472cb616001261305a62cc1bbbd477d881bc88a",
+      "internal/execution/execution_commands.go": "33c41a5926de4dad04312579bccb2b85123b531f473cc05b6a8dbb1cf89d05e7",
+      "internal/execution/execution_config.go": "244ee2852501bb2711c370456c40c072fc59822f9ae6e2ec602b4b9882c5d8a2",
+      "internal/execution/execution_delivery_poll.go": "6e73151f6fd7bab05cae36b1cdc8cb1453bcc8c2e7c13bb6646020d5aeef6c7a",
+      "internal/execution/execution_directory.go": "cf0e77ee47a8e4994189f709031f7b0c941dc87cd0ff4e06ca0c5151a86246db",
+      "internal/execution/execution_discard_cleanup.go": "a1f756e4591f45b85e2d2254cde2a1e66b83805b3bb036c02a6d865c5070207d",
+      "internal/execution/execution_dispatch.go": "0567ef4a8f4349a74f5892a38ab5ffb0619abc9d907d60c5256229958ef35f10",
+      "internal/execution/execution_errors.go": "b53a4c12a89d9b63c26148fa47dd3e83476168f416cc9380a673e9692025a406",
+      "internal/execution/execution_helpers.go": "7bf014c8e39a26d82cfab1eb88f568dac01e74613deac99795ba3dd5e36f321a",
+      "internal/execution/execution_profiles.go": "4b7cb86aac49318062feaebf3c66fa14e21d9b52d0f6bbe6a55e394f99e6f5c7",
+      "internal/execution/execution_requirements.go": "7bd86412d733e5dbe202087418b3d6a9200e5ea437067377328b48490625c027",
+      "internal/execution/execution_snapshot.go": "229b2f82b79c6fb18e697ce9e67d0ed3a2e92ba2d15858acec339c6f469a16dc",
+      "internal/execution/execution_store.go": "ef603d6263240db56a2977d9fa4fa3de662334f29eb24872bfc2cc97ac831aa3",
+      "internal/execution/host_callbacks.go": "348f7e99b60279e8f1d6f7766501c9428971bdb9123c26a1e6f0d4c2b572a255",
+      "internal/execution/host_ports.go": "95c3969f4483afdb9492e81f06a95aea24f2f7499c86d9f8160b21ac6fe06563",
+      "internal/execution/implementation_bindings.go": "99438445c3f9246acbc9ee6a0d1bea71b91e5c461f676615c2b36911b7a62535",
+      "internal/execution/journal_cursor.go": "77190cb62d96ad0814aca3e48e32bdfba91b3e182ea706c56df5d3cc00a82fc6",
+      "internal/execution/journal_platform_linux.go": "009f667de6d040e9caa631f757426dd061f13456b6d8d6bb954e3995252db91f",
+      "internal/execution/journal_platform_other.go": "dba0267b5d71f50b63bcc7a87f5c5526f527ea2622313e689a4a6f353938f49a",
+      "internal/execution/journal_platform_windows.go": "0addff13c8e0e3aad6ede9903c430faab595471c194de4b407e102747c704ae0",
+      "internal/execution/journal_reader.go": "56beff8c54e9b288f9536e7b8395382ebeb130122db8f79efd3ebe969aa5c3f8",
+      "internal/execution/json_decode.go": "fc1cb3d45f2472a6f324d4eaf459d18b96f82e43ebda0d855499282a587ec984",
+      "internal/execution/lifecycle_effect.go": "057c229707f9bc83ab9f1bc35d7fb56675c9b7d3b6efeed1b24fc5197489123e",
+      "internal/execution/lifecycle_receipt.go": "b8a972a3270b34f2822bab020e4b28c811e0fd5f6f965d292606556c06bb83b8",
+      "internal/execution/native_claim_command.go": "ceec8238ab44c2a320026c22120249d52d12ecf49bea263ff0ba0e0e2c4abf48",
+      "internal/execution/native_cleanup.go": "488c67c5c659331fe07124ac21d46a0c1a7f23dae096630456d3bf3485261800",
+      "internal/execution/native_cleanup_stop.go": "d3e9e6d95a262937c8351962d616cc6332c35818164e26b036ddd67a3d8c9196",
+      "internal/execution/native_delivery_command.go": "8993930719a9291eebb0870565570f4d6b1e8941b19b3fffb9115ece5a8df408",
+      "internal/execution/native_discard_command.go": "4bc7dcdb88d00fc57447af451085e2c9bc7baab5fea23c8ea4ba6cc72e2d051f",
+      "internal/execution/native_dispatch_command.go": "fa0924bde7c491924a123c56b1ce22dc661dc328ceea81221ecbb3787a5721c3",
+      "internal/execution/native_repository_target.go": "7d627b6a9f2cf64e33939698c5b9a3fcef008e0ef5a36a87e74a98d9b9748547",
+      "internal/execution/operation.go": "23be1f3d8f9c0be65a8b919820ef2b856e9242ea8fe0642e29274d3b08a51ca8",
+      "internal/execution/profile_data.go": "70da7ba9adddc66ffb6b2a8d05b3451fd2f2f2dd5e3f065c62b84e1a2fe1d018",
+      "internal/execution/prompt.go": "b4c1acf3c7843112e6b6b9ab3bdc4b6b656df17972c14348a80637991a68f48d",
+      "internal/execution/publication_snapshot.go": "a2bfca4aafa82ff0a07962b714fa14a2df1ea5d631b486e00427d85ddc793507",
+      "internal/execution/read_ports.go": "4445f68d25ef4097e71b70e8805db87a50e45055962b4a3fdc15a15966bc08ba",
+      "internal/execution/recovery.go": "d63fd3e6628a89e13636a298feac3b430dc8df563655a5f72d91f0385fb53913",
+      "internal/execution/recovery_inspection.go": "82bc5f70d10cb25ed4b79171c7e96777b74785e52721451cc3eb513e765bce2a",
+      "internal/execution/runtime_view.go": "c479e3d3b70df4f3ad0e9352615e3249258d2aa3f5f5a1a1661e416394db5637",
+      "internal/execution/scheduler.go": "a60f4dcf2a4131f201e4b1a1b5965b9bd1ca303ac75df5fddedf4a830b100162",
+      "internal/execution/service_activity.go": "5a1a8688bf2aea405877fe7993b70f83084c7b832b58c83b8c9c0815d83b05f2",
+      "internal/execution/service_actor.go": "c8878304908a8cddc99ffde094679380ab68cc1cacef99ab6e11f817506e1c19",
+      "internal/execution/service_checkpoint.go": "a32ce1208be4ec1e838bf098193ab9a06b293423cf0f1dfb9163889616f0821f",
+      "internal/execution/service_commit.go": "277a4826930fbbcc93a8b6a842debd3ab43f05564e5be66c9662ceae81ebaf9e",
+      "internal/execution/service_construction.go": "f4a53732d62a7d4d291704b98fafce34b0f43e988410148873e3801b21edde18",
+      "internal/execution/service_execution_profiles.go": "58f863e17df8680e6d4682049224bbd802802002a9789097cc2ca96e687e7cb5",
+      "internal/execution/service_shutdown.go": "acc5e358fce6dd5ba66b2d1cb9254b0c9a1c1a64d0bf3ddf79b6e95020943e82",
+      "internal/execution/service_state.go": "e9067da9d101073fd28dae7468c55f3045c6c3bd0dd5db57d01606cc5b9cfe7f",
+      "internal/execution/service_task_snapshot.go": "61974bb589325141857d7d1f393c0eef2ebce2bbb8d9ed461b10d89d518d4742",
+      "internal/execution/service_workers.go": "3ab64a89ed18b3d1bf2a09e7916dbfcd33c9360c1499aa2025dbd3060c05a122",
+      "internal/execution/store.go": "0fd588d3d3e56af3a3a0b8b516f0b679cf6c3fcd9ffeb45f2857f4ab587fe66e",
+      "internal/execution/stored_execution_validation.go": "7f048fd8d86fde06d2693442fda78d3f11234649c0b2303853f48a2d8d657052",
+      "internal/execution/utilities.go": "5171e50c935d1b0d442a46a83618461106bd12275946680579428d565fcc1494",
+      "internal/execution/worker_attachment_store.go": "20605bfa290a68cdc2acf873ce5fb68d91ab148b531d30f07070e49d364ccc1e",
+      "internal/execution/worker_completion.go": "1ad58fcf34f6b9d1c1150fcbdc04d148abcf8c9c3ca1e24c661b07aa8b30dbc7",
+      "internal/execution/worker_environment.go": "8f08420ae95b6a81f7042a36ebe750bfe961e55a6373bd3e152b2f4b25f711b3",
+      "internal/execution/worker_environment_host.go": "47718fe10841cecfabf7b173d6269bef6d3add4d255895043bd8e52054a8e6ae",
+      "internal/execution/worker_events.go": "df1bc4379710c7d76ef31a8021b8ca5aa948ccc7dd94156b7dd4f6829df195c1",
+      "internal/execution/worker_evidence.go": "c4452465cb4fcdb12abf37fae0269d50f01fef3db82900f348e3af475991c8b1",
+      "internal/execution/worker_execution.go": "3a52d493fe0dd40341e08986c8a4f866221ec38e9cf0e5df50bd366604dc31fa",
+      "internal/execution/worker_feedback.go": "2479f31c4220d2181d70f9368e1370203528a1401a3e153bfec2bada606d50d8",
+      "internal/execution/worker_lifecycle.go": "1b2034042720db9eebcb82fd5e792e16292fc5c332e7db0548e9cb0a0e4ebb44",
+      "internal/execution/worker_lifecycle_async.go": "ac2ab34322c4e6e4079468528998671664ffeac67368ac62a060d5b1fdbadfff",
+      "internal/execution/worker_lifecycle_feedback.go": "7651c0794b258ae7a316f676a7b2a38bf93a05b8dca386439c204a41339d5b9d",
+      "internal/execution/worker_lifecycle_recovery.go": "6151e0a400f5fb97c8817fde7230a2a78284f2c6249b0e64582c31b3dbcf37f7",
+      "internal/execution/worker_pr.go": "0ea26fcf0174b36178dc975ef18f8090ff64b9085c0e23a4084dc362b7011d98",
+      "internal/execution/worker_process.go": "6da3a2008668b09581b7105d4d6f5e07c27d7f410339519c0ecd923396efbd18",
+      "internal/execution/worker_recovery.go": "56f159a473abd552276b59bf8b13dcf6015f47d6d3df013cb3a9d0240b40d9e7",
+      "internal/execution/worker_resume.go": "7dfbf8f0441fe7584af199fd0b71e9390499626a800b046f66fc73316ebf05c9",
+      "internal/execution/worker_start.go": "d57eb238e43f385e4ef6809cb2e24baba283d87ac4e4ef3c76018749e96efdbd",
+      "internal/execution/worker_state.go": "a43530fec2e82707e30616bc90105f1dd32f376d571c6ff16ef3357b21d050ee",
+      "internal/execution/worker_types.go": "f96c416041745e7b4d5bc7e8a5206871c53a116ca620ac7b318c85af427fe6e5",
+      "internal/execution/workspace_config.go": "2941d698775646ccadf55fcc9db238c35d9f4a74c562946e5ce100078775c195"
+    }
+  },
+  "internal/execution/adapters/codex": {
+    "files": [
+      "internal/execution/adapters/codex/ask.go",
+      "internal/execution/adapters/codex/ask_journal.go",
+      "internal/execution/adapters/codex/backend.go",
+      "internal/execution/adapters/codex/capability.go",
+      "internal/execution/adapters/codex/command.go",
+      "internal/execution/adapters/codex/config.go",
+      "internal/execution/adapters/codex/connection.go",
+      "internal/execution/adapters/codex/conversation.go",
+      "internal/execution/adapters/codex/conversation_adapter.go",
+      "internal/execution/adapters/codex/doc.go",
+      "internal/execution/adapters/codex/event_fact.go",
+      "internal/execution/adapters/codex/executable.go",
+      "internal/execution/adapters/codex/execution_binding.go",
+      "internal/execution/adapters/codex/history.go",
+      "internal/execution/adapters/codex/history_binding.go",
+      "internal/execution/adapters/codex/intent.go",
+      "internal/execution/adapters/codex/journal.go",
+      "internal/execution/adapters/codex/launch.go",
+      "internal/execution/adapters/codex/lifecycle.go",
+      "internal/execution/adapters/codex/native_params.go",
+      "internal/execution/adapters/codex/observe.go",
+      "internal/execution/adapters/codex/outcome.go",
+      "internal/execution/adapters/codex/params.go",
+      "internal/execution/adapters/codex/permissions.go",
+      "internal/execution/adapters/codex/policy.go",
+      "internal/execution/adapters/codex/policy_resources.go",
+      "internal/execution/adapters/codex/profile_config.go",
+      "internal/execution/adapters/codex/recovery.go",
+      "internal/execution/adapters/codex/session_launcher.go"
+    ],
+    "imports": [
+      "internal/execution/adapters/protocol/codexapp",
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/execution/workspace",
+      "internal/steerline/contracts"
+    ],
+    "sha256": {
+      "internal/execution/adapters/codex/ask.go": "9acf91f333c5aba0d929044dde54422fbd84b7ce7748b9f6f8443ca4a06ae0ad",
+      "internal/execution/adapters/codex/ask_journal.go": "032b63b1cb614c27f7fcdfa684eb03165162e548b79c93f04a88773d82ed5c9b",
+      "internal/execution/adapters/codex/backend.go": "655db961b409f57a3e83bf09e73c31a4bcaa5917ca3634b0b7143ad56f497ccb",
+      "internal/execution/adapters/codex/capability.go": "95843d3671456b9edfe2f8b381a21b899a78ce6335eb20a3f3d77b8076151703",
+      "internal/execution/adapters/codex/command.go": "744b0536f589df0958124a06be4e3ce72cfd378b8dfe0336a05ed0fc12dd2472",
+      "internal/execution/adapters/codex/config.go": "36e365fe52c150fb674f6b6686ef81d96ae3fc80d2926114c70c36b50b4cb801",
+      "internal/execution/adapters/codex/connection.go": "c916711f3b2639402a2eb184b8260c68699c003d69277ba92fca7a2a7bcd2890",
+      "internal/execution/adapters/codex/conversation.go": "059ef8884ceb08ce4f8c866bfc14c45896f0e90c4719476d5af394b2d952f475",
+      "internal/execution/adapters/codex/conversation_adapter.go": "cb39b052b323147d58f81f584d3c07fdbf2c2cf5ff5d3fea87e7b6b635dffe9a",
+      "internal/execution/adapters/codex/doc.go": "230c1d61f725738bdc5030c94e63870f88ab80be6a198d61e4eb82cddb2da162",
+      "internal/execution/adapters/codex/event_fact.go": "9f418f827b6fedc1855ad192d9722a24a5391a698af75f6ddf139e853f9cf4c5",
+      "internal/execution/adapters/codex/executable.go": "b3760e7a593a2be94da23abcd343745090fae7f25054300611346a35258d9b9a",
+      "internal/execution/adapters/codex/execution_binding.go": "d51909d8ef5c630b9315dd2223666be3e8ae4d4b158bfda4d0374a34fa6a989f",
+      "internal/execution/adapters/codex/history.go": "23eb98749d73f8debdb53aedc1dc877e1052245b154918ce55d521bb35ee6239",
+      "internal/execution/adapters/codex/history_binding.go": "41fd0f39f38ebd7abc19c0efe80639de4f4cb3887adad2f3ad1454e35ce73258",
+      "internal/execution/adapters/codex/intent.go": "4e6a068f584bea7e20701f1a48cee2cf36f78051234c57adbf839a221b9d0dfa",
+      "internal/execution/adapters/codex/journal.go": "47ded0fda55147e55f44177a1e667bfd86f158dfef55b921d01bad283c1dca4d",
+      "internal/execution/adapters/codex/launch.go": "671aba9aa1a56355e97c5fa6a9324c69026bc7ba7a18a702d07a57b2a7d35a63",
+      "internal/execution/adapters/codex/lifecycle.go": "80a386f8940ceb116f529b0a92442dd6a5d40753ea09a7185e4ca833a4a1574d",
+      "internal/execution/adapters/codex/native_params.go": "0469c3817de246ef1679ed9c324b8917a92c847c754905c9abbbf14bd7270541",
+      "internal/execution/adapters/codex/observe.go": "169bc900a8f3c328ded90f0791f1295ae08d206b173f78311fdbb3b80944f7d7",
+      "internal/execution/adapters/codex/outcome.go": "95ad8d9b255bae9fffa4dbcc8cdeded868340256f0c032b2e6181e3657a71b66",
+      "internal/execution/adapters/codex/params.go": "4bb831f51251f63dd390c88f3c763d0204ad94cf07bd3ac2dabdf0b20696be47",
+      "internal/execution/adapters/codex/permissions.go": "96b54bb985ce7c8ba2971953fe25d19d730d4f74c4ef5f797c6d8521d23c0c5f",
+      "internal/execution/adapters/codex/policy.go": "dee25278a7fbf430b2eae00fd2b268377125e62443d9b7d15b94251eba0f0752",
+      "internal/execution/adapters/codex/policy_resources.go": "7295465466fc5bd97f79cf0521b5220728a5e5c79f757314119fbddcf7133e81",
+      "internal/execution/adapters/codex/profile_config.go": "87ee3ed03dae01a859db6977b5c21e664c93a396e16080b6a832837a1681fc08",
+      "internal/execution/adapters/codex/recovery.go": "3c192e09e4cc038582fb3bb1ed19efb69a7f25ae2f5017f7f7ab9bbce04fb20a",
+      "internal/execution/adapters/codex/session_launcher.go": "16c7cd2fb22750501cf065e5f538849dd934859db48d892e90aeffe13247d427"
+    }
+  },
+  "internal/execution/adapters/orca": {
+    "files": [
+      "internal/execution/adapters/orca/backend.go",
+      "internal/execution/adapters/orca/binding.go",
+      "internal/execution/adapters/orca/client.go",
+      "internal/execution/adapters/orca/command.go",
+      "internal/execution/adapters/orca/config.go",
+      "internal/execution/adapters/orca/dispatch_submit.go",
+      "internal/execution/adapters/orca/environment.go",
+      "internal/execution/adapters/orca/event.go",
+      "internal/execution/adapters/orca/events.go",
+      "internal/execution/adapters/orca/execution_state.go",
+      "internal/execution/adapters/orca/host.go",
+      "internal/execution/adapters/orca/intent.go",
+      "internal/execution/adapters/orca/inventory.go",
+      "internal/execution/adapters/orca/lifecycle.go",
+      "internal/execution/adapters/orca/lifecycle_observation.go",
+      "internal/execution/adapters/orca/lifecycle_resources.go",
+      "internal/execution/adapters/orca/lifecycle_turns.go",
+      "internal/execution/adapters/orca/message.go",
+      "internal/execution/adapters/orca/mutation.go",
+      "internal/execution/adapters/orca/orchestration.go",
+      "internal/execution/adapters/orca/output.go",
+      "internal/execution/adapters/orca/profile_config.go",
+      "internal/execution/adapters/orca/readiness.go",
+      "internal/execution/adapters/orca/relay.go",
+      "internal/execution/adapters/orca/saved_receipt.go",
+      "internal/execution/adapters/orca/terminal.go",
+      "internal/execution/adapters/orca/terminal_protocol.go",
+      "internal/execution/adapters/orca/workspace.go"
+    ],
+    "imports": [
+      "internal/execution/adapters/codex",
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/execution/workspace",
+      "internal/steerline/contracts"
+    ],
+    "sha256": {
+      "internal/execution/adapters/orca/backend.go": "3671b9f587e919b00f2aaa4e5a385d50ab58c3fa5a71ec4b41d91e1120dd56bc",
+      "internal/execution/adapters/orca/binding.go": "0fe531d57715c5fc28f157f32c184db80f96780aee5a478060734653b930972a",
+      "internal/execution/adapters/orca/client.go": "c59fe478bb18401c481c572e50c0bab0536d2b5cc8f04c7dc9035ff37e631a58",
+      "internal/execution/adapters/orca/command.go": "f7738c40b9014149824b48b8b82081a58b47b6c6099345e69a2e0834128b2a99",
+      "internal/execution/adapters/orca/config.go": "bdc665b837f285d06ab843267c4860189d106cdd54b82a97e8492d075636a559",
+      "internal/execution/adapters/orca/dispatch_submit.go": "7ec9f0ef1d2c96f71e1f14e8c1da8c52d98613a45dbcee483625449338d8fd20",
+      "internal/execution/adapters/orca/environment.go": "1573494269a2cd50dcc52b7a95254f6953d38425884a92a19dc169676d87c740",
+      "internal/execution/adapters/orca/event.go": "eb38581f24a3d27c9a7a328501b563c2605d403338167dd14093957ae618d26c",
+      "internal/execution/adapters/orca/events.go": "3b5746fc4f0cfa17cb1a8169649594e666318426c41a73fb6a5220ec32c3409a",
+      "internal/execution/adapters/orca/execution_state.go": "7b21786acdc7524ea2eeaa86d9ac4e742494e2dc649e53de57622efa95aee763",
+      "internal/execution/adapters/orca/host.go": "eb3f64166ad571e87306a3ac5450281cffafc624e01e6b102d48b559628d2ebf",
+      "internal/execution/adapters/orca/intent.go": "fc328f7238566a1e89d5d03932793fa23fc37f66da653488c38ca4b25d8ad737",
+      "internal/execution/adapters/orca/inventory.go": "816808216f53df674935cdc2307dfcba5e4610d0f628a3ff3bfa315f1001ed0c",
+      "internal/execution/adapters/orca/lifecycle.go": "651d658867c5e8a9f47a5cfbaa856455fe7d25ad7f2dc222a417ecc2fbf2751a",
+      "internal/execution/adapters/orca/lifecycle_observation.go": "a5a5fc8f676d6d2221f69447210d451a8c004b45fde79ddac6864da8482ffbeb",
+      "internal/execution/adapters/orca/lifecycle_resources.go": "64fca12b443fe8cf0ae376a96c0a9efa19475f316bc31608804a6a6e39d90a33",
+      "internal/execution/adapters/orca/lifecycle_turns.go": "6565b4e52a9e366342623fb83c173af0bc608a669269e9a89267de478d545f2c",
+      "internal/execution/adapters/orca/message.go": "0a7d92fc33098d3930966ccb2ec84b2efb2c54833b27d376059dde4aa356c48c",
+      "internal/execution/adapters/orca/mutation.go": "181232c1f0d1543dd98303693a177aa0557e30f54407b41222a6fd16efbcf26e",
+      "internal/execution/adapters/orca/orchestration.go": "50edb4abf7b4e9a33ff90fe1e987528dae71cb715acda81860fd408b64b97a57",
+      "internal/execution/adapters/orca/output.go": "058c349950c75ca5c24593254f72fc713b93dee74db9fc86e10f890e55fa0d54",
+      "internal/execution/adapters/orca/profile_config.go": "a0ed7c682cec9c278bbcc7311cd6ca89b17211749b1a01b9d781df120b47aae7",
+      "internal/execution/adapters/orca/readiness.go": "5dcb4fdd9bd91698ee015de8441606ea4f160d88db7a17178755df63f7d92194",
+      "internal/execution/adapters/orca/relay.go": "e46b8eeef770e521f2d4273073eedb6a7a794ac52980af0223d3aaa89c5b9dd5",
+      "internal/execution/adapters/orca/saved_receipt.go": "383708979f724814cb88971682609917308f21412cd3279fa30d0e70824eee27",
+      "internal/execution/adapters/orca/terminal.go": "74f3917bca491ae9af868d5ad255dcaa21aadd6e9b0e3c2eb7507b4ca5009cd9",
+      "internal/execution/adapters/orca/terminal_protocol.go": "d9df26f8f3c797c9fb30feaa007bc0772a190976da486e3fdda061df9b9ccedb",
+      "internal/execution/adapters/orca/workspace.go": "c141615e91a30f13eee759571c3f490e81da61c3a62a7d0657e04c46119b264d"
+    }
+  },
+  "internal/execution/adapters/orcaremote": {
+    "files": [
+      "internal/execution/adapters/orcaremote/backend.go",
+      "internal/execution/adapters/orcaremote/config.go",
+      "internal/execution/adapters/orcaremote/intent.go",
+      "internal/execution/adapters/orcaremote/lifecycle.go",
+      "internal/execution/adapters/orcaremote/messaging.go",
+      "internal/execution/adapters/orcaremote/observation.go",
+      "internal/execution/adapters/orcaremote/policy.go",
+      "internal/execution/adapters/orcaremote/preflight.go",
+      "internal/execution/adapters/orcaremote/profile_config.go",
+      "internal/execution/adapters/orcaremote/run.go",
+      "internal/execution/adapters/orcaremote/start.go",
+      "internal/execution/adapters/orcaremote/types.go",
+      "internal/execution/adapters/orcaremote/version.go",
+      "internal/execution/adapters/orcaremote/worker.go"
+    ],
+    "imports": [
+      "internal/execution/adapters/codex",
+      "internal/execution/adapters/orca",
+      "internal/execution/backend"
+    ],
+    "sha256": {
+      "internal/execution/adapters/orcaremote/backend.go": "ed06ec4b30831ef7a0a984a7ddede0c655f878983ab64b372defb095f2c00787",
+      "internal/execution/adapters/orcaremote/config.go": "b7a6db520c05ab191caa818ebade13c0c83e3d9ee5c403091ac72bd40536d7e0",
+      "internal/execution/adapters/orcaremote/intent.go": "609d04c1b4af1cd6793b3eebd7ec8f428da758b7413c5ed1c5ef26cb50697b44",
+      "internal/execution/adapters/orcaremote/lifecycle.go": "627cee8dd6b6a67757998b1cd0b36bac0b5ea88e5fa46fb0a1d8a2bd7a9dab89",
+      "internal/execution/adapters/orcaremote/messaging.go": "4ccdd96a994a4525f7d9660f1355c0c825aa8101d5a89c63c81e4eea6f874a91",
+      "internal/execution/adapters/orcaremote/observation.go": "3e74ac6224715611b9272652aabae194b15b3b65afc1f6d83ed145a099ba6c1b",
+      "internal/execution/adapters/orcaremote/policy.go": "efecc037a31cbca157de3207e21d0c8c78d8b6c01a73b1d65636ad66154bdde8",
+      "internal/execution/adapters/orcaremote/preflight.go": "dfae21e2fa870696fe6ab0806be95b32cfb883340e3d2778ccab2d463cbfe3d4",
+      "internal/execution/adapters/orcaremote/profile_config.go": "c9fc00ba55c3d514e50b9eb0707e2699a70ee75f4a47230c600be45dffb2339e",
+      "internal/execution/adapters/orcaremote/run.go": "ee87e501622c77dc70f1e8e8cfffce0ce1e4c60cfd70021955b947a3f2b518c2",
+      "internal/execution/adapters/orcaremote/start.go": "47557487688fd5f578bbeb79e1b1fabee5f43cfb3ac27dca619a6d72491d8043",
+      "internal/execution/adapters/orcaremote/types.go": "1ce55e549fdc7aea9bcfccc3de8577e121dcb067cc6086595aeb1ed7d10675c4",
+      "internal/execution/adapters/orcaremote/version.go": "7bd7e41d2e7a301c5b37c7a5c670ce9e45beb2dd9eddd3c97cf36e462c967d6a",
+      "internal/execution/adapters/orcaremote/worker.go": "6357effa28a4c030a42d36455171d678937d2bb58479829fafed0e6d713816a8"
+    }
+  },
+  "internal/execution/adapters/protocol/codexapp": {
+    "files": [
+      "internal/execution/adapters/protocol/codexapp/ask.go",
+      "internal/execution/adapters/protocol/codexapp/client.go",
+      "internal/execution/adapters/protocol/codexapp/doc.go",
+      "internal/execution/adapters/protocol/codexapp/transport.go"
+    ],
+    "imports": [],
+    "sha256": {
+      "internal/execution/adapters/protocol/codexapp/ask.go": "84b8b7149a102e2343ecf91e408bef167b165064486b1bba8b1024286541b503",
+      "internal/execution/adapters/protocol/codexapp/client.go": "e4aac14bb7debd9d9d8056cde5f34501219653ed0f72e1bce2aa219a5a1551e1",
+      "internal/execution/adapters/protocol/codexapp/doc.go": "481e68ebe0f8374f767d2819518fb9845ff5d8069dac7b9c8b74ecfe4269a212",
+      "internal/execution/adapters/protocol/codexapp/transport.go": "1874a55d8074b559e06f85a6f54a1f97e4f09910875e7fd74d7387c8857015dc"
+    }
+  },
+  "internal/execution/backend": {
+    "files": [
+      "internal/execution/backend/backend.go",
+      "internal/execution/backend/capability.go",
+      "internal/execution/backend/environment.go",
+      "internal/execution/backend/errors.go",
+      "internal/execution/backend/event.go",
+      "internal/execution/backend/execution.go",
+      "internal/execution/backend/host.go",
+      "internal/execution/backend/implementation_config_input.go",
+      "internal/execution/backend/implementation_data.go",
+      "internal/execution/backend/json.go",
+      "internal/execution/backend/lifecycle.go",
+      "internal/execution/backend/operation.go",
+      "internal/execution/backend/policy.go",
+      "internal/execution/backend/publication.go",
+      "internal/execution/backend/question_route.go",
+      "internal/execution/backend/record_validation.go",
+      "internal/execution/backend/requirements.go",
+      "internal/execution/backend/session.go",
+      "internal/execution/backend/workspace.go"
+    ],
+    "imports": [],
+    "sha256": {
+      "internal/execution/backend/backend.go": "4cb9b3b0fe8392daec63ca6b1023d413044c7a11bbc9efb8984ce1d3a72eb97f",
+      "internal/execution/backend/capability.go": "db7901cd5256ffff9b9677b47ae03e20e61870b24206ee60046cee32ffc312aa",
+      "internal/execution/backend/environment.go": "94eb2a6a8ac75cf9ad59119ddbb8bd740f0b94f266ae7882575c4daf34e62258",
+      "internal/execution/backend/errors.go": "a258dd01d84a596c0a3b7bae6f003263793f87deccb0040f1ea37784fcd5c779",
+      "internal/execution/backend/event.go": "0c7729ef859eab115efd97d726d793d20613c6e0dfc7426ab3ed1cea59dd66aa",
+      "internal/execution/backend/execution.go": "673bfa648c28234c1a12de59637b2cd63b517ebd020d2021f2c013add748aa3f",
+      "internal/execution/backend/host.go": "5b40fa1389b829d9c04e808d8bcceadcaf58c1dfe6787835a496067c73403863",
+      "internal/execution/backend/implementation_config_input.go": "f60669571c5a78e83a85b6958c7e4aa87b50e9ee42b0db9262d1994e21d7658d",
+      "internal/execution/backend/implementation_data.go": "7a773dfc691b6f8f33237bc3157901cdfed3dbb41e4f9b7c120cf69572f2cf70",
+      "internal/execution/backend/json.go": "cb62f0d7856f93624ddc792a6d15b97152f8e8acb2b20126747fd210074249eb",
+      "internal/execution/backend/lifecycle.go": "c979652253e5e29cb0c9934536526996f74d25f186e8569f58215ea4877aab9c",
+      "internal/execution/backend/operation.go": "1c0242a802f7c98fefc8f2a5394cc30aa24bd433e2a80c89e1e2c452a261d7cf",
+      "internal/execution/backend/policy.go": "3302f9e4f4ca0f0e48656b7f80328cc7c3fb385ba0e243eda45be1782bea1b7f",
+      "internal/execution/backend/publication.go": "b0f4d352d552cbcd18130b5f0b4b1c8b2dcdf5f049ce24af75516e56ceffc6e4",
+      "internal/execution/backend/question_route.go": "9c0956c2a16ba2faa445cf9ba99b0898c947c5514f41c283a9e8605c3f3d49c8",
+      "internal/execution/backend/record_validation.go": "95dd6ad1a85f8215a95fd7b68848a7d11c19aacf213b31166a5c47934a51ab8a",
+      "internal/execution/backend/requirements.go": "b08f511ff85e0831ede5da2c54c7001954a675b8d1c839034b1f6fdead406d2b",
+      "internal/execution/backend/session.go": "c62d028c73503e214df321baf7eed9cddb836c7f6a676568d167ed2f92dd791f",
+      "internal/execution/backend/workspace.go": "19f0442aad1b45da839db5a3035f5543b602a17e2e1747c249199abc8bfec277"
+    }
+  },
+  "internal/execution/model": {
+    "files": [
+      "internal/execution/model/answer_identity.go",
+      "internal/execution/model/candidate_base.go",
+      "internal/execution/model/candidate_set.go",
+      "internal/execution/model/decision_content.go",
+      "internal/execution/model/discard_facts.go",
+      "internal/execution/model/environment.go",
+      "internal/execution/model/execution.go",
+      "internal/execution/model/json.go",
+      "internal/execution/model/operation_rules.go",
+      "internal/execution/model/pr.go",
+      "internal/execution/model/publication.go",
+      "internal/execution/model/records.go",
+      "internal/execution/model/recovery.go",
+      "internal/execution/model/runtime.go",
+      "internal/execution/model/state.go",
+      "internal/execution/model/task_admission.go",
+      "internal/execution/model/task_delivery.go",
+      "internal/execution/model/task_delivery_gate.go",
+      "internal/execution/model/task_delivery_validation.go",
+      "internal/execution/model/task_receipts.go",
+      "internal/execution/model/verified_pr.go"
+    ],
+    "imports": [
+      "internal/execution/backend"
+    ],
+    "sha256": {
+      "internal/execution/model/answer_identity.go": "c6aa170d8f2e23905cd876f4ee04580180c0617799a0430fdbe9a2b0b84d625f",
+      "internal/execution/model/candidate_base.go": "f3810bf0fef8f9533997973aa2494efea931e20a75bf7f2f26a197bbd74faa9c",
+      "internal/execution/model/candidate_set.go": "bf88d0f86c8ab441f262859a05fadb30cc4651e62eb01d697d3a8bb18e3ba7e7",
+      "internal/execution/model/decision_content.go": "1b2e2914a26841546af491d1b3d16f9b2734c40932b100fdca7acb58791837ae",
+      "internal/execution/model/discard_facts.go": "a5e669934ee751777d248bc6d2a89e9d523bdbf6920632b67d7cfe5d6b58dab3",
+      "internal/execution/model/environment.go": "d71ceaddf1e896b30bf7097575fd97213f0e4080716de4fe2dab450c834119b2",
+      "internal/execution/model/execution.go": "f904b6746716062ff9c3395aed7f62ba6a0be52cbcdfd0c64a6c6fe1ded6696c",
+      "internal/execution/model/json.go": "63a692dc9acf22b08a809ffba85540cd614cb8176d9df1c4aec5742d376cff98",
+      "internal/execution/model/operation_rules.go": "ee305b9129e38f8c4de0abad101e95a24c7c58bed52712844e7631b412bcdb0c",
+      "internal/execution/model/pr.go": "1ab82812c3b9227393aca9eaccf67db7e89d2cfa9666e036483909c78dc9e76e",
+      "internal/execution/model/publication.go": "93b299bd320b8f8e6bf2ec8931f7df56482753a6c0e4c1bbcd7e8e21a614e9e6",
+      "internal/execution/model/records.go": "0dd35ce1046ce15a3424276fa8d62334ad26cc04d52415e7356295e9aa77f383",
+      "internal/execution/model/recovery.go": "6726045ba0c33e5d9c8a053f6b2d3fa14e13655e929cb502cd36fb3f177c3015",
+      "internal/execution/model/runtime.go": "7e2d702bea2582586d95c15c7a1ef64258f6dae2ac14f1b6b53fdb9d677c5d4f",
+      "internal/execution/model/state.go": "abd54db40c6b2f0699cac80e5af7d38b1e0bc53c8e2aef9781fa0fdb56758110",
+      "internal/execution/model/task_admission.go": "7cb5ac5b9732a239cd70998848f4953fe2699a11a7e9da66af26e978b308ee82",
+      "internal/execution/model/task_delivery.go": "28f781da85debeabe8759fb985a3569355c2923bbb039e3bf8648a7ce15c7270",
+      "internal/execution/model/task_delivery_gate.go": "95e8a77f6af768930402a90c2b770b4a9337acfa78adce2c75ab0ac001ac25d7",
+      "internal/execution/model/task_delivery_validation.go": "48a816fe5a485f24700d897f89b0fe80d4bac10470552641b9225a9f926cb986",
+      "internal/execution/model/task_receipts.go": "40a0ee168b0d864b4e298ae839d32e5b566890cc30ba3f2d31fb6f57b6fc112e",
+      "internal/execution/model/verified_pr.go": "f15fbe61a8584892e5bd9689349e871c9101bf2118f20ca29f975870f248c7eb"
+    }
+  },
+  "internal/execution/process": {
+    "files": [
+      "internal/execution/process/facts.go",
+      "internal/execution/process/facts_linux.go",
+      "internal/execution/process/facts_other.go",
+      "internal/execution/process/facts_windows.go",
+      "internal/execution/process/host.go",
+      "internal/execution/process/replace_unix.go",
+      "internal/execution/process/replace_windows.go"
+    ],
+    "imports": [
+      "internal/execution/backend"
+    ],
+    "sha256": {
+      "internal/execution/process/facts.go": "88acc9a7bac762b20ef843dc6e705eaa98b96c2a43e11345d30e76a6f022caa2",
+      "internal/execution/process/facts_linux.go": "9b20b003c3289541228228510aace6c4ce1427239ac2b872a8ab04b8f20527a9",
+      "internal/execution/process/facts_other.go": "bf778d91e7d0b746d28dd389862bba1929c26aa2c0c2623869b9a7a0f378f5a7",
+      "internal/execution/process/facts_windows.go": "6e7550c6fcdce21179b38f67f4670d8f906062cc4c9587aa4ff86cedc9de4447",
+      "internal/execution/process/host.go": "8c7903d33e3f2a0c9012abe16ede9cb78c0ad390bddef004a05f193e551cedfd",
+      "internal/execution/process/replace_unix.go": "eb98f88751dc49e38d918e36876e395935a103606c6ac5db0ae1d413d6e8961a",
+      "internal/execution/process/replace_windows.go": "79e90eafe1cbc83b9750419b7c3d6a9af498d25048f2be26d0fc4b7cfb159027"
+    }
+  },
+  "internal/execution/publication": {
+    "files": [
+      "internal/execution/publication/command.go",
+      "internal/execution/publication/gitea.go",
+      "internal/execution/publication/identity.go",
+      "internal/execution/publication/policy.go",
+      "internal/execution/publication/pr.go",
+      "internal/execution/publication/provider.go"
+    ],
+    "imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts"
+    ],
+    "sha256": {
+      "internal/execution/publication/command.go": "ae7d248e1e05108c4b903452ff285e2ea68e493bd57c6d22ed2fa0d8208464f2",
+      "internal/execution/publication/gitea.go": "318406f41ee563189952b55f64c1ad28b05daa2c122edba3f1a1220e7159c8cf",
+      "internal/execution/publication/identity.go": "68a38ce93dbb5a24ae1fbc55e97f9201bb15013b262c8c87d1dd79759ed45dc0",
+      "internal/execution/publication/policy.go": "d55b22221a3637b4924c192cf84b9629e5c05d825f15cbcfbbbb908a7c6b3b70",
+      "internal/execution/publication/pr.go": "3bf0497a61462500455ca10a92c350412e7ee38b59ca877b594645748cb0cc20",
+      "internal/execution/publication/provider.go": "9ef306871c93be438edb51a51d25610434a0fa6c8cdf334a0dda7b74c06da0c3"
+    }
+  },
+  "internal/execution/reconstruction": {
+    "files": [
+      "internal/execution/reconstruction/run.go",
+      "internal/execution/reconstruction/runtime.go",
+      "internal/execution/reconstruction/selectors.go"
+    ],
+    "imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/task/model"
+    ],
+    "sha256": {
+      "internal/execution/reconstruction/run.go": "84bd8ff9651551313c9809534f364485ac239cbebdfac35fbaaddd2ea3a2047c",
+      "internal/execution/reconstruction/runtime.go": "8ef812db06d0f73fa6e96d979497aba6fe340401028e9bd6793548d9b010e43f",
+      "internal/execution/reconstruction/selectors.go": "4c953a80eb58f85f890924821d6c42a5022ec071f71e3fbf8041afd3df5c92ba"
+    }
+  },
+  "internal/execution/workspace": {
+    "files": [
+      "internal/execution/workspace/cleanup.go",
+      "internal/execution/workspace/git.go",
+      "internal/execution/workspace/inspect.go",
+      "internal/execution/workspace/lifecycle.go",
+      "internal/execution/workspace/prepare.go",
+      "internal/execution/workspace/resources.go"
+    ],
+    "imports": [
+      "internal/execution/backend"
+    ],
+    "sha256": {
+      "internal/execution/workspace/cleanup.go": "ae2c6e48f9227b5b5f460843e6264ec1c216daa79e2c419c1df676ca3bd5f374",
+      "internal/execution/workspace/git.go": "64fef854ce6779f2d9b06e1ece152ba6bce95cebeebf9cd0c98cbccba9b66cd6",
+      "internal/execution/workspace/inspect.go": "1aa6dd9b93d43e85195c1594f41d727954e22d010a6e902273f01a3457554eaf",
+      "internal/execution/workspace/lifecycle.go": "7c1b31ff68f2c8e4258720dff3461f419efde682009cbdf92089ff1a59d9111b",
+      "internal/execution/workspace/prepare.go": "047f23fc834ae0b7abd208819173d9a9fc444b8c81ae51993cab31a776ad6129",
+      "internal/execution/workspace/resources.go": "d63a40636c91a9c070ef9f52b05454eadc6e3942845d794cfaa49bc12ac862a5"
+    }
+  },
+  "internal/product/api": {
+    "files": [
+      "internal/product/api/availability.go",
+      "internal/product/api/client.go",
+      "internal/product/api/conversation.go",
+      "internal/product/api/execution.go",
+      "internal/product/api/graph.go",
+      "internal/product/api/observations.go",
+      "internal/product/api/pages.go",
+      "internal/product/api/runtime.go",
+      "internal/product/api/targets.go",
+      "internal/product/api/task_commands.go",
+      "internal/product/api/task_page.go",
+      "internal/product/api/task_predecessors.go"
+    ],
+    "imports": [],
+    "sha256": {
+      "internal/product/api/availability.go": "f9e2cd7804e3391d38198e4db92deee10143cee2c86f1dce08125e4790d5818b",
+      "internal/product/api/client.go": "353914900fa697ee71a626e7ca908be54141fdf61ad0afc63cbc474c8cc3bb06",
+      "internal/product/api/conversation.go": "e2d24336de3af693cc98c77acb6be829e64737d1df4f38682fc704c449fa2eee",
+      "internal/product/api/execution.go": "056bffd5e5d485bd46c7483a26efa3971dbde5b5af8332ea97f46185c045d18e",
+      "internal/product/api/graph.go": "b11ffeee5c63846636496814dc1591feacdad42e4ba1cacec80ccfd9eb04fe65",
+      "internal/product/api/observations.go": "639817f0c080175909a9de06b0c00baa4b3609a52d589158eccc401a0a5bb04f",
+      "internal/product/api/pages.go": "ac5270f84b7d9bc0f8f55e0aba89ba365c89e6d2a1b5932fbb4c7ab5600d11e0",
+      "internal/product/api/runtime.go": "6b234b7c7e771b3b53e87903fab757f990c948b6a1da8edfff53573c6b7e40fb",
+      "internal/product/api/targets.go": "dcaf6cbe8ee11feea8e1660f4e7e42969731bbb45407f8ce123f3bd02a4c165d",
+      "internal/product/api/task_commands.go": "5e815bd3cf3ea78b938c2a8a765bb155920682696aebdcdde154340b2d47de3c",
+      "internal/product/api/task_page.go": "e202b99eb81474068e3279a51718785aaa6e411078ee20161b7dbb8aee64c6d5",
+      "internal/product/api/task_predecessors.go": "135b85a223c77073b9050014f985ebecbd1b35412ad21e4d000c5ec0ea035f05"
+    }
+  },
+  "internal/product/client": {
+    "files": [
+      "internal/product/client/client.go",
+      "internal/product/client/ports.go"
+    ],
+    "imports": [
+      "internal/product/api"
+    ],
+    "sha256": {
+      "internal/product/client/client.go": "b40bc1d6d006f3a87d5ab659a887d38ba51b6c9bd50a85a8370ee1f326abd03f",
+      "internal/product/client/ports.go": "47b8bbc7ae9dc6a50129609533f38244acc9eb09b2e57fb387c5b2d802e6a61d"
+    }
+  },
+  "internal/product/query": {
+    "files": [
+      "internal/product/query/activity.go",
+      "internal/product/query/activity_display.go",
+      "internal/product/query/conversation.go",
+      "internal/product/query/conversation_pages.go",
+      "internal/product/query/conversation_ports.go",
+      "internal/product/query/events.go",
+      "internal/product/query/pages.go",
+      "internal/product/query/ports.go",
+      "internal/product/query/project.go",
+      "internal/product/query/project_page.go",
+      "internal/product/query/tasks.go"
+    ],
+    "imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/product/api",
+      "internal/product/query/taskgraph",
+      "internal/steerline/contracts",
+      "internal/storage/ports",
+      "internal/task/model"
+    ],
+    "sha256": {
+      "internal/product/query/activity.go": "e5c5bc2d4aedde57cc86e202cb4877cf99b492215d79447454a86f553f5319fd",
+      "internal/product/query/activity_display.go": "7e6af96d32d9e2383fa5680c7206dae0bf693b911123f6f4172322a810ecdc58",
+      "internal/product/query/conversation.go": "d258bdc87622348068cbca30d8a49cd5f86f0d3e8f861dfc89e44261c2476332",
+      "internal/product/query/conversation_pages.go": "56875b05aa39cb9629104e5b7c3957435521ab1ab1fb5e67759bbc5e433d3b0a",
+      "internal/product/query/conversation_ports.go": "479c9e9513cd9f5e37baba24fd8a5ca831cac8a52d702dcd77bbdb46ad2d26dd",
+      "internal/product/query/events.go": "2b555c453ebbe6ad57ff5b76ac858e8e71988629714c0a51d2b22e3e3123fcbf",
+      "internal/product/query/pages.go": "0e1464f48ff299f817b886b4edcaefc53c196f8f1b5f430526c57a15b70d2e49",
+      "internal/product/query/ports.go": "b8bb28dcb35f54e0aa3c2783a73574cb116ddd92f263e8e96a9b21273bebe41b",
+      "internal/product/query/project.go": "05c8e2eb74828943fc4a18c8979f47ceffa78679f7e26b1cbb199dcd7df44394",
+      "internal/product/query/project_page.go": "b7388bdcf7c9870406afe327098569a829a81c91bdc6de186ae6aa95b2f522b2",
+      "internal/product/query/tasks.go": "ffb5935ea563d4480178780067b792ae90db91fb0c1392d7cf62357040834529"
+    }
+  },
+  "internal/product/query/taskgraph": {
+    "files": [
+      "internal/product/query/taskgraph/model.go",
+      "internal/product/query/taskgraph/page.go",
+      "internal/product/query/taskgraph/project.go"
+    ],
+    "imports": [
+      "internal/execution/model",
+      "internal/product/api",
+      "internal/storage/ports",
+      "internal/task/model"
+    ],
+    "sha256": {
+      "internal/product/query/taskgraph/model.go": "2d9ff3d3abf3a1fc1bff4d3df021b8aef1b51fc82589ccf13ff542cc245f685f",
+      "internal/product/query/taskgraph/page.go": "d0e3008ef64a92817607c8007c6987e38b65a085bf6f25f0434345f4608f878d",
+      "internal/product/query/taskgraph/project.go": "4d20cf0ad23f686eec1d7a29ea7a29d8e3e60c05a8f78e18a9a288a634907d5c"
+    }
+  },
+  "internal/steerline": {
+    "files": [
+      "internal/steerline/activity.go",
+      "internal/steerline/application_config.go",
+      "internal/steerline/command_digest.go",
+      "internal/steerline/command_kinds.go",
+      "internal/steerline/command_replay.go",
+      "internal/steerline/control_client.go",
+      "internal/steerline/control_files.go",
+      "internal/steerline/control_protocol.go",
+      "internal/steerline/conversation.go",
+      "internal/steerline/decision_client.go",
+      "internal/steerline/domain.go",
+      "internal/steerline/domain_snapshot.go",
+      "internal/steerline/host_utilities.go",
+      "internal/steerline/json_decode.go",
+      "internal/steerline/launchers.go",
+      "internal/steerline/model.go",
+      "internal/steerline/native_graph_export.go",
+      "internal/steerline/native_project_open.go",
+      "internal/steerline/native_readiness_query.go",
+      "internal/steerline/native_state_preflight.go",
+      "internal/steerline/native_task_page.go",
+      "internal/steerline/observation.go",
+      "internal/steerline/platform_linux.go",
+      "internal/steerline/platform_windows.go",
+      "internal/steerline/process_projection.go",
+      "internal/steerline/project_view.go",
+      "internal/steerline/render.go",
+      "internal/steerline/service_client.go",
+      "internal/steerline/service_connection.go",
+      "internal/steerline/service_console.go",
+      "internal/steerline/service_host.go",
+      "internal/steerline/service_loop.go",
+      "internal/steerline/service_preflight.go",
+      "internal/steerline/service_prepare.go",
+      "internal/steerline/service_startup_publication.go",
+      "internal/steerline/state_preflight.go",
+      "internal/steerline/state_revision.go",
+      "internal/steerline/store.go",
+      "internal/steerline/task_record_lookup.go",
+      "internal/steerline/write_ports.go"
+    ],
+    "imports": [
+      "internal/console/activityrender",
+      "internal/execution",
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/execution/process",
+      "internal/execution/publication",
+      "internal/execution/workspace",
+      "internal/product/api",
+      "internal/product/query",
+      "internal/steerline/contracts",
+      "internal/steerline/host",
+      "internal/steerline/persistence",
+      "internal/storage/ports",
+      "internal/task/model"
+    ],
+    "sha256": {
+      "internal/steerline/activity.go": "c36523f338ce89006e67f264385334b63f03f82a8db1c43e59202ecdacef173a",
+      "internal/steerline/application_config.go": "9e8218339874030058c21e336ede00544c12c3d5fa92baa8a83ac4d51166ef35",
+      "internal/steerline/command_digest.go": "a91b18cd6cac09ad170aba36d0a9df108b3a74e4f40a961ca31f21921c901de6",
+      "internal/steerline/command_kinds.go": "209819b88c92154433f54acaa26e53f0080d84704573648367fd6fd0ab878973",
+      "internal/steerline/command_replay.go": "e7b04b7be8d9ff37070a6af629252145b0a74cf6d8ab0644df5c853ca68dea43",
+      "internal/steerline/control_client.go": "1c7b1e915d5047b98bcb2832a7b68fd7c85dc6e7793e45e19ee6e0b1e7127982",
+      "internal/steerline/control_files.go": "bf7f9e6dcaa21677193894c63b4788557ff026ebdd06555f541819148700d541",
+      "internal/steerline/control_protocol.go": "91453de785c7cfc4e92dc26f910304b58b16e5cdcfb910515d1c49f8a3743d20",
+      "internal/steerline/conversation.go": "0b91d1a26c20a4eafe07e66fbabbcdef052ff1ad9464f348b235fb08ddea3988",
+      "internal/steerline/decision_client.go": "8258636f4befa67750c903e0259ea6c03f49981d2c0b0454baf592c0f01e6930",
+      "internal/steerline/domain.go": "0ac4a23028e1a7c4c5064ee2ab54644181e167211e9175ac6c7220d5c864a27a",
+      "internal/steerline/domain_snapshot.go": "1f0f09797080a9574e5334a29a15409a87ac2ff737083b09362e7f92f11e86e8",
+      "internal/steerline/host_utilities.go": "c6b46f60dd2a0ba5770de09638b3e7e74082e38085c35a4f1fe04e44de821d0d",
+      "internal/steerline/json_decode.go": "715a675ab423fd3306bcd981faf825d060ff9d1dc3335a4bad1949c90732a6f2",
+      "internal/steerline/launchers.go": "f446b97cc5cf200dc49ba893f1e8371ff5627d1bdd16ff3ed7525a95aae92f07",
+      "internal/steerline/model.go": "30b469627c2d1a697a20c034db63baed5c493c58b96f3c4ce8d7901b2527802f",
+      "internal/steerline/native_graph_export.go": "f95726ec109b779f24b8a3915a80e8419c73e0452680128bdfc2b0f98189ee7c",
+      "internal/steerline/native_project_open.go": "e4be647eb312245e97f811713aaaa9dbed99e759ef08b8fcf62fa87ea5dc3205",
+      "internal/steerline/native_readiness_query.go": "024accac2a1ade0de3a7b76674545a5038249dc9cfaefba58247273aedc58e72",
+      "internal/steerline/native_state_preflight.go": "c00989be04d865769b89dcea8b481136f50c724c3e0c81cfed435e232a46e5dc",
+      "internal/steerline/native_task_page.go": "5afec6d80514264816944f459db63189ce0a5a26c8c3a61b0b4c144d39fe7d0a",
+      "internal/steerline/observation.go": "99f8f3ff9839c3a9bc94bcdee6d49be30f38ff6ca8f3229bff025f526a19d227",
+      "internal/steerline/platform_linux.go": "29da19382e50b975f818eba03321a58c163224adf0ab7fa03b05973fb57e4b58",
+      "internal/steerline/platform_windows.go": "39c0c64bad75911ed71f243af055b0e67be974094436d01d16b11648eb406781",
+      "internal/steerline/process_projection.go": "8fed1d3ea31b3248ca38a1071b3c8018959fa034c3618e81684ddf4f89f70769",
+      "internal/steerline/project_view.go": "02abb35312bbd84bc029752a47d765daac075bb08543e1bfaaca938606cda51f",
+      "internal/steerline/render.go": "a409eccb08e10352ae3c60b9f7f36910e0c6abaa61616eeea9a5628880a0bd5c",
+      "internal/steerline/service_client.go": "11ee62a7b7c91dd021649a10337be95f82e1fe58adaa66137f5a275df82f9c04",
+      "internal/steerline/service_connection.go": "260c749f8ad96cf6d40c1dc909b44c6077183731246449dc32c8cdfe402dedbe",
+      "internal/steerline/service_console.go": "f00becf4af840edcb7a55040a1f39e61508f421501356a21005c6b1e5480432e",
+      "internal/steerline/service_host.go": "54173291db817320093458b4eedc28223acce42dbd0f9bf0d92212bc7df218c1",
+      "internal/steerline/service_loop.go": "6ae1bb9395a37f396bf80f703ee10ad800001cc35aab94e47b163d5102c3f505",
+      "internal/steerline/service_preflight.go": "79200180b99e65a06d7b76aa366cc9be14f0b70439f29a83fb0904f4efd4d877",
+      "internal/steerline/service_prepare.go": "bb60be83c63eea25e85f0c786a2727a040f2e2e167435890606841a5f5ab174a",
+      "internal/steerline/service_startup_publication.go": "12842f83af1137d7ed104ee4b84175b80454f07a21199660be9e3bc05dbe7e97",
+      "internal/steerline/state_preflight.go": "9e856b459c7b12620f0c3c4a0bde1b65f2b4c0dd9ae9f97bb2d86531e7229e9c",
+      "internal/steerline/state_revision.go": "f62aff62b59a6c980178e409f8b30649a1b26ac2d60c7c4623369a4430d365e9",
+      "internal/steerline/store.go": "a1ebb093d346b720f4a039d0bbeaa59ede3d2f110d760d3c04444e79c6e9b366",
+      "internal/steerline/task_record_lookup.go": "bfdd556e52674ef65413dec6bb18b7086ec2fa68d61bdf7e1731cc21c4e1f387",
+      "internal/steerline/write_ports.go": "c7af2dc016e6526648f9f135085454acdc9dfb2998ced2cfdd2b331eef493781"
+    }
+  },
+  "internal/steerline/contracts": {
+    "files": [
+      "internal/steerline/contracts/activity.go",
+      "internal/steerline/contracts/conversation.go",
+      "internal/steerline/contracts/conversation_position.go",
+      "internal/steerline/contracts/conversation_query.go",
+      "internal/steerline/contracts/delivery.go",
+      "internal/steerline/contracts/execution.go",
+      "internal/steerline/contracts/json.go",
+      "internal/steerline/contracts/query.go",
+      "internal/steerline/contracts/runtime.go",
+      "internal/steerline/contracts/snapshot.go"
+    ],
+    "imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/product/api",
+      "internal/task/model"
+    ],
+    "sha256": {
+      "internal/steerline/contracts/activity.go": "a4abacd15544545bbe2362d93e335941011df83da3ae6e413686660b451b6730",
+      "internal/steerline/contracts/conversation.go": "69914b8fff355972d2422cc40c46c42a8252fbb1f02bfa935b981dfbbf3701e4",
+      "internal/steerline/contracts/conversation_position.go": "6164e25c202277091cf7b25862d34c15a9b84aaadb7d15210a498c2dd1108940",
+      "internal/steerline/contracts/conversation_query.go": "0263c7ef012c7ba4479d0eb134ad3aa97f1fd92f412b6eb76c31f3520f9f34c2",
+      "internal/steerline/contracts/delivery.go": "9cfd7248797e145f3421ee0cd92b750fa26bb12df82fa2791a65ea0259ad03db",
+      "internal/steerline/contracts/execution.go": "efbf046811ce2c1b9be8bd1498a44d6a1d8198bda814eddb34b8cce98585b2c2",
+      "internal/steerline/contracts/json.go": "7b67e356e74b2ff5ee9d62127cef24e188ac1a49b815a05c7ab72fad9dfe8daf",
+      "internal/steerline/contracts/query.go": "6fae64989edb9592d15288d224a0030152bf686ae45fded8cd2175d60e02b399",
+      "internal/steerline/contracts/runtime.go": "b4dfa635b3cef27be24c229677d8554f85f0a24d4550658ba7e465c4ed476245",
+      "internal/steerline/contracts/snapshot.go": "fa628c469095bb99dcba29ced2358f98c81cfb3e0dbe7c4a7043275e72b263f6"
+    }
+  },
+  "internal/steerline/host": {
+    "files": [
+      "internal/steerline/host/errors.go",
+      "internal/steerline/host/loop.go"
+    ],
+    "imports": [
+      "internal/product/api"
+    ],
+    "sha256": {
+      "internal/steerline/host/errors.go": "5e9891bbc132b4a0bea604a9dbdc30118f21d39600df7111cc01c7f610e9558c",
+      "internal/steerline/host/loop.go": "fd0a00603451e9fe4e85b6fab16f3e076cf40240458b5655794979160414508b"
+    }
+  },
+  "internal/steerline/persistence": {
+    "files": [
+      "internal/steerline/persistence/connections.go",
+      "internal/steerline/persistence/ports.go"
+    ],
+    "imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/steerline/contracts",
+      "internal/storage/ports",
+      "internal/task/model"
+    ],
+    "sha256": {
+      "internal/steerline/persistence/connections.go": "cb870bdb4f1e19e9dd7ef20027bafa4ab6cb2102538981ae002ab45ced4ce7d4",
+      "internal/steerline/persistence/ports.go": "95ada72cd17b86ef1daa6051f3ec50464e1c25cc45a7915c54bd788fdc69c380"
+    }
+  },
+  "internal/steerline/sqlite": {
+    "files": [
+      "internal/steerline/sqlite/activity_view.go",
+      "internal/steerline/sqlite/atomic_replay.go",
+      "internal/steerline/sqlite/checkpoint.go",
+      "internal/steerline/sqlite/connections.go",
+      "internal/steerline/sqlite/conversation.go",
+      "internal/steerline/sqlite/conversation_store.go",
+      "internal/steerline/sqlite/graph.go",
+      "internal/steerline/sqlite/helpers.go",
+      "internal/steerline/sqlite/project.go",
+      "internal/steerline/sqlite/project_view.go",
+      "internal/steerline/sqlite/reader.go",
+      "internal/steerline/sqlite/record_validation.go",
+      "internal/steerline/sqlite/records.go",
+      "internal/steerline/sqlite/runtime_preflight.go",
+      "internal/steerline/sqlite/schema_preflight.go",
+      "internal/steerline/sqlite/sqlite_native_authority.go",
+      "internal/steerline/sqlite/sqlite_runtime_snapshot.go",
+      "internal/steerline/sqlite/sqlite_store.go",
+      "internal/steerline/sqlite/sqlite_store_checkpoint.go",
+      "internal/steerline/sqlite/sqlite_store_read.go",
+      "internal/steerline/sqlite/sqlite_store_schema.go",
+      "internal/steerline/sqlite/sqlite_store_write.go",
+      "internal/steerline/sqlite/sqlite_store_write_commands.go",
+      "internal/steerline/sqlite/sqlite_store_write_execution.go",
+      "internal/steerline/sqlite/sqlite_store_write_native.go",
+      "internal/steerline/sqlite/sqlite_task_graph.go",
+      "internal/steerline/sqlite/sqlite_task_ports.go",
+      "internal/steerline/sqlite/sqlite_worker_commit.go",
+      "internal/steerline/sqlite/sqlite_write_ports.go",
+      "internal/steerline/sqlite/state_revision.go",
+      "internal/steerline/sqlite/task_claim_commit.go",
+      "internal/steerline/sqlite/task_discard_commit.go",
+      "internal/steerline/sqlite/task_result_commit.go",
+      "internal/steerline/sqlite/tasks.go",
+      "internal/steerline/sqlite/values.go",
+      "internal/steerline/sqlite/worker_attachment_store.go"
+    ],
+    "imports": [
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/execution/reconstruction",
+      "internal/product/query",
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/storage/ports",
+      "internal/task/model"
+    ],
+    "sha256": {
+      "internal/steerline/sqlite/activity_view.go": "50e8df8612d2276497e7c3d58775374bb178366abf9f2eb683ed586b09a1f1ac",
+      "internal/steerline/sqlite/atomic_replay.go": "1dffcf37176676ca6b01e69b80f9d1744a0ed5e6d073ad14837b4e3e0b824f56",
+      "internal/steerline/sqlite/checkpoint.go": "275ef65d6b12bba95df9fa16880a41271b0ef799b19220af1c205c7b7fcf9459",
+      "internal/steerline/sqlite/connections.go": "e945750ba66c5e9e1e2dee6040bd07833e6f2d1bb2ed27727146d3c8f2e3c1fc",
+      "internal/steerline/sqlite/conversation.go": "53efef609b6636355a6f3a5cfd6ec7eb5f9ad041dc2f1a2b72a9cb97dc166731",
+      "internal/steerline/sqlite/conversation_store.go": "812d2bdf9e6f939f3b244f8f9a563193c39b944c63652747db31b6b68a9d3304",
+      "internal/steerline/sqlite/graph.go": "d5f5eea7ef5dfd82ee32bf402993785545de84125885250e4db39807f2f331b7",
+      "internal/steerline/sqlite/helpers.go": "ecc5204fe38c2cc66a9903f489e1a5b10e63155c29ef0659156806d4f250cc2e",
+      "internal/steerline/sqlite/project.go": "02b68b93bef9a4ad0035dd3346b4765bca1d1623499e416e64301ea80064b23f",
+      "internal/steerline/sqlite/project_view.go": "3c8c7f0d734509210bd4051d60efb0c8c87324d4351815bd525618989773dbe1",
+      "internal/steerline/sqlite/reader.go": "dec0efe0b71cc0c8943bda75038e6843e9ca9e33effb2e7c4d13adbe939d12d7",
+      "internal/steerline/sqlite/record_validation.go": "1a0ffe26f785a88528d04eaa295b4b864988f1dfae615b536f9a446c4ec7ff82",
+      "internal/steerline/sqlite/records.go": "faf47a317a83c64460e34587893503eaf252e8095e33392f4e91c6a1f63cd384",
+      "internal/steerline/sqlite/runtime_preflight.go": "20eae5fc5d65968b90d75bf7d936dc8a7bd4e3c2f97abeb4774c2a921c19e3af",
+      "internal/steerline/sqlite/schema_preflight.go": "74833f8db155b665f621ae728de6311ca251e4973f043e5e883395ffb3e5e620",
+      "internal/steerline/sqlite/sqlite_native_authority.go": "9c85ccd39d24c081a3d29a2f5a58e0320802f642cffb977709d517a24d662fa6",
+      "internal/steerline/sqlite/sqlite_runtime_snapshot.go": "8a4ddb96d7fdaef427a28097deb62eec98a285b60eb5158d6b46af4b5b671607",
+      "internal/steerline/sqlite/sqlite_store.go": "943f8ef082f7d8f3ea2da51a95348588ed4407bb5449863506e5a3fe7de257bf",
+      "internal/steerline/sqlite/sqlite_store_checkpoint.go": "e2bc4ca03b59ff632be78d05bcc845fad0bb6fdb4b906b264849d977a3f0db12",
+      "internal/steerline/sqlite/sqlite_store_read.go": "f05e602f51726502f6707c5423dcd98d69e910f9a7df42c980574372a89fd2c4",
+      "internal/steerline/sqlite/sqlite_store_schema.go": "ba1ac9e5edc1f82812456a161d51476969757d8461f958a851170710a28e70f9",
+      "internal/steerline/sqlite/sqlite_store_write.go": "a9f2e012b1298407bf8bc4d2983512cf4c921c61723b59c60a899975ea2d1982",
+      "internal/steerline/sqlite/sqlite_store_write_commands.go": "58b1ab931757150da4c1307c0814c2e4f35ca1863d743cdff43d8556487dc3e5",
+      "internal/steerline/sqlite/sqlite_store_write_execution.go": "c884462f0a3ec71add7a86c18ea177c210daa5d9ab60412024f0da954f2ffca8",
+      "internal/steerline/sqlite/sqlite_store_write_native.go": "de46b48a32017fdde79a579ee02000d9d287d5812d8dcaeb8abccee1ade7bdc0",
+      "internal/steerline/sqlite/sqlite_task_graph.go": "8bbb3f9fd9af6b9cef05c6da19c9e94a214e010edbe33ada74f70b5750670516",
+      "internal/steerline/sqlite/sqlite_task_ports.go": "e67f2a958b4e72af61a31b0c2a608c2568e6d5ce0b28f1af3bc4e569d7511316",
+      "internal/steerline/sqlite/sqlite_worker_commit.go": "986337f2542c9dc9a12b31e2a10fdadb7bfe0ac8c540815e421d462988d0a362",
+      "internal/steerline/sqlite/sqlite_write_ports.go": "39f7684a7af5da7cbee448e89d72a7bd4d0f3ed4507ef49a9f7cf2479d891022",
+      "internal/steerline/sqlite/state_revision.go": "96cbb5d5e41cd4724052041d3a7f04580c15cc35305c7dbbcf6cbda3abae3df2",
+      "internal/steerline/sqlite/task_claim_commit.go": "1875d3a50c971b1028bec278d12cdaa0d363ec22675a577d6eb006e93bc42b6b",
+      "internal/steerline/sqlite/task_discard_commit.go": "eb0653cbca9ecc4c14ceace0b0c6b961a775dd0d77222b0fb7acf6388913a68f",
+      "internal/steerline/sqlite/task_result_commit.go": "e513dc0979ed1253b8538d0cd1945bc476ab96c86550b90abfc38e3095f43b75",
+      "internal/steerline/sqlite/tasks.go": "21fca892db6bb494d2d89c303420c89f85225ffaa7708794115dad681344b3c8",
+      "internal/steerline/sqlite/values.go": "56bce76b80178a6276477130e7e3da7cadd0b9d956209ab6a530cd0e2a929e11",
+      "internal/steerline/sqlite/worker_attachment_store.go": "547bd9b49eb124be268db86d5b1804201afbff3f55756ae07afabba33b00ea5b"
+    }
+  },
+  "internal/steerline/testprotocol": {
+    "files": [
+      "internal/steerline/testprotocol/appserver.go",
+      "internal/steerline/testprotocol/native_lock_other.go",
+      "internal/steerline/testprotocol/native_lock_windows.go",
+      "internal/steerline/testprotocol/native_orca.go",
+      "internal/steerline/testprotocol/supervised.go",
+      "internal/steerline/testprotocol/terminal.go"
+    ],
+    "imports": [],
+    "sha256": {
+      "internal/steerline/testprotocol/appserver.go": "423a51fdcbf5a8c21fb56555be5d9d14154bd1ba8615248fff765b421ad12c09",
+      "internal/steerline/testprotocol/native_lock_other.go": "05bdf89590311f14f444ef0fb69c2f20ece552a749a338e870a03da33f95bf26",
+      "internal/steerline/testprotocol/native_lock_windows.go": "33980957ab4c00969a68bb5361e67ba060e013abbe700ab9d9ec788748fd3478",
+      "internal/steerline/testprotocol/native_orca.go": "324b358d60f193ca309833e619b043b636295380d4afbccb0a02f7b6f89c8958",
+      "internal/steerline/testprotocol/supervised.go": "ee251935d5ca3ee51572d937ad56edc88166967e0231d989cbedf83baa87db3b",
+      "internal/steerline/testprotocol/terminal.go": "b1f810952563f643c416dc13a59a224710d93d9b716b94e1ce441b80aed58936"
+    }
+  },
+  "internal/steerlineapp": {
+    "files": [
+      "internal/steerlineapp/app.go",
+      "internal/steerlineapp/capability.go",
+      "internal/steerlineapp/client.go",
+      "internal/steerlineapp/client_command_wiring.go",
+      "internal/steerlineapp/client_discard_commands.go",
+      "internal/steerlineapp/client_task_commands.go",
+      "internal/steerlineapp/config.go",
+      "internal/steerlineapp/console.go",
+      "internal/steerlineapp/directory.go",
+      "internal/steerlineapp/execution_command_wiring.go",
+      "internal/steerlineapp/execution_service_wiring.go",
+      "internal/steerlineapp/task_boundary_wiring.go",
+      "internal/steerlineapp/task_command_store.go",
+      "internal/steerlineapp/task_documents.go"
+    ],
+    "imports": [
+      "internal/console",
+      "internal/execution",
+      "internal/execution/adapters/codex",
+      "internal/execution/adapters/orca",
+      "internal/execution/adapters/orcaremote",
+      "internal/execution/backend",
+      "internal/execution/model",
+      "internal/execution/process",
+      "internal/execution/publication",
+      "internal/execution/workspace",
+      "internal/product/api",
+      "internal/product/client",
+      "internal/product/query",
+      "internal/steerline",
+      "internal/steerline/contracts",
+      "internal/steerline/persistence",
+      "internal/steerline/sqlite",
+      "internal/storage/ports",
+      "internal/task",
+      "internal/task/model"
+    ],
+    "sha256": {
+      "internal/steerlineapp/app.go": "3a249ca2e528b5c1d395428b56263461039ab77dff0596f803a8ab46f111be7e",
+      "internal/steerlineapp/capability.go": "49e8c8620ef4319bbb1fa7e2d0662b5dea619f4461f266ca07be50ad4d00729a",
+      "internal/steerlineapp/client.go": "7ad738b915c6ec2a316d8f8d8a176af440cf24a81398494d6c8dc6b4b921a3c6",
+      "internal/steerlineapp/client_command_wiring.go": "686b7831abdf2392e554f594afb68cb5767d8830002de93da43797380aa1d19d",
+      "internal/steerlineapp/client_discard_commands.go": "b09c46976a7a239da2b07a035c1484758bdb6cd8a1bf68436c44bd047c463ae8",
+      "internal/steerlineapp/client_task_commands.go": "7d241a6ae7f2da9007ac97faa24f7a02c557e13d6657973c72b0a1a613ba99ce",
+      "internal/steerlineapp/config.go": "511ecedf2248a14ba661c5ca481427371c0e46d048484c996414daeb078c4cf9",
+      "internal/steerlineapp/console.go": "dca3441eeb7eb4070176f5cd640792882ad12a1cabea05d063fe60198c05b219",
+      "internal/steerlineapp/directory.go": "a5c84c0cdf449ecec90796479a402d9a3b64d25ffb7ec88d32383554edd77ba8",
+      "internal/steerlineapp/execution_command_wiring.go": "21610082457d897ec974ff54abaab0f04e98f91fb4a327d00fcab48a30de5e11",
+      "internal/steerlineapp/execution_service_wiring.go": "da907f2a236bba9d0769d8110f573a9f39c49a05f90d008ac1cce3902d48b5e4",
+      "internal/steerlineapp/task_boundary_wiring.go": "aff5fcadf5e4aff345f610ca5264f92d0ccee4226b9f6d7a510b3fce1219f060",
+      "internal/steerlineapp/task_command_store.go": "e1c978a4b45d2293656be4a0d3e0705fac0214947232235a57ad18f8ae85995d",
+      "internal/steerlineapp/task_documents.go": "e07a0faf5a2e37b94c65ace7490a9bf21da616370d67e77fd3d5a77fa1842a66"
+    }
+  },
+  "internal/storage/ports": {
+    "files": [
+      "internal/storage/ports/errors.go",
+      "internal/storage/ports/ports.go",
+      "internal/storage/ports/records.go",
+      "internal/storage/ports/task_claim.go",
+      "internal/storage/ports/task_discard.go",
+      "internal/storage/ports/task_graph.go",
+      "internal/storage/ports/task_result.go"
+    ],
+    "imports": [
+      "internal/execution/model",
+      "internal/task/model"
+    ],
+    "sha256": {
+      "internal/storage/ports/errors.go": "fc416a58ca5b644404458c4ac81627a9a4b4289b632a8045348e173c484441a4",
+      "internal/storage/ports/ports.go": "d4aae91efb64a34040ce5ad923c2e4579965bb83ff0a18c713216a3b4b0727bb",
+      "internal/storage/ports/records.go": "a850c68b83de3418f591d767e7ed717db2f966220053d796bc77871532fa003a",
+      "internal/storage/ports/task_claim.go": "0963c747e8f712ce6f9be323949788400605e2b8d9e4b10bd06a0847e2faf714",
+      "internal/storage/ports/task_discard.go": "008caf2c7135da2e6ef904a68761153506d1395fe17806cea02052ebf6fb9c3f",
+      "internal/storage/ports/task_graph.go": "edd5c15ee2e2aa63bd2bab80feb1e248019aac28905a5b5f3e6b58be79f32263",
+      "internal/storage/ports/task_result.go": "2d5118666786d1c525ef84c7027dd8d319b7ee650b3128ebba8c8867cfd9e439"
+    }
+  },
+  "internal/task": {
+    "files": [
+      "internal/task/batch.go",
+      "internal/task/commands.go",
+      "internal/task/documents.go",
+      "internal/task/predecessors.go",
+      "internal/task/validation.go",
+      "internal/task/work.go"
+    ],
+    "imports": [
+      "internal/task/model"
+    ],
+    "sha256": {
+      "internal/task/batch.go": "2772df52b315c26937569b53312b1f8ae9946daa43fe983b69e50d490fa1467d",
+      "internal/task/commands.go": "f09b3d9b459d395cc97ab002d873be29f0a4b19d80a4cf3430f433c9de37c735",
+      "internal/task/documents.go": "5aa6d0163eb7daea2a897adbf471d668cf9a26188bb145822719ab15af9949bf",
+      "internal/task/predecessors.go": "7fc22e0dcba15b8652f4baf413dac2f4196b975dcdab2dad31a928789a602471",
+      "internal/task/validation.go": "30ac67dd72d8c0a491c74a09dfdd1b28ee1792867f67aefc08d3d0cf7859c33a",
+      "internal/task/work.go": "97943bbc614d5a33035af14d519f496af7cdd1e631f975d0c98d53d77136a0b1"
+    }
+  },
+  "internal/task/model": {
+    "files": [
+      "internal/task/model/batch.go",
+      "internal/task/model/command_plan.go",
+      "internal/task/model/contract.go",
+      "internal/task/model/delivery_gate.go",
+      "internal/task/model/discard_intent.go",
+      "internal/task/model/document_content.go",
+      "internal/task/model/model.go",
+      "internal/task/model/predecessor_command.go",
+      "internal/task/model/predecessors.go",
+      "internal/task/model/readiness.go",
+      "internal/task/model/result.go",
+      "internal/task/model/snapshot.go",
+      "internal/task/model/status.go",
+      "internal/task/model/taskgraph.go",
+      "internal/task/model/work.go"
+    ],
+    "imports": [],
+    "sha256": {
+      "internal/task/model/batch.go": "690ffb9a5bb8196648debfc730f338f2105616d39c58194b0b69e2c3859eb63c",
+      "internal/task/model/command_plan.go": "9d25cd1f1bad60d8061ccce1f14b32ba498b10fb4027695e2945275e29079735",
+      "internal/task/model/contract.go": "c15feafa74412560bff931952ee7bd88eaf4b7f5db58117c4ba034b3ffeb7cf5",
+      "internal/task/model/delivery_gate.go": "a98b4d7dbddf9552c46bc2b0970a5b95e5656254356833d32723a7dbbdf39e76",
+      "internal/task/model/discard_intent.go": "5c512380ee047084c72cf7321fae5179931d9f3858f8c7b0fa0a24b852afc414",
+      "internal/task/model/document_content.go": "002933c3dd21c82391f1b64c700ba666cb476e8ecfd6c0dc4a9c3ef5f48176b6",
+      "internal/task/model/model.go": "8308b011f5a2fffcc4d7659695ea0c12c87c36c4e3ec72deba5c059c3e786c26",
+      "internal/task/model/predecessor_command.go": "ee7bbbdf21d7e2847ca07484beadc9f520d8e5593fcb68093b4561ade51a78f9",
+      "internal/task/model/predecessors.go": "a3f2d14a4a927b24fc68bd8518bc34cf5993fab1c3ba9c72daa5c22bac1bdeb0",
+      "internal/task/model/readiness.go": "c35f061c19cd7b200f9e5a6a364af0786fb26614aeac58d754c9b49e37c5b321",
+      "internal/task/model/result.go": "46610d40c251780614c77626affb45447474c0f681ea38f5cfdf1fd4ea3c44b7",
+      "internal/task/model/snapshot.go": "374f278869e9643d255c4dda43496253e3ecf5b2d4236d88ef57104627190887",
+      "internal/task/model/status.go": "9222d258059b6096e0b3f595ee24a3a47a8439985294ecd07c98ddc2f5e482e2",
+      "internal/task/model/taskgraph.go": "daba85a7d445685fd508dc914e256189e4570bc3bf9affd0745a2b924278a4b9",
+      "internal/task/model/work.go": "e0cc1d320adc4e85c5eee829ff441cc637634f70476ea258f8e29cfb017140e7"
+    }
+  },
+  "internal/testfeedback": {
+    "files": [
+      "internal/testfeedback/summary.go"
+    ],
+    "imports": [],
+    "sha256": {
+      "internal/testfeedback/summary.go": "40f0bec4ae4165651c83216a4ad6f6bc6049479860ca6aa9fb63f2ea0c689bb1"
+    }
+  },
+  "internal/testprocess": {
+    "files": [
+      "internal/testprocess/process.go",
+      "internal/testprocess/process_unix.go",
+      "internal/testprocess/process_windows.go"
+    ],
+    "imports": [],
+    "sha256": {
+      "internal/testprocess/process.go": "71ec55d1a91ee94aadbaf7f7b224bdd39a9de5ac8bb6744ea8b20273621f2f6f",
+      "internal/testprocess/process_unix.go": "1594e75ffd35138ddb3411850f6858d75fe51d731aeb8ada9b26838f84aa7543",
+      "internal/testprocess/process_windows.go": "f5d3380a90a8633bc7ca385083446978f6ac86af713dad9274461bbe9acc6a17"
+    }
+  }
+}

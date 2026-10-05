@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"path/filepath"
 	"strings"
@@ -119,7 +120,7 @@ func TestCodexHistoryRealLocalToolInterleaveFixture(t *testing.T) {
 	if first[0].Type != steerline.ConversationTurnStarted || first[2].Type != steerline.ConversationMessageComplete || first[2].Phase != steerline.MessagePhaseCommentary || first[3].Type != steerline.ConversationToolCompleted || first[3].Status != "completed" || first[4].Type != steerline.ConversationMessageComplete || first[4].Phase != steerline.MessagePhaseFinalAnswer || first[5].Type != steerline.ConversationTurnCompleted || first[5].FinalAvailability != steerline.FinalAvailable {
 		t.Fatalf("real commentary/tool/final order or turn completion was lost: %+v", first)
 	}
-	query := steerline.NewConversationQueryService(store, "project")
+	query := productquery.NewConversationService(store, "project")
 	for _, tc := range []struct {
 		index int
 		want  string
@@ -179,7 +180,7 @@ func TestCodexHistoryRealFailedTurnFixture(t *testing.T) {
 	if events[2].Raw == nil {
 		t.Fatal("real failure lost its raw error evidence")
 	}
-	page, err := steerline.NewConversationQueryService(store, "project").ReadRaw(context.Background(), *events[2].Raw, 0, 4096)
+	page, err := productquery.NewConversationService(store, "project").ReadRaw(context.Background(), *events[2].Raw, 0, 4096)
 	require(t, err)
 	if !page.Complete || !strings.Contains(string(page.Data), "401 Unauthorized") {
 		t.Fatalf("real failure error evidence changed: %+v", page)
@@ -258,13 +259,13 @@ func TestCodexHistoryCanonicalSourceKeepsRawReadable(t *testing.T) {
 	native.Type, native.ItemKey = steerline.ConversationSession, ""
 	_, err = store.CommitConversation(ctx, []steerline.ConversationWrite{{Event: native}}, steerline.ConversationCheckpoint{})
 	require(t, err)
-	query := steerline.NewConversationQueryService(store, "project")
-	page, err := query.ReadConversation(ctx, steerline.ConversationFilter{}, "", 100)
+	query := productquery.NewConversationService(store, "project")
+	page, err := query.ReadConversation(ctx, contracts.ConversationFilter{}, "", 100)
 	require(t, err)
 	if len(page.Events) != 1 || page.Events[0].Source != "codex-app-server" {
 		t.Fatal("raw and native message projections were both displayed")
 	}
-	rawPage, err := query.ReadConversation(ctx, steerline.ConversationFilter{Source: "codex-jsonl"}, "", 100)
+	rawPage, err := query.ReadConversation(ctx, contracts.ConversationFilter{Source: "codex-jsonl"}, "", 100)
 	require(t, err)
 	if len(rawPage.Events) != 1 || rawPage.Events[0].Raw == nil {
 		t.Fatal("raw source evidence became inaccessible")
@@ -274,7 +275,7 @@ func TestCodexHistoryCanonicalSourceKeepsRawReadable(t *testing.T) {
 	other.Event.ItemKey = conversationItemKey(other.Event, other.Event.ItemID)
 	_, err = store.CommitConversation(ctx, []steerline.ConversationWrite{other}, steerline.ConversationCheckpoint{})
 	require(t, err)
-	page, err = query.ReadConversation(ctx, steerline.ConversationFilter{}, "", 100)
+	page, err = query.ReadConversation(ctx, contracts.ConversationFilter{}, "", 100)
 	require(t, err)
 	if len(page.Events) != 2 {
 		t.Fatal("native source selection crossed attempt boundaries")
@@ -285,7 +286,7 @@ func TestCodexHistoryCanonicalSourceKeepsRawReadable(t *testing.T) {
 	wait.Source, wait.Type, wait.SourceEventID = "orca-terminal-v2", steerline.ConversationInputWait, "host-wait"
 	_, err = store.CommitConversation(ctx, []steerline.ConversationWrite{{Event: gap}, {Event: wait}}, steerline.ConversationCheckpoint{})
 	require(t, err)
-	page, err = query.ReadConversation(ctx, steerline.ConversationFilter{}, "", 100)
+	page, err = query.ReadConversation(ctx, contracts.ConversationFilter{}, "", 100)
 	require(t, err)
 	if len(page.Events) != 4 || page.Events[2].Type != steerline.ConversationGap || page.Events[3].Type != steerline.ConversationInputWait {
 		t.Fatal("native source selection hid a gap or host wait")

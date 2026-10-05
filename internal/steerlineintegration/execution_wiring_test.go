@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -30,7 +31,7 @@ type appCandidateFixture struct {
 	f        integrationFixture
 	store    persistence.CommandStore
 	commands execution.CommandService
-	query    steerline.QueryService
+	query    productquery.Service
 	ctx      context.Context
 }
 
@@ -45,7 +46,7 @@ func newAppCandidateFixture(t *testing.T) appCandidateFixture {
 	t.Cleanup(func() { require(t, store.Close()) })
 	commands, err := steerlineapp.NewCommandService(store, f.config)
 	require(t, err)
-	return appCandidateFixture{f: f, store: store, commands: commands, query: steerline.NewQueryService(store, f.config.Identity()), ctx: ctx}
+	return appCandidateFixture{f: f, store: store, commands: commands, query: productquery.NewService(store, f.config.Identity()), ctx: ctx}
 }
 
 func (f appCandidateFixture) page(t *testing.T) contracts.NativeTaskPage {

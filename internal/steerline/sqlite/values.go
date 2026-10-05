@@ -1,10 +1,9 @@
 package sqlite
 
 import (
+	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	"github.com/erranliu/SteerLine/internal/steerline/query"
-	taskview "github.com/erranliu/SteerLine/internal/steerline/taskview"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -46,7 +45,7 @@ type workerCommitResult = persistence.WorkerCommitResult
 
 type recordWrite[T any] = storageports.RecordWrite[T]
 
-type taskGraphSnapshot = taskview.Snapshot
+type taskGraphSnapshot = storageports.TaskGraphSnapshot
 
 const WorkerFlowRuntimeSchema = contracts.WorkerFlowRuntimeSchema
 

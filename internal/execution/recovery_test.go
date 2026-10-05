@@ -5,7 +5,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -15,7 +14,7 @@ func TestRecoveryInspectionReadsNativeClaimFromCenter(t *testing.T) {
 	project := "repo:native-recovery"
 	task := taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "7", Claimant: "native-claimant", Status: "in_progress"}
 	service := Service{Config: Config{Persistence: sqlite.Factory{}, identity: project}, State: contracts.Runtime{}, domain: contracts.DomainSnapshot{Tasks: []taskmodel.TaskRecord{task}}}
-	report := clientcontracts.RecoveryInspection{}
+	report := RecoveryInspection{}
 	service.inspectRecoveryClaim(context.Background(), &contracts.Run{TaskID: "7", DomainTaskID: "7"}, &report)
 	if report.NativeClaim == nil || report.NativeClaim.TaskID != task.TaskID || report.NativeClaim.Claimant != task.Claimant || report.ClaimError != "" {
 		t.Fatalf("native recovery claim lost its center evidence: %+v", report)

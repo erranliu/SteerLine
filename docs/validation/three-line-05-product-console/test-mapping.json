@@ -1,0 +1,149 @@
+{
+  "baseline": "4288c43b05287554de0b542e9eeb90d366fe063f",
+  "status": "worker mapping preserved; coordinator integration, repairs and exact relocated assertions recorded",
+  "tests": [
+    {
+      "old_package": "internal/steerline/console",
+      "new_package": "internal/console",
+      "parents": [
+        "TestCC1",
+        "TestCC2",
+        "TestCC3",
+        "TestCC4",
+        "TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript",
+        "TestUX1ParallelNumbersAndPrimarySurface",
+        "TestUX2PreviewSubmitEndsCurrentHumanInteraction",
+        "TestUX3FreeInputAndNarrowPinnedPreview",
+        "TestUX4RejectPreservesDraftAndBlockerStaysIndependent"
+      ],
+      "assertion_owner": "console: original candidate identity, draft/history/focus/input, blocker and lifecycle behavior",
+      "status": "console-02 passed; first rerun exposed an old repository-relative fixture path after relocation, fixed before the passing rerun"
+    },
+    {
+      "old_package": "internal/steerlineclient",
+      "new_package": "internal/product/client",
+      "parents": [
+        "TestCM71ResourceOwnershipAndClosedClient",
+        "TestCM71ProjectScopeAndErrors",
+        "TestWaitServiceCommandResolvesIdentityAndKeepsPolling",
+        "TestTM05OriginalRequest"
+      ],
+      "assertion_owner": "single client lifetime, project scope, read failures and original control request/replay",
+      "status": "product-02 passed"
+    },
+    {
+      "new_package": "internal/product/api",
+      "parent": "TestTM05ProductDTO",
+      "subtests": [
+        "serializable_target_version_original_receipt",
+        "api_has_no_internal_models_aliases_or_go_handles",
+        "task_page_escapes_bidi_preserves_unicode"
+      ],
+      "assertion_owner": "serializable pages/errors/receipts without internal records, handles or lost Unicode",
+      "status": "product-02 passed"
+    },
+    {
+      "new_package": "internal/product/query",
+      "parents": [
+        "TestTM05PageProjection",
+        "TestTM05CanonicalActivityIdentityAndNoRawFallback",
+        "TestTaskQueriesUseOnlyTaskReader",
+        "TestTaskQueriesRejectReaderScopeAndCursorDrift",
+        "TestConversationQueriesUseIndependentEventPortAndBoundCursor",
+        "TestConversationBodyAndRawQueriesUseSeparatePorts"
+      ],
+      "assertion_owner": "narrow injected query ports, canonical identity/order, copied pages, complete history, no raw-log fallback and strict cursors",
+      "status": "product-02 passed"
+    },
+    {
+      "new_package": "internal/product/query/taskgraph",
+      "parent": "TestGraphViewUsesOneSnapshot",
+      "assertion_owner": "query-owned graph filter/page projection over storage/ports.TaskGraphSnapshot",
+      "status": "product-02 passed"
+    },
+    {
+      "new_package": "internal/storage/ports",
+      "parents": [
+        "TestTM01StoragePortDependencies",
+        "TestGraphViewUsesOneSnapshot"
+      ],
+      "assertion_owner": "one sampled task graph value shared by execution, SQLite, persistence and product query; no product query type leaks back into execution",
+      "status": "product-02 and boundary-01 passed"
+    },
+    {
+      "old_package": "internal/steerline/sqlite",
+      "parents": [
+        "TestProjectViewSharesTransactionAcrossWriterCommit",
+        "TestProjectViewKeepsReadOnlySectionsWithoutCheckpointOrSelection"
+      ],
+      "assertion_owner": "one pinned SQLite transaction across writer commit and partial read failures",
+      "status": "sqlite-snapshot-01 passed"
+    },
+    {
+      "package": "internal/steerlineapp",
+      "parents": [
+        "TestFileQuerySourceReadsCombinedProjectView",
+        "TestCLIExecutionProfileIsBoundIntoStartTaskRequest"
+      ],
+      "assertion_owner": "real factory/query read snapshot and immutable profile digest binding",
+      "status": "app-query-02 passed"
+    },
+    {
+      "package": "internal/steerlineintegration",
+      "parent": "TestCD67CoreBoundary",
+      "assertion_owner": "all-tag source scan, negative import fixtures and Windows/Linux production dependency graphs",
+      "status": "boundary-01 passed: 36 test instances"
+    },
+    {
+      "package": "internal/steerlineintegration",
+      "parent": "TestCandidateConsoleWiring",
+      "assertion_owner": "real app/client/SQLite/control construction and candidate command through console",
+      "status": "wiring-02 passed: 2 test instances"
+    },
+    {
+      "package": "cmd/test-feedback L1",
+      "parent": "quick-boundary",
+      "assertion_owner": "fixed minimal task, execution and boundary package/test selections",
+      "status": "l1-02 passed: 9 groups, 356 test instances, zero failures or skips; initial run documented stale package selectors"
+    }
+  ],
+  "coordinator_changes": [
+    {
+      "old_parent": "TestRenderActivity",
+      "old_package": "internal/steerline",
+      "new_package": "internal/console/activityrender",
+      "new_parent": "TestRenderActivity",
+      "assertions": "Original command/title/elapsed/exit assertions retained; unique shared formatter owns all behavior, no query/console copies",
+      "l1_group": "quick-rules"
+    },
+    {
+      "old_parent": "TestNativeCandidateSnapshotKeepsDispatchOrderBeyondDetailPage",
+      "old_package": "internal/steerlineclient",
+      "new_package": "internal/product/query",
+      "new_parent": "TestNativeCandidateSnapshotKeepsDispatchOrderBeyondDetailPage",
+      "assertions": "Original501candidates and reverse order exact assertion restored at unique projector; target passed after L1 launched"
+    },
+    {
+      "new_parent": "TestTM05ActivitySharesTransactionAcrossWriterCommit",
+      "new_package": "internal/steerline/sqlite",
+      "assertions": "RealWALwritercommit between identity/event reads must not mix snapshots; next actual provider method adopts whole commit"
+    },
+    {
+      "new_parent": "TestTM05ProductQueryBoundary",
+      "new_package": "internal/coreboundary",
+      "assertions": "Inactive-tag production query forbids app/helper/usecase/SQL/console/adapter imports; actualWin/Linux use same rules",
+      "l1_group": "quick-execution-boundary"
+    },
+    {
+      "parent": "TestFileQuerySourceReadsCombinedProjectView",
+      "new_package": "internal/steerlineapp",
+      "assertions": "Originalprojectsnapshot retained; added actualmissingtask publiclyUnknownRecord plusoriginaltask_not_found cause"
+    },
+    {
+      "old_parent": "TestProjectSnapshotReuseRequiresSameLiveIdentityAndDatabaseVersion",
+      "old_package": "internal/steerlineclient",
+      "status": "obsolete cache optimization removed",
+      "reason": "Productclient now always opens a current reader and app takes a full pinned transaction; no stale snapshot reuse or internalProcessIdentity in publicAPI; original identity/refusal behavior remains in actualapp/client/console tests."
+    }
+  ]
+}

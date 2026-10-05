@@ -8,7 +8,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/activityview"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
@@ -126,7 +125,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 					return errors.New("accepted decision disappeared from its committed execution")
 				}
 				delete(s.workerDecisionWrites, record.DecisionID)
-				s.note(run, "steer", "decision", "answer_saved", "decision answer saved", activityview.DecisionAnswerSummary(run), decisionAnswerMeta(run))
+				s.note(run, "steer", "decision", "answer_saved", "decision answer saved", decisionAnswerSummary(run), decisionAnswerMeta(run))
 				if err = s.commitWorker(run); err != nil {
 					return err
 				}

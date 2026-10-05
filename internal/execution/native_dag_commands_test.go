@@ -16,8 +16,8 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
-	"github.com/erranliu/SteerLine/internal/steerline/query"
-	taskview "github.com/erranliu/SteerLine/internal/steerline/taskview"
+	"github.com/erranliu/SteerLine/internal/product/query"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -363,7 +363,7 @@ func TestTaskDependencyStateRequiresEveryPredecessorDelivery(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			task := taskmodel.TaskRecord{TaskID: "3", Status: "open"}
-			graph := taskview.Snapshot{
+			graph := storageports.TaskGraphSnapshot{
 				ByID:       map[string]taskmodel.TaskRecord{"1": {TaskID: "1", Status: "open"}, "2": {TaskID: "2", Status: "open"}, "3": task},
 				Edges:      []taskmodel.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "3"}, {PredecessorID: "2", SuccessorID: "3"}},
 				Deliveries: map[string]executionmodel.TaskDeliveryRecord{},

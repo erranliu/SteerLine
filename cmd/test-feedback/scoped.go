@@ -35,7 +35,7 @@ var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImp
 var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary",
 	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests",
-	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/steerline/taskview",
+	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/product/query/taskgraph",
 	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/task",
 	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/task/model",
 	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/model",
@@ -67,14 +67,29 @@ var quickBoundaryAssigned = []string{
 	"TestTM06ResourceWiring",
 }
 
-var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{corePackage + "/taskview", "github.com/erranliu/SteerLine/internal/storage/ports", corePackage + "/persistence", corePackage + "/testprotocol", "github.com/erranliu/SteerLine/internal/execution/model", "github.com/erranliu/SteerLine/internal/execution/backend", corePackage + "/contracts", executionPackage + "/reconstruction", corePackage + "/query", corePackage + "/sqlite", "github.com/erranliu/SteerLine/internal/testboundary"}...)
+var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{
+	"github.com/erranliu/SteerLine/internal/product/api",
+	"github.com/erranliu/SteerLine/internal/product/client",
+	"github.com/erranliu/SteerLine/internal/product/query",
+	"github.com/erranliu/SteerLine/internal/product/query/taskgraph",
+	"github.com/erranliu/SteerLine/internal/storage/ports",
+	corePackage + "/persistence",
+	corePackage + "/testprotocol",
+	"github.com/erranliu/SteerLine/internal/execution/model",
+	"github.com/erranliu/SteerLine/internal/execution/backend",
+	corePackage + "/contracts",
+	executionPackage + "/reconstruction",
+	corePackage + "/sqlite",
+	"github.com/erranliu/SteerLine/internal/console", "github.com/erranliu/SteerLine/internal/console/activityrender",
+	"github.com/erranliu/SteerLine/internal/testboundary",
+}...)
 
 var quickOwnerCases = []struct {
 	ID, Package string
 	Tests       []string
 }{
 	{"quick-execution", executionPackage, quickExecutionTests},
-	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/coreboundary", []string{"TestTM04ExecutionBoundary", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure"}},
+	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/coreboundary", []string{"TestTM04ExecutionBoundary", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure", "TestTM05ProductQueryBoundary"}},
 	{"quick-owner-remote", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", []string{"TestCD63CodecIdentityAndVersion", "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily", "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift", "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch", "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree", "TestSupervisedRunCoordinatorsAreDistinctAndFenced", "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal", "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall", "TestRemoteContinuationRequiresOriginalPeerAndTerminal", "TestRemoteWorkspaceKeepsPeerPathAndRuntime", "TestRemoteReplyRejectsOversizeWithoutMutation", "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending", "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox", "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID", "TestLoadConfigRequiresExplicitRemoteCancellationFalse"}},
 	{"quick-owner-codec", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", []string{"TestCD63CodecIdentityAndVersion", "TestConversationMapperNativeTwoTurnFixture", "TestHistoryAdapterRejectsOversizedNativeCursor", "TestAppServerLaunchPreservesConfiguredArgs", "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt"}},
 	{"quick-owner-identity", "github.com/erranliu/SteerLine/internal/execution/adapters/orca", []string{"TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess", "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation", "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost", "TestReadinessEvidenceUsesActualPlatformToolBlocks", "TestReadinessReceiptRejectsStaleAndEscapingFiles", "TestActualSavedCommandWrapperProvidesProbeEvidence", "TestActualStringifiedCommandWrapperProvidesProbeEvidence"}},
