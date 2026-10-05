@@ -1,0 +1,3992 @@
+{
+  "schema_version": 1,
+  "status": "complete_for_changed_test_sources",
+  "baseline": "4288c43b05287554de0b542e9eeb90d366fe063f (PR219 / #76 merged main)",
+  "changed_test_sources": [
+    {
+      "source_file": "cmd/steerline/native_task_test.go",
+      "target_file": "cmd/steerline/native_task_test.go",
+      "source_package": "cmd/steerline",
+      "target_package": "cmd/steerline",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs",
+          "new_parent": "TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "name": "CM71 control keeps original request and client close preserves service"
+            },
+            {
+              "name": "CM72 actual console shares product adapter and original receipt"
+            }
+          ],
+          "new_subtests": [
+            {
+              "name": "CM71 control keeps original request and client close preserves service"
+            },
+            {
+              "name": "CM72 actual console shares product adapter and original receipt"
+            }
+          ],
+          "assertion_owner": "cmd/steerline",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/coreboundary/execution_boundary_test.go",
+      "target_file": "internal/coreboundary/execution_boundary_test.go",
+      "source_package": "internal/coreboundary",
+      "target_package": "internal/coreboundary",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestTM04ExecutionBoundary",
+          "new_parent": "TestTM04ExecutionBoundary",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "fixture.name"
+            },
+            {
+              "name": "repository_all_tags_windows_linux"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "fixture.name"
+            },
+            {
+              "name": "repository_all_tags_windows_linux"
+            }
+          ],
+          "assertion_owner": "internal/coreboundary",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestTM04ConsoleQueryBoundary",
+          "new_parent": "TestTM04ConsoleQueryBoundary",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "strings.TrimPrefix(dependency"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "strings.TrimPrefix(dependency"
+            }
+          ],
+          "assertion_owner": "internal/coreboundary",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": null,
+          "new_parent": "TestTM06AdapterBoundary",
+          "status": "added",
+          "old_subtests": [],
+          "new_subtests": [
+            {
+              "name": "execution"
+            },
+            {
+              "name": "task"
+            },
+            {
+              "name": "storage/ports"
+            },
+            {
+              "name": "database/sql"
+            },
+            {
+              "name": "steerline/sqlite"
+            },
+            {
+              "name": "steerline/testprotocol"
+            },
+            {
+              "name": "steerlineapp"
+            },
+            {
+              "name": "steerline/console"
+            },
+            {
+              "name": "product/api"
+            },
+            {
+              "name": "steerline/taskview"
+            },
+            {
+              "name": "transitive_helper"
+            },
+            {
+              "name": "backend_resources_and_protocol_are_allowed"
+            }
+          ],
+          "assertion_owner": "internal/coreboundary",
+          "assertions": "new TM06 source/resource boundary assertions"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/execution/business_fixture_test.go",
+      "target_file": "internal/execution/business_fixture_test.go",
+      "source_package": "internal/execution",
+      "target_package": "internal/execution",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/execution/business_ports_fixture_test.go",
+      "target_file": "internal/execution/business_ports_fixture_test.go",
+      "source_package": "internal/execution",
+      "target_package": "internal/execution",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/execution/native_dag_commands_test.go",
+      "target_file": "internal/execution/native_dag_commands_test.go",
+      "source_package": "internal/execution",
+      "target_package": "internal/execution",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestTaskBatchDeterministicCyclePath",
+          "new_parent": "TestTaskBatchDeterministicCyclePath",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCreateTaskBatchAtomicIdempotentAndQueryable",
+          "new_parent": "TestCreateTaskBatchAtomicIdempotentAndQueryable",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCreateTaskBatchRollsBackEveryWriteWhenEdgeInsertFails",
+          "new_parent": "TestCreateTaskBatchRollsBackEveryWriteWhenEdgeInsertFails",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestNativeCommandsRejectConfigurationBindingDriftBeforeSideEffects",
+          "new_parent": "TestNativeCommandsRejectConfigurationBindingDriftBeforeSideEffects",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestTaskBatchRejectsDuplicateAndCrossProjectDependencies",
+          "new_parent": "TestTaskBatchRejectsDuplicateAndCrossProjectDependencies",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestTaskDependencyStateRequiresEveryPredecessorDelivery",
+          "new_parent": "TestTaskDependencyStateRequiresEveryPredecessorDelivery",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "tc.name"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "tc.name"
+            }
+          ],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestNativeClaimAllowsManualParallelButKeepsAutoSlot",
+          "new_parent": "TestNativeClaimAllowsManualParallelButKeepsAutoSlot",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge",
+          "new_parent": "TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation",
+          "new_parent": "TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof",
+          "new_parent": "TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent",
+          "new_parent": "TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity",
+          "new_parent": "TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/execution/publication_policy_test.go",
+      "target_file": "internal/execution/publication_policy_test.go",
+      "source_package": "internal/execution",
+      "target_package": "internal/execution",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestPublicationPolicyFrozenConfigurationAndCredentials",
+          "new_parent": "TestPublicationPolicyFrozenConfigurationAndCredentials",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestRetiredPublicationMetadataRejected",
+          "new_parent": "TestRetiredPublicationMetadataRejected",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestPublicationOriginalProviderAfterRestartAndRemoteDrift",
+          "new_parent": "TestPublicationOriginalProviderAfterRestartAndRemoteDrift",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/execution/service_ports_fixture_test.go",
+      "target_file": "internal/execution/service_ports_fixture_test.go",
+      "source_package": "internal/execution",
+      "target_package": "internal/execution",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/execution/service_test.go",
+      "target_file": "internal/execution/service_test.go",
+      "source_package": "internal/execution",
+      "target_package": "internal/execution",
+      "rename_status": "M",
+      "harness_functions": [
+        "TestMain"
+      ],
+      "parents": [
+        {
+          "old_parent": "TestProjectRuntimeOmitsSettledDiscardedRuns",
+          "new_parent": "TestProjectRuntimeOmitsSettledDiscardedRuns",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestIdleServiceDoesNotPublishOnNoOpPolls",
+          "new_parent": "TestIdleServiceDoesNotPublishOnNoOpPolls",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/execution/worker_delivery_test.go",
+      "target_file": "internal/execution/worker_delivery_test.go",
+      "source_package": "internal/execution",
+      "target_package": "internal/execution",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor",
+          "new_parent": "TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged",
+          "new_parent": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "name"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "name"
+            }
+          ],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestWorkerFlowClaimNeedsNoProjectSteps",
+          "new_parent": "TestWorkerFlowClaimNeedsNoProjectSteps",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/execution/worker_pr_binding_test.go",
+      "target_file": "internal/execution/worker_pr_binding_test.go",
+      "source_package": "internal/execution",
+      "target_package": "internal/execution",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestWorkerPRBindingUsesProviderAndRetainsSession",
+          "new_parent": "TestWorkerPRBindingUsesProviderAndRetainsSession",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/execution/worker_publish_local_test.go",
+      "target_file": "internal/execution/worker_publish_local_test.go",
+      "source_package": "internal/execution",
+      "target_package": "internal/execution",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/backend_test.go",
+      "target_file": "internal/execution/adapters/codex/backend_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestPrepareSessionRetainsPartialProcessReceiptOnWriteFailure",
+          "new_parent": "TestPrepareSessionRetainsPartialProcessReceiptOnWriteFailure",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestPrepareSessionRejectsInvalidSettingsBeforeAnySideEffect",
+          "new_parent": "TestPrepareSessionRejectsInvalidSettingsBeforeAnySideEffect",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/binding_isolation_cd67_test.go",
+      "target_file": "internal/execution/adapters/codex/binding_isolation_cd67_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R098",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCD63BindingCodecIsolation",
+          "new_parent": "TestCD63BindingCodecIsolation",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "name": "duplicate binding is an error"
+            },
+            {
+              "name": "codec must belong to protocol"
+            },
+            {
+              "name": "seed cannot stand in for a bound process"
+            },
+            {
+              "name": "native coordinator must match the target"
+            }
+          ],
+          "new_subtests": [
+            {
+              "name": "duplicate binding is an error"
+            },
+            {
+              "name": "codec must belong to protocol"
+            },
+            {
+              "name": "seed cannot stand in for a bound process"
+            },
+            {
+              "name": "native coordinator must match the target"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/capability_test.go",
+      "target_file": "internal/execution/adapters/codex/capability_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestProbeRejectsVersionMismatchBeforeManagedStart",
+          "new_parent": "TestProbeRejectsVersionMismatchBeforeManagedStart",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestProbePreservesHistoryFailureBeforeManagedStart",
+          "new_parent": "TestProbePreservesHistoryFailureBeforeManagedStart",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/command_test.go",
+      "target_file": "internal/execution/adapters/codex/command_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestManagedOrcaLaunchFreezesPermissionsAndRejectsArgs",
+          "new_parent": "TestManagedOrcaLaunchFreezesPermissionsAndRejectsArgs",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestManagedCommandIndependentEffortAndOrderedPermissionArgs",
+          "new_parent": "TestManagedCommandIndependentEffortAndOrderedPermissionArgs",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/conversation_adapter_test.go",
+      "target_file": "internal/execution/adapters/codex/conversation_adapter_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestConversationHistoryProtocolHelper",
+          "new_parent": "TestConversationHistoryProtocolHelper",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestHistoryDiscoveryRejectsWorkspaceReplacementAndKeepsSourceAttempts",
+          "new_parent": "TestHistoryDiscoveryRejectsWorkspaceReplacementAndKeepsSourceAttempts",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestHistoryDiscoveryDeclaresHostVersionRequirement",
+          "new_parent": "TestHistoryDiscoveryDeclaresHostVersionRequirement",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestHistoryAdapterRejectsOversizedNativeCursor",
+          "new_parent": "TestHistoryAdapterRejectsOversizedNativeCursor",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestHistoryPageCandidateIsRecreatedAfterDiscardAndLateFinalKeepsTurnIdentity",
+          "new_parent": "TestHistoryPageCandidateIsRecreatedAfterDiscardAndLateFinalKeepsTurnIdentity",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestHistoryPositionCannotCrossItsOriginalBinding",
+          "new_parent": "TestHistoryPositionCannotCrossItsOriginalBinding",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "field"
+            },
+            {
+              "expression": "field"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "field"
+            },
+            {
+              "expression": "field"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestHistoryReadRejectsReplacedProjectBeforeOpeningClient",
+          "new_parent": "TestHistoryReadRejectsReplacedProjectBeforeOpeningClient",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/conversation_test.go",
+      "target_file": "internal/execution/adapters/codex/conversation_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestConversationMapperKeepsTurnAndPhaseEvidenceExplicit",
+          "new_parent": "TestConversationMapperKeepsTurnAndPhaseEvidenceExplicit",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestConversationMapperPreservesMissingSnapshotAndExplicitEmptyFinal",
+          "new_parent": "TestConversationMapperPreservesMissingSnapshotAndExplicitEmptyFinal",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestConversationMapperNativeTwoTurnFixture",
+          "new_parent": "TestConversationMapperNativeTwoTurnFixture",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestHistoryTerminalOutcomeFixturesKeepFailureAndCancellationDistinct",
+          "new_parent": "TestHistoryTerminalOutcomeFixturesKeepFailureAndCancellationDistinct",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/event_test.go",
+      "target_file": "internal/execution/adapters/codex/event_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R099",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestDecodeQuestionsKeepsCenterActionsOutOfNativeContent",
+          "new_parent": "TestDecodeQuestionsKeepsCenterActionsOutOfNativeContent",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCD62NativeFactsAndQuestionRoute",
+          "new_parent": "TestCD62NativeFactsAndQuestionRoute",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "tc.name"
+            },
+            {
+              "name": "TestAppServerRecoveryReplaysOnlyUnresolvedQuestion"
+            },
+            {
+              "name": "TestAppServerAnswerEvidenceRequiresMatchingNativeContent"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "tc.name"
+            },
+            {
+              "name": "TestAppServerRecoveryReplaysOnlyUnresolvedQuestion"
+            },
+            {
+              "name": "TestAppServerAnswerEvidenceRequiresMatchingNativeContent"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/executable_test.go",
+      "target_file": "internal/execution/adapters/codex/executable_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestAppServerLaunchBindsNativeExecutable",
+          "new_parent": "TestAppServerLaunchBindsNativeExecutable",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/journal_test.go",
+      "target_file": "internal/execution/adapters/codex/journal_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestPrepareTurnNeverOverwritesOriginalJournal",
+          "new_parent": "TestPrepareTurnNeverOverwritesOriginalJournal",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/launch_test.go",
+      "target_file": "internal/execution/adapters/codex/launch_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestLaunchServerFixesWindowsSandboxBeforeStarting",
+          "new_parent": "TestLaunchServerFixesWindowsSandboxBeforeStarting",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/lifecycle_test.go",
+      "target_file": "internal/execution/adapters/codex/lifecycle_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestStartTurnFailureRetainsOriginalSessionIdentity",
+          "new_parent": "TestStartTurnFailureRetainsOriginalSessionIdentity",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "map[bool]string{false: \"resume_failure\""
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "map[bool]string{false: \"resume_failure\""
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/linked_workspace_cd67_test.go",
+      "target_file": "internal/execution/adapters/codex/linked_workspace_cd67_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R090",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCodexLinkedWorktreeWriteArgsOnlyGrantsFixedGitPaths",
+          "new_parent": "TestCodexLinkedWorktreeWriteArgsOnlyGrantsFixedGitPaths",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/mock_helper_cd67_test.go",
+      "target_file": "internal/execution/adapters/codex/mock_helper_cd67_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestWorkerFlowMockCodexHelper",
+          "new_parent": "TestWorkerFlowMockCodexHelper",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/native_params_test.go",
+      "target_file": "internal/execution/adapters/codex/native_params_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestAppServerLaunchPreservesConfiguredArgs",
+          "new_parent": "TestAppServerLaunchPreservesConfiguredArgs",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestTurnStartParamsKeepApprovalAndWritableRoots",
+          "new_parent": "TestTurnStartParamsKeepApprovalAndWritableRoots",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/outcome_cd67_test.go",
+      "target_file": "internal/execution/adapters/codex/outcome_cd67_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestWorkerTurnFindsPRBeforeFinalMessage",
+          "new_parent": "TestWorkerTurnFindsPRBeforeFinalMessage",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/params_test.go",
+      "target_file": "internal/execution/adapters/codex/params_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestTurnParamsRejectsUnboundCommandBeforeWorkspaceProbe",
+          "new_parent": "TestTurnParamsRejectsUnboundCommandBeforeWorkspaceProbe",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/permissions_test.go",
+      "target_file": "internal/execution/adapters/codex/permissions_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestGitPermissionLinkedWorktreeWriteArgsCompilesOnlyResolvedDirectories",
+          "new_parent": "TestGitPermissionLinkedWorktreeWriteArgsCompilesOnlyResolvedDirectories",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/policy_test.go",
+      "target_file": "internal/execution/adapters/codex/policy_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestExplicitHostPolicyMapsBothWindowsWorkersToFullAccess",
+          "new_parent": "TestExplicitHostPolicyMapsBothWindowsWorkersToFullAccess",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestProjectPolicyCompilerSupportsOnlyVerifiedTargetMappings",
+          "new_parent": "TestProjectPolicyCompilerSupportsOnlyVerifiedTargetMappings",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "tc.host+\"-\"+tc.mode"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "tc.host+\"-\"+tc.mode"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestProjectPolicyRejectsAllManagedOverridesBeforeNativeCalls",
+          "new_parent": "TestProjectPolicyRejectsAllManagedOverridesBeforeNativeCalls",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestNetworkDenyRejectsLiveSearchAndDisablesInheritedSearch",
+          "new_parent": "TestNetworkDenyRejectsLiveSearchAndDisablesInheritedSearch",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/profile_config_cd63_test.go",
+      "target_file": "internal/execution/adapters/codex/profile_config_cd63_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCD63CodecIdentityAndVersion",
+          "new_parent": "TestCD63CodecIdentityAndVersion",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "name": "shared_question_envelope"
+            },
+            {
+              "name": "binding endpoint validated before connection"
+            }
+          ],
+          "new_subtests": [
+            {
+              "name": "shared_question_envelope"
+            },
+            {
+              "name": "binding endpoint validated before connection"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/reattach_receipt_cd67_test.go",
+      "target_file": "internal/execution/adapters/codex/reattach_receipt_cd67_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R098",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt",
+          "new_parent": "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "name"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "name"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/stream_contract_cd67_test.go",
+      "target_file": "internal/execution/adapters/codex/stream_contract_cd67_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R095",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestAppServerOutcomeUsesNativeTurnAndEarlierPRItem",
+          "new_parent": "TestAppServerOutcomeUsesNativeTurnAndEarlierPRItem",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestMockAppServerThreadAndTurnContract",
+          "new_parent": "TestMockAppServerThreadAndTurnContract",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexworker/windows_sandbox_test.go",
+      "target_file": "internal/execution/adapters/codex/windows_sandbox_test.go",
+      "source_package": "internal/steerline/codexworker",
+      "target_package": "internal/execution/adapters/codex",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestLocalWindowsSandboxArgs",
+          "new_parent": "TestLocalWindowsSandboxArgs",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "tc.name"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "tc.name"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/codex",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/agent_detection_cd67_test.go",
+      "target_file": "internal/execution/adapters/orca/agent_detection_cd67_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess",
+          "new_parent": "TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost",
+          "new_parent": "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/binding_test.go",
+      "target_file": "internal/execution/adapters/orca/binding_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestBindAgentPendingDetectionDoesNotAcceptAnotherAgentOrWorkspace",
+          "new_parent": "TestBindAgentPendingDetectionDoesNotAcceptAnotherAgentOrWorkspace",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestVerifyAgentTerminalWaitsOnlyForOriginalAgentDetection",
+          "new_parent": "TestVerifyAgentTerminalWaitsOnlyForOriginalAgentDetection",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "change"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "change"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/candidate_history_test.go",
+      "target_file": "internal/execution/adapters/orca/candidate_history_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R092",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCandidateSessionLaunchKeepsOriginalHistoryIntentAndPolicy",
+          "new_parent": "TestCandidateSessionLaunchKeepsOriginalHistoryIntentAndPolicy",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/client_test.go",
+      "target_file": "internal/execution/adapters/orca/client_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestBoundTerminalGateReleasesCanceledWaiter",
+          "new_parent": "TestBoundTerminalGateReleasesCanceledWaiter",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestTerminalObservationRejectsFailedTransportWithValidPayload",
+          "new_parent": "TestTerminalObservationRejectsFailedTransportWithValidPayload",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestMutationRejectionDoesNotHideTransportTimeout",
+          "new_parent": "TestMutationRejectionDoesNotHideTransportTimeout",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "code"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "code"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/command_test.go",
+      "target_file": "internal/execution/adapters/orca/command_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestWrapAgentCommandPreservesIndependentArguments",
+          "new_parent": "TestWrapAgentCommandPreservesIndependentArguments",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/conversation_test.go",
+      "target_file": "internal/execution/adapters/orca/conversation_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestTerminalWaitMapsAsHostFactWithoutBusinessInput",
+          "new_parent": "TestTerminalWaitMapsAsHostFactWithoutBusinessInput",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/dispatch_submit_test.go",
+      "target_file": "internal/execution/adapters/orca/dispatch_submit_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestPromptSubmissionRequiresMatchingPendingPaste",
+          "new_parent": "TestPromptSubmissionRequiresMatchingPendingPaste",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/event_test.go",
+      "target_file": "internal/execution/adapters/orca/event_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCD62NativeFactsAndQuestionRoute",
+          "new_parent": "TestCD62NativeFactsAndQuestionRoute",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "name": "TestNativeOrcaRejectsLateDispatchMessages"
+            },
+            {
+              "name": "replayed_question_matches_normalized_saved_content"
+            }
+          ],
+          "new_subtests": [
+            {
+              "name": "TestNativeOrcaRejectsLateDispatchMessages"
+            },
+            {
+              "name": "replayed_question_matches_normalized_saved_content"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/host_wait_live_cd67_test.go",
+      "target_file": "internal/execution/adapters/orca/host_wait_live_cd67_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R098",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestOrcaNativeHostWait",
+          "new_parent": "TestOrcaNativeHostWait",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/identity_cd67_test.go",
+      "target_file": "internal/execution/adapters/orca/identity_cd67_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity",
+          "new_parent": "TestWorkerOrcaWorktreeNameIncludesTaskNumberAndRunIdentity",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation",
+          "new_parent": "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/inventory_test.go",
+      "target_file": "internal/execution/adapters/orca/inventory_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestFindRunRejectsDuplicateRecoveryIdentityAcrossPages",
+          "new_parent": "TestFindRunRejectsDuplicateRecoveryIdentityAcrossPages",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestFindTaskRejectsIncompleteInventory",
+          "new_parent": "TestFindTaskRejectsIncompleteInventory",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestRecoveredDispatchRequiresExactInjectedIdentity",
+          "new_parent": "TestRecoveredDispatchRequiresExactInjectedIdentity",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestListTerminalsRejectsMissingRuntime",
+          "new_parent": "TestListTerminalsRejectsMissingRuntime",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/lifecycle_test.go",
+      "target_file": "internal/execution/adapters/orca/lifecycle_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R099",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCleanupProgressRequiresConfirmedOriginalResource",
+          "new_parent": "TestCleanupProgressRequiresConfirmedOriginalResource",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestNativeLifecyclePlansCommittedResourcesAndSeparateInput",
+          "new_parent": "TestNativeLifecyclePlansCommittedResourcesAndSeparateInput",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestProbeMutationRunsAsOneDurableLifecycleAction",
+          "new_parent": "TestProbeMutationRunsAsOneDurableLifecycleAction",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/mutation_test.go",
+      "target_file": "internal/execution/adapters/orca/mutation_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestNativeWorktreeReceiptRequiresAgentHandle",
+          "new_parent": "TestNativeWorktreeReceiptRequiresAgentHandle",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestFixedAgentTerminalReceiptRequiresOriginalWorktree",
+          "new_parent": "TestFixedAgentTerminalReceiptRequiresOriginalWorktree",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/orchestration_test.go",
+      "target_file": "internal/execution/adapters/orca/orchestration_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCreateRunDistinguishesUncertainCallFromInvalidReceipt",
+          "new_parent": "TestCreateRunDistinguishesUncertainCallFromInvalidReceipt",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestDispatchReceiptRejectsAnotherTask",
+          "new_parent": "TestDispatchReceiptRejectsAnotherTask",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestReplyQuestionRejectsWrongDispatch",
+          "new_parent": "TestReplyQuestionRejectsWrongDispatch",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestSendFeedbackPreservesInactiveDispatchCode",
+          "new_parent": "TestSendFeedbackPreservesInactiveDispatchCode",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/output_test.go",
+      "target_file": "internal/execution/adapters/orca/output_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestReadWorkerOutputResetsChangedSourceCursorOnce",
+          "new_parent": "TestReadWorkerOutputResetsChangedSourceCursorOnce",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestVerifySettledDispatchRejectsReplacedTerminal",
+          "new_parent": "TestVerifySettledDispatchRejectsReplacedTerminal",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestReadWorkerOutputUpgradesPinnedTerminalToLateTranscript",
+          "new_parent": "TestReadWorkerOutputUpgradesPinnedTerminalToLateTranscript",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/profile_config_cd63_test.go",
+      "target_file": "internal/execution/adapters/orca/profile_config_cd63_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCD63CodecIdentityAndVersion",
+          "new_parent": "TestCD63CodecIdentityAndVersion",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "name": "shared_question_envelope"
+            }
+          ],
+          "new_subtests": [
+            {
+              "name": "shared_question_envelope"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/readiness_test.go",
+      "target_file": "internal/execution/adapters/orca/readiness_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestProbeContentBuildIsPureAndWritesAreExplicit",
+          "new_parent": "TestProbeContentBuildIsPureAndWritesAreExplicit",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestReadinessEvidenceUsesActualPlatformToolBlocks",
+          "new_parent": "TestReadinessEvidenceUsesActualPlatformToolBlocks",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "name"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "name"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestAgentInputNeverTargetsTrustMenuOrParentShell",
+          "new_parent": "TestAgentInputNeverTargetsTrustMenuOrParentShell",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "tc.name"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "tc.name"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestProbeInitializationFailureCannotBeOverwrittenByRetry",
+          "new_parent": "TestProbeInitializationFailureCannotBeOverwrittenByRetry",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestActualSavedCommandWrapperProvidesProbeEvidence",
+          "new_parent": "TestActualSavedCommandWrapperProvidesProbeEvidence",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestActualStringifiedCommandWrapperProvidesProbeEvidence",
+          "new_parent": "TestActualStringifiedCommandWrapperProvidesProbeEvidence",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestBusinessToolFactsRequireCurrentTaskAndActualCommand",
+          "new_parent": "TestBusinessToolFactsRequireCurrentTaskAndActualCommand",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "tc.name"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "tc.name"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestProjectedCommandOutputOnlyProvesBusinessAttempt",
+          "new_parent": "TestProjectedCommandOutputOnlyProvesBusinessAttempt",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestReadinessReceiptRejectsStaleAndEscapingFiles",
+          "new_parent": "TestReadinessReceiptRejectsStaleAndEscapingFiles",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "name"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "name"
+            }
+          ],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestProbeEvidenceAcceptsNativeExecPragmaWithoutChangingCommand",
+          "new_parent": "TestProbeEvidenceAcceptsNativeExecPragmaWithoutChangingCommand",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/relay_binding_test.go",
+      "target_file": "internal/execution/adapters/orca/relay_binding_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestDoneRequestBindsCurrentTurn",
+          "new_parent": "TestDoneRequestBindsCurrentTurn",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/relay_lifecycle_test.go",
+      "target_file": "internal/execution/adapters/orca/relay_lifecycle_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestRelayReconciliationIgnoresOtherTurnHistory",
+          "new_parent": "TestRelayReconciliationIgnoresOtherTurnHistory",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestSecondTurnRelayIsStillProposedAfterFirstReport",
+          "new_parent": "TestSecondTurnRelayIsStillProposedAfterFirstReport",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/relay_test.go",
+      "target_file": "internal/execution/adapters/orca/relay_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestEnsureRelayIgnoredIsIdempotent",
+          "new_parent": "TestEnsureRelayIgnoredIsIdempotent",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orcaworker/terminal_backend_cd67_test.go",
+      "target_file": "internal/execution/adapters/orca/terminal_backend_cd67_test.go",
+      "source_package": "internal/steerline/orcaworker",
+      "target_package": "internal/execution/adapters/orca",
+      "rename_status": "R099",
+      "harness_functions": [
+        "TestMain"
+      ],
+      "parents": [
+        {
+          "old_parent": "TestOrcaTerminalExitCauseConfirmsCommandExit",
+          "new_parent": "TestOrcaTerminalExitCauseConfirmsCommandExit",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestOrcaStopExecutionConfirmsFixedTerminalExit",
+          "new_parent": "TestOrcaStopExecutionConfirmsFixedTerminalExit",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestOrcaStopFailureDoesNotConfirmExit",
+          "new_parent": "TestOrcaStopFailureDoesNotConfirmExit",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestSlowOrcaObservationDoesNotBlockOtherRefStop",
+          "new_parent": "TestSlowOrcaObservationDoesNotBlockOtherRefStop",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestOrcaSameRefObservationsDoNotOverlapOrLeakGate",
+          "new_parent": "TestOrcaSameRefObservationsDoNotOverlapOrLeakGate",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestOrcaObservationRejectsReplacedIncarnationAndConnection",
+          "new_parent": "TestOrcaObservationRejectsReplacedIncarnationAndConnection",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orca",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orca_remote_worker/cancellation_config_cd67_test.go",
+      "target_file": "internal/execution/adapters/orcaremote/cancellation_config_cd67_test.go",
+      "source_package": "internal/steerline/orca_remote_worker",
+      "target_package": "internal/execution/adapters/orcaremote",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestLoadConfigRequiresExplicitRemoteCancellationFalse",
+          "new_parent": "TestLoadConfigRequiresExplicitRemoteCancellationFalse",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orca_remote_worker/lifecycle_test.go",
+      "target_file": "internal/execution/adapters/orcaremote/lifecycle_test.go",
+      "source_package": "internal/steerline/orca_remote_worker",
+      "target_package": "internal/execution/adapters/orcaremote",
+      "rename_status": "R099",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestLifecyclePlanPersistsWorkspaceAndResourceBoundaries",
+          "new_parent": "TestLifecyclePlanPersistsWorkspaceAndResourceBoundaries",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestLifecyclePreflightRetainsRemotePermissionGate",
+          "new_parent": "TestLifecyclePreflightRetainsRemotePermissionGate",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending",
+          "new_parent": "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox",
+          "new_parent": "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID",
+          "new_parent": "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orca_remote_worker/original_protocol_cd67_test.go",
+      "target_file": "internal/execution/adapters/orcaremote/original_protocol_cd67_test.go",
+      "source_package": "internal/steerline/orca_remote_worker",
+      "target_package": "internal/execution/adapters/orcaremote",
+      "rename_status": "R098",
+      "harness_functions": [
+        "TestMain"
+      ],
+      "parents": [
+        {
+          "old_parent": "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily",
+          "new_parent": "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift",
+          "new_parent": "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch",
+          "new_parent": "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree",
+          "new_parent": "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestSupervisedRunCoordinatorsAreDistinctAndFenced",
+          "new_parent": "TestSupervisedRunCoordinatorsAreDistinctAndFenced",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal",
+          "new_parent": "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall",
+          "new_parent": "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orca_remote_worker/p10_live_cd67_test.go",
+      "target_file": "internal/execution/adapters/orcaremote/p10_live_cd67_test.go",
+      "source_package": "internal/steerline/orca_remote_worker",
+      "target_package": "internal/execution/adapters/orcaremote",
+      "rename_status": "R096",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestSupervisedOrcaRealP10ReplyGate",
+          "new_parent": "TestSupervisedOrcaRealP10ReplyGate",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orca_remote_worker/profile_config_cd63_test.go",
+      "target_file": "internal/execution/adapters/orcaremote/profile_config_cd63_test.go",
+      "source_package": "internal/steerline/orca_remote_worker",
+      "target_package": "internal/execution/adapters/orcaremote",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCD63CodecIdentityAndVersion",
+          "new_parent": "TestCD63CodecIdentityAndVersion",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orca_remote_worker/version_test.go",
+      "target_file": "internal/execution/adapters/orcaremote/version_test.go",
+      "source_package": "internal/steerline/orca_remote_worker",
+      "target_package": "internal/execution/adapters/orcaremote",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestOrcaVersionFamilyUsesMajorMinorOnly",
+          "new_parent": "TestOrcaVersionFamilyUsesMajorMinorOnly",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/orca_remote_worker/worker_test.go",
+      "target_file": "internal/execution/adapters/orcaremote/worker_test.go",
+      "source_package": "internal/steerline/orca_remote_worker",
+      "target_package": "internal/execution/adapters/orcaremote",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestRemoteContinuationRequiresOriginalPeerAndTerminal",
+          "new_parent": "TestRemoteContinuationRequiresOriginalPeerAndTerminal",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestRemoteWorkspaceKeepsPeerPathAndRuntime",
+          "new_parent": "TestRemoteWorkspaceKeepsPeerPathAndRuntime",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestRemoteReplyRejectsOversizeWithoutMutation",
+          "new_parent": "TestRemoteReplyRejectsOversizeWithoutMutation",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/orcaremote",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexapp/params_test.go",
+      "target_file": "internal/execution/adapters/protocol/codexapp/params_test.go",
+      "source_package": "internal/steerline/codexapp",
+      "target_package": "internal/execution/adapters/protocol/codexapp",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestAskToolResponseUsesNativeAnswerEnvelope",
+          "new_parent": "TestAskToolResponseUsesNativeAnswerEnvelope",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/protocol/codexapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/codexapp/transport_test.go",
+      "target_file": "internal/execution/adapters/protocol/codexapp/transport_test.go",
+      "source_package": "internal/steerline/codexapp",
+      "target_package": "internal/execution/adapters/protocol/codexapp",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCodexAppCallCancellationInterruptsBlockedWrite",
+          "new_parent": "TestCodexAppCallCancellationInterruptsBlockedWrite",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/protocol/codexapp",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCodexSocketHandshakeHonorsCancellationWithoutDeadline",
+          "new_parent": "TestCodexSocketHandshakeHonorsCancellationWithoutDeadline",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/protocol/codexapp",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCodexSocketLoopbackHandshakeAndMaskedJSON",
+          "new_parent": "TestCodexSocketLoopbackHandshakeAndMaskedJSON",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/adapters/protocol/codexapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/publication/policy_test.go",
+      "target_file": "internal/execution/publication/policy_test.go",
+      "source_package": "internal/steerline/publication",
+      "target_package": "internal/execution/publication",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestPublicationPolicyValidatesProviderValues",
+          "new_parent": "TestPublicationPolicyValidatesProviderValues",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/publication",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestPublicationSecretsRejectedBeforeFreeze",
+          "new_parent": "TestPublicationSecretsRejectedBeforeFreeze",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/publication",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/publication/pr_test.go",
+      "target_file": "internal/execution/publication/pr_test.go",
+      "source_package": "internal/steerline/publication",
+      "target_package": "internal/execution/publication",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestPRRequiresExactIdentityAndMergeEvidence",
+          "new_parent": "TestPRRequiresExactIdentityAndMergeEvidence",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "bad"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "bad"
+            }
+          ],
+          "assertion_owner": "internal/execution/publication",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestPRURLsAndRemotes",
+          "new_parent": "TestPRURLsAndRemotes",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/publication",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestWorkerPRIdentityRequiresExecutionBranch",
+          "new_parent": "TestWorkerPRIdentityRequiresExecutionBranch",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "name"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "name"
+            }
+          ],
+          "assertion_owner": "internal/execution/publication",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestGiteaQueryReadsPRHeadIdentity",
+          "new_parent": "TestGiteaQueryReadsPRHeadIdentity",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/publication",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestPRCloseUsesExactGiteaIdentityAndReturnsClosedReceipt",
+          "new_parent": "TestPRCloseUsesExactGiteaIdentityAndReturnsClosedReceipt",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/publication",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCommandProviderErrorsRedactReferencedCredential",
+          "new_parent": "TestCommandProviderErrorsRedactReferencedCredential",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/publication",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestUnsupportedProviderDoesNoNetworkOperation",
+          "new_parent": "TestUnsupportedProviderDoesNoNetworkOperation",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/publication",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/workspace/workspace_test.go",
+      "target_file": "internal/execution/workspace/workspace_test.go",
+      "source_package": "internal/steerline/workspace",
+      "target_package": "internal/execution/workspace",
+      "rename_status": "R100",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestLocalWorkspacePrepareInspectResourcesAndCleanup",
+          "new_parent": "TestLocalWorkspacePrepareInspectResourcesAndCleanup",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/workspace",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestPrepareRejectsHeadChangedByCheckoutHook",
+          "new_parent": "TestPrepareRejectsHeadChangedByCheckoutHook",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/execution/workspace",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/business_fixture_test.go",
+      "target_file": "internal/steerline/business_fixture_test.go",
+      "source_package": "internal/steerline",
+      "target_package": "internal/steerline",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/business_ports_fixture_test.go",
+      "target_file": "internal/steerline/business_ports_fixture_test.go",
+      "source_package": "internal/steerline",
+      "target_package": "internal/steerline",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/host_fixture_support_test.go",
+      "target_file": "internal/steerline/host_fixture_support_test.go",
+      "source_package": "internal/steerline",
+      "target_package": "internal/steerline",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/host_shared_native_dag_commands_test.go",
+      "target_file": "internal/steerline/host_shared_native_dag_commands_test.go",
+      "source_package": "internal/steerline",
+      "target_package": "internal/steerline",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/host_shared_service_test.go",
+      "target_file": "internal/steerline/host_shared_service_test.go",
+      "source_package": "internal/steerline",
+      "target_package": "internal/steerline",
+      "rename_status": "M",
+      "harness_functions": [
+        "TestMain"
+      ],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/service_ports_fixture_test.go",
+      "target_file": "internal/steerline/service_ports_fixture_test.go",
+      "source_package": "internal/steerline",
+      "target_package": "internal/steerline",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerline/integration/cli_test.go",
+      "target_file": "internal/steerline/integration/cli_test.go",
+      "source_package": "internal/steerline/integration",
+      "target_package": "internal/steerline/integration",
+      "rename_status": "M",
+      "harness_functions": [
+        "TestMain"
+      ],
+      "parents": [
+        {
+          "old_parent": "TestCLIRejectsLegacyTaskAuthorityBeforeStateInitialization",
+          "new_parent": "TestCLIRejectsLegacyTaskAuthorityBeforeStateInitialization",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerline/integration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead",
+          "new_parent": "TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerline/integration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/agent_selection_cd67_test.go",
+      "target_file": "internal/steerlineapp/agent_selection_cd67_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestNativeOrcaAgentSelectionUsesFrozenProfile",
+          "new_parent": "TestNativeOrcaAgentSelectionUsesFrozenProfile",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/client_boundary_test.go",
+      "target_file": "internal/steerlineapp/client_boundary_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCM71ProductDependencyBoundary",
+          "new_parent": "TestCM71ProductDependencyBoundary",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/client_profile_test.go",
+      "target_file": "internal/steerlineapp/client_profile_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCLIExecutionProfileIsBoundIntoStartTaskRequest",
+          "new_parent": "TestCLIExecutionProfileIsBoundIntoStartTaskRequest",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/config_backend_test.go",
+      "target_file": "internal/steerlineapp/config_backend_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestConfigKeepsOrcaCodexNativeByDefault",
+          "new_parent": "TestConfigKeepsOrcaCodexNativeByDefault",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestConfigRejectsRemovedOrcaFallback",
+          "new_parent": "TestConfigRejectsRemovedOrcaFallback",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestConfigRequiresAnExplicitTaskAuthority",
+          "new_parent": "TestConfigRequiresAnExplicitTaskAuthority",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestConfigRejectsRetiredBeadsExecutionFields",
+          "new_parent": "TestConfigRejectsRetiredBeadsExecutionFields",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestTerminalFullAccessProfileKeepsReadinessAndFrozenAuthority",
+          "new_parent": "TestTerminalFullAccessProfileKeepsReadinessAndFrozenAuthority",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/config_fixture_test.go",
+      "target_file": "internal/steerlineapp/config_fixture_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/core_decoupling_66_test.go",
+      "target_file": "internal/steerlineapp/core_decoupling_66_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCD66ExplicitCatalogAndEntrypoints",
+          "new_parent": "TestCD66ExplicitCatalogAndEntrypoints",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "name": "missing_directory_and_ports_reject_before_state"
+            },
+            {
+              "name": "duplicate_keys_versions_and_missing_capability"
+            },
+            {
+              "name": "unknown_key_version_and_duplicate_input_reject_before_target"
+            },
+            {
+              "name": "two_instances_keep_factories_config_and_returned_slices_independent"
+            },
+            {
+              "name": "config_loader_rejects_missing_key_before_repository_probe"
+            },
+            {
+              "name": "publication_support_uses_the_selected_catalog"
+            }
+          ],
+          "new_subtests": [
+            {
+              "name": "missing_directory_and_ports_reject_before_state"
+            },
+            {
+              "name": "duplicate_keys_versions_and_missing_capability"
+            },
+            {
+              "name": "unknown_key_version_and_duplicate_input_reject_before_target"
+            },
+            {
+              "name": "two_instances_keep_factories_config_and_returned_slices_independent"
+            },
+            {
+              "name": "config_loader_rejects_missing_key_before_repository_probe"
+            },
+            {
+              "name": "publication_support_uses_the_selected_catalog"
+            }
+          ],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/execution_policy_live_cd67_test.go",
+      "target_file": "internal/steerlineapp/execution_policy_live_cd67_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestExecutionPolicyNativeToolsLive",
+          "new_parent": "TestExecutionPolicyNativeToolsLive",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestExecutionPolicyNativeToolsCollectLive",
+          "new_parent": "TestExecutionPolicyNativeToolsCollectLive",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/full_access_freeze_cd67_test.go",
+      "target_file": "internal/steerlineapp/full_access_freeze_cd67_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestFullAccessProfileFreezeSurvivesClaimValidation",
+          "new_parent": "TestFullAccessProfileFreezeSurvivesClaimValidation",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/global_execution_config_test.go",
+      "target_file": "internal/steerlineapp/global_execution_config_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestGlobalExecutionProfilesSharedAcrossProjects",
+          "new_parent": "TestGlobalExecutionProfilesSharedAcrossProjects",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestProjectExecutionSettingsAreRejected",
+          "new_parent": "TestProjectExecutionSettingsAreRejected",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/local_capability_live_cd67_test.go",
+      "target_file": "internal/steerlineapp/local_capability_live_cd67_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestLiveLocalCapabilityEvidence",
+          "new_parent": "TestLiveLocalCapabilityEvidence",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/local_windows_sandbox_cd67_test.go",
+      "target_file": "internal/steerlineapp/local_windows_sandbox_cd67_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestLocalWindowsSandboxProfileFreezesAndRestores",
+          "new_parent": "TestLocalWindowsSandboxProfileFreezesAndRestores",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/policy_admission_cd67_test.go",
+      "target_file": "internal/steerlineapp/policy_admission_cd67_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestProjectPolicyRejectsMissingOrOldConfiguration",
+          "new_parent": "TestProjectPolicyRejectsMissingOrOldConfiguration",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestProjectPolicyRejectsGlobalConflictsBeforeRepositoryProbe",
+          "new_parent": "TestProjectPolicyRejectsGlobalConflictsBeforeRepositoryProbe",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/policy_snapshot_cd67_test.go",
+      "target_file": "internal/steerlineapp/policy_snapshot_cd67_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority",
+          "new_parent": "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/profile_publication_cd67_test.go",
+      "target_file": "internal/steerlineapp/profile_publication_cd67_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestProfileSelectionDigestMatchesServicePreflight",
+          "new_parent": "TestProfileSelectionDigestMatchesServicePreflight",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestSimplifiedWorkerOnlyPublication",
+          "new_parent": "TestSimplifiedWorkerOnlyPublication",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/profile_selection_cd67_test.go",
+      "target_file": "internal/steerlineapp/profile_selection_cd67_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets",
+          "new_parent": "TestConfigLoadsLocalAndRemoteOrcaProfilesWithoutProbingTargets",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestUnsupportedLocalAgentProfileIsMarkedUnavailable",
+          "new_parent": "TestUnsupportedLocalAgentProfileIsMarkedUnavailable",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/readiness_command_cd67_test.go",
+      "target_file": "internal/steerlineapp/readiness_command_cd67_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions",
+          "new_parent": "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/requirement_tools_cd67_test.go",
+      "target_file": "internal/steerlineapp/requirement_tools_cd67_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestRequirementVersionParsers",
+          "new_parent": "TestRequirementVersionParsers",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestRequirementToolsUseWorkerEnvironment",
+          "new_parent": "TestRequirementToolsUseWorkerEnvironment",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineapp/terminal_preflight_cd67_test.go",
+      "target_file": "internal/steerlineapp/terminal_preflight_cd67_test.go",
+      "source_package": "internal/steerlineapp",
+      "target_package": "internal/steerlineapp",
+      "rename_status": "M",
+      "harness_functions": [
+        "TestMain"
+      ],
+      "parents": [
+        {
+          "old_parent": "TestExecutionBackendCommonCapabilityContract",
+          "new_parent": "TestExecutionBackendCommonCapabilityContract",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestLocalObservationRejectsReusedPIDIdentity",
+          "new_parent": "TestLocalObservationRejectsReusedPIDIdentity",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping",
+          "new_parent": "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineapp",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/additional_implementation_fixture_test.go",
+      "target_file": "internal/steerlineintegration/additional_implementation_fixture_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/candidate_console_test.go",
+      "target_file": "internal/steerlineintegration/candidate_console_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCandidateConsoleWiring",
+          "new_parent": "TestCandidateConsoleWiring",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "name": "merged_PR_service_guard"
+            }
+          ],
+          "new_subtests": [
+            {
+              "name": "merged_PR_service_guard"
+            }
+          ],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/conversation_history_fixture_test.go",
+      "target_file": "internal/steerlineintegration/conversation_history_fixture_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCodexHistoryNativeFixtures",
+          "new_parent": "TestCodexHistoryNativeFixtures",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "string(sample.Backend)"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "string(sample.Backend)"
+            }
+          ],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCodexHistoryRealLocalToolInterleaveFixture",
+          "new_parent": "TestCodexHistoryRealLocalToolInterleaveFixture",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCodexHistoryRealCancelledTurnFixture",
+          "new_parent": "TestCodexHistoryRealCancelledTurnFixture",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCodexHistoryRealFailedTurnFixture",
+          "new_parent": "TestCodexHistoryRealFailedTurnFixture",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCodexHistoryTurnCompletionAndLateFinal",
+          "new_parent": "TestCodexHistoryTurnCompletionAndLateFinal",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCodexHistoryMissingTextDoesNotClaimFinalBody",
+          "new_parent": "TestCodexHistoryMissingTextDoesNotClaimFinalBody",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCodexHistoryCanonicalSourceKeepsRawReadable",
+          "new_parent": "TestCodexHistoryCanonicalSourceKeepsRawReadable",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCodexHistoryBindingCannotChangeAttempt",
+          "new_parent": "TestCodexHistoryBindingCannotChangeAttempt",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/conversation_native_acceptance_test.go",
+      "target_file": "internal/steerlineintegration/conversation_native_acceptance_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCodexHistoryRealFailedAcceptance",
+          "new_parent": "TestCodexHistoryRealFailedAcceptance",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCodexHistoryNativeAcceptance",
+          "new_parent": "TestCodexHistoryNativeAcceptance",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "string(binding.Backend)"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "string(binding.Backend)"
+            }
+          ],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCodexHistoryRealSourceReplacement",
+          "new_parent": "TestCodexHistoryRealSourceReplacement",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/core_decoupling_66_test.go",
+      "target_file": "internal/steerlineintegration/core_decoupling_66_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCD66FixedProfileRecovery",
+          "new_parent": "TestCD66FixedProfileRecovery",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "name": "original_app_server_two_phase_turns"
+            },
+            {
+              "name": "changed_config_keeps_native_original_identity_and_manual_gate"
+            }
+          ],
+          "new_subtests": [
+            {
+              "name": "original_app_server_two_phase_turns"
+            },
+            {
+              "name": "changed_config_keeps_native_original_identity_and_manual_gate"
+            }
+          ],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestCD66ExplicitCatalogAndEntrypoints",
+          "new_parent": "TestCD66ExplicitCatalogAndEntrypoints",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "name": "missing_catalog_claim_rejects_before_target_or_write"
+            },
+            {
+              "name": "offline_persisted_query_and_console_survive_missing_support"
+            },
+            {
+              "name": "capability_evidence_keeps_original_target_and_versions"
+            },
+            {
+              "name": "terminal_evidence_keeps_agent_and_resource_proofs"
+            },
+            {
+              "name": "service_entries_reject_missing_catalog_before_target"
+            }
+          ],
+          "new_subtests": [
+            {
+              "name": "missing_catalog_claim_rejects_before_target_or_write"
+            },
+            {
+              "name": "offline_persisted_query_and_console_survive_missing_support"
+            },
+            {
+              "name": "capability_evidence_keeps_original_target_and_versions"
+            },
+            {
+              "name": "terminal_evidence_keeps_agent_and_resource_proofs"
+            },
+            {
+              "name": "service_entries_reject_missing_catalog_before_target"
+            }
+          ],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/core_decoupling_67_additional_test.go",
+      "target_file": "internal/steerlineintegration/core_decoupling_67_additional_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCD67AdditionalImplementation",
+          "new_parent": "TestCD67AdditionalImplementation",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "name": "neutral_fixed_input_restart_and_fresh_manual_answer"
+            },
+            {
+              "name": "supported_app_server_receipt_barriers"
+            },
+            {
+              "name": "supported_terminal_recovery_and_original_identity"
+            },
+            {
+              "name": "remote_protocol_is_not_permission_authentication"
+            },
+            {
+              "name": "remote_model_and_cancellation_admission"
+            },
+            {
+              "name": "remote_claim_requires_permission_evidence"
+            }
+          ],
+          "new_subtests": [
+            {
+              "name": "neutral_fixed_input_restart_and_fresh_manual_answer"
+            },
+            {
+              "name": "supported_app_server_receipt_barriers"
+            },
+            {
+              "name": "supported_terminal_recovery_and_original_identity"
+            },
+            {
+              "name": "remote_protocol_is_not_permission_authentication"
+            },
+            {
+              "name": "remote_model_and_cancellation_admission"
+            },
+            {
+              "name": "remote_claim_requires_permission_evidence"
+            }
+          ],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/core_decoupling_67_boundary_test.go",
+      "target_file": "internal/steerlineintegration/core_decoupling_67_boundary_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCD67CoreBoundary",
+          "new_parent": "TestCD67CoreBoundary",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "name": "pure_ownership_all_tags_production_and_tests"
+            },
+            {
+              "expression": "owner"
+            },
+            {
+              "name": "negative_source_fixtures"
+            },
+            {
+              "expression": "fixture.name"
+            },
+            {
+              "name": "console_negative_all_tags_production_and_tests"
+            },
+            {
+              "expression": "dependency"
+            },
+            {
+              "name": "transitive_test_helper"
+            },
+            {
+              "name": "repository_all_tags_and_production_graphs"
+            }
+          ],
+          "new_subtests": [
+            {
+              "name": "pure_ownership_all_tags_production_and_tests"
+            },
+            {
+              "expression": "owner"
+            },
+            {
+              "name": "negative_source_fixtures"
+            },
+            {
+              "expression": "fixture.name"
+            },
+            {
+              "name": "console_negative_all_tags_production_and_tests"
+            },
+            {
+              "expression": "dependency"
+            },
+            {
+              "name": "transitive_test_helper"
+            },
+            {
+              "name": "repository_all_tags_and_production_graphs"
+            }
+          ],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/execution_wiring_test.go",
+      "target_file": "internal/steerlineintegration/execution_wiring_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestMC1",
+          "new_parent": "TestMC1",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestMC9",
+          "new_parent": "TestMC9",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestMC7",
+          "new_parent": "TestMC7",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestMC3",
+          "new_parent": "TestMC3",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestMC5",
+          "new_parent": "TestMC5",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestMC6",
+          "new_parent": "TestMC6",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestMC8",
+          "new_parent": "TestMC8",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestTM04ExecutionWiring",
+          "new_parent": "TestTM04ExecutionWiring",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "name": "claim_transaction_failure_and_original_receipt"
+            },
+            {
+              "name": "intent_binding_and_two_original_turns"
+            },
+            {
+              "name": "original_request_ack_and_manual_recovery"
+            }
+          ],
+          "new_subtests": [
+            {
+              "name": "claim_transaction_failure_and_original_receipt"
+            },
+            {
+              "name": "intent_binding_and_two_original_turns"
+            },
+            {
+              "name": "original_request_ack_and_manual_recovery"
+            }
+          ],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": null,
+          "new_parent": "TestTM06ResourceWiringHelper",
+          "status": "added",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "child process helper invoked only by TestTM06ResourceWiring; not a standalone acceptance parent",
+          "role": "subprocess_helper"
+        },
+        {
+          "old_parent": null,
+          "new_parent": "TestTM06ResourceWiring",
+          "status": "added",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "new TM06 source/resource boundary assertions",
+          "role": "acceptance_parent"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/lifecycle_test.go",
+      "target_file": "internal/steerlineintegration/lifecycle_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCD64OriginalSessionReconciliation",
+          "new_parent": "TestCD64OriginalSessionReconciliation",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "name": "remote_admission_stays_blocked"
+            },
+            {
+              "name": "app_server_two_turns"
+            },
+            {
+              "name": "native_original_session_manual_gate"
+            },
+            {
+              "name": "remote_protocol_original_assertions"
+            }
+          ],
+          "new_subtests": [
+            {
+              "name": "remote_admission_stays_blocked"
+            },
+            {
+              "name": "app_server_two_turns"
+            },
+            {
+              "name": "native_original_session_manual_gate"
+            },
+            {
+              "name": "remote_protocol_original_assertions"
+            }
+          ],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/native_environment_cd67_test.go",
+      "target_file": "internal/steerlineintegration/native_environment_cd67_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal",
+          "new_parent": "TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestNativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterRestart",
+          "new_parent": "TestNativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterRestart",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestNativeSourceReplacementRetainsOutputEvidence",
+          "new_parent": "TestNativeSourceReplacementRetainsOutputEvidence",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestWorkerEnvironmentWaitsForOriginalAgentDetection",
+          "new_parent": "TestWorkerEnvironmentWaitsForOriginalAgentDetection",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/native_feedback_resume_test.go",
+      "target_file": "internal/steerlineintegration/native_feedback_resume_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestNativeOrcaConsecutiveFeedbackKeepsOriginalSession",
+          "new_parent": "TestNativeOrcaConsecutiveFeedbackKeepsOriginalSession",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestNativeOrcaOpenPRFeedbackResumesSavedTask",
+          "new_parent": "TestNativeOrcaOpenPRFeedbackResumesSavedTask",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/native_profile_fixture_test.go",
+      "target_file": "internal/steerlineintegration/native_profile_fixture_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/readiness_live_cd67_test.go",
+      "target_file": "internal/steerlineintegration/readiness_live_cd67_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestWorkerEnvironmentNativeReadinessLive",
+          "new_parent": "TestWorkerEnvironmentNativeReadinessLive",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/remote_admission_cd67_test.go",
+      "target_file": "internal/steerlineintegration/remote_admission_cd67_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestPublicationAndPermissionChecksRemainCombined",
+          "new_parent": "TestPublicationAndPermissionChecksRemainCombined",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestRemotePublicationClaimRequiresPermissionEvidence",
+          "new_parent": "TestRemotePublicationClaimRequiresPermissionEvidence",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/remote_fake_test.go",
+      "target_file": "internal/steerlineintegration/remote_fake_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [
+        "TestMain"
+      ],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/remote_protocol_test.go",
+      "target_file": "internal/steerlineintegration/remote_protocol_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/requirement_admission_cd67_test.go",
+      "target_file": "internal/steerlineintegration/requirement_admission_cd67_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestExecutionRequirementsCannotInferOtherTargetEnvironment",
+          "new_parent": "TestExecutionRequirementsCannotInferOtherTargetEnvironment",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestEmptyExecutionRequirementsKeepMandatoryChecks",
+          "new_parent": "TestEmptyExecutionRequirementsKeepMandatoryChecks",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/supervised_configuration_cd67_test.go",
+      "target_file": "internal/steerlineintegration/supervised_configuration_cd67_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported",
+          "new_parent": "TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestSupervisedOrcaExecutionBindingRequiresExactDispatchIdentity",
+          "new_parent": "TestSupervisedOrcaExecutionBindingRequiresExactDispatchIdentity",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/worker_codex_live_test.go",
+      "target_file": "internal/steerlineintegration/worker_codex_live_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestCodexAppServerNativeQuestionLive",
+          "new_parent": "TestCodexAppServerNativeQuestionLive",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/steerlineintegration/worker_recovery_live_cd67_test.go",
+      "target_file": "internal/steerlineintegration/worker_recovery_live_cd67_test.go",
+      "source_package": "internal/steerlineintegration",
+      "target_package": "internal/steerlineintegration",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestAppServerHostExitHelper",
+          "new_parent": "TestAppServerHostExitHelper",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestLocalCodexManualRecoveryLive",
+          "new_parent": "TestLocalCodexManualRecoveryLive",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestAppServerHostExitRecoveryLive",
+          "new_parent": "TestAppServerHostExitRecoveryLive",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestAppServerServiceParallelRecoveryLive",
+          "new_parent": "TestAppServerServiceParallelRecoveryLive",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/steerlineintegration",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "internal/testboundary/boundary_test.go",
+      "target_file": "internal/testboundary/boundary_test.go",
+      "source_package": "internal/testboundary",
+      "target_package": "internal/testboundary",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestProductionHasNoTestDependencies",
+          "new_parent": "TestProductionHasNoTestDependencies",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/testboundary",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestE2EScenariosUseTestAdapters",
+          "new_parent": "TestE2EScenariosUseTestAdapters",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/testboundary",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestBoundaryRulesRejectTransitiveLeaksAndDirectImplementationImports",
+          "new_parent": "TestBoundaryRulesRejectTransitiveLeaksAndDirectImplementationImports",
+          "status": "retained",
+          "old_subtests": [],
+          "new_subtests": [],
+          "assertion_owner": "internal/testboundary",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    },
+    {
+      "source_file": "tests/e2e/internal/evidence/execution_test.go",
+      "target_file": "tests/e2e/internal/evidence/execution_test.go",
+      "source_package": "tests/e2e/internal/evidence",
+      "target_package": "tests/e2e/internal/evidence",
+      "rename_status": "M",
+      "harness_functions": [],
+      "parents": [
+        {
+          "old_parent": "TestExecutionEvidencePreservesBoundIdentityAndAuthority",
+          "new_parent": "TestExecutionEvidencePreservesBoundIdentityAndAuthority",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "field"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "field"
+            }
+          ],
+          "assertion_owner": "tests/e2e/internal/evidence",
+          "assertions": "original assertions retained; import/path updates only"
+        },
+        {
+          "old_parent": "TestOrcaEvidenceRequiresOriginalRuntimeAndSucceededPreparation",
+          "new_parent": "TestOrcaEvidenceRequiresOriginalRuntimeAndSucceededPreparation",
+          "status": "retained",
+          "old_subtests": [
+            {
+              "expression": "reason"
+            }
+          ],
+          "new_subtests": [
+            {
+              "expression": "reason"
+            }
+          ],
+          "assertion_owner": "tests/e2e/internal/evidence",
+          "assertions": "original assertions retained; import/path updates only"
+        }
+      ],
+      "removed_parents": []
+    }
+  ],
+  "unchanged_regression_owners": [
+    {
+      "parent": "TestMC1",
+      "subtests": [],
+      "assertion_owner": "internal/execution/candidate_workers_test.go",
+      "owner_task": "#76",
+      "status": "unchanged_by_#78"
+    },
+    {
+      "parent": "TestMC2",
+      "subtests": [
+        {
+          "expression": "name"
+        },
+        {
+          "name": "original_async_receipt"
+        },
+        {
+          "name": "target_profile"
+        },
+        {
+          "name": "inbox_reservation_receipt_loss"
+        }
+      ],
+      "assertion_owner": "internal/execution/candidate_workers_test.go",
+      "owner_task": "#76",
+      "status": "unchanged_by_#78"
+    },
+    {
+      "parent": "TestMC3",
+      "subtests": [
+        {
+          "name": "blocker_keeps_question_rejects_no_queue"
+        },
+        {
+          "name": "unsent_blocked_feedback"
+        }
+      ],
+      "assertion_owner": "internal/execution/candidate_workers_test.go",
+      "owner_task": "#76",
+      "status": "unchanged_by_#78"
+    },
+    {
+      "parent": "TestMC4",
+      "subtests": [
+        {
+          "name": "worker_only_frozen_permissions"
+        },
+        {
+          "name": "database_gap"
+        }
+      ],
+      "assertion_owner": "internal/execution/candidate_workers_test.go",
+      "owner_task": "#76",
+      "status": "unchanged_by_#78"
+    },
+    {
+      "parent": "TestMC5",
+      "subtests": [],
+      "assertion_owner": "internal/execution/candidate_workers_test.go",
+      "owner_task": "#76",
+      "status": "unchanged_by_#78"
+    },
+    {
+      "parent": "TestMC6",
+      "subtests": [
+        {
+          "expression": "mode"
+        }
+      ],
+      "assertion_owner": "internal/execution/candidate_workers_test.go",
+      "owner_task": "#76",
+      "status": "unchanged_by_#78"
+    },
+    {
+      "parent": "TestMC7",
+      "subtests": [
+        {
+          "name": "original_single_candidate"
+        },
+        {
+          "name": "discard_full_history_and_exited_set"
+        }
+      ],
+      "assertion_owner": "internal/execution/candidate_workers_test.go",
+      "owner_task": "#76",
+      "status": "unchanged_by_#78"
+    },
+    {
+      "parent": "TestMC8",
+      "subtests": [
+        {
+          "expression": "mode"
+        },
+        {
+          "name": "merged_rejects_exit"
+        },
+        {
+          "name": "inbox_under_project_effect"
+        }
+      ],
+      "assertion_owner": "internal/execution/candidate_workers_test.go",
+      "owner_task": "#76",
+      "status": "unchanged_by_#78"
+    },
+    {
+      "parent": "TestMC9",
+      "subtests": [],
+      "assertion_owner": "internal/execution/candidate_workers_test.go",
+      "owner_task": "#76",
+      "status": "unchanged_by_#78"
+    }
+  ],
+  "selection_note": "Only parents listed in docs/spec/three-line-06-adapters-resources.plan.md are marked for this task run. Live opt-in parents and the wider #39 failure matrix retain their original owners and are not re-labeled as passed by a directory move."
+}

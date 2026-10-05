@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 )
 
 func TestRequirementVersionParsers(t *testing.T) {

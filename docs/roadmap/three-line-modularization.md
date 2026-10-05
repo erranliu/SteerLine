@@ -142,8 +142,8 @@ task/model、task 应用、execution/model、execution/backend 和纯端口已�
 | 当前所有者 | 目标归属与整理 |
 | --- | --- |
 | 主包执行、决策、会话、恢复及交付用例 | execution，状态与外部动作经原提交屏障组织 |
-| codexworker、codexapp、orcaworker、orca_remote_worker | execution/adapters 下对应实现；codexapp 先核对共享消费者，再决定并入或保留专用协议子包 |
-| workspace、publication、processhost | execution 下对应独立副作用包 |
+| codexworker、codexapp、orcaworker、orca_remote_worker | #78 将实现置于 `internal/execution/adapters/{codex,orca,orcaremote}`；共享 Codex app-server RPC/WS codec 位于 `internal/execution/adapters/protocol/codexapp` |
+| workspace、publication、processhost | #78 将资源归入 `internal/execution/{workspace,publication,process}`；Host 与 #76 process facts 合为一个实现 |
 | query、projection、taskview、activityview | 收拢到 product/query；领域规则仍调用 model 的唯一实现，不复制 |
 | clientcontracts、steerlineclient、console | product/api、product/client、console；消除完整内部记录向UI泄漏 |
 | persistence、sqlite | storage/ports、storage/sqlite；窄端口和原子事务不因目录整理放宽 |
@@ -235,12 +235,12 @@ flowchart LR
     M09 --> M10["#82 独立开发/清理"]
 ```
 
-任务选择/结果边界和 task 应用已具备。#76/#77 的固定基础已经满足；用户已确认 #38/#39 合入并解除后续暂停，剩余任务按各自硬前置推进。#78 仍等 #76；#79 的剩余前置为 #76/#77；后继以任务表和各自 Spec 的完整固定条件为准。
+任务选择/结果边界和 task 应用已具备。#76 已通过 PR219 合入；#77 与 #78 在独立工作树按各自范围继续。#79 的剩余硬前置为 #77；#79+ 未由当前任务启动，后继仍按任务表和各自 Spec 的完整固定条件推进。
 
 | 并行工作 | 开工与接口条件 | 共享修改与集成条件 |
 | --- | --- | --- |
-| #76 与 #77 | 固定基础与用户执行授权已具备 | execution 与 product/console 各自归包；Service/Config/提交协调及 app/cmd/runner 共用段指定一个集成所有者，#76 的领取文档端口与公共构造按现行接口交接顺序集成 |
-| #78 与未完成产品/存储工作 | #76 整体交付；#79 仍须自身全部硬前置 | adapter/资源与其他目录分别所有；backend/API 形状先由定义所有者集成，构造段顺序修改 |
+| #76 与 #77 | #76 已合入 PR219；#77 继续在独立工作树 | execution 与 product/console 各自归包；Service/Config/提交协调及 app/cmd/runner 共用段指定一个集成所有者，定义端口与公共构造按现行接口交接顺序集成 |
+| #78 与未完成产品/存储工作 | #76 已整体交付；#77 仍是 #79 的硬前置 | adapter/资源与其他目录分别所有；backend/API 形状先由定义所有者集成，构造段顺序修改 |
 | 剩余迁移与本机候选验收复用 | 已具备本机候选、原会话和真实交付证据 | 纯搬包复用未变证据；身份、协议、启动、权限或宿主实际变化才定向重验，现场运行固定 executable/config，不用旧构建证明新行为 |
 | 与 #40/#41、#45 或规划基础 | 各自既定 Spec 前置仍成立 | 共享配置、类型、恢复和 app 接线确定唯一所有者；不新增全面重构硬前置 |
 

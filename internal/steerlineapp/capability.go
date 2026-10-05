@@ -16,7 +16,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
+	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 )
 
 type capabilityEvidence struct {

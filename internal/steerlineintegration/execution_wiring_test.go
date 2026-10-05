@@ -4,13 +4,18 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
+	"os"
 	"path/filepath"
+	"reflect"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
@@ -331,4 +336,93 @@ func TestTM04ExecutionWiring(t *testing.T) {
 	})
 	t.Run("intent_binding_and_two_original_turns", testIntegratedAppServerTwoTurns)
 	t.Run("original_request_ack_and_manual_recovery", testIntegratedNativeOriginalSessionGate)
+}
+
+func TestTM06ResourceWiringHelper(t *testing.T) {
+	if os.Getenv("STEERLINE_TM06_RESOURCE_HELPER") != "1" {
+		return
+	}
+	_, _ = fmt.Fprint(os.Stdout, "tm06-managed-process-output")
+}
+
+func TestTM06ResourceWiring(t *testing.T) {
+	host := steerlineapp.NewProcessHost(10 * time.Second)
+	file := filepath.Join(t.TempDir(), "execution", "receipt.json")
+	require(t, host.WriteExecutionFile(file, []byte("{\"generation\":\"original\"}")))
+	data, err := os.ReadFile(file)
+	require(t, err)
+	if string(data) != "{\"generation\":\"original\"}" {
+		t.Fatal("process resource host changed execution-file bytes")
+	}
+	firstGeneration, secondGeneration := host.NewProcessGeneration(), host.NewProcessGeneration()
+	if firstGeneration == "" || secondGeneration == "" || firstGeneration == secondGeneration {
+		t.Fatal("process resource host did not provide distinct generations")
+	}
+	t.Setenv("STEERLINE_TM06_RESOURCE_HELPER", "1")
+	executable, err := os.Executable()
+	require(t, err)
+	output, err := host.OutputCommand(context.Background(), executionbackend.LaunchCommand{
+		Executable: executable, Args: []string{"-test.run=^TestTM06ResourceWiringHelper$"}, WorkingDirectory: t.TempDir(),
+	})
+	require(t, err)
+	if !strings.Contains(string(output), "tm06-managed-process-output") {
+		t.Fatalf("managed local child output missing: %s", output)
+	}
+
+	directory, err := steerlineapp.NewBuiltinDirectory(host)
+	require(t, err)
+	workspacePath := t.TempDir()
+	codexPayload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex"})
+	require(t, err)
+	codexEnvelope, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{
+		CodecVersion: 1, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: codexworker.ProfileCodecKey,
+		ProjectID: "project", ProfileID: "profile", AcceptedConfigVersion: "accepted",
+	}, codexPayload)
+	require(t, err)
+	policy := executionbackend.ExecutionPolicy{
+		Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true},
+		Network:    "allow", Escalation: "deny",
+	}
+	for _, test := range []struct {
+		host, wantProtocol, factory, backendPackage string
+	}{
+		{"local", string(executionbackend.ProtocolLocalCodexAppServer), "github.com/erranliu/SteerLine/internal/execution/adapters/codex.NewExecutionLifecycle", ""},
+		{"orca", string(executionbackend.ProtocolOrcaTerminalV2), "github.com/erranliu/SteerLine/internal/execution/adapters/orca.NewExecutionLifecycle", "github.com/erranliu/SteerLine/internal/execution/adapters/orca"},
+		{"orca_supervised", string(executionbackend.ProtocolOrcaSupervised), "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote.NewExecutionLifecycle", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"},
+	} {
+		config := execution.Config{Host: test.host, Agent: "codex", ProcessHost: host}
+		entry, err := directory.Resolve(config)
+		require(t, err)
+		if string(entry.Key.Protocol) != test.wantProtocol {
+			t.Fatalf("%s selected protocol %q, want %q", test.host, entry.Key.Protocol, test.wantProtocol)
+		}
+		if test.backendPackage != "" && reflect.TypeOf(entry.Backend(config)).PkgPath() != test.backendPackage {
+			t.Fatalf("%s backend resolves outside its adapter package: %T", test.host, entry.Backend(config))
+		}
+		if test.host == "local" {
+			setup := executionbackend.LifecycleSetup{
+				Snapshot: executionbackend.LifecycleSnapshot{
+					Ref: executionbackend.ExecutionRef{Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalCodexAppServer,
+						Agent: executionbackend.AgentSpec{Name: "codex"}, WorkspacePath: workspacePath},
+					Session: executionbackend.SessionContext{ProjectID: "project", WorkflowRunID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Agent: executionbackend.AgentSpec{Name: "codex"}},
+				},
+				ProfileData: []executionbackend.ImplementationDataEnvelope{codexEnvelope}, ProfileID: "profile", AcceptedConfigVersion: "accepted",
+				Policy: policy, ProcessHost: host, RepositoryPath: workspacePath, RunDirectory: filepath.Join(t.TempDir(), "run"),
+			}
+			lifecycle, err := entry.Lifecycle(setup)
+			require(t, err)
+			lifecycleType := reflect.TypeOf(lifecycle)
+			if lifecycleType.Kind() == reflect.Pointer {
+				lifecycleType = lifecycleType.Elem()
+			}
+			if lifecycleType.PkgPath() != strings.TrimSuffix(test.factory, ".NewExecutionLifecycle") {
+				t.Fatalf("local lifecycle resolves outside its adapter package: %T", lifecycle)
+			}
+			continue
+		}
+		factory := runtime.FuncForPC(reflect.ValueOf(entry.Lifecycle).Pointer())
+		if factory == nil || !strings.Contains(factory.Name(), test.factory) {
+			t.Fatalf("%s lifecycle factory resolves outside its adapter package: %v", test.host, factory)
+		}
+	}
 }

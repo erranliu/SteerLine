@@ -8,7 +8,7 @@ import (
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
 func publicationTargetInstruction(c Config) string {

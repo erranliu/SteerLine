@@ -2,7 +2,7 @@
 
 一期产品流程和验收仅包含本地 Codex/本机 Orca；本页远端包、接口与协议条目描述存量代码归属，保留迁移/编译/拒绝保护，不表示一期启用远端或必须完成其真机认证。
 
-核对日期：2026-10-05。本页反映已合入 #74/#75/#39 前置的当前工作树与 #76 execution 用例归包实现；[类型归属](../validation/three-line-01-types/README.md)、[#75 任务交付](../validation/three-line-03-task-usecases/README.md)、[#76 execution 归属/验证](../validation/three-line-04-execution-usecases/README.md)记录接口和行为证据。原生能力证据不因搬包而扩大。
+核对日期：2026-10-05。本页反映 PR219 (#76) 已合入的基线及当前 #78 实现分支实际源码；#78 尚待独立复审/合入。[类型归属](../validation/three-line-01-types/README.md)、[#75 任务交付](../validation/three-line-03-task-usecases/README.md)、[#76 execution 归属/验证](../validation/three-line-04-execution-usecases/README.md)记录接口和行为证据。本页包表按当前所有 OS/tag 的生产 import 声明生成；原生能力证据不因搬包而扩大。
 
 ## 系统与业务权威
 
@@ -24,7 +24,7 @@ flowchart LR
     Task --> Work
     Exec --> Ports[execution/backend]
     Exec --> Records[execution/model]
-    App --> Impl[具体执行实现与 processhost]
+    App --> Impl[execution/adapters 与 execution resources]
     Impl --> Ports
     Impl --> Records
     App --> Persistence[storage/ports 与旧 persistence 契约]
@@ -55,19 +55,18 @@ flowchart LR
 | `internal/product/api` | 独立状态标量、用户输入、游标、错误、控制目标和回执；仅标准库，不含 Domain/Runtime/持久记录。 |
 | `internal/storage/ports` | RecordWrite 前值声明、Commands 纯读写契约、CommandRecord/DomainEvent、ClaimCommit/ResultCommit/DiscardCommit 和存储错误；只消费纯模型/API/backend。 |
 | `contracts` | 尚未迁的宽 Domain/Runtime/内部投影、会话来源/存储组合与宿主记录；每字段唯一后继见[残留清单](../validation/three-line-01-types/residual-ownership.json)。execution 对这些 transitional records 的重建位于自己的纯函数子包。 |
-| `codexworker` / `codexapp` | 前者拥有原生 codec、配置/命令/权限、生命周期、history/source/mapper；后者拥有 WebSocket/JSON-RPC 和原生问题传输。不给实现 Store 或可写 Service。 |
-| `orcaworker` | 原生配置/绑定/资源/terminal/Dispatch/message、宿主准备和输出、观察及原操作对账。[lifecycle_resources.go](../../internal/steerline/orcaworker/lifecycle_resources.go)、[lifecycle_observation.go](../../internal/steerline/orcaworker/lifecycle_observation.go)。 |
-| `orca_remote_worker` | 原远端协议、身份、消息、观察、结算与对账；新执行仍按权限准入拒绝，远端取消 unsupported。协议 mock 不证明权限认证。 |
+| `execution/adapters/codex` 与 `adapters/protocol/codexapp` | Codex adapter 拥有原生配置、命令/权限、session/history 与恢复；协议子包唯一拥有 app-server WebSocket/JSON-RPC codec。实现不持有 Store 或可写 Service。 |
+| `execution/adapters/orca` | 本机 Orca 配置/绑定/terminal/Dispatch/message、宿主准备和输出、观察及原操作对账。[lifecycle_resources.go](../../internal/execution/adapters/orca/lifecycle_resources.go)、[lifecycle_observation.go](../../internal/execution/adapters/orca/lifecycle_observation.go)。 |
+| `execution/adapters/orcaremote` | 存量 remote 协议、身份、消息、观察、结算与对账；远端准入仍拒绝，取消仍 unsupported。fixture/mock 不证明权限认证。 |
 | `task` | 批次验证/创建、固定文档、追加依赖、工作挑选及规范结果/丢弃声明；只依赖 task/model 和自有任务事务/文档窄端口。[归属与测试](../validation/three-line-03-task-usecases/ownership.md)。 |
 | `steerlineapp` | 唯一内置目录、严格实现配置、默认值、具体工厂与产品构造。[directory.go](../../internal/steerlineapp/directory.go)、[config.go](../../internal/steerlineapp/config.go)、[app.go](../../internal/steerlineapp/app.go)；不承担状态转换，无 init/全局可变注册。 |
-| `processhost` | OS 进程、身份、句柄及文件操作，由 app 构造，经小端口注入中心/实现；关闭观察不等于杀进程。 |
+| `execution/process` | 统一拥有 OS 进程启动、身份核验、StopHandle、受控输出与原子执行文件操作；app 构造 Host 并经 ManagedProcessHost 注入。关闭观察不等于杀进程。 |
 | `steerlineintegration` / `testprotocol` | 外层真实应用端口、原生配置和协议 mock 的跨层断言；不导出任意中心写接口。testprotocol 是测试进程 fixture，不是产品依赖。 |
 | `taskview` | 当前混合只读图投影，依赖 task/execution 纯模型；旧 steerline/task 已删除，任务工作/结果归 task，执行准入/PR事实归 execution/model。TaskGraph 每快照构造一次纯任务事实，任务批次读取绑定与版本来自同一快照；后续产品归包由 #77 负责。 |
-| `projection` | 从同一持久快照复制并构建 Runtime/Run，按当前 Step 和 AttemptNumber 选择候选；持续 worker 路径另核对非空 CurrentAttemptID，不匹配时拒绝投影，无 I/O。 |
 | `persistence` | #69 的窄声明提交、纯错误及注入连接工厂；消费者只持有自己的端口，不暴露 SQL/任意事务。 |
 | `query` / `sqlite` | query 拥有只读应用契约；sqlite 是连接、schema 14、SQL、声明提交及读写事务的唯一实现，复用既有 Reader。应用选择并注入 Factory，中心不依赖 SQL/具体存储。 |
-| `workspace` / `publication` | 固定 Git 工作区及 PR 查询/关闭和事实；中心决定资格、受理与唯一交付。 |
-| `clientcontracts` / `steerlineclient` | 纯产品 DTO/小接口与唯一客户端；配置/资源工厂由 app 注入，读取复用 query/projection，任务变更调用 task.Commands，执行变更调用 CommandService/control。 |
+| `execution/workspace` / `execution/publication` / `execution/process` | 固定 Git 工作区、PR 查询/关闭和事实、OS 进程与文件资源；中心决定资格、受理与唯一交付。 |
+| `clientcontracts` / `steerlineclient` | 纯产品 DTO/小接口与唯一客户端；配置/资源工厂由 app 注入，读取调用现存 `internal/steerline/query`，任务变更调用 task.Commands，执行变更调用 CommandService/control。 |
 | `console` | TUI 输入/导航/视图和独立偏好；按项目消费注入的 `clientcontracts.ConsoleClient`。全 OS/tag 生产与测试不依赖中心、具体 SQL、adapter 或 app；内部纯记录和命令回执的消费由 #77 继续收窄。 |
 | `activityview` | 唯一纯活动格式化；CLI/中心入口和 console 共用 [render.go](../../internal/steerline/activityview/render.go)，没有产品 I/O。 |
 | `coreboundary` / `testboundary` / `testfeedback` | 执行隔离守卫、E2E 测试依赖守卫及 Go JSON 报告；产品不依赖测试 fixture 或 runner。 |
@@ -112,7 +111,7 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 
 中心按预算轮转来源，使用实现提供的 source/mapper 端口；mapper 从已提交事件重建，失败候选 mapper/cursor 丢弃。来源归属 Project/Workflow/Execution/Attempt 必须匹配中心请求。会话事件、正文版本和 source cursor 用独立原子事务，不混入 heartbeat；正文/raw 不累计进实现封套。
 
-公开 Runtime/Run 从已提交记录深复制构建，与私有工作 Run 分开。sqlite.Reader 在同一读事务采样任务、Ready、选中任务、记录和 checkpoint；query 复用 projection/task 规则。连接身份失败仍可展示可用只读数据，控制和领取各自重检。领域事件正文有页预算，cursor 只推进到实际返回事件；缺来源终态/final 时不能由界面推断完成。
+公开 Runtime/Run 从已提交记录深复制构建，与私有工作 Run 分开。sqlite.Reader 在同一读事务采样任务、Ready、选中任务、执行记录和 checkpoint；纯 `internal/execution/reconstruction` 负责从已提交记录重建 Run/Runtime/selectors，query 提供只读应用入口。连接身份失败仍可展示可用只读数据，控制和领取各自重检。领域事件正文有页预算，cursor 只推进到实际返回事件；缺来源终态/final 时不能由界面推断完成。
 
 源码：[conversation.go](../../internal/execution/conversation.go)、[conversation_replay.go](../../internal/execution/conversation_replay.go)、[conversation_store.go](../../internal/steerline/sqlite/conversation_store.go)、[project_view.go](../../internal/steerline/project_view.go)、[query/project.go](../../internal/steerline/query/project.go)。
 
@@ -120,51 +119,50 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 
 执行 actor 与私有状态、配置、命令、conversation journal cursor、执行态重建和相关白盒用例统一归属 `internal/execution`。唯一真实 app 构造注入 TaskWorkPort/TaskResultPort、目录、SQLite connection、ProcessHost 与宿主 transport/diagnostic 小端口。通用 host loop 只认识 scheduler 接口，SQL、adapter 和产品 UI 仍由各自 owner 负责。
 
-依赖守卫 `TestTM04ExecutionBoundary` 检查所有 OS/tag 源码图、Windows/Linux 构建图、product query/projection 直接依赖反例及重建包 adapter 反例。app 外层 MC1/3/5/6/7/8/9、#39 pending-PR、#218 sibling-recovery、TM04 wiring、L1 与 L3 controlled recovery 的实际命中和报告见[#76 验收记录](../validation/three-line-04-execution-usecases/README.md)。没有跑 Full、L2/live 或启用原生接受开关。
+依赖守卫 `TestTM04ExecutionBoundary` 检查所有 OS/tag 源码图、Windows/Linux 构建图、旧/产品 query 直接依赖反例及重建包 adapter 反例。app 外层 MC1/3/5/6/7/8/9、#39 pending-PR、#218 sibling-recovery、TM04 wiring、L1 与 L3 controlled recovery 的实际命中和报告见[#76 验收记录](../validation/three-line-04-execution-usecases/README.md)。没有跑 Full、L2/live 或启用原生接受开关。
 
 #76 合入后 #78 可消费 execution/backend 固定接口；#79 等 #75/#76/#77；#80 等三线服务/目录边界固定；最终测试组合仍归 #82。后继不复制 execution implementation 或恢复旧 forwarding facade。
 
 ## 全 OS / 构建标签源码索引
 
-以下索引从当前工作树生成，包含 cmd/internal 所有生产 Go 源码（包括 Windows/Linux 和其他 build tags）；不包含测试文件。逐文件 SHA/import 清单在 [#76 source-index](../validation/three-line-04-execution-usecases/source-index.json)。依赖守卫另扫描测试文件与完整传递图。
+下表由当前分支 `cmd`/`internal` 的全部生产 Go 源文件 import 声明生成，包含 Windows/Linux 和其他 build tags，不含测试文件或字符串中的 runner package 名。依赖守卫另扫描测试源码、全部 tags 与 Windows/Linux 传递图。
 
 | 包 | 生产文件数 | 项目内直接依赖 |
 | --- | ---: | --- |
-| `cmd/orca-probe` | 1 | 无 |
+| `cmd/orca-probe` | 1 | — |
 | `cmd/steerline` | 2 | `internal/execution`, `internal/product/api`, `internal/steerline`, `internal/steerline/clientcontracts`, `internal/steerline/contracts`, `internal/steerline/taskview`, `internal/steerlineapp`, `internal/steerlineclient`, `internal/storage/ports`, `internal/task/model` |
-| `cmd/test-feedback` | 6 | `internal/coreboundary`, `internal/execution`, `internal/execution/backend`, `internal/execution/model`, `internal/steerline`, `internal/steerlineapp`, `internal/steerlineintegration`, `internal/storage/ports`, `internal/task`, `internal/task/model`, `internal/testboundary`, `internal/testfeedback`, `internal/testprocess` |
-| `internal/coreboundary` | 1 | 无 |
-| `internal/execution` | 94 | `internal/execution/backend`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/product/api`, `internal/steerline/activityview`, `internal/steerline/clientcontracts`, `internal/steerline/contracts`, `internal/steerline/persistence`, `internal/steerline/publication`, `internal/steerline/workspace`, `internal/storage/ports`, `internal/task/model` |
-| `internal/execution/backend` | 19 | 无 |
+| `cmd/test-feedback` | 6 | `internal/testfeedback`, `internal/testprocess` |
+| `internal/coreboundary` | 1 | — |
+| `internal/execution` | 94 | `internal/execution/backend`, `internal/execution/model`, `internal/execution/publication`, `internal/execution/reconstruction`, `internal/execution/workspace`, `internal/product/api`, `internal/steerline/activityview`, `internal/steerline/clientcontracts`, `internal/steerline/contracts`, `internal/steerline/persistence`, `internal/storage/ports`, `internal/task/model` |
+| `internal/execution/adapters/codex` | 29 | `internal/execution/adapters/protocol/codexapp`, `internal/execution/backend`, `internal/execution/model`, `internal/execution/workspace`, `internal/steerline/contracts` |
+| `internal/execution/adapters/orca` | 28 | `internal/execution/adapters/codex`, `internal/execution/backend`, `internal/execution/model`, `internal/execution/workspace`, `internal/steerline/contracts` |
+| `internal/execution/adapters/orcaremote` | 14 | `internal/execution/adapters/codex`, `internal/execution/adapters/orca`, `internal/execution/backend` |
+| `internal/execution/adapters/protocol/codexapp` | 4 | — |
+| `internal/execution/backend` | 19 | — |
 | `internal/execution/model` | 21 | `internal/execution/backend` |
-| `internal/execution/process` | 3 | `internal/execution/backend` |
+| `internal/execution/process` | 7 | `internal/execution/backend` |
+| `internal/execution/publication` | 6 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/contracts` |
 | `internal/execution/reconstruction` | 3 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/contracts`, `internal/task/model` |
-| `internal/product/api` | 5 | 无 |
-| `internal/steerline` | 42 | `internal/execution`, `internal/execution/backend`, `internal/execution/model`, `internal/execution/process`, `internal/product/api`, `internal/steerline/activityview`, `internal/steerline/clientcontracts`, `internal/steerline/contracts`, `internal/steerline/host`, `internal/steerline/persistence`, `internal/steerline/publication`, `internal/steerline/query`, `internal/steerline/taskview`, `internal/steerline/workspace`, `internal/storage/ports`, `internal/task/model` |
+| `internal/execution/workspace` | 6 | `internal/execution/backend` |
+| `internal/product/api` | 5 | — |
+| `internal/steerline` | 42 | `internal/execution`, `internal/execution/backend`, `internal/execution/model`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/workspace`, `internal/product/api`, `internal/steerline/activityview`, `internal/steerline/clientcontracts`, `internal/steerline/contracts`, `internal/steerline/host`, `internal/steerline/persistence`, `internal/steerline/query`, `internal/steerline/taskview`, `internal/storage/ports`, `internal/task/model` |
 | `internal/steerline/activityview` | 2 | `internal/steerline/contracts` |
 | `internal/steerline/clientcontracts` | 5 | `internal/execution/backend`, `internal/execution/model`, `internal/product/api`, `internal/steerline/contracts`, `internal/steerline/taskview`, `internal/storage/ports`, `internal/task/model` |
-| `internal/steerline/codexapp` | 4 | 无 |
-| `internal/steerline/codexworker` | 29 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/codexapp`, `internal/steerline/contracts`, `internal/steerline/workspace` |
 | `internal/steerline/console` | 23 | `internal/execution/backend`, `internal/execution/model`, `internal/product/api`, `internal/steerline/activityview`, `internal/steerline/clientcontracts`, `internal/steerline/contracts`, `internal/storage/ports` |
 | `internal/steerline/contracts` | 10 | `internal/execution/backend`, `internal/execution/model`, `internal/product/api`, `internal/steerline/taskview`, `internal/task/model` |
 | `internal/steerline/host` | 2 | `internal/product/api` |
-| `internal/steerline/orca_remote_worker` | 14 | `internal/execution/backend`, `internal/steerline/codexworker`, `internal/steerline/orcaworker` |
-| `internal/steerline/orcaworker` | 28 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/codexworker`, `internal/steerline/contracts`, `internal/steerline/workspace` |
-| `internal/steerline/persistence` | 2 | `internal/execution/backend`、`internal/execution/model`、`internal/steerline/contracts`、`internal/steerline/taskview`、`internal/storage/ports`、`internal/task/model` |
-| `internal/steerline/processhost` | 4 | `internal/execution/backend` |
-| `internal/steerline/publication` | 6 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/contracts` |
+| `internal/steerline/persistence` | 2 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/contracts`, `internal/steerline/taskview`, `internal/storage/ports`, `internal/task/model` |
 | `internal/steerline/query` | 6 | `internal/execution/backend`, `internal/execution/model`, `internal/steerline/contracts`, `internal/steerline/taskview`, `internal/storage/ports`, `internal/task/model` |
 | `internal/steerline/sqlite` | 35 | `internal/execution/backend`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/steerline/contracts`, `internal/steerline/persistence`, `internal/steerline/query`, `internal/steerline/taskview`, `internal/storage/ports`, `internal/task/model` |
 | `internal/steerline/taskview` | 4 | `internal/execution/model`, `internal/task/model` |
-| `internal/steerline/testprotocol` | 6 | 无 |
-| `internal/steerline/workspace` | 6 | `internal/execution/backend` |
-| `internal/steerlineapp` | 14 | `internal/execution`, `internal/execution/backend`, `internal/execution/model`, `internal/product/api`, `internal/steerline`, `internal/steerline/clientcontracts`, `internal/steerline/codexworker`, `internal/steerline/console`, `internal/steerline/contracts`, `internal/steerline/orca_remote_worker`, `internal/steerline/orcaworker`, `internal/steerline/persistence`, `internal/steerline/processhost`, `internal/steerline/publication`, `internal/steerline/query`, `internal/steerline/sqlite`, `internal/steerline/workspace`, `internal/steerlineclient`, `internal/storage/ports`, `internal/task`, `internal/task/model` |
+| `internal/steerline/testprotocol` | 6 | — |
+| `internal/steerlineapp` | 14 | `internal/execution`, `internal/execution/adapters/codex`, `internal/execution/adapters/orca`, `internal/execution/adapters/orcaremote`, `internal/execution/backend`, `internal/execution/model`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/workspace`, `internal/product/api`, `internal/steerline`, `internal/steerline/clientcontracts`, `internal/steerline/console`, `internal/steerline/contracts`, `internal/steerline/persistence`, `internal/steerline/query`, `internal/steerline/sqlite`, `internal/steerlineclient`, `internal/storage/ports`, `internal/task`, `internal/task/model` |
 | `internal/steerlineclient` | 1 | `internal/execution/backend`, `internal/product/api`, `internal/steerline/clientcontracts`, `internal/steerline/contracts`, `internal/steerline/query`, `internal/steerline/taskview`, `internal/storage/ports`, `internal/task/model` |
 | `internal/storage/ports` | 6 | `internal/execution/model`, `internal/task/model` |
 | `internal/task` | 6 | `internal/task/model` |
-| `internal/task/model` | 15 | 无 |
-| `internal/testfeedback` | 1 | 无 |
-| `internal/testprocess` | 3 | 无 |
+| `internal/task/model` | 15 | — |
+| `internal/testfeedback` | 1 | — |
+| `internal/testprocess` | 3 | — |
 
 ### 文件
 
@@ -330,7 +328,11 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 
 - [facts.go](../../internal/execution/process/facts.go)
 - [facts_linux.go](../../internal/execution/process/facts_linux.go)
+- [facts_other.go](../../internal/execution/process/facts_other.go)
 - [facts_windows.go](../../internal/execution/process/facts_windows.go)
+- [host.go](../../internal/execution/process/host.go)
+- [replace_unix.go](../../internal/execution/process/replace_unix.go)
+- [replace_windows.go](../../internal/execution/process/replace_windows.go)
 #### internal/execution/reconstruction
 
 - [run.go](../../internal/execution/reconstruction/run.go)
@@ -398,43 +400,43 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [observations.go](../../internal/steerline/clientcontracts/observations.go)
 - [presentation.go](../../internal/steerline/clientcontracts/presentation.go)
 - [recovery.go](../../internal/steerline/clientcontracts/recovery.go)
-#### internal/steerline/codexapp
+#### internal/execution/adapters/protocol/codexapp
 
-- [ask.go](../../internal/steerline/codexapp/ask.go)
-- [client.go](../../internal/steerline/codexapp/client.go)
-- [doc.go](../../internal/steerline/codexapp/doc.go)
-- [transport.go](../../internal/steerline/codexapp/transport.go)
-#### internal/steerline/codexworker
+- [ask.go](../../internal/execution/adapters/protocol/codexapp/ask.go)
+- [client.go](../../internal/execution/adapters/protocol/codexapp/client.go)
+- [doc.go](../../internal/execution/adapters/protocol/codexapp/doc.go)
+- [transport.go](../../internal/execution/adapters/protocol/codexapp/transport.go)
+#### internal/execution/adapters/codex
 
-- [ask.go](../../internal/steerline/codexworker/ask.go)
-- [ask_journal.go](../../internal/steerline/codexworker/ask_journal.go)
-- [backend.go](../../internal/steerline/codexworker/backend.go)
-- [capability.go](../../internal/steerline/codexworker/capability.go)
-- [command.go](../../internal/steerline/codexworker/command.go)
-- [config.go](../../internal/steerline/codexworker/config.go)
-- [connection.go](../../internal/steerline/codexworker/connection.go)
-- [conversation.go](../../internal/steerline/codexworker/conversation.go)
-- [conversation_adapter.go](../../internal/steerline/codexworker/conversation_adapter.go)
-- [doc.go](../../internal/steerline/codexworker/doc.go)
-- [event_fact.go](../../internal/steerline/codexworker/event_fact.go)
-- [executable.go](../../internal/steerline/codexworker/executable.go)
-- [execution_binding.go](../../internal/steerline/codexworker/execution_binding.go)
-- [history.go](../../internal/steerline/codexworker/history.go)
-- [history_binding.go](../../internal/steerline/codexworker/history_binding.go)
-- [intent.go](../../internal/steerline/codexworker/intent.go)
-- [journal.go](../../internal/steerline/codexworker/journal.go)
-- [launch.go](../../internal/steerline/codexworker/launch.go)
-- [lifecycle.go](../../internal/steerline/codexworker/lifecycle.go)
-- [native_params.go](../../internal/steerline/codexworker/native_params.go)
-- [observe.go](../../internal/steerline/codexworker/observe.go)
-- [outcome.go](../../internal/steerline/codexworker/outcome.go)
-- [params.go](../../internal/steerline/codexworker/params.go)
-- [permissions.go](../../internal/steerline/codexworker/permissions.go)
-- [policy.go](../../internal/steerline/codexworker/policy.go)
-- [policy_resources.go](../../internal/steerline/codexworker/policy_resources.go)
-- [profile_config.go](../../internal/steerline/codexworker/profile_config.go)
-- [recovery.go](../../internal/steerline/codexworker/recovery.go)
-- [session_launcher.go](../../internal/steerline/codexworker/session_launcher.go)
+- [ask.go](../../internal/execution/adapters/codex/ask.go)
+- [ask_journal.go](../../internal/execution/adapters/codex/ask_journal.go)
+- [backend.go](../../internal/execution/adapters/codex/backend.go)
+- [capability.go](../../internal/execution/adapters/codex/capability.go)
+- [command.go](../../internal/execution/adapters/codex/command.go)
+- [config.go](../../internal/execution/adapters/codex/config.go)
+- [connection.go](../../internal/execution/adapters/codex/connection.go)
+- [conversation.go](../../internal/execution/adapters/codex/conversation.go)
+- [conversation_adapter.go](../../internal/execution/adapters/codex/conversation_adapter.go)
+- [doc.go](../../internal/execution/adapters/codex/doc.go)
+- [event_fact.go](../../internal/execution/adapters/codex/event_fact.go)
+- [executable.go](../../internal/execution/adapters/codex/executable.go)
+- [execution_binding.go](../../internal/execution/adapters/codex/execution_binding.go)
+- [history.go](../../internal/execution/adapters/codex/history.go)
+- [history_binding.go](../../internal/execution/adapters/codex/history_binding.go)
+- [intent.go](../../internal/execution/adapters/codex/intent.go)
+- [journal.go](../../internal/execution/adapters/codex/journal.go)
+- [launch.go](../../internal/execution/adapters/codex/launch.go)
+- [lifecycle.go](../../internal/execution/adapters/codex/lifecycle.go)
+- [native_params.go](../../internal/execution/adapters/codex/native_params.go)
+- [observe.go](../../internal/execution/adapters/codex/observe.go)
+- [outcome.go](../../internal/execution/adapters/codex/outcome.go)
+- [params.go](../../internal/execution/adapters/codex/params.go)
+- [permissions.go](../../internal/execution/adapters/codex/permissions.go)
+- [policy.go](../../internal/execution/adapters/codex/policy.go)
+- [policy_resources.go](../../internal/execution/adapters/codex/policy_resources.go)
+- [profile_config.go](../../internal/execution/adapters/codex/profile_config.go)
+- [recovery.go](../../internal/execution/adapters/codex/recovery.go)
+- [session_launcher.go](../../internal/execution/adapters/codex/session_launcher.go)
 #### internal/steerline/console
 
 - [candidates.go](../../internal/steerline/console/candidates.go)
@@ -476,70 +478,64 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 
 - [errors.go](../../internal/steerline/host/errors.go)
 - [loop.go](../../internal/steerline/host/loop.go)
-#### internal/steerline/orca_remote_worker
+#### internal/execution/adapters/orcaremote
 
-- [backend.go](../../internal/steerline/orca_remote_worker/backend.go)
-- [config.go](../../internal/steerline/orca_remote_worker/config.go)
-- [intent.go](../../internal/steerline/orca_remote_worker/intent.go)
-- [lifecycle.go](../../internal/steerline/orca_remote_worker/lifecycle.go)
-- [messaging.go](../../internal/steerline/orca_remote_worker/messaging.go)
-- [observation.go](../../internal/steerline/orca_remote_worker/observation.go)
-- [policy.go](../../internal/steerline/orca_remote_worker/policy.go)
-- [preflight.go](../../internal/steerline/orca_remote_worker/preflight.go)
-- [profile_config.go](../../internal/steerline/orca_remote_worker/profile_config.go)
-- [run.go](../../internal/steerline/orca_remote_worker/run.go)
-- [start.go](../../internal/steerline/orca_remote_worker/start.go)
-- [types.go](../../internal/steerline/orca_remote_worker/types.go)
-- [version.go](../../internal/steerline/orca_remote_worker/version.go)
-- [worker.go](../../internal/steerline/orca_remote_worker/worker.go)
-#### internal/steerline/orcaworker
+- [backend.go](../../internal/execution/adapters/orcaremote/backend.go)
+- [config.go](../../internal/execution/adapters/orcaremote/config.go)
+- [intent.go](../../internal/execution/adapters/orcaremote/intent.go)
+- [lifecycle.go](../../internal/execution/adapters/orcaremote/lifecycle.go)
+- [messaging.go](../../internal/execution/adapters/orcaremote/messaging.go)
+- [observation.go](../../internal/execution/adapters/orcaremote/observation.go)
+- [policy.go](../../internal/execution/adapters/orcaremote/policy.go)
+- [preflight.go](../../internal/execution/adapters/orcaremote/preflight.go)
+- [profile_config.go](../../internal/execution/adapters/orcaremote/profile_config.go)
+- [run.go](../../internal/execution/adapters/orcaremote/run.go)
+- [start.go](../../internal/execution/adapters/orcaremote/start.go)
+- [types.go](../../internal/execution/adapters/orcaremote/types.go)
+- [version.go](../../internal/execution/adapters/orcaremote/version.go)
+- [worker.go](../../internal/execution/adapters/orcaremote/worker.go)
+#### internal/execution/adapters/orca
 
-- [backend.go](../../internal/steerline/orcaworker/backend.go)
-- [binding.go](../../internal/steerline/orcaworker/binding.go)
-- [client.go](../../internal/steerline/orcaworker/client.go)
-- [command.go](../../internal/steerline/orcaworker/command.go)
-- [config.go](../../internal/steerline/orcaworker/config.go)
-- [dispatch_submit.go](../../internal/steerline/orcaworker/dispatch_submit.go)
-- [environment.go](../../internal/steerline/orcaworker/environment.go)
-- [event.go](../../internal/steerline/orcaworker/event.go)
-- [events.go](../../internal/steerline/orcaworker/events.go)
-- [execution_state.go](../../internal/steerline/orcaworker/execution_state.go)
-- [host.go](../../internal/steerline/orcaworker/host.go)
-- [intent.go](../../internal/steerline/orcaworker/intent.go)
-- [inventory.go](../../internal/steerline/orcaworker/inventory.go)
-- [lifecycle.go](../../internal/steerline/orcaworker/lifecycle.go)
-- [lifecycle_observation.go](../../internal/steerline/orcaworker/lifecycle_observation.go)
-- [lifecycle_resources.go](../../internal/steerline/orcaworker/lifecycle_resources.go)
-- [lifecycle_turns.go](../../internal/steerline/orcaworker/lifecycle_turns.go)
-- [message.go](../../internal/steerline/orcaworker/message.go)
-- [mutation.go](../../internal/steerline/orcaworker/mutation.go)
-- [orchestration.go](../../internal/steerline/orcaworker/orchestration.go)
-- [output.go](../../internal/steerline/orcaworker/output.go)
-- [profile_config.go](../../internal/steerline/orcaworker/profile_config.go)
-- [readiness.go](../../internal/steerline/orcaworker/readiness.go)
-- [relay.go](../../internal/steerline/orcaworker/relay.go)
-- [saved_receipt.go](../../internal/steerline/orcaworker/saved_receipt.go)
-- [terminal.go](../../internal/steerline/orcaworker/terminal.go)
-- [terminal_protocol.go](../../internal/steerline/orcaworker/terminal_protocol.go)
-- [workspace.go](../../internal/steerline/orcaworker/workspace.go)
+- [backend.go](../../internal/execution/adapters/orca/backend.go)
+- [binding.go](../../internal/execution/adapters/orca/binding.go)
+- [client.go](../../internal/execution/adapters/orca/client.go)
+- [command.go](../../internal/execution/adapters/orca/command.go)
+- [config.go](../../internal/execution/adapters/orca/config.go)
+- [dispatch_submit.go](../../internal/execution/adapters/orca/dispatch_submit.go)
+- [environment.go](../../internal/execution/adapters/orca/environment.go)
+- [event.go](../../internal/execution/adapters/orca/event.go)
+- [events.go](../../internal/execution/adapters/orca/events.go)
+- [execution_state.go](../../internal/execution/adapters/orca/execution_state.go)
+- [host.go](../../internal/execution/adapters/orca/host.go)
+- [intent.go](../../internal/execution/adapters/orca/intent.go)
+- [inventory.go](../../internal/execution/adapters/orca/inventory.go)
+- [lifecycle.go](../../internal/execution/adapters/orca/lifecycle.go)
+- [lifecycle_observation.go](../../internal/execution/adapters/orca/lifecycle_observation.go)
+- [lifecycle_resources.go](../../internal/execution/adapters/orca/lifecycle_resources.go)
+- [lifecycle_turns.go](../../internal/execution/adapters/orca/lifecycle_turns.go)
+- [message.go](../../internal/execution/adapters/orca/message.go)
+- [mutation.go](../../internal/execution/adapters/orca/mutation.go)
+- [orchestration.go](../../internal/execution/adapters/orca/orchestration.go)
+- [output.go](../../internal/execution/adapters/orca/output.go)
+- [profile_config.go](../../internal/execution/adapters/orca/profile_config.go)
+- [readiness.go](../../internal/execution/adapters/orca/readiness.go)
+- [relay.go](../../internal/execution/adapters/orca/relay.go)
+- [saved_receipt.go](../../internal/execution/adapters/orca/saved_receipt.go)
+- [terminal.go](../../internal/execution/adapters/orca/terminal.go)
+- [terminal_protocol.go](../../internal/execution/adapters/orca/terminal_protocol.go)
+- [workspace.go](../../internal/execution/adapters/orca/workspace.go)
 #### internal/steerline/persistence
 
 - [connections.go](../../internal/steerline/persistence/connections.go)
 - [ports.go](../../internal/steerline/persistence/ports.go)
-#### internal/steerline/processhost
+#### internal/execution/publication
 
-- [host.go](../../internal/steerline/processhost/host.go)
-- [process_other.go](../../internal/steerline/processhost/process_other.go)
-- [process_unix.go](../../internal/steerline/processhost/process_unix.go)
-- [process_windows.go](../../internal/steerline/processhost/process_windows.go)
-#### internal/steerline/publication
-
-- [command.go](../../internal/steerline/publication/command.go)
-- [gitea.go](../../internal/steerline/publication/gitea.go)
-- [identity.go](../../internal/steerline/publication/identity.go)
-- [policy.go](../../internal/steerline/publication/policy.go)
-- [pr.go](../../internal/steerline/publication/pr.go)
-- [provider.go](../../internal/steerline/publication/provider.go)
+- [command.go](../../internal/execution/publication/command.go)
+- [gitea.go](../../internal/execution/publication/gitea.go)
+- [identity.go](../../internal/execution/publication/identity.go)
+- [policy.go](../../internal/execution/publication/policy.go)
+- [pr.go](../../internal/execution/publication/pr.go)
+- [provider.go](../../internal/execution/publication/provider.go)
 #### internal/steerline/query
 
 - [conversation.go](../../internal/steerline/query/conversation.go)
@@ -599,14 +595,14 @@ console 保留任务/会话选择、正文版本、Unicode/字节预算、阅读
 - [native_orca.go](../../internal/steerline/testprotocol/native_orca.go)
 - [supervised.go](../../internal/steerline/testprotocol/supervised.go)
 - [terminal.go](../../internal/steerline/testprotocol/terminal.go)
-#### internal/steerline/workspace
+#### internal/execution/workspace
 
-- [cleanup.go](../../internal/steerline/workspace/cleanup.go)
-- [git.go](../../internal/steerline/workspace/git.go)
-- [inspect.go](../../internal/steerline/workspace/inspect.go)
-- [lifecycle.go](../../internal/steerline/workspace/lifecycle.go)
-- [prepare.go](../../internal/steerline/workspace/prepare.go)
-- [resources.go](../../internal/steerline/workspace/resources.go)
+- [cleanup.go](../../internal/execution/workspace/cleanup.go)
+- [git.go](../../internal/execution/workspace/git.go)
+- [inspect.go](../../internal/execution/workspace/inspect.go)
+- [lifecycle.go](../../internal/execution/workspace/lifecycle.go)
+- [prepare.go](../../internal/execution/workspace/prepare.go)
+- [resources.go](../../internal/execution/workspace/resources.go)
 #### internal/steerlineapp
 
 - [app.go](../../internal/steerlineapp/app.go)

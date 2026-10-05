@@ -1,0 +1,195 @@
+package orcaworker
+
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+)
+
+func TestCleanupProgressRequiresConfirmedOriginalResource(t *testing.T) {
+	resource := executionbackend.ProcessIdentity{Kind: "orca", Terminal: "original", RuntimeID: "runtime", Incarnation: "incarnation"}
+	snapshot := executionbackend.LifecycleSnapshot{Ref: executionbackend.ExecutionRef{External: resource}, Session: executionbackend.SessionContext{ExecutionID: "execution"}}
+	input, err := json.Marshal(executionbackend.CleanupInput{Resources: []executionbackend.ProcessIdentity{resource}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	operation := executionbackend.Operation{Action: string(executionbackend.LifecycleCleanup), Status: executionbackend.OperationUnknown, Request: input, Ref: &snapshot.Ref, LifecycleIdentity: &executionbackend.LifecycleOperationIdentity{ExecutionID: "execution"}}
+	snapshot.Operations = []executionbackend.Operation{operation}
+	if cleanupConfirmed(snapshot, resource) {
+		t.Fatal("unknown cleanup advanced progress")
+	}
+	snapshot.Operations[0].Status = executionbackend.OperationConfirmed
+	if !cleanupConfirmed(snapshot, resource) {
+		t.Fatal("committed cleanup did not advance its original resource")
+	}
+	replacement := resource
+	replacement.Incarnation = "replacement"
+	if cleanupConfirmed(snapshot, replacement) {
+		t.Fatal("original receipt closed a replacement resource")
+	}
+}
+
+func TestNativeLifecyclePlansCommittedResourcesAndSeparateInput(t *testing.T) {
+	project, workflow, execution, attempt := stableIDValue(1), stableIDValue(2), stableIDValue(3), stableIDValue(4)
+	config := ProfileConfig{Executable: "orca", Args: []string{"--native"}, Shell: "powershell.exe", WaitTimeout: "1m"}
+	target := executionbackend.ExecutionTarget{ID: nativeTargetID(config)}
+	snapshot := executionbackend.LifecycleSnapshot{
+		Ref: executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendOrca,
+			Protocol: executionbackend.ProtocolOrcaTerminalV2, Target: target, Agent: executionbackend.AgentSpec{Name: "codex"},
+			RunID: workflow, AttemptID: attempt},
+		Session: executionbackend.SessionContext{ProjectID: project, TaskID: "808", WorkflowRunID: workflow, ExecutionID: execution,
+			AttemptID: attempt, Agent: executionbackend.AgentSpec{Name: "codex"}, Target: target},
+		ConfigurationDigest: "fixed-profile", ResourceGeneration: stableIDValue(5),
+		WorkspacePlan: executionbackend.WorkspaceIntent{Path: "C:/repo/worktrees/worker", Branch: "codex/808", BaseCommit: "0123456789012345678901234567890123456789"},
+	}
+	lifecycle := &ExecutionLifecycle{setup: executionbackend.LifecycleSetup{Snapshot: snapshot},
+		config: Config{Target: target}, client: New(Config{}), codex: codexProfileForTest(), orca: config}
+	step, err := lifecycle.Next(context.Background(), snapshot)
+	if err != nil || step.Action != executionbackend.LifecyclePrepareWorkspace {
+		t.Fatalf("first plan step=%+v error=%v", step, err)
+	}
+
+	snapshot.Workspace = snapshot.WorkspacePlan
+	snapshot.Ref.WorkspacePath, snapshot.Ref.WorkspaceBranch, snapshot.Ref.BaseCommit = snapshot.Workspace.Path, snapshot.Workspace.Branch, snapshot.Workspace.BaseCommit
+	snapshot.Ref.Target.WorktreeID = "repo::C:/repo/worktrees/worker"
+	snapshot.Session.Target = snapshot.Ref.Target
+	state := NativeExecutionState{RepositoryID: "repo"}
+	putState := func() {
+		t.Helper()
+		envelope, err := NewExecutionStateEnvelope(ExecutionStateIdentity{ProjectID: project, ExecutionID: execution, AttemptID: attempt,
+			Generation: snapshot.ResourceGeneration, ConfigDigest: snapshot.ConfigurationDigest, Protocol: snapshot.Ref.Protocol,
+			Process: snapshot.Ref.External, CoordinatorTerminal: snapshot.Ref.Target.CoordinatorTerminal}, state)
+		if err != nil {
+			t.Fatal(err)
+		}
+		snapshot.Implementation = []executionbackend.ImplementationDataEnvelope{envelope}
+	}
+	putState()
+	step, err = lifecycle.Next(context.Background(), snapshot)
+	if err != nil || step.Action != executionbackend.LifecycleCreateResource || step.Input.Resource.Purpose != "agent-terminal" {
+		t.Fatalf("agent plan step=%+v error=%v", step, err)
+	}
+
+	snapshot.Ref.External = executionbackend.ProcessIdentity{Kind: "orca", Terminal: "agent", RuntimeID: "runtime", Incarnation: "agent-inc",
+		WorktreeID: snapshot.Ref.Target.WorktreeID}
+	state.AgentBound = true
+	putState()
+	step, err = lifecycle.Next(context.Background(), snapshot)
+	if err != nil || step.Input.Resource.Purpose != "coordinator" {
+		t.Fatalf("coordinator plan step=%+v error=%v", step, err)
+	}
+
+	state.Coordinator = executionbackend.ProcessIdentity{Kind: "orca-native-coordinator", Terminal: "coordinator", RuntimeID: "runtime", Incarnation: "coord-inc"}
+	snapshot.Ref.Target.CoordinatorTerminal = "coordinator"
+	snapshot.Session.Target = snapshot.Ref.Target
+	putState()
+	step, err = lifecycle.Next(context.Background(), snapshot)
+	if err != nil || step.Input.Resource.Purpose != "workflow" {
+		t.Fatalf("Run plan step=%+v error=%v", step, err)
+	}
+	snapshot.Ref.Target.OrchestrationRun = "run-fixed"
+	snapshot.Session.Target = snapshot.Ref.Target
+	state.RelayIgnored = true
+	putState()
+	if step, err = lifecycle.Next(context.Background(), snapshot); err != nil || !step.Done {
+		t.Fatalf("idle plan=%+v error=%v", step, err)
+	}
+
+	pending := &executionbackend.TurnInput{CommandID: stableIDValue(6), Prompt: "run the worker task", Purpose: "readiness"}
+	snapshot.PendingTurn = pending
+	putState()
+	step, err = lifecycle.Next(context.Background(), snapshot)
+	if err != nil || step.Action != executionbackend.LifecycleCreateResource || step.Input.Resource.Purpose != "conversation" || step.Input.Resource.TurnPurpose != "readiness" {
+		t.Fatalf("Task plan step=%+v error=%v", step, err)
+	}
+	state.Turns = append(state.Turns, NativeTurnState{TurnID: pending.CommandID, TaskID: "task-fixed", Purpose: "readiness"})
+	putState()
+	step, err = lifecycle.Next(context.Background(), snapshot)
+	if err != nil || step.Action != executionbackend.LifecycleStartTurn {
+		t.Fatalf("Dispatch plan step=%+v error=%v", step, err)
+	}
+	state.Turns[0].DispatchID, state.Turns[0].InputSubmissionPending = "dispatch-fixed", true
+	putState()
+	step, err = lifecycle.Next(context.Background(), snapshot)
+	if err != nil || step.Action != executionbackend.LifecycleSubmitInput {
+		t.Fatalf("input submission plan step=%+v error=%v", step, err)
+	}
+}
+
+func TestProbeMutationRunsAsOneDurableLifecycleAction(t *testing.T) {
+	gitDir, worktree := t.TempDir(), t.TempDir()
+	if err := os.MkdirAll(filepath.Join(gitDir, "info"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	identity := executionbackend.ProbeIdentity{Execution: stableIDValue(7), Turn: stableIDValue(8), Nonce: stableIDValue(9), ProfileDigest: "profile",
+		Runtime: "runtime", Terminal: "terminal", Incarnation: "incarnation", Worktree: worktree}
+	snapshot := executionbackend.LifecycleSnapshot{Ref: executionbackend.ExecutionRef{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV2,
+		WorkspacePath: worktree, External: executionbackend.ProcessIdentity{Kind: "orca", Terminal: "terminal", RuntimeID: "runtime", Incarnation: "incarnation"}},
+		Session:             executionbackend.SessionContext{ProjectID: gitDir, ExecutionID: identity.Execution, AttemptID: stableIDValue(10), WorkflowRunID: stableIDValue(11)},
+		ConfigurationDigest: "config", ResourceGeneration: stableIDValue(12)}
+	state := NativeExecutionState{Coordinator: executionbackend.ProcessIdentity{Kind: "orca", Terminal: "coordinator", RuntimeID: "runtime", Incarnation: "incarnation"},
+		Turns: []NativeTurnState{{TurnID: identity.Turn, Purpose: "readiness"}}}
+	snapshot.PreparationProbe = &identity
+	envelope, err := NewExecutionStateEnvelope(ExecutionStateIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID,
+		AttemptID: snapshot.Session.AttemptID, Generation: snapshot.ResourceGeneration, ConfigDigest: snapshot.ConfigurationDigest,
+		Protocol: snapshot.Ref.Protocol, Process: snapshot.Ref.External}, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot.Implementation = []executionbackend.ImplementationDataEnvelope{envelope}
+	lifecycle := &ExecutionLifecycle{setup: executionbackend.LifecycleSetup{Snapshot: snapshot}, client: New(Config{}), orca: ProfileConfig{WaitTimeout: "1m"}}
+	request := executionbackend.LifecycleRequest{Snapshot: snapshot, Operation: executionbackend.Operation{ID: "operation", Action: string(executionbackend.LifecycleHostAction), PayloadDigest: "digest"},
+		Input: executionbackend.LifecycleInput{Host: &executionbackend.HostActionInput{Kind: executionbackend.HostPrepareProbeFiles, Probe: &identity}}}
+	receipt, err := lifecycle.ExecuteHostAction(context.Background(), request)
+	if err != nil || receipt.Disposition != executionbackend.OperationConfirmed {
+		t.Fatalf("probe file action receipt=%+v error=%v", receipt, err)
+	}
+	plan, err := BuildProbe(identity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if present, err := CheckProbeFiles(identity, plan); err != nil || !present {
+		t.Fatalf("probe files were not prepared by the action: present=%v err=%v", present, err)
+	}
+	ignored, err := ReadinessIgnored(gitDir)
+	if err != nil || !ignored {
+		t.Fatalf("probe ignore rule was not prepared by the action: ignored=%v err=%v", ignored, err)
+	}
+	reconciled, err := lifecycle.ReconcileHostAction(context.Background(), request)
+	if err != nil || reconciled.Disposition != executionbackend.OperationConfirmed {
+		t.Fatalf("probe action receipt could not be reconciled read-only: %+v err=%v", reconciled, err)
+	}
+	cleanup := request
+	cleanup.Operation.ID = "cleanup-operation"
+	cleanup.Input.Host = &executionbackend.HostActionInput{Kind: executionbackend.HostCleanupProbeFiles, Probe: &identity}
+	if _, err = lifecycle.ExecuteHostAction(context.Background(), cleanup); err != nil {
+		t.Fatal(err)
+	}
+	if absent, err := ProbeFilesAbsent(identity); err != nil || !absent {
+		t.Fatalf("cleanup action left probe files: absent=%v err=%v", absent, err)
+	}
+	exclude, err := os.ReadFile(filepath.Join(gitDir, "info", "exclude"))
+	if err != nil || !strings.Contains(string(exclude), "/.steerline-readiness/") {
+		t.Fatalf("persisted ignore rule disappeared during probe cleanup: %q err=%v", exclude, err)
+	}
+}
+
+func stableIDValue(last byte) string {
+	const hex = "0123456789abcdef"
+	value := make([]byte, 32)
+	for i := range value {
+		value[i] = hex[0]
+	}
+	value[len(value)-1] = hex[int(last)]
+	return string(value)
+}
+
+func codexProfileForTest() codexworker.ProfileConfig {
+	return codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "unelevated"}
+}

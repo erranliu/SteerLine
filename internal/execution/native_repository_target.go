@@ -6,7 +6,7 @@ import (
 	"strings"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
 func configuredRepositoryTarget(ctx context.Context, c Config) (string, error) {

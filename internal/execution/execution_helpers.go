@@ -8,7 +8,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/workspace"
+	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
 func (s *Service) workflowRecords(run *contracts.Run) (*executionmodel.WorkflowRunRecord, *executionmodel.ExecutionRecord) {

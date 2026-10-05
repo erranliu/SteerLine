@@ -25,6 +25,8 @@ const execution = module + "/internal/execution"
 
 var platformText = regexp.MustCompile(`(?i)codex|orca`)
 
+var executionAdapters = execution + "/adapters"
+
 // Report contains deterministic source diagnostics, including the full path
 // through a helper when a forbidden dependency is transitive.
 type Report struct {
@@ -78,7 +80,7 @@ func purePackage(pkg string) bool {
 }
 
 func implementation(pkg string) bool {
-	for _, path := range []string{core + "/codexapp", core + "/codexworker", core + "/orcaworker", core + "/orca_remote_worker", core + "/processhost"} {
+	for _, path := range []string{executionAdapters} {
 		if pkg == path || strings.HasPrefix(pkg, path+"/") {
 			return true
 		}
@@ -94,7 +96,7 @@ func consoleForbidden(pkg string) bool {
 	if pkg == core || pkg == execution || pkg == "database/sql" || pkg == "modernc.org/sqlite" || strings.HasPrefix(pkg, "modernc.org/sqlite/") || forbidden(pkg) {
 		return true
 	}
-	for _, p := range []string{core + "/sqlite", core + "/persistence", core + "/query", core + "/projection", execution + "/reconstruction", core + "/workspace", core + "/publication", module + "/internal/steerlineclient"} {
+	for _, p := range []string{core + "/sqlite", core + "/persistence", core + "/query", core + "/projection", execution + "/reconstruction", execution + "/workspace", execution + "/publication", execution + "/process", module + "/internal/steerlineclient"} {
 		if pkg == p || strings.HasPrefix(pkg, p+"/") {
 			return true
 		}
@@ -115,6 +117,63 @@ func executionForbidden(pkg string) bool {
 		}
 	}
 	return strings.HasPrefix(pkg, module+"/internal/task/") && pkg != module+"/internal/task/model"
+}
+
+// Adapter implementations may consume backend contracts, pure model values,
+// dedicated protocol packages and execution resource helpers. They cannot
+// depend on application use cases, task implementations, storage, SQL, app or
+// product code.
+func adapterForbidden(pkg string) bool {
+	if pkg == "database/sql" || strings.HasPrefix(pkg, "modernc.org/sqlite") {
+		return true
+	}
+	if pkg == execution || strings.HasPrefix(pkg, execution+"/") {
+		for _, allowed := range []string{
+			execution + "/backend", execution + "/model", execution + "/adapters",
+			execution + "/workspace", execution + "/publication", execution + "/process",
+		} {
+			if pkg == allowed || strings.HasPrefix(pkg, allowed+"/") {
+				return false
+			}
+		}
+		return true
+	}
+	if pkg == module+"/internal/task" || strings.HasPrefix(pkg, module+"/internal/task/") {
+		return pkg != module+"/internal/task/model" && !strings.HasPrefix(pkg, module+"/internal/task/model/")
+	}
+	for _, allowed := range []string{core + "/contracts"} {
+		if pkg == allowed || strings.HasPrefix(pkg, allowed+"/") {
+			return false
+		}
+	}
+	// The transitional conversation-value package imports these two pure value
+	// packages. Adapter source must not import them directly; the scoped
+	// exception below is only for that existing contract dependency closure.
+	for _, allowed := range []string{module + "/internal/product/api", core + "/taskview"} {
+		if pkg == allowed || strings.HasPrefix(pkg, allowed+"/") {
+			return false
+		}
+	}
+	if pkg == core || strings.HasPrefix(pkg, core+"/") {
+		return true
+	}
+	return strings.HasPrefix(pkg, module+"/internal/storage/") ||
+		(pkg != module+"/internal/product/api" && strings.HasPrefix(pkg, module+"/internal/product/")) ||
+		strings.HasPrefix(pkg, module+"/internal/steerlineapp") ||
+		strings.HasPrefix(pkg, module+"/internal/steerlineclient") ||
+		strings.HasPrefix(pkg, module+"/internal/steerlineintegration")
+}
+
+func adapterDirectForbidden(pkg string) bool {
+	if adapterForbidden(pkg) {
+		return true
+	}
+	for _, pure := range []string{module + "/internal/product/api", core + "/taskview"} {
+		if pkg == pure || strings.HasPrefix(pkg, pure+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // ScanSource parses production and test Go files regardless of GOOS or build tags.
@@ -174,6 +233,9 @@ func ScanSource(root string) (Report, error) {
 				return err
 			}
 			graph[pkg] = append(graph[pkg], value)
+			if implementation(pkg) && !strings.HasSuffix(entry.Name(), "_test.go") && adapterDirectForbidden(value) {
+				report.Violations = append(report.Violations, "execution adapter forbidden dependency: "+filepath.ToSlash(path)+" -> "+value)
+			}
 			if purePackage(pkg) && !PureImportsAllowed(pkg, value) {
 				report.Violations = append(report.Violations, "pure ownership dependency: "+filepath.ToSlash(path)+" -> "+value)
 			}
@@ -213,6 +275,16 @@ func ScanSource(root string) (Report, error) {
 			report.Violations = append(report.Violations, "execution forbidden dependency: "+strings.Join(path, " -> "))
 		}
 	})
+	for pkg := range productionGraph {
+		if !strings.HasPrefix(pkg, executionAdapters+"/") {
+			continue
+		}
+		visitGraph(productionGraph, pkg, func(path []string) {
+			if adapterForbidden(path[len(path)-1]) {
+				report.Violations = append(report.Violations, "execution adapter forbidden dependency: "+strings.Join(path, " -> "))
+			}
+		})
+	}
 	for _, seed := range []string{core + "/sqlite", core + "/persistence"} {
 		visitGraph(graph, seed, func(path []string) {
 			last := path[len(path)-1]
@@ -353,6 +425,46 @@ func Check(ctx context.Context, root string) (Report, error) {
 					}
 				}
 			}
+		}
+		adapterCmd := exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/execution/adapters/...")
+		adapterCmd.Dir = root
+		for _, value := range os.Environ() {
+			key, _, _ := strings.Cut(value, "=")
+			if !strings.EqualFold(key, "GOOS") && !strings.EqualFold(key, "GOARCH") {
+				adapterCmd.Env = append(adapterCmd.Env, value)
+			}
+		}
+		adapterCmd.Env = append(adapterCmd.Env, "GOOS="+target, "GOARCH=amd64")
+		adapterData, err := adapterCmd.Output()
+		if err != nil {
+			return report, fmt.Errorf("%s adapter dependencies: %w", target, err)
+		}
+		adapterDecoder := json.NewDecoder(strings.NewReader(string(adapterData)))
+		for adapterDecoder.More() {
+			var pkg struct {
+				ImportPath string
+				Imports    []string
+				Deps       []string
+				Error      *struct{ Err string }
+				DepsErrors []struct{ Err string }
+			}
+			if err := adapterDecoder.Decode(&pkg); err != nil {
+				return report, err
+			}
+			if pkg.Error != nil {
+				return report, fmt.Errorf("%s adapter package %s: %s", target, pkg.ImportPath, pkg.Error.Err)
+			}
+			if len(pkg.DepsErrors) > 0 {
+				return report, fmt.Errorf("%s adapter package %s: %s", target, pkg.ImportPath, pkg.DepsErrors[0].Err)
+			}
+			if strings.HasPrefix(pkg.ImportPath, executionAdapters+"/") {
+				for _, dep := range append(append([]string{}, pkg.Imports...), pkg.Deps...) {
+					if adapterForbidden(dep) {
+						report.Violations = append(report.Violations, target+" adapter forbidden dependency: "+pkg.ImportPath+" -> "+dep)
+					}
+				}
+			}
+			report.Dependencies[target+"-adapters"]++
 		}
 	}
 
