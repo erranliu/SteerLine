@@ -4,34 +4,46 @@
 
 ## 结果
 
-- 定向存储、execution、product、边界与 app wiring 组全部通过；无 skip。
-- 最终 L1 通过：12 个 quick 组，431 个测试事件全部通过、0 失败、0 skip，执行 339.0 秒。摘要：[L1 summary](L1-20261005T043100Z/summary.json)。环境为 Windows/amd64，最终 L1 的短临时根为 `C:\s79l1`，每个 quick 组通过 runner 分配独立 home/temp；未启用原生验收开关。
-- 全仓编译诊断 `go test -run '^$' ./...` 通过；该命令只编译，不计入行为测试证据。
-- 未运行 Full、L2、L3 或 live。schema 14 和 checkpoint/runtime schema 18 均未更改。
-- test-feedback 已清理每个 quick 组的隔离目录；几个人工建立的外层 TEMP 根仍留在系统临时目录。尝试删除这些根目录时，桌面环境文件操作策略拒绝了删除命令，因此没有继续绕过策略。
+- PR #223 在最新 `main` `d532c5f13c1d3269c019a8cdee6df008580c0446` 上完成 rebase。#224 的 Full owner 分区、资源注入、managed Git/heartbeat、task document 与 E2E deadline/cleanup 更新均保留。
+- 实现和回归代码已提交为 `810130c9a4520ad9fb5ac4ae517d0534ab13a153`。L1 summary 记录其运行时 HEAD 为父提交 `820d3fa65e7aace9f2ff8fe2af7d622f3611e208`，并记录了当时完整修改工作树；测试之后没有再改源码或测试，因此提交树与已验证实现一致。随后只更新了本 README 与 test mapping。
+- 修复了独立复审确认的 3 项遗漏：worker-flow 服务预检调用 execution 所有者的 `ValidateStoredExecutions`；SQLite 在同一只读事务采 checkpoint、TaskGraph/authority 和 execution facts；命令、Workflow(id)、Activity 改用 task/candidate/workflow/attempt 范围的值和前值读取。
+- 最终 L1 通过：12 组、432/432 测试通过，0 失败、0 跳过，执行 374.1 秒。该报告来自集成 `d532c5f` 后的候选：[L1 summary](L1-20261005T154237/summary.json)。各 quick 组原始 Go JSON 与 stderr 在同目录。
+- 全仓编译诊断 `go test -run '^$' ./...` 退出码为 0，只证明编译；stdout、stderr 和实际退出码：[stdout](compile-only-01-20261005T154223/stdout.log) · [stderr](compile-only-01-20261005T154223/stderr.log) · [exit code](compile-only-01-20261005T154223/exit-code.txt)。
+- 未运行 Full、L2、L3 或 live。#224 的 Full/十场景报告不是本次 #79 行为测试证据。schema 14 和 checkpoint/runtime schema 18 未变。
+
+## 新发现的回归
 
 | 组 | 命中与结果 | 报告 |
 | --- | --- | --- |
-| `sqlite-01` | 11/11 通过；包含项目页/活动同事务、原子回滚、只读不建库/释放句柄和 conversation 写屏障子例 | [summary](sqlite-01-20261005T034918Z/summary.json) · [Go JSON](sqlite-01-20261005T034918Z/go-test.jsonl) |
-| `execution-01` | 19/19 通过；MC1/MC7 与 ResultCAS 全部子例通过 | [summary](execution-01-20261005T040056Z/summary.json) · [Go JSON](execution-01-20261005T040056Z/go-test.jsonl) |
-| `product-01` | 8/8 通过；501 候选超详情页排序通过 | [summary](product-01-20261005T040538Z/summary.json) · [Go JSON](product-01-20261005T040538Z/go-test.jsonl) |
-| `storage-boundary-01` | 17/17 通过；TM04 与 TM07 storage/reconstruction 正负边界通过 | [summary](storage-boundary-01-20261005T042037Z/summary.json) · [Go JSON](storage-boundary-01-20261005T042037Z/go-test.jsonl) |
-| `product-boundary-01` | 37/37 通过；CD67 core 全源码、Windows/Linux 依赖图与负向注入通过 | [summary](product-boundary-01-20261005T042043Z/summary.json) · [Go JSON](product-boundary-01-20261005T042043Z/go-test.jsonl) |
-| `wiring-01` | 1/1 通过；真实 app store、窄端口和 Close 回调断言通过 | [summary](wiring-01-20261005T040545Z/summary.json) · [Go JSON](wiring-01-20261005T040545Z/go-test.jsonl) |
-| `wiring-regression-01` | 11/11 通过；CD67 AdditionalImplementation lifecycle 子例通过 | [summary](wiring-regression-01-20261005T042735Z/summary.json) · [Go JSON](wiring-regression-01-20261005T042735Z/go-test.jsonl) |
+| `preflight-01` | 1/1 通过；真实 app service factory 对当前 schema execution 缺失 `Environment.Preparation` 返回 `unsupported_schema`，且数据库 revision 不变 | [summary](preflight-01-20261005T153851/summary.json) · [Go JSON](preflight-01-20261005T153851/go-test.jsonl) |
+| `runtime-snapshot-01` | 2/2 通过；WAL reader 在 checkpoint 采样后遇到真实 WorkerCommit 和 authority 写入仍只见完整旧 revision；下一次读到完整新 checkpoint、authority、execution；真实 app Runtime 使用所采样的 checkpoint/authority | [summary](runtime-snapshot-01-20261005T153912/summary.json) · [Go JSON](runtime-snapshot-01-20261005T153912/go-test.jsonl) |
+| `bounded-read-01` | 1/1 通过；B 的 operation JSON 损坏后，重新打开的 app reader 仍能读取 A 的 Workflow(id) 和 Activity，事件及执行/attempt 归属保持固定 identity | [summary](bounded-read-01-20261005T153931/summary.json) · [Go JSON](bounded-read-01-20261005T153931/go-test.jsonl) |
+| `bounded-command-01` | 1/1 通过；B 的 operation JSON 损坏后，真实 app command 可为同一任务启动 C；前值包含完整 TaskGraph 和该任务全部三个候选，没有 project-wide Query 能力 | [summary](bounded-command-01-20261005T153954/summary.json) · [Go JSON](bounded-command-01-20261005T153954/go-test.jsonl) |
 
-最终 L1 的所有组 ID、父/子测试实际命中、各组通过数和原始 JSON 均在 [L1 summary](L1-20261005T043100Z/summary.json) 与同目录各组 `test.jsonl` 中。
+## 定向回归和主干集成
 
-## 主干集成与证据复用
+| 组 | 命中与结果 | 报告 |
+| --- | --- | --- |
+| `sqlite-01` | 11/11 通过；回滚、项目/活动事务、只读和 conversation 写屏障 | [summary](sqlite-01-20261005T151028/summary.json) · [Go JSON](sqlite-01-20261005T151028/go-test.jsonl) |
+| `execution-01` | 19/19 通过；MC1/MC7 候选领取、完整历史、结果 CAS/唯一交付、丢弃仲裁 | [summary](execution-01-20261005T151039/summary.json) · [Go JSON](execution-01-20261005T151039/go-test.jsonl) |
+| `product-01` | 8/8 通过；storage ports、页面投影和 501 候选顺序 | [summary](product-01-20261005T151651/summary.json) · [Go JSON](product-01-20261005T151651/go-test.jsonl) |
+| `storage-boundary-01` | 17/17 通过；TM04/TM07 正负边界 | [summary](storage-boundary-01-20261005T151659/summary.json) · [Go JSON](storage-boundary-01-20261005T151659/go-test.jsonl) |
+| `product-boundary-01` | 37/37 通过；#77/#78 全源码、Windows/Linux 依赖图与负向注入 | [summary](product-boundary-01-20261005T151713/summary.json) · [Go JSON](product-boundary-01-20261005T151713/go-test.jsonl) |
+| `wiring-01` | 1/1 通过；app SQLite wiring、消费者端口与 Close 回调 | [summary](wiring-01-20261005T151724/summary.json) · [Go JSON](wiring-01-20261005T151724/go-test.jsonl) |
+| `wiring-regression-01` | 11/11 通过；CD67 app-server、terminal、fixed input 和恢复回归 | [summary](wiring-regression-01-20261005T151750/summary.json) · [Go JSON](wiring-regression-01-20261005T151750/go-test.jsonl) |
+| `mainline-runner-01` | 9/9 通过；迁移后的 execution Full owner 有非零测试，coverage 反例拒绝缺失、重复、旧 owner 与错报 owner；未启动 Full | [summary](mainline-runner-01-20261005T152916/summary.json) · [Go JSON](mainline-runner-01-20261005T152916/go-test.jsonl) |
+| `mainline-fixtures-01` | 9/9 通过；file resource、WorkerFlow 当前 profile 拒绝、SQLite host fixture、managed Git task document | [summary](mainline-fixtures-01-20261005T153516/summary.json) · [Go JSON](mainline-fixtures-01-20261005T153516/go-test.jsonl) |
+| `mainline-e2e-01` | 11/11 通过；business deadline、候选 feedback 和第二次 cleanup 保留第一次冻结的业务结果 | [summary](mainline-e2e-01-20261005T153835/summary.json) · [Go JSON](mainline-e2e-01-20261005T153835/go-test.jsonl) |
 
-最终集成 base 为 `origin/main` `f8b5959462679faa4f00972f8f9e232044b6ab6c`，L1/定向证据的验证源 commit 为 `b49dec2cc27455fbf8044651a9975d28293aa372`。从该验证基线到新 main 的实际 diff 只有 4 个 `.agents/skills/roadmap-runner` 指令/metadata 文件，无 Go、SQL、配置或产品路径变化；rebase 无冲突，代码树与验证基线一致，因此按 Plan 复用上述通过证据，没有重跑 L1。Spec SHA-256 为 `A26308A7919B822AEED91382D542660EE92D9BD90A674CD3E8CD2ADABEA6D606`。
+最终 L1 分组的实际父/子测试名、退出码和分组计数见 [L1 summary](L1-20261005T154237/summary.json)。复审前的 431 事件 L1 仍保留作历史证据，不替代当前 432 事件结果。
 
-## 修复和诊断轨迹
+## 集成与诊断轨迹
 
-实施中保留了失败报告，不覆盖 `-out`：
+- 最新 main 的父提交为原集成基线 `f8b5959`，PR #224 合并后的 tip 是 `d532c5f`。基于该 tip rebase；四个冲突集中在 execution capability 测试与 core host fixture。保留了上游 file resource 断言，并把 capability report fixture 接到当前 `ResourcePort`；host fixture 使用新的 `storage/sqlite` 与 `ExecutionStateReader`；其他 managed Git、heartbeat、Full owner、候选样本复用和 E2E deadline/cleanup 变更保留。rebase 后 runner/fixture/E2E 定向组和最终 L1 均通过。
+- 诊断编译失败均有独立产物 `compile-only-attempt-01` 至 `compile-only-attempt-08`；没有将其写成行为测试通过。最终 compile-only 结果保存在上表路径。
+- 初版 `preflight-01` 在 `150645` 失败，因为 fixture 误以为本地 claim 已包含 preparation；后续测试改为通过真实 `CommitWorker` 写入缺 preparation 的当前格式记录，再验证 app factory 拒绝，未更改拒绝条件。报告：[summary](preflight-01-20261005T150645/summary.json)。
+- 主干夹具诊断 `mainline-fixtures-01-20261005T152931` 暴露旧错误文案断言和 core test fixture 缺 app storage hooks；`153248` 又暴露 test-only `ReadRuntime` 回调递归。已将 fixture 改为明确注入 reader/validator/project initializer，并在测试回调中直接读取 SQLite 快照；最终 `153516` 通过。失败/不完整原始报告均保留，未覆盖。
+- 每次定向运行通过 `test-feedback` 使用新空报告目录、Windows/amd64、受控 Git/SQLite fixture，无原生 opt-in。E2E live、模型请求和远端 provider 验收未运行。
+- 原手动外层临时根 `C:\s79r`、`C:\s79l1` 仍由先前执行遗留；之前删除请求被桌面文件操作策略拒绝，本次没有重试或绕过。
 
-1. 首次 `sqlite-01` 有 10/11 通过。回滚测试夹具在空库上读取 task graph，但未创建其所需的 native authority；已在事务前初始化当前 authority，再运行的 `sqlite-01` 为 11/11 通过。原报告：[首次 SQLite summary](sqlite-01-20261005T034628Z/summary.json)。
-2. `execution-01` 的前两次诊断暴露白盒命令 fixture 的端口边界问题：包装后的 `CommandStore` 被错误要求同时实现任务命令写端口，之后测试 TaskService 又缺少固定输入和文档端口。已把 Reader、task-owned Input/文档端口与任务命令事务分开构造；最终 19/19 通过。原报告：[第一次](execution-01-20261005T034937Z/summary.json)、[第二次](execution-01-20261005T035305Z/summary.json)。
-3. 第一次完整 L1 是修复前的诊断运行，`execution/reconstruction` 的 #76 守卫尚未允许读取纯 `storage/ports` 值、CD67 反向存储夹具仍放在旧 SQLite 路径，且 lifecycle 测试直接调用 core 答复时缺少 app 提供的 command ports。长 TEMP 根又让 Git worktree 在 Windows 报 `$GIT_DIR too big`。已允许 reconstruction 读取纯 storage ports（继续拒绝具体 SQLite）、迁移反向存储夹具、由 app 端测试 helper 注入 command read/write ports，并让 runner 的 quick 组使用独立短临时根；修复后的 core/product boundary 与 lifecycle 回归均通过，最终 L1 通过。两次诊断证据：[首次 L1](L1-20261005T040716Z/summary.json)、[旧路径反向夹具](product-boundary-01-20261005T041846Z/summary.json)。
-
-具体测试选择、断言所有者、诊断报告和最终命中见 [test-mapping.json](test-mapping.json)；代码目录/类型/构造映射见 [ownership.md](ownership.md)。
+具体所有者、父/子测试和报告映射见 [test-mapping.json](test-mapping.json)；当前接口与 fixture 所有权见 [ownership.md](ownership.md)。
