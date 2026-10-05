@@ -13,7 +13,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
 func fakeHostGH(args []string) int {

@@ -15,7 +15,7 @@
 当前剩余问题如下：
 
 - `internal/steerline` 仍持有执行、决策、控制、恢复与跨线提交协调；task 创建/固定文档、批次和追加前置已经归位。
-- 任务选择与执行结果边界已接通 task 工作/规范结果端口、执行核验和专用原子提交；任务应用用例已由 #75 迁入 task；执行 actor 的完整迁包及领取文档端口集成仍由 #76 负责。后继消费已固定小端口，执行资格仍以各自硬前置真实交付为准。
+- 任务选择与执行结果边界已接通 task 工作/规范结果端口、执行核验和专用原子提交；任务应用用例已由 #75 迁入 task；执行 actor 的完整迁包及领取文档端口集成已由 #76 在 PR219 交付。后继消费已固定小端口，执行资格仍以各自硬前置真实交付为准。
 - 产品公共快照仍包含完整 Domain/Runtime 和内部记录，控制台虽已隔离实现 import，仍会受到内部模型形状变化影响。
 - 纯定义已归对应所有者；`contracts` 仍残留宽聚合 DTO，后端、查询、存储、宿主与测试目录的归组仍待完成。
 
@@ -142,8 +142,8 @@ task/model、task 应用、execution/model、execution/backend 和纯端口已�
 | 当前所有者 | 目标归属与整理 |
 | --- | --- |
 | 主包执行、决策、会话、恢复及交付用例 | execution，状态与外部动作经原提交屏障组织 |
-| codexworker、codexapp、orcaworker、orca_remote_worker | execution/adapters 下对应实现；codexapp 先核对共享消费者，再决定并入或保留专用协议子包 |
-| workspace、publication、processhost | execution 下对应独立副作用包 |
+| codexworker、codexapp、orcaworker、orca_remote_worker | #78 将实现置于 `internal/execution/adapters/{codex,orca,orcaremote}`；共享 Codex app-server RPC/WS codec 位于 `internal/execution/adapters/protocol/codexapp` |
+| workspace、publication、processhost | #78 将资源归入 `internal/execution/{workspace,publication,process}`；Host 与 #76 process facts 合为一个实现 |
 | query、projection、taskview、activityview | 收拢到 product/query；领域规则仍调用 model 的唯一实现，不复制 |
 | clientcontracts、steerlineclient、console | product/api、product/client、console；消除完整内部记录向UI泄漏 |
 | persistence、sqlite | storage/ports、storage/sqlite；窄端口和原子事务不因目录整理放宽 |
@@ -235,12 +235,12 @@ flowchart LR
     M09 --> M10["#82 独立开发/清理"]
 ```
 
-任务选择/结果边界和 task 应用已具备。#76/#77 的固定基础已经满足；用户已确认 #38/#39 合入并解除后续暂停，剩余任务按各自硬前置推进。#78 仍等 #76；#79 的剩余前置为 #76/#77；后继以任务表和各自 Spec 的完整固定条件为准。
+任务选择/结果边界和 task 应用已具备。#76 已通过 PR219 合入；#77 与 #78 在独立工作树按各自范围继续。#79 的剩余硬前置为 #77；#79+ 未由当前任务启动，后继仍按任务表和各自 Spec 的完整固定条件推进。
 
 | 并行工作 | 开工与接口条件 | 共享修改与集成条件 |
 | --- | --- | --- |
-| #76 与 #77 | 固定基础与用户执行授权已具备 | execution 与 product/console 各自归包；Service/Config/提交协调及 app/cmd/runner 共用段指定一个集成所有者，#76 的领取文档端口与公共构造按现行接口交接顺序集成 |
-| #78 与未完成产品/存储工作 | #76 整体交付；#79 仍须自身全部硬前置 | adapter/资源与其他目录分别所有；backend/API 形状先由定义所有者集成，构造段顺序修改 |
+| #76 与 #77 | #76 已合入 PR219；#77 继续在独立工作树 | execution 与 product/console 各自归包；Service/Config/提交协调及 app/cmd/runner 共用段指定一个集成所有者，定义端口与公共构造按现行接口交接顺序集成 |
+| #78 与未完成产品/存储工作 | #76 已整体交付；#77 仍是 #79 的硬前置 | adapter/资源与其他目录分别所有；backend/API 形状先由定义所有者集成，构造段顺序修改 |
 | 剩余迁移与本机候选验收复用 | 已具备本机候选、原会话和真实交付证据 | 纯搬包复用未变证据；身份、协议、启动、权限或宿主实际变化才定向重验，现场运行固定 executable/config，不用旧构建证明新行为 |
 | 与 #40/#41、#45 或规划基础 | 各自既定 Spec 前置仍成立 | 共享配置、类型、恢复和 app 接线确定唯一所有者；不新增全面重构硬前置 |
 
@@ -277,4 +277,4 @@ flowchart LR
 7. cmd、构建/安装/launcher、runner/suite及测试文档中的路径与最终结构一致；全OS源码索引、所有权图、实际入口和剩余原生限制记录在交付文档中。当前架构页只在实际实现后更新为新结构。
 8. 已交付分叉候选的Task/领取/Workflow/Execution关系和唯一交付不被收窄为单运行；公共操作不能按task_id猜候选。规划来源、受控主agent和WinUI传输有清晰归属，未交付能力不被伪装为可用，也不要求完成全部整理才能开始对应产品任务。
 
-按剩余 #76–#82 的独立 Spec/Plan 顺序实施，活动条目同步维护在 [主 roadmap](roadmap.md) 与 [执行依赖](execution-map.md)。若实际盘点确需进一步拆分，应为新增独立交付重新占用任务 ID、形成独立 Spec/Plan 并同步依赖；不能共用原身份或在实现中默改范围。
+按剩余 #77–#82 的独立 Spec/Plan 依赖实施，活动条目同步维护在 [主 roadmap](roadmap.md) 与 [执行依赖](execution-map.md)。若实际盘点确需进一步拆分，应为新增独立交付重新占用任务 ID、形成独立 Spec/Plan 并同步依赖；不能共用原身份或在实现中默改范围。

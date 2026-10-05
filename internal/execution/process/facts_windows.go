@@ -151,6 +151,9 @@ func InspectProcess(old *executionbackend.ProcessIdentity) string {
 	case "pid-reused":
 		return "PID belongs to a different process"
 	default:
+		if probe.Reason == "process identity is missing or unsupported" {
+			return probe.Reason
+		}
 		return "process identity unavailable: " + probe.Reason
 	}
 }

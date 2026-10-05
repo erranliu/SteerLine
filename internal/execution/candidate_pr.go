@@ -5,7 +5,7 @@ import (
 
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/execution/publication"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 

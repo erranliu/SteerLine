@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 )
 
 func TestProjectPolicyRejectsMissingOrOldConfiguration(t *testing.T) {

@@ -10,7 +10,7 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
 // The old platform-specific PR test belongs to the shared business owner.

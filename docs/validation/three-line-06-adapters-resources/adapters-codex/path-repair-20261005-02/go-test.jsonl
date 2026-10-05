@@ -1,0 +1,8 @@
+{"Time":"2026-10-05T07:50:15.7885746+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/execution/adapters/codex"}
+{"Time":"2026-10-05T07:50:16.5659309+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/execution/adapters/codex","Test":"TestConversationMapperNativeTwoTurnFixture"}
+{"Time":"2026-10-05T07:50:16.5664866+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/adapters/codex","Test":"TestConversationMapperNativeTwoTurnFixture","Output":"=== RUN   TestConversationMapperNativeTwoTurnFixture\n"}
+{"Time":"2026-10-05T07:50:16.5664866+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/adapters/codex","Test":"TestConversationMapperNativeTwoTurnFixture","Output":"--- PASS: TestConversationMapperNativeTwoTurnFixture (0.00s)\n"}
+{"Time":"2026-10-05T07:50:16.5670346+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/execution/adapters/codex","Test":"TestConversationMapperNativeTwoTurnFixture","Elapsed":0}
+{"Time":"2026-10-05T07:50:16.5670346+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/adapters/codex","Output":"PASS\n"}
+{"Time":"2026-10-05T07:50:16.5704028+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/adapters/codex","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/execution/adapters/codex\t0.782s\n"}
+{"Time":"2026-10-05T07:50:16.5704028+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/execution/adapters/codex","Elapsed":0.782}

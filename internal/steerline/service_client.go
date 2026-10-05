@@ -17,7 +17,7 @@ import (
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
-	"github.com/erranliu/SteerLine/internal/steerline/workspace"
+	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
 var errLockBusy = errors.New("service lock is held")

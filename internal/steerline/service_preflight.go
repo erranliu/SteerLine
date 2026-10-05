@@ -9,8 +9,8 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
-	"github.com/erranliu/SteerLine/internal/steerline/workspace"
+	"github.com/erranliu/SteerLine/internal/execution/publication"
+	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
 func Preflight(ctx context.Context, c *execution.Config, checkSkills bool) error {

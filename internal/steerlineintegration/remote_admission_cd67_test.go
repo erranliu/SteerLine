@@ -8,10 +8,10 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
 func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {

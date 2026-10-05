@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 )
 
 const SupportedCodexVersion = codexworker.PolicyCodexVersion

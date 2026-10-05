@@ -15,7 +15,7 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 )
 
 // TestLiveLocalCapabilityEvidence is an opt-in probe for the installed Codex

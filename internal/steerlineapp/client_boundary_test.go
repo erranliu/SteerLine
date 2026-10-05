@@ -71,7 +71,7 @@ func TestCM71ProductDependencyBoundary(t *testing.T) {
 		}
 		count++
 		path := pkg.ImportPath
-		if path == base || path == "database/sql" || strings.Contains(path, "/sqlite") || strings.Contains(path, "/steerlineapp") || strings.Contains(path, "/steerlineclient") || strings.Contains(path, "/codex") || strings.Contains(path, "/orca") || strings.Contains(path, "/processhost") {
+		if path == base || path == "database/sql" || strings.Contains(path, "/sqlite") || strings.Contains(path, "/steerlineapp") || strings.Contains(path, "/steerlineclient") || strings.Contains(path, "/codex") || strings.Contains(path, "/orca") || strings.Contains(path, "/execution/process") || strings.Contains(path, "/execution/publication") || strings.Contains(path, "/execution/workspace") {
 			t.Fatalf("pure product dependency reached %s", path)
 		}
 	}

@@ -30,7 +30,7 @@ var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "Te
 
 const boundaryPackage = "github.com/erranliu/SteerLine/internal/steerlineintegration"
 
-var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImplementation"}
+var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImplementation", "TestTM06ResourceWiring"}
 
 var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary",
@@ -64,6 +64,7 @@ var quickBoundaryAssigned = []string{
 	"TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication",
 	"TestCD67AdditionalImplementation/remote_model_and_cancellation_admission",
 	"TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
+	"TestTM06ResourceWiring",
 }
 
 var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{corePackage + "/taskview", "github.com/erranliu/SteerLine/internal/storage/ports", corePackage + "/persistence", corePackage + "/testprotocol", "github.com/erranliu/SteerLine/internal/execution/model", "github.com/erranliu/SteerLine/internal/execution/backend", corePackage + "/contracts", executionPackage + "/reconstruction", corePackage + "/query", corePackage + "/sqlite", "github.com/erranliu/SteerLine/internal/testboundary"}...)
@@ -73,10 +74,13 @@ var quickOwnerCases = []struct {
 	Tests       []string
 }{
 	{"quick-execution", executionPackage, quickExecutionTests},
-	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/coreboundary", []string{"TestTM04ExecutionBoundary"}},
-	{"quick-owner-remote", corePackage + "/orca_remote_worker", []string{"TestCD63CodecIdentityAndVersion", "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily", "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift", "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch", "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree", "TestSupervisedRunCoordinatorsAreDistinctAndFenced", "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal", "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall", "TestRemoteContinuationRequiresOriginalPeerAndTerminal", "TestRemoteWorkspaceKeepsPeerPathAndRuntime", "TestRemoteReplyRejectsOversizeWithoutMutation", "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending", "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox", "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID", "TestLoadConfigRequiresExplicitRemoteCancellationFalse"}},
-	{"quick-owner-codec", corePackage + "/codexworker", []string{"TestConversationMapperNativeTwoTurnFixture", "TestHistoryAdapterRejectsOversizedNativeCursor", "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt"}},
-	{"quick-owner-identity", corePackage + "/orcaworker", []string{"TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess", "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation", "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost"}},
+	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/coreboundary", []string{"TestTM04ExecutionBoundary", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure"}},
+	{"quick-owner-remote", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", []string{"TestCD63CodecIdentityAndVersion", "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily", "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift", "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch", "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree", "TestSupervisedRunCoordinatorsAreDistinctAndFenced", "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal", "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall", "TestRemoteContinuationRequiresOriginalPeerAndTerminal", "TestRemoteWorkspaceKeepsPeerPathAndRuntime", "TestRemoteReplyRejectsOversizeWithoutMutation", "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending", "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox", "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID", "TestLoadConfigRequiresExplicitRemoteCancellationFalse"}},
+	{"quick-owner-codec", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", []string{"TestCD63CodecIdentityAndVersion", "TestConversationMapperNativeTwoTurnFixture", "TestHistoryAdapterRejectsOversizedNativeCursor", "TestAppServerLaunchPreservesConfiguredArgs", "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt"}},
+	{"quick-owner-identity", "github.com/erranliu/SteerLine/internal/execution/adapters/orca", []string{"TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess", "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation", "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost", "TestReadinessEvidenceUsesActualPlatformToolBlocks", "TestReadinessReceiptRejectsStaleAndEscapingFiles", "TestActualSavedCommandWrapperProvidesProbeEvidence", "TestActualStringifiedCommandWrapperProvidesProbeEvidence"}},
+	{"quick-owner-codexapp", "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/codexapp", []string{"TestAskToolResponseUsesNativeAnswerEnvelope", "TestCodexAppCallCancellationInterruptsBlockedWrite", "TestCodexSocketHandshakeHonorsCancellationWithoutDeadline", "TestCodexSocketLoopbackHandshakeAndMaskedJSON"}},
+	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestLocalWorkspacePrepareInspectResourcesAndCleanup", "TestPrepareRejectsHeadChangedByCheckoutHook"}},
+	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPRRequiresExactIdentityAndMergeEvidence", "TestUnsupportedProviderDoesNoNetworkOperation"}},
 	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/steerlineapp", []string{"TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestLocalWindowsSandboxProfileFreezesAndRestores", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile"}},
 }
 

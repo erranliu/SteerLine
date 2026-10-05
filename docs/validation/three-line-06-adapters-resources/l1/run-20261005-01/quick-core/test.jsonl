@@ -1,0 +1,6 @@
+{"ImportPath":"github.com/erranliu/SteerLine/internal/steerline [github.com/erranliu/SteerLine/internal/steerline.test]","Action":"build-output","Output":"# github.com/erranliu/SteerLine/internal/steerline [github.com/erranliu/SteerLine/internal/steerline.test]\n"}
+{"ImportPath":"github.com/erranliu/SteerLine/internal/steerline [github.com/erranliu/SteerLine/internal/steerline.test]","Action":"build-output","Output":"internal\\steerline\\platform_windows_test.go:132:22: owned.ContainsProcess undefined (type backend.StopHandle has no field or method ContainsProcess)\n"}
+{"ImportPath":"github.com/erranliu/SteerLine/internal/steerline [github.com/erranliu/SteerLine/internal/steerline.test]","Action":"build-fail"}
+{"Time":"2026-10-05T07:38:19.1534901+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerline"}
+{"Time":"2026-10-05T07:38:19.1534901+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Output":"FAIL\tgithub.com/erranliu/SteerLine/internal/steerline [build failed]\n"}
+{"Time":"2026-10-05T07:38:19.1534901+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/internal/steerline","Elapsed":0,"FailedBuild":"github.com/erranliu/SteerLine/internal/steerline [github.com/erranliu/SteerLine/internal/steerline.test]"}

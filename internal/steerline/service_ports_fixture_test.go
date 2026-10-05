@@ -13,9 +13,9 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
-	"github.com/erranliu/SteerLine/internal/steerline/publication"
+	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
-	"github.com/erranliu/SteerLine/internal/steerline/workspace"
+	"github.com/erranliu/SteerLine/internal/execution/workspace"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 

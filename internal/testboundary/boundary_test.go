@@ -95,7 +95,7 @@ func violations(graph map[string][]string, roots []string) []string {
 
 func TestProductionHasNoTestDependencies(t *testing.T) {
 	var roots []string
-	for _, p := range list(t, "./cmd/steerline", "./internal/steerline/...", "./internal/steerlineapp/...") {
+	for _, p := range list(t, "./cmd/steerline", "./internal/steerline/...", "./internal/steerlineapp/...", "./internal/execution/...") {
 		if !testOnly(p.ImportPath) {
 			roots = append(roots, p.ImportPath)
 		}
@@ -111,7 +111,17 @@ func TestProductionHasNoTestDependencies(t *testing.T) {
 
 func e2eAllowed(source, dependency string) bool {
 	production := module + "/internal/steerline"
-	if !under(dependency, production) && !under(dependency, module+"/internal/steerlineapp") {
+	executionResources := []string{
+		module + "/internal/execution/adapters",
+		module + "/internal/execution/workspace",
+		module + "/internal/execution/publication",
+		module + "/internal/execution/process",
+	}
+	restricted := under(dependency, production) || under(dependency, module+"/internal/steerlineapp")
+	for _, root := range executionResources {
+		restricted = restricted || under(dependency, root)
+	}
+	if !restricted {
 		return true
 	}
 	for _, adapter := range []string{"driver", "native", "evidence"} {
@@ -148,7 +158,7 @@ func TestBoundaryRulesRejectTransitiveLeaksAndDirectImplementationImports(t *tes
 		t.Fatalf("production-only graph rejected: %v", got)
 	}
 	for _, source := range []string{"/tests/e2e/internal/testenv", "/tests/e2e/live", "/tests/e2e/smoke", "/tests/e2e/suites/recovery"} {
-		if e2eAllowed(module+source, module+"/internal/steerline/codexworker") || e2eAllowed(module+source, module+"/internal/steerline") || e2eAllowed(module+source, module+"/internal/steerlineapp") {
+		if e2eAllowed(module+source, module+"/internal/execution/adapters/codex") || e2eAllowed(module+source, module+"/internal/steerline") || e2eAllowed(module+source, module+"/internal/steerlineapp") {
 			t.Fatalf("implementation leak accepted from %s", source)
 		}
 		if !e2eAllowed(module+source, module+"/internal/steerline/contracts") {
@@ -156,7 +166,7 @@ func TestBoundaryRulesRejectTransitiveLeaksAndDirectImplementationImports(t *tes
 		}
 	}
 	for _, adapter := range []string{"driver", "native", "evidence"} {
-		if !e2eAllowed(module+"/tests/e2e/internal/"+adapter, module+"/internal/steerline/codexworker") {
+		if !e2eAllowed(module+"/tests/e2e/internal/"+adapter, module+"/internal/execution/adapters/codex") {
 			t.Fatal("test adapter rejected")
 		}
 	}
