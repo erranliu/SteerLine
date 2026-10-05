@@ -31,7 +31,7 @@ func TestUnregisteredWorkerFlowConfigurationCannotClaim(t *testing.T) {
 
 func TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation(t *testing.T) {
 	c, _, store := openDAGFixture(t)
-	old := contracts.Runtime{SchemaVersion: 5, Repository: contracts.Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()}}
+	old := contracts.ServiceCheckpoint{SchemaVersion: 5, Repository: contracts.Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()}}
 	payload, err := json.Marshal(old)
 	if err != nil {
 		t.Fatal(err)
@@ -43,7 +43,7 @@ func TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation(t *testing.T) {
 	}
 	c.WorkflowProtocol = executionmodel.Version
 	workspaceRoot := filepath.Join(c.RunDir, "worktrees")
-	if _, err := newTestService(c); err == nil || !strings.Contains(err.Error(), "unsupported_schema") {
+	if _, err := newTestService(c); err == nil || !strings.Contains(err.Error(), "unsupported runtime schema 5") {
 		t.Fatalf("old state was not rejected: %v", err)
 	}
 	if _, err := os.Stat(workspaceRoot); !os.IsNotExist(err) {
@@ -137,7 +137,9 @@ func TestWorkerFlowRejectsOldLocalExecutionProtocol(t *testing.T) {
 		t.Fatal(err)
 	}
 	workspaceRoot := filepath.Join(c.RunDir, "worktrees")
-	if _, err := newTestService(c); err == nil || !strings.Contains(err.Error(), "unsupported_schema") {
+	// The execution was claimed with the current fixed profile. Changing only
+	// its persisted protocol must fail that binding before any workspace write.
+	if _, err := newTestService(c); err == nil || !strings.Contains(err.Error(), "fixed execution profile differs from the persisted run identity") {
 		t.Fatalf("old local execution was not rejected: %v", err)
 	}
 	if _, err := os.Stat(workspaceRoot); !os.IsNotExist(err) {
