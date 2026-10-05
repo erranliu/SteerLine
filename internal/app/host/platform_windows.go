@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	scheduler "github.com/erranliu/SteerLine/internal/app/host/scheduler"
+	scheduler "github.com/erranliu/SteerLine/internal/execution/scheduler"
 	"io"
 	"os"
 	"os/exec"

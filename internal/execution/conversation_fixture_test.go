@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"os"
 	"path/filepath"
@@ -23,7 +24,7 @@ type neutralRecordMapper struct {
 	snapshot executionvalues.ConversationMapperSnapshot
 }
 
-func (p neutralJournalPort) RestoreMapper(s executionvalues.ConversationMapperSnapshot) ConversationMapper {
+func (p neutralJournalPort) RestoreMapper(s executionvalues.ConversationMapperSnapshot) conversationtypes.ConversationMapper {
 	return &neutralRecordMapper{snapshot: s}
 }
 
@@ -48,7 +49,7 @@ func (p neutralJournalPort) JournalGeneration(id, segment string) (uint64, error
 	return 0, errors.New("fixture source generation differs")
 }
 
-func (p neutralJournalPort) LiveJournalPath(_ context.Context, r ConversationJournalPathRequest) (string, error) {
+func (p neutralJournalPort) LiveJournalPath(_ context.Context, r conversationtypes.ConversationJournalPathRequest) (string, error) {
 	if r.LogPath != "" {
 		return r.LogPath, nil
 	}
@@ -118,8 +119,8 @@ func (m *neutralRecordMapper) MapRecord(e executionvalues.ConversationEvent, dat
 	return w
 }
 
-func (p neutralJournalPort) DiscoverJournals(_ context.Context, d ConversationDiscovery, identify func(string) (string, error)) ([]ConversationJournalSource, error) {
-	var sources []ConversationJournalSource
+func (p neutralJournalPort) DiscoverJournals(_ context.Context, d conversationtypes.ConversationDiscovery, identify func(string) (string, error)) ([]conversationtypes.ConversationJournalSource, error) {
+	var sources []conversationtypes.ConversationJournalSource
 	for _, run := range d.Runs {
 		root := run.RunDirectory
 		raw, err := os.ReadFile(filepath.Join(root, "fixture-source.json"))
@@ -138,7 +139,7 @@ func (p neutralJournalPort) DiscoverJournals(_ context.Context, d ConversationDi
 		event := run.Base
 		event.Source, event.SourceRole, event.SourceSegment, event.SourceIdentity = neutralJournalSource, executionvalues.ConversationSourceFallback, p.JournalSegment(event.Backend, event.Protocol, id), id
 		event.AttemptID = marker.AttemptID
-		sources = append(sources, ConversationJournalSource{Path: path, AttemptID: marker.AttemptID, FileID: id, ExpectedFileID: id, Event: event, Ended: true})
+		sources = append(sources, conversationtypes.ConversationJournalSource{Path: path, AttemptID: marker.AttemptID, FileID: id, ExpectedFileID: id, Event: event, Ended: true})
 	}
 	return sources, nil
 }

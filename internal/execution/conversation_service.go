@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"path/filepath"
 
@@ -51,9 +52,9 @@ func (s *Service) recordConversationEvent(run *reconstructiontypes.RunView, sour
 		}
 		input.Mapper = snapshot
 	}
-	var mapper ConversationInputMapper = s.conversationSources
+	var mapper conversationtypes.ConversationInputMapper = s.conversationSources
 	if lifecycle, _, lifecycleErr := s.lifecycleForRun(run); lifecycleErr == nil {
-		if implementationMapper, ok := lifecycle.(ConversationInputMapper); ok {
+		if implementationMapper, ok := lifecycle.(conversationtypes.ConversationInputMapper); ok {
 			mapper = implementationMapper
 		}
 	} else if run.WorkflowVersion == executionmodel.Version {
@@ -80,7 +81,7 @@ func (s *Service) recordConversationEvent(run *reconstructiontypes.RunView, sour
 				paths = append(paths, attempt.EventPath)
 			}
 		}
-		path, pathErr := s.conversationSources.LiveJournalPath(context.Background(), ConversationJournalPathRequest{
+		path, pathErr := s.conversationSources.LiveJournalPath(context.Background(), conversationtypes.ConversationJournalPathRequest{
 			RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: attemptID,
 			SourceIdentity: source.SourceIdentity, LogPath: deref(run.LogPath), EventPaths: paths, WorkerFlow: run.WorkflowVersion == executionmodel.Version})
 		if pathErr != nil {

@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"encoding/json"
 	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productdto "github.com/erranliu/SteerLine/internal/product/api"
@@ -34,8 +35,18 @@ func TestHostInputWaitPersistsWithoutBusinessDecision(t *testing.T) {
 	require(t, service.recordConversationEvent(run, source))
 	page, err := newFixtureConversationQuery(store, "project").ReadConversation(context.Background(), productdto.ConversationFilter{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID}, "", 10)
 	require(t, err)
-	if len(page.Events) != 1 || page.Events[0].Type != executionvalues.ConversationInputWait || page.Events[0].Status != "waiting" || page.Events[0].Attributes["wait_origin"] != "host" || page.Events[0].Attributes["business_decision"] != false || page.Events[0].Evidence["wait_source"] != "fixture.host-observation" {
+	if len(page.Events) != 1 || page.Events[0].Type != productdto.ConversationInputWait || page.Events[0].Status != "waiting" {
 		t.Fatalf("persisted host wait became business input or lost source identity: %+v", page.Events)
+	}
+	record, err := store.NextConversationEvent(context.Background(), "project", productdto.ConversationFilter{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID}, 0)
+	require(t, err)
+	if record == nil {
+		t.Fatal("host wait event was not persisted")
+	}
+	var stored executionvalues.ConversationEvent
+	require(t, json.Unmarshal(record.Payload, &stored))
+	if stored.Attributes["wait_origin"] != "host" || stored.Attributes["business_decision"] != false || stored.Evidence["wait_source"] != "fixture.host-observation" {
+		t.Fatalf("persisted host wait lost its internal source evidence: %+v", stored)
 	}
 	if run.Decision != nil || len(service.domain.Decisions) != 0 {
 		t.Fatal("host wait created a center business decision")

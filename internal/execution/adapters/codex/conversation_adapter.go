@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	executionapp "github.com/erranliu/SteerLine/internal/execution"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"os"
 	"os/exec"
@@ -97,11 +97,11 @@ func decodeHistoryPosition(binding HistoryBinding, raw string) (codexHistoryCurs
 	return cursor, nil
 }
 
-func NewConversationAdapter() executionapp.ConversationSourcePort {
+func NewConversationAdapter() conversationtypes.ConversationSourcePort {
 	return &ConversationAdapter{}
 }
 
-func (a *ConversationAdapter) RestoreMapper(snapshot executionvalues.ConversationMapperSnapshot) executionapp.ConversationMapper {
+func (a *ConversationAdapter) RestoreMapper(snapshot executionvalues.ConversationMapperSnapshot) conversationtypes.ConversationMapper {
 	return RestoreConversationMapper(snapshot)
 }
 
@@ -180,7 +180,7 @@ func (a *ConversationAdapter) MapRealtime(input executionvalues.ConversationInpu
 	return executionvalues.ConversationMappedBatch{Writes: []executionvalues.ConversationWrite{write}, Checkpoint: checkpoint}, nil
 }
 
-func (a *ConversationAdapter) LiveJournalPath(ctx context.Context, request executionapp.ConversationJournalPathRequest) (string, error) {
+func (a *ConversationAdapter) LiveJournalPath(ctx context.Context, request conversationtypes.ConversationJournalPathRequest) (string, error) {
 	if request.RunDirectory == "" || request.WorkflowID == "" || request.ExecutionID == "" || request.AttemptID == "" {
 		return "", errors.New("live conversation source has no fixed run identity")
 	}
@@ -222,21 +222,21 @@ func (a *ConversationAdapter) LiveJournalPath(ctx context.Context, request execu
 	return "", errors.New("conversation source path is unavailable")
 }
 
-func (a *ConversationAdapter) DiscoverHistory(ctx context.Context, discovery executionapp.ConversationDiscovery) (executionapp.ConversationDiscoveryResult, error) {
+func (a *ConversationAdapter) DiscoverHistory(ctx context.Context, discovery conversationtypes.ConversationDiscovery) (conversationtypes.ConversationDiscoveryResult, error) {
 	if discovery.ProjectID == "" || discovery.RunDirectory == "" {
-		return executionapp.ConversationDiscoveryResult{}, errors.New("conversation source discovery lacks a project or run directory")
+		return conversationtypes.ConversationDiscoveryResult{}, errors.New("conversation source discovery lacks a project or run directory")
 	}
-	result := executionapp.ConversationDiscoveryResult{}
+	result := conversationtypes.ConversationDiscoveryResult{}
 	seen := map[string]bool{}
 	for _, run := range discovery.Runs {
 		if err := ctx.Err(); err != nil {
-			return executionapp.ConversationDiscoveryResult{}, err
+			return conversationtypes.ConversationDiscoveryResult{}, err
 		}
 		base := run.Base
 		if base.Agent != "codex" || base.ProjectID != discovery.ProjectID || base.WorkflowID == "" || base.ExecutionID == "" || run.RunDirectory == "" {
 			continue
 		}
-		attempts := append([]executionapp.ConversationAttemptSource(nil), run.Attempts...)
+		attempts := append([]conversationtypes.ConversationAttemptSource(nil), run.Attempts...)
 		if run.WorkerFlow {
 			entries, readErr := os.ReadDir(filepath.Join(run.RunDirectory, "turns"))
 			if readErr == nil && len(entries) <= 4096 {
@@ -248,7 +248,7 @@ func (a *ConversationAdapter) DiscoverHistory(ctx context.Context, discovery exe
 				}
 				for _, entry := range entries {
 					if entry.IsDir() && validExecutionID(entry.Name()) {
-						attempts = append(attempts, executionapp.ConversationAttemptSource{AttemptID: base.AttemptID, EventPath: filepath.Join(run.RunDirectory, "turns", entry.Name(), "events.jsonl"), Ended: ended})
+						attempts = append(attempts, conversationtypes.ConversationAttemptSource{AttemptID: base.AttemptID, EventPath: filepath.Join(run.RunDirectory, "turns", entry.Name(), "events.jsonl"), Ended: ended})
 					}
 				}
 			}
@@ -304,7 +304,7 @@ func (a *ConversationAdapter) DiscoverHistory(ctx context.Context, discovery exe
 				}
 				binding.Ended = attempt.Ended
 				identity := binding.Identity() + ":" + binding.AttemptID
-				result.Sources = append(result.Sources, executionapp.ConversationHistorySource{Identity: identity, BindingPath: bindingPath, Workspace: binding.Workspace, Event: binding.Event(), Ended: binding.Ended,
+				result.Sources = append(result.Sources, conversationtypes.ConversationHistorySource{Identity: identity, BindingPath: bindingPath, Workspace: binding.Workspace, Event: binding.Event(), Ended: binding.Ended,
 					RequiresPlatformVersion: binding.Backend == executionbackend.BackendOrca})
 			}
 		}
@@ -312,11 +312,11 @@ func (a *ConversationAdapter) DiscoverHistory(ctx context.Context, discovery exe
 	return result, nil
 }
 
-func (a *ConversationAdapter) DiscoverJournals(ctx context.Context, discovery executionapp.ConversationDiscovery, identify func(string) (string, error)) ([]executionapp.ConversationJournalSource, error) {
+func (a *ConversationAdapter) DiscoverJournals(ctx context.Context, discovery conversationtypes.ConversationDiscovery, identify func(string) (string, error)) ([]conversationtypes.ConversationJournalSource, error) {
 	if identify == nil {
 		return nil, errors.New("conversation journal identity reader is required")
 	}
-	sources := []executionapp.ConversationJournalSource{}
+	sources := []conversationtypes.ConversationJournalSource{}
 	seen := map[string]bool{}
 	for _, run := range discovery.Runs {
 		if err := ctx.Err(); err != nil {
@@ -325,7 +325,7 @@ func (a *ConversationAdapter) DiscoverJournals(ctx context.Context, discovery ex
 		if JournalSource(run.Base.Backend, run.Base.Protocol) == "" {
 			continue
 		}
-		candidates := append([]executionapp.ConversationAttemptSource(nil), run.Attempts...)
+		candidates := append([]conversationtypes.ConversationAttemptSource(nil), run.Attempts...)
 		if run.WorkerFlow {
 			turnRoot := filepath.Join(run.RunDirectory, "turns")
 			if entries, err := os.ReadDir(turnRoot); err == nil && len(entries) <= 4096 {
@@ -339,7 +339,7 @@ func (a *ConversationAdapter) DiscoverJournals(ctx context.Context, discovery ex
 				}
 				for _, entry := range entries {
 					if entry.IsDir() && validExecutionID(entry.Name()) {
-						candidates = append(candidates, executionapp.ConversationAttemptSource{AttemptID: attempt, EventPath: filepath.Join(turnRoot, entry.Name(), "events.jsonl"), Ended: ended})
+						candidates = append(candidates, conversationtypes.ConversationAttemptSource{AttemptID: attempt, EventPath: filepath.Join(turnRoot, entry.Name(), "events.jsonl"), Ended: ended})
 					}
 				}
 			}
@@ -363,7 +363,7 @@ func (a *ConversationAdapter) DiscoverJournals(ctx context.Context, discovery ex
 				continue
 			}
 			seen[path] = true
-			source := executionapp.ConversationJournalSource{Path: path, AttemptID: candidate.AttemptID, FileID: fileID, Workspace: run.Workspace, Ended: candidate.Ended}
+			source := conversationtypes.ConversationJournalSource{Path: path, AttemptID: candidate.AttemptID, FileID: fileID, Workspace: run.Workspace, Ended: candidate.Ended}
 			base := run.Base
 			base.AttemptID = candidate.AttemptID
 			base.ExternalRef = conversationExternalRef(run.Process)
@@ -389,17 +389,17 @@ func (a *ConversationAdapter) DiscoverJournals(ctx context.Context, discovery ex
 	return sources, nil
 }
 
-func (a *ConversationAdapter) ReadHistory(ctx context.Context, request executionapp.ConversationHistoryReadRequest, start func(*exec.Cmd) (executionbackend.StopHandle, error)) (executionapp.ConversationHistoryBatch, error) {
+func (a *ConversationAdapter) ReadHistory(ctx context.Context, request conversationtypes.ConversationHistoryReadRequest, start func(*exec.Cmd) (executionbackend.StopHandle, error)) (conversationtypes.ConversationHistoryBatch, error) {
 	binding, err := ReadHistoryBinding(request.Source.BindingPath)
 	event := request.Source.Event
 	if err != nil || request.Source.Identity != binding.Identity()+":"+binding.AttemptID || event.ProjectID != binding.ProjectID || event.TaskID != binding.TaskID || event.WorkflowID != binding.WorkflowID || event.ExecutionID != binding.ExecutionID || event.AttemptID != binding.AttemptID || event.Backend != binding.Backend || event.Protocol != binding.Protocol || event.TargetID != binding.TargetID || event.ExternalRef != binding.ExternalRef || event.SessionID != binding.SessionID || event.SourceIdentity != binding.Identity() || event.SourceSegment != binding.Identity() || canonicalPath(request.Source.Workspace) != canonicalPath(binding.Workspace) {
-		return executionapp.ConversationHistoryBatch{}, errors.New("history source is no longer bound to its discovered execution")
+		return conversationtypes.ConversationHistoryBatch{}, errors.New("history source is no longer bound to its discovered execution")
 	}
 	var cursor codexHistoryCursor
 	if request.Cursor != "" {
 		cursor, err = decodeHistoryPosition(binding, request.Cursor)
 		if err != nil {
-			return executionapp.ConversationHistoryBatch{}, err
+			return conversationtypes.ConversationHistoryBatch{}, err
 		}
 	}
 	readerDir := binding.Workspace
@@ -414,11 +414,11 @@ func (a *ConversationAdapter) ReadHistory(ctx context.Context, request execution
 	}
 	client, err := OpenHistory(ctx, binding.Command, readerDir, binding.Home, start)
 	if err != nil {
-		return executionapp.ConversationHistoryBatch{}, err
+		return conversationtypes.ConversationHistoryBatch{}, err
 	}
 	defer client.Close()
 	if err = client.ReadMetadata(ctx, binding.SessionID, binding.Workspace); err != nil {
-		return executionapp.ConversationHistoryBatch{}, err
+		return conversationtypes.ConversationHistoryBatch{}, err
 	}
 	readCursor := cursor.Cursor
 	pendingIndex := -1
@@ -432,10 +432,10 @@ func (a *ConversationAdapter) ReadHistory(ctx context.Context, request execution
 	}
 	page, err := client.ReadPage(ctx, binding.SessionID, readCursor)
 	if err != nil {
-		return executionapp.ConversationHistoryBatch{}, err
+		return conversationtypes.ConversationHistoryBatch{}, err
 	}
 	if pendingIndex >= 0 && (len(page.Data) != 1 || page.Data[0].ID != cursor.Pending[pendingIndex].ID) {
-		return executionapp.ConversationHistoryBatch{}, errors.New("history cursor changed its native turn identity")
+		return conversationtypes.ConversationHistoryBatch{}, errors.New("history cursor changed its native turn identity")
 	}
 	base := binding.Event()
 	writes := []executionvalues.ConversationWrite{}
@@ -456,13 +456,13 @@ func (a *ConversationAdapter) ReadHistory(ctx context.Context, request execution
 		if !unchanged {
 			mapped, mapErr := MapHistoryTurn(base, turn, cursor.Sequence+uint64(len(writes))+1)
 			if mapErr != nil {
-				return executionapp.ConversationHistoryBatch{}, mapErr
+				return conversationtypes.ConversationHistoryBatch{}, mapErr
 			}
 			writes = append(writes, mapped...)
 		}
 		native, inspectErr := InspectHistoryTurn(turn)
 		if inspectErr != nil {
-			return executionapp.ConversationHistoryBatch{}, inspectErr
+			return conversationtypes.ConversationHistoryBatch{}, inspectErr
 		}
 		if pendingIndex >= 0 && native.HasFinal {
 			cursor.Pending = append(cursor.Pending[:pendingIndex], cursor.Pending[pendingIndex+1:]...)
@@ -473,7 +473,7 @@ func (a *ConversationAdapter) ReadHistory(ctx context.Context, request execution
 			cursor.Pending[pendingIndex].Digest = digest
 		} else if native.Terminal && !native.HasFinal {
 			if page.BackwardsCursor == nil || *page.BackwardsCursor == "" {
-				return executionapp.ConversationHistoryBatch{}, errors.New("history omitted the anchor needed to reconcile a final-less turn")
+				return conversationtypes.ConversationHistoryBatch{}, errors.New("history omitted the anchor needed to reconcile a final-less turn")
 			}
 			known := false
 			for _, pending := range cursor.Pending {
@@ -484,7 +484,7 @@ func (a *ConversationAdapter) ReadHistory(ctx context.Context, request execution
 			}
 			if !known {
 				if len(cursor.Pending) >= 1024 {
-					return executionapp.ConversationHistoryBatch{}, errors.New("history has too many unresolved turns for a bounded cursor")
+					return conversationtypes.ConversationHistoryBatch{}, errors.New("history has too many unresolved turns for a bounded cursor")
 				}
 				cursor.Pending = append(cursor.Pending, codexPendingTurn{ID: turn.ID, Cursor: *page.BackwardsCursor, Digest: digest})
 			}
@@ -503,13 +503,13 @@ func (a *ConversationAdapter) ReadHistory(ctx context.Context, request execution
 	cursor.Sequence += uint64(len(writes))
 	encoded, err := encodeHistoryPosition(binding, cursor)
 	if err != nil {
-		return executionapp.ConversationHistoryBatch{}, err
+		return conversationtypes.ConversationHistoryBatch{}, err
 	}
 	settled := false
 	if pendingIndex < 0 && len(cursor.Pending) == 0 && len(page.Data) > 0 {
 		native, inspectErr := InspectHistoryTurn(page.Data[0])
 		if inspectErr != nil {
-			return executionapp.ConversationHistoryBatch{}, inspectErr
+			return conversationtypes.ConversationHistoryBatch{}, inspectErr
 		}
 		settled = native.Terminal
 	}
@@ -518,14 +518,14 @@ func (a *ConversationAdapter) ReadHistory(ctx context.Context, request execution
 	if binding.Backend == executionbackend.BackendOrca {
 		platformVersion = strings.TrimSpace(request.PlatformVersion)
 		if platformVersion == "" {
-			return executionapp.ConversationHistoryBatch{}, errors.New("host implementation version is unavailable for capability reporting")
+			return conversationtypes.ConversationHistoryBatch{}, errors.New("host implementation version is unavailable for capability reporting")
 		}
 	}
 	report := &executionvalues.ConversationCapabilityReport{Version: 1, Backend: binding.Backend, Protocol: binding.Protocol, Agent: "codex", AgentVersion: version,
 		PlatformVersion: platformVersion, Target: executionbackend.ExecutionTarget{ID: binding.TargetID}, ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID,
 		Source: "codex-app-server", SourceIdentity: binding.Identity(), CheckedAt: time.Now().UTC()}
 	report.Capabilities = historyCapabilities(binding, page, request.HasCheckpoint)
-	return executionapp.ConversationHistoryBatch{Writes: writes, Cursor: encoded, Sequence: cursor.Sequence, Settled: settled, More: page.NextCursor != nil && *page.NextCursor != "", Capabilities: report}, nil
+	return conversationtypes.ConversationHistoryBatch{Writes: writes, Cursor: encoded, Sequence: cursor.Sequence, Settled: settled, More: page.NextCursor != nil && *page.NextCursor != "", Capabilities: report}, nil
 }
 
 func historyCapabilities(binding HistoryBinding, page HistoryPage, hadCheckpoint bool) []executionvalues.ConversationCapability {

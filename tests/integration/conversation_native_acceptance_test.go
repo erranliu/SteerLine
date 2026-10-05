@@ -1,12 +1,12 @@
 package integration
 
 import (
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	executionapp "github.com/erranliu/SteerLine/internal/execution"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productdto "github.com/erranliu/SteerLine/internal/product/api"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
@@ -229,8 +229,8 @@ func (f *isolatedHistoryCommitFixture) collectCodexHistoryPage(ctx context.Conte
 		return false, err
 	}
 	checkpoint, cpErr := f.domainStore.ConversationCheckpoint(ctx, b.ProjectID, b.ExecutionID, b.AttemptID, "codex-app-server", b.Identity())
-	source := executionapp.ConversationHistorySource{Identity: b.Identity() + ":" + b.AttemptID, BindingPath: path, Workspace: b.Workspace, Event: b.Event()}
-	batch, err := codexworker.NewConversationAdapter().ReadHistory(ctx, executionapp.ConversationHistoryReadRequest{Source: source, Cursor: checkpoint.Cursor, HasCheckpoint: cpErr == nil, PlatformVersion: f.platformVersion}, func(cmd *exec.Cmd) (executionbackend.StopHandle, error) {
+	source := conversationtypes.ConversationHistorySource{Identity: b.Identity() + ":" + b.AttemptID, BindingPath: path, Workspace: b.Workspace, Event: b.Event()}
+	batch, err := codexworker.NewConversationAdapter().ReadHistory(ctx, conversationtypes.ConversationHistoryReadRequest{Source: source, Cursor: checkpoint.Cursor, HasCheckpoint: cpErr == nil, PlatformVersion: f.platformVersion}, func(cmd *exec.Cmd) (executionbackend.StopHandle, error) {
 		if err := cmd.Start(); err != nil {
 			return nil, err
 		}

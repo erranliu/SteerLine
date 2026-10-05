@@ -4,8 +4,8 @@ import (
 	"context"
 	"time"
 
-	scheduler "github.com/erranliu/SteerLine/internal/app/host/scheduler"
 	"github.com/erranliu/SteerLine/internal/execution"
+	scheduler "github.com/erranliu/SteerLine/internal/execution/scheduler"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 

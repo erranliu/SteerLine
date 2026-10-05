@@ -85,6 +85,47 @@
         }
       ],
       "reason_not_moved_in_task_80": "Candidate actor behavior and assertions already belong to execution; this task only corrects the mapping and keeps their L1/Full owner selection intact."
+    },
+    "TM08.ConversationPorts": {
+      "package": "github.com/erranliu/SteerLine/internal/execution/conversation",
+      "file": "internal/execution/conversation/source.go",
+      "previous_location": "source/mapper port definitions were kept beside execution service use cases in internal/execution/conversation_types.go during the initial migration",
+      "purpose": "give adapters a focused execution-owned port package without depending on the execution application; DTO values remain in execution/model",
+      "covering_tests": [
+        {
+          "parent": "TestConversationMapperNativeTwoTurnFixture",
+          "package": "internal/execution/adapters/codex"
+        },
+        {
+          "parents": [
+            "TestConversationJournalReplayIsBoundedAndIdempotent",
+            "TestHostInputWaitPersistsWithoutBusinessDecision"
+          ],
+          "package": "internal/execution"
+        },
+        {
+          "parent": "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/conversation",
+          "package": "tests/integration"
+        }
+      ],
+      "boundary_test": "internal/coreboundary/TestTM06AdapterBoundary/backend_resources_and_protocol_are_allowed"
+    },
+    "TM08.ExecutionScheduler": {
+      "package": "github.com/erranliu/SteerLine/internal/execution/scheduler",
+      "file": "internal/execution/scheduler/loop.go",
+      "previous_file": "internal/steerline/host/loop.go",
+      "superseded_task80_path": "internal/app/host/scheduler/loop.go",
+      "reason": "execution owns its actor scheduling loop; app host supplies timers and control transport without introducing a reverse execution-to-host dependency",
+      "parents": [
+        "TestRunStopsActorAndWaitsForSourcesOnCancellation",
+        "TestRunRejectsUnknownDispatchModeBeforeStartingActor"
+      ]
+    },
+    "TM08.CheckpointControlReceipt": {
+      "package": "github.com/erranliu/SteerLine/internal/execution/model",
+      "file": "internal/execution/model/control_receipt.go",
+      "previous_owner": "product/api.ControlReceipt",
+      "note": "checkpoint/reconstruction state uses the execution value; product/api keeps the separate serialized caller DTO and execution converts at the host boundary"
     }
   },
   "groups": [
@@ -93,7 +134,7 @@
       "level": "targeted-go",
       "package": "./internal/app/host",
       "environment": "Windows; isolated STEERLINE_HOME; temporary service and SQLite state; controlled child processes; no model or native opt-in",
-      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/host/commit-bound-01 -- ./internal/app/host -run '^TestTM08(ControlIdentity|Heartbeat|Shutdown)$' -count=1",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/host/commit-bound-02 -- ./internal/app/host -run '^TestTM08(ControlIdentity|Heartbeat|Shutdown)$' -count=1",
       "timing": "after host transport, heartbeat and shutdown migration",
       "tests": [
         {
@@ -132,7 +173,7 @@
       "level": "targeted-go",
       "package": "./tests/integration",
       "environment": "Windows; isolated STEERLINE_HOME; real app configuration and SQLite; controlled backend/process fixtures; no model request",
-      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/wiring/commit-bound-01 -- ./tests/integration -run '^TestTM08AppHostWiring$' -count=1",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/wiring/commit-bound-02 -- ./tests/integration -run '^TestTM08AppHostWiring$' -count=1",
       "timing": "after default app, cmd, installation and host construction switch",
       "tests": [
         {
@@ -153,11 +194,38 @@
       "evidence": "docs/validation/three-line-08-app-host/wiring/"
     },
     {
+      "id": "TM08.ExecutionScheduler",
+      "level": "targeted-go",
+      "package": "./internal/execution/scheduler",
+      "environment": "Windows; isolated actor fixture and timers/context; no model or native opt-in",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/scheduler/commit-bound-02 -- ./internal/execution/scheduler -run '^TestRun' -count=1",
+      "timing": "after moving the timer loop to its execution owner",
+      "tests": [
+        {
+          "id": "TM08.SchedulerLifecycle",
+          "parent": "TestRunStopsActorAndWaitsForSourcesOnCancellation",
+          "assertions": [
+            "actor cancellation ends the loop",
+            "source wait and EndActor both run"
+          ]
+        },
+        {
+          "id": "TM08.SchedulerMode",
+          "parent": "TestRunRejectsUnknownDispatchModeBeforeStartingActor",
+          "assertions": [
+            "unknown dispatch mode is rejected before actor startup"
+          ]
+        }
+      ],
+      "pass_condition": "both parents run and pass with zero skips",
+      "evidence": "docs/validation/three-line-08-app-host/scheduler/"
+    },
+    {
       "id": "TM08.E2ESnapshotContext",
       "level": "targeted-go",
       "package": "./tests/e2e/internal/testenv",
       "environment": "Windows; isolated SQLite fixture; isolated STEERLINE_HOME; no model or native opt-in",
-      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/e2e-snapshot/commit-bound-01 -- ./tests/e2e/internal/testenv -run '^TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions$' -count=1",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/e2e-snapshot/commit-bound-02 -- ./tests/e2e/internal/testenv -run '^TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions$' -count=1",
       "timing": "after E2E fixture/runtime type migration",
       "tests": [
         {
@@ -177,7 +245,7 @@
       "level": "L1",
       "package": "registered quick, rule, owner and integration boundary groups",
       "environment": "Windows; isolated STEERLINE_HOME; no native opt-in; one serial runner invocation",
-      "command": "go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1/commit-bound-01",
+      "command": "go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1/commit-bound-02",
       "timing": "once after self-review and targeted repairs",
       "required_groups": [
         "TM05 product/API/query/client/console",
@@ -186,7 +254,8 @@
         "TM04 original combined app/execution regression",
         "TM08 host",
         "TM08 app/host wiring",
-        "TM08 production host dependency boundary"
+        "TM08 production host dependency boundary",
+        "TM08 execution scheduler"
       ],
       "required_tests": [
         {
@@ -209,6 +278,14 @@
         },
         {
           "parent": "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding",
+          "subtests": []
+        },
+        {
+          "parent": "TestRunStopsActorAndWaitsForSourcesOnCancellation",
+          "subtests": []
+        },
+        {
+          "parent": "TestRunRejectsUnknownDispatchModeBeforeStartingActor",
           "subtests": []
         }
       ],
@@ -662,6 +739,24 @@
       "summary": "docs/validation/three-line-08-app-host/app-project/final-candidate-02/summary.json",
       "source_head": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
       "skipped": 0
+    },
+    {
+      "status": "failed",
+      "incomplete_reasons": [
+        "app/client conversation port compile references after move",
+        "execution conversation event tests expected internal model values instead of product DTO values",
+        "adapter conversation source port still imported execution root",
+        "scheduler/testkit/source boundary ownership stale",
+        "integration CLI repository root used cwd-relative path"
+      ],
+      "classification": "commit-bound failed run; report retained in place; re-run required after ownership and fixture repairs",
+      "skipped_tests": 1,
+      "summary": "docs/validation/three-line-08-app-host/l1/commit-bound-01/summary.json",
+      "group_id": "L1-fixed",
+      "source_commit": "11dd7f831c44c15de9c748d3bbe281d85bafbcf1",
+      "command_exit_code": 1,
+      "phase": "commit-bound-repair-trigger",
+      "failed_tests": 16
     }
   ]
 }

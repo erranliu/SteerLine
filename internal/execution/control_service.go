@@ -17,6 +17,18 @@ var errClaimConflict = errors.New("native task claim conflict")
 
 var errTaskNotReady = errors.New("target task is no longer ready")
 
+func checkpointControlReceipt(receipt productapi.ControlReceipt) executionmodel.ControlReceipt {
+	return executionmodel.ControlReceipt{Version: receipt.Version, RequestID: receipt.RequestID, RequestDigest: receipt.RequestDigest, InstanceID: receipt.InstanceID, Action: receipt.Action,
+		Status: receipt.Status, Code: receipt.Code, Message: receipt.Message, RequestedBy: receipt.RequestedBy, SubmittedAt: receipt.SubmittedAt, AcceptedAt: receipt.AcceptedAt,
+		CompletedAt: receipt.CompletedAt, RunID: receipt.RunID, AttemptID: receipt.AttemptID, DecisionID: receipt.DecisionID, ControlRevision: receipt.ControlRevision, RunRevision: receipt.RunRevision}
+}
+
+func productControlReceipt(receipt executionmodel.ControlReceipt) productapi.ControlReceipt {
+	return productapi.ControlReceipt{Version: receipt.Version, RequestID: receipt.RequestID, RequestDigest: receipt.RequestDigest, InstanceID: receipt.InstanceID, Action: receipt.Action,
+		Status: receipt.Status, Code: receipt.Code, Message: receipt.Message, RequestedBy: receipt.RequestedBy, SubmittedAt: receipt.SubmittedAt, AcceptedAt: receipt.AcceptedAt,
+		CompletedAt: receipt.CompletedAt, RunID: receipt.RunID, AttemptID: receipt.AttemptID, DecisionID: receipt.DecisionID, ControlRevision: receipt.ControlRevision, RunRevision: receipt.RunRevision}
+}
+
 func (s *Service) baseReceipt(req productapi.ControlRequest, digest string, status, code, message string) productapi.ControlReceipt {
 	return productapi.ControlReceipt{Version: 1, RequestID: req.RequestID, RequestDigest: digest, InstanceID: req.InstanceID, Action: req.Action, Status: status, Code: code, Message: message, RequestedBy: req.RequestedBy, SubmittedAt: req.CreatedAt}
 }
@@ -52,7 +64,7 @@ func (s *Service) finishControl(op *reconstructiontypes.ControlOperation, receip
 		}
 	}
 	op.Phase = "completed"
-	copy := receipt
+	copy := checkpointControlReceipt(receipt)
 	op.Result = &copy
 	s.State.Control.Operation = op
 	if err := s.publishCheckpoint(); err != nil {
@@ -506,7 +518,7 @@ func (s *Service) recoverControlOperation() error {
 		return nil
 	}
 	if op.Phase == "completed" && op.Result != nil {
-		if err := s.writeReceipt(*op.Result); err != nil {
+		if err := s.writeReceipt(productControlReceipt(*op.Result)); err != nil {
 			return err
 		}
 		s.State.Control.Operation = nil
@@ -550,7 +562,8 @@ func (s *Service) recoverControlOperation() error {
 	receipt.RunID = op.RunID
 	receipt.AttemptID = op.AttemptID
 	receipt.ControlRevision = s.State.Control.Revision + 1
-	op.Phase, op.Result = "completed", &receipt
+	checkpointReceipt := checkpointControlReceipt(receipt)
+	op.Phase, op.Result = "completed", &checkpointReceipt
 	if err = s.publishCheckpoint(); err != nil {
 		return err
 	}

@@ -75,7 +75,7 @@ func TestConversationQueriesUseIndependentEventPortAndBoundCursor(t *testing.T) 
 	if err != nil || len(last.Events) != 1 || last.Events[0].EventID != 2 || last.HasMore {
 		t.Fatalf("continuation: %+v %v", last, err)
 	}
-	if _, err := service.ReadMessageBody(ctx, executionvalues.ConversationBodyRef{}, 0, 10); err == nil {
+	if _, err := service.ReadMessageBody(ctx, api.ConversationBodyRef{}, 0, 10); err == nil {
 		t.Fatal("missing body reader accepted")
 	}
 }
@@ -139,11 +139,10 @@ func TestConversationBodyAndRawQueriesUseSeparatePorts(t *testing.T) {
 	text := []byte("你好🙂tail")
 	sum := sha256.Sum256(text)
 	digest := hex.EncodeToString(sum[:])
-	ref := executionvalues.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "item", Revision: 2, SHA256: digest, Bytes: int64(len(text)), Completeness: executionvalues.BodyComplete}
+	ref := api.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "item", Revision: 2, SHA256: digest, Bytes: int64(len(text)), Completeness: api.BodyComplete}
 	record := storageports.ConversationBodyRecord{Body: text, TotalBytes: ref.Bytes, SHA256: digest, Completeness: string(ref.Completeness)}
 	service := ConversationService{Project: "project", Bodies: conversationBodies(func(_ context.Context, project string, got api.ConversationBodyRef, limit int) (storageports.ConversationBodyRecord, error) {
-		apiRef := api.ConversationBodyRef{ExecutionID: ref.ExecutionID, AttemptID: ref.AttemptID, ItemKey: ref.ItemKey, Revision: ref.Revision, SHA256: ref.SHA256, Bytes: ref.Bytes, Completeness: api.BodyCompleteness(ref.Completeness)}
-		if project != "project" || got != apiRef || limit != executionvalues.MaxConversationBodyBytes+1 {
+		if project != "project" || got != ref || limit != executionvalues.MaxConversationBodyBytes+1 {
 			t.Fatalf("lost bounded revision input: %s %+v %d", project, got, limit)
 		}
 		return record, nil
@@ -159,10 +158,9 @@ func TestConversationBodyAndRawQueriesUseSeparatePorts(t *testing.T) {
 	if _, err := service.ReadMessageBody(ctx, ref, 0, 7); err == nil {
 		t.Fatal("corrupt revision was accepted")
 	}
-	rawRef := executionvalues.ConversationRawRef{ExecutionID: "execution", AttemptID: "attempt", ID: "raw", SHA256: digest, Bytes: int64(len(text))}
+	rawRef := api.ConversationRawRef{ExecutionID: "execution", AttemptID: "attempt", ID: "raw", SHA256: digest, Bytes: int64(len(text))}
 	service = ConversationService{Project: "project", Raw: conversationRaw(func(_ context.Context, project string, got api.ConversationRawRef, limit int) (storageports.ConversationRawRecord, error) {
-		apiRawRef := api.ConversationRawRef{ExecutionID: rawRef.ExecutionID, AttemptID: rawRef.AttemptID, ID: rawRef.ID, SHA256: rawRef.SHA256, Bytes: rawRef.Bytes}
-		if project != "project" || got != apiRawRef || limit != executionvalues.MaxConversationBodyBytes+1 {
+		if project != "project" || got != rawRef || limit != executionvalues.MaxConversationBodyBytes+1 {
 			t.Fatal("lost raw identity or bound")
 		}
 		return storageports.ConversationRawRecord{Data: text, TotalBytes: rawRef.Bytes, SHA256: digest}, nil

@@ -4,7 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
-	executionapp "github.com/erranliu/SteerLine/internal/execution"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"os"
 	"os/exec"
@@ -88,8 +88,8 @@ func TestHistoryDiscoveryRejectsWorkspaceReplacementAndKeepsSourceAttempts(t *te
 	}
 	base := executionvalues.ConversationEvent{Version: executionvalues.ConversationVersion, ProjectID: binding.ProjectID, TaskID: binding.TaskID, WorkflowID: workflowID,
 		ExecutionID: executionID, Backend: binding.Backend, Protocol: binding.Protocol, Agent: "codex", TargetID: binding.TargetID}
-	discovery := executionapp.ConversationDiscovery{ProjectID: binding.ProjectID, RunDirectory: root, Runs: []executionapp.ConversationRunSource{{Base: base, RunDirectory: runDirectory, Workspace: wrongWorkspace,
-		Attempts: []executionapp.ConversationAttemptSource{{AttemptID: attemptID, EventPath: eventPath}}}}}
+	discovery := conversationtypes.ConversationDiscovery{ProjectID: binding.ProjectID, RunDirectory: root, Runs: []conversationtypes.ConversationRunSource{{Base: base, RunDirectory: runDirectory, Workspace: wrongWorkspace,
+		Attempts: []conversationtypes.ConversationAttemptSource{{AttemptID: attemptID, EventPath: eventPath}}}}}
 	port := NewConversationAdapter()
 	wrong, err := port.DiscoverHistory(context.Background(), discovery)
 	if err != nil || len(wrong.Sources) != 0 || len(wrong.Writes) != 1 || wrong.Writes[0].Event.Type != executionvalues.ConversationGap {
@@ -126,9 +126,9 @@ func TestHistoryDiscoveryDeclaresHostVersionRequirement(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := binding.Event()
-	discovery := executionapp.ConversationDiscovery{ProjectID: binding.ProjectID, RunDirectory: root, Runs: []executionapp.ConversationRunSource{{
+	discovery := conversationtypes.ConversationDiscovery{ProjectID: binding.ProjectID, RunDirectory: root, Runs: []conversationtypes.ConversationRunSource{{
 		Base: base, RunDirectory: runDirectory, Workspace: workspace,
-		Attempts: []executionapp.ConversationAttemptSource{{AttemptID: attemptID, EventPath: eventPath}},
+		Attempts: []conversationtypes.ConversationAttemptSource{{AttemptID: attemptID, EventPath: eventPath}},
 	}}}
 	result, err := NewConversationAdapter().DiscoverHistory(context.Background(), discovery)
 	if err != nil || len(result.Sources) != 1 || !result.Sources[0].RequiresPlatformVersion {
@@ -146,8 +146,8 @@ func TestHistoryAdapterRejectsOversizedNativeCursor(t *testing.T) {
 	if err := WriteHistoryBinding(path, binding, func(path string, data []byte) error { return os.WriteFile(path, data, 0600) }); err != nil {
 		t.Fatal(err)
 	}
-	source := executionapp.ConversationHistorySource{Identity: binding.Identity() + ":" + binding.AttemptID, BindingPath: path, Workspace: workspace, Event: binding.Event()}
-	_, err := NewConversationAdapter().ReadHistory(context.Background(), executionapp.ConversationHistoryReadRequest{Source: source}, startHistoryFixtureProcess)
+	source := conversationtypes.ConversationHistorySource{Identity: binding.Identity() + ":" + binding.AttemptID, BindingPath: path, Workspace: workspace, Event: binding.Event()}
+	_, err := NewConversationAdapter().ReadHistory(context.Background(), conversationtypes.ConversationHistoryReadRequest{Source: source}, startHistoryFixtureProcess)
 	if err == nil || !strings.Contains(err.Error(), "bounded source limit") {
 		t.Fatalf("oversized native cursor was accepted: %v", err)
 	}
@@ -165,15 +165,15 @@ func TestHistoryPageCandidateIsRecreatedAfterDiscardAndLateFinalKeepsTurnIdentit
 	if err := WriteHistoryBinding(path, binding, func(path string, data []byte) error { return os.WriteFile(path, data, 0600) }); err != nil {
 		t.Fatal(err)
 	}
-	source := executionapp.ConversationHistorySource{Identity: binding.Identity() + ":" + binding.AttemptID, BindingPath: path, Workspace: workspace, Event: binding.Event()}
+	source := conversationtypes.ConversationHistorySource{Identity: binding.Identity() + ":" + binding.AttemptID, BindingPath: path, Workspace: workspace, Event: binding.Event()}
 	port := &ConversationAdapter{}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	first, err := port.ReadHistory(ctx, executionapp.ConversationHistoryReadRequest{Source: source}, startHistoryFixtureProcess)
+	first, err := port.ReadHistory(ctx, conversationtypes.ConversationHistoryReadRequest{Source: source}, startHistoryFixtureProcess)
 	if err != nil {
 		t.Fatal(err)
 	}
-	retry, err := port.ReadHistory(ctx, executionapp.ConversationHistoryReadRequest{Source: source}, startHistoryFixtureProcess)
+	retry, err := port.ReadHistory(ctx, conversationtypes.ConversationHistoryReadRequest{Source: source}, startHistoryFixtureProcess)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +185,7 @@ func TestHistoryPageCandidateIsRecreatedAfterDiscardAndLateFinalKeepsTurnIdentit
 			t.Fatal("retry changed a native event identity")
 		}
 	}
-	second, err := port.ReadHistory(ctx, executionapp.ConversationHistoryReadRequest{Source: source, Cursor: retry.Cursor, HasCheckpoint: true}, startHistoryFixtureProcess)
+	second, err := port.ReadHistory(ctx, conversationtypes.ConversationHistoryReadRequest{Source: source, Cursor: retry.Cursor, HasCheckpoint: true}, startHistoryFixtureProcess)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestHistoryPageCandidateIsRecreatedAfterDiscardAndLateFinalKeepsTurnIdentit
 		t.Fatalf("final-less native turn was not held for later reconciliation: %+v", cursor.Pending)
 	}
 	t.Setenv("STEERLINE_CONVERSATION_HISTORY_STAGE", "late")
-	resolved, err := port.ReadHistory(ctx, executionapp.ConversationHistoryReadRequest{Source: source, Cursor: second.Cursor, HasCheckpoint: true}, startHistoryFixtureProcess)
+	resolved, err := port.ReadHistory(ctx, conversationtypes.ConversationHistoryReadRequest{Source: source, Cursor: second.Cursor, HasCheckpoint: true}, startHistoryFixtureProcess)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,13 +319,13 @@ func TestHistoryReadRejectsReplacedProjectBeforeOpeningClient(t *testing.T) {
 	if err := WriteHistoryBinding(path, binding, func(path string, data []byte) error { return os.WriteFile(path, data, 0600) }); err != nil {
 		t.Fatal(err)
 	}
-	source := executionapp.ConversationHistorySource{Identity: binding.Identity() + ":" + binding.AttemptID, BindingPath: path, Workspace: binding.Workspace, Event: binding.Event()}
+	source := conversationtypes.ConversationHistorySource{Identity: binding.Identity() + ":" + binding.AttemptID, BindingPath: path, Workspace: binding.Workspace, Event: binding.Event()}
 	binding.ProjectID = "different-project"
 	data, _ := json.Marshal(binding)
 	if err := os.WriteFile(path, data, 0600); err != nil {
 		t.Fatal(err)
 	}
-	_, err := NewConversationAdapter().ReadHistory(context.Background(), executionapp.ConversationHistoryReadRequest{Source: source}, func(*exec.Cmd) (executionbackend.StopHandle, error) {
+	_, err := NewConversationAdapter().ReadHistory(context.Background(), conversationtypes.ConversationHistoryReadRequest{Source: source}, func(*exec.Cmd) (executionbackend.StopHandle, error) {
 		t.Fatal("replaced source opened a reader process")
 		return nil, nil
 	})

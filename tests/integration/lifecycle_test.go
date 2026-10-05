@@ -1,12 +1,12 @@
 package integration
 
 import (
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -22,12 +22,13 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
-	"github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+	"github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
 
 // This suite starts the production service with its formal resolver injection,
@@ -516,7 +517,7 @@ func (r *integrationLifecycleResolver) ResolveLifecycle(setup executionbackend.L
 			if !ok {
 				return nil, fmt.Errorf("native fixture adapter lacks its host port")
 			}
-			mapper, ok := port.(execution.ConversationInputMapper)
+			mapper, ok := port.(conversationtypes.ConversationInputMapper)
 			if !ok {
 				return nil, fmt.Errorf("native fixture adapter lacks its conversation mapper")
 			}
@@ -531,7 +532,7 @@ func (r *integrationLifecycleResolver) ResolveLifecycle(setup executionbackend.L
 type integrationFaultLifecycle struct {
 	executionbackend.LifecyclePort
 	executionbackend.HostEnvironmentPort
-		execution.ConversationInputMapper
+	conversationtypes.ConversationInputMapper
 	before func(executionbackend.LifecycleRequest) error
 }
 
@@ -564,7 +565,7 @@ func startIntegrationService(t *testing.T, parent context.Context, config execut
 	return startIntegrationServiceWithSources(t, parent, config, resolver, nil)
 }
 
-func startIntegrationServiceWithSources(t *testing.T, parent context.Context, config execution.Config, resolver executionbackend.LifecycleResolver, sources execution.ConversationSourcePort) *runningIntegrationService {
+func startIntegrationServiceWithSources(t *testing.T, parent context.Context, config execution.Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort) *runningIntegrationService {
 	t.Helper()
 	if decorated, ok := resolver.(*integrationLifecycleResolver); ok {
 		decorated.directory = config.ExecutionDirectory

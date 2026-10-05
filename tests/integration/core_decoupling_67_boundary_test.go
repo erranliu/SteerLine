@@ -14,7 +14,7 @@ import (
 
 func TestCD67CoreBoundary(t *testing.T) {
 	t.Run("pure_ownership_all_tags_production_and_tests", func(t *testing.T) {
-		for _, owner := range []string{"product/query/taskgraph", "task", "task/model", "execution/model", "execution/backend", "product/api", "storage/ports"} {
+		for _, owner := range []string{"product/query/taskgraph", "task", "task/model", "execution/model", "execution/backend", "execution/conversation", "product/api", "storage/ports"} {
 			t.Run(owner, func(t *testing.T) {
 				for _, dependency := range []string{"database/sql", "github.com/erranliu/SteerLine/internal/app/host", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/storage/sqlite", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/app", "github.com/erranliu/SteerLine/internal/helper", "example.org/implementation"} {
 					for _, filename := range []string{"edge_plan9.go", "edge_linux_test.go"} {
@@ -68,7 +68,7 @@ func TestCD67CoreBoundary(t *testing.T) {
 					require(t, os.MkdirAll(filepath.Dir(filepath.Join(root, path)), 0700))
 					require(t, os.WriteFile(filepath.Join(root, path), []byte(source), 0600))
 				}
-				filename := filepath.Join("internal", "steerline", fixture.filename)
+				filename := filepath.Join("internal", "app", "host", fixture.filename)
 				if fixture.name == "reverse_client_subpackage" {
 					filename = filepath.Join("internal", "storage", "sqlite", fixture.filename)
 				}
@@ -133,7 +133,7 @@ func TestCD67CoreBoundary(t *testing.T) {
 		raw, err := json.Marshal(report)
 		require(t, err)
 		t.Log(string(raw))
-		for _, owner := range []string{"product/query/taskgraph", "task", "task/model", "execution/model", "execution/backend", "product/api", "storage/ports"} {
+		for _, owner := range []string{"product/query/taskgraph", "task", "task/model", "execution/model", "execution/backend", "execution/conversation", "product/api", "storage/ports"} {
 			if report.PureFiles["github.com/erranliu/SteerLine/internal/"+owner] == 0 {
 				t.Fatalf("empty migrated owner scan: %s", owner)
 			}

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	executionapp "github.com/erranliu/SteerLine/internal/execution"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"os"
 	"os/exec"
@@ -427,7 +427,7 @@ func (additionalSources) MapConversation(executionvalues.ConversationInput) (exe
 	return executionvalues.ConversationMappedBatch{}, nil
 }
 
-func (additionalSources) RestoreMapper(executionvalues.ConversationMapperSnapshot) executionapp.ConversationMapper {
+func (additionalSources) RestoreMapper(executionvalues.ConversationMapperSnapshot) conversationtypes.ConversationMapper {
 	return nil
 }
 
@@ -443,18 +443,18 @@ func (additionalSources) JournalSegment(executionbackend.BackendKind, executionb
 
 func (additionalSources) JournalGeneration(string, string) (uint64, error) { return 0, nil }
 
-func (additionalSources) LiveJournalPath(context.Context, executionapp.ConversationJournalPathRequest) (string, error) {
+func (additionalSources) LiveJournalPath(context.Context, conversationtypes.ConversationJournalPathRequest) (string, error) {
 	return "", nil
 }
 
-func (additionalSources) DiscoverHistory(context.Context, executionapp.ConversationDiscovery) (executionapp.ConversationDiscoveryResult, error) {
-	return executionapp.ConversationDiscoveryResult{}, nil
+func (additionalSources) DiscoverHistory(context.Context, conversationtypes.ConversationDiscovery) (conversationtypes.ConversationDiscoveryResult, error) {
+	return conversationtypes.ConversationDiscoveryResult{}, nil
 }
 
-func (additionalSources) DiscoverJournals(context.Context, executionapp.ConversationDiscovery, func(string) (string, error)) ([]executionapp.ConversationJournalSource, error) {
+func (additionalSources) DiscoverJournals(context.Context, conversationtypes.ConversationDiscovery, func(string) (string, error)) ([]conversationtypes.ConversationJournalSource, error) {
 	return nil, nil
 }
 
-func (additionalSources) ReadHistory(context.Context, executionapp.ConversationHistoryReadRequest, func(*exec.Cmd) (executionbackend.StopHandle, error)) (executionapp.ConversationHistoryBatch, error) {
-	return executionapp.ConversationHistoryBatch{}, fmt.Errorf("fixture history reading is unsupported")
+func (additionalSources) ReadHistory(context.Context, conversationtypes.ConversationHistoryReadRequest, func(*exec.Cmd) (executionbackend.StopHandle, error)) (conversationtypes.ConversationHistoryBatch, error) {
+	return conversationtypes.ConversationHistoryBatch{}, fmt.Errorf("fixture history reading is unsupported")
 }

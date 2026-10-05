@@ -174,7 +174,7 @@ func TestTM06AdapterBoundary(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 			t.Fatal(err)
 		}
-		source := "package codexworker\nimport (_ \"" + execution + "/backend\"; _ \"" + execution + "/model\"; _ \"" + execution + "/workspace\"; _ \"" + execution + "/adapters/protocol/codexapp\")\n"
+		source := "package codexworker\nimport (_ \"" + execution + "/backend\"; _ \"" + execution + "/model\"; _ \"" + execution + "/conversation\"; _ \"" + execution + "/workspace\"; _ \"" + execution + "/adapters/protocol/codexapp\")\n"
 		if err := os.WriteFile(path, []byte(source), 0600); err != nil {
 			t.Fatal(err)
 		}

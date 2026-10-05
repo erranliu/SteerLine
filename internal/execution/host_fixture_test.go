@@ -13,11 +13,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/app/host/scheduler"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/execution/scheduler"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -276,7 +276,7 @@ func (fixtureHost) CurrentProcessIdentity() (*executionbackend.ProcessIdentity, 
 	return resourceprocess.CurrentIdentity()
 }
 func runTestService(ctx context.Context, s *Service, mode string) error {
-	return host.Run(ctx, s, host.Schedule{TaskPoll: duration(s.Config.TaskPoll), PRPoll: duration(s.Config.PRPoll), Heartbeat: duration(s.Config.Heartbeat), FindStop: s.host.FindStopRequest}, mode)
+	return scheduler.Run(ctx, s, scheduler.Schedule{TaskPoll: duration(s.Config.TaskPoll), PRPoll: duration(s.Config.PRPoll), Heartbeat: duration(s.Config.Heartbeat), FindStop: s.host.FindStopRequest}, mode)
 }
 
 var _ HostPort = fixtureHost{}

@@ -60,13 +60,15 @@ func PureImportsAllowed(owner, dependency string) bool {
 		return dependency == module+"/internal/task/model"
 	case module + "/internal/execution/model":
 		return dependency == module+"/internal/execution/backend"
+	case module + "/internal/execution/conversation":
+		return dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend"
 	case module + "/internal/storage/ports":
 		return dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend" || dependency == module+"/internal/product/api"
 	}
 	return false
 }
 
-var purePackages = []string{module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/execution/conversation", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
@@ -94,7 +96,7 @@ func implementation(pkg string) bool {
 }
 
 func forbidden(pkg string) bool {
-	return implementation(pkg) || pkg == module+"/internal/app" || strings.HasPrefix(pkg, module+"/internal/app/") || pkg == module+"/tests/integration" || strings.HasPrefix(pkg, module+"/tests/integration/")
+	return implementation(pkg) || pkg == module+"/internal/app" || strings.HasPrefix(pkg, module+"/internal/app/") || pkg == module+"/internal/testkit" || strings.HasPrefix(pkg, module+"/internal/testkit/") || pkg == module+"/tests/integration" || strings.HasPrefix(pkg, module+"/tests/integration/")
 }
 
 func consoleForbidden(pkg string) bool {
@@ -116,9 +118,6 @@ func consoleForbidden(pkg string) bool {
 }
 
 func hostForbidden(pkg string) bool {
-	if pkg == core+"/scheduler" {
-		return false
-	}
 	for _, prefix := range []string{
 		"database/sql",
 		"modernc.org/sqlite",
@@ -159,12 +158,15 @@ func executionForbidden(pkg string) bool {
 // depend on application use cases, task implementations, storage, SQL, app or
 // product code.
 func adapterForbidden(pkg string) bool {
+	if pkg == module+"/internal/testkit" || strings.HasPrefix(pkg, module+"/internal/testkit/") {
+		return true
+	}
 	if pkg == "database/sql" || strings.HasPrefix(pkg, "modernc.org/sqlite") {
 		return true
 	}
 	if pkg == execution || strings.HasPrefix(pkg, execution+"/") {
 		for _, allowed := range []string{
-			execution + "/backend", execution + "/model", execution + "/adapters",
+			execution + "/backend", execution + "/model", execution + "/conversation", execution + "/adapters",
 			execution + "/workspace", execution + "/publication", execution + "/process",
 		} {
 			if pkg == allowed || strings.HasPrefix(pkg, allowed+"/") {
@@ -395,10 +397,14 @@ func ScanSource(root string) (Report, error) {
 	for pkg := range productionGraph {
 		sort.Strings(productionGraph[pkg])
 	}
-	visitGraph(productionGraph, core, func(path []string) {
+	visitHostGraph(productionGraph, core, func(path []string) {
 		last := path[len(path)-1]
-		if last == "database/sql" || last == module+"/internal/storage/sqlite" || strings.HasPrefix(last, module+"/internal/storage/sqlite/") || strings.HasPrefix(last, "modernc.org/sqlite") {
+		if last == "database/sql" || last == storageSQLite || strings.HasPrefix(last, storageSQLite+"/") || strings.HasPrefix(last, "modernc.org/sqlite") {
 			report.Violations = append(report.Violations, "concrete storage dependency: "+strings.Join(path, " -> "))
+			return
+		}
+		if hostForbidden(last) {
+			report.Violations = append(report.Violations, "app host forbidden dependency: "+strings.Join(path, " -> "))
 		}
 	})
 	visitGraph(productionGraph, execution, func(path []string) {
@@ -466,12 +472,39 @@ func visitGraph(graph map[string][]string, seed string, inspect func([]string)) 
 	}
 }
 
+// The app host consumes execution's service configuration and actor port,
+// reconstructed runtime values, and narrow storage ports. Their transitive
+// closures are checked from their owning roots; do not attribute their owned
+// implementation packages to the host consumer. Other host imports are still
+// traversed fully, including helper packages.
+func visitHostGraph(graph map[string][]string, seed string, inspect func([]string)) {
+	seen := map[string]bool{seed: true}
+	queue := [][]string{{seed}}
+	for len(queue) > 0 {
+		path := queue[0]
+		queue = queue[1:]
+		for _, next := range graph[path[len(path)-1]] {
+			if next == execution || next == execution+"/reconstruction" || next == module+"/internal/storage/ports" || seen[next] {
+				continue
+			}
+			seen[next] = true
+			chain := append(append([]string(nil), path...), next)
+			inspect(chain)
+			queue = append(queue, chain)
+		}
+	}
+}
+
 // Check adds Windows and Linux production graphs to the all-tags source scan.
 // An unavailable go list is an error, never a skipped or passing boundary.
 func Check(ctx context.Context, root string) (Report, error) {
 	report, err := ScanSource(root)
 	if err != nil {
 		return report, err
+	}
+	productionRoots := map[string]bool{}
+	for _, owner := range []string{core, module + "/internal/app", execution, module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/product/api", productQuery, module + "/internal/product/query/taskgraph", module + "/internal/storage/ports"} {
+		productionRoots[owner] = true
 	}
 
 	for _, target := range []string{"windows", "linux"} {
@@ -549,7 +582,7 @@ func Check(ctx context.Context, root string) (Report, error) {
 						}
 					}
 				}
-				bad := forbidden(pkg.ImportPath) || pkg.ImportPath == storageSQLite || pkg.ImportPath == "database/sql" || strings.HasPrefix(pkg.ImportPath, "modernc.org/sqlite")
+				bad := !productionRoots[pkg.ImportPath] && (pkg.ImportPath == module+"/internal/testkit" || strings.HasPrefix(pkg.ImportPath, module+"/internal/testkit/") || pkg.ImportPath == module+"/tests/integration" || strings.HasPrefix(pkg.ImportPath, module+"/tests/integration/"))
 				if consoleGraph {
 					bad = consoleForbidden(pkg.ImportPath)
 				}

@@ -9,6 +9,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 )
 
 // NewService uses the directory and process adapter already bound to the
@@ -25,7 +26,7 @@ func NewServiceWithLifecycleResolver(config execution.Config, resolver execution
 
 // NewServiceWithPorts composes explicitly supplied execution and history ports
 // with the directory already accepted by this application instance.
-func NewServiceWithPorts(config execution.Config, resolver executionbackend.LifecycleResolver, sources execution.ConversationSourcePort) (*execution.Service, error) {
+func NewServiceWithPorts(config execution.Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort) (*execution.Service, error) {
 	return newServiceWithHost(config, resolver, sources, nil)
 }
 
@@ -33,7 +34,7 @@ func newConfiguredServiceWithHost(config execution.Config, host execution.HostPo
 	return newServiceWithHost(config, config.ExecutionDirectory, codexworker.NewConversationAdapter(), host)
 }
 
-func newServiceWithHost(config execution.Config, resolver executionbackend.LifecycleResolver, sources execution.ConversationSourcePort, host execution.HostPort) (*execution.Service, error) {
+func newServiceWithHost(config execution.Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort, host execution.HostPort) (*execution.Service, error) {
 	if config.ExecutionDirectory == nil || config.ProcessHost == nil {
 		return nil, errors.New("application configuration is missing its execution directory or process host")
 	}

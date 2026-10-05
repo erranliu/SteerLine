@@ -56,7 +56,7 @@ func TestConversationLiveSourceFailureKeepsGapAndMapperPosition(t *testing.T) {
 	}
 	page, err := newFixtureConversationQuery(store, "project").ReadConversation(ctx, productdto.ConversationFilter{ExecutionID: executionID, AttemptID: runID}, "", 10)
 	require(t, err)
-	if len(page.Events) != 2 || page.Events[1].Type != executionmodel.ConversationGap || page.Events[1].Status != "source_unavailable" || page.Events[1].Raw == nil {
+	if len(page.Events) != 2 || page.Events[1].Type != productdto.ConversationGap || page.Events[1].Status != "source_unavailable" || page.Events[1].Raw == nil {
 		t.Fatalf("failed source was not visible with raw evidence: %+v", page.Events)
 	}
 }
@@ -96,7 +96,7 @@ func TestConversationChangedLiveBytesCannotBindOrCheckpoint(t *testing.T) {
 	}
 	page, err := newFixtureConversationQuery(store, "project").ReadConversation(ctx, productdto.ConversationFilter{ExecutionID: executionID, AttemptID: runID, Source: sourceName}, "", 10)
 	require(t, err)
-	if len(page.Events) != 1 || page.Events[0].Type != executionmodel.ConversationGap || page.Events[0].Status != "source_unavailable" {
+	if len(page.Events) != 1 || page.Events[0].Type != productdto.ConversationGap || page.Events[0].Status != "source_unavailable" {
 		t.Fatalf("rewritten source did not leave a visible gap: %+v", page.Events)
 	}
 }
@@ -163,11 +163,11 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	if len(page.Events) != 4 {
 		t.Fatalf("replay returned %d events, want 4: %+v", len(page.Events), page.Events)
 	}
-	var bodyRef *executionmodel.ConversationBodyRef
+	var bodyRef *productdto.ConversationBodyRef
 	for i := range page.Events {
-		if page.Events[i].Type == executionmodel.ConversationMessageComplete {
+		if page.Events[i].Type == productdto.ConversationMessageComplete {
 			bodyRef = page.Events[i].Body
-			if page.Events[i].SessionID != "00000000-0000-0000-0000-000000000001" || page.Events[i].TurnQuality != executionmodel.IdentityDerived {
+			if page.Events[i].SessionID != "00000000-0000-0000-0000-000000000001" || page.Events[i].TurnQuality != productdto.IdentityDerived {
 				t.Fatalf("replayed event identity was not reconstructed from source boundaries: %+v", page.Events[i])
 			}
 		}
@@ -213,7 +213,7 @@ func TestConversationJournalReplayIsBoundedAndIdempotent(t *testing.T) {
 	require(t, service.replayConversationJournal(ctx, sources[0]))
 	changed, err := query.ReadConversation(ctx, productdto.ConversationFilter{ExecutionID: executionID, AttemptID: attemptID}, "", 20)
 	require(t, err)
-	if len(changed.Events) != 9 || changed.Events[4].Type != executionmodel.ConversationGap || changed.Events[4].Status != "source_changed" || changed.Events[5].SessionID != "00000000-0000-0000-0000-000000000002" || changed.Events[2].Body == nil {
+	if len(changed.Events) != 9 || changed.Events[4].Type != productdto.ConversationGap || changed.Events[4].Status != "source_changed" || changed.Events[5].SessionID != "00000000-0000-0000-0000-000000000002" || changed.Events[2].Body == nil {
 		t.Fatalf("in-place source rewrite hid its gap or damaged old history: %+v", changed.Events)
 	}
 }

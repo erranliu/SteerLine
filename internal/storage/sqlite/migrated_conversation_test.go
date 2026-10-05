@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	queryapi "github.com/erranliu/SteerLine/internal/product/query"
 )
 
@@ -50,7 +51,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 	var restored strings.Builder
 	offset := int64(0)
 	for {
-		page, readErr := query.ReadMessageBody(ctx, *committed[0].Body, offset, 11)
+		page, readErr := query.ReadMessageBody(ctx, conversationBodyAPIRef(*committed[0].Body), offset, 11)
 		if readErr != nil {
 			t.Fatal(readErr)
 		}
@@ -60,7 +61,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 		restored.Write(page.Data)
 		offset = page.NextOffset
 		if page.Complete {
-			if page.SHA256 != committed[0].Body.SHA256 || page.Completeness != executionvalues.BodyPartial {
+			if page.SHA256 != committed[0].Body.SHA256 || page.Completeness != productapi.BodyPartial {
 				t.Fatalf("body page revision metadata changed: %+v", page)
 			}
 			break
@@ -76,7 +77,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 	if hex.EncodeToString(wholeDigest[:]) != committed[0].Body.SHA256 {
 		t.Fatal("stored body SHA-256 does not match the source text")
 	}
-	rawPage, err := query.ReadRaw(ctx, *committed[0].Raw, 0, 64)
+	rawPage, err := query.ReadRaw(ctx, conversationRawAPIRef(*committed[0].Raw), 0, 64)
 	if err != nil || string(rawPage.Data) != "raw-record-one" || !rawPage.Complete {
 		t.Fatalf("raw reference was not readable: page=%+v err=%v", rawPage, err)
 	}
@@ -138,7 +139,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 	if err != nil || len(tail.Events) != 0 {
 		t.Fatalf("tail cursor did not resume after the latest event: %+v %v", tail, err)
 	}
-	if _, err = query.ReadRaw(ctx, ConversationRawRef{ExecutionID: "other", AttemptID: "attempt", ID: committed[0].Raw.ID}, 0, 10); err == nil {
+	if _, err = query.ReadRaw(ctx, productapi.ConversationRawRef{ExecutionID: "other", AttemptID: "attempt", ID: committed[0].Raw.ID}, 0, 10); err == nil {
 		t.Fatal("raw reference crossed execution identity")
 	}
 }
@@ -175,32 +176,32 @@ func TestConversationBodyAndRawCorruptionCannotReadAsComplete(t *testing.T) {
 	events, err := store.CommitConversation(ctx, []ConversationWrite{write}, conversationTestCheckpoint(1, `{"byte_offset":4}`))
 	require(t, err)
 	query := conversationQueries(store, "project")
-	if page, err := query.ReadMessageBody(ctx, *events[0].Body, 0, 64); err != nil || !page.Complete {
+	if page, err := query.ReadMessageBody(ctx, conversationBodyAPIRef(*events[0].Body), 0, 64); err != nil || !page.Complete {
 		t.Fatalf("intact body was unreadable: page=%+v err=%v", page, err)
 	}
 	_, err = store.db.ExecContext(ctx, `UPDATE conversation_bodies SET body=? WHERE project_identity=? AND execution_id=? AND attempt_id=? AND item_key=? AND revision=?`, []byte("HELLO 🙂"), "project", "execution", "attempt", events[0].Body.ItemKey, events[0].Body.Revision)
 	require(t, err)
-	if page, err := query.ReadMessageBody(ctx, *events[0].Body, 0, 64); err == nil || page.Complete {
+	if page, err := query.ReadMessageBody(ctx, conversationBodyAPIRef(*events[0].Body), 0, 64); err == nil || page.Complete {
 		t.Fatalf("modified body was reported complete: page=%+v err=%v", page, err)
 	}
 	_, err = store.db.ExecContext(ctx, `UPDATE conversation_bodies SET body=zeroblob(?) WHERE project_identity=? AND execution_id=? AND attempt_id=? AND item_key=? AND revision=?`, maxConversationBodyBytes+1, "project", "execution", "attempt", events[0].Body.ItemKey, events[0].Body.Revision)
 	require(t, err)
-	if page, err := query.ReadMessageBody(ctx, *events[0].Body, 0, 64); err == nil || page.Complete {
+	if page, err := query.ReadMessageBody(ctx, conversationBodyAPIRef(*events[0].Body), 0, 64); err == nil || page.Complete {
 		t.Fatalf("oversized corrupt body was reported complete: page=%+v err=%v", page, err)
 	}
 	_, err = store.db.ExecContext(ctx, `UPDATE conversation_raw SET payload=? WHERE project_identity=? AND execution_id=? AND attempt_id=? AND raw_id=?`, []byte("RAW-record"), "project", "execution", "attempt", events[0].Raw.ID)
 	require(t, err)
-	if page, err := query.ReadRaw(ctx, *events[0].Raw, 0, 64); err == nil || page.Complete {
+	if page, err := query.ReadRaw(ctx, conversationRawAPIRef(*events[0].Raw), 0, 64); err == nil || page.Complete {
 		t.Fatalf("modified raw record was reported complete: page=%+v err=%v", page, err)
 	}
 	_, err = store.db.ExecContext(ctx, `UPDATE conversation_raw SET payload=zeroblob(?) WHERE project_identity=? AND execution_id=? AND attempt_id=? AND raw_id=?`, maxConversationBodyBytes+1, "project", "execution", "attempt", events[0].Raw.ID)
 	require(t, err)
-	if page, err := query.ReadRaw(ctx, *events[0].Raw, 0, 64); err == nil || page.Complete {
+	if page, err := query.ReadRaw(ctx, conversationRawAPIRef(*events[0].Raw), 0, 64); err == nil || page.Complete {
 		t.Fatalf("oversized corrupt raw record was reported complete: page=%+v err=%v", page, err)
 	}
 	_, err = store.db.ExecContext(ctx, `DELETE FROM conversation_bodies WHERE project_identity=? AND execution_id=? AND attempt_id=? AND item_key=? AND revision=?`, "project", "execution", "attempt", events[0].Body.ItemKey, events[0].Body.Revision)
 	require(t, err)
-	if page, err := query.ReadMessageBody(ctx, *events[0].Body, 0, 64); err == nil || page.Complete {
+	if page, err := query.ReadMessageBody(ctx, conversationBodyAPIRef(*events[0].Body), 0, 64); err == nil || page.Complete {
 		t.Fatalf("missing body was reported complete: page=%+v err=%v", page, err)
 	}
 }
@@ -223,9 +224,9 @@ func TestConversationLongUnicodeFinalIsExactAcrossPages(t *testing.T) {
 	query := conversationQueries(store, "project")
 	var restored bytes.Buffer
 	for offset := int64(0); ; {
-		page, err := query.ReadMessageBody(ctx, *ref, offset, 257)
+		page, err := query.ReadMessageBody(ctx, conversationBodyAPIRef(*ref), offset, 257)
 		require(t, err)
-		if !utf8.Valid(page.Data) || page.NextOffset <= offset || page.Completeness != executionvalues.BodyComplete {
+		if !utf8.Valid(page.Data) || page.NextOffset <= offset || page.Completeness != productapi.BodyComplete {
 			t.Fatalf("Unicode final page is invalid: %+v", page)
 		}
 		restored.Write(page.Data)
@@ -342,7 +343,7 @@ func TestConversationLateOldAttemptCannotCrossNewAttempt(t *testing.T) {
 		if len(page.Events) != 1 || page.Events[0].AttemptID != tc.attempt {
 			t.Fatalf("attempt filter crossed identities: %+v", page.Events)
 		}
-		body, err := query.ReadMessageBody(ctx, tc.ref, 0, 100)
+		body, err := query.ReadMessageBody(ctx, conversationBodyAPIRef(tc.ref), 0, 100)
 		require(t, err)
 		if string(body.Data) != tc.want || !body.Complete {
 			t.Fatalf("attempt body was overwritten: %+v", body)

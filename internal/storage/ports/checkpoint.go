@@ -5,7 +5,7 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	api "github.com/erranliu/SteerLine/internal/product/api"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 const WorkerFlowRuntimeSchema = 18
@@ -36,16 +36,16 @@ type CheckpointServiceState struct {
 }
 
 type CheckpointControlOperation struct {
-	RequestID     string              `json:"request_id"`
-	Action        string              `json:"action"`
-	TaskID        string              `json:"task_id,omitempty"`
-	Payload       json.RawMessage     `json:"payload,omitempty"`
-	Phase         string              `json:"phase"`
-	RunID         string              `json:"run_id,omitempty"`
-	AttemptID     string              `json:"attempt_id,omitempty"`
-	DecisionID    string              `json:"decision_id,omitempty"`
-	RequestDigest string              `json:"request_digest"`
-	Result        *api.ControlReceipt `json:"result,omitempty"`
+	RequestID     string                         `json:"request_id"`
+	Action        string                         `json:"action"`
+	TaskID        string                         `json:"task_id,omitempty"`
+	Payload       json.RawMessage                `json:"payload,omitempty"`
+	Phase         string                         `json:"phase"`
+	RunID         string                         `json:"run_id,omitempty"`
+	AttemptID     string                         `json:"attempt_id,omitempty"`
+	DecisionID    string                         `json:"decision_id,omitempty"`
+	RequestDigest string                         `json:"request_digest"`
+	Result        *executionmodel.ControlReceipt `json:"result,omitempty"`
 }
 
 type CheckpointControlBlocker struct {

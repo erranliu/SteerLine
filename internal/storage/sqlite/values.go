@@ -2,7 +2,6 @@ package sqlite
 
 import (
 	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productdto "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -25,8 +24,6 @@ type ConversationRawRef = executionvalues.ConversationRawRef
 type ConversationWrite = executionvalues.ConversationWrite
 
 type FinalAvailability = executionvalues.FinalAvailability
-
-type Repository = reconstructiontypes.Repository
 
 type recordWrite[T any] = storageports.RecordWrite[T]
 

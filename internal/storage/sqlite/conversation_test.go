@@ -62,11 +62,11 @@ func TestConversationReaderKeepsSourceScopeOnReadOnlyConnection(t *testing.T) {
 	if err != nil || len(page.Events) != 1 || page.Events[0].ProjectID != "project" {
 		t.Fatalf("explicit raw source crossed scope: %+v %v", page, err)
 	}
-	body, err := service.ReadMessageBody(ctx, *committed[0].Body, 0, 4096)
+	body, err := service.ReadMessageBody(ctx, productdto.ConversationBodyRef{ExecutionID: committed[0].Body.ExecutionID, AttemptID: committed[0].Body.AttemptID, ItemKey: committed[0].Body.ItemKey, Revision: committed[0].Body.Revision, SHA256: committed[0].Body.SHA256, Bytes: committed[0].Body.Bytes, Source: committed[0].Body.Source, Completeness: productdto.BodyCompleteness(committed[0].Body.Completeness)}, 0, 4096)
 	if err != nil || string(body.Data) != "你好🙂" || !body.Complete {
 		t.Fatalf("read-only body query failed: %+v %v", body, err)
 	}
-	raw, err := service.ReadRaw(ctx, *committed[0].Raw, 0, 4096)
+	raw, err := service.ReadRaw(ctx, productdto.ConversationRawRef{ExecutionID: committed[0].Raw.ExecutionID, AttemptID: committed[0].Raw.AttemptID, ID: committed[0].Raw.ID, SHA256: committed[0].Raw.SHA256, Bytes: committed[0].Raw.Bytes}, 0, 4096)
 	if err != nil || string(raw.Data) != "raw bytes" || !raw.Complete {
 		t.Fatalf("read-only raw query failed: %+v %v", raw, err)
 	}

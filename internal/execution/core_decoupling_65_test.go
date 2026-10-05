@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"fmt"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
@@ -43,13 +44,13 @@ func testCD65HostGateKeepsTrustedActionSeparate(t *testing.T) {
 }
 
 type testConversationHistoryPort struct {
-	ConversationSourcePort
+	conversationtypes.ConversationSourcePort
 	mu      sync.Mutex
 	visits  []string
 	cursors []string
 }
 
-func (p *testConversationHistoryPort) ReadHistory(_ context.Context, request ConversationHistoryReadRequest, _ func(*exec.Cmd) (executionbackend.StopHandle, error)) (ConversationHistoryBatch, error) {
+func (p *testConversationHistoryPort) ReadHistory(_ context.Context, request conversationtypes.ConversationHistoryReadRequest, _ func(*exec.Cmd) (executionbackend.StopHandle, error)) (conversationtypes.ConversationHistoryBatch, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.visits = append(p.visits, request.Source.Identity)
@@ -58,14 +59,14 @@ func (p *testConversationHistoryPort) ReadHistory(_ context.Context, request Con
 	if request.Cursor != "" {
 		value, err := strconv.ParseUint(strings.TrimPrefix(request.Cursor, "cursor:"), 10, 64)
 		if err != nil {
-			return ConversationHistoryBatch{}, err
+			return conversationtypes.ConversationHistoryBatch{}, err
 		}
 		sequence = value + 1
 	}
 	event := request.Source.Event
 	event.Type, event.SourceEventID, event.SourceEventQuality, event.SourceSeq = executionvalues.ConversationObservation, fmt.Sprintf("%s:%d", request.Source.Identity, sequence), executionvalues.IdentityDerived, sequence
 	event.ReceivedAt = now()
-	return ConversationHistoryBatch{Writes: []executionvalues.ConversationWrite{{Event: event}}, Cursor: fmt.Sprintf("cursor:%d", sequence), Sequence: sequence}, nil
+	return conversationtypes.ConversationHistoryBatch{Writes: []executionvalues.ConversationWrite{{Event: event}}, Cursor: fmt.Sprintf("cursor:%d", sequence), Sequence: sequence}, nil
 }
 
 func TestCD65HistoryBudgetRotatesSources(t *testing.T) {
@@ -92,14 +93,14 @@ func TestCD65HistoryBudgetRotatesSources(t *testing.T) {
 	port := &testConversationHistoryPort{}
 	service := &Service{Config: Config{identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
 	active := testHistorySource("active", false)
-	historical := make([]ConversationHistorySource, 5)
+	historical := make([]conversationtypes.ConversationHistorySource, 5)
 	for i := range historical {
 		historical[i] = testHistorySource(fmt.Sprintf("history-%d", i), true)
 	}
-	sources := append([]ConversationHistorySource{active}, historical...)
+	sources := append([]conversationtypes.ConversationHistorySource{active}, historical...)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
-	requests := make(chan []ConversationHistorySource, 1)
+	requests := make(chan []conversationtypes.ConversationHistorySource, 1)
 	errorsOut := make(chan error, 4)
 	done := make(chan struct{})
 	go func() { defer close(done); service.runConversationHistoryCollector(ctx, requests, errorsOut) }()
@@ -175,20 +176,20 @@ func TestCD65HistoryCursorCommitsWithItsConversationBatch(t *testing.T) {
 	}
 }
 
-func testHistorySource(identity string, ended bool) ConversationHistorySource {
+func testHistorySource(identity string, ended bool) conversationtypes.ConversationHistorySource {
 	event := executionvalues.ConversationEvent{Version: executionvalues.ConversationVersion, ProjectID: "project", TaskID: "task", WorkflowID: "workflow", ExecutionID: "execution-" + identity,
 		AttemptID: "attempt-" + identity, Source: "fixture-history", SourceRole: executionvalues.ConversationSourceFallback, SourceSegment: identity, SourceIdentity: identity, SourceEventQuality: executionvalues.IdentityDerived,
 		SessionQuality: executionvalues.IdentityUnknown, TurnQuality: executionvalues.IdentityUnknown, ItemQuality: executionvalues.IdentityUnknown, Phase: executionvalues.MessagePhaseUnknown, Type: executionvalues.ConversationSession, SourceEventID: "session:" + identity, ReceivedAt: now()}
-	return ConversationHistorySource{Identity: identity, Event: event, Ended: ended}
+	return conversationtypes.ConversationHistorySource{Identity: identity, Event: event, Ended: ended}
 }
 
 type foreignConversationDiscovery struct {
-	ConversationSourcePort
+	conversationtypes.ConversationSourcePort
 	event executionvalues.ConversationEvent
 }
 
-func (p foreignConversationDiscovery) DiscoverHistory(context.Context, ConversationDiscovery) (ConversationDiscoveryResult, error) {
-	return ConversationDiscoveryResult{Writes: []executionvalues.ConversationWrite{{Event: p.event}}}, nil
+func (p foreignConversationDiscovery) DiscoverHistory(context.Context, conversationtypes.ConversationDiscovery) (conversationtypes.ConversationDiscoveryResult, error) {
+	return conversationtypes.ConversationDiscoveryResult{Writes: []executionvalues.ConversationWrite{{Event: p.event}}}, nil
 }
 
 func testCD65DiscoveryRejectsForeignOwner(t *testing.T) {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"io"
 	"os"
@@ -39,14 +40,14 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 	if s.conversationSources == nil {
 		return nil
 	}
-	discovery := ConversationDiscovery{ProjectID: s.Config.identity, RunDirectory: s.Config.RunDir, Repository: s.Config.Repository}
+	discovery := conversationtypes.ConversationDiscovery{ProjectID: s.Config.identity, RunDirectory: s.Config.RunDir, Repository: s.Config.Repository}
 	for _, run := range s.runs {
 		if run == nil || run.RunID == "" || run.ExecutionID == "" || run.DomainTaskID == "" {
 			continue
 		}
 		base := executionmodel.ConversationEvent{Version: executionmodel.ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, AttemptID: run.AttemptID,
 			ExecutionID: run.ExecutionID, Backend: executionbackend.BackendKind(run.Backend), Protocol: executionbackend.ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID}
-		runSource := ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath),
+		runSource := conversationtypes.ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath),
 			WorkerFlow: run.WorkflowVersion == executionmodel.Version, Process: conversationProcessSnapshot(run.Process)}
 		for _, attempt := range s.domain.Attempts {
 			if attempt.ExecutionID != run.ExecutionID || attempt.EventPath == "" || !executionbackend.StableExecutionID(attempt.AttemptID) {
@@ -56,7 +57,7 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 			if run.WorkflowVersion == executionmodel.Version && attempt.AttemptID == run.AttemptID {
 				ended = run.TaskStatus == "closed" || run.TaskStatus == "discarded"
 			}
-			runSource.Attempts = append(runSource.Attempts, ConversationAttemptSource{AttemptID: attempt.AttemptID, EventPath: attempt.EventPath, Ended: ended})
+			runSource.Attempts = append(runSource.Attempts, conversationtypes.ConversationAttemptSource{AttemptID: attempt.AttemptID, EventPath: attempt.EventPath, Ended: ended})
 		}
 		discovery.Runs = append(discovery.Runs, runSource)
 	}
@@ -331,7 +332,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 	}
 }
 
-func (s *Service) replayConversationTail(ctx context.Context, source conversationJournalSource, segment, generation string, mapper ConversationMapper, data []byte, start int64, oldSeq uint64) error {
+func (s *Service) replayConversationTail(ctx context.Context, source conversationJournalSource, segment, generation string, mapper conversationtypes.ConversationMapper, data []byte, start int64, oldSeq uint64) error {
 	journalSource := s.conversationSources.JournalSource(source.Backend, source.Protocol)
 	sequence := oldSeq + 1
 	raw := append([]byte(nil), data...)

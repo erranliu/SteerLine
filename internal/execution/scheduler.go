@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -42,7 +43,7 @@ func (s *Service) BeginActor(ctx context.Context) error {
 	if len(replaySources) > 0 {
 		s.conversationReplayRequests <- replaySources
 	}
-	s.historyRequests = make(chan []ConversationHistorySource, 1)
+	s.historyRequests = make(chan []conversationtypes.ConversationHistorySource, 1)
 	historyDone := make(chan struct{})
 	s.historyDone = historyDone
 	go func() {

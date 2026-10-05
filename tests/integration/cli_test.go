@@ -22,10 +22,11 @@ import (
 var cliPath string
 
 func prepareIntegrationCLI() (func(), error) {
-	repoRoot, err := filepath.Abs(filepath.Join("..", ".."))
-	if err != nil {
-		return nil, fmt.Errorf("locate repository root: %w", err)
+	_, sourceFile, _, ok := runtime.Caller(0)
+	if !ok {
+		return nil, fmt.Errorf("locate integration CLI source file")
 	}
+	repoRoot := filepath.Clean(filepath.Join(filepath.Dir(sourceFile), "..", ".."))
 	buildDir, err := os.MkdirTemp("", "steerline-integration-build-")
 	if err != nil {
 		return nil, fmt.Errorf("create CLI build directory: %w", err)

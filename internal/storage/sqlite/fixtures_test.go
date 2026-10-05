@@ -10,10 +10,19 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
+
+func conversationBodyAPIRef(ref executionmodel.ConversationBodyRef) productapi.ConversationBodyRef {
+	return productapi.ConversationBodyRef{ExecutionID: ref.ExecutionID, AttemptID: ref.AttemptID, ItemKey: ref.ItemKey, Revision: ref.Revision, SHA256: ref.SHA256, Bytes: ref.Bytes, Source: ref.Source, Completeness: productapi.BodyCompleteness(ref.Completeness)}
+}
+
+func conversationRawAPIRef(ref executionmodel.ConversationRawRef) productapi.ConversationRawRef {
+	return productapi.ConversationRawRef{ExecutionID: ref.ExecutionID, AttemptID: ref.AttemptID, ID: ref.ID, SHA256: ref.SHA256, Bytes: ref.Bytes}
+}
 
 func require(t *testing.T, err error) {
 	t.Helper()

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/app/host/scheduler"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/execution/scheduler"
 )
 
 func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {
@@ -83,13 +83,13 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	err = service.prepareWorkerFlow(ctx, *task, run)
 	service.Config = preparationConfig
 	if err != nil {
-		if os.Getenv("STEERLINE_REQUIRE_DETACHED_TESTS") != "1" && strings.Contains(err.Error(), host.ErrDetachUnsupported.Error()) {
+		if os.Getenv("STEERLINE_REQUIRE_DETACHED_TESTS") != "1" && strings.Contains(err.Error(), scheduler.ErrDetachUnsupported.Error()) {
 			t.Skipf("host cannot retain a worker across service exit: %v", err)
 		}
 		t.Fatal(err)
 	}
 	if service.workers[run.RunID] == nil {
-		if os.Getenv("STEERLINE_REQUIRE_DETACHED_TESTS") != "1" && run.Error != nil && strings.Contains(*run.Error, host.ErrDetachUnsupported.Error()) {
+		if os.Getenv("STEERLINE_REQUIRE_DETACHED_TESTS") != "1" && run.Error != nil && strings.Contains(*run.Error, scheduler.ErrDetachUnsupported.Error()) {
 			t.Skipf("host cannot retain a worker across service exit: %s", *run.Error)
 		}
 		t.Fatalf("worker was not launched: reason=%q run=%+v", deref(run.Error), run)

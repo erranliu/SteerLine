@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	"sync"
 	"time"
 
@@ -14,14 +15,14 @@ import (
 type Service struct {
 	replayDone           <-chan struct{}
 	historyDone          <-chan struct{}
-	historyRequests      chan []ConversationHistorySource
+	historyRequests      chan []conversationtypes.ConversationHistorySource
 	host                 HostPort
 	taskWork             TaskWorkPort
 	taskResults          TaskResultPort
 	Config               Config
 	baseConfig           Config
 	lifecycleResolver    executionbackend.LifecycleResolver
-	conversationSources  ConversationSourcePort
+	conversationSources  conversationtypes.ConversationSourcePort
 	dispatchConfig       *Config
 	dispatchProfile      *ExecutionProfile
 	State                reconstruction.Runtime
