@@ -33,16 +33,18 @@
 | `internal/steerlineapp/config.go`: Git/workspace/PR 调用 | #78 只改 import 所有者路径；配置字段、JSON、默认值、冻结与拒绝行为不变。 |
 | `internal/execution/application_config_types.go`: `Config.ProcessHost` 与 `Config.PR` | 字段/type shape 不变；`PR` 仍是 `publication.Config`，只由真实资源 package 提供。 |
 | `cmd/steerline/native_task_test.go`、`internal/steerlineintegration/execution_wiring_test.go`: CLI process/profile consumers 与 `TestTM06ResourceWiring` | #78。CLI test 的 Codex import 改到新 adapter；新增 app factory/resource parent 和 child helper。原 `TestTM04ExecutionWiring`、MC parents/subtests/断言仍归原文件 owners。 |
-| `internal/steerlineapp/client_boundary_test.go`、`internal/steerlineintegration/core_decoupling_67_boundary_test.go` | #78 只将 console/adapter 禁止依赖反例改到实际新路径；其余原边界 parents 和断言保持。 |
+| `internal/steerlineapp/client_boundary_test.go`、`internal/steerlineintegration/core_decoupling_67_boundary_test.go` | #78 只拥有 adapter/resource 新路径反例与 import closure 对应路径；#77 拥有 product DTO、console root/closure 反例。原 `TestTM04ConsoleQueryBoundary` 及 #76 execution/CAS/ack parents 不变。 |
 | `internal/steerline/launchers.go`: `//go:embed launcher/*` | embedded templates 仍归 host package；模板路径、嵌入规则与 native launch argv 未变。Session launcher 的实际实现路径由 `app.go` 修改负责。 |
 | `internal/execution/backend/backend.go`: `ManagedProcessHost` | 接口方法/参数/返回类型不变：`StartManaged(*exec.Cmd) (StopHandle,error)`、`InspectProcess(*ProcessIdentity) string`、`NewProcessGeneration() string`、`WriteExecutionFile(string,[]byte) error`、`OutputCommand(context.Context,LaunchCommand) ([]byte,error)`。 |
-| `internal/coreboundary/check.go`、`internal/coreboundary/execution_boundary_test.go`、`internal/testboundary/boundary_test.go` | #78。真实 prefix、禁止依赖列表、adapter test roots 与 E2E allowlist 同次更新；inactive-tag 与 transitive negative fixtures 保留。 |
-| `cmd/test-feedback/scoped.go` | #78。L1 的 package 与 exact parent test 指向真实迁入位置；历史 `remoteprotocol` 空目录不再作为 package。 |
+| `internal/coreboundary/check.go`、`internal/coreboundary/execution_boundary_test.go`、`internal/testboundary/boundary_test.go` | #78 拥有新 adapters/resources prefix、direct/transitive adapter 禁止依赖守卫、TM06 negative fixtures、移入 resources 的 console/E2E 路径；#77 拥有纯 DTO、console root/closure 的规则和反例。既有 `TestTM04ConsoleQueryBoundary` 与 #76 execution/CAS/ack 断言保留原 owner。 |
+| `cmd/test-feedback/scoped.go` | #78 拥有迁入 adapter/protocol/workspace/publication 的 `quickOwnerCases` package/parent 映射与 `TestTM06ResourceWiring` 的 boundary group/assignment；#77 拥有产品 api/client/query/taskview/console `quickRulePackages` 与产品图 `quickBoundaryAssigned` 子例。当前改动保留既有组和范围。 |
+| `internal/storage/ports`: `TaskGraphSnapshot` 定义及其查询/消费者 | #77 唯一所有者，连同定义和全部消费者切换。本分支未复制、重声明或改写此接口。 |
 
 具体旧/新文件和每个受影响测试父/子例、断言所有者列于 [test-mapping.json](test-mapping.json)。源包没有旧路径 alias、兼容 facade 或转发实现。
 
 ## 集成与后续所有者
 
 - #77 继续拥有 product/api、product/query、client、console 与其专属产品工厂。此分支只拥有上表里的 backend/resource 构造段；公共 app 文件如发生整合，以语法段/字段所有者顺序合并。
+- #77 正迁移的共享纯 `TaskGraphSnapshot` 由 #77 单点完成定义与消费方切换；本分支未改 storage/ports 相关定义/消费者。
 - #80 接收本分支提供的新 backend 工厂和 `execution/process` Host/resource 小端口，不负责补本次遗漏的调用者或编译修复。
 - #79 及后续任务不由 #78 启动；它们按各自硬前置执行。
