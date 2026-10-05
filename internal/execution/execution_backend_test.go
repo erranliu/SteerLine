@@ -66,7 +66,7 @@ func TestExecutionRecordsPinBindingsAndOperations(t *testing.T) {
 func TestCapabilityReportRejectsRetiredWholeRunActions(t *testing.T) {
 	for _, name := range []string{"reply_continue", "retry"} {
 		report := executionbackend.CapabilityReport{Version: 1, Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Target: executionbackend.ExecutionTarget{ID: "local"}, Agent: executionbackend.AgentSpec{Name: "fixture"}, PlatformVersion: "fixture", CheckedAt: now(), Capabilities: []executionbackend.Capability{{Name: name, Status: executionbackend.CapabilityUnsupported}}}
-		if err := (executionRecords{root: t.TempDir(), persistence: sqlite.Factory{}}).saveCapabilityReport(report); err == nil {
+		if err := (executionRecords{root: t.TempDir(), persistence: sqlite.Factory{}, resources: fixtureResources{}}).saveCapabilityReport(report); err == nil {
 			t.Fatalf("capability report retained retired whole-run action %q", name)
 		}
 	}
