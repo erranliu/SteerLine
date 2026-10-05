@@ -468,12 +468,10 @@ func (p *Project) Record(label string, snap Snapshot) {
 }
 
 func (s *Scenario) cleanup() {
-	bodyContextErr := s.Context.Err()
-	if !s.bodyFinishedAt.IsZero() {
-		bodyContextErr = s.bodyContextErr
-	} else {
-		s.bodyFinishedAt = time.Now().UTC()
+	if s.bodyFinishedAt.IsZero() {
+		_ = s.finishBody()
 	}
+	bodyContextErr := s.bodyContextErr
 	defer s.cancel()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
