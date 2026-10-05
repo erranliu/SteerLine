@@ -1,0 +1,12 @@
+{"Time":"2026-10-06T02:46:22.2243228+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/execution/scheduler"}
+{"Time":"2026-10-06T02:46:22.5799117+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/execution/scheduler","Test":"TestRunStopsActorAndWaitsForSourcesOnCancellation"}
+{"Time":"2026-10-06T02:46:22.5799117+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/scheduler","Test":"TestRunStopsActorAndWaitsForSourcesOnCancellation","Output":"=== RUN   TestRunStopsActorAndWaitsForSourcesOnCancellation\n"}
+{"Time":"2026-10-06T02:46:22.5799117+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/scheduler","Test":"TestRunStopsActorAndWaitsForSourcesOnCancellation","Output":"--- PASS: TestRunStopsActorAndWaitsForSourcesOnCancellation (0.00s)\n"}
+{"Time":"2026-10-06T02:46:22.5846619+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/execution/scheduler","Test":"TestRunStopsActorAndWaitsForSourcesOnCancellation","Elapsed":0}
+{"Time":"2026-10-06T02:46:22.5846619+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/execution/scheduler","Test":"TestRunRejectsUnknownDispatchModeBeforeStartingActor"}
+{"Time":"2026-10-06T02:46:22.5846619+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/scheduler","Test":"TestRunRejectsUnknownDispatchModeBeforeStartingActor","Output":"=== RUN   TestRunRejectsUnknownDispatchModeBeforeStartingActor\n"}
+{"Time":"2026-10-06T02:46:22.5846619+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/scheduler","Test":"TestRunRejectsUnknownDispatchModeBeforeStartingActor","Output":"--- PASS: TestRunRejectsUnknownDispatchModeBeforeStartingActor (0.00s)\n"}
+{"Time":"2026-10-06T02:46:22.5846619+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/execution/scheduler","Test":"TestRunRejectsUnknownDispatchModeBeforeStartingActor","Elapsed":0}
+{"Time":"2026-10-06T02:46:22.5846619+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/scheduler","Output":"PASS\n"}
+{"Time":"2026-10-06T02:46:22.5846619+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/scheduler","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/execution/scheduler\t0.360s\n"}
+{"Time":"2026-10-06T02:46:22.5846619+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/execution/scheduler","Elapsed":0.36}

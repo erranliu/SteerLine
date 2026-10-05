@@ -2,7 +2,333 @@
   "schema_version": 1,
   "task": 80,
   "starting_head": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
-  "runs": [],
+  "runs": [
+    {
+      "id": "TM08.1-TM08.3-host",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/host/commit-bound-02 -- ./internal/app/host -run '^TestTM08(ControlIdentity|Heartbeat|Shutdown)$' -count=1",
+      "source_commit": "50627a412224a0afb52426e0c1606a5e915664fe",
+      "runner_summary": "docs/validation/three-line-08-app-host/host/commit-bound-02/summary.json",
+      "command_exit_code": 0,
+      "status": "passed",
+      "test_count": 3,
+      "passed_tests": 3,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "actual_tests": [
+        {
+          "parent": "TestTM08Heartbeat",
+          "status": "pass"
+        },
+        {
+          "parent": "TestTM08Shutdown",
+          "status": "pass"
+        },
+        {
+          "parent": "TestTM08ControlIdentity",
+          "status": "pass"
+        }
+      ]
+    },
+    {
+      "id": "TM08.1-TM08.2-app-host-wiring",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/wiring/commit-bound-02 -- ./tests/integration -run '^TestTM08AppHostWiring$' -count=1",
+      "source_commit": "50627a412224a0afb52426e0c1606a5e915664fe",
+      "runner_summary": "docs/validation/three-line-08-app-host/wiring/commit-bound-02/summary.json",
+      "command_exit_code": 0,
+      "status": "passed",
+      "test_count": 2,
+      "passed_tests": 2,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "actual_tests": [
+        {
+          "parent": "TestTM08AppHostWiring",
+          "status": "pass"
+        },
+        {
+          "parent": "TestTM08AppHostWiring/default_app_host_composition",
+          "status": "pass"
+        }
+      ]
+    },
+    {
+      "id": "TM08.ExecutionScheduler",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/scheduler/commit-bound-02 -- ./internal/execution/scheduler -run '^TestRun' -count=1",
+      "source_commit": "50627a412224a0afb52426e0c1606a5e915664fe",
+      "runner_summary": "docs/validation/three-line-08-app-host/scheduler/commit-bound-02/summary.json",
+      "command_exit_code": 0,
+      "status": "passed",
+      "test_count": 2,
+      "passed_tests": 2,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "actual_tests": [
+        {
+          "parent": "TestRunRejectsUnknownDispatchModeBeforeStartingActor",
+          "status": "pass"
+        },
+        {
+          "parent": "TestRunStopsActorAndWaitsForSourcesOnCancellation",
+          "status": "pass"
+        }
+      ]
+    },
+    {
+      "id": "TM08.E2ESnapshotContext",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/e2e-snapshot/commit-bound-02 -- ./tests/e2e/internal/testenv -run '^TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions$' -count=1",
+      "source_commit": "50627a412224a0afb52426e0c1606a5e915664fe",
+      "runner_summary": "docs/validation/three-line-08-app-host/e2e-snapshot/commit-bound-02/summary.json",
+      "command_exit_code": 0,
+      "status": "passed",
+      "test_count": 1,
+      "passed_tests": 1,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "actual_tests": [
+        {
+          "parent": "TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions",
+          "status": "pass"
+        }
+      ]
+    },
+    {
+      "id": "L1-fixed",
+      "command": "go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1/commit-bound-02",
+      "source_commit": "50627a412224a0afb52426e0c1606a5e915664fe",
+      "runner_summary": "docs/validation/three-line-08-app-host/l1/commit-bound-02/summary.json",
+      "command_exit_code": 0,
+      "status": "passed",
+      "execution_seconds": 654.7555345,
+      "group_count": 12,
+      "package_count": 27,
+      "failed_packages": 0,
+      "skipped_packages": 0,
+      "test_count": 445,
+      "passed_tests": 445,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "groups": [
+        {
+          "id": "quick-core",
+          "command_exit_code": 0,
+          "status": "passed",
+          "package_count": 1,
+          "passed_packages": 1,
+          "failed_packages": [],
+          "skipped_packages": [],
+          "test_count": 3,
+          "passed_tests": 3,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-rules",
+          "command_exit_code": 0,
+          "status": "passed",
+          "package_count": 16,
+          "passed_packages": 16,
+          "failed_packages": [],
+          "skipped_packages": [],
+          "test_count": 256,
+          "passed_tests": 256,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-execution",
+          "command_exit_code": 0,
+          "status": "passed",
+          "package_count": 1,
+          "passed_packages": 1,
+          "failed_packages": [],
+          "skipped_packages": [],
+          "test_count": 16,
+          "passed_tests": 16,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-execution-boundary",
+          "command_exit_code": 0,
+          "status": "passed",
+          "package_count": 1,
+          "passed_packages": 1,
+          "failed_packages": [],
+          "skipped_packages": [],
+          "test_count": 44,
+          "passed_tests": 44,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-remote",
+          "command_exit_code": 0,
+          "status": "passed",
+          "package_count": 1,
+          "passed_packages": 1,
+          "failed_packages": [],
+          "skipped_packages": [],
+          "test_count": 15,
+          "passed_tests": 15,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-codec",
+          "command_exit_code": 0,
+          "status": "passed",
+          "package_count": 1,
+          "passed_packages": 1,
+          "failed_packages": [],
+          "skipped_packages": [],
+          "test_count": 14,
+          "passed_tests": 14,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-identity",
+          "command_exit_code": 0,
+          "status": "passed",
+          "package_count": 1,
+          "passed_packages": 1,
+          "failed_packages": [],
+          "skipped_packages": [],
+          "test_count": 17,
+          "passed_tests": 17,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-codexapp",
+          "command_exit_code": 0,
+          "status": "passed",
+          "package_count": 1,
+          "passed_packages": 1,
+          "failed_packages": [],
+          "skipped_packages": [],
+          "test_count": 4,
+          "passed_tests": 4,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-workspace",
+          "command_exit_code": 0,
+          "status": "passed",
+          "package_count": 1,
+          "passed_packages": 1,
+          "failed_packages": [],
+          "skipped_packages": [],
+          "test_count": 2,
+          "passed_tests": 2,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-publication",
+          "command_exit_code": 0,
+          "status": "passed",
+          "package_count": 1,
+          "passed_packages": 1,
+          "failed_packages": [],
+          "skipped_packages": [],
+          "test_count": 9,
+          "passed_tests": 9,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-app",
+          "command_exit_code": 0,
+          "status": "passed",
+          "package_count": 1,
+          "passed_packages": 1,
+          "failed_packages": [],
+          "skipped_packages": [],
+          "test_count": 9,
+          "passed_tests": 9,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-boundary",
+          "command_exit_code": 0,
+          "status": "passed",
+          "package_count": 1,
+          "passed_packages": 1,
+          "failed_packages": [],
+          "skipped_packages": [],
+          "test_count": 56,
+          "passed_tests": 56,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        }
+      ],
+      "required_test_hits": [
+        {
+          "parent": "TestTM04ExecutionWiring",
+          "status": "pass",
+          "required_subtests": [
+            "claim_transaction_failure_and_original_receipt",
+            "intent_binding_and_two_original_turns",
+            "original_request_ack_and_manual_recovery"
+          ],
+          "subtests": [
+            {
+              "name": "TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt",
+              "status": "pass"
+            },
+            {
+              "name": "TestTM04ExecutionWiring/intent_binding_and_two_original_turns",
+              "status": "pass"
+            },
+            {
+              "name": "TestTM04ExecutionWiring/original_request_ack_and_manual_recovery",
+              "status": "pass"
+            }
+          ]
+        },
+        {
+          "parent": "TestTM08AppHostWiring",
+          "status": "pass",
+          "required_subtests": [
+            "default_app_host_composition"
+          ],
+          "subtests": [
+            {
+              "name": "TestTM08AppHostWiring/default_app_host_composition",
+              "status": "pass"
+            }
+          ]
+        },
+        {
+          "parent": "TestTM08AppHostBoundary",
+          "status": "pass",
+          "required_subtests": [],
+          "subtests": []
+        },
+        {
+          "parent": "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding",
+          "status": "pass",
+          "required_subtests": [],
+          "subtests": []
+        },
+        {
+          "parent": "TestRunStopsActorAndWaitsForSourcesOnCancellation",
+          "status": "pass",
+          "required_subtests": [],
+          "subtests": []
+        },
+        {
+          "parent": "TestRunRejectsUnknownDispatchModeBeforeStartingActor",
+          "status": "pass",
+          "required_subtests": [],
+          "subtests": []
+        }
+      ]
+    }
+  ],
   "migrated_test_ownership": {
     "TM08.NativeProjectBinding": {
       "package": "github.com/erranliu/SteerLine/internal/app",

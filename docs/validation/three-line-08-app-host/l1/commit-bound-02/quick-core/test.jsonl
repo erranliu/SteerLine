@@ -1,0 +1,16 @@
+{"Time":"2026-10-06T02:47:13.8625978+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/app/host"}
+{"Time":"2026-10-06T02:47:14.0395236+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/app/host","Test":"TestTM08ControlIdentity"}
+{"Time":"2026-10-06T02:47:14.0395236+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app/host","Test":"TestTM08ControlIdentity","Output":"=== RUN   TestTM08ControlIdentity\n"}
+{"Time":"2026-10-06T02:47:14.1452796+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app/host","Test":"TestTM08ControlIdentity","Output":"--- PASS: TestTM08ControlIdentity (0.11s)\n"}
+{"Time":"2026-10-06T02:47:14.1458006+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/app/host","Test":"TestTM08ControlIdentity","Elapsed":0.11}
+{"Time":"2026-10-06T02:47:14.1458006+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/app/host","Test":"TestTM08Heartbeat"}
+{"Time":"2026-10-06T02:47:14.1458006+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app/host","Test":"TestTM08Heartbeat","Output":"=== RUN   TestTM08Heartbeat\n"}
+{"Time":"2026-10-06T02:47:22.1521044+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app/host","Test":"TestTM08Heartbeat","Output":"--- PASS: TestTM08Heartbeat (8.01s)\n"}
+{"Time":"2026-10-06T02:47:22.1526294+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/app/host","Test":"TestTM08Heartbeat","Elapsed":8.01}
+{"Time":"2026-10-06T02:47:22.1526294+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/app/host","Test":"TestTM08Shutdown"}
+{"Time":"2026-10-06T02:47:22.1526294+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app/host","Test":"TestTM08Shutdown","Output":"=== RUN   TestTM08Shutdown\n"}
+{"Time":"2026-10-06T02:47:30.7655678+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app/host","Test":"TestTM08Shutdown","Output":"--- PASS: TestTM08Shutdown (8.61s)\n"}
+{"Time":"2026-10-06T02:47:30.7655678+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/app/host","Test":"TestTM08Shutdown","Elapsed":8.61}
+{"Time":"2026-10-06T02:47:30.7655678+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app/host","Output":"PASS\n"}
+{"Time":"2026-10-06T02:47:30.7881231+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app/host","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/app/host\t16.926s\n"}
+{"Time":"2026-10-06T02:47:30.7881231+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/app/host","Elapsed":16.927}

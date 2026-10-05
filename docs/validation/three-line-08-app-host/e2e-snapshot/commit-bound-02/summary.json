@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./tests/e2e/internal/testenv",
+    "-run",
+    "^TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions$",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-05T18:46:45.1544362Z",
+  "finished_at": "2026-10-05T18:46:47.5898158Z",
+  "wall_seconds": 2.4354522,
+  "environment": {
+    "source_commit": "50627a412224a0afb52426e0c1606a5e915664fe",
+    "worktree_status": "?? docs/validation/three-line-08-app-host/host/commit-bound-02/go-test.jsonl\n?? docs/validation/three-line-08-app-host/host/commit-bound-02/go-test.stderr.txt\n?? docs/validation/three-line-08-app-host/host/commit-bound-02/summary.json\n?? docs/validation/three-line-08-app-host/scheduler/commit-bound-02/go-test.jsonl\n?? docs/validation/three-line-08-app-host/scheduler/commit-bound-02/go-test.stderr.txt\n?? docs/validation/three-line-08-app-host/scheduler/commit-bound-02/summary.json\n?? docs/validation/three-line-08-app-host/wiring/commit-bound-02/go-test.jsonl\n?? docs/validation/three-line-08-app-host/wiring/commit-bound-02/go-test.stderr.txt\n?? docs/validation/three-line-08-app-host/wiring/commit-bound-02/summary.json",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 1,
+    "passed_packages": 1,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 1,
+    "passed_tests": 1,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/testenv",
+        "status": "pass",
+        "elapsed_seconds": 0.662
+      }
+    ],
+    "tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/testenv",
+        "name": "TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "slowest_tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/tests/e2e/internal/testenv",
+        "name": "TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 0.6617182,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/three-line-08-app-host/e2e-snapshot/commit-bound-02/go-test.jsonl",
+  "stderr_log": "docs/validation/three-line-08-app-host/e2e-snapshot/commit-bound-02/go-test.stderr.txt"
+}
