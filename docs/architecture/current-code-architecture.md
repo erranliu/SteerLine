@@ -163,8 +163,8 @@ product/api 只含可序列化页面、目标/版本/原请求回执；无 Domai
 | `internal/steerline/host` | 2 | `internal/product/api` |
 | `internal/steerline/testprotocol` | 6 | — |
 | `internal/steerlineapp` | 15 | `internal/console`, `internal/execution`, `internal/execution/adapters/codex`, `internal/execution/adapters/orca`, `internal/execution/adapters/orcaremote`, `internal/execution/backend`, `internal/execution/model`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/reconstruction`, `internal/execution/workspace`, `internal/product/api`, `internal/product/client`, `internal/product/query`, `internal/steerline`, `internal/steerline/contracts`, `internal/storage/ports`, `internal/storage/sqlite`, `internal/task`, `internal/task/model` |
-| `internal/storage/ports` | 13 | `internal/execution/backend`, `internal/execution/model`, `internal/product/api`, `internal/task/model` |
-| `internal/storage/sqlite` | 37 | `internal/execution/backend`, `internal/execution/model`, `internal/product/api`, `internal/product/query`, `internal/steerline/contracts`, `internal/storage/ports`, `internal/task/model` |
+| `internal/storage/ports` | 15 | `internal/execution/backend`, `internal/execution/model`, `internal/product/api`, `internal/task/model` |
+| `internal/storage/sqlite` | 40 | `internal/execution/backend`, `internal/execution/model`, `internal/product/api`, `internal/product/query`, `internal/steerline/contracts`, `internal/storage/ports`, `internal/task/model` |
 | `internal/task` | 6 | `internal/task/model` |
 | `internal/task/model` | 15 | — |
 | `internal/testfeedback` | 1 | — |
@@ -617,6 +617,7 @@ product/api 只含可序列化页面、目标/版本/原请求回执；无 Domai
 
 #### internal/storage/ports
 
+- [application_snapshot.go](../../internal/storage/ports/application_snapshot.go)
 - [checkpoint.go](../../internal/storage/ports/checkpoint.go)
 - [conversation_read.go](../../internal/storage/ports/conversation_read.go)
 - [errors.go](../../internal/storage/ports/errors.go)
@@ -625,6 +626,7 @@ product/api 只含可序列化页面、目标/版本/原请求回执；无 Domai
 - [ports.go](../../internal/storage/ports/ports.go)
 - [query.go](../../internal/storage/ports/query.go)
 - [records.go](../../internal/storage/ports/records.go)
+- [scoped_snapshots.go](../../internal/storage/ports/scoped_snapshots.go)
 - [task_claim.go](../../internal/storage/ports/task_claim.go)
 - [task_discard.go](../../internal/storage/ports/task_discard.go)
 - [task_graph.go](../../internal/storage/ports/task_graph.go)
@@ -634,6 +636,7 @@ product/api 只含可序列化页面、目标/版本/原请求回执；无 Domai
 #### internal/storage/sqlite
 
 - [activity_view.go](../../internal/storage/sqlite/activity_view.go)
+- [application_snapshot.go](../../internal/storage/sqlite/application_snapshot.go)
 - [atomic_replay.go](../../internal/storage/sqlite/atomic_replay.go)
 - [checkpoint.go](../../internal/storage/sqlite/checkpoint.go)
 - [connections.go](../../internal/storage/sqlite/connections.go)
@@ -664,12 +667,14 @@ product/api 只含可序列化页面、目标/版本/原请求回执；无 Domai
 - [sqlite_worker_commit.go](../../internal/storage/sqlite/sqlite_worker_commit.go)
 - [sqlite_write_ports.go](../../internal/storage/sqlite/sqlite_write_ports.go)
 - [state_revision.go](../../internal/storage/sqlite/state_revision.go)
+- [task_candidate_snapshot.go](../../internal/storage/sqlite/task_candidate_snapshot.go)
 - [task_claim_commit.go](../../internal/storage/sqlite/task_claim_commit.go)
 - [task_discard_commit.go](../../internal/storage/sqlite/task_discard_commit.go)
 - [task_result_commit.go](../../internal/storage/sqlite/task_result_commit.go)
 - [tasks.go](../../internal/storage/sqlite/tasks.go)
 - [values.go](../../internal/storage/sqlite/values.go)
 - [worker_attachment_store.go](../../internal/storage/sqlite/worker_attachment_store.go)
+- [workflow_view.go](../../internal/storage/sqlite/workflow_view.go)
 
 #### internal/task
 
