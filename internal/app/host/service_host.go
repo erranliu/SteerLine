@@ -5,15 +5,15 @@ import (
 	"io"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 // ServiceHost owns file transport and console/startup publication. It holds no
 // domain writer, task result capability or mutable execution records.
 type ServiceHost struct {
-	Config          execution.Config
+	Config          Config
 	Console         string
 	consoleOut      io.Writer
 	formatter       ActivityFormatter
@@ -22,14 +22,14 @@ type ServiceHost struct {
 	startupID       string
 }
 
-func NewServiceHost(c execution.Config, startupID, console string, output io.Writer, admission ApplicationAdmission, formatter ActivityFormatter) *ServiceHost {
+func NewServiceHost(c Config, startupID, console string, output io.Writer, admission ApplicationAdmission, formatter ActivityFormatter) *ServiceHost {
 	return &ServiceHost{Config: c, startupID: startupID, Console: console, consoleOut: output, admission: admission, formatter: formatter}
 }
-func (s *ServiceHost) ValidateStateLocation(c execution.Config) error {
+func (s *ServiceHost) ValidateStateLocation() error {
 	if s.admission == nil {
 		return errors.New("application state-location validator is required")
 	}
-	return s.admission.ValidateStateLocation(c)
+	return s.admission.ValidateStateLocation(s.Config)
 }
 func (s *ServiceHost) ReadControlRequest(id string) (productapi.ControlRequest, error) {
 	return readControlRequest(controlRequestPath(s.Config.RunDir, id))
@@ -50,4 +50,4 @@ func (s *ServiceHost) CurrentProcessIdentity() (*executionbackend.ProcessIdentit
 	return s.Config.ProcessFacts.CurrentIdentity()
 }
 
-var _ execution.HostPort = (*ServiceHost)(nil)
+var _ hostport.HostPort = (*ServiceHost)(nil)

@@ -62,11 +62,11 @@ func VerifyStoredCapabilityReport(root string, report executionbackend.Capabilit
 
 // SaveExecutionCapabilityReport persists one already verified, generic report
 // using the center's capability record format.
-func SaveExecutionCapabilityReport(c Config, report executionbackend.CapabilityReport) error {
+func SaveExecutionCapabilityReport(c Config, resources ResourcePort, report executionbackend.CapabilityReport) error {
 	if c.RunDir == "" {
 		return errors.New("run directory is required for a capability report")
 	}
-	records := executionRecords{root: c.RunDir, reader: c.ExecutionRecords, resources: c.Resources}
+	records := executionRecords{root: c.RunDir, resources: resources}
 	if _, err := records.loadCapabilityReport(report); err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -186,7 +186,7 @@ func (s *Service) requireBackendCapabilitiesFor(ctx context.Context, backend exe
 	if err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
-	records := executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords, resources: s.Config.Resources}
+	records := s.records
 	report, err := records.loadCapabilityReport(probe)
 	if os.IsNotExist(err) {
 		if saveErr := records.saveCapabilityReport(probe); saveErr != nil {

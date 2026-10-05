@@ -1,10 +1,10 @@
 package integration
 
 import (
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"bytes"
 	"context"
 	"encoding/json"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"strings"
@@ -137,7 +137,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 	t.Run("service_entries_reject_missing_catalog_before_target", func(t *testing.T) {
 		state := t.TempDir() + "/absent"
 		config := execution.Config{TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, Repository: "must-not-be-read", RunDir: state, Git: executionbackend.Command{Executable: "must-not-be-called"}}
-		if _, err := steerline.StartService(context.Background(), config, "unused.json", steerline.StartServiceOptions{}); err == nil || !strings.Contains(err.Error(), "directory") {
+		if _, err := steerlineapp.StartConfiguredService(context.Background(), config, "unused.json", steerline.StartServiceOptions{}); err == nil || !strings.Contains(err.Error(), "directory") {
 			t.Fatalf("start reached target without directory: %v", err)
 		}
 		if err := steerlineapp.RunConfiguredService(context.Background(), config, "manual", "", "off"); err == nil || !strings.Contains(err.Error(), "directory") {

@@ -580,11 +580,12 @@ func startIntegrationServiceWithSources(t *testing.T, parent context.Context, co
 	require(t, err)
 	reader, err := steerlineapp.OpenNativeTaskReader(parent, &config)
 	require(t, err)
+	hostConfig := integrationHostConfig(t, config)
 	ctx, cancel := context.WithCancel(parent)
 	harness := &runningIntegrationService{service: service, config: config, reader: reader,
 		queries: productquery.NewService(reader, config.Identity()), cancel: cancel, done: make(chan error, 1)}
 	t.Cleanup(func() { harness.stop(t) })
-	go func() { harness.done <- steerline.RunService(ctx, service, service.Config, "manual") }()
+	go func() { harness.done <- steerline.RunService(ctx, service, hostConfig, "manual") }()
 	waitFor(t, 30*time.Second, func() bool {
 		select {
 		case err := <-harness.done:
@@ -747,20 +748,16 @@ func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config exe
 		candidate := productquery.Candidate(&productquery.CandidateView{RunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, EnvironmentBlocker: run.EnvironmentBlocker})
 		target, err := productapi.EnvironmentTarget(candidate)
 		require(t, err)
-		request, err := steerline.SubmitControlTargeted(config, option, productapi.ControlPayload{Environment: target}, "fixture", newID(), "", nil)
+		hostConfig := integrationHostConfig(t, config)
+		request, err := steerline.SubmitControlTargeted(hostConfig, option, productapi.ControlPayload{Environment: target}, "fixture", newID(), "", nil)
 		require(t, err)
-		receipt, err := steerline.WaitControlReceipt(ctx, config, request.RequestID, 10*time.Millisecond)
+		receipt, err := steerline.WaitControlReceipt(ctx, hostConfig, request.RequestID, 10*time.Millisecond)
 		require(t, err)
 		if receipt.Status != "applied" && receipt.Status != "failed" {
 			t.Fatalf("environment command: %+v", receipt)
 		}
 		return
 	}
-	commandStore, err := steerlineapp.OpenNativeTaskCommandStore(ctx, &config)
-	require(t, err)
-	defer func() { require(t, commandStore.Close()) }()
-	config.ExecutionRecords, config.CommandReader, config.CommandWriter = commandStore, commandStore, commandStore
-
 	answer := steerlineapp.AnswerOptions{
 		RunID: run.RunID, DecisionID: run.Decision.ID, Option: option, Note: "Continue the original work.",
 		By: "operator", ExpectedVersion: run.Decision.Version,

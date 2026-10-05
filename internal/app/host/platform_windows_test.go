@@ -247,7 +247,7 @@ func TestWindowsPendingStartupPreservesMismatchClassification(t *testing.T) {
 				record.RepositoryPath = filepath.Join(t.TempDir(), "another-worktree")
 				expected = ConnectionIdentityError
 			}
-			require(t, writeStartupRecord(c, record))
+			require(t, writeStartupRecord(hostConfigForTest(c), record))
 			if kind == "repository-path" {
 				path, err := startupPath(c.RunDir, record.StartupID)
 				require(t, err)

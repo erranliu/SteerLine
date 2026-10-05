@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -20,7 +19,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
-	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
@@ -68,8 +66,8 @@ func LoadConfigWithDirectory(path string, directory *execution.ExecutionDirector
 }
 
 func loadConfig(path string, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost, requireSupport bool) (execution.Config, error) {
-	config := execution.Config{Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s",
-		Git: executionbackend.Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
+	input := defaultProjectConfigInput()
+	config := input.executionConfig()
 	projectPath, err := filepath.Abs(path)
 	if err != nil {
 		return config, err
@@ -78,9 +76,10 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 	if err != nil {
 		return config, err
 	}
-	if err = decodeStrictJSON(projectBytes, &config); err != nil {
+	if err = decodeStrictJSON(projectBytes, &input); err != nil {
 		return config, err
 	}
+	config = input.executionConfig()
 	if config.TaskAuthority != "native" {
 		return config, errors.New("task_authority must be explicitly set to native; Beads is not supported")
 	}
@@ -96,7 +95,7 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 	if err := config.PublicationPolicy.Validate(); err != nil {
 		return config, err
 	}
-	if err := publication.ValidateNonSecret(config.PR, config.Git); err != nil {
+	if err := publication.ValidateNonSecret(input.PR, config.Git); err != nil {
 		return config, err
 	}
 	globalPath := GlobalExecutionConfigPath()
@@ -131,17 +130,9 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 		return config, err
 	}
 	config.ProcessHost = processHost
-	config.ProcessFacts = executionprocess.NewServiceFacts()
-	config.Resources = executionResources{}
-	config.ReadRuntime = func(_ context.Context, c execution.Config) (*reconstructiontypes.Runtime, error) {
-		return LoadDatabaseRuntime(c)
-	}
-	configureNativeStorage(&config)
 	config.ExecutionDirectory = directory
-	config.StateRoot = StateRoot()
 	config.ExecutionProfiles = global.ExecutionProfiles
 	config.DefaultExecutionProfile = global.DefaultProfile
-	config.RepositoryStateKey = ""
 	config.BindApplicationConfig(directory, projectPath, globalPath, loadedConfigDigest(projectBytes, globalBytes), true)
 	if err := validateQueryProfiles(config); err != nil {
 		return config, err
@@ -173,17 +164,14 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 		if err != nil {
 			return config, fmt.Errorf("run_dir is required (cannot derive from repository identity: %w)", err)
 		}
-		config.RepositoryStateKey = key
-		config.RunDir = filepath.Join(config.StateRoot, key)
+		config.RunDir = filepath.Join(StateRoot(), key)
 	} else {
 		if !filepath.IsAbs(config.RunDir) {
 			config.RunDir = filepath.Join(base, config.RunDir)
 		}
-		key, err := repositoryStateKey(config, processHost)
-		if err != nil {
+		if _, err := repositoryStateKey(config, processHost); err != nil {
 			return config, err
 		}
-		config.RepositoryStateKey = key
 	}
 	if config.WorktreeRoot == "" {
 		config.WorktreeRoot = filepath.Join(config.RunDir, "worktrees")

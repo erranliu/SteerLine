@@ -13,11 +13,13 @@ import (
 
 	execution "github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -30,45 +32,88 @@ func testConfigWithDirectory(c execution.Config) execution.Config {
 		c = withNeutralProfile(c, neutralSettings{Executable: os.Args[0]})
 	}
 	c.ProcessHost = testProcessHost{}
-	c.ProcessFacts = resourceprocess.NewServiceFacts()
 	if c.WorktreeRoot == "" && c.RunDir != "" {
 		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	}
-	if c.StateRoot == "" {
-		c.StateRoot = fixtureStateRoot()
-	}
-	if c.RepositoryStateKey == "" && c.Identity() != "" {
-		c.RepositoryStateKey = fixtureStateKeyFromIdentity(c.Identity())
-	}
-	if c.ValidateNativeStore == nil {
-		c.ValidateNativeStore = func(ctx context.Context, config execution.Config) error {
-			reader, err := openHostFixtureNativeReader(ctx, &config)
-			if err != nil {
-				return err
-			}
-			return reader.Close()
-		}
-	}
-	if c.EnsureNativeProject == nil {
-		c.EnsureNativeProject = func(ctx context.Context, config execution.Config) error {
-			store, err := openHostFixtureNativeProject(ctx, &config)
-			if err != nil {
-				return err
-			}
-			return store.Close()
-		}
-	}
-	if c.ReadPersistedExecutionState == nil {
-		c.ReadPersistedExecutionState = func(ctx context.Context, config execution.Config) (storageports.ExecutionStateSnapshot, error) {
-			reader, err := openHostFixtureNativeReader(ctx, &config)
-			if err != nil {
-				return storageports.ExecutionStateSnapshot{}, err
-			}
-			defer reader.Close()
-			return reader.ReadExecutionStateSnapshot(ctx, config.Identity())
-		}
-	}
 	return c
+}
+
+func hostConfigForTest(c execution.Config) Config {
+	identity := c.Identity()
+	if identity == "" {
+		_ = c.ResolveIdentity(context.Background())
+		identity = c.Identity()
+	}
+	h := Config{
+		Repository: c.Repository, RepositoryIdentity: identity, Remote: c.Remote, Branch: c.Branch, RunDir: c.RunDir,
+		Claimant: c.Claimant, ConfigDigest: c.LoadedConfigDigest(), TaskAuthority: c.TaskAuthority,
+		WorkflowProtocol: c.WorkflowProtocol, TaskPoll: c.TaskPoll, PRPoll: c.PRPoll, Heartbeat: c.Heartbeat,
+		CommandTimeout: c.CommandTimeout, ShutdownGrace: c.ShutdownGrace, ProcessFacts: resourceprocess.NewServiceFacts(),
+		CapabilityValidation: fixtureCapabilityValidation{}, ControlValidation: fixtureControlValidation{},
+	}
+	h.RuntimeReader = func(ctx context.Context, input Config) (*reconstruction.Runtime, error) {
+		resolved, err := executionConfigForHostTest(c, input)
+		if err != nil {
+			return nil, err
+		}
+		return readFixtureDatabaseRuntime(ctx, resolved)
+	}
+	h.ValidateNativeStore = func(ctx context.Context, input Config) error {
+		resolved, err := executionConfigForHostTest(c, input)
+		if err != nil {
+			return err
+		}
+		reader, err := openHostFixtureNativeReader(ctx, &resolved)
+		if err != nil {
+			return err
+		}
+		return reader.Close()
+	}
+	h.EnsureRunDirOutsideRepo = func(_ context.Context, input Config) error {
+		if input.Repository == "" || input.RunDir == "" || inside(input.Repository, input.RunDir) {
+			return errors.New("run directory must be outside the repository")
+		}
+		return nil
+	}
+	return h
+}
+
+func executionConfigForHostTest(base execution.Config, input Config) (execution.Config, error) {
+	base.Repository, base.Remote, base.Branch, base.RunDir, base.Claimant = input.Repository, input.Remote, input.Branch, input.RunDir, input.Claimant
+	if err := base.ResolveIdentity(context.Background()); err != nil {
+		return base, err
+	}
+	if base.Identity() != input.Identity() {
+		return base, errors.New("host test identity differs from execution fixture")
+	}
+	return base, nil
+}
+
+type fixtureCapabilityValidation struct{}
+
+func (fixtureCapabilityValidation) Key(report executionbackend.CapabilityReport) string {
+	return execution.CapabilityReportKey(report)
+}
+func (fixtureCapabilityValidation) Verify(root string, report executionbackend.CapabilityReport) error {
+	return execution.VerifyStoredCapabilityReport(root, report)
+}
+
+type fixtureControlValidation struct{}
+
+func (fixtureControlValidation) ValidAction(value string) bool {
+	return execution.ValidControlAction(value)
+}
+func (fixtureControlValidation) DecodePayload(value productapi.ControlRequest) (productapi.ControlPayload, error) {
+	return execution.DecodeControlPayload(value)
+}
+func (fixtureControlValidation) ValidateRequest(value productapi.ControlRequest, instance, identity string, revision uint64, at time.Time) (string, error) {
+	return execution.ValidateControlRequest(value, instance, identity, revision, at)
+}
+func (fixtureControlValidation) RequestDigest(value productapi.ControlRequest) string {
+	return execution.RequestDigest(value)
+}
+func (fixtureControlValidation) TerminalStatus(value string) bool {
+	return execution.TerminalControlStatus(value)
 }
 
 func newTestService(c execution.Config) (*execution.Service, error) {
@@ -163,16 +208,10 @@ func fixtureStateKeyFromIdentity(identity string) string {
 }
 
 func validateNativeStateLocation(c execution.Config) error {
-	if c.RepositoryStateKey == "" || c.StateRoot == "" {
-		return nativeErr("authority_mismatch", "application configuration lacks its fixed repository state location")
-	}
 	if err := c.ResolveIdentity(context.Background()); err != nil {
 		return err
 	}
-	if c.RepositoryStateKey != fixtureStateKeyFromIdentity(c.Identity()) {
-		return nativeErr("authority_mismatch", "repository state key differs from the resolved repository identity")
-	}
-	expected := filepath.Join(c.StateRoot, c.RepositoryStateKey)
+	expected := filepath.Join(fixtureStateRoot(), fixtureStateKeyFromIdentity(c.Identity()))
 	if canonical(c.RunDir) != canonical(expected) {
 		return nativeErr("authority_mismatch", "native tasks require the repository's stable shared state directory; remove the custom run_dir setting")
 	}
@@ -204,7 +243,7 @@ func loadFixtureConfig(path string) (execution.Config, error) {
 	if err := c.ExecutionRequirements.Validate(); err != nil {
 		return c, err
 	}
-	if err := publication.ValidateNonSecret(c.PR, c.Git); err != nil {
+	if err := publication.ValidateNonSecret(publication.Config(c.PR), c.Git); err != nil {
 		return c, err
 	}
 	if c.Host != "" || c.Agent != "" || len(c.ExecutionProfiles) != 0 || c.DefaultExecutionProfile != "" {
@@ -230,7 +269,7 @@ func loadFixtureConfig(path string) (execution.Config, error) {
 	if err != nil {
 		return c, err
 	}
-	c.ExecutionDirectory, c.ProcessHost, c.StateRoot = directory, testProcessHost{}, fixtureStateRoot()
+	c.ExecutionDirectory, c.ProcessHost = directory, testProcessHost{}
 	c.ExecutionProfiles, c.DefaultExecutionProfile = global.ExecutionProfiles, global.DefaultProfile
 	c.BindApplicationConfig(directory, projectPath, globalPath, operationDigest(append(append([]byte(nil), projectBytes...), globalBytes...)), true)
 	base := filepath.Dir(projectPath)
@@ -244,9 +283,9 @@ func loadFixtureConfig(path string) (execution.Config, error) {
 	if err != nil {
 		return c, err
 	}
-	c.RepositoryStateKey = key
+	stateRoot := fixtureStateRoot()
 	if c.RunDir == "" {
-		c.RunDir = filepath.Join(c.StateRoot, key)
+		c.RunDir = filepath.Join(stateRoot, key)
 	} else if !filepath.IsAbs(c.RunDir) {
 		c.RunDir = filepath.Join(base, c.RunDir)
 	}
@@ -270,7 +309,7 @@ func loadFixtureConfig(path string) (execution.Config, error) {
 	if err := validateNativeStateLocation(c); err != nil {
 		return c, err
 	}
-	if err := preflightNativeStatePath(c); err != nil {
+	if err := PreflightNativeStatePath(hostConfigForTest(c)); err != nil {
 		return c, err
 	}
 	return c, nil
@@ -287,11 +326,25 @@ func testStartService(ctx context.Context, configPath string, options StartServi
 	if options.ApplicationBin == "" {
 		options.ApplicationBin = fixtureBinDir()
 	}
-	return StartService(ctx, config, configPath, options)
+	return StartService(ctx, hostConfigForTest(config), configPath, options)
 }
 
 func testRunConfiguredService(ctx context.Context, config execution.Config, mode, startupID, console string) error {
-	return RunConfiguredService(ctx, testConfigWithDirectory(config), mode, startupID, console, newHostFixtureService, testHostAdmission{}, nil)
+	config = testConfigWithDirectory(config)
+	admission := testHostAdmission{config: config}
+	factory := func(input Config, port hostport.HostPort, id string) (ServiceLifetime, error) {
+		executionConfig, err := executionConfigForHostTest(config, input)
+		if err != nil {
+			return nil, err
+		}
+		service, err := newHostFixtureService(executionConfig, port)
+		if err != nil {
+			return nil, err
+		}
+		service.SetStartupMetadata(id)
+		return fixtureServiceLifetime{service: service, config: input, mode: mode}, nil
+	}
+	return RunConfiguredService(ctx, hostConfigForTest(config), mode, startupID, console, factory, admission, nil)
 }
 
 func testPrepareServiceConfig(c execution.Config) (execution.Config, error) {
@@ -301,7 +354,7 @@ func testPrepareServiceConfig(c execution.Config) (execution.Config, error) {
 	if err := validateNativeStateLocation(c); err != nil {
 		return c, err
 	}
-	if err := preflightNativeStatePath(c); err != nil {
+	if err := PreflightNativeStatePath(hostConfigForTest(c)); err != nil {
 		return c, err
 	}
 	if err := c.PrepareWorktreeRoot(); err != nil {
@@ -310,19 +363,43 @@ func testPrepareServiceConfig(c execution.Config) (execution.Config, error) {
 	return c, nil
 }
 
-type testHostAdmission struct{}
+type testHostAdmission struct{ config execution.Config }
 
-func (testHostAdmission) ValidateStateLocation(c execution.Config) error {
-	return validateNativeStateLocation(c)
-}
-
-func (testHostAdmission) Preflight(_ context.Context, c *execution.Config, _ bool) error {
-	return preflightNativeStatePath(*c)
-}
-
-func (testHostAdmission) InitializeNativeProject(ctx context.Context, c execution.Config) error {
-	if c.EnsureNativeProject == nil {
-		return nil
+func (a testHostAdmission) ValidateStateLocation(c Config) error {
+	if err := validateNativeStateLocation(a.config); err != nil {
+		return err
 	}
-	return c.EnsureNativeProject(ctx, c)
+	return PreflightNativeStatePath(c)
 }
+
+func (a testHostAdmission) Preflight(_ context.Context, c Config, _ bool) (Config, error) {
+	if err := PreflightNativeStatePath(hostConfigForTest(a.config)); err != nil {
+		return c, err
+	}
+	return c, PreflightNativeStatePath(c)
+}
+
+func (a testHostAdmission) InitializeNativeProject(ctx context.Context, c Config) error {
+	resolved, err := executionConfigForHostTest(a.config, c)
+	if err != nil {
+		return err
+	}
+	store, err := openHostFixtureNativeProject(ctx, &resolved)
+	if err != nil {
+		return err
+	}
+	return store.Close()
+}
+
+type fixtureServiceLifetime struct {
+	service *execution.Service
+	config  Config
+	mode    string
+}
+
+func (l fixtureServiceLifetime) Run(ctx context.Context) error {
+	return RunService(ctx, l.service, l.config, l.mode)
+}
+func (l fixtureServiceLifetime) Close() error { return l.service.Close() }
+
+var _ ApplicationAdmission = testHostAdmission{}

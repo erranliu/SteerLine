@@ -48,7 +48,7 @@ func verifyKnownCandidatePRs(ctx context.Context, config Config, snapshot storag
 			}
 			seen[url] = w.WorkflowRunID
 			query := verifier
-			if client, ok := query.(*publication.Client); ok && !publication.ProviderIdentity(fixed.PR).Matches(client.Config) {
+			if client, ok := query.(*publication.Client); ok && !publication.ProviderIdentity(publication.Config(fixed.PR)).Matches(client.Config) {
 				return nil, nativeErr("authority_mismatch", "known PR verifier differs from candidate's frozen provider")
 			}
 			if query == nil {

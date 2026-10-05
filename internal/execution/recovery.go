@@ -12,7 +12,9 @@ import (
 
 // InspectRecovery reads the current SQLite projection and performs read-only
 // host, workspace, claim and PR checks. It never constructs a running Service.
-func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspection, error) {
+type RuntimeReader func(context.Context, Config) (*reconstruction.Runtime, error)
+
+func InspectRecovery(ctx context.Context, c Config, runID string, readRuntime RuntimeReader) (RecoveryInspection, error) {
 	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return RecoveryInspection{}, err
 	}
@@ -22,10 +24,10 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return RecoveryInspection{}, err
 	}
-	if c.ReadRuntime == nil {
+	if readRuntime == nil {
 		return RecoveryInspection{}, errors.New("bound runtime read port is required")
 	}
-	runtimeState, err := c.ReadRuntime(ctx, c)
+	runtimeState, err := readRuntime(ctx, c)
 	if err != nil {
 		return RecoveryInspection{}, err
 	}

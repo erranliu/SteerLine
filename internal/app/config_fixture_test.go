@@ -16,7 +16,6 @@ import (
 	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
 type Config = execution.Config
@@ -35,8 +34,8 @@ func executionPublicationFixture() executionbackend.PublicationPolicy {
 	return executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}
 }
 
-func hostPublicationProviderFixture() publication.Config {
-	return publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: "gh"}}
+func hostPublicationProviderFixture() executionmodel.PRProviderConfig {
+	return executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: "gh"}}
 }
 
 func testExecutionProfile(t *testing.T, id, name, host, agent string, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remoteConfig ...*remote.ProfileConfig) ExecutionProfile {

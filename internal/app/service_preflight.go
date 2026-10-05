@@ -90,23 +90,20 @@ func preflightNative(ctx context.Context, c *execution.Config) error {
 			return err
 		}
 	}
-	if err = steerline.EnsureRunDirOutsideRepository(*c); err != nil {
+	if err = ensureRunDirOutsideRepository(ctx, *c); err != nil {
 		return err
 	}
 	if _, err = os.Stat(filepath.Join(c.RunDir, "steerline.db")); err == nil {
-		if c.ValidateNativeStore == nil {
-			return errors.New("application native store validator is required")
-		}
-		if err = c.ValidateNativeStore(ctx, *c); err != nil {
+		if err = validateNativeStore(ctx, *c); err != nil {
 			return err
 		}
 	} else if !os.IsNotExist(err) {
 		return err
-	} else if err = steerline.EnsureNativeStateClean(c.RunDir, c.Repository); err != nil {
+	} else if err = steerline.EnsureNativeStateClean(c.RunDir, c.Repository, applicationCapabilityValidation{}); err != nil {
 		return err
 	}
 	if c.PR.Kind == "gitea" {
-		if err = (publication.NewClient(c.PR, git, git.Timeout)).Check(ctx); err != nil {
+		if err = (publication.NewClient(publication.Config(c.PR), git, git.Timeout)).Check(ctx); err != nil {
 			return err
 		}
 	}

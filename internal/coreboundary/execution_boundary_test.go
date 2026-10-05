@@ -66,6 +66,25 @@ func TestTM04ExecutionBoundary(t *testing.T) {
 }
 
 func TestTM08AppHostBoundary(t *testing.T) {
+	t.Run("transitive_execution_workspace", func(t *testing.T) {
+		graph := map[string][]string{
+			core:      {execution},
+			execution: {execution + "/workspace"},
+		}
+		var found []string
+		visitHostGraph(graph, core, func(path []string) {
+			if hostForbidden(path[len(path)-1]) {
+				found = append(found, strings.Join(path, " -> "))
+			}
+		})
+		want := core + " -> " + execution + " -> " + execution + "/workspace"
+		for _, path := range found {
+			if path == want {
+				return
+			}
+		}
+		t.Fatalf("host closure skipped its execution-to-workspace dependency: got %v, want %s", found, want)
+	})
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	_, file, _, _ := runtime.Caller(0)

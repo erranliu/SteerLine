@@ -14,16 +14,11 @@ func ValidateNativeStateLocation(config execution.Config) error {
 }
 
 func validateNativeStateLocation(config execution.Config) error {
-	if config.RepositoryStateKey == "" || config.StateRoot == "" {
-		return taskError("authority_mismatch", "application configuration lacks its fixed repository state location")
-	}
 	if err := config.ResolveIdentity(context.Background()); err != nil {
 		return err
 	}
-	if config.RepositoryStateKey != RepositoryStateKey(config.Identity()) {
-		return taskError("authority_mismatch", "repository state key differs from the resolved repository identity")
-	}
-	expected := filepath.Join(config.StateRoot, config.RepositoryStateKey)
+	key := RepositoryStateKey(config.Identity())
+	expected := filepath.Join(StateRoot(), key)
 	if canonicalPath(config.RunDir) != canonicalPath(expected) {
 		return taskError("authority_mismatch", "native tasks require the repository's stable shared state directory; remove the custom run_dir setting")
 	}

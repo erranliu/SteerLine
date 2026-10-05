@@ -84,13 +84,13 @@ func TestNativePreflightAllowsItsEmptyRunLockFile(t *testing.T) {
 	if err = os.WriteFile(lockPath, nil, 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err = preflightNativeStatePath(c); err != nil {
+	if err = PreflightNativeStatePath(hostConfigForTest(c)); err != nil {
 		t.Fatalf("native preflight rejected its own empty OS lock file: %v", err)
 	}
 	if err = os.WriteFile(lockPath, []byte("unknown"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err = preflightNativeStatePath(c); err == nil || !strings.Contains(err.Error(), "native service lock path is not an empty regular file") {
+	if err = PreflightNativeStatePath(hostConfigForTest(c)); err == nil || !strings.Contains(err.Error(), "native service lock path is not an empty regular file") {
 		t.Fatalf("native preflight accepted a nonempty lock path: %v", err)
 	}
 }

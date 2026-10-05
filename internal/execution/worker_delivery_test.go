@@ -11,7 +11,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -103,7 +102,7 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	c.PublicationPolicy.Publisher = "worker"
 	setNeutralProfile(t, &c, settings)
 	c.WorkflowProtocol = executionmodel.Version
-	c.PR = publication.Config{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo", Query: executionbackend.Command{Executable: "gh"}}
+	c.PR = executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://forge.invalid", Repository: "org/repo", Query: executionbackend.Command{Executable: "gh"}}
 	project, err := openFixtureProject(ctx, &c)
 	if err != nil {
 		t.Fatal(err)

@@ -45,7 +45,6 @@ func ClientResources(ctx context.Context, ref productapi.ProjectRef) (productcli
 }
 
 func clientResources(ctx context.Context, c execution.Config, ref productapi.ProjectRef) (productclient.Resources, error) {
-	configureNativeStorage(&c)
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return productclient.Resources{}, err
 	}
@@ -73,8 +72,8 @@ func clientResources(ctx context.Context, c execution.Config, ref productapi.Pro
 			if errors.Is(readErr, os.ErrNotExist) {
 				observationErr = nil
 			}
-			nativeObservation := steerline.ObserveRuntimeSnapshot(c, nil, observationErr, time.Now().UTC())
-			legacy := steerline.ConnectServiceFromSnapshot(ctx, c, nativeObservation)
+			nativeObservation := observeHostRuntime(ctx, c, nil, observationErr, time.Now().UTC())
+			legacy := connectHostServiceFromSnapshot(ctx, c, nativeObservation)
 			obs := productObservation(nativeObservation)
 			connection := productConnection(legacy, obs)
 			return productapi.ProjectSnapshot{SelectedTaskID: selected, Observation: obs, Connection: connection, TaskError: readErr.Error(), NativeTaskError: readErr.Error(), HistoryError: readErr.Error()}
@@ -148,7 +147,9 @@ func clientResources(ctx context.Context, c execution.Config, ref productapi.Pro
 			return productapi.ControlPayload{TaskID: id, ExecutionProfileID: p.ID, ExecutionProfileDigest: p.Digest()}, nil
 		},
 		InspectRecovery: func(ctx context.Context, id string) (productapi.RecoveryInspection, error) {
-			result, err := execution.InspectRecovery(ctx, c, id)
+			result, err := execution.InspectRecovery(ctx, c, id, func(ctx context.Context, config execution.Config) (*reconstruction.Runtime, error) {
+				return LoadDatabaseRuntime(config)
+			})
 			return recoveryInspection(result), err
 		},
 	}, nil
@@ -174,8 +175,8 @@ func (r *clientReader) Close() error { return r.store.Close() }
 func (r *clientReader) ReadProject(ctx context.Context, selected string, _ productapi.ProjectSnapshot) productapi.ProjectSnapshot {
 	snapshot, err := r.store.ReadApplicationProjectSnapshot(ctx, r.project, selected, 500)
 	if err != nil {
-		nativeObservation := steerline.ObserveRuntimeSnapshot(r.config, nil, err, time.Now().UTC())
-		legacyConnection := steerline.ConnectServiceFromSnapshot(ctx, r.config, nativeObservation)
+		nativeObservation := observeHostRuntime(ctx, r.config, nil, err, time.Now().UTC())
+		legacyConnection := connectHostServiceFromSnapshot(ctx, r.config, nativeObservation)
 		observation := productObservation(nativeObservation)
 		connection := productConnection(legacyConnection, observation)
 		page := query.ProjectPage(storageports.ProjectView{}, selected, r.freshness, observation, connection, nil, r.executableTypes)
@@ -183,8 +184,8 @@ func (r *clientReader) ReadProject(ctx context.Context, selected string, _ produ
 		return page
 	}
 	view := snapshot.ProjectView
-	nativeObservation := applicationProjectObservation(r.config, snapshot)
-	legacyConnection := steerline.ConnectServiceFromSnapshot(ctx, r.config, nativeObservation)
+	nativeObservation := applicationProjectObservation(ctx, r.config, snapshot)
+	legacyConnection := connectHostServiceFromSnapshot(ctx, r.config, nativeObservation)
 	observation := productObservation(nativeObservation)
 	connection := productConnection(legacyConnection, observation)
 	decisionReasons := map[string]string{}
@@ -202,22 +203,22 @@ func (r *clientReader) ReadProject(ctx context.Context, selected string, _ produ
 	return query.ProjectPage(view, selected, r.freshness, observation, connection, decisionReasons, r.executableTypes)
 }
 
-func applicationProjectObservation(config execution.Config, snapshot storageports.ApplicationProjectSnapshot) steerline.ObservationSnapshot {
+func applicationProjectObservation(ctx context.Context, config execution.Config, snapshot storageports.ApplicationProjectSnapshot) steerline.ObservationSnapshot {
 	sampledAt := snapshot.ProjectView.SampledAt
 	if sampledAt.IsZero() {
 		sampledAt = time.Now().UTC()
 	}
 	if snapshot.ExecutionError != nil {
-		return steerline.ObserveRuntimeSnapshot(config, nil, snapshot.ExecutionError, sampledAt)
+		return observeHostRuntime(ctx, config, nil, snapshot.ExecutionError, sampledAt)
 	}
 	if snapshot.ExecutionState.Checkpoint == nil {
-		return steerline.ObserveRuntimeSnapshot(config, nil, nil, sampledAt)
+		return observeHostRuntime(ctx, config, nil, nil, sampledAt)
 	}
 	runtimeState, err := reconstruction.BuildFromStorage(snapshot.ExecutionState, *snapshot.ExecutionState.Checkpoint)
 	if err != nil {
-		return steerline.ObserveRuntimeSnapshot(config, nil, err, sampledAt)
+		return observeHostRuntime(ctx, config, nil, err, sampledAt)
 	}
-	return steerline.ObserveRuntimeSnapshot(config, &runtimeState, nil, sampledAt)
+	return observeHostRuntime(ctx, config, &runtimeState, nil, sampledAt)
 }
 
 func (r *clientReader) ShowTask(ctx context.Context, id string) (productapi.TaskPage, error) {
@@ -293,7 +294,11 @@ func (r clientControl) Submit(ctx context.Context, in productapi.ControlInput) (
 	if in.Payload != (productapi.ControlPayload{}) {
 		payload = in.Payload
 	}
-	return steerline.SubmitControlTargeted(r.config, string(in.Action), payload, in.RequestedBy, in.RequestID, in.InstanceID, in.ExpectedRevision)
+	hostConfig, err := hostRuntimeConfig(ctx, r.config)
+	if err != nil {
+		return productapi.ControlRequest{}, err
+	}
+	return steerline.SubmitControlTargeted(hostConfig, string(in.Action), payload, in.RequestedBy, in.RequestID, in.InstanceID, in.ExpectedRevision)
 }
 
 func (r clientControl) Receipt(ctx context.Context, id string) (*productapi.ControlReceipt, error) {
@@ -303,22 +308,34 @@ func (r clientControl) Receipt(ctx context.Context, id string) (*productapi.Cont
 	if _, err := r.Request(ctx, id); err != nil {
 		return nil, err
 	}
-	return steerline.ReadVerifiedControlReceipt(r.config, id)
+	hostConfig, err := hostRuntimeConfig(ctx, r.config)
+	if err != nil {
+		return nil, err
+	}
+	return steerline.ReadVerifiedControlReceipt(hostConfig, id)
 }
 
 func (r clientControl) Request(ctx context.Context, id string) (*productapi.ControlRequest, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	req, err := steerline.ReadControlRequest(r.config, id)
-	if err == nil && req.RepositoryIdentity != r.config.Identity() {
+	hostConfig, err := hostRuntimeConfig(ctx, r.config)
+	if err != nil {
+		return nil, err
+	}
+	req, err := steerline.ReadControlRequest(hostConfig, id)
+	if err == nil && req.RepositoryIdentity != hostConfig.Identity() {
 		return nil, errors.New("control request project identity does not match")
 	}
 	return req, err
 }
 
 func (r clientControl) Stop(ctx context.Context, by string, timeout time.Duration) (productapi.ServiceStopResult, error) {
-	return steerline.StopService(ctx, r.config, by, timeout)
+	hostConfig, err := hostRuntimeConfig(ctx, r.config)
+	if err != nil {
+		return productapi.ServiceStopResult{}, err
+	}
+	return steerline.StopService(ctx, hostConfig, by, timeout)
 }
 
 type clientDecision struct{ config execution.Config }
@@ -344,7 +361,7 @@ func (r clientDecision) Answer(ctx context.Context, in productapi.AnswerInput) (
 		return productapi.CommandReceipt{}, false, err
 	}
 	defer store.Close()
-	record, submitted, err := SubmitDecisionAnswer(ctx, config, AnswerOptions{RunID: in.RunID, DecisionID: in.DecisionID, Option: in.Option, Note: in.Note, By: in.RequestedBy, ExpectedVersion: in.ExpectedVersion, CommandID: in.CommandID})
+	record, submitted, err := submitDecisionAnswerWithStore(ctx, config, store, AnswerOptions{RunID: in.RunID, DecisionID: in.DecisionID, Option: in.Option, Note: in.Note, By: in.RequestedBy, ExpectedVersion: in.ExpectedVersion, CommandID: in.CommandID})
 	return query.CommandReceipt(record), submitted, err
 }
 
@@ -353,7 +370,6 @@ func openDecisionStore(ctx context.Context, config execution.Config) (execution.
 	if err != nil {
 		return config, nil, err
 	}
-	config.ExecutionRecords, config.CommandReader, config.CommandWriter, config.TaskReader = store, store, store, store
 	return config, store, nil
 }
 

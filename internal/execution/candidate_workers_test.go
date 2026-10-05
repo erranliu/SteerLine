@@ -448,7 +448,7 @@ func TestMC5(t *testing.T) {
 	}
 	// The winner's immutable delivery and subsequent physical stop are separate
 	// facts, committed together with the exact original stop operation receipt.
-	records := executionRecords{root: f.c.RunDir, reader: f.s.Config.ExecutionRecords}
+	records := f.s.records
 	ref, err := records.loadBinding(second.RunID, second.AttemptID)
 	require(t, err)
 	op := executionbackend.Operation{Version: executionbackend.ExecutionRecordVersion, ID: "stop-" + second.AttemptID, RunID: second.RunID, AttemptID: second.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue("mc-original-stop"), Status: executionbackend.OperationPending, StartedAt: now(), UpdatedAt: now(), Ref: &ref}

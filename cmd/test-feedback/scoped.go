@@ -22,7 +22,7 @@ import (
 
 const corePackage = "github.com/erranliu/SteerLine/internal/app/host"
 
-var quickTests = []string{"TestTM08ControlIdentity", "TestTM08Heartbeat", "TestTM08Shutdown"}
+var quickTests = []string{"TestTM08ControlIdentity", "TestTM08Heartbeat", "TestTM08Shutdown", "TestServiceLifetimeCloseOnRunError"}
 
 const executionPackage = "github.com/erranliu/SteerLine/internal/execution"
 
@@ -106,7 +106,7 @@ var quickOwnerCases = []struct {
 	{"quick-owner-codexapp", "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/codexapp", []string{"TestAskToolResponseUsesNativeAnswerEnvelope", "TestCodexAppCallCancellationInterruptsBlockedWrite", "TestCodexSocketHandshakeHonorsCancellationWithoutDeadline", "TestCodexSocketLoopbackHandshakeAndMaskedJSON"}},
 	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestLocalWorkspacePrepareInspectResourcesAndCleanup", "TestPrepareRejectsHeadChangedByCheckoutHook"}},
 	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPRRequiresExactIdentityAndMergeEvidence", "TestUnsupportedProviderDoesNoNetworkOperation"}},
-	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/app", []string{"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestLocalWindowsSandboxProfileFreezesAndRestores", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile", "TestFileQuerySourceReadsCombinedProjectView"}},
+	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/app", []string{"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites", "TestRunConfiguredServiceClosesTransferredStoreOnReturn", "TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestLocalWindowsSandboxProfileFreezesAndRestores", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile", "TestFileQuerySourceReadsCombinedProjectView"}},
 }
 
 var quickPackages = func() []string {

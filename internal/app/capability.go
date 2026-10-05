@@ -170,7 +170,7 @@ func CertifyExecutionBackend(ctx context.Context, config execution.Config, paths
 			}
 		}
 	}
-	if err := execution.SaveExecutionCapabilityReport(config, probe); err != nil {
+	if err := execution.SaveExecutionCapabilityReport(config, executionResources{}, probe); err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
 	return probe, nil

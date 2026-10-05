@@ -88,7 +88,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *reconstruc
 		owned.Close()
 		delete(s.ownedProcesses, run.RunID)
 	}
-	if !s.Config.Resources.WorkerTreeAbsent(*execution.Process) {
+	if !s.resources.WorkerTreeAbsent(*execution.Process) {
 		return errors.New("original worker descendants may still write to the worktree")
 	}
 	if s.hasUnknownWorkerOperation(run) {

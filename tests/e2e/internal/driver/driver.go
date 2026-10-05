@@ -116,6 +116,10 @@ func MainControl(args []string) error {
 	if err != nil {
 		return err
 	}
+	hostConfig, err := steerlineapp.BuildHostConfig(context.Background(), c)
+	if err != nil {
+		return err
+	}
 	identityCtx, identityCancel := context.WithTimeout(context.Background(), 25*time.Second)
 	err = c.ResolveIdentity(identityCtx)
 	identityCancel()
@@ -130,13 +134,13 @@ func MainControl(args []string) error {
 		}
 		payload = productapi.ControlPayload{TaskID: *taskID, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest()}
 	}
-	request, err := steerline.SubmitControl(c, *action, payload, "e2e")
+	request, err := steerline.SubmitControl(hostConfig, *action, payload, "e2e")
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithDeadline(context.Background(), request.ExpiresAt)
 	defer cancel()
-	receipt, err := steerline.WaitControlReceipt(ctx, c, request.RequestID, 100*time.Millisecond)
+	receipt, err := steerline.WaitControlReceipt(ctx, hostConfig, request.RequestID, 100*time.Millisecond)
 	if err != nil {
 		return err
 	}

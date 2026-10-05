@@ -18,7 +18,7 @@ func TestRealIsolatedRecoveryPreview(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	preview, err := execution.InspectRecovery(context.Background(), c, runID)
+	preview, err := execution.InspectRecovery(context.Background(), c, runID, readFixtureDatabaseRuntime)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -338,7 +338,39 @@
       "assertions": [
         "native authority initializes once",
         "reopen preserves the original project binding",
+        "authority version 1->2 succeeds and replaying expected version 1 returns stale_version",
         "branch drift and retired authority are rejected without migration"
+      ]
+    },
+    "AppJSON.StrictDecoder": {
+      "package": "github.com/erranliu/SteerLine/internal/app",
+      "file": "internal/app/native_project_open_test.go",
+      "previous_parent": "TestContractDecoderPreservesStrictFieldsAndSingleValue",
+      "previous_file": "internal/steerline/contracts/json_test.go",
+      "assertions": [
+        "current BOM-prefixed Git command JSON is accepted by the app-owned wrapper",
+        "unknown fields are rejected",
+        "concatenated JSON values and trailing null are rejected"
+      ]
+    },
+    "TM08.AppStartupRefusal": {
+      "package": "github.com/erranliu/SteerLine/internal/app",
+      "file": "internal/app/service_lifetime_test.go",
+      "previous_parent": "TestRunConfiguredServiceRejectsBeadsBeforeCreatingStartupEvidence",
+      "previous_file": "internal/app/host/service_lifecycle_review_test.go",
+      "assertions": [
+        "actual app admission rejects Beads before creating the run directory or startup evidence",
+        "rejected startup preserves the Beads sentinel"
+      ]
+    },
+    "TM08.AppStoreLifetime": {
+      "package": "github.com/erranliu/SteerLine/internal/app",
+      "file": "internal/app/service_lifetime_test.go",
+      "previous_parent": "TestReview80RealFactoryClosesTransferredStore",
+      "previous_file": "external reviewer overlay close_probe_test.go",
+      "assertions": [
+        "real app service can write heartbeat before host return",
+        "the same service store rejects a heartbeat after the lock-owning host returns"
       ]
     },
     "MC1-MC9": {
@@ -571,8 +603,8 @@
       "level": "L1",
       "package": "registered quick, rule, owner and integration boundary groups",
       "environment": "Windows; isolated STEERLINE_HOME; no native opt-in; one serial runner invocation",
-      "command": "go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1/commit-bound-02",
-      "timing": "once after self-review and targeted repairs",
+      "command": "go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1/review-fixes-01",
+      "timing": "once after F1-F4 repairs and targeted checks",
       "required_groups": [
         "TM05 product/API/query/client/console",
         "TM06 resources and boundary",
@@ -600,10 +632,28 @@
         },
         {
           "parent": "TestTM08AppHostBoundary",
-          "subtests": []
+          "subtests": [
+            "transitive_execution_workspace"
+          ]
         },
         {
           "parent": "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding",
+          "subtests": []
+        },
+        {
+          "parent": "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM",
+          "subtests": []
+        },
+        {
+          "parent": "TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites",
+          "subtests": []
+        },
+        {
+          "parent": "TestRunConfiguredServiceClosesTransferredStoreOnReturn",
+          "subtests": []
+        },
+        {
+          "parent": "TestServiceLifetimeCloseOnRunError",
           "subtests": []
         },
         {
@@ -1083,6 +1133,47 @@
       "command_exit_code": 1,
       "phase": "commit-bound-repair-trigger",
       "failed_tests": 16
+    },
+    {
+      "group_id": "F1-F4.app-precommit-diagnostic",
+      "status": "passed",
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "commit_bound": false,
+      "phase": "precommit-diagnostic",
+      "source_head": "c0e16a864eb2f419648059f18d3a914c5e762d65",
+      "summary": "docs/validation/three-line-08-app-host/review-fixes/app/summary.json",
+      "note": "Initial app package probe passed CAS, strict decoder, real Beads refusal, and real service store-close assertions before the decoder assertion moved to its dedicated app decoder test file. Final clean-commit group is rerun."
+    },
+    {
+      "group_id": "F2.host-startup-refusal-precommit-diagnostic",
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "commit_bound": false,
+      "phase": "precommit-diagnostic",
+      "source_head": "c0e16a864eb2f419648059f18d3a914c5e762d65",
+      "summary": "docs/validation/three-line-08-app-host/review-fixes/host-refusal/summary.json"
+    },
+    {
+      "group_id": "F1.host-closure-precommit-diagnostic",
+      "status": "failed_then_repaired",
+      "first_summary": "docs/validation/three-line-08-app-host/review-fixes/boundary/summary.json",
+      "first_runs": 2,
+      "first_passed": 1,
+      "first_failed": 1,
+      "first_skipped": 0,
+      "repair": "Full traversal correctly exposed reconstruction's pure task/model dependency. The host allowlist now permits only task/model values while continuing to traverse the closure.",
+      "repair_summary": "docs/validation/three-line-08-app-host/review-fixes/boundary-02/summary.json",
+      "repair_runs": 2,
+      "repair_passed": 2,
+      "repair_failed": 0,
+      "repair_skipped": 0,
+      "commit_bound": false,
+      "phase": "precommit-diagnostic",
+      "source_head": "c0e16a864eb2f419648059f18d3a914c5e762d65"
     }
   ]
 }

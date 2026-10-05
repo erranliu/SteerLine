@@ -14,7 +14,6 @@ import (
 	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
@@ -97,8 +96,8 @@ func executionPublicationFixture() executionbackend.PublicationPolicy {
 	return executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}
 }
 
-func hostPublicationProviderFixture() publication.Config {
-	return publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: os.Args[0], Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: executionbackend.Command{Executable: os.Args[0], Args: []string{"pr", "close", "{pr_url}"}}}
+func hostPublicationProviderFixture() executionmodel.PRProviderConfig {
+	return executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: os.Args[0], Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: executionbackend.Command{Executable: os.Args[0], Args: []string{"pr", "close", "{pr_url}"}}}
 }
 
 func setNativeImplementationProfiles(t *testing.T, c *execution.Config, w codexworker.ProfileConfig, o *orcaworker.ProfileConfig, r ...*remote.ProfileConfig) {

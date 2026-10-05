@@ -42,11 +42,11 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	}
 
 	write(rt)
-	connected := ConnectService(context.Background(), c)
+	connected := ConnectService(context.Background(), hostConfigForTest(c))
 	if connected.State != ConnectionConnected || !connected.CanControl || !connected.IdentityMatched {
 		t.Fatalf("connected process classified as %+v", connected)
 	}
-	denied := connectServiceWithProbe(context.Background(), c, func(*executionbackend.ProcessIdentity) productapi.ProcessProbe {
+	denied := connectServiceWithProbe(context.Background(), hostConfigForTest(c), func(*executionbackend.ProcessIdentity) productapi.ProcessProbe {
 		return productapi.ProcessProbe{State: ProcessUnknown, Reason: "access denied"}
 	})
 	if denied.State != ConnectionUnknown || denied.CanStart || denied.CanControl || denied.CanStop || !strings.Contains(denied.Diagnostic, "access denied") {
@@ -56,21 +56,21 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	stale := rt
 	stale.HeartbeatAt = now().Add(-time.Minute)
 	write(stale)
-	if got := ConnectService(context.Background(), c); got.State != ConnectionStale || got.CanStart || !got.CanStop {
+	if got := ConnectService(context.Background(), hostConfigForTest(c)); got.State != ConnectionStale || got.CanStart || !got.CanStop {
 		t.Fatalf("stale heartbeat classification=%+v", got)
 	}
 
 	initializing := rt
 	initializing.Service.Ready = false
 	write(initializing)
-	if got := ConnectService(context.Background(), c); got.State != ConnectionInitializing || got.CanControl || !got.CanStop {
+	if got := ConnectService(context.Background(), hostConfigForTest(c)); got.State != ConnectionInitializing || got.CanControl || !got.CanStop {
 		t.Fatalf("ready=false classification=%+v", got)
 	}
 
 	incompatible := rt
 	incompatible.Service.ControlProtocol = ControlProtocolVersion + 1
 	write(incompatible)
-	if got := ConnectService(context.Background(), c); got.State != ConnectionIncompatible || got.CanControl || got.CanStop {
+	if got := ConnectService(context.Background(), hostConfigForTest(c)); got.State != ConnectionIncompatible || got.CanControl || got.CanStop {
 		t.Fatalf("protocol classification=%+v", got)
 	}
 
@@ -82,22 +82,22 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	if e := os.MkdirAll(filepath.Join(c.RunDir, "service", "startups", *changed.Service.StartupID), 0700); e != nil {
 		t.Fatal(e)
 	}
-	oldRunDir, e := expectedRunDir(c)
+	oldRunDir, e := expectedRunDir(hostConfigForTest(c))
 	require(t, e)
-	record := initialStartupRecord(oldConfig, *changed.Service.StartupID)
+	record := initialStartupRecord(hostConfigForTest(oldConfig), *changed.Service.StartupID)
 	record.Status = "started"
 	record.InstanceID = changed.Service.InstanceID
 	record.ProcessIdentity = id
-	require(t, writeStartupRecord(c, record))
+	require(t, writeStartupRecord(hostConfigForTest(c), record))
 	write(changed)
-	configChanged := ConnectService(context.Background(), c)
+	configChanged := ConnectService(context.Background(), hostConfigForTest(c))
 	if configChanged.State != ConnectionConfigChanged || configChanged.CanControl || !configChanged.CanStop {
 		t.Fatalf("config change classification=%+v; expected run_dir=%s", configChanged, oldRunDir)
 	}
 	unboundRuntime := rt
 	unboundRuntime.Service.ConfigDigest = strings.Repeat("e", 64)
 	write(unboundRuntime)
-	if got := ConnectService(context.Background(), c); got.State != ConnectionIdentityError || got.CanStop {
+	if got := ConnectService(context.Background(), hostConfigForTest(c)); got.State != ConnectionIdentityError || got.CanStop {
 		t.Fatalf("runtime without a startup binding must remain unbound: %+v", got)
 	}
 	repoLock, err := LockRepository(c.Identity())
@@ -114,7 +114,7 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 			runLock.Close()
 		}
 	})
-	if got := ConnectService(context.Background(), c); got.State != ConnectionIdentityError || got.CanStop || got.CanControl {
+	if got := ConnectService(context.Background(), hostConfigForTest(c)); got.State != ConnectionIdentityError || got.CanStop || got.CanControl {
 		t.Fatalf("unbound runtime must not gain identity from service locks=%+v", got)
 	}
 	repoLock.Close()
@@ -125,7 +125,7 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	wrongRepo.Service.PID = 2_000_000_000
 	wrongRepo.Service.ProcessIdentity = &executionbackend.ProcessIdentity{Kind: "os", PID: wrongRepo.Service.PID, Created: "unused", Executable: "unused"}
 	write(wrongRepo)
-	if got := ConnectService(context.Background(), c); got.State != ConnectionIdentityError || got.CanStart {
+	if got := ConnectService(context.Background(), hostConfigForTest(c)); got.State != ConnectionIdentityError || got.CanStart {
 		t.Fatalf("mismatched repository must not be treated as offline: %+v", got)
 	}
 }
@@ -194,13 +194,13 @@ func TestStartServiceReobservesExistingPendingAttempt(t *testing.T) {
 	f := newFixture(t)
 	config, configPath := lifecycleConfigFile(t, f, f.c.RunDir)
 	id := newID()
-	_, _, err := createStartupAttempt(config, id, true)
+	_, _, err := createStartupAttempt(hostConfigForTest(config), id, true)
 	require(t, err)
 	processIdentity, err := resourceprocess.CurrentIdentity()
 	require(t, err)
-	record := initialStartupRecord(config, id)
+	record := initialStartupRecord(hostConfigForTest(config), id)
 	record.ProcessIdentity = processIdentity
-	require(t, writeStartupRecord(config, record))
+	require(t, writeStartupRecord(hostConfigForTest(config), record))
 	exe, err := os.Executable()
 	require(t, err)
 	options := StartServiceOptions{Executable: exe, WaitTimeout: 150 * time.Millisecond, PollInterval: 15 * time.Millisecond}
@@ -212,7 +212,7 @@ func TestStartServiceReobservesExistingPendingAttempt(t *testing.T) {
 	if err != nil || second.Status != "pending" || second.StartupID != id {
 		t.Fatalf("repeated start launched or changed the pending attempt: second=%+v err=%v", second, err)
 	}
-	updated, err := readStartupRecord(config, id)
+	updated, err := readStartupRecord(hostConfigForTest(config), id)
 	require(t, err)
 	if updated.Status != "starting" || updated.ProcessIdentity == nil || updated.ProcessIdentity.PID != os.Getpid() {
 		t.Fatalf("pending attempt identity changed: %+v", updated)
@@ -223,16 +223,16 @@ func TestWaitForStartupMarksConfirmedEarlyExit(t *testing.T) {
 	f := newFixture(t)
 	config, _ := lifecycleConfigFile(t, f, f.c.RunDir)
 	id := newID()
-	_, logPath, err := createStartupAttempt(config, id, true)
+	_, logPath, err := createStartupAttempt(hostConfigForTest(config), id, true)
 	require(t, err)
-	record := initialStartupRecord(config, id)
+	record := initialStartupRecord(hostConfigForTest(config), id)
 	record.ProcessIdentity = &executionbackend.ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "no-such-process", Executable: "no-such-executable"}
-	require(t, writeStartupRecord(config, record))
-	result, err := waitForStartup(context.Background(), config, id, logPath, StartServiceOptions{WaitTimeout: time.Second, PollInterval: 10 * time.Millisecond})
+	require(t, writeStartupRecord(hostConfigForTest(config), record))
+	result, err := waitForStartup(context.Background(), hostConfigForTest(config), id, logPath, StartServiceOptions{WaitTimeout: time.Second, PollInterval: 10 * time.Millisecond})
 	if err != nil || result.Status != "failed" || !strings.Contains(result.Error, "exited before") {
 		t.Fatalf("early process exit result=%+v err=%v", result, err)
 	}
-	updated, err := readStartupRecord(config, id)
+	updated, err := readStartupRecord(hostConfigForTest(config), id)
 	if err != nil || updated.Status != "failed" {
 		t.Fatalf("early process exit record=%+v err=%v", updated, err)
 	}

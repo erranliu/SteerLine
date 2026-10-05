@@ -8,6 +8,7 @@ import (
 	"os"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -23,6 +24,7 @@ type ServiceStorage struct {
 	Worker        storageports.WorkerMetadata
 	Conversations ConversationStore
 	Records       ExecutionRecordReader
+	Resources     ResourcePort
 	Close         func() error
 }
 
@@ -30,11 +32,15 @@ type ServiceStorage struct {
 // directory and its conversation source port. Lifecycle operations receive
 // only execution values and already-persisted operation intents. The application
 // calls PrepareServiceConfig before opening and transferring the connection.
-func NewService(c Config, directory *ExecutionDirectory, resolver executionbackend.LifecycleResolver, conversationSources conversationtypes.ConversationSourcePort, processHost executionbackend.ManagedProcessHost, stores ServiceStorage, work TaskWorkPort, results TaskResultPort, host HostPort) (_ *Service, retErr error) {
-	if c.ExecutionRecords == nil {
-		c.ExecutionRecords = stores.Records
+func NewService(c Config, directory *ExecutionDirectory, resolver executionbackend.LifecycleResolver, conversationSources conversationtypes.ConversationSourcePort, processHost executionbackend.ManagedProcessHost, stores ServiceStorage, work TaskWorkPort, results TaskResultPort, host hostport.HostPort) (_ *Service, retErr error) {
+	if stores.Close != nil {
+		defer func() {
+			if retErr != nil {
+				retErr = errors.Join(retErr, stores.Close())
+			}
+		}()
 	}
-	if directory == nil || resolver == nil || conversationSources == nil || processHost == nil || c.ExecutionRecords == nil || stores.State == nil || stores.Commands == nil || stores.Worker == nil || stores.Conversations == nil || stores.Close == nil || work == nil || results == nil || host == nil || c.Resources == nil {
+	if directory == nil || resolver == nil || conversationSources == nil || processHost == nil || stores.Records == nil || stores.Resources == nil || stores.State == nil || stores.Commands == nil || stores.Worker == nil || stores.Conversations == nil || stores.Close == nil || work == nil || results == nil || host == nil {
 		return nil, errors.New("execution directory, conversation source, process host and persistence ports are required")
 	}
 	c.ExecutionDirectory = directory
@@ -44,15 +50,10 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionbacke
 	if admissionErr != nil {
 		return nil, admissionErr
 	}
-	if err := host.ValidateStateLocation(c); err != nil {
+	if err := host.ValidateStateLocation(); err != nil {
 		return nil, err
 	}
-	defer func() {
-		if retErr != nil {
-			_ = stores.Close()
-		}
-	}()
-	s := &Service{host: host, taskWork: work, taskResults: results, Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: stores.State, commandStore: stores.Commands, conversationStore: stores.Conversations, closeStore: stores.Close, store: &Store{Domain: stores.Worker, Project: c.identity}, workers: map[string]*Worker{}, ownedProcesses: map[string]executionbackend.StopHandle{}}
+	s := &Service{host: host, taskWork: work, taskResults: results, Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: stores.State, commandStore: stores.Commands, conversationStore: stores.Conversations, closeStore: stores.Close, store: &Store{Domain: stores.Worker, Project: c.identity}, records: executionRecords{root: c.RunDir, reader: stores.Records, resources: stores.Resources}, resources: stores.Resources, workers: map[string]*Worker{}, ownedProcesses: map[string]executionbackend.StopHandle{}}
 	stored, e := stores.State.ReadExecutionStateSnapshot(context.Background(), c.identity)
 	if e != nil {
 		return nil, e

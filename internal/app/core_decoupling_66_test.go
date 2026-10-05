@@ -179,7 +179,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		if fresh[0].Payload[0] == '[' || public[0] == "changed" || fresh[0].ValidateProfileIdentity("project", "profile", "accepted") != nil {
 			t.Fatal("profile data or display leaked between instances")
 		}
-		c := execution.Config{Repository: "fixture", Branch: "main", Remote: "origin", ExecutionPolicy: policy, PublicationPolicy: executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}, PR: publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "org/repo", Query: executionbackend.Command{Executable: "gh"}}}
+		c := execution.Config{Repository: "fixture", Branch: "main", Remote: "origin", ExecutionPolicy: policy, PublicationPolicy: executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}, PR: executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "org/repo", Query: executionbackend.Command{Executable: "gh"}}}
 		c.BindApplicationConfig(first, "explicit", "", "accepted", false)
 		c = c.ApplyExecutionProfile(execution.ExecutionProfile{ID: "fixture", Name: "Fixture", Host: "local", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{input}})
 		frozen := c.AvailableExecutionProfiles()[0].Freeze()

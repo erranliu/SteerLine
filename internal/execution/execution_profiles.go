@@ -129,7 +129,7 @@ func (c Config) ApplyFixedExecutionProfile(p executionmodel.FixedExecutionProfil
 	c.ExecutionRequirements = p.ExecutionRequirements.Clone()
 	c.requirementsEvaluation = p.RequirementsEvaluation
 	c.PublicationPolicy = p.PublicationPolicy
-	c.PR, c.Git, c.Remote, c.publicationRemoteURL, c.Branch = publication.Config(p.Publication.Provider), p.Publication.Git, p.Publication.Remote, p.Publication.RemoteURL, p.Publication.BaseBranch
+	c.PR, c.Git, c.Remote, c.publicationRemoteURL, c.Branch = p.Publication.Provider, p.Publication.Git, p.Publication.Remote, p.Publication.RemoteURL, p.Publication.BaseBranch
 	c.Host, c.Agent = p.Host, p.Agent
 	if c.ExecutionDirectory != nil {
 		if entry, err := c.ExecutionDirectory.Resolve(Config{ExecutionDirectory: c.ExecutionDirectory, Host: p.Host, Agent: p.Agent}); err == nil {
@@ -332,7 +332,7 @@ func validateExecutionProfiles(c Config) error {
 	if err := validateProjectPublicationPolicy(c.PublicationPolicy); err != nil {
 		return err
 	}
-	if err := publication.ValidateNonSecret(c.PR, c.Git); err != nil {
+	if err := publication.ValidateNonSecret(publication.Config(c.PR), c.Git); err != nil {
 		return err
 	}
 	if err := c.ExecutionPolicy.Validate(); err != nil {

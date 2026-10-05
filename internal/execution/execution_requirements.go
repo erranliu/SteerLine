@@ -35,6 +35,10 @@ func queryCredentialRequirement(c Config, r executionbackend.CredentialRequireme
 // Evaluation is deliberately separate from the mandatory worker preflight.
 // Reports loaded here have already had their native evidence references checked.
 func evaluateExecutionRequirements(ctx context.Context, c Config) (executionbackend.RequirementsEvaluation, error) {
+	return evaluateExecutionRequirementsWithRecords(ctx, c, executionRecords{root: c.RunDir})
+}
+
+func evaluateExecutionRequirementsWithRecords(ctx context.Context, c Config, records executionRecords) (executionbackend.RequirementsEvaluation, error) {
 	entry, err := registrationFor(c)
 	if err != nil {
 		return executionbackend.RequirementsEvaluation{}, err
@@ -50,7 +54,7 @@ func evaluateExecutionRequirements(ctx context.Context, c Config) (executionback
 			return e, err
 		}
 		// A version probe establishes the lookup key, never verified capability.
-		report, loadErr := (executionRecords{root: c.RunDir, reader: c.ExecutionRecords, resources: c.Resources}).loadCapabilityReport(key)
+		report, loadErr := records.loadCapabilityReport(key)
 		if loadErr != nil {
 			return e, errors.New("required capabilities have no current authenticated report: " + loadErr.Error())
 		}
@@ -145,7 +149,7 @@ func (s *Service) checkCurrentExecutionRequirements(ctx context.Context, fixed w
 	if fixed.config.ExecutionRequirements.Empty() {
 		return nil
 	}
-	evaluation, err := evaluateExecutionRequirements(ctx, fixed.config)
+	evaluation, err := evaluateExecutionRequirementsWithRecords(ctx, fixed.config, s.records)
 	if err == nil {
 		fixed.execution.CurrentRequirementsEvaluation = &evaluation
 		if fixed.execution.CurrentRequirementsError != nil {

@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/erranliu/SteerLine/internal/execution"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -60,7 +59,7 @@ func publishControlRequest(runDir string, req productapi.ControlRequest) error {
 	}
 	if existing, e := readBoundedFile(path, maxControlRequestBytes); e == nil {
 		var old productapi.ControlRequest
-		if decode(existing, &old) != nil || execution.RequestDigest(old) != execution.RequestDigest(req) {
+		if decode(existing, &old) != nil || productapi.ControlRequestDigest(old) != productapi.ControlRequestDigest(req) {
 			return errors.New("request ID conflict: an immutable request with different content already exists")
 		}
 		return nil
@@ -92,7 +91,7 @@ func publishControlRequest(runDir string, req productapi.ControlRequest) error {
 			return readErr
 		}
 		var old productapi.ControlRequest
-		if decode(existing, &old) != nil || execution.RequestDigest(old) != execution.RequestDigest(req) {
+		if decode(existing, &old) != nil || productapi.ControlRequestDigest(old) != productapi.ControlRequestDigest(req) {
 			return errors.New("request ID conflict: an immutable request with different content already exists")
 		}
 	}

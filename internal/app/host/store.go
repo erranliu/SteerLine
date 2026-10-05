@@ -1,17 +1,15 @@
 package host
 
 import (
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"os"
 	"path/filepath"
-
-	"github.com/erranliu/SteerLine/internal/execution"
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func newID() string {
@@ -52,11 +50,11 @@ func atomicWriteWith(path string, data []byte, write func(*os.File, []byte) erro
 }
 
 // LoadDatabaseRuntime delegates to the application-owned execution snapshot reader.
-func LoadDatabaseRuntime(c execution.Config) (*reconstructiontypes.Runtime, error) {
+func LoadDatabaseRuntime(c Config) (*reconstructiontypes.Runtime, error) {
 	return readConfiguredRuntime(context.Background(), c)
 }
 
-func readConfiguredRuntime(ctx context.Context, c execution.Config) (*reconstructiontypes.Runtime, error) {
+func readConfiguredRuntime(ctx context.Context, c Config) (*reconstructiontypes.Runtime, error) {
 	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return nil, err
 	}
@@ -65,22 +63,22 @@ func readConfiguredRuntime(ctx context.Context, c execution.Config) (*reconstruc
 			return nil, err
 		}
 	}
-	if c.ReadRuntime == nil {
+	if c.RuntimeReader == nil {
 		return nil, errors.New("application runtime read port is required")
 	}
-	return c.ReadRuntime(ctx, c)
+	return c.RuntimeReader(ctx, c)
 }
 
-func loadObservedRuntime(c execution.Config) (*reconstructiontypes.Runtime, error) {
+func loadObservedRuntime(c Config) (*reconstructiontypes.Runtime, error) {
 	if c.Identity() == "" {
 		if err := c.ResolveIdentity(context.Background()); err != nil {
 			return nil, err
 		}
 	}
-	if c.ReadRuntime == nil {
+	if c.RuntimeReader == nil {
 		return nil, errors.New("application runtime read port is required")
 	}
-	value, err := c.ReadRuntime(context.Background(), c)
+	value, err := c.RuntimeReader(context.Background(), c)
 	if errors.Is(err, storageports.ErrNotFound) {
 		return nil, nil
 	}

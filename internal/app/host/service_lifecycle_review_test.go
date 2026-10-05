@@ -3,6 +3,7 @@ package host
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -19,6 +20,26 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
+type failingServiceLifetime struct {
+	runErr, closeErr error
+	closeCalls       int
+}
+
+func (l *failingServiceLifetime) Run(context.Context) error { return l.runErr }
+func (l *failingServiceLifetime) Close() error {
+	l.closeCalls++
+	return l.closeErr
+}
+
+func TestServiceLifetimeCloseOnRunError(t *testing.T) {
+	runErr, closeErr := errors.New("service run failed"), errors.New("store close failed")
+	lifetime := &failingServiceLifetime{runErr: runErr, closeErr: closeErr}
+	err := runServiceLifetime(context.Background(), lifetime)
+	if !errors.Is(err, runErr) || !errors.Is(err, closeErr) || lifetime.closeCalls != 1 {
+		t.Fatalf("run error did not close and report the transferred lifetime exactly once: err=%v closeCalls=%d", err, lifetime.closeCalls)
+	}
+}
+
 func TestLifecycleAuditRejectedStartupPreservesOwnerFiles(t *testing.T) {
 	for _, missingLog := range []bool{false, true} {
 		t.Run(fmt.Sprint("missing-log=", missingLog), func(t *testing.T) {
@@ -28,7 +49,7 @@ func TestLifecycleAuditRejectedStartupPreservesOwnerFiles(t *testing.T) {
 			require(t, err)
 			record := reviewStartup(t, c, "started", identity)
 			record.InstanceID = newID()
-			require(t, writeStartupRecord(c, record))
+			require(t, writeStartupRecord(hostConfigForTest(c), record))
 			recordPath, err := startupPath(c.RunDir, record.StartupID)
 			require(t, err)
 			logPath, err := startupLogPath(c.RunDir, record.StartupID)
@@ -68,16 +89,16 @@ func TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEff
 			t.Fatalf("%s did not reject missing native authority: %v", name, err)
 		}
 	}
-	assertAuthorityError("RunConfiguredService", RunConfiguredService(context.Background(), c, "manual", "", "off", newHostFixtureService, testHostAdmission{}, nil))
-	_, stopErr := StopService(context.Background(), c, "operator", time.Second)
+	assertAuthorityError("RunConfiguredService", testRunConfiguredService(context.Background(), c, "manual", "", "off"))
+	_, stopErr := StopService(context.Background(), hostConfigForTest(c), "operator", time.Second)
 	assertAuthorityError("StopService", stopErr)
-	if _, err := ControlSnapshot(c); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
+	if _, err := ControlSnapshot(hostConfigForTest(c)); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
 		t.Fatalf("ControlSnapshot did not reject missing native authority: %v", err)
 	}
-	if _, err := LoadDatabaseRuntime(c); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
+	if _, err := LoadDatabaseRuntime(hostConfigForTest(c)); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
 		t.Fatalf("LoadDatabaseRuntime did not reject missing native authority: %v", err)
 	}
-	if _, err := execution.InspectRecovery(context.Background(), c, "run"); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
+	if _, err := execution.InspectRecovery(context.Background(), c, "run", nil); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
 		t.Fatalf("InspectRecovery did not reject missing native authority: %v", err)
 	}
 	assertAuthorityError("VerifyTaskContractFiles", fullFixtureTaskService(nil, c).VerifyContractFiles(context.Background(), taskmodel.TaskContract{}))
@@ -106,11 +127,12 @@ func TestRunConfiguredServiceRejectsBeadsBeforeCreatingStartupEvidence(t *testin
 func reviewStartup(t *testing.T, c execution.Config, status string, identity *executionbackend.ProcessIdentity) StartupRecord {
 	t.Helper()
 	id := newID()
-	_, _, err := createStartupAttempt(c, id, true)
+	h := hostConfigForTest(c)
+	_, _, err := createStartupAttempt(h, id, true)
 	require(t, err)
-	record := initialStartupRecord(c, id)
+	record := initialStartupRecord(h, id)
 	record.Status, record.ProcessIdentity = status, identity
-	require(t, writeStartupRecord(c, record))
+	require(t, writeStartupRecord(h, record))
 	return record
 }
 
@@ -120,7 +142,7 @@ func TestLifecycleReviewMultipleLiveAttemptsRefuseLaunch(t *testing.T) {
 	require(t, err)
 	reviewStartup(t, s.Config, "starting", id)
 	reviewStartup(t, s.Config, "starting", id)
-	_, _, _, err = findLiveStartupAttempt(s.Config)
+	_, _, _, err = findLiveStartupAttempt(hostConfigForTest(s.Config))
 	if err == nil {
 		t.Fatal("ambiguous live attempts must stop the caller from launching a third process")
 	}
@@ -131,7 +153,7 @@ func TestLifecycleReviewStartedProcessEarlyExit(t *testing.T) {
 	removeRuntimeProjection(t, s)
 	id := &executionbackend.ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "absent", Executable: "absent"}
 	record := reviewStartup(t, s.Config, "started", id)
-	result, err := waitForStartup(context.Background(), s.Config, record.StartupID, "", StartServiceOptions{WaitTimeout: 30 * time.Millisecond, PollInterval: time.Millisecond})
+	result, err := waitForStartup(context.Background(), hostConfigForTest(s.Config), record.StartupID, "", StartServiceOptions{WaitTimeout: 30 * time.Millisecond, PollInterval: time.Millisecond})
 	require(t, err)
 	if result.Status != "failed" {
 		t.Fatalf("known exited startup reported %s", result.Status)
@@ -149,7 +171,7 @@ func TestLifecycleReviewFailedRecordMustBindProcess(t *testing.T) {
 	record := reviewStartup(t, s.Config, "failed", nil)
 	s.State.Service.StartupID = &record.StartupID
 	require(t, publishFixtureCheckpoint(s))
-	connection := ConnectService(context.Background(), s.Config)
+	connection := ConnectService(context.Background(), hostConfigForTest(s.Config))
 	if connection.CanStop || connection.IdentityMatched {
 		t.Fatalf("unbound failed record authorizes a process: %+v", connection)
 	}
@@ -168,11 +190,11 @@ func TestLifecycleReviewExistingServiceDoesNotNeedInstalledBinary(t *testing.T) 
 	s.State.Service.Ready = true
 	s.State.Service.Status = "running"
 	startupID := newID()
-	_, _, err = createStartupAttempt(s.Config, startupID, true)
+	_, _, err = createStartupAttempt(hostConfigForTest(s.Config), startupID, true)
 	require(t, err)
-	record := initialStartupRecord(s.Config, startupID)
+	record := initialStartupRecord(hostConfigForTest(s.Config), startupID)
 	record.Status, record.InstanceID, record.ProcessIdentity = "started", s.State.Service.InstanceID, identity
-	require(t, writeStartupRecord(s.Config, record))
+	require(t, writeStartupRecord(hostConfigForTest(s.Config), record))
 	s.State.Service.StartupID, s.State.Service.PID, s.State.Service.ProcessIdentity = &startupID, identity.PID, identity
 	require(t, publishFixtureCheckpoint(s))
 	result, err := testStartService(context.Background(), configPath, StartServiceOptions{Executable: filepath.Join(t.TempDir(), "missing.exe")})
@@ -203,7 +225,7 @@ func TestLifecycleReviewWaitTimeoutDiagnosticUsesActualDuration(t *testing.T) {
 	id, err := resourceprocess.CurrentIdentity()
 	require(t, err)
 	record := reviewStartup(t, s.Config, "starting", id)
-	result, err := waitForStartup(context.Background(), s.Config, record.StartupID, "", StartServiceOptions{WaitTimeout: 25 * time.Millisecond, PollInterval: time.Millisecond})
+	result, err := waitForStartup(context.Background(), hostConfigForTest(s.Config), record.StartupID, "", StartServiceOptions{WaitTimeout: 25 * time.Millisecond, PollInterval: time.Millisecond})
 	require(t, err)
 	if strings.Contains(result.Error, "30 seconds") {
 		t.Fatal("custom wait timeout is reported as 30 seconds")
@@ -216,12 +238,12 @@ func TestLifecycleReviewLauncherCannotRollbackChildHandshake(t *testing.T) {
 	require(t, err)
 	record := reviewStartup(t, s.Config, "started", id)
 	record.InstanceID = s.State.Service.InstanceID
-	require(t, writeStartupRecord(s.Config, record))
+	require(t, writeStartupRecord(hostConfigForTest(s.Config), record))
 	path, err := startupPath(s.Config.RunDir, record.StartupID)
 	require(t, err)
 	before, err := os.ReadFile(path)
 	require(t, err)
-	require(t, recordStartupProcess(s.Config, record.StartupID, *id))
+	require(t, recordStartupProcess(hostConfigForTest(s.Config), record.StartupID, *id))
 	after, err := os.ReadFile(path)
 	require(t, err)
 	if string(before) != string(after) {
@@ -234,7 +256,7 @@ func TestLifecycleReviewStopPublicationKeepsObservedInstance(t *testing.T) {
 	observed := s.State
 	s.State.Service.InstanceID = newID()
 	require(t, publishFixtureCheckpoint(s))
-	req, err := submitControlSnapshot(s.Config, &observed, "stop_service", nil, "review")
+	req, err := submitControlSnapshot(hostConfigForTest(s.Config), &observed, "stop_service", nil, "review")
 	require(t, err)
 	if req.InstanceID != observed.Service.InstanceID {
 		t.Fatal("stop was retargeted to replacement service")
@@ -246,15 +268,15 @@ func TestLifecycleReviewOfflineWithHeldLockCannotRestart(t *testing.T) {
 	absent := &executionbackend.ProcessIdentity{Kind: "os", PID: 2_000_000_000, Created: "absent", Executable: "absent"}
 	s.State.Service.ProcessIdentity = absent
 	s.State.Service.PID = s.State.Service.ProcessIdentity.PID
-	startup, err := readStartupRecord(s.Config, *s.State.Service.StartupID)
+	startup, err := readStartupRecord(hostConfigForTest(s.Config), *s.State.Service.StartupID)
 	require(t, err)
 	startup.ProcessIdentity = absent
-	require(t, writeStartupRecord(s.Config, *startup))
+	require(t, writeStartupRecord(hostConfigForTest(s.Config), *startup))
 	require(t, publishFixtureCheckpoint(s))
 	lock, err := LockRepository(s.Config.RunDir)
 	require(t, err)
 	defer lock.Close()
-	connection := ConnectService(context.Background(), s.Config)
+	connection := ConnectService(context.Background(), hostConfigForTest(s.Config))
 	if connection.State != ConnectionOffline || connection.CanStart {
 		t.Fatalf("restart enabled before lock release: %+v", connection)
 	}
@@ -263,10 +285,10 @@ func TestLifecycleReviewOfflineWithHeldLockCannotRestart(t *testing.T) {
 func TestLifecycleReviewCorruptStartupCannotBeIgnored(t *testing.T) {
 	s := controlReviewService(t)
 	id := newID()
-	path, _, err := createStartupAttempt(s.Config, id, true)
+	path, _, err := createStartupAttempt(hostConfigForTest(s.Config), id, true)
 	require(t, err)
 	require(t, os.WriteFile(path, []byte("{"), 0600))
-	if _, _, _, err := findLiveStartupAttempt(s.Config); err == nil {
+	if _, _, _, err := findLiveStartupAttempt(hostConfigForTest(s.Config)); err == nil {
 		t.Fatal("corrupt startup evidence was ignored")
 	}
 }
@@ -282,7 +304,7 @@ func TestLifecycleReviewChildPublishesIdentityBeforePreflight(t *testing.T) {
 	defer func() { cancel(); <-done }()
 	deadline := time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		current, err := readStartupRecord(c, record.StartupID)
+		current, err := readStartupRecord(hostConfigForTest(c), record.StartupID)
 		if err == nil && current.ProcessIdentity != nil && current.ProcessIdentity.PID == os.Getpid() {
 			return
 		}
@@ -302,17 +324,17 @@ func TestTM08Shutdown(t *testing.T) {
 	defer func() { process.Kill(); _ = cmd.Wait() }()
 	identity := process.Identity()
 	s.State.Service.PID, s.State.Service.ProcessIdentity = identity.PID, &identity
-	startup, err := readStartupRecord(s.Config, *s.State.Service.StartupID)
+	startup, err := readStartupRecord(hostConfigForTest(s.Config), *s.State.Service.StartupID)
 	require(t, err)
 	startup.ProcessIdentity = &identity
-	require(t, writeStartupRecord(s.Config, *startup))
+	require(t, writeStartupRecord(hostConfigForTest(s.Config), *startup))
 	require(t, publishFixtureCheckpoint(s))
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	done := make(chan productapi.ServiceStopResult, 1)
 	errors := make(chan error, 1)
 	go func() {
-		result, err := StopService(ctx, s.Config, "review", time.Second)
+		result, err := StopService(ctx, hostConfigForTest(s.Config), "review", time.Second)
 		done <- result
 		errors <- err
 	}()

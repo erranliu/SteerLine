@@ -25,22 +25,7 @@ func TestTM08Heartbeat(t *testing.T) {
 	if err = reader.Close(); err != nil {
 		t.Fatal(err)
 	}
-	c.ReadRuntime = func(ctx context.Context, config execution.Config) (*reconstruction.Runtime, error) {
-		reader, err := openHostFixtureNativeReader(ctx, &config)
-		if err != nil {
-			return nil, err
-		}
-		defer reader.Close()
-		snapshot, err := reader.ReadExecutionStateSnapshot(ctx, config.Identity())
-		if err != nil {
-			return nil, err
-		}
-		if snapshot.Checkpoint == nil {
-			return nil, storageports.ErrNotFound
-		}
-		view, err := reconstruction.BuildFromStorage(snapshot, *snapshot.Checkpoint)
-		return &view, err
-	}
+	hostConfig := hostConfigForTest(c)
 	db, err := openHostFixtureNativeCommandStore(context.Background(), &c)
 	if err != nil {
 		t.Fatal(err)
@@ -48,7 +33,7 @@ func TestTM08Heartbeat(t *testing.T) {
 	defer db.Close()
 	nowTime := time.Date(2026, 9, 23, 10, 0, 0, 0, time.UTC)
 	clock := func() time.Time { return nowTime }
-	if got := ReadObservationSnapshot(c, clock); got.State != SnapshotNone {
+	if got := ReadObservationSnapshot(hostConfig, clock); got.State != SnapshotNone {
 		t.Fatalf("missing state=%s", got.State)
 	}
 	operation := executionmodel.OperationRecord{ProjectIdentity: c.Identity(), OperationID: newID(), IdempotencyKey: newID(), Kind: "test", Status: "pending", PayloadDigest: strings.Repeat("a", 64), Request: []byte(`{}`), CreatedAt: nowTime, UpdatedAt: nowTime}
@@ -79,11 +64,11 @@ func TestTM08Heartbeat(t *testing.T) {
 			t.Fatalf("SQLite checkpoint duplicates %s domain rows", key)
 		}
 	}
-	loaded, err := LoadDatabaseRuntime(c)
+	loaded, err := LoadDatabaseRuntime(hostConfig)
 	if err != nil || len(loaded.Operations) != 1 || loaded.Operations[0].OperationID != operation.OperationID {
 		t.Fatalf("domain operation was not joined into runtime: %+v / %v", loaded, err)
 	}
-	if got := ReadObservationSnapshot(c, clock); got.State != SnapshotValid || got.FreshnessLimit != 15*time.Second || len(got.Runtime.Operations) != 1 {
+	if got := ReadObservationSnapshot(hostConfig, clock); got.State != SnapshotValid || got.FreshnessLimit != 15*time.Second || len(got.Runtime.Operations) != 1 {
 		t.Fatalf("fresh heartbeat classification: %+v", got)
 	}
 	if err = (&execution.Store{Domain: db, Project: c.Identity()}).Heartbeat(); err != nil {
@@ -102,12 +87,12 @@ func TestTM08Heartbeat(t *testing.T) {
 	}
 	state.HeartbeatAt = nowTime.Add(-16 * time.Second)
 	save()
-	if got := ReadObservationSnapshot(c, clock); got.State != SnapshotStale {
+	if got := ReadObservationSnapshot(hostConfig, clock); got.State != SnapshotStale {
 		t.Fatalf("stale heartbeat classification: %+v", got)
 	}
 	state.HeartbeatAt = nowTime.Add(time.Second)
 	save()
-	if got := ReadObservationSnapshot(c, clock); got.State != SnapshotStale || !got.ClockSkew {
+	if got := ReadObservationSnapshot(hostConfig, clock); got.State != SnapshotStale || !got.ClockSkew {
 		t.Fatalf("future heartbeat classification: %+v", got)
 	}
 	state.SchemaVersion = 4
@@ -120,7 +105,7 @@ func TestTM08Heartbeat(t *testing.T) {
 	if err = transactFixture(db, context.Background(), func(tx *fixtureTransaction) error { return tx.PutProjection(c.Identity(), 99, body) }); err != nil {
 		t.Fatal(err)
 	}
-	if got := ReadObservationSnapshot(c, clock); got.State != SnapshotUnknownVersion {
+	if got := ReadObservationSnapshot(hostConfig, clock); got.State != SnapshotUnknownVersion {
 		t.Fatalf("unsupported SQLite projection classification: %+v", got)
 	}
 }

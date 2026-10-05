@@ -144,12 +144,6 @@ func withNeutralProfile(c Config, value neutralSettings) Config {
 	if c.WorktreeRoot == "" && c.RunDir != "" {
 		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	}
-	if c.StateRoot == "" {
-		c.StateRoot = fixtureStateRoot()
-	}
-	if c.Identity() != "" {
-		c.RepositoryStateKey = fixtureStateKey(c.Identity())
-	}
 	data, _, err := directory.NormalizeProfile([]executionbackend.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(value)}}, c.ExecutionPolicy, c.Host, c.Agent, ConfigurationProjectIdentity(c), ProjectExecutionProfileID, c.configDigest)
 	if err != nil {
 		panic(err)
@@ -264,7 +258,7 @@ func newNeutralService(c Config) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	stores := ServiceStorage{State: db, Commands: db, Worker: db, Conversations: db, Records: db, Close: db.Close}
+	stores := ServiceStorage{State: db, Commands: db, Worker: db, Conversations: db, Records: db, Resources: fixtureResources{}, Close: db.Close}
 	service, err := NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, stores, newFixtureTasks(db, c), newFixtureTasks(db, c), fixtureHost{config: c})
 	if err != nil {
 		_ = db.Close()

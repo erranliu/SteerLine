@@ -1,7 +1,6 @@
 package host
 
 import (
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,9 +12,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -146,14 +146,14 @@ func rejectSymlink(path string) error {
 	return nil
 }
 
-func expectedClaimant(c execution.Config) string {
+func expectedClaimant(c Config) string {
 	if c.Claimant != "" {
 		return c.Claimant
 	}
 	return "steerline-" + shortHash(c.Identity())
 }
 
-func resolveRepositoryPath(ctx context.Context, c execution.Config) (string, error) {
+func resolveRepositoryPath(ctx context.Context, c Config) (string, error) {
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return "", err
 	}
@@ -163,7 +163,7 @@ func resolveRepositoryPath(ctx context.Context, c execution.Config) (string, err
 	return canonical(c.Repository), nil
 }
 
-func expectedRunDir(c execution.Config) (string, error) {
+func expectedRunDir(c Config) (string, error) {
 	return resolveProspectivePath(c.RunDir)
 }
 
@@ -193,7 +193,7 @@ func resolveProspectivePath(input string) (string, error) {
 	}
 }
 
-func readStartupRecord(c execution.Config, id string) (*StartupRecord, error) {
+func readStartupRecord(c Config, id string) (*StartupRecord, error) {
 	path, err := startupPath(c.RunDir, id)
 	if err != nil {
 		return nil, err
@@ -232,7 +232,7 @@ type startupProcessRecord struct {
 	ProcessIdentity executionbackend.ProcessIdentity `json:"process_identity"`
 }
 
-func recordStartupProcess(c execution.Config, id string, identity executionbackend.ProcessIdentity) error {
+func recordStartupProcess(c Config, id string, identity executionbackend.ProcessIdentity) error {
 	path, err := startupPath(c.RunDir, id)
 	if err != nil {
 		return err
@@ -244,7 +244,7 @@ func recordStartupProcess(c execution.Config, id string, identity executionbacke
 	return AtomicWrite(filepath.Join(filepath.Dir(path), "process.json"), append(b, '\n'))
 }
 
-func findLiveStartupAttempt(c execution.Config) (*StartupRecord, productapi.ProcessProbe, string, error) {
+func findLiveStartupAttempt(c Config) (*StartupRecord, productapi.ProcessProbe, string, error) {
 	root, err := resolveProspectivePath(filepath.Join(c.RunDir, "service", "startups"))
 	if err != nil {
 		return nil, productapi.ProcessProbe{}, "", err
@@ -305,7 +305,7 @@ func findLiveStartupAttempt(c execution.Config) (*StartupRecord, productapi.Proc
 	return found, foundProbe, foundDiagnostic, nil
 }
 
-func validateRecordForRuntime(c execution.Config, rt *reconstructiontypes.Runtime, record *StartupRecord, repositoryPath, runDir string) error {
+func validateRecordForRuntime(c Config, rt *reconstructiontypes.Runtime, record *StartupRecord, repositoryPath, runDir string) error {
 	if canonical(record.RepositoryIdentity) != canonical(rt.Repository.Identity) || canonical(record.RepositoryIdentity) != canonical(c.Identity()) ||
 		canonical(record.RepositoryPath) != canonical(repositoryPath) || canonical(record.RunDir) != canonical(runDir) ||
 		record.Remote != c.Remote || record.Branch != c.Branch || record.Claimant != expectedClaimant(c) ||
@@ -335,13 +335,13 @@ func validateRecordForRuntime(c execution.Config, rt *reconstructiontypes.Runtim
 	return nil
 }
 
-func ConnectService(ctx context.Context, c execution.Config) ServiceConnection {
+func ConnectService(ctx context.Context, c Config) ServiceConnection {
 	return connectServiceWithProbe(ctx, c, func(identity *executionbackend.ProcessIdentity) productapi.ProcessProbe {
 		return publicProcessProbe(c.ProcessFacts, identity)
 	})
 }
 
-func connectServiceWithProbe(ctx context.Context, c execution.Config, probe func(*executionbackend.ProcessIdentity) productapi.ProcessProbe) ServiceConnection {
+func connectServiceWithProbe(ctx context.Context, c Config, probe func(*executionbackend.ProcessIdentity) productapi.ProcessProbe) ServiceConnection {
 	connection := ServiceConnection{State: ConnectionNoRecord, Capabilities: []string{}, CanStart: true}
 	if err := c.ResolveIdentity(ctx); err != nil {
 		connection.State, connection.Diagnostic, connection.CanStart = ConnectionIdentityError, "resolve repository identity: "+err.Error(), false
@@ -354,7 +354,7 @@ func connectServiceWithProbe(ctx context.Context, c execution.Config, probe func
 // ConnectServiceFromSnapshot checks process and configuration identity against
 // the supplied committed observation, without sampling the database again.
 // Control commands still perform their own admission checks.
-func ConnectServiceFromSnapshot(ctx context.Context, c execution.Config, obs ObservationSnapshot) ServiceConnection {
+func ConnectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSnapshot) ServiceConnection {
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return ServiceConnection{State: ConnectionIdentityError, Snapshot: obs, Diagnostic: "resolve repository identity: " + err.Error()}
 	}
@@ -363,7 +363,7 @@ func ConnectServiceFromSnapshot(ctx context.Context, c execution.Config, obs Obs
 	})
 }
 
-func connectServiceFromSnapshot(ctx context.Context, c execution.Config, obs ObservationSnapshot, probe func(*executionbackend.ProcessIdentity) productapi.ProcessProbe) ServiceConnection {
+func connectServiceFromSnapshot(ctx context.Context, c Config, obs ObservationSnapshot, probe func(*executionbackend.ProcessIdentity) productapi.ProcessProbe) ServiceConnection {
 	connection := ServiceConnection{State: ConnectionNoRecord, Capabilities: []string{}, CanStart: true}
 	connection.Snapshot = obs
 	if obs.State == SnapshotNone {
@@ -511,7 +511,7 @@ func connectServiceFromSnapshot(ctx context.Context, c execution.Config, obs Obs
 	return connection
 }
 
-func createStartupAttempt(c execution.Config, id string, createLog bool) (string, string, error) {
+func createStartupAttempt(c Config, id string, createLog bool) (string, string, error) {
 	jsonPath, err := startupPath(c.RunDir, id)
 	if err != nil {
 		return "", "", err
@@ -545,11 +545,11 @@ func createStartupAttempt(c execution.Config, id string, createLog bool) (string
 	return jsonPath, logPath, nil
 }
 
-func initialStartupRecord(c execution.Config, id string) StartupRecord {
+func initialStartupRecord(c Config, id string) StartupRecord {
 	return StartupRecord{Version: 1, StartupID: id, Status: "starting", StartedAt: now(), UpdatedAt: now(), RepositoryIdentity: c.Identity(), RepositoryPath: c.Repository, RunDir: c.RunDir, Remote: c.Remote, Branch: c.Branch, Claimant: expectedClaimant(c), ConfigDigest: c.LoadedConfigDigest()}
 }
 
-func writeStartupRecord(c execution.Config, record StartupRecord) error {
+func writeStartupRecord(c Config, record StartupRecord) error {
 	path, err := startupPath(c.RunDir, record.StartupID)
 	if err != nil {
 		return err
@@ -565,7 +565,7 @@ func writeStartupRecord(c execution.Config, record StartupRecord) error {
 	return AtomicWrite(path, append(b, '\n'))
 }
 
-func failStartup(c execution.Config, id string, cause error) error {
+func failStartup(c Config, id string, cause error) error {
 	if id == "" {
 		return cause
 	}
@@ -583,7 +583,7 @@ func failStartup(c execution.Config, id string, cause error) error {
 	return errors.Join(cause, writeStartupRecord(c, record))
 }
 
-func windowsServiceWindowStart(ctx context.Context, c execution.Config, absoluteConfig string, opts StartServiceOptions) (ServiceStartResult, error) {
+func windowsServiceWindowStart(ctx context.Context, c Config, absoluteConfig string, opts StartServiceOptions) (ServiceStartResult, error) {
 	connection := ConnectService(ctx, c)
 	switch connection.State {
 	case ConnectionConnected:
@@ -653,15 +653,15 @@ func windowsServiceWindowStart(ctx context.Context, c execution.Config, absolute
 	return result, nil
 }
 
-func StartService(ctx context.Context, c execution.Config, configPath string, opts StartServiceOptions) (ServiceStartResult, error) {
+func StartService(ctx context.Context, c Config, configPath string, opts StartServiceOptions) (ServiceStartResult, error) {
 	if err := ctx.Err(); err != nil {
 		return ServiceStartResult{}, err
 	}
 	if err := c.ValidateTaskCommandConfiguration(); err != nil {
 		return ServiceStartResult{}, err
 	}
-	if c.ProcessHost == nil || c.ProcessFacts == nil {
-		return ServiceStartResult{}, errors.New("managed process host is required")
+	if c.ProcessFacts == nil {
+		return ServiceStartResult{}, errors.New("application process-facts port is required")
 	}
 	var err error
 	if err = c.ResolveIdentity(ctx); err != nil {
@@ -837,7 +837,7 @@ func StartService(ctx context.Context, c execution.Config, configPath string, op
 	return waitForStartup(ctx, c, startupID, logPath, opts)
 }
 
-func waitForStartup(ctx context.Context, c execution.Config, id, logPath string, opts StartServiceOptions) (ServiceStartResult, error) {
+func waitForStartup(ctx context.Context, c Config, id, logPath string, opts StartServiceOptions) (ServiceStartResult, error) {
 	if opts.WaitTimeout <= 0 || opts.WaitTimeout > 30*time.Second {
 		opts.WaitTimeout = 30 * time.Second
 	}
@@ -884,7 +884,7 @@ func waitForStartup(ctx context.Context, c execution.Config, id, logPath string,
 	}
 }
 
-func StopService(ctx context.Context, c execution.Config, requestedBy string, timeout time.Duration) (productapi.ServiceStopResult, error) {
+func StopService(ctx context.Context, c Config, requestedBy string, timeout time.Duration) (productapi.ServiceStopResult, error) {
 	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return productapi.ServiceStopResult{}, err
 	}
@@ -928,7 +928,7 @@ func StopService(ctx context.Context, c execution.Config, requestedBy string, ti
 				return result, nil
 			}
 			result.Receipt = receipt
-			if execution.TerminalControlStatus(receipt.Status) {
+			if c.ControlValidation != nil && c.ControlValidation.TerminalStatus(receipt.Status) {
 				switch receipt.Status {
 				case "applied":
 					result.Status = "stopping"
@@ -983,7 +983,7 @@ func StopService(ctx context.Context, c execution.Config, requestedBy string, ti
 	}
 }
 
-func serviceLocksReleased(c execution.Config) (bool, error) {
+func serviceLocksReleased(c Config) (bool, error) {
 	repoLock, err := tryExistingLock(filepath.Join(c.Identity(), "steerline.lock"))
 	if err != nil {
 		if errors.Is(err, errLockBusy) {
@@ -1039,9 +1039,19 @@ func acquireLaunchLock(ctx context.Context, path string) (*RepoLock, error) {
 
 // RunConfiguredService is the lock-owning service entry point used by the CLI.
 // It records preflight and lock failures under startup_id before returning.
-type ServiceFactory func(execution.Config, execution.HostPort) (*execution.Service, error)
+type ServiceLifetime interface {
+	Run(context.Context) error
+	Close() error
+}
 
-func RunConfiguredService(ctx context.Context, c execution.Config, mode, startupID, console string, construct ServiceFactory, admission ApplicationAdmission, formatter ActivityFormatter) (retErr error) {
+type ServiceFactory func(Config, hostport.HostPort, string) (ServiceLifetime, error)
+
+func runServiceLifetime(ctx context.Context, lifetime ServiceLifetime) error {
+	runErr := lifetime.Run(ctx)
+	return errors.Join(runErr, lifetime.Close())
+}
+
+func RunConfiguredService(ctx context.Context, c Config, mode, startupID, console string, construct ServiceFactory, admission ApplicationAdmission, formatter ActivityFormatter) (retErr error) {
 	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return err
 	}
@@ -1054,8 +1064,8 @@ func RunConfiguredService(ctx context.Context, c execution.Config, mode, startup
 	if err := c.ValidateTaskCommandConfiguration(); err != nil {
 		return err
 	}
-	if c.ProcessHost == nil || c.ProcessFacts == nil {
-		return errors.New("managed process host is required")
+	if c.ProcessFacts == nil {
+		return errors.New("application process-facts port is required")
 	}
 	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return err
@@ -1145,7 +1155,7 @@ func RunConfiguredService(ctx context.Context, c execution.Config, mode, startup
 	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return fail(err)
 	}
-	if retErr = admission.Preflight(ctx, &c, true); retErr != nil {
+	if c, retErr = admission.Preflight(ctx, c, true); retErr != nil {
 		return fail(fmt.Errorf("service preflight: %w", retErr))
 	}
 	if initErr := admission.InitializeNativeProject(ctx, c); initErr != nil {
@@ -1177,12 +1187,22 @@ func RunConfiguredService(ctx context.Context, c execution.Config, mode, startup
 		selectedConsole = ConsoleDefault()
 	}
 	host := NewServiceHost(c, startupID, selectedConsole, io.MultiWriter(logFile, os.Stdout), admission, formatter)
-	s, err := construct(c, host)
+	runtime, err := construct(c, host, startupID)
 	if err != nil {
 		return fail(err)
 	}
-	s.SetStartupMetadata(startupID)
-	retErr = RunService(ctx, s, s.Config, mode)
+	if runtime == nil {
+		return fail(errors.New("application service factory returned nil lifetime"))
+	}
+	closed := false
+	defer func() {
+		if !closed {
+			retErr = errors.Join(retErr, runtime.Close())
+		}
+	}()
+	runErr := runServiceLifetime(ctx, runtime)
+	closed = true
+	retErr = runErr
 	if retErr != nil {
 		fmt.Fprintf(logFile, "service exited: %v\n", retErr)
 	} else {

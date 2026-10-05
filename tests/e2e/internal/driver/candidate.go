@@ -53,8 +53,8 @@ func (c *Client) Candidate(ctx context.Context, helper string, in CandidateComma
 }
 
 type CandidateConversation struct {
-	Events []productapi.ConversationEvent     `json:"events"`
-	Bodies []productapi.ConversationBodyPage  `json:"bodies"`
+	Events []productapi.ConversationEvent    `json:"events"`
+	Bodies []productapi.ConversationBodyPage `json:"bodies"`
 }
 
 func ReadOriginalOperations(ctx context.Context, database, project string) ([]executionmodel.OperationRecord, error) {
@@ -135,6 +135,10 @@ func MainCandidate(args []string) error {
 	if err = c.ResolveIdentity(ctx); err != nil {
 		return err
 	}
+	hostConfig, err := steerlineapp.BuildHostConfig(ctx, c)
+	if err != nil {
+		return err
+	}
 	if in.Action == "answer_decision" {
 		reader, err := steerlineapp.OpenNativeTaskReader(ctx, &c)
 		if err != nil {
@@ -161,7 +165,7 @@ func MainCandidate(args []string) error {
 		return json.NewEncoder(os.Stdout).Encode(CandidateReceipt{Command: &cmd})
 	}
 	if in.Action == "receipt" {
-		receipt, err := steerline.ReadControlReceipt(c, in.RequestID)
+		receipt, err := steerline.ReadControlReceipt(hostConfig, in.RequestID)
 		if err != nil {
 			return err
 		}
@@ -178,11 +182,11 @@ func MainCandidate(args []string) error {
 		}
 		payload.ExecutionProfileID, payload.ExecutionProfileDigest = profile.ID, profile.Digest()
 	}
-	req, err := steerline.SubmitControlTargeted(c, in.Action, payload, "e2e", in.RequestID, in.InstanceID, nil)
+	req, err := steerline.SubmitControlTargeted(hostConfig, in.Action, payload, "e2e", in.RequestID, in.InstanceID, nil)
 	if err != nil {
 		return err
 	}
-	receipt, err := steerline.WaitControlReceipt(ctx, c, req.RequestID, 100*time.Millisecond)
+	receipt, err := steerline.WaitControlReceipt(ctx, hostConfig, req.RequestID, 100*time.Millisecond)
 	if err != nil {
 		_ = json.NewEncoder(os.Stdout).Encode(CandidateReceipt{Request: &req})
 		return err

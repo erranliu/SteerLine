@@ -19,7 +19,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/execution/publication"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -168,7 +167,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f.c.Claimant = "native-fixture"
 	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll, f.c.CommandTimeout, f.c.ShutdownGrace = "100ms", "100ms", "100ms", "5s", "1s"
-	f.c.PR = publication.Config{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}
+	f.c.PR = executionmodel.PRProviderConfig{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}
 	setNeutralProfile(t, &f.c, neutralSettings{Executable: executable})
 	f.c.WorkflowProtocol = executionmodel.Version
 	if err = f.c.ResolveIdentity(context.Background()); err != nil {

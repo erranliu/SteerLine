@@ -18,17 +18,18 @@ func TestProjectViewDoesNotOwnServiceRuntime(t *testing.T) {
 	view, err := (productquery.NewService(fixtureStoreFor(t, service), service.Config.Identity())).ReadProjectView(ctx, "", 500)
 	require(t, err)
 	requireProjectView(t, view)
-	connection := ConnectService(ctx, service.Config)
+	hostConfig := hostConfigForTest(service.Config)
+	connection := ConnectService(ctx, hostConfig)
 	if connection.State != ConnectionConnected || connection.Snapshot.Runtime == nil {
 		t.Fatalf("host failed to read its service observation: %+v", connection)
 	}
 	// The product query result is independent from subsequent service checkpoint writes.
 	service.State.Service.Ready = false
 	require(t, publishFixtureCheckpoint(service))
-	if current := ConnectService(ctx, service.Config); current.State != ConnectionInitializing {
+	if current := ConnectService(ctx, hostConfig); current.State != ConnectionInitializing {
 		t.Fatal("service observer ignored the latest service checkpoint")
 	}
-	unknown := connectServiceFromSnapshot(ctx, service.Config, connection.Snapshot, func(*executionbackend.ProcessIdentity) productapi.ProcessProbe {
+	unknown := connectServiceFromSnapshot(ctx, hostConfig, connection.Snapshot, func(*executionbackend.ProcessIdentity) productapi.ProcessProbe {
 		return productapi.ProcessProbe{State: ProcessUnknown, Reason: "unavailable"}
 	})
 	if unknown.State != ConnectionUnknown || unknown.CanControl {
@@ -42,7 +43,8 @@ func TestProjectViewFreshnessChecksUseHostSnapshot(t *testing.T) {
 	view, err := (productquery.NewService(fixtureStoreFor(t, service), service.Config.Identity())).ReadProjectView(ctx, "", 500)
 	require(t, err)
 	requireProjectView(t, view)
-	runtime, err := LoadDatabaseRuntime(service.Config)
+	hostConfig := hostConfigForTest(service.Config)
+	runtime, err := LoadDatabaseRuntime(hostConfig)
 	require(t, err)
 	for _, test := range []struct {
 		name      string
@@ -58,8 +60,8 @@ func TestProjectViewFreshnessChecksUseHostSnapshot(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			copy := *runtime
 			copy.HeartbeatAt = test.heartbeat
-			observation := ObserveRuntimeSnapshot(service.Config, &copy, nil, test.sampledAt)
-			connection := ConnectServiceFromSnapshot(ctx, service.Config, observation)
+			observation := ObserveRuntimeSnapshot(hostConfig, &copy, nil, test.sampledAt)
+			connection := ConnectServiceFromSnapshot(ctx, hostConfig, observation)
 			if connection.State != test.want || connection.Snapshot.ClockSkew != test.clockSkew ||
 				!connection.Snapshot.SampledAt.Equal(test.sampledAt) || connection.Snapshot.Runtime != &copy ||
 				connection.CanControl != (test.want == ConnectionConnected) {
@@ -67,10 +69,10 @@ func TestProjectViewFreshnessChecksUseHostSnapshot(t *testing.T) {
 			}
 		})
 	}
-	observation := ObserveRuntimeSnapshot(service.Config, runtime, nil, view.SampledAt)
+	observation := ObserveRuntimeSnapshot(hostConfig, runtime, nil, view.SampledAt)
 	invalid := service.Config
 	invalid.Git.Executable = filepath.Join(t.TempDir(), "missing-git")
-	connection := ConnectServiceFromSnapshot(ctx, invalid, observation)
+	connection := ConnectServiceFromSnapshot(ctx, hostConfigForTest(invalid), observation)
 	if connection.State != ConnectionIdentityError || connection.CanControl || connection.CanStart || connection.Snapshot.Runtime != observation.Runtime {
 		t.Fatal("failed identity check discarded the supplied read-only snapshot")
 	}

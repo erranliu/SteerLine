@@ -7,6 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func TestNativeProjectInitializesOnceAndRejectsMismatchedBinding(t *testing.T) {
@@ -53,6 +56,29 @@ func TestNativeProjectInitializesOnceAndRejectsMismatchedBinding(t *testing.T) {
 		t.Fatalf("repeat open: %v", err)
 	}
 	if err := repeated.Close(); err != nil {
+		t.Fatal(err)
+	}
+	writer, err := OpenNativeTaskCommandStore(context.Background(), &config)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updatedAuthority := authority
+	updatedAuthority.AuthorityVersion = 2
+	updatedAuthority.UpdatedAt = time.Now().UTC()
+	if err := writer.TransactDispatch(context.Background(), func(tx ports.DispatchTx) error {
+		return tx.UpdateProjectTaskAuthorityCAS(updatedAuthority, 1)
+	}); err != nil {
+		t.Fatalf("authority CAS 1->2 failed: %v", err)
+	}
+	staleAuthority := updatedAuthority
+	staleAuthority.UpdatedAt = time.Now().UTC()
+	err = writer.TransactDispatch(context.Background(), func(tx ports.DispatchTx) error {
+		return tx.UpdateProjectTaskAuthorityCAS(staleAuthority, 1)
+	})
+	if err == nil || !strings.Contains(err.Error(), "stale_version") {
+		t.Fatalf("replayed authority version was not rejected as stale: %v", err)
+	}
+	if err := writer.Close(); err != nil {
 		t.Fatal(err)
 	}
 	changedBranch := config

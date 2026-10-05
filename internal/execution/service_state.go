@@ -2,11 +2,12 @@ package execution
 
 import (
 	"context"
-	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	"sync"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
+	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -16,7 +17,7 @@ type Service struct {
 	replayDone           <-chan struct{}
 	historyDone          <-chan struct{}
 	historyRequests      chan []conversationtypes.ConversationHistorySource
-	host                 HostPort
+	host                 hostport.HostPort
 	taskWork             TaskWorkPort
 	taskResults          TaskResultPort
 	Config               Config
@@ -33,6 +34,8 @@ type Service struct {
 	pendingOperations    map[string]string
 	workerDecisionWrites map[string]bool
 	store                *Store
+	records              executionRecords
+	resources            ResourcePort
 	domainStore          StateReader
 	commandStore         CommandStore
 	conversationStore    ConversationStore

@@ -1,11 +1,11 @@
 package integration
 
 import (
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"net/url"
 	"os"
@@ -205,10 +205,11 @@ func startReadinessLiveService(t *testing.T, ctx context.Context, c execution.Co
 	require(t, err)
 	reader, err := steerlineapp.OpenNativeTaskReader(ctx, &c)
 	require(t, err)
+	hostConfig := integrationHostConfig(t, c)
 	runCtx, cancel := context.WithCancel(ctx)
 	result := &runningIntegrationService{service: service, config: c, reader: reader, queries: productquery.NewService(reader, c.Identity()), cancel: cancel, done: make(chan error, 1)}
 	t.Cleanup(func() { result.stop(t) })
-	go func() { result.done <- steerline.RunService(runCtx, service, service.Config, "manual") }()
+	go func() { result.done <- steerline.RunService(runCtx, service, hostConfig, "manual") }()
 	waitFor(t, 30*time.Second, func() bool {
 		runtimeState, err := steerlineapp.LoadDatabaseRuntime(c)
 		if err == nil && runtimeState != nil && runtimeState.Service.Ready {

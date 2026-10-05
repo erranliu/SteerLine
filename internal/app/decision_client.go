@@ -1,20 +1,20 @@
 package app
 
 import (
-	"crypto/rand"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"context"
-	"encoding/json"
+	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
 // AnswerOptions is the CLI entry point for answering a pending decision.
@@ -31,13 +31,17 @@ type AnswerOptions struct {
 // SubmitAnswerDecision publishes one immutable answer command to the live
 // service's SQLite authority. It never falls back to a file or offline writer.
 func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisionID, optionID, note, requestedBy string, expectedDecisionVersion, expectedRunRevision uint64, expectedInstance, commandID string, answers ...map[string][]string) (storageports.CommandRecord, bool, error) {
+	return submitAnswerDecisionWithStore(ctx, c, nil, runID, decisionID, optionID, note, requestedBy, expectedDecisionVersion, expectedRunRevision, expectedInstance, commandID, answers...)
+}
+
+func submitAnswerDecisionWithStore(ctx context.Context, c execution.Config, store *sqlite.SQLiteStore, runID, decisionID, optionID, note, requestedBy string, expectedDecisionVersion, expectedRunRevision uint64, expectedInstance, commandID string, answers ...map[string][]string) (storageports.CommandRecord, bool, error) {
 	if strings.TrimSpace(runID) == "" {
 		return storageports.CommandRecord{}, false, errors.New("answer requires a run ID")
 	}
 	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return storageports.CommandRecord{}, false, err
 	}
-	if err := steerline.PreflightNativeStatePath(c); err != nil {
+	if err := PreflightNativeStatePath(c); err != nil {
 		return storageports.CommandRecord{}, false, err
 	}
 	if err := c.ResolveIdentity(ctx); err != nil {
@@ -89,10 +93,15 @@ func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisi
 		expectedRunRevision = run.ControlRevision
 	}
 	key := execution.DecisionAnswerKey(answer)
-	if c.CommandReader == nil {
-		return storageports.CommandRecord{}, false, errors.New("application command reader is required")
+	ownedStore := store == nil
+	if ownedStore {
+		store, err = OpenNativeTaskCommandStore(ctx, &c)
+		if err != nil {
+			return storageports.CommandRecord{}, false, err
+		}
+		defer store.Close()
 	}
-	existing, lookupErr := c.CommandReader.CommandByIdempotency(ctx, c.Identity(), key)
+	existing, lookupErr := store.CommandByIdempotency(ctx, c.Identity(), key)
 	if lookupErr == nil {
 		var previous executionmodel.DecisionAnswer
 		if existing.Kind != "answer_decision" || existing.TargetID != decisionID || decodeStrictJSON(existing.Payload, &previous) != nil || !executionmodel.SameDecisionAnswer(previous, answer) {
@@ -103,7 +112,7 @@ func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisi
 	if !errors.Is(lookupErr, storageports.ErrNotFound) {
 		return storageports.CommandRecord{}, false, lookupErr
 	}
-	connection := steerline.ConnectService(ctx, c)
+	connection := connectHostService(ctx, c)
 	if !connection.CanControl || connection.Snapshot.Runtime == nil {
 		diagnostic := connection.Diagnostic
 		if diagnostic == "" {
@@ -184,9 +193,6 @@ func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisi
 	if expectedDecisionVersion == 0 {
 		answer.ExpectedDecisionVersion = version
 	}
-	if c.CommandWriter == nil {
-		return storageports.CommandRecord{}, false, errors.New("application command writer is required")
-	}
 	if commandID == "" {
 		commandID = newCommandID()
 	}
@@ -194,7 +200,7 @@ func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisi
 	if err != nil {
 		return storageports.CommandRecord{}, false, err
 	}
-	return (execution.NewCommandService(c.CommandWriter, c.Identity(), nil, nil)).AnswerDecisionWithID(ctx, commandID, decisionID, version, key, requestedBy, payload)
+	return (execution.NewCommandService(store, c.Identity(), nil, nil)).AnswerDecisionWithID(ctx, commandID, decisionID, version, key, requestedBy, payload)
 }
 
 func serviceHasCapability(runtimeState *reconstructiontypes.Runtime, action string) bool {
@@ -218,10 +224,7 @@ func readConfiguredRuntime(ctx context.Context, config execution.Config) (*recon
 			return nil, err
 		}
 	}
-	if config.ReadRuntime == nil {
-		return nil, errors.New("application runtime read port is required")
-	}
-	return config.ReadRuntime(ctx, config)
+	return LoadDatabaseRuntime(config)
 }
 
 func newCommandID() string {
@@ -252,13 +255,17 @@ func AnswerDecision(c execution.Config, o AnswerOptions) error {
 }
 
 func SubmitDecisionAnswer(ctx context.Context, c execution.Config, o AnswerOptions) (storageports.CommandRecord, bool, error) {
+	return submitDecisionAnswerWithStore(ctx, c, nil, o)
+}
+
+func submitDecisionAnswerWithStore(ctx context.Context, c execution.Config, store *sqlite.SQLiteStore, o AnswerOptions) (storageports.CommandRecord, bool, error) {
 	if strings.TrimSpace(o.RunID) == "" {
 		return storageports.CommandRecord{}, false, errors.New("answer requires a run ID or task ID")
 	}
 	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return storageports.CommandRecord{}, false, err
 	}
-	if err := steerline.PreflightNativeStatePath(c); err != nil {
+	if err := PreflightNativeStatePath(c); err != nil {
 		return storageports.CommandRecord{}, false, err
 	}
 	if err := c.ResolveIdentity(ctx); err != nil {
@@ -291,7 +298,7 @@ func SubmitDecisionAnswer(ctx context.Context, c execution.Config, o AnswerOptio
 	if o.By == "" {
 		o.By = answererName()
 	}
-	return SubmitAnswerDecision(ctx, c, runID, o.DecisionID, o.Option, o.Note, o.By, o.ExpectedVersion, 0, "", o.CommandID)
+	return submitAnswerDecisionWithStore(ctx, c, store, runID, o.DecisionID, o.Option, o.Note, o.By, o.ExpectedVersion, 0, "", o.CommandID)
 }
 
 // AnswererName resolves the default "answered by" identity from the environment.

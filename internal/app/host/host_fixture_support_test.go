@@ -11,9 +11,9 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
-	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
@@ -28,8 +28,8 @@ func workspacePolicyFixture() executionbackend.ExecutionPolicy {
 func executionPublicationFixture() executionbackend.PublicationPolicy {
 	return executionbackend.PublicationPolicy{Publisher: "worker"}
 }
-func hostPublicationProviderFixture() publication.Config {
-	return publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: os.Args[0], Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: executionbackend.Command{Executable: os.Args[0], Args: []string{"pr", "close", "{pr_url}"}}}
+func hostPublicationProviderFixture() executionmodel.PRProviderConfig {
+	return executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: os.Args[0], Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: executionbackend.Command{Executable: os.Args[0], Args: []string{"pr", "close", "{pr_url}"}}}
 }
 func fullFixtureTaskService(reader taskCommandStorage, c execution.Config) taskapp.Service {
 	commands := NewTaskCommands(reader, c)
@@ -79,6 +79,7 @@ func controlReviewService(t *testing.T) *execution.Service {
 	t.Helper()
 	service := newFixture(t).service(t)
 	service.Config.BindApplicationConfig(service.Config.ExecutionDirectory, "", "", "lifecycle-review-config", false)
+	hostConfig := hostConfigForTest(service.Config)
 	service.State.Service.Mode = "scheduler"
 	service.State.Service.Status = "running"
 	service.State.Service.Ready = true
@@ -87,14 +88,14 @@ func controlReviewService(t *testing.T) *execution.Service {
 		t.Fatal(err)
 	}
 	startupID := newID()
-	if _, _, err := createStartupAttempt(service.Config, startupID, true); err != nil {
+	if _, _, err := createStartupAttempt(hostConfig, startupID, true); err != nil {
 		t.Fatal(err)
 	}
-	record := initialStartupRecord(service.Config, startupID)
+	record := initialStartupRecord(hostConfig, startupID)
 	record.Status = "started"
 	record.InstanceID = service.State.Service.InstanceID
 	record.ProcessIdentity = identity
-	if err := writeStartupRecord(service.Config, record); err != nil {
+	if err := writeStartupRecord(hostConfig, record); err != nil {
 		t.Fatal(err)
 	}
 	service.State.Service.StartupID = &startupID
@@ -107,7 +108,7 @@ func controlReviewService(t *testing.T) *execution.Service {
 	return service
 }
 
-func newHostFixtureService(c execution.Config, host execution.HostPort) (*execution.Service, error) {
+func newHostFixtureService(c execution.Config, host hostport.HostPort) (*execution.Service, error) {
 	c = testConfigWithDirectory(c)
 	var err error
 	c, err = testPrepareServiceConfig(c)
@@ -119,7 +120,7 @@ func newHostFixtureService(c execution.Config, host execution.HostPort) (*execut
 		return nil, err
 	}
 	tasks := fullFixtureTaskService(db, c)
-	stores := execution.ServiceStorage{State: db, Commands: db, Worker: db, Conversations: db, Records: db, Close: db.Close}
+	stores := execution.ServiceStorage{State: db, Commands: db, Worker: db, Conversations: db, Records: db, Resources: testExecutionResources{}, Close: db.Close}
 	return execution.NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, stores, tasks, tasks, host)
 }
 func isNativeErrorCode(err error, codes ...string) bool {

@@ -50,7 +50,7 @@ func (c *Config) BindPublicationTarget(ctx context.Context) error {
 }
 
 func publicationClient(c Config) *publication.Client {
-	return publication.NewClient(c.PR, Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: c.ProcessHost}, duration(c.CommandTimeout))
+	return publication.NewClient(publication.Config(c.PR), Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: c.ProcessHost}, duration(c.CommandTimeout))
 }
 
 func verifyPublicationTargetForRun(ctx context.Context, c Config, run *reconstructiontypes.RunView) error {

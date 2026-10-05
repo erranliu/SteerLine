@@ -19,7 +19,6 @@ import (
 	execution "github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
 // fakeDB is the isolated PR-provider state used by native workflow tests.
@@ -150,7 +149,7 @@ func newFixture(t *testing.T) *fixture {
 	}
 	f.c.Claimant = "native-fixture"
 	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll, f.c.CommandTimeout, f.c.ShutdownGrace = "100ms", "100ms", "100ms", "5s", "1s"
-	f.c.PR = publication.Config{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}
+	f.c.PR = executionmodel.PRProviderConfig{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}
 	setNeutralProfile(t, &f.c, neutralSettings{Executable: executable})
 	f.c.WorkflowProtocol = executionmodel.Version
 	if err = f.c.ResolveIdentity(context.Background()); err != nil {
@@ -362,7 +361,7 @@ func seedFakeCapabilities(t *testing.T, c execution.Config) {
 		report.Capabilities[i].Status = executionbackend.CapabilityVerified
 		report.Capabilities[i].Evidence = evidence
 	}
-	if err := execution.SaveExecutionCapabilityReport(c, report); err != nil {
+	if err := execution.SaveExecutionCapabilityReport(c, testExecutionResources{}, report); err != nil {
 		t.Fatal(err)
 	}
 }

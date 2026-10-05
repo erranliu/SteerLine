@@ -43,7 +43,7 @@ func (s *Service) reconcileRunStop(ctx context.Context, run *reconstructiontypes
 	requestOp.Action = string(executionbackend.LifecycleStopExecution)
 	requestOp.LifecycleIdentity = &executionbackend.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionbackend.LifecycleBindingDigest(snapshot), Ref: *op.Ref}
 	request := executionbackend.LifecycleRequest{Snapshot: snapshot, Operation: requestOp, Input: executionbackend.LifecycleInput{Stop: &executionbackend.StopInput{TurnID: snapshot.Session.CurrentTurnID}}}
-	records := executionRecords{root: fixed.config.RunDir, reader: fixed.config.ExecutionRecords, resources: fixed.config.Resources}
+	records := s.records
 	err = s.dispatchLifecycleEffect(ctx, run, stopReconciliationPort{LifecyclePort: lifecycle, backend: BackendFor(fixed.config), ref: *op.Ref}, request, true, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 		if err := result.receipt.ValidateFor(request); err != nil {
 			return err
@@ -84,7 +84,7 @@ func (s *Service) stopRunExecution(ctx context.Context, r *reconstructiontypes.R
 	if configErr != nil {
 		return executionbackend.Operation{}, configErr
 	}
-	records := executionRecords{root: config.RunDir, reader: config.ExecutionRecords, resources: config.Resources}
+	records := s.records
 	ref, err := records.loadBinding(r.RunID, r.AttemptID)
 	if err != nil {
 		return executionbackend.Operation{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "active execution has no valid fixed binding", Cause: err}
@@ -168,7 +168,7 @@ func (s *Service) confirmExecutionStop(op executionbackend.Operation) (bool, err
 	if op.ID == "" {
 		return false, errors.New("stop operation is missing")
 	}
-	records := executionRecords{root: config.RunDir, reader: config.ExecutionRecords, resources: config.Resources}
+	records := s.records
 	run := s.find(op.RunID)
 	if run == nil {
 		return false, errors.New("execution stop has no fixed workflow")
@@ -192,7 +192,7 @@ func (s *Service) confirmExecutionStop(op executionbackend.Operation) (bool, err
 	}
 	ref := op.Ref
 	if ref == nil {
-		loaded, err := (executionRecords{root: config.RunDir, reader: config.ExecutionRecords, resources: config.Resources}).loadBinding(op.RunID, op.AttemptID)
+		loaded, err := s.records.loadBinding(op.RunID, op.AttemptID)
 		if err != nil {
 			return false, err
 		}

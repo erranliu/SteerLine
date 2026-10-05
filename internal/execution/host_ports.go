@@ -1,27 +1,8 @@
 package execution
 
 import (
-	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
-	"time"
-
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
-
-// HostPort carries transport and diagnostics only. All qualification, intent,
-// result binding and acknowledgement decisions stay with the execution actor.
-type HostPort interface {
-	ValidateStateLocation(Config) error
-	ControlRequestIDs() ([]string, error)
-	ReadControlRequest(string) (productapi.ControlRequest, error)
-	ReadControlReceipt(string) (*productapi.ControlReceipt, error)
-	ControlRequestDigest(string) string
-	WriteControlReceipt(productapi.ControlReceipt) error
-	FindStopRequest(string, map[string]bool) (*productapi.ControlRequest, string, time.Time)
-	PublishReady(string, *executionbackend.ProcessIdentity, string) error
-	Emit(executionvalues.ActivityEvent)
-	CurrentProcessIdentity() (*executionbackend.ProcessIdentity, error)
-}
 
 // ResourcePort is an injected OS/file fact capability; it has no business writes.
 type ResourcePort interface {

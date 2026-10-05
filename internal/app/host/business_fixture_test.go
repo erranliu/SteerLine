@@ -32,7 +32,9 @@ func (testExecutionResources) WorkerTreeAbsent(identity executionbackend.Process
 	return resourceprocess.WorkerTreeAbsent(identity)
 }
 
-func (testExecutionResources) AtomicWrite(path string, data []byte) error { return AtomicWrite(path, data) }
+func (testExecutionResources) AtomicWrite(path string, data []byte) error {
+	return AtomicWrite(path, data)
+}
 
 // The business fixture has one implementation and one codec. Its payload
 // describes test input; it compiles no native command or permission mapping.
@@ -156,15 +158,8 @@ func withNeutralProfile(c execution.Config, value neutralSettings) execution.Con
 	}
 	c.BindApplicationConfig(directory, "", "", digest, false)
 	c.ProcessHost = testProcessHost{}
-	c.ProcessFacts = resourceprocess.NewServiceFacts()
 	if c.WorktreeRoot == "" && c.RunDir != "" {
 		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
-	}
-	if c.StateRoot == "" {
-		c.StateRoot = fixtureStateRoot()
-	}
-	if c.Identity() != "" {
-		c.RepositoryStateKey = fixtureStateKeyFromIdentity(c.Identity())
 	}
 	p := execution.ExecutionProfile{ID: execution.ProjectExecutionProfileID, Name: "项目默认", Host: "local", Agent: "fixture", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(value)}}}
 	return c.ApplyExecutionProfile(p)
@@ -260,9 +255,6 @@ func newNeutralService(c execution.Config) (*execution.Service, error) {
 		c = withNeutralProfile(c, neutralSettings{Executable: os.Args[0]})
 	}
 	c.ProcessHost = testProcessHost{}
-	c.ProcessFacts = resourceprocess.NewServiceFacts()
-	c.Resources = testExecutionResources{}
-	c.ReadRuntime = readFixtureDatabaseRuntime
 	var err error
 	c, err = testPrepareServiceConfig(c)
 	if err != nil {
@@ -272,8 +264,8 @@ func newNeutralService(c execution.Config) (*execution.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	stores := execution.ServiceStorage{State: db, Commands: db, Worker: db, Conversations: db, Records: db, Close: db.Close}
-	service, err := execution.NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, stores, fullFixtureTaskService(db, c), fullFixtureTaskService(db, c), NewServiceHost(c, "", "", nil, testHostAdmission{}, nil))
+	stores := execution.ServiceStorage{State: db, Commands: db, Worker: db, Conversations: db, Records: db, Resources: testExecutionResources{}, Close: db.Close}
+	service, err := execution.NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, stores, fullFixtureTaskService(db, c), fullFixtureTaskService(db, c), NewServiceHost(hostConfigForTest(c), "", "", nil, testHostAdmission{config: c}, nil))
 	if err != nil {
 		_ = db.Close()
 	}

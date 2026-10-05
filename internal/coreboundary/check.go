@@ -118,6 +118,12 @@ func consoleForbidden(pkg string) bool {
 }
 
 func hostForbidden(pkg string) bool {
+	if pkg == execution {
+		return true
+	}
+	if pkg == module+"/internal/task/model" {
+		return false
+	}
 	for _, prefix := range []string{
 		"database/sql",
 		"modernc.org/sqlite",
@@ -131,6 +137,9 @@ func hostForbidden(pkg string) bool {
 		module + "/internal/console",
 		module + "/internal/app",
 	} {
+		if prefix == module+"/internal/task" && (pkg == prefix+"/model" || strings.HasPrefix(pkg, prefix+"/model/")) {
+			continue
+		}
 		if pkg == prefix || strings.HasPrefix(pkg, prefix+"/") {
 			return true
 		}
@@ -472,11 +481,9 @@ func visitGraph(graph map[string][]string, seed string, inspect func([]string)) 
 	}
 }
 
-// The app host consumes execution's service configuration and actor port,
-// reconstructed runtime values, and narrow storage ports. Their transitive
-// closures are checked from their owning roots; do not attribute their owned
-// implementation packages to the host consumer. Other host imports are still
-// traversed fully, including helper packages.
+// visitHostGraph traverses every production dependency below the app host.
+// Narrow value and storage ports remain subject to the same transitive check as
+// direct imports so an owner split cannot hide a forbidden implementation.
 func visitHostGraph(graph map[string][]string, seed string, inspect func([]string)) {
 	seen := map[string]bool{seed: true}
 	queue := [][]string{{seed}}
@@ -484,7 +491,7 @@ func visitHostGraph(graph map[string][]string, seed string, inspect func([]strin
 		path := queue[0]
 		queue = queue[1:]
 		for _, next := range graph[path[len(path)-1]] {
-			if next == execution || next == execution+"/reconstruction" || next == module+"/internal/storage/ports" || seen[next] {
+			if seen[next] {
 				continue
 			}
 			seen[next] = true

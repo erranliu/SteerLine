@@ -23,10 +23,10 @@ func validateWorkflowConfig(c *Config, _ []byte) error {
 	if err := c.ExecutionRequirements.Validate(); err != nil {
 		return err
 	}
-	if err := entry.ValidatePublicationPolicy(c.PublicationPolicy, c.PR); err != nil {
+	if err := entry.ValidatePublicationPolicy(c.PublicationPolicy, publication.Config(c.PR)); err != nil {
 		return err
 	}
-	if err := publication.ValidateNonSecret(c.PR, c.Git); err != nil {
+	if err := publication.ValidateNonSecret(publication.Config(c.PR), c.Git); err != nil {
 		return err
 	}
 	if c.WorkflowProtocol != executionmodel.Version {

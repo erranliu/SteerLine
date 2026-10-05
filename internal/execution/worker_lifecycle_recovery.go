@@ -184,7 +184,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 			owned.Close()
 			delete(s.ownedProcesses, run.RunID)
 		}
-		if !s.Config.Resources.WorkerTreeAbsent(*execution.Process) {
+		if !s.resources.WorkerTreeAbsent(*execution.Process) {
 			execution.RecoveryState = string(executionmodel.RecoveryUnverified)
 			return s.waitWorkerFlow(run, "Original worker descendants may still write to the worktree")
 		}

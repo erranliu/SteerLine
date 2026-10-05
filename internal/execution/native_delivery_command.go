@@ -77,7 +77,7 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	if !found {
 		return executionmodel.TaskDeliveryReceipt{}, nativeErr("inconsistent_delivery", "original publication workflow is missing")
 	}
-	if client, ok := verifier.(*publication.Client); ok && !publication.ProviderIdentity(config.PR).Matches(client.Config) {
+	if client, ok := verifier.(*publication.Client); ok && !publication.ProviderIdentity(publication.Config(config.PR)).Matches(client.Config) {
 		return executionmodel.TaskDeliveryReceipt{}, nativeErr("authority_mismatch", "PR verifier differs from the original publication provider")
 	}
 	if verifier == nil {

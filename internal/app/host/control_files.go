@@ -5,14 +5,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"io"
 	"os"
 	"path/filepath"
 	"sort"
 	"time"
-
-	"github.com/erranliu/SteerLine/internal/execution"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 func (s *ServiceHost) WriteControlReceipt(r productapi.ControlReceipt) error {
@@ -72,7 +70,7 @@ func (s *ServiceHost) ControlRequestIDs() ([]string, error) {
 	return ids, nil
 }
 
-func findStopRequestCached(c execution.Config, instanceID string, seen map[string]bool) (*productapi.ControlRequest, string, time.Time) {
+func findStopRequestCached(c Config, instanceID string, seen map[string]bool) (*productapi.ControlRequest, string, time.Time) {
 	root := filepath.Join(c.RunDir, "control", "requests")
 	entries, err := os.ReadDir(root)
 	if err != nil {
@@ -92,7 +90,7 @@ func findStopRequestCached(c execution.Config, instanceID string, seen map[strin
 		}
 		if err != nil {
 			if seen != nil {
-				if receipt, e := ReadControlReceipt(c, e.Name()); e == nil && execution.TerminalControlStatus(receipt.Status) {
+				if receipt, e := ReadControlReceipt(c, e.Name()); e == nil && c.ControlValidation != nil && c.ControlValidation.TerminalStatus(receipt.Status) {
 					seen[receipt.RequestID] = true
 				}
 			}
@@ -104,11 +102,14 @@ func findStopRequestCached(c execution.Config, instanceID string, seen map[strin
 		if err != nil || req.Action != "stop_service" || req.InstanceID != instanceID || req.RequestID != e.Name() {
 			continue
 		}
-		if _, err = execution.DecodeControlPayload(req); err != nil {
+		if c.ControlValidation == nil {
+			continue
+		}
+		if _, err = c.ControlValidation.DecodePayload(req); err != nil {
 			continue
 		}
 		checkedAt := now()
-		if _, err = execution.ValidateControlRequest(req, instanceID, c.Identity(), 0, checkedAt); err != nil {
+		if _, err = c.ControlValidation.ValidateRequest(req, instanceID, c.Identity(), 0, checkedAt); err != nil {
 			continue
 		}
 		if _, err = ReadControlReceipt(c, req.RequestID); err == nil {

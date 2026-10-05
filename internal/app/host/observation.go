@@ -3,13 +3,11 @@ package host
 import (
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
-
-	"github.com/erranliu/SteerLine/internal/execution"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 // ObservationSnapshot is a private host sample consumed by service control.
@@ -33,7 +31,7 @@ const (
 
 // ReadObservationSnapshot reads the committed SQLite service checkpoint.
 // nowFn keeps freshness and future-heartbeat behavior testable.
-func ReadObservationSnapshot(c execution.Config, nowFn func() time.Time) ObservationSnapshot {
+func ReadObservationSnapshot(c Config, nowFn func() time.Time) ObservationSnapshot {
 	if nowFn == nil {
 		nowFn = time.Now
 	}
@@ -50,7 +48,7 @@ func ReadObservationSnapshot(c execution.Config, nowFn func() time.Time) Observa
 
 // ObserveRuntimeSnapshot applies freshness to an already sampled database
 // runtime. It does not read storage or infer whether the service process lives.
-func ObserveRuntimeSnapshot(c execution.Config, rt *reconstructiontypes.Runtime, err error, sampledAt time.Time) ObservationSnapshot {
+func ObserveRuntimeSnapshot(c Config, rt *reconstructiontypes.Runtime, err error, sampledAt time.Time) ObservationSnapshot {
 	now := sampledAt.UTC()
 	limit := freshnessLimit(c.Heartbeat)
 	if err != nil {

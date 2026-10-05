@@ -14,6 +14,7 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -144,8 +145,9 @@ func newFixtureTasks(reader *sqlite.SQLiteStore, c Config) taskapp.Service {
 // drives the same execution actor; this creates no alternate business writer.
 type fixtureHost struct{ config Config }
 
-func (h fixtureHost) ValidateStateLocation(c Config) error {
-	if c.StateRoot == "" || c.RepositoryStateKey == "" || c.RepositoryStateKey != fixtureStateKey(c.Identity()) || canonical(c.RunDir) != canonical(filepath.Join(c.StateRoot, c.RepositoryStateKey)) {
+func (h fixtureHost) ValidateStateLocation() error {
+	c := h.config
+	if canonical(c.RunDir) != canonical(filepath.Join(fixtureStateRoot(), fixtureStateKey(c.Identity()))) {
 		return errors.New("fixture state identity differs")
 	}
 	return nil
@@ -279,7 +281,7 @@ func runTestService(ctx context.Context, s *Service, mode string) error {
 	return scheduler.Run(ctx, s, scheduler.Schedule{TaskPoll: duration(s.Config.TaskPoll), PRPoll: duration(s.Config.PRPoll), Heartbeat: duration(s.Config.Heartbeat), FindStop: s.host.FindStopRequest}, mode)
 }
 
-var _ HostPort = fixtureHost{}
+var _ hostport.HostPort = fixtureHost{}
 
 func newFixtureConversationQuery(store storageports.ConversationReader, project string) query.ConversationService {
 	return query.ConversationService{Project: project, Events: store, Bodies: store, Raw: store, Capabilities: store}

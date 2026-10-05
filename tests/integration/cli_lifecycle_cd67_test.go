@@ -30,11 +30,11 @@ func TestStartServiceSerializesSameConfig(t *testing.T) {
 	config, configPath := f.c, f.path
 	serviceExe := buildProductLifecycleCLI(t)
 	t.Cleanup(func() {
-		connection := steerline.ConnectService(context.Background(), config)
+		connection := steerline.ConnectService(context.Background(), integrationHostConfig(t, config))
 		if connection.CanStop {
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
-			_, _ = steerline.StopService(ctx, config, "test-cleanup", 12*time.Second)
+			_, _ = steerline.StopService(ctx, integrationHostConfig(t, config), "test-cleanup", 12*time.Second)
 		}
 	})
 	opts := steerline.StartServiceOptions{Executable: serviceExe, WaitTimeout: 20 * time.Second, PollInterval: 30 * time.Millisecond}
@@ -60,7 +60,7 @@ func TestStartServiceSerializesSameConfig(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
-	stopped, err := steerline.StopService(ctx, config, "lifecycle-test", 12*time.Second)
+	stopped, err := steerline.StopService(ctx, integrationHostConfig(t, config), "lifecycle-test", 12*time.Second)
 	if err != nil || stopped.Status != "stopped" {
 		t.Fatalf("stop concurrent winner: %+v %v", stopped, err)
 	}
@@ -121,7 +121,7 @@ func TestStartServiceReportsPreflightFailureAndPendingHandshake(t *testing.T) {
 		if record.Status != "starting" || record.ProcessIdentity == nil || steerlineapp.NewProcessHost(time.Second).InspectProcess(record.ProcessIdentity) != "matching process still exists" {
 			t.Fatalf("pending startup lost process identity: %+v", record)
 		}
-		if got := steerline.ReadObservationSnapshot(config, nil); got.State != steerline.SnapshotNone {
+		if got := steerline.ReadObservationSnapshot(integrationHostConfig(t, config), nil); got.State != steerline.SnapshotNone {
 			t.Fatalf("preflight delay unexpectedly published a runtime: %+v", got)
 		}
 		if err := terminateCLIProcess(record.ProcessIdentity); err != nil {
@@ -242,9 +242,13 @@ func terminateCLIProcess(identity *executionbackend.ProcessIdentity) error {
 }
 
 func observeCLIStartupExit(c execution.Config, id string, budget time.Duration) (steerline.ServiceConnection, error) {
+	hostConfig, err := steerlineapp.BuildHostConfig(context.Background(), c)
+	if err != nil {
+		return steerline.ServiceConnection{}, err
+	}
 	deadline := time.Now().Add(budget)
 	for time.Now().Before(deadline) {
-		connection := steerline.ConnectService(context.Background(), c)
+		connection := steerline.ConnectService(context.Background(), hostConfig)
 		if connection.StartupID == id && connection.Process.State == steerline.ProcessAbsent {
 			return connection, nil
 		}

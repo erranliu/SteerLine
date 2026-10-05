@@ -807,7 +807,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	ctx := context.Background()
 	c, commit := nativeTaskFixture(t)
 	remoteURL := server.URL + "/org/repo.git"
-	c.PR = publication.Config{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
+	c.PR = executionmodel.PRProviderConfig{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
 	c.Host, c.Agent = "local", "fixture"
 	c.PublicationPolicy.Publisher = "worker"
 	c.globalExecution = false
@@ -905,7 +905,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutTaskDelivery(lateDelivery) }); err == nil || !strings.Contains(err.Error(), "task_discarded") {
 		t.Fatalf("late merge created a normal delivery for discarded task: %v", err)
 	}
-	verifier := publication.NewClient(c.PR, Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}, duration(c.CommandTimeout))
+	verifier := publication.NewClient(publication.Config(c.PR), Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}, duration(c.CommandTimeout))
 	statesMu.Lock()
 	states["90"] = "unknown"
 	statesMu.Unlock()

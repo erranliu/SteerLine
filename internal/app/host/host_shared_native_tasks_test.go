@@ -76,8 +76,7 @@ func nativeTaskFixture(t *testing.T) (execution.Config, string) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	c.StateRoot, c.RepositoryStateKey = fixtureStateRoot(), key
-	c.RunDir = filepath.Join(c.StateRoot, key)
+	c.RunDir = filepath.Join(fixtureStateRoot(), key)
 	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	c.Git = executionbackend.Command{Executable: os.Args[0], Args: []string{"--fake", "publication-git", "git"}}
 	return c, commit

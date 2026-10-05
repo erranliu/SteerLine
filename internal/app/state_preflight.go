@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
+	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	steerline "github.com/erranliu/SteerLine/internal/app/host"
 )
 
 func preflightWorkerFlowState(ctx context.Context, c execution.Config) error {
@@ -22,13 +22,19 @@ func preflightWorkerFlowState(ctx context.Context, c execution.Config) error {
 	} else if err != nil {
 		return err
 	}
-	if err := steerline.PreflightNativeStatePath(c); err != nil {
+	hostConfig, err := hostRuntimeConfig(ctx, c)
+	if err != nil {
 		return err
 	}
-	if c.ReadPersistedExecutionState == nil {
-		return errors.New("application persisted execution reader is required for worker-flow preflight")
+	if err := steerline.PreflightNativeStatePath(hostConfig); err != nil {
+		return err
 	}
-	state, err := c.ReadPersistedExecutionState(ctx, c)
+	reader, err := OpenNativeTaskReader(ctx, &c)
+	if err != nil {
+		return err
+	}
+	defer reader.Close()
+	state, err := reader.ReadExecutionStateSnapshot(ctx, c.Identity())
 	if err != nil {
 		return err
 	}

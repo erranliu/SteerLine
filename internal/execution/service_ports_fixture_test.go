@@ -3,7 +3,6 @@ package execution
 import (
 	"context"
 	"errors"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,16 +25,8 @@ func testConfigWithDirectory(c Config) Config {
 		c = withNeutralProfile(c, neutralSettings{Executable: os.Args[0]})
 	}
 	c.ProcessHost = testProcessHost{}
-	c.Resources = fixtureResources{}
-	c.ReadRuntime = func(_ context.Context, c Config) (*reconstructiontypes.Runtime, error) { return loadFixtureRuntime(c) }
 	if c.WorktreeRoot == "" && c.RunDir != "" {
 		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
-	}
-	if c.StateRoot == "" {
-		c.StateRoot = fixtureStateRoot()
-	}
-	if c.RepositoryStateKey == "" && c.Identity() != "" {
-		c.RepositoryStateKey = fixtureStateKey(c.Identity())
 	}
 	return c
 }
@@ -133,7 +124,7 @@ func loadFixtureConfig(path string) (Config, error) {
 	if err := c.ExecutionRequirements.Validate(); err != nil {
 		return c, err
 	}
-	if err := publication.ValidateNonSecret(c.PR, c.Git); err != nil {
+	if err := publication.ValidateNonSecret(publication.Config(c.PR), c.Git); err != nil {
 		return c, err
 	}
 	if c.Host != "" || c.Agent != "" || len(c.ExecutionProfiles) != 0 || c.DefaultExecutionProfile != "" {
@@ -159,7 +150,7 @@ func loadFixtureConfig(path string) (Config, error) {
 	if err != nil {
 		return c, err
 	}
-	c.ExecutionDirectory, c.ProcessHost, c.StateRoot = directory, testProcessHost{}, fixtureStateRoot()
+	c.ExecutionDirectory, c.ProcessHost = directory, testProcessHost{}
 	c.ExecutionProfiles, c.DefaultExecutionProfile = global.ExecutionProfiles, global.DefaultProfile
 	c.BindApplicationConfig(directory, projectPath, globalPath, loadedConfigDigest(projectBytes, globalBytes), true)
 	base := filepath.Dir(projectPath)
@@ -173,9 +164,9 @@ func loadFixtureConfig(path string) (Config, error) {
 	if err != nil {
 		return c, err
 	}
-	c.RepositoryStateKey = key
+	stateRoot := fixtureStateRoot()
 	if c.RunDir == "" {
-		c.RunDir = filepath.Join(c.StateRoot, key)
+		c.RunDir = filepath.Join(stateRoot, key)
 	} else if !filepath.IsAbs(c.RunDir) {
 		c.RunDir = filepath.Join(base, c.RunDir)
 	}

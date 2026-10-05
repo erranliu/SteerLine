@@ -15,45 +15,7 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func configureNativeStorage(c *execution.Config) {
-	if c.ReadRuntime == nil {
-		c.ReadRuntime = func(_ context.Context, config execution.Config) (*reconstruction.Runtime, error) {
-			return LoadDatabaseRuntime(config)
-		}
-	}
-	if c.ReadPersistedExecutionState == nil {
-		c.ReadPersistedExecutionState = func(ctx context.Context, config execution.Config) (storageports.ExecutionStateSnapshot, error) {
-			reader, err := OpenNativeTaskReader(ctx, &config)
-			if err != nil {
-				return storageports.ExecutionStateSnapshot{}, err
-			}
-			defer reader.Close()
-			return reader.ReadExecutionStateSnapshot(ctx, config.Identity())
-		}
-	}
-	if c.ValidateNativeStore == nil {
-		c.ValidateNativeStore = func(ctx context.Context, config execution.Config) error {
-			path := filepath.Join(config.RunDir, "steerline.db")
-			reader, err := openBoundNativeReader(ctx, config, path)
-			if err != nil {
-				return err
-			}
-			return reader.Close()
-		}
-	}
-	if c.EnsureNativeProject == nil {
-		c.EnsureNativeProject = func(ctx context.Context, config execution.Config) error {
-			store, err := OpenNativeTaskProject(ctx, &config)
-			if err != nil {
-				return err
-			}
-			return store.Close()
-		}
-	}
-}
-
 func LoadDatabaseRuntime(c execution.Config) (*reconstruction.Runtime, error) {
-	configureNativeStorage(&c)
 	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return nil, err
 	}
@@ -85,7 +47,6 @@ func OpenNativeTaskProject(ctx context.Context, c *execution.Config) (*sqlite.SQ
 	if c == nil {
 		return nil, taskError("authority_mismatch", "native project configuration is required")
 	}
-	configureNativeStorage(c)
 	if c.RequireNativeTaskAuthority() != nil {
 		return nil, taskError("authority_mismatch", "configuration must explicitly select task_authority=native")
 	}
@@ -98,7 +59,7 @@ func OpenNativeTaskProject(ctx context.Context, c *execution.Config) (*sqlite.SQ
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return nil, err
 	}
-	if err := steerline.PreflightNativeStatePath(*c); err != nil {
+	if err := PreflightNativeStatePath(*c); err != nil {
 		return nil, err
 	}
 	path := filepath.Join(c.RunDir, "steerline.db")
@@ -112,7 +73,7 @@ func OpenNativeTaskProject(ctx context.Context, c *execution.Config) (*sqlite.SQ
 		return nil, err
 	}
 	defer lock.Close()
-	if err := steerline.PreflightNativeStatePath(*c); err != nil {
+	if err := PreflightNativeStatePath(*c); err != nil {
 		return nil, err
 	}
 	if _, err := os.Stat(path); err == nil {
@@ -120,7 +81,7 @@ func OpenNativeTaskProject(ctx context.Context, c *execution.Config) (*sqlite.SQ
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	if err := steerline.EnsureNativeStateClean(c.RunDir, c.Repository); err != nil {
+	if err := steerline.EnsureNativeStateClean(c.RunDir, c.Repository, applicationCapabilityValidation{}); err != nil {
 		return nil, err
 	}
 	target, err := c.TaskRepositoryTarget(ctx)
@@ -146,7 +107,6 @@ func OpenNativeTaskReader(ctx context.Context, c *execution.Config) (*sqlite.SQL
 	if c == nil || c.RequireNativeTaskAuthority() != nil {
 		return nil, taskError("authority_mismatch", "native task reader requires task_authority=native")
 	}
-	configureNativeStorage(c)
 	if err := validateNativeStateLocation(*c); err != nil {
 		return nil, err
 	}
@@ -164,7 +124,6 @@ func OpenNativeTaskCommandStore(ctx context.Context, c *execution.Config) (*sqli
 	if c == nil || c.RequireNativeTaskAuthority() != nil {
 		return nil, taskError("authority_mismatch", "native task command requires task_authority=native")
 	}
-	configureNativeStorage(c)
 	if err := c.ValidateTaskCommandConfiguration(); err != nil {
 		return nil, err
 	}

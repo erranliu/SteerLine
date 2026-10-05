@@ -33,7 +33,7 @@ func TestWorkerBindingRollsBackWithItsCheckpoint(t *testing.T) {
 	if err := s.commitWorkerBinding(run, ref); err == nil {
 		t.Fatal("binding committed without its checkpoint")
 	}
-	if _, err := (executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords}).loadBinding(run.RunID, run.AttemptID); !os.IsNotExist(err) {
+	if _, err := s.records.loadBinding(run.RunID, run.AttemptID); !os.IsNotExist(err) {
 		t.Fatalf("failed worker receipt left a binding: %v", err)
 	}
 	snapshot, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.identity)
@@ -63,7 +63,7 @@ func TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding(t *testing.T) {
 	s.refreshRun(run)
 	ref := executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Target: TargetFor(s.Config), Agent: AgentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, External: *identity, Generation: "generation"}
 	require(t, s.commitWorkerBinding(run, ref))
-	records := executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords}
+	records := s.records
 	process := &recordedStopProcess{identity: *identity, beforeKill: func() {
 		op, err := records.loadOperation(run.RunID, run.AttemptID, "stop-"+run.AttemptID)
 		require(t, err)

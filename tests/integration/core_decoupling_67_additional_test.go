@@ -1,11 +1,11 @@
 package integration
 
 import (
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"path/filepath"
 	"strings"
@@ -178,7 +178,7 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 	provider.mu.Lock()
 	provider.merged, provider.mergedAt = true, time.Now().UTC()
 	provider.mu.Unlock()
-	mergedInfo, err := (&publication.Client{Config: config2.PR, Timeout: 10 * time.Second}).Query(ctx, ledger.publicationURL)
+	mergedInfo, err := (&publication.Client{Config: publication.Config(config2.PR), Timeout: 10 * time.Second}).Query(ctx, ledger.publicationURL)
 	require(t, err)
 	if !mergedInfo.Merged || mergedInfo.State != "merged" || mergedInfo.MergeCommit == nil || *mergedInfo.MergeCommit != fixture.commit {
 		t.Fatal("isolated provider did not expose its original merged receipt")

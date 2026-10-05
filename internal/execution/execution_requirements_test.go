@@ -60,7 +60,7 @@ func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
 
 func TestExecutionRequirementsDoNotUpgradeProbeToVerified(t *testing.T) {
 	c := workerContextConfigFixture()
-	c.Resources = fixtureResources{}
+	resources := fixtureResources{}
 	c.Repository = t.TempDir()
 	c.RunDir = t.TempDir()
 	c.ExecutionRequirements.Capabilities = []string{"workspace_inspection"}
@@ -79,7 +79,7 @@ func TestExecutionRequirementsDoNotUpgradeProbeToVerified(t *testing.T) {
 			report.Capabilities[i].Evidence = evidence + "#sha256=" + fmt.Sprintf("%x", sha256.Sum256([]byte("fixture evidence; not native certification")))
 		}
 	}
-	require(t, (executionRecords{root: c.RunDir, resources: c.Resources}).saveCapabilityReport(report))
+	require(t, (executionRecords{root: c.RunDir, resources: resources}).saveCapabilityReport(report))
 	_, err = evaluateExecutionRequirements(context.Background(), c)
 	require(t, err)
 	require(t, os.WriteFile(evidence, []byte("changed evidence"), 0600))
