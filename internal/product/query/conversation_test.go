@@ -13,30 +13,32 @@ import (
 	"unicode/utf8"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-type conversationEvents func(context.Context, string, contracts.ConversationFilter, int64) (*contracts.ConversationEventRecord, error)
+type conversationEvents func(context.Context, string, api.ConversationFilter, int64) (*storageports.ConversationEventRecord, error)
 
-func (f conversationEvents) NextConversationEvent(ctx context.Context, project string, filter contracts.ConversationFilter, after int64) (*contracts.ConversationEventRecord, error) {
+func (f conversationEvents) NextConversationEvent(ctx context.Context, project string, filter api.ConversationFilter, after int64) (*storageports.ConversationEventRecord, error) {
 	return f(ctx, project, filter, after)
 }
 
-type conversationBodies func(context.Context, string, contracts.ConversationBodyRef, int) (contracts.ConversationBodyRecord, error)
+type conversationBodies func(context.Context, string, api.ConversationBodyRef, int) (storageports.ConversationBodyRecord, error)
 
-func (f conversationBodies) ConversationBody(ctx context.Context, project string, ref contracts.ConversationBodyRef, limit int) (contracts.ConversationBodyRecord, error) {
+func (f conversationBodies) ConversationBody(ctx context.Context, project string, ref api.ConversationBodyRef, limit int) (storageports.ConversationBodyRecord, error) {
 	return f(ctx, project, ref, limit)
 }
 
-type conversationRaw func(context.Context, string, contracts.ConversationRawRef, int) (contracts.ConversationRawRecord, error)
+type conversationRaw func(context.Context, string, api.ConversationRawRef, int) (storageports.ConversationRawRecord, error)
 
-func (f conversationRaw) ConversationRaw(ctx context.Context, project string, ref contracts.ConversationRawRef, limit int) (contracts.ConversationRawRecord, error) {
+func (f conversationRaw) ConversationRaw(ctx context.Context, project string, ref api.ConversationRawRef, limit int) (storageports.ConversationRawRecord, error) {
 	return f(ctx, project, ref, limit)
 }
 
-type conversationCapabilities func(context.Context, executionbackend.BackendKind, executionbackend.ExecutionProtocol, string, int) ([]contracts.ConversationCapabilityReport, error)
+type conversationCapabilities func(context.Context, executionbackend.BackendKind, executionbackend.ExecutionProtocol, string, int) ([]api.ConversationCapabilityReport, error)
 
-func (f conversationCapabilities) ConversationCapabilityReports(ctx context.Context, backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, target string, limit int) ([]contracts.ConversationCapabilityReport, error) {
+func (f conversationCapabilities) ConversationCapabilityReports(ctx context.Context, backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, target string, limit int) ([]api.ConversationCapabilityReport, error) {
 	return f(ctx, backend, protocol, target, limit)
 }
 
@@ -44,9 +46,9 @@ func TestConversationQueriesUseIndependentEventPortAndBoundCursor(t *testing.T) 
 	ctx := context.Background()
 	filter := contracts.ConversationFilter{ExecutionID: "execution", AttemptID: "attempt", Source: "codex-app-server"}
 	reads := 0
-	service := ConversationService{Project: "project", Events: conversationEvents(func(_ context.Context, project string, got contracts.ConversationFilter, after int64) (*contracts.ConversationEventRecord, error) {
+	service := ConversationService{Project: "project", Events: conversationEvents(func(_ context.Context, project string, got api.ConversationFilter, after int64) (*storageports.ConversationEventRecord, error) {
 		reads++
-		if project != "project" || got != filter {
+		if project != "project" || got != api.ConversationFilter(filter) {
 			t.Fatalf("lost query scope: %s %+v", project, got)
 		}
 		if after >= 2 {
@@ -55,7 +57,7 @@ func TestConversationQueriesUseIndependentEventPortAndBoundCursor(t *testing.T) 
 		payload, _ := json.Marshal(contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: project, ExecutionID: filter.ExecutionID, AttemptID: filter.AttemptID,
 			Source: filter.Source, SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment", SourceEventID: fmt.Sprintf("event:%d", after+1), SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown,
 			ItemQuality: contracts.IdentityUnknown, SourceEventQuality: contracts.IdentityDerived, Type: contracts.ConversationObservation, Phase: contracts.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()})
-		return &contracts.ConversationEventRecord{EventID: after + 1, PayloadBytes: len(payload), Payload: payload}, nil
+		return &storageports.ConversationEventRecord{EventID: after + 1, PayloadBytes: len(payload), Payload: payload}, nil
 	})}
 	first, err := service.ReadConversation(ctx, filter, "", 1)
 	if err != nil || len(first.Events) != 1 || first.Events[0].EventID != 1 || !first.HasMore || first.NextCursor == "" {
@@ -86,11 +88,11 @@ func TestConversationPageBudgetDefersOverflowPayloadDecoding(t *testing.T) {
 	if len(payload) >= MaxEventPageBytes {
 		t.Fatal("fixture must leave room for a budget boundary")
 	}
-	service := ConversationService{Project: "project", Events: conversationEvents(func(_ context.Context, _ string, _ contracts.ConversationFilter, after int64) (*contracts.ConversationEventRecord, error) {
+	service := ConversationService{Project: "project", Events: conversationEvents(func(_ context.Context, _ string, _ api.ConversationFilter, after int64) (*storageports.ConversationEventRecord, error) {
 		if after == 0 {
-			return &contracts.ConversationEventRecord{EventID: 1, PayloadBytes: len(payload), Payload: payload}, nil
+			return &storageports.ConversationEventRecord{EventID: 1, PayloadBytes: len(payload), Payload: payload}, nil
 		}
-		return &contracts.ConversationEventRecord{EventID: 2, PayloadBytes: MaxEventPageBytes, Payload: []byte("invalid JSON")}, nil
+		return &storageports.ConversationEventRecord{EventID: 2, PayloadBytes: MaxEventPageBytes, Payload: []byte("invalid JSON")}, nil
 	})}
 	page, err := service.ReadConversation(context.Background(), contracts.ConversationFilter{}, "", 10)
 	if err != nil || len(page.Events) != 1 || !page.HasMore || page.PayloadBytes != len(payload) {
@@ -108,8 +110,8 @@ func TestConversationReaderRejectsPreviousEventFormat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := ConversationService{Project: "project", Events: conversationEvents(func(context.Context, string, contracts.ConversationFilter, int64) (*contracts.ConversationEventRecord, error) {
-		return &contracts.ConversationEventRecord{EventID: 1, PayloadBytes: len(old), Payload: old}, nil
+	service := ConversationService{Project: "project", Events: conversationEvents(func(context.Context, string, api.ConversationFilter, int64) (*storageports.ConversationEventRecord, error) {
+		return &storageports.ConversationEventRecord{EventID: 1, PayloadBytes: len(old), Payload: old}, nil
 	})}
 	if _, err = service.ReadConversation(context.Background(), contracts.ConversationFilter{}, "", 1); err == nil || !strings.Contains(err.Error(), "unsupported schema") && !strings.Contains(err.Error(), "missing versioned identity") {
 		t.Fatalf("previous conversation event format was read without migration: %v", err)
@@ -124,8 +126,8 @@ func TestConversationReaderRejectsMissingSourceRole(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	service := ConversationService{Project: "project", Events: conversationEvents(func(context.Context, string, contracts.ConversationFilter, int64) (*contracts.ConversationEventRecord, error) {
-		return &contracts.ConversationEventRecord{EventID: 1, PayloadBytes: len(payload), Payload: payload}, nil
+	service := ConversationService{Project: "project", Events: conversationEvents(func(context.Context, string, api.ConversationFilter, int64) (*storageports.ConversationEventRecord, error) {
+		return &storageports.ConversationEventRecord{EventID: 1, PayloadBytes: len(payload), Payload: payload}, nil
 	})}
 	if _, err = service.ReadConversation(context.Background(), contracts.ConversationFilter{}, "", 1); err == nil || !strings.Contains(err.Error(), "source role") {
 		t.Fatalf("event without an explicit source role was accepted: %v", err)
@@ -138,9 +140,10 @@ func TestConversationBodyAndRawQueriesUseSeparatePorts(t *testing.T) {
 	sum := sha256.Sum256(text)
 	digest := hex.EncodeToString(sum[:])
 	ref := contracts.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "item", Revision: 2, SHA256: digest, Bytes: int64(len(text)), Completeness: contracts.BodyComplete}
-	record := contracts.ConversationBodyRecord{Body: text, TotalBytes: ref.Bytes, SHA256: digest, Completeness: ref.Completeness}
-	service := ConversationService{Project: "project", Bodies: conversationBodies(func(_ context.Context, project string, got contracts.ConversationBodyRef, limit int) (contracts.ConversationBodyRecord, error) {
-		if project != "project" || got != ref || limit != contracts.MaxConversationBodyBytes+1 {
+	record := storageports.ConversationBodyRecord{Body: text, TotalBytes: ref.Bytes, SHA256: digest, Completeness: string(ref.Completeness)}
+	service := ConversationService{Project: "project", Bodies: conversationBodies(func(_ context.Context, project string, got api.ConversationBodyRef, limit int) (storageports.ConversationBodyRecord, error) {
+		apiRef := api.ConversationBodyRef{ExecutionID: ref.ExecutionID, AttemptID: ref.AttemptID, ItemKey: ref.ItemKey, Revision: ref.Revision, SHA256: ref.SHA256, Bytes: ref.Bytes, Completeness: api.BodyCompleteness(ref.Completeness)}
+		if project != "project" || got != apiRef || limit != contracts.MaxConversationBodyBytes+1 {
 			t.Fatalf("lost bounded revision input: %s %+v %d", project, got, limit)
 		}
 		return record, nil
@@ -157,11 +160,12 @@ func TestConversationBodyAndRawQueriesUseSeparatePorts(t *testing.T) {
 		t.Fatal("corrupt revision was accepted")
 	}
 	rawRef := contracts.ConversationRawRef{ExecutionID: "execution", AttemptID: "attempt", ID: "raw", SHA256: digest, Bytes: int64(len(text))}
-	service = ConversationService{Project: "project", Raw: conversationRaw(func(_ context.Context, project string, got contracts.ConversationRawRef, limit int) (contracts.ConversationRawRecord, error) {
-		if project != "project" || got != rawRef || limit != contracts.MaxConversationBodyBytes+1 {
+	service = ConversationService{Project: "project", Raw: conversationRaw(func(_ context.Context, project string, got api.ConversationRawRef, limit int) (storageports.ConversationRawRecord, error) {
+		apiRawRef := api.ConversationRawRef{ExecutionID: rawRef.ExecutionID, AttemptID: rawRef.AttemptID, ID: rawRef.ID, SHA256: rawRef.SHA256, Bytes: rawRef.Bytes}
+		if project != "project" || got != apiRawRef || limit != contracts.MaxConversationBodyBytes+1 {
 			t.Fatal("lost raw identity or bound")
 		}
-		return contracts.ConversationRawRecord{Data: text, TotalBytes: rawRef.Bytes, SHA256: digest}, nil
+		return storageports.ConversationRawRecord{Data: text, TotalBytes: rawRef.Bytes, SHA256: digest}, nil
 	})}
 	raw, err := service.ReadRaw(ctx, rawRef, 3, 3)
 	if err != nil || string(raw.Data) != "好" || raw.NextOffset != 6 {
@@ -170,11 +174,11 @@ func TestConversationBodyAndRawQueriesUseSeparatePorts(t *testing.T) {
 }
 
 func TestConversationCapabilitiesNeedNoUnrelatedReader(t *testing.T) {
-	service := ConversationService{Capabilities: conversationCapabilities(func(_ context.Context, backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, target string, limit int) ([]contracts.ConversationCapabilityReport, error) {
+	service := ConversationService{Capabilities: conversationCapabilities(func(_ context.Context, backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, target string, limit int) ([]api.ConversationCapabilityReport, error) {
 		if backend != executionbackend.BackendLocal || protocol != executionbackend.ProtocolLocalCodexAppServer || target != "local" || limit != 1000 {
 			t.Fatal("capability filter or limit changed")
 		}
-		return []contracts.ConversationCapabilityReport{{SourceIdentity: "source"}}, nil
+		return []api.ConversationCapabilityReport{{SourceIdentity: "source"}}, nil
 	})}
 	reports, err := service.ReadCapabilities(context.Background(), executionbackend.BackendLocal, executionbackend.ProtocolLocalCodexAppServer, "local", 2000)
 	if err != nil || len(reports) != 1 || reports[0].SourceIdentity != "source" {

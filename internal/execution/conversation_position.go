@@ -9,7 +9,6 @@ import (
 	"os"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -20,7 +19,7 @@ func journalCursorOf(p contracts.ConversationJournalPosition, path string) Journ
 	return JournalCursor{Path: path, FileID: p.FileID, Generation: p.Generation, Offset: p.ByteOffset, ScanOffset: p.ByteOffset, HeaderLength: p.HeaderLength, HeaderHash: p.HeaderHash, AnchorOffset: p.AnchorOffset, AnchorLength: p.AnchorLength, AnchorHash: p.AnchorHash, Initialized: true}
 }
 
-func currentConversationJournalPosition(ctx context.Context, store persistence.Conversations, project, execution, attempt, source, segment string, generation uint64, path, fileID string, offset int64, seq uint64) (contracts.ConversationJournalPosition, error) {
+func currentConversationJournalPosition(ctx context.Context, store ConversationStore, project, execution, attempt, source, segment string, generation uint64, path, fileID string, offset int64, seq uint64) (contracts.ConversationJournalPosition, error) {
 	if generation == 0 {
 		return contracts.ConversationJournalPosition{}, errors.New("conversation source generation is invalid")
 	}

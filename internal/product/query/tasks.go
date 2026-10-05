@@ -27,9 +27,9 @@ type TaskCursor struct {
 
 func nativeErr(code, message string) error { return &taskmodel.Error{Code: code, Message: message} }
 
-func (q Service) ListNativeTasks(ctx context.Context, cursor string, limit int) (contracts.NativeTaskPage, error) {
+func (q Service) ListNativeTasks(ctx context.Context, cursor string, limit int) (storageports.NativeTaskPage, error) {
 	if q.Tasks == nil || q.Project == "" {
-		return contracts.NativeTaskPage{}, errors.New("query service store and project identity are required")
+		return storageports.NativeTaskPage{}, errors.New("query service store and project identity are required")
 	}
 	if limit < 1 {
 		limit = 100
@@ -44,11 +44,11 @@ func (q Service) ListNativeTasks(ctx context.Context, cursor string, limit int) 
 	if cursor != "" {
 		raw, err := base64.RawURLEncoding.DecodeString(cursor)
 		if err != nil {
-			return contracts.NativeTaskPage{}, nativeErr("cursor_invalidated", "cursor encoding is invalid")
+			return storageports.NativeTaskPage{}, nativeErr("cursor_invalidated", "cursor encoding is invalid")
 		}
 		var c TaskCursor
 		if contracts.DecodeJSON(raw, &c) != nil || c.Version != 1 || c.ProjectID != q.Project || c.Offset < 0 || c.DatabaseRevision == 0 || len(c.DatabaseID) != 32 {
-			return contracts.NativeTaskPage{}, nativeErr("cursor_invalidated", "cursor identity or sampling revision is invalid")
+			return storageports.NativeTaskPage{}, nativeErr("cursor_invalidated", "cursor identity or sampling revision is invalid")
 		}
 		offset, expectedDB = c.Offset, c.DatabaseRevision
 		expectedDatabaseID = c.DatabaseID
@@ -56,19 +56,19 @@ func (q Service) ListNativeTasks(ctx context.Context, cursor string, limit int) 
 	}
 	page, err := q.Tasks.NativeTaskPage(ctx, q.Project, "", expectedDatabaseID, expectedDB, offset, limit)
 	if err != nil {
-		return contracts.NativeTaskPage{}, err
+		return storageports.NativeTaskPage{}, err
 	}
 	if page.ProjectID != q.Project {
-		return contracts.NativeTaskPage{}, nativeErr("authority_mismatch", "task page belongs to another project")
+		return storageports.NativeTaskPage{}, nativeErr("authority_mismatch", "task page belongs to another project")
 	}
 	if expectedDB != 0 && (page.DatabaseID != expectedDatabaseID || page.DatabaseRevision != expectedDB || page.AuthorityVersion != expectedAuthority || page.GraphRevision != expectedGraph) {
-		return contracts.NativeTaskPage{}, nativeErr("cursor_invalidated", "database or project authority changed between pages")
+		return storageports.NativeTaskPage{}, nativeErr("cursor_invalidated", "database or project authority changed between pages")
 	}
 	SetTaskPageCursor(&page, offset)
 	return page, nil
 }
 
-func SetTaskPageCursor(page *contracts.NativeTaskPage, offset int) {
+func SetTaskPageCursor(page *storageports.NativeTaskPage, offset int) {
 	if page.HasMore {
 		c := TaskCursor{Version: 1, ProjectID: page.ProjectID, AuthorityVersion: page.AuthorityVersion, GraphRevision: page.GraphRevision, DatabaseID: page.DatabaseID, DatabaseRevision: page.DatabaseRevision, Offset: offset + len(page.Tasks)}
 		b, _ := json.Marshal(c)
@@ -76,25 +76,25 @@ func SetTaskPageCursor(page *contracts.NativeTaskPage, offset int) {
 	}
 }
 
-func (q Service) ShowNativeTask(ctx context.Context, id string) (contracts.NativeTaskPage, error) {
+func (q Service) ShowNativeTask(ctx context.Context, id string) (storageports.NativeTaskPage, error) {
 	if q.Tasks == nil || q.Project == "" {
-		return contracts.NativeTaskPage{}, errors.New("query service store and project identity are required")
+		return storageports.NativeTaskPage{}, errors.New("query service store and project identity are required")
 	}
 	if err := taskmodel.ValidateID(id); err != nil {
-		return contracts.NativeTaskPage{}, err
+		return storageports.NativeTaskPage{}, err
 	}
 	page, err := q.Tasks.NativeTaskPage(ctx, q.Project, id, "", 0, 0, 1)
 	if err != nil {
-		return contracts.NativeTaskPage{}, err
+		return storageports.NativeTaskPage{}, err
 	}
 	if page.ProjectID != q.Project {
-		return contracts.NativeTaskPage{}, nativeErr("authority_mismatch", "task detail belongs to another project")
+		return storageports.NativeTaskPage{}, nativeErr("authority_mismatch", "task detail belongs to another project")
 	}
 	if len(page.Tasks) == 0 {
-		return contracts.NativeTaskPage{}, nativeErr("task_not_found", "native task was not found")
+		return storageports.NativeTaskPage{}, nativeErr("task_not_found", "native task was not found")
 	}
 	if len(page.Tasks) != 1 || page.Tasks[0].TaskID != id {
-		return contracts.NativeTaskPage{}, nativeErr("contract_mismatch", "task detail differs from the requested task")
+		return storageports.NativeTaskPage{}, nativeErr("contract_mismatch", "task detail differs from the requested task")
 	}
 	return page, nil
 }
@@ -138,13 +138,13 @@ func (q Service) QueryTaskGraph(ctx context.Context, filter api.GraphFilter) (ap
 	return TaskGraphPage(page), nil
 }
 
-func (q Service) ReadyNativeTaskSnapshot(ctx context.Context) (contracts.NativeReadyTaskSnapshot, error) {
+func (q Service) ReadyNativeTaskSnapshot(ctx context.Context) (storageports.NativeReadyTaskSnapshot, error) {
 	if q.Tasks == nil || q.Project == "" {
-		return contracts.NativeReadyTaskSnapshot{}, errors.New("query service store and project identity are required")
+		return storageports.NativeReadyTaskSnapshot{}, errors.New("query service store and project identity are required")
 	}
 	graph, err := q.readTaskGraph(ctx)
 	if err != nil {
-		return contracts.NativeReadyTaskSnapshot{}, err
+		return storageports.NativeReadyTaskSnapshot{}, err
 	}
 	return ReadySnapshot(graph), nil
 }
@@ -160,8 +160,8 @@ func (q Service) readTaskGraph(ctx context.Context) (storageports.TaskGraphSnaps
 	return snapshot, nil
 }
 
-func ReadySnapshot(graph storageports.TaskGraphSnapshot) contracts.NativeReadyTaskSnapshot {
-	return contracts.NativeReadyTaskSnapshot{ProjectID: graph.Authority.ProjectIdentity, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, DatabaseID: graph.DatabaseID, DatabaseRevision: graph.DatabaseRevision, SampledAt: graph.SampledAt, Tasks: taskmodel.ReadyTasks(graph.TaskGraph())}
+func ReadySnapshot(graph storageports.TaskGraphSnapshot) storageports.NativeReadyTaskSnapshot {
+	return storageports.NativeReadyTaskSnapshot{ProjectID: graph.Authority.ProjectIdentity, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, DatabaseID: graph.DatabaseID, DatabaseRevision: graph.DatabaseRevision, SampledAt: graph.SampledAt, Tasks: taskmodel.ReadyTasks(graph.TaskGraph())}
 }
 
 // ReadyNativeTasks preserves the candidate API used by dispatch and control.

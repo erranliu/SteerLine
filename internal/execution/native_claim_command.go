@@ -11,7 +11,7 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -190,10 +190,10 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err = c.Work.VerifyContractFiles(ctx, contract); err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
 	}
-	var candidateSnapshot contracts.DomainSnapshot
+	var candidateSnapshot reconstruction.Snapshot
 	var commonBase string
 	if options.startCandidate {
-		candidateSnapshot, err = sqlite.Query(ctx, c.Project)
+		candidateSnapshot, err = readCommandSnapshot(ctx, sqlite, c.Project)
 		if err != nil {
 			return executionmodel.TaskClaimReceipt{}, err
 		}

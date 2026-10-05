@@ -7,14 +7,13 @@ import (
 	"strings"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	ports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 // ProjectActivity consumes caller-collected canonical records. The reader must
 // collect binding facts and events in one read transaction; native logs cannot
 // fill a canonical gap and no file path is accepted here.
-func ProjectActivity(project, run, execution, attempt string, cursor api.ActivityCursor, snapshot contracts.DomainSnapshot, events []ports.DomainEvent) (api.LogBatch, error) {
+func ProjectActivity(project, run, execution, attempt string, cursor api.ActivityCursor, snapshot ports.ExecutionSnapshot, events []ports.DomainEvent) (api.LogBatch, error) {
 	if run == "" || execution == "" || attempt == "" {
 		return api.LogBatch{}, errors.New("activity query identity is missing")
 	}

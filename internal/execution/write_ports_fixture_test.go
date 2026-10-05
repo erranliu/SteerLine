@@ -7,10 +7,8 @@ import (
 	"testing"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -39,7 +37,7 @@ type fixtureTx interface {
 	PutTaskDelivery(v executionmodel.TaskDeliveryRecord) error
 	PutTaskDependency(v taskmodel.TaskDependencyRecord) error
 	PutWorkflowRun(v executionmodel.WorkflowRunRecord) error
-	Query(ctx context.Context, project string) (contracts.DomainSnapshot, error)
+	Query(ctx context.Context, project string) (storageports.ExecutionSnapshot, error)
 	Task(ctx context.Context, project, id string) (taskmodel.TaskRecord, error)
 	TaskContract(ctx context.Context, project string, task taskmodel.TaskRecord) (taskmodel.TaskContract, error)
 	TaskGraphSnapshot(ctx context.Context, project string) (storageports.TaskGraphSnapshot, error)
@@ -56,17 +54,17 @@ type fixtureTransaction struct {
 }
 
 type sqliteFixture struct {
-	persistence.Connection
+	*sqlite.SQLiteStore
 	db *sql.DB
 }
 
-func fixtureStore(conn persistence.Connection, path string) *sqliteFixture {
+func fixtureStore(conn *sqlite.SQLiteStore, path string) *sqliteFixture {
 	db, err := sql.Open("sqlite", path+"?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)")
 	if err != nil {
 		panic(err)
 	}
 	db.SetMaxIdleConns(0)
-	return &sqliteFixture{Connection: conn, db: db}
+	return &sqliteFixture{SQLiteStore: conn, db: db}
 }
 
 func openSQLiteFixture(path string) (*sqliteFixture, error) {
@@ -85,7 +83,7 @@ func openSQLiteReaderFixture(path string) (*sqliteFixture, error) {
 	return fixtureStore(conn, path), nil
 }
 
-func (s *sqliteFixture) Close() error { return errorsJoin(s.db.Close(), s.Connection.Close()) }
+func (s *sqliteFixture) Close() error { return errorsJoin(s.db.Close(), s.SQLiteStore.Close()) }
 
 func errorsJoin(a, b error) error {
 	if a != nil {
@@ -95,13 +93,17 @@ func errorsJoin(a, b error) error {
 }
 
 func (s *sqliteFixture) transactRecords(ctx context.Context, fn func(*fixtureTransaction) error) error {
-	return s.TransactTaskBatch(ctx, func(tx persistence.BatchTx) error {
+	return s.TransactTaskBatch(ctx, func(tx storageports.BatchTx) error {
 		return fn(&fixtureTransaction{fixtureTx: tx.(fixtureTx)})
 	})
 }
 
 func testSQLite(s *Service) *sqliteFixture {
-	return fixtureStore(s.domainStore.(persistence.Connection), filepath.Join(s.Config.RunDir, "steerline.db"))
+	store, ok := s.commandStore.(*sqlite.SQLiteStore)
+	if !ok {
+		panic("test service does not use the SQLite command store")
+	}
+	return fixtureStore(store, filepath.Join(s.Config.RunDir, "steerline.db"))
 }
 
 func openDomainTestStore(t *testing.T) *sqliteFixture {
@@ -112,6 +114,6 @@ func openDomainTestStore(t *testing.T) *sqliteFixture {
 	return s
 }
 
-func transactFixture(s persistence.Connection, ctx context.Context, fn func(*fixtureTransaction) error) error {
-	return s.TransactTaskBatch(ctx, func(tx persistence.BatchTx) error { return fn(&fixtureTransaction{fixtureTx: tx.(fixtureTx)}) })
+func transactFixture(s *sqlite.SQLiteStore, ctx context.Context, fn func(*fixtureTransaction) error) error {
+	return s.TransactTaskBatch(ctx, func(tx storageports.BatchTx) error { return fn(&fixtureTransaction{fixtureTx: tx.(fixtureTx)}) })
 }

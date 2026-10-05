@@ -92,12 +92,11 @@ func preflightNative(ctx context.Context, c *execution.Config) error {
 		return err
 	}
 	if _, err = os.Stat(filepath.Join(c.RunDir, "steerline.db")); err == nil {
-		reader, openErr := openBoundNativeStore(ctx, *c, filepath.Join(c.RunDir, "steerline.db"))
-		if openErr != nil {
-			return openErr
+		if c.ValidateNativeStore == nil {
+			return errors.New("application native store validator is required")
 		}
-		if closeErr := reader.Close(); closeErr != nil {
-			return closeErr
+		if err = c.ValidateNativeStore(ctx, *c); err != nil {
+			return err
 		}
 	} else if !os.IsNotExist(err) {
 		return err

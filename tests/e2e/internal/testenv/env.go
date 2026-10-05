@@ -18,7 +18,9 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testprocess"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
@@ -63,10 +65,10 @@ type Task struct {
 }
 
 type Snapshot struct {
-	Page    contracts.NativeTaskPage `json:"page"`
-	Domain  contracts.DomainSnapshot `json:"domain"`
-	Helper  controlled.State         `json:"helper"`
-	Runtime *contracts.Runtime       `json:"runtime,omitempty"`
+	Page    storageports.NativeTaskPage `json:"page"`
+	Domain  reconstruction.Snapshot     `json:"domain"`
+	Helper  controlled.State            `json:"helper"`
+	Runtime *contracts.Runtime          `json:"runtime,omitempty"`
 }
 
 func NewScenario(t *testing.T, id string) *Scenario {
@@ -334,15 +336,11 @@ func (p *Project) StartService() {
 			s.t.Fatal("service exited; see log")
 		default:
 		}
-		page, err := p.Driver.Tasks(s.Context)
+		runtime, err := driver.ReadRuntime(s.Context, p.Config)
 		if err != nil {
 			return false, err
 		}
-		reader, err := openView(s.Context, p.Database, page.ProjectID)
-		if err != nil {
-			return false, err
-		}
-		return reader.Runtime != nil && reader.Runtime.Service.Ready, nil
+		return runtime != nil && runtime.Service.Ready, nil
 	})
 }
 
@@ -380,15 +378,24 @@ func (p *Project) SnapshotContext(ctx context.Context) (Snapshot, error) {
 	if err != nil {
 		return snap, err
 	}
-	if view.TaskError != nil || view.DomainError != nil {
-		return snap, errors.Join(view.TaskError, view.DomainError)
+	if view.TaskError != nil {
+		return snap, view.TaskError
 	}
-	if view.Tasks == nil || view.Domain == nil {
-		return snap, errors.New("public project snapshot lacks tasks or domain")
+	if view.Tasks == nil {
+		return snap, errors.New("public project snapshot lacks tasks")
 	}
-	// The product reader samples tasks and execution facts in one read transaction.
-	snap.Page, snap.Domain = *view.Tasks, *view.Domain
-	snap.Runtime = view.Runtime
+	snap.Page = *view.Tasks
+	snap.Domain, err = driver.ReadWorkflow(ctx, p.Database, page.ProjectID)
+	if err != nil {
+		return snap, err
+	}
+	snap.Runtime, err = driver.ReadRuntime(ctx, p.Config)
+	if errors.Is(err, storageports.ErrNotFound) {
+		err, snap.Runtime = nil, nil
+	}
+	if err != nil {
+		return snap, err
+	}
 	snap.Helper, err = controlled.Read(p.Provider)
 	if err == nil && p.RealPR && !strings.HasPrefix(p.Scenario.ID, "candidates.") {
 		snap.Helper.PR, err = p.githubPR(snap)

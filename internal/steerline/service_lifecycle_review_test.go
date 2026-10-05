@@ -16,7 +16,6 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -62,7 +61,7 @@ func TestLifecycleAuditRejectedStartupPreservesOwnerFiles(t *testing.T) {
 
 func TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEffects(t *testing.T) {
 	runDir := filepath.Join(t.TempDir(), "state")
-	c := execution.Config{Persistence: sqlite.Factory{}, Repository: filepath.Join(t.TempDir(), "not-a-repository"), RunDir: runDir}
+	c := execution.Config{Repository: filepath.Join(t.TempDir(), "not-a-repository"), RunDir: runDir}
 	assertAuthorityError := func(name string, err error) {
 		t.Helper()
 		if err == nil || !strings.Contains(err.Error(), "task_authority=native") {

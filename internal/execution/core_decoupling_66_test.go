@@ -8,8 +8,9 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
@@ -40,7 +41,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 
 func TestCD66CandidateResourceIdentityAndCommitRollback(t *testing.T) {
 	t.Run("missing_workspace_root_has_no_core_default", func(t *testing.T) {
-		c := Config{Persistence: sqlite.Factory{}, Repository: "must-not-be-read", identity: "project", RunDir: t.TempDir()}
+		c := Config{Repository: "must-not-be-read", identity: "project", RunDir: t.TempDir()}
 		if err := c.PrepareWorktreeRoot(); err == nil || !strings.Contains(err.Error(), "explicit worktree_root") {
 			t.Fatalf("missing app path acquired a core default: %v", err)
 		}
@@ -68,7 +69,7 @@ func TestCD66CandidateResourceIdentityAndCommitRollback(t *testing.T) {
 	})
 	t.Run("invalid_binding_restores_private_candidates", func(t *testing.T) {
 		config := workerContextConfigFixture()
-		service := Service{Config: config, committed: contracts.DomainSnapshot{Tasks: []taskmodel.TaskRecord{{TaskID: "task", Status: "open"}}}, domain: contracts.DomainSnapshot{Tasks: []taskmodel.TaskRecord{{TaskID: "task", Status: "closed"}}}, pendingOperations: map[string]string{"pending": "run"}}
+		service := Service{Config: config, committed: reconstruction.Snapshot{Tasks: []taskmodel.TaskRecord{{TaskID: "task", Status: "open"}}}, domain: reconstruction.Snapshot{Tasks: []taskmodel.TaskRecord{{TaskID: "task", Status: "closed"}}}, pendingOperations: map[string]string{"pending": "run"}}
 		ref := executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Agent: executionbackend.AgentSpec{Name: "fixture"}, Target: TargetFor(config), RunID: newID(), AttemptID: newID(), WorkspacePath: "workspace", WorkspaceBranch: "fixture/task", BaseCommit: strings.Repeat("a", 40), External: executionbackend.ProcessIdentity{Kind: "os", Created: "original", Executable: "never-run"}}
 		if err := service.commitWorkerAttached(&contracts.Run{RunID: "run"}, workerCommitAttachment{Binding: &ref}, "pending"); err == nil {
 			t.Fatal("incomplete resource identity was committed")

@@ -17,11 +17,10 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/execution/publication"
+	"github.com/erranliu/SteerLine/internal/execution/workspace"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/execution/publication"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
-	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
 type ProjectInfo struct {
@@ -68,7 +67,7 @@ func LoadConfigWithDirectory(path string, directory *execution.ExecutionDirector
 }
 
 func loadConfig(path string, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost, requireSupport bool) (execution.Config, error) {
-	config := execution.Config{Persistence: sqlite.Factory{}, Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s",
+	config := execution.Config{Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s",
 		Git: executionbackend.Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
 	projectPath, err := filepath.Abs(path)
 	if err != nil {
@@ -133,8 +132,9 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 	config.ProcessHost = processHost
 	config.Resources = steerline.ExecutionResources{}
 	config.ReadRuntime = func(_ context.Context, c execution.Config) (*contracts.Runtime, error) {
-		return steerline.LoadDatabaseRuntime(c)
+		return LoadDatabaseRuntime(c)
 	}
+	configureNativeStorage(&config)
 	config.ExecutionDirectory = directory
 	config.StateRoot = StateRoot()
 	config.ExecutionProfiles = global.ExecutionProfiles

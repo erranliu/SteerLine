@@ -20,7 +20,7 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 		currentQuestions := cloneExecutionQuestions(oldQuestions)
 		currentQuestions[0].TurnID, currentQuestions[0].Question = "current-turn", "New question"
 		request := DecisionRequestFromEventFact(executionbackend.EventFact{QuestionRoute: &old, Questions: oldQuestions})
-		s := &Service{domain: contracts.DomainSnapshot{Decisions: []executionmodel.DecisionRecord{{ExecutionID: "execution", QuestionID: old.QuestionID, Request: mustJSON(request)}}}}
+		s := &Service{domain: reconstruction.Snapshot{Decisions: []executionmodel.DecisionRecord{{ExecutionID: "execution", QuestionID: old.QuestionID, Request: mustJSON(request)}}}}
 		seen, err := s.routedQuestionSeen(&contracts.Run{}, &executionmodel.ExecutionRecord{ExecutionID: "execution"}, &current, currentQuestions)
 		if err != nil || seen {
 			t.Fatalf("a call ID from an earlier turn conflicts with a new bound question: seen=%t err=%v", seen, err)

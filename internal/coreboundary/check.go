@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/ast"
 	"go/parser"
 	"go/token"
 	"io/fs"
@@ -27,6 +28,7 @@ var platformText = regexp.MustCompile(`(?i)codex|orca`)
 
 const productQuery = module + "/internal/product/query"
 const console = module + "/internal/console"
+const storageSQLite = module + "/internal/storage/sqlite"
 
 var executionAdapters = execution + "/adapters"
 
@@ -70,7 +72,7 @@ func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
 		return true
 	}
-	return dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend" || dependency == core+"/contracts"
+	return dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/execution/backend" || dependency == core+"/contracts" || dependency == module+"/internal/storage/ports"
 }
 
 func purePackage(pkg string) bool {
@@ -105,7 +107,7 @@ func consoleForbidden(pkg string) bool {
 	if strings.HasPrefix(pkg, module+"/internal/") && pkg != module+"/internal/product/api" {
 		return true
 	}
-	for _, p := range []string{core + "/sqlite", core + "/persistence", core + "/query", core + "/projection", productQuery, execution + "/reconstruction", execution + "/workspace", execution + "/publication", execution + "/process", module + "/internal/steerlineclient"} {
+	for _, p := range []string{module + "/internal/storage/sqlite", core + "/query", core + "/projection", productQuery, execution + "/reconstruction", execution + "/workspace", execution + "/publication", execution + "/process", module + "/internal/steerlineclient"} {
 		if pkg == p || strings.HasPrefix(pkg, p+"/") {
 			return true
 		}
@@ -120,7 +122,7 @@ func executionForbidden(pkg string) bool {
 	if pkg == core || pkg == module+"/internal/task" || forbidden(pkg) || pkg == "database/sql" || strings.HasPrefix(pkg, "modernc.org/sqlite") {
 		return true
 	}
-	for _, owner := range []string{core + "/sqlite", core + "/console", console, core + "/query", core + "/projection", productQuery, module + "/internal/steerlineclient", module + "/internal/testboundary", module + "/internal/testfeedback"} {
+	for _, owner := range []string{module + "/internal/storage/sqlite", core + "/console", console, core + "/query", core + "/projection", productQuery, module + "/internal/steerlineclient", module + "/internal/testboundary", module + "/internal/testfeedback"} {
 		if pkg == owner || strings.HasPrefix(pkg, owner+"/") {
 			return true
 		}
@@ -233,6 +235,51 @@ func productQueryImportAllowed(dependency string) bool {
 	return false
 }
 
+func storageSQLiteImportAllowed(dependency string) bool {
+	if !strings.HasPrefix(dependency, module+"/internal/") {
+		return true
+	}
+	for _, allowed := range []string{
+		module + "/internal/execution/backend", module + "/internal/execution/model",
+		module + "/internal/product/api", productQuery, module + "/internal/steerline/contracts",
+		module + "/internal/storage/ports", module + "/internal/task/model",
+	} {
+		if dependency == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+func sqliteProductQuerySelectorAllowed(file *ast.File) []string {
+	allowed := map[string]bool{"History": true, "MaxEventPageBytes": true, "NativeTaskProtocol": true, "ReadySnapshot": true, "SetTaskPageCursor": true}
+	aliases := map[string]bool{}
+	for _, spec := range file.Imports {
+		dependency, err := strconv.Unquote(spec.Path.Value)
+		if err != nil || dependency != productQuery {
+			continue
+		}
+		alias := "query"
+		if spec.Name != nil {
+			alias = spec.Name.Name
+		}
+		aliases[alias] = true
+	}
+	var violations []string
+	ast.Inspect(file, func(node ast.Node) bool {
+		selector, ok := node.(*ast.SelectorExpr)
+		if !ok {
+			return true
+		}
+		identifier, ok := selector.X.(*ast.Ident)
+		if ok && aliases[identifier.Name] && !allowed[selector.Sel.Name] {
+			violations = append(violations, selector.Sel.Name)
+		}
+		return true
+	})
+	return violations
+}
+
 // ScanSource parses production and test Go files regardless of GOOS or build tags.
 func ScanSource(root string) (Report, error) {
 	report := Report{Dependencies: map[string]int{}, PureFiles: map[string]int{}}
@@ -277,7 +324,7 @@ func ScanSource(root string) (Report, error) {
 		if purePackage(pkg) {
 			report.PureFiles[pkg]++
 		}
-		parsed, err := parser.ParseFile(token.NewFileSet(), path, nil, parser.ImportsOnly)
+		parsed, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
 		if err != nil {
 			return err
 		}
@@ -292,6 +339,14 @@ func ScanSource(root string) (Report, error) {
 			graph[pkg] = append(graph[pkg], value)
 			if pkg == productQuery && !strings.HasSuffix(entry.Name(), "_test.go") && !productQueryImportAllowed(value) {
 				report.Violations = append(report.Violations, "product query forbidden dependency: "+filepath.ToSlash(path)+" -> "+value)
+			}
+			if pkg == storageSQLite && !strings.HasSuffix(entry.Name(), "_test.go") && !storageSQLiteImportAllowed(value) {
+				report.Violations = append(report.Violations, "storage sqlite forbidden dependency: "+filepath.ToSlash(path)+" -> "+value)
+			}
+			if pkg == storageSQLite && !strings.HasSuffix(entry.Name(), "_test.go") && value == productQuery {
+				for _, selector := range sqliteProductQuerySelectorAllowed(parsed) {
+					report.Violations = append(report.Violations, "storage sqlite product query application call: "+filepath.ToSlash(path)+" -> "+selector)
+				}
 			}
 
 			if implementation(pkg) && !strings.HasSuffix(entry.Name(), "_test.go") && adapterDirectForbidden(value) {
@@ -309,7 +364,7 @@ func ScanSource(root string) (Report, error) {
 			if !strings.HasSuffix(entry.Name(), "_test.go") {
 				productionGraph[pkg] = append(productionGraph[pkg], value)
 			}
-			if pkg == core && !strings.HasSuffix(entry.Name(), "_test.go") && (value == "database/sql" || value == core+"/sqlite" || strings.HasPrefix(value, "modernc.org/sqlite")) {
+			if pkg == core && !strings.HasSuffix(entry.Name(), "_test.go") && (value == "database/sql" || value == module+"/internal/storage/sqlite" || strings.HasPrefix(value, "modernc.org/sqlite")) {
 				report.Violations = append(report.Violations, "concrete storage dependency: "+filepath.ToSlash(path)+" -> "+value)
 			}
 		}
@@ -327,7 +382,7 @@ func ScanSource(root string) (Report, error) {
 	}
 	visitGraph(productionGraph, core, func(path []string) {
 		last := path[len(path)-1]
-		if last == "database/sql" || last == core+"/sqlite" || strings.HasPrefix(last, core+"/sqlite/") || strings.HasPrefix(last, "modernc.org/sqlite") {
+		if last == "database/sql" || last == module+"/internal/storage/sqlite" || strings.HasPrefix(last, module+"/internal/storage/sqlite/") || strings.HasPrefix(last, "modernc.org/sqlite") {
 			report.Violations = append(report.Violations, "concrete storage dependency: "+strings.Join(path, " -> "))
 		}
 	})
@@ -344,7 +399,7 @@ func ScanSource(root string) (Report, error) {
 			report.Violations = append(report.Violations, "execution adapter forbidden dependency: "+strings.Join(path, " -> "))
 		})
 	}
-	for _, seed := range []string{core + "/sqlite", core + "/persistence"} {
+	for _, seed := range []string{module + "/internal/storage/sqlite", module + "/internal/storage/ports"} {
 		visitGraph(graph, seed, func(path []string) {
 			last := path[len(path)-1]
 			if last == core || last == execution || forbidden(last) || last == module+"/internal/steerlineclient" || strings.HasPrefix(last, module+"/internal/steerlineclient/") || last == core+"/console" || strings.HasPrefix(last, core+"/console/") {

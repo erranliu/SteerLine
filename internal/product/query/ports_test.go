@@ -10,19 +10,18 @@ import (
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 // This reader has task capabilities only: no SQLite, command or event methods.
 type taskReader struct {
-	page  contracts.NativeTaskPage
+	page  storageports.NativeTaskPage
 	graph storageports.TaskGraphSnapshot
 	reads int
 }
 
-func (r *taskReader) NativeTaskPage(context.Context, string, string, string, uint64, int, int) (contracts.NativeTaskPage, error) {
+func (r *taskReader) NativeTaskPage(context.Context, string, string, string, uint64, int, int) (storageports.NativeTaskPage, error) {
 	r.reads++
 	return r.page, nil
 }
@@ -36,7 +35,7 @@ func TestTaskQueriesUseOnlyTaskReader(t *testing.T) {
 	first := taskmodel.TaskRecord{TaskID: "1", Status: "open"}
 	second := taskmodel.TaskRecord{TaskID: "2", Status: "open"}
 	reader := &taskReader{
-		page:  contracts.NativeTaskPage{Protocol: NativeTaskProtocol, ProjectID: "project", Tasks: []contracts.NativeTaskDetail{{TaskRecord: first}}},
+		page:  storageports.NativeTaskPage{Protocol: NativeTaskProtocol, ProjectID: "project", Tasks: []storageports.NativeTaskDetail{{TaskRecord: first}}},
 		graph: storageports.TaskGraphSnapshot{Authority: executionmodel.ProjectTaskAuthority{ProjectIdentity: "project"}, Tasks: []taskmodel.TaskRecord{first, second}, ByID: map[string]taskmodel.TaskRecord{"1": first, "2": second}, Edges: []taskmodel.TaskDependencyRecord{{PredecessorID: "1", SuccessorID: "2"}}},
 	}
 	service := Service{Project: "project", Tasks: reader}
@@ -86,13 +85,13 @@ func TestTaskCursorRemainsStrictWithoutSQLite(t *testing.T) {
 }
 
 func TestTaskQueriesRejectReaderScopeAndCursorDrift(t *testing.T) {
-	reader := &taskReader{page: contracts.NativeTaskPage{ProjectID: "project", DatabaseID: strings.Repeat("a", 32), DatabaseRevision: 8, AuthorityVersion: 2, GraphRevision: 3, HasMore: true, Tasks: []contracts.NativeTaskDetail{{TaskRecord: taskmodel.TaskRecord{TaskID: "1"}}}}}
+	reader := &taskReader{page: storageports.NativeTaskPage{ProjectID: "project", DatabaseID: strings.Repeat("a", 32), DatabaseRevision: 8, AuthorityVersion: 2, GraphRevision: 3, HasMore: true, Tasks: []storageports.NativeTaskDetail{{TaskRecord: taskmodel.TaskRecord{TaskID: "1"}}}}}
 	service := Service{Project: "project", Tasks: reader}
 	first, err := service.ListNativeTasks(context.Background(), "", 1)
 	if err != nil || first.NextCursor == "" {
 		t.Fatalf("initial page: %+v %v", first, err)
 	}
-	for _, changed := range []contracts.NativeTaskPage{
+	for _, changed := range []storageports.NativeTaskPage{
 		{ProjectID: "project", DatabaseID: strings.Repeat("b", 32), DatabaseRevision: 8, AuthorityVersion: 2, GraphRevision: 3},
 		{ProjectID: "project", DatabaseID: strings.Repeat("a", 32), DatabaseRevision: 9, AuthorityVersion: 2, GraphRevision: 3},
 	} {

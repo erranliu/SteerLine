@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	persistence "github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -50,7 +49,7 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	nextWorkflow := expectedWorkflow
 	require(t, BeginWorkerFeedbackDelivery(&nextWorkflow, expectedExecution, expectedDecision, now()))
 	attempt := *service.workflowAttempt(run, run.AttemptID)
-	request := persistence.WorkerCommit{Project: service.Config.Identity(), TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, ControlRevision: expectedWorkflow.ControlRevision,
+	request := storageports.WorkerCommit{Project: service.Config.Identity(), TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, ControlRevision: expectedWorkflow.ControlRevision,
 		Workflow: &storageports.RecordWrite[executionmodel.WorkflowRunRecord]{Before: &expectedWorkflow, After: nextWorkflow}, Execution: &storageports.RecordWrite[executionmodel.ExecutionRecord]{Before: &expectedExecution, After: expectedExecution}, Attempt: &storageports.RecordWrite[executionmodel.StepAttemptRecord]{Before: &attempt, After: attempt}, Decisions: []storageports.RecordWrite[executionmodel.DecisionRecord]{{Before: &expectedDecision, After: expectedDecision}}, Checkpoint: runtimeCheckpoint(service.State)}
 	result, err := testSQLite(service).CommitWorker(ctx, request)
 	committed := nextWorkflow

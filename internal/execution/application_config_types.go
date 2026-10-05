@@ -4,15 +4,20 @@ import (
 	"context"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 type Config struct {
 	ReadRuntime             func(context.Context, Config) (*contracts.Runtime, error) `json:"-"`
+	ValidateNativeStore     func(context.Context, Config) error                      `json:"-"`
+	EnsureNativeProject     func(context.Context, Config) error                      `json:"-"`
+	TaskReader              storageports.TaskReader                                  `json:"-"`
+	CommandReader           NativeCommandReader                                      `json:"-"`
+	CommandWriter           CommandStore                                             `json:"-"`
 	Resources               ResourcePort                                              `json:"-"`
-	Persistence             persistence.Factory                                       `json:"-"`
+	ExecutionRecords        ExecutionRecordReader                                     `json:"-"`
 	ExecutionDirectory      *ExecutionDirectory                                       `json:"-"`
 	ProcessHost             executionbackend.ManagedProcessHost                       `json:"-"`
 	WorkspaceBranchPrefix   string                                                    `json:"-"`

@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/erranliu/SteerLine/internal/execution"
@@ -40,7 +39,7 @@ func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisi
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return storageports.CommandRecord{}, false, err
 	}
-	snapshot, err := LoadDatabaseRuntime(c)
+	snapshot, err := readConfiguredRuntime(ctx, c)
 	if err != nil {
 		return storageports.CommandRecord{}, false, err
 	}
@@ -86,12 +85,10 @@ func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisi
 		expectedRunRevision = run.ControlRevision
 	}
 	key := execution.DecisionAnswerKey(answer)
-	reader, err := c.Persistence.OpenReader(filepath.Join(c.RunDir, "steerline.db"))
-	if err != nil {
-		return storageports.CommandRecord{}, false, err
+	if c.CommandReader == nil {
+		return storageports.CommandRecord{}, false, errors.New("application command reader is required")
 	}
-	existing, lookupErr := reader.CommandByIdempotency(ctx, c.Identity(), key)
-	_ = reader.Close()
+	existing, lookupErr := c.CommandReader.CommandByIdempotency(ctx, c.Identity(), key)
 	if lookupErr == nil {
 		var previous executionmodel.DecisionAnswer
 		if existing.Kind != "answer_decision" || existing.TargetID != decisionID || decode(existing.Payload, &previous) != nil || !executionmodel.SameDecisionAnswer(previous, answer) {
@@ -114,7 +111,7 @@ func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisi
 	if !serviceHasCapability(serviceRuntime, "answer_decision") {
 		return storageports.CommandRecord{}, false, errors.New("service does not advertise answer_decision capability")
 	}
-	snapshot, err = LoadDatabaseRuntime(c)
+	snapshot, err = readConfiguredRuntime(ctx, c)
 	if err != nil {
 		return storageports.CommandRecord{}, false, err
 	}
@@ -183,11 +180,9 @@ func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisi
 	if expectedDecisionVersion == 0 {
 		answer.ExpectedDecisionVersion = version
 	}
-	db, err := c.Persistence.OpenWriter(filepath.Join(c.RunDir, "steerline.db"))
-	if err != nil {
-		return storageports.CommandRecord{}, false, err
+	if c.CommandWriter == nil {
+		return storageports.CommandRecord{}, false, errors.New("application command writer is required")
 	}
-	defer db.Close()
 	if commandID == "" {
 		commandID = newID()
 	}
@@ -195,7 +190,7 @@ func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisi
 	if err != nil {
 		return storageports.CommandRecord{}, false, err
 	}
-	return (execution.NewCommandService(db, c.Identity(), nil, nil)).AnswerDecisionWithID(ctx, commandID, decisionID, version, key, requestedBy, payload)
+	return (execution.NewCommandService(c.CommandWriter, c.Identity(), nil, nil)).AnswerDecisionWithID(ctx, commandID, decisionID, version, key, requestedBy, payload)
 }
 
 func runtimeRunByID(runtimeState *Runtime, runID string) *Run {
@@ -230,7 +225,7 @@ func SubmitDecisionAnswer(ctx context.Context, c execution.Config, o AnswerOptio
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return storageports.CommandRecord{}, false, err
 	}
-	snapshot, err := LoadDatabaseRuntime(c)
+	snapshot, err := readConfiguredRuntime(ctx, c)
 	if err != nil {
 		return storageports.CommandRecord{}, false, err
 	}

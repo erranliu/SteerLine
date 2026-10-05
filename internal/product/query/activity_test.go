@@ -7,12 +7,11 @@ import (
 
 	model "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func TestTM05CanonicalActivityIdentityAndNoRawFallback(t *testing.T) {
-	snapshot := contracts.DomainSnapshot{
+	snapshot := ports.ExecutionSnapshot{
 		ProjectIdentity: "project",
 		Executions:      []model.ExecutionRecord{{ProjectIdentity: "project", WorkflowRunID: "run", ExecutionID: "execution"}},
 		Attempts:        []model.StepAttemptRecord{{ProjectIdentity: "project", ExecutionID: "execution", AttemptID: "attempt"}},

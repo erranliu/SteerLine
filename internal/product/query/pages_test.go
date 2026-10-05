@@ -11,12 +11,13 @@ import (
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
 	model "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func TestTM05PageProjection(t *testing.T) {
 	t.Run("task_page_excludes_fixed_contract_and_private_delivery_evidence", func(t *testing.T) {
-		input := contracts.NativeTaskDetail{TaskRecord: taskmodel.TaskRecord{TaskID: "77", Title: "中文任务", Version: 6, IdentityMapDigest: "private-map", ContractID: "private-contract"}, Contract: taskmodel.TaskContract{SpecRef: taskmodel.FileReference{Path: "docs/spec/task.spec.md", SHA256: "secret-document-hash"}, PlanRef: taskmodel.FileReference{Path: "docs/spec/task.plan.md"}}, Delivery: &model.TaskDeliveryRecord{SelectedWorkflowRunID: "winning-workflow", PRURL: "https://example.invalid/pr/7", Evidence: []byte(`{"private":true}`)}}
+		input := storageports.NativeTaskDetail{TaskRecord: taskmodel.TaskRecord{TaskID: "77", Title: "中文任务", Version: 6, IdentityMapDigest: "private-map", ContractID: "private-contract"}, Contract: taskmodel.TaskContract{SpecRef: taskmodel.FileReference{Path: "docs/spec/task.spec.md", SHA256: "secret-document-hash"}, PlanRef: taskmodel.FileReference{Path: "docs/spec/task.plan.md"}}, Delivery: &model.TaskDeliveryRecord{SelectedWorkflowRunID: "winning-workflow", PRURL: "https://example.invalid/pr/7", Evidence: []byte(`{"private":true}`)}}
 		page := TaskDetail(input)
 		encoded, err := json.Marshal(page)
 		if err != nil {
@@ -32,7 +33,7 @@ func TestTM05PageProjection(t *testing.T) {
 		}
 	})
 	t.Run("unique_delivery_projects_winner_and_loser_without_choosing_by_merge", func(t *testing.T) {
-		rt := &contracts.Runtime{Runs: []*contracts.Run{{TaskID: "77", RunID: "late-merged", PR: model.PRState{State: "merged"}}, {TaskID: "77", RunID: "winner", PR: model.PRState{State: "merged"}}}}
+		rt := &ServiceView{Runs: []*CandidateView{{TaskID: "77", RunID: "late-merged", PR: model.PRState{State: "merged"}}, {TaskID: "77", RunID: "winner", PR: model.PRState{State: "merged"}}}}
 		if page := ServicePage(rt); page.Runs[0].DeliveryOutcome != "" || page.Runs[1].DeliveryOutcome != "" {
 			t.Fatal("merge observations became a unique delivery")
 		}
@@ -71,7 +72,7 @@ func TestTM05PageProjection(t *testing.T) {
 	t.Run("candidate_excludes_private_execution_and_copies_page_values", func(t *testing.T) {
 		now := time.Now().UTC()
 		path, summary := "workspace-b", "中文😀"
-		r := &contracts.Run{RunID: "workflow-b", ExecutionID: "execution-b", AttemptID: "attempt-b", SessionID: "session-b", ControlRevision: 9, WorktreePath: &path, Summary: &summary, CandidateEndedAt: &now, Process: &backend.ProcessIdentity{PID: 41, Terminal: "terminal-b"}, Decision: &model.DecisionState{ID: "decision-b", Version: 3, Request: model.DecisionRequest{Question: "继续？", Options: []backend.DecisionOption{{ID: "yes", Label: "继续", Action: "private-authority"}}}}, IdentityMapDigest: "private-map", WorkflowConfigDigest: "private-config"}
+		r := &CandidateView{RunID: "workflow-b", ExecutionID: "execution-b", AttemptID: "attempt-b", SessionID: "session-b", ControlRevision: 9, WorktreePath: &path, Summary: &summary, CandidateEndedAt: &now, Process: &backend.ProcessIdentity{PID: 41, Terminal: "terminal-b"}, Decision: &model.DecisionState{ID: "decision-b", Version: 3, Request: model.DecisionRequest{Question: "继续？", Options: []backend.DecisionOption{{ID: "yes", Label: "继续", Action: "private-authority"}}}}}
 		page := Candidate(r)
 		if page.RunID != r.RunID || page.ExecutionID != r.ExecutionID || page.SessionID != r.SessionID || page.ControlRevision != 9 || page.Process.Terminal != "terminal-b" {
 			t.Fatalf("lost exact target: %+v", page)
@@ -92,7 +93,7 @@ func TestTM05PageProjection(t *testing.T) {
 		}
 	})
 	t.Run("history_retains_complete_candidate_numbering_without_private_records", func(t *testing.T) {
-		input := contracts.DomainSnapshot{WorkflowRuns: []model.WorkflowRunRecord{{WorkflowRunID: "exited", TaskID: "77", Phase: "abandoned"}, {WorkflowRunID: "active", TaskID: "77", Phase: "running"}}, Attempts: []model.StepAttemptRecord{{ExecutionID: "execution-b", AttemptID: "attempt-b", AttemptNumber: 2}}, Decisions: []model.DecisionRecord{{DecisionID: "decision-b", WorkflowRunID: "active", Request: []byte(`{"question":"继续？","options":[]}`)}, {DecisionID: "bad-original", Request: []byte("invalid")}}}
+		input := storageports.ExecutionSnapshot{WorkflowRuns: []model.WorkflowRunRecord{{WorkflowRunID: "exited", TaskID: "77", Phase: "abandoned"}, {WorkflowRunID: "active", TaskID: "77", Phase: "running"}}, Attempts: []model.StepAttemptRecord{{ExecutionID: "execution-b", AttemptID: "attempt-b", AttemptNumber: 2}}, Decisions: []model.DecisionRecord{{DecisionID: "decision-b", WorkflowRunID: "active", Request: []byte(`{"question":"继续？","options":[]}`)}, {DecisionID: "bad-original", Request: []byte("invalid")}}}
 		page := History(input)
 		if len(page.WorkflowRuns) != 2 || page.WorkflowRuns[0].WorkflowRunID != "exited" || page.Attempts[0].AttemptNumber != 2 || page.Decisions[0].Request.Question != "继续？" || page.Decisions[1].Diagnostic == "" {
 			t.Fatalf("history guessed or lost canonical facts: %+v", page)
@@ -103,7 +104,7 @@ func TestTM05PageProjection(t *testing.T) {
 // This original client assertion follows the unique ready-candidate projector.
 func TestNativeCandidateSnapshotKeepsDispatchOrderBeyondDetailPage(t *testing.T) {
 	at := time.Now().UTC()
-	ready := contracts.NativeReadyTaskSnapshot{SampledAt: at}
+	ready := storageports.NativeReadyTaskSnapshot{SampledAt: at}
 	for i := 501; i >= 1; i-- {
 		ready.Tasks = append(ready.Tasks, taskmodel.TaskRecord{TaskID: fmt.Sprint(i), Title: "ready", Type: "task", Status: "open"})
 	}

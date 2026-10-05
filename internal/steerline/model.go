@@ -6,11 +6,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-const WorkerFlowRuntimeSchema = contracts.WorkerFlowRuntimeSchema
-
 type Repository = contracts.Repository
-
-type ServiceCheckpoint = contracts.ServiceCheckpoint
 
 type Runtime = contracts.Runtime
 

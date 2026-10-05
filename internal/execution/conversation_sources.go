@@ -5,11 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"slices"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
@@ -157,7 +157,7 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 		if reportErr != nil {
 			return false, reportErr
 		}
-		var previous *contracts.ConversationCapabilityReport
+		var previous *api.ConversationCapabilityReport
 		for i := range reports {
 			if reports[i].ExecutionID == report.ExecutionID && reports[i].AttemptID == report.AttemptID && reports[i].SourceIdentity == report.SourceIdentity {
 				previous = &reports[i]
@@ -170,12 +170,21 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 					if old.Name != report.Capabilities[i].Name {
 						continue
 					}
-					if report.Capabilities[i].Status == executionbackend.CapabilityNotTested && old.Status != executionbackend.CapabilityNotTested || old.Status == executionbackend.CapabilityVerified && report.Capabilities[i].Status != executionbackend.CapabilityVerified {
-						report.Capabilities[i] = old
+					oldStatus := executionbackend.CapabilityStatus(old.Status)
+					if report.Capabilities[i].Status == executionbackend.CapabilityNotTested && oldStatus != executionbackend.CapabilityNotTested || oldStatus == executionbackend.CapabilityVerified && report.Capabilities[i].Status != executionbackend.CapabilityVerified {
+						report.Capabilities[i].Status = oldStatus
+						report.Capabilities[i].Evidence = old.Evidence
 					}
 				}
 			}
-			if slices.Equal(report.Capabilities, previous.Capabilities) {
+			same := len(report.Capabilities) == len(previous.Capabilities)
+			for i, capability := range report.Capabilities {
+				if !same || capability.Name != previous.Capabilities[i].Name || capability.Status != executionbackend.CapabilityStatus(previous.Capabilities[i].Status) || capability.Evidence != previous.Capabilities[i].Evidence {
+					same = false
+					break
+				}
+			}
+			if same {
 				return !batch.More && batch.Settled, nil
 			}
 		}

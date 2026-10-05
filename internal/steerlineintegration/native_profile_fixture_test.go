@@ -8,15 +8,14 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
 // Native fixtures encode configuration values and use the actual app catalog.
@@ -122,10 +121,10 @@ func setNativeProfile(t *testing.T, c *execution.Config, w codexworker.ProfileCo
 	setNativeImplementationProfiles(t, c, w, o, r...)
 }
 
-func nativeAdmissionFixture(t *testing.T) (execution.Config, string, persistence.Connection) {
+func nativeAdmissionFixture(t *testing.T) (execution.Config, string, *sqlite.SQLiteStore) {
 	t.Helper()
 	f := newLifecycleProject(t, "local")
-	store, err := steerline.OpenNativeTaskCommandStore(context.Background(), &f.config)
+	store, err := steerlineapp.OpenNativeTaskCommandStore(context.Background(), &f.config)
 	require(t, err)
 	t.Cleanup(func() { _ = store.Close() })
 	return f.config, f.commit, store

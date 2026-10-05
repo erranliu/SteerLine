@@ -8,7 +8,6 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -16,7 +15,7 @@ import (
 var errCapturedResult = errors.New("hold verified declaration before atomic commit")
 
 type resultCaptureStore struct {
-	persistence.CommandStore
+	CommandStore
 	commit storageports.ResultCommit
 }
 

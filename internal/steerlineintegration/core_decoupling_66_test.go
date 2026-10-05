@@ -14,7 +14,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
 
@@ -107,7 +107,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		}
 		config, err := steerlineapp.LoadQueryConfig(fixture.configPath)
 		require(t, err)
-		reader, err := steerline.OpenNativeTaskReader(ctx, &config)
+		reader, err := steerlineapp.OpenNativeTaskReader(ctx, &config)
 		require(t, err)
 		defer reader.Close()
 		_, before, err := reader.DatabaseVersion(ctx)
@@ -122,7 +122,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		if len(refs) != 1 || refs[0].Error != "" || refs[0].Presentation.Profiles[0].UnavailableReason == "" {
 			t.Fatalf("console failed to show unknown support: %+v", refs)
 		}
-		if _, err := steerline.OpenNativeTaskCommandStore(ctx, &config); err == nil {
+		if _, err := steerlineapp.OpenNativeTaskCommandStore(ctx, &config); err == nil {
 			t.Fatal("unknown support admitted a writable command store")
 		}
 		_, after, err := reader.DatabaseVersion(ctx)
@@ -135,7 +135,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 	t.Run("terminal_evidence_keeps_agent_and_resource_proofs", TestOrcaCertificationRequiresAgentAndTerminalEvidence)
 	t.Run("service_entries_reject_missing_catalog_before_target", func(t *testing.T) {
 		state := t.TempDir() + "/absent"
-		config := execution.Config{Persistence: sqlite.Factory{}, TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, Repository: "must-not-be-read", RunDir: state, Git: executionbackend.Command{Executable: "must-not-be-called"}}
+		config := execution.Config{TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, Repository: "must-not-be-read", RunDir: state, Git: executionbackend.Command{Executable: "must-not-be-called"}}
 		if _, err := steerline.StartService(context.Background(), config, "unused.json", steerline.StartServiceOptions{}); err == nil || !strings.Contains(err.Error(), "directory") {
 			t.Fatalf("start reached target without directory: %v", err)
 		}

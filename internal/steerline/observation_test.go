@@ -12,6 +12,7 @@ import (
 	execution "github.com/erranliu/SteerLine/internal/execution"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
@@ -41,7 +42,7 @@ func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	state := Runtime{SchemaVersion: WorkerFlowRuntimeSchema, Repository: Repository{Identity: c.Identity(), Path: c.Repository, Remote: c.Remote, Branch: c.Branch}, HeartbeatAt: nowTime.Add(-5 * time.Second), Runs: []*Run{}}
+	state := Runtime{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: Repository{Identity: c.Identity(), Path: c.Repository, Remote: c.Remote, Branch: c.Branch}, HeartbeatAt: nowTime.Add(-5 * time.Second), Runs: []*Run{}}
 	save := func() {
 		t.Helper()
 		if _, err := db.SaveCheckpoint(context.Background(), reconstruction.Checkpoint(state)); err != nil {
@@ -76,7 +77,7 @@ func TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var beat ServiceCheckpoint
+	var beat storageports.ServiceCheckpoint
 	if err = json.Unmarshal(updated, &beat); err != nil || !beat.HeartbeatAt.After(state.HeartbeatAt) || beat.Revision != revision {
 		t.Fatalf("SQLite heartbeat did not update the same checkpoint: %+v / %v", beat, err)
 	}

@@ -8,14 +8,14 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func participatingCandidates(snapshot contracts.DomainSnapshot, taskID string) int {
+func participatingCandidates(snapshot reconstruction.Snapshot, taskID string) int {
 	count := 0
 	for _, w := range snapshot.WorkflowRuns {
 		if w.TaskID == taskID && w.Abandonment == nil && w.Phase != "completed" && w.Phase != "abandoned" {
@@ -27,7 +27,7 @@ func participatingCandidates(snapshot contracts.DomainSnapshot, taskID string) i
 
 // selectedID="" requires every known PR to be verified unmerged. Delivery
 // requires exactly the selected eligible PR merged, with all siblings known.
-func verifyKnownCandidatePRs(ctx context.Context, config Config, snapshot contracts.DomainSnapshot, taskID string, verifier TaskDeliveryVerifier, selectedID string) ([]executionmodel.VerifiedCandidatePR, error) {
+func verifyKnownCandidatePRs(ctx context.Context, config Config, snapshot reconstruction.Snapshot, taskID string, verifier TaskDeliveryVerifier, selectedID string) ([]executionmodel.VerifiedCandidatePR, error) {
 	seen := map[string]string{}
 	results := []executionmodel.VerifiedCandidatePR{}
 	merged := 0
@@ -133,7 +133,7 @@ func (c CommandService) AbandonNativeCandidate(ctx context.Context, config Confi
 		}
 		saved = old
 	}
-	snapshot, err := c.Store.Query(ctx, c.Project)
+	snapshot, err := readCommandSnapshot(ctx, c.Store, c.Project)
 	if err != nil {
 		return CandidateAbandonReceipt{}, err
 	}
@@ -179,7 +179,7 @@ func (c CommandService) AbandonNativeCandidate(ctx context.Context, config Confi
 			receipt.Status, status = "rejected", "rejected"
 		}
 	}
-	err = c.Store.TransactCandidate(ctx, func(tx persistence.CandidateTx) error {
+	err = c.Store.TransactCandidate(ctx, func(tx storageports.CandidateTx) error {
 		old, found, err := tx.LookupCommand(ctx, c.Project, options.RequestID)
 		if err != nil || !found {
 			return errors.Join(err, errors.New("candidate exit intent disappeared"))
@@ -187,7 +187,7 @@ func (c CommandService) AbandonNativeCandidate(ctx context.Context, config Confi
 		if old.Status == "accepted" || old.Status == "rejected" {
 			return json.Unmarshal(old.Result, &receipt)
 		}
-		current, err := tx.Query(ctx, c.Project)
+		current, err := readTransactionalSnapshot(ctx, tx, c.Project)
 		if err != nil {
 			return err
 		}
@@ -239,8 +239,8 @@ func (s *Service) candidateBusinessClosed(run *contracts.Run) bool {
 	return w == nil || w.Abandonment != nil || w.Phase == "abandoned" || w.Phase == "completed" || run.TaskStatus == "closed" || run.TaskStatus == "discarded"
 }
 
-func (c CommandService) recordCandidateMergeConflict(ctx context.Context, snapshot contracts.DomainSnapshot, taskID, workflowID, reason string, proofs ...executionmodel.VerifiedCandidatePR) error {
-	err := c.Store.TransactCandidate(ctx, func(tx persistence.CandidateTx) error {
+func (c CommandService) recordCandidateMergeConflict(ctx context.Context, snapshot reconstruction.Snapshot, taskID, workflowID, reason string, proofs ...executionmodel.VerifiedCandidatePR) error {
+	err := c.Store.TransactCandidate(ctx, func(tx storageports.CandidateTx) error {
 		_, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.Project, TaskID: taskID, WorkflowRunID: workflowID, ExternalSource: "candidate-delivery", ExternalID: taskID + ":" + executionmodel.CandidateBindings(snapshot.WorkflowRuns, snapshot.Executions, taskID) + ":" + digestValue(reason), Type: "task.delivery.conflict", ReceivedAt: now(), Payload: mustJSON(map[string]any{"reason": reason, "known_prs": proofs})})
 		return err
 	})

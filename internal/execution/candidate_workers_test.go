@@ -235,7 +235,7 @@ func TestMC1(t *testing.T) {
 	}
 	page, err := query.NewService(f.store, f.c.Identity()).ReadProjectView(context.Background(), "8", 20)
 	require(t, err)
-	if page.RuntimeError != nil || len(page.Runtime.Runs) != 5 || len(page.SelectedTask.WorkflowRuns) != 5 {
+	if len(page.SelectedTask.WorkflowRuns) != 5 {
 		t.Fatalf("public query lost current/history candidates: %+v", page)
 	}
 }
@@ -417,7 +417,7 @@ func TestMC5(t *testing.T) {
 	if err == nil {
 		t.Fatal("required transaction failure was ignored")
 	}
-	snapshot, err := f.store.Query(context.Background(), f.c.Identity())
+	snapshot, err := readCommandSnapshot(context.Background(), f.store, f.c.Identity())
 	require(t, err)
 	if len(snapshot.Deliveries) != 0 || nativeTaskRecord(snapshot.Tasks, "8").Status != "in_progress" {
 		t.Fatal("delivery/closed partially committed")
@@ -448,7 +448,7 @@ func TestMC5(t *testing.T) {
 	}
 	// The winner's immutable delivery and subsequent physical stop are separate
 	// facts, committed together with the exact original stop operation receipt.
-	records := executionRecords{root: f.c.RunDir, persistence: f.c.Persistence}
+	records := executionRecords{root: f.c.RunDir, reader: f.s.Config.ExecutionRecords}
 	ref, err := records.loadBinding(second.RunID, second.AttemptID)
 	require(t, err)
 	op := executionbackend.Operation{Version: executionbackend.ExecutionRecordVersion, ID: "stop-" + second.AttemptID, RunID: second.RunID, AttemptID: second.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue("mc-original-stop"), Status: executionbackend.OperationPending, StartedAt: now(), UpdatedAt: now(), Ref: &ref}
@@ -500,7 +500,7 @@ func TestMC6(t *testing.T) {
 				if err == nil {
 					t.Fatal("conflicting/unknown set delivered")
 				}
-				snapshot, e := f.store.Query(context.Background(), f.c.Identity())
+				snapshot, e := readCommandSnapshot(context.Background(), f.store, f.c.Identity())
 				require(t, e)
 				if len(snapshot.Deliveries) != 0 {
 					t.Fatal("conflict created delivery")

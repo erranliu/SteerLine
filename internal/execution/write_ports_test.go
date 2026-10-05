@@ -12,13 +12,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type commandPortProbe struct {
-	persistence.CommandStore
+	CommandStore
 	submitted storageports.CommandRecord
 	updated   storageports.CommandRecord
 	failure   error
@@ -54,13 +54,13 @@ func TestCM69CommandPortUsesFixedProjectAndPropagatesRejection(t *testing.T) {
 }
 
 type workerPortProbe struct {
-	persistence.Metadata
-	request persistence.WorkerCommit
+	storageports.Metadata
+	request storageports.WorkerCommit
 }
 
-func (p *workerPortProbe) CommitWorker(_ context.Context, v persistence.WorkerCommit) (persistence.WorkerCommitResult, error) {
+func (p *workerPortProbe) CommitWorker(_ context.Context, v storageports.WorkerCommit) (storageports.WorkerCommitResult, error) {
 	p.request = v
-	return persistence.WorkerCommitResult{}, nativeErr("stale_revision", "original Attempt changed")
+	return storageports.WorkerCommitResult{}, nativeErr("stale_revision", "original Attempt changed")
 }
 
 func TestCM69WorkerPortRejectsCandidateWithoutPublishing(t *testing.T) {
@@ -94,7 +94,7 @@ func TestCM69WorkerCommitRejectsSupersededAttempt(t *testing.T) {
 	next.AttemptID, next.AttemptNumber, next.Status = newID(), old.AttemptNumber+1, "planned"
 	execution := *service.executionRecord(run)
 	execution.CurrentAttemptID = next.AttemptID
-	require(t, transactFixture(db, ctx, func(tx *fixtureTransaction) error {
+	require(t, transactFixture(db.SQLiteStore, ctx, func(tx *fixtureTransaction) error {
 		if err := tx.PutStepAttempt(old); err != nil {
 			return err
 		}
@@ -107,10 +107,19 @@ func TestCM69WorkerCommitRejectsSupersededAttempt(t *testing.T) {
 	require(t, err)
 	before, revision, err := db.LoadProjection(ctx, service.Config.identity)
 	require(t, err)
-	workflow := snapshotWorkflow(&current, run.RunID)
+	var workflow *executionmodel.WorkflowRunRecord
+	for i := range current.WorkflowRuns {
+		if current.WorkflowRuns[i].WorkflowRunID == run.RunID {
+			workflow = &current.WorkflowRuns[i]
+			break
+		}
+	}
+	if workflow == nil {
+		t.Fatal("authoritative workflow is missing")
+	}
 	// Use the current control version so the rejection proves the transaction's
 	// Attempt identity check rather than an earlier version check.
-	request := persistence.WorkerCommit{Project: service.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: original, ExpectedAttemptID: original, ControlRevision: workflow.ControlRevision, Checkpoint: runtimeCheckpoint(service.State)}
+	request := storageports.WorkerCommit{Project: service.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: original, ExpectedAttemptID: original, ControlRevision: workflow.ControlRevision, Checkpoint: runtimeCheckpoint(service.State)}
 	_, err = service.store.Domain.CommitWorker(ctx, request)
 	if !isNativeErrorCode(err, "stale_revision") || !strings.Contains(err.Error(), "attempt changed") {
 		t.Fatalf("superseded Attempt was not rejected inside commitment: %v", err)
@@ -139,7 +148,7 @@ func TestCM69CleanupReceiptKeepsTaskAndReceiptAtomic(t *testing.T) {
 			execution.Target.ID, execution.Target.WorktreeID = project, workspace
 			execution.Target.Branch, execution.Target.BaseRevision = "fixture/cleanup", execution.Workspace.Base
 			execution.Workspace.Worktree = workspace
-			require(t, transactFixture(db, ctx, func(tx *fixtureTransaction) error { return tx.PutExecution(execution) }))
+			require(t, transactFixture(db.SQLiteStore, ctx, func(tx *fixtureTransaction) error { return tx.PutExecution(execution) }))
 			commands := newTestCommandService(db, Config{identity: project})
 			task := nativeTaskRecord(service.domain.Tasks, run.TaskID)
 			discarded, err := commands.DiscardNativeTask(ctx, service.Config, task.TaskID, newID(), task.Version, "cleanup fixture", "operator")
@@ -255,7 +264,7 @@ func TestCM69WriteConsumersDoNotAccessConcreteTransactions(t *testing.T) {
 		parsed, err := parser.ParseFile(token.NewFileSet(), name, nil, 0)
 		require(t, err)
 		ast.Inspect(parsed, func(node ast.Node) bool {
-			if v, ok := node.(*ast.Ident); ok && strings.HasPrefix(v.Name, "Domain") && v.Name != "DomainEvent" && v.Name != "DomainSnapshot" {
+			if v, ok := node.(*ast.Ident); ok && strings.HasPrefix(v.Name, "Domain") && v.Name != "DomainEvent" {
 				t.Errorf("%s exports a domain writer: %s", name, v.Name)
 			}
 			return true

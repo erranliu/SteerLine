@@ -8,10 +8,11 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func projectionFixture(t *testing.T) (contracts.DomainSnapshot, Metadata) {
+func projectionFixture(t *testing.T) (Snapshot, Metadata) {
 	t.Helper()
 	at := time.Date(2026, 10, 1, 0, 0, 0, 0, time.UTC)
 	implementationData, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{CodecVersion: 1, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: "codex.worker-profile", ProjectID: "project", ProfileID: "default", AcceptedConfigVersion: "accepted-v2"}, []byte(`{"args":["original"]}`))
@@ -26,7 +27,7 @@ func projectionFixture(t *testing.T) (contracts.DomainSnapshot, Metadata) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	snapshot := contracts.DomainSnapshot{
+	snapshot := Snapshot{
 		ProjectIdentity: "project",
 		Tasks:           []taskmodel.TaskRecord{{TaskID: "task", Title: "Task", Status: "in_progress"}},
 		WorkflowRuns: []executionmodel.WorkflowRunRecord{{WorkflowRunID: "run", TaskID: "task", WorkflowVersion: executionmodel.Version, SelectedResult: "execution", Phase: "waiting_decision", ControlRevision: 42,
@@ -36,9 +37,9 @@ func projectionFixture(t *testing.T) (contracts.DomainSnapshot, Metadata) {
 		Attempts:  []executionmodel.StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution", StepID: "worker", AttemptNumber: 1}},
 		Decisions: []executionmodel.DecisionRecord{{DecisionID: "decision", QuestionID: "decision", ProjectIdentity: "project", WorkflowRunID: "run", ExecutionID: "execution", AttemptID: "attempt", Version: 2, Status: "answer_saved", Request: request, Answer: answer}},
 	}
-	metadata := Metadata{Checkpoint: contracts.ServiceCheckpoint{SchemaVersion: contracts.WorkerFlowRuntimeSchema, Revision: 7, HeartbeatAt: at,
-		Repository: contracts.Repository{Identity: "project"}, Service: contracts.ServiceState{Capabilities: []string{"answer_decision"}},
-		Operation: &contracts.ControlOperation{RequestID: "control", Payload: json.RawMessage(`{"task":"task"}`)}},
+	metadata := Metadata{Checkpoint: storageports.ServiceCheckpoint{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Revision: 7, HeartbeatAt: at,
+		Repository: storageports.CheckpointRepository{Identity: "project"}, Service: storageports.CheckpointServiceState{Capabilities: []string{"answer_decision"}},
+		Operation: &storageports.CheckpointControlOperation{RequestID: "control", Payload: json.RawMessage(`{"task":"task"}`)}},
 		DispatchMode: "manual", DispatchPaused: true, AuthorityRevision: 9}
 	return snapshot, metadata
 }
@@ -80,13 +81,13 @@ func TestBuildOwnsRecordsAndMetadataAcrossRefreshes(t *testing.T) {
 
 func TestProjectionRejectsBrokenBindingsWithoutReusingOldViews(t *testing.T) {
 	snapshot, metadata := projectionFixture(t)
-	for _, mutation := range []func(*contracts.DomainSnapshot){
-		func(s *contracts.DomainSnapshot) { s.WorkflowRuns[0].SelectedResult = "another-execution" },
-		func(s *contracts.DomainSnapshot) {
+	for _, mutation := range []func(*Snapshot){
+		func(s *Snapshot) { s.WorkflowRuns[0].SelectedResult = "another-execution" },
+		func(s *Snapshot) {
 			s.Decisions[0].Answer = []byte(`{"decision_id":"decision","run_id":"another-run","note":"continue","answered_by":"operator"}`)
 		},
 	} {
-		broken, err := CloneDomain(snapshot)
+		broken, err := CloneSnapshot(snapshot)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -96,7 +97,7 @@ func TestProjectionRejectsBrokenBindingsWithoutReusingOldViews(t *testing.T) {
 		}
 	}
 	old := contracts.Runtime{Runs: []*contracts.Run{{RunID: "old", ExecutionID: "orphan", ExecutionStatus: "running"}}}
-	view, err := Build(contracts.DomainSnapshot{}, MetadataOf(old))
+	view, err := Build(Snapshot{}, MetadataOf(old))
 	if err != nil || len(view.Runs) != 0 || view.SlotOccupied {
 		t.Fatalf("old client view filled missing authority: %+v %v", view, err)
 	}
@@ -117,7 +118,7 @@ func TestProjectionRetainsDeliveryAndReservationRules(t *testing.T) {
 	}
 	reserved := "unclaimed"
 	metadata.Checkpoint.ReservedTask = &reserved
-	view, err = Build(contracts.DomainSnapshot{}, metadata)
+	view, err = Build(Snapshot{}, metadata)
 	if err != nil || !view.SlotOccupied || view.CurrentTask == nil || *view.CurrentTask != reserved || view.CurrentTask == &reserved {
 		t.Fatalf("reservation lost or aliased input: %+v %v", view, err)
 	}

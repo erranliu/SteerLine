@@ -6,8 +6,7 @@ import (
 	"fmt"
 	"sync"
 
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -15,19 +14,19 @@ import (
 // runtime store.
 type Store struct {
 	mu      sync.Mutex
-	Domain  persistence.WorkerMetadata
+	Domain  storageports.WorkerMetadata
 	Project string
 	failure error
 }
 
-func (s *Store) commitWorker(request persistence.WorkerCommit) (persistence.WorkerCommitResult, error) {
+func (s *Store) commitWorker(request storageports.WorkerCommit) (storageports.WorkerCommitResult, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.failure != nil {
-		return persistence.WorkerCommitResult{}, s.failure
+		return storageports.WorkerCommitResult{}, s.failure
 	}
 	if s.Domain == nil {
-		return persistence.WorkerCommitResult{}, errors.New("worker commitment requires a durable store")
+		return storageports.WorkerCommitResult{}, errors.New("worker commitment requires a durable store")
 	}
 	result, err := s.Domain.CommitWorker(context.Background(), request)
 	var conflict *taskmodel.Error
@@ -38,7 +37,7 @@ func (s *Store) commitWorker(request persistence.WorkerCommit) (persistence.Work
 	return result, err
 }
 
-func (s *Store) Publish(checkpoint *contracts.ServiceCheckpoint) error {
+func (s *Store) Publish(checkpoint *storageports.ServiceCheckpoint) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.failure != nil {

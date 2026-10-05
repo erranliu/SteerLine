@@ -24,9 +24,9 @@ import (
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -384,7 +384,7 @@ func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) inte
 	require(t, err)
 	config.Claimant = "integration"
 	if openAuthority {
-		project, err := steerline.OpenNativeTaskProject(context.Background(), &config)
+		project, err := steerlineapp.OpenNativeTaskProject(context.Background(), &config)
 		require(t, err)
 		require(t, project.Close())
 	}
@@ -403,7 +403,7 @@ func createIntegrationTask(t *testing.T, ctx context.Context, fixture integratio
 	digest, err := taskmodel.ContractDigest(contract)
 	require(t, err)
 	contract.Digest = digest
-	store, err := steerline.OpenNativeTaskCommandStore(ctx, &fixture.config)
+	store, err := steerlineapp.OpenNativeTaskCommandStore(ctx, &fixture.config)
 	require(t, err)
 	commands := appExecutionCommands(t, store, fixture.config)
 	queries := productquery.NewService(store, fixture.config.Identity())
@@ -415,7 +415,7 @@ func createIntegrationTask(t *testing.T, ctx context.Context, fixture integratio
 	}
 	body, err := json.Marshal(batch)
 	require(t, err)
-	_, err = createTaskBatchFixture(ctx, commands.Store, fixture.config, body, newID(), authority.AuthorityVersion, "operator")
+	_, err = createTaskBatchFixture(ctx, sqliteCommandStore(commands.Store), fixture.config, body, newID(), authority.AuthorityVersion, "operator")
 	require(t, err)
 	paused := false
 	page, err := queries.ShowNativeTask(ctx, fmt.Sprint(id))
@@ -437,7 +437,7 @@ func createIntegrationTask(t *testing.T, ctx context.Context, fixture integratio
 
 func claimIntegrationTask(t *testing.T, ctx context.Context, fixture integrationFixture, taskID int64, serviceInstanceID string) {
 	t.Helper()
-	store, err := steerline.OpenNativeTaskCommandStore(ctx, &fixture.config)
+	store, err := steerlineapp.OpenNativeTaskCommandStore(ctx, &fixture.config)
 	require(t, err)
 	commands := appExecutionCommands(t, store, fixture.config)
 	page, err := productquery.NewService(store, fixture.config.Identity()).ShowNativeTask(ctx, fmt.Sprint(taskID))
@@ -455,7 +455,7 @@ func claimIntegrationTask(t *testing.T, ctx context.Context, fixture integration
 	require(t, store.Close())
 }
 
-func appExecutionCommands(t *testing.T, store persistence.CommandStore, config execution.Config) execution.CommandService {
+func appExecutionCommands(t *testing.T, store *sqlite.SQLiteStore, config execution.Config) execution.CommandService {
 	t.Helper()
 	commands, err := steerlineapp.NewCommandService(store, config)
 	require(t, err)
@@ -551,7 +551,7 @@ func (r *integrationLifecycleResolver) count(protocol executionbackend.Execution
 type runningIntegrationService struct {
 	service    *execution.Service
 	config     execution.Config
-	reader     persistence.Connection
+	reader     *sqlite.SQLiteStore
 	queries    productquery.Service
 	instanceID string
 	cancel     context.CancelFunc
@@ -577,7 +577,7 @@ func startIntegrationServiceWithSources(t *testing.T, parent context.Context, co
 		service, err = steerlineapp.NewServiceWithPorts(config, resolver, sources)
 	}
 	require(t, err)
-	reader, err := steerline.OpenNativeTaskReader(parent, &config)
+	reader, err := steerlineapp.OpenNativeTaskReader(parent, &config)
 	require(t, err)
 	ctx, cancel := context.WithCancel(parent)
 	harness := &runningIntegrationService{service: service, config: config, reader: reader,
@@ -591,12 +591,9 @@ func startIntegrationServiceWithSources(t *testing.T, parent context.Context, co
 			t.Fatalf("public service exited before readiness: %v", err)
 		default:
 		}
-		view, err := harness.queries.ReadProjectView(parent, "901", 100)
-		if err != nil {
-			view, err = harness.queries.ReadProjectView(parent, "902", 100)
-		}
-		if err == nil && view.Runtime != nil && view.Runtime.Service.Ready {
-			harness.instanceID = view.Runtime.Service.InstanceID
+		runtimeState, err := steerlineapp.LoadDatabaseRuntime(config)
+		if err == nil && runtimeState != nil && runtimeState.Service.Ready {
+			harness.instanceID = runtimeState.Service.InstanceID
 			return true
 		}
 		return false
@@ -652,28 +649,15 @@ func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningInteg
 		select {
 		case err := <-service.done:
 			service.stopped = true
-			diagnosticContext, diagnosticCancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer diagnosticCancel()
-			view, queryErr := service.queries.ReadProjectView(diagnosticContext, "901", 100)
-			if queryErr != nil {
-				view, queryErr = service.queries.ReadProjectView(diagnosticContext, "902", 100)
-			}
-			var runtimeState *steerline.Runtime
-			if view.Runtime != nil {
-				runtimeState = view.Runtime
-			}
+			runtimeState, queryErr := steerlineapp.LoadDatabaseRuntime(config)
 			t.Fatalf("public service exited during lifecycle: run=%v query=%v service=%+v runs=%+v executions=%+v operations=%+v",
 				err, queryErr, runtimeStateService(runtimeState), runtimeStateRuns(runtimeState), runtimeStateExecutions(runtimeState), runtimeStateOperations(runtimeState))
 		default:
 		}
-		view, err := service.queries.ReadProjectView(ctx, "901", 100)
-		if err != nil {
-			view, err = service.queries.ReadProjectView(ctx, "902", 100)
-		}
-		if err != nil || view.Runtime == nil {
+		runtimeState, err := steerlineapp.LoadDatabaseRuntime(config)
+		if err != nil || runtimeState == nil {
 			return false
 		}
-		runtimeState := view.Runtime
 		for _, run := range runtimeState.Runs {
 			if run == nil || run.TaskID != "901" && run.TaskID != "902" {
 				continue
@@ -759,7 +743,8 @@ func submitIntegrationAnswer(t *testing.T, ctx context.Context, config execution
 func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config execution.Config, run *steerline.Run, option string) {
 	t.Helper()
 	if option == "open_terminal" || option == "recheck_environment" {
-		target, err := productapi.EnvironmentTarget(productquery.Candidate(run))
+		candidate := productquery.Candidate(&productquery.CandidateView{RunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, EnvironmentBlocker: run.EnvironmentBlocker})
+		target, err := productapi.EnvironmentTarget(candidate)
 		require(t, err)
 		request, err := steerline.SubmitControlTargeted(config, option, productapi.ControlPayload{Environment: target}, "fixture", newID(), "", nil)
 		require(t, err)
@@ -770,6 +755,10 @@ func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config exe
 		}
 		return
 	}
+	commandStore, err := steerlineapp.OpenNativeTaskCommandStore(ctx, &config)
+	require(t, err)
+	defer func() { require(t, commandStore.Close()) }()
+	config.ExecutionRecords, config.CommandReader, config.CommandWriter = commandStore, commandStore, commandStore
 
 	answer := steerline.AnswerOptions{
 		RunID: run.RunID, DecisionID: run.Decision.ID, Option: option, Note: "Continue the original work.",
@@ -786,20 +775,18 @@ func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config exe
 			// Refresh this displayed question after a known rejection. A renewed
 			// generic/host choice must retain the exact request and target; a
 			// different native question or consumed answer is never retried.
-			reader, readErr := steerline.OpenNativeTaskReader(ctx, &config)
+			reader, readErr := steerlineapp.OpenNativeTaskReader(ctx, &config)
 			require(t, readErr)
-			view, readErr := productquery.NewService(reader, config.Identity()).ReadProjectView(ctx, run.TaskID, 100)
+			runtimeState, readErr := steerlineapp.LoadDatabaseRuntime(config)
 			closeErr := reader.Close()
 			require(t, readErr)
 			require(t, closeErr)
 			found := false
-			if view.Runtime != nil {
-				for _, current := range view.Runtime.Runs {
-					if current != nil && current.RunID == run.RunID && current.ExecutionID == run.ExecutionID && current.AttemptID == run.AttemptID && current.Decision != nil && current.Decision.Status == "pending" &&
-						(current.Decision.ID == run.Decision.ID || current.Decision.Request.QuestionRoute == nil && run.Decision.Request.QuestionRoute == nil && derefString(current.LogPath) == derefString(run.LogPath) && string(mustJSON(current.Decision.Request)) == string(mustJSON(run.Decision.Request))) {
-						answer.DecisionID, answer.ExpectedVersion = current.Decision.ID, current.Decision.Version
-						found = true
-					}
+			for _, current := range runtimeState.Runs {
+				if current != nil && current.RunID == run.RunID && current.ExecutionID == run.ExecutionID && current.AttemptID == run.AttemptID && current.Decision != nil && current.Decision.Status == "pending" &&
+					(current.Decision.ID == run.Decision.ID || current.Decision.Request.QuestionRoute == nil && run.Decision.Request.QuestionRoute == nil && derefString(current.LogPath) == derefString(run.LogPath) && string(mustJSON(current.Decision.Request)) == string(mustJSON(run.Decision.Request))) {
+					answer.DecisionID, answer.ExpectedVersion = current.Decision.ID, current.Decision.Version
+					found = true
 				}
 			}
 			if !found {
@@ -820,7 +807,7 @@ func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config exe
 
 func assertQueriedTaskPhase(t *testing.T, ctx context.Context, config execution.Config, taskID, phase string) {
 	t.Helper()
-	reader, err := steerline.OpenNativeTaskReader(ctx, &config)
+	reader, err := steerlineapp.OpenNativeTaskReader(ctx, &config)
 	require(t, err)
 	defer reader.Close()
 	page, err := productquery.NewService(reader, config.Identity()).ShowNativeTask(ctx, taskID)

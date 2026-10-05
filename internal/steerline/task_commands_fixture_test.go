@@ -8,7 +8,6 @@ import (
 	execution "github.com/erranliu/SteerLine/internal/execution"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -16,7 +15,27 @@ import (
 
 // The adapter projects task-only transactions. In particular RecordPredecessorAudit
 // can only persist the audit of this task command, not arbitrary execution records.
-type taskCommandStore struct{ store persistence.CommandStore }
+type taskCommandStorage interface {
+	storageports.Commands
+	TaskGraphSnapshot(context.Context, string) (storageports.TaskGraphSnapshot, error)
+	TaskContract(context.Context, string, taskmodel.TaskRecord) (taskmodel.TaskContract, error)
+	NativeAuthority(context.Context, string) (executionmodel.ProjectTaskAuthority, error)
+	TransactTaskBatch(context.Context, func(storageports.BatchTx) error) error
+	TransactPredecessors(context.Context, func(storageports.PredecessorTx) error) error
+}
+
+type taskCommandStore struct{ store taskCommandStorage }
+
+func (a taskCommandStore) TaskSnapshot(ctx context.Context, project string) (taskmodel.Snapshot, error) {
+	graph, err := a.store.TaskGraphSnapshot(ctx, project)
+	if err != nil {
+		return taskmodel.Snapshot{}, err
+	}
+	return graph.TaskGraph(), nil
+}
+func (a taskCommandStore) TaskContract(ctx context.Context, project string, task taskmodel.TaskRecord) (taskmodel.TaskContract, error) {
+	return a.store.TaskContract(ctx, project, task)
+}
 
 func taskCommand(v storageports.CommandRecord) taskapp.Command {
 	return taskapp.Command{ProjectIdentity: v.ProjectIdentity, CommandID: v.CommandID, Kind: v.Kind, TargetID: v.TargetID, ExpectedVersion: v.ExpectedVersion, IdempotencyKey: v.IdempotencyKey, RequestedBy: v.RequestedBy, Payload: v.Payload, Status: v.Status, Result: v.Result, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
@@ -54,13 +73,13 @@ func (a taskCommandStore) CheckTarget(ctx context.Context, in taskapp.Input) err
 	return nil
 }
 func (a taskCommandStore) TransactTaskBatch(ctx context.Context, apply func(taskapp.BatchTx) error) error {
-	return a.store.TransactTaskBatch(ctx, func(tx persistence.BatchTx) error { return apply(taskBatchTx{tx}) })
+	return a.store.TransactTaskBatch(ctx, func(tx storageports.BatchTx) error { return apply(taskBatchTx{tx}) })
 }
 func (a taskCommandStore) TransactPredecessors(ctx context.Context, apply func(taskapp.PredecessorTx) error) error {
-	return a.store.TransactPredecessors(ctx, func(tx persistence.PredecessorTx) error { return apply(taskPredecessorTx{tx}) })
+	return a.store.TransactPredecessors(ctx, func(tx storageports.PredecessorTx) error { return apply(taskPredecessorTx{tx}) })
 }
 
-type taskBatchTx struct{ tx persistence.BatchTx }
+type taskBatchTx struct{ tx storageports.BatchTx }
 
 func (a taskBatchTx) LookupCommand(ctx context.Context, project, id string) (taskapp.Command, bool, error) {
 	v, found, err := a.tx.LookupCommand(ctx, project, id)
@@ -94,7 +113,7 @@ func (a taskBatchTx) PutTaskDependency(v taskmodel.TaskDependencyRecord) error {
 	return a.tx.PutTaskDependency(v)
 }
 
-type taskPredecessorTx struct{ tx persistence.PredecessorTx }
+type taskPredecessorTx struct{ tx storageports.PredecessorTx }
 
 func (a taskPredecessorTx) LookupCommand(ctx context.Context, project, id string) (taskapp.Command, bool, error) {
 	v, found, err := a.tx.LookupCommand(ctx, project, id)
@@ -135,33 +154,41 @@ func (a taskPredecessorTx) RecordPredecessorAudit(v taskapp.Command) error {
 }
 
 // NewTaskCommands extracts only fixed task input and injects narrow I/O ports.
-func NewTaskCommands(store persistence.CommandStore, config execution.Config) taskapp.Commands {
+func NewTaskCommands(store taskCommandStorage, config execution.Config) taskapp.Commands {
 	timeout, _ := time.ParseDuration(config.CommandTimeout)
 	return taskapp.Commands{Store: taskCommandStore{store}, Documents: taskDocuments{target: config.TaskRepositoryTarget, repository: config.Repository, git: config.Git, timeout: timeout, processHost: config.ProcessHost}, Input: taskapp.Input{Project: config.Identity(), Authority: config.TaskAuthority, Remote: config.Remote, Branch: config.Branch, ExecutableTypes: append([]string(nil), config.ExecutableTypes...), DefaultRequestedBy: DefaultRequestedBy()}}
 }
 
+func taskCommandStorageForTest(store execution.CommandStore) taskCommandStorage {
+	value, ok := store.(taskCommandStorage)
+	if !ok {
+		panic("test service command store does not expose the task command fixture ports")
+	}
+	return value
+}
+
 func (c taskTestCommands) ValidateTaskBatch(ctx context.Context, config execution.Config, data []byte) (taskmodel.TaskBatchValidation, error) {
-	commands := NewTaskCommands(c.Store, config)
+	commands := NewTaskCommands(taskCommandStorageForTest(c.Store), config)
 	return commands.ValidateTaskBatch(ctx, data)
 }
 func (c taskTestCommands) CreateTaskBatch(ctx context.Context, config execution.Config, data []byte, request string, version uint64, by string) (taskmodel.TaskBatchReceipt, error) {
 	if err := config.ValidateTaskCommandConfiguration(); err != nil {
 		return taskmodel.TaskBatchReceipt{}, err
 	}
-	commands := NewTaskCommands(c.Store, config)
+	commands := NewTaskCommands(taskCommandStorageForTest(c.Store), config)
 	return commands.CreateTaskBatch(ctx, data, request, version, by)
 }
 func (c taskTestCommands) AddNativeTaskPredecessors(ctx context.Context, config execution.Config, in productapi.TaskPredecessorAddInput) (productapi.TaskPredecessorAddReceipt, error) {
 	if err := config.ValidateTaskCommandConfiguration(); err != nil {
 		return productapi.TaskPredecessorAddReceipt{}, err
 	}
-	commands := NewTaskCommands(c.Store, config)
+	commands := NewTaskCommands(taskCommandStorageForTest(c.Store), config)
 	receipt, err := commands.AddNativeTaskPredecessors(ctx, taskmodel.PredecessorAddInput(in))
 	return productapi.TaskPredecessorAddReceipt(receipt), err
 }
-func validateTaskBatchAgainstGraph(ctx context.Context, config execution.Config, batch taskmodel.TaskBatchInput, graph taskGraphSnapshot, verify bool) ([]taskmodel.TaskBatchIssue, []string) {
+func validateTaskBatchAgainstGraph(ctx context.Context, config execution.Config, batch taskmodel.TaskBatchInput, graph storageports.TaskGraphSnapshot, verify bool) ([]taskmodel.TaskBatchIssue, []string) {
 	return taskmodel.ValidateBatchAgainstGraph(batch, graph.TaskGraph(), config.ExecutableTypes, taskmodel.ValidateContract)
 }
-func validateNativePredecessorAddition(graph taskGraphSnapshot, id string, predecessors []string) error {
+func validateNativePredecessorAddition(graph storageports.TaskGraphSnapshot, id string, predecessors []string) error {
 	return taskmodel.ValidatePredecessorAddition(graph.TaskGraph(), id, predecessors)
 }

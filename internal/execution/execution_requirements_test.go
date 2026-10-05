@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
@@ -49,7 +48,7 @@ func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
 	if _, err = evaluateExecutionRequirements(context.Background(), c); err == nil {
 		t.Fatal("missing token reference accepted")
 	}
-	missing := queryHostRequirementTool(context.Background(), Config{Persistence: sqlite.Factory{}, Repository: c.Repository, Git: executionbackend.Command{Executable: filepath.Join(c.Repository, "missing-tool.exe")}}, "git")
+	missing := queryHostRequirementTool(context.Background(), Config{Repository: c.Repository, Git: executionbackend.Command{Executable: filepath.Join(c.Repository, "missing-tool.exe")}}, "git")
 	if missing.Status != executionbackend.RequirementMissing {
 		t.Fatal("missing tool not reported")
 	}
@@ -80,7 +79,7 @@ func TestExecutionRequirementsDoNotUpgradeProbeToVerified(t *testing.T) {
 			report.Capabilities[i].Evidence = evidence + "#sha256=" + fmt.Sprintf("%x", sha256.Sum256([]byte("fixture evidence; not native certification")))
 		}
 	}
-	require(t, (executionRecords{root: c.RunDir, persistence: sqlite.Factory{}, resources: c.Resources}).saveCapabilityReport(report))
+	require(t, (executionRecords{root: c.RunDir, resources: c.Resources}).saveCapabilityReport(report))
 	_, err = evaluateExecutionRequirements(context.Background(), c)
 	require(t, err)
 	require(t, os.WriteFile(evidence, []byte("changed evidence"), 0600))

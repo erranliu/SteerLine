@@ -13,10 +13,10 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -56,7 +56,7 @@ func newNativeLiveRecoveryProject(t *testing.T) integrationFixture {
 	f.config, err = steerlineapp.LoadConfig(f.configPath)
 	require(t, err)
 	// Bind authority only after the original native policy/model is final.
-	store, err := steerline.OpenNativeTaskProject(context.Background(), &f.config)
+	store, err := steerlineapp.OpenNativeTaskProject(context.Background(), &f.config)
 	require(t, err)
 	require(t, store.Close())
 	return f
@@ -75,7 +75,7 @@ func createNativeLiveTask(t *testing.T, ctx context.Context, f *integrationFixtu
 	var err error
 	contract.Digest, err = taskmodel.ContractDigest(contract)
 	require(t, err)
-	store, err := steerline.OpenNativeTaskCommandStore(ctx, &f.config)
+	store, err := steerlineapp.OpenNativeTaskCommandStore(ctx, &f.config)
 	require(t, err)
 	defer store.Close()
 	queries := productquery.NewService(store, f.config.Identity())
@@ -83,7 +83,7 @@ func createNativeLiveTask(t *testing.T, ctx context.Context, f *integrationFixtu
 	require(t, err)
 	commands := appExecutionCommands(t, store, f.config)
 	batch := taskmodel.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: f.config.Identity(), Tasks: []taskmodel.TaskBatchTask{{LocalKey: "fixture", TaskID: id, Title: "Native recovery acceptance", Type: "task", Contract: contract}}, Dependencies: []taskmodel.TaskBatchEdge{}}
-	_, err = createTaskBatchFixture(ctx, commands.Store, f.config, mustJSON(batch), newID(), authority.AuthorityVersion, "operator")
+	_, err = createTaskBatchFixture(ctx, sqliteCommandStore(commands.Store), f.config, mustJSON(batch), newID(), authority.AuthorityVersion, "operator")
 	require(t, err)
 	page, err := queries.ShowNativeTask(ctx, fmt.Sprint(id))
 	require(t, err)

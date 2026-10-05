@@ -16,12 +16,13 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/host"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -70,7 +71,7 @@ func fixtureStateKey(identity string) string {
 	}
 	return name + "-" + shortHash(canonical(common))[:12]
 }
-func openFixtureProject(ctx context.Context, c *Config) (persistence.Connection, error) {
+func openFixtureProject(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
 	*c = testConfigWithDirectory(*c)
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return nil, err
@@ -82,7 +83,7 @@ func openFixtureProject(ctx context.Context, c *Config) (persistence.Connection,
 	if err = os.MkdirAll(c.RunDir, 0700); err != nil {
 		return nil, err
 	}
-	db, err := c.Persistence.OpenWriter(filepath.Join(c.RunDir, "steerline.db"))
+	db, err := sqlite.OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		return nil, err
 	}
@@ -101,30 +102,42 @@ func openFixtureProject(ctx context.Context, c *Config) (persistence.Connection,
 	db.BindAuthority(authority)
 	return db, nil
 }
-func openFixtureCommandStore(ctx context.Context, c *Config) (persistence.Connection, error) {
+func openFixtureCommandStore(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
 	return openFixtureProject(ctx, c)
 }
 func loadFixtureRuntime(c Config) (*contracts.Runtime, error) {
-	db, err := c.Persistence.OpenReader(filepath.Join(c.RunDir, "steerline.db"))
+	db, err := sqlite.OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		return nil, err
 	}
 	defer db.Close()
-	return db.LoadRuntime(c.Identity(), true)
+	checkpoint, err := db.LoadCheckpoint(context.Background(), c.Identity(), true)
+	if err != nil {
+		return nil, err
+	}
+	snapshot, err := db.ReadExecutionStateSnapshot(context.Background(), c.Identity())
+	if err != nil {
+		return nil, err
+	}
+	runtime, err := reconstruction.BuildFromStorage(snapshot, *checkpoint)
+	if err != nil {
+		return nil, err
+	}
+	return &runtime, nil
 }
 func checkFixtureStoredExecutions(ctx context.Context, c Config) error {
-	db, err := c.Persistence.OpenReader(filepath.Join(c.RunDir, "steerline.db"))
+	db, err := sqlite.OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		return err
 	}
 	defer db.Close()
-	snapshot, err := db.Query(ctx, c.Identity())
+	snapshot, err := db.ReadExecutionStateSnapshot(ctx, c.Identity())
 	if err != nil {
 		return err
 	}
-	return c.ValidateStoredExecutions(snapshot)
+	return c.ValidateStoredExecutions(reconstruction.SnapshotFromStorage(snapshot))
 }
-func newFixtureTasks(reader persistence.CommandStore, c Config) taskapp.Service {
+func newFixtureTasks(reader *sqlite.SQLiteStore, c Config) taskapp.Service {
 	commands := NewTaskCommands(reader, c)
 	return taskapp.Service{Reader: reader, Input: commands.Input, Documents: commands.Documents}
 }
@@ -270,7 +283,7 @@ func runTestService(ctx context.Context, s *Service, mode string) error {
 
 var _ HostPort = fixtureHost{}
 
-func newFixtureConversationQuery(store persistence.Connection, project string) query.ConversationService {
+func newFixtureConversationQuery(store storageports.ConversationReader, project string) query.ConversationService {
 	return query.ConversationService{Project: project, Events: store, Bodies: store, Raw: store, Capabilities: store}
 }
 func taskDependencyState(record taskmodel.TaskRecord, graph storageports.TaskGraphSnapshot) (bool, []taskmodel.TaskDependencyStatus) {

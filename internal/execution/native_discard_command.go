@@ -11,8 +11,7 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -77,7 +76,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 			}
 		}
 	}
-	snapshot, err := sqlite.Query(ctx, c.Project)
+	snapshot, err := readCommandSnapshot(ctx, sqlite, c.Project)
 	if err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err
 	}
@@ -105,7 +104,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	intentBytes, _ := json.Marshal(intent)
 	canonicalIntent, _ := taskmodel.CanonicalJSON(intentBytes)
 	var staged executionmodel.OperationRecord
-	err = sqlite.TransactDiscardIntent(ctx, func(tx persistence.DiscardIntentTx) error {
+	err = sqlite.TransactDiscardIntent(ctx, func(tx storageports.DiscardIntentTx) error {
 		if old, found, e := tx.LookupCommand(ctx, c.Project, requestID); e != nil {
 			return e
 		} else if found {
@@ -221,7 +220,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 			return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "PR provider configuration does not match the fixed repository target")
 		}
 	}
-	knownSnapshot, err := sqlite.Query(ctx, c.Project)
+	knownSnapshot, err := readCommandSnapshot(ctx, sqlite, c.Project)
 	if err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err
 	}
@@ -249,7 +248,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	return c.commitDiscard(ctx, sqlite, requestID, staged, intent, prInfo, config.PR.Repository, known)
 }
 
-func updateDiscardIntentReceipt(ctx context.Context, s persistence.CommandStore, op *executionmodel.OperationRecord, intent taskDiscardIntent) error {
+func updateDiscardIntentReceipt(ctx context.Context, s CommandStore, op *executionmodel.OperationRecord, intent taskDiscardIntent) error {
 	data, err := json.Marshal(intent)
 	if err != nil {
 		return err
@@ -265,15 +264,15 @@ func updateDiscardIntentReceipt(ctx context.Context, s persistence.CommandStore,
 	return nil
 }
 
-func taskDiscardPlanFromStore(ctx context.Context, s persistence.CommandStore, project, taskID string) (executionmodel.DiscardFacts, taskmodel.TaskRecord, error) {
-	snapshot, err := s.Query(ctx, project)
+func taskDiscardPlanFromStore(ctx context.Context, s CommandStore, project, taskID string) (executionmodel.DiscardFacts, taskmodel.TaskRecord, error) {
+	snapshot, err := readCommandSnapshot(ctx, s, project)
 	if err != nil {
 		return executionmodel.DiscardFacts{}, taskmodel.TaskRecord{}, err
 	}
 	return taskDiscardPlanFromSnapshot(snapshot, taskID)
 }
 
-func taskDiscardPlanFromSnapshot(snapshot contracts.DomainSnapshot, taskID string) (executionmodel.DiscardFacts, taskmodel.TaskRecord, error) {
+func taskDiscardPlanFromSnapshot(snapshot reconstruction.Snapshot, taskID string) (executionmodel.DiscardFacts, taskmodel.TaskRecord, error) {
 	var task taskmodel.TaskRecord
 	found := false
 	for _, candidate := range snapshot.Tasks {
@@ -302,13 +301,13 @@ func uniqueSorted(values []string) []string {
 	return out
 }
 
-func persistDiscardPending(ctx context.Context, s persistence.CommandStore, project, requestID string, op executionmodel.OperationRecord, intent taskDiscardIntent, code, message string) (taskmodel.TaskDiscardReceipt, error) {
+func persistDiscardPending(ctx context.Context, s CommandStore, project, requestID string, op executionmodel.OperationRecord, intent taskDiscardIntent, code, message string) (taskmodel.TaskDiscardReceipt, error) {
 	receipt := taskmodel.TaskDiscardReceipt{RequestID: requestID, TaskID: intent.TaskID, Status: "pending_verification", Code: code, Message: message, CleanupPending: uniqueSorted(intent.CleanupPending)}
 	checkpoint, err := json.Marshal(intent)
 	if err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err
 	}
-	err = s.TransactDiscardPending(ctx, func(tx persistence.DiscardPendingTx) error {
+	err = s.TransactDiscardPending(ctx, func(tx storageports.DiscardPendingTx) error {
 		op.Status = "outcome_unknown"
 		op.Receipt = checkpoint
 		op.UnknownReason = message
@@ -328,7 +327,7 @@ func persistDiscardPending(ctx context.Context, s persistence.CommandStore, proj
 	return receipt, err
 }
 
-func (c CommandService) commitDiscard(ctx context.Context, s persistence.CommandStore, requestID string, op executionmodel.OperationRecord, intent taskDiscardIntent, info *executionmodel.PRInfo, expectedPRRepository string, known []executionmodel.VerifiedCandidatePR) (taskmodel.TaskDiscardReceipt, error) {
+func (c CommandService) commitDiscard(ctx context.Context, s CommandStore, requestID string, op executionmodel.OperationRecord, intent taskDiscardIntent, info *executionmodel.PRInfo, expectedPRRepository string, known []executionmodel.VerifiedCandidatePR) (taskmodel.TaskDiscardReceipt, error) {
 	graph, err := s.TaskGraphSnapshot(ctx, c.Project)
 	if err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err

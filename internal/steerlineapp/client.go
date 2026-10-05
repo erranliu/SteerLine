@@ -18,8 +18,8 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
 func OpenClient(ctx context.Context, path string) (*productclient.Client, error) {
@@ -45,6 +45,7 @@ func ClientResources(ctx context.Context, ref productapi.ProjectRef) (productcli
 }
 
 func clientResources(ctx context.Context, c execution.Config, ref productapi.ProjectRef) (productclient.Resources, error) {
+	configureNativeStorage(&c)
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return productclient.Resources{}, err
 	}
@@ -75,7 +76,7 @@ func clientResources(ctx context.Context, c execution.Config, ref productapi.Pro
 		},
 		OpenReader: func(ctx context.Context) (productclient.Reader, error) {
 			cfg := c
-			s, err := steerline.OpenNativeTaskReader(ctx, &cfg)
+			s, err := OpenNativeTaskReader(ctx, &cfg)
 			if err != nil {
 				return nil, err
 			}
@@ -83,7 +84,7 @@ func clientResources(ctx context.Context, c execution.Config, ref productapi.Pro
 		},
 		OpenCommands: func(ctx context.Context, mutation bool) (productclient.TaskCommands, error) {
 			cfg := c
-			s, err := steerline.OpenNativeTaskProject(ctx, &cfg)
+			s, err := OpenNativeTaskProject(ctx, &cfg)
 			if err != nil {
 				return nil, err
 			}
@@ -96,7 +97,7 @@ func clientResources(ctx context.Context, c execution.Config, ref productapi.Pro
 				if err != nil {
 					return nil, err
 				}
-				s, err = steerline.OpenNativeTaskCommandStore(ctx, &cfg)
+				s, err = OpenNativeTaskCommandStore(ctx, &cfg)
 				if err != nil {
 					lock.Close()
 					return nil, err
@@ -117,7 +118,7 @@ func clientResources(ctx context.Context, c execution.Config, ref productapi.Pro
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			reader, err := steerline.OpenNativeTaskReader(ctx, &c)
+			reader, err := OpenNativeTaskReader(ctx, &c)
 			if err != nil {
 				return nil, err
 			}
@@ -151,7 +152,11 @@ func clientResources(ctx context.Context, c execution.Config, ref productapi.Pro
 type clientReader struct {
 	query.Service
 	query.ConversationService
-	store           persistence.Connection
+	store interface {
+		Close() error
+		Command(context.Context, string, string) (storageports.CommandRecord, error)
+		DatabaseVersion(context.Context) (string, uint64, error)
+	}
 	project         string
 	config          execution.Config
 	executableTypes []string
@@ -166,17 +171,16 @@ func (r *clientReader) ReadProject(ctx context.Context, selected string, _ produ
 		legacyConnection := steerline.ConnectService(ctx, r.config)
 		observation := productObservation(legacyConnection.Snapshot)
 		connection := productConnection(legacyConnection, observation)
-		page := query.ProjectPage(view, selected, r.freshness, observation, connection, nil, r.executableTypes)
+		page := query.ProjectPage(storageports.ProjectView{}, selected, r.freshness, observation, connection, nil, r.executableTypes)
 		page.TaskError, page.NativeTaskError, page.HistoryError = err.Error(), err.Error(), err.Error()
 		return page
 	}
-	observed := steerline.ObserveRuntimeSnapshot(r.config, view.Runtime, view.RuntimeError, view.SampledAt)
-	legacyConnection := steerline.ConnectServiceFromSnapshot(ctx, r.config, observed)
+	legacyConnection := steerline.ConnectService(ctx, r.config)
 	observation := productObservation(legacyConnection.Snapshot)
 	connection := productConnection(legacyConnection, observation)
 	decisionReasons := map[string]string{}
-	if view.Runtime != nil {
-		for _, run := range view.Runtime.Runs {
+	if legacyConnection.Snapshot.Runtime != nil {
+		for _, run := range legacyConnection.Snapshot.Runtime.Runs {
 			if run == nil || run.Decision == nil {
 				continue
 			}
@@ -238,11 +242,11 @@ func (r *clientReader) Capabilities(ctx context.Context, f productapi.Capability
 		return nil, err
 	}
 	out := make([]productapi.ConversationCapabilityReport, 0, len(records))
-	for _, record := range records {
-		if f.ExecutionID != "" && record.ExecutionID != f.ExecutionID || f.AttemptID != "" && record.AttemptID != f.AttemptID || f.Source != "" && record.Source != f.Source || f.SourceIdentity != "" && record.SourceIdentity != f.SourceIdentity {
+	for _, report := range records {
+		if f.ExecutionID != "" && report.ExecutionID != f.ExecutionID || f.AttemptID != "" && report.AttemptID != f.AttemptID || f.Source != "" && report.Source != f.Source || f.SourceIdentity != "" && report.SourceIdentity != f.SourceIdentity {
 			continue
 		}
-		out = append(out, query.CapabilityReport(record))
+		out = append(out, report)
 	}
 	return out, nil
 }
@@ -309,18 +313,72 @@ func (r clientDecision) Eligibility(ctx context.Context, run *productapi.Candida
 }
 
 func (r clientDecision) Submit(ctx context.Context, in productapi.DecisionInput) (productapi.CommandReceipt, bool, error) {
+	config, store, err := openDecisionStore(ctx, r.config)
+	if err != nil {
+		return productapi.CommandReceipt{}, false, err
+	}
+	defer store.Close()
 	a := in.Answer
-	record, submitted, err := steerline.SubmitAnswerDecision(ctx, r.config, a.RunID, a.DecisionID, a.OptionID, a.Note, in.RequestedBy, a.ExpectedDecisionVersion, a.ExpectedRunRevision, a.ServiceInstanceID, in.CommandID, a.Answers)
+	record, submitted, err := steerline.SubmitAnswerDecision(ctx, config, a.RunID, a.DecisionID, a.OptionID, a.Note, in.RequestedBy, a.ExpectedDecisionVersion, a.ExpectedRunRevision, a.ServiceInstanceID, in.CommandID, a.Answers)
 	return query.CommandReceipt(record), submitted, err
 }
 
 func (r clientDecision) Answer(ctx context.Context, in productapi.AnswerInput) (productapi.CommandReceipt, bool, error) {
-	record, submitted, err := steerline.SubmitDecisionAnswer(ctx, r.config, steerline.AnswerOptions{RunID: in.RunID, DecisionID: in.DecisionID, Option: in.Option, Note: in.Note, By: in.RequestedBy, ExpectedVersion: in.ExpectedVersion, CommandID: in.CommandID})
+	config, store, err := openDecisionStore(ctx, r.config)
+	if err != nil {
+		return productapi.CommandReceipt{}, false, err
+	}
+	defer store.Close()
+	record, submitted, err := steerline.SubmitDecisionAnswer(ctx, config, steerline.AnswerOptions{RunID: in.RunID, DecisionID: in.DecisionID, Option: in.Option, Note: in.Note, By: in.RequestedBy, ExpectedVersion: in.ExpectedVersion, CommandID: in.CommandID})
 	return query.CommandReceipt(record), submitted, err
 }
 
+func openDecisionStore(ctx context.Context, config execution.Config) (execution.Config, *sqlite.SQLiteStore, error) {
+	store, err := OpenNativeTaskCommandStore(ctx, &config)
+	if err != nil {
+		return config, nil, err
+	}
+	config.ExecutionRecords, config.CommandReader, config.CommandWriter, config.TaskReader = store, store, store, store
+	return config, store, nil
+}
+
 func productObservation(value steerline.ObservationSnapshot) productapi.ObservationSnapshot {
-	return productapi.ObservationSnapshot{Page: query.ServicePage(value.Runtime), State: value.State, SampledAt: value.SampledAt, HeartbeatAge: value.HeartbeatAge, FreshnessLimit: value.FreshnessLimit, ClockSkew: value.ClockSkew, Error: value.Error}
+	return productapi.ObservationSnapshot{Page: productServicePage(value.Runtime), State: value.State, SampledAt: value.SampledAt, HeartbeatAge: value.HeartbeatAge, FreshnessLimit: value.FreshnessLimit, ClockSkew: value.ClockSkew, Error: value.Error}
+}
+
+func productServicePage(runtimeState *contracts.Runtime) *productapi.ServicePage {
+	if runtimeState == nil {
+		return nil
+	}
+	view := &query.ServiceView{Revision: runtimeState.Revision, UpdatedAt: runtimeState.UpdatedAt, HeartbeatAt: runtimeState.HeartbeatAt,
+		CurrentTask: copyClientValue(runtimeState.CurrentTask), SlotOccupied: runtimeState.SlotOccupied,
+		Repository: productapi.RepositorySummary{Path: runtimeState.Repository.Path, Remote: runtimeState.Repository.Remote, Branch: runtimeState.Repository.Branch, Identity: runtimeState.Repository.Identity},
+		Service:    productapi.ServiceSummary{InstanceID: runtimeState.Service.InstanceID, Status: runtimeState.Service.Status, ConfigDigest: runtimeState.Service.ConfigDigest, Claimant: runtimeState.Service.Claimant, Mode: runtimeState.Service.Mode, PID: runtimeState.Service.PID, Error: copyClientValue(runtimeState.Service.Error), StartupID: copyClientValue(runtimeState.Service.StartupID), Ready: runtimeState.Service.Ready, ControlProtocol: runtimeState.Service.ControlProtocol, Capabilities: append([]string(nil), runtimeState.Service.Capabilities...)},
+		Control:    productapi.ControlSummary{DispatchMode: runtimeState.Control.DispatchMode, DispatchPaused: runtimeState.Control.DispatchPaused, Revision: runtimeState.Control.Revision},
+		Deliveries: append([]executionmodel.TaskDeliveryRecord(nil), runtimeState.Deliveries...),
+	}
+	if operation := runtimeState.Control.Operation; operation != nil {
+		view.Control.Operation = &productapi.PendingControl{RequestID: operation.RequestID, Action: operation.Action, TaskID: operation.TaskID, Phase: operation.Phase, RunID: operation.RunID, AttemptID: operation.AttemptID, DecisionID: operation.DecisionID}
+	}
+	for _, blocker := range runtimeState.Control.Blockers {
+		view.Control.Blockers = append(view.Control.Blockers, productapi.ControlBlocker{RequestID: blocker.RequestID, Action: blocker.Action, TaskID: blocker.TaskID, RunID: blocker.RunID, AttemptID: blocker.AttemptID, DecisionID: blocker.DecisionID, Reason: blocker.Reason})
+	}
+	for _, run := range runtimeState.Runs {
+		if run == nil {
+			view.Runs = append(view.Runs, nil)
+			continue
+		}
+		view.Runs = append(view.Runs, &query.CandidateView{SessionID: run.SessionID, SessionGeneration: run.SessionGeneration, CurrentTurnID: run.CurrentTurnID, TurnNumber: run.TurnNumber, PRHistory: append([]string(nil), run.PRHistory...), CandidateCreatedAt: run.CandidateCreatedAt, CandidateEndedAt: copyClientValue(run.CandidateEndedAt), CandidateTiming: run.CandidateTiming, ResourceStatus: run.ResourceStatus, RecoveryRequired: run.RecoveryRequired, RecoveryState: run.RecoveryState, RecoveryVersion: run.RecoveryVersion, TaskID: run.TaskID, DomainTaskID: run.DomainTaskID, WorkflowVersion: run.WorkflowVersion, ExecutionID: run.ExecutionID, Title: run.Title, RunID: run.RunID, AttemptID: run.AttemptID, ControlRevision: run.ControlRevision, Claimant: run.Claimant, Host: run.Host, Backend: run.Backend, Protocol: run.Protocol, Agent: run.Agent, Target: run.Target, TaskStatus: run.TaskStatus, ExecutionStatus: run.ExecutionStatus, FinishTaskStatus: run.FinishTaskStatus, StartedAt: copyClientValue(run.StartedAt), EndedAt: copyClientValue(run.EndedAt), WorktreePath: copyClientValue(run.WorktreePath), WorktreeBranch: copyClientValue(run.WorktreeBranch), BaseCommit: copyClientValue(run.BaseCommit), LastEvent: copyClientValue(run.LastEvent), LogPath: copyClientValue(run.LogPath), ResultPath: copyClientValue(run.ResultPath), Summary: copyClientValue(run.Summary), Error: copyClientValue(run.Error), Process: run.Process, Abandonment: run.Abandonment, EnvironmentBlocker: run.EnvironmentBlocker, ExecutionProfile: run.ExecutionProfile, Decision: run.Decision, PR: run.PR})
+	}
+	return query.ServicePage(view)
+}
+
+func copyClientValue[T any](value *T) *T {
+	if value == nil {
+		return nil
+	}
+	copy := *value
+	return &copy
 }
 
 func productConnection(value steerline.ServiceConnection, observation productapi.ObservationSnapshot) productapi.ServiceConnection {

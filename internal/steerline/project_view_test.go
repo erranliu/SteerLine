@@ -2,33 +2,33 @@ package steerline
 
 import (
 	"context"
-	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"path/filepath"
 	"testing"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-func TestProjectViewConnectionUsesSampledRuntime(t *testing.T) {
+func TestProjectViewDoesNotOwnServiceRuntime(t *testing.T) {
 	ctx := context.Background()
 	service := controlReviewService(t)
 	view, err := (productquery.NewService(fixtureStoreFor(t, service), service.Config.Identity())).ReadProjectView(ctx, "", 500)
 	require(t, err)
 	requireProjectView(t, view)
-	observation := ObserveRuntimeSnapshot(service.Config, view.Runtime, view.RuntimeError, view.SampledAt)
-	// A subsequent checkpoint must not be read by connection classification.
+	connection := ConnectService(ctx, service.Config)
+	if connection.State != ConnectionConnected || connection.Snapshot.Runtime == nil {
+		t.Fatalf("host failed to read its service observation: %+v", connection)
+	}
+	// The product query result is independent from subsequent service checkpoint writes.
 	service.State.Service.Ready = false
 	require(t, publishFixtureCheckpoint(service))
-	connection := ConnectServiceFromSnapshot(ctx, service.Config, observation)
-	if connection.State != ConnectionConnected || connection.Snapshot.Runtime != view.Runtime || !connection.Snapshot.SampledAt.Equal(view.SampledAt) {
-		t.Fatalf("connection re-read the database instead of using the project sample: %+v", connection)
-	}
 	if current := ConnectService(ctx, service.Config); current.State != ConnectionInitializing {
-		t.Fatal("fixture did not publish a different service checkpoint")
+		t.Fatal("service observer ignored the latest service checkpoint")
 	}
-	unknown := connectServiceFromSnapshot(ctx, service.Config, observation, func(*executionbackend.ProcessIdentity) productapi.ProcessProbe {
+	unknown := connectServiceFromSnapshot(ctx, service.Config, connection.Snapshot, func(*executionbackend.ProcessIdentity) productapi.ProcessProbe {
 		return productapi.ProcessProbe{State: ProcessUnknown, Reason: "unavailable"}
 	})
 	if unknown.State != ConnectionUnknown || unknown.CanControl {
@@ -36,12 +36,14 @@ func TestProjectViewConnectionUsesSampledRuntime(t *testing.T) {
 	}
 }
 
-func TestProjectViewConnectionRechecksHeartbeatAtUse(t *testing.T) {
+func TestProjectViewFreshnessChecksUseHostSnapshot(t *testing.T) {
 	ctx := context.Background()
 	service := controlReviewService(t)
 	view, err := (productquery.NewService(fixtureStoreFor(t, service), service.Config.Identity())).ReadProjectView(ctx, "", 500)
 	require(t, err)
 	requireProjectView(t, view)
+	runtime, err := LoadDatabaseRuntime(service.Config)
+	require(t, err)
 	for _, test := range []struct {
 		name      string
 		heartbeat time.Time
@@ -54,18 +56,18 @@ func TestProjectViewConnectionRechecksHeartbeatAtUse(t *testing.T) {
 		{name: "future heartbeat", heartbeat: now().Add(time.Hour), sampledAt: now(), want: ConnectionStale, clockSkew: true},
 	} {
 		t.Run(test.name, func(t *testing.T) {
-			runtime := *view.Runtime
-			runtime.HeartbeatAt = test.heartbeat
-			observation := ObserveRuntimeSnapshot(service.Config, &runtime, nil, test.sampledAt)
+			copy := *runtime
+			copy.HeartbeatAt = test.heartbeat
+			observation := ObserveRuntimeSnapshot(service.Config, &copy, nil, test.sampledAt)
 			connection := ConnectServiceFromSnapshot(ctx, service.Config, observation)
 			if connection.State != test.want || connection.Snapshot.ClockSkew != test.clockSkew ||
-				!connection.Snapshot.SampledAt.Equal(test.sampledAt) || connection.Snapshot.Runtime != &runtime ||
+				!connection.Snapshot.SampledAt.Equal(test.sampledAt) || connection.Snapshot.Runtime != &copy ||
 				connection.CanControl != (test.want == ConnectionConnected) {
 				t.Fatalf("connection trusted an outdated freshness classification: %+v", connection)
 			}
 		})
 	}
-	observation := ObserveRuntimeSnapshot(service.Config, view.Runtime, nil, view.SampledAt)
+	observation := ObserveRuntimeSnapshot(service.Config, runtime, nil, view.SampledAt)
 	invalid := service.Config
 	invalid.Git.Executable = filepath.Join(t.TempDir(), "missing-git")
 	connection := ConnectServiceFromSnapshot(ctx, invalid, observation)
@@ -74,12 +76,12 @@ func TestProjectViewConnectionRechecksHeartbeatAtUse(t *testing.T) {
 	}
 }
 
-func requireProjectView(t *testing.T, view ProjectView) {
+func requireProjectView(t *testing.T, view storageports.ProjectView) {
 	t.Helper()
-	for _, err := range []error{view.TaskError, view.SelectedTaskError, view.DomainError, view.RuntimeError} {
+	for _, err := range []error{view.TaskError, view.SelectedTaskError, view.HistoryError} {
 		require(t, err)
 	}
-	if view.Tasks == nil || view.Ready == nil || view.Domain == nil {
+	if view.Tasks == nil || view.Ready == nil || view.History == nil {
 		t.Fatal("project view omitted a successful query section")
 	}
 	if view.Tasks.DatabaseID != view.Ready.DatabaseID || view.Tasks.DatabaseRevision != view.Ready.DatabaseRevision ||

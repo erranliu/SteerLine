@@ -7,6 +7,7 @@ import (
 	"strings"
 	"unicode/utf8"
 
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
@@ -84,7 +85,7 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 }
 
 func recoveryService(c Config, runtimeState contracts.Runtime) Service {
-	return Service{Config: c, lifecycleResolver: c.ExecutionDirectory, State: runtimeState, domain: contracts.DomainSnapshot{Tasks: runtimeState.Tasks, WorkflowRuns: runtimeState.WorkflowRuns, Executions: runtimeState.Executions, Attempts: runtimeState.Attempts, Decisions: runtimeState.Decisions, Operations: runtimeState.Operations}, runs: runtimeState.Runs}
+	return Service{Config: c, lifecycleResolver: c.ExecutionDirectory, State: runtimeState, domain: reconstruction.Snapshot{Tasks: runtimeState.Tasks, WorkflowRuns: runtimeState.WorkflowRuns, Executions: runtimeState.Executions, Attempts: runtimeState.Attempts, Decisions: runtimeState.Decisions, Operations: runtimeState.Operations, Deliveries: runtimeState.Deliveries}, runs: runtimeState.Runs}
 }
 
 func (s *Service) inspectRecoveryClaim(ctx context.Context, run *contracts.Run, report *RecoveryInspection) {

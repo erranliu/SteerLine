@@ -8,7 +8,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 type recordedStopProcess struct {
@@ -34,10 +33,10 @@ func TestWorkerBindingRollsBackWithItsCheckpoint(t *testing.T) {
 	if err := s.commitWorkerBinding(run, ref); err == nil {
 		t.Fatal("binding committed without its checkpoint")
 	}
-	if _, err := (executionRecords{root: s.Config.RunDir, persistence: sqlite.Factory{}}).loadBinding(run.RunID, run.AttemptID); !os.IsNotExist(err) {
+	if _, err := (executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords}).loadBinding(run.RunID, run.AttemptID); !os.IsNotExist(err) {
 		t.Fatalf("failed worker receipt left a binding: %v", err)
 	}
-	snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
+	snapshot, err := s.commandStore.Query(context.Background(), s.Config.identity)
 	require(t, err)
 	if snapshot.Executions[0].Process != nil || s.executionRecord(run).Process != nil {
 		t.Fatal("failed binding receipt became an authoritative worker")
@@ -64,7 +63,7 @@ func TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding(t *testing.T) {
 	s.refreshRun(run)
 	ref := executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Target: TargetFor(s.Config), Agent: AgentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, External: *identity, Generation: "generation"}
 	require(t, s.commitWorkerBinding(run, ref))
-	records := executionRecords{root: s.Config.RunDir, persistence: sqlite.Factory{}}
+	records := executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords}
 	process := &recordedStopProcess{identity: *identity, beforeKill: func() {
 		op, err := records.loadOperation(run.RunID, run.AttemptID, "stop-"+run.AttemptID)
 		require(t, err)

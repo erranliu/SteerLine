@@ -11,9 +11,9 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -280,7 +280,7 @@ func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupIt
 	if err != nil || !confirmed {
 		return errors.Join(err, &executionbackend.BackendError{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "native stop operation is not confirmed"})
 	}
-	records := executionRecords{root: s.Config.RunDir, persistence: s.Config.Persistence, resources: s.Config.Resources}
+	records := executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords, resources: s.Config.Resources}
 	persisted, err := records.loadOperation(op.RunID, op.AttemptID, op.ID)
 	if err != nil || persisted.Status != executionbackend.OperationConfirmed {
 		return errors.Join(err, nativeErr("outcome_unknown", "confirmed stop was not durably recorded"))
@@ -339,7 +339,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	if attempt == nil {
 		return nativeErr("outcome_unknown", "discarded task has no active local step attempt")
 	}
-	ref, err := (executionRecords{root: s.Config.RunDir, persistence: s.Config.Persistence, resources: s.Config.Resources}).loadBinding(workflowRunID, attempt.AttemptID)
+	ref, err := (executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords, resources: s.Config.Resources}).loadBinding(workflowRunID, attempt.AttemptID)
 	if err != nil {
 		return err
 	}
@@ -354,7 +354,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 		Grace  string
 	}{"fixed_local_execution_stop", s.Config.ShutdownGrace}
 	op := executionbackend.Operation{Version: executionbackend.ExecutionRecordVersion, ID: opID, RunID: workflowRunID, AttemptID: attempt.AttemptID, Backend: executionbackend.BackendLocal, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: executionbackend.OperationConfirmed, StartedAt: now(), UpdatedAt: now(), Diagnostic: observation.Diagnostic, Ref: &ref}
-	records := executionRecords{root: s.Config.RunDir, persistence: s.Config.Persistence, resources: s.Config.Resources}
+	records := executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords, resources: s.Config.Resources}
 	expectedOperation := ""
 	if old, loadErr := records.loadOperation(workflowRunID, attempt.AttemptID, opID); loadErr == nil {
 		expectedOperation = recordFingerprint(old)

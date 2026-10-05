@@ -9,9 +9,8 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -64,7 +63,7 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 		}
 		return executionmodel.TaskDeliveryReceipt{TaskID: taskID, TaskVersion: saved.TaskVersion, WorkflowRunID: workflowRunID, GraphRevision: saved.GraphRevision, Status: saved.Status, Delivery: existing}, nil
 	}
-	snapshot, err := sqlite.Query(ctx, c.Project)
+	snapshot, err := readCommandSnapshot(ctx, sqlite, c.Project)
 	if err != nil {
 		return executionmodel.TaskDeliveryReceipt{}, err
 	}
@@ -153,8 +152,8 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 
 // recordDiscardedMergeConflict keeps a late platform merge as audit evidence
 // without converting a discarded task into a normal delivery.
-func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s persistence.CommandStore, config Config, task taskmodel.TaskRecord, workflowRunID string, verifier TaskDeliveryVerifier, authority executionmodel.ProjectTaskAuthority) error {
-	snapshot, err := s.Query(ctx, c.Project)
+func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s CommandStore, config Config, task taskmodel.TaskRecord, workflowRunID string, verifier TaskDeliveryVerifier, authority executionmodel.ProjectTaskAuthority) error {
+	snapshot, err := readCommandSnapshot(ctx, s, c.Project)
 	if err != nil {
 		return err
 	}
@@ -178,7 +177,7 @@ func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s pers
 		if info.MergedAt == nil || info.MergedAt.IsZero() || info.MergeCommit == nil || !taskmodel.ValidCommit(*info.MergeCommit) {
 			return nativeErr("merge_state_unknown", "discarded candidate merge evidence is incomplete")
 		}
-		err = s.TransactDeliveryAudit(ctx, func(tx persistence.DeliveryAuditTx) error {
+		err = s.TransactDeliveryAudit(ctx, func(tx storageports.DeliveryAuditTx) error {
 			graph, err := tx.TaskGraphSnapshot(ctx, c.Project)
 			if err != nil {
 				return err
@@ -187,7 +186,7 @@ func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s pers
 			if !ok || current.Status != "discarded" || current.Version != task.Version || graph.Authority.AuthorityVersion != authority.AuthorityVersion {
 				return nativeErr("stale_version", "discarded task changed during merge reconciliation")
 			}
-			currentSnapshot, err := tx.Query(ctx, c.Project)
+			currentSnapshot, err := readTransactionalSnapshot(ctx, tx, c.Project)
 			if err != nil {
 				return err
 			}
@@ -208,7 +207,7 @@ func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s pers
 	return nativeErr("task_discarded", "discarded candidate PR is not verified merged")
 }
 
-func selectedNativeDeliveryState(snapshot contracts.DomainSnapshot, taskID, workflowRunID string) (executionmodel.WorkflowRunRecord, executionmodel.ExecutionRecord, error) {
+func selectedNativeDeliveryState(snapshot reconstruction.Snapshot, taskID, workflowRunID string) (executionmodel.WorkflowRunRecord, executionmodel.ExecutionRecord, error) {
 	var workflow *executionmodel.WorkflowRunRecord
 	for i := range snapshot.WorkflowRuns {
 		if snapshot.WorkflowRuns[i].WorkflowRunID == workflowRunID && snapshot.WorkflowRuns[i].TaskID == taskID {
@@ -255,7 +254,7 @@ func validateNativeDeliveryGates(record taskmodel.TaskRecord, contract taskmodel
 	return url, err
 }
 
-func (c CommandService) commitNativeDelivery(ctx context.Context, s persistence.CommandStore, expectedAuthorityVersion, expectedGraphRevision uint64, task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, execution executionmodel.ExecutionRecord, contract taskmodel.TaskContract, prURL string, delivery executionmodel.TaskDeliveryRecord, expectedBindings string) (executionmodel.TaskDeliveryReceipt, error) {
+func (c CommandService) commitNativeDelivery(ctx context.Context, s CommandStore, expectedAuthorityVersion, expectedGraphRevision uint64, task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, execution executionmodel.ExecutionRecord, contract taskmodel.TaskContract, prURL string, delivery executionmodel.TaskDeliveryRecord, expectedBindings string) (executionmodel.TaskDeliveryReceipt, error) {
 	if c.taskResults == nil {
 		return executionmodel.TaskDeliveryReceipt{}, nativeErr("authority_mismatch", "task result port is required")
 	}

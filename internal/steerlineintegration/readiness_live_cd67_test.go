@@ -15,12 +15,12 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution"
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -66,10 +66,10 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	require(t, os.WriteFile(configPath, mustJSON(project), 0600))
 	c, err := steerlineapp.LoadConfig(configPath)
 	require(t, err)
-	authority, err := steerline.OpenNativeTaskProject(ctx, &c)
+	authority, err := steerlineapp.OpenNativeTaskProject(ctx, &c)
 	require(t, err)
 	require(t, authority.Close())
-	store, err := steerline.OpenNativeTaskCommandStore(ctx, &c)
+	store, err := steerlineapp.OpenNativeTaskCommandStore(ctx, &c)
 	require(t, err)
 	queries := productquery.NewService(store, c.Identity())
 	commands := appExecutionCommands(t, store, c)
@@ -79,13 +79,13 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	require(t, err)
 	priority := 2
 	batch := taskmodel.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: c.Identity(), Tasks: []taskmodel.TaskBatchTask{{LocalKey: "readiness", TaskID: 9001154, Title: "PR154 isolated readiness and business dispatch acceptance", Type: "task", Priority: &priority, Contract: contract}}, Dependencies: []taskmodel.TaskBatchEdge{}}
-	validation, err := validateTaskBatchFixture(ctx, commands.Store, c, mustJSON(batch))
+	validation, err := validateTaskBatchFixture(ctx, sqliteCommandStore(commands.Store), c, mustJSON(batch))
 	require(t, err)
 	if !resume && !validation.Valid {
 		t.Fatalf("live contract rejected: %+v", validation)
 	}
 	if !resume {
-		_, err = createTaskBatchFixture(ctx, commands.Store, c, mustJSON(batch), newID(), validation.AuthorityVersion, "acceptance")
+		_, err = createTaskBatchFixture(ctx, sqliteCommandStore(commands.Store), c, mustJSON(batch), newID(), validation.AuthorityVersion, "acceptance")
 		require(t, err)
 		page, err := queries.ShowNativeTask(ctx, "9001154")
 		require(t, err)
@@ -99,7 +99,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	if !resume {
 		page, err := service.queries.ShowNativeTask(ctx, "9001154")
 		require(t, err)
-		store, err := steerline.OpenNativeTaskCommandStore(ctx, &c)
+		store, err := steerlineapp.OpenNativeTaskCommandStore(ctx, &c)
 		require(t, err)
 		profiles := c.AvailableExecutionProfiles()
 		_, err = (appExecutionCommands(t, store, c)).ClaimNativeTask(ctx, c, execution.TaskClaimOptions{TaskID: "9001154", RequestID: newID(), ExpectedTaskVersion: page.Tasks[0].Version, ExpectedAuthorityVersion: page.AuthorityVersion, RequestedBy: "acceptance", Explicit: true, ExecutionProfile: &profiles[0], ServiceInstanceID: service.instanceID})
@@ -111,20 +111,22 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	ctx = settleCtx
 	answered := map[string]bool{}
 	for ctx.Err() == nil {
-		view, err := service.queries.ReadProjectView(ctx, "9001154", 100)
-		require(t, err)
-		if view.Runtime == nil {
+		runtimeState, err := steerlineapp.LoadDatabaseRuntime(c)
+		if err != nil {
+			t.Fatalf("read execution runtime snapshot: %v", err)
+		}
+		if runtimeState == nil {
 			time.Sleep(time.Second)
 			continue
 		}
-		for _, run := range view.Runtime.Runs {
+		for _, run := range runtimeState.Runs {
 			if run.TaskID != "9001154" {
 				continue
 			}
 			var e *executionmodel.ExecutionRecord
-			for i := range view.Runtime.Executions {
-				if view.Runtime.Executions[i].ExecutionID == run.ExecutionID {
-					e = &view.Runtime.Executions[i]
+			for i := range runtimeState.Executions {
+				if runtimeState.Executions[i].ExecutionID == run.ExecutionID {
+					e = &runtimeState.Executions[i]
 					break
 				}
 			}
@@ -149,7 +151,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 				if !e.Environment.Ready || !e.Environment.Preparation.Verified || e.TurnNumber != 1 || state.Turns[0].Purpose != "readiness" || state.Turns[1].Purpose != "business" || state.Turns[0].DispatchID == state.Turns[1].DispatchID || state.Turns[1].Outcome != "succeeded" || e.Process.Terminal != e.Environment.Preparation.Probe.Terminal || e.Process.Incarnation != e.Environment.Preparation.Probe.Incarnation {
 					t.Fatal("live readiness/business lost its original session or dispatch boundaries")
 				}
-				report := map[string]any{"captured_at": time.Now().UTC(), "workflow_run_id": run.RunID, "execution_id": e.ExecutionID, "profile": findReadinessLiveProfile(t, view.Runtime, run.RunID), "environment": e.Environment, "turns": state.Turns, "process": e.Process, "state_root": home, "scope": "real readiness probe and settlement, exactly one business Dispatch, original terminal/incarnation, business command and settlement; no PR delivery"}
+				report := map[string]any{"captured_at": time.Now().UTC(), "workflow_run_id": run.RunID, "execution_id": e.ExecutionID, "profile": findReadinessLiveProfile(t, runtimeState, run.RunID), "environment": e.Environment, "turns": state.Turns, "process": e.Process, "state_root": home, "scope": "real readiness probe and settlement, exactly one business Dispatch, original terminal/incarnation, business command and settlement; no PR delivery"}
 				if path := os.Getenv("STEERLINE_READINESS_LIVE_REPORT"); path != "" {
 					raw, err := json.MarshalIndent(report, "", "  ")
 					require(t, err)
@@ -159,7 +161,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 				// Clean up only the two exact settled terminals owned by this isolated
 				// fixture, using checked native identity/close receipts.
 				service.stop(t)
-				config := c.ApplyFixedExecutionProfile(findReadinessLiveProfile(t, view.Runtime, run.RunID))
+				config := c.ApplyFixedExecutionProfile(findReadinessLiveProfile(t, runtimeState, run.RunID))
 				client := orcaworker.New(orcaworker.Config{Repository: config.Repository, CommandTimeout: config.CommandTimeout, Target: e.Target, Output: func(callCtx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
 					return (execution.Runner{Dir: config.Repository, Timeout: timeout}).Output(callCtx, executionbackend.Command{Executable: "orca"}, args...)
 				}})
@@ -200,16 +202,16 @@ func startReadinessLiveService(t *testing.T, ctx context.Context, c execution.Co
 	t.Helper()
 	service, err := steerlineapp.NewService(c)
 	require(t, err)
-	reader, err := steerline.OpenNativeTaskReader(ctx, &c)
+	reader, err := steerlineapp.OpenNativeTaskReader(ctx, &c)
 	require(t, err)
 	runCtx, cancel := context.WithCancel(ctx)
 	result := &runningIntegrationService{service: service, config: c, reader: reader, queries: productquery.NewService(reader, c.Identity()), cancel: cancel, done: make(chan error, 1)}
 	t.Cleanup(func() { result.stop(t) })
 	go func() { result.done <- steerline.RunService(runCtx, service, service.Config, "manual") }()
 	waitFor(t, 30*time.Second, func() bool {
-		view, err := result.queries.ReadProjectView(ctx, "9001154", 100)
-		if err == nil && view.Runtime != nil && view.Runtime.Service.Ready {
-			result.instanceID = view.Runtime.Service.InstanceID
+		runtimeState, err := steerlineapp.LoadDatabaseRuntime(c)
+		if err == nil && runtimeState != nil && runtimeState.Service.Ready {
+			result.instanceID = runtimeState.Service.InstanceID
 			return true
 		}
 		return false

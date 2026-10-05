@@ -14,10 +14,11 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func additionalDirectory(t *testing.T, ledger *additionalLedger) *execution.ExecutionDirectory {
@@ -114,7 +115,7 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 	require(t, os.WriteFile(fixture.configPath, mustJSON(project), 0600))
 	fixture.config, err = steerlineapp.LoadConfigWithDirectory(fixture.configPath, directory, steerlineapp.NewProcessHost(10*time.Second))
 	require(t, err)
-	projectStore, err := steerline.OpenNativeTaskProject(ctx, &fixture.config)
+	projectStore, err := steerlineapp.OpenNativeTaskProject(ctx, &fixture.config)
 	require(t, err)
 	require(t, projectStore.Close())
 	createIntegrationTask(t, ctx, fixture, 901)
@@ -185,7 +186,7 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 	}
 	// Settled executions leave the active runtime projection. Verify delivery
 	// through the public task detail, which retains its authoritative receipt.
-	var delivered contracts.NativeTaskPage
+	var delivered storageports.NativeTaskPage
 	var deliveryServiceError string
 	t.Cleanup(func() {
 		if t.Failed() {
@@ -195,19 +196,24 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 	waitFor(t, 2*time.Minute, func() bool {
 		var err error
 		delivered, err = service2.queries.ShowNativeTask(ctx, "901")
-		if snapshot, queryErr := service2.queries.ReadProjectView(ctx, "901", 100); queryErr == nil && snapshot.Runtime != nil && snapshot.Runtime.Service.Error != nil {
-			deliveryServiceError = *snapshot.Runtime.Service.Error
+		if observed, queryErr := steerlineapp.LoadDatabaseRuntime(config2); queryErr == nil && observed != nil && observed.Service.Error != nil {
+			deliveryServiceError = *observed.Service.Error
 			t.Fatalf("production delivery reported an error: %s", deliveryServiceError)
 		}
 		return err == nil && len(delivered.Tasks) == 1 && delivered.Tasks[0].Status == "closed" && delivered.Tasks[0].Delivery != nil
 	})
 	view, err := service2.queries.ReadProjectView(ctx, "901", 100)
 	require(t, err)
-	if view.Runtime == nil {
-		t.Fatal("delivery lost its public runtime records")
+	if view.SelectedTask == nil || view.SelectedTask.Delivery == nil || view.SelectedTask.Delivery.SelectedWorkflowRunID != first.run.RunID || view.SelectedTask.Delivery.MergeCommit != fixture.commit || view.SelectedTask.Delivery.PRURL != ledger.publicationURL {
+		t.Fatal("product task page lost its original selected workflow/provider delivery")
+	}
+	observed, err := steerlineapp.LoadDatabaseRuntime(config2)
+	require(t, err)
+	if observed == nil {
+		t.Fatal("execution reconstruction lost its database snapshot")
 	}
 	count := 0
-	for _, delivery := range view.Runtime.Deliveries {
+	for _, delivery := range observed.Deliveries {
 		if delivery.TaskID == "901" {
 			count++
 			if delivery.SelectedWorkflowRunID != first.run.RunID || delivery.MergeCommit != fixture.commit || delivery.PRURL != ledger.publicationURL {
@@ -222,7 +228,7 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 		t.Fatal("task detail lost its original selected workflow/provider delivery")
 	}
 	if candidateGuard {
-		store, err := steerline.OpenNativeTaskCommandStore(ctx, &config2)
+		store, err := steerlineapp.OpenNativeTaskCommandStore(ctx, &config2)
 		require(t, err)
 		defer store.Close()
 		command := appExecutionCommands(t, store, config2)

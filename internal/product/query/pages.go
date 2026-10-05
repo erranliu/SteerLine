@@ -6,12 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
 	model "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	taskview "github.com/erranliu/SteerLine/internal/product/query/taskgraph"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -19,7 +20,7 @@ func TaskSummary(t taskmodel.TaskRecord) api.TaskSummary {
 	return api.TaskSummary{TaskID: t.TaskID, Title: t.Title, Type: t.Type, Status: t.Status, Version: t.Version, Claimant: t.Claimant}
 }
 
-func TaskDetail(t contracts.NativeTaskDetail) api.TaskDetail {
+func TaskDetail(t storageports.NativeTaskDetail) api.TaskDetail {
 	p := api.TaskDetail{TaskSummary: TaskSummary(t.TaskRecord), ProjectID: t.ProjectID, Priority: t.Priority, SpecPath: t.Contract.SpecRef.Path, Successors: append([]string(nil), t.Successors...), DependencyReady: t.DependencyReady, StartupBlockers: append([]string(nil), t.StartupBlockers...)}
 	for _, w := range t.WorkflowRuns {
 		p.WorkflowRuns = append(p.WorkflowRuns, workflowSummary(w))
@@ -40,7 +41,7 @@ func dependencySummary(d taskmodel.TaskDependencyStatus) api.DependencySummary {
 	return api.DependencySummary{TaskID: d.TaskID, Status: d.Status, Delivered: d.Delivered, Blocker: d.Blocker}
 }
 
-func TaskPage(p contracts.NativeTaskPage) api.TaskPage {
+func TaskPage(p storageports.NativeTaskPage) api.TaskPage {
 	view := api.TaskPage{Protocol: p.Protocol, ProjectID: p.ProjectID, AuthorityVersion: p.AuthorityVersion, GraphRevision: p.GraphRevision, DatabaseRevision: p.DatabaseRevision, DatabaseID: p.DatabaseID, SampledAt: p.SampledAt, Capabilities: api.TaskCapabilities{DependencyReadiness: p.Capabilities.DependencyReadiness, DependencyBlockers: p.Capabilities.DependencyBlockers, StartupBlockers: p.Capabilities.StartupBlockers}, NextCursor: p.NextCursor, HasMore: p.HasMore, Tasks: []api.TaskDetail{}}
 	for _, t := range p.Tasks {
 		view.Tasks = append(view.Tasks, TaskDetail(t))
@@ -48,7 +49,7 @@ func TaskPage(p contracts.NativeTaskPage) api.TaskPage {
 	return view
 }
 
-func TaskDetailByID(p contracts.NativeTaskPage, id string) (*api.TaskDetail, error) {
+func TaskDetailByID(p storageports.NativeTaskPage, id string) (*api.TaskDetail, error) {
 	for _, item := range p.Tasks {
 		if item.TaskID == id {
 			v := TaskDetail(item)
@@ -87,7 +88,50 @@ func DecisionRequest(r model.DecisionRequest) api.DecisionRequest {
 	return p
 }
 
-func Candidate(r *contracts.Run) *api.CandidateSummary {
+// CandidateView is the bounded product projection input prepared by the
+// application edge. The query package never receives or reconstructs Runtime.
+type CandidateView struct {
+	SessionID, SessionGeneration, CurrentTurnID    string
+	TurnNumber                                     uint64
+	PRHistory                                      []string
+	CandidateCreatedAt                             time.Time
+	CandidateEndedAt                               *time.Time
+	CandidateTiming, ResourceStatus                string
+	RecoveryRequired                               bool
+	RecoveryState                                  string
+	RecoveryVersion                                uint64
+	TaskID, DomainTaskID, WorkflowVersion          string
+	ExecutionID, Title, RunID, AttemptID           string
+	ControlRevision                                uint64
+	Claimant, Host, Backend, Protocol, Agent       string
+	Target                                         backend.ExecutionTarget
+	TaskStatus, ExecutionStatus, FinishTaskStatus  string
+	StartedAt, EndedAt                             *time.Time
+	WorktreePath, WorktreeBranch, BaseCommit       *string
+	LastEvent, LogPath, ResultPath, Summary, Error *string
+	Process                                        *backend.ProcessIdentity
+	Abandonment                                    *model.CandidateAbandonment
+	EnvironmentBlocker                             *model.WorkerHostBlocker
+	ExecutionProfile                               *model.FixedExecutionProfile
+	Decision                                       *model.DecisionState
+	PR                                             model.PRState
+}
+
+// ServiceView contains only service fields rendered by the product API plus
+// candidate values projected separately from the execution actor state.
+type ServiceView struct {
+	Revision               uint64
+	UpdatedAt, HeartbeatAt time.Time
+	CurrentTask            *string
+	SlotOccupied           bool
+	Repository             api.RepositorySummary
+	Service                api.ServiceSummary
+	Control                api.ControlSummary
+	Runs                   []*CandidateView
+	Deliveries             []model.TaskDeliveryRecord
+}
+
+func Candidate(r *CandidateView) *api.CandidateSummary {
 	if r == nil {
 		return nil
 	}
@@ -118,17 +162,19 @@ func environmentBlocker(b *model.WorkerHostBlocker) *api.EnvironmentBlocker {
 	return &api.EnvironmentBlocker{ID: b.ID, TurnID: b.TurnID, Version: b.Version, Fact: api.EnvironmentFact{Reason: b.Fact.Reason, Detail: b.Fact.Detail, Confidence: b.Fact.Confidence, Source: b.Fact.Source}}
 }
 
-func ServicePage(rt *contracts.Runtime) *api.ServicePage {
+func ServicePage(rt *ServiceView) *api.ServicePage {
 	if rt == nil {
 		return nil
 	}
-	p := &api.ServicePage{Revision: rt.Revision, UpdatedAt: rt.UpdatedAt, HeartbeatAt: rt.HeartbeatAt, CurrentTask: copyValue(rt.CurrentTask), SlotOccupied: rt.SlotOccupied, Repository: api.RepositorySummary{Path: rt.Repository.Path, Remote: rt.Repository.Remote, Branch: rt.Repository.Branch, Identity: rt.Repository.Identity}, Service: api.ServiceSummary{InstanceID: rt.Service.InstanceID, Status: rt.Service.Status, ConfigDigest: rt.Service.ConfigDigest, Claimant: rt.Service.Claimant, Mode: rt.Service.Mode, PID: rt.Service.PID, Error: copyValue(rt.Service.Error), StartupID: copyValue(rt.Service.StartupID), Ready: rt.Service.Ready, ControlProtocol: rt.Service.ControlProtocol, Capabilities: append([]string(nil), rt.Service.Capabilities...)}, Control: api.ControlSummary{DispatchMode: rt.Control.DispatchMode, DispatchPaused: rt.Control.DispatchPaused, Revision: rt.Control.Revision}}
+	p := &api.ServicePage{Revision: rt.Revision, UpdatedAt: rt.UpdatedAt, HeartbeatAt: rt.HeartbeatAt, CurrentTask: copyValue(rt.CurrentTask), SlotOccupied: rt.SlotOccupied, Repository: rt.Repository, Service: rt.Service, Control: rt.Control}
+	p.Service.Capabilities = append([]string(nil), rt.Service.Capabilities...)
+	p.Service.Error = copyValue(rt.Service.Error)
+	p.Service.StartupID = copyValue(rt.Service.StartupID)
 	if o := rt.Control.Operation; o != nil {
-		p.Control.Operation = &api.PendingControl{RequestID: o.RequestID, Action: o.Action, TaskID: o.TaskID, Phase: o.Phase, RunID: o.RunID, AttemptID: o.AttemptID, DecisionID: o.DecisionID}
+		operation := *o
+		p.Control.Operation = &operation
 	}
-	for _, b := range rt.Control.Blockers {
-		p.Control.Blockers = append(p.Control.Blockers, api.ControlBlocker{RequestID: b.RequestID, Action: b.Action, TaskID: b.TaskID, RunID: b.RunID, AttemptID: b.AttemptID, DecisionID: b.DecisionID, Reason: b.Reason})
-	}
+	p.Control.Blockers = append([]api.ControlBlocker(nil), rt.Control.Blockers...)
 	for _, r := range rt.Runs {
 		candidate := Candidate(r)
 		if candidate != nil {
@@ -155,7 +201,7 @@ func workflowSummary(w model.WorkflowRunRecord) api.WorkflowSummary {
 	return p
 }
 
-func History(d contracts.DomainSnapshot) api.HistorySummary {
+func History(d storageports.ExecutionSnapshot) api.HistorySummary {
 	p := api.HistorySummary{}
 	for _, w := range d.WorkflowRuns {
 		p.WorkflowRuns = append(p.WorkflowRuns, workflowSummary(w))

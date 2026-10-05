@@ -8,18 +8,33 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
+
+// ServiceStorage is the app's explicit port bundle for one service instance.
+// Each consumer receives only its own capabilities; no combined connection
+// or factory enters the execution application.
+type ServiceStorage struct {
+	State         StateReader
+	Commands      CommandStore
+	Worker        storageports.WorkerMetadata
+	Conversations ConversationStore
+	Records       ExecutionRecordReader
+	Close         func() error
+}
 
 // NewService constructs a service from one explicit, immutable implementation
 // directory and its conversation source port. Lifecycle operations receive
 // only execution values and already-persisted operation intents. The application
 // calls PrepareServiceConfig before opening and transferring the connection.
-func NewService(c Config, directory *ExecutionDirectory, resolver executionbackend.LifecycleResolver, conversationSources contracts.ConversationSourcePort, processHost executionbackend.ManagedProcessHost, db persistence.Connection, work TaskWorkPort, results TaskResultPort, host HostPort) (_ *Service, retErr error) {
-	if directory == nil || resolver == nil || conversationSources == nil || processHost == nil || c.Persistence == nil || db == nil || work == nil || results == nil || host == nil || c.Resources == nil {
+func NewService(c Config, directory *ExecutionDirectory, resolver executionbackend.LifecycleResolver, conversationSources contracts.ConversationSourcePort, processHost executionbackend.ManagedProcessHost, stores ServiceStorage, work TaskWorkPort, results TaskResultPort, host HostPort) (_ *Service, retErr error) {
+	if c.ExecutionRecords == nil {
+		c.ExecutionRecords = stores.Records
+	}
+	if directory == nil || resolver == nil || conversationSources == nil || processHost == nil || c.ExecutionRecords == nil || stores.State == nil || stores.Commands == nil || stores.Worker == nil || stores.Conversations == nil || stores.Close == nil || work == nil || results == nil || host == nil || c.Resources == nil {
 		return nil, errors.New("execution directory, conversation source, process host and persistence ports are required")
 	}
 	c.ExecutionDirectory = directory
@@ -34,19 +49,19 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionbacke
 	}
 	defer func() {
 		if retErr != nil {
-			_ = db.Close()
+			_ = stores.Close()
 		}
 	}()
-	s := &Service{host: host, taskWork: work, taskResults: results, Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: db, commandStore: db, conversationStore: db, closeStore: db.Close, store: &Store{Domain: db, Project: c.identity}, workers: map[string]*Worker{}, ownedProcesses: map[string]executionbackend.StopHandle{}}
-	old, e := db.LoadRuntime(c.identity, false)
+	s := &Service{host: host, taskWork: work, taskResults: results, Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: stores.State, commandStore: stores.Commands, conversationStore: stores.Conversations, closeStore: stores.Close, store: &Store{Domain: stores.Worker, Project: c.identity}, workers: map[string]*Worker{}, ownedProcesses: map[string]executionbackend.StopHandle{}}
+	checkpoint, e := stores.State.LoadCheckpoint(context.Background(), c.identity, false)
 	if errors.Is(e, storageports.ErrNotFound) {
-		old, e = nil, nil
+		checkpoint, e = nil, nil
 	}
 	if e != nil {
 		return nil, e
 	}
-	s.State = contracts.Runtime{SchemaVersion: contracts.WorkerFlowRuntimeSchema, Repository: contracts.Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}, Runs: []*contracts.Run{}, Control: contracts.ControlState{DispatchMode: "auto", Revision: 1, Blockers: []contracts.ControlBlocker{}}}
-	authority, authErr := db.NativeAuthority(context.Background(), c.identity)
+	s.State = contracts.Runtime{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: contracts.Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}, Runs: []*contracts.Run{}, Control: contracts.ControlState{DispatchMode: "auto", Revision: 1, Blockers: []contracts.ControlBlocker{}}}
+	authority, authErr := stores.State.NativeAuthority(context.Background(), c.identity)
 	if authErr != nil {
 		return nil, authErr
 	}
@@ -54,11 +69,12 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionbacke
 		return nil, errors.New("automatic dispatch requires default_execution_profile")
 	}
 	s.State.Control = contracts.ControlState{DispatchMode: authority.DispatchMode, DispatchPaused: authority.DispatchPaused, Revision: authority.AuthorityVersion, Blockers: []contracts.ControlBlocker{}}
-	if old != nil {
+	if checkpoint != nil {
+		old := reconstruction.RuntimeFromCheckpoint(*checkpoint, authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion)
 		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch {
 			return nil, nativeErr("authority_mismatch", "runtime repository or branch differs from the native authority; preserve state")
 		}
-		s.State = *old
+		s.State = old
 		s.runs = old.Runs
 		s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion
 		if op := s.State.Control.Operation; op != nil {
@@ -87,7 +103,7 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionbacke
 			return nil, err
 		}
 	}
-	s.State.SchemaVersion = contracts.WorkerFlowRuntimeSchema
+	s.State.SchemaVersion = storageports.WorkerFlowRuntimeSchema
 	capabilities := []string{"answer_decision", "open_terminal", "recheck_environment", "start_task", "start_candidate", "abandon_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
 	s.State.Service = contracts.ServiceState{ExecutionPolicy: c.ExecutionPolicy, PolicySource: c.policySource, InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: capabilities, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
 	identity, err := host.CurrentProcessIdentity()
@@ -95,7 +111,7 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionbacke
 		return nil, fmt.Errorf("identify service process: %w", err)
 	}
 	s.State.Service.ProcessIdentity = identity
-	if err := db.ValidateConversationCheckpointFormat(context.Background(), c.identity, conversationSources.JournalSources()); err != nil {
+	if err := stores.Conversations.ValidateConversationCheckpointFormat(context.Background(), c.identity, conversationSources.JournalSources()); err != nil {
 		return nil, err
 	}
 	return s, nil

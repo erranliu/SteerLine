@@ -10,7 +10,6 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -74,7 +73,7 @@ func (c CommandService) SetNativeDispatchState(ctx context.Context, update Nativ
 	}
 	next.UpdatedAt = time.Now().UTC()
 	var result executionmodel.ProjectTaskAuthority
-	err = sqlite.TransactDispatch(ctx, func(tx persistence.DispatchTx) error {
+	err = sqlite.TransactDispatch(ctx, func(tx storageports.DispatchTx) error {
 		if old, found, lookupErr := tx.LookupCommand(ctx, c.Project, update.RequestID); lookupErr != nil {
 			return lookupErr
 		} else if found {

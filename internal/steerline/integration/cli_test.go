@@ -12,11 +12,11 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 var cliPath string
@@ -123,7 +123,7 @@ func TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead(t *test
 		t.Fatalf("read commands initialized missing native state: %v", err)
 	}
 
-	store, err := steerline.OpenNativeTaskProject(context.Background(), &config)
+	store, err := steerlineapp.OpenNativeTaskProject(context.Background(), &config)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead(t *test
 	if err != nil {
 		t.Fatalf("native task list process failed: %v: %s", err, output)
 	}
-	var page steerline.NativeTaskPage
+	var page storageports.NativeTaskPage
 	if err = json.Unmarshal(output, &page); err != nil {
 		t.Fatalf("invalid native task JSON: %v: %s", err, output)
 	}
@@ -154,7 +154,7 @@ func TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead(t *test
 	if output, err = runCLI(t, home, "task", "show", "-task-id", "01", "-config", configPath); err == nil || !strings.Contains(string(output), "contract_mismatch") {
 		t.Fatalf("noncanonical task ID was accepted: err=%v output=%s", err, output)
 	}
-	reader, err := steerline.OpenNativeTaskReader(context.Background(), &config)
+	reader, err := steerlineapp.OpenNativeTaskReader(context.Background(), &config)
 	if err != nil {
 		t.Fatalf("native authority did not survive CLI process: %v", err)
 	}

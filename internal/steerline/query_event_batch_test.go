@@ -11,14 +11,14 @@ import (
 )
 
 type countingEventStore struct {
-	productquery.Store
+	storageports.ProductReader
 	calls               int
 	maxPayloadBytesRead int
 }
 
 func (s *countingEventStore) Events(ctx context.Context, project, execution, attempt string, after int64, limit, payloadBudget int) ([]storageports.DomainEvent, error) {
 	s.calls++
-	events, err := s.Store.Events(ctx, project, execution, attempt, after, limit, payloadBudget)
+	events, err := s.ProductReader.Events(ctx, project, execution, attempt, after, limit, payloadBudget)
 	bytes := 0
 	for _, event := range events {
 		bytes += len(event.Payload)
@@ -49,7 +49,7 @@ func TestQueryEventBatchPagingPreservesByteBoundary(t *testing.T) {
 		_, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: "other-project", ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "batch", ExternalID: "other", Type: "message", Payload: []byte("wrong project")})
 		return err
 	}))
-	counted := &countingEventStore{Store: store}
+	counted := &countingEventStore{ProductReader: store}
 	query := productquery.NewService(counted, project)
 	filter := productquery.EventFilter{ExecutionID: "execution", AttemptID: "attempt"}
 	first, err := query.ReadEvents(ctx, filter, "", 200)
@@ -92,7 +92,7 @@ func TestQueryEventBatchReadCountAndPageLimit(t *testing.T) {
 	}))
 	for _, limit := range []int{0, 1, productquery.EventReadBatchSize, productquery.EventReadBatchSize + 1, productquery.MaxEventPageSize + 1} {
 		t.Run(fmt.Sprint(limit), func(t *testing.T) {
-			counted := &countingEventStore{Store: store}
+			counted := &countingEventStore{ProductReader: store}
 			query := productquery.NewService(counted, project)
 			page, err := query.ReadEvents(ctx, productquery.EventFilter{ExecutionID: "execution"}, "", limit)
 			require(t, err)
@@ -130,7 +130,7 @@ func TestQueryEventBatchDoesNotPrefetchUnusedLargeBodies(t *testing.T) {
 		}
 		return nil
 	}))
-	counted := &countingEventStore{Store: store}
+	counted := &countingEventStore{ProductReader: store}
 	query := productquery.NewService(counted, project)
 	cursor := ""
 	for i, id := range ids {

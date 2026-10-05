@@ -5,14 +5,13 @@ import (
 	"time"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 // ProjectPage builds the client page from one SQLite ProjectView. All sections
 // in ProjectView share its pinned read transaction; this function only maps
 // sampled values and never opens storage or reconstructs actor state.
-func ProjectPage(view contracts.ProjectView, selected string, freshness time.Duration, observation api.ObservationSnapshot, connection api.ServiceConnection, decisions map[string]string, executableTypes []string) api.ProjectSnapshot {
+func ProjectPage(view storageports.ProjectView, selected string, freshness time.Duration, observation api.ObservationSnapshot, connection api.ServiceConnection, decisions map[string]string, executableTypes []string) api.ProjectSnapshot {
 	page := api.ProjectSnapshot{SelectedTaskID: selected, CandidateFreshnessLimit: freshness, Observation: observation, Connection: connection, DecisionReasons: cloneStrings(decisions)}
 	if view.Tasks != nil {
 		native := TaskPage(*view.Tasks)
@@ -34,15 +33,11 @@ func ProjectPage(view contracts.ProjectView, selected string, freshness time.Dur
 	if view.SelectedTaskError != nil {
 		page.NativeTaskError = view.SelectedTaskError.Error()
 	}
-	if view.Domain != nil {
-		history := History(*view.Domain)
-		page.History = &history
+	if view.History != nil {
+		page.History = view.History
 	}
-	if view.DomainError != nil {
-		page.HistoryError = view.DomainError.Error()
-	}
-	if view.RuntimeError != nil && page.Observation.Error == "" {
-		page.Observation.Error = view.RuntimeError.Error()
+	if view.HistoryError != nil {
+		page.HistoryError = view.HistoryError.Error()
 	}
 	if page.TaskError == "" && page.NativeTaskError == "" && page.HistoryError == "" && page.Observation.Error == "" {
 		page.FullReadAt = view.SampledAt
@@ -52,7 +47,7 @@ func ProjectPage(view contracts.ProjectView, selected string, freshness time.Dur
 
 // ReadyCandidates renders the exact read order. It retains cached candidates
 // when control is offline, leaving start eligibility to the product input rule.
-func ReadyCandidates(source contracts.NativeReadyTaskSnapshot, sampled time.Time, connection api.ServiceConnection, executableTypes []string) *api.TaskCandidates {
+func ReadyCandidates(source storageports.NativeReadyTaskSnapshot, sampled time.Time, connection api.ServiceConnection, executableTypes []string) *api.TaskCandidates {
 	last := source.SampledAt
 	if last.IsZero() {
 		last = sampled
