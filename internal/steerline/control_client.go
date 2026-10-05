@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"strings"
 	"time"
@@ -74,7 +75,7 @@ func ReadTaskSnapshot(c execution.Config) (*TaskSnapshot, error) {
 	if err != nil {
 		return nil, err
 	}
-	ready, err := (NewQueryService(store, c.Identity())).ReadyNativeTasks(context.Background())
+	ready, err := (productquery.NewService(store, c.Identity())).ReadyNativeTasks(context.Background())
 	if err != nil {
 		return nil, err
 	}

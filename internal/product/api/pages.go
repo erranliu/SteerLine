@@ -212,11 +212,12 @@ type PRSummary struct {
 
 type DecisionOption struct{ ID, Label, Detail string }
 type DecisionRequest struct {
-	Question      string           `json:"question"`
-	Context       string           `json:"context"`
-	Recommended   string           `json:"recommended"`
-	Options       []DecisionOption `json:"options"`
-	AllowFreeText bool             `json:"allow_free_text"`
+	Question           string           `json:"question"`
+	Context            string           `json:"context"`
+	Recommended        string           `json:"recommended"`
+	Options            []DecisionOption `json:"options"`
+	AllowFreeText      bool             `json:"allow_free_text"`
+	HasNativeQuestions bool             `json:"has_native_questions"`
 }
 type DecisionSummary struct {
 	ID         string          `json:"id"`
@@ -271,16 +272,17 @@ type AttemptSummary struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 type DecisionHistory struct {
-	WorkflowRunID string           `json:"workflow_run_id"`
-	DecisionID    string           `json:"decision_id"`
-	ExecutionID   string           `json:"execution_id"`
-	AttemptID     string           `json:"attempt_id"`
-	Status        string           `json:"status"`
-	Version       uint64           `json:"version"`
-	CreatedAt     time.Time        `json:"created_at"`
-	Request       *DecisionRequest `json:"request"`
-	Answer        *DecisionAnswer  `json:"answer"`
-	Diagnostic    string           `json:"diagnostic"`
+	WorkflowRunID    string           `json:"workflow_run_id"`
+	DecisionID       string           `json:"decision_id"`
+	ExecutionID      string           `json:"execution_id"`
+	AttemptID        string           `json:"attempt_id"`
+	Status           string           `json:"status"`
+	Version          uint64           `json:"version"`
+	CreatedAt        time.Time        `json:"created_at"`
+	Request          *DecisionRequest `json:"request"`
+	Answer           *DecisionAnswer  `json:"answer"`
+	Diagnostic       string           `json:"diagnostic"`
+	AnswerDiagnostic string           `json:"answer_diagnostic,omitempty"`
 }
 type ExecutionSummary struct {
 	ExecutionID string    `json:"execution_id"`

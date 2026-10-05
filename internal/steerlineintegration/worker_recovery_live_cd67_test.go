@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -77,7 +78,7 @@ func createNativeLiveTask(t *testing.T, ctx context.Context, f *integrationFixtu
 	store, err := steerline.OpenNativeTaskCommandStore(ctx, &f.config)
 	require(t, err)
 	defer store.Close()
-	queries := steerline.NewQueryService(store, f.config.Identity())
+	queries := productquery.NewService(store, f.config.Identity())
 	authority, err := queries.ReadyNativeTaskSnapshot(ctx)
 	require(t, err)
 	commands := appExecutionCommands(t, store, f.config)

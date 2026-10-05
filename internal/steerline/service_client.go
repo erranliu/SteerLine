@@ -16,13 +16,10 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/workspace"
 )
 
 var errLockBusy = errors.New("service lock is held")
-
-type ServiceConnection = clientcontracts.ServiceConnection
 
 const (
 	ConnectionNoRecord      = productapi.ConnectionNoRecord

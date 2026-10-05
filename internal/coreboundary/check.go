@@ -25,6 +25,9 @@ const execution = module + "/internal/execution"
 
 var platformText = regexp.MustCompile(`(?i)codex|orca`)
 
+const productQuery = module + "/internal/product/query"
+const console = module + "/internal/console"
+
 // Report contains deterministic source diagnostics, including the full path
 // through a helper when a forbidden dependency is transitive.
 type Report struct {
@@ -47,8 +50,8 @@ func PureImportsAllowed(owner, dependency string) bool {
 		return true
 	}
 	switch owner {
-	case module + "/internal/steerline/taskview":
-		return dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model"
+	case module + "/internal/product/query/taskgraph":
+		return dependency == module+"/internal/task/model" || dependency == module+"/internal/execution/model" || dependency == module+"/internal/product/api" || dependency == module+"/internal/storage/ports"
 	case module + "/internal/task":
 		return dependency == module+"/internal/task/model"
 	case module + "/internal/execution/model":
@@ -59,7 +62,7 @@ func PureImportsAllowed(owner, dependency string) bool {
 	return false
 }
 
-var purePackages = []string{module + "/internal/steerline/taskview", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/product/api", module + "/internal/storage/ports"}
+var purePackages = []string{module + "/internal/product/query/taskgraph", module + "/internal/task", module + "/internal/task/model", module + "/internal/execution/model", module + "/internal/execution/backend", module + "/internal/product/api", module + "/internal/storage/ports"}
 
 func PureReconstructionImportAllowed(dependency string) bool {
 	if !strings.Contains(strings.Split(dependency, "/")[0], ".") {
@@ -91,10 +94,16 @@ func forbidden(pkg string) bool {
 }
 
 func consoleForbidden(pkg string) bool {
+	if pkg == console || pkg == module+"/internal/product/api" {
+		return false
+	}
 	if pkg == core || pkg == execution || pkg == "database/sql" || pkg == "modernc.org/sqlite" || strings.HasPrefix(pkg, "modernc.org/sqlite/") || forbidden(pkg) {
 		return true
 	}
-	for _, p := range []string{core + "/sqlite", core + "/persistence", core + "/query", core + "/projection", execution + "/reconstruction", core + "/workspace", core + "/publication", module + "/internal/steerlineclient"} {
+	if strings.HasPrefix(pkg, module+"/internal/") && pkg != module+"/internal/product/api" {
+		return true
+	}
+	for _, p := range []string{core + "/sqlite", core + "/persistence", core + "/query", core + "/projection", productQuery, execution + "/reconstruction", core + "/workspace", core + "/publication", module + "/internal/steerlineclient"} {
 		if pkg == p || strings.HasPrefix(pkg, p+"/") {
 			return true
 		}
@@ -109,7 +118,7 @@ func executionForbidden(pkg string) bool {
 	if pkg == core || pkg == module+"/internal/task" || forbidden(pkg) || pkg == "database/sql" || strings.HasPrefix(pkg, "modernc.org/sqlite") {
 		return true
 	}
-	for _, owner := range []string{core + "/sqlite", core + "/console", core + "/query", core + "/projection", module + "/internal/product/query", module + "/internal/steerlineclient", module + "/internal/testboundary", module + "/internal/testfeedback"} {
+	for _, owner := range []string{core + "/sqlite", core + "/console", console, core + "/query", core + "/projection", productQuery, module + "/internal/steerlineclient", module + "/internal/testboundary", module + "/internal/testfeedback"} {
 		if pkg == owner || strings.HasPrefix(pkg, owner+"/") {
 			return true
 		}
@@ -152,7 +161,7 @@ func ScanSource(root string) (Report, error) {
 				report.Violations = append(report.Violations, "platform text: "+filepath.ToSlash(rel)+"/"+entry.Name())
 			}
 		}
-		if pkg == core+"/console" {
+		if pkg == console {
 			report.ConsoleFiles++
 		}
 		if pkg == execution {
@@ -228,7 +237,7 @@ func ScanSource(root string) (Report, error) {
 			}
 		})
 	}
-	visitGraph(graph, core+"/console", func(path []string) {
+	visitGraph(graph, console, func(path []string) {
 		if consoleForbidden(path[len(path)-1]) {
 			report.Violations = append(report.Violations, "console forbidden dependency: "+strings.Join(path, " -> "))
 		}
@@ -276,9 +285,9 @@ func Check(ctx context.Context, root string) (Report, error) {
 	for _, target := range []string{"windows", "linux"} {
 		for _, consoleGraph := range []bool{false, true} {
 
-			cmd := exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/steerline", "./internal/execution", "./internal/steerline/contracts", "./internal/task/model", "./internal/execution/model", "./internal/execution/backend", "./internal/product/api", "./internal/storage/ports")
+			cmd := exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/steerline", "./internal/execution", "./internal/steerline/contracts", "./internal/task/model", "./internal/execution/model", "./internal/execution/backend", "./internal/product/api", "./internal/product/query", "./internal/product/query/taskgraph", "./internal/storage/ports")
 			if consoleGraph {
-				cmd = exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/steerline/console")
+				cmd = exec.CommandContext(ctx, "go", "list", "-deps", "-json", "./internal/console")
 			}
 			cmd.Dir = root
 			for _, value := range os.Environ() {
@@ -335,6 +344,16 @@ func Check(ctx context.Context, root string) (Report, error) {
 					for _, dep := range append(append([]string{}, pkg.Imports...), pkg.Deps...) {
 						if executionForbidden(dep) {
 							report.Violations = append(report.Violations, graphName+" execution forbidden dependency: "+execution+" -> "+dep)
+						}
+					}
+				}
+				if pkg.ImportPath == productQuery {
+					for _, dep := range pkg.Imports {
+						if strings.HasPrefix(dep, module+"/internal/") && dep != module+"/internal/product/api" && dep != module+"/internal/product/query/taskgraph" && dep != module+"/internal/task/model" && dep != module+"/internal/execution/model" && dep != module+"/internal/execution/backend" && dep != module+"/internal/storage/ports" && dep != module+"/internal/steerline/contracts" {
+							report.Violations = append(report.Violations, graphName+" product query dependency: "+productQuery+" -> "+dep)
+						}
+						if dep == "database/sql" || strings.HasPrefix(dep, "modernc.org/sqlite") {
+							report.Violations = append(report.Violations, graphName+" product query concrete storage dependency: "+productQuery+" -> "+dep)
 						}
 					}
 				}

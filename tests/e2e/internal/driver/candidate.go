@@ -7,6 +7,7 @@ import (
 	"fmt"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"os"
 	"path/filepath"
@@ -74,7 +75,7 @@ func ReadCandidateConversation(ctx context.Context, database, project, runID, ex
 		return result, err
 	}
 	defer reader.Close()
-	q := steerline.NewConversationQueryService(reader, project)
+	q := productquery.NewConversationService(reader, project)
 	filter := contracts.ConversationFilter{WorkflowID: runID, ExecutionID: executionID}
 	cursor := ""
 	for n := 0; n < 100; n++ {
@@ -141,7 +142,7 @@ func MainCandidate(args []string) error {
 			return err
 		}
 		defer reader.Close()
-		d, err := steerline.NewQueryService(reader, c.Identity()).Workflow(ctx, "")
+		d, err := productquery.NewService(reader, c.Identity()).Workflow(ctx, "")
 		if err != nil {
 			return err
 		}

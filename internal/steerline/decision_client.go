@@ -27,7 +27,7 @@ type AnswerOptions struct {
 
 // SubmitAnswerDecision publishes one immutable answer command to the live
 // service's SQLite authority. It never falls back to a file or offline writer.
-func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisionID, optionID, note, requestedBy string, expectedDecisionVersion, expectedRunRevision uint64, expectedInstance, commandID string) (storageports.CommandRecord, bool, error) {
+func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisionID, optionID, note, requestedBy string, expectedDecisionVersion, expectedRunRevision uint64, expectedInstance, commandID string, answers ...map[string][]string) (storageports.CommandRecord, bool, error) {
 	if strings.TrimSpace(runID) == "" {
 		return storageports.CommandRecord{}, false, errors.New("answer requires a run ID")
 	}
@@ -63,7 +63,14 @@ func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisi
 	if requestedBy == "" {
 		requestedBy = answererName()
 	}
-	answer := executionmodel.DecisionAnswer{DecisionID: decisionID, RunID: run.RunID, OptionID: strings.TrimSpace(optionID), Note: note, AnsweredBy: requestedBy, ExpectedDecisionVersion: expectedDecisionVersion, ExpectedRunRevision: expectedRunRevision, ServiceInstanceID: expectedInstance}
+	var questionAnswers map[string][]string
+	if len(answers) > 0 && answers[0] != nil {
+		questionAnswers = make(map[string][]string, len(answers[0]))
+		for id, values := range answers[0] {
+			questionAnswers[id] = append([]string(nil), values...)
+		}
+	}
+	answer := executionmodel.DecisionAnswer{DecisionID: decisionID, RunID: run.RunID, OptionID: strings.TrimSpace(optionID), Note: note, Answers: questionAnswers, AnsweredBy: requestedBy, ExpectedDecisionVersion: expectedDecisionVersion, ExpectedRunRevision: expectedRunRevision, ServiceInstanceID: expectedInstance}
 	answer.SourceAttemptID, answer.ExpectedRecoveryVersion = run.AttemptID, run.RecoveryVersion
 	if run.Decision != nil && run.Decision.ID == decisionID && len(executionmodel.DecisionQuestions(&run.Decision.Request)) > 0 {
 		if err := execution.NormalizeNativeDecisionAnswer(&run.Decision.Request, &answer); err != nil {

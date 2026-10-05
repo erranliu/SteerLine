@@ -1,0 +1,12 @@
+{"Time":"2026-10-05T07:58:46.4819126+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerlineapp"}
+{"Time":"2026-10-05T07:58:46.7181758+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineapp","Test":"TestCLIExecutionProfileIsBoundIntoStartTaskRequest"}
+{"Time":"2026-10-05T07:58:46.7181758+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineapp","Test":"TestCLIExecutionProfileIsBoundIntoStartTaskRequest","Output":"=== RUN   TestCLIExecutionProfileIsBoundIntoStartTaskRequest\n"}
+{"Time":"2026-10-05T07:58:47.434278+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineapp","Test":"TestCLIExecutionProfileIsBoundIntoStartTaskRequest","Output":"--- PASS: TestCLIExecutionProfileIsBoundIntoStartTaskRequest (0.72s)\n"}
+{"Time":"2026-10-05T07:58:47.4348221+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineapp","Test":"TestCLIExecutionProfileIsBoundIntoStartTaskRequest","Elapsed":0.72}
+{"Time":"2026-10-05T07:58:47.4348221+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineapp","Test":"TestFileQuerySourceReadsCombinedProjectView"}
+{"Time":"2026-10-05T07:58:47.4348221+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineapp","Test":"TestFileQuerySourceReadsCombinedProjectView","Output":"=== RUN   TestFileQuerySourceReadsCombinedProjectView\n"}
+{"Time":"2026-10-05T07:58:54.8391126+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineapp","Test":"TestFileQuerySourceReadsCombinedProjectView","Output":"--- PASS: TestFileQuerySourceReadsCombinedProjectView (7.40s)\n"}
+{"Time":"2026-10-05T07:58:54.8391126+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineapp","Test":"TestFileQuerySourceReadsCombinedProjectView","Elapsed":7.4}
+{"Time":"2026-10-05T07:58:54.8391126+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineapp","Output":"PASS\n"}
+{"Time":"2026-10-05T07:58:54.8435704+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineapp","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerlineapp\t8.362s\n"}
+{"Time":"2026-10-05T07:58:54.8435704+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineapp","Elapsed":8.362}

@@ -24,16 +24,28 @@ type clientTaskCommands struct {
 func newClientTaskCommands(store persistence.CommandStore, config execution.Config) clientTaskCommands {
 	return clientTaskCommands{store: store, config: config}
 }
-func (r *clientTaskCommands) Validate(ctx context.Context, payload []byte) (taskmodel.TaskBatchValidation, error) {
+func (r *clientTaskCommands) Validate(ctx context.Context, payload []byte) (productapi.TaskBatchValidation, error) {
 	commands := NewTaskCommands(r.store, r.config)
-	return commands.ValidateTaskBatch(ctx, payload)
+	value, err := commands.ValidateTaskBatch(ctx, payload)
+	if err != nil {
+		return productapi.TaskBatchValidation{}, err
+	}
+	result := productapi.TaskBatchValidation{Valid: value.Valid, ProjectID: value.ProjectID, TaskCount: value.TaskCount, DependencyCount: value.DependencyCount, AuthorityVersion: value.AuthorityVersion, GraphRevision: value.GraphRevision, DatabaseRevision: value.DatabaseRevision, DatabaseID: value.DatabaseID, SampledAt: value.SampledAt, Cycle: append([]string(nil), value.Cycle...)}
+	for _, issue := range value.Issues {
+		result.Issues = append(result.Issues, productapi.TaskBatchIssue{Code: issue.Code, Node: issue.Node, Message: issue.Message})
+	}
+	return result, nil
 }
-func (r *clientTaskCommands) Create(ctx context.Context, in productapi.CreateInput) (taskmodel.TaskBatchReceipt, error) {
+func (r *clientTaskCommands) Create(ctx context.Context, in productapi.CreateInput) (productapi.TaskBatchReceipt, error) {
 	if err := r.config.ValidateTaskCommandConfiguration(); err != nil {
-		return taskmodel.TaskBatchReceipt{}, err
+		return productapi.TaskBatchReceipt{}, err
 	}
 	commands := NewTaskCommands(r.store, r.config)
-	return commands.CreateTaskBatch(ctx, in.Payload, in.RequestID, in.ExpectedAuthorityVersion, in.RequestedBy)
+	value, err := commands.CreateTaskBatch(ctx, in.Payload, in.RequestID, in.ExpectedAuthorityVersion, in.RequestedBy)
+	if err != nil {
+		return productapi.TaskBatchReceipt{}, err
+	}
+	return productapi.TaskBatchReceipt(value), nil
 }
 func (r *clientTaskCommands) AddPredecessors(ctx context.Context, in productapi.TaskPredecessorAddInput) (productapi.TaskPredecessorAddReceipt, error) {
 	if err := r.config.ValidateTaskCommandConfiguration(); err != nil {

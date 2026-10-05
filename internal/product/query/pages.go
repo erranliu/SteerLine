@@ -10,6 +10,7 @@ import (
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
 	model "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
+	taskview "github.com/erranliu/SteerLine/internal/product/query/taskgraph"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -47,8 +48,39 @@ func TaskPage(p contracts.NativeTaskPage) api.TaskPage {
 	return view
 }
 
+func TaskDetailByID(p contracts.NativeTaskPage, id string) (*api.TaskDetail, error) {
+	for _, item := range p.Tasks {
+		if item.TaskID == id {
+			v := TaskDetail(item)
+			return &v, nil
+		}
+	}
+	return nil, nil
+}
+
+func TaskGraphPage(p taskview.Page) api.GraphPage {
+	v := api.GraphPage{Protocol: p.Protocol, ProjectID: p.ProjectID, AuthorityVersion: p.AuthorityVersion, GraphRevision: p.GraphRevision, DatabaseRevision: p.DatabaseRevision, DatabaseID: p.DatabaseID, SampledAt: p.SampledAt, NextCursor: p.NextCursor, HasMore: p.HasMore, Filters: api.GraphFilter{ProjectID: p.Filters.ProjectID, Status: p.Filters.Status, CenterTaskID: p.Filters.CenterTaskID, Direction: p.Filters.Direction, Depth: p.Filters.Depth, Limit: p.Filters.Limit}, Boundary: api.GraphBoundary{Truncated: p.Boundary.Truncated, MaxDepth: p.Boundary.MaxDepth, MaxNodes: p.Boundary.MaxNodes, OmittedNodeCount: p.Boundary.OmittedNodeCount, OmittedBoundaryEdgeCount: p.Boundary.OmittedBoundaryEdgeCount, Reasons: append([]string(nil), p.Boundary.Reasons...)}, Nodes: []api.GraphNode{}, Edges: []api.GraphEdge{}}
+	for _, n := range p.Nodes {
+		node := api.GraphNode{TaskID: n.TaskID, Title: n.Title, Status: n.Status, Priority: n.Priority, DependencyReady: n.DependencyReady, StartupBlockers: append([]string(nil), n.StartupBlockers...)}
+		for _, b := range n.Blockers {
+			node.Blockers = append(node.Blockers, api.DependencySummary{TaskID: b.TaskID, Status: b.Status, Delivered: b.Delivered, Blocker: b.Blocker})
+		}
+		if d := n.Delivery; d != nil {
+			node.Delivery = &api.DeliverySummary{PRURL: d.PRURL, WorkflowRunID: d.SelectedWorkflowRunID, MergedAt: d.MergedAt}
+		}
+		v.Nodes = append(v.Nodes, node)
+	}
+	for _, e := range p.Edges {
+		v.Edges = append(v.Edges, api.GraphEdge{Predecessor: e.Predecessor, Successor: e.Successor})
+	}
+	for _, e := range p.Boundary.Edges {
+		v.Boundary.Edges = append(v.Boundary.Edges, api.GraphBoundaryEdge{Predecessor: e.Predecessor, Successor: e.Successor, Reason: e.Reason})
+	}
+	return v
+}
+
 func DecisionRequest(r model.DecisionRequest) api.DecisionRequest {
-	p := api.DecisionRequest{Question: r.Question, Context: r.Context, Recommended: r.Recommended, AllowFreeText: r.AllowFreeText}
+	p := api.DecisionRequest{Question: r.Question, Context: r.Context, Recommended: r.Recommended, AllowFreeText: r.AllowFreeText, HasNativeQuestions: len(r.Questions) > 0 || r.QuestionRoute != nil}
 	for _, o := range r.Options {
 		p.Options = append(p.Options, api.DecisionOption{ID: o.ID, Label: o.Label, Detail: o.Detail})
 	}
@@ -147,6 +179,8 @@ func History(d contracts.DomainSnapshot) api.HistorySummary {
 			var a api.DecisionAnswer
 			if err := json.Unmarshal(d.Answer, &a); err == nil {
 				v.Answer = &a
+			} else {
+				v.AnswerDiagnostic = "原答案记录格式未知；原记录保留，未猜测或重放。"
 			}
 		}
 		p.Decisions = append(p.Decisions, v)
@@ -155,7 +189,7 @@ func History(d contracts.DomainSnapshot) api.HistorySummary {
 }
 
 func Profile(f model.FixedExecutionProfile) api.ExecutionProfileSummary {
-	p := api.ExecutionProfileSummary{ID: f.ID, Name: f.Name, Host: f.Host, Agent: f.Agent, AcceptedConfigVersion: f.AcceptedConfigVersion, ImplementationDisplay: append([]string(nil), f.ImplementationDisplay...)}
+	p := api.ExecutionProfileSummary{ID: f.ID, Name: f.Name, Host: f.Host, Agent: f.Agent, Digest: f.Digest, AcceptedConfigVersion: f.AcceptedConfigVersion, ImplementationDisplay: append([]string(nil), f.ImplementationDisplay...)}
 	p.Details = []string{"发布责任：" + f.PublicationPolicy.Publisher, "冻结发布目标：" + f.Publication.Provider.Kind + " · " + f.Publication.Provider.BaseURL + "/" + f.Publication.Provider.Repository + " · base " + f.Publication.BaseBranch, "Git remote：" + f.Publication.Remote + " · " + f.Publication.RemoteURL, "发布工具：" + f.Publication.Git.Executable + " · query " + f.Publication.Provider.Query.Executable + " · close " + f.Publication.Provider.Close.Executable, "认证引用：" + strings.Join(f.Publication.AuthenticationRefs, ", ")}
 	for _, tool := range []struct {
 		name    string

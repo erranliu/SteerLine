@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
@@ -27,7 +28,7 @@ func requireProjectView(t *testing.T, view ProjectView) {
 
 func TestProjectViewRejectsNilReader(t *testing.T) {
 	var store *SQLiteStore
-	view, err := NewQueryService(store, "project").ReadProjectView(context.Background(), "", 1)
+	view, err := productquery.NewService(store, "project").ReadProjectView(context.Background(), "", 1)
 	if err == nil || view.Tasks != nil || view.Domain != nil || view.Runtime != nil {
 		t.Fatal("nil reader exposed a successful project view")
 	}
@@ -86,7 +87,7 @@ func TestProjectViewSharesTransactionAcrossWriterCommit(t *testing.T) {
 		t.Fatalf("writer commit leaked into the pinned project view: %+v", view)
 	}
 	require(t, tx.Commit())
-	next, err := (NewQueryService(reader, project)).ReadProjectView(ctx, "99", 1)
+	next, err := (productquery.NewService(reader, project)).ReadProjectView(ctx, "99", 1)
 	require(t, err)
 	requireProjectView(t, next)
 	if next.Tasks.DatabaseRevision <= page.DatabaseRevision || next.Tasks.GraphRevision != page.GraphRevision+1 ||
@@ -100,7 +101,7 @@ func TestProjectViewSharesTransactionAcrossWriterCommit(t *testing.T) {
 func TestProjectViewKeepsReadOnlySectionsWithoutCheckpointOrSelection(t *testing.T) {
 	ctx := context.Background()
 	store, project, _ := nativeAuditStore(t)
-	query := NewQueryService(store, project)
+	query := productquery.NewService(store, project)
 	view, err := query.ReadProjectView(ctx, "2", 1)
 	require(t, err)
 	requireProjectView(t, view)

@@ -1,45 +1,75 @@
 {
-  "baseline": "621707d534b62e4b7df015463c53949715ba8be3",
-  "status": "preparing owned DTO, ports and projections; production consumer migration awaits actual merged execution namespace",
+  "baseline": "4288c43b05287554de0b542e9eeb90d366fe063f",
+  "status": "implementation and all planned checks complete; self-review and PR publication remain",
   "tests": [
     {
       "old_package": "internal/steerline/console",
       "new_package": "internal/console",
-      "parents": ["TestCC1", "TestCC2", "TestCC4"],
-      "assertion_owner": "console API fixtures: candidate identity, draft, blocker, request receipt and resource facts",
-      "status": "temporary module preparation; final production package rerun required"
+      "parents": ["TestCC1", "TestCC2", "TestCC3", "TestCC4", "TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript", "TestUX1ParallelNumbersAndPrimarySurface", "TestUX2PreviewSubmitEndsCurrentHumanInteraction", "TestUX3FreeInputAndNarrowPinnedPreview", "TestUX4RejectPreservesDraftAndBlockerStaysIndependent"],
+      "assertion_owner": "console: original candidate identity, draft/history/focus/input, blocker and lifecycle behavior",
+      "status": "console-02 passed; first rerun exposed an old repository-relative fixture path after relocation, fixed before the passing rerun"
     },
     {
       "old_package": "internal/steerlineclient",
       "new_package": "internal/product/client",
-      "parents": ["TestCM71ResourceOwnershipAndClosedClient", "TestCM71ProjectScopeAndErrors", "TestCM71UnknownControlUsesOriginalRequestAndRejectsConflict"],
-      "new_original_request_parent": "TestTM05OriginalRequest",
-      "assertion_owner": "single product client lifecycle and original request replay",
-      "status": "pending actual consumer switch"
+      "parents": ["TestCM71ResourceOwnershipAndClosedClient", "TestCM71ProjectScopeAndErrors", "TestWaitServiceCommandResolvesIdentityAndKeepsPolling", "TestTM05OriginalRequest"],
+      "assertion_owner": "single client lifetime, project scope, read failures and original control request/replay",
+      "status": "product-02 passed"
     },
     {
       "new_package": "internal/product/api",
       "parent": "TestTM05ProductDTO",
       "subtests": ["serializable_target_version_original_receipt", "api_has_no_internal_models_aliases_or_go_handles", "task_page_escapes_bidi_preserves_unicode"],
-      "assertion_owner": "public DTO shape, serializable original identity/version/receipt/error and Unicode"
+      "assertion_owner": "serializable pages/errors/receipts without internal records, handles or lost Unicode",
+      "status": "product-02 passed"
     },
     {
       "new_package": "internal/product/query",
-      "parent": "TestTM05PageProjection",
-      "subtests": ["candidate_excludes_private_execution_and_copies_page_values", "history_retains_complete_candidate_numbering_without_private_records", "task_page_excludes_fixed_contract_and_private_delivery_evidence", "unique_delivery_projects_winner_and_loser_without_choosing_by_merge", "conversation_projects_exact_body_raw_and_source_without_checkpoint"],
-      "assertion_owner": "pure page projection; does not reconstruct actor state"
+      "parents": ["TestTM05PageProjection", "TestTM05CanonicalActivityIdentityAndNoRawFallback", "TestTaskQueriesUseOnlyTaskReader", "TestTaskQueriesRejectReaderScopeAndCursorDrift", "TestConversationQueriesUseIndependentEventPortAndBoundCursor", "TestConversationBodyAndRawQueriesUseSeparatePorts"],
+      "assertion_owner": "narrow injected query ports, canonical identity/order, copied pages, complete history, no raw-log fallback and strict cursors",
+      "status": "product-02 passed"
+    },
+    {
+      "new_package": "internal/product/query/taskgraph",
+      "parent": "TestGraphViewUsesOneSnapshot",
+      "assertion_owner": "query-owned graph filter/page projection over storage/ports.TaskGraphSnapshot",
+      "status": "product-02 passed"
+    },
+    {
+      "new_package": "internal/storage/ports",
+      "parents": ["TestTM01StoragePortDependencies", "TestGraphViewUsesOneSnapshot"],
+      "assertion_owner": "one sampled task graph value shared by execution, SQLite, persistence and product query; no product query type leaks back into execution",
+      "status": "product-02 and boundary-01 passed"
     },
     {
       "old_package": "internal/steerline/sqlite",
       "parents": ["TestProjectViewSharesTransactionAcrossWriterCommit", "TestProjectViewKeepsReadOnlySectionsWithoutCheckpointOrSelection"],
       "assertion_owner": "one pinned SQLite transaction across writer commit and partial read failures",
-      "status": "preserve unique SQL and assertions during shared interface integration"
+      "status": "sqlite-snapshot-01 passed"
+    },
+    {
+      "package": "internal/steerlineapp",
+      "parents": ["TestFileQuerySourceReadsCombinedProjectView", "TestCLIExecutionProfileIsBoundIntoStartTaskRequest"],
+      "assertion_owner": "real factory/query read snapshot and immutable profile digest binding",
+      "status": "app-query-02 passed"
+    },
+    {
+      "package": "internal/steerlineintegration",
+      "parent": "TestCD67CoreBoundary",
+      "assertion_owner": "all-tag source scan, negative import fixtures and Windows/Linux production dependency graphs",
+      "status": "boundary-01 passed: 36 test instances"
     },
     {
       "package": "internal/steerlineintegration",
       "parent": "TestCandidateConsoleWiring",
-      "assertion_owner": "real app/client/SQLite/control construction and candidate commands",
-      "status": "rerun after actual factory migration"
+      "assertion_owner": "real app/client/SQLite/control construction and candidate command through console",
+      "status": "wiring-02 passed: 2 test instances"
+    },
+    {
+      "package": "cmd/test-feedback L1",
+      "parent": "quick-boundary",
+      "assertion_owner": "fixed minimal task, execution and boundary package/test selections",
+      "status": "l1-02 passed: 9 groups, 356 test instances, zero failures or skips; initial run documented stale package selectors"
     }
   ]
 }

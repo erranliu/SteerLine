@@ -10,8 +10,8 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/query"
 	readsqlite "github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 

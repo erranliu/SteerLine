@@ -5,7 +5,7 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/taskview"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -72,5 +72,5 @@ func (p NativeTaskPage) MarshalJSON() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	return taskview.EscapeBidiJSON(body), nil
+	return api.EscapeBidiJSON(body), nil
 }

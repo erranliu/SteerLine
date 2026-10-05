@@ -8,10 +8,10 @@ import (
 )
 
 const (
-	Protocol         = "native-task-graph/v1"
-	MaxNodes         = 500
-	MaxDepth         = 10
-	MaxBoundaryEdges = 500
+	TaskGraphProtocol         = "native-task-graph/v1"
+	MaxTaskGraphNodes         = 500
+	MaxTaskGraphDepth         = 10
+	MaxTaskGraphBoundaryEdges = 500
 )
 
 type GraphNode struct {
@@ -83,7 +83,8 @@ func (p GraphPage) MarshalJSON() ([]byte, error) {
 	return EscapeBidiJSON(body), nil
 }
 
-// EscapeBidiJSON is also used by the task detail page in the center package.
+// EscapeBidiJSON preserves source text while preventing terminal-direction
+// controls from being interpreted when serialized pages are displayed.
 func EscapeBidiJSON(body []byte) []byte {
 	for _, control := range []rune{'\u061c', '\u200e', '\u200f', '\u202a', '\u202b', '\u202c', '\u202d', '\u202e', '\u2066', '\u2067', '\u2068', '\u2069'} {
 		body = bytes.ReplaceAll(body, []byte(string(control)), []byte(fmt.Sprintf("\\u%04x", control)))

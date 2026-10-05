@@ -8,29 +8,31 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/taskview"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
+const nativeTaskGraphProtocol = productapi.TaskGraphProtocol
+
 type TaskGraphExportReceipt struct {
-	Output           string            `json:"output"`
-	ProjectID        string            `json:"project_id"`
-	NodeCount        int               `json:"node_count"`
-	GraphRevision    uint64            `json:"graph_revision"`
-	DatabaseID       string            `json:"database_id"`
-	DatabaseRevision uint64            `json:"database_revision"`
-	SampledAt        string            `json:"sampled_at"`
-	Overwritten      bool              `json:"overwritten"`
-	Boundary         TaskGraphBoundary `json:"boundary"`
+	Output           string                   `json:"output"`
+	ProjectID        string                   `json:"project_id"`
+	NodeCount        int                      `json:"node_count"`
+	GraphRevision    uint64                   `json:"graph_revision"`
+	DatabaseID       string                   `json:"database_id"`
+	DatabaseRevision uint64                   `json:"database_revision"`
+	SampledAt        string                   `json:"sampled_at"`
+	Overwritten      bool                     `json:"overwritten"`
+	Boundary         productapi.GraphBoundary `json:"boundary"`
 }
 
 // WriteTaskGraphExport atomically publishes a graph in the destination
 // directory. A destination without overwrite uses a hard-link publication to
 // make the no-replace check race-safe; the existing file is never removed first.
-func WriteTaskGraphExport(path string, graph TaskGraphPage, overwrite bool) (TaskGraphExportReceipt, error) {
+func WriteTaskGraphExport(path string, graph productapi.GraphPage, overwrite bool) (TaskGraphExportReceipt, error) {
 	if graph.Protocol != nativeTaskGraphProtocol || graph.ProjectID == "" || graph.Filters.ProjectID != graph.ProjectID {
 		return TaskGraphExportReceipt{}, nativeErr("invalid_export", "export requires a native task graph query result")
 	}
-	if len(graph.Nodes) > taskview.MaxNodes || graph.Boundary.Truncated && !graph.Filters.Filtered() {
+	if len(graph.Nodes) > productapi.MaxTaskGraphNodes || graph.Boundary.Truncated && !graph.Filters.Filtered() {
 		return TaskGraphExportReceipt{}, nativeErr("export_limit_exceeded", "complete task graph exceeds the export node limit")
 	}
 	if strings.TrimSpace(path) == "" {

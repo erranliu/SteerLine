@@ -1,9 +1,8 @@
 package steerline
 
 import (
+	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	"github.com/erranliu/SteerLine/internal/steerline/query"
-	taskview "github.com/erranliu/SteerLine/internal/steerline/taskview"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -18,4 +17,4 @@ type centerReader interface {
 	query.Store
 }
 
-type taskGraphSnapshot = taskview.Snapshot
+type taskGraphSnapshot = storageports.TaskGraphSnapshot

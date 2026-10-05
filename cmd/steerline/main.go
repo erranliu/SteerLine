@@ -17,12 +17,9 @@ import (
 	"time"
 
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	productclient "github.com/erranliu/SteerLine/internal/product/client"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	steerlineapp "github.com/erranliu/SteerLine/internal/steerlineapp"
-	"github.com/erranliu/SteerLine/internal/steerlineclient"
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func main() {
@@ -115,7 +112,7 @@ func run() error {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	var c execution.Config
-	var product api.Client
+	var product *productclient.Client
 	var e error
 	switch command {
 	case "tasks", "control", "stop", "answer", "stop-service":
@@ -171,7 +168,7 @@ func run() error {
 		return nil
 	}
 	if command == "stop" {
-		id := steerlineclient.NewRequestID()
+		id := productclient.NewRequestID()
 		request, err := product.SubmitControl(ctx, productapi.ControlInput{Action: productapi.StopService, RequestID: id, RequestedBy: *by})
 		if err != nil {
 			fmt.Println("request_id", id)
@@ -223,22 +220,25 @@ func run() error {
 			if e != nil {
 				return e
 			}
-			snapshot := product.ReadProject(ctx, *taskID, api.ProjectSnapshot{})
-			if snapshot.SelectedNative == nil || snapshot.NativeTasks == nil || snapshot.Connection.Snapshot.Runtime == nil {
+			snapshot := product.ReadProject(ctx, *taskID, productapi.ProjectSnapshot{})
+			if snapshot.SelectedNative == nil || snapshot.NativeTasks == nil || snapshot.Connection.Snapshot.Page == nil {
 				return fmt.Errorf("current native task/service snapshot is unavailable")
 			}
 			payload.ExpectedTaskVersion, payload.ExpectedGraphRevision = snapshot.SelectedNative.Version, snapshot.NativeTasks.GraphRevision
-			candidateRevision, candidateInstance = &snapshot.NativeTasks.AuthorityVersion, snapshot.Connection.Snapshot.Runtime.Service.InstanceID
+			candidateRevision, candidateInstance = &snapshot.NativeTasks.AuthorityVersion, snapshot.Connection.Snapshot.Page.Service.InstanceID
 		case "abandon_candidate":
 			if *runID == "" || strings.TrimSpace(*candidateReason) == "" || *controlMode != "" {
 				return fmt.Errorf("abandon_candidate requires exact -run-id and -reason")
 			}
-			snapshot := product.ReadProject(ctx, *taskID, api.ProjectSnapshot{})
-			runtimeState := snapshot.Connection.Snapshot.Runtime
+			snapshot := product.ReadProject(ctx, *taskID, productapi.ProjectSnapshot{})
+			runtimeState := snapshot.Connection.Snapshot.Page
 			if runtimeState == nil {
 				return fmt.Errorf("service snapshot is unavailable")
 			}
-			var target *contracts.Run
+			if snapshot.NativeTasks == nil {
+				return fmt.Errorf("native task version snapshot is unavailable")
+			}
+			var target *productapi.CandidateSummary
 			for _, run := range runtimeState.Runs {
 				if run.RunID == *runID {
 					target = run
@@ -248,13 +248,42 @@ func run() error {
 			if target == nil || *taskID != "" && *taskID != target.TaskID {
 				return fmt.Errorf("exact candidate does not belong to the requested task")
 			}
-			payload = productapi.ControlPayload{TaskID: target.TaskID, WorkflowRunID: target.RunID, ExpectedCandidateVersion: target.ControlRevision, Reason: *candidateReason}
-			for _, task := range runtimeState.Tasks {
-				if task.TaskID == target.TaskID {
-					payload.ExpectedTaskVersion = task.Version
+			// Resolve task version and graph revision from the same authoritative page.
+			targetSnapshot := snapshot
+			var selected *productapi.TaskDetail
+			for i := range snapshot.NativeTasks.Tasks {
+				if snapshot.NativeTasks.Tasks[i].TaskID == target.TaskID {
+					selected = &snapshot.NativeTasks.Tasks[i]
 					break
 				}
 			}
+			if snapshot.SelectedNative != nil && snapshot.SelectedNative.TaskID == target.TaskID {
+				selected = snapshot.SelectedNative
+			}
+			if selected == nil {
+				targetSnapshot = product.ReadProject(ctx, target.TaskID, productapi.ProjectSnapshot{})
+				if targetSnapshot.NativeTasks == nil || targetSnapshot.SelectedNative == nil || targetSnapshot.Connection.Snapshot.Page == nil {
+					return fmt.Errorf("exact candidate/task version snapshot is unavailable")
+				}
+				var refreshed *productapi.CandidateSummary
+				for _, candidate := range targetSnapshot.Connection.Snapshot.Page.Runs {
+					if candidate != nil && candidate.RunID == target.RunID {
+						refreshed = candidate
+						break
+					}
+				}
+				if refreshed == nil || refreshed.ExecutionID != target.ExecutionID || refreshed.SessionID != target.SessionID || refreshed.ControlRevision != target.ControlRevision {
+					return fmt.Errorf("candidate changed while resolving its task version; refresh and retry")
+				}
+				target = refreshed
+				selected = targetSnapshot.SelectedNative
+				runtimeState = targetSnapshot.Connection.Snapshot.Page
+			}
+			if selected == nil || selected.TaskID != target.TaskID || selected.Version == 0 {
+				return fmt.Errorf("exact native task version is unavailable")
+			}
+			payload = productapi.ControlPayload{TaskID: target.TaskID, WorkflowRunID: target.RunID, ExpectedCandidateVersion: target.ControlRevision, Reason: *candidateReason}
+			payload.ExpectedTaskVersion = selected.Version
 			candidateRevision, candidateInstance = &runtimeState.Control.Revision, runtimeState.Service.InstanceID
 		case "start_task":
 			if *taskID == "" {
@@ -282,8 +311,8 @@ func run() error {
 			if *runID == "" {
 				return fmt.Errorf("environment action requires -run-id")
 			}
-			snapshot := product.ReadProject(ctx, "", api.ProjectSnapshot{})
-			runtimeState := snapshot.Connection.Snapshot.Runtime
+			snapshot := product.ReadProject(ctx, "", productapi.ProjectSnapshot{})
+			runtimeState := snapshot.Connection.Snapshot.Page
 			if runtimeState == nil {
 				return fmt.Errorf("service snapshot is unavailable")
 			}
@@ -291,7 +320,7 @@ func run() error {
 			for _, run := range runtimeState.Runs {
 				if run.RunID == *runID {
 					var targetErr error
-					target, targetErr = api.EnvironmentTarget(run)
+					target, targetErr = productapi.EnvironmentTarget(run)
 					if targetErr != nil {
 						return targetErr
 					}
@@ -309,7 +338,7 @@ func run() error {
 		default:
 			return fmt.Errorf("unsupported control action %q", *action)
 		}
-		id := steerlineclient.NewRequestID()
+		id := productclient.NewRequestID()
 		req, err := product.SubmitControl(ctx, productapi.ControlInput{Action: productapi.ControlAction(*action), Payload: payload, RequestID: id, RequestedBy: *by, ExpectedRevision: candidateRevision, InstanceID: candidateInstance})
 		if err != nil {
 			fmt.Println("request_id", id)
@@ -345,7 +374,7 @@ func run() error {
 			if *runID != "" || *decisionID != "" || *option != "" || *note != "" {
 				return errors.New("-request-id cannot be combined with a new answer")
 			}
-			var result storageports.CommandRecord
+			var result productapi.CommandReceipt
 			var err error
 			if *waitReceipt {
 				result, err = product.WaitCommand(ctx, *requestID, 2*time.Minute)
@@ -357,7 +386,7 @@ func run() error {
 			}
 			return json.NewEncoder(os.Stdout).Encode(result)
 		}
-		id := steerlineclient.NewRequestID()
+		id := productclient.NewRequestID()
 		request, _, err := product.Answer(ctx, productapi.AnswerInput{RunID: *runID, DecisionID: *decisionID, Option: *option, Note: *note, RequestedBy: *by, CommandID: id})
 		if err != nil {
 			fmt.Println("command_id", id)
@@ -372,7 +401,7 @@ func run() error {
 			data, _ := json.Marshal(result)
 			fmt.Println(string(data))
 			if result.Status != "accepted" {
-				return fmt.Errorf("decision command is %s: %s", result.Status, strings.TrimSpace(string(result.Result)))
+				return fmt.Errorf("decision command is %s: %s", result.Status, strings.TrimSpace(result.ResultError))
 			}
 		}
 		return nil

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"strings"
 	"testing"
@@ -111,7 +112,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		defer reader.Close()
 		_, before, err := reader.DatabaseVersion(ctx)
 		require(t, err)
-		view, err := steerline.NewQueryService(reader, config.Identity()).ReadProjectView(ctx, "907", 500)
+		view, err := productquery.NewService(reader, config.Identity()).ReadProjectView(ctx, "907", 500)
 		require(t, err)
 		if view.SelectedTask == nil {
 			t.Fatal("offline query lost the persisted selected task")

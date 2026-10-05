@@ -10,7 +10,7 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/query"
+	"github.com/erranliu/SteerLine/internal/product/query"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 

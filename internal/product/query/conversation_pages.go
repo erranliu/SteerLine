@@ -47,3 +47,11 @@ func CapabilityReport(r contracts.ConversationCapabilityReport) api.Conversation
 	}
 	return p
 }
+
+func ConversationBodyPage(p contracts.ConversationBodyPage) api.ConversationBodyPage {
+	return api.ConversationBodyPage{ItemKey: p.ItemKey, Revision: p.Revision, Offset: p.Offset, NextOffset: p.NextOffset, TotalBytes: p.TotalBytes, SHA256: p.SHA256, Completeness: api.BodyCompleteness(p.Completeness), Complete: p.Complete, Data: append([]byte(nil), p.Data...)}
+}
+
+func ConversationRawPage(p contracts.ConversationRawPage) api.ConversationRawPage {
+	return api.ConversationRawPage{RawID: p.RawID, Offset: p.Offset, NextOffset: p.NextOffset, TotalBytes: p.TotalBytes, SHA256: p.SHA256, Complete: p.Complete, Data: append([]byte(nil), p.Data...)}
+}

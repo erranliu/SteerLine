@@ -2,6 +2,7 @@ package steerline
 
 import (
 	"context"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"path/filepath"
 	"testing"
 	"time"
@@ -13,7 +14,7 @@ import (
 func TestProjectViewConnectionUsesSampledRuntime(t *testing.T) {
 	ctx := context.Background()
 	service := controlReviewService(t)
-	view, err := (NewQueryService(fixtureStoreFor(t, service), service.Config.Identity())).ReadProjectView(ctx, "", 500)
+	view, err := (productquery.NewService(fixtureStoreFor(t, service), service.Config.Identity())).ReadProjectView(ctx, "", 500)
 	require(t, err)
 	requireProjectView(t, view)
 	observation := ObserveRuntimeSnapshot(service.Config, view.Runtime, view.RuntimeError, view.SampledAt)
@@ -38,7 +39,7 @@ func TestProjectViewConnectionUsesSampledRuntime(t *testing.T) {
 func TestProjectViewConnectionRechecksHeartbeatAtUse(t *testing.T) {
 	ctx := context.Background()
 	service := controlReviewService(t)
-	view, err := (NewQueryService(fixtureStoreFor(t, service), service.Config.Identity())).ReadProjectView(ctx, "", 500)
+	view, err := (productquery.NewService(fixtureStoreFor(t, service), service.Config.Identity())).ReadProjectView(ctx, "", 500)
 	require(t, err)
 	requireProjectView(t, view)
 	for _, test := range []struct {

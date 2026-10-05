@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -221,7 +222,7 @@ func TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation(t *testing.T) {
 	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutTaskBatch(replayedBatch, 1, 0) }); err != nil {
 		t.Fatalf("identical batch retry was not idempotent: %v", err)
 	}
-	query := NewQueryService(store, project)
+	query := productquery.NewService(store, project)
 	first, err := query.ListNativeTasks(ctx, "", 1)
 	if err != nil {
 		t.Fatal(err)
@@ -268,7 +269,7 @@ func TestNativeTaskQuerySnapshotPagingPersistenceAndIsolation(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer store.Close()
-	restarted, err := (NewQueryService(store, project)).ShowNativeTask(ctx, "10")
+	restarted, err := (productquery.NewService(store, project)).ShowNativeTask(ctx, "10")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -349,7 +350,7 @@ func TestNativeTaskCASGuardsAndDeliveryProjection(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	page, err := (NewQueryService(store, project)).ShowNativeTask(ctx, "7")
+	page, err := (productquery.NewService(store, project)).ShowNativeTask(ctx, "7")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -367,7 +368,7 @@ func TestNativeTaskCASGuardsAndDeliveryProjection(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer restarted.Close()
-	recovered, err := (NewQueryService(restarted, project)).ShowNativeTask(ctx, "7")
+	recovered, err := (productquery.NewService(restarted, project)).ShowNativeTask(ctx, "7")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -430,7 +431,7 @@ func TestNativeDiscardCASKeepsAuditAndNeverReusesID(t *testing.T) {
 	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutTask(replacement) }); err == nil {
 		t.Fatal("discarded task ID was reused")
 	}
-	page, err := (NewQueryService(store, project)).ShowNativeTask(ctx, "4")
+	page, err := (productquery.NewService(store, project)).ShowNativeTask(ctx, "4")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -40,8 +41,8 @@ func TestCodexHistoryRealFailedAcceptance(t *testing.T) {
 	service := &isolatedHistoryCommitFixture{domainStore: store, directory: t.TempDir()}
 	_, err = service.collectCodexHistoryPage(ctx, binding)
 	require(t, err)
-	query := steerline.NewConversationQueryService(store, binding.ProjectID)
-	filter := steerline.ConversationFilter{ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID, Source: "codex-app-server"}
+	query := productquery.NewConversationService(store, binding.ProjectID)
+	filter := contracts.ConversationFilter{ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID, Source: "codex-app-server"}
 	page, err := query.ReadConversation(ctx, filter, "", 100)
 	require(t, err)
 	failures := 0
@@ -104,8 +105,8 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 			if !settled {
 				t.Fatal("native turn paging did not reach the final turn")
 			}
-			query := steerline.NewConversationQueryService(store, binding.ProjectID)
-			filter := steerline.ConversationFilter{ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID}
+			query := productquery.NewConversationService(store, binding.ProjectID)
+			filter := contracts.ConversationFilter{ExecutionID: binding.ExecutionID, AttemptID: binding.AttemptID}
 			page, err := query.ReadConversation(ctx, filter, "", 1000)
 			require(t, err)
 			starts, ends, commentary, finals, tools := 0, 0, 0, 0, 0
@@ -170,7 +171,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 			require(t, err)
 			defer store.Close()
 			service.domainStore = store
-			query = steerline.NewConversationQueryService(store, binding.ProjectID)
+			query = productquery.NewConversationService(store, binding.ProjectID)
 			for i := 0; i < 2; i++ {
 				_, err = service.collectCodexHistoryPage(ctx, binding)
 				require(t, err)
@@ -279,8 +280,8 @@ func TestCodexHistoryRealSourceReplacement(t *testing.T) {
 			t.Fatalf("real source %s did not reach its final page", binding.SessionID)
 		}
 	}
-	query := steerline.NewConversationQueryService(store, bindings[0].ProjectID)
-	filter := steerline.ConversationFilter{ExecutionID: bindings[0].ExecutionID, AttemptID: bindings[0].AttemptID, Source: "codex-app-server"}
+	query := productquery.NewConversationService(store, bindings[0].ProjectID)
+	filter := contracts.ConversationFilter{ExecutionID: bindings[0].ExecutionID, AttemptID: bindings[0].AttemptID, Source: "codex-app-server"}
 	page, err := query.ReadConversation(ctx, filter, "", 100)
 	require(t, err)
 	sessions, gaps, finals := map[string]int{}, map[string]int{}, map[string]int{}

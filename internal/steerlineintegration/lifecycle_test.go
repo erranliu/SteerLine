@@ -19,8 +19,8 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
@@ -406,7 +406,7 @@ func createIntegrationTask(t *testing.T, ctx context.Context, fixture integratio
 	store, err := steerline.OpenNativeTaskCommandStore(ctx, &fixture.config)
 	require(t, err)
 	commands := appExecutionCommands(t, store, fixture.config)
-	queries := steerline.NewQueryService(store, fixture.config.Identity())
+	queries := productquery.NewService(store, fixture.config.Identity())
 	authority, err := queries.ReadyNativeTaskSnapshot(ctx)
 	require(t, err)
 	batch := taskmodel.TaskBatchInput{SchemaVersion: "task-batch/v1", ProjectID: fixture.config.Identity(),
@@ -440,7 +440,7 @@ func claimIntegrationTask(t *testing.T, ctx context.Context, fixture integration
 	store, err := steerline.OpenNativeTaskCommandStore(ctx, &fixture.config)
 	require(t, err)
 	commands := appExecutionCommands(t, store, fixture.config)
-	page, err := steerline.NewQueryService(store, fixture.config.Identity()).ShowNativeTask(ctx, fmt.Sprint(taskID))
+	page, err := productquery.NewService(store, fixture.config.Identity()).ShowNativeTask(ctx, fmt.Sprint(taskID))
 	require(t, err)
 	profiles := fixture.config.AvailableExecutionProfiles()
 	if len(profiles) != 1 || len(page.Tasks) != 1 {
@@ -552,7 +552,7 @@ type runningIntegrationService struct {
 	service    *execution.Service
 	config     execution.Config
 	reader     persistence.Connection
-	queries    steerline.QueryService
+	queries    productquery.Service
 	instanceID string
 	cancel     context.CancelFunc
 	done       chan error
@@ -581,7 +581,7 @@ func startIntegrationServiceWithSources(t *testing.T, parent context.Context, co
 	require(t, err)
 	ctx, cancel := context.WithCancel(parent)
 	harness := &runningIntegrationService{service: service, config: config, reader: reader,
-		queries: steerline.NewQueryService(reader, config.Identity()), cancel: cancel, done: make(chan error, 1)}
+		queries: productquery.NewService(reader, config.Identity()), cancel: cancel, done: make(chan error, 1)}
 	t.Cleanup(func() { harness.stop(t) })
 	go func() { harness.done <- steerline.RunService(ctx, service, service.Config, "manual") }()
 	waitFor(t, 30*time.Second, func() bool {
@@ -759,7 +759,7 @@ func submitIntegrationAnswer(t *testing.T, ctx context.Context, config execution
 func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config execution.Config, run *steerline.Run, option string) {
 	t.Helper()
 	if option == "open_terminal" || option == "recheck_environment" {
-		target, err := clientcontracts.EnvironmentTarget(run)
+		target, err := productapi.EnvironmentTarget(productquery.Candidate(run))
 		require(t, err)
 		request, err := steerline.SubmitControlTargeted(config, option, productapi.ControlPayload{Environment: target}, "fixture", newID(), "", nil)
 		require(t, err)
@@ -788,7 +788,7 @@ func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config exe
 			// different native question or consumed answer is never retried.
 			reader, readErr := steerline.OpenNativeTaskReader(ctx, &config)
 			require(t, readErr)
-			view, readErr := steerline.NewQueryService(reader, config.Identity()).ReadProjectView(ctx, run.TaskID, 100)
+			view, readErr := productquery.NewService(reader, config.Identity()).ReadProjectView(ctx, run.TaskID, 100)
 			closeErr := reader.Close()
 			require(t, readErr)
 			require(t, closeErr)
@@ -823,7 +823,7 @@ func assertQueriedTaskPhase(t *testing.T, ctx context.Context, config execution.
 	reader, err := steerline.OpenNativeTaskReader(ctx, &config)
 	require(t, err)
 	defer reader.Close()
-	page, err := steerline.NewQueryService(reader, config.Identity()).ShowNativeTask(ctx, taskID)
+	page, err := productquery.NewService(reader, config.Identity()).ShowNativeTask(ctx, taskID)
 	require(t, err)
 	if len(page.Tasks) != 1 || len(page.Tasks[0].WorkflowRuns) != 1 || page.Tasks[0].WorkflowRuns[0].Phase != phase {
 		t.Fatalf("public task query phase=%+v, want %s", page.Tasks, phase)

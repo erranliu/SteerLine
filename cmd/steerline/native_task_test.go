@@ -16,17 +16,16 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/erranliu/SteerLine/internal/console"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	productclient "github.com/erranliu/SteerLine/internal/product/client"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
 	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/console"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
-	"github.com/erranliu/SteerLine/internal/steerlineclient"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -152,7 +151,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	if callErr != nil {
 		t.Fatalf("task graph failed: %v", callErr)
 	}
-	var graph steerline.TaskGraphPage
+	var graph productapi.GraphPage
 	if err = json.Unmarshal(graphOutput, &graph); err != nil || graph.Protocol != "native-task-graph/v1" || len(graph.Nodes) != 1 || graph.Nodes[0].TaskID != "70" || graph.Nodes[0].Status != "discarded" {
 		t.Fatalf("unexpected task graph: %v / %+v", err, graph)
 	}
@@ -281,7 +280,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 				t.Fatalf("console construction: %+v / %v", refs, err)
 			}
 			tuiClient := options.Clients[refs[0].Key]
-			if _, ok := tuiClient.(*steerlineclient.Client); !ok {
+			if _, ok := tuiClient.(*productclient.Client); !ok {
 				t.Fatal("TUI uses another client implementation")
 			}
 			cliProfile := client.Project().Presentation
@@ -292,7 +291,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 			if result, err := tuiClient.Receipt(context.Background(), id); err != nil || result.Status != "indeterminate" || result.RequestID != id {
 				t.Fatalf("TUI changed original CLI receipt: %+v / %v", result, err)
 			}
-			if snapshot := tuiClient.ReadProject(context.Background(), "70", api.ProjectSnapshot{}); snapshot.Connection.State != productapi.ConnectionConnected || snapshot.DomainError != "" {
+			if snapshot := tuiClient.ReadProject(context.Background(), "70", productapi.ProjectSnapshot{}); snapshot.Connection.State != productapi.ConnectionConnected || snapshot.HistoryError != "" {
 				t.Fatalf("actual console failed reading project: %+v", snapshot)
 			}
 

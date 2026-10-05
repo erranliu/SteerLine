@@ -71,8 +71,8 @@ func TestTM04ConsoleQueryBoundary(t *testing.T) {
 		t.Run(strings.TrimPrefix(dependency, module+"/internal/"), func(t *testing.T) {
 			root := t.TempDir()
 			files := map[string]string{
-				"internal/steerline/console/edge_linux_test.go": "package console\nimport _ \"" + module + "/internal/helper\"\n",
-				"internal/helper/query_plan9.go":                "//go:build never_enabled\n\npackage helper\nimport _ \"" + dependency + "\"\n",
+				"internal/console/edge_linux_test.go": "package console\nimport _ \"" + module + "/internal/helper\"\n",
+				"internal/helper/query_plan9.go":      "//go:build never_enabled\n\npackage helper\nimport _ \"" + dependency + "\"\n",
 			}
 			for name, source := range files {
 				path := filepath.Join(root, name)

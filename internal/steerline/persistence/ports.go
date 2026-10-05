@@ -9,7 +9,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	taskview "github.com/erranliu/SteerLine/internal/steerline/taskview"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -64,7 +63,7 @@ type operationTx interface {
 }
 
 type graphTx interface {
-	TaskGraphSnapshot(context.Context, string) (taskview.Snapshot, error)
+	TaskGraphSnapshot(context.Context, string) (storageports.TaskGraphSnapshot, error)
 }
 
 type workflowTx interface {
@@ -152,7 +151,7 @@ type Tasks interface {
 	storageports.Claims
 	storageports.Discards
 	Query(context.Context, string) (contracts.DomainSnapshot, error)
-	TaskGraphSnapshot(context.Context, string) (taskview.Snapshot, error)
+	TaskGraphSnapshot(context.Context, string) (storageports.TaskGraphSnapshot, error)
 	NativeAuthority(context.Context, string) (executionmodel.ProjectTaskAuthority, error)
 	TaskContract(context.Context, string, taskmodel.TaskRecord) (taskmodel.TaskContract, error)
 	Operation(context.Context, string, string) (executionmodel.OperationRecord, error)

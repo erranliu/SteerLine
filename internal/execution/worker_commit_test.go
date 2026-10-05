@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/steerline/query"
+	"github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )

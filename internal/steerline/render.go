@@ -2,15 +2,7 @@ package steerline
 
 import (
 	"os"
-
-	"github.com/erranliu/SteerLine/internal/steerline/activityview"
 )
-
-type RenderOptions = activityview.RenderOptions
-
-func RenderActivity(ev ActivityEvent, o RenderOptions) string {
-	return activityview.RenderActivity(ev, o)
-}
 
 // ConsoleDefault returns "pretty" when stdout is an interactive terminal, so a
 // single `steerline run` shows live activity without a second process.

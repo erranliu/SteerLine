@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"net/url"
 	"os"
 	"os/exec"
@@ -70,7 +71,7 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 	require(t, authority.Close())
 	store, err := steerline.OpenNativeTaskCommandStore(ctx, &c)
 	require(t, err)
-	queries := steerline.NewQueryService(store, c.Identity())
+	queries := productquery.NewService(store, c.Identity())
 	commands := appExecutionCommands(t, store, c)
 	spec, plan := liveReadinessReference(t, ctx, repo, commit, "docs/spec/pr154-readiness-gate.spec.md"), liveReadinessReference(t, ctx, repo, commit, "docs/spec/pr154-readiness-gate.plan.md")
 	contract := taskmodel.TaskContract{ContractID: "pr154-readiness-live", Repository: remote, Remote: "origin", Branch: "main", SpecRef: spec, PlanRef: plan, AcceptanceRefs: []taskmodel.FileReference{spec}}
@@ -202,7 +203,7 @@ func startReadinessLiveService(t *testing.T, ctx context.Context, c execution.Co
 	reader, err := steerline.OpenNativeTaskReader(ctx, &c)
 	require(t, err)
 	runCtx, cancel := context.WithCancel(ctx)
-	result := &runningIntegrationService{service: service, config: c, reader: reader, queries: steerline.NewQueryService(reader, c.Identity()), cancel: cancel, done: make(chan error, 1)}
+	result := &runningIntegrationService{service: service, config: c, reader: reader, queries: productquery.NewService(reader, c.Identity()), cancel: cancel, done: make(chan error, 1)}
 	t.Cleanup(func() { result.stop(t) })
 	go func() { result.done <- steerline.RunService(runCtx, service, service.Config, "manual") }()
 	waitFor(t, 30*time.Second, func() bool {

@@ -16,8 +16,8 @@ import (
 	"unicode/utf8"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	queryapi "github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	queryapi "github.com/erranliu/SteerLine/internal/steerline/query"
 )
 
 func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) {

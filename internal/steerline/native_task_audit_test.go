@@ -3,6 +3,7 @@ package steerline
 import (
 	"context"
 	"errors"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -65,7 +66,7 @@ func TestNativeAuditPageBatchesRelationsAcrossPageBoundary(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
 	seedNativeGraphForView(t, c, commit, store, 402, []taskmodel.TaskDependencyRecord{{ProjectIdentity: c.Identity(), PredecessorID: "1", SuccessorID: "402"}})
-	q := NewQueryService(store, c.Identity())
+	q := productquery.NewService(store, c.Identity())
 	first, err := q.ListNativeTasks(ctx, "", 1)
 	require(t, err)
 	second, err := q.ListNativeTasks(ctx, first.NextCursor, 401)
@@ -79,7 +80,11 @@ func TestNativeAuditPageBatchesRelationsAcrossPageBoundary(t *testing.T) {
 	}
 	graph, err := q.TaskGraph(ctx, "", 500)
 	require(t, err)
-	if graph.Nodes[401].DependencyReady != last.DependencyReady || len(graph.Nodes[401].Blockers) != len(last.UnmetPredecessors) || graph.Nodes[401].Blockers[0] != last.UnmetPredecessors[0] {
+	if graph.Nodes[401].DependencyReady != last.DependencyReady || len(graph.Nodes[401].Blockers) != len(last.UnmetPredecessors) {
+		t.Fatalf("DAG and task page disagree on readiness: %+v / %+v", graph.Nodes[401], last)
+	}
+	graphBlocker, taskBlocker := graph.Nodes[401].Blockers[0], last.UnmetPredecessors[0]
+	if graphBlocker.TaskID != taskBlocker.TaskID || graphBlocker.Status != taskBlocker.Status || graphBlocker.Delivered != taskBlocker.Delivered || graphBlocker.Blocker != taskBlocker.Blocker {
 		t.Fatalf("DAG and task page disagree on readiness: %+v / %+v", graph.Nodes[401], last)
 	}
 }
@@ -102,7 +107,7 @@ func TestNativeAuditReadersCoexistWithWriter(t *testing.T) {
 	reader, err = OpenNativeTaskProject(ctx, &c)
 	require(t, err)
 	defer reader.Close()
-	page, err := (NewQueryService(reader, c.Identity())).ListNativeTasks(ctx, "", 100)
+	page, err := (productquery.NewService(reader, c.Identity())).ListNativeTasks(ctx, "", 100)
 	require(t, err)
 	if len(page.Tasks) != 3 {
 		t.Fatal("read failed while writer owns repository")
@@ -110,7 +115,7 @@ func TestNativeAuditReadersCoexistWithWriter(t *testing.T) {
 	// Every read rechecks the binding rather than relying on an earlier handle.
 	_, err = writer.db.Exec(`UPDATE project_task_authorities SET branch='other'`)
 	require(t, err)
-	_, err = (NewQueryService(reader, c.Identity())).ListNativeTasks(ctx, "", 100)
+	_, err = (productquery.NewService(reader, c.Identity())).ListNativeTasks(ctx, "", 100)
 	requireNativeAuditCode(t, err, "authority_mismatch")
 }
 
@@ -146,7 +151,7 @@ func TestNativeAuditContractRolesAndFixedReferenceVersions(t *testing.T) {
 		t.Fatal("invalid UTF-8 was silently replaced before hashing")
 	}
 	s, project, _ := nativeAuditStore(t)
-	page, err := (NewQueryService(s, project)).ShowNativeTask(context.Background(), "2")
+	page, err := (productquery.NewService(s, project)).ShowNativeTask(context.Background(), "2")
 	require(t, err)
 	base := page.Tasks[0].Contract
 	// Each reference has its own fixed revision; naming and commit equality

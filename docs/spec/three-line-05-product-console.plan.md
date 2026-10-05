@@ -4,38 +4,34 @@
 
 ## 实施步骤
 
-开工实际基线为 main `621707d534b62e4b7df015463c53949715ba8be3`。#38/#39/#74/#75 已合入。协调已明确共享接线顺序：#76 先完成独立复审并真实合入；本任务先完成专属 DTO、注入端口、纯页面投影与控制台中性 fixture 准备，再基于协调提供的实际 main SHA 切换 ownership.md 第 1–6 项消费者。不能以接口草案或纯文档 PR217 代替执行 namespace 真实交付。
+实现基于合入 #76（PR #219，merge `4288c43b05287554de0b542e9eeb90d366fe063f`）后的 main，分支起点 `a5fa7fc2`。按用户确认的实施顺序，先消费 #76 的实际执行 namespace 和接口，再迁真实消费者；不保留旧路径别名、转发或第二份 SQL。
 
-1. 按 #38 实际消费者列 DTO 字段及映射，移除产品聚合内部记录；小接口按查询/命令/连接拆，旧定义立即删除。
+任务 ID：77。Canonical Spec：`docs/spec/three-line-05-product-console.spec.md`；SHA-256：`75930b2a156ae9bdf71c78ffe4cf19135258738c127f43b4a63dba3cbd694b42`。实现 Plan 持续更新，不改变 Spec 范围。
 
-2. 迁纯投影及唯一 query/client，切换 app/CLI；console 迁包并完整保留 #38 行为与中性 fixture。
+1. [完成] 将页面字段映射到独立、可序列化的 `internal/product/api` 类型；移出候选、运行、恢复、决策和命令的内部记录与 Go 句柄。Go 错误 cause 留在客户端内部。验证：`product-02`。
 
-3. 扩展产品边界守卫及 DTO 编解码代表，更新 #38/#39 和已形成 #45 的路径/接线说明；不改变其产品验收范围。
+2. [完成] 将唯一 Go 客户端迁到 `internal/product/client`，以窄的 Reader/Command/Control/Decision 注入端口组成。把产品只读查询和页面映射迁到 `internal/product/query`，图过滤/游标归 `taskgraph`。共享任务图快照归 `storage/ports`，让 SQLite、执行和产品查询共用同一采样值。验证：`product-02`、`sqlite-snapshot-01`。
 
-实施中维护 `docs/validation/three-line-05-product-console/ownership.md` 和 `test-mapping.json`：记录实际旧/新文件、类型/端口、构造消费者及迁入测试父/子名称、断言所有者。前置已迁的定义/接线不重复迁移。共享文件按 Spec 的唯一修改所有者顺序集成，每步消费者与测试立即可运行。
+3. [完成] 将 UI 迁至 `internal/console`，只消费产品 API。更新 app 工厂、CLI、runner 精确组与边界守卫。应用层继续委派执行/命令写者；项目概览继续使用同一个 `ReadProjectView` SQLite 事务。验证：`console-02`、`app-query-02`、`boundary-01`、`wiring-02`。
+
+4. [完成] 保持 `docs/validation/three-line-05-product-console/ownership.md` 和 `test-mapping.json` 记录实际文件、接口、构造者、测试 parent/subtest、断言所有者和证据状态。验证：本目录报告。
 
 ## 测试计划
 
-以下新包及 `TestTM*` 是实施时需要接通的精确目标，不表示本次文档 PR 已创建测试或入口。优先将已有代表测试迁到真正所有者并保留断言，只补 Spec 的未覆盖缺口；不能新增仅镜像实现的测试。迁移影响命令时在同次实现中修订到唯一实际包，记录旧/新 parent/subtest，零匹配或 skip 不算通过。TestMC* 当前来源是 `internal/steerline/candidate_workers_test.go`。
-
-环境：Windows 临时 Git/SQLite/受控后端，STEERLINE_HOME 指向本轮隔离目录并在结束后恢复；不设置原生 opt-in。下表输出路径为证据目录基名，每次使用新的空运行子目录，不覆盖前置报告。原始 Go JSON、runner summary、身份/版本/原请求回执和必要清理结果一并保留。
+运行环境为 Windows；`cmd/test-feedback` 为每次运行创建隔离 `STEERLINE_HOME` 并保存原始 Go JSON、stderr、summary。所有命令不启用原生 opt-in。每行列出级别/组或场景 ID、环境、命令、时点、通过条件和证据目录；命令须至少命中一个目标测试，skip 或零匹配不算通过。
 
 | 级别/组或场景 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
 | --- | --- | --- | --- | --- | --- |
-| 定向 Go：TM05.1、TM05.2、TM05.3 页面准备 | Windows；纯 DTO/投影，无模型 | `go run ./cmd/test-feedback -out docs/validation/three-line-05-product-console/dto-preparation-01 -- ./internal/product/api ./internal/product/query -run '^TestTM05(ProductDTO\|PageProjection)$' -count=1` | 专属 DTO/纯投影完成后；共享消费者切换后另存新目录重验 | 两个父测试及其序列化/私有字段/Unicode/候选历史子测试非零通过；准备结果不替代真实产品接线验收 | `docs/validation/three-line-05-product-console/dto-preparation-01/` |
-| 定向 Go：TM05.2 | Windows；#38 产品 fixture，无模型 | `go run ./cmd/test-feedback -out docs/validation/three-line-05-product-console/console -- ./internal/console -run '^TestCC[124]$' -count=1` | 候选 UI 迁移后 | 既有 CC1/2/4 非零命中；身份/草稿/历史/停止事实保持 | `docs/validation/three-line-05-product-console/console/` |
-| 定向 Go：TM05.1、TM05.3 | Windows；真实 app/client 和 SQLite 读快照 | `go run ./cmd/test-feedback -out docs/validation/three-line-05-product-console/product -- ./internal/product/api ./internal/product/client -run '^TestTM05(ProductDTO\|Snapshot\|OriginalRequest)$' -count=1` | 公开 DTO 和客户端切换后 | DTO 不含内部记录；同快照与原请求拒绝/对账代表实际通过 | `docs/validation/three-line-05-product-console/product/` |
-| 定向 Go：TM05.1–TM05.3 | Windows；真实服务与受控后端 | `go run ./cmd/test-feedback -out docs/validation/three-line-05-product-console/wiring -- ./internal/steerlineintegration -run '^TestCandidateConsoleWiring$' -count=1` | 默认工厂迁移后 | 复用 #38 CC3/4 实际命令接线，无 UI 业务写权 | `docs/validation/three-line-05-product-console/wiring/` |
-| L1 固定最小入口 | Windows；隔离 STEERLINE_HOME，无原生 opt-in | `go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-05-product-console/l1` | 自查/定向修复完成后一次 | 现有规则/构造/守卫代表非零命中且通过，无意外 live | `docs/validation/three-line-05-product-console/l1/` |
+| 定向 TM05.1/TM05.3：API、client、query、taskgraph、storage ports | Windows；隔离 runner；无原生 opt-in | `go run ./cmd/test-feedback -out docs/validation/three-line-05-product-console/product-02 -- ./internal/product/api ./internal/product/client ./internal/product/query ./internal/product/query/taskgraph ./internal/storage/ports -count=1` | DTO、注入端口和投影迁移后 | 5 packages、33 test instances 通过；覆盖私有字段、Unicode、原请求、独立读取能力、规范活动身份和同一图快照 | `docs/validation/three-line-05-product-console/product-02/` |
+| 定向 TM05.2/#38 CC 与 UX：完整 console | Windows；隔离 runner；无原生 opt-in | `go run ./cmd/test-feedback -out docs/validation/three-line-05-product-console/console-02 -- ./internal/console -count=1` | UI 迁移后 | 1 package、78 test instances 通过；保留输入、草稿、历史、焦点、阻塞、停止和本地/Orca fixture 行为 | `docs/validation/three-line-05-product-console/console-02/` |
+| 定向 TM05.1/TM05.3：app 工厂与项目读取 | Windows；真实 app 适配、临时 SQLite | `go run ./cmd/test-feedback -out docs/validation/three-line-05-product-console/app-query-02 -- ./internal/steerlineapp -run '^(TestFileQuerySourceReadsCombinedProjectView\|TestCLIExecutionProfileIsBoundIntoStartTaskRequest)$' -count=1` | app/client 接线后 | 2 tests 通过；项目页面使用组合快照，冻结 profile digest 绑定原 start request | `docs/validation/three-line-05-product-console/app-query-02/` |
+| TM05.3：SQLite 项目快照同事务 | Windows；临时 SQLite | `go run ./cmd/test-feedback -out docs/validation/three-line-05-product-console/sqlite-snapshot-01 -- ./internal/steerline/sqlite -run '^TestProjectView(RejectsNilReader\|SharesTransactionAcrossWriterCommit\|KeepsReadOnlySectionsWithoutCheckpointOrSelection)$' -count=1` | 读取接线后 | 3 tests 通过；writer commit 前后仍由同一 pinned transaction 采样 | `docs/validation/three-line-05-product-console/sqlite-snapshot-01/` |
+| TM05 边界：全 OS/build-tag 源码、负向 fixture、Windows/Linux 依赖图 | Windows runner 计算两平台图；不把依赖扫描当跨系统运行 | `go run ./cmd/test-feedback -out docs/validation/three-line-05-product-console/boundary-01 -- ./internal/steerlineintegration -run '^TestCD67CoreBoundary$' -count=1` | 包迁移和守卫更新后 | 36 test instances 通过；无旧包、产品/执行反向边或平台依赖违规 | `docs/validation/three-line-05-product-console/boundary-01/` |
+| TM05.1–TM05.3：真实候选控制台接线 | Windows；临时 Git/SQLite、受控服务与后端 | `go run ./cmd/test-feedback -out docs/validation/three-line-05-product-console/wiring-02 -- ./internal/steerlineintegration -run '^TestCandidateConsoleWiring$' -count=1` | 最终共享接口调整后 | 非零命中并通过；真实 app/client/SQLite/control 构造和候选命令保留 task/execution/session/revision/profile 身份 | `docs/validation/three-line-05-product-console/wiring-02/` |
+| 固定最小入口 L1 | Windows；runner 隔离 home；无原生 opt-in | `go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-05-product-console/l1-02` | 更新精确包名、目录边界测试后执行 | 固定最小规则、构造、守卫组非零命中并通过；不启用 live/native 组 | `docs/validation/three-line-05-product-console/l1-02/` |
 
-边界类变更在本阶段同步既有守卫/负向注入及 L1 选择；扫描全 OS/build tag 源码，核对 Windows/Linux 生产直接及传递依赖。跨系统只做依赖图/编译不冒充运行行为。新增场景或环境能力须先登记包/测试/ID与命令，再执行；当前已注册 E2E 入口和环境约定见 [E2E README](../../tests/e2e/README.md)。
-
-不选 Full/L2/L3/live：公开形状和路径调整由 fixture、读快照及真实应用接线验。#38 CC5 原输入证据复用；若输入/渲染实现变动，仅补受影响 Windows 手工代表并记录实际命令。
-
-控制台迁移准备位于独立临时模块（不进入生产目录）；使用当前 api DTO 编译既有 CC1/2/4，最终须在真实 `internal/console` 和 app/CLI 构造切换后重新运行，不能作为 TM05 完成交付。原契约 Plan/digest 隐藏断言由 UI fixture 与产品 TaskDetail 源映射共同承接；fixture 不再造完整 TaskContract。唯一交付断言由明确的候选 `delivery_outcome` 承接，不再向 UI 传完整交付持久记录。决策历史的原 JSON 解码归 query，UI 只消费已类型化的问题、答案或未知格式诊断。
+不选 Full、L2、L3 或 live：本次只调整 API/包所有权；完整 console 包、真实 SQLite 同事务、真实候选接线、两平台依赖闭包覆盖变更。#38 的终端行为由迁移后完整 console 测试承担。#39 原生环境无需重验，因为本次没有原生适配、策略或进程改动。跨平台只检查依赖图，不宣称运行通过。新增场景/环境能力前先更新 [E2E README](../../tests/e2e/README.md) 与本表。
 
 ## 自查与交付
 
-逐项核对 Spec 验收，保留提交屏障、同快照、身份/版本和唯一结果，删除迁出路径/无消费者桥接，核对最小命令实际命中。汇总 `docs/validation/three-line-05-product-console/README.md`，注明复用证据、定向重验依据及未具备能力。
-
-#79 接产品读取需求，#80 接产品工厂；可与 #39 固定构建验收并行，默认构建换入本任务后定向重验改动的产品入口。
+逐项对照 Spec 检查 API 字段、提交屏障、同快照、身份/版本和唯一结果；确认迁出路径与无消费者桥接删除。检查所有目标命令命中、回执和测试 summary 后，汇总 [验证证据](../validation/three-line-05-product-console/README.md)、提交并创建一个实现 PR。

@@ -6,7 +6,7 @@ import (
 	"database/sql"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/query"
+	"github.com/erranliu/SteerLine/internal/product/query"
 )
 
 const SchemaVersion = 14

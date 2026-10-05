@@ -1,16 +1,19 @@
 # #77 当前实施证据
 
-开工基线 main `621707d534b62e4b7df015463c53949715ba8be3`，分支 `codex/product-console-77`。
-本目录当前是专属页面与端口准备记录，尚不声明 TM05.1–TM05.3 整体通过，也尚未提实现 PR。
+实现基于合入 #76 的 main（PR #219，merge `4288c43b`），位于 `codex/product-console-77`。共享读取端口、产品 DTO/客户端/query 和 console 已切到实际消费者；全部迁移路径、接口及测试归属见 [ownership.md](ownership.md) 与 [test-mapping.json](test-mapping.json)。
 
-已完成独立准备：product/api 的任务、候选、服务页面、历史、会话、图、命令回执与恢复摘要；product/query 的纯页面映射；product/client 的读/命令/连接注入端口。api.Error 只序列化 kind/message，Go cause 留在客户端内部包装并保持 errors.Is/errors.As。
+最终接口迁移后的定向结果：
 
-第一轮 [DTO 准备报告](dto-preparation-01/summary.json) 是 Windows 无原生 opt-in 的定向入口：2 个 package，2 个 parent 与 5 个 subtest 共 7 个 test 实例通过，0 fail/skip。此后新增的字段隔离/唯一交付/会话投影断言需在真实集成后另存新运行证据，不覆盖该报告。
+- [product-02](product-02/summary.json)：5 个 packages、33 个 test instances 全通过，覆盖 product API/client/query、图投影与 storage ports。
+- [console-02](console-02/summary.json)：完整 `internal/console`，1 个 package、78 个 test instances 全通过。
+- [app-query-02](app-query-02/summary.json)：真实 app 项目快照和 profile digest 绑定，2 个 test instances 全通过。
+- [sqlite-snapshot-01](sqlite-snapshot-01/summary.json)：SQLite pinned transaction 与 partial read，3 个 test instances 全通过。
+- [boundary-01](boundary-01/summary.json)：36 个边界测试实例全通过，包括全 tag 源扫描和 Windows/Linux 依赖图。
+- [wiring-02](wiring-02/summary.json)：真实 app/client/SQLite/受控后端候选流程，2 个测试通过。
+- [l1-02](l1-02/summary.json)：9 个固定组、356 个 test instances 全通过，0 fail/skip。
 
-控制台、唯一客户端和图规则的迁入版本已经在独立临时模块中准备，CC1/CC2/CC4、原客户端资源/原请求回执代表与图读快照代表已编译并定向运行。临时模块不进入生产路径，不构成最终构造、SQL 同事务、原生输入或生命周期验收；正式消费者切换后按 Plan 重新取证。
+早期 [DTO 准备报告](dto-preparation-01/summary.json) 保留为历史证据，不替代真实接线。`console-01` 的一次失败是 console 目录迁移后仍使用旧的三层相对路径读取仓库 fixture；修正路径后，`console-02` 的全包测试通过。首次 `l1/` 失败是 runner 固定 package 清单仍包含迁出目录，且 app/client 边界 fixture 仍读取旧目录；更新 `cmd/test-feedback/scoped.go` 和边界 fixture 后，`l1-02/` 全组通过。早期临时模块不作为最终交付证据。
 
-共享段采用协调确认的顺序：#76 先独立复审并真实合入，随后本任务消费其实际 main namespace，再定向集成 [ownership.md](ownership.md) 的 app/cmd/runner/存储产品读取与守卫清单。原 execution/model/backend、Config/Service 与 actor 私有重建仍由 #76 唯一修改；无永久 alias、转发、第二 SQL 或业务写者替代计划。
+## 自查结论
 
-`product/api.JournalCursor` 另已发现为执行日志扫描私有值，消费者限 conversation_position/replay/journal_reader 及其测试；该定义迁移需要协调 #76 或在其合入后指定执行路径，不能在收窄的公开 API 中保留 scanner Pending/Dropping/Anchor 状态。
-
-#38 PR208/PR213 的既有输入/Unicode/草稿/锚点断言随控制台迁移，#39 PR216 的本机原生证据按实际产品接线影响判断复用或定向重验。当前不运行生产服务/任务库，不启动其它任务，不声称 fake 或临时模块证明原生能力。最终 L1、自查与 PR 仍待真实共享集成完成。
+真实接线与 L1 均通过。产品请求、执行/会话身份、revision/profile digest 由相应 DTO/接线断言验证；当前仍待提交与 PR 发布。

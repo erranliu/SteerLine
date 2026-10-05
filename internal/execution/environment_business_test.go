@@ -9,7 +9,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -21,7 +21,7 @@ func answerNeutralEnvironment(t *testing.T, s *Service, run *contracts.Run, opti
 	}
 	s.State.Service.Ready = true
 	require(t, s.publishCheckpoint())
-	target, err := clientcontracts.EnvironmentTarget(run)
+	target, err := productapi.EnvironmentTarget(productquery.Candidate(run))
 	require(t, err)
 	req := productapi.ControlRequest{RequestID: newID(), Action: option, RequestedBy: "operator", RunID: run.RunID}
 	payload := productapi.ControlPayload{Environment: target}

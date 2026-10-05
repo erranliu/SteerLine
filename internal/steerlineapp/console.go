@@ -7,15 +7,15 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/erranliu/SteerLine/internal/console"
 	"github.com/erranliu/SteerLine/internal/execution"
-	api "github.com/erranliu/SteerLine/internal/steerline/clientcontracts"
-	"github.com/erranliu/SteerLine/internal/steerline/console"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 // PrepareConsole constructs each project's sole product adapter outside the UI.
 func PrepareConsole(ctx context.Context, configPath, runID string) ([]api.ProjectRef, console.Options, error) {
 	refs, err := LoadConsoleProjects(configPath)
-	options := console.Options{RunID: runID, Clients: map[string]api.ConsoleClient{}, ApplicationHome: HomeDir(), ApplicationBin: BinDir(), ApplicationEtc: EtcDir()}
+	options := console.Options{RunID: runID, Clients: map[string]console.ConsoleClient{}, ApplicationHome: HomeDir(), ApplicationBin: BinDir(), ApplicationEtc: EtcDir()}
 	if err != nil {
 		return nil, options, err
 	}

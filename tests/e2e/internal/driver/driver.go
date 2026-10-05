@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -162,7 +163,7 @@ func ReadWorkflow(ctx context.Context, database, project string) (contracts.Doma
 		return contracts.DomainSnapshot{}, err
 	}
 	defer reader.Close()
-	return steerline.NewQueryService(reader, project).Workflow(ctx, "")
+	return productquery.NewService(reader, project).Workflow(ctx, "")
 }
 
 // ReadProjectView uses the product reader's public transaction contract.
@@ -172,7 +173,7 @@ func ReadProjectView(ctx context.Context, database, project string) (contracts.P
 		return contracts.ProjectView{}, err
 	}
 	defer reader.Close()
-	return steerline.NewQueryService(reader, project).ReadProjectView(ctx, "", 100)
+	return productquery.NewService(reader, project).ReadProjectView(ctx, "", 100)
 }
 
 // MainView exposes the same public read transaction for fixture diagnostics.
@@ -196,7 +197,7 @@ func MainView(args []string) error {
 		return err
 	}
 	defer reader.Close()
-	view, err := steerline.NewQueryService(reader, c.Identity()).ReadProjectView(ctx, "", 100)
+	view, err := productquery.NewService(reader, c.Identity()).ReadProjectView(ctx, "", 100)
 	if err != nil {
 		return err
 	}

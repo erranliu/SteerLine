@@ -13,10 +13,17 @@ import (
 )
 
 func TestCM71ProductDependencyBoundary(t *testing.T) {
-	const base = "github.com/erranliu/SteerLine/internal/steerline"
-	// Parse all source files, independent of host or build tags.
-	for _, dir := range []string{"../steerline/clientcontracts", "../steerlineclient", "../product/api"} {
-		entries, err := os.ReadDir(dir)
+	const module = "github.com/erranliu/SteerLine"
+	owners := []struct {
+		dir   string
+		allow []string
+	}{
+		{"../product/api", nil},
+		{"../product/client", []string{module + "/internal/product/api"}},
+		{"../console", []string{module + "/internal/product/api"}},
+	}
+	for _, owner := range owners {
+		entries, err := os.ReadDir(owner.dir)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -24,7 +31,7 @@ func TestCM71ProductDependencyBoundary(t *testing.T) {
 			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".go") || strings.HasSuffix(entry.Name(), "_test.go") {
 				continue
 			}
-			file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(dir, entry.Name()), nil, parser.ImportsOnly)
+			file, err := parser.ParseFile(token.NewFileSet(), filepath.Join(owner.dir, entry.Name()), nil, parser.ImportsOnly)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -33,49 +40,42 @@ func TestCM71ProductDependencyBoundary(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if strings.Contains(path, "/steerlineapp") || strings.Contains(path, "/sqlite") || strings.Contains(path, "/console") {
-					t.Fatalf("%s depends on concrete construction: %s", entry.Name(), path)
-				}
-				if strings.HasSuffix(dir, "api") && strings.Contains(path, ".") {
-					t.Fatalf("product/api imports non-scalar owner %s", path)
-				}
-				if strings.HasSuffix(dir, "clientcontracts") && strings.HasPrefix(path, "github.com/erranliu/SteerLine/") {
-					allowed := false
-					for _, owner := range []string{"contracts", "task", "taskview"} {
-						if path == base+"/"+owner {
-							allowed = true
-						}
-					}
-					for _, owner := range []string{"execution/backend", "execution/model", "product/api", "storage/ports", "task/model"} {
-						if path == "github.com/erranliu/SteerLine/internal/"+owner {
-							allowed = true
-						}
-					}
-					if !allowed {
-						t.Fatalf("pure contract %s imports %s", entry.Name(), path)
-					}
+				if strings.HasPrefix(path, module+"/internal/") && !contains(owner.allow, path) {
+					t.Fatalf("%s depends on an unowned internal package: %s", entry.Name(), path)
 				}
 			}
 		}
 	}
-	output, err := exec.Command("go", "list", "-deps", "-json", "../steerline/clientcontracts").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	decoder := json.NewDecoder(strings.NewReader(string(output)))
-	count := 0
-	for decoder.More() {
-		var pkg struct{ ImportPath string }
-		if err := decoder.Decode(&pkg); err != nil {
+
+	for _, owner := range []string{"../product/api", "../product/client", "../console"} {
+		output, err := exec.Command("go", "list", "-deps", "-json", owner).Output()
+		if err != nil {
 			t.Fatal(err)
 		}
-		count++
-		path := pkg.ImportPath
-		if path == base || path == "database/sql" || strings.Contains(path, "/sqlite") || strings.Contains(path, "/steerlineapp") || strings.Contains(path, "/steerlineclient") || strings.Contains(path, "/codex") || strings.Contains(path, "/orca") || strings.Contains(path, "/processhost") {
-			t.Fatalf("pure product dependency reached %s", path)
+		decoder := json.NewDecoder(strings.NewReader(string(output)))
+		count := 0
+		for decoder.More() {
+			var pkg struct{ ImportPath string }
+			if err := decoder.Decode(&pkg); err != nil {
+				t.Fatal(err)
+			}
+			count++
+			path := pkg.ImportPath
+			if path == "database/sql" || strings.HasPrefix(path, "modernc.org/sqlite") || strings.HasPrefix(path, module+"/internal/steerline/") || path == module+"/internal/steerline" {
+				t.Fatalf("product-owned package %s reached concrete storage or the old center: %s", owner, path)
+			}
+		}
+		if count == 0 {
+			t.Fatalf("dependency guard matched no packages for %s", owner)
 		}
 	}
-	if count == 0 {
-		t.Fatal("dependency guard matched no packages")
+}
+
+func contains(values []string, target string) bool {
+	for _, value := range values {
+		if value == target {
+			return true
+		}
 	}
+	return false
 }

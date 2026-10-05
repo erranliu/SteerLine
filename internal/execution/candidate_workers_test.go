@@ -15,8 +15,8 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	"github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/query"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 

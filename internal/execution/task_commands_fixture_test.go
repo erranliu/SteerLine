@@ -8,7 +8,6 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	taskview "github.com/erranliu/SteerLine/internal/steerline/taskview"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -159,9 +158,9 @@ func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Co
 	receipt, err := commands.AddNativeTaskPredecessors(ctx, taskmodel.PredecessorAddInput(in))
 	return productapi.TaskPredecessorAddReceipt(receipt), err
 }
-func validateTaskBatchAgainstGraph(ctx context.Context, config Config, batch taskmodel.TaskBatchInput, graph taskview.Snapshot, verify bool) ([]taskmodel.TaskBatchIssue, []string) {
+func validateTaskBatchAgainstGraph(ctx context.Context, config Config, batch taskmodel.TaskBatchInput, graph storageports.TaskGraphSnapshot, verify bool) ([]taskmodel.TaskBatchIssue, []string) {
 	return taskmodel.ValidateBatchAgainstGraph(batch, graph.TaskGraph(), config.ExecutableTypes, taskmodel.ValidateContract)
 }
-func validateNativePredecessorAddition(graph taskview.Snapshot, id string, predecessors []string) error {
+func validateNativePredecessorAddition(graph storageports.TaskGraphSnapshot, id string, predecessors []string) error {
 	return taskmodel.ValidatePredecessorAddition(graph.TaskGraph(), id, predecessors)
 }

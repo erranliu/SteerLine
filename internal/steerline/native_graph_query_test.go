@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	execution "github.com/erranliu/SteerLine/internal/execution"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -73,8 +75,8 @@ func TestTaskGraphViewSnapshotAndBoundary(t *testing.T) {
 		{ProjectIdentity: c.Identity(), PredecessorID: "5", SuccessorID: "4"},
 	}
 	seedNativeGraphForView(t, c, commit, store, 6, edges)
-	q := NewQueryService(store, c.Identity())
-	full, err := q.QueryTaskGraph(ctx, TaskGraphFilter{Limit: 500})
+	q := productquery.NewService(store, c.Identity())
+	full, err := q.QueryTaskGraph(ctx, productapi.GraphFilter{Limit: 500})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,24 +112,24 @@ func TestTaskGraphViewSnapshotAndBoundary(t *testing.T) {
 	if err = json.Unmarshal(encodedList, &decodedList); err != nil || len(decodedList.Tasks) <= 2 || decodedList.Tasks[2].Title != list.Tasks[2].Title {
 		t.Fatalf("terminal-safe JSON changed the source title: %v", err)
 	}
-	depthOne, err := q.QueryTaskGraph(ctx, TaskGraphFilter{CenterTaskID: "1", Direction: "downstream", Depth: 1})
+	depthOne, err := q.QueryTaskGraph(ctx, productapi.GraphFilter{CenterTaskID: "1", Direction: "downstream", Depth: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(depthOne.Nodes) != 2 || depthOne.Boundary.OmittedNodeCount != 3 || !depthOne.Boundary.Truncated || len(depthOne.Boundary.Edges) != 2 {
 		t.Fatalf("depth boundary missed the downstream graph: %+v", depthOne.Boundary)
 	}
-	depthTwo, err := q.QueryTaskGraph(ctx, TaskGraphFilter{CenterTaskID: "1", Direction: "downstream", Depth: 2})
+	depthTwo, err := q.QueryTaskGraph(ctx, productapi.GraphFilter{CenterTaskID: "1", Direction: "downstream", Depth: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(depthTwo.Nodes) != 4 || depthTwo.Boundary.OmittedNodeCount != 1 || len(depthTwo.Boundary.Edges) != 2 {
 		t.Fatalf("merge boundary is wrong: %+v", depthTwo.Boundary)
 	}
-	if _, err = q.QueryTaskGraph(ctx, TaskGraphFilter{CenterTaskID: "1", Depth: 11}); err == nil || !strings.Contains(err.Error(), "invalid_filter") {
+	if _, err = q.QueryTaskGraph(ctx, productapi.GraphFilter{CenterTaskID: "1", Depth: 11}); err == nil || !strings.Contains(err.Error(), "invalid_filter") {
 		t.Fatalf("excess depth accepted: %v", err)
 	}
-	if _, err = q.QueryTaskGraph(ctx, TaskGraphFilter{Limit: 501}); err == nil || !strings.Contains(err.Error(), "invalid_filter") {
+	if _, err = q.QueryTaskGraph(ctx, productapi.GraphFilter{Limit: 501}); err == nil || !strings.Contains(err.Error(), "invalid_filter") {
 		t.Fatalf("excess node limit accepted: %v", err)
 	}
 
@@ -135,14 +137,14 @@ func TestTaskGraphViewSnapshotAndBoundary(t *testing.T) {
 	if err != nil || discard.Status != "discarded" {
 		t.Fatalf("discard fixture failed: %+v / %v", discard, err)
 	}
-	filtered, err := q.QueryTaskGraph(ctx, TaskGraphFilter{Status: "open", CenterTaskID: "2", Direction: "upstream", Depth: 1})
+	filtered, err := q.QueryTaskGraph(ctx, productapi.GraphFilter{Status: "open", CenterTaskID: "2", Direction: "upstream", Depth: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(filtered.Nodes) != 1 || filtered.Nodes[0].TaskID != "2" || len(filtered.Nodes[0].Blockers) != 1 || filtered.Nodes[0].Blockers[0].Blocker != "discarded_predecessor" || filtered.Boundary.OmittedNodeCount != 1 || len(filtered.Boundary.Edges) != 1 || filtered.Boundary.Edges[0].Reason != "status_filter" {
 		t.Fatalf("discarded predecessor became invisible or unblocked: %+v", filtered)
 	}
-	anchored, err := q.QueryTaskGraph(ctx, TaskGraphFilter{Status: "open", CenterTaskID: "1", Direction: "downstream", Depth: 1, Limit: 1})
+	anchored, err := q.QueryTaskGraph(ctx, productapi.GraphFilter{Status: "open", CenterTaskID: "1", Direction: "downstream", Depth: 1, Limit: 1})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,9 +156,9 @@ func TestTaskGraphViewSnapshotAndBoundary(t *testing.T) {
 func TestTaskGraphLimitsAndExportPublication(t *testing.T) {
 	c, commit, store := openDAGFixture(t)
 	seedNativeGraphForView(t, c, commit, store, 502, nil)
-	q := NewQueryService(store, c.Identity())
+	q := productquery.NewService(store, c.Identity())
 	ctx := context.Background()
-	graph, err := q.QueryTaskGraph(ctx, TaskGraphFilter{Limit: 2})
+	graph, err := q.QueryTaskGraph(ctx, productapi.GraphFilter{Limit: 2})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -185,7 +187,7 @@ func TestTaskGraphLimitsAndExportPublication(t *testing.T) {
 	if !page.HasMore || len(page.Tasks) != 500 || len(ready.Tasks) != 502 || ready.Tasks[501].TaskID != "502" || selected.Tasks[0].TaskID != "502" || ready.DatabaseRevision != page.DatabaseRevision || selected.DatabaseRevision != page.DatabaseRevision {
 		t.Fatalf("ready candidate beyond the detail page was lost: page=%d ready=%d selected=%+v", len(page.Tasks), len(ready.Tasks), selected)
 	}
-	filtered, err := q.QueryTaskGraph(ctx, TaskGraphFilter{Status: "open", Limit: 500})
+	filtered, err := q.QueryTaskGraph(ctx, productapi.GraphFilter{Status: "open", Limit: 500})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +208,7 @@ func TestTaskGraphLimitsAndExportPublication(t *testing.T) {
 	if _, _, err = taskmodel.DecodeBatch(body); err == nil {
 		t.Fatal("graph export was accepted as task-batch/v1 input")
 	}
-	var exported TaskGraphPage
+	var exported productapi.GraphPage
 	if err = json.Unmarshal(body, &exported); err != nil || exported.Protocol != nativeTaskGraphProtocol || exported.DatabaseID != filtered.DatabaseID || exported.DatabaseRevision != filtered.DatabaseRevision || !exported.Boundary.Truncated || len(exported.Nodes) <= 2 || exported.Nodes[2].Title != filtered.Nodes[2].Title {
 		t.Fatalf("export lost version or boundary: %v / %+v", err, exported)
 	}
@@ -266,7 +268,7 @@ func TestTaskGraphReadCoexistsWithWriter(t *testing.T) {
 	if _, err = writer.ExecContext(ctx, `UPDATE project_task_authorities SET updated_at=updated_at WHERE project_identity=?`, c.Identity()); err != nil {
 		t.Fatal(err)
 	}
-	graph, err := (NewQueryService(reader, c.Identity())).QueryTaskGraph(ctx, TaskGraphFilter{})
+	graph, err := (productquery.NewService(reader, c.Identity())).QueryTaskGraph(ctx, productapi.GraphFilter{})
 	if err != nil || len(graph.Nodes) != 1 {
 		t.Fatalf("read-only graph query waited for a center writer: %v / %+v", err, graph)
 	}

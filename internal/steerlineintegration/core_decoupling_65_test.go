@@ -2,6 +2,8 @@ package steerlineintegration
 
 import (
 	"context"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"runtime"
 	"testing"
 	"time"
@@ -42,9 +44,9 @@ func testCD65HistoryCommitsOnly(t *testing.T) {
 	if run.run.Process == nil || run.execution.SessionID != integrationAppServerSession {
 		t.Fatalf("history source lost the original session/process identity: %+v", run)
 	}
-	filter := steerline.ConversationFilter{ExecutionID: run.execution.ExecutionID, AttemptID: run.run.AttemptID, Source: "codex-app-server"}
-	query := steerline.NewConversationQueryService(service.reader, fixture.config.Identity())
-	var page steerline.ConversationPage
+	filter := contracts.ConversationFilter{ExecutionID: run.execution.ExecutionID, AttemptID: run.run.AttemptID, Source: "codex-app-server"}
+	query := productquery.NewConversationService(service.reader, fixture.config.Identity())
+	var page contracts.ConversationPage
 	var pageError error
 	t.Cleanup(func() {
 		if t.Failed() {

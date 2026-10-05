@@ -53,6 +53,7 @@ type Resources struct {
 	Project                             api.ProjectRef
 	DefaultRequestedBy, DefaultAnswerer string
 	OpenReader                          func(context.Context) (Reader, error)
+	ReadFailure                         func(context.Context, string, error) api.ProjectSnapshot
 	OpenCommands                        func(context.Context, bool) (TaskCommands, error)
 	Control                             ControlPort
 	Decision                            DecisionPort

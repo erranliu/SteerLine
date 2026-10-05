@@ -13,7 +13,7 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	queryapi "github.com/erranliu/SteerLine/internal/steerline/query"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -271,8 +271,8 @@ func TestQueryEventCursorAndLargeBodyPaging(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	query := NewQueryService(store, project)
-	page, err := query.ReadEvents(ctx, queryapi.EventFilter{ExecutionID: "exec", AttemptID: "attempt"}, "", 1)
+	query := productquery.NewService(store, project)
+	page, err := query.ReadEvents(ctx, productquery.EventFilter{ExecutionID: "exec", AttemptID: "attempt"}, "", 1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -306,13 +306,13 @@ func TestQueryEventCursorAndLargeBodyPaging(t *testing.T) {
 	if !fifthBody.Complete || operationDigest(joined) != operationDigest(body) {
 		t.Fatal("event body pages did not reconstruct the original payload")
 	}
-	secondPage, err := query.ReadEvents(ctx, queryapi.EventFilter{ExecutionID: "exec", AttemptID: "attempt"}, page.NextCursor, 1)
+	secondPage, err := query.ReadEvents(ctx, productquery.EventFilter{ExecutionID: "exec", AttemptID: "attempt"}, page.NextCursor, 1)
 	if err != nil || len(secondPage.Events) != 1 || string(secondPage.Events[0].Payload) != "small" {
 		t.Fatalf("second event page: %+v %v", secondPage, err)
 	}
-	if _, err = query.ReadEvents(ctx, queryapi.EventFilter{ExecutionID: "other"}, page.NextCursor, 1); err == nil {
+	if _, err = query.ReadEvents(ctx, productquery.EventFilter{ExecutionID: "other"}, page.NextCursor, 1); err == nil {
 		t.Fatal("cursor was reused with a different filter")
-	} else if cursorErr, ok := err.(*queryapi.CursorError); !ok || cursorErr.Code != "cursor_invalidated" {
+	} else if cursorErr, ok := err.(*productquery.CursorError); !ok || cursorErr.Code != "cursor_invalidated" {
 		t.Fatalf("bad cursor error: %v", err)
 	}
 }
