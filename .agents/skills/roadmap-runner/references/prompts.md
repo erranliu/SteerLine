@@ -6,7 +6,7 @@
 
 工具参数：`model: "gpt-6-luna"`、`thinking: "xhigh"`；项目托管 worktree，从默认主干创建。
 
-> 执行 roadmap `{roadmap}` 中的任务 `{task_id}`。先读工作区 AGENTS.md、共同约束 `{constraints}`、Spec `{spec}` 和 Plan `{plan}`，按其范围实现并运行最小必要验证。完成后自己复查实际 diff 与生产调用路径，修复确认的问题，提交推送并创建针对 `{default_branch}` 的 PR；PR 说明记录最终行为及实际验证，按工具要求关联 PR。不要合并 PR 或启动其他 roadmap 任务。仅余人工补验时在 roadmap 登记任务/验收项、原因、步骤和证据位置，保留未验事实并同步 Spec/Plan 的非阻塞状态，不仅因此保持 draft 或请求批准。真实验收失败、功能或前置能力缺失仍诊断并报告，不改称人工补验。最终报告 PR URL、分支、最终 commit、验证结果、人工清单及未解决问题，然后停止写入工作区，等待协调 session 独立复审。
+> 执行 roadmap `{roadmap}` 中的任务 `{task_id}`。先读工作区 AGENTS.md、共同约束 `{constraints}`、Spec `{spec}` 和 Plan `{plan}`，按其范围实现并运行最小必要验证。完成后自己复查实际 diff 与生产调用路径，修复确认的问题，提交推送并创建针对 `{default_branch}` 的 PR；PR 说明记录最终行为及实际验证，按工具要求关联 PR。不要合并 PR 或启动其他 roadmap 任务。仅余人工补验时在 roadmap 登记任务/验收项、原因、步骤和证据位置，保留未验事实并同步 Spec/Plan 的非阻塞状态，不仅因此保持 draft 或请求批准。真实验收失败、功能或前置能力缺失仍诊断并报告，不改称人工补验。最终报告 PR URL、分支、最终 commit、验证结果、人工清单及未解决问题，然后停止写入工作区，等待协调 session 调度独立 subagent 复审；后续冲突、共享主干集成或原需求遗漏优先由本执行 session 处理。
 
 如果任务要求先产出 Plan 而非已有 Plan，按用户规定处理；不能把不存在的文件当作已读。
 
@@ -20,25 +20,35 @@
 
 ## 需要执行 session 继续解决具体问题
 
-通常协调 session 自己修复；确需执行 session 工作且已获授权时再发送。后续工具参数仍显式传入 Luna xhigh。
+PR 冲突、主干/共享接线集成及原需求遗漏优先交回原执行 session；原流程已有发送授权时直接发送一次，后续参数仍显式传入 Luna xhigh。发送前结束已委派的 review/fix 工作并交接唯一写入者，不新建替代聊天。
 
-> 继续本任务 `{task_id}`：处理 `{具体问题和证据}`，保持原 Spec/Plan 的验收要求。完成后复查修复、跑 `{必要验证}`，推送同一 PR `{url}`，报告最终 head 和验证后停止写入；由协调 session 再审核并合并。
+> 继续本任务 `{task_id}`、原 worktree `{worktree}` 和 PR `{url}`：以最新 `{default_branch}` / `{base_sha}` 为基线，处理 `{冲突文件/原需求遗漏及具体证据}`，保持原 Spec/Plan 的验收要求。完成后复查修复、跑 `{必要验证}`，推送同一 PR `{url}`，报告最终 head 和验证后停止写入；由协调 session 调度新的独立 subagent 复审并按门禁合并。
 
-不要向仍写入的 session 同时交付协调 session 已开始修改的 worktree。
+不要在原 session、repair agent 或协调者仍写入时交给另一位写入者。
+
+## 独立审核与修复 subagent
+
+reviewer 使用新 subagent、只读，并沿用协调模型：
+
+> 独立复审任务 `{task_id}` 的 PR `{url}`，固定候选 head `{sha}`、base `{base_sha}`、worktree `{worktree}`。先读 AGENTS、唯一 Spec/Plan 和约束，检查完整实际 diff、真实生产调用路径与最小必要验证。不要修改文件、run 状态、评论 PR、合并或提示其他聊天。不要依据执行者“通过”结论作判断；报告候选身份、问题/位置/影响与可复核证据、实际验证结果、未解决项和报告位置。区分局部缺陷与原需求遗漏/集成工作，供协调分流。
+
+fixer 使用另一个新 subagent；先确认当前唯一写入者已停写：
+
+> 修复任务 `{task_id}` 在独立审核中确认的 `{问题/证据}`，限定 worktree `{worktree}`、PR `{url}`、head `{sha}`、base `{base_sha}` 和修改范围 `{scope}`。保持固定 Spec/Plan 和原断言；跑 `{最小必要验证}`，在原分支提交并报告实际 commit/命令/结果，然后停止写入。不要自行 push、评论/合并 PR、改 run 状态或提示其他聊天。出现冲突、实质需求遗漏或需扩大验收时报告给协调，优先交回原执行 session。你的报告不是最终独立审核，由新的只读 reviewer 复核改动。
 
 ## Heartbeat
 
 默认 20 分钟，通过 automation 工具创建本线程 heartbeat。按用户要求调整间隔。恢复说明要能独立执行，保存真实 run ID 和协调状态的绝对路径，不硬编码本技能所在 worktree（后续可以从该项目的技能目录重新发现）。
 
-> 继续本聊天用户已授权的 roadmap-runner 流程，run `{run_id}`，状态文件 `{state_path}`，仓库 `{repository}`、主项目路径 `{repo_root}`、Codex 项目 `{project_id}`。先读该项目的 roadmap-runner 技能、AGENTS、状态中绑定的 roadmap 和当前任务 Spec/Plan。范围严格为 `{ordered_task_ids}`，不启动范围外任务。协调 session 保持当前模型；创建执行 session 和给它发送后续提示都显式设置 gpt-6-luna、xhigh，每项新任务使用新 session + worktree。每轮核对状态、session 历史、真实 PR；未知动作先核对，不能重复创建或发送。上一个任务独立复审、修复、在 PR 记录问题和验证、以预期 head 合并且真实确认后，才启动下一项。活跃 session 用紧凑 wait_threads 快照，无可操作进展就结束本轮。不与执行 session 同时写同一 worktree。仅余人工补验时实际登记 roadmap 清单，记录 passed_with_manual_pending 后正常合入推进，不重复申请单项批准；真实失败或缺环境/权限/能力仍保留阻塞，不伪造验收通过。保持安静，仅重要进展、完成、真实失败或需要用户行动时通知。全部选定任务真实合并后汇总待人工项并暂停本 heartbeat，保留清单和状态，不等待人工结果。用户明确的先验收再合入要求、授权及其他例外以状态内原始指令为准。
+> 继续本聊天用户已授权的 roadmap-runner 流程，run `{run_id}`，状态文件 `{state_path}`，仓库 `{repository}`、主项目路径 `{repo_root}`、Codex 项目 `{project_id}`。先读该项目的 roadmap-runner 技能、AGENTS、状态中绑定的 roadmap 和当前任务 Spec/Plan。范围严格为 `{ordered_task_ids}`，不启动范围外任务。协调 session 保持当前模型；创建执行 session 和给它发送后续提示都显式设置 gpt-6-luna、xhigh，每项新任务使用新 session + worktree。每轮核对状态、session 历史、真实 PR；未知动作先核对，不能重复创建或发送。冲突、主干集成和原需求遗漏优先交回原执行 session；协调新建独立只读 review subagent，局部修复交给另一独立 fix subagent，修复后再独立复核。上一个任务独立复审、修复、在 PR 记录 agent 身份/报告、问题和验证、以预期 head 合并且真实确认后，才启动下一项。活跃 session 用紧凑 wait_threads 快照，无可操作进展就结束本轮。不与执行 session 同时写同一 worktree。仅余人工补验时实际登记 roadmap 清单，记录 passed_with_manual_pending 后正常合入推进，不重复申请单项批准；真实失败或缺环境/权限/能力仍保留阻塞，不伪造验收通过。保持安静，仅重要进展、完成、真实失败或需要用户行动时通知。全部选定任务真实合并后汇总待人工项并暂停本 heartbeat，保留清单和状态，不等待人工结果。用户明确的先验收再合入要求、授权及其他例外以状态内原始指令为准。
 
 ## PR 复审记录
 
 按真实事实填写，简单任务不必长篇说明：
 
-> 协调 session 独立复审：候选 head `{sha}`，目标 `{branch}` / base `{sha}`；已检查 `{Spec/Plan、实际 diff、受影响生产路径}`。
+> 协调 session 已核对独立 review subagent `{review_agent_id}` 的报告 `{report}`：候选 head `{sha}`，目标 `{branch}` / base `{sha}`；已检查 `{Spec/Plan、实际 diff、受影响生产路径}`。
 >
-> 发现 `{问题、文件/位置、触发条件及影响}`；已在 `{fix_commit}` 修复。/ 本轮未发现需要修复的问题。
+> 发现 `{问题、文件/位置、触发条件及影响}`；由原执行 session 或 fix subagent `{fix_agent_id}` 在 `{fix_commit}` 修复；最终 review subagent `{final_review_agent_id}` 已复核。/ 本轮未发现需要修复的问题。
 >
 > 实际验证：`{command}`，`{result}`，候选 `{sha}`。待人工补验 `{验收项及roadmap定位}` / 无人工残留。已授权例外 `{来源及限制}` / 无例外。人工登记不表示通过；其余验证完成后正常合入推进。合并前另核对最终 head、base 和必需检查。
 
