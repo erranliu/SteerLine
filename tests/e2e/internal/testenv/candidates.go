@@ -250,9 +250,11 @@ func (p *Project) MergeCandidate(c Candidate) executionmodel.PRInfo {
 
 func (p *Project) CandidateUsage(c Candidate, label string) native.Usage {
 	var u native.Usage
+	var snap Snapshot
 	p.Scenario.Wait("candidate native usage", func() (bool, error) {
 		var err error
-		u, err = p.NativeUsage(p.CandidateSnapshot(c), c.RunID+"-"+label)
+		snap = p.CandidateSnapshot(c)
+		u, err = p.NativeUsage(snap, c.RunID+"-"+label)
 		if errors.Is(err, native.ErrNativeTurnPending) {
 			return false, nil
 		}
@@ -262,8 +264,9 @@ func (p *Project) CandidateUsage(c Candidate, label string) native.Usage {
 		}
 		return err == nil, err
 	})
-	p.Scenario.Must(evidence.FullAccess(p.CandidateSnapshot(c).Domain))
-	snap := p.CandidateSnapshot(c)
+	// Usage, frozen permission and canonical body checks share the same exact
+	// original candidate sample; no business mutation occurs between them.
+	p.Scenario.Must(evidence.FullAccess(snap.Domain))
 	canonicalDeadline := time.Now().Add(45 * time.Second)
 	p.Scenario.Wait("canonical original candidate final/body", func() (bool, error) {
 		conversation, err := driver.ReadCandidateConversation(p.Scenario.Context, p.Database, snap.Page.ProjectID, c.RunID, c.ExecutionID)
@@ -504,6 +507,7 @@ func CandidateAcceptance(s *Scenario) {
 	proof := p.CandidatePR(a)
 	p.RealPRProof = &proof
 	s.usageVerified = true
+	s.Must(s.finishBody())
 	p.StopService()
 }
 func mustSnapshot(p *Project) Snapshot { snap, err := p.Snapshot(); p.Scenario.Must(err); return snap }

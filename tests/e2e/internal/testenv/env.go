@@ -29,6 +29,8 @@ import (
 
 type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level, CandidateConfig string }
 type Scenario struct {
+	bodyFinishedAt   time.Time
+	bodyContextErr   error
 	Run              Run
 	ID, Root, Output string
 	Context          context.Context
@@ -109,6 +111,21 @@ func (s *Scenario) Must(err error) {
 	if err != nil {
 		s.t.Fatal(err)
 	}
+}
+
+// Freeze the business deadline before independent service/resource cleanup.
+// Cancelling this context also prevents later business I/O after this boundary.
+func (s *Scenario) finishBody() error {
+	if !s.bodyFinishedAt.IsZero() {
+		return errors.New("scenario business phase already finished")
+	}
+	s.bodyFinishedAt = time.Now().UTC()
+	s.bodyContextErr = s.Context.Err()
+	if deadline, ok := s.Context.Deadline(); ok && !s.bodyFinishedAt.Before(deadline) && s.bodyContextErr == nil {
+		s.bodyContextErr = context.DeadlineExceeded
+	}
+	s.cancel()
+	return s.bodyContextErr
 }
 
 func (s *Scenario) register(kind, path string, pid int) {
@@ -451,6 +468,10 @@ func (p *Project) Record(label string, snap Snapshot) {
 }
 
 func (s *Scenario) cleanup() {
+	if s.bodyFinishedAt.IsZero() {
+		_ = s.finishBody()
+	}
+	bodyContextErr := s.bodyContextErr
 	defer s.cancel()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
@@ -534,7 +555,7 @@ func (s *Scenario) cleanup() {
 			realPR = p.RealPRProof
 		}
 	}
-	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && s.Context.Err() == nil, "context_error": fmt.Sprint(s.Context.Err()), "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "real_pr": realPR, "finished_at": time.Now().UTC()}
+	evidence := map[string]any{"id": s.ID, "passed": !s.t.Failed() && bodyContextErr == nil && len(failures) == 0, "context_error": fmt.Sprint(bodyContextErr), "body_finished_at": s.bodyFinishedAt, "cleanup_complete": len(failures) == 0, "cleanup_errors": failures, "resources": s.resources, "components": map[string]string{"worker": worker, "provider": provider}, "usage_verified": s.usageVerified, "real_pr": realPR, "finished_at": time.Now().UTC()}
 	if err := controlled.Write(filepath.Join(s.Output, "scenario.json"), evidence); err != nil {
 		s.t.Errorf("write scenario evidence: %v", err)
 	}

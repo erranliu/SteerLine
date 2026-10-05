@@ -198,7 +198,7 @@ func TestCM69CleanupReceiptKeepsTaskAndReceiptAtomic(t *testing.T) {
 
 func TestCM69WriteConsumersDoNotAccessConcreteTransactions(t *testing.T) {
 	// Storage, project connection ownership and read adapters are separate owners.
-	files := []string{"query_construction.go", "store.go", "command_processor.go", "control_service.go", "native_claim_command.go", "native_dispatch_command.go", "native_discard_command.go", "native_delivery_command.go", "native_cleanup.go", "worker_start.go", "worker_recovery.go", "conversation_service.go", "conversation_sources.go", "conversation_replay.go", "conversation_position.go"}
+	files := []string{"store.go", "command_processor.go", "control_service.go", "native_claim_command.go", "native_dispatch_command.go", "native_discard_command.go", "native_delivery_command.go", "native_cleanup.go", "worker_start.go", "worker_recovery.go", "conversation_service.go", "conversation_sources.go", "conversation_replay.go", "conversation_position.go"}
 	// Follow the split service and the task use cases at their current owners.
 	// Storage and read adapters remain outside this consumer boundary.
 	for _, pattern := range []string{"service_*.go", "../task/*.go"} {
@@ -240,7 +240,7 @@ func TestCM69WriteConsumersDoNotAccessConcreteTransactions(t *testing.T) {
 		})
 	}
 	// Only named, operation-specific callback interfaces cross the write boundary.
-	contracts := []string{"persistence/ports.go"}
+	contracts := []string{"../steerline/persistence/ports.go"}
 	owned, err := filepath.Glob("../storage/ports/*.go")
 	require(t, err)
 	if len(owned) == 0 {

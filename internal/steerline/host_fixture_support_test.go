@@ -13,10 +13,10 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
+	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	"github.com/erranliu/SteerLine/internal/execution/publication"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -66,8 +66,9 @@ func publishFixtureCheckpoint(service *execution.Service) error {
 		return err
 	}
 	defer db.Close()
-	checkpoint, err := db.SaveCheckpoint(context.Background(), reconstruction.Checkpoint(service.State))
-	if err != nil {
+	checkpoint := reconstruction.Checkpoint(service.State)
+	store := execution.Store{Domain: db, Project: service.Config.Identity()}
+	if err := store.Publish(&checkpoint); err != nil {
 		return err
 	}
 	service.State.Revision = checkpoint.Revision

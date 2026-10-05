@@ -407,5 +407,6 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 		p.RealPRProof = &proof
 	}
 	s.usageVerified = true
+	s.Must(s.finishBody())
 	p.StopService()
 }

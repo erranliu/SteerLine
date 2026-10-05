@@ -66,7 +66,7 @@ func TestExecutionRecordsPinBindingsAndOperations(t *testing.T) {
 func TestCapabilityReportRejectsRetiredWholeRunActions(t *testing.T) {
 	for _, name := range []string{"reply_continue", "retry"} {
 		report := executionbackend.CapabilityReport{Version: 1, Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Target: executionbackend.ExecutionTarget{ID: "local"}, Agent: executionbackend.AgentSpec{Name: "fixture"}, PlatformVersion: "fixture", CheckedAt: now(), Capabilities: []executionbackend.Capability{{Name: name, Status: executionbackend.CapabilityUnsupported}}}
-		if err := (executionRecords{root: t.TempDir(), persistence: sqlite.Factory{}}).saveCapabilityReport(report); err == nil {
+		if err := (executionRecords{root: t.TempDir(), persistence: sqlite.Factory{}, resources: fixtureResources{}}).saveCapabilityReport(report); err == nil {
 			t.Fatalf("capability report retained retired whole-run action %q", name)
 		}
 	}
@@ -126,6 +126,7 @@ func TestOperationRecordRejectsCorruptionBeforeUse(t *testing.T) {
 func TestNativeCapabilityCheckKeepsFixedAgent(t *testing.T) {
 	c := workerContextConfigFixture()
 	c.RunDir = t.TempDir()
+	c.Resources = fixtureResources{}
 	backend := BackendFor(c)
 	fixedTarget, fixedAgent := TargetFor(c), AgentFor(c)
 	report, err := backend.Probe(context.Background(), fixedTarget, fixedAgent)
@@ -140,7 +141,7 @@ func TestNativeCapabilityCheckKeepsFixedAgent(t *testing.T) {
 			report.Capabilities[i].Evidence = evidencePath + "#sha256=" + hex.EncodeToString(sum[:])
 		}
 	}
-	require(t, (executionRecords{root: c.RunDir, persistence: sqlite.Factory{}}).saveCapabilityReport(report))
+	require(t, (executionRecords{root: c.RunDir, persistence: sqlite.Factory{}, resources: c.Resources}).saveCapabilityReport(report))
 	c.Agent = "changed-default"
 	s := &Service{Config: c}
 	if _, err := s.requireBackendCapabilitiesFor(context.Background(), backend, fixedTarget, fixedAgent, "workspace_inspection"); err != nil {

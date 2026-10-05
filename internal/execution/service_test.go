@@ -18,8 +18,8 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -425,7 +425,7 @@ func seedFakeCapabilities(t *testing.T, c Config) {
 		report.Capabilities[i].Status = executionbackend.CapabilityVerified
 		report.Capabilities[i].Evidence = evidence
 	}
-	if err := (executionRecords{root: c.RunDir, persistence: sqlite.Factory{}}).saveCapabilityReport(report); err != nil {
+	if err := (executionRecords{root: c.RunDir, persistence: sqlite.Factory{}, resources: fixtureResources{}}).saveCapabilityReport(report); err != nil {
 		t.Fatal(err)
 	}
 }
