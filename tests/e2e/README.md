@@ -18,7 +18,7 @@ go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recove
 go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.orca-codex'
 ```
 
-保留 `-quick` 和 `-workers=3`；后者是完整确定性 Go 回归，不包含带 e2e tag 的场景。L2/L3 当前支持 Windows、串行。L2 默认 gated：先验证 controlled（包括证据和清理），通过才进入两条真实链路；失败不会创建真实会话或发模型请求。L2 禁止直接选择 live 绕过门槛；显式 controlled 的报告 coverage 为 gate-only。L3 必须显式指定 controlled/live 和 suite；组、场景可以逗号多选，未知、重复、零匹配或跨环境选择失败。PowerShell 的带点场景 ID 参数需加引号。
+保留 `-quick` 和 `-workers=3`；后者将当前 `internal/execution` 业务包划分到三个 worker，再完整运行其余包，是完整确定性 Go 回归，不包含带 e2e tag 的场景。L2/L3 当前支持 Windows、串行。L2 默认 gated：先验证 controlled（包括证据和清理），通过才进入两条真实链路；失败不会创建真实会话或发模型请求。L2 禁止直接选择 live 绕过门槛；显式 controlled 的报告 coverage 为 gate-only。L3 必须显式指定 controlled/live 和 suite；组、场景可以逗号多选，未知、重复、零匹配或跨环境选择失败。PowerShell 的带点场景 ID 参数需加引号。
 
 不能混用原始 Go 参数、quick/full/build-only。`-out` 指定空目录；默认写入系统临时目录 `steerline-test-feedback/<运行时间>`，拒绝覆盖已有产物。
 

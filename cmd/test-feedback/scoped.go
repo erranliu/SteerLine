@@ -26,6 +26,9 @@ var quickTests = []string{"TestNativeProjectInitializesOnceAndRejectsMismatchedB
 
 const executionPackage = "github.com/erranliu/SteerLine/internal/execution"
 
+// Full partitions the execution business tests after their move out of the host facade.
+const fullCorePackage = executionPackage
+
 var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput", "TestCandidateResumeErrorDoesNotStarveSibling"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/internal/steerlineintegration"
@@ -133,6 +136,7 @@ type scopedReport struct {
 	PreparationSecs float64       `json:"preparation_seconds"`
 	ExecutionSecs   float64       `json:"execution_seconds"`
 	Environment     environment   `json:"environment"`
+	CorePackage     string        `json:"core_package"`
 	CoreTests       []string      `json:"enumerated_core_tests,omitempty"`
 	AllPackages     []string      `json:"enumerated_packages"`
 	WeightSource    string        `json:"weight_source,omitempty"`
@@ -153,8 +157,10 @@ func runScoped(opts options) int {
 	report := scopedReport{SchemaVersion: 1, Phase: opts.phase, StartedAt: started.UTC().Format(time.RFC3339Nano), Complete: true, Errors: []string{}, Groups: []scopedGroup{}}
 	if opts.quick {
 		report.Scope = "quick"
+		report.CorePackage = corePackage
 	} else {
 		report.Scope = "full"
+		report.CorePackage = fullCorePackage
 		report.WeightSource = "testdata/core-test-weights.json (serial baseline 543f0d4; top-level elapsed, floor 0.05s)"
 	}
 	report.Environment = collectEnvironment(opts.cacheCondition, opts.nativeNote, opts.out, nil)
@@ -229,15 +235,15 @@ func runScoped(opts options) int {
 			go func(i int) {
 				defer wg.Done()
 				id := fmt.Sprintf("core-%d", i+1)
-				args := []string{"go", "tool", "test2json", "-t", "-p", corePackage, binary, "-test.v=test2json", "-test.count=1", "-test.parallel=1", "-test.timeout=45m", "-test.run=" + exactPattern(assignments[i])}
-				groups[i] = runGroup(ctx, opts.out, id, coreDir, args, assignments[i], []string{corePackage}, true)
+				args := []string{"go", "tool", "test2json", "-t", "-p", fullCorePackage, binary, "-test.v=test2json", "-test.count=1", "-test.parallel=1", "-test.timeout=45m", "-test.run=" + exactPattern(assignments[i])}
+				groups[i] = runGroup(ctx, opts.out, id, coreDir, args, assignments[i], []string{fullCorePackage}, true)
 			}(i)
 		}
 		wg.Wait()
 		report.Groups = append(report.Groups, groups...)
 		others := make([]string, 0, len(packages)-1)
 		for _, pkg := range packages {
-			if pkg != corePackage {
+			if pkg != fullCorePackage {
 				others = append(others, pkg)
 			}
 		}
@@ -283,20 +289,22 @@ func listPackages(ctx context.Context) ([]string, error) {
 	if len(packages) == 0 {
 		return nil, fmt.Errorf("go list returned no packages")
 	}
-	found := false
-	for _, pkg := range packages {
-		if pkg == corePackage {
-			found = true
+	for _, required := range []string{corePackage, fullCorePackage} {
+		found := false
+		for _, pkg := range packages {
+			if pkg == required {
+				found = true
+			}
 		}
-	}
-	if !found {
-		return nil, fmt.Errorf("core package missing from go list")
+		if !found {
+			return nil, fmt.Errorf("test owner package missing from go list: %s", required)
+		}
 	}
 	return packages, nil
 }
 
 func prepareCore(ctx context.Context, out string) (string, string, error) {
-	dirBytes, err := exec.CommandContext(ctx, "go", "list", "-f", "{{.Dir}}", "./internal/steerline").CombinedOutput()
+	dirBytes, err := exec.CommandContext(ctx, "go", "list", "-f", "{{.Dir}}", fullCorePackage).CombinedOutput()
 	if err != nil {
 		return "", "", fmt.Errorf("locate core: %w: %s", err, dirBytes)
 	}
@@ -308,7 +316,7 @@ func prepareCore(ctx context.Context, out string) (string, string, error) {
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
-	output, err := exec.CommandContext(ctx, "go", "test", "-c", "-o", binary, "./internal/steerline").CombinedOutput()
+	output, err := exec.CommandContext(ctx, "go", "test", "-c", "-o", binary, fullCorePackage).CombinedOutput()
 	if err != nil {
 		return "", "", fmt.Errorf("compile core: %w: %s", err, output)
 	}
@@ -494,6 +502,9 @@ func activeRealSwitches() []string {
 
 func checkScopedCoverage(report scopedReport) []string {
 	var failures []string
+	if report.Scope == "full" && report.CorePackage != fullCorePackage {
+		failures = append(failures, "full core package differs from the execution test owner")
+	}
 	seenPackages := map[string]int{}
 	seenCore := map[string]int{}
 	for _, group := range report.Groups {
@@ -545,9 +556,13 @@ func checkScopedCoverage(report scopedReport) []string {
 				}
 			}
 			if strings.HasPrefix(group.ID, "core-") || group.ID == "quick-core" {
+				expectedPackage := corePackage
+				if strings.HasPrefix(group.ID, "core-") {
+					expectedPackage = fullCorePackage
+				}
 				for key := range runs {
 					pkg, test, _ := strings.Cut(key, "\x00")
-					if pkg != corePackage || (!strings.Contains(test, "/") && !assigned[test]) {
+					if pkg != expectedPackage || (!strings.Contains(test, "/") && !assigned[test]) {
 						failures = append(failures, group.ID+": unexpected test "+key)
 					}
 				}
@@ -565,12 +580,12 @@ func checkScopedCoverage(report scopedReport) []string {
 			}
 		}
 		if strings.HasPrefix(group.ID, "core-") {
-			if packages[corePackage] != 1 {
+			if packages[fullCorePackage] != 1 {
 				failures = append(failures, group.ID+": core package has no terminal")
 			}
 			for key, count := range runs {
 				pkg, test, _ := strings.Cut(key, "\x00")
-				if pkg == corePackage && !strings.Contains(test, "/") {
+				if pkg == fullCorePackage && !strings.Contains(test, "/") {
 					seenCore[test] += count
 				}
 			}
@@ -586,7 +601,7 @@ func checkScopedCoverage(report scopedReport) []string {
 			failures = append(failures, "core top-level test set differs from enumeration")
 		}
 		for _, pkg := range report.AllPackages {
-			if pkg != corePackage && seenPackages[pkg] != 1 {
+			if pkg != fullCorePackage && seenPackages[pkg] != 1 {
 				failures = append(failures, fmt.Sprintf("package %s completed %d times", pkg, seenPackages[pkg]))
 			}
 		}
