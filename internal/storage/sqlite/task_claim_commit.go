@@ -48,7 +48,7 @@ func (s *SQLiteStore) CommitTaskClaim(ctx context.Context, commit storageports.C
 			return nativeErr("wrong_mode", "project dispatch mode changed before claim")
 		}
 		if commit.Candidate {
-			stored, e := tx.Query(ctx, commit.Before.ProjectIdentity)
+			stored, e := tx.ReadTaskCandidateSnapshot(ctx, commit.Before.ProjectIdentity, commit.Before.TaskID)
 			if e != nil {
 				return e
 			}

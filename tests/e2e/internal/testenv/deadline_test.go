@@ -57,6 +57,22 @@ func TestBusinessDeadlineIsFrozenBeforeIndependentCleanup(t *testing.T) {
 				expired && record.Error != context.DeadlineExceeded.Error() || !expired && record.Error != "<nil>" {
 				t.Fatalf("cleanup changed the business deadline result: %+v", record)
 			}
+			s.cleanup()
+			raw, err = os.ReadFile(filepath.Join(s.Output, "scenario.json"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var repeated struct {
+				Passed  bool      `json:"passed"`
+				Error   string    `json:"context_error"`
+				BodyEnd time.Time `json:"body_finished_at"`
+			}
+			if err := json.Unmarshal(raw, &repeated); err != nil {
+				t.Fatal(err)
+			}
+			if repeated.Passed != record.Passed || repeated.Error != record.Error || !repeated.BodyEnd.Equal(record.BodyEnd) {
+				t.Fatalf("repeated cleanup changed the frozen business result: before=%+v after=%+v", record, repeated)
+			}
 		})
 	}
 }

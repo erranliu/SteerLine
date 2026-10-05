@@ -2,7 +2,6 @@ package steerlineapp
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"time"
@@ -20,6 +19,16 @@ func configureNativeStorage(c *execution.Config) {
 	if c.ReadRuntime == nil {
 		c.ReadRuntime = func(_ context.Context, config execution.Config) (*steerline.Runtime, error) {
 			return LoadDatabaseRuntime(config)
+		}
+	}
+	if c.ReadPersistedExecutionState == nil {
+		c.ReadPersistedExecutionState = func(ctx context.Context, config execution.Config) (storageports.ExecutionStateSnapshot, error) {
+			reader, err := OpenNativeTaskReader(ctx, &config)
+			if err != nil {
+				return storageports.ExecutionStateSnapshot{}, err
+			}
+			defer reader.Close()
+			return reader.ReadExecutionStateSnapshot(ctx, config.Identity())
 		}
 	}
 	if c.ValidateNativeStore == nil {
@@ -58,15 +67,14 @@ func LoadDatabaseRuntime(c execution.Config) (*steerline.Runtime, error) {
 		return nil, err
 	}
 	defer reader.Close()
-	checkpoint, err := reader.LoadCheckpoint(context.Background(), c.Identity(), true)
-	if err != nil {
-		return nil, err
-	}
 	snapshot, err := reader.ReadExecutionStateSnapshot(context.Background(), c.Identity())
 	if err != nil {
 		return nil, err
 	}
-	view, err := reconstruction.BuildFromStorage(snapshot, *checkpoint)
+	if snapshot.Checkpoint == nil {
+		return nil, storageports.ErrNotFound
+	}
+	view, err := reconstruction.BuildFromStorage(snapshot, *snapshot.Checkpoint)
 	if err != nil {
 		return nil, err
 	}
@@ -203,26 +211,20 @@ func validateWriterBinding(ctx context.Context, c execution.Config, store *sqlit
 	if err := store.ValidateStoredFormat(ctx); err != nil {
 		return err
 	}
-	authority, err := store.NativeAuthority(ctx, c.Identity())
-	if errors.Is(err, storageports.ErrNotFound) {
-		return taskError("authority_mismatch", "database has no native authority for this project; preserve existing state")
-	}
+	graph, err := store.TaskGraphSnapshot(ctx, c.Identity())
 	if err != nil {
 		return err
 	}
+	authority := graph.Authority
 	target, err := c.TaskRepositoryTarget(ctx)
 	if err != nil {
 		return err
 	}
-	if authority.Authority != "native" || authority.Repository != target || authority.Remote != c.Remote || authority.Branch != c.Branch {
+	if authority.ProjectIdentity != c.Identity() || authority.Authority != "native" || authority.Repository != target || authority.Remote != c.Remote || authority.Branch != c.Branch {
 		return taskError("authority_mismatch", "configuration repository, remote or branch differs from persisted native authority")
 	}
 	store.BindAuthority(authority)
-	snapshot, err := store.ReadExecutionStateSnapshot(ctx, c.Identity())
-	if err != nil {
-		return err
-	}
-	for _, task := range snapshot.Graph.Tasks {
+	for _, task := range graph.Tasks {
 		if task.Source != "native" || task.ExternalProvider != "" || task.ExternalProject != "" || task.ExternalID != "" || task.IdentityMapDigest != "" {
 			return taskError("authority_mismatch", "native center contains a task identity from an unsupported source")
 		}

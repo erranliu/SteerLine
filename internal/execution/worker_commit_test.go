@@ -32,7 +32,7 @@ func TestWorkerCommitRollsBackRecordsReceiptsEventsAndCheckpoint(t *testing.T) {
 	}
 	after, nextRevision, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
 	require(t, err)
-	durable, err := service.commandStore.Query(ctx, service.Config.Identity())
+	durable, err := readServiceSnapshot(ctx, service.domainStore, service.Config.Identity())
 	require(t, err)
 	if revision != nextRevision || !bytes.Equal(before, after) || recordFingerprint(original) != recordFingerprint(durable) {
 		t.Fatal("failed checkpoint changed durable business state or receipt")
@@ -72,7 +72,7 @@ func TestCheckpointAndReadViewsCannotPublishWorkerCandidates(t *testing.T) {
 	service.pendingEvents = append(service.pendingEvents, storageports.DomainEvent{ProjectIdentity: service.Config.Identity(), ExternalSource: "unpublished", ExternalID: newID(), Type: "worker.test", ReceivedAt: now(), Payload: mustJSON(map[string]bool{"pending": true})})
 	require(t, service.publishCheckpoint())
 	require(t, service.store.Heartbeat())
-	durable, err := service.commandStore.Query(ctx, service.Config.Identity())
+	durable, err := readServiceSnapshot(ctx, service.domainStore, service.Config.Identity())
 	require(t, err)
 	if recordFingerprint(durable) != original || len(service.pendingEvents) != 1 {
 		t.Fatal("checkpoint or heartbeat wrote or consumed business candidates")

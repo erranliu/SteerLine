@@ -11,7 +11,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -190,14 +189,14 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err = c.Work.VerifyContractFiles(ctx, contract); err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
 	}
-	var candidateSnapshot reconstruction.Snapshot
+	var candidateSnapshot storageports.TaskCandidateSnapshot
 	var commonBase string
 	if options.startCandidate {
-		candidateSnapshot, err = readCommandSnapshot(ctx, sqlite, c.Project)
+		candidateSnapshot, err = readCommandSnapshot(ctx, sqlite, c.Project, task.TaskID)
 		if err != nil {
 			return executionmodel.TaskClaimReceipt{}, err
 		}
-		if participatingCandidates(candidateSnapshot, task.TaskID) >= 5 {
+		if participatingCandidates(candidateSnapshot.WorkflowRuns, task.TaskID) >= 5 {
 			return executionmodel.TaskClaimReceipt{}, nativeErr("candidate_limit_reached", "five candidates already participate in this task experiment")
 		}
 		commonBase, err = executionmodel.CandidateCommonBase(candidateSnapshot.WorkflowRuns, candidateSnapshot.Executions, task.TaskID)

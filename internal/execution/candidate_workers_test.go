@@ -220,7 +220,7 @@ func TestMC1(t *testing.T) {
 			t.Fatal("candidate changed common base")
 		}
 	}
-	if len(f.s.State.Runs) != 5 || f.s.find("8") != nil || participatingCandidates(f.s.domain, "8") != 5 {
+	if len(f.s.State.Runs) != 5 || f.s.find("8") != nil || participatingCandidates(f.s.domain.WorkflowRuns, "8") != 5 {
 		t.Fatal("projection lost candidates or guessed a task target")
 	}
 	graph, err := f.store.TaskGraphSnapshot(context.Background(), f.c.Identity())
@@ -417,9 +417,9 @@ func TestMC5(t *testing.T) {
 	if err == nil {
 		t.Fatal("required transaction failure was ignored")
 	}
-	snapshot, err := readCommandSnapshot(context.Background(), f.store, f.c.Identity())
+	snapshot, err := readCommandSnapshot(context.Background(), f.store, f.c.Identity(), "8")
 	require(t, err)
-	if len(snapshot.Deliveries) != 0 || nativeTaskRecord(snapshot.Tasks, "8").Status != "in_progress" {
+	if len(snapshot.Graph.Deliveries) != 0 || snapshot.Graph.ByID["8"].Status != "in_progress" {
 		t.Fatal("delivery/closed partially committed")
 	}
 	var normalizedResults int
@@ -500,9 +500,9 @@ func TestMC6(t *testing.T) {
 				if err == nil {
 					t.Fatal("conflicting/unknown set delivered")
 				}
-				snapshot, e := readCommandSnapshot(context.Background(), f.store, f.c.Identity())
+				snapshot, e := readCommandSnapshot(context.Background(), f.store, f.c.Identity(), "8")
 				require(t, e)
-				if len(snapshot.Deliveries) != 0 {
+				if len(snapshot.Graph.Deliveries) != 0 {
 					t.Fatal("conflict created delivery")
 				}
 				return
@@ -534,7 +534,7 @@ func TestMC7(t *testing.T) {
 			t.Fatal("candidate exit failed")
 		}
 	}
-	if participatingCandidates(f.s.domain, "8") != 0 || nativeTaskRecord(f.s.domain.Tasks, "8").Status != "in_progress" {
+	if participatingCandidates(f.s.domain.WorkflowRuns, "8") != 0 || nativeTaskRecord(f.s.domain.Tasks, "8").Status != "in_progress" {
 		t.Fatal("empty experiment reopened task")
 	}
 	before := digestValue(f.s.domain)
@@ -684,7 +684,7 @@ func TestMC8(t *testing.T) {
 			}
 			<-port.entered
 			before := len(f.s.domain.Operations)
-			if f.abandon(t, run, newID()).Status != "abandoned" || participatingCandidates(f.s.domain, "8") != 0 {
+			if f.abandon(t, run, newID()).Status != "abandoned" || participatingCandidates(f.s.domain.WorkflowRuns, "8") != 0 {
 				t.Fatal("exit waited for effect/stop")
 			}
 			f.start(t, "candidate-b")
@@ -808,7 +808,7 @@ func TestMC9(t *testing.T) {
 		t.Fatal("exit failed")
 	}
 	f.start(t, "candidate-c")
-	if participatingCandidates(f.s.domain, "8") != 5 || len(f.s.domain.WorkflowRuns) != 6 {
+	if participatingCandidates(f.s.domain.WorkflowRuns, "8") != 5 || len(f.s.domain.WorkflowRuns) != 6 {
 		t.Fatal("exit did not immediately admit replacement")
 	}
 	var reserved int

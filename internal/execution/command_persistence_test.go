@@ -316,7 +316,7 @@ func TestCheckpointDoesNotSynthesizeControlOperations(t *testing.T) {
 	for _, action := range []string{"set_dispatch_mode", "stop_service"} {
 		service.State.Control.Operation = &contracts.ControlOperation{RequestID: newID(), Action: action, Phase: "applying", RequestDigest: strings.Repeat("b", 64)}
 		require(t, service.publishCheckpoint())
-		snapshot, err := service.commandStore.Query(context.Background(), service.Config.Identity())
+		snapshot, err := readServiceSnapshot(context.Background(), service.domainStore, service.Config.Identity())
 		require(t, err)
 		if recordFingerprint(snapshot.Operations) != before {
 			t.Fatal("checkpoint synthesized a business operation from its read metadata")

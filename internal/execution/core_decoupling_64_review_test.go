@@ -174,7 +174,7 @@ func testCD64InboxCommitBeforeAck(t *testing.T) {
 	if s.executionRecord(run).PendingDeliveryID != "" {
 		t.Fatal("failed consumption fact leaked into actor state")
 	}
-	snapshot, err := s.commandStore.Query(context.Background(), s.Config.identity)
+	snapshot, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.identity)
 	require(t, err)
 	for _, operation := range snapshot.Operations {
 		if operation.Kind == string(executionbackend.LifecycleAcknowledge) {

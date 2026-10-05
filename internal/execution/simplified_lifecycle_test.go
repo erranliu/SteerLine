@@ -39,7 +39,7 @@ func TestSimplifiedCleanupRetainsFrozenDeliveryEvidence(t *testing.T) {
 	run.TaskStatus = "discarded"
 	candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleCleanup, Input: executionbackend.LifecycleInput{Cleanup: &executionbackend.CleanupInput{Resources: []executionbackend.ProcessIdentity{{Kind: "fixture", Terminal: "original"}}}}}
 	require(t, s.executeLifecycleStep(context.Background(), run, simplifiedCleanupPort{lifecycle}, candidate))
-	stored, err := s.commandStore.Query(context.Background(), s.Config.Identity())
+	stored, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.Identity())
 	require(t, err)
 	if stored.Executions[0].Target != original {
 		t.Fatal("cleanup receipt rewrote delivered execution evidence")

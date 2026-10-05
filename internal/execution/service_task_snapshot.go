@@ -17,6 +17,10 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	return s.applyNativeSnapshot(stored)
+}
+
+func (s *Service) applyNativeSnapshot(stored storageports.ExecutionStateSnapshot) error {
 	snapshot := reconstruction.SnapshotFromStorage(stored)
 	for _, task := range snapshot.Tasks {
 		if task.Source != "native" || task.ExternalProvider != "" || task.ExternalProject != "" || task.ExternalID != "" || task.IdentityMapDigest != "" {
@@ -31,10 +35,6 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
 			return nativeErr("unsupported_schema", "unsupported workflow version")
 		}
 	}
-	authority, err := s.domainStore.NativeAuthority(ctx, s.Config.identity)
-	if err != nil {
-		return err
-	}
 	s.domain = snapshot
 	s.workerDecisionWrites = nil
 	s.pendingOperations = nil
@@ -43,6 +43,7 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
 	if copyErr != nil {
 		return copyErr
 	}
+	authority := stored.Graph.Authority
 	s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion
 	s.State.SchemaVersion = storageports.WorkerFlowRuntimeSchema
 	return s.projectState()

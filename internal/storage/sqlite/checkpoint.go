@@ -9,7 +9,15 @@ import (
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
+type checkpointQuery interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
 func ReadServiceCheckpointTx(ctx context.Context, tx *sql.Tx, project string, requireIdentity bool) (*storageports.ServiceCheckpoint, error) {
+	return readServiceCheckpoint(ctx, tx, project, requireIdentity)
+}
+
+func readServiceCheckpoint(ctx context.Context, tx checkpointQuery, project string, requireIdentity bool) (*storageports.ServiceCheckpoint, error) {
 	var payload []byte
 	if err := tx.QueryRowContext(ctx, `SELECT payload FROM projection WHERE project_identity=?`, project).Scan(&payload); err != nil {
 		return nil, err

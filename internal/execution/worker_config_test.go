@@ -12,7 +12,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -31,7 +30,7 @@ func TestUnregisteredWorkerFlowConfigurationCannotClaim(t *testing.T) {
 
 func TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation(t *testing.T) {
 	c, _, store := openDAGFixture(t)
-	old := contracts.ServiceCheckpoint{SchemaVersion: 5, Repository: contracts.Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()}}
+	old := storageports.ServiceCheckpoint{SchemaVersion: 5, Repository: storageports.CheckpointRepository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.Identity()}}
 	payload, err := json.Marshal(old)
 	if err != nil {
 		t.Fatal(err)

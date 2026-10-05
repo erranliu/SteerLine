@@ -60,7 +60,7 @@ func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
 		}
 		_, _, applyErr := s.applyAppServerSessionReceipt(run, request, receipt, errors.New("session receipt persistence failed"))
 		require(t, applyErr)
-		snapshotResult, err := s.commandStore.Query(context.Background(), s.Config.identity)
+		snapshotResult, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.identity)
 		require(t, err)
 		got := snapshotResult.Executions[0]
 		if got.PolicyResources == nil || got.PolicyResources.Digest != resource.Digest || got.SessionID != workerFlowMockSession || got.PendingTurnID != "" || s.workers[run.RunID] != nil {
@@ -100,7 +100,7 @@ func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
 			Implementation: CloneImplementationData(execution.ImplementationData), State: executionbackend.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "policy-generation"}}
 		applyErr := s.applyAppServerTurnReceipt(run, request, receipt, nil, errors.New("turn receipt persistence failed"))
 		require(t, applyErr)
-		snapshotResult, err := s.commandStore.Query(context.Background(), s.Config.identity)
+		snapshotResult, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.identity)
 		require(t, err)
 		got := snapshotResult.Executions[0]
 		if got.PolicyResources == nil || got.PolicyResources.Digest != resource.Digest || got.SessionID != workerFlowMockSession || got.PendingTurnID != "" || s.workers[run.RunID] != nil {

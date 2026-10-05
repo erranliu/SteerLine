@@ -22,6 +22,10 @@ func (q activityCommitBetweenReads) QueryContext(ctx context.Context, statement 
 	return q.tx.QueryContext(ctx, statement, args...)
 }
 
+func (q activityCommitBetweenReads) QueryRowContext(ctx context.Context, statement string, args ...any) *sql.Row {
+	return q.tx.QueryRowContext(ctx, statement, args...)
+}
+
 func TestTM05ActivitySharesTransactionAcrossWriterCommit(t *testing.T) {
 	ctx := context.Background()
 	writer, project, tasks := nativeAuditStore(t)
@@ -30,7 +34,10 @@ func TestTM05ActivitySharesTransactionAcrossWriterCommit(t *testing.T) {
 		if err := tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "run", TaskID: tasks[0].TaskID, WorkflowVersion: "minimal-v1", Phase: "executing"}); err != nil {
 			return err
 		}
-		return tx.PutExecution(initial)
+		if err := tx.PutExecution(initial); err != nil {
+			return err
+		}
+		return tx.PutStepAttempt(executionmodel.StepAttemptRecord{ProjectIdentity: project, AttemptID: "attempt", ExecutionID: "execution", StepID: "worker", AttemptNumber: 1, Status: "running"})
 	}))
 	var sequence int
 	var name, path string
@@ -44,7 +51,7 @@ func TestTM05ActivitySharesTransactionAcrossWriterCommit(t *testing.T) {
 	updated := initial
 	updated.Status = "succeeded"
 	committed := false
-	snapshot, events, err := readActivityView(ctx, activityCommitBetweenReads{tx: tx, commit: func() {
+	binding, events, err := readActivityView(ctx, activityCommitBetweenReads{tx: tx, commit: func() {
 		if committed {
 			t.Fatal("unexpected duplicate event read")
 		}
@@ -56,30 +63,15 @@ func TestTM05ActivitySharesTransactionAcrossWriterCommit(t *testing.T) {
 			_, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: project, WorkflowRunID: "run", ExecutionID: "execution", AttemptID: "attempt", ExternalSource: "activity-snapshot", ExternalID: "new", Type: "activity.worker", Payload: []byte(`{"title":"new"}`)})
 			return err
 		}))
-	}}, project, "execution", "attempt", 0, 200, 1<<20)
+	}}, project, "run", "execution", "attempt", 0, 200, 1<<20)
 	require(t, err)
-	if !committed || len(events) != 0 {
-		t.Fatalf("new event leaked into old snapshot: committed=%t events=%+v", committed, events)
-	}
-	foundBefore := false
-	for _, execution := range snapshot.Executions {
-		if execution.ExecutionID == updated.ExecutionID {
-			foundBefore = execution.Status == initial.Status
-		}
-	}
-	if !foundBefore {
-		t.Fatal("activity snapshot omitted the fixed task")
+	if !committed || len(events) != 0 || binding.ProjectIdentity != project || binding.ExecutionWorkflowRunID != "run" || binding.ExecutionID != "execution" || binding.AttemptID != "attempt" || binding.AttemptExecutionID != "execution" {
+		t.Fatalf("new event leaked into old snapshot or activity binding changed: committed=%t binding=%+v events=%+v", committed, binding, events)
 	}
 	require(t, tx.Commit())
-	next, events, err := reader.ReadActivityView(ctx, project, "execution", "attempt", 0, 200, 1<<20)
+	next, events, err := reader.ReadActivityView(ctx, project, "run", "execution", "attempt", 0, 200, 1<<20)
 	require(t, err)
-	found := false
-	for _, execution := range next.Executions {
-		if execution.ExecutionID == updated.ExecutionID && execution.Status == updated.Status {
-			found = true
-		}
-	}
-	if !found || len(events) != 1 || events[0].ExternalID != "new" {
-		t.Fatalf("next snapshot did not adopt complete commit: found=%t events=%+v", found, events)
+	if next.ExecutionWorkflowRunID != "run" || len(events) != 1 || events[0].ExternalID != "new" {
+		t.Fatalf("next snapshot did not adopt complete commit: binding=%+v events=%+v", next, events)
 	}
 }

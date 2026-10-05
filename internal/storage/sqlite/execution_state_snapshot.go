@@ -3,6 +3,7 @@ package sqlite
 import (
 	"context"
 	"database/sql"
+	"errors"
 
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
@@ -15,7 +16,31 @@ func (s Reader) ReadExecutionStateSnapshot(ctx context.Context, project string) 
 		return storageports.ExecutionStateSnapshot{}, err
 	}
 	defer tx.Rollback()
-	graph, err := s.TaskGraphSnapshotTx(ctx, tx, project)
+	snapshot, err := readExecutionStateSnapshotTx(ctx, tx, project, nil)
+	if err != nil {
+		return storageports.ExecutionStateSnapshot{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return storageports.ExecutionStateSnapshot{}, err
+	}
+	return snapshot, nil
+}
+
+func readExecutionStateSnapshotTx(ctx context.Context, tx graphSnapshotQuery, project string, afterCheckpoint func() error) (storageports.ExecutionStateSnapshot, error) {
+	var checkpoint *storageports.ServiceCheckpoint
+	checkpoint, err := readServiceCheckpoint(ctx, tx, project, true)
+	if errors.Is(err, sql.ErrNoRows) {
+		checkpoint, err = nil, nil
+	}
+	if err != nil {
+		return storageports.ExecutionStateSnapshot{}, persistenceError(err)
+	}
+	if afterCheckpoint != nil {
+		if err := afterCheckpoint(); err != nil {
+			return storageports.ExecutionStateSnapshot{}, err
+		}
+	}
+	graph, err := TaskGraphSnapshotTx(ctx, tx, project, nil)
 	if err != nil {
 		return storageports.ExecutionStateSnapshot{}, err
 	}
@@ -23,8 +48,5 @@ func (s Reader) ReadExecutionStateSnapshot(ctx context.Context, project string) 
 	if err != nil {
 		return storageports.ExecutionStateSnapshot{}, err
 	}
-	if err := tx.Commit(); err != nil {
-		return storageports.ExecutionStateSnapshot{}, err
-	}
-	return storageports.ExecutionStateSnapshot{Graph: graph, Records: records}, nil
+	return storageports.ExecutionStateSnapshot{Graph: graph, Records: records, Checkpoint: checkpoint}, nil
 }

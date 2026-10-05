@@ -161,6 +161,10 @@ func (s Reader) Events(ctx context.Context, project, execution, attempt string, 
 }
 
 func readEvents(ctx context.Context, db QueryContext, project, execution, attempt string, after int64, limit, payloadBudget int) ([]storageports.DomainEvent, error) {
+	return readBoundEvents(ctx, db, project, "", execution, attempt, after, limit, payloadBudget)
+}
+
+func readBoundEvents(ctx context.Context, db QueryContext, project, workflow, execution, attempt string, after int64, limit, payloadBudget int) ([]storageports.DomainEvent, error) {
 	if limit < 1 {
 		limit = 200
 	}
@@ -175,6 +179,10 @@ func readEvents(ctx context.Context, db QueryContext, project, execution, attemp
 	// events does not load bodies that the page will immediately discard.
 	query := `WITH batch AS (SELECT event_id,payload_bytes FROM events WHERE project_identity=? AND event_id>?`
 	args := []any{project, after}
+	if workflow != "" {
+		query += ` AND workflow_run_id=?`
+		args = append(args, workflow)
+	}
 	if execution != "" {
 		query += ` AND execution_id=?`
 		args = append(args, execution)

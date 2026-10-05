@@ -83,7 +83,7 @@ type CandidateTx interface {
 	operationTx
 	graphTx
 	workflowTx
-	Query(context.Context, string) (ExecutionSnapshot, error)
+	TaskCandidateReader
 	PutWorkflowRun(executionmodel.WorkflowRunRecord) error
 	UpdateOperation(executionmodel.OperationRecord) error
 }
@@ -120,7 +120,7 @@ type DiscardPendingTx interface {
 type DeliveryAuditTx interface {
 	graphTx
 	workflowTx
-	Query(context.Context, string) (ExecutionSnapshot, error)
+	TaskCandidateReader
 	AppendEvent(DomainEvent) (int64, error)
 }
 

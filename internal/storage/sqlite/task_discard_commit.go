@@ -45,10 +45,11 @@ func (s *SQLiteStore) CommitTaskDiscard(ctx context.Context, commit storageports
 		if digestValue(currentOperation) != digestValue(commit.Operation) || currentOperation.Kind != "discard_task" {
 			return nativeErr("stale_version", "discard original operation changed")
 		}
-		graph, err := tx.TaskGraphSnapshot(ctx, project)
+		snapshot, err := tx.ReadTaskCandidateSnapshot(ctx, project, id)
 		if err != nil {
 			return err
 		}
+		graph := snapshot.Graph
 		current, found := graph.ByID[id]
 		if !found {
 			return nativeErr("task_not_found", "discard task missing")
@@ -61,10 +62,6 @@ func (s *SQLiteStore) CommitTaskDiscard(ctx context.Context, commit storageports
 		}
 		if current.Status != "open" && current.Status != "in_progress" {
 			return nativeErr("immutable_task", "task cannot be discarded")
-		}
-		snapshot, err := tx.Query(ctx, project)
-		if err != nil {
-			return err
 		}
 		facts := executionmodel.CandidateDiscardFacts(snapshot.WorkflowRuns, snapshot.Executions, id)
 		if facts.UncertainPR || digestValue(facts) != digestValue(commit.Facts) {

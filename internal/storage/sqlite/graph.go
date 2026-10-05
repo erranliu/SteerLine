@@ -12,6 +12,11 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
+type graphSnapshotQuery interface {
+	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
 func (s Reader) TaskGraphSnapshot(ctx context.Context, project string) (storageports.TaskGraphSnapshot, error) {
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
@@ -25,11 +30,11 @@ func (s Reader) TaskGraphSnapshot(ctx context.Context, project string) (storagep
 	return out, tx.Commit()
 }
 
-func (s Reader) TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string) (storageports.TaskGraphSnapshot, error) {
+func (s Reader) TaskGraphSnapshotTx(ctx context.Context, tx graphSnapshotQuery, project string) (storageports.TaskGraphSnapshot, error) {
 	return TaskGraphSnapshotTx(ctx, tx, project, s.nativeBinding)
 }
 
-func TaskGraphSnapshotTx(ctx context.Context, tx *sql.Tx, project string, binding *executionmodel.ProjectTaskAuthority) (storageports.TaskGraphSnapshot, error) {
+func TaskGraphSnapshotTx(ctx context.Context, tx graphSnapshotQuery, project string, binding *executionmodel.ProjectTaskAuthority) (storageports.TaskGraphSnapshot, error) {
 	out := storageports.TaskGraphSnapshot{ByID: map[string]taskmodel.TaskRecord{}, RepositoryTaskIDs: map[string]bool{}, ContractIDs: map[string]bool{}, Deliveries: map[string]executionmodel.TaskDeliveryRecord{}, SampledAt: time.Now().UTC()}
 	if project == "" {
 		return out, nativeErr("authority_mismatch", "project identity is required")

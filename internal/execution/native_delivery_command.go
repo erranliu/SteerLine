@@ -10,7 +10,6 @@ import (
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
-	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -36,10 +35,11 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	if expectedTaskVersion == 0 || workflowRunID == "" {
 		return executionmodel.TaskDeliveryReceipt{}, nativeErr("immutable_task", "delivery requires task version and workflow identity")
 	}
-	graph, err := sqlite.TaskGraphSnapshot(ctx, c.Project)
+	snapshot, err := readCommandSnapshot(ctx, sqlite, c.Project, taskID)
 	if err != nil {
 		return executionmodel.TaskDeliveryReceipt{}, err
 	}
+	graph := snapshot.Graph
 	task, exists := graph.ByID[taskID]
 	if !exists {
 		return executionmodel.TaskDeliveryReceipt{}, nativeErr("task_not_found", "native task was not found")
@@ -62,10 +62,6 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 			return executionmodel.TaskDeliveryReceipt{}, nativeErr("stale_version", "delivery retry changed the original task version")
 		}
 		return executionmodel.TaskDeliveryReceipt{TaskID: taskID, TaskVersion: saved.TaskVersion, WorkflowRunID: workflowRunID, GraphRevision: saved.GraphRevision, Status: saved.Status, Delivery: existing}, nil
-	}
-	snapshot, err := readCommandSnapshot(ctx, sqlite, c.Project)
-	if err != nil {
-		return executionmodel.TaskDeliveryReceipt{}, err
 	}
 	found := false
 	for _, w := range snapshot.WorkflowRuns {
@@ -153,7 +149,7 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 // recordDiscardedMergeConflict keeps a late platform merge as audit evidence
 // without converting a discarded task into a normal delivery.
 func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s CommandStore, config Config, task taskmodel.TaskRecord, workflowRunID string, verifier TaskDeliveryVerifier, authority executionmodel.ProjectTaskAuthority) error {
-	snapshot, err := readCommandSnapshot(ctx, s, c.Project)
+	snapshot, err := readCommandSnapshot(ctx, s, c.Project, task.TaskID)
 	if err != nil {
 		return err
 	}
@@ -186,7 +182,7 @@ func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s Comm
 			if !ok || current.Status != "discarded" || current.Version != task.Version || graph.Authority.AuthorityVersion != authority.AuthorityVersion {
 				return nativeErr("stale_version", "discarded task changed during merge reconciliation")
 			}
-			currentSnapshot, err := readTransactionalSnapshot(ctx, tx, c.Project)
+			currentSnapshot, err := tx.ReadTaskCandidateSnapshot(ctx, c.Project, task.TaskID)
 			if err != nil {
 				return err
 			}
@@ -207,7 +203,7 @@ func (c CommandService) recordDiscardedMergeConflict(ctx context.Context, s Comm
 	return nativeErr("task_discarded", "discarded candidate PR is not verified merged")
 }
 
-func selectedNativeDeliveryState(snapshot reconstruction.Snapshot, taskID, workflowRunID string) (executionmodel.WorkflowRunRecord, executionmodel.ExecutionRecord, error) {
+func selectedNativeDeliveryState(snapshot storageports.TaskCandidateSnapshot, taskID, workflowRunID string) (executionmodel.WorkflowRunRecord, executionmodel.ExecutionRecord, error) {
 	var workflow *executionmodel.WorkflowRunRecord
 	for i := range snapshot.WorkflowRuns {
 		if snapshot.WorkflowRuns[i].WorkflowRunID == workflowRunID && snapshot.WorkflowRuns[i].TaskID == taskID {

@@ -31,7 +31,7 @@ type CommandStore interface {
 	storageports.Claims
 	storageports.Results
 	storageports.Discards
-	Query(context.Context, string) (storageports.ExecutionSnapshot, error)
+	storageports.TaskCandidateReader
 	TaskGraphSnapshot(context.Context, string) (storageports.TaskGraphSnapshot, error)
 	NativeAuthority(context.Context, string) (executionmodel.ProjectTaskAuthority, error)
 	TaskContract(context.Context, string, taskmodel.TaskRecord) (taskmodel.TaskContract, error)

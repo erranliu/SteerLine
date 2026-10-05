@@ -105,7 +105,7 @@ func TestAnswerChecksDomainRevisionBeforeCheckpointPublication(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "stale_revision") {
 		t.Fatalf("answer accepted against stale domain state: %v", err)
 	}
-	snapshot, err := service.commandStore.Query(ctx, service.Config.Identity())
+	snapshot, err := readServiceSnapshot(ctx, service.domainStore, service.Config.Identity())
 	require(t, err)
 	if snapshot.Decisions[0].Status != "pending" || len(snapshot.Decisions[0].Answer) != 0 {
 		t.Fatal("rejected answer changed decision")

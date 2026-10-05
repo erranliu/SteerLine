@@ -11,7 +11,6 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -76,7 +75,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 			}
 		}
 	}
-	snapshot, err := readCommandSnapshot(ctx, sqlite, c.Project)
+	snapshot, err := readCommandSnapshot(ctx, sqlite, c.Project, taskID)
 	if err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err
 	}
@@ -86,14 +85,11 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 			return taskmodel.TaskDiscardReceipt{}, err
 		}
 	}
-	authority, err := sqlite.NativeAuthority(ctx, c.Project)
-	if err != nil {
-		return taskmodel.TaskDiscardReceipt{}, err
-	}
+	authority := snapshot.Graph.Authority
 	if err = validateNativeConfiguredTarget(ctx, config, authority); err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err
 	}
-	plan, task, err := taskDiscardPlanFromStore(ctx, sqlite, c.Project, taskID)
+	plan, task, err := taskDiscardPlanFromSnapshot(snapshot)
 	if err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err
 	}
@@ -220,7 +216,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 			return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "PR provider configuration does not match the fixed repository target")
 		}
 	}
-	knownSnapshot, err := readCommandSnapshot(ctx, sqlite, c.Project)
+	knownSnapshot, err := readCommandSnapshot(ctx, sqlite, c.Project, taskID)
 	if err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err
 	}
@@ -264,28 +260,20 @@ func updateDiscardIntentReceipt(ctx context.Context, s CommandStore, op *executi
 	return nil
 }
 
-func taskDiscardPlanFromStore(ctx context.Context, s CommandStore, project, taskID string) (executionmodel.DiscardFacts, taskmodel.TaskRecord, error) {
-	snapshot, err := readCommandSnapshot(ctx, s, project)
+func taskDiscardPlanFromStore(ctx context.Context, s storageports.TaskCandidateReader, project, taskID string) (executionmodel.DiscardFacts, taskmodel.TaskRecord, error) {
+	snapshot, err := readCommandSnapshot(ctx, s, project, taskID)
 	if err != nil {
 		return executionmodel.DiscardFacts{}, taskmodel.TaskRecord{}, err
 	}
-	return taskDiscardPlanFromSnapshot(snapshot, taskID)
+	return taskDiscardPlanFromSnapshot(snapshot)
 }
 
-func taskDiscardPlanFromSnapshot(snapshot reconstruction.Snapshot, taskID string) (executionmodel.DiscardFacts, taskmodel.TaskRecord, error) {
-	var task taskmodel.TaskRecord
-	found := false
-	for _, candidate := range snapshot.Tasks {
-		if candidate.TaskID == taskID {
-			task = candidate
-			found = true
-			break
-		}
-	}
+func taskDiscardPlanFromSnapshot(snapshot storageports.TaskCandidateSnapshot) (executionmodel.DiscardFacts, taskmodel.TaskRecord, error) {
+	task, found := snapshot.Graph.ByID[snapshot.TaskID]
 	if !found {
 		return executionmodel.DiscardFacts{}, task, nativeErr("task_not_found", "native task was not found")
 	}
-	return executionmodel.CandidateDiscardFacts(snapshot.WorkflowRuns, snapshot.Executions, taskID), task, nil
+	return executionmodel.CandidateDiscardFacts(snapshot.WorkflowRuns, snapshot.Executions, snapshot.TaskID), task, nil
 }
 
 func uniqueSorted(values []string) []string {
@@ -328,15 +316,16 @@ func persistDiscardPending(ctx context.Context, s CommandStore, project, request
 }
 
 func (c CommandService) commitDiscard(ctx context.Context, s CommandStore, requestID string, op executionmodel.OperationRecord, intent taskDiscardIntent, info *executionmodel.PRInfo, expectedPRRepository string, known []executionmodel.VerifiedCandidatePR) (taskmodel.TaskDiscardReceipt, error) {
-	graph, err := s.TaskGraphSnapshot(ctx, c.Project)
+	snapshot, err := readCommandSnapshot(ctx, s, c.Project, intent.TaskID)
 	if err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err
 	}
+	graph := snapshot.Graph
 	before, found := graph.ByID[intent.TaskID]
 	if !found {
 		return taskmodel.TaskDiscardReceipt{}, nativeErr("task_not_found", "discard task missing")
 	}
-	facts, _, err := taskDiscardPlanFromStore(ctx, s, c.Project, intent.TaskID)
+	facts, _, err := taskDiscardPlanFromSnapshot(snapshot)
 	if err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err
 	}

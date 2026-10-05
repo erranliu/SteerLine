@@ -1,0 +1,8 @@
+{"Time":"2026-10-05T15:39:56.3500518+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration"}
+{"Time":"2026-10-05T15:39:56.5478439+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07CandidateCommandUsesTaskScopedSnapshot"}
+{"Time":"2026-10-05T15:39:56.5478439+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07CandidateCommandUsesTaskScopedSnapshot","Output":"=== RUN   TestTM07CandidateCommandUsesTaskScopedSnapshot\n"}
+{"Time":"2026-10-05T15:40:11.5805307+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07CandidateCommandUsesTaskScopedSnapshot","Output":"--- PASS: TestTM07CandidateCommandUsesTaskScopedSnapshot (15.03s)\n"}
+{"Time":"2026-10-05T15:40:11.5805307+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07CandidateCommandUsesTaskScopedSnapshot","Elapsed":15.03}
+{"Time":"2026-10-05T15:40:11.5805307+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"PASS\n"}
+{"Time":"2026-10-05T15:40:11.5887608+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerlineintegration\t15.239s\n"}
+{"Time":"2026-10-05T15:40:11.5887608+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Elapsed":15.239}

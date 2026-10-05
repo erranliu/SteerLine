@@ -107,14 +107,14 @@ func TestResolutionAuditEvidenceCannotChangeUnderOriginalProfileDigest(t *testin
 
 func TestResolutionAuditWorkerCommitCannotReplaceSnapshot(t *testing.T) {
 	s, run := neutralAuditService(t)
-	before, err := s.commandStore.Query(context.Background(), s.Config.Identity())
+	before, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.Identity())
 	require(t, err)
 	workflow := s.workflowRecord(run)
 	workflow.ExecutionProfile.ImplementationData[0].Payload[0] = '['
 	if err = s.commitWorker(run); err == nil {
 		t.Fatal("worker commit replaced original snapshot")
 	}
-	after, err := s.commandStore.Query(context.Background(), s.Config.Identity())
+	after, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.Identity())
 	require(t, err)
 	if digestValue(before.WorkflowRuns) != digestValue(after.WorkflowRuns) {
 		t.Fatal("rejected snapshot change mutated database")

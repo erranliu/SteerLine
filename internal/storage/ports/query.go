@@ -5,12 +5,19 @@ import "context"
 // Product query readers are read-only capabilities. Implementations own SQL
 // and transactions; product/query owns cursor and projection rules.
 type WorkflowReader interface {
-	Query(context.Context, string) (ExecutionSnapshot, error)
+	ReadWorkflow(context.Context, string, string) (WorkflowSnapshot, error)
 }
 
 // ActivityReader samples identity records and bounded events in one read transaction.
 type ActivityReader interface {
-	ReadActivityView(context.Context, string, string, string, int64, int, int) (ExecutionSnapshot, []DomainEvent, error)
+	ReadActivityView(context.Context, string, string, string, string, int64, int, int) (ActivityBinding, []DomainEvent, error)
+}
+
+// TaskCandidateReader returns the whole task graph and every candidate fact
+// for one task from a single snapshot. It does not expose unrelated execution
+// records such as decisions and private operation requests.
+type TaskCandidateReader interface {
+	ReadTaskCandidateSnapshot(context.Context, string, string) (TaskCandidateSnapshot, error)
 }
 
 type EventReader interface {

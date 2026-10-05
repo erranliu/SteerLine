@@ -239,7 +239,7 @@ func testAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	if err := service.reconcileSavedLifecycleQuestionAnswer(context.Background(), run); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := service.commandStore.Query(context.Background(), service.Config.identity)
+	snapshot, err := readServiceSnapshot(context.Background(), service.domainStore, service.Config.identity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -285,7 +285,7 @@ func TestAppServerStartedEventCommitsOperationReceipt(t *testing.T) {
 	require(t, err)
 	event := WorkerEvent{Fact: executionbackend.EventFact{Kind: executionbackend.EventStarted, SessionID: workerFlowMockSession, StartedTurnID: turnID}}
 	require(t, service.eventWorkerFlowFor(run, event))
-	snapshot, err := service.commandStore.Query(context.Background(), service.Config.identity)
+	snapshot, err := readServiceSnapshot(context.Background(), service.domainStore, service.Config.identity)
 	require(t, err)
 	for _, op := range snapshot.Operations {
 		if op.OperationID == opID {

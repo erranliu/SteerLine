@@ -20,8 +20,9 @@ type ExecutionSnapshot struct {
 // ExecutionStateSnapshot is sampled atomically for the execution actor's
 // recovery projection. Product reads use their narrower task/activity ports.
 type ExecutionStateSnapshot struct {
-	Graph   TaskGraphSnapshot
-	Records ExecutionSnapshot
+	Graph      TaskGraphSnapshot
+	Records    ExecutionSnapshot
+	Checkpoint *ServiceCheckpoint
 }
 
 type ExecutionStateReader interface {

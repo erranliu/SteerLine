@@ -11,13 +11,8 @@ import (
 // StateReader is the execution actor's atomic startup/recovery read port.
 type StateReader interface {
 	storageports.ExecutionStateReader
-	CheckpointReader
 	NativeAuthority(context.Context, string) (executionmodel.ProjectTaskAuthority, error)
 	DatabaseVersion(context.Context) (string, uint64, error)
-}
-
-type CheckpointReader interface {
-	LoadCheckpoint(context.Context, string, bool) (*storageports.ServiceCheckpoint, error)
 }
 
 // ExecutionRecordReader provides only immutable bindings and operation

@@ -13,34 +13,20 @@ import (
 // ProjectActivity consumes caller-collected canonical records. The reader must
 // collect binding facts and events in one read transaction; native logs cannot
 // fill a canonical gap and no file path is accepted here.
-func ProjectActivity(project, run, execution, attempt string, cursor api.ActivityCursor, snapshot ports.ExecutionSnapshot, events []ports.DomainEvent) (api.LogBatch, error) {
+func ProjectActivity(project, run, execution, attempt string, cursor api.ActivityCursor, binding ports.ActivityBinding, events []ports.DomainEvent) (api.LogBatch, error) {
 	if run == "" || execution == "" || attempt == "" {
 		return api.LogBatch{}, errors.New("activity query identity is missing")
 	}
 	if cursor.Initialized && (cursor.RunID != run || cursor.ExecutionID != execution || cursor.AttemptID != attempt) {
 		return api.LogBatch{}, errors.New("activity cursor belongs to another execution or attempt")
 	}
-	if snapshot.ProjectIdentity != project {
-		return api.LogBatch{}, errors.New("activity snapshot belongs to another project")
+	if binding.ProjectIdentity != project {
+		return api.LogBatch{}, errors.New("activity binding belongs to another project")
 	}
-	owned := false
-	for _, e := range snapshot.Executions {
-		if e.ExecutionID == execution && e.WorkflowRunID == run {
-			owned = true
-			break
-		}
-	}
-	if !owned {
+	if binding.ExecutionID != execution || binding.ExecutionWorkflowRunID != run {
 		return api.LogBatch{}, errors.New("activity execution does not belong to the requested run")
 	}
-	owned = false
-	for _, a := range snapshot.Attempts {
-		if a.ExecutionID == execution && a.AttemptID == attempt {
-			owned = true
-			break
-		}
-	}
-	if !owned {
+	if binding.AttemptID != attempt || binding.AttemptExecutionID != execution {
 		return api.LogBatch{}, errors.New("activity attempt does not belong to the requested execution")
 	}
 	batch := api.LogBatch{Cursor: api.ActivityCursor{RunID: run, ExecutionID: execution, AttemptID: attempt, AfterEventID: cursor.AfterEventID, Initialized: true}}
@@ -71,9 +57,9 @@ func (q Service) ReadActivity(ctx context.Context, run, execution, attempt strin
 	if q.Activity == nil || q.Project == "" {
 		return api.LogBatch{}, errors.New("activity reader and project identity are required")
 	}
-	domain, events, err := q.Activity.ReadActivityView(ctx, q.Project, execution, attempt, cursor.AfterEventID, DefaultEventPageSize, MaxEventPageBytes)
+	binding, events, err := q.Activity.ReadActivityView(ctx, q.Project, run, execution, attempt, cursor.AfterEventID, DefaultEventPageSize, MaxEventPageBytes)
 	if err != nil {
 		return api.LogBatch{}, err
 	}
-	return ProjectActivity(q.Project, run, execution, attempt, cursor, domain, events)
+	return ProjectActivity(q.Project, run, execution, attempt, cursor, binding, events)
 }

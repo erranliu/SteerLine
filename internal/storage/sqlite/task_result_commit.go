@@ -99,7 +99,7 @@ func (s *SQLiteStore) CommitTaskResult(ctx context.Context, commit storageports.
 			currentExecution.Workspace.Branch != commit.Execution.Workspace.Branch {
 			return nativeErr("immutable_task", "selected result or PR binding changed during platform verification")
 		}
-		currentSnapshot, err := tx.Query(ctx, input.ProjectIdentity)
+		currentSnapshot, err := tx.ReadTaskCandidateSnapshot(ctx, input.ProjectIdentity, input.TaskID)
 		if err != nil {
 			return err
 		}

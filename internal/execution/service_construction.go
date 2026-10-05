@@ -53,24 +53,23 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionbacke
 		}
 	}()
 	s := &Service{host: host, taskWork: work, taskResults: results, Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: stores.State, commandStore: stores.Commands, conversationStore: stores.Conversations, closeStore: stores.Close, store: &Store{Domain: stores.Worker, Project: c.identity}, workers: map[string]*Worker{}, ownedProcesses: map[string]executionbackend.StopHandle{}}
-	checkpoint, e := stores.State.LoadCheckpoint(context.Background(), c.identity, false)
-	if errors.Is(e, storageports.ErrNotFound) {
-		checkpoint, e = nil, nil
-	}
+	stored, e := stores.State.ReadExecutionStateSnapshot(context.Background(), c.identity)
 	if e != nil {
 		return nil, e
 	}
-	s.State = contracts.Runtime{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: contracts.Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}, Runs: []*contracts.Run{}, Control: contracts.ControlState{DispatchMode: "auto", Revision: 1, Blockers: []contracts.ControlBlocker{}}}
-	authority, authErr := stores.State.NativeAuthority(context.Background(), c.identity)
-	if authErr != nil {
-		return nil, authErr
+	if c.WorkflowProtocol == executionmodel.Version {
+		if err := c.ValidateStoredExecutions(reconstruction.SnapshotFromStorage(stored)); err != nil {
+			return nil, err
+		}
 	}
+	authority := stored.Graph.Authority
+	s.State = contracts.Runtime{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: contracts.Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}, Runs: []*contracts.Run{}, Control: contracts.ControlState{DispatchMode: "auto", Revision: 1, Blockers: []contracts.ControlBlocker{}}}
 	if authority.DispatchMode == "auto" && c.DefaultProfileID() == "" {
 		return nil, errors.New("automatic dispatch requires default_execution_profile")
 	}
 	s.State.Control = contracts.ControlState{DispatchMode: authority.DispatchMode, DispatchPaused: authority.DispatchPaused, Revision: authority.AuthorityVersion, Blockers: []contracts.ControlBlocker{}}
-	if checkpoint != nil {
-		old := reconstruction.RuntimeFromCheckpoint(*checkpoint, authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion)
+	if stored.Checkpoint != nil {
+		old := reconstruction.RuntimeFromCheckpoint(*stored.Checkpoint, authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion)
 		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch {
 			return nil, nativeErr("authority_mismatch", "runtime repository or branch differs from the native authority; preserve state")
 		}
@@ -92,7 +91,7 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionbacke
 			s.State.SlotOccupied = false
 		}
 	}
-	if err := s.refreshNativeSnapshot(context.Background()); err != nil {
+	if err := s.applyNativeSnapshot(stored); err != nil {
 		return nil, err
 	}
 	for _, run := range s.runs {

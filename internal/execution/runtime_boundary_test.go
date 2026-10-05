@@ -36,7 +36,7 @@ func TestWorkerBindingRollsBackWithItsCheckpoint(t *testing.T) {
 	if _, err := (executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords}).loadBinding(run.RunID, run.AttemptID); !os.IsNotExist(err) {
 		t.Fatalf("failed worker receipt left a binding: %v", err)
 	}
-	snapshot, err := s.commandStore.Query(context.Background(), s.Config.identity)
+	snapshot, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.identity)
 	require(t, err)
 	if snapshot.Executions[0].Process != nil || s.executionRecord(run).Process != nil {
 		t.Fatal("failed binding receipt became an authoritative worker")

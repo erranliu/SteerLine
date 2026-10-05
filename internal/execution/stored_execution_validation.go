@@ -33,7 +33,7 @@ func (c Config) ValidateStoredExecutions(snapshot reconstruction.Snapshot) error
 		fixedConfig := c.ApplyFixedExecutionProfile(*fixedProfile)
 		entry, resolveErr := registrationFor(fixedConfig)
 		if resolveErr != nil || execution.Backend != string(entry.Key.Backend) || execution.Agent != entry.Key.Agent || execution.Protocol != string(entry.Key.Protocol) {
-			return nativeErr("unsupported_schema", "execution identity differs from its fixed implementation snapshot")
+			return nativeErr("unsupported_schema", "fixed execution profile differs from the persisted run identity")
 		}
 		if (execution.Process != nil || execution.SessionID != "") && !awaitingRecoveryResources(&execution) {
 			if execution.PolicyResources == nil {
