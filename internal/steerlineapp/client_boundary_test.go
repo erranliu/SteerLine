@@ -20,7 +20,7 @@ func TestCM71ProductDependencyBoundary(t *testing.T) {
 	}{
 		{"../product/api", nil},
 		{"../product/client", []string{module + "/internal/product/api"}},
-		{"../console", []string{module + "/internal/product/api"}},
+		{"../console", []string{module + "/internal/product/api", module + "/internal/console/activityrender"}},
 	}
 	for _, owner := range owners {
 		entries, err := os.ReadDir(owner.dir)
@@ -61,7 +61,7 @@ func TestCM71ProductDependencyBoundary(t *testing.T) {
 			}
 			count++
 			path := pkg.ImportPath
-			if path == "database/sql" || strings.HasPrefix(path, "modernc.org/sqlite") || strings.HasPrefix(path, module+"/internal/steerline/") || path == module+"/internal/steerline" {
+			if path == "database/sql" || strings.HasPrefix(path, "modernc.org/sqlite") || strings.HasPrefix(path, module+"/internal/") && path != module+"/internal/product/api" && path != module+"/internal/product/client" && path != module+"/internal/console" && !(owner == "../console" && path == module+"/internal/console/activityrender") {
 				t.Fatalf("product-owned package %s reached concrete storage or the old center: %s", owner, path)
 			}
 		}

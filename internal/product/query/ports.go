@@ -13,6 +13,11 @@ type WorkflowReader interface {
 	Query(context.Context, string) (contracts.DomainSnapshot, error)
 }
 
+// ActivityReader samples binding records and events in the same read transaction.
+type ActivityReader interface {
+	ReadActivityView(context.Context, string, string, string, int64, int, int) (contracts.DomainSnapshot, []storageports.DomainEvent, error)
+}
+
 type EventReader interface {
 	Events(context.Context, string, string, string, int64, int, int) ([]storageports.DomainEvent, error)
 	EventPayload(context.Context, string, int64, int64, int) ([]byte, int64, string, error)
@@ -34,9 +39,10 @@ type Store interface {
 	EventReader
 	TaskReader
 	ProjectReader
+	ActivityReader
 }
 
 // NewService wires one product reader into its separate consumer capabilities.
 func NewService(store Store, project string) Service {
-	return Service{Project: project, Workflows: store, Events: store, Tasks: store, Projects: store}
+	return Service{Project: project, Workflows: store, Events: store, Tasks: store, Projects: store, Activity: store}
 }

@@ -189,6 +189,10 @@ func QuerySnapshot(ctx context.Context, db QueryContext, project string) (contra
 // Events reads bounded metadata and materializes only the inline bodies that
 // fit payloadBudget. A zero budget reads metadata only, including lookahead.
 func (s Reader) Events(ctx context.Context, project, execution, attempt string, after int64, limit, payloadBudget int) ([]storageports.DomainEvent, error) {
+	return readEvents(ctx, s.db, project, execution, attempt, after, limit, payloadBudget)
+}
+
+func readEvents(ctx context.Context, db QueryContext, project, execution, attempt string, after int64, limit, payloadBudget int) ([]storageports.DomainEvent, error) {
 	if limit < 1 {
 		limit = 200
 	}
@@ -217,7 +221,7 @@ func (s Reader) Events(ctx context.Context, project, execution, attempt string, 
 		CASE WHEN e.payload_bytes<=? AND b.inline_bytes<=? THEN e.payload ELSE X'' END
 		FROM bounded b JOIN events e ON e.event_id=b.event_id ORDER BY e.event_id`
 	args = append(args, limit, queryrules.MaxEventPageBytes, queryrules.MaxEventPageBytes, payloadBudget)
-	rows, err := s.db.QueryContext(ctx, query, args...)
+	rows, err := db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, err
 	}

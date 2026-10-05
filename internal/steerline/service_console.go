@@ -3,6 +3,7 @@ package steerline
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/console/activityrender"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 )
@@ -29,9 +30,9 @@ func (s *ServiceHost) Emit(ev ActivityEvent) {
 		}
 	case "summary":
 		if ev.Source == "steer" {
-			fmt.Fprintln(out, productquery.RenderActivity(productquery.ActivityDisplayEvent(ev), productquery.ActivityRenderOptions{Color: false}))
+			fmt.Fprintln(out, activityrender.RenderActivity(productquery.ActivityDisplayEvent(ev), activityrender.RenderOptions{Color: false}))
 		}
 	default:
-		fmt.Fprintln(out, productquery.RenderActivity(productquery.ActivityDisplayEvent(ev), productquery.ActivityRenderOptions{Color: stdoutColor()}))
+		fmt.Fprintln(out, activityrender.RenderActivity(productquery.ActivityDisplayEvent(ev), activityrender.RenderOptions{Color: stdoutColor()}))
 	}
 }

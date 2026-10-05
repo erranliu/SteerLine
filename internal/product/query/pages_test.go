@@ -2,6 +2,8 @@ package query
 
 import (
 	"encoding/json"
+	"fmt"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	"strings"
 	"testing"
 	"time"
@@ -96,4 +98,17 @@ func TestTM05PageProjection(t *testing.T) {
 			t.Fatalf("history guessed or lost canonical facts: %+v", page)
 		}
 	})
+}
+
+// This original client assertion follows the unique ready-candidate projector.
+func TestNativeCandidateSnapshotKeepsDispatchOrderBeyondDetailPage(t *testing.T) {
+	at := time.Now().UTC()
+	ready := contracts.NativeReadyTaskSnapshot{SampledAt: at}
+	for i := 501; i >= 1; i-- {
+		ready.Tasks = append(ready.Tasks, taskmodel.TaskRecord{TaskID: fmt.Sprint(i), Title: "ready", Type: "task", Status: "open"})
+	}
+	snapshot := ReadyCandidates(ready, at, api.ServiceConnection{State: api.ConnectionConnected}, []string{"task"})
+	if len(snapshot.Tasks) != 501 || snapshot.Tasks[0].TaskID != "501" || snapshot.Tasks[500].TaskID != "1" {
+		t.Fatalf("ready candidates were truncated or reordered by task ID: %d", len(snapshot.Tasks))
+	}
 }

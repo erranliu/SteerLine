@@ -24,6 +24,7 @@ type Connection interface {
 	// Declare provider capabilities structurally; the application-owned
 	// connection must not import the product query use-case package.
 	Query(context.Context, string) (contracts.DomainSnapshot, error)
+	ReadActivityView(context.Context, string, string, string, int64, int, int) (contracts.DomainSnapshot, []storageports.DomainEvent, error)
 	Events(context.Context, string, string, string, int64, int, int) ([]storageports.DomainEvent, error)
 	EventPayload(context.Context, string, int64, int64, int) ([]byte, int64, string, error)
 	NativeTaskPage(context.Context, string, string, string, uint64, int, int) (contracts.NativeTaskPage, error)

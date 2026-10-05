@@ -16,4 +16,8 @@
 
 ## 自查结论
 
-真实接线与 L1 均通过。产品请求、执行/会话身份、revision/profile digest 由相应 DTO/接线断言验证；当前仍待提交与 PR 发布。
+真实接线与 L1 均通过。产品请求、执行/会话身份、revision/profile digest 由相应 DTO/接线断言验证；原实现已提交 PR221，独立复审修复/集成记录见下文。
+
+## 协调独立复审
+
+共享集成、确认问题/修复、首轮失败及最终证据见 [coordinator-review](coordinator-review/README.md)。原 worker 报告保留真实历史候选和结果。

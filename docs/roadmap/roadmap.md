@@ -74,4 +74,4 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 [架构约束](architecture-constraints.md) · [控制台约束](console-constraints.md) · [第一阶段交付](phase-1-delivery.md)
 
-当前用户暂停的 #77/#79/#80/#81/#82 保持暂停；前置交付不自动解除该安排。#76 的领取文档端口和公共构造接线按[现行接口交接](../validation/three-line-03-task-usecases/interface-handoff.md)集成。
+#76 已由 PR219 合入；#77 在独立工作树继续产品读取/客户端工作，#78 基于该硬前置迁移适配器与资源目录。#79–#82 未由当前任务启动，后续仍按固定 Spec 与 DAG 前置执行。共享构造按[现行接口交接](../validation/three-line-04-execution-usecases/interface-handoff.md)和各任务所有权顺序集成。

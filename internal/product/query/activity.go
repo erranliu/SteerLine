@@ -1,6 +1,7 @@
 package query
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"strings"
@@ -64,4 +65,16 @@ func ProjectActivity(project, run, execution, attempt string, cursor api.Activit
 		batch.Diagnostics = append(batch.Diagnostics, "数据库中暂无已采集活动；不会从原始日志补画")
 	}
 	return batch, nil
+}
+
+// ReadActivity reads one fixed snapshot before projecting public activity values.
+func (q Service) ReadActivity(ctx context.Context, run, execution, attempt string, cursor api.ActivityCursor) (api.LogBatch, error) {
+	if q.Activity == nil || q.Project == "" {
+		return api.LogBatch{}, errors.New("activity reader and project identity are required")
+	}
+	domain, events, err := q.Activity.ReadActivityView(ctx, q.Project, execution, attempt, cursor.AfterEventID, DefaultEventPageSize, MaxEventPageBytes)
+	if err != nil {
+		return api.LogBatch{}, err
+	}
+	return ProjectActivity(q.Project, run, execution, attempt, cursor, domain, events)
 }

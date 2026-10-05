@@ -27,6 +27,7 @@ type Service struct {
 	Events    EventReader
 	Tasks     TaskReader
 	Projects  ProjectReader
+	Activity  ActivityReader
 }
 
 type EventFilter struct {

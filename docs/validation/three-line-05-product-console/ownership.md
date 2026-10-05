@@ -31,3 +31,11 @@ SQLite `Reader.TaskGraphSnapshot`、事务内 `TaskGraphSnapshotTx`、`persisten
 - 真实 app/client/SQLite/受控后端命令路径：`wiring-02` 的 `TestCandidateConsoleWiring`，最终状态在报告完成后记录。
 
 所有验收命令、环境、时点、通过条件和证据目录见 [实现计划](../../spec/three-line-05-product-console.plan.md) 与本目录 [证据索引](README.md)。
+
+## 协调集成后的唯一所有者
+
+基线更新到 #78 PR220 merge `fdb9ad75b1c5797503af9ced198732c62c9968dc`。共享 cmd/app/guard 容器由协调聊天唯一修复合并，保留产品与适配资源双方实际接口。adapter 的旧 taskview 纯值例外随该旧包删除；只保留现存 contracts→product/api 路径。
+
+`query.ActivityReader.ReadActivityView` 消费 SQLite 的一只读事务，连接结构契约声明同一方法；app reader 委派 `query.Service.ReadActivity`，无第二次独立 Query/Events 采样、无无消费者 ActivityEvents 转发。新 SQL provider 复用原有 QuerySnapshot 和有界 event SQL；此方法由 #79 按存储边界继续承接，不能改回两个采样。
+
+活动格式化唯一位于 `internal/console/activityrender`，只接受产品 API 并依赖纯字符宽度库；console 和 ServiceHost 直接调用，query/console 无复制或转发。它是 Spec 允许的独立纯 UI 视图，不是新的业务/客户端/SQL 白名单。守卫对 query 全标签生产 imports、新 console adapter 反例及该视图传递闭包保留禁用检查。实际 missing task 错误在 app 映射成公开 UnknownRecord，并保留原任务 error cause。

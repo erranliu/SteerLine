@@ -4,7 +4,7 @@ import (
 	"context"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/workspace"
+	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
 func (c *Config) ValidateAdmission() error {

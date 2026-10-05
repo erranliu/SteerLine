@@ -2,6 +2,7 @@ package console
 
 import (
 	"fmt"
+	"github.com/erranliu/SteerLine/internal/console/activityrender"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"sort"
 	"strconv"
@@ -622,7 +623,7 @@ func renderActivity(state projectState, row *consoleRow, width, height int) []st
 			event.Detail = safeTerminalText(event.Detail)
 			event.Status = safeTerminalText(event.Status)
 			event.Meta = safeActivityMetadata(event.Meta)
-			rendered := RenderActivity(event, RenderOptions{MaxColumns: width})
+			rendered := activityrender.RenderActivity(event, activityrender.RenderOptions{MaxColumns: width})
 			lines = append(lines, strings.Split(rendered, "\n")...)
 		}
 	}
@@ -1080,7 +1081,7 @@ func activityEventLineCount(event api.ActivityEvent, width int) int {
 	event.Title = safeTerminalText(event.Title)
 	event.Detail = safeTerminalText(event.Detail)
 	event.Status = safeTerminalText(event.Status)
-	return max(1, len(strings.Split(RenderActivity(event, RenderOptions{MaxColumns: width}), "\n")))
+	return max(1, len(strings.Split(activityrender.RenderActivity(event, activityrender.RenderOptions{MaxColumns: width}), "\n")))
 }
 
 func serviceWindowInstruction(ref ProjectRef) string { return ref.Presentation.ServiceInstruction }

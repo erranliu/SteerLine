@@ -3,6 +3,7 @@ package steerlineapp
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -95,6 +96,13 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer client.Close()
+	_, missingTaskErr := client.ShowTask(ctx, "999")
+	var publicError *api.Error
+	var domainError *taskmodel.Error
+	if !errors.As(missingTaskErr, &publicError) || publicError.Kind != api.UnknownRecord || !errors.As(missingTaskErr, &domainError) || domainError.Code != "task_not_found" {
+		t.Fatalf("real missing task lost public error or original cause: %v", missingTaskErr)
+	}
+
 	snapshot := client.ReadProject(ctx, "10", api.ProjectSnapshot{})
 	if snapshot.TaskError != "" || snapshot.NativeTaskError != "" || snapshot.HistoryError != "" || snapshot.FullReadAt.IsZero() ||
 		snapshot.NativeTasks == nil || len(snapshot.NativeTasks.Tasks) != 2 || snapshot.NativeTasks.DatabaseRevision != revision || snapshot.NativeTasks.DatabaseID != id ||

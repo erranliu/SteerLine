@@ -1,0 +1,394 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./internal/coreboundary",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-05T00:41:26.7485538Z",
+  "finished_at": "2026-10-05T00:41:33.874139Z",
+  "wall_seconds": 7.1255852,
+  "environment": {
+    "source_commit": "862379824ac0dcb1bbfa45fa842038ea43d2526b",
+    "worktree_status": " M internal/coreboundary/check.go\n M internal/coreboundary/execution_boundary_test.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 1,
+    "passed_packages": 1,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 33,
+    "passed_tests": 33,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "status": "pass",
+        "elapsed_seconds": 6.186
+      }
+    ],
+    "tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06ContractValueClosure",
+        "status": "pass",
+        "elapsed_seconds": 3.09
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary",
+        "status": "pass",
+        "elapsed_seconds": 2.52
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/repository_all_tags_windows_linux",
+        "status": "pass",
+        "elapsed_seconds": 2.48
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06ContractValueClosure/product/api",
+        "status": "pass",
+        "elapsed_seconds": 0.87
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06ContractValueClosure/steerline/taskview/alongside_allowed_contract_path",
+        "status": "pass",
+        "elapsed_seconds": 0.75
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06ContractValueClosure/steerline/taskview",
+        "status": "pass",
+        "elapsed_seconds": 0.74
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06ContractValueClosure/product/api/alongside_allowed_contract_path",
+        "status": "pass",
+        "elapsed_seconds": 0.72
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary",
+        "status": "pass",
+        "elapsed_seconds": 0.09
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ConsoleQueryBoundary",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ConsoleQueryBoundary/execution/reconstruction",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ConsoleQueryBoundary/steerline/projection",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ConsoleQueryBoundary/steerline/query",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/concrete_storage_in_helper",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/new_product_query_in_helper",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/product_query_in_execution",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/product_query_in_helper",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/task_implementation_in_inactive_tag",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/backend_resources_and_protocol_are_allowed",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/database/sql",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/execution",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/product/api",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/steerline/console",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/steerline/sqlite",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/steerline/taskview",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/steerline/testprotocol",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/steerlineapp",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/storage/ports",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/task",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/transitive_helper",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/adapter_in_other_os_test",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/adapter_in_pure_reconstruction",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/old_host_in_other_os",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/old_projection_in_execution",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "slowest_tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06ContractValueClosure",
+        "status": "pass",
+        "elapsed_seconds": 3.09
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary",
+        "status": "pass",
+        "elapsed_seconds": 2.52
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/repository_all_tags_windows_linux",
+        "status": "pass",
+        "elapsed_seconds": 2.48
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06ContractValueClosure/product/api",
+        "status": "pass",
+        "elapsed_seconds": 0.87
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06ContractValueClosure/steerline/taskview/alongside_allowed_contract_path",
+        "status": "pass",
+        "elapsed_seconds": 0.75
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06ContractValueClosure/steerline/taskview",
+        "status": "pass",
+        "elapsed_seconds": 0.74
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06ContractValueClosure/product/api/alongside_allowed_contract_path",
+        "status": "pass",
+        "elapsed_seconds": 0.72
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary",
+        "status": "pass",
+        "elapsed_seconds": 0.09
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ConsoleQueryBoundary",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ConsoleQueryBoundary/execution/reconstruction",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ConsoleQueryBoundary/steerline/projection",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ConsoleQueryBoundary/steerline/query",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/concrete_storage_in_helper",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/new_product_query_in_helper",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/product_query_in_execution",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/product_query_in_helper",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM04ExecutionBoundary/task_implementation_in_inactive_tag",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/backend_resources_and_protocol_are_allowed",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/database/sql",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/coreboundary",
+        "name": "TestTM06AdapterBoundary/execution",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      }
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 6.1858112,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-three-line-20261004-01a10589/review78-boundary-final/go-test.jsonl",
+  "stderr_log": "C:/Users/lmas1/.codex/task-state/roadmap-runner/steerline-three-line-20261004-01a10589/review78-boundary-final/go-test.stderr.txt"
+}

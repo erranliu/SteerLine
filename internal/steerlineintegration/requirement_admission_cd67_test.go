@@ -7,9 +7,9 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 )
 
 func TestExecutionRequirementsCannotInferOtherTargetEnvironment(t *testing.T) {

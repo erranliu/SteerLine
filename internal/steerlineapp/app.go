@@ -6,14 +6,14 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/codexworker"
-	"github.com/erranliu/SteerLine/internal/steerline/processhost"
 )
 
 func NewProcessHost(timeout time.Duration) executionbackend.ManagedProcessHost {
-	return processhost.New(timeout)
+	return executionprocess.New(timeout)
 }
 
 func StartService(ctx context.Context, configPath string, options steerline.StartServiceOptions) (steerline.ServiceStartResult, error) {

@@ -35,3 +35,15 @@
 ## 自查与交付
 
 逐项对照 Spec 检查 API 字段、提交屏障、同快照、身份/版本和唯一结果；确认迁出路径与无消费者桥接删除。检查所有目标命令命中、回执和测试 summary 后，汇总 [验证证据](../validation/three-line-05-product-console/README.md)、提交并创建一个实现 PR。
+
+## 协调复审集成与追加验证
+
+先集成 PR220 (#78) 已合入 main `fdb9ad75b1c5797503af9ced198732c62c9968dc`，共享容器由协调聊天唯一合并，保留 TM06 路径守卫和所有适配/资源 runner 条目；产品目录/DTO/console 接线保留 #77 所有权。移除 contracts 旧 taskview 例外，仅保留实际 product/api 契约闭包。
+
+TM05.4 活动同快照：query 消费 ActivityReader.ReadActivityView，SQLite 在一只读事务复用原 QuerySnapshot 与有界 event SQL，不复制 SQL。`TestTM05ActivitySharesTransactionAcrossWriterCommit` 在身份采样和 event SQL 之间真实提交另一个 WAL writer，要求两节均保持旧快照，下一次真实读取共同采用新提交。删除无消费者 ActivityEvents 转发。
+
+TM05.5 纯共享视图：原复制到 query/console 的两份活动 formatter 收为 `internal/console/activityrender` 唯一实现；宿主/TUI 均直接消费。原 TestRenderActivity 随唯一实现迁入并加入 L1，Unicode/宽度/详情断言由 console 完整包保留。console 守卫只放行这一个独立纯 UI 子包，仍检查完整传递图。
+
+TM05.6 守卫与错误：product/query 的生产 import 规则同时检查所有标签 AST 和 Windows/Linux 图，新增禁用标签反例；adapter 禁止新增 console 根和独立视图子包。真实 app missing task 查询要求公开 UnknownRecord 且保留原 task_not_found cause，不用内部模型进入 API。
+
+测试环境为 Windows/amd64、隔离 SQLite/Git/WAL/source fixtures、无 native opt-in。最终定向命令 `go run ./cmd/test-feedback -out <run>/review77-final-targeted2 -- ./internal/coreboundary ./internal/product/api ./internal/product/client ./internal/product/query ./internal/product/query/taskgraph ./internal/storage/ports ./internal/console ./internal/console/activityrender ./cmd/test-feedback -count=1` 在修复后执行，要求所有包非零命中、零失败/跳过。SQLite/app 使用 `go run ./cmd/test-feedback -out <run>/review77-final-sql-app -- ./internal/steerline/sqlite ./internal/steerlineapp -run '^(TestTM05ActivitySharesTransactionAcrossWriterCommit|TestProjectView.*|TestFileQuerySourceReadsCombinedProjectView|TestCLIExecutionProfileIsBoundIntoStartTaskRequest|TestCM71ProductDependencyBoundary)$' -count=1`，覆盖真实事务、错误分类和工厂。真实候选接线 `review77-wiring-integrated` 的 parent 保留全部原断言。集成后的首轮 L1 暴露 TM06 临时模块仍按旧 console/查询路径建立；报告保留，修复后在最终工作树运行一次 `go run ./cmd/test-feedback -level=L1 -out <run>/review77-l1-final`，要求非零完整命中、零失败/跳过。源码索引和实际结果见协调复审目录及本 run task-state；不跑 Full/L2/L3/live。

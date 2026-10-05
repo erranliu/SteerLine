@@ -14,8 +14,8 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	remote "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker"
-	"github.com/erranliu/SteerLine/internal/steerline/orcaworker"
+	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 )
 
 // Protocol fixtures invoke production adapters without claiming a Service run

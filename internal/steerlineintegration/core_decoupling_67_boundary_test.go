@@ -16,7 +16,7 @@ func TestCD67CoreBoundary(t *testing.T) {
 	t.Run("pure_ownership_all_tags_production_and_tests", func(t *testing.T) {
 		for _, owner := range []string{"product/query/taskgraph", "task", "task/model", "execution/model", "execution/backend", "product/api", "storage/ports"} {
 			t.Run(owner, func(t *testing.T) {
-				for _, dependency := range []string{"database/sql", "github.com/erranliu/SteerLine/internal/steerline/contracts", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/steerline/sqlite", "github.com/erranliu/SteerLine/internal/steerline/codexworker", "github.com/erranliu/SteerLine/internal/steerlineapp", "github.com/erranliu/SteerLine/internal/helper", "example.org/implementation"} {
+				for _, dependency := range []string{"database/sql", "github.com/erranliu/SteerLine/internal/steerline/contracts", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/steerline/sqlite", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/steerlineapp", "github.com/erranliu/SteerLine/internal/helper", "example.org/implementation"} {
 					for _, filename := range []string{"edge_plan9.go", "edge_linux_test.go"} {
 						root := t.TempDir()
 						dir := filepath.Join(root, "internal", owner)
@@ -77,7 +77,7 @@ func TestCD67CoreBoundary(t *testing.T) {
 					write(path, fixture.helper)
 				}
 				if fixture.implementation != "" {
-					write("internal/steerline/codexworker/edge_darwin.go", fixture.implementation)
+					write("internal/execution/adapters/codex/edge_darwin.go", fixture.implementation)
 				}
 				report, err := coreboundary.ScanSource(root)
 				require(t, err)
@@ -89,7 +89,7 @@ func TestCD67CoreBoundary(t *testing.T) {
 	})
 
 	t.Run("console_negative_all_tags_production_and_tests", func(t *testing.T) {
-		for _, dependency := range []string{"github.com/erranliu/SteerLine/internal/steerline", "database/sql", "modernc.org/sqlite", "github.com/erranliu/SteerLine/internal/steerline/sqlite", "github.com/erranliu/SteerLine/internal/steerline/persistence", "github.com/erranliu/SteerLine/internal/steerline/codexworker", "github.com/erranliu/SteerLine/internal/steerline/orca_remote_worker", "github.com/erranliu/SteerLine/internal/steerline/processhost", "github.com/erranliu/SteerLine/internal/steerlineclient", "github.com/erranliu/SteerLine/internal/product/client", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/steerlineapp"} {
+		for _, dependency := range []string{"github.com/erranliu/SteerLine/internal/steerline", "database/sql", "modernc.org/sqlite", "github.com/erranliu/SteerLine/internal/steerline/sqlite", "github.com/erranliu/SteerLine/internal/steerline/persistence", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", "github.com/erranliu/SteerLine/internal/execution/process", "github.com/erranliu/SteerLine/internal/steerlineclient", "github.com/erranliu/SteerLine/internal/product/client", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/execution/workspace", "github.com/erranliu/SteerLine/internal/execution/publication", "github.com/erranliu/SteerLine/internal/steerlineapp"} {
 			t.Run(dependency, func(t *testing.T) {
 				for _, file := range []string{"edge_plan9.go", "edge_linux_test.go"} {
 					root := t.TempDir()

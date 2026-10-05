@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/workspace"
+	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
 // LoadedConfigDigest identifies the project and global execution file bytes

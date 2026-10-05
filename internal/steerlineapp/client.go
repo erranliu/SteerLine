@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -191,22 +192,24 @@ func (r *clientReader) ReadProject(ctx context.Context, selected string, _ produ
 func (r *clientReader) ShowTask(ctx context.Context, id string) (productapi.TaskPage, error) {
 	page, err := r.Service.ShowNativeTask(ctx, id)
 	if err != nil {
-		return productapi.TaskPage{}, err
+		return productapi.TaskPage{}, productReadError(err)
 	}
 	return query.TaskPage(page), nil
 }
 func (r *clientReader) ListTasks(ctx context.Context, cursor string, limit int) (productapi.TaskPage, error) {
 	page, err := r.Service.ListNativeTasks(ctx, cursor, limit)
 	if err != nil {
-		return productapi.TaskPage{}, err
+		return productapi.TaskPage{}, productReadError(err)
 	}
 	return query.TaskPage(page), nil
 }
 func (r *clientReader) TaskGraph(ctx context.Context, cursor string, limit int) (productapi.GraphPage, error) {
-	return r.Service.TaskGraph(ctx, cursor, limit)
+	page, err := r.Service.TaskGraph(ctx, cursor, limit)
+	return page, productReadError(err)
 }
 func (r *clientReader) QueryTaskGraph(ctx context.Context, filter productapi.GraphFilter) (productapi.GraphPage, error) {
-	return r.Service.QueryTaskGraph(ctx, filter)
+	page, err := r.Service.QueryTaskGraph(ctx, filter)
+	return page, productReadError(err)
 }
 func (r *clientReader) Conversation(ctx context.Context, filter productapi.ConversationFilter, cursor string, limit int) (productapi.ConversationPage, error) {
 	page, err := r.ConversationService.ReadConversation(ctx, contracts.ConversationFilter(filter), cursor, limit)
@@ -251,15 +254,7 @@ func (r *clientReader) Command(ctx context.Context, id string) (productapi.Comma
 	return query.CommandReceipt(record), err
 }
 func (r *clientReader) Activity(ctx context.Context, runID, executionID, attemptID string, cursor productapi.ActivityCursor) (productapi.LogBatch, error) {
-	domain, err := r.store.Query(ctx, r.project)
-	if err != nil {
-		return productapi.LogBatch{}, err
-	}
-	events, err := r.store.Events(ctx, r.project, executionID, attemptID, cursor.AfterEventID, query.DefaultEventPageSize, query.MaxEventPageBytes)
-	if err != nil {
-		return productapi.LogBatch{}, err
-	}
-	return query.ProjectActivity(r.project, runID, executionID, attemptID, cursor, domain, events)
+	return r.Service.ReadActivity(ctx, runID, executionID, attemptID, cursor)
 }
 
 func (r *clientReader) DatabaseVersion(ctx context.Context) (string, uint64, error) {
@@ -436,6 +431,18 @@ func clientServiceInstruction(ref productapi.ProjectRef) string {
 	return launcher
 }
 
-func (r *clientReader) ActivityEvents(ctx context.Context, execution, attempt string, after int64) ([]storageports.DomainEvent, error) {
-	return r.store.Events(ctx, r.project, execution, attempt, after, query.DefaultEventPageSize, query.MaxEventPageBytes)
+func productReadError(err error) error {
+	if err == nil {
+		return nil
+	}
+	var domain *taskmodel.Error
+	if errors.As(err, &domain) {
+		switch domain.Code {
+		case "task_not_found":
+			return errors.Join(&productapi.Error{Kind: productapi.UnknownRecord, Message: err.Error()}, err)
+		case "authority_mismatch":
+			return errors.Join(&productapi.Error{Kind: productapi.IdentityConflict, Message: err.Error()}, err)
+		}
+	}
+	return err
 }
