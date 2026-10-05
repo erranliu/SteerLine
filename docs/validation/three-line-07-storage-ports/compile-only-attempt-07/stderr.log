@@ -1,0 +1,2 @@
+# github.com/erranliu/SteerLine/internal/execution [github.com/erranliu/SteerLine/internal/execution.test]
+internal\execution\worker_config_test.go:34:19: undefined: contracts.ServiceCheckpoint

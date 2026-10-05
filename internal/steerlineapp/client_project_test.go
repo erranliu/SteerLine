@@ -14,8 +14,8 @@ import (
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -43,7 +43,7 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader, err := steerline.OpenNativeTaskProject(ctx, &cfg)
+	reader, err := OpenNativeTaskProject(ctx, &cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestFileQuerySourceReadsCombinedProjectView(t *testing.T) {
 	}
 	defer writer.Close()
 	at := time.Now().UTC()
-	err = writer.TransactTaskBatch(ctx, func(tx persistence.BatchTx) error {
+	err = writer.TransactTaskBatch(ctx, func(tx storageports.BatchTx) error {
 		if err := tx.PutTaskBatch(taskmodel.TaskBatchRecord{ProjectIdentity: cfg.Identity(), BatchID: "source-batch", SchemaVersion: "task-batch/v1", PayloadDigest: strings.Repeat("a", 64), CommandID: "source-command", TaskIDs: map[string]string{"a": "2", "b": "10"}, CreatedAt: at}, 1, 0); err != nil {
 			return err
 		}

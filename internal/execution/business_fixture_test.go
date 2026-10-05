@@ -264,7 +264,8 @@ func newNeutralService(c Config) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	service, err := NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, db, newFixtureTasks(db, c), newFixtureTasks(db, c), fixtureHost{config: c})
+	stores := ServiceStorage{State: db, Commands: db, Worker: db, Conversations: db, Records: db, Close: db.Close}
+	service, err := NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, stores, newFixtureTasks(db, c), newFixtureTasks(db, c), fixtureHost{config: c})
 	if err != nil {
 		_ = db.Close()
 	}

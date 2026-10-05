@@ -14,8 +14,8 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -36,6 +36,34 @@ func testConfigWithDirectory(c execution.Config) execution.Config {
 	}
 	if c.RepositoryStateKey == "" && c.Identity() != "" {
 		c.RepositoryStateKey = RepositoryStateKey(c.Identity())
+	}
+	if c.ValidateNativeStore == nil {
+		c.ValidateNativeStore = func(ctx context.Context, config execution.Config) error {
+			reader, err := OpenNativeTaskReader(ctx, &config)
+			if err != nil {
+				return err
+			}
+			return reader.Close()
+		}
+	}
+	if c.EnsureNativeProject == nil {
+		c.EnsureNativeProject = func(ctx context.Context, config execution.Config) error {
+			store, err := OpenNativeTaskProject(ctx, &config)
+			if err != nil {
+				return err
+			}
+			return store.Close()
+		}
+	}
+	if c.ReadPersistedExecutionState == nil {
+		c.ReadPersistedExecutionState = func(ctx context.Context, config execution.Config) (storageports.ExecutionStateSnapshot, error) {
+			reader, err := OpenNativeTaskReader(ctx, &config)
+			if err != nil {
+				return storageports.ExecutionStateSnapshot{}, err
+			}
+			defer reader.Close()
+			return reader.ReadExecutionStateSnapshot(ctx, config.Identity())
+		}
 	}
 	return c
 }
@@ -111,7 +139,7 @@ func fixtureRepositoryStateKey(c execution.Config) (string, error) {
 }
 
 func loadFixtureConfig(path string) (execution.Config, error) {
-	c := execution.Config{Persistence: sqlite.Factory{}, Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: executionbackend.Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
+	c := execution.Config{Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: executionbackend.Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
 	projectPath, err := filepath.Abs(path)
 	if err != nil {
 		return c, err

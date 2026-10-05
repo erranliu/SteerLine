@@ -5,21 +5,21 @@ package evidence
 import (
 	"errors"
 
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 type ModelSettings struct{ Model, Effort string }
 
-func ModelSelection(domain contracts.DomainSnapshot) (ModelSettings, error) {
+func ModelSelection(domain reconstruction.Snapshot) (ModelSettings, error) {
 	settings, err := codexSettings(domain)
 	return ModelSettings{Model: settings.Model, Effort: settings.ReasoningEffort}, err
 }
 
-func codexSettings(domain contracts.DomainSnapshot) (codexworker.ProfileConfig, error) {
+func codexSettings(domain reconstruction.Snapshot) (codexworker.ProfileConfig, error) {
 	if len(domain.WorkflowRuns) != 1 || len(domain.Executions) != 1 || domain.WorkflowRuns[0].ExecutionProfile == nil {
 		return codexworker.ProfileConfig{}, errors.New("missing fixed execution profile")
 	}
@@ -36,7 +36,7 @@ func codexSettings(domain contracts.DomainSnapshot) (codexworker.ProfileConfig, 
 }
 
 // FullAccess checks frozen authority and the identity-bound launch receipt.
-func FullAccess(domain contracts.DomainSnapshot) error {
+func FullAccess(domain reconstruction.Snapshot) error {
 	if len(domain.WorkflowRuns) != 1 || len(domain.Executions) != 1 {
 		return errors.New("full-access evidence needs one bound workflow/execution")
 	}

@@ -11,19 +11,21 @@ import (
 	"unicode/utf8"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 // ConversationService owns read rules without connection ownership or write capabilities.
 type ConversationService struct {
 	Project      string
-	Events       ConversationEventReader
-	Bodies       ConversationBodyReader
-	Raw          ConversationRawReader
-	Capabilities ConversationCapabilityReader
+	Events       storageports.ConversationEventReader
+	Bodies       storageports.ConversationBodyReader
+	Raw          storageports.ConversationRawReader
+	Capabilities storageports.ConversationCapabilityReader
 }
 
-func NewConversationService(store ConversationStore, project string) ConversationService {
+func NewConversationService(store storageports.ConversationReader, project string) ConversationService {
 	if store == nil {
 		return ConversationService{Project: project}
 	}
@@ -72,7 +74,7 @@ func (q ConversationService) ReadConversation(ctx context.Context, filter contra
 	}
 	page := contracts.ConversationPage{Events: []contracts.ConversationEvent{}}
 	for len(page.Events) < limit {
-		record, err := q.Events.NextConversationEvent(ctx, q.Project, filter, after)
+		record, err := q.Events.NextConversationEvent(ctx, q.Project, api.ConversationFilter(filter), after)
 		if err != nil {
 			return contracts.ConversationPage{}, err
 		}
@@ -112,7 +114,7 @@ func (q ConversationService) ReadConversation(ctx context.Context, filter contra
 }
 
 func (q ConversationService) readOne(ctx context.Context, filter contracts.ConversationFilter, after int64) (*contracts.ConversationEvent, error) {
-	record, err := q.Events.NextConversationEvent(ctx, q.Project, filter, after)
+	record, err := q.Events.NextConversationEvent(ctx, q.Project, api.ConversationFilter(filter), after)
 	if err != nil || record == nil {
 		return nil, err
 	}
@@ -140,7 +142,8 @@ func (q ConversationService) ReadMessageBody(ctx context.Context, ref contracts.
 	if limit < utf8.UTFMax {
 		limit = utf8.UTFMax
 	}
-	record, err := q.Bodies.ConversationBody(ctx, q.Project, ref, contracts.MaxConversationBodyBytes+1)
+	apiRef := api.ConversationBodyRef{ExecutionID: ref.ExecutionID, AttemptID: ref.AttemptID, ItemKey: ref.ItemKey, Revision: ref.Revision, SHA256: ref.SHA256, Bytes: ref.Bytes, Source: ref.Source, Completeness: api.BodyCompleteness(ref.Completeness)}
+	record, err := q.Bodies.ConversationBody(ctx, q.Project, apiRef, contracts.MaxConversationBodyBytes+1)
 	if err != nil {
 		return contracts.ConversationBodyPage{}, err
 	}
@@ -177,7 +180,8 @@ func (q ConversationService) ReadRaw(ctx context.Context, ref contracts.Conversa
 	if limit > MaxEventPageBytes {
 		limit = MaxEventPageBytes
 	}
-	record, err := q.Raw.ConversationRaw(ctx, q.Project, ref, contracts.MaxConversationBodyBytes+1)
+	apiRef := api.ConversationRawRef{ExecutionID: ref.ExecutionID, AttemptID: ref.AttemptID, ID: ref.ID, SHA256: ref.SHA256, Bytes: ref.Bytes}
+	record, err := q.Raw.ConversationRaw(ctx, q.Project, apiRef, contracts.MaxConversationBodyBytes+1)
 	if err != nil {
 		return contracts.ConversationRawPage{}, err
 	}
@@ -208,7 +212,7 @@ func utf8SafePrefix(data []byte) []byte {
 }
 
 // ReadCapabilities preserves the shared backend/target report lookup; consumers select their source identity.
-func (q ConversationService) ReadCapabilities(ctx context.Context, backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, targetID string, limit int) ([]contracts.ConversationCapabilityReport, error) {
+func (q ConversationService) ReadCapabilities(ctx context.Context, backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, targetID string, limit int) ([]api.ConversationCapabilityReport, error) {
 	if q.Capabilities == nil {
 		return nil, errors.New("conversation capability reader is required")
 	}

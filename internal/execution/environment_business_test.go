@@ -21,7 +21,8 @@ func answerNeutralEnvironment(t *testing.T, s *Service, run *contracts.Run, opti
 	}
 	s.State.Service.Ready = true
 	require(t, s.publishCheckpoint())
-	target, err := productapi.EnvironmentTarget(productquery.Candidate(run))
+	candidate := productquery.Candidate(&productquery.CandidateView{RunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, EnvironmentBlocker: run.EnvironmentBlocker})
+	target, err := productapi.EnvironmentTarget(candidate)
 	require(t, err)
 	req := productapi.ControlRequest{RequestID: newID(), Action: option, RequestedBy: "operator", RunID: run.RunID}
 	payload := productapi.ControlPayload{Environment: target}

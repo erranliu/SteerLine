@@ -16,8 +16,8 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
 type CandidateCommand struct {
@@ -59,7 +59,7 @@ type CandidateConversation struct {
 }
 
 func ReadOriginalOperations(ctx context.Context, database, project string) ([]executionmodel.OperationRecord, error) {
-	reader, err := (sqlite.Factory{}).OpenReader(database)
+	reader, err := sqlite.OpenSQLiteReader(database)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func ReadOriginalOperations(ctx context.Context, database, project string) ([]ex
 
 func ReadCandidateConversation(ctx context.Context, database, project, runID, executionID string) (CandidateConversation, error) {
 	var result CandidateConversation
-	reader, err := (sqlite.Factory{}).OpenReader(database)
+	reader, err := sqlite.OpenSQLiteReader(database)
 	if err != nil {
 		return result, err
 	}
@@ -137,7 +137,7 @@ func MainCandidate(args []string) error {
 		return err
 	}
 	if in.Action == "answer_decision" {
-		reader, err := steerline.OpenNativeTaskReader(ctx, &c)
+		reader, err := steerlineapp.OpenNativeTaskReader(ctx, &c)
 		if err != nil {
 			return err
 		}

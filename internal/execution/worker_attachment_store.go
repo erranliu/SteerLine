@@ -13,7 +13,7 @@ func (s *Service) commitWorkerBinding(run *contracts.Run, ref executionbackend.E
 func (s *Service) commitExecutionOperation(run *contracts.Run, op executionbackend.Operation, expected string) error {
 	var before *executionbackend.Operation
 	if expected != "" {
-		saved, err := (executionRecords{root: s.Config.RunDir, persistence: s.Config.Persistence, resources: s.Config.Resources}).loadOperation(op.RunID, op.AttemptID, op.ID)
+		saved, err := (executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords, resources: s.Config.Resources}).loadOperation(op.RunID, op.AttemptID, op.ID)
 		if err != nil {
 			return err
 		}

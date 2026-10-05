@@ -16,7 +16,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
 func TestCodexHistoryNativeFixtures(t *testing.T) {

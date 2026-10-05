@@ -13,12 +13,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
 func TestCodexHistoryRealFailedAcceptance(t *testing.T) {
@@ -151,7 +150,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 			}
 			statuses := map[string]executionbackend.CapabilityStatus{}
 			for _, cap := range reports[0].Capabilities {
-				statuses[cap.Name] = cap.Status
+				statuses[cap.Name] = executionbackend.CapabilityStatus(cap.Status)
 			}
 			for _, name := range []string{"turn_boundaries", "message_phase", "final_content", "stable_item_identity", "incremental_read", "history_replay"} {
 				if statuses[name] != executionbackend.CapabilityVerified {
@@ -202,7 +201,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 }
 
 type isolatedHistoryCommitFixture struct {
-	domainStore                persistence.Connection
+	domainStore                *sqlite.SQLiteStore
 	directory, platformVersion string
 }
 

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 // One neutral implementation registers two explicit agent identities. Both
@@ -13,7 +12,7 @@ func TestFixedProfileRetainsSelectedAgent(t *testing.T) {
 	directory, err := newNeutralDirectory("fixture", "alternative")
 	require(t, err)
 	for _, agent := range []string{"fixture", "alternative"} {
-		base := withNeutralProfile(Config{Persistence: sqlite.Factory{}, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}, neutralSettings{Executable: "fixture"})
+		base := withNeutralProfile(Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}, neutralSettings{Executable: "fixture"})
 		base.ExecutionDirectory, base.Agent = directory, agent
 		profile := ExecutionProfile{ID: "fixture-" + agent, Name: "Fixture " + agent, Host: "local", Agent: agent,
 			ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(neutralSettings{Executable: "fixture"})}}}

@@ -1,0 +1,8 @@
+{"Time":"2026-10-05T15:39:33.4010383+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration"}
+{"Time":"2026-10-05T15:39:33.5961731+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07ScopedActivityAndWorkflowReaders"}
+{"Time":"2026-10-05T15:39:33.5961731+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07ScopedActivityAndWorkflowReaders","Output":"=== RUN   TestTM07ScopedActivityAndWorkflowReaders\n"}
+{"Time":"2026-10-05T15:39:48.1980879+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07ScopedActivityAndWorkflowReaders","Output":"--- PASS: TestTM07ScopedActivityAndWorkflowReaders (14.60s)\n"}
+{"Time":"2026-10-05T15:39:48.1985946+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07ScopedActivityAndWorkflowReaders","Elapsed":14.6}
+{"Time":"2026-10-05T15:39:48.1985946+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"PASS\n"}
+{"Time":"2026-10-05T15:39:48.2067683+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerlineintegration\t14.804s\n"}
+{"Time":"2026-10-05T15:39:48.2067683+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Elapsed":14.806000000000001}

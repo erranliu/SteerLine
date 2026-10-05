@@ -10,7 +10,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/product/query"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
@@ -19,7 +19,7 @@ func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
 	ctx := context.Background()
 	before, _, err := testSQLite(s).LoadProjection(ctx, s.Config.identity)
 	require(t, err)
-	var old contracts.ServiceCheckpoint
+	var old storageports.ServiceCheckpoint
 	require(t, decode(before, &old))
 	unlisted := executionmodel.OperationRecord{ProjectIdentity: s.Config.identity, OperationID: newID(), IdempotencyKey: newID(), Kind: "unlisted", Status: "in_flight", PayloadDigest: operationDigest([]byte("{}")), Request: []byte("{}"), CreatedAt: now(), UpdatedAt: now()}
 	s.domain.Operations = append(s.domain.Operations, unlisted)
@@ -27,7 +27,7 @@ func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
 	s.executionRecord(run).LastEvent = ptr("committed worker diagnostic")
 	s.note(run, "steer", "worker", "observed", "explicit commit", "", nil)
 	require(t, s.commitWorker(run))
-	snapshot, err := s.domainStore.Query(ctx, s.Config.identity)
+	snapshot, err := readServiceSnapshot(ctx, s.domainStore, s.Config.identity)
 	require(t, err)
 	for _, op := range snapshot.Operations {
 		if op.OperationID == unlisted.OperationID {
@@ -47,14 +47,14 @@ func TestWorkerCommitWritesOnlyDeclaredRowsAndCheckpoint(t *testing.T) {
 	}
 	after, _, err := testSQLite(s).LoadProjection(ctx, s.Config.identity)
 	require(t, err)
-	var checkpoint contracts.ServiceCheckpoint
+	var checkpoint storageports.ServiceCheckpoint
 	require(t, decode(after, &checkpoint))
 	if checkpoint.Revision != old.Revision+1 || len(s.pendingEvents) != 0 {
 		t.Fatal("event and checkpoint did not commit together")
 	}
 	s.State.Service.Error = ptr("service metadata after the worker transition")
 	require(t, s.publishCheckpoint())
-	snapshot, err = s.domainStore.Query(ctx, s.Config.identity)
+	snapshot, err = readServiceSnapshot(ctx, s.domainStore, s.Config.identity)
 	require(t, err)
 	if snapshot.Decisions[0].Status != "pending" {
 		t.Fatal("scheduler checkpoint publication flushed an undeclared decision")
@@ -99,7 +99,7 @@ func TestWorkerCommitRollsBackOnStaleRecordAndCheckpointFailure(t *testing.T) {
 			if string(after) != string(before) {
 				t.Fatal("failed worker commit advanced checkpoint")
 			}
-			snapshot, err := s.domainStore.Query(ctx, s.Config.identity)
+			snapshot, err := readServiceSnapshot(ctx, s.domainStore, s.Config.identity)
 			require(t, err)
 			if snapshot.Executions[0].LastEvent != nil && *snapshot.Executions[0].LastEvent == "must roll back" {
 				t.Fatalf("failed worker commit wrote candidate execution: %v", commitErr)
@@ -138,7 +138,7 @@ func TestWorkerReceiptFailureRetainsIntentAndCancelsUnregisteredObserver(t *test
 	if !cancelled || s.workers[run.RunID] != nil || s.store.Err() == nil || recordFingerprint(*snapshotOperation(&s.committed, opID)) != baseline {
 		t.Fatal("receipt failure attached an observer or advanced the persistence baseline")
 	}
-	snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
+	snapshot, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.identity)
 	require(t, err)
 	for _, op := range snapshot.Operations {
 		if op.OperationID == opID {
@@ -180,7 +180,7 @@ func TestAppServerFailedPreparationKeepsPartialSessionBinding(t *testing.T) {
 		State:          executionbackend.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "partial-generation"}}
 	_, _, applyErr := s.applyAppServerSessionReceipt(run, request, receipt, errors.New("session receipt persistence failed"))
 	require(t, applyErr)
-	snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
+	snapshot, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.identity)
 	require(t, err)
 	got := snapshot.Executions[0]
 	gotBinding, bindingErr := decodeNeutralBinding(got.ImplementationData[0], &got)
@@ -215,7 +215,7 @@ func TestWorkerCommitRejectsSavedAnswerRegression(t *testing.T) {
 			if err := s.commitWorker(run); err == nil {
 				t.Fatal("invalid worker change overwrote a saved answer")
 			}
-			snapshot, err := s.domainStore.Query(context.Background(), s.Config.identity)
+			snapshot, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.identity)
 			require(t, err)
 			if snapshot.Decisions[0].Status != original.Status || string(snapshot.Decisions[0].Answer) != string(original.Answer) {
 				t.Fatal("rejected worker transition changed the saved answer")
@@ -238,7 +238,7 @@ func TestWorkerIntentIsDurableBeforeDispatchAndFailurePreventsDispatch(t *testin
 			calls := 0
 			id, err := s.startWorkerOperation(run, "start_worker_turn", key, map[string]string{"execution_id": run.ExecutionID})
 			if err == nil {
-				snapshot, readErr := s.domainStore.Query(ctx, s.Config.identity)
+				snapshot, readErr := readServiceSnapshot(ctx, s.domainStore, s.Config.identity)
 				require(t, readErr)
 				found := false
 				for _, op := range snapshot.Operations {

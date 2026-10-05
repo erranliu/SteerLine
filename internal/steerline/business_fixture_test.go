@@ -10,8 +10,10 @@ import (
 	execution "github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 const neutralProfileKey = "fixture.config"
@@ -250,7 +252,7 @@ func newNeutralService(c execution.Config) (*execution.Service, error) {
 	}
 	c.ProcessHost = testProcessHost{}
 	c.Resources = ExecutionResources{}
-	c.ReadRuntime = func(_ context.Context, c execution.Config) (*contracts.Runtime, error) { return LoadDatabaseRuntime(c) }
+	c.ReadRuntime = readFixtureDatabaseRuntime
 	var err error
 	c, err = PrepareServiceConfig(c)
 	if err != nil {
@@ -260,11 +262,32 @@ func newNeutralService(c execution.Config) (*execution.Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	service, err := execution.NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, db, fullFixtureTaskService(db, c), fullFixtureTaskService(db, c), NewServiceHost(c, "", "", nil))
+	stores := execution.ServiceStorage{State: db, Commands: db, Worker: db, Conversations: db, Records: db, Close: db.Close}
+	service, err := execution.NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, stores, fullFixtureTaskService(db, c), fullFixtureTaskService(db, c), NewServiceHost(c, "", "", nil))
 	if err != nil {
 		_ = db.Close()
 	}
 	return service, err
+}
+
+func readFixtureDatabaseRuntime(ctx context.Context, c execution.Config) (*contracts.Runtime, error) {
+	reader, err := OpenNativeTaskReader(ctx, &c)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	state, err := reader.ReadExecutionStateSnapshot(ctx, c.Identity())
+	if err != nil {
+		return nil, err
+	}
+	if state.Checkpoint == nil {
+		return nil, storageports.ErrNotFound
+	}
+	runtimeState, err := reconstruction.BuildFromStorage(state, *state.Checkpoint)
+	if err != nil {
+		return nil, err
+	}
+	return &runtimeState, nil
 }
 
 func neutralVerifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile) bool {

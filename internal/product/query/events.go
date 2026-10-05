@@ -7,10 +7,7 @@ import (
 	"errors"
 	"fmt"
 
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 const (
@@ -23,11 +20,11 @@ const (
 
 type Service struct {
 	Project   string
-	Workflows WorkflowReader
-	Events    EventReader
-	Tasks     TaskReader
-	Projects  ProjectReader
-	Activity  ActivityReader
+	Workflows storageports.WorkflowReader
+	Events    storageports.EventReader
+	Tasks     storageports.TaskReader
+	Projects  storageports.ProjectReader
+	Activity  storageports.ActivityReader
 }
 
 type EventFilter struct {
@@ -64,48 +61,21 @@ type CursorError struct{ Code string }
 
 func (e *CursorError) Error() string { return e.Code }
 
-func (q Service) Workflow(ctx context.Context, workflowRunID string) (contracts.DomainSnapshot, error) {
+func (q Service) Workflow(ctx context.Context, workflowRunID string) (storageports.WorkflowSnapshot, error) {
 	if q.Workflows == nil || q.Project == "" {
-		return contracts.DomainSnapshot{}, errors.New("query service store and project identity are required")
+		return storageports.WorkflowSnapshot{}, errors.New("query service store and project identity are required")
 	}
-	snapshot, err := q.Workflows.Query(ctx, q.Project)
+	if workflowRunID == "" {
+		return storageports.WorkflowSnapshot{}, errors.New("workflow run identity is required")
+	}
+	snapshot, err := q.Workflows.ReadWorkflow(ctx, q.Project, workflowRunID)
 	if err != nil {
-		return contracts.DomainSnapshot{}, err
+		return storageports.WorkflowSnapshot{}, err
 	}
-	filtered := contracts.DomainSnapshot{ProjectIdentity: snapshot.ProjectIdentity, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}}
-	taskIDs := map[string]bool{}
-	for _, run := range snapshot.WorkflowRuns {
-		if workflowRunID == "" || run.WorkflowRunID == workflowRunID {
-			filtered.WorkflowRuns = append(filtered.WorkflowRuns, run)
-			taskIDs[run.TaskID] = true
-		}
+	if snapshot.ProjectIdentity != q.Project || len(snapshot.WorkflowRuns) == 0 {
+		return snapshot, fmt.Errorf("workflow run %s not found", workflowRunID)
 	}
-	if workflowRunID != "" && len(filtered.WorkflowRuns) == 0 {
-		return filtered, fmt.Errorf("workflow run %s not found", workflowRunID)
-	}
-	for _, task := range snapshot.Tasks {
-		if taskIDs[task.TaskID] {
-			filtered.Tasks = append(filtered.Tasks, task)
-		}
-	}
-	executionIDs := map[string]bool{}
-	for _, execution := range snapshot.Executions {
-		if workflowRunID == "" || execution.WorkflowRunID == workflowRunID {
-			filtered.Executions = append(filtered.Executions, execution)
-			executionIDs[execution.ExecutionID] = true
-		}
-	}
-	for _, attempt := range snapshot.Attempts {
-		if executionIDs[attempt.ExecutionID] {
-			filtered.Attempts = append(filtered.Attempts, attempt)
-		}
-	}
-	for _, decision := range snapshot.Decisions {
-		if workflowRunID == "" || decision.WorkflowRunID == workflowRunID {
-			filtered.Decisions = append(filtered.Decisions, decision)
-		}
-	}
-	return filtered, nil
+	return snapshot, nil
 }
 
 func (q Service) ReadEvents(ctx context.Context, filter EventFilter, cursor string, limit int) (EventPage, error) {

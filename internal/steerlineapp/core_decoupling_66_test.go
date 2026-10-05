@@ -11,10 +11,9 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
@@ -82,10 +81,10 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		if _, err := NewService(c); err == nil {
 			t.Fatal("app constructed an implicit catalog")
 		}
-		if _, err := execution.NewService(c, nil, nil, nil, nil, nil, nil, nil, nil); err == nil {
+		if _, err := execution.NewService(c, nil, nil, nil, nil, execution.ServiceStorage{}, nil, nil, nil); err == nil {
 			t.Fatal("core accepted missing ports")
 		}
-		if _, err := steerline.OpenNativeTaskProject(context.Background(), &c); err == nil || !strings.Contains(err.Error(), "directory") {
+		if _, err := OpenNativeTaskProject(context.Background(), &c); err == nil || !strings.Contains(err.Error(), "directory") {
 			t.Fatalf("missing directory reached project initialization: %v", err)
 		}
 		if _, err := os.Stat(state); !os.IsNotExist(err) {

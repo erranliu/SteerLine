@@ -1,0 +1,16 @@
+{"Time":"2026-10-05T15:39:14.3333342+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/storage/sqlite"}
+{"Time":"2026-10-05T15:39:14.3340421+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration"}
+{"Time":"2026-10-05T15:39:14.5332983+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07RuntimeUsesSampledAuthorityAndCheckpoint"}
+{"Time":"2026-10-05T15:39:14.533823+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07RuntimeUsesSampledAuthorityAndCheckpoint","Output":"=== RUN   TestTM07RuntimeUsesSampledAuthorityAndCheckpoint\n"}
+{"Time":"2026-10-05T15:39:15.0877463+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/storage/sqlite","Test":"TestSQLiteExecutionStateSnapshotSharesTransactionAcrossWorkerCommit"}
+{"Time":"2026-10-05T15:39:15.0877463+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/storage/sqlite","Test":"TestSQLiteExecutionStateSnapshotSharesTransactionAcrossWorkerCommit","Output":"=== RUN   TestSQLiteExecutionStateSnapshotSharesTransactionAcrossWorkerCommit\n"}
+{"Time":"2026-10-05T15:39:15.3170733+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/storage/sqlite","Test":"TestSQLiteExecutionStateSnapshotSharesTransactionAcrossWorkerCommit","Output":"--- PASS: TestSQLiteExecutionStateSnapshotSharesTransactionAcrossWorkerCommit (0.23s)\n"}
+{"Time":"2026-10-05T15:39:15.3170733+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/storage/sqlite","Test":"TestSQLiteExecutionStateSnapshotSharesTransactionAcrossWorkerCommit","Elapsed":0.23}
+{"Time":"2026-10-05T15:39:15.3170733+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/storage/sqlite","Output":"PASS\n"}
+{"Time":"2026-10-05T15:39:15.3206588+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/storage/sqlite","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/storage/sqlite\t0.987s\n"}
+{"Time":"2026-10-05T15:39:15.3206588+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/storage/sqlite","Elapsed":0.987}
+{"Time":"2026-10-05T15:39:25.5349114+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07RuntimeUsesSampledAuthorityAndCheckpoint","Output":"--- PASS: TestTM07RuntimeUsesSampledAuthorityAndCheckpoint (11.00s)\n"}
+{"Time":"2026-10-05T15:39:25.5349114+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07RuntimeUsesSampledAuthorityAndCheckpoint","Elapsed":11}
+{"Time":"2026-10-05T15:39:25.5349114+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"PASS\n"}
+{"Time":"2026-10-05T15:39:25.5439672+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerlineintegration\t11.210s\n"}
+{"Time":"2026-10-05T15:39:25.5439672+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Elapsed":11.21}

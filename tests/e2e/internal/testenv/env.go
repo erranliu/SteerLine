@@ -18,7 +18,9 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testprocess"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
@@ -63,10 +65,10 @@ type Task struct {
 }
 
 type Snapshot struct {
-	Page    contracts.NativeTaskPage `json:"page"`
-	Domain  contracts.DomainSnapshot `json:"domain"`
-	Helper  controlled.State         `json:"helper"`
-	Runtime *contracts.Runtime       `json:"runtime,omitempty"`
+	Page    storageports.NativeTaskPage `json:"page"`
+	Domain  reconstruction.Snapshot     `json:"domain"`
+	Helper  controlled.State            `json:"helper"`
+	Runtime *contracts.Runtime          `json:"runtime,omitempty"`
 }
 
 func NewScenario(t *testing.T, id string) *Scenario {
@@ -334,15 +336,11 @@ func (p *Project) StartService() {
 			s.t.Fatal("service exited; see log")
 		default:
 		}
-		page, err := p.Driver.Tasks(s.Context)
+		runtime, err := driver.ReadRuntime(s.Context, p.Config)
 		if err != nil {
 			return false, err
 		}
-		reader, err := openView(s.Context, p.Database, page.ProjectID)
-		if err != nil {
-			return false, err
-		}
-		return reader.Runtime != nil && reader.Runtime.Service.Ready, nil
+		return runtime != nil && runtime.Service.Ready, nil
 	})
 }
 
@@ -370,25 +368,56 @@ func (p *Project) Claim(key string) {
 func (p *Project) Snapshot() (Snapshot, error) {
 	return p.SnapshotContext(p.Scenario.Context)
 }
+
+func snapshotFromApplicationRead(read storageports.ApplicationProjectSnapshot) (Snapshot, error) {
+	var snap Snapshot
+	view := read.ProjectView
+	if view.TaskError != nil {
+		return snap, view.TaskError
+	}
+	if view.Tasks == nil || view.Ready == nil {
+		return snap, errors.New("combined project snapshot lacks task page or ready values")
+	}
+	if read.ExecutionError != nil {
+		return snap, read.ExecutionError
+	}
+	state := read.ExecutionState
+	project := view.Tasks.ProjectID
+	graph := state.Graph
+	if project == "" || state.Records.ProjectIdentity != project || graph.Authority.ProjectIdentity != project ||
+		graph.DatabaseID != view.Tasks.DatabaseID || graph.DatabaseRevision != view.Tasks.DatabaseRevision ||
+		graph.Authority.AuthorityVersion != view.Tasks.AuthorityVersion || graph.Authority.GraphRevision != view.Tasks.GraphRevision ||
+		view.Ready.ProjectID != project || view.Ready.DatabaseID != view.Tasks.DatabaseID || view.Ready.DatabaseRevision != view.Tasks.DatabaseRevision ||
+		view.Ready.AuthorityVersion != view.Tasks.AuthorityVersion || view.Ready.GraphRevision != view.Tasks.GraphRevision ||
+		!view.Tasks.SampledAt.Equal(view.SampledAt) || !view.Ready.SampledAt.Equal(view.SampledAt) {
+		return snap, errors.New("combined project snapshot contains different database revisions")
+	}
+	snap.Page = *view.Tasks
+	snap.Domain = reconstruction.SnapshotFromStorage(state)
+	if state.Checkpoint != nil {
+		runtime, err := reconstruction.BuildFromStorage(state, *state.Checkpoint)
+		if err != nil {
+			return snap, err
+		}
+		snap.Runtime = &runtime
+	}
+	return snap, nil
+}
+
 func (p *Project) SnapshotContext(ctx context.Context) (Snapshot, error) {
 	var snap Snapshot
 	page, err := p.Driver.Tasks(ctx)
 	if err != nil {
 		return snap, err
 	}
-	view, err := openView(ctx, p.Database, page.ProjectID)
+	read, err := driver.ReadApplicationProjectSnapshot(ctx, p.Database, page.ProjectID, "", 100)
 	if err != nil {
 		return snap, err
 	}
-	if view.TaskError != nil || view.DomainError != nil {
-		return snap, errors.Join(view.TaskError, view.DomainError)
+	snap, err = snapshotFromApplicationRead(read)
+	if err != nil {
+		return snap, err
 	}
-	if view.Tasks == nil || view.Domain == nil {
-		return snap, errors.New("public project snapshot lacks tasks or domain")
-	}
-	// The product reader samples tasks and execution facts in one read transaction.
-	snap.Page, snap.Domain = *view.Tasks, *view.Domain
-	snap.Runtime = view.Runtime
 	snap.Helper, err = controlled.Read(p.Provider)
 	if err == nil && p.RealPR && !strings.HasPrefix(p.Scenario.ID, "candidates.") {
 		snap.Helper.PR, err = p.githubPR(snap)

@@ -6,17 +6,22 @@ import (
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
 	if s.domainStore == nil {
 		return errors.New("native service store is required")
 	}
-	snapshot, err := s.domainStore.Query(ctx, s.Config.identity)
+	stored, err := s.domainStore.ReadExecutionStateSnapshot(ctx, s.Config.identity)
 	if err != nil {
 		return err
 	}
+	return s.applyNativeSnapshot(stored)
+}
+
+func (s *Service) applyNativeSnapshot(stored storageports.ExecutionStateSnapshot) error {
+	snapshot := reconstruction.SnapshotFromStorage(stored)
 	for _, task := range snapshot.Tasks {
 		if task.Source != "native" || task.ExternalProvider != "" || task.ExternalProject != "" || task.ExternalID != "" || task.IdentityMapDigest != "" {
 			return nativeErr("authority_mismatch", "non-native task identity")
@@ -30,20 +35,17 @@ func (s *Service) refreshNativeSnapshot(ctx context.Context) error {
 			return nativeErr("unsupported_schema", "unsupported workflow version")
 		}
 	}
-	authority, err := s.domainStore.NativeAuthority(ctx, s.Config.identity)
-	if err != nil {
-		return err
-	}
 	s.domain = snapshot
 	s.workerDecisionWrites = nil
 	s.pendingOperations = nil
 	var copyErr error
-	s.committed, copyErr = copyDomainSnapshot(snapshot)
+	s.committed, copyErr = copyExecutionSnapshot(snapshot)
 	if copyErr != nil {
 		return copyErr
 	}
+	authority := stored.Graph.Authority
 	s.State.Control.DispatchMode, s.State.Control.DispatchPaused, s.State.Control.Revision = authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion
-	s.State.SchemaVersion = contracts.WorkerFlowRuntimeSchema
+	s.State.SchemaVersion = storageports.WorkerFlowRuntimeSchema
 	return s.projectState()
 }
 

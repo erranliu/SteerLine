@@ -1145,12 +1145,11 @@ func RunConfiguredService(ctx context.Context, c execution.Config, mode, startup
 	if retErr = Preflight(ctx, &c, true); retErr != nil {
 		return fail(fmt.Errorf("service preflight: %w", retErr))
 	}
-	nativeStore, initErr := OpenNativeTaskProject(ctx, &c)
-	if initErr != nil {
-		return fail(fmt.Errorf("initialize native project authority: %w", initErr))
+	if c.EnsureNativeProject == nil {
+		return fail(errors.New("application native project initializer is required"))
 	}
-	if initErr = nativeStore.Close(); initErr != nil {
-		return fail(initErr)
+	if initErr := c.EnsureNativeProject(ctx, c); initErr != nil {
+		return fail(fmt.Errorf("initialize native project authority: %w", initErr))
 	}
 	// Preflight canonicalizes paths and applies the same defaults used by the
 	// service. Rewrite only this attempt's non-authoritative startup record.

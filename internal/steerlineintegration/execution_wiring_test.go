@@ -20,16 +20,17 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
+	taskapp "github.com/erranliu/SteerLine/internal/task"
 )
 
 // All mutations go through the production app factory. SQL is used only to
 // install a transaction failure and to inspect committed evidence.
 type appCandidateFixture struct {
 	f        integrationFixture
-	store    persistence.CommandStore
+	store    *sqlite.SQLiteStore
 	commands execution.CommandService
 	query    productquery.Service
 	ctx      context.Context
@@ -41,7 +42,7 @@ func newAppCandidateFixture(t *testing.T) appCandidateFixture {
 	t.Cleanup(cancel)
 	f := newLifecycleProject(t, "local")
 	createIntegrationTask(t, ctx, f, 901)
-	store, err := steerline.OpenNativeTaskCommandStore(ctx, &f.config)
+	store, err := steerlineapp.OpenNativeTaskCommandStore(ctx, &f.config)
 	require(t, err)
 	t.Cleanup(func() { require(t, store.Close()) })
 	commands, err := steerlineapp.NewCommandService(store, f.config)
@@ -49,7 +50,7 @@ func newAppCandidateFixture(t *testing.T) appCandidateFixture {
 	return appCandidateFixture{f: f, store: store, commands: commands, query: productquery.NewService(store, f.config.Identity()), ctx: ctx}
 }
 
-func (f appCandidateFixture) page(t *testing.T) contracts.NativeTaskPage {
+func (f appCandidateFixture) page(t *testing.T) storageports.NativeTaskPage {
 	t.Helper()
 	p, err := f.query.ShowNativeTask(f.ctx, "901")
 	require(t, err)
@@ -85,18 +86,6 @@ func (f appCandidateFixture) abandon(t *testing.T, id string) {
 		}
 		candidateVersion := w.ControlRevision
 		if candidateVersion == 0 {
-			view, err := f.query.ReadProjectView(f.ctx, "901", 100)
-			require(t, err)
-			if view.Runtime != nil {
-				for _, run := range view.Runtime.Runs {
-					if run.RunID == id {
-						candidateVersion = run.ControlRevision
-						break
-					}
-				}
-			}
-		}
-		if candidateVersion == 0 {
 			t.Fatal("candidate control revision unavailable from command snapshot or runtime query")
 		}
 		graph, err := f.store.TaskGraphSnapshot(f.ctx, f.f.config.Identity())
@@ -110,6 +99,53 @@ func (f appCandidateFixture) abandon(t *testing.T, id string) {
 		return
 	}
 	t.Fatal("exact candidate absent")
+}
+
+func TestTM07StorageWiring(t *testing.T) {
+	f := newAppCandidateFixture(t)
+	var _ storageports.ProductReader = f.store
+	commands, err := steerlineapp.NewCommandService(f.store, f.f.config)
+	require(t, err)
+	commandType := reflect.TypeOf(execution.CommandService{})
+	for _, field := range []string{"Store", "Work"} {
+		value, ok := commandType.FieldByName(field)
+		if !ok || value.Type.Kind() != reflect.Interface {
+			t.Fatalf("execution command field %s is not a consumer port", field)
+		}
+	}
+	f.commands = commands
+	f.start(t, "")
+	page := f.page(t)
+	if page.Tasks[0].Status != "in_progress" || len(page.Tasks[0].WorkflowRuns) != 1 {
+		t.Fatal("task, execution and product readers did not observe the same SQLite database")
+	}
+	for _, field := range []string{"Workflows", "Events", "Tasks", "Projects", "Activity"} {
+		value, ok := reflect.TypeOf(productquery.Service{}).FieldByName(field)
+		if !ok || value.Type.Kind() != reflect.Interface {
+			t.Fatalf("product query field %s is not an owned read port", field)
+		}
+	}
+	taskReader, ok := reflect.TypeOf(taskapp.Service{}).FieldByName("Reader")
+	if !ok || taskReader.Type.Kind() != reflect.Interface {
+		t.Fatal("task service reader is not a consumer-owned interface")
+	}
+	storageType := reflect.TypeOf(execution.ServiceStorage{})
+	for _, field := range []string{"State", "Commands", "Worker", "Conversations", "Records"} {
+		value, ok := storageType.FieldByName(field)
+		if !ok || value.Type.Kind() != reflect.Interface {
+			t.Fatalf("execution storage field %s is not a narrow port", field)
+		}
+	}
+	closeField, ok := storageType.FieldByName("Close")
+	if !ok || closeField.Type.Kind() != reflect.Func || closeField.Type.String() != "func() error" {
+		t.Fatal("execution storage bundle does not receive an application-owned close callback")
+	}
+	service, err := steerlineapp.NewServiceWithLifecycleResolver(f.f.config, &integrationLifecycleResolver{})
+	require(t, err)
+	require(t, service.Close())
+	reader, err := steerlineapp.OpenNativeTaskReader(f.ctx, &f.f.config)
+	require(t, err)
+	require(t, reader.Close())
 }
 
 func TestMC1(t *testing.T) {
@@ -214,9 +250,9 @@ func TestMC3(t *testing.T) {
 	if after.execution.SessionID != second.execution.SessionID || after.run.Process == nil || *after.run.Process != *second.run.Process {
 		t.Fatal("selected feedback replaced original session/process")
 	}
-	view, err := f.query.ReadProjectView(f.ctx, "901", 100)
+	snapshot, err := f.store.Query(f.ctx, f.f.config.Identity())
 	require(t, err)
-	for _, e := range view.Runtime.Executions {
+	for _, e := range snapshot.Executions {
 		if e.ExecutionID == a.ExecutionID && (e.TurnNumber != 1 || e.CurrentTurnID != first.execution.CurrentTurnID) {
 			t.Fatal("candidate B feedback crossed to candidate A")
 		}

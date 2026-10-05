@@ -6,9 +6,9 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -26,16 +26,16 @@ type Service struct {
 	dispatchConfig       *Config
 	dispatchProfile      *ExecutionProfile
 	State                contracts.Runtime
-	domain               contracts.DomainSnapshot
-	committed            contracts.DomainSnapshot
+	domain               reconstruction.Snapshot
+	committed            reconstruction.Snapshot
 	runs                 []*contracts.Run
 	pendingEvents        []storageports.DomainEvent
 	pendingOperations    map[string]string
 	workerDecisionWrites map[string]bool
 	store                *Store
-	domainStore          centerReader
-	commandStore         persistence.CommandStore
-	conversationStore    persistence.Conversations
+	domainStore          StateReader
+	commandStore         CommandStore
+	conversationStore    ConversationStore
 	closeStore           func() error
 	// workers owns live observers by authoritative workflow run ID.
 	workers                    map[string]*Worker

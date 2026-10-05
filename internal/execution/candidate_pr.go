@@ -3,9 +3,8 @@ package execution
 import (
 	"context"
 
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -41,7 +40,7 @@ func (s *Service) pollRetiredCandidatePRs(ctx context.Context, run *contracts.Ru
 				typeName = "task.delivery.conflict"
 			}
 		}
-		err = s.commandStore.TransactCandidate(ctx, func(tx persistence.CandidateTx) error {
+		err = s.commandStore.TransactCandidate(ctx, func(tx storageports.CandidateTx) error {
 			_, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: c.identity, TaskID: run.TaskID, WorkflowRunID: run.RunID, ExecutionID: e.ExecutionID, AttemptID: run.AttemptID, ExternalSource: "candidate-pr", ExternalID: url + ":" + info.State + ":" + deref(info.MergeCommit), Type: typeName, ReceivedAt: now(), Payload: mustJSON(info)})
 			return err
 		})

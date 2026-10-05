@@ -50,9 +50,12 @@ func atomicWriteWith(path string, data []byte, write func(*os.File, []byte) erro
 	return replaceFile(name, path)
 }
 
-// LoadDatabaseRuntime reads one SQLite snapshot, joining the compact service
-// checkpoint with the authoritative domain rows in a read transaction.
+// LoadDatabaseRuntime delegates to the application-owned execution snapshot reader.
 func LoadDatabaseRuntime(c execution.Config) (*Runtime, error) {
+	return readConfiguredRuntime(context.Background(), c)
+}
+
+func readConfiguredRuntime(ctx context.Context, c execution.Config) (*Runtime, error) {
 	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return nil, err
 	}
@@ -61,29 +64,22 @@ func LoadDatabaseRuntime(c execution.Config) (*Runtime, error) {
 			return nil, err
 		}
 	}
-	db, err := OpenNativeTaskReader(context.Background(), &c)
-	if err != nil {
-		return nil, err
+	if c.ReadRuntime == nil {
+		return nil, errors.New("application runtime read port is required")
 	}
-	defer db.Close()
-	return db.LoadRuntime(c.Identity(), true)
+	return c.ReadRuntime(ctx, c)
 }
 
 func loadObservedRuntime(c execution.Config) (*Runtime, error) {
-	if c.Persistence == nil {
-		return nil, errors.New("persistence factory is required")
-	}
 	if c.Identity() == "" {
 		if err := c.ResolveIdentity(context.Background()); err != nil {
 			return nil, err
 		}
 	}
-	db, err := c.Persistence.OpenReader(filepath.Join(c.RunDir, "steerline.db"))
-	if err != nil {
-		return nil, err
+	if c.ReadRuntime == nil {
+		return nil, errors.New("application runtime read port is required")
 	}
-	defer db.Close()
-	value, err := db.LoadRuntime(c.Identity(), false)
+	value, err := c.ReadRuntime(context.Background(), c)
 	if errors.Is(err, storageports.ErrNotFound) {
 		return nil, nil
 	}

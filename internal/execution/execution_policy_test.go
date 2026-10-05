@@ -9,7 +9,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func workspacePolicyFixture() executionbackend.ExecutionPolicy {
@@ -17,7 +16,7 @@ func workspacePolicyFixture() executionbackend.ExecutionPolicy {
 }
 
 func TestProjectPolicyMissingBoundResourcesAreNotReconstructed(t *testing.T) {
-	c := Config{Persistence: sqlite.Factory{}, ExecutionPolicy: workspacePolicyFixture()}
+	c := Config{ExecutionPolicy: workspacePolicyFixture()}
 	e := executionmodel.ExecutionRecord{Generation: "original-generation", Process: &executionbackend.ProcessIdentity{Kind: "local"}}
 	if err := bindPolicyResources(context.Background(), c, &e, "workspace", nil); err == nil || !strings.Contains(err.Error(), "snapshot is missing") {
 		t.Fatalf("missing original resources were reconstructed: %v", err)
@@ -61,13 +60,13 @@ func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
 		}
 		_, _, applyErr := s.applyAppServerSessionReceipt(run, request, receipt, errors.New("session receipt persistence failed"))
 		require(t, applyErr)
-		snapshotResult, err := s.domainStore.Query(context.Background(), s.Config.identity)
+		snapshotResult, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.identity)
 		require(t, err)
 		got := snapshotResult.Executions[0]
 		if got.PolicyResources == nil || got.PolicyResources.Digest != resource.Digest || got.SessionID != workerFlowMockSession || got.PendingTurnID != "" || s.workers[run.RunID] != nil {
 			t.Fatalf("policy resource receipt was lost or advanced a turn: %+v", got)
 		}
-		if snapshotOperation(&snapshotResult, opID).Status != "outcome_unknown" {
+		if storedOperationStatus(snapshotResult.Operations, opID) != "outcome_unknown" {
 			t.Fatal("unverified session receipt changed the original operation identity")
 		}
 		_, err = s.executionConfigForRun(run)
@@ -101,16 +100,25 @@ func TestAppServerLaunchMessagePersistsPolicyResources(t *testing.T) {
 			Implementation: CloneImplementationData(execution.ImplementationData), State: executionbackend.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "policy-generation"}}
 		applyErr := s.applyAppServerTurnReceipt(run, request, receipt, nil, errors.New("turn receipt persistence failed"))
 		require(t, applyErr)
-		snapshotResult, err := s.domainStore.Query(context.Background(), s.Config.identity)
+		snapshotResult, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.identity)
 		require(t, err)
 		got := snapshotResult.Executions[0]
 		if got.PolicyResources == nil || got.PolicyResources.Digest != resource.Digest || got.SessionID != workerFlowMockSession || got.PendingTurnID != "" || s.workers[run.RunID] != nil {
 			t.Fatalf("policy resource receipt was lost or advanced a turn: %+v", got)
 		}
-		if snapshotOperation(&snapshotResult, opID).Status != "outcome_unknown" {
+		if storedOperationStatus(snapshotResult.Operations, opID) != "outcome_unknown" {
 			t.Fatal("unverified turn receipt changed the original operation identity")
 		}
 		_, err = s.executionConfigForRun(run)
 		require(t, err)
 	})
+}
+
+func storedOperationStatus(records []executionmodel.OperationRecord, id string) string {
+	for _, record := range records {
+		if record.OperationID == id {
+			return record.Status
+		}
+	}
+	return ""
 }

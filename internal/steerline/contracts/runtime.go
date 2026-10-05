@@ -17,24 +17,7 @@ type Repository struct {
 	Identity string `json:"identity"`
 }
 
-const WorkerFlowRuntimeSchema = 18
-
-// ServiceCheckpoint contains only service-owned recovery state. Task and worker
-// state is read from domain rows in the same transaction as this checkpoint.
-type ServiceCheckpoint struct {
-	SchemaVersion int               `json:"schema_version"`
-	Revision      uint64            `json:"revision"`
-	UpdatedAt     time.Time         `json:"updated_at"`
-	HeartbeatAt   time.Time         `json:"heartbeat_at"`
-	Service       ServiceState      `json:"service"`
-	Repository    Repository        `json:"repository"`
-	Operation     *ControlOperation `json:"operation,omitempty"`
-	Blockers      []ControlBlocker  `json:"blockers,omitempty"`
-	ReservedTask  *string           `json:"reserved_task,omitempty"`
-}
-
-// Runtime is a sampled client view plus the service actor's working domain rows.
-// Only ServiceCheckpoint is serialized into the projection table.
+// Runtime is execution's actor working state and host observation value.
 type Runtime struct {
 	SchemaVersion int                                 `json:"schema_version"`
 	Revision      uint64                              `json:"revision"`
@@ -190,11 +173,4 @@ type LegacyBeadsContext struct {
 	ProjectID string `json:"project_id"`
 	Database  string `json:"database"`
 	Backend   string `json:"backend"`
-}
-
-func RuntimeFromCheckpoint(c ServiceCheckpoint) Runtime {
-	return Runtime{SchemaVersion: c.SchemaVersion, Revision: c.Revision, UpdatedAt: c.UpdatedAt,
-		HeartbeatAt: c.HeartbeatAt, Service: c.Service, Repository: c.Repository,
-		CurrentTask: c.ReservedTask, SlotOccupied: c.ReservedTask != nil,
-		Control: ControlState{Operation: c.Operation, Blockers: c.Blockers}}
 }

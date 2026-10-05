@@ -16,7 +16,7 @@ func TestCD67CoreBoundary(t *testing.T) {
 	t.Run("pure_ownership_all_tags_production_and_tests", func(t *testing.T) {
 		for _, owner := range []string{"product/query/taskgraph", "task", "task/model", "execution/model", "execution/backend", "product/api", "storage/ports"} {
 			t.Run(owner, func(t *testing.T) {
-				for _, dependency := range []string{"database/sql", "github.com/erranliu/SteerLine/internal/steerline/contracts", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/steerline/sqlite", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/steerlineapp", "github.com/erranliu/SteerLine/internal/helper", "example.org/implementation"} {
+				for _, dependency := range []string{"database/sql", "github.com/erranliu/SteerLine/internal/steerline/contracts", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/storage/sqlite", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/steerlineapp", "github.com/erranliu/SteerLine/internal/helper", "example.org/implementation"} {
 					for _, filename := range []string{"edge_plan9.go", "edge_linux_test.go"} {
 						root := t.TempDir()
 						dir := filepath.Join(root, "internal", owner)
@@ -56,10 +56,10 @@ func TestCD67CoreBoundary(t *testing.T) {
 			{name: "nested_generated_name_is_not_an_exclusion", filename: "neutral.go", source: "package steerline\nimport _ \"github.com/erranliu/SteerLine/internal/helper/bin\"\n", helperPath: "internal/helper/bin/edge_freebsd.go", helper: "package bin\nimport _ \"github.com/erranliu/SteerLine/internal/steerlineapp\"\n", want: "forbidden dependency"},
 			{name: "top_level_output_name_is_not_an_exclusion", filename: "neutral.go", source: "package steerline\nimport _ \"github.com/erranliu/SteerLine/bin/helper\"\n", helperPath: "bin/helper/edge_freebsd.go", helper: "package helper\nimport _ \"github.com/erranliu/SteerLine/internal/steerlineapp\"\n", want: "forbidden dependency"},
 			{name: "reverse_implementation_edge", filename: "neutral.go", source: "package steerline\n", implementation: "package codexworker\nimport _ \"github.com/erranliu/SteerLine/internal/helper\"\n", helper: "package helper\nimport _ \"github.com/erranliu/SteerLine/internal/steerline\"\n", want: "reverse dependency"},
-			{name: "reverse_storage_edge", filename: "neutral.go", source: "package steerline\n", helperPath: "internal/steerline/sqlite/edge_freebsd.go", helper: "package sqlite\nimport _ \"github.com/erranliu/SteerLine/internal/steerline\"\n", want: "reverse storage dependency"},
+			{name: "reverse_storage_edge", filename: "neutral.go", source: "package steerline\n", helperPath: "internal/storage/sqlite/edge_freebsd.go", helper: "package sqlite\nimport _ \"github.com/erranliu/SteerLine/internal/steerline\"\n", want: "reverse storage dependency"},
 			{name: "concrete_storage_edge", filename: "neutral_freebsd.go", source: "package steerline\nimport _ \"database/sql\"\n", want: "concrete storage dependency"},
-			{name: "transitive_storage_edge", filename: "neutral_plan9.go", source: "//go:build never_enabled\n\npackage steerline\nimport _ \"github.com/erranliu/SteerLine/internal/helper\"\n", helper: "//go:build never_enabled\n\npackage helper\nimport _ \"github.com/erranliu/SteerLine/internal/steerline/sqlite\"\n", want: "concrete storage dependency"},
-			{name: "reverse_client_subpackage", filename: "sqlite/neutral_plan9.go", source: "//go:build never_enabled\n\npackage sqlite\nimport _ \"github.com/erranliu/SteerLine/internal/steerlineclient/nested\"\n", want: "reverse storage dependency"},
+			{name: "transitive_storage_edge", filename: "neutral_plan9.go", source: "//go:build never_enabled\n\npackage steerline\nimport _ \"github.com/erranliu/SteerLine/internal/helper\"\n", helper: "//go:build never_enabled\n\npackage helper\nimport _ \"github.com/erranliu/SteerLine/internal/storage/sqlite\"\n", want: "concrete storage dependency"},
+			{name: "reverse_client_subpackage", filename: "neutral_plan9.go", source: "//go:build never_enabled\n\npackage sqlite\nimport _ \"github.com/erranliu/SteerLine/internal/steerlineclient/nested\"\n", want: "reverse storage dependency"},
 		} {
 			t.Run(fixture.name, func(t *testing.T) {
 				root := t.TempDir()
@@ -68,7 +68,11 @@ func TestCD67CoreBoundary(t *testing.T) {
 					require(t, os.MkdirAll(filepath.Dir(filepath.Join(root, path)), 0700))
 					require(t, os.WriteFile(filepath.Join(root, path), []byte(source), 0600))
 				}
-				write("internal/steerline/"+fixture.filename, fixture.source)
+				filename := filepath.Join("internal", "steerline", fixture.filename)
+				if fixture.name == "reverse_client_subpackage" {
+					filename = filepath.Join("internal", "storage", "sqlite", fixture.filename)
+				}
+				write(filename, fixture.source)
 				if fixture.helper != "" {
 					path := fixture.helperPath
 					if path == "" {
@@ -89,7 +93,7 @@ func TestCD67CoreBoundary(t *testing.T) {
 	})
 
 	t.Run("console_negative_all_tags_production_and_tests", func(t *testing.T) {
-		for _, dependency := range []string{"github.com/erranliu/SteerLine/internal/steerline", "database/sql", "modernc.org/sqlite", "github.com/erranliu/SteerLine/internal/steerline/sqlite", "github.com/erranliu/SteerLine/internal/steerline/persistence", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", "github.com/erranliu/SteerLine/internal/execution/process", "github.com/erranliu/SteerLine/internal/steerlineclient", "github.com/erranliu/SteerLine/internal/product/client", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/execution/workspace", "github.com/erranliu/SteerLine/internal/execution/publication", "github.com/erranliu/SteerLine/internal/steerlineapp"} {
+		for _, dependency := range []string{"github.com/erranliu/SteerLine/internal/steerline", "database/sql", "modernc.org/sqlite", "github.com/erranliu/SteerLine/internal/storage/sqlite", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", "github.com/erranliu/SteerLine/internal/execution/process", "github.com/erranliu/SteerLine/internal/steerlineclient", "github.com/erranliu/SteerLine/internal/product/client", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/execution/workspace", "github.com/erranliu/SteerLine/internal/execution/publication", "github.com/erranliu/SteerLine/internal/steerlineapp"} {
 			t.Run(dependency, func(t *testing.T) {
 				for _, file := range []string{"edge_plan9.go", "edge_linux_test.go"} {
 					root := t.TempDir()

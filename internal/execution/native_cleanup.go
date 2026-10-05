@@ -12,7 +12,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -75,7 +74,7 @@ func (c CommandService) RecordNativeWorkspaceCleanupProgress(ctx context.Context
 		return err
 	}
 	nowAt := time.Now().UTC()
-	return c.Store.TransactCleanupProgress(ctx, func(tx persistence.CleanupProgressTx) error {
+	return c.Store.TransactCleanupProgress(ctx, func(tx storageports.CleanupProgressTx) error {
 		task, err := tx.Task(ctx, c.Project, taskID)
 		if err != nil {
 			if errors.Is(err, storageports.ErrNotFound) {
@@ -130,7 +129,7 @@ func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, 
 	}
 	nowAt := time.Now().UTC()
 	var result taskmodel.TaskRecord
-	err = sqlite.TransactCleanup(ctx, func(tx persistence.CleanupTx) error {
+	err = sqlite.TransactCleanup(ctx, func(tx storageports.CleanupTx) error {
 		if old, found, lookupErr := tx.LookupCommand(ctx, c.Project, requestID); lookupErr != nil {
 			return lookupErr
 		} else if found {
@@ -224,7 +223,7 @@ func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, 
 	return result, err
 }
 
-func commitNativePRCleanupReceipt(ctx context.Context, tx persistence.CleanupTx, project string, task taskmodel.TaskRecord, cleanupItem string, receipt json.RawMessage) error {
+func commitNativePRCleanupReceipt(ctx context.Context, tx storageports.CleanupTx, project string, task taskmodel.TaskRecord, cleanupItem string, receipt json.RawMessage) error {
 	var evidence NativePRCleanupReceipt
 	if err := decode(receipt, &evidence); err != nil || evidence.PRURL == "" || cleanupItem != "pull_request_close:"+evidence.PRURL || evidence.WorkflowRunID == "" || evidence.ExecutionID == "" || evidence.AttemptID == "" || evidence.State != "closed_unmerged" || evidence.Merged || evidence.ObservedAt.IsZero() || !taskmodel.ValidCommit(evidence.HeadRevision) {
 		return nativeErr("contract_mismatch", "native PR cleanup receipt does not prove the exact unmerged PR was closed")
@@ -255,7 +254,7 @@ func commitNativePRCleanupReceipt(ctx context.Context, tx persistence.CleanupTx,
 	return nil
 }
 
-func commitNativeWorkspaceCleanupReceipt(ctx context.Context, tx persistence.CleanupTx, project string, task taskmodel.TaskRecord, cleanupItem string, receipt json.RawMessage) error {
+func commitNativeWorkspaceCleanupReceipt(ctx context.Context, tx storageports.CleanupTx, project string, task taskmodel.TaskRecord, cleanupItem string, receipt json.RawMessage) error {
 	var evidence NativeWorkspaceCleanupReceipt
 	if err := decode(receipt, &evidence); err != nil || evidence.WorkflowRunID == "" || evidence.ExecutionID == "" || evidence.Repository == "" || evidence.Branch == "" || !filepath.IsAbs(evidence.Worktree) || !strings.HasPrefix(cleanupItem, "workspace_cleanup:") || canonical(strings.TrimPrefix(cleanupItem, "workspace_cleanup:")) != canonical(evidence.Worktree) || !taskmodel.ValidCommit(evidence.BaseCommit) || !evidence.WorktreeGone || !evidence.BranchGone || evidence.ObservedAt.IsZero() {
 		return nativeErr("contract_mismatch", "native workspace cleanup receipt lacks the exact absent worktree and branch identities")
@@ -281,7 +280,7 @@ func commitNativeWorkspaceCleanupReceipt(ctx context.Context, tx persistence.Cle
 	return nil
 }
 
-func commitNativeExecutionStopReceipt(ctx context.Context, tx persistence.CleanupTx, project string, task taskmodel.TaskRecord, cleanupItem string, receipt json.RawMessage) error {
+func commitNativeExecutionStopReceipt(ctx context.Context, tx storageports.CleanupTx, project string, task taskmodel.TaskRecord, cleanupItem string, receipt json.RawMessage) error {
 	var evidence NativeStopCleanupReceipt
 	if err := decode(receipt, &evidence); err != nil || evidence.ExecutionID == "" || cleanupItem != "execution_stop_manual:"+evidence.ExecutionID || evidence.WorkflowRunID == "" || evidence.AttemptID == "" {
 		return nativeErr("contract_mismatch", "native stop receipt does not match the pending execution identity")

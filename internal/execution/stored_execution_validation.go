@@ -5,10 +5,10 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
-func (c Config) ValidateStoredExecutions(snapshot contracts.DomainSnapshot) error {
+func (c Config) ValidateStoredExecutions(snapshot reconstruction.Snapshot) error {
 	for _, workflow := range snapshot.WorkflowRuns {
 		if workflow.WorkflowVersion != executionmodel.Version || workflow.ExecutionProfile == nil || !VerifyFixedExecutionProfile(*workflow.ExecutionProfile, c.ExecutionDirectory) || workflow.ConfigDigest != workflow.ExecutionProfile.AcceptedConfigVersion {
 			return nativeErr("unsupported_schema", "worker-flow-v1 refuses an old WorkflowRun; preserve the original state and external session")
@@ -33,7 +33,7 @@ func (c Config) ValidateStoredExecutions(snapshot contracts.DomainSnapshot) erro
 		fixedConfig := c.ApplyFixedExecutionProfile(*fixedProfile)
 		entry, resolveErr := registrationFor(fixedConfig)
 		if resolveErr != nil || execution.Backend != string(entry.Key.Backend) || execution.Agent != entry.Key.Agent || execution.Protocol != string(entry.Key.Protocol) {
-			return nativeErr("unsupported_schema", "execution identity differs from its fixed implementation snapshot")
+			return nativeErr("unsupported_schema", "fixed execution profile differs from the persisted run identity")
 		}
 		if (execution.Process != nil || execution.SessionID != "") && !awaitingRecoveryResources(&execution) {
 			if execution.PolicyResources == nil {

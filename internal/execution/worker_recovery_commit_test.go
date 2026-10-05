@@ -34,7 +34,7 @@ func TestWorkerRecoveryAttemptCommitsAtomically(t *testing.T) {
 			if (err != nil) != fail {
 				t.Fatalf("unexpected recovery commitment result: %v", err)
 			}
-			snapshot, err := service.domainStore.Query(context.Background(), service.Config.identity)
+			snapshot, err := readServiceSnapshot(context.Background(), service.domainStore, service.Config.identity)
 			require(t, err)
 			current := snapshot.Executions[0]
 			if fail {

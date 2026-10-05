@@ -15,7 +15,6 @@ import (
 	"time"
 
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -38,7 +37,7 @@ func TestTM03TaskWiring(t *testing.T) {
 		batch.Tasks = append(batch.Tasks, taskmodel.TaskBatchTask{LocalKey: strconv.FormatInt(id, 10), TaskID: id, Title: "Task wiring", Type: "task", Contract: contract})
 	}
 	payload := mustJSON(batch)
-	reader, err := steerline.OpenNativeTaskReader(ctx, &f.config)
+	reader, err := steerlineapp.OpenNativeTaskReader(ctx, &f.config)
 	require(t, err)
 	tasks := steerlineapp.NewTaskService(reader, f.config)
 	var verifier interface {

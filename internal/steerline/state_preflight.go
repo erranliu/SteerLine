@@ -2,11 +2,13 @@ package steerline
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func preflightWorkerFlowState(ctx context.Context, c execution.Config) error {
@@ -19,24 +21,19 @@ func preflightWorkerFlowState(ctx context.Context, c execution.Config) error {
 	} else if err != nil {
 		return err
 	}
-	reader, err := OpenNativeTaskReader(ctx, &c)
+	if err := preflightNativeStatePath(c); err != nil {
+		return err
+	}
+	if c.ReadPersistedExecutionState == nil {
+		return errors.New("application persisted execution reader is required for worker-flow preflight")
+	}
+	state, err := c.ReadPersistedExecutionState(ctx, c)
 	if err != nil {
 		return err
 	}
-	defer reader.Close()
-	payload, _, err := reader.LoadProjection(ctx, c.Identity())
-	if err != nil {
-		return err
+	project := c.Identity()
+	if state.Records.ProjectIdentity != project || state.Graph.Authority.ProjectIdentity != project {
+		return errors.New("persisted execution snapshot belongs to another project")
 	}
-	if len(payload) != 0 {
-		var runtime ServiceCheckpoint
-		if err := decode(payload, &runtime); err != nil || runtime.SchemaVersion != WorkerFlowRuntimeSchema {
-			return nativeErr("unsupported_schema", "worker-flow-v1 refuses the old runtime projection; preserve the original state and external session")
-		}
-	}
-	snapshot, err := reader.Query(ctx, c.Identity())
-	if err != nil {
-		return err
-	}
-	return c.ValidateStoredExecutions(snapshot)
+	return c.ValidateStoredExecutions(reconstruction.SnapshotFromStorage(state))
 }

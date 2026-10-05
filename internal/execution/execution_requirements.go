@@ -50,7 +50,7 @@ func evaluateExecutionRequirements(ctx context.Context, c Config) (executionback
 			return e, err
 		}
 		// A version probe establishes the lookup key, never verified capability.
-		report, loadErr := (executionRecords{root: c.RunDir, persistence: c.Persistence, resources: c.Resources}).loadCapabilityReport(key)
+		report, loadErr := (executionRecords{root: c.RunDir, reader: c.ExecutionRecords, resources: c.Resources}).loadCapabilityReport(key)
 		if loadErr != nil {
 			return e, errors.New("required capabilities have no current authenticated report: " + loadErr.Error())
 		}

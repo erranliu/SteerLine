@@ -16,7 +16,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -32,9 +32,9 @@ func executionPublicationFixture() executionbackend.PublicationPolicy {
 func hostPublicationProviderFixture() publication.Config {
 	return publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: os.Args[0], Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: executionbackend.Command{Executable: os.Args[0], Args: []string{"pr", "close", "{pr_url}"}}}
 }
-func fullFixtureTaskService(reader persistence.CommandStore, c execution.Config) taskapp.Service {
+func fullFixtureTaskService(reader taskCommandStorage, c execution.Config) taskapp.Service {
 	commands := NewTaskCommands(reader, c)
-	return taskapp.Service{Reader: reader, Input: commands.Input, Documents: commands.Documents}
+	return taskapp.Service{Reader: taskCommandStore{store: reader}, Input: commands.Input, Documents: commands.Documents}
 }
 func putFixtureImplementationEnvelope(record *executionmodel.ExecutionRecord, envelope executionbackend.ImplementationDataEnvelope) error {
 	if record == nil {
@@ -61,7 +61,7 @@ func fixtureStoreFor(t *testing.T, service *execution.Service) *sqliteFixture {
 	return store
 }
 func publishFixtureCheckpoint(service *execution.Service) error {
-	db, err := service.Config.Persistence.OpenWriter(filepath.Join(service.Config.RunDir, "steerline.db"))
+	db, err := sqlite.OpenSQLiteStore(filepath.Join(service.Config.RunDir, "steerline.db"))
 	if err != nil {
 		return err
 	}
@@ -120,7 +120,8 @@ func newHostFixtureService(c execution.Config, host execution.HostPort) (*execut
 		return nil, err
 	}
 	tasks := fullFixtureTaskService(db, c)
-	return execution.NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, db, tasks, tasks, host)
+	stores := execution.ServiceStorage{State: db, Commands: db, Worker: db, Conversations: db, Records: db, Close: db.Close}
+	return execution.NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, stores, tasks, tasks, host)
 }
 func isNativeErrorCode(err error, codes ...string) bool {
 	var value *taskmodel.Error

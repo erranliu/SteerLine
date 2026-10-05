@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	executionreconstruction "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"os/exec"
@@ -16,8 +17,9 @@ import (
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/steerline"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/internal/testprocess"
 )
 
@@ -148,8 +150,8 @@ func MainControl(args []string) error {
 	return nil
 }
 
-func (c *Client) Tasks(ctx context.Context) (contracts.NativeTaskPage, error) {
-	var page contracts.NativeTaskPage
+func (c *Client) Tasks(ctx context.Context) (storageports.NativeTaskPage, error) {
+	var page storageports.NativeTaskPage
 	raw, err := c.Run(ctx, "task", "list", "-config", c.Config)
 	if err == nil {
 		err = json.Unmarshal(raw, &page)
@@ -157,23 +159,46 @@ func (c *Client) Tasks(ctx context.Context) (contracts.NativeTaskPage, error) {
 	return page, err
 }
 
-func ReadWorkflow(ctx context.Context, database, project string) (contracts.DomainSnapshot, error) {
-	reader, err := (sqlite.Factory{}).OpenReader(database)
+func ReadWorkflow(ctx context.Context, database, project string) (executionreconstruction.Snapshot, error) {
+	reader, err := sqlite.OpenSQLiteReader(database)
 	if err != nil {
-		return contracts.DomainSnapshot{}, err
+		return executionreconstruction.Snapshot{}, err
 	}
 	defer reader.Close()
-	return productquery.NewService(reader, project).Workflow(ctx, "")
+	snapshot, err := reader.ReadExecutionStateSnapshot(ctx, project)
+	if err != nil {
+		return executionreconstruction.Snapshot{}, err
+	}
+	return executionreconstruction.SnapshotFromStorage(snapshot), nil
 }
 
 // ReadProjectView uses the product reader's public transaction contract.
-func ReadProjectView(ctx context.Context, database, project string) (contracts.ProjectView, error) {
-	reader, err := (sqlite.Factory{}).OpenReader(database)
+func ReadProjectView(ctx context.Context, database, project string) (storageports.ProjectView, error) {
+	reader, err := sqlite.OpenSQLiteReader(database)
 	if err != nil {
-		return contracts.ProjectView{}, err
+		return storageports.ProjectView{}, err
 	}
 	defer reader.Close()
 	return productquery.NewService(reader, project).ReadProjectView(ctx, "", 100)
+}
+
+// ReadApplicationProjectSnapshot obtains the product view and execution facts
+// used by SnapshotContext from one SQLite read transaction.
+func ReadApplicationProjectSnapshot(ctx context.Context, database, project, selected string, limit int) (storageports.ApplicationProjectSnapshot, error) {
+	reader, err := sqlite.OpenSQLiteReader(database)
+	if err != nil {
+		return storageports.ApplicationProjectSnapshot{}, err
+	}
+	defer reader.Close()
+	return reader.ReadApplicationProjectSnapshot(ctx, project, selected, limit)
+}
+
+func ReadRuntime(ctx context.Context, configPath string) (*contracts.Runtime, error) {
+	config, err := steerlineapp.LoadConfig(configPath)
+	if err != nil {
+		return nil, err
+	}
+	return steerlineapp.LoadDatabaseRuntime(config)
 }
 
 // MainView exposes the same public read transaction for fixture diagnostics.
@@ -192,7 +217,7 @@ func MainView(args []string) error {
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return err
 	}
-	reader, err := steerline.OpenNativeTaskReader(ctx, &c)
+	reader, err := steerlineapp.OpenNativeTaskReader(ctx, &c)
 	if err != nil {
 		return err
 	}

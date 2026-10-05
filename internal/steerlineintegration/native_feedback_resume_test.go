@@ -42,7 +42,7 @@ func testNativeOrcaConsecutiveFeedback(t *testing.T, openPR bool) {
 		require(t, os.WriteFile(f.configPath, mustJSON(config), 0600))
 		f.config, err = steerlineapp.LoadConfig(f.configPath)
 		require(t, err)
-		project, err := steerline.OpenNativeTaskProject(ctx, &f.config)
+		project, err := steerlineapp.OpenNativeTaskProject(ctx, &f.config)
 		require(t, err)
 		require(t, project.Close())
 		initial.CompletionPRURL = provider.server.URL + "/owner/repo/pulls/901"

@@ -66,16 +66,15 @@ func ReadTaskSnapshot(c execution.Config) (*TaskSnapshot, error) {
 	if err := c.ResolveIdentity(context.Background()); err != nil {
 		return nil, err
 	}
-	store, err := OpenNativeTaskProject(context.Background(), &c)
+	if c.TaskReader == nil {
+		return nil, errors.New("application task reader is required")
+	}
+	graph, err := c.TaskReader.TaskGraphSnapshot(context.Background(), c.Identity())
 	if err != nil {
 		return nil, err
 	}
-	defer store.Close()
-	authority, err := store.NativeAuthority(context.Background(), c.Identity())
-	if err != nil {
-		return nil, err
-	}
-	ready, err := (productquery.NewService(store, c.Identity())).ReadyNativeTasks(context.Background())
+	authority := graph.Authority
+	ready, err := (productquery.Service{Project: c.Identity(), Tasks: c.TaskReader}).ReadyNativeTasks(context.Background())
 	if err != nil {
 		return nil, err
 	}

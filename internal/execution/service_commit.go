@@ -9,12 +9,11 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	persistence "github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-func copyDomainSnapshot(snapshot contracts.DomainSnapshot) (contracts.DomainSnapshot, error) {
-	return reconstruction.CloneDomain(snapshot)
+func copyExecutionSnapshot(snapshot reconstruction.Snapshot) (reconstruction.Snapshot, error) {
+	return reconstruction.CloneSnapshot(snapshot)
 }
 
 // projectState builds independently owned read views from committed records.
@@ -53,7 +52,7 @@ func (s *Service) projectActor() error {
 	return nil
 }
 
-func snapshotWorkflow(snapshot *contracts.DomainSnapshot, id string) *executionmodel.WorkflowRunRecord {
+func snapshotWorkflow(snapshot *reconstruction.Snapshot, id string) *executionmodel.WorkflowRunRecord {
 	for i := range snapshot.WorkflowRuns {
 		if snapshot.WorkflowRuns[i].WorkflowRunID == id {
 			return &snapshot.WorkflowRuns[i]
@@ -62,7 +61,7 @@ func snapshotWorkflow(snapshot *contracts.DomainSnapshot, id string) *executionm
 	return nil
 }
 
-func snapshotExecution(snapshot *contracts.DomainSnapshot, id string) *executionmodel.ExecutionRecord {
+func snapshotExecution(snapshot *reconstruction.Snapshot, id string) *executionmodel.ExecutionRecord {
 	for i := range snapshot.Executions {
 		if snapshot.Executions[i].ExecutionID == id {
 			return &snapshot.Executions[i]
@@ -71,7 +70,7 @@ func snapshotExecution(snapshot *contracts.DomainSnapshot, id string) *execution
 	return nil
 }
 
-func snapshotAttempt(snapshot *contracts.DomainSnapshot, id string) *executionmodel.StepAttemptRecord {
+func snapshotAttempt(snapshot *reconstruction.Snapshot, id string) *executionmodel.StepAttemptRecord {
 	for i := range snapshot.Attempts {
 		if snapshot.Attempts[i].AttemptID == id {
 			return &snapshot.Attempts[i]
@@ -80,7 +79,7 @@ func snapshotAttempt(snapshot *contracts.DomainSnapshot, id string) *executionmo
 	return nil
 }
 
-func snapshotDecision(snapshot *contracts.DomainSnapshot, id string) *executionmodel.DecisionRecord {
+func snapshotDecision(snapshot *reconstruction.Snapshot, id string) *executionmodel.DecisionRecord {
 	for i := range snapshot.Decisions {
 		if snapshot.Decisions[i].DecisionID == id {
 			return &snapshot.Decisions[i]
@@ -89,7 +88,7 @@ func snapshotDecision(snapshot *contracts.DomainSnapshot, id string) *executionm
 	return nil
 }
 
-func snapshotOperation(snapshot *contracts.DomainSnapshot, id string) *executionmodel.OperationRecord {
+func snapshotOperation(snapshot *reconstruction.Snapshot, id string) *executionmodel.OperationRecord {
 	for i := range snapshot.Operations {
 		if snapshot.Operations[i].OperationID == id {
 			return &snapshot.Operations[i]
@@ -130,7 +129,7 @@ func (s *Service) commitWorkerAttached(run *contracts.Run, attachment workerComm
 	if workflow == nil || execution == nil || attempt == nil || before == nil {
 		return errors.New("worker commitment has no authoritative fixed records")
 	}
-	request := persistence.WorkerCommit{Project: workflow.ProjectIdentity, TaskID: workflow.TaskID,
+	request := storageports.WorkerCommit{Project: workflow.ProjectIdentity, TaskID: workflow.TaskID,
 		Binding: attachment.Binding, ExecutionOperation: attachment.ExecutionOperation,
 		WorkflowID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, AttemptID: attempt.AttemptID,
 		ControlRevision:   before.ControlRevision,
@@ -192,7 +191,7 @@ func (s *Service) commitWorkerAttached(run *contracts.Run, attachment workerComm
 }
 
 func (s *Service) discardWorkerCandidates(operationIDs ...string) {
-	if restored, err := copyDomainSnapshot(s.committed); err == nil {
+	if restored, err := copyExecutionSnapshot(s.committed); err == nil {
 		s.domain = restored
 	}
 	for _, id := range operationIDs {
@@ -201,7 +200,7 @@ func (s *Service) discardWorkerCandidates(operationIDs ...string) {
 	_ = s.projectState()
 }
 
-func (s *Service) commitDeclared(request persistence.WorkerCommit) error {
+func (s *Service) commitDeclared(request storageports.WorkerCommit) error {
 	request.Checkpoint.UpdatedAt, request.Checkpoint.HeartbeatAt = now(), now()
 	result, err := s.store.commitWorker(request)
 	if err != nil {
@@ -214,7 +213,7 @@ func (s *Service) commitDeclared(request persistence.WorkerCommit) error {
 		s.discardWorkerCandidates(operationIDs...)
 		return err
 	}
-	committed, copyErr := copyDomainSnapshot(s.committed)
+	committed, copyErr := copyExecutionSnapshot(s.committed)
 	if copyErr != nil {
 		return copyErr
 	}
@@ -252,7 +251,7 @@ func (s *Service) commitDeclared(request persistence.WorkerCommit) error {
 		}
 		delete(s.pendingOperations, write.After.OperationID)
 	}
-	s.committed, err = copyDomainSnapshot(committed)
+	s.committed, err = copyExecutionSnapshot(committed)
 	if err != nil {
 		return err
 	}
@@ -272,7 +271,7 @@ func (s *Service) commitDeclared(request persistence.WorkerCommit) error {
 }
 
 func (s *Service) commitEvents() error {
-	return s.commitDeclared(persistence.WorkerCommit{Project: s.Config.identity, Events: append([]storageports.DomainEvent(nil), s.pendingEvents...), Checkpoint: runtimeCheckpoint(s.State)})
+	return s.commitDeclared(storageports.WorkerCommit{Project: s.Config.identity, Events: append([]storageports.DomainEvent(nil), s.pendingEvents...), Checkpoint: runtimeCheckpoint(s.State)})
 }
 
 func (s *Service) stageWorkerOperation(run *contracts.Run, id, next, requestID string, receipt []byte, reason string) error {

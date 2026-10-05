@@ -1,0 +1,12 @@
+# github.com/erranliu/SteerLine/internal/execution [github.com/erranliu/SteerLine/internal/execution.test]
+internal\execution\command_persistence_test.go:319:41: service.commandStore.Query undefined (type CommandStore has no field or method Query)
+internal\execution\core_decoupling_64_review_test.go:177:34: s.commandStore.Query undefined (type CommandStore has no field or method Query)
+internal\execution\execution_policy_test.go:63:41: s.commandStore.Query undefined (type CommandStore has no field or method Query)
+internal\execution\execution_policy_test.go:103:41: s.commandStore.Query undefined (type CommandStore has no field or method Query)
+internal\execution\execution_resolution_audit_test.go:110:32: s.commandStore.Query undefined (type CommandStore has no field or method Query)
+internal\execution\execution_resolution_audit_test.go:117:31: s.commandStore.Query undefined (type CommandStore has no field or method Query)
+internal\execution\runtime_boundary_test.go:39:34: s.commandStore.Query undefined (type CommandStore has no field or method Query)
+internal\execution\runtime_view_test.go:108:40: service.commandStore.Query undefined (type CommandStore has no field or method Query)
+internal\execution\simplified_lifecycle_test.go:42:32: s.commandStore.Query undefined (type CommandStore has no field or method Query)
+internal\execution\worker_commit_test.go:35:39: service.commandStore.Query undefined (type CommandStore has no field or method Query)
+internal\execution\worker_commit_test.go:35:39: too many errors

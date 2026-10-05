@@ -13,7 +13,7 @@ func TestTM04ExecutionBoundary(t *testing.T) {
 	for _, fixture := range []struct{ name, path, source, helper string }{
 		{"task_implementation_in_inactive_tag", "edge_plan9.go", "//go:build never_enabled\n\npackage execution\nimport _ \"" + module + "/internal/task\"\n", ""},
 		{"old_host_in_other_os", "edge_freebsd.go", "package execution\nimport _ \"" + core + "\"\n", ""},
-		{"concrete_storage_in_helper", "edge.go", "package execution\nimport _ \"" + module + "/internal/helper\"\n", "package helper\nimport _ \"" + core + "/sqlite\"\n"},
+		{"concrete_storage_in_helper", "edge.go", "package execution\nimport _ \"" + module + "/internal/helper\"\n", "package helper\nimport _ \"" + module + "/internal/storage/sqlite\"\n"},
 		{"adapter_in_other_os_test", "edge_linux_test.go", "package execution\nimport _ \"" + execution + "/adapters/codex\"\n", ""},
 		{"product_query_in_execution", "query_edge.go", "package execution\nimport _ \"" + core + "/query\"\n", ""},
 		{"old_projection_in_execution", "projection_edge.go", "package execution\nimport _ \"" + core + "/projection\"\n", ""},
@@ -100,7 +100,7 @@ func TestTM06AdapterBoundary(t *testing.T) {
 		module + "/internal/task",
 		module + "/internal/storage/ports",
 		"database/sql",
-		module + "/internal/steerline/sqlite",
+		module + "/internal/storage/sqlite",
 		module + "/internal/steerline/testprotocol",
 		module + "/internal/steerlineapp",
 		module + "/internal/steerline/console",
@@ -132,7 +132,7 @@ func TestTM06AdapterBoundary(t *testing.T) {
 		root := t.TempDir()
 		files := map[string]string{
 			"internal/execution/adapters/orca/edge.go": "package orcaworker\nimport _ \"github.com/erranliu/SteerLine/internal/helper\"\n",
-			"internal/helper/edge_freebsd.go":          "//go:build never_enabled\n\npackage helper\nimport _ \"github.com/erranliu/SteerLine/internal/steerline/sqlite\"\n",
+			"internal/helper/edge_freebsd.go":          "//go:build never_enabled\n\npackage helper\nimport _ \"github.com/erranliu/SteerLine/internal/storage/sqlite\"\n",
 		}
 		for name, source := range files {
 			path := filepath.Join(root, name)
@@ -264,6 +264,42 @@ func TestTM05ProductQueryBoundary(t *testing.T) {
 			}
 			if !strings.Contains(strings.Join(report.Violations, "\n"), "product query forbidden dependency") {
 				t.Fatalf("inactive query import escaped: %+v", report)
+			}
+		})
+	}
+}
+
+func TestTM07StorageBoundary(t *testing.T) {
+	for _, fixture := range []struct {
+		name, dir, source, want string
+	}{
+		{"adapter_dependency", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/execution/adapters/codex\"\n", "storage sqlite forbidden dependency"},
+		{"application_dependency", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/steerlineapp\"\n", "storage sqlite forbidden dependency"},
+		{"query_use_case", "internal/storage/sqlite", "package sqlite\nimport productquery \"" + productQuery + "\"\nvar _ = productquery.NewService\n", "storage sqlite product query application call"},
+		{"storage_sqlite_in_reconstruction", "internal/execution/reconstruction", "package reconstruction\nimport _ \"" + storageSQLite + "\"\n", "execution reconstruction dependency"},
+		{"storage_ports_in_reconstruction", "internal/execution/reconstruction", "package reconstruction\nimport _ \"" + module + "/internal/storage/ports\"\n", ""},
+	} {
+		t.Run(fixture.name, func(t *testing.T) {
+			root := t.TempDir()
+			path := filepath.Join(root, filepath.FromSlash(fixture.dir), "edge_plan9.go")
+			if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte("//go:build never_enabled\n\n"+fixture.source), 0600); err != nil {
+				t.Fatal(err)
+			}
+			report, err := ScanSource(root)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if fixture.want == "" {
+				if len(report.Violations) != 0 {
+					t.Fatalf("pure storage port was rejected: %+v", report)
+				}
+				return
+			}
+			if !strings.Contains(strings.Join(report.Violations, "\n"), fixture.want) {
+				t.Fatalf("storage dependency escaped guard: %+v", report)
 			}
 		})
 	}

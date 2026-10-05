@@ -4,11 +4,11 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 const thread = "00000000-0000-0000-0000-000000000008"
@@ -21,7 +21,7 @@ func must[T any](t *testing.T, value T, err error) T {
 	return value
 }
 
-func fixture(t *testing.T) contracts.DomainSnapshot {
+func fixture(t *testing.T) reconstruction.Snapshot {
 	t.Helper()
 	e := executionmodel.ExecutionRecord{ProjectIdentity: "project", ExecutionID: "execution", CurrentAttemptID: "attempt", Generation: "generation", ConfigurationDigest: "config", Protocol: string(executionbackend.ProtocolLocalCodexAppServer)}
 	policy := executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "host"}, Network: "allow", Escalation: "deny"}
@@ -36,7 +36,7 @@ func fixture(t *testing.T) contracts.DomainSnapshot {
 	e.PolicyResources = &executionmodel.PolicyResources{ImplementationData: must(t, resource, err)}
 	binding, err := codexworker.NewAppServerBindingEnvelope(codexworker.AppServerBindingIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, codexworker.AppServerBinding{Endpoint: "ws://127.0.0.1:12345", SessionID: thread, Generation: "native-generation"})
 	e.ImplementationData = []executionbackend.ImplementationDataEnvelope{must(t, binding, err)}
-	return contracts.DomainSnapshot{Executions: []executionmodel.ExecutionRecord{e}, WorkflowRuns: []executionmodel.WorkflowRunRecord{{ExecutionProfile: profile}}}
+	return reconstruction.Snapshot{Executions: []executionmodel.ExecutionRecord{e}, WorkflowRuns: []executionmodel.WorkflowRunRecord{{ExecutionProfile: profile}}}
 }
 
 func TestExecutionEvidencePreservesBoundIdentityAndAuthority(t *testing.T) {

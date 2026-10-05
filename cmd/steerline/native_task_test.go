@@ -20,12 +20,12 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -79,7 +79,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	reader, err := steerline.OpenNativeTaskProject(context.Background(), &c)
+	reader, err := steerlineapp.OpenNativeTaskProject(context.Background(), &c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +191,8 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 		state := service.State
 		state.Service.Mode, state.Service.Ready = "scheduler", true
 		at := time.Now().UTC()
-		checkpoint := contracts.ServiceCheckpoint{SchemaVersion: state.SchemaVersion, Revision: state.Revision, UpdatedAt: at, HeartbeatAt: at, Service: state.Service, Repository: state.Repository}
+		checkpoint := reconstruction.Checkpoint(state)
+		checkpoint.SchemaVersion, checkpoint.UpdatedAt, checkpoint.HeartbeatAt = state.SchemaVersion, at, at
 		if err = service.Close(); err != nil {
 			t.Fatal(err)
 		}

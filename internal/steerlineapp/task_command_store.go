@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -13,7 +12,16 @@ import (
 
 // The adapter projects task-only transactions. In particular RecordPredecessorAudit
 // can only persist the audit of this task command, not arbitrary execution records.
-type taskCommandStore struct{ store persistence.CommandStore }
+type taskStorage interface {
+	storageports.Commands
+	TaskGraphSnapshot(context.Context, string) (storageports.TaskGraphSnapshot, error)
+	TaskContract(context.Context, string, taskmodel.TaskRecord) (taskmodel.TaskContract, error)
+	NativeAuthority(context.Context, string) (executionmodel.ProjectTaskAuthority, error)
+	TransactTaskBatch(context.Context, func(storageports.BatchTx) error) error
+	TransactPredecessors(context.Context, func(storageports.PredecessorTx) error) error
+}
+
+type taskCommandStore struct{ store taskStorage }
 
 func taskCommand(v storageports.CommandRecord) taskapp.Command {
 	return taskapp.Command{ProjectIdentity: v.ProjectIdentity, CommandID: v.CommandID, Kind: v.Kind, TargetID: v.TargetID, ExpectedVersion: v.ExpectedVersion, IdempotencyKey: v.IdempotencyKey, RequestedBy: v.RequestedBy, Payload: v.Payload, Status: v.Status, Result: v.Result, CreatedAt: v.CreatedAt, UpdatedAt: v.UpdatedAt}
@@ -36,6 +44,16 @@ func (a taskCommandStore) ReadGraph(ctx context.Context, in taskapp.Input) (task
 	}
 	return graph.TaskGraph(), nil
 }
+func (a taskCommandStore) TaskSnapshot(ctx context.Context, project string) (taskmodel.Snapshot, error) {
+	graph, err := a.store.TaskGraphSnapshot(ctx, project)
+	if err != nil {
+		return taskmodel.Snapshot{}, err
+	}
+	return graph.TaskGraph(), nil
+}
+func (a taskCommandStore) TaskContract(ctx context.Context, project string, task taskmodel.TaskRecord) (taskmodel.TaskContract, error) {
+	return a.store.TaskContract(ctx, project, task)
+}
 func (a taskCommandStore) LookupCommand(ctx context.Context, project, id string) (taskapp.Command, bool, error) {
 	v, found, err := a.store.LookupCommand(ctx, project, id)
 	return taskCommand(v), found, err
@@ -51,13 +69,13 @@ func (a taskCommandStore) CheckTarget(ctx context.Context, in taskapp.Input) err
 	return nil
 }
 func (a taskCommandStore) TransactTaskBatch(ctx context.Context, apply func(taskapp.BatchTx) error) error {
-	return a.store.TransactTaskBatch(ctx, func(tx persistence.BatchTx) error { return apply(taskBatchTx{tx}) })
+	return a.store.TransactTaskBatch(ctx, func(tx storageports.BatchTx) error { return apply(taskBatchTx{tx}) })
 }
 func (a taskCommandStore) TransactPredecessors(ctx context.Context, apply func(taskapp.PredecessorTx) error) error {
-	return a.store.TransactPredecessors(ctx, func(tx persistence.PredecessorTx) error { return apply(taskPredecessorTx{tx}) })
+	return a.store.TransactPredecessors(ctx, func(tx storageports.PredecessorTx) error { return apply(taskPredecessorTx{tx}) })
 }
 
-type taskBatchTx struct{ tx persistence.BatchTx }
+type taskBatchTx struct{ tx storageports.BatchTx }
 
 func (a taskBatchTx) LookupCommand(ctx context.Context, project, id string) (taskapp.Command, bool, error) {
 	v, found, err := a.tx.LookupCommand(ctx, project, id)
@@ -91,7 +109,7 @@ func (a taskBatchTx) PutTaskDependency(v taskmodel.TaskDependencyRecord) error {
 	return a.tx.PutTaskDependency(v)
 }
 
-type taskPredecessorTx struct{ tx persistence.PredecessorTx }
+type taskPredecessorTx struct{ tx storageports.PredecessorTx }
 
 func (a taskPredecessorTx) LookupCommand(ctx context.Context, project, id string) (taskapp.Command, bool, error) {
 	v, found, err := a.tx.LookupCommand(ctx, project, id)

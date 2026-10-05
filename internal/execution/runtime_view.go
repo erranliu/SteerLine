@@ -4,15 +4,16 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-func runtimeCheckpoint(v contracts.Runtime) contracts.ServiceCheckpoint {
+func runtimeCheckpoint(v contracts.Runtime) storageports.ServiceCheckpoint {
 	return reconstruction.Checkpoint(v)
 }
 
 // projectRuntime is composition for already-loaded rows, without reuse of client Run pointers.
 func projectRuntime(v *contracts.Runtime) error {
-	snapshot := contracts.DomainSnapshot{Tasks: v.Tasks, WorkflowRuns: v.WorkflowRuns, Executions: v.Executions, Attempts: v.Attempts, Decisions: v.Decisions, Operations: v.Operations, Deliveries: v.Deliveries}
+	snapshot := reconstruction.Snapshot{Tasks: v.Tasks, WorkflowRuns: v.WorkflowRuns, Executions: v.Executions, Attempts: v.Attempts, Decisions: v.Decisions, Operations: v.Operations, Deliveries: v.Deliveries}
 	next, err := reconstruction.Build(snapshot, reconstruction.MetadataOf(*v))
 	if err != nil {
 		return err

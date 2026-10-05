@@ -2,13 +2,13 @@ package evidence
 
 import (
 	"errors"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 // Candidate resolves by both immutable IDs; list order/current profile are never
 // authority. Keep the full snapshot elsewhere for decisions/operations/delivery.
-func Candidate(d contracts.DomainSnapshot, runID, executionID string) (contracts.DomainSnapshot, error) {
-	var selected contracts.DomainSnapshot
+func Candidate(d reconstruction.Snapshot, runID, executionID string) (reconstruction.Snapshot, error) {
+	var selected reconstruction.Snapshot
 	selected.ProjectIdentity = d.ProjectIdentity
 	for _, w := range d.WorkflowRuns {
 		if w.WorkflowRunID == runID {

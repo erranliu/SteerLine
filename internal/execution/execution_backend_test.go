@@ -11,11 +11,15 @@ import (
 	"testing"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
+	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
 func TestExecutionRecordsPinBindingsAndOperations(t *testing.T) {
-	r := executionRecords{root: t.TempDir(), persistence: sqlite.Factory{}}
+	root := t.TempDir()
+	reader, err := sqlite.OpenSQLiteStore(filepath.Join(root, "steerline.db"))
+	require(t, err)
+	defer reader.Close()
+	r := executionRecords{root: root, reader: reader}
 	ref := executionbackend.ExecutionRef{Version: 1, Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Target: executionbackend.ExecutionTarget{ID: "local:test"}, Agent: executionbackend.AgentSpec{Name: "fixture"}, RunID: newID(), AttemptID: newID(), WorkspacePath: t.TempDir(), WorkspaceBranch: "fixture/test", BaseCommit: "0123456789abcdef0123456789abcdef01234567", External: executionbackend.ProcessIdentity{Kind: "os", PID: 42, Created: "creation-1", Executable: "fixture"}, Generation: "creation-1"}
 	if err := r.saveBinding(ref); err != nil {
 		t.Fatal(err)
@@ -66,7 +70,7 @@ func TestExecutionRecordsPinBindingsAndOperations(t *testing.T) {
 func TestCapabilityReportRejectsRetiredWholeRunActions(t *testing.T) {
 	for _, name := range []string{"reply_continue", "retry"} {
 		report := executionbackend.CapabilityReport{Version: 1, Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Target: executionbackend.ExecutionTarget{ID: "local"}, Agent: executionbackend.AgentSpec{Name: "fixture"}, PlatformVersion: "fixture", CheckedAt: now(), Capabilities: []executionbackend.Capability{{Name: name, Status: executionbackend.CapabilityUnsupported}}}
-		if err := (executionRecords{root: t.TempDir(), persistence: sqlite.Factory{}, resources: fixtureResources{}}).saveCapabilityReport(report); err == nil {
+		if err := (executionRecords{root: t.TempDir(), resources: fixtureResources{}}).saveCapabilityReport(report); err == nil {
 			t.Fatalf("capability report retained retired whole-run action %q", name)
 		}
 	}
@@ -84,7 +88,7 @@ func TestLocalReadOutputUsesBoundedExecutionCursor(t *testing.T) {
 	if err := os.WriteFile(path, []byte("abcdefghij"), 0600); err != nil {
 		t.Fatal(err)
 	}
-	cfg := Config{Persistence: sqlite.Factory{}, Host: "local", RunDir: runDir}
+	cfg := Config{Host: "local", RunDir: runDir}
 	backend := localExecutionBackend{config: cfg}
 	ref := executionbackend.ExecutionRef{Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Target: TargetFor(cfg), RunID: runID, AttemptID: attemptID}
 	first, err := backend.ReadOutput(context.Background(), ref, "", 4)
@@ -113,7 +117,11 @@ func TestLocalReadOutputUsesBoundedExecutionCursor(t *testing.T) {
 }
 
 func TestOperationRecordRejectsCorruptionBeforeUse(t *testing.T) {
-	r := executionRecords{root: t.TempDir(), persistence: sqlite.Factory{}}
+	root := t.TempDir()
+	reader, err := sqlite.OpenSQLiteStore(filepath.Join(root, "steerline.db"))
+	require(t, err)
+	defer reader.Close()
+	r := executionRecords{root: root, reader: reader}
 	run, attempt := newID(), newID()
 	if err := r.writeRecord("execution_operations", run, attempt, "op", []byte("{broken")); err != nil {
 		t.Fatal(err)
@@ -141,7 +149,7 @@ func TestNativeCapabilityCheckKeepsFixedAgent(t *testing.T) {
 			report.Capabilities[i].Evidence = evidencePath + "#sha256=" + hex.EncodeToString(sum[:])
 		}
 	}
-	require(t, (executionRecords{root: c.RunDir, persistence: sqlite.Factory{}, resources: c.Resources}).saveCapabilityReport(report))
+	require(t, (executionRecords{root: c.RunDir, resources: c.Resources}).saveCapabilityReport(report))
 	c.Agent = "changed-default"
 	s := &Service{Config: c}
 	if _, err := s.requireBackendCapabilitiesFor(context.Background(), backend, fixedTarget, fixedAgent, "workspace_inspection"); err != nil {

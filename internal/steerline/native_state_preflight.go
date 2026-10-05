@@ -13,8 +13,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func validateNativeStateLocation(c execution.Config) error {
@@ -34,6 +32,8 @@ func validateNativeStateLocation(c execution.Config) error {
 	return nil
 }
 
+func ValidateNativeStateLocation(c execution.Config) error { return validateNativeStateLocation(c) }
+
 // RepositoryStateKey derives a pure storage identity from an explicit Git
 // common directory. Application roots and default paths remain external.
 func RepositoryStateKey(identity string) string {
@@ -50,49 +50,6 @@ func RepositoryStateKey(identity string) string {
 		name = "repo"
 	}
 	return name + "-" + shortHash(canonical(common))[:12]
-}
-
-func openBoundNativeStore(ctx context.Context, c execution.Config, path string) (_ persistence.Connection, retErr error) {
-	if c.Persistence == nil {
-		return nil, nativeErr("authority_mismatch", "persistence factory is required")
-	}
-	db, err := c.Persistence.OpenReader(path)
-	if err != nil {
-		return nil, err
-	}
-	defer func() {
-		if retErr != nil {
-			_ = db.Close()
-		}
-	}()
-	if err = db.ValidateStoredFormat(ctx); err != nil {
-		return nil, err
-	}
-	authority, err := db.NativeAuthority(ctx, c.Identity())
-	if errors.Is(err, storageports.ErrNotFound) {
-		return nil, nativeErr("authority_mismatch", "database has no native authority for this project; preserve existing state")
-	}
-	if err != nil {
-		return nil, err
-	}
-	target, err := c.TaskRepositoryTarget(ctx)
-	if err != nil {
-		return nil, err
-	}
-	if authority.Authority != "native" || authority.Repository != target || authority.Remote != c.Remote || authority.Branch != c.Branch {
-		return nil, nativeErr("authority_mismatch", "configuration repository, remote or branch differs from persisted native authority")
-	}
-	db.BindAuthority(authority)
-	snapshot, err := db.Query(ctx, c.Identity())
-	if err != nil {
-		return nil, err
-	}
-	for _, task := range snapshot.Tasks {
-		if task.Source != "native" || task.ExternalProvider != "" || task.ExternalProject != "" || task.ExternalID != "" || task.IdentityMapDigest != "" {
-			return nil, nativeErr("authority_mismatch", "native center contains a task identity from an unsupported source")
-		}
-	}
-	return db, nil
 }
 
 func preflightNativeStatePath(c execution.Config) error {
@@ -112,15 +69,20 @@ func preflightNativeStatePath(c execution.Config) error {
 		if err := ensureNativeStateFilesAllowed(c.RunDir); err != nil {
 			return err
 		}
-		reader, err := openBoundNativeStore(context.Background(), c, path)
-		if err != nil {
-			return err
+		if c.ValidateNativeStore == nil {
+			return errors.New("application native store validator is required")
 		}
-		return reader.Close()
+		return c.ValidateNativeStore(context.Background(), c)
 	} else if !os.IsNotExist(err) {
 		return err
 	}
 	return ensureNativeStateClean(c.RunDir, c.Repository)
+}
+
+func PreflightNativeStatePath(c execution.Config) error { return preflightNativeStatePath(c) }
+
+func EnsureNativeStateClean(runDir, repository string) error {
+	return ensureNativeStateClean(runDir, repository)
 }
 
 func ensureRunDirOutsideRepository(c execution.Config) error {

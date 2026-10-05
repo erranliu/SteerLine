@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion(t *testing.T) {
@@ -18,7 +17,7 @@ func TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion(t *test
 			report.Capabilities[i].Status = executionbackend.CapabilityUnsupported
 		}
 	}
-	records := executionRecords{root: t.TempDir(), persistence: sqlite.Factory{}, resources: fixtureResources{}}
+	records := executionRecords{root: t.TempDir(), resources: fixtureResources{}}
 	require(t, records.saveCapabilityReport(report))
 	restored, err := records.loadCapabilityReport(report)
 	require(t, err)

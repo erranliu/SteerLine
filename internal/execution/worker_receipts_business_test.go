@@ -12,6 +12,8 @@ import (
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
@@ -21,7 +23,7 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	workflow := &executionmodel.WorkflowRunRecord{WorkflowRunID: run.RunID, WorkflowVersion: executionmodel.Version, Phase: "waiting_decision"}
 	execution := &executionmodel.ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, CurrentAttemptID: run.AttemptID, CurrentStep: "worker", CurrentTurnID: first, LastStoppedTurnID: first, PendingTurnID: second, PendingCommandID: commandID, TurnNumber: 1}
 	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
-	service := &Service{domain: contracts.DomainSnapshot{Operations: []executionmodel.OperationRecord{{OperationID: newID(), IdempotencyKey: "worker-turn:" + run.ExecutionID + ":" + commandID, Status: "outcome_unknown"}}}}
+	service := &Service{domain: reconstruction.Snapshot{Operations: []executionmodel.OperationRecord{{OperationID: newID(), IdempotencyKey: "worker-turn:" + run.ExecutionID + ":" + commandID, Status: "outcome_unknown"}}}}
 	service.Config.identity = "test-project"
 	run.TaskID, run.DomainTaskID, workflow.TaskID = "task", "task", "task"
 	service.domain.Tasks = []taskmodel.TaskRecord{{TaskID: "task", Status: "in_progress"}}
@@ -68,20 +70,20 @@ func TestAppServerRejectedEventReleasesObserver(t *testing.T) {
 
 func TestAppServerRecoveryDoesNotRaceInFlightLaunch(t *testing.T) {
 	run := &contracts.Run{RunID: newID(), ExecutionID: newID(), DomainTaskID: "8", Protocol: string(neutralProtocol), WorkflowVersion: executionmodel.Version}
-	service := &Service{lifecycleEffects: map[string]pendingLifecycleEffect{newID(): {runID: run.RunID}}, State: contracts.Runtime{}, domain: contracts.DomainSnapshot{Tasks: []taskmodel.TaskRecord{{TaskID: "8", Status: "in_progress"}},
+	service := &Service{lifecycleEffects: map[string]pendingLifecycleEffect{newID(): {runID: run.RunID}}, State: contracts.Runtime{}, domain: reconstruction.Snapshot{Tasks: []taskmodel.TaskRecord{{TaskID: "8", Status: "in_progress"}},
 		WorkflowRuns: []executionmodel.WorkflowRunRecord{{WorkflowRunID: run.RunID, WorkflowVersion: executionmodel.Version, Phase: "queued"}},
 		Executions:   []executionmodel.ExecutionRecord{{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, PendingCommandID: newID()}}}, runs: []*contracts.Run{run},
 	}
 	before := digestValue(struct {
 		View   contracts.Runtime
-		Domain contracts.DomainSnapshot
+		Domain reconstruction.Snapshot
 	}{service.State, service.domain})
 	if err := service.resumeAppServerWorkers(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if before != digestValue(struct {
 		View   contracts.Runtime
-		Domain contracts.DomainSnapshot
+		Domain reconstruction.Snapshot
 	}{service.State, service.domain}) {
 		t.Fatal("recovery modified a still-running launch before its receipt")
 	}
@@ -91,10 +93,10 @@ func TestAppServerLateReplyCannotModifyTerminalTask(t *testing.T) {
 	for _, status := range []string{"closed", "discarded"} {
 		route := simpleQuestionRoute(t, neutralQuestionKey, "project", newID(), newID(), newID(), "generation", "turn", "original")
 		run := &contracts.Run{RunID: newID(), TaskStatus: status, Decision: &executionmodel.DecisionState{ID: newID(), Status: "answer_saved", Request: executionmodel.DecisionRequest{QuestionRoute: &route}}}
-		service := &Service{State: contracts.Runtime{}, domain: contracts.DomainSnapshot{Operations: []executionmodel.OperationRecord{{OperationID: "reply", Status: "in_flight"}}}, runs: []*contracts.Run{run}}
+		service := &Service{State: contracts.Runtime{}, domain: reconstruction.Snapshot{Operations: []executionmodel.OperationRecord{{OperationID: "reply", Status: "in_flight"}}}, runs: []*contracts.Run{run}}
 		before := digestValue(struct {
 			View   contracts.Runtime
-			Domain contracts.DomainSnapshot
+			Domain reconstruction.Snapshot
 		}{service.State, service.domain})
 		late := lifecycleEffectResult{request: executionbackend.LifecycleRequest{Operation: executionbackend.Operation{ID: "reply", Action: string(executionbackend.LifecycleDeliverFeedback)}, Input: executionbackend.LifecycleInput{Feedback: &executionbackend.FeedbackInput{DecisionID: run.Decision.ID, QuestionID: "original"}}}}
 		service.lifecycleEffects = map[string]pendingLifecycleEffect{"reply": {runID: run.RunID, apply: func(*contracts.Run, lifecycleEffectResult) error {
@@ -106,7 +108,7 @@ func TestAppServerLateReplyCannotModifyTerminalTask(t *testing.T) {
 		}
 		if before != digestValue(struct {
 			View   contracts.Runtime
-			Domain contracts.DomainSnapshot
+			Domain reconstruction.Snapshot
 		}{service.State, service.domain}) {
 			t.Fatalf("late reply changed %s task", status)
 		}
@@ -237,7 +239,7 @@ func testAppServerAnswerRecoveryPersistsBeforeNextQuestion(t *testing.T) {
 	if err := service.reconcileSavedLifecycleQuestionAnswer(context.Background(), run); err != nil {
 		t.Fatal(err)
 	}
-	snapshot, err := service.domainStore.Query(context.Background(), service.Config.identity)
+	snapshot, err := readServiceSnapshot(context.Background(), service.domainStore, service.Config.identity)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,7 +285,7 @@ func TestAppServerStartedEventCommitsOperationReceipt(t *testing.T) {
 	require(t, err)
 	event := WorkerEvent{Fact: executionbackend.EventFact{Kind: executionbackend.EventStarted, SessionID: workerFlowMockSession, StartedTurnID: turnID}}
 	require(t, service.eventWorkerFlowFor(run, event))
-	snapshot, err := service.domainStore.Query(context.Background(), service.Config.identity)
+	snapshot, err := readServiceSnapshot(context.Background(), service.domainStore, service.Config.identity)
 	require(t, err)
 	for _, op := range snapshot.Operations {
 		if op.OperationID == opID {

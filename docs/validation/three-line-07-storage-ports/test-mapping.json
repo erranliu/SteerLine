@@ -1,0 +1,624 @@
+{
+  "schema_version": 1,
+  "task_id": 79,
+  "plan": "docs/spec/three-line-07-storage-ports.plan.md",
+  "spec": "docs/spec/three-line-07-storage-ports.spec.md",
+  "spec_sha256": "A26308A7919B822AEED91382D542660EE92D9BD90A674CD3E8CD2ADABEA6D606",
+  "integration_base": "d532c5f13c1d3269c019a8cdee6df008580c0446",
+  "validation_source_commit": "9e17f8513f9889c4afd95c856fe373a12069d107",
+  "status": "passed",
+  "groups": [
+    {
+      "id": "sqlite-01",
+      "package": "./internal/storage/sqlite",
+      "tests": [
+        "TestSQLiteTransactionRollsBackAllDomainWrites",
+        "TestProjectViewSharesTransactionAcrossWriterCommit",
+        "TestTM05ActivitySharesTransactionAcrossWriterCommit",
+        "TestCM70ReadOnlyOpenPreservesFiles",
+        "TestCM70WindowsCloseReleasesHandlesAndMissingReaderCannotCreate",
+        "TestConversationWriteFailureRollsBackContentAndCursor"
+      ],
+      "assertion_owner": "storage/sqlite",
+      "evidence": "docs/validation/three-line-07-storage-ports/sqlite-01-20261005T172035/summary.json",
+      "diagnostic_attempts": [
+        "docs/validation/three-line-07-storage-ports/sqlite-01-20261005T034628Z/summary.json"
+      ],
+      "actual_test_names": [
+        "TestConversationWriteFailureRollsBackContentAndCursor",
+        "TestCM70ReadOnlyOpenPreservesFiles",
+        "TestProjectViewSharesTransactionAcrossWriterCommit",
+        "TestConversationWriteFailureRollsBackContentAndCursor/conversation_bodies",
+        "TestConversationWriteFailureRollsBackContentAndCursor/conversation_events",
+        "TestConversationWriteFailureRollsBackContentAndCursor/conversation_raw",
+        "TestConversationWriteFailureRollsBackContentAndCursor/conversation_source_cursors",
+        "TestTM05ActivitySharesTransactionAcrossWriterCommit",
+        "TestConversationWriteFailureRollsBackContentAndCursor/conversation_current_messages",
+        "TestCM70WindowsCloseReleasesHandlesAndMissingReaderCannotCreate",
+        "TestSQLiteTransactionRollsBackAllDomainWrites"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 11,
+        "passed_tests": 11,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      },
+      "status": "passed"
+    },
+    {
+      "id": "execution-01",
+      "package": "./internal/execution",
+      "tests": [
+        "TestMC1",
+        "TestMC7",
+        "TestTM02ResultCAS"
+      ],
+      "assertion_owner": "execution",
+      "evidence": "docs/validation/three-line-07-storage-ports/execution-01-20261005T172046/summary.json",
+      "diagnostic_attempts": [
+        "docs/validation/three-line-07-storage-ports/execution-01-20261005T034937Z/summary.json",
+        "docs/validation/three-line-07-storage-ports/execution-01-20261005T035305Z/summary.json"
+      ],
+      "actual_test_names": [
+        "TestTM02ResultCAS",
+        "TestMC7",
+        "TestMC1",
+        "TestMC7/discard_full_history_and_exited_set",
+        "TestTM02ResultCAS/duplicate_original_receipt_and_content_conflict",
+        "TestTM02ResultCAS/delivery_first",
+        "TestTM02ResultCAS/reply",
+        "TestTM02ResultCAS/execution_identity",
+        "TestTM02ResultCAS/graph_version",
+        "TestTM02ResultCAS/discard_first",
+        "TestTM02ResultCAS/stopped",
+        "TestTM02ResultCAS/claim_identity",
+        "TestTM02ResultCAS/failure",
+        "TestTM02ResultCAS/task_version",
+        "TestTM02ResultCAS/merged_discard_rejected",
+        "TestTM02ResultCAS/concurrent",
+        "TestTM02ResultCAS/unknown",
+        "TestTM02ResultCAS/candidate_set",
+        "TestMC7/original_single_candidate"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 19,
+        "passed_tests": 19,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      },
+      "status": "passed"
+    },
+    {
+      "id": "product-01",
+      "packages": [
+        "./internal/storage/ports",
+        "./internal/product/query"
+      ],
+      "tests": [
+        "TestTM01StoragePortDependencies",
+        "TestTM05PageProjection",
+        "TestNativeCandidateSnapshotKeepsDispatchOrderBeyondDetailPage"
+      ],
+      "assertion_owner": "storage/ports and product/query",
+      "evidence": "docs/validation/three-line-07-storage-ports/product-01-20261005T172124/summary.json",
+      "actual_test_names": [
+        "TestNativeCandidateSnapshotKeepsDispatchOrderBeyondDetailPage",
+        "TestTM05PageProjection",
+        "TestTM05PageProjection/candidate_excludes_private_execution_and_copies_page_values",
+        "TestTM05PageProjection/conversation_projects_exact_body_raw_and_source_without_checkpoint",
+        "TestTM05PageProjection/history_retains_complete_candidate_numbering_without_private_records",
+        "TestTM05PageProjection/task_page_excludes_fixed_contract_and_private_delivery_evidence",
+        "TestTM05PageProjection/unique_delivery_projects_winner_and_loser_without_choosing_by_merge",
+        "TestTM01StoragePortDependencies"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 8,
+        "passed_tests": 8,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      },
+      "status": "passed"
+    },
+    {
+      "id": "storage-boundary-01",
+      "package": "./internal/coreboundary",
+      "tests": [
+        "TestTM04ExecutionBoundary",
+        "TestTM07StorageBoundary"
+      ],
+      "assertion_owner": "coreboundary",
+      "evidence": "docs/validation/three-line-07-storage-ports/storage-boundary-01-20261005T172133/summary.json",
+      "actual_test_names": [
+        "TestTM04ExecutionBoundary",
+        "TestTM04ExecutionBoundary/repository_all_tags_windows_linux",
+        "TestTM07StorageBoundary",
+        "TestTM07StorageBoundary/adapter_dependency",
+        "TestTM07StorageBoundary/query_use_case",
+        "TestTM07StorageBoundary/storage_ports_in_reconstruction",
+        "TestTM07StorageBoundary/storage_sqlite_in_reconstruction",
+        "TestTM04ExecutionBoundary/adapter_in_pure_reconstruction",
+        "TestTM04ExecutionBoundary/concrete_storage_in_helper",
+        "TestTM04ExecutionBoundary/new_product_query_in_helper",
+        "TestTM04ExecutionBoundary/old_host_in_other_os",
+        "TestTM04ExecutionBoundary/product_query_in_helper",
+        "TestTM04ExecutionBoundary/task_implementation_in_inactive_tag",
+        "TestTM07StorageBoundary/application_dependency",
+        "TestTM04ExecutionBoundary/adapter_in_other_os_test",
+        "TestTM04ExecutionBoundary/old_projection_in_execution",
+        "TestTM04ExecutionBoundary/product_query_in_execution"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 17,
+        "passed_tests": 17,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      },
+      "status": "passed"
+    },
+    {
+      "id": "product-boundary-01",
+      "package": "./internal/steerlineintegration",
+      "tests": [
+        "TestCD67CoreBoundary"
+      ],
+      "assertion_owner": "steerlineintegration",
+      "evidence": "docs/validation/three-line-07-storage-ports/product-boundary-01-20261005T172145/summary.json",
+      "diagnostic_attempts": [
+        "docs/validation/three-line-07-storage-ports/product-boundary-01-20261005T041846Z/summary.json"
+      ],
+      "actual_test_names": [
+        "TestCD67CoreBoundary",
+        "TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
+        "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests",
+        "TestCD67CoreBoundary/negative_source_fixtures",
+        "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/product/query/taskgraph",
+        "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/backend",
+        "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/model",
+        "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/product/api",
+        "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/storage/ports",
+        "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/task/model",
+        "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/task",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/database/sql",
+        "TestCD67CoreBoundary/negative_source_fixtures/transitive_helper_edge",
+        "TestCD67CoreBoundary/negative_source_fixtures/direct_import_behind_tag",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/execution/adapters/codex",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/execution/process",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/execution/publication",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/execution/workspace",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/product/client",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/product/query",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerline",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerlineapp",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/steerlineclient",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/github.com/erranliu/SteerLine/internal/storage/sqlite",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/modernc.org/sqlite",
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/transitive_test_helper",
+        "TestCD67CoreBoundary/negative_source_fixtures/nested_generated_name_is_not_an_exclusion",
+        "TestCD67CoreBoundary/negative_source_fixtures/reverse_implementation_edge",
+        "TestCD67CoreBoundary/negative_source_fixtures/reverse_storage_edge",
+        "TestCD67CoreBoundary/negative_source_fixtures/top_level_output_name_is_not_an_exclusion",
+        "TestCD67CoreBoundary/negative_source_fixtures/transitive_storage_edge",
+        "TestCD67CoreBoundary/negative_source_fixtures/concrete_storage_edge",
+        "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_filename",
+        "TestCD67CoreBoundary/negative_source_fixtures/mixed_case_text_in_other_os_test",
+        "TestCD67CoreBoundary/negative_source_fixtures/reverse_client_subpackage"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 37,
+        "passed_tests": 37,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      },
+      "status": "passed"
+    },
+    {
+      "id": "wiring-01",
+      "package": "./internal/steerlineintegration",
+      "tests": [
+        "TestTM07StorageWiring"
+      ],
+      "assertion_owner": "steerlineintegration",
+      "evidence": "docs/validation/three-line-07-storage-ports/wiring-01-20261005T172158/summary.json",
+      "actual_test_names": [
+        "TestTM07StorageWiring"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      },
+      "status": "passed"
+    },
+    {
+      "id": "wiring-regression-01",
+      "package": "./internal/steerlineintegration",
+      "tests": [
+        "TestCD67AdditionalImplementation"
+      ],
+      "assertion_owner": "steerlineintegration",
+      "evidence": "docs/validation/three-line-07-storage-ports/wiring-regression-01-20261005T172537/summary.json",
+      "diagnostic_attempts": [
+        "docs/validation/three-line-07-storage-ports/wiring-regression-01-20261005T042050Z/go-test.jsonl"
+      ],
+      "actual_test_names": [
+        "TestCD67AdditionalImplementation",
+        "TestCD67AdditionalImplementation/supported_terminal_recovery_and_original_identity",
+        "TestCD67AdditionalImplementation/supported_app_server_receipt_barriers",
+        "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+        "TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
+        "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication",
+        "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/two_turns_and_settlement",
+        "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/replacement_session_rejected",
+        "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/lost_reply_and_ack",
+        "TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication/lost_start_no_resend",
+        "TestCD67AdditionalImplementation/remote_model_and_cancellation_admission"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 11,
+        "passed_tests": 11,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      },
+      "status": "passed"
+    },
+    {
+      "id": "preflight-01",
+      "package": "./internal/steerlineintegration",
+      "tests": [
+        "TestTM07PersistedExecutionPreflight"
+      ],
+      "assertion_owner": "steerlineintegration",
+      "status": "passed",
+      "evidence": "docs/validation/three-line-07-storage-ports/preflight-01-20261005T153851/summary.json",
+      "actual_test_names": [
+        "TestTM07PersistedExecutionPreflight"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      },
+      "diagnostic_attempts": [
+        "docs/validation/three-line-07-storage-ports/preflight-01-20261005T150645/summary.json"
+      ]
+    },
+    {
+      "id": "runtime-snapshot-01",
+      "packages": [
+        "./internal/steerlineintegration",
+        "./internal/execution"
+      ],
+      "tests": [
+        "TestTM07RuntimeUsesSampledAuthorityAndCheckpoint",
+        "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor"
+      ],
+      "assertion_owner": "steerlineintegration and execution",
+      "status": "passed",
+      "diagnostic_attempts": [
+        "docs/validation/three-line-07-storage-ports/runtime-snapshot-01-20261005T153912/summary.json"
+      ],
+      "evidence": "docs/validation/three-line-07-storage-ports/runtime-snapshot-01-20261005T170829/summary.json",
+      "actual_test_names": [
+        "TestTM07RuntimeUsesSampledAuthorityAndCheckpoint",
+        "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 2,
+        "passed_tests": 2,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      }
+    },
+    {
+      "id": "bounded-read-01",
+      "package": "./internal/steerlineintegration",
+      "tests": [
+        "TestTM07ScopedActivityAndWorkflowReaders"
+      ],
+      "assertion_owner": "steerlineintegration",
+      "status": "passed",
+      "evidence": "docs/validation/three-line-07-storage-ports/bounded-read-01-20261005T153931/summary.json",
+      "actual_test_names": [
+        "TestTM07ScopedActivityAndWorkflowReaders"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      }
+    },
+    {
+      "id": "bounded-command-01",
+      "package": "./internal/steerlineintegration",
+      "tests": [
+        "TestTM07CandidateCommandUsesTaskScopedSnapshot"
+      ],
+      "assertion_owner": "steerlineintegration",
+      "status": "passed",
+      "evidence": "docs/validation/three-line-07-storage-ports/bounded-command-01-20261005T153954/summary.json",
+      "actual_test_names": [
+        "TestTM07CandidateCommandUsesTaskScopedSnapshot"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      }
+    },
+    {
+      "id": "project-snapshot-01",
+      "packages": [
+        "./internal/storage/sqlite",
+        "./internal/steerlineapp"
+      ],
+      "tests": [
+        "TestSQLiteApplicationProjectSnapshotSharesTransactionAcrossWriterCommit",
+        "TestFileQuerySourceReadsCombinedProjectView"
+      ],
+      "assertion_owner": "storage/sqlite and steerlineapp",
+      "status": "passed",
+      "evidence": "docs/validation/three-line-07-storage-ports/project-snapshot-01-20261005T170812/summary.json",
+      "actual_test_names": [
+        "TestFileQuerySourceReadsCombinedProjectView",
+        "TestSQLiteApplicationProjectSnapshotSharesTransactionAcrossWriterCommit"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 2,
+        "passed_tests": 2,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      }
+    },
+    {
+      "id": "compile-only-01",
+      "scope": "all Go packages, compile only",
+      "assertion_owner": "Go toolchain",
+      "status": "passed",
+      "behavior_test": false,
+      "command": "go test -run '^$' ./...",
+      "diagnostic_attempts": [
+        "docs/validation/three-line-07-storage-ports/compile-only-01-20261005T154223"
+      ],
+      "evidence_files": [
+        "docs/validation/three-line-07-storage-ports/compile-only-02-20261005T170800/stdout.log",
+        "docs/validation/three-line-07-storage-ports/compile-only-02-20261005T170800/stderr.log",
+        "docs/validation/three-line-07-storage-ports/compile-only-02-20261005T170800/exit-code.txt"
+      ],
+      "exit_code": 0,
+      "summary_counts": {
+        "passed": true,
+        "behavior_test": false,
+        "exit_code": 0
+      }
+    },
+    {
+      "id": "L1",
+      "command": "go run ./cmd/test-feedback -level=L1 -out <new-empty-run-directory>",
+      "diagnostic_attempts": [
+        "docs/validation/three-line-07-storage-ports/L1-20261005T154237/summary.json",
+        "docs/validation/three-line-07-storage-ports/L1-20261005T040716Z/summary.json",
+        "docs/validation/three-line-07-storage-ports/L1-20261005T043100Z/summary.json"
+      ],
+      "status": "passed",
+      "evidence": "docs/validation/three-line-07-storage-ports/L1-20261005T171014/summary.json",
+      "actual_groups": [
+        {
+          "id": "quick-core",
+          "status": "passed",
+          "test_count": 1,
+          "passed_tests": 1,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-rules",
+          "status": "passed",
+          "test_count": 255,
+          "passed_tests": 255,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-execution",
+          "status": "passed",
+          "test_count": 16,
+          "passed_tests": 16,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-execution-boundary",
+          "status": "passed",
+          "test_count": 43,
+          "passed_tests": 43,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-remote",
+          "status": "passed",
+          "test_count": 15,
+          "passed_tests": 15,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-codec",
+          "status": "passed",
+          "test_count": 14,
+          "passed_tests": 14,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-identity",
+          "status": "passed",
+          "test_count": 17,
+          "passed_tests": 17,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-codexapp",
+          "status": "passed",
+          "test_count": 4,
+          "passed_tests": 4,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-workspace",
+          "status": "passed",
+          "test_count": 2,
+          "passed_tests": 2,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-publication",
+          "status": "passed",
+          "test_count": 9,
+          "passed_tests": 9,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-owner-app",
+          "status": "passed",
+          "test_count": 8,
+          "passed_tests": 8,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        },
+        {
+          "id": "quick-boundary",
+          "status": "passed",
+          "test_count": 50,
+          "passed_tests": 50,
+          "failed_tests": 0,
+          "skipped_tests": 0
+        }
+      ],
+      "summary_counts": {
+        "passed": true,
+        "complete": true,
+        "groups": 12,
+        "test_count": 434,
+        "passed_tests": 434,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      }
+    },
+    {
+      "id": "mainline-runner-01",
+      "assertion_owner": "cmd/test-feedback",
+      "evidence": "docs/validation/three-line-07-storage-ports/mainline-runner-01-20261005T152916/summary.json",
+      "actual_test_names": [
+        "TestPrepareFullCoreEnumeratesExecutionBusinessTests",
+        "TestFullCoverageRequiresExecutionPartitionsAndCompleteOtherOwners",
+        "TestFullCoverageRequiresExecutionPartitionsAndCompleteOtherOwners/complete",
+        "TestFullCoverageRequiresExecutionPartitionsAndCompleteOtherOwners/execution_repeated_in_others",
+        "TestFullCoverageRequiresExecutionPartitionsAndCompleteOtherOwners/old_partition_owner",
+        "TestFullCoverageRequiresExecutionPartitionsAndCompleteOtherOwners/duplicate_test",
+        "TestFullCoverageRequiresExecutionPartitionsAndCompleteOtherOwners/host_omitted",
+        "TestFullCoverageRequiresExecutionPartitionsAndCompleteOtherOwners/missing_test",
+        "TestFullCoverageRequiresExecutionPartitionsAndCompleteOtherOwners/wrong_reported_owner"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 9,
+        "passed_tests": 9,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      },
+      "status": "passed",
+      "package": "./cmd/test-feedback"
+    },
+    {
+      "id": "mainline-fixtures-01",
+      "assertion_owner": "execution and steerline test fixtures",
+      "evidence": "docs/validation/three-line-07-storage-ports/mainline-fixtures-01-20261005T153516/summary.json",
+      "actual_test_names": [
+        "TestProjectViewDoesNotOwnServiceRuntime",
+        "TestTaskContractPinsCommittedBlobsAndRejectsInvalidReferences",
+        "TestWorkerFlowRejectsOldLocalExecutionProtocol",
+        "TestFreshWorkerFlowRuntimeUsesDistinctFormat",
+        "TestWorkerFlowRejectsOldRuntimeBeforeWorkspacePreparation",
+        "TestTaskContractRejectsCommittedSymlinkReferences",
+        "TestExecutionRequirementsDoNotUpgradeProbeToVerified",
+        "TestNativeCapabilityCheckKeepsFixedAgent",
+        "TestCapabilityReportRejectsRetiredWholeRunActions"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 9,
+        "passed_tests": 9,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      },
+      "status": "passed",
+      "packages": [
+        "./internal/execution",
+        "./internal/steerline"
+      ],
+      "diagnostic_attempts": [
+        "docs/validation/three-line-07-storage-ports/mainline-fixtures-01-20261005T152931/summary.json",
+        "docs/validation/three-line-07-storage-ports/mainline-fixtures-01-20261005T153248/summary.json"
+      ]
+    },
+    {
+      "id": "mainline-e2e-01",
+      "assertion_owner": "tests/e2e/internal/testenv",
+      "status": "passed",
+      "package": "./tests/e2e/internal/testenv",
+      "tests": [
+        "TestBusinessDeadlineIsFrozenBeforeIndependentCleanup",
+        "TestCandidatePublicationFailureRequiresCompletedOriginalFeedback",
+        "TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions"
+      ],
+      "diagnostic_attempts": [
+        "docs/validation/three-line-07-storage-ports/mainline-e2e-01-20261005T153835/summary.json"
+      ],
+      "evidence": "docs/validation/three-line-07-storage-ports/mainline-e2e-01-20261005T170854/summary.json",
+      "actual_test_names": [
+        "TestBusinessDeadlineIsFrozenBeforeIndependentCleanup",
+        "TestBusinessDeadlineIsFrozenBeforeIndependentCleanup/business_already_expired",
+        "TestBusinessDeadlineIsFrozenBeforeIndependentCleanup/finished_within_deadline",
+        "TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions",
+        "TestCandidatePublicationFailureRequiresCompletedOriginalFeedback",
+        "TestCandidatePublicationFailureRequiresCompletedOriginalFeedback/pending_command",
+        "TestCandidatePublicationFailureRequiresCompletedOriginalFeedback/pending_turn",
+        "TestCandidatePublicationFailureRequiresCompletedOriginalFeedback/previous_command",
+        "TestCandidatePublicationFailureRequiresCompletedOriginalFeedback/running",
+        "TestCandidatePublicationFailureRequiresCompletedOriginalFeedback/unsettled_turn",
+        "TestCandidatePublicationFailureRequiresCompletedOriginalFeedback/unstarted_turn",
+        "TestCandidatePublicationFailureRequiresCompletedOriginalFeedback/verified_PR"
+      ],
+      "summary_counts": {
+        "passed": true,
+        "test_count": 12,
+        "passed_tests": 12,
+        "failed_tests": 0,
+        "skipped_tests": 0
+      }
+    }
+  ]
+}

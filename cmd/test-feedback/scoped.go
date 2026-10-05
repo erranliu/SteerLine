@@ -29,11 +29,11 @@ const executionPackage = "github.com/erranliu/SteerLine/internal/execution"
 // Full partitions the execution business tests after their move out of the host facade.
 const fullCorePackage = executionPackage
 
-var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput", "TestCandidateResumeErrorDoesNotStarveSibling"}
+var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput", "TestCandidateResumeErrorDoesNotStarveSibling", "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/internal/steerlineintegration"
 
-var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImplementation", "TestTM06ResourceWiring"}
+var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImplementation", "TestTM06ResourceWiring", "TestTM07StorageWiring"}
 
 var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary",
@@ -68,6 +68,7 @@ var quickBoundaryAssigned = []string{
 	"TestCD67AdditionalImplementation/remote_model_and_cancellation_admission",
 	"TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
 	"TestTM06ResourceWiring",
+	"TestTM07StorageWiring",
 }
 
 var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{
@@ -76,13 +77,12 @@ var quickRulePackages = append(append([]string{}, taskRulePackages...), []string
 	"github.com/erranliu/SteerLine/internal/product/query",
 	"github.com/erranliu/SteerLine/internal/product/query/taskgraph",
 	"github.com/erranliu/SteerLine/internal/storage/ports",
-	corePackage + "/persistence",
 	corePackage + "/testprotocol",
 	"github.com/erranliu/SteerLine/internal/execution/model",
 	"github.com/erranliu/SteerLine/internal/execution/backend",
 	corePackage + "/contracts",
 	executionPackage + "/reconstruction",
-	corePackage + "/sqlite",
+	"github.com/erranliu/SteerLine/internal/storage/sqlite",
 	"github.com/erranliu/SteerLine/internal/console", "github.com/erranliu/SteerLine/internal/console/activityrender",
 	"github.com/erranliu/SteerLine/internal/testboundary",
 }...)
@@ -92,14 +92,14 @@ var quickOwnerCases = []struct {
 	Tests       []string
 }{
 	{"quick-execution", executionPackage, quickExecutionTests},
-	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/coreboundary", []string{"TestTM04ExecutionBoundary", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure", "TestTM05ProductQueryBoundary"}},
+	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/coreboundary", []string{"TestTM04ExecutionBoundary", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure", "TestTM05ProductQueryBoundary", "TestTM07StorageBoundary"}},
 	{"quick-owner-remote", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", []string{"TestCD63CodecIdentityAndVersion", "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily", "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift", "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch", "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree", "TestSupervisedRunCoordinatorsAreDistinctAndFenced", "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal", "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall", "TestRemoteContinuationRequiresOriginalPeerAndTerminal", "TestRemoteWorkspaceKeepsPeerPathAndRuntime", "TestRemoteReplyRejectsOversizeWithoutMutation", "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending", "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox", "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID", "TestLoadConfigRequiresExplicitRemoteCancellationFalse"}},
 	{"quick-owner-codec", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", []string{"TestCD63CodecIdentityAndVersion", "TestConversationMapperNativeTwoTurnFixture", "TestHistoryAdapterRejectsOversizedNativeCursor", "TestAppServerLaunchPreservesConfiguredArgs", "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt"}},
 	{"quick-owner-identity", "github.com/erranliu/SteerLine/internal/execution/adapters/orca", []string{"TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess", "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation", "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost", "TestReadinessEvidenceUsesActualPlatformToolBlocks", "TestReadinessReceiptRejectsStaleAndEscapingFiles", "TestActualSavedCommandWrapperProvidesProbeEvidence", "TestActualStringifiedCommandWrapperProvidesProbeEvidence"}},
 	{"quick-owner-codexapp", "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/codexapp", []string{"TestAskToolResponseUsesNativeAnswerEnvelope", "TestCodexAppCallCancellationInterruptsBlockedWrite", "TestCodexSocketHandshakeHonorsCancellationWithoutDeadline", "TestCodexSocketLoopbackHandshakeAndMaskedJSON"}},
 	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestLocalWorkspacePrepareInspectResourcesAndCleanup", "TestPrepareRejectsHeadChangedByCheckoutHook"}},
 	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPRRequiresExactIdentityAndMergeEvidence", "TestUnsupportedProviderDoesNoNetworkOperation"}},
-	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/steerlineapp", []string{"TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestLocalWindowsSandboxProfileFreezesAndRestores", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile"}},
+	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/steerlineapp", []string{"TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestLocalWindowsSandboxProfileFreezesAndRestores", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile", "TestFileQuerySourceReadsCombinedProjectView"}},
 }
 
 var quickPackages = func() []string {
@@ -191,12 +191,12 @@ func runScoped(opts options) int {
 	if opts.quick {
 		report.CoreTests = append([]string(nil), quickTests...)
 		args := []string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1", "-run=" + exactPattern(quickTests), corePackage}
-		report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-core", "", args, quickTests, []string{corePackage}, false))
+		report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-core", "", args, quickTests, []string{corePackage}, true))
 		args = append([]string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1"}, quickRulePackages...)
-		report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-rules", "", args, nil, quickRulePackages, false))
+		report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-rules", "", args, nil, quickRulePackages, true))
 		for _, owner := range quickOwnerCases {
 			args = []string{"go", "test", "-json", "-count=1", "-timeout=3m", "-p", "1", "-parallel", "1", "-run=" + exactPattern(owner.Tests), owner.Package}
-			report.Groups = append(report.Groups, runGroup(ctx, opts.out, owner.ID, "", args, owner.Tests, []string{owner.Package}, false))
+			report.Groups = append(report.Groups, runGroup(ctx, opts.out, owner.ID, "", args, owner.Tests, []string{owner.Package}, true))
 		}
 		boundarySelected := false
 		for _, arg := range opts.goTestArgs {
@@ -206,7 +206,7 @@ func runScoped(opts options) int {
 		}
 		if !boundarySelected {
 			args = []string{"go", "test", "-json", "-count=1", "-timeout=10m", "-p", "1", "-parallel", "1", "-run=" + exactPattern(quickBoundaryTests), boundaryPackage}
-			report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-boundary", "", args, quickBoundaryAssigned, []string{boundaryPackage}, false))
+			report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-boundary", "", args, quickBoundaryAssigned, []string{boundaryPackage}, true))
 		}
 		if len(opts.goTestArgs) > 0 {
 			args = append([]string{"go", "test"}, opts.goTestArgs...)
@@ -217,9 +217,9 @@ func runScoped(opts options) int {
 				args = append(args, "-count=1")
 			}
 			if boundarySelected {
-				report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-boundary", "", args, quickBoundaryAssigned, []string{boundaryPackage}, false))
+				report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-boundary", "", args, quickBoundaryAssigned, []string{boundaryPackage}, true))
 			} else {
-				report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-targeted", "", args, nil, nil, false))
+				report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-targeted", "", args, nil, nil, true))
 			}
 		}
 	} else {

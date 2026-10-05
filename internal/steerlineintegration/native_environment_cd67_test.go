@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
 	"github.com/erranliu/SteerLine/internal/steerlineapp"
 )
@@ -235,9 +235,9 @@ func TestWorkerEnvironmentWaitsForOriginalAgentDetection(t *testing.T) {
 	}
 	// Additional public actor passes observe only the original launch.
 	time.Sleep(1200 * time.Millisecond)
-	view, err := service.queries.ReadProjectView(ctx, "901", 100)
+	view, err := steerlineapp.LoadDatabaseRuntime(f.config)
 	require(t, err)
-	for _, e := range view.Runtime.Executions {
+	for _, e := range view.Executions {
 		if e.ExecutionID == waiting.execution.ExecutionID && (e.Environment.Blocker != nil || !e.Environment.Preparation.Deadline.Equal(deadline) || e.Environment.Preparation.Nonce != nonce || *e.Environment.OriginalTerminal != terminal) {
 			t.Fatal("waiting reset original preparation or replaced terminal")
 		}

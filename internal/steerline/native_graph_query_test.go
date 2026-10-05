@@ -14,6 +14,7 @@ import (
 
 	execution "github.com/erranliu/SteerLine/internal/execution"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
+	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -108,7 +109,7 @@ func TestTaskGraphViewSnapshotAndBoundary(t *testing.T) {
 	if err != nil || strings.ContainsRune(string(encodedList), '\u202e') || !strings.Contains(string(encodedList), `\u202e`) {
 		t.Fatalf("task list JSON allowed bidi controls: %v / %s", err, encodedList)
 	}
-	var decodedList NativeTaskPage
+	var decodedList storageports.NativeTaskPage
 	if err = json.Unmarshal(encodedList, &decodedList); err != nil || len(decodedList.Tasks) <= 2 || decodedList.Tasks[2].Title != list.Tasks[2].Title {
 		t.Fatalf("terminal-safe JSON changed the source title: %v", err)
 	}

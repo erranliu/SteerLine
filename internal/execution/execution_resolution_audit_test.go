@@ -10,7 +10,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
@@ -26,7 +25,7 @@ func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
 }
 
 func TestResolutionAuditRegistrationRejectsBaseTargetDrift(t *testing.T) {
-	c := withNeutralProfile(Config{Persistence: sqlite.Factory{}, ExecutionPolicy: workspacePolicyFixture()}, neutralSettings{Executable: "fixture-agent", Target: executionbackend.ExecutionTarget{ID: "fixture:peer", ConnectionID: "peer", ExternalRuntime: "original"}})
+	c := withNeutralProfile(Config{ExecutionPolicy: workspacePolicyFixture()}, neutralSettings{Executable: "fixture-agent", Target: executionbackend.ExecutionTarget{ID: "fixture:peer", ConnectionID: "peer", ExternalRuntime: "original"}})
 	target := TargetFor(c)
 	run := &contracts.Run{Host: c.Host, Agent: c.Agent, Backend: "fixture", Protocol: string(neutralProtocol), Target: target}
 	record := &executionmodel.ExecutionRecord{Agent: c.Agent, Backend: run.Backend, Protocol: run.Protocol, Target: target}
@@ -108,14 +107,14 @@ func TestResolutionAuditEvidenceCannotChangeUnderOriginalProfileDigest(t *testin
 
 func TestResolutionAuditWorkerCommitCannotReplaceSnapshot(t *testing.T) {
 	s, run := neutralAuditService(t)
-	before, err := s.domainStore.Query(context.Background(), s.Config.Identity())
+	before, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.Identity())
 	require(t, err)
 	workflow := s.workflowRecord(run)
 	workflow.ExecutionProfile.ImplementationData[0].Payload[0] = '['
 	if err = s.commitWorker(run); err == nil {
 		t.Fatal("worker commit replaced original snapshot")
 	}
-	after, err := s.domainStore.Query(context.Background(), s.Config.Identity())
+	after, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.Identity())
 	require(t, err)
 	if digestValue(before.WorkflowRuns) != digestValue(after.WorkflowRuns) {
 		t.Fatal("rejected snapshot change mutated database")

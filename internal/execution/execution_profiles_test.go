@@ -14,6 +14,8 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
@@ -68,7 +70,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	}
 	base.ExecutionProfiles[0].ImplementationConfigs[0].Payload = mustJSON(neutralSettings{Executable: os.Args[0], Model: "later-edit", ReasoningEffort: "xhigh"})
 	run := &contracts.Run{RunID: wf.WorkflowRunID, Host: "local", Agent: "fixture", Backend: execution.Backend, Protocol: execution.Protocol, Target: execution.Target}
-	service := &Service{Config: base, baseConfig: base, State: contracts.Runtime{}, domain: contracts.DomainSnapshot{WorkflowRuns: snapshot.WorkflowRuns}, runs: []*contracts.Run{run}}
+	service := &Service{Config: base, baseConfig: base, State: contracts.Runtime{}, domain: reconstruction.Snapshot{WorkflowRuns: snapshot.WorkflowRuns}, runs: []*contracts.Run{run}}
 	fixed, err := service.executionConfigForRun(run)
 	if err != nil || neutralProfileSettings(fixed).Model != "chosen-model" || fixed.ExecutionPolicy.Filesystem.WriteScope != "workspace" {
 		t.Fatalf("recovery adopted the edited preset: %+v / %v", fixed, err)

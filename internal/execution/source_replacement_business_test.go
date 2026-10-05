@@ -73,7 +73,7 @@ func TestCD64SourceReplacementRetainsEvidence(t *testing.T) {
 	decisions, operations := len(s.domain.Decisions), len(s.domain.Operations)
 	require(t, s.readHostOutput(context.Background(), run))
 	require(t, s.commitWorker(run))
-	before, err := s.domainStore.Query(context.Background(), s.Config.Identity())
+	before, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.Identity())
 	require(t, err)
 	first := snapshotAttempt(&before, originalAttempt)
 	if first == nil || first.OutputSource != "buffer" || first.OutputCursor != "original:4" {
@@ -82,7 +82,7 @@ func TestCD64SourceReplacementRetainsEvidence(t *testing.T) {
 	resolver.changed = true
 	require(t, s.readHostOutput(context.Background(), run))
 	require(t, s.commitWorker(run))
-	snapshot, err := s.domainStore.Query(context.Background(), s.Config.Identity())
+	snapshot, err := readServiceSnapshot(context.Background(), s.domainStore, s.Config.Identity())
 	require(t, err)
 	attempt := snapshotAttempt(&snapshot, originalAttempt)
 	if run.AttemptID != originalAttempt || attempt == nil || attempt.OutputSource != "transcript" || attempt.OutputCursor != "replacement:7" || len(snapshot.Decisions) != decisions || len(snapshot.Operations) != operations {

@@ -15,7 +15,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/persistence"
 )
 
 func executionStopperFor(c Config) (executionbackend.ExecutionStopper, error) {
@@ -49,9 +48,9 @@ func digestValue(v any) string {
 }
 
 type executionRecords struct {
-	root        string
-	persistence persistence.Factory
-	resources   ResourcePort
+	root      string
+	reader    ExecutionRecordReader
+	resources ResourcePort
 }
 
 // VerifyStoredCapabilityReport checks existing evidence without acquiring a
@@ -67,7 +66,7 @@ func SaveExecutionCapabilityReport(c Config, report executionbackend.CapabilityR
 	if c.RunDir == "" {
 		return errors.New("run directory is required for a capability report")
 	}
-	records := executionRecords{root: c.RunDir, persistence: c.Persistence, resources: c.Resources}
+	records := executionRecords{root: c.RunDir, reader: c.ExecutionRecords, resources: c.Resources}
 	if _, err := records.loadCapabilityReport(report); err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -187,7 +186,7 @@ func (s *Service) requireBackendCapabilitiesFor(ctx context.Context, backend exe
 	if err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
-	records := executionRecords{root: s.Config.RunDir, persistence: s.Config.Persistence, resources: s.Config.Resources}
+	records := executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords, resources: s.Config.Resources}
 	report, err := records.loadCapabilityReport(probe)
 	if os.IsNotExist(err) {
 		if saveErr := records.saveCapabilityReport(probe); saveErr != nil {

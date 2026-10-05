@@ -13,7 +13,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/sqlite"
 )
 
 func TestCD65SourceCommitAndHostGate(t *testing.T) {
@@ -90,7 +89,7 @@ func TestCD65HistoryBudgetRotatesSources(t *testing.T) {
 	require(t, err)
 	defer store.Close()
 	port := &testConversationHistoryPort{}
-	service := &Service{Config: Config{Persistence: sqlite.Factory{}, identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
+	service := &Service{Config: Config{identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
 	active := testHistorySource("active", false)
 	historical := make([]contracts.ConversationHistorySource, 5)
 	for i := range historical {
@@ -147,7 +146,7 @@ func TestCD65HistoryCursorCommitsWithItsConversationBatch(t *testing.T) {
 	require(t, err)
 	defer store.Close()
 	port := &testConversationHistoryPort{}
-	service := &Service{Config: Config{Persistence: sqlite.Factory{}, identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
+	service := &Service{Config: Config{identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
 	source := testHistorySource("commit-source", false)
 	_, err = store.db.Exec(`CREATE TRIGGER reject_history_batch BEFORE INSERT ON conversation_events BEGIN SELECT RAISE(FAIL, 'history batch commit failed'); END`)
 	require(t, err)
@@ -200,7 +199,7 @@ func testCD65DiscoveryRejectsForeignOwner(t *testing.T) {
 	event.ProjectID = "other-project"
 	event.ExecutionID = id
 	event.AttemptID = attempt
-	service := &Service{Config: Config{Persistence: sqlite.Factory{}, identity: "project", RunDir: t.TempDir()}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: foreignConversationDiscovery{event: event}, runs: []*contracts.Run{{RunID: "workflow", ExecutionID: id, AttemptID: attempt, DomainTaskID: "task"}}}
+	service := &Service{Config: Config{identity: "project", RunDir: t.TempDir()}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: foreignConversationDiscovery{event: event}, runs: []*contracts.Run{{RunID: "workflow", ExecutionID: id, AttemptID: attempt, DomainTaskID: "task"}}}
 	if _, err := service.discoverConversationHistory(context.Background()); err == nil {
 		t.Fatal("discovery committed a foreign project's diagnostic")
 	}
@@ -218,7 +217,7 @@ func testCD65DiscoveryRejectsForeignOwner(t *testing.T) {
 }
 
 func TestConversationHistoryMissingInjectedHostReturnsError(t *testing.T) {
-	service := &Service{Config: Config{Persistence: sqlite.Factory{}, identity: "project"}, conversationSources: &testConversationHistoryPort{}}
+	service := &Service{Config: Config{identity: "project"}, conversationSources: &testConversationHistoryPort{}}
 	if _, err := service.collectConversationHistoryPage(context.Background(), testHistorySource("missing-host", false)); err == nil || !strings.Contains(err.Error(), "managed process host") {
 		t.Fatalf("missing host did not fail before reading or writing history: %v", err)
 	}
