@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
@@ -75,7 +75,7 @@ func fakeHostGH(args []string) int {
 type localWorkerPublicationFixture struct {
 	ctx      context.Context
 	s        *Service
-	run      *contracts.Run
+	run      *reconstructiontypes.RunView
 	c        Config
 	base     string
 	turnID   string

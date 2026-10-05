@@ -3,11 +3,11 @@ package execution
 import (
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"path/filepath"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func (s *Service) projectExecutionConfig() Config {
@@ -38,7 +38,7 @@ func (s *Service) selectDefaultDispatchProfile() error {
 	return s.selectDispatchProfile(id, "")
 }
 
-func (s *Service) executionConfigForRun(run *contracts.Run) (Config, error) {
+func (s *Service) executionConfigForRun(run *reconstructiontypes.RunView) (Config, error) {
 	base := s.projectExecutionConfig()
 	if run == nil {
 		return base, nil

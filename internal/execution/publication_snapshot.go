@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"strings"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
@@ -53,7 +53,7 @@ func publicationClient(c Config) *publication.Client {
 	return publication.NewClient(c.PR, Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: c.ProcessHost}, duration(c.CommandTimeout))
 }
 
-func verifyPublicationTargetForRun(ctx context.Context, c Config, run *contracts.Run) error {
+func verifyPublicationTargetForRun(ctx context.Context, c Config, run *reconstructiontypes.RunView) error {
 	entry, err := registrationFor(c)
 	if err != nil {
 		return err

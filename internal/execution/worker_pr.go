@@ -3,15 +3,15 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func (s *Service) offerWorkerPRFeedback(run *contracts.Run, url string) error {
+func (s *Service) offerWorkerPRFeedback(run *reconstructiontypes.RunView, url string) error {
 	if s.candidateBusinessClosed(run) {
 		return nil
 	}
@@ -33,7 +33,7 @@ func (s *Service) offerWorkerPRFeedback(run *contracts.Run, url string) error {
 	return nil
 }
 
-func (s *Service) pollWorkerFlowPR(ctx context.Context, run *contracts.Run, task *taskmodel.TaskRecord, workflow *executionmodel.WorkflowRunRecord) error {
+func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes.RunView, task *taskmodel.TaskRecord, workflow *executionmodel.WorkflowRunRecord) error {
 	fixed, contextErr := s.workerFlowContext(run)
 	if contextErr != nil {
 		return contextErr

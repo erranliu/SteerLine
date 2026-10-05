@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"testing"
 	"time"
 
@@ -10,11 +11,10 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func answerNeutralEnvironment(t *testing.T, s *Service, run *contracts.Run, option, note string) {
+func answerNeutralEnvironment(t *testing.T, s *Service, run *reconstructiontypes.RunView, option, note string) {
 	t.Helper()
 	if option != "open_terminal" && option != "recheck_environment" {
 		t.Fatal("environment commands do not accept business text")
@@ -26,7 +26,7 @@ func answerNeutralEnvironment(t *testing.T, s *Service, run *contracts.Run, opti
 	require(t, err)
 	req := productapi.ControlRequest{RequestID: newID(), Action: option, RequestedBy: "operator", RunID: run.RunID}
 	payload := productapi.ControlPayload{Environment: target}
-	op := &contracts.ControlOperation{RequestID: req.RequestID, Action: option, RunID: run.RunID}
+	op := &reconstructiontypes.ControlOperation{RequestID: req.RequestID, Action: option, RunID: run.RunID}
 	err = s.applyControlAction(context.Background(), req, payload, op, &productapi.ControlReceipt{})
 	var rejected *taskmodel.Error
 	if err != nil && !(errors.As(err, &rejected) && rejected.Code == "environment_unverified") {
@@ -34,7 +34,7 @@ func answerNeutralEnvironment(t *testing.T, s *Service, run *contracts.Run, opti
 	}
 }
 
-func neutralPendingPreparation(t *testing.T) (*Service, *contracts.Run, *neutralPreparationResolver) {
+func neutralPendingPreparation(t *testing.T) (*Service, *reconstructiontypes.RunView, *neutralPreparationResolver) {
 	t.Helper()
 	s, run, resolver := neutralPreparationService(t, "success")
 	resolver.turn.Settled = false

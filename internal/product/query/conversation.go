@@ -11,8 +11,8 @@ import (
 	"unicode/utf8"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -33,13 +33,13 @@ func NewConversationService(store storageports.ConversationReader, project strin
 }
 
 type conversationQueryCursor struct {
-	Version int                          `json:"v"`
-	Project string                       `json:"p"`
-	Filter  contracts.ConversationFilter `json:"f"`
-	After   int64                        `json:"n"`
+	Version int                    `json:"v"`
+	Project string                 `json:"p"`
+	Filter  api.ConversationFilter `json:"f"`
+	After   int64                  `json:"n"`
 }
 
-func ConversationCursorAfter(project string, filter contracts.ConversationFilter, after int64) (string, error) {
+func ConversationCursorAfter(project string, filter api.ConversationFilter, after int64) (string, error) {
 	if project == "" || after < 0 {
 		return "", errors.New("conversation cursor requires a project and non-negative event ID")
 	}
@@ -50,9 +50,9 @@ func ConversationCursorAfter(project string, filter contracts.ConversationFilter
 	return base64.RawURLEncoding.EncodeToString(raw), nil
 }
 
-func (q ConversationService) ReadConversation(ctx context.Context, filter contracts.ConversationFilter, cursor string, limit int) (contracts.ConversationPage, error) {
+func (q ConversationService) ReadConversation(ctx context.Context, filter api.ConversationFilter, cursor string, limit int) (api.ConversationPage, error) {
 	if q.Events == nil || q.Project == "" {
-		return contracts.ConversationPage{}, errors.New("conversation query requires a store and project identity")
+		return api.ConversationPage{}, errors.New("conversation query requires a store and project identity")
 	}
 	if limit < 1 {
 		limit = DefaultEventPageSize
@@ -64,19 +64,19 @@ func (q ConversationService) ReadConversation(ctx context.Context, filter contra
 	if cursor != "" {
 		raw, err := base64.RawURLEncoding.DecodeString(cursor)
 		if err != nil {
-			return contracts.ConversationPage{}, &CursorError{Code: "cursor_invalidated"}
+			return api.ConversationPage{}, &CursorError{Code: "cursor_invalidated"}
 		}
 		var saved conversationQueryCursor
 		if json.Unmarshal(raw, &saved) != nil || saved.Version != 1 || saved.Project != q.Project || saved.Filter != filter || saved.After < 0 {
-			return contracts.ConversationPage{}, &CursorError{Code: "cursor_invalidated"}
+			return api.ConversationPage{}, &CursorError{Code: "cursor_invalidated"}
 		}
 		after = saved.After
 	}
-	page := contracts.ConversationPage{Events: []contracts.ConversationEvent{}}
+	page := api.ConversationPage{Events: []api.ConversationEvent{}}
 	for len(page.Events) < limit {
 		record, err := q.Events.NextConversationEvent(ctx, q.Project, api.ConversationFilter(filter), after)
 		if err != nil {
-			return contracts.ConversationPage{}, err
+			return api.ConversationPage{}, err
 		}
 		if record == nil {
 			break
@@ -86,15 +86,19 @@ func (q ConversationService) ReadConversation(ctx context.Context, filter contra
 			page.HasMore = true
 			break
 		}
-		var event contracts.ConversationEvent
+		var event executionmodel.ConversationEvent
 		if err = json.Unmarshal(payload, &event); err != nil {
-			return contracts.ConversationPage{}, fmt.Errorf("decode conversation event %d: %w", id, err)
+			return api.ConversationPage{}, fmt.Errorf("decode conversation event %d: %w", id, err)
 		}
 		if err = event.Validate(); err != nil {
-			return contracts.ConversationPage{}, fmt.Errorf("validate conversation event %d: %w", id, err)
+			return api.ConversationPage{}, fmt.Errorf("validate conversation event %d: %w", id, err)
 		}
 		event.EventID = id
-		page.Events = append(page.Events, event)
+		projected, err := ConversationEvent(event)
+		if err != nil {
+			return api.ConversationPage{}, fmt.Errorf("project conversation event %d: %w", id, err)
+		}
+		page.Events = append(page.Events, projected)
 		page.PayloadBytes += payloadBytes
 		after = id
 	}
@@ -102,7 +106,7 @@ func (q ConversationService) ReadConversation(ctx context.Context, filter contra
 		if !page.HasMore && len(page.Events) == limit {
 			probe, err := q.readOne(ctx, filter, after)
 			if err != nil {
-				return contracts.ConversationPage{}, err
+				return api.ConversationPage{}, err
 			}
 			page.HasMore = probe != nil
 		}
@@ -113,12 +117,12 @@ func (q ConversationService) ReadConversation(ctx context.Context, filter contra
 	return page, nil
 }
 
-func (q ConversationService) readOne(ctx context.Context, filter contracts.ConversationFilter, after int64) (*contracts.ConversationEvent, error) {
+func (q ConversationService) readOne(ctx context.Context, filter api.ConversationFilter, after int64) (*executionmodel.ConversationEvent, error) {
 	record, err := q.Events.NextConversationEvent(ctx, q.Project, api.ConversationFilter(filter), after)
 	if err != nil || record == nil {
 		return nil, err
 	}
-	var event contracts.ConversationEvent
+	var event executionmodel.ConversationEvent
 	if err := json.Unmarshal(record.Payload, &event); err != nil {
 		return nil, err
 	}
@@ -129,9 +133,9 @@ func (q ConversationService) readOne(ctx context.Context, filter contracts.Conve
 	return &event, nil
 }
 
-func (q ConversationService) ReadMessageBody(ctx context.Context, ref contracts.ConversationBodyRef, offset int64, limit int) (contracts.ConversationBodyPage, error) {
+func (q ConversationService) ReadMessageBody(ctx context.Context, ref api.ConversationBodyRef, offset int64, limit int) (api.ConversationBodyPage, error) {
 	if q.Bodies == nil || q.Project == "" || ref.ItemKey == "" || ref.Revision < 1 || offset < 0 {
-		return contracts.ConversationBodyPage{}, errors.New("message body reference or offset is invalid")
+		return api.ConversationBodyPage{}, errors.New("message body reference or offset is invalid")
 	}
 	if limit < 1 {
 		limit = 256 << 10
@@ -142,21 +146,20 @@ func (q ConversationService) ReadMessageBody(ctx context.Context, ref contracts.
 	if limit < utf8.UTFMax {
 		limit = utf8.UTFMax
 	}
-	apiRef := api.ConversationBodyRef{ExecutionID: ref.ExecutionID, AttemptID: ref.AttemptID, ItemKey: ref.ItemKey, Revision: ref.Revision, SHA256: ref.SHA256, Bytes: ref.Bytes, Source: ref.Source, Completeness: api.BodyCompleteness(ref.Completeness)}
-	record, err := q.Bodies.ConversationBody(ctx, q.Project, apiRef, contracts.MaxConversationBodyBytes+1)
+	record, err := q.Bodies.ConversationBody(ctx, q.Project, ref, executionmodel.MaxConversationBodyBytes+1)
 	if err != nil {
-		return contracts.ConversationBodyPage{}, err
+		return api.ConversationBodyPage{}, err
 	}
 	body, total, digest, complete := record.Body, record.TotalBytes, record.SHA256, string(record.Completeness)
 	actual := sha256.Sum256(body)
-	if len(body) > contracts.MaxConversationBodyBytes || total != int64(len(body)) || digest != hex.EncodeToString(actual[:]) || !utf8.Valid(body) {
-		return contracts.ConversationBodyPage{}, errors.New("message body revision is corrupt")
+	if len(body) > executionmodel.MaxConversationBodyBytes || total != int64(len(body)) || digest != hex.EncodeToString(actual[:]) || !utf8.Valid(body) {
+		return api.ConversationBodyPage{}, errors.New("message body revision is corrupt")
 	}
 	if offset > total {
-		return contracts.ConversationBodyPage{}, &CursorError{Code: "cursor_invalidated"}
+		return api.ConversationBodyPage{}, &CursorError{Code: "cursor_invalidated"}
 	}
-	if digest != ref.SHA256 || total != ref.Bytes || contracts.BodyCompleteness(complete) != ref.Completeness {
-		return contracts.ConversationBodyPage{}, errors.New("message body revision does not match the supplied reference")
+	if digest != ref.SHA256 || total != ref.Bytes || api.BodyCompleteness(complete) != ref.Completeness {
+		return api.ConversationBodyPage{}, errors.New("message body revision does not match the supplied reference")
 	}
 	end := offset + int64(limit)
 	if end > total {
@@ -164,15 +167,15 @@ func (q ConversationService) ReadMessageBody(ctx context.Context, ref contracts.
 	}
 	data := body[offset:end]
 	if len(data) > 0 && data[0]&0xC0 == 0x80 {
-		return contracts.ConversationBodyPage{}, &CursorError{Code: "cursor_invalidated"}
+		return api.ConversationBodyPage{}, &CursorError{Code: "cursor_invalidated"}
 	}
 	data = utf8SafePrefix(data)
-	return contracts.ConversationBodyPage{ItemKey: ref.ItemKey, Revision: ref.Revision, Offset: offset, NextOffset: offset + int64(len(data)), TotalBytes: total, SHA256: digest, Completeness: contracts.BodyCompleteness(complete), Complete: offset+int64(len(data)) >= total, Data: data}, nil
+	return api.ConversationBodyPage{ItemKey: ref.ItemKey, Revision: ref.Revision, Offset: offset, NextOffset: offset + int64(len(data)), TotalBytes: total, SHA256: digest, Completeness: api.BodyCompleteness(complete), Complete: offset+int64(len(data)) >= total, Data: append([]byte(nil), data...)}, nil
 }
 
-func (q ConversationService) ReadRaw(ctx context.Context, ref contracts.ConversationRawRef, offset int64, limit int) (contracts.ConversationRawPage, error) {
+func (q ConversationService) ReadRaw(ctx context.Context, ref api.ConversationRawRef, offset int64, limit int) (api.ConversationRawPage, error) {
 	if q.Raw == nil || q.Project == "" || ref.ID == "" || ref.ExecutionID == "" || ref.AttemptID == "" || offset < 0 {
-		return contracts.ConversationRawPage{}, errors.New("raw reference or offset is invalid")
+		return api.ConversationRawPage{}, errors.New("raw reference or offset is invalid")
 	}
 	if limit < 1 {
 		limit = MaxEventPageBytes
@@ -180,28 +183,27 @@ func (q ConversationService) ReadRaw(ctx context.Context, ref contracts.Conversa
 	if limit > MaxEventPageBytes {
 		limit = MaxEventPageBytes
 	}
-	apiRef := api.ConversationRawRef{ExecutionID: ref.ExecutionID, AttemptID: ref.AttemptID, ID: ref.ID, SHA256: ref.SHA256, Bytes: ref.Bytes}
-	record, err := q.Raw.ConversationRaw(ctx, q.Project, apiRef, contracts.MaxConversationBodyBytes+1)
+	record, err := q.Raw.ConversationRaw(ctx, q.Project, ref, executionmodel.MaxConversationBodyBytes+1)
 	if err != nil {
-		return contracts.ConversationRawPage{}, err
+		return api.ConversationRawPage{}, err
 	}
 	body, total, digest := record.Data, record.TotalBytes, record.SHA256
 	actual := sha256.Sum256(body)
-	if len(body) > contracts.MaxConversationBodyBytes || total != int64(len(body)) || digest != hex.EncodeToString(actual[:]) {
-		return contracts.ConversationRawPage{}, errors.New("raw conversation record is corrupt")
+	if len(body) > executionmodel.MaxConversationBodyBytes || total != int64(len(body)) || digest != hex.EncodeToString(actual[:]) {
+		return api.ConversationRawPage{}, errors.New("raw conversation record is corrupt")
 	}
 	if offset > total {
-		return contracts.ConversationRawPage{}, &CursorError{Code: "cursor_invalidated"}
+		return api.ConversationRawPage{}, &CursorError{Code: "cursor_invalidated"}
 	}
 	if ref.SHA256 != "" && (digest != ref.SHA256 || total != ref.Bytes) {
-		return contracts.ConversationRawPage{}, errors.New("raw body does not match the supplied reference")
+		return api.ConversationRawPage{}, errors.New("raw body does not match the supplied reference")
 	}
 	end := offset + int64(limit)
 	if end > total {
 		end = total
 	}
 	data := body[offset:end]
-	return contracts.ConversationRawPage{RawID: ref.ID, Offset: offset, NextOffset: end, TotalBytes: total, SHA256: digest, Complete: end >= total, Data: data}, nil
+	return api.ConversationRawPage{RawID: ref.ID, Offset: offset, NextOffset: end, TotalBytes: total, SHA256: digest, Complete: end >= total, Data: append([]byte(nil), data...)}, nil
 }
 
 func utf8SafePrefix(data []byte) []byte {

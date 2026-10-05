@@ -4,16 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"strings"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // WriteDecisionRequest creates a new decision identity in the service-owned
 // runtime projection. The caller persists it to SQLite with the run transition.
-func WriteDecisionRequest(r *contracts.Run, req executionmodel.DecisionRequest) (*executionmodel.DecisionState, error) {
+func WriteDecisionRequest(r *reconstructiontypes.RunView, req executionmodel.DecisionRequest) (*executionmodel.DecisionState, error) {
 	return writeDecisionRequestWithID(r, req, newID())
 }
 
@@ -65,7 +65,7 @@ func DecisionRequestFromEventFact(fact executionbackend.EventFact) executionmode
 	return request
 }
 
-func writeDecisionRequestWithID(r *contracts.Run, req executionmodel.DecisionRequest, decisionID string) (*executionmodel.DecisionState, error) {
+func writeDecisionRequestWithID(r *reconstructiontypes.RunView, req executionmodel.DecisionRequest, decisionID string) (*executionmodel.DecisionState, error) {
 	if r == nil || strings.TrimSpace(decisionID) == "" {
 		return nil, errors.New("decision requires a run and stable ID")
 	}
@@ -142,7 +142,7 @@ func cloneExecutionQuestions(questions []executionbackend.Question) []executionb
 // ReadDecisionAnswer returns the answer already committed to the current
 // service projection. A pending decision has no answer; clients cannot create
 // one by writing a file.
-func ReadDecisionAnswer(r *contracts.Run) (executionmodel.DecisionAnswer, error) {
+func ReadDecisionAnswer(r *reconstructiontypes.RunView) (executionmodel.DecisionAnswer, error) {
 	if r.Decision == nil {
 		return executionmodel.DecisionAnswer{}, errors.New("run has no decision")
 	}
@@ -160,7 +160,7 @@ func ReadDecisionAnswer(r *contracts.Run) (executionmodel.DecisionAnswer, error)
 	return a, nil
 }
 
-func decisionAnswerMeta(r *contracts.Run) map[string]any {
+func decisionAnswerMeta(r *reconstructiontypes.RunView) map[string]any {
 	if r.Decision == nil {
 		return nil
 	}
@@ -171,14 +171,14 @@ func decisionAnswerMeta(r *contracts.Run) map[string]any {
 	}
 }
 
-func (s *Service) requireDecisionReplyCapability(ctx context.Context, run *contracts.Run) error {
+func (s *Service) requireDecisionReplyCapability(ctx context.Context, run *reconstructiontypes.RunView) error {
 	return DecisionReplyEligibility(ctx, s.Config, run)
 }
 
 // DecisionReplyEligibility is the shared read-only qualification used by the
 // CLI, console client and service handler. It checks the immutable execution
 // binding and verified reply capabilities for this exact target.
-func DecisionReplyEligibility(ctx context.Context, c Config, run *contracts.Run) error {
+func DecisionReplyEligibility(ctx context.Context, c Config, run *reconstructiontypes.RunView) error {
 	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return err
 	}

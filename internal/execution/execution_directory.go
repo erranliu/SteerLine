@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"slices"
 	"strings"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
@@ -348,7 +348,7 @@ func registrationFor(c Config) (ExecutionRegistration, error) {
 	return c.ExecutionDirectory.Resolve(c)
 }
 
-func workerFlowRegistrationFor(config Config, run *contracts.Run, execution *executionmodel.ExecutionRecord) (ExecutionRegistration, error) {
+func workerFlowRegistrationFor(config Config, run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) (ExecutionRegistration, error) {
 	if run == nil || execution == nil {
 		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "worker flow has no fixed run or execution"}
 	}
@@ -412,7 +412,7 @@ func TargetFor(c Config) executionbackend.ExecutionTarget {
 	return entry.Target(c)
 }
 
-func (s *Service) workerFlowRegistration(run *contracts.Run) (ExecutionRegistration, error) {
+func (s *Service) workerFlowRegistration(run *reconstructiontypes.RunView) (ExecutionRegistration, error) {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return ExecutionRegistration{}, err

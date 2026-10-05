@@ -3,10 +3,10 @@ package execution
 import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
-func workerSessionContext(run *contracts.Run, record *executionmodel.ExecutionRecord) *executionbackend.SessionContext {
+func workerSessionContext(run *reconstructiontypes.RunView, record *executionmodel.ExecutionRecord) *executionbackend.SessionContext {
 	if record == nil {
 		return nil
 	}

@@ -14,10 +14,9 @@ import (
 	"strings"
 	"time"
 
+	steerlineapp "github.com/erranliu/SteerLine/internal/app"
+	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerlineapp"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/internal/testprocess"
@@ -193,7 +192,7 @@ func ReadApplicationProjectSnapshot(ctx context.Context, database, project, sele
 	return reader.ReadApplicationProjectSnapshot(ctx, project, selected, limit)
 }
 
-func ReadRuntime(ctx context.Context, configPath string) (*contracts.Runtime, error) {
+func ReadRuntime(ctx context.Context, configPath string) (*executionreconstruction.Runtime, error) {
 	config, err := steerlineapp.LoadConfig(configPath)
 	if err != nil {
 		return nil, err

@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -135,7 +135,7 @@ func (s *Service) processPendingCommands(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) findDecision(id string) *contracts.Run {
+func (s *Service) findDecision(id string) *reconstructiontypes.RunView {
 	for _, run := range s.runs {
 		if run != nil && run.Decision != nil && run.Decision.ID == id {
 			return run

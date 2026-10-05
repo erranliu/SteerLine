@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"strings"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 var errClaimConflict = errors.New("native task claim conflict")
@@ -40,7 +40,7 @@ func (s *Service) rejectControl(req productapi.ControlRequest, digest, code stri
 	return nil
 }
 
-func (s *Service) finishControl(op *contracts.ControlOperation, receipt productapi.ControlReceipt) error {
+func (s *Service) finishControl(op *reconstructiontypes.ControlOperation, receipt productapi.ControlReceipt) error {
 	nowAt := now()
 	receipt.CompletedAt = &nowAt
 	receipt.ControlRevision = s.State.Control.Revision + 1
@@ -234,7 +234,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	if payload.Environment != nil {
 		attemptID = payload.Environment.AttemptID
 	}
-	op := &contracts.ControlOperation{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, Payload: append(json.RawMessage(nil), req.Payload...), Phase: "applying", RunID: runID, AttemptID: attemptID, RequestDigest: digest}
+	op := &reconstructiontypes.ControlOperation{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, Payload: append(json.RawMessage(nil), req.Payload...), Phase: "applying", RunID: runID, AttemptID: attemptID, RequestDigest: digest}
 	s.State.Control.Operation = op
 	if err = s.publishCheckpoint(); err != nil {
 		return err
@@ -273,7 +273,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 				}
 			} else if r.ExecutionStatus == "unknown" || r.TaskStatus == "in_progress" && r.ExecutionStatus == "pending" {
 				reason := "start_task side effects require manual reconciliation; request will not be replayed"
-				s.State.Control.Blockers = append(s.State.Control.Blockers, contracts.ControlBlocker{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, RunID: runID, AttemptID: runID, Reason: reason})
+				s.State.Control.Blockers = append(s.State.Control.Blockers, reconstructiontypes.ControlBlocker{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, RunID: runID, AttemptID: runID, Reason: reason})
 				s.State.SlotOccupied = true
 				result.Status, result.Code, result.Message = "indeterminate", "indeterminate", reason
 			}
@@ -378,7 +378,7 @@ func (s *Service) validateReadyTarget(ctx context.Context, taskID string) error 
 	return fmt.Errorf("%w: %s is not in the current ready native task set", errTaskNotReady, taskID)
 }
 
-func (s *Service) applyControlAction(ctx context.Context, req productapi.ControlRequest, payload productapi.ControlPayload, op *contracts.ControlOperation, result *productapi.ControlReceipt) error {
+func (s *Service) applyControlAction(ctx context.Context, req productapi.ControlRequest, payload productapi.ControlPayload, op *reconstructiontypes.ControlOperation, result *productapi.ControlReceipt) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -537,7 +537,7 @@ func (s *Service) recoverControlOperation() error {
 			taskID = payload.TaskID
 		}
 		if status == "indeterminate" {
-			s.State.Control.Blockers = append(s.State.Control.Blockers, contracts.ControlBlocker{RequestID: op.RequestID, Action: op.Action, TaskID: taskID, RunID: op.RunID, AttemptID: op.AttemptID, Reason: message})
+			s.State.Control.Blockers = append(s.State.Control.Blockers, reconstructiontypes.ControlBlocker{RequestID: op.RequestID, Action: op.Action, TaskID: taskID, RunID: op.RunID, AttemptID: op.AttemptID, Reason: message})
 			s.State.SlotOccupied = true
 		}
 	}

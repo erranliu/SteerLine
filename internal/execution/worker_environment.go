@@ -4,15 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func (s *Service) environmentTurn(run *contracts.Run) string {
+func (s *Service) environmentTurn(run *reconstructiontypes.RunView) string {
 	execution := s.executionRecord(run)
 	if turn, err := s.currentHostTurn(run); err == nil && turn != nil {
 		if p := execution.Environment.Preparation; !p.Verified && turn.Settled && turn.TurnID != p.TurnID {
@@ -23,7 +23,7 @@ func (s *Service) environmentTurn(run *contracts.Run) string {
 	return execution.Environment.Preparation.TurnID
 }
 
-func (s *Service) blockWorkerEnvironment(run *contracts.Run, fact executionbackend.HostFact) error {
+func (s *Service) blockWorkerEnvironment(run *reconstructiontypes.RunView, fact executionbackend.HostFact) error {
 	if s.candidateBusinessClosed(run) {
 		return nil
 	}
@@ -64,7 +64,7 @@ func (s *Service) blockWorkerEnvironment(run *contracts.Run, fact executionbacke
 // A saved answer without an input intent is not a delivery queue. Preserve its
 // audit record and original question, but require a new answer after recheck.
 // Once an input could have been sent, only its original receipt may settle it.
-func (s *Service) rejectUnsentBlockedAnswer(run *contracts.Run) error {
+func (s *Service) rejectUnsentBlockedAnswer(run *reconstructiontypes.RunView) error {
 	answer, err := ReadDecisionAnswer(run)
 	if err != nil {
 		return err
@@ -110,7 +110,7 @@ func (s *Service) rejectUnsentBlockedAnswer(run *contracts.Run) error {
 	return (s.commandService(s.Config.identity)).SetStatus(ctx, command, "rejected", mustJSON(map[string]string{"code": "environment_blocked", "error": "unsent answer was cancelled by the environment blocker; review and submit a new answer after recheck"}))
 }
 
-func (s *Service) observeWorkerEnvironment(ctx context.Context, run *contracts.Run) error {
+func (s *Service) observeWorkerEnvironment(ctx context.Context, run *reconstructiontypes.RunView) error {
 	wf, execution := s.workflowRecords(run)
 	if execution == nil || execution.Environment == nil || ctx.Err() != nil || wf.Phase == "completed" || wf.Phase == "abandoned" {
 		return nil
@@ -160,7 +160,7 @@ func (s *Service) observeWorkerEnvironment(ctx context.Context, run *contracts.R
 
 // Preparation owns one persisted budget spanning resource creation and host
 // settlement. Each actor pass performs bounded work; restarts reuse its intent.
-func (s *Service) advanceWorkerPreparation(ctx context.Context, run *contracts.Run) error {
+func (s *Service) advanceWorkerPreparation(ctx context.Context, run *reconstructiontypes.RunView) error {
 	if s.candidateBusinessClosed(run) {
 		return nil
 	}
@@ -293,7 +293,7 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *contracts.R
 	return s.commitWorker(run)
 }
 
-func (s *Service) reconcileEnvironmentBusinessIntent(ctx context.Context, run *contracts.Run) error {
+func (s *Service) reconcileEnvironmentBusinessIntent(ctx context.Context, run *reconstructiontypes.RunView) error {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
@@ -336,7 +336,7 @@ func (s *Service) reconcileEnvironmentBusinessIntent(ctx context.Context, run *c
 	return s.startWorkerLifecycle(ctx, run, lifecycle, fixed, input.CommandID, input.Prompt)
 }
 
-func (s *Service) finishWorkerPreparation(ctx context.Context, run *contracts.Run, execution *executionmodel.ExecutionRecord, turn *executionbackend.HostTurnFacts, outcome string) error {
+func (s *Service) finishWorkerPreparation(ctx context.Context, run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord, turn *executionbackend.HostTurnFacts, outcome string) error {
 	p := execution.Environment.Preparation
 	if turn.TurnID != p.TurnID {
 		return nil
@@ -405,7 +405,7 @@ func (s *Service) finishWorkerPreparation(ctx context.Context, run *contracts.Ru
 	return s.advanceWorkerPreparation(ctx, run)
 }
 
-func (s *Service) applyEnvironmentAction(ctx context.Context, run *contracts.Run, action string, input productapi.HostActionTarget, commandID string) error {
+func (s *Service) applyEnvironmentAction(ctx context.Context, run *reconstructiontypes.RunView, action string, input productapi.HostActionTarget, commandID string) error {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err

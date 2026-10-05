@@ -7,69 +7,69 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"os"
 	"strings"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func (l *ExecutionLifecycle) MapConversation(input contracts.ConversationInput) (contracts.ConversationMappedBatch, error) {
+func (l *ExecutionLifecycle) MapConversation(input executionvalues.ConversationInput) (executionvalues.ConversationMappedBatch, error) {
 	return MapTerminalConversation(input)
 }
 
-func MapTerminalConversation(input contracts.ConversationInput) (contracts.ConversationMappedBatch, error) {
+func MapTerminalConversation(input executionvalues.ConversationInput) (executionvalues.ConversationMappedBatch, error) {
 	if input.Source != "orca-terminal-v2" {
-		return contracts.ConversationMappedBatch{}, nil
+		return executionvalues.ConversationMappedBatch{}, nil
 	}
 	event := input.Event
 	if event.ProjectID == "" || event.ExecutionID == "" || event.AttemptID == "" {
-		return contracts.ConversationMappedBatch{}, errors.New("terminal conversation has no fixed execution identity")
+		return executionvalues.ConversationMappedBatch{}, errors.New("terminal conversation has no fixed execution identity")
 	}
 	segment := input.Segment
 	if segment == "" {
 		segment = "orca-terminal-v2-unsegmented"
 	}
-	event.Version, event.Source, event.SourceRole, event.SourceSegment = contracts.ConversationVersion, "orca-terminal-v2", contracts.ConversationSourceFallback, segment
+	event.Version, event.Source, event.SourceRole, event.SourceSegment = executionvalues.ConversationVersion, "orca-terminal-v2", executionvalues.ConversationSourceFallback, segment
 	event.SourceIdentity, event.SourceCursor, event.SessionID = input.Identity, input.Cursor, input.Session
 	event.ExternalRef = hostExternalRef(input.Process)
-	event.SessionQuality, event.TurnQuality, event.ItemQuality = contracts.IdentityUnknown, contracts.IdentityUnknown, contracts.IdentityUnknown
-	event.SourceEventQuality, event.SourceSeq, event.ReceivedAt = contracts.IdentityDerived, input.SourceSeq, time.Now().UTC()
-	eventID, quality := input.Event.SourceEventID, contracts.IdentityDerived
+	event.SessionQuality, event.TurnQuality, event.ItemQuality = executionvalues.IdentityUnknown, executionvalues.IdentityUnknown, executionvalues.IdentityUnknown
+	event.SourceEventQuality, event.SourceSeq, event.ReceivedAt = executionvalues.IdentityDerived, input.SourceSeq, time.Now().UTC()
+	eventID, quality := input.Event.SourceEventID, executionvalues.IdentityDerived
 	if eventID == "" {
-		eventID, quality = "unidentified:"+newHostSourceID(), contracts.IdentityUnknown
+		eventID, quality = "unidentified:"+newHostSourceID(), executionvalues.IdentityUnknown
 	}
 	event.SourceEventID, event.SourceEventQuality = eventID, quality
-	event.Phase, event.Status = contracts.MessagePhaseUnknown, "observed"
+	event.Phase, event.Status = executionvalues.MessagePhaseUnknown, "observed"
 	event.Evidence = map[string]string{"capture": "terminal-read", "turn_boundary": "unknown", "message_phase": "unknown", "source_changed": fmt.Sprint(input.SourceChanged)}
 	event.Diagnostic = input.Diagnostic
 	if input.Session != "" {
-		event.SessionQuality = contracts.IdentityDerived
+		event.SessionQuality = executionvalues.IdentityDerived
 	}
-	write := contracts.ConversationWrite{Event: event}
+	write := executionvalues.ConversationWrite{Event: event}
 	if input.Gap {
-		event.Type, event.Status = contracts.ConversationGap, "gap"
+		event.Type, event.Status = executionvalues.ConversationGap, "gap"
 		if len(input.Raw) > 0 {
-			event.ItemID, event.ItemQuality = eventID, contracts.IdentityDerived
+			event.ItemID, event.ItemQuality = eventID, executionvalues.IdentityDerived
 			event.ItemKey = terminalItemKey(event)
 			event.Attributes = map[string]any{"content_kind": "terminal_observation", "source_changed": input.SourceChanged}
-			write = contracts.ConversationWrite{Event: event, Body: append([]byte(nil), input.Raw...), BodyMode: "snapshot", Raw: append([]byte(nil), input.Raw...), BodySource: "orca-terminal-stream"}
+			write = executionvalues.ConversationWrite{Event: event, Body: append([]byte(nil), input.Raw...), BodyMode: "snapshot", Raw: append([]byte(nil), input.Raw...), BodySource: "orca-terminal-stream"}
 		}
 		write.Event = event
 	} else if input.InputWait {
-		event.Type, event.Status = contracts.ConversationInputWait, "waiting"
+		event.Type, event.Status = executionvalues.ConversationInputWait, "waiting"
 		event.Attributes = map[string]any{"wait_origin": "host", "business_decision": false}
 		event.Evidence["wait_source"] = "host.terminal.agent-wait"
 		write.Event = event
 	} else {
-		event.Type, event.ItemID, event.ItemQuality = contracts.ConversationObservation, eventID, contracts.IdentityDerived
+		event.Type, event.ItemID, event.ItemQuality = executionvalues.ConversationObservation, eventID, executionvalues.IdentityDerived
 		event.ItemKey = terminalItemKey(event)
-		write = contracts.ConversationWrite{Event: event, Body: append([]byte(nil), input.Raw...), BodyMode: "snapshot", Raw: append([]byte(nil), input.Raw...), BodySource: "orca-terminal-stream"}
+		write = executionvalues.ConversationWrite{Event: event, Body: append([]byte(nil), input.Raw...), BodyMode: "snapshot", Raw: append([]byte(nil), input.Raw...), BodySource: "orca-terminal-stream"}
 	}
-	checkpoint := contracts.ConversationCheckpoint{ProjectID: event.ProjectID, ExecutionID: event.ExecutionID, AttemptID: event.AttemptID,
+	checkpoint := executionvalues.ConversationCheckpoint{ProjectID: event.ProjectID, ExecutionID: event.ExecutionID, AttemptID: event.AttemptID,
 		Source: event.Source, SourceSegment: segment, SourceIdentity: input.Identity, Generation: input.Generation, Cursor: input.Cursor, LocalSeq: input.SourceSeq}
-	return contracts.ConversationMappedBatch{Writes: []contracts.ConversationWrite{write}, Checkpoint: checkpoint}, nil
+	return executionvalues.ConversationMappedBatch{Writes: []executionvalues.ConversationWrite{write}, Checkpoint: checkpoint}, nil
 }
 
 func newHostSourceID() string {
@@ -80,7 +80,7 @@ func newHostSourceID() string {
 	return hex.EncodeToString(value[:])
 }
 
-func terminalItemKey(event contracts.ConversationEvent) string {
+func terminalItemKey(event executionvalues.ConversationEvent) string {
 	if event.ItemID == "" {
 		return ""
 	}

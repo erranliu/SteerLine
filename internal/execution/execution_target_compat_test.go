@@ -2,15 +2,14 @@ package execution
 
 import (
 	"encoding/json"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"strings"
 	"testing"
-
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func TestCurrentRuntimeRetainsSupervisedCoordinatorTerminal(t *testing.T) {
 	raw := `{"schema_version":5,"repository":{"identity":"project"},"executions":[{"execution_id":"execution","workflow_run_id":"workflow","target":{"dispatch":"dispatch","coordinator_terminal":"term-original"},"status":"blocked"}]}`
-	var runtime contracts.Runtime
+	var runtime reconstructiontypes.Runtime
 	if err := decode([]byte(raw), &runtime); err != nil {
 		t.Fatalf("current persisted supervised target was rejected: %v", err)
 	}

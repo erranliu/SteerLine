@@ -20,7 +20,7 @@ const module = "github.com/erranliu/SteerLine"
 func under(path, prefix string) bool { return path == prefix || strings.HasPrefix(path, prefix+"/") }
 
 func testOnly(path string) bool {
-	for _, suffix := range []string{"/tests", "/cmd/test-feedback", "/internal/testfeedback", "/internal/testprocess", "/internal/testboundary", "/internal/steerline/testprotocol"} {
+	for _, suffix := range []string{"/tests", "/cmd/test-feedback", "/internal/testfeedback", "/internal/testprocess", "/internal/testboundary", "/internal/testkit/protocol"} {
 		if under(path, module+suffix) {
 			return true
 		}
@@ -95,7 +95,7 @@ func violations(graph map[string][]string, roots []string) []string {
 
 func TestProductionHasNoTestDependencies(t *testing.T) {
 	var roots []string
-	for _, p := range list(t, "./cmd/steerline", "./internal/steerline/...", "./internal/steerlineapp/...", "./internal/execution/...") {
+	for _, p := range list(t, "./cmd/steerline", "./internal/app/...", "./internal/execution/...") {
 		if !testOnly(p.ImportPath) {
 			roots = append(roots, p.ImportPath)
 		}
@@ -110,14 +110,14 @@ func TestProductionHasNoTestDependencies(t *testing.T) {
 }
 
 func e2eAllowed(source, dependency string) bool {
-	production := module + "/internal/steerline"
+	production := module + "/internal/app/host"
 	executionResources := []string{
 		module + "/internal/execution/adapters",
 		module + "/internal/execution/workspace",
 		module + "/internal/execution/publication",
 		module + "/internal/execution/process",
 	}
-	restricted := under(dependency, production) || under(dependency, module+"/internal/steerlineapp")
+	restricted := under(dependency, production) || under(dependency, module+"/internal/app")
 	for _, root := range executionResources {
 		restricted = restricted || under(dependency, root)
 	}
@@ -129,7 +129,12 @@ func e2eAllowed(source, dependency string) bool {
 			return true
 		}
 	}
-	return dependency == production+"/contracts" || dependency == production+"/task"
+	for _, valueOwner := range []string{module + "/internal/execution/model", module + "/internal/execution/reconstruction", module + "/internal/product/api", module + "/internal/task/model"} {
+		if dependency == valueOwner || under(dependency, valueOwner) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestE2EScenariosUseTestAdapters(t *testing.T) {
@@ -158,11 +163,11 @@ func TestBoundaryRulesRejectTransitiveLeaksAndDirectImplementationImports(t *tes
 		t.Fatalf("production-only graph rejected: %v", got)
 	}
 	for _, source := range []string{"/tests/e2e/internal/testenv", "/tests/e2e/live", "/tests/e2e/smoke", "/tests/e2e/suites/recovery"} {
-		if e2eAllowed(module+source, module+"/internal/execution/adapters/codex") || e2eAllowed(module+source, module+"/internal/steerline") || e2eAllowed(module+source, module+"/internal/steerlineapp") {
+		if e2eAllowed(module+source, module+"/internal/execution/adapters/codex") || e2eAllowed(module+source, module+"/internal/app/host") || e2eAllowed(module+source, module+"/internal/app") {
 			t.Fatalf("implementation leak accepted from %s", source)
 		}
-		if !e2eAllowed(module+source, module+"/internal/steerline/contracts") {
-			t.Fatal("data contract rejected")
+		if !e2eAllowed(module+source, module+"/internal/product/api") {
+			t.Fatal("product value contract rejected")
 		}
 	}
 	for _, adapter := range []string{"driver", "native", "evidence"} {

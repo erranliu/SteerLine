@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,7 +15,6 @@ import (
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type testProcessHost struct{}
@@ -27,7 +27,7 @@ func testConfigWithDirectory(c Config) Config {
 	}
 	c.ProcessHost = testProcessHost{}
 	c.Resources = fixtureResources{}
-	c.ReadRuntime = func(_ context.Context, c Config) (*contracts.Runtime, error) { return loadFixtureRuntime(c) }
+	c.ReadRuntime = func(_ context.Context, c Config) (*reconstructiontypes.Runtime, error) { return loadFixtureRuntime(c) }
 	if c.WorktreeRoot == "" && c.RunDir != "" {
 		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	}

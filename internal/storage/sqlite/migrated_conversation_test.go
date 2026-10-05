@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,7 +18,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	queryapi "github.com/erranliu/SteerLine/internal/product/query"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) {
@@ -35,7 +35,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(committed) != 1 || committed[0].Body == nil || committed[0].Body.Bytes != int64(len(text)) || committed[0].Body.Completeness != contracts.BodyPartial {
+	if len(committed) != 1 || committed[0].Body == nil || committed[0].Body.Bytes != int64(len(text)) || committed[0].Body.Completeness != executionvalues.BodyPartial {
 		t.Fatalf("body reference is incomplete: %+v", committed)
 	}
 	duplicate, err := store.CommitConversation(ctx, []ConversationWrite{first}, checkpoint)
@@ -60,7 +60,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 		restored.Write(page.Data)
 		offset = page.NextOffset
 		if page.Complete {
-			if page.SHA256 != committed[0].Body.SHA256 || page.Completeness != contracts.BodyPartial {
+			if page.SHA256 != committed[0].Body.SHA256 || page.Completeness != executionvalues.BodyPartial {
 				t.Fatalf("body page revision metadata changed: %+v", page)
 			}
 			break
@@ -86,7 +86,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated[0].Body.Revision != committed[0].Body.Revision+1 || updated[0].Body.Completeness != contracts.BodyPartial {
+	if updated[0].Body.Revision != committed[0].Body.Revision+1 || updated[0].Body.Completeness != executionvalues.BodyPartial {
 		t.Fatalf("delta was not stored as a new body revision: %+v", updated[0].Body)
 	}
 	repeatedText := conversationTestWrite("bytes:8:12", 3, "delta", []byte(" tail"), []byte("raw-record-three"))
@@ -98,7 +98,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 		t.Fatalf("a real repeated text event was removed by content dedupe: %+v", repeated[0].Body)
 	}
 	snapshot := conversationTestWrite("bytes:12:16", 4, "snapshot", []byte("replacement"), []byte("raw-record-four"))
-	snapshot.Event.Type = contracts.ConversationMessageSnapshot
+	snapshot.Event.Type = executionvalues.ConversationMessageSnapshot
 	replaced, err := store.CommitConversation(ctx, []ConversationWrite{snapshot}, conversationTestCheckpoint(4, `{"byte_offset":16}`))
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +107,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 		t.Fatalf("snapshot did not create a distinct revision: %+v", replaced[0].Body)
 	}
 	oldSnapshot := conversationTestWrite("bytes:1:3", 1, "snapshot", []byte("stale"), []byte("raw-stale"))
-	oldSnapshot.Event.Type = contracts.ConversationMessageSnapshot
+	oldSnapshot.Event.Type = executionvalues.ConversationMessageSnapshot
 	conflict, err := store.CommitConversation(ctx, []ConversationWrite{oldSnapshot}, conversationTestCheckpoint(5, `{"byte_offset":20}`))
 	if err != nil {
 		t.Fatal(err)
@@ -212,12 +212,12 @@ func TestConversationLongUnicodeFinalIsExactAcrossPages(t *testing.T) {
 	defer store.Close()
 	final := strings.Repeat("末尾 🙂 SteerLine\n", 900)
 	write := conversationTestWrite("final", 1, "complete", []byte(final), []byte("final-source"))
-	write.Event.Type = contracts.ConversationMessageComplete
-	write.Event.Phase = contracts.MessagePhaseFinalAnswer
+	write.Event.Type = executionvalues.ConversationMessageComplete
+	write.Event.Phase = executionvalues.MessagePhaseFinalAnswer
 	events, err := store.CommitConversation(ctx, []ConversationWrite{write}, conversationTestCheckpoint(1, "final-cursor"))
 	require(t, err)
 	ref := events[0].Body
-	if ref == nil || ref.Bytes <= 4096 || ref.Completeness != contracts.BodyComplete {
+	if ref == nil || ref.Bytes <= 4096 || ref.Completeness != executionvalues.BodyComplete {
 		t.Fatalf("final body was truncated or partial: %+v", ref)
 	}
 	query := conversationQueries(store, "project")
@@ -225,7 +225,7 @@ func TestConversationLongUnicodeFinalIsExactAcrossPages(t *testing.T) {
 	for offset := int64(0); ; {
 		page, err := query.ReadMessageBody(ctx, *ref, offset, 257)
 		require(t, err)
-		if !utf8.Valid(page.Data) || page.NextOffset <= offset || page.Completeness != contracts.BodyComplete {
+		if !utf8.Valid(page.Data) || page.NextOffset <= offset || page.Completeness != executionvalues.BodyComplete {
 			t.Fatalf("Unicode final page is invalid: %+v", page)
 		}
 		restored.Write(page.Data)
@@ -459,7 +459,7 @@ func TestConversationCommitRejectsChangedRawAtSameSourceIdentity(t *testing.T) {
 		t.Fatal("source cursor advanced after conflicting raw bytes")
 	}
 	changed = first
-	changed.Event.Type = contracts.ConversationGap
+	changed.Event.Type = executionvalues.ConversationGap
 	changed.Body = nil
 	changed.BodyMode = ""
 	if _, err = store.CommitConversation(ctx, []ConversationWrite{changed}, conversationTestCheckpoint(2, `{"byte_offset":8}`)); err == nil {
@@ -482,12 +482,12 @@ func TestConversationCheckpointPreflightRejectsUnanchoredState(t *testing.T) {
 
 func conversationTestWrite(sourceID string, seq uint64, mode string, body, raw []byte) ConversationWrite {
 	event := ConversationEvent{
-		Version: contracts.ConversationVersion, ProjectID: "project", TaskID: "task", WorkflowID: "workflow",
+		Version: executionvalues.ConversationVersion, ProjectID: "project", TaskID: "task", WorkflowID: "workflow",
 		ExecutionID: "execution", AttemptID: "attempt", Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess,
-		Agent: "fixture", TargetID: "local-test", Source: "fixture-journal", SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment-1",
-		SessionID: "session", SessionQuality: contracts.IdentityNative, TurnID: "turn", TurnQuality: contracts.IdentityDerived,
-		ItemID: "same-item", ItemQuality: contracts.IdentityNative, SourceEventID: sourceID, SourceEventQuality: contracts.IdentityDerived,
-		SourceSeq: seq, Type: contracts.ConversationMessageDelta, Phase: contracts.MessagePhaseUnknown, ReceivedAt: time.Now().UTC(),
+		Agent: "fixture", TargetID: "local-test", Source: "fixture-journal", SourceRole: executionvalues.ConversationSourceFallback, SourceSegment: "segment-1",
+		SessionID: "session", SessionQuality: executionvalues.IdentityNative, TurnID: "turn", TurnQuality: executionvalues.IdentityDerived,
+		ItemID: "same-item", ItemQuality: executionvalues.IdentityNative, SourceEventID: sourceID, SourceEventQuality: executionvalues.IdentityDerived,
+		SourceSeq: seq, Type: executionvalues.ConversationMessageDelta, Phase: executionvalues.MessagePhaseUnknown, ReceivedAt: time.Now().UTC(),
 		Evidence: map[string]string{"identity_rule": "test-byte-range"},
 	}
 	event.ItemKey = conversationItemKey(event, event.ItemID)

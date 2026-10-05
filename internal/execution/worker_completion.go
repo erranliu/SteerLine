@@ -3,15 +3,15 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"strings"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func (s *Service) finishWorkerFlowFor(run *contracts.Run, workerErr error) error {
+func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerErr error) error {
 	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
 		return err

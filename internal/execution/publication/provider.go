@@ -15,7 +15,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // CommandRunner is supplied by the host. No service or business state crosses this boundary.
@@ -74,7 +73,7 @@ func (c *Client) Query(ctx context.Context, raw string) (executionmodel.PRInfo, 
 		if e != nil {
 			return info, e
 		}
-		if e = contracts.DecodeJSON(out, &info); e != nil {
+		if e = decodeStrictJSON(out, &info); e != nil {
 			return info, e
 		}
 	} else {
@@ -174,7 +173,7 @@ func (c *Client) Close(ctx context.Context, raw string) (executionmodel.PRInfo, 
 		if runErr != nil {
 			return executionmodel.PRInfo{}, runErr
 		}
-		if err = contracts.DecodeJSON(out, &closed); err != nil {
+		if err = decodeStrictJSON(out, &closed); err != nil {
 			return executionmodel.PRInfo{}, err
 		}
 	} else {

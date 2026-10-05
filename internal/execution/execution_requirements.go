@@ -5,13 +5,13 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"slices"
 	"strings"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -164,7 +164,7 @@ func (s *Service) checkCurrentExecutionRequirements(ctx context.Context, fixed w
 	return errors.Join(err, s.commitWorker(fixed.run))
 }
 
-func (s *Service) resumeRegisteredWorkerFlow(ctx context.Context, task *taskmodel.TaskRecord, run *contracts.Run, entry ExecutionRegistration) (bool, error) {
+func (s *Service) resumeRegisteredWorkerFlow(ctx context.Context, task *taskmodel.TaskRecord, run *reconstructiontypes.RunView, entry ExecutionRegistration) (bool, error) {
 	if _, err := s.workerFlowContext(run); err != nil {
 		return false, err
 	}

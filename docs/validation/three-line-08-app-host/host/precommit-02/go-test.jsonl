@@ -1,0 +1,6 @@
+{"ImportPath":"github.com/erranliu/SteerLine/internal/storage/sqlite","Action":"build-output","Output":"# github.com/erranliu/SteerLine/internal/storage/sqlite\n"}
+{"ImportPath":"github.com/erranliu/SteerLine/internal/storage/sqlite","Action":"build-output","Output":"internal\\storage\\sqlite\\conversation_store.go:11:2: \"github.com/erranliu/SteerLine/internal/execution\" imported as executionapp and not used\n"}
+{"ImportPath":"github.com/erranliu/SteerLine/internal/storage/sqlite","Action":"build-fail"}
+{"Time":"2026-10-05T20:51:20.9588461+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/app/host"}
+{"Time":"2026-10-05T20:51:20.9588461+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app/host","Output":"FAIL\tgithub.com/erranliu/SteerLine/internal/app/host [build failed]\n"}
+{"Time":"2026-10-05T20:51:20.9588461+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/internal/app/host","Elapsed":0,"FailedBuild":"github.com/erranliu/SteerLine/internal/storage/sqlite"}

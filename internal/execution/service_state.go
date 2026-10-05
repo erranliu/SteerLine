@@ -8,27 +8,26 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 type Service struct {
 	replayDone           <-chan struct{}
 	historyDone          <-chan struct{}
-	historyRequests      chan []contracts.ConversationHistorySource
+	historyRequests      chan []ConversationHistorySource
 	host                 HostPort
 	taskWork             TaskWorkPort
 	taskResults          TaskResultPort
 	Config               Config
 	baseConfig           Config
 	lifecycleResolver    executionbackend.LifecycleResolver
-	conversationSources  contracts.ConversationSourcePort
+	conversationSources  ConversationSourcePort
 	dispatchConfig       *Config
 	dispatchProfile      *ExecutionProfile
-	State                contracts.Runtime
+	State                reconstruction.Runtime
 	domain               reconstruction.Snapshot
 	committed            reconstruction.Snapshot
-	runs                 []*contracts.Run
+	runs                 []*reconstruction.RunView
 	pendingEvents        []storageports.DomainEvent
 	pendingOperations    map[string]string
 	workerDecisionWrites map[string]bool
@@ -51,14 +50,13 @@ type Service struct {
 	conversationReplayRequests chan []conversationJournalSource
 	conversationReplayErrors   chan error
 	// Console selects service-side rendering: "", "off", "pretty", "summary" or "json".
-	controlSeen       map[string]string
-	stopControl       *productapi.ControlRequest
-	stopAcceptedAt    *time.Time
-	targetTask        string
-	lastDispatched    string
-	reservedRunID     string
-	candidateSnapshot *contracts.TaskSnapshot
-	explicitDispatch  bool
-	controlFault      func(string)
-	startupID         string
+	controlSeen      map[string]string
+	stopControl      *productapi.ControlRequest
+	stopAcceptedAt   *time.Time
+	targetTask       string
+	lastDispatched   string
+	reservedRunID    string
+	explicitDispatch bool
+	controlFault     func(string)
+	startupID        string
 }

@@ -9,7 +9,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -30,7 +29,7 @@ type ServiceStorage struct {
 // directory and its conversation source port. Lifecycle operations receive
 // only execution values and already-persisted operation intents. The application
 // calls PrepareServiceConfig before opening and transferring the connection.
-func NewService(c Config, directory *ExecutionDirectory, resolver executionbackend.LifecycleResolver, conversationSources contracts.ConversationSourcePort, processHost executionbackend.ManagedProcessHost, stores ServiceStorage, work TaskWorkPort, results TaskResultPort, host HostPort) (_ *Service, retErr error) {
+func NewService(c Config, directory *ExecutionDirectory, resolver executionbackend.LifecycleResolver, conversationSources ConversationSourcePort, processHost executionbackend.ManagedProcessHost, stores ServiceStorage, work TaskWorkPort, results TaskResultPort, host HostPort) (_ *Service, retErr error) {
 	if c.ExecutionRecords == nil {
 		c.ExecutionRecords = stores.Records
 	}
@@ -63,11 +62,11 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionbacke
 		}
 	}
 	authority := stored.Graph.Authority
-	s.State = contracts.Runtime{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: contracts.Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}, Runs: []*contracts.Run{}, Control: contracts.ControlState{DispatchMode: "auto", Revision: 1, Blockers: []contracts.ControlBlocker{}}}
+	s.State = reconstruction.Runtime{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: reconstruction.Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}, Runs: []*reconstruction.RunView{}, Control: reconstruction.ControlState{DispatchMode: "auto", Revision: 1, Blockers: []reconstruction.ControlBlocker{}}}
 	if authority.DispatchMode == "auto" && c.DefaultProfileID() == "" {
 		return nil, errors.New("automatic dispatch requires default_execution_profile")
 	}
-	s.State.Control = contracts.ControlState{DispatchMode: authority.DispatchMode, DispatchPaused: authority.DispatchPaused, Revision: authority.AuthorityVersion, Blockers: []contracts.ControlBlocker{}}
+	s.State.Control = reconstruction.ControlState{DispatchMode: authority.DispatchMode, DispatchPaused: authority.DispatchPaused, Revision: authority.AuthorityVersion, Blockers: []reconstruction.ControlBlocker{}}
 	if stored.Checkpoint != nil {
 		old := reconstruction.RuntimeFromCheckpoint(*stored.Checkpoint, authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion)
 		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch {
@@ -104,7 +103,7 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionbacke
 	}
 	s.State.SchemaVersion = storageports.WorkerFlowRuntimeSchema
 	capabilities := []string{"answer_decision", "open_terminal", "recheck_environment", "start_task", "start_candidate", "abandon_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
-	s.State.Service = contracts.ServiceState{ExecutionPolicy: c.ExecutionPolicy, PolicySource: c.policySource, InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: capabilities, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
+	s.State.Service = reconstruction.ServiceState{ExecutionPolicy: c.ExecutionPolicy, PolicySource: c.policySource, InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: capabilities, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
 	identity, err := host.CurrentProcessIdentity()
 	if err != nil {
 		return nil, fmt.Errorf("identify service process: %w", err)

@@ -3,12 +3,12 @@ package execution
 import (
 	"context"
 	"encoding/json"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/erranliu/SteerLine/internal/product/query"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func TestActivityDatabaseSurvivesReopenWithoutMirror(t *testing.T) {
@@ -21,7 +21,7 @@ func TestActivityDatabaseSurvivesReopenWithoutMirror(t *testing.T) {
 	// A directory at the obsolete mirror path must not affect event commitment.
 	require(t, os.Mkdir(filepath.Join(dir, "activity.jsonl"), 0700))
 	run.LogPath = &log
-	event := contracts.ActivityEvent{Source: "fixture-stream", Kind: "message", ItemID: "original-item", Detail: "original activity", TS: now()}
+	event := executionvalues.ActivityEvent{Source: "fixture-stream", Kind: "message", ItemID: "original-item", Detail: "original activity", TS: now()}
 	s.recordActivity(run, event)
 	require(t, s.commitEvents())
 	if s.State.Service.Error != nil {
@@ -43,7 +43,7 @@ func TestActivityDatabaseSurvivesReopenWithoutMirror(t *testing.T) {
 			continue
 		}
 		count++
-		var got contracts.ActivityEvent
+		var got executionvalues.ActivityEvent
 		require(t, json.Unmarshal(stored.Payload, &got))
 		if stored.EventID <= 0 || stored.WorkflowRunID != runID || got.RunID != runID || got.Detail != event.Detail || got.V != ActivityVersion {
 			t.Fatal("database activity lost its original scope or payload")

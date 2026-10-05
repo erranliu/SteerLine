@@ -7,7 +7,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type recoveryOnlyLifecycle struct{ executionbackend.LifecyclePort }
@@ -163,7 +162,7 @@ func testCD64InboxCommitBeforeAck(t *testing.T) {
 	s.lifecycleResolver = nil
 	event := WorkerEvent{RunID: run.RunID, AttemptID: run.AttemptID, Source: "execution", SourceEventID: "message-original",
 		Fact:       executionbackend.EventFact{Kind: executionbackend.EventStatus, Source: "execution", SourceEventID: "message-original", LastMessage: "original content"},
-		Activity:   contracts.ActivityEvent{Source: "execution", Kind: "execution", Status: "observed", Title: "Original message"},
+		Activity:   executionmodel.ActivityEvent{Source: "execution", Kind: "execution", Status: "observed", Title: "Original message"},
 		DeliveryID: "delivery-original", DeliveryFinal: true, Persisted: make(chan error, 1)}
 	if err := s.eventWorkerFlowFor(run, event); err == nil {
 		t.Fatal("message committed despite transaction failure")

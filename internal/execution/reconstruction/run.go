@@ -8,29 +8,28 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, execution executionmodel.ExecutionRecord, attempts []executionmodel.StepAttemptRecord, decisions []executionmodel.DecisionRecord, deliveries []executionmodel.TaskDeliveryRecord) (contracts.Run, error) {
+func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, execution executionmodel.ExecutionRecord, attempts []executionmodel.StepAttemptRecord, decisions []executionmodel.DecisionRecord, deliveries []executionmodel.TaskDeliveryRecord) (RunView, error) {
 	if workflow.TaskID != task.TaskID || execution.WorkflowRunID != workflow.WorkflowRunID || workflow.SelectedResult != "" && workflow.SelectedResult != execution.ExecutionID {
-		return contracts.Run{}, errors.New("task, workflow and selected execution identity differ")
+		return RunView{}, errors.New("task, workflow and selected execution identity differ")
 	}
 	if workflow.WorkflowVersion == executionmodel.Version {
 		count := 0
 		for _, attempt := range attempts {
 			if attempt.ExecutionID == execution.ExecutionID {
 				if attempt.StepID != "worker" || execution.CurrentStep != "worker" {
-					return contracts.Run{}, errors.New("worker flow has an invalid step identity")
+					return RunView{}, errors.New("worker flow has an invalid step identity")
 				}
 				count++
 			}
 		}
 		if count < 1 {
-			return contracts.Run{}, errors.New("worker flow has no worker attempt identity")
+			return RunView{}, errors.New("worker flow has no worker attempt identity")
 		}
 	}
-	run := contracts.Run{TaskID: task.TaskID, DomainTaskID: task.TaskID, Title: task.Title, TaskStatus: task.Status,
+	run := RunView{TaskID: task.TaskID, DomainTaskID: task.TaskID, Title: task.Title, TaskStatus: task.Status,
 		CandidateTiming: "wall_since_reservation",
 		ResourceStatus:  execution.Status,
 		SessionID:       execution.SessionID, SessionGeneration: execution.SessionGeneration, TurnNumber: execution.TurnNumber, CurrentTurnID: execution.CurrentTurnID,
@@ -47,7 +46,7 @@ func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, e
 			QueryError: copyPtr(workflow.PRQueryError), MergedAt: copyPtr(workflow.PRMergedAt), MergeCommit: copyPtr(workflow.PRMergeCommit)}}
 	if attempt := CurrentAttempt(attempts, &execution); attempt != nil {
 		if workflow.WorkflowVersion == executionmodel.Version && execution.CurrentAttemptID != "" && execution.CurrentAttemptID != attempt.AttemptID {
-			return contracts.Run{}, errors.New("worker flow current attempt pointer differs from latest worker generation")
+			return RunView{}, errors.New("worker flow current attempt pointer differs from latest worker generation")
 		}
 		run.AttemptID, run.DomainAttemptNumber = attempt.AttemptID, attempt.AttemptNumber
 	}
@@ -70,18 +69,18 @@ func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, e
 		for _, record := range decisions {
 			if record.DecisionID == execution.DecisionID {
 				if record.WorkflowRunID != workflow.WorkflowRunID || record.ExecutionID != execution.ExecutionID || record.AttemptID != run.AttemptID || record.Version == 0 {
-					return contracts.Run{}, errors.New("current decision differs from its execution or attempt")
+					return RunView{}, errors.New("current decision differs from its execution or attempt")
 				}
 				var err error
 				run.Decision, err = decisionView(record)
 				if err != nil {
-					return contracts.Run{}, err
+					return RunView{}, err
 				}
 				break
 			}
 		}
 		if run.Decision == nil {
-			return contracts.Run{}, errors.New("execution refers to a missing decision")
+			return RunView{}, errors.New("execution refers to a missing decision")
 		}
 	}
 	if task.Status == "closed" {
@@ -120,7 +119,7 @@ func workflowExecutionHost(workflow executionmodel.WorkflowRunRecord) string {
 	return workflow.ExecutionProfile.Host
 }
 
-func Execution(run contracts.Run, e executionmodel.ExecutionRecord) contracts.Run {
+func Execution(run RunView, e executionmodel.ExecutionRecord) RunView {
 	run.Process, run.Target = copyPtr(e.Process), e.Target
 	run.WorkspaceIntent = copyPtr(e.WorkspaceIntent)
 	path, branch, base := e.Workspace.Worktree, e.Workspace.Branch, e.Workspace.Base
@@ -153,7 +152,7 @@ func Execution(run contracts.Run, e executionmodel.ExecutionRecord) contracts.Ru
 
 func decisionView(record executionmodel.DecisionRecord) (*executionmodel.DecisionState, error) {
 	var request executionmodel.DecisionRequest
-	if err := contracts.DecodeJSON(record.Request, &request); err != nil || request.FormatVersion != executionmodel.DecisionRequestFormatVersion {
+	if err := decodeStrictJSON(record.Request, &request); err != nil || request.FormatVersion != executionmodel.DecisionRequestFormatVersion {
 		return nil, errors.New("persisted decision request has an unsupported format; preserve it for manual recovery")
 	}
 	if err := executionmodel.ValidateDecisionRequest(&request); err != nil {

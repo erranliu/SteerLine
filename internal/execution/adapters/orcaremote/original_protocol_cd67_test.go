@@ -14,7 +14,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
+	"github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
 
 func TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily(t *testing.T) {

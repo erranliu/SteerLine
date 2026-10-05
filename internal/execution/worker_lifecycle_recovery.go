@@ -3,11 +3,11 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"sync"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // A crash can happen after a native request is journaled but before its
@@ -140,7 +140,7 @@ func (s *Service) applyAppServerRecovery(result appServerRecoveryResult) error {
 			_ = result.worker.detachLocalObservation(context.Background())
 		}
 	}()
-	var run *contracts.Run
+	var run *reconstructiontypes.RunView
 	for _, candidate := range s.runs {
 		if candidate != nil && candidate.RunID == result.runID {
 			run = candidate

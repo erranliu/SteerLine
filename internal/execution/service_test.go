@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -19,7 +20,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -33,7 +33,7 @@ type fakeDB struct {
 }
 
 func TestProjectRuntimeOmitsSettledDiscardedRuns(t *testing.T) {
-	state := contracts.Runtime{Tasks: []taskmodel.TaskRecord{{TaskID: "14", Status: "discarded"}, {TaskID: "17", Status: "in_progress"}, {TaskID: "18", Status: "discarded"}},
+	state := reconstructiontypes.Runtime{Tasks: []taskmodel.TaskRecord{{TaskID: "14", Status: "discarded"}, {TaskID: "17", Status: "in_progress"}, {TaskID: "18", Status: "discarded"}},
 		WorkflowRuns: []executionmodel.WorkflowRunRecord{{TaskID: "14", WorkflowRunID: "old", Phase: "abandoned"}, {TaskID: "17", WorkflowRunID: "active", Phase: "executing"}, {TaskID: "18", WorkflowRunID: "pending-stop", Phase: "blocked"}},
 		Executions:   []executionmodel.ExecutionRecord{{WorkflowRunID: "active", ExecutionID: "active-execution", Status: "active"}, {WorkflowRunID: "pending-stop", ExecutionID: "stopping-execution", Status: "blocked"}},
 		SlotOccupied: true, CurrentTask: ptr("14")}

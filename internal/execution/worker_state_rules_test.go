@@ -2,12 +2,12 @@ package execution
 
 import (
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"testing"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -55,7 +55,7 @@ func TestWorkerFlowKeepsSessionThroughFeedbackAndPRChanges(t *testing.T) {
 	}
 	mergedAt := time.Now().UTC()
 	delivery := executionmodel.TaskDeliveryRecord{TaskID: "8", SelectedWorkflowRunID: "wf-8", PRURL: "pr-9", MergeCommit: "merge-9", MergedAt: mergedAt}
-	if err := contracts.MarkWorkerDeliveryCommitted(taskmodel.TaskRecord{TaskID: "8", Status: "closed"}, &wf, delivery); err != nil || wf.Phase != "completed" {
+	if err := reconstructiontypes.MarkWorkerDeliveryCommitted(taskmodel.TaskRecord{TaskID: "8", Status: "closed"}, &wf, delivery); err != nil || wf.Phase != "completed" {
 		t.Fatalf("committed delivery did not complete: phase=%s error=%v", wf.Phase, err)
 	}
 	if err := BeginWorkerTurn(&wf, &exec, "session-8", "turn-4"); err == nil {

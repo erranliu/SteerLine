@@ -9,7 +9,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
@@ -67,7 +66,7 @@ func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
 
 func TestRetiredPublicationMetadataRejected(t *testing.T) {
 	var settings executionmodel.PublicationSettings
-	if err := contracts.DecodeJSON([]byte(`{"create":{"executable":"retired-publisher"}}`), &settings); err == nil {
+	if err := decode([]byte(`{"create":{"executable":"retired-publisher"}}`), &settings); err == nil {
 		t.Fatal("retired create command accepted by the current metadata schema")
 	}
 }

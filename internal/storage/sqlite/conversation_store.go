@@ -8,16 +8,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"strings"
 	"time"
 	"unicode/utf8"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-const maxConversationBodyBytes = contracts.MaxConversationBodyBytes
+const maxConversationBodyBytes = executionvalues.MaxConversationBodyBytes
 
 func (s *SQLiteStore) CommitConversation(ctx context.Context, writes []ConversationWrite, checkpoint ConversationCheckpoint) ([]ConversationEvent, error) {
 	if s.readOnly {
@@ -264,8 +264,8 @@ func (s *SQLiteStore) ConversationSourceCheckpoints(ctx context.Context, project
 	return out, rows.Err()
 }
 
-func (s *SQLiteStore) ConversationMapperSnapshot(ctx context.Context, project, execution, attempt, source, segment string) (contracts.ConversationMapperSnapshot, error) {
-	var snapshot contracts.ConversationMapperSnapshot
+func (s *SQLiteStore) ConversationMapperSnapshot(ctx context.Context, project, execution, attempt, source, segment string) (executionvalues.ConversationMapperSnapshot, error) {
+	var snapshot executionvalues.ConversationMapperSnapshot
 	var payload []byte
 	err := s.db.QueryRowContext(ctx, `SELECT payload FROM conversation_events WHERE project_identity=? AND execution_id=? AND attempt_id=? AND source=? AND source_segment=? AND event_type=? ORDER BY event_id DESC LIMIT 1`, project, execution, attempt, source, segment, ConversationSession).Scan(&payload)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
@@ -363,7 +363,7 @@ func (s *SQLiteStore) ValidateConversationCheckpointFormat(ctx context.Context, 
 		if err := rows.Scan(&cp.ExecutionID, &cp.AttemptID, &cp.SourceSegment, &cp.SourceIdentity, &cp.Cursor, &cp.LocalSeq); err != nil {
 			return err
 		}
-		if _, err := contracts.DecodeConversationJournalPosition(cp); err != nil {
+		if _, err := executionvalues.DecodeConversationJournalPosition(cp); err != nil {
 			return fmt.Errorf("unsupported conversation checkpoint %s/%s: %w; preserve state and inspect external execution before recovery", cp.ExecutionID, cp.AttemptID, err)
 		}
 	}

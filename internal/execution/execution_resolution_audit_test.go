@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,7 +10,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
@@ -27,7 +27,7 @@ func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
 func TestResolutionAuditRegistrationRejectsBaseTargetDrift(t *testing.T) {
 	c := withNeutralProfile(Config{ExecutionPolicy: workspacePolicyFixture()}, neutralSettings{Executable: "fixture-agent", Target: executionbackend.ExecutionTarget{ID: "fixture:peer", ConnectionID: "peer", ExternalRuntime: "original"}})
 	target := TargetFor(c)
-	run := &contracts.Run{Host: c.Host, Agent: c.Agent, Backend: "fixture", Protocol: string(neutralProtocol), Target: target}
+	run := &reconstructiontypes.RunView{Host: c.Host, Agent: c.Agent, Backend: "fixture", Protocol: string(neutralProtocol), Target: target}
 	record := &executionmodel.ExecutionRecord{Agent: c.Agent, Backend: run.Backend, Protocol: run.Protocol, Target: target}
 	for _, field := range []string{"connection", "runtime"} {
 		r, e := *run, *record

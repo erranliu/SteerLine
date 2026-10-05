@@ -2,20 +2,20 @@ package execution
 
 import (
 	"context"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"os/exec"
 	"testing"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func neutralAuditService(t *testing.T) (*Service, *contracts.Run) {
+func neutralAuditService(t *testing.T) (*Service, *reconstructiontypes.RunView) {
 	return neutralAuditServiceWithRequirements(t, workspacePolicyFixture(), executionbackend.ExecutionRequirements{}, "")
 }
 
-func neutralAuditServiceWithRequirements(t *testing.T, policy executionbackend.ExecutionPolicy, requirements executionbackend.ExecutionRequirements, tokenEnv string) (*Service, *contracts.Run) {
+func neutralAuditServiceWithRequirements(t *testing.T, policy executionbackend.ExecutionPolicy, requirements executionbackend.ExecutionRequirements, tokenEnv string) (*Service, *reconstructiontypes.RunView) {
 	t.Helper()
 	c, commit, store := openDAGFixture(t)
 	c.WorkflowProtocol, c.Host, c.Agent, c.Claimant = executionmodel.Version, "local", "fixture", "operator"
@@ -61,7 +61,7 @@ func neutralAuditServiceWithRequirements(t *testing.T, policy executionbackend.E
 	return service, run
 }
 
-func neutralAuditServiceWithPolicy(t *testing.T, p executionbackend.ExecutionPolicy) (*Service, *contracts.Run) {
+func neutralAuditServiceWithPolicy(t *testing.T, p executionbackend.ExecutionPolicy) (*Service, *reconstructiontypes.RunView) {
 	return neutralAuditServiceWithRequirements(t, p, executionbackend.ExecutionRequirements{}, "")
 }
 

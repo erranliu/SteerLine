@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"strings"
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -238,7 +238,7 @@ func (c CommandService) AbandonNativeCandidate(ctx context.Context, config Confi
 	return receipt, err
 }
 
-func (s *Service) candidateBusinessClosed(run *contracts.Run) bool {
+func (s *Service) candidateBusinessClosed(run *reconstructiontypes.RunView) bool {
 	if run == nil {
 		return true
 	}

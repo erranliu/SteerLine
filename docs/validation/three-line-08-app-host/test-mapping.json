@@ -1,0 +1,667 @@
+{
+  "schema_version": 1,
+  "task": 80,
+  "starting_head": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+  "runs": [],
+  "migrated_test_ownership": {
+    "TM08.NativeProjectBinding": {
+      "package": "github.com/erranliu/SteerLine/internal/app",
+      "file": "internal/app/native_project_open_test.go",
+      "previous_parent": "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding",
+      "previous_file": "internal/steerline/native_tasks_test.go",
+      "assertions": [
+        "native authority initializes once",
+        "reopen preserves the original project binding",
+        "branch drift and retired authority are rejected without migration"
+      ]
+    },
+    "MC1-MC9": {
+      "package": "github.com/erranliu/SteerLine/internal/execution",
+      "file": "internal/execution/candidate_workers_test.go",
+      "plan_path_correction": "The fixed Plan's historical internal/steerline/candidate_workers_test.go path is stale; #76 already moved these parents to execution.",
+      "parents": [
+        {
+          "name": "TestMC1",
+          "subtests": []
+        },
+        {
+          "name": "TestMC2",
+          "subtests": [
+            "content",
+            "task-version",
+            "graph-version",
+            "original_async_receipt",
+            "target_profile",
+            "inbox_reservation_receipt_loss"
+          ]
+        },
+        {
+          "name": "TestMC3",
+          "subtests": [
+            "blocker_keeps_question_rejects_no_queue",
+            "unsent_blocked_feedback"
+          ]
+        },
+        {
+          "name": "TestMC4",
+          "subtests": [
+            "worker_only_frozen_permissions",
+            "database_gap"
+          ]
+        },
+        {
+          "name": "TestMC5",
+          "subtests": []
+        },
+        {
+          "name": "TestMC6",
+          "subtests": [
+            "multiple_merged",
+            "abandoned_merged",
+            "unknown_sibling",
+            "late_after_delivery"
+          ]
+        },
+        {
+          "name": "TestMC7",
+          "subtests": [
+            "original_single_candidate",
+            "discard_full_history_and_exited_set"
+          ]
+        },
+        {
+          "name": "TestMC8",
+          "subtests": [
+            "late_start",
+            "late_feedback",
+            "unknown_stop",
+            "merged_rejects_exit",
+            "inbox_under_project_effect"
+          ]
+        },
+        {
+          "name": "TestMC9",
+          "subtests": []
+        }
+      ],
+      "reason_not_moved_in_task_80": "Candidate actor behavior and assertions already belong to execution; this task only corrects the mapping and keeps their L1/Full owner selection intact."
+    }
+  },
+  "groups": [
+    {
+      "id": "TM08.1-TM08.3-host",
+      "level": "targeted-go",
+      "package": "./internal/app/host",
+      "environment": "Windows; isolated STEERLINE_HOME; temporary service and SQLite state; controlled child processes; no model or native opt-in",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/host/commit-bound-01 -- ./internal/app/host -run '^TestTM08(ControlIdentity|Heartbeat|Shutdown)$' -count=1",
+      "timing": "after host transport, heartbeat and shutdown migration",
+      "tests": [
+        {
+          "id": "TM08.ControlIdentity",
+          "parent": "TestTM08ControlIdentity",
+          "previous_parent": "TestControlRequestPublicationIsImmutableAcrossClientProcesses",
+          "assertions": [
+            "same request ID and content is idempotent",
+            "different content cannot replace the original request"
+          ]
+        },
+        {
+          "id": "TM08.Heartbeat",
+          "parent": "TestTM08Heartbeat",
+          "previous_parent": "TestObservationReadsOneSQLiteRuntimeAndClassifiesHeartbeat",
+          "assertions": [
+            "runtime and authority use the sampled SQLite view",
+            "heartbeat freshness is classified independently"
+          ]
+        },
+        {
+          "id": "TM08.Shutdown",
+          "parent": "TestTM08Shutdown",
+          "previous_parent": "TestLifecycleReviewStopReportsExitWithoutReceipt",
+          "assertions": [
+            "service exit without the original stop receipt stays pending",
+            "request and instance identity remain bound"
+          ]
+        }
+      ],
+      "pass_condition": "all three parents run and pass with zero skips",
+      "evidence": "docs/validation/three-line-08-app-host/host/"
+    },
+    {
+      "id": "TM08.1-TM08.2-app-host-wiring",
+      "level": "targeted-go",
+      "package": "./tests/integration",
+      "environment": "Windows; isolated STEERLINE_HOME; real app configuration and SQLite; controlled backend/process fixtures; no model request",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/wiring/commit-bound-01 -- ./tests/integration -run '^TestTM08AppHostWiring$' -count=1",
+      "timing": "after default app, cmd, installation and host construction switch",
+      "tests": [
+        {
+          "id": "TM08.AppHostWiring",
+          "parent": "TestTM08AppHostWiring",
+          "previous_parent": null,
+          "subtests": [
+            "default_app_host_composition"
+          ],
+          "assertions": [
+            "default app constructor creates the execution actor with injected host/storage ports",
+            "the same SQLite-backed actor becomes ready and receives heartbeat",
+            "shutdown clears ready state and closes the actor"
+          ]
+        }
+      ],
+      "pass_condition": "parent and all listed subtests run and pass with zero skips",
+      "evidence": "docs/validation/three-line-08-app-host/wiring/"
+    },
+    {
+      "id": "TM08.E2ESnapshotContext",
+      "level": "targeted-go",
+      "package": "./tests/e2e/internal/testenv",
+      "environment": "Windows; isolated SQLite fixture; isolated STEERLINE_HOME; no model or native opt-in",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/e2e-snapshot/commit-bound-01 -- ./tests/e2e/internal/testenv -run '^TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions$' -count=1",
+      "timing": "after E2E fixture/runtime type migration",
+      "tests": [
+        {
+          "id": "TM08.E2ESnapshotContext.SampleRevision",
+          "parent": "TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions",
+          "assertions": [
+            "product page and execution values share database identity and revision",
+            "different sampled revisions are rejected"
+          ]
+        }
+      ],
+      "pass_condition": "parent runs and passes with zero skips",
+      "evidence": "docs/validation/three-line-08-app-host/e2e-snapshot/"
+    },
+    {
+      "id": "L1-fixed",
+      "level": "L1",
+      "package": "registered quick, rule, owner and integration boundary groups",
+      "environment": "Windows; isolated STEERLINE_HOME; no native opt-in; one serial runner invocation",
+      "command": "go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1/commit-bound-01",
+      "timing": "once after self-review and targeted repairs",
+      "required_groups": [
+        "TM05 product/API/query/client/console",
+        "TM06 resources and boundary",
+        "TM07 storage",
+        "TM04 original combined app/execution regression",
+        "TM08 host",
+        "TM08 app/host wiring",
+        "TM08 production host dependency boundary"
+      ],
+      "required_tests": [
+        {
+          "parent": "TestTM04ExecutionWiring",
+          "subtests": [
+            "claim_transaction_failure_and_original_receipt",
+            "intent_binding_and_two_original_turns",
+            "original_request_ack_and_manual_recovery"
+          ]
+        },
+        {
+          "parent": "TestTM08AppHostWiring",
+          "subtests": [
+            "default_app_host_composition"
+          ]
+        },
+        {
+          "parent": "TestTM08AppHostBoundary",
+          "subtests": []
+        },
+        {
+          "parent": "TestNativeProjectInitializesOnceAndRejectsMismatchedBinding",
+          "subtests": []
+        }
+      ],
+      "pass_condition": "all registered selected parents/subtests run and pass with zero skips; no live scenario starts",
+      "evidence": "docs/validation/three-line-08-app-host/l1/"
+    },
+    {
+      "id": "recovery.waiting-merge-restart",
+      "level": "L3-controlled-conditional",
+      "package": "registered E2E recovery suite",
+      "environment": "Windows; controlled backend; isolated Task/SQLite/Workflow/Execution/workspace; no model",
+      "command": "go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled -scenario=recovery.waiting-merge-restart -out docs/validation/three-line-08-app-host/recovery",
+      "timing": "only if this implementation changes recovery behavior",
+      "pass_condition": "original identities and workspace survive restart without redispatch, then delivery proceeds normally",
+      "evidence": "docs/validation/three-line-08-app-host/recovery/",
+      "selected": false,
+      "reason": "conditional in the fixed Plan; not selected unless the actual recovery behavior changes"
+    }
+  ],
+  "not_selected": [
+    {
+      "group": "Full",
+      "reason": "the fixed Plan selects targeted host/wiring evidence and one L1; no full business regression is required"
+    },
+    {
+      "group": "L2 and live L3",
+      "reason": "service hosting moves are verified with controlled processes and real application construction; live/native acceptance remains owned by #39 and #40/#41"
+    }
+  ],
+  "diagnostic_attempts": [
+    {
+      "evidence": "docs/validation/three-line-08-app-host/host/precommit-02/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": [
+        "github.com/erranliu/SteerLine/internal/storage/sqlite"
+      ]
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/host/precommit-03/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": [
+        "github.com/erranliu/SteerLine/internal/app/host [github.com/erranliu/SteerLine/internal/app/host.test]"
+      ]
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/host/precommit-04/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 3,
+      "passed_tests": 2,
+      "failed_tests": 1,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/host/precommit-05/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 0,
+      "test_count": 3,
+      "passed_tests": 3,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/host/precommit-06/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": [
+        "github.com/erranliu/SteerLine/internal/app/host [github.com/erranliu/SteerLine/internal/app/host.test]"
+      ]
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/host/precommit-07/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": [
+        "github.com/erranliu/SteerLine/internal/product/client"
+      ]
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/host/precommit-08/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": [
+        "github.com/erranliu/SteerLine/internal/app/host [github.com/erranliu/SteerLine/internal/app/host.test]"
+      ]
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/host/precommit-09/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 0,
+      "test_count": 3,
+      "passed_tests": 3,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/host/precommit-10/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": [
+        "github.com/erranliu/SteerLine/internal/app/host [github.com/erranliu/SteerLine/internal/app/host.test]"
+      ]
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/host/precommit-11/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 0,
+      "test_count": 3,
+      "passed_tests": 3,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/host/precommit-12/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 0,
+      "test_count": 3,
+      "passed_tests": 3,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/host/precommit-14/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 0,
+      "test_count": 3,
+      "passed_tests": 3,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/host/precommit-15/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 0,
+      "test_count": 3,
+      "passed_tests": 3,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/host/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": [
+        "github.com/erranliu/SteerLine/internal/product/query",
+        "github.com/erranliu/SteerLine/internal/execution"
+      ]
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-01/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": [
+        "github.com/erranliu/SteerLine/tests/integration.test"
+      ]
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-02/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": [
+        "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+      ]
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-03/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": [
+        "github.com/erranliu/SteerLine/internal/app"
+      ]
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-04/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": [
+        "github.com/erranliu/SteerLine/tests/integration [github.com/erranliu/SteerLine/tests/integration.test]"
+      ]
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-05/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": [
+        "github.com/erranliu/SteerLine/tests/integration [github.com/erranliu/SteerLine/tests/integration.test]"
+      ]
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-06/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-07/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 0,
+      "test_count": 4,
+      "passed_tests": 4,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-08/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 0,
+      "test_count": 2,
+      "passed_tests": 2,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-09/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 0,
+      "test_count": 2,
+      "passed_tests": 2,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-10/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": [
+        "github.com/erranliu/SteerLine/tests/integration [github.com/erranliu/SteerLine/tests/integration.test]"
+      ]
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-11/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 1,
+      "test_count": 0,
+      "passed_tests": 0,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-12/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 0,
+      "test_count": 2,
+      "passed_tests": 2,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-13/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 0,
+      "test_count": 2,
+      "passed_tests": 2,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-14/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 0,
+      "test_count": 2,
+      "passed_tests": 2,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-15/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 0,
+      "test_count": 2,
+      "passed_tests": 2,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "evidence": "docs/validation/three-line-08-app-host/wiring/precommit-16/summary.json",
+      "classification": "precommit diagnostic; not commit-bound final evidence",
+      "source_commit": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "command_exit_code": 0,
+      "test_count": 2,
+      "passed_tests": 2,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "build_failures": []
+    },
+    {
+      "group_id": "TM08.1-TM08.3-host",
+      "status": "passed",
+      "passed": 3,
+      "failed": 0,
+      "commit_bound": false,
+      "summary": "docs/validation/three-line-08-app-host/host/final-candidate-02/summary.json",
+      "source_head": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "skipped": 0,
+      "phase": "precommit-final-candidate"
+    },
+    {
+      "group_id": "TM08.1-TM08.2-app-host-wiring",
+      "status": "passed",
+      "passed": 2,
+      "failed": 0,
+      "commit_bound": false,
+      "summary": "docs/validation/three-line-08-app-host/wiring/final-candidate-01/summary.json",
+      "source_head": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "skipped": 0,
+      "phase": "precommit-final-candidate"
+    },
+    {
+      "group_id": "TM08.E2ESnapshotContext",
+      "status": "passed",
+      "passed": 1,
+      "failed": 0,
+      "commit_bound": false,
+      "summary": "docs/validation/three-line-08-app-host/e2e-snapshot/final-candidate-01/summary.json",
+      "source_head": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "skipped": 0,
+      "phase": "precommit-final-candidate"
+    },
+    {
+      "passed": 1,
+      "group_id": "TM08.3-host-boundary",
+      "failed": 0,
+      "phase": "precommit-final-candidate",
+      "status": "passed",
+      "commit_bound": false,
+      "summary": "docs/validation/three-line-08-app-host/boundary/final-candidate-01/summary.json",
+      "source_head": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "skipped": 0
+    },
+    {
+      "passed": 0,
+      "group_id": "TM08.NativeProjectBinding",
+      "failed": 0,
+      "diagnostic": "internal/app/execution_policy_live_cd67_test.go retained an unused host import",
+      "phase": "precommit-final-candidate",
+      "status": "failed_compile",
+      "commit_bound": false,
+      "summary": "docs/validation/three-line-08-app-host/app-project/final-candidate-01/summary.json",
+      "source_head": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "skipped": 0
+    },
+    {
+      "passed": 1,
+      "group_id": "TM08.NativeProjectBinding",
+      "failed": 0,
+      "phase": "precommit-final-candidate",
+      "status": "passed",
+      "commit_bound": false,
+      "summary": "docs/validation/three-line-08-app-host/app-project/final-candidate-02/summary.json",
+      "source_head": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+      "skipped": 0
+    }
+  ]
+}

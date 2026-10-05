@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,7 +15,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func executionStopperFor(c Config) (executionbackend.ExecutionStopper, error) {
@@ -208,7 +208,7 @@ func retiredExecutionCapabilityName(name string) bool {
 	return name == "reply_continue" || name == "retry"
 }
 
-func (s *Service) readRunWorkspace(ctx context.Context, run *contracts.Run) (executionbackend.WorkspaceInspection, error) {
+func (s *Service) readRunWorkspace(ctx context.Context, run *reconstructiontypes.RunView) (executionbackend.WorkspaceInspection, error) {
 	if run == nil || run.WorkflowVersion != executionmodel.Version {
 		return executionbackend.WorkspaceInspection{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "workspace inspection requires its fixed worker-flow-v1 identity"}
 	}
@@ -216,7 +216,7 @@ func (s *Service) readRunWorkspace(ctx context.Context, run *contracts.Run) (exe
 	return executionbackend.WorkspaceInspection{Repository: w.Repository, Worktree: w.Worktree, Branch: w.Branch, Base: w.Base, Head: w.Head, Dirty: w.Dirty, CheckedAt: w.VerifiedAt}, err
 }
 
-func (s *Service) inspectRunProcess(run *contracts.Run) string {
+func (s *Service) inspectRunProcess(run *reconstructiontypes.RunView) string {
 	if run == nil || run.Process == nil {
 		return "execution identity unavailable"
 	}

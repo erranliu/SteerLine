@@ -2,13 +2,13 @@ package execution
 
 import (
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func (s *Service) newLifecycleOperation(run *contracts.Run, kind, key string, value any) (*executionmodel.OperationRecord, error) {
+func (s *Service) newLifecycleOperation(run *reconstructiontypes.RunView, kind, key string, value any) (*executionmodel.OperationRecord, error) {
 	id, err := s.startWorkerOperation(run, kind, key, value)
 	if err != nil {
 		return nil, err
@@ -21,7 +21,7 @@ func (s *Service) newLifecycleOperation(run *contracts.Run, kind, key string, va
 }
 
 // originalLifecycleOperation never offers an existing external intent to Execute.
-func (s *Service) originalLifecycleOperation(run *contracts.Run, kind, key string, value any) (*executionmodel.OperationRecord, bool, error) {
+func (s *Service) originalLifecycleOperation(run *reconstructiontypes.RunView, kind, key string, value any) (*executionmodel.OperationRecord, bool, error) {
 	prior := s.operationByKey(key)
 	if prior != nil && prior.Status != "pending" {
 		if prior.Kind != kind {
@@ -54,7 +54,7 @@ func lifecycleOutcome(receipt executionbackend.LifecycleReceipt, err error) (str
 	return status, diagnostic
 }
 
-func (s *Service) checkedWorkerTurnReceipt(run *contracts.Run, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt, action executionbackend.LifecycleAction) (workerFlowContext, error) {
+func (s *Service) checkedWorkerTurnReceipt(run *reconstructiontypes.RunView, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt, action executionbackend.LifecycleAction) (workerFlowContext, error) {
 	if err := receipt.ValidateFor(request); err != nil {
 		return workerFlowContext{}, err
 	}

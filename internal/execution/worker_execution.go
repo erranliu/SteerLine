@@ -3,10 +3,10 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
@@ -42,14 +42,14 @@ func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, re
 // workerFlowContext binds one persisted run to its fixed profile and records.
 // It is resolved for each operation; no mutable "current worker" slot owns it.
 type workerFlowContext struct {
-	run       *contracts.Run
+	run       *reconstructiontypes.RunView
 	workflow  *executionmodel.WorkflowRunRecord
 	execution *executionmodel.ExecutionRecord
 	attempt   *executionmodel.StepAttemptRecord
 	config    Config
 }
 
-func (s *Service) workerFlowContext(run *contracts.Run) (workerFlowContext, error) {
+func (s *Service) workerFlowContext(run *reconstructiontypes.RunView) (workerFlowContext, error) {
 	if run == nil || run.RunID == "" || run.ExecutionID == "" || run.AttemptID == "" {
 		return workerFlowContext{}, errors.New("worker flow has no fixed run identity")
 	}
@@ -102,7 +102,7 @@ func copyWorkerFlowConfig(c Config) Config {
 	return c
 }
 
-func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *contracts.Run, execution *executionmodel.ExecutionRecord, answer executionmodel.DecisionAnswer, commandID string) error {
+func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord, answer executionmodel.DecisionAnswer, commandID string) error {
 	sessionID, _ := executionSessionFacts(execution)
 	if sessionID == "" {
 		execution.Error = ptr("Feedback is saved, but the original worker session is not yet available for delivery")
@@ -162,7 +162,7 @@ func workerFeedbackText(answer executionmodel.DecisionAnswer, request executionm
 	return message
 }
 
-func prepareLocalWorkerWorkspace(s *Service, ctx context.Context, run *contracts.Run, opID string) (bool, error) {
+func prepareLocalWorkerWorkspace(s *Service, ctx context.Context, run *reconstructiontypes.RunView, opID string) (bool, error) {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return false, err

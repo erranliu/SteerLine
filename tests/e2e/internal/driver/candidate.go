@@ -14,9 +14,8 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerlineapp"
+	steerlineapp "github.com/erranliu/SteerLine/internal/app"
+	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
@@ -54,8 +53,8 @@ func (c *Client) Candidate(ctx context.Context, helper string, in CandidateComma
 }
 
 type CandidateConversation struct {
-	Events []contracts.ConversationEvent    `json:"events"`
-	Bodies []contracts.ConversationBodyPage `json:"bodies"`
+	Events []productapi.ConversationEvent     `json:"events"`
+	Bodies []productapi.ConversationBodyPage  `json:"bodies"`
 }
 
 func ReadOriginalOperations(ctx context.Context, database, project string) ([]executionmodel.OperationRecord, error) {
@@ -76,7 +75,7 @@ func ReadCandidateConversation(ctx context.Context, database, project, runID, ex
 	}
 	defer reader.Close()
 	q := productquery.NewConversationService(reader, project)
-	filter := contracts.ConversationFilter{WorkflowID: runID, ExecutionID: executionID}
+	filter := productapi.ConversationFilter{WorkflowID: runID, ExecutionID: executionID}
 	cursor := ""
 	for n := 0; n < 100; n++ {
 		page, err := q.ReadConversation(ctx, filter, cursor, 100)
@@ -88,7 +87,7 @@ func ReadCandidateConversation(ctx context.Context, database, project, runID, ex
 				return result, fmt.Errorf("canonical conversation crossed candidate")
 			}
 			result.Events = append(result.Events, event)
-			if event.Type == contracts.ConversationMessageComplete && event.Body != nil {
+			if event.Type == productapi.ConversationMessageComplete && event.Body != nil {
 				body, err := q.ReadMessageBody(ctx, *event.Body, 0, 256<<10)
 				if err != nil {
 					return result, err
@@ -155,7 +154,7 @@ func MainCandidate(args []string) error {
 		if !matched {
 			return fmt.Errorf("feedback execution/run identity mismatch")
 		}
-		cmd, _, err := steerline.SubmitAnswerDecision(ctx, c, in.RunID, in.DecisionID, in.Option, in.Note, "e2e", in.DecisionVersion, in.RunRevision, in.InstanceID, in.RequestID)
+		cmd, _, err := steerlineapp.SubmitAnswerDecision(ctx, c, in.RunID, in.DecisionID, in.Option, in.Note, "e2e", in.DecisionVersion, in.RunRevision, in.InstanceID, in.RequestID)
 		if err != nil {
 			return err
 		}

@@ -53,6 +53,7 @@ func (c *Config) ResolveIdentity(ctx context.Context) error {
 		return errors.New("configured repository identity changed after it was resolved")
 	}
 	c.identity = identity
+	c.Repository = repository.Path
 	if c.frozenExecutionConfig {
 		return validateImplementationProfileData(*c)
 	}

@@ -3,6 +3,7 @@ package execution
 import (
 	"context"
 	"errors"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
@@ -264,11 +264,11 @@ func (o *neutralObserver) Close(context.Context) error {
 
 type neutralConversationSources struct{}
 
-func (neutralConversationSources) MapConversation(contracts.ConversationInput) (contracts.ConversationMappedBatch, error) {
-	return contracts.ConversationMappedBatch{}, nil
+func (neutralConversationSources) MapConversation(executionvalues.ConversationInput) (executionvalues.ConversationMappedBatch, error) {
+	return executionvalues.ConversationMappedBatch{}, nil
 }
 
-func (neutralConversationSources) RestoreMapper(contracts.ConversationMapperSnapshot) contracts.ConversationMapper {
+func (neutralConversationSources) RestoreMapper(executionvalues.ConversationMapperSnapshot) ConversationMapper {
 	return nil
 }
 
@@ -284,20 +284,20 @@ func (neutralConversationSources) JournalSegment(executionbackend.BackendKind, e
 
 func (neutralConversationSources) JournalGeneration(string, string) (uint64, error) { return 0, nil }
 
-func (neutralConversationSources) LiveJournalPath(context.Context, contracts.ConversationJournalPathRequest) (string, error) {
+func (neutralConversationSources) LiveJournalPath(context.Context, ConversationJournalPathRequest) (string, error) {
 	return "", nil
 }
 
-func (neutralConversationSources) DiscoverHistory(context.Context, contracts.ConversationDiscovery) (contracts.ConversationDiscoveryResult, error) {
-	return contracts.ConversationDiscoveryResult{}, nil
+func (neutralConversationSources) DiscoverHistory(context.Context, ConversationDiscovery) (ConversationDiscoveryResult, error) {
+	return ConversationDiscoveryResult{}, nil
 }
 
-func (neutralConversationSources) DiscoverJournals(context.Context, contracts.ConversationDiscovery, func(string) (string, error)) ([]contracts.ConversationJournalSource, error) {
+func (neutralConversationSources) DiscoverJournals(context.Context, ConversationDiscovery, func(string) (string, error)) ([]ConversationJournalSource, error) {
 	return nil, nil
 }
 
-func (neutralConversationSources) ReadHistory(context.Context, contracts.ConversationHistoryReadRequest, func(*exec.Cmd) (executionbackend.StopHandle, error)) (contracts.ConversationHistoryBatch, error) {
-	return contracts.ConversationHistoryBatch{}, errors.New("fixture history unsupported")
+func (neutralConversationSources) ReadHistory(context.Context, ConversationHistoryReadRequest, func(*exec.Cmd) (executionbackend.StopHandle, error)) (ConversationHistoryBatch, error) {
+	return ConversationHistoryBatch{}, errors.New("fixture history unsupported")
 }
 
 var _ = time.Second

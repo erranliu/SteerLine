@@ -13,14 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/app/host/scheduler"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/query"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/host"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
@@ -105,7 +104,7 @@ func openFixtureProject(ctx context.Context, c *Config) (*sqlite.SQLiteStore, er
 func openFixtureCommandStore(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
 	return openFixtureProject(ctx, c)
 }
-func loadFixtureRuntime(c Config) (*contracts.Runtime, error) {
+func loadFixtureRuntime(c Config) (*reconstruction.Runtime, error) {
 	db, err := sqlite.OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		return nil, err
@@ -180,7 +179,7 @@ func readControlRequest(path string) (productapi.ControlRequest, error) {
 	if len(body) > 3<<20 {
 		return request, errors.New("oversize fixture request")
 	}
-	return request, contracts.DecodeJSON(body, &request)
+	return request, decode(body, &request)
 }
 func (h fixtureHost) ReadControlRequest(id string) (productapi.ControlRequest, error) {
 	return readControlRequest(controlRequestPath(h.config.RunDir, id))
@@ -205,7 +204,7 @@ func ReadControlReceipt(c Config, id string) (*productapi.ControlReceipt, error)
 		return nil, err
 	}
 	var value productapi.ControlReceipt
-	if err = contracts.DecodeJSON(body, &value); err != nil {
+	if err = decode(body, &value); err != nil {
 		return nil, err
 	}
 	return &value, nil
@@ -272,7 +271,7 @@ func (h fixtureHost) FindStopRequest(instance string, seen map[string]bool) (*pr
 	return nil, "", time.Time{}
 }
 func (fixtureHost) PublishReady(string, *executionbackend.ProcessIdentity, string) error { return nil }
-func (fixtureHost) Emit(contracts.ActivityEvent)                                         {}
+func (fixtureHost) Emit(executionmodel.ActivityEvent)                                    {}
 func (fixtureHost) CurrentProcessIdentity() (*executionbackend.ProcessIdentity, error) {
 	return resourceprocess.CurrentIdentity()
 }

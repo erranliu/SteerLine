@@ -3,14 +3,14 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"reflect"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func (s *Service) hostEnvironmentForRun(run *contracts.Run) (executionbackend.HostEnvironmentPort, executionbackend.LifecyclePort, workerFlowContext, executionbackend.LifecycleSnapshot, error) {
+func (s *Service) hostEnvironmentForRun(run *reconstructiontypes.RunView) (executionbackend.HostEnvironmentPort, executionbackend.LifecyclePort, workerFlowContext, executionbackend.LifecycleSnapshot, error) {
 	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
 		return nil, nil, fixed, executionbackend.LifecycleSnapshot{}, err
@@ -26,7 +26,7 @@ func (s *Service) hostEnvironmentForRun(run *contracts.Run) (executionbackend.Ho
 	return host, lifecycle, fixed, snapshot, nil
 }
 
-func (s *Service) currentHostTurn(run *contracts.Run) (*executionbackend.HostTurnFacts, error) {
+func (s *Service) currentHostTurn(run *reconstructiontypes.RunView) (*executionbackend.HostTurnFacts, error) {
 	host, _, _, snapshot, err := s.hostEnvironmentForRun(run)
 	if err != nil {
 		return nil, err
@@ -34,7 +34,7 @@ func (s *Service) currentHostTurn(run *contracts.Run) (*executionbackend.HostTur
 	return host.CurrentTurn(snapshot)
 }
 
-func (s *Service) resetHostTurnOutput(run *contracts.Run, turnID string) error {
+func (s *Service) resetHostTurnOutput(run *reconstructiontypes.RunView, turnID string) error {
 	host, _, fixed, snapshot, err := s.hostEnvironmentForRun(run)
 	if err != nil {
 		return err
@@ -49,12 +49,12 @@ func (s *Service) resetHostTurnOutput(run *contracts.Run, turnID string) error {
 	return s.commitWorker(run)
 }
 
-func (s *Service) executeHostAction(ctx context.Context, run *contracts.Run, lifecycle executionbackend.LifecyclePort, input executionbackend.HostActionInput) error {
+func (s *Service) executeHostAction(ctx context.Context, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, input executionbackend.HostActionInput) error {
 	candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecycleHostAction, Input: executionbackend.LifecycleInput{Host: &input}}
 	return s.executeLifecycleStep(ctx, run, lifecycle, candidate)
 }
 
-func (s *Service) readHostOutput(ctx context.Context, run *contracts.Run) error {
+func (s *Service) readHostOutput(ctx context.Context, run *reconstructiontypes.RunView) error {
 	host, _, fixed, snapshot, err := s.hostEnvironmentForRun(run)
 	if err != nil {
 		return err
@@ -104,7 +104,7 @@ func (s *Service) readHostOutput(ctx context.Context, run *contracts.Run) error 
 	return s.commitWorker(run)
 }
 
-func (s *Service) verifyHostExecutionEvidence(ctx context.Context, run *contracts.Run, execution *executionmodel.ExecutionRecord) error {
+func (s *Service) verifyHostExecutionEvidence(ctx context.Context, run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) error {
 	if execution == nil || execution.Process == nil {
 		return errors.New("host execution has no original terminal")
 	}

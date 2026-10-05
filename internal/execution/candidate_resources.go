@@ -3,15 +3,15 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // Receipt handling after experiment exit retains physical facts and the
 // original Operation. It never asks a planner for another business action.
-func (s *Service) applyRetiredLifecycleReceipt(run *contracts.Run, result lifecycleEffectResult) (retErr error) {
+func (s *Service) applyRetiredLifecycleReceipt(run *reconstructiontypes.RunView, result lifecycleEffectResult) (retErr error) {
 	defer func() {
 		if retErr != nil && result.observer != nil {
 			_ = result.observer.Close(context.Background())
@@ -77,7 +77,7 @@ func (s *Service) applyRetiredLifecycleReceipt(run *contracts.Run, result lifecy
 	return nil
 }
 
-func (s *Service) recordRetiredWorkerEvent(run *contracts.Run, ev WorkerEvent) error {
+func (s *Service) recordRetiredWorkerEvent(run *reconstructiontypes.RunView, ev WorkerEvent) error {
 	w, e := s.workflowRecords(run)
 	if e == nil || w == nil {
 		return executionmodel.ErrTurnStale
@@ -151,7 +151,7 @@ func (s *Service) recordRetiredWorkerEvent(run *contracts.Run, ev WorkerEvent) e
 	return nil
 }
 
-func (s *Service) finishRetiredCandidate(run *contracts.Run, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext) error {
+func (s *Service) finishRetiredCandidate(run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext) error {
 	snapshot, err := s.lifecycleSnapshot(run, fixed.workflow, fixed.execution, fixed.attempt, nil)
 	if err != nil {
 		return err
@@ -201,7 +201,7 @@ func (s *Service) finishRetiredCandidate(run *contracts.Run, lifecycle execution
 	return s.commitWorker(run)
 }
 
-func (s *Service) resumeRetiredCandidate(ctx context.Context, run *contracts.Run) error {
+func (s *Service) resumeRetiredCandidate(ctx context.Context, run *reconstructiontypes.RunView) error {
 	if s.lifecycleEffectPending(run.RunID) {
 		return nil
 	}

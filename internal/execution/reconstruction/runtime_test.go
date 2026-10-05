@@ -7,7 +7,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -96,7 +95,7 @@ func TestProjectionRejectsBrokenBindingsWithoutReusingOldViews(t *testing.T) {
 			t.Fatal("broken execution or saved-answer identity accepted")
 		}
 	}
-	old := contracts.Runtime{Runs: []*contracts.Run{{RunID: "old", ExecutionID: "orphan", ExecutionStatus: "running"}}}
+	old := Runtime{Runs: []*RunView{{RunID: "old", ExecutionID: "orphan", ExecutionStatus: "running"}}}
 	view, err := Build(Snapshot{}, MetadataOf(old))
 	if err != nil || len(view.Runs) != 0 || view.SlotOccupied {
 		t.Fatalf("old client view filled missing authority: %+v %v", view, err)
@@ -126,7 +125,7 @@ func TestProjectionRetainsDeliveryAndReservationRules(t *testing.T) {
 
 func TestExecutionProjectionKeepsRemotePathAndWhitespaceSemantics(t *testing.T) {
 	execution := executionmodel.ExecutionRecord{Backend: string(executionbackend.BackendOrca), Protocol: string(executionbackend.ProtocolOrcaSupervised), Target: executionbackend.ExecutionTarget{ConnectionID: "peer", ExternalRuntime: "remote"}, WorkspaceIntent: &executionbackend.WorkspaceIntent{Path: "service-local-path", Branch: "codex/task"}, Status: "idle", LastTurnOutcome: " "}
-	run := Execution(contracts.Run{}, execution)
+	run := Execution(RunView{}, execution)
 	if run.WorktreePath != nil || *run.WorktreeBranch != "codex/task" || executionViewStatus(execution) != " " || workflowExecutionHost(executionmodel.WorkflowRunRecord{ExecutionProfile: &executionmodel.FixedExecutionProfile{Host: "orca_supervised"}}) != "orca_supervised" {
 		t.Fatal("remote intent was shown as an actual local workspace or whitespace fallback changed")
 	}

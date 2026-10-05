@@ -2,15 +2,15 @@ package execution
 
 import (
 	"context"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	"github.com/erranliu/SteerLine/internal/execution/publication"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 // Retired candidates remain PR observation sources. Their provider facts are
 // audit records and cannot replace the selected TaskDelivery.
-func (s *Service) pollRetiredCandidatePRs(ctx context.Context, run *contracts.Run, fixed workerFlowContext) error {
+func (s *Service) pollRetiredCandidatePRs(ctx context.Context, run *reconstructiontypes.RunView, fixed workerFlowContext) error {
 	w, e, c := fixed.workflow, fixed.execution, fixed.config
 	urls := uniqueSorted(append(append(append([]string(nil), w.PRHistory...), w.PRURL), w.PRCandidateURL))
 	for _, url := range urls {

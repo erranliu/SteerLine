@@ -7,7 +7,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
@@ -16,7 +15,7 @@ func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 	config := workerContextConfigFixture()
 	fixed := config.projectExecutionProfile().Freeze()
 	target := TargetFor(config)
-	run := &contracts.Run{RunID: "run", ExecutionID: "execution", AttemptID: "attempt", Host: "local", Agent: "fixture", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Target: target}
+	run := &reconstruction.RunView{RunID: "run", ExecutionID: "execution", AttemptID: "attempt", Host: "local", Agent: "fixture", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Target: target}
 	service := Service{
 		Config: config,
 		domain: reconstruction.Snapshot{WorkflowRuns: []executionmodel.WorkflowRunRecord{{ProjectIdentity: ConfigurationProjectIdentity(config), WorkflowRunID: "run", WorkflowVersion: executionmodel.Version, Repository: config.Repository, Branch: config.Branch, ConfigDigest: fixed.AcceptedConfigVersion, ExecutionProfile: &fixed}},
@@ -87,7 +86,7 @@ func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
 	config.ExecutionDirectory, err = NewExecutionDirectory(config.ExecutionDirectory.Version(), neutralCodecs(), []ExecutionRegistration{entry, foreign})
 	require(t, err)
 	target := TargetFor(config)
-	run := &contracts.Run{Host: config.Host, Agent: config.Agent, Backend: string(entry.Key.Backend), Protocol: string(entry.Key.Protocol), Target: target}
+	run := &reconstruction.RunView{Host: config.Host, Agent: config.Agent, Backend: string(entry.Key.Backend), Protocol: string(entry.Key.Protocol), Target: target}
 	record := &executionmodel.ExecutionRecord{Agent: config.Agent, Backend: run.Backend, Protocol: run.Protocol, Target: target}
 	mode, err := workerFlowRegistrationFor(config, run, record)
 	require(t, err)

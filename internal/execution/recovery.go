@@ -8,7 +8,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // InspectRecovery reads the current SQLite projection and performs read-only
@@ -33,7 +32,7 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 	if runtimeState == nil || runtimeState.Repository.Identity != c.identity {
 		return RecoveryInspection{}, errors.New("current SQLite runtime projection is unavailable or belongs to another repository")
 	}
-	var run *contracts.Run
+	var run *reconstruction.RunView
 	for _, candidate := range runtimeState.Runs {
 		if candidate != nil && candidate.RunID == runID {
 			run = candidate
@@ -43,7 +42,7 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 	if run == nil {
 		return RecoveryInspection{}, fmt.Errorf("run %s not found", runID)
 	}
-	inspection := RecoveryInspection{Version: 1, SampledAt: now(), RunID: run.RunID, RunRevision: run.ControlRevision, ServiceInstanceID: runtimeState.Service.InstanceID, ServiceStatus: runtimeState.Service.Status, DispatchMode: runtimeState.Control.DispatchMode, DispatchPaused: runtimeState.Control.DispatchPaused, SlotOccupied: runtimeState.SlotOccupied, TaskID: run.TaskID, ExecutionStatus: run.ExecutionStatus, DeliveryStatus: run.FinishTaskStatus, Backend: run.Backend, Protocol: run.Protocol, Target: run.Target, ProcessCheck: "not inspected", Blockers: append([]contracts.ControlBlocker(nil), runtimeState.Control.Blockers...)}
+	inspection := RecoveryInspection{Version: 1, SampledAt: now(), RunID: run.RunID, RunRevision: run.ControlRevision, ServiceInstanceID: runtimeState.Service.InstanceID, ServiceStatus: runtimeState.Service.Status, DispatchMode: runtimeState.Control.DispatchMode, DispatchPaused: runtimeState.Control.DispatchPaused, SlotOccupied: runtimeState.SlotOccupied, TaskID: run.TaskID, ExecutionStatus: run.ExecutionStatus, DeliveryStatus: run.FinishTaskStatus, Backend: run.Backend, Protocol: run.Protocol, Target: run.Target, ProcessCheck: "not inspected", Blockers: append([]reconstruction.ControlBlocker(nil), runtimeState.Control.Blockers...)}
 	if run.Decision != nil {
 		inspection.DecisionID, inspection.DecisionStatus = run.Decision.ID, run.Decision.Status
 	}
@@ -84,11 +83,11 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 	return inspection, nil
 }
 
-func recoveryService(c Config, runtimeState contracts.Runtime) Service {
+func recoveryService(c Config, runtimeState reconstruction.Runtime) Service {
 	return Service{Config: c, lifecycleResolver: c.ExecutionDirectory, State: runtimeState, domain: reconstruction.Snapshot{Tasks: runtimeState.Tasks, WorkflowRuns: runtimeState.WorkflowRuns, Executions: runtimeState.Executions, Attempts: runtimeState.Attempts, Decisions: runtimeState.Decisions, Operations: runtimeState.Operations, Deliveries: runtimeState.Deliveries}, runs: runtimeState.Runs}
 }
 
-func (s *Service) inspectRecoveryClaim(ctx context.Context, run *contracts.Run, report *RecoveryInspection) {
+func (s *Service) inspectRecoveryClaim(ctx context.Context, run *reconstruction.RunView, report *RecoveryInspection) {
 	for i := range s.domain.Tasks {
 		task := &s.domain.Tasks[i]
 		if task.TaskID == run.DomainTaskID && task.ProjectIdentity == s.Config.identity {

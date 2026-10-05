@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/app/host/scheduler"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/host"
 )
 
 func TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace(t *testing.T) {

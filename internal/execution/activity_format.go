@@ -1,10 +1,10 @@
 package execution
 
-import contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+import reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 // decisionAnswerSummary is the execution audit's stable decision outcome text.
 // Terminal coloring and width formatting live with product query/UI code.
-func decisionAnswerSummary(run *contracts.Run) string {
+func decisionAnswerSummary(run *reconstructiontypes.RunView) string {
 	if run == nil || run.Decision == nil {
 		return ""
 	}

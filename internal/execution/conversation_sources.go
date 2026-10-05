@@ -4,31 +4,31 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"path/filepath"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 const maxConversationCursorBytes = 1 << 20
 
-func (s *Service) discoverConversationHistory(ctx context.Context) ([]contracts.ConversationHistorySource, error) {
+func (s *Service) discoverConversationHistory(ctx context.Context) ([]ConversationHistorySource, error) {
 	if s.conversationSources == nil {
 		return nil, errors.New("conversation source port is required")
 	}
-	discovery := contracts.ConversationDiscovery{ProjectID: s.Config.identity, RunDirectory: s.Config.RunDir, Repository: s.Config.Repository}
+	discovery := ConversationDiscovery{ProjectID: s.Config.identity, RunDirectory: s.Config.RunDir, Repository: s.Config.Repository}
 	for _, run := range s.runs {
 		if run == nil || run.RunID == "" || run.ExecutionID == "" || run.DomainTaskID == "" {
 			continue
 		}
-		base := contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, AttemptID: run.AttemptID,
+		base := executionmodel.ConversationEvent{Version: executionmodel.ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, AttemptID: run.AttemptID,
 			ExecutionID: run.ExecutionID, Backend: executionbackend.BackendKind(run.Backend), Protocol: executionbackend.ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID,
-			SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown, ItemQuality: contracts.IdentityUnknown}
-		runSource := contracts.ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath), WorkerFlow: run.WorkflowVersion == executionmodel.Version, Process: conversationProcessSnapshot(run.Process)}
+			SessionQuality: executionmodel.IdentityUnknown, TurnQuality: executionmodel.IdentityUnknown, ItemQuality: executionmodel.IdentityUnknown}
+		runSource := ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath), WorkerFlow: run.WorkflowVersion == executionmodel.Version, Process: conversationProcessSnapshot(run.Process)}
 		for _, attempt := range s.domain.Attempts {
 			if attempt.ExecutionID != run.ExecutionID || attempt.EventPath == "" {
 				continue
@@ -37,7 +37,7 @@ func (s *Service) discoverConversationHistory(ctx context.Context) ([]contracts.
 			if run.WorkflowVersion == executionmodel.Version && attempt.AttemptID == run.AttemptID {
 				ended = run.TaskStatus == "closed" || run.TaskStatus == "discarded"
 			}
-			runSource.Attempts = append(runSource.Attempts, contracts.ConversationAttemptSource{AttemptID: attempt.AttemptID, EventPath: attempt.EventPath, Ended: ended})
+			runSource.Attempts = append(runSource.Attempts, ConversationAttemptSource{AttemptID: attempt.AttemptID, EventPath: attempt.EventPath, Ended: ended})
 		}
 		discovery.Runs = append(discovery.Runs, runSource)
 	}
@@ -56,14 +56,14 @@ func (s *Service) discoverConversationHistory(ctx context.Context) ([]contracts.
 		}
 	}
 	if len(result.Writes) > 0 {
-		if _, err = s.conversationStore.CommitConversation(ctx, result.Writes, contracts.ConversationCheckpoint{}); err != nil {
+		if _, err = s.conversationStore.CommitConversation(ctx, result.Writes, executionmodel.ConversationCheckpoint{}); err != nil {
 			return nil, err
 		}
 	}
 	return result.Sources, nil
 }
 
-func validateDiscoveredConversationOwner(discovery contracts.ConversationDiscovery, event contracts.ConversationEvent) error {
+func validateDiscoveredConversationOwner(discovery ConversationDiscovery, event executionmodel.ConversationEvent) error {
 	if event.ProjectID != discovery.ProjectID {
 		return errors.New("conversation discovery changed its original project")
 	}
@@ -80,12 +80,12 @@ func validateDiscoveredConversationOwner(discovery contracts.ConversationDiscove
 		}
 		expected := run.Base
 		expected.AttemptID = event.AttemptID
-		return validateConversationSourceWrites(expected, []contracts.ConversationWrite{{Event: event}})
+		return validateConversationSourceWrites(expected, []executionmodel.ConversationWrite{{Event: event}})
 	}
 	return errors.New("conversation discovery returned an unknown original execution")
 }
 
-func (s *Service) collectConversationHistoryPage(ctx context.Context, source contracts.ConversationHistorySource) (bool, error) {
+func (s *Service) collectConversationHistoryPage(ctx context.Context, source ConversationHistorySource) (bool, error) {
 	if s.conversationSources == nil || s.Config.ProcessHost == nil {
 		return false, errors.New("conversation source port and managed process host are required")
 	}
@@ -106,7 +106,7 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 	}
 	platformVersion := ""
 	if source.RequiresPlatformVersion {
-		var run *contracts.Run
+		var run *reconstructiontypes.RunView
 		for _, candidate := range s.runs {
 			if candidate != nil && candidate.RunID == event.WorkflowID && candidate.ExecutionID == event.ExecutionID {
 				run = candidate
@@ -125,7 +125,7 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 			return false, err
 		}
 	}
-	batch, err := s.conversationSources.ReadHistory(ctx, contracts.ConversationHistoryReadRequest{Source: source, Cursor: previousCursor, HasCheckpoint: hadCheckpoint,
+	batch, err := s.conversationSources.ReadHistory(ctx, ConversationHistoryReadRequest{Source: source, Cursor: previousCursor, HasCheckpoint: hadCheckpoint,
 		Repository: s.Config.Repository, RunDirectory: s.Config.RunDir, PlatformVersion: platformVersion}, s.Config.ProcessHost.StartManaged)
 	if err != nil {
 		return false, err
@@ -136,12 +136,12 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 	if len(batch.Cursor) > maxConversationCursorBytes {
 		return false, errors.New("conversation source cursor exceeds the persisted budget")
 	}
-	newCheckpoint := contracts.ConversationCheckpoint{ProjectID: event.ProjectID, ExecutionID: event.ExecutionID, AttemptID: event.AttemptID,
+	newCheckpoint := executionmodel.ConversationCheckpoint{ProjectID: event.ProjectID, ExecutionID: event.ExecutionID, AttemptID: event.AttemptID,
 		Source: event.Source, SourceSegment: event.SourceSegment, SourceIdentity: event.SourceIdentity,
 		Generation: event.SessionID, Cursor: batch.Cursor, LocalSeq: batch.Sequence}
 	writes := batch.Writes
 	for len(writes) > 128 {
-		if _, err = s.conversationStore.CommitConversation(ctx, writes[:128], contracts.ConversationCheckpoint{}); err != nil {
+		if _, err = s.conversationStore.CommitConversation(ctx, writes[:128], executionmodel.ConversationCheckpoint{}); err != nil {
 			return false, err
 		}
 		writes = writes[128:]
@@ -195,7 +195,7 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 	return !batch.More && batch.Settled, nil
 }
 
-func (s *Service) runConversationHistoryCollector(ctx context.Context, requests <-chan []contracts.ConversationHistorySource, errorsOut chan<- error) {
+func (s *Service) runConversationHistoryCollector(ctx context.Context, requests <-chan []ConversationHistorySource, errorsOut chan<- error) {
 	finished := map[string]bool{}
 	activeIndex, historicalIndex := 0, 0
 	for {
@@ -206,7 +206,7 @@ func (s *Service) runConversationHistoryCollector(ctx context.Context, requests 
 			if !ok {
 				return
 			}
-			active, historical := []contracts.ConversationHistorySource{}, []contracts.ConversationHistorySource{}
+			active, historical := []ConversationHistorySource{}, []ConversationHistorySource{}
 			for _, source := range sources {
 				if source.Ended {
 					historical = append(historical, source)
@@ -217,7 +217,7 @@ func (s *Service) runConversationHistoryCollector(ctx context.Context, requests 
 			for i, j := 0, len(historical)-1; i < j; i, j = i+1, j-1 {
 				historical[i], historical[j] = historical[j], historical[i]
 			}
-			pick := func(group []contracts.ConversationHistorySource, next *int) (contracts.ConversationHistorySource, bool) {
+			pick := func(group []ConversationHistorySource, next *int) (ConversationHistorySource, bool) {
 				for i := 0; i < len(group); i++ {
 					index := (*next + i) % len(group)
 					source := group[index]
@@ -226,9 +226,9 @@ func (s *Service) runConversationHistoryCollector(ctx context.Context, requests 
 						return source, true
 					}
 				}
-				return contracts.ConversationHistorySource{}, false
+				return ConversationHistorySource{}, false
 			}
-			selected := make([]contracts.ConversationHistorySource, 0, 2)
+			selected := make([]ConversationHistorySource, 0, 2)
 			if source, ok := pick(active, &activeIndex); ok {
 				selected = append(selected, source)
 			}
@@ -244,10 +244,10 @@ func (s *Service) runConversationHistoryCollector(ctx context.Context, requests 
 						return
 					}
 					event := source.Event
-					event.Type, event.Status = contracts.ConversationGap, "source_unavailable"
+					event.Type, event.Status = executionmodel.ConversationGap, "source_unavailable"
 					event.SourceEventID = "read-error:" + source.Identity
 					event.Diagnostic = readErr.Error()
-					_, _ = s.conversationStore.CommitConversation(ctx, []contracts.ConversationWrite{{Event: event}}, contracts.ConversationCheckpoint{})
+					_, _ = s.conversationStore.CommitConversation(ctx, []executionmodel.ConversationWrite{{Event: event}}, executionmodel.ConversationCheckpoint{})
 					select {
 					case errorsOut <- fmt.Errorf("conversation history: %w", readErr):
 					default:

@@ -2,12 +2,12 @@ package execution
 
 import (
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"strings"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
@@ -128,7 +128,7 @@ func BindWorkerPR(workflow *executionmodel.WorkflowRunRecord, execution *executi
 
 // Every platform reaches the same business transition after its own adapter
 // has verified the original turn's terminal evidence.
-func (s *Service) stopVerifiedWorkerTurn(run *contracts.Run, workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, turnID, outcome string, question bool) error {
+func (s *Service) stopVerifiedWorkerTurn(run *reconstructiontypes.RunView, workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, turnID, outcome string, question bool) error {
 	if err := StopWorkerTurn(workflow, execution, turnID, question); err != nil {
 		return err
 	}
@@ -147,7 +147,7 @@ type stoppedWorkerResolution struct {
 	RecordPRStop bool
 }
 
-func (s *Service) resolveStoppedWorkerTurn(run *contracts.Run, workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, resolution stoppedWorkerResolution) error {
+func (s *Service) resolveStoppedWorkerTurn(run *reconstructiontypes.RunView, workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, resolution stoppedWorkerResolution) error {
 	if workflow.Phase == "waiting_pr_merge" {
 		if err := s.offerWorkerPRFeedback(run, workflow.PRURL); err != nil {
 			return err

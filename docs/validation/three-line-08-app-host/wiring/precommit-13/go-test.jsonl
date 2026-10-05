@@ -1,0 +1,12 @@
+{"Time":"2026-10-05T23:41:05.5118032+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/integration"}
+{"Time":"2026-10-05T23:41:07.0697832+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestTM08AppHostWiring"}
+{"Time":"2026-10-05T23:41:07.07029+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestTM08AppHostWiring","Output":"=== RUN   TestTM08AppHostWiring\n"}
+{"Time":"2026-10-05T23:41:07.07029+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestTM08AppHostWiring/default_app_host_composition"}
+{"Time":"2026-10-05T23:41:07.07029+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestTM08AppHostWiring/default_app_host_composition","Output":"=== RUN   TestTM08AppHostWiring/default_app_host_composition\n"}
+{"Time":"2026-10-05T23:41:37.6778034+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestTM08AppHostWiring/default_app_host_composition","Output":"--- PASS: TestTM08AppHostWiring/default_app_host_composition (30.61s)\n"}
+{"Time":"2026-10-05T23:41:37.6783344+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestTM08AppHostWiring/default_app_host_composition","Elapsed":30.61}
+{"Time":"2026-10-05T23:41:37.6783344+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestTM08AppHostWiring","Output":"--- PASS: TestTM08AppHostWiring (30.61s)\n"}
+{"Time":"2026-10-05T23:41:37.6783344+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestTM08AppHostWiring","Elapsed":30.61}
+{"Time":"2026-10-05T23:41:37.6783344+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"PASS\n"}
+{"Time":"2026-10-05T23:41:37.6898471+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"ok  \tgithub.com/erranliu/SteerLine/tests/integration\t32.178s\n"}
+{"Time":"2026-10-05T23:41:37.6898471+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/integration","Elapsed":32.178}

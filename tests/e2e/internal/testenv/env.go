@@ -19,7 +19,6 @@ import (
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"github.com/erranliu/SteerLine/internal/testprocess"
@@ -68,7 +67,7 @@ type Snapshot struct {
 	Page    storageports.NativeTaskPage `json:"page"`
 	Domain  reconstruction.Snapshot     `json:"domain"`
 	Helper  controlled.State            `json:"helper"`
-	Runtime *contracts.Runtime          `json:"runtime,omitempty"`
+	Runtime *reconstruction.Runtime `json:"runtime,omitempty"`
 }
 
 func NewScenario(t *testing.T, id string) *Scenario {

@@ -4,8 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func (s *Service) shutdown() {
@@ -36,7 +35,7 @@ func (s *Service) shutdown() {
 			runID = id
 			break
 		}
-		var run *contracts.Run
+		var run *reconstructiontypes.RunView
 		for _, candidate := range s.runs {
 			if candidate != nil && candidate.RunID == runID {
 				run = candidate

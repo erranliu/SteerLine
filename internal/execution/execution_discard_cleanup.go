@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -158,7 +158,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 
 func (s *Service) reconcileNativePRCleanup(ctx context.Context, task taskmodel.TaskRecord, cleanupItem string) error {
 	prURL := strings.TrimPrefix(cleanupItem, "pull_request_close:")
-	var run *contracts.Run
+	var run *reconstructiontypes.RunView
 	for _, candidate := range s.runs {
 		if candidate == nil || candidate.TaskID != task.TaskID {
 			continue

@@ -1,11 +1,11 @@
 package execution
 
 import (
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // HostPort carries transport and diagnostics only. All qualification, intent,
@@ -19,7 +19,7 @@ type HostPort interface {
 	WriteControlReceipt(productapi.ControlReceipt) error
 	FindStopRequest(string, map[string]bool) (*productapi.ControlRequest, string, time.Time)
 	PublishReady(string, *executionbackend.ProcessIdentity, string) error
-	Emit(contracts.ActivityEvent)
+	Emit(executionvalues.ActivityEvent)
 	CurrentProcessIdentity() (*executionbackend.ProcessIdentity, error)
 }
 

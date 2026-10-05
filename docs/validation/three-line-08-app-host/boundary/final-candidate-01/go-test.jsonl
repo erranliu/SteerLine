@@ -1,0 +1,8 @@
+{"Time":"2026-10-06T01:08:35.0949957+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/coreboundary"}
+{"Time":"2026-10-06T01:08:35.5547397+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/coreboundary","Test":"TestTM08AppHostBoundary"}
+{"Time":"2026-10-06T01:08:35.5547397+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/coreboundary","Test":"TestTM08AppHostBoundary","Output":"=== RUN   TestTM08AppHostBoundary\n"}
+{"Time":"2026-10-06T01:08:41.6523309+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/coreboundary","Test":"TestTM08AppHostBoundary","Output":"--- PASS: TestTM08AppHostBoundary (6.10s)\n"}
+{"Time":"2026-10-06T01:08:41.6545037+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/coreboundary","Test":"TestTM08AppHostBoundary","Elapsed":6.1}
+{"Time":"2026-10-06T01:08:41.6545037+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/coreboundary","Output":"PASS\n"}
+{"Time":"2026-10-06T01:08:41.6590472+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/coreboundary","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/coreboundary\t6.565s\n"}
+{"Time":"2026-10-06T01:08:41.6590472+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/coreboundary","Elapsed":6.5649999999999995}

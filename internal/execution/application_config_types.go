@@ -2,15 +2,15 @@ package execution
 
 import (
 	"context"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 type Config struct {
-	ReadRuntime                 func(context.Context, Config) (*contracts.Runtime, error)                  `json:"-"`
+	ReadRuntime                 func(context.Context, Config) (*reconstructiontypes.Runtime, error)        `json:"-"`
 	ValidateNativeStore         func(context.Context, Config) error                                        `json:"-"`
 	ReadPersistedExecutionState func(context.Context, Config) (storageports.ExecutionStateSnapshot, error) `json:"-"`
 	EnsureNativeProject         func(context.Context, Config) error                                        `json:"-"`
@@ -21,6 +21,7 @@ type Config struct {
 	ExecutionRecords            ExecutionRecordReader                                                      `json:"-"`
 	ExecutionDirectory          *ExecutionDirectory                                                        `json:"-"`
 	ProcessHost                 executionbackend.ManagedProcessHost                                        `json:"-"`
+	ProcessFacts                executionbackend.ProcessFactsPort                                         `json:"-"`
 	WorkspaceBranchPrefix       string                                                                     `json:"-"`
 	StateRoot                   string                                                                     `json:"-"`
 	RepositoryStateKey          string                                                                     `json:"-"`

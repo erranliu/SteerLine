@@ -14,19 +14,21 @@
 
 ## 测试计划
 
-以下新包及 `TestTM*` 是实施时需要接通的精确目标，不表示本次文档 PR 已创建测试或入口。优先将已有代表测试迁到真正所有者并保留断言，只补 Spec 的未覆盖缺口；不能新增仅镜像实现的测试。迁移影响命令时在同次实现中修订到唯一实际包，记录旧/新 parent/subtest，零匹配或 skip 不算通过。TestMC* 当前来源是 `internal/steerline/candidate_workers_test.go`。
+验证目标按最终所有者执行：宿主断言位于 `internal/app/host`，真实 app/host 组合断言位于 `tests/integration`。现有 `TestMC1`–`TestMC9` 已由前置迁入 `internal/execution/candidate_workers_test.go`；保持 execution 所有权，记录其真实 parent/subtest，不按历史根包路径重新归组。优先保留迁入测试的断言，只补 Spec 未覆盖缺口；不能新增仅镜像实现的测试。迁移影响命令时在同次修订到唯一实际包，零匹配或 skip 不算通过。
 
 环境：Windows 临时 Git/SQLite/受控后端，STEERLINE_HOME 指向本轮隔离目录并在结束后恢复；不设置原生 opt-in。下表输出路径为证据目录基名，每次使用新的空运行子目录，不覆盖前置报告。原始 Go JSON、runner summary、身份/版本/原请求回执和必要清理结果一并保留。
 
 | 级别/组或场景 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
 | --- | --- | --- | --- | --- | --- |
-| 定向 Go：TM08.1–TM08.3 | Windows；隔离服务/SQLite/可控宿主，无模型 | `go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/host -- ./internal/app/host -run '^TestTM08(ControlIdentity\|Heartbeat\|Shutdown)$' -count=1` | 服务/路由迁移后 | 原请求/实例拒绝、心跳不改业务、退出不杀 worker/连接关闭代表 | `docs/validation/three-line-08-app-host/host/` |
-| 定向 Go：TM08.1–TM08.2 | Windows；真实 app/cmd 构造与可控后端 | `go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/wiring -- ./internal/steerlineintegration -run '^TestTM08AppHostWiring$' -count=1` | 默认入口和安装路径切换后 | 从默认构造驱动实际服务/命令、恢复原身份；无旧门面 | `docs/validation/three-line-08-app-host/wiring/` |
-| L1 固定最小入口 | Windows；隔离 STEERLINE_HOME，无原生 opt-in | `go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1` | 自查/定向修复完成后一次 | 现有规则/构造/守卫代表非零命中且通过，无意外 live | `docs/validation/three-line-08-app-host/l1/` |
+| 定向 Go：TM08.1–TM08.3 | Windows；隔离服务/SQLite/可控宿主，无模型 | `go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/host/commit-bound-01 -- ./internal/app/host -run '^TestTM08(ControlIdentity|Heartbeat|Shutdown)$' -count=1` | 服务/路由迁移后 | 原请求/实例拒绝、心跳只更新元数据、退出关闭服务资源但不推断 worker 停止 | `docs/validation/three-line-08-app-host/host/` |
+| 定向 Go：TM08.1–TM08.2 | Windows；真实 app/cmd 构造与可控后端 | `go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/wiring/commit-bound-01 -- ./tests/integration -run '^TestTM08AppHostWiring$' -count=1` | 默认入口和安装路径切换后 | 默认 app 构造接通 host、原服务身份/请求回执保持、没有旧 facade 导入 | `docs/validation/three-line-08-app-host/wiring/` |
+| 定向 Go：E2E SnapshotContext sample | Windows；独立 SQLite fixture 与隔离 STEERLINE_HOME，无模型/原生 opt-in | `go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/e2e-snapshot/commit-bound-01 -- ./tests/e2e/internal/testenv -run '^TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions$' -count=1` | E2E/host fixture 类型迁移后 | `SnapshotContext` 只接受同数据库身份/版本的产品页与执行事实 | `docs/validation/three-line-08-app-host/e2e-snapshot/` |
+| L1 固定最小入口 | Windows；隔离 STEERLINE_HOME，无原生 opt-in | `go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1/commit-bound-01` | 自查/定向修复完成后一次 | 固定规则、TM05/TM06/TM07、原组合 TM04、TM08 host dependency guard 与新组合断言非零命中且通过，无意外 live | `docs/validation/three-line-08-app-host/l1/` |
+| 条件追加：L3 controlled `recovery.waiting-merge-restart` | Windows；原 Task/SQLite/Workflow 受控恢复现场 | `go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled -scenario=recovery.waiting-merge-restart -out docs/validation/three-line-08-app-host/recovery` | 仅当实现实际改变恢复行为时 | 原身份、数据库、执行与工作区保留且不重派；否则不选择此组 | `docs/validation/three-line-08-app-host/recovery/` |
 
 边界类变更在本阶段同步既有守卫/负向注入及 L1 选择；扫描全 OS/build tag 源码，核对 Windows/Linux 生产直接及传递依赖。跨系统只做依赖图/编译不冒充运行行为。新增场景或环境能力须先登记包/测试/ID与命令，再执行；当前已注册 E2E 入口和环境约定见 [E2E README](../../tests/e2e/README.md)。
 
-不选 Full/L2/live：宿主承载迁移通过受控进程和实际构造代表验证。#40/#41 的版本/24小时和 #39 原生验收各自负责；若实际恢复行为改变，定向追加已注册 L3 controlled recovery.waiting-merge-restart。
+不选 Full/L2/live：宿主承载迁移通过受控进程和真实 app 构造代表验证。#40/#41 的版本/24小时和 #39 原生验收各自负责；只有恢复行为实际变化才追加已注册的 L3 controlled `recovery.waiting-merge-restart`。L1 选择须保留 TM05/TM06/TM07、原 TM04 组合回归及新增 TM08 host/app 断言。
 
 ## 自查与交付
 

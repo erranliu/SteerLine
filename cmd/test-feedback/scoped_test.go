@@ -156,7 +156,7 @@ func TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents(t *testing.T) {
 }
 
 func TestScopedOptionsAndNativeSwitchGate(t *testing.T) {
-	for _, args := range [][]string{{"-quick", "-workers=3"}, {"-workers=3", "--", "./internal/steerline"}, {"-workers=4"}, {"-quick", "--", "./..."}, {"-quick", "--", "./internal/steerline", "-count=2"}} {
+	for _, args := range [][]string{{"-quick", "-workers=3"}, {"-workers=3", "--", "./internal/app/host"}, {"-workers=4"}, {"-quick", "--", "./..."}, {"-quick", "--", "./internal/app/host", "-count=2"}} {
 		if _, err := parseOptions(args); err == nil {
 			t.Fatalf("accepted invalid options %v", args)
 		}

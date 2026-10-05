@@ -10,7 +10,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -19,7 +18,7 @@ import (
 func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	first, second := "00000000-0000-0000-0000-000000000001", "00000000-0000-0000-0000-000000000002"
 	commandID := newID()
-	run := &contracts.Run{RunID: newID(), ExecutionID: newID(), AttemptID: newID(), Decision: &executionmodel.DecisionState{Status: "answer_saved", Request: executionmodel.DecisionRequest{FormatVersion: executionmodel.DecisionRequestFormatVersion, Question: "Continue?", AllowFreeText: true}}}
+	run := &reconstruction.RunView{RunID: newID(), ExecutionID: newID(), AttemptID: newID(), Decision: &executionmodel.DecisionState{Status: "answer_saved", Request: executionmodel.DecisionRequest{FormatVersion: executionmodel.DecisionRequestFormatVersion, Question: "Continue?", AllowFreeText: true}}}
 	workflow := &executionmodel.WorkflowRunRecord{WorkflowRunID: run.RunID, WorkflowVersion: executionmodel.Version, Phase: "waiting_decision"}
 	execution := &executionmodel.ExecutionRecord{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, CurrentAttemptID: run.AttemptID, CurrentStep: "worker", CurrentTurnID: first, LastStoppedTurnID: first, PendingTurnID: second, PendingCommandID: commandID, TurnNumber: 1}
 	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
@@ -69,20 +68,20 @@ func TestAppServerRejectedEventReleasesObserver(t *testing.T) {
 }
 
 func TestAppServerRecoveryDoesNotRaceInFlightLaunch(t *testing.T) {
-	run := &contracts.Run{RunID: newID(), ExecutionID: newID(), DomainTaskID: "8", Protocol: string(neutralProtocol), WorkflowVersion: executionmodel.Version}
-	service := &Service{lifecycleEffects: map[string]pendingLifecycleEffect{newID(): {runID: run.RunID}}, State: contracts.Runtime{}, domain: reconstruction.Snapshot{Tasks: []taskmodel.TaskRecord{{TaskID: "8", Status: "in_progress"}},
+	run := &reconstruction.RunView{RunID: newID(), ExecutionID: newID(), DomainTaskID: "8", Protocol: string(neutralProtocol), WorkflowVersion: executionmodel.Version}
+	service := &Service{lifecycleEffects: map[string]pendingLifecycleEffect{newID(): {runID: run.RunID}}, State: reconstruction.Runtime{}, domain: reconstruction.Snapshot{Tasks: []taskmodel.TaskRecord{{TaskID: "8", Status: "in_progress"}},
 		WorkflowRuns: []executionmodel.WorkflowRunRecord{{WorkflowRunID: run.RunID, WorkflowVersion: executionmodel.Version, Phase: "queued"}},
-		Executions:   []executionmodel.ExecutionRecord{{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, PendingCommandID: newID()}}}, runs: []*contracts.Run{run},
+		Executions:   []executionmodel.ExecutionRecord{{ExecutionID: run.ExecutionID, WorkflowRunID: run.RunID, PendingCommandID: newID()}}}, runs: []*reconstruction.RunView{run},
 	}
 	before := digestValue(struct {
-		View   contracts.Runtime
+		View   reconstruction.Runtime
 		Domain reconstruction.Snapshot
 	}{service.State, service.domain})
 	if err := service.resumeAppServerWorkers(context.Background()); err != nil {
 		t.Fatal(err)
 	}
 	if before != digestValue(struct {
-		View   contracts.Runtime
+		View   reconstruction.Runtime
 		Domain reconstruction.Snapshot
 	}{service.State, service.domain}) {
 		t.Fatal("recovery modified a still-running launch before its receipt")
@@ -92,14 +91,14 @@ func TestAppServerRecoveryDoesNotRaceInFlightLaunch(t *testing.T) {
 func TestAppServerLateReplyCannotModifyTerminalTask(t *testing.T) {
 	for _, status := range []string{"closed", "discarded"} {
 		route := simpleQuestionRoute(t, neutralQuestionKey, "project", newID(), newID(), newID(), "generation", "turn", "original")
-		run := &contracts.Run{RunID: newID(), TaskStatus: status, Decision: &executionmodel.DecisionState{ID: newID(), Status: "answer_saved", Request: executionmodel.DecisionRequest{QuestionRoute: &route}}}
-		service := &Service{State: contracts.Runtime{}, domain: reconstruction.Snapshot{Operations: []executionmodel.OperationRecord{{OperationID: "reply", Status: "in_flight"}}}, runs: []*contracts.Run{run}}
+		run := &reconstruction.RunView{RunID: newID(), TaskStatus: status, Decision: &executionmodel.DecisionState{ID: newID(), Status: "answer_saved", Request: executionmodel.DecisionRequest{QuestionRoute: &route}}}
+		service := &Service{State: reconstruction.Runtime{}, domain: reconstruction.Snapshot{Operations: []executionmodel.OperationRecord{{OperationID: "reply", Status: "in_flight"}}}, runs: []*reconstruction.RunView{run}}
 		before := digestValue(struct {
-			View   contracts.Runtime
+			View   reconstruction.Runtime
 			Domain reconstruction.Snapshot
 		}{service.State, service.domain})
 		late := lifecycleEffectResult{request: executionbackend.LifecycleRequest{Operation: executionbackend.Operation{ID: "reply", Action: string(executionbackend.LifecycleDeliverFeedback)}, Input: executionbackend.LifecycleInput{Feedback: &executionbackend.FeedbackInput{DecisionID: run.Decision.ID, QuestionID: "original"}}}}
-		service.lifecycleEffects = map[string]pendingLifecycleEffect{"reply": {runID: run.RunID, apply: func(*contracts.Run, lifecycleEffectResult) error {
+		service.lifecycleEffects = map[string]pendingLifecycleEffect{"reply": {runID: run.RunID, apply: func(*reconstruction.RunView, lifecycleEffectResult) error {
 			t.Fatal("terminal task consumed a late receipt")
 			return nil
 		}}}
@@ -107,7 +106,7 @@ func TestAppServerLateReplyCannotModifyTerminalTask(t *testing.T) {
 			t.Fatalf("late reply admission: %v", err)
 		}
 		if before != digestValue(struct {
-			View   contracts.Runtime
+			View   reconstruction.Runtime
 			Domain reconstruction.Snapshot
 		}{service.State, service.domain}) {
 			t.Fatalf("late reply changed %s task", status)

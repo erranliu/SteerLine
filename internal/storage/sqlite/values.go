@@ -1,30 +1,32 @@
 package sqlite
 
 import (
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	productdto "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/query"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-type BodyCompleteness = contracts.BodyCompleteness
+type BodyCompleteness = executionvalues.BodyCompleteness
 
-type ConversationBodyRef = contracts.ConversationBodyRef
+type ConversationBodyRef = executionvalues.ConversationBodyRef
 
-type ConversationCapabilityReport = contracts.ConversationCapabilityReport
+type ConversationCapabilityReport = executionvalues.ConversationCapabilityReport
 
-type ConversationCheckpoint = contracts.ConversationCheckpoint
+type ConversationCheckpoint = executionvalues.ConversationCheckpoint
 
-type ConversationEvent = contracts.ConversationEvent
+type ConversationEvent = executionvalues.ConversationEvent
 
-type ConversationFilter = contracts.ConversationFilter
+type ConversationFilter = productdto.ConversationFilter
 
-type ConversationRawRef = contracts.ConversationRawRef
+type ConversationRawRef = executionvalues.ConversationRawRef
 
-type ConversationWrite = contracts.ConversationWrite
+type ConversationWrite = executionvalues.ConversationWrite
 
-type FinalAvailability = contracts.FinalAvailability
+type FinalAvailability = executionvalues.FinalAvailability
 
-type Repository = contracts.Repository
+type Repository = reconstructiontypes.Repository
 
 type recordWrite[T any] = storageports.RecordWrite[T]
 
@@ -32,14 +34,14 @@ type taskGraphSnapshot = storageports.TaskGraphSnapshot
 
 const MaxEventPageBytes = query.MaxEventPageBytes
 
-const BodyPartial = contracts.BodyPartial
+const BodyPartial = executionvalues.BodyPartial
 
-const BodyComplete = contracts.BodyComplete
+const BodyComplete = executionvalues.BodyComplete
 
-const ConversationSession = contracts.ConversationSession
+const ConversationSession = executionvalues.ConversationSession
 
-const ConversationTurnStarted = contracts.ConversationTurnStarted
+const ConversationTurnStarted = executionvalues.ConversationTurnStarted
 
-const ConversationMessageComplete = contracts.ConversationMessageComplete
+const ConversationMessageComplete = executionvalues.ConversationMessageComplete
 
-const MessagePhaseFinalAnswer = contracts.MessagePhaseFinalAnswer
+const MessagePhaseFinalAnswer = executionvalues.MessagePhaseFinalAnswer

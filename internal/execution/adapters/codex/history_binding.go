@@ -3,6 +3,7 @@ package codexworker
 import (
 	"encoding/json"
 	"errors"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 const ConversationSourceMarkerName = "conversation-source.v1.json"
@@ -130,8 +130,8 @@ func (b HistoryBinding) Identity() string {
 	}{b.SessionID, b.Home, canonicalPath(b.Workspace), b.Command})
 }
 
-func (b HistoryBinding) Event() contracts.ConversationEvent {
-	return contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: b.ProjectID, TaskID: b.TaskID, WorkflowID: b.WorkflowID, ExecutionID: b.ExecutionID, AttemptID: b.AttemptID, Backend: b.Backend, Protocol: b.Protocol, Agent: "codex", TargetID: b.TargetID, ExternalRef: b.ExternalRef, Source: "codex-app-server", SourceRole: contracts.ConversationSourceCanonical, SourceSegment: b.Identity(), SourceIdentity: b.Identity(), SessionID: b.SessionID, SessionQuality: contracts.IdentityNative, TurnQuality: contracts.IdentityUnknown, ItemQuality: contracts.IdentityUnknown, SourceEventQuality: contracts.IdentityDerived, Phase: contracts.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()}
+func (b HistoryBinding) Event() executionvalues.ConversationEvent {
+	return executionvalues.ConversationEvent{Version: executionvalues.ConversationVersion, ProjectID: b.ProjectID, TaskID: b.TaskID, WorkflowID: b.WorkflowID, ExecutionID: b.ExecutionID, AttemptID: b.AttemptID, Backend: b.Backend, Protocol: b.Protocol, Agent: "codex", TargetID: b.TargetID, ExternalRef: b.ExternalRef, Source: "codex-app-server", SourceRole: executionvalues.ConversationSourceCanonical, SourceSegment: b.Identity(), SourceIdentity: b.Identity(), SessionID: b.SessionID, SessionQuality: executionvalues.IdentityNative, TurnQuality: executionvalues.IdentityUnknown, ItemQuality: executionvalues.IdentityUnknown, SourceEventQuality: executionvalues.IdentityDerived, Phase: executionvalues.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()}
 }
 
 func WriteHistoryBinding(path string, b HistoryBinding, writeAtomic func(string, []byte) error) error {

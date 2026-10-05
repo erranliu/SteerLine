@@ -3,11 +3,11 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type stopReconciliationPort struct {
@@ -27,7 +27,7 @@ func (p stopReconciliationPort) Reconcile(ctx context.Context, request execution
 
 // Observe the original stop request through the shared background channel;
 // reconciliation cannot repeat Kill or occupy a project control checkpoint.
-func (s *Service) reconcileRunStop(ctx context.Context, run *contracts.Run, op executionbackend.Operation) error {
+func (s *Service) reconcileRunStop(ctx context.Context, run *reconstructiontypes.RunView, op executionbackend.Operation) error {
 	if op.Ref == nil || s.lifecycleEffectPending(run.RunID) {
 		return nil
 	}
@@ -44,7 +44,7 @@ func (s *Service) reconcileRunStop(ctx context.Context, run *contracts.Run, op e
 	requestOp.LifecycleIdentity = &executionbackend.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionbackend.LifecycleBindingDigest(snapshot), Ref: *op.Ref}
 	request := executionbackend.LifecycleRequest{Snapshot: snapshot, Operation: requestOp, Input: executionbackend.LifecycleInput{Stop: &executionbackend.StopInput{TurnID: snapshot.Session.CurrentTurnID}}}
 	records := executionRecords{root: fixed.config.RunDir, reader: fixed.config.ExecutionRecords, resources: fixed.config.Resources}
-	err = s.dispatchLifecycleEffect(ctx, run, stopReconciliationPort{LifecyclePort: lifecycle, backend: BackendFor(fixed.config), ref: *op.Ref}, request, true, func(run *contracts.Run, result lifecycleEffectResult) error {
+	err = s.dispatchLifecycleEffect(ctx, run, stopReconciliationPort{LifecyclePort: lifecycle, backend: BackendFor(fixed.config), ref: *op.Ref}, request, true, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 		if err := result.receipt.ValidateFor(request); err != nil {
 			return err
 		}
@@ -76,7 +76,7 @@ func (s *Service) reconcileRunStop(ctx context.Context, run *contracts.Run, op e
 	return err
 }
 
-func (s *Service) stopRunExecution(ctx context.Context, r *contracts.Run, worker *Worker) (executionbackend.Operation, error) {
+func (s *Service) stopRunExecution(ctx context.Context, r *reconstructiontypes.RunView, worker *Worker) (executionbackend.Operation, error) {
 	if r == nil || worker == nil || worker.proc == nil {
 		return executionbackend.Operation{}, errors.New("there is no active execution to stop")
 	}
@@ -138,7 +138,7 @@ func (s *Service) stopRunExecution(ctx context.Context, r *contracts.Run, worker
 	requestOperation.LifecycleIdentity = &executionbackend.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionbackend.LifecycleBindingDigest(snapshot), Ref: *op.Ref}
 	request := executionbackend.LifecycleRequest{Snapshot: snapshot, Operation: requestOperation, Input: executionbackend.LifecycleInput{Stop: &executionbackend.StopInput{TurnID: snapshot.Session.CurrentTurnID}}}
 	port := lifecycleStopEffectPort{LifecyclePort: lifecycle, handle: worker.proc, stopper: stopper, operation: op}
-	err = s.dispatchLifecycleEffect(ctx, r, port, request, false, func(run *contracts.Run, result lifecycleEffectResult) error {
+	err = s.dispatchLifecycleEffect(ctx, r, port, request, false, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 		if err := result.receipt.ValidateFor(request); err != nil {
 			return err
 		}

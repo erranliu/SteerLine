@@ -7,13 +7,12 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func TestWorkerFlowContextKeepsFixedRunAndCopiesConfig(t *testing.T) {
-	run := &contracts.Run{RunID: "run", ExecutionID: "execution", AttemptID: "attempt"}
+	run := &reconstruction.RunView{RunID: "run", ExecutionID: "execution", AttemptID: "attempt"}
 	config := workerContextConfigFixture()
 	settings := neutralProfileSettings(config)
 	settings.Args = []string{"--no-alt-screen"}
@@ -54,7 +53,7 @@ func TestWorkerFlowContextsDoNotExchangeExecutionProfiles(t *testing.T) {
 		id := route.ID
 		fixed := base.bindProjectPolicy(route).Freeze(ConfigurationProjectIdentity(base))
 		selected := base.ApplyFixedExecutionProfile(fixed)
-		run := &contracts.Run{RunID: id, ExecutionID: id + "-execution", AttemptID: id + "-attempt", Host: "local", Agent: "fixture", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Target: TargetFor(selected), ExecutionStatus: "pending"}
+		run := &reconstruction.RunView{RunID: id, ExecutionID: id + "-execution", AttemptID: id + "-attempt", Host: "local", Agent: "fixture", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Target: TargetFor(selected), ExecutionStatus: "pending"}
 		service.State.Runs = append(service.State.Runs, run)
 		service.domain.WorkflowRuns = append(service.domain.WorkflowRuns, executionmodel.WorkflowRunRecord{ProjectIdentity: ConfigurationProjectIdentity(base), WorkflowRunID: id, WorkflowVersion: executionmodel.Version, Repository: base.Repository, Branch: base.Branch, ConfigDigest: fixed.AcceptedConfigVersion, ExecutionProfile: &fixed})
 		service.domain.Executions = append(service.domain.Executions, executionmodel.ExecutionRecord{ProjectIdentity: ConfigurationProjectIdentity(base), ExecutionID: run.ExecutionID, WorkflowRunID: id, CurrentAttemptID: run.AttemptID, ConfigurationDigest: fixed.Digest})
