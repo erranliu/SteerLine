@@ -182,6 +182,17 @@ func ReadProjectView(ctx context.Context, database, project string) (storageport
 	return productquery.NewService(reader, project).ReadProjectView(ctx, "", 100)
 }
 
+// ReadApplicationProjectSnapshot obtains the product view and execution facts
+// used by SnapshotContext from one SQLite read transaction.
+func ReadApplicationProjectSnapshot(ctx context.Context, database, project, selected string, limit int) (storageports.ApplicationProjectSnapshot, error) {
+	reader, err := sqlite.OpenSQLiteReader(database)
+	if err != nil {
+		return storageports.ApplicationProjectSnapshot{}, err
+	}
+	defer reader.Close()
+	return reader.ReadApplicationProjectSnapshot(ctx, project, selected, limit)
+}
+
 func ReadRuntime(ctx context.Context, configPath string) (*contracts.Runtime, error) {
 	config, err := steerlineapp.LoadConfig(configPath)
 	if err != nil {

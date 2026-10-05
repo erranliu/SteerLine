@@ -129,7 +129,7 @@ product/api 只含可序列化页面、目标/版本/原请求回执；无 Domai
 
 `internal/storage/sqlite` 是唯一 SQLite 实现，独占连接、schema、SQL、WAL、CAS 与原子事务。`internal/steerlineapp` 是唯一生产构造层，通过 [native_project_open.go](../../internal/steerlineapp/native_project_open.go) 校验/打开/绑定存储，并把各消费者端口交给 task、execution 和 product/query；执行服务只收到 `execution.ServiceStorage` 窄端口组与 app 持有的 Close 回调。旧 `internal/steerline/sqlite` 与 `internal/steerline/persistence` 包已删除。
 
-`storage/ports` 按所有者持有 TaskGraph/NativeTaskPage/ProjectView、只读事件/活动、ExecutionSnapshot/ExecutionStateSnapshot、ServiceCheckpoint 以及窄原子声明。SQLite 的执行恢复快照在一个读事务内采 checkpoint、TaskGraph/authority 与 execution 记录；项目页不含 Runtime。`CommandStore` 只读完整 DAG 与目标任务的全部候选 workflow/execution 前值；产品 `Workflow(id)` 与活动查询按传入 identity 读取，活动归属与事件在同一事务采样。worker-flow 服务预检经 app 注入的只读快照交由 execution 校验冻结 profile、binding 和 readiness 证据。SQL 层只调用 product/query 的 History、ReadySnapshot 和页面游标纯投影，不调用读取用例或命令用例。schema 14 与 checkpoint/runtime schema 18 不变。端口、构造、测试和本次证据见[#79 验证记录](../validation/three-line-07-storage-ports/README.md)。
+`storage/ports` 按所有者持有 TaskGraph/NativeTaskPage/ProjectView、只读事件/活动、ExecutionSnapshot/ExecutionStateSnapshot、ServiceCheckpoint 以及窄原子声明。SQLite 的执行恢复快照在一个读事务内采 checkpoint、TaskGraph/authority 与 execution 记录；`ApplicationProjectSnapshot` 还在该同一事务组合产品 ProjectView 与 execution 状态，Runtime 仍由 app 用纯值重建，project DTO 不含 Runtime/Domain。`CommandStore` 只读完整 DAG 与目标任务的全部候选 workflow/execution 前值；产品 `Workflow(id)` 与活动查询按传入 identity 读取，活动归属与事件在同一事务采样。worker-flow 服务预检经 app 注入的只读快照交由 execution 校验冻结 profile、binding 和 readiness 证据。SQL 层只调用 product/query 的 History、ReadySnapshot 和页面游标纯投影，不调用读取用例或命令用例。schema 14 与 checkpoint/runtime schema 18 不变。端口、构造、测试和本次证据见[#79 验证记录](../validation/three-line-07-storage-ports/README.md)。
 
 ## 全 OS / 构建标签源码索引
 

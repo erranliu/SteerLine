@@ -1,0 +1,16 @@
+{"Time":"2026-10-05T17:08:31.4783579+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration"}
+{"Time":"2026-10-05T17:08:31.4783579+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/execution"}
+{"Time":"2026-10-05T17:08:31.6831857+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/execution","Test":"TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor"}
+{"Time":"2026-10-05T17:08:31.6831857+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution","Test":"TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor","Output":"=== RUN   TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor\n"}
+{"Time":"2026-10-05T17:08:31.6934308+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07RuntimeUsesSampledAuthorityAndCheckpoint"}
+{"Time":"2026-10-05T17:08:31.6934308+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07RuntimeUsesSampledAuthorityAndCheckpoint","Output":"=== RUN   TestTM07RuntimeUsesSampledAuthorityAndCheckpoint\n"}
+{"Time":"2026-10-05T17:08:41.8799588+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution","Test":"TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor","Output":"--- PASS: TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor (10.20s)\n"}
+{"Time":"2026-10-05T17:08:41.8804889+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/execution","Test":"TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor","Elapsed":10.2}
+{"Time":"2026-10-05T17:08:41.8804889+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution","Output":"PASS\n"}
+{"Time":"2026-10-05T17:08:41.906695+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/execution\t10.428s\n"}
+{"Time":"2026-10-05T17:08:41.906695+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/execution","Elapsed":10.429}
+{"Time":"2026-10-05T17:08:45.380282+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07RuntimeUsesSampledAuthorityAndCheckpoint","Output":"--- PASS: TestTM07RuntimeUsesSampledAuthorityAndCheckpoint (13.69s)\n"}
+{"Time":"2026-10-05T17:08:45.380282+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07RuntimeUsesSampledAuthorityAndCheckpoint","Elapsed":13.69}
+{"Time":"2026-10-05T17:08:45.380282+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"PASS\n"}
+{"Time":"2026-10-05T17:08:45.3899028+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerlineintegration\t13.912s\n"}
+{"Time":"2026-10-05T17:08:45.3899028+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Elapsed":13.912}

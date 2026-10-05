@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -16,7 +17,7 @@ func (s Reader) ReadExecutionStateSnapshot(ctx context.Context, project string) 
 		return storageports.ExecutionStateSnapshot{}, err
 	}
 	defer tx.Rollback()
-	snapshot, err := readExecutionStateSnapshotTx(ctx, tx, project, nil)
+	snapshot, err := readExecutionStateSnapshotTx(ctx, tx, project, s.nativeBinding, nil)
 	if err != nil {
 		return storageports.ExecutionStateSnapshot{}, err
 	}
@@ -26,7 +27,7 @@ func (s Reader) ReadExecutionStateSnapshot(ctx context.Context, project string) 
 	return snapshot, nil
 }
 
-func readExecutionStateSnapshotTx(ctx context.Context, tx graphSnapshotQuery, project string, afterCheckpoint func() error) (storageports.ExecutionStateSnapshot, error) {
+func readExecutionStateSnapshotTx(ctx context.Context, tx graphSnapshotQuery, project string, binding *executionmodel.ProjectTaskAuthority, afterCheckpoint func() error) (storageports.ExecutionStateSnapshot, error) {
 	var checkpoint *storageports.ServiceCheckpoint
 	checkpoint, err := readServiceCheckpoint(ctx, tx, project, true)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -40,7 +41,7 @@ func readExecutionStateSnapshotTx(ctx context.Context, tx graphSnapshotQuery, pr
 			return storageports.ExecutionStateSnapshot{}, err
 		}
 	}
-	graph, err := TaskGraphSnapshotTx(ctx, tx, project, nil)
+	graph, err := TaskGraphSnapshotTx(ctx, tx, project, binding)
 	if err != nil {
 		return storageports.ExecutionStateSnapshot{}, err
 	}

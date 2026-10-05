@@ -111,15 +111,14 @@ func loadFixtureRuntime(c Config) (*contracts.Runtime, error) {
 		return nil, err
 	}
 	defer db.Close()
-	checkpoint, err := db.LoadCheckpoint(context.Background(), c.Identity(), true)
-	if err != nil {
-		return nil, err
-	}
 	snapshot, err := db.ReadExecutionStateSnapshot(context.Background(), c.Identity())
 	if err != nil {
 		return nil, err
 	}
-	runtime, err := reconstruction.BuildFromStorage(snapshot, *checkpoint)
+	if snapshot.Checkpoint == nil {
+		return nil, storageports.ErrNotFound
+	}
+	runtime, err := reconstruction.BuildFromStorage(snapshot, *snapshot.Checkpoint)
 	if err != nil {
 		return nil, err
 	}

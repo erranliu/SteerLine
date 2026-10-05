@@ -11,7 +11,7 @@ import (
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-func TestSQLiteExecutionStateSnapshotSharesTransactionAcrossWorkerCommit(t *testing.T) {
+func TestSQLiteApplicationProjectSnapshotSharesTransactionAcrossWriterCommit(t *testing.T) {
 	ctx := context.Background()
 	writer, project, tasks := nativeAuditStore(t)
 	task := tasks[0]
@@ -57,7 +57,7 @@ func TestSQLiteExecutionStateSnapshotSharesTransactionAcrossWorkerCommit(t *test
 	tx, err := reader.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	require(t, err)
 	defer tx.Rollback()
-	sampled, err := readExecutionStateSnapshotTx(ctx, tx, project, func() error {
+	sampled, err := readApplicationProjectSnapshotTx(ctx, tx, reader.Reader, project, task.TaskID, 500, func() error {
 		committed, err = writer.CommitWorker(ctx, storageports.WorkerCommit{
 			Project: project, TaskID: task.TaskID, WorkflowID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, AttemptID: attempt.AttemptID,
 			ExpectedAttemptID: attempt.AttemptID, ControlRevision: old.Records.WorkflowRuns[0].ControlRevision,
@@ -80,13 +80,17 @@ func TestSQLiteExecutionStateSnapshotSharesTransactionAcrossWorkerCommit(t *test
 	if committed.Checkpoint.Revision != oldCheckpoint.Revision+1 {
 		t.Fatalf("WorkerCommit did not publish the next checkpoint: old=%d new=%d", oldCheckpoint.Revision, committed.Checkpoint.Revision)
 	}
-	if sampled.Checkpoint == nil || sampled.Checkpoint.Revision != oldCheckpoint.Revision || sampled.Checkpoint.Service.InstanceID != "old-instance" || sampled.Graph.Authority.AuthorityVersion != 1 || !sampled.Graph.Authority.DispatchPaused || sampled.Records.Executions[0].Status != "active" {
-		t.Fatalf("writer commits leaked into the pinned runtime sample: checkpoint=%+v authority=%+v execution=%+v", sampled.Checkpoint, sampled.Graph.Authority, sampled.Records.Executions)
+	if sampled.ProjectView.Tasks == nil || sampled.ProjectView.Ready == nil || sampled.ProjectView.Tasks.AuthorityVersion != 1 || sampled.ProjectView.Ready.AuthorityVersion != 1 ||
+		sampled.ExecutionState.Checkpoint == nil || sampled.ExecutionState.Checkpoint.Revision != oldCheckpoint.Revision || sampled.ExecutionState.Checkpoint.Service.InstanceID != "old-instance" ||
+		sampled.ExecutionState.Graph.Authority.AuthorityVersion != 1 || !sampled.ExecutionState.Graph.Authority.DispatchPaused || sampled.ExecutionState.Records.Executions[0].Status != "active" {
+		t.Fatalf("writer commit leaked into the combined project sample: product=%+v checkpoint=%+v authority=%+v execution=%+v", sampled.ProjectView.Tasks, sampled.ExecutionState.Checkpoint, sampled.ExecutionState.Graph.Authority, sampled.ExecutionState.Records.Executions)
 	}
 	require(t, tx.Commit())
-	next, err := reader.ReadExecutionStateSnapshot(ctx, project)
+	next, err := reader.ReadApplicationProjectSnapshot(ctx, project, task.TaskID, 500)
 	require(t, err)
-	if next.Checkpoint == nil || next.Checkpoint.Revision != committed.Checkpoint.Revision || next.Checkpoint.Service.InstanceID != "new-instance" || next.Graph.Authority.AuthorityVersion != 2 || next.Graph.Authority.DispatchPaused || next.Records.Executions[0].Status != "waiting_decision" {
-		t.Fatalf("next sample did not adopt the complete committed state: checkpoint=%+v authority=%+v execution=%+v", next.Checkpoint, next.Graph.Authority, next.Records.Executions)
+	if next.ProjectView.Tasks == nil || next.ProjectView.Ready == nil || next.ProjectView.Tasks.AuthorityVersion != 2 || next.ProjectView.Ready.AuthorityVersion != 2 ||
+		next.ExecutionState.Checkpoint == nil || next.ExecutionState.Checkpoint.Revision != committed.Checkpoint.Revision || next.ExecutionState.Checkpoint.Service.InstanceID != "new-instance" ||
+		next.ExecutionState.Graph.Authority.AuthorityVersion != 2 || next.ExecutionState.Graph.Authority.DispatchPaused || next.ExecutionState.Records.Executions[0].Status != "waiting_decision" {
+		t.Fatalf("next combined sample did not adopt the complete committed state: product=%+v checkpoint=%+v authority=%+v execution=%+v", next.ProjectView.Tasks, next.ExecutionState.Checkpoint, next.ExecutionState.Graph.Authority, next.ExecutionState.Records.Executions)
 	}
 }

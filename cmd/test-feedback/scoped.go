@@ -29,7 +29,7 @@ const executionPackage = "github.com/erranliu/SteerLine/internal/execution"
 // Full partitions the execution business tests after their move out of the host facade.
 const fullCorePackage = executionPackage
 
-var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput", "TestCandidateResumeErrorDoesNotStarveSibling"}
+var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput", "TestCandidateResumeErrorDoesNotStarveSibling", "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/internal/steerlineintegration"
 
@@ -99,7 +99,7 @@ var quickOwnerCases = []struct {
 	{"quick-owner-codexapp", "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/codexapp", []string{"TestAskToolResponseUsesNativeAnswerEnvelope", "TestCodexAppCallCancellationInterruptsBlockedWrite", "TestCodexSocketHandshakeHonorsCancellationWithoutDeadline", "TestCodexSocketLoopbackHandshakeAndMaskedJSON"}},
 	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestLocalWorkspacePrepareInspectResourcesAndCleanup", "TestPrepareRejectsHeadChangedByCheckoutHook"}},
 	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPRRequiresExactIdentityAndMergeEvidence", "TestUnsupportedProviderDoesNoNetworkOperation"}},
-	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/steerlineapp", []string{"TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestLocalWindowsSandboxProfileFreezesAndRestores", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile"}},
+	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/steerlineapp", []string{"TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestLocalWindowsSandboxProfileFreezesAndRestores", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile", "TestFileQuerySourceReadsCombinedProjectView"}},
 }
 
 var quickPackages = func() []string {

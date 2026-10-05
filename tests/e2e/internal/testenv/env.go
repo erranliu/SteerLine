@@ -368,31 +368,53 @@ func (p *Project) Claim(key string) {
 func (p *Project) Snapshot() (Snapshot, error) {
 	return p.SnapshotContext(p.Scenario.Context)
 }
+
+func snapshotFromApplicationRead(read storageports.ApplicationProjectSnapshot) (Snapshot, error) {
+	var snap Snapshot
+	view := read.ProjectView
+	if view.TaskError != nil {
+		return snap, view.TaskError
+	}
+	if view.Tasks == nil || view.Ready == nil {
+		return snap, errors.New("combined project snapshot lacks task page or ready values")
+	}
+	if read.ExecutionError != nil {
+		return snap, read.ExecutionError
+	}
+	state := read.ExecutionState
+	project := view.Tasks.ProjectID
+	graph := state.Graph
+	if project == "" || state.Records.ProjectIdentity != project || graph.Authority.ProjectIdentity != project ||
+		graph.DatabaseID != view.Tasks.DatabaseID || graph.DatabaseRevision != view.Tasks.DatabaseRevision ||
+		graph.Authority.AuthorityVersion != view.Tasks.AuthorityVersion || graph.Authority.GraphRevision != view.Tasks.GraphRevision ||
+		view.Ready.ProjectID != project || view.Ready.DatabaseID != view.Tasks.DatabaseID || view.Ready.DatabaseRevision != view.Tasks.DatabaseRevision ||
+		view.Ready.AuthorityVersion != view.Tasks.AuthorityVersion || view.Ready.GraphRevision != view.Tasks.GraphRevision ||
+		!view.Tasks.SampledAt.Equal(view.SampledAt) || !view.Ready.SampledAt.Equal(view.SampledAt) {
+		return snap, errors.New("combined project snapshot contains different database revisions")
+	}
+	snap.Page = *view.Tasks
+	snap.Domain = reconstruction.SnapshotFromStorage(state)
+	if state.Checkpoint != nil {
+		runtime, err := reconstruction.BuildFromStorage(state, *state.Checkpoint)
+		if err != nil {
+			return snap, err
+		}
+		snap.Runtime = &runtime
+	}
+	return snap, nil
+}
+
 func (p *Project) SnapshotContext(ctx context.Context) (Snapshot, error) {
 	var snap Snapshot
 	page, err := p.Driver.Tasks(ctx)
 	if err != nil {
 		return snap, err
 	}
-	view, err := openView(ctx, p.Database, page.ProjectID)
+	read, err := driver.ReadApplicationProjectSnapshot(ctx, p.Database, page.ProjectID, "", 100)
 	if err != nil {
 		return snap, err
 	}
-	if view.TaskError != nil {
-		return snap, view.TaskError
-	}
-	if view.Tasks == nil {
-		return snap, errors.New("public project snapshot lacks tasks")
-	}
-	snap.Page = *view.Tasks
-	snap.Domain, err = driver.ReadWorkflow(ctx, p.Database, page.ProjectID)
-	if err != nil {
-		return snap, err
-	}
-	snap.Runtime, err = driver.ReadRuntime(ctx, p.Config)
-	if errors.Is(err, storageports.ErrNotFound) {
-		err, snap.Runtime = nil, nil
-	}
+	snap, err = snapshotFromApplicationRead(read)
 	if err != nil {
 		return snap, err
 	}

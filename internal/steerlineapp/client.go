@@ -13,6 +13,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
 	"github.com/erranliu/SteerLine/internal/product/query"
@@ -69,8 +70,13 @@ func clientResources(ctx context.Context, c execution.Config, ref productapi.Pro
 	return productclient.Resources{
 		Project: ref, DefaultRequestedBy: steerline.DefaultRequestedBy(), DefaultAnswerer: steerline.AnswererName(),
 		ReadFailure: func(ctx context.Context, selected string, readErr error) productapi.ProjectSnapshot {
-			legacy := steerline.ConnectService(ctx, c)
-			obs := productObservation(legacy.Snapshot)
+			observationErr := readErr
+			if errors.Is(readErr, os.ErrNotExist) {
+				observationErr = nil
+			}
+			nativeObservation := steerline.ObserveRuntimeSnapshot(c, nil, observationErr, time.Now().UTC())
+			legacy := steerline.ConnectServiceFromSnapshot(ctx, c, nativeObservation)
+			obs := productObservation(nativeObservation)
 			connection := productConnection(legacy, obs)
 			return productapi.ProjectSnapshot{SelectedTaskID: selected, Observation: obs, Connection: connection, TaskError: readErr.Error(), NativeTaskError: readErr.Error(), HistoryError: readErr.Error()}
 		},
@@ -153,6 +159,7 @@ type clientReader struct {
 	query.Service
 	query.ConversationService
 	store interface {
+		storageports.ApplicationProjectSnapshotReader
 		Close() error
 		Command(context.Context, string, string) (storageports.CommandRecord, error)
 		DatabaseVersion(context.Context) (string, uint64, error)
@@ -166,17 +173,20 @@ type clientReader struct {
 func (r *clientReader) Close() error { return r.store.Close() }
 
 func (r *clientReader) ReadProject(ctx context.Context, selected string, _ productapi.ProjectSnapshot) productapi.ProjectSnapshot {
-	view, err := r.ReadProjectView(ctx, selected, 500)
+	snapshot, err := r.store.ReadApplicationProjectSnapshot(ctx, r.project, selected, 500)
 	if err != nil {
-		legacyConnection := steerline.ConnectService(ctx, r.config)
-		observation := productObservation(legacyConnection.Snapshot)
+		nativeObservation := steerline.ObserveRuntimeSnapshot(r.config, nil, err, time.Now().UTC())
+		legacyConnection := steerline.ConnectServiceFromSnapshot(ctx, r.config, nativeObservation)
+		observation := productObservation(nativeObservation)
 		connection := productConnection(legacyConnection, observation)
 		page := query.ProjectPage(storageports.ProjectView{}, selected, r.freshness, observation, connection, nil, r.executableTypes)
 		page.TaskError, page.NativeTaskError, page.HistoryError = err.Error(), err.Error(), err.Error()
 		return page
 	}
-	legacyConnection := steerline.ConnectService(ctx, r.config)
-	observation := productObservation(legacyConnection.Snapshot)
+	view := snapshot.ProjectView
+	nativeObservation := applicationProjectObservation(r.config, snapshot)
+	legacyConnection := steerline.ConnectServiceFromSnapshot(ctx, r.config, nativeObservation)
+	observation := productObservation(nativeObservation)
 	connection := productConnection(legacyConnection, observation)
 	decisionReasons := map[string]string{}
 	if legacyConnection.Snapshot.Runtime != nil {
@@ -191,6 +201,24 @@ func (r *clientReader) ReadProject(ctx context.Context, selected string, _ produ
 		}
 	}
 	return query.ProjectPage(view, selected, r.freshness, observation, connection, decisionReasons, r.executableTypes)
+}
+
+func applicationProjectObservation(config execution.Config, snapshot storageports.ApplicationProjectSnapshot) steerline.ObservationSnapshot {
+	sampledAt := snapshot.ProjectView.SampledAt
+	if sampledAt.IsZero() {
+		sampledAt = time.Now().UTC()
+	}
+	if snapshot.ExecutionError != nil {
+		return steerline.ObserveRuntimeSnapshot(config, nil, snapshot.ExecutionError, sampledAt)
+	}
+	if snapshot.ExecutionState.Checkpoint == nil {
+		return steerline.ObserveRuntimeSnapshot(config, nil, nil, sampledAt)
+	}
+	runtimeState, err := reconstruction.BuildFromStorage(snapshot.ExecutionState, *snapshot.ExecutionState.Checkpoint)
+	if err != nil {
+		return steerline.ObserveRuntimeSnapshot(config, nil, err, sampledAt)
+	}
+	return steerline.ObserveRuntimeSnapshot(config, &runtimeState, nil, sampledAt)
 }
 
 func (r *clientReader) ShowTask(ctx context.Context, id string) (productapi.TaskPage, error) {

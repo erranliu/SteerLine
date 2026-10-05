@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./internal/storage/sqlite",
+    "./internal/steerlineapp",
+    "-run",
+    "^(TestSQLiteApplicationProjectSnapshotSharesTransactionAcrossWriterCommit|TestFileQuerySourceReadsCombinedProjectView)$",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-05T09:08:13.6003057Z",
+  "finished_at": "2026-10-05T09:08:21.3317266Z",
+  "wall_seconds": 7.7316327000000005,
+  "environment": {
+    "source_commit": "222183f1dd85651e5a9cea07f70b33b58d9ac509",
+    "worktree_status": " M cmd/test-feedback/scoped.go\n M docs/spec/three-line-07-storage-ports.plan.md\n M docs/validation/three-line-07-storage-ports/ownership.md\n M docs/validation/three-line-07-storage-ports/test-mapping.json\n M internal/execution/host_fixture_test.go\n M internal/steerlineapp/client.go\n M internal/storage/sqlite/execution_state_snapshot.go\n M internal/storage/sqlite/execution_state_snapshot_test.go\n M tests/e2e/internal/driver/driver.go\n M tests/e2e/internal/testenv/env.go\n?? docs/validation/three-line-07-storage-ports/compile-only-02-20261005T170054/exit-code.txt\n?? docs/validation/three-line-07-storage-ports/compile-only-02-20261005T170054/stderr.log\n?? docs/validation/three-line-07-storage-ports/compile-only-02-20261005T170054/stdout.log\n?? docs/validation/three-line-07-storage-ports/compile-only-02-20261005T170355/exit-code.txt\n?? docs/validation/three-line-07-storage-ports/compile-only-02-20261005T170355/stderr.log\n?? docs/validation/three-line-07-storage-ports/compile-only-02-20261005T170355/stdout.log\n?? docs/validation/three-line-07-storage-ports/compile-only-02-20261005T170800/exit-code.txt\n?? docs/validation/three-line-07-storage-ports/compile-only-02-20261005T170800/stderr.log\n?? docs/validation/three-line-07-storage-ports/compile-only-02-20261005T170800/stdout.log\n?? docs/validation/three-line-07-storage-ports/project-snapshot-01-20261005T170112/go-test.jsonl\n?? docs/validation/three-line-07-storage-ports/project-snapshot-01-20261005T170112/go-test.stderr.txt\n?? docs/validation/three-line-07-storage-ports/project-snapshot-01-20261005T170112/summary.json\n?? docs/validation/three-line-07-storage-ports/project-snapshot-01-20261005T170406/go-test.jsonl\n?? docs/validation/three-line-07-storage-ports/project-snapshot-01-20261005T170406/go-test.stderr.txt\n?? docs/validation/three-line-07-storage-ports/project-snapshot-01-20261005T170406/summary.json\n?? docs/validation/three-line-07-storage-ports/runtime-snapshot-01-20261005T170136/go-test.jsonl\n?? docs/validation/three-line-07-storage-ports/runtime-snapshot-01-20261005T170136/go-test.stderr.txt\n?? docs/validation/three-line-07-storage-ports/runtime-snapshot-01-20261005T170136/summary.json\n?? docs/validation/three-line-07-storage-ports/runtime-snapshot-01-20261005T170425/go-test.jsonl\n?? docs/validation/three-line-07-storage-ports/runtime-snapshot-01-20261005T170425/go-test.stderr.txt\n?? docs/validation/three-line-07-storage-ports/runtime-snapshot-01-20261005T170425/summary.json\n?? internal/storage/ports/application_snapshot.go\n?? internal/storage/sqlite/application_snapshot.go\n?? tests/e2e/internal/testenv/project_snapshot_test.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 2,
+    "passed_packages": 2,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 2,
+    "passed_tests": 2,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+        "status": "pass",
+        "elapsed_seconds": 6.445
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/storage/sqlite",
+        "status": "pass",
+        "elapsed_seconds": 1.031
+      }
+    ],
+    "tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+        "name": "TestFileQuerySourceReadsCombinedProjectView",
+        "status": "pass",
+        "elapsed_seconds": 6.21
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/storage/sqlite",
+        "name": "TestSQLiteApplicationProjectSnapshotSharesTransactionAcrossWriterCommit",
+        "status": "pass",
+        "elapsed_seconds": 0.24
+      }
+    ],
+    "slowest_tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/steerlineapp",
+        "name": "TestFileQuerySourceReadsCombinedProjectView",
+        "status": "pass",
+        "elapsed_seconds": 6.21
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/storage/sqlite",
+        "name": "TestSQLiteApplicationProjectSnapshotSharesTransactionAcrossWriterCommit",
+        "status": "pass",
+        "elapsed_seconds": 0.24
+      }
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 6.4447811,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/three-line-07-storage-ports/project-snapshot-01-20261005T170812/go-test.jsonl",
+  "stderr_log": "docs/validation/three-line-07-storage-ports/project-snapshot-01-20261005T170812/go-test.stderr.txt"
+}
