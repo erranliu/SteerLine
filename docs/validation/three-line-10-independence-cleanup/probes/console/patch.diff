@@ -1,0 +1,15 @@
+diff --git "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\console\\source-before.go.txt" "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\console\\source-mutated.go.txt"
+index 66fe75dc..df04a328 100644
+--- "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\console\\source-before.go.txt"
++++ "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\console\\source-mutated.go.txt"
+@@ -661,10 +661,6 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
+ 		dialog.error = "原候选身份已变化或已退出实验；草稿保留"
+ 		return m, nil
+ 	}
+-	if run.EnvironmentBlocker != nil {
+-		dialog.error = "环境阻断：" + run.EnvironmentBlocker.Fact.Reason + "；未发送，解除后请重新提交"
+-		return m, nil
+-	}
+ 	for _, pending := range state.actions {
+ 		if pending.Action == "answer_decision" && pending.DecisionID == dialog.decisionID && !pending.Resolved {
+ 			dialog.error = "原答案请求仍在核实：" + pending.RequestID

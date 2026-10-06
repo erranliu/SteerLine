@@ -1,0 +1,13 @@
+diff --git "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\task\\source-before.go.txt" "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\task\\source-mutated.go.txt"
+index 860566c6..128fd1e6 100644
+--- "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\task\\source-before.go.txt"
++++ "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\task\\source-mutated.go.txt"
+@@ -128,7 +128,7 @@ func StableTaskOrder(nodes []Node, edges []Edge) []string {
+ 	less := func(a, b string) bool {
+ 		x, y := byID[a], byID[b]
+ 		if x.Priority != y.Priority {
+-			return x.Priority < y.Priority
++			return x.Priority > y.Priority
+ 		}
+ 		if !x.CreatedAt.Equal(y.CreatedAt) {
+ 			return x.CreatedAt.Before(y.CreatedAt)

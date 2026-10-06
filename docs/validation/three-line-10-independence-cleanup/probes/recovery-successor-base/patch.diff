@@ -1,0 +1,67 @@
+diff --git "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\recovery-successor-base\\source-before.go.txt" "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\recovery-successor-base\\source-mutated.go.txt"
+index dac452b1..5b1b57aa 100644
+--- "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\recovery-successor-base\\source-before.go.txt"
++++ "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\recovery-successor-base\\source-mutated.go.txt"
+@@ -58,9 +58,60 @@ func TestWaitingMergeRestart(t *testing.T) {
+ 			}
+ 		}
+ 	}
+-	if len(delivery) == 0 {
+-		t.Fatal("missing delivery")
++	if len(again.Domain.Deliveries) != 1 || again.Domain.Deliveries[0].MergeCommit == "" {
++		t.Fatal("original delivery has no unique merge commit")
+ 	}
++	deliveryMerge := again.Domain.Deliveries[0].MergeCommit
++	startErr := p.Driver.Control(env.Context, env.Run.Helper, "start_task", p.Tasks["b"].ID)
++	if startErr != nil {
++		diagnostic, readErr := p.Snapshot()
++		if readErr == nil {
++			p.Record("successor-start-diagnostic", diagnostic)
++			for _, workflow := range diagnostic.Domain.WorkflowRuns {
++				if workflow.TaskID != p.Tasks["b"].ID {
++					continue
++				}
++				for _, execution := range diagnostic.Domain.Executions {
++					if execution.WorkflowRunID == workflow.WorkflowRunID && execution.Workspace.Base != "" {
++						t.Logf("successor base after rejected original receipt: %s; delivery merge: %s", execution.Workspace.Base, deliveryMerge)
++					}
++				}
++			}
++		}
++		t.Fatalf("one original successor start request was rejected; no retry: %v", startErr)
++	}
++	var successor testenv.Snapshot
++	env.Wait("successor base follows delivered merge after restart", func() (bool, error) {
++		var readErr error
++		successor, readErr = p.Snapshot()
++		if readErr != nil {
++			return false, readErr
++		}
++		for _, workflow := range successor.Domain.WorkflowRuns {
++			if workflow.TaskID != p.Tasks["b"].ID {
++				continue
++			}
++			for _, execution := range successor.Domain.Executions {
++				if execution.WorkflowRunID == workflow.WorkflowRunID && execution.Workspace.Base != "" {
++					return true, nil
++				}
++			}
++		}
++		return false, nil
++	})
++	for _, execution := range successor.Domain.Executions {
++		if execution.Workspace.Base != "" && execution.WorkflowRunID != "" {
++			for _, workflow := range successor.Domain.WorkflowRuns {
++				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.TaskID == p.Tasks["b"].ID && execution.Workspace.Base != deliveryMerge {
++					t.Fatalf("successor base %s differs from delivery merge %s", execution.Workspace.Base, deliveryMerge)
++				}
++			}
++		}
++	}
++	if len(successor.Domain.Deliveries) != 1 || successor.Domain.Deliveries[0].MergeCommit != deliveryMerge {
++		t.Fatalf("successor start changed original Delivery: %+v", successor.Domain.Deliveries)
++	}
++	p.Record("successor-base", successor)
+ 	again, err := p.Snapshot()
+ 	env.Must(err)
+ 	p.Record("rechecked", again)

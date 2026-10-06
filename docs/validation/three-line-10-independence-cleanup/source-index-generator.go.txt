@@ -1,0 +1,236 @@
+package main
+
+import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
+	"io/fs"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"sort"
+	"strconv"
+	"strings"
+)
+
+type symbol struct {
+	Name     string `json:"name"`
+	Kind     string `json:"kind"`
+	Receiver string `json:"receiver,omitempty"`
+}
+
+type sourceFile struct {
+	Path             string   `json:"path"`
+	Package          string   `json:"package"`
+	Test             bool     `json:"test"`
+	BuildConstraints []string `json:"build_constraints,omitempty"`
+	Imports          []string `json:"imports"`
+	SHA256           string   `json:"sha256"`
+	Declarations     []symbol `json:"exported_declarations"`
+}
+
+type index struct {
+	SchemaVersion int          `json:"schema_version"`
+	SourceCommit  string       `json:"source_commit"`
+	SourceTree    string       `json:"source_tree"`
+	GoVersion     string       `json:"go_version"`
+	GOOS          string       `json:"goos"`
+	GOARCH        string       `json:"goarch"`
+	FileCount     int          `json:"file_count"`
+	PackageCount  int          `json:"package_count"`
+	SymbolCount   int          `json:"exported_declaration_count"`
+	Files         []sourceFile `json:"files"`
+}
+
+func command(root string, args ...string) string {
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Dir = root
+	data, err := cmd.Output()
+	if err != nil {
+		panic(fmt.Sprintf("%v: %v", args, err))
+	}
+	return strings.TrimSpace(string(data))
+}
+
+func receiver(expr ast.Expr) string {
+	switch value := expr.(type) {
+	case *ast.StarExpr:
+		return receiver(value.X)
+	case *ast.Ident:
+		return value.Name
+	case *ast.IndexExpr:
+		return receiver(value.X)
+	case *ast.IndexListExpr:
+		return receiver(value.X)
+	default:
+		return ""
+	}
+}
+
+func declarations(file *ast.File) []symbol {
+	var result []symbol
+	for _, decl := range file.Decls {
+		switch item := decl.(type) {
+		case *ast.FuncDecl:
+			if item.Name.IsExported() {
+				s := symbol{Name: item.Name.Name, Kind: "func"}
+				if item.Recv != nil && len(item.Recv.List) > 0 {
+					s.Receiver = receiver(item.Recv.List[0].Type)
+					s.Kind = "method"
+				}
+				result = append(result, s)
+			}
+		case *ast.GenDecl:
+			kind := strings.ToLower(item.Tok.String())
+			for _, spec := range item.Specs {
+				switch value := spec.(type) {
+				case *ast.TypeSpec:
+					if value.Name.IsExported() {
+						result = append(result, symbol{Name: value.Name.Name, Kind: "type"})
+					}
+				case *ast.ValueSpec:
+					for _, name := range value.Names {
+						if name.IsExported() {
+							result = append(result, symbol{Name: name.Name, Kind: kind})
+						}
+					}
+				}
+			}
+		}
+	}
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Name != result[j].Name {
+			return result[i].Name < result[j].Name
+		}
+		if result[i].Kind != result[j].Kind {
+			return result[i].Kind < result[j].Kind
+		}
+		return result[i].Receiver < result[j].Receiver
+	})
+	return result
+}
+
+func main() {
+	if len(os.Args) != 3 {
+		panic("usage: source-index-generator <repo-root> <output-json>")
+	}
+	root, err := filepath.Abs(os.Args[1])
+	if err != nil {
+		panic(err)
+	}
+	output, err := filepath.Abs(os.Args[2])
+	if err != nil {
+		panic(err)
+	}
+	data, err := os.ReadFile(filepath.Join(root, "go.mod"))
+	if err != nil {
+		panic(err)
+	}
+	module := ""
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) == 2 && fields[0] == "module" {
+			module = fields[1]
+			break
+		}
+	}
+	if module == "" {
+		panic("go.mod module path not found")
+	}
+	result := index{
+		SchemaVersion: 1,
+		SourceCommit:  command(root, "git", "rev-parse", "HEAD"),
+		SourceTree:    command(root, "git", "rev-parse", "HEAD^{tree}"),
+		GoVersion:     runtime.Version(),
+		GOOS:          runtime.GOOS,
+		GOARCH:        runtime.GOARCH,
+		Files:         []sourceFile{},
+	}
+	set := token.NewFileSet()
+	packages := map[string]bool{}
+	err = filepath.WalkDir(root, func(path string, entry fs.DirEntry, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		if entry.IsDir() {
+			if path != root && (entry.Name() == ".git" || entry.Name() == "vendor" || entry.Name() == "bin") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if filepath.Ext(path) != ".go" {
+			return nil
+		}
+		contents, readErr := os.ReadFile(path)
+		if readErr != nil {
+			return readErr
+		}
+		parsed, parseErr := parser.ParseFile(set, path, contents, parser.ParseComments|parser.AllErrors)
+		if parseErr != nil {
+			return fmt.Errorf("parse %s: %w", path, parseErr)
+		}
+		rel, relErr := filepath.Rel(root, path)
+		if relErr != nil {
+			return relErr
+		}
+		dir := filepath.ToSlash(filepath.Dir(rel))
+		packagePath := module
+		if dir != "." {
+			packagePath += "/" + dir
+		}
+		packages[packagePath] = true
+		imports := make([]string, 0, len(parsed.Imports))
+		for _, item := range parsed.Imports {
+			value, unquoteErr := strconv.Unquote(item.Path.Value)
+			if unquoteErr != nil {
+				return unquoteErr
+			}
+			imports = append(imports, value)
+		}
+		sort.Strings(imports)
+		constraints := []string{}
+		for _, group := range parsed.Comments {
+			for _, comment := range group.List {
+				line := strings.TrimSpace(comment.Text)
+				if strings.HasPrefix(line, "//go:build ") || strings.HasPrefix(line, "// +build ") {
+					constraints = append(constraints, line)
+				}
+			}
+		}
+		sort.Strings(constraints)
+		digest := sha256.Sum256(contents)
+		decls := declarations(parsed)
+		result.SymbolCount += len(decls)
+		result.Files = append(result.Files, sourceFile{
+			Path:             filepath.ToSlash(rel),
+			Package:          packagePath,
+			Test:             strings.HasSuffix(rel, "_test.go"),
+			BuildConstraints: constraints,
+			Imports:          imports,
+			SHA256:           hex.EncodeToString(digest[:]),
+			Declarations:     decls,
+		})
+		return nil
+	})
+	if err != nil {
+		panic(err)
+	}
+	sort.Slice(result.Files, func(i, j int) bool { return result.Files[i].Path < result.Files[j].Path })
+	result.FileCount = len(result.Files)
+	result.PackageCount = len(packages)
+	encoded, err := json.MarshalIndent(result, "", "  ")
+	if err != nil {
+		panic(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(output), 0700); err != nil {
+		panic(err)
+	}
+	if err := os.WriteFile(output, append(encoded, '\n'), 0600); err != nil {
+		panic(err)
+	}
+}

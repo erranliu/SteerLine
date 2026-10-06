@@ -1,0 +1,13 @@
+diff --git "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\execution\\source-before.go.txt" "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\execution\\source-mutated.go.txt"
+index 7531dfe7..f9f4f972 100644
+--- "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\execution\\source-before.go.txt"
++++ "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\probes\\execution\\source-mutated.go.txt"
+@@ -403,7 +403,7 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
+ 		}
+ 		if s.candidateBusinessClosed(run) {
+ 			if err := s.resumeRetiredCandidate(ctx, run); err != nil {
+-				resumeErr = errors.Join(resumeErr, err)
++				return err
+ 			}
+ 			continue
+ 		}

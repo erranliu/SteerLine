@@ -48,6 +48,16 @@ if ($summary.PSObject.Properties.Name -contains 'summary' -and $null -ne $summar
     $passedTests = $summary.summary.passed_tests
     $failedTests = $summary.summary.failed_tests
     $skippedTests = $summary.summary.skipped_tests
+} elseif ($summary.PSObject.Properties.Name -contains 'cleanup_complete') {
+    $groupReports = @($summary.groups)
+    $groupsComplete = $groupReports.Count -gt 0 -and @($groupReports | Where-Object { -not $_.summary.complete }).Count -eq 0
+    $complete = [bool]$summary.cleanup_complete -and $groupsComplete
+    $runnerStatus = if ($summary.passed -and $complete) { 'passed' } elseif ($complete) { 'failed' } else { 'incomplete' }
+    $trueExit = $invocation.true_process_exit_code
+    $parentTests = [int](($summary.groups | ForEach-Object { $_.summary.test_count } | Measure-Object -Sum).Sum)
+    $passedTests = [int](($summary.groups | ForEach-Object { $_.summary.passed_tests } | Measure-Object -Sum).Sum)
+    $failedTests = [int](($summary.groups | ForEach-Object { $_.summary.failed_tests } | Measure-Object -Sum).Sum)
+    $skippedTests = [int](($summary.groups | ForEach-Object { $_.summary.skipped_tests } | Measure-Object -Sum).Sum)
 } else {
     $complete = $summary.complete
     $runnerStatus = if ($summary.passed -and $complete) { 'passed' } else { 'failed_or_incomplete' }

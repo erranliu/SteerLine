@@ -1,0 +1,2 @@
+# Unified-diff context markers intentionally precede tab-indented source lines.
+*.diff whitespace=-space-before-tab

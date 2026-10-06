@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "owner": "execution",
+  "source_commit": "d87a714baeea5aa8a8d0173deb5a232cf0ba1d47",
+  "source_tree_before": "b30d95e709d126a04c7621f1d024b1f8846df59d",
+  "source_tree_after_generation": "b30d95e709d126a04c7621f1d024b1f8846df59d",
+  "source_path": "internal/execution/worker_recovery.go",
+  "source_absolute_path": "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\internal\\execution\\worker_recovery.go",
+  "source_sha256_before": "66afdc354fceafa445723590ce0fefc005d9744b0eb87eaa25353e9742aff3b7",
+  "source_sha256_mutated": "78205d093a8c2562bc4d59ebdba08b0ada0a6b33ceb0778cbfc09f7c74293af5",
+  "source_sha256_in_worktree_after_generation": "66afdc354fceafa445723590ce0fefc005d9744b0eb87eaa25353e9742aff3b7",
+  "mutation": "Return the first retired-candidate resume error before the service visits sibling runs.",
+  "selected_test": "^(TestMC9|TestCandidateResumeErrorDoesNotStarveSibling)$",
+  "overlay_path": "probes/execution/overlay.json",
+  "patch_path": "probes/execution/patch.diff",
+  "patch_sha256": "45ec67a6cb4efe01308f8cdf27f3447bb9ff74787922247a4660125bc09f7192",
+  "disposition": "non_triggering_diagnostic",
+  "exact_test_feedback_command": "go run ./cmd/test-feedback -out docs/validation/three-line-10-independence-cleanup/independence/execution-mutated-20261006-01 -- -overlay=docs/validation/three-line-10-independence-cleanup/probes/execution/overlay.json ./internal/execution -run '^(TestMC9|TestCandidateResumeErrorDoesNotStarveSibling)$' -count=1",
+  "expected_mutation_exit": null,
+  "actual_mutation_process_exit": 0,
+  "result_note": "Retired-candidate branch did not trigger in the selected parent; both tests passed. Preserved as a failed probe design and excluded from TM10.1 proof. Corrected active registered-worker branch is in execution-active-branch.",
+  "actual_run_output": "docs/validation/three-line-10-independence-cleanup/independence/execution-mutated-20261006-01/"
+}

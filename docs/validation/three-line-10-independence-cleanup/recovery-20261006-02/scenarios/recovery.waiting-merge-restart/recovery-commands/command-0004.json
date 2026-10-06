@@ -1,0 +1,17 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\recovery-20261006-02\\build\\controlled-helper.exe",
+    "control",
+    "-config",
+    "C:\\Users\\lmas1\\Temp\\sl82-recovery-final-20261006-01\\t\\steerline-e2e-481131803\\recovery.waiting-merge-restart\\recovery\\project.json",
+    "-action",
+    "resume_dispatch",
+    "-task-id",
+    "",
+    "-profile",
+    "controlled"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\"version\":1,\"request_id\":\"8b4d74d9b1da525dd75eef4aef006c4c\",\"request_digest\":\"33ff93605dbfc2affe7793db65a44a6d6d3c338e6bfd75169fdd1cccfc6d7445\",\"instance_id\":\"96119c712e87ecf1bd3156789fc0da46\",\"action\":\"resume_dispatch\",\"status\":\"applied\",\"code\":\"applied\",\"message\":\"control action applied\",\"requested_by\":\"e2e\",\"submitted_at\":\"2026-10-06T11:29:16.3035524Z\",\"accepted_at\":\"2026-10-06T11:29:16.3470084Z\",\"completed_at\":\"2026-10-06T11:29:16.407551Z\",\"control_revision\":3}\n"
+}

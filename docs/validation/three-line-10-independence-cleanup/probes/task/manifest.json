@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "owner": "task",
+  "source_commit": "d87a714baeea5aa8a8d0173deb5a232cf0ba1d47",
+  "source_tree_before": "b30d95e709d126a04c7621f1d024b1f8846df59d",
+  "source_tree_after_generation": "b30d95e709d126a04c7621f1d024b1f8846df59d",
+  "source_path": "internal/task/model/taskgraph.go",
+  "source_absolute_path": "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\internal\\task\\model\\taskgraph.go",
+  "source_sha256_before": "daba85a7d445685fd508dc914e256189e4570bc3bf9affd0745a2b924278a4b9",
+  "source_sha256_mutated": "4122c6249984a237b1e8c199e5acbeb0bfcb10f1b98f0b35f5464a1df96d6458",
+  "source_sha256_in_worktree_after_generation": "daba85a7d445685fd508dc914e256189e4570bc3bf9affd0745a2b924278a4b9",
+  "mutation": "Invert only the task-priority comparison from ascending to descending.",
+  "selected_test": "TestStableTaskOrderUsesPriorityTimeAndNumericID",
+  "overlay_path": "probes/task/overlay.json",
+  "patch_path": "probes/task/patch.diff",
+  "patch_sha256": "c949b5f73bcb20c2e9ed2f6dbc55b7e3e5c4c09026edf190dacb36b583e01613",
+  "expected_mutation_exit": 1,
+  "exact_test_feedback_command": "go run ./cmd/test-feedback -out docs/validation/three-line-10-independence-cleanup/independence/task-mutated-20261006-01 -- -overlay=docs/validation/three-line-10-independence-cleanup/probes/task/overlay.json ./internal/task/model -run '^TestStableTaskOrderUsesPriorityTimeAndNumericID$' -count=1",
+  "disposition": "expected_negative_rule_result",
+  "result_note": "Priority mutation changed the observed order and the existing assertion failed.",
+  "actual_mutation_process_exit": 1,
+  "actual_run_output": "docs/validation/three-line-10-independence-cleanup/independence/task-mutated-20261006-01/"
+}

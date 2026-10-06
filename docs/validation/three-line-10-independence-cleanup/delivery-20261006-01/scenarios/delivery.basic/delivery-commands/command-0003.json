@@ -1,0 +1,20 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\delivery-20261006-01\\build\\steerline.exe",
+    "task",
+    "create",
+    "-config",
+    "C:\\Users\\lmas1\\Temp\\sl82-delivery-20261006-01\\t\\steerline-e2e-2942100116\\delivery.basic\\delivery\\project.json",
+    "-file",
+    "C:\\Users\\lmas1\\Temp\\sl82-delivery-20261006-01\\t\\steerline-e2e-2942100116\\delivery.basic\\delivery\\tasks.json",
+    "-request-id",
+    "d7f12ab4be4c406ba6e00e8adfe3d685",
+    "-expected-authority-version",
+    "1",
+    "-by",
+    "e2e"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\"request_id\":\"d7f12ab4be4c406ba6e00e8adfe3d685\",\"batch_id\":\"951b11a8bf09a8ec9dda8eb55c868825\",\"task_ids\":{\"a\":\"1\",\"b\":\"2\"},\"graph_revision\":1,\"payload_digest\":\"f74dffa22500c7a3abf755cd88d7be1925d282612a640b0bd82ec621a9b2ced7\",\"status\":\"accepted\",\"dispatch_note\":\"Task creation does not start work. If dispatch is already auto and unpaused, normal polling may consider these tasks.\"}\n"
+}

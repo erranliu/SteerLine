@@ -1,0 +1,10 @@
+{"Time":"2026-10-06T18:22:05.0483866+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery"}
+{"Time":"2026-10-06T18:22:05.8269267+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery"}
+{"Time":"2026-10-06T18:22:05.8269267+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery","Output":"=== RUN   TestBasicDelivery\n"}
+{"Time":"2026-10-06T18:27:05.8668087+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery","Output":"    delivery_test.go:15: service readiness: context deadline exceeded (last error: run_dir is required (cannot derive from repository identity: C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\delivery-20261006-02\\build\\controlled-helper.exe failed: exit status 1 (helper requires absolute --e2e-state\n"}
+{"Time":"2026-10-06T18:27:05.8830142+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery","Output":"        )))\n"}
+{"Time":"2026-10-06T18:27:11.7468081+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery","Output":"--- FAIL: TestBasicDelivery (305.92s)\n"}
+{"Time":"2026-10-06T18:27:11.7473527+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery","Elapsed":305.92}
+{"Time":"2026-10-06T18:27:11.7473527+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Output":"FAIL\n"}
+{"Time":"2026-10-06T18:27:11.754565+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Output":"FAIL\tgithub.com/erranliu/SteerLine/tests/e2e/suites/delivery\t306.710s\n"}
+{"Time":"2026-10-06T18:27:11.754565+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Elapsed":306.71}

@@ -1,0 +1,4 @@
+test feedback: failed (2.286s wall); report docs/validation/three-line-10-independence-cleanup/independence/console-mutated-20261006-01/summary.json
+failed test: github.com/erranliu/SteerLine/internal/console TestUX4RejectPreservesDraftAndBlockerStaysIndependent
+failed package: github.com/erranliu/SteerLine/internal/console
+exit status 1
