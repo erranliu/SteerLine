@@ -19,7 +19,9 @@ import (
 )
 
 func TestCandidateConsoleWiring(t *testing.T) {
-	timeout := 3 * time.Minute
+	// Five original native fixture processes plus their control and UI reads
+	// need the controlled scenario budget; individual waits remain bounded.
+	timeout := 5 * time.Minute
 	if os.Getenv("STEERLINE_CC5_MANIFEST") != "" {
 		timeout = 15 * time.Minute
 	}
@@ -48,14 +50,31 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	defer m.Close()
 	next, _ := m.Update(tea.WindowSizeMsg{Width: 160, Height: 80})
 	m = next.(console.Model)
+	var execute func(tea.Cmd, int)
+	execute = func(cmd tea.Cmd, depth int) {
+		t.Helper()
+		if cmd == nil {
+			return
+		}
+		if depth > 32 {
+			t.Fatal("console command chain did not settle")
+		}
+		message := cmd()
+		if batch, ok := message.(tea.BatchMsg); ok {
+			for _, child := range batch {
+				execute(child, depth+1)
+			}
+			return
+		}
+		next, followup := m.Update(message)
+		m = next.(console.Model)
+		execute(followup, depth+1)
+	}
 	step := func(key tea.KeyMsg) {
 		t.Helper()
 		next, cmd := m.Update(key)
 		m = next.(console.Model)
-		if cmd != nil {
-			next, _ = m.Update(cmd())
-			m = next.(console.Model)
-		}
+		execute(cmd, 0)
 	}
 	key := func(r rune) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
 	step(key('r'))
