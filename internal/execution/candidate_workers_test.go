@@ -32,7 +32,6 @@ type mcFixture struct {
 func newMCFixture(t *testing.T) mcFixture {
 	t.Helper()
 	c, commit, store := openDAGFixture(t)
-	c.Claimant = "operator"
 	provider := t.TempDir()
 	c.PR.Query = executionbackend.Command{Executable: os.Args[0], Args: []string{"mc-provider", provider, "{number}"}}
 	c.PR.Close = executionbackend.Command{}
@@ -90,8 +89,10 @@ func (f mcFixture) start(t *testing.T, model string) (executionmodel.TaskClaimRe
 	require(t, err)
 	c := f.c
 	setNeutralProfile(t, &c, neutralSettings{Executable: os.Args[0], Model: model, ReasoningEffort: "high"})
-	p := c.projectExecutionProfile()
-	options := TaskClaimOptions{TaskID: "8", RequestID: newID(), ExpectedTaskVersion: graph.ByID["8"].Version, ExpectedAuthorityVersion: graph.Authority.AuthorityVersion, ExpectedGraphRevision: graph.Authority.GraphRevision, ExecutionProfile: &p, RequestedBy: "operator", ServiceInstanceID: f.s.State.Service.InstanceID}
+	p := testProjectExecutionProfile(c)
+	dependencies, _ := neutralFixtureRuntime(c)
+	fixed := p.Freeze(dependencies.Directory, c.Identity())
+	options := TaskClaimOptions{TaskID: "8", RequestID: newID(), ExpectedTaskVersion: graph.ByID["8"].Version, ExpectedAuthorityVersion: graph.Authority.AuthorityVersion, ExpectedGraphRevision: graph.Authority.GraphRevision, ExecutionProfile: &fixed, RequestedBy: "operator", ServiceInstanceID: f.s.State.Service.InstanceID}
 	receipt, err := f.commands.StartNativeCandidate(context.Background(), c, options)
 	require(t, err)
 	t.Logf("candidate start receipt: %s", mustJSON(receipt))
@@ -276,14 +277,16 @@ func TestMC2(t *testing.T) {
 		f := newMCFixture(t)
 		graph, err := f.store.TaskGraphSnapshot(context.Background(), f.c.Identity())
 		require(t, err)
-		profile := f.c.projectExecutionProfile()
+		profile := testProjectExecutionProfile(f.c)
 		p := productapi.ControlPayload{TaskID: "8", ExpectedTaskVersion: 2, ExpectedGraphRevision: graph.Authority.GraphRevision, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest()}
 		req := productapi.ControlRequest{ProtocolVersion: ControlProtocolVersion, RequestID: newID(), RepositoryIdentity: f.c.Identity(), InstanceID: f.s.State.Service.InstanceID, ExpectedControlRevision: graph.Authority.AuthorityVersion, Action: "start_candidate", Payload: mustJSON(p), RequestedBy: "operator", CreatedAt: now().Add(-3 * time.Minute), ExpiresAt: now().Add(-time.Minute)}
 		require(t, publishControlRequest(f.c.RunDir, req))
 		digest := rawRequestDigest(controlRequestPath(f.c.RunDir, req.RequestID))
 		// Persist the exact original reservation and simulate losing the inbox
 		// receipt. Recovery must precede expiry/version/count rejection.
-		saved, err := f.commands.StartNativeCandidate(context.Background(), f.c, TaskClaimOptions{TaskID: "8", RequestID: req.RequestID, WorkflowRunID: req.RequestID, ExpectedTaskVersion: 2, ExpectedAuthorityVersion: graph.Authority.AuthorityVersion, ExpectedGraphRevision: graph.Authority.GraphRevision, RequestedBy: req.RequestedBy, ExecutionProfile: &profile, ServiceInstanceID: req.InstanceID, controlRequestDigest: digest})
+		dependencies, _ := neutralFixtureRuntime(f.c)
+		fixed := profile.Freeze(dependencies.Directory, f.c.Identity())
+		saved, err := f.commands.StartNativeCandidate(context.Background(), f.c, TaskClaimOptions{TaskID: "8", RequestID: req.RequestID, WorkflowRunID: req.RequestID, ExpectedTaskVersion: 2, ExpectedAuthorityVersion: graph.Authority.AuthorityVersion, ExpectedGraphRevision: graph.Authority.GraphRevision, RequestedBy: req.RequestedBy, ExecutionProfile: &fixed, ServiceInstanceID: req.InstanceID, controlRequestDigest: digest})
 		require(t, err)
 		f.s.State.Service.InstanceID = newID()
 		require(t, f.s.processNextControl(context.Background(), func() {}))
@@ -413,7 +416,7 @@ func TestMC5(t *testing.T) {
 	task := nativeTaskRecord(f.s.domain.Tasks, "8")
 	_, err := f.store.db.Exec(`CREATE TRIGGER mc_delivery_rollback BEFORE UPDATE ON tasks WHEN NEW.status='closed' BEGIN SELECT RAISE(ABORT,'mc rollback'); END`)
 	require(t, err)
-	_, err = f.commands.CompleteNativeTask(context.Background(), f.c, "8", task.Version, second.RunID, publicationClient(f.c))
+	_, err = f.commands.CompleteNativeTask(context.Background(), f.c, "8", task.Version, second.RunID, testPublicationClient(f.c))
 	if err == nil {
 		t.Fatal("required transaction failure was ignored")
 	}
@@ -429,9 +432,9 @@ func TestMC5(t *testing.T) {
 	}
 	_, err = f.store.db.Exec(`DROP TRIGGER mc_delivery_rollback`)
 	require(t, err)
-	first, err := f.commands.CompleteNativeTask(context.Background(), f.c, "8", task.Version, second.RunID, publicationClient(f.c))
+	first, err := f.commands.CompleteNativeTask(context.Background(), f.c, "8", task.Version, second.RunID, testPublicationClient(f.c))
 	require(t, err)
-	replay, err := f.commands.CompleteNativeTask(context.Background(), f.c, "8", task.Version, second.RunID, publicationClient(f.c))
+	replay, err := f.commands.CompleteNativeTask(context.Background(), f.c, "8", task.Version, second.RunID, testPublicationClient(f.c))
 	require(t, err)
 	t.Logf("unique delivery receipt: %s", mustJSON(first))
 	if first.Delivery.SelectedWorkflowRunID != second.RunID || digestValue(first.Delivery) != digestValue(replay.Delivery) {
@@ -495,7 +498,7 @@ func TestMC6(t *testing.T) {
 				require(t, os.Remove(filepath.Join(f.provider, "81.json")))
 			}
 			task := nativeTaskRecord(f.s.domain.Tasks, "8")
-			_, err := f.commands.CompleteNativeTask(context.Background(), f.c, "8", task.Version, second.RunID, publicationClient(f.c))
+			_, err := f.commands.CompleteNativeTask(context.Background(), f.c, "8", task.Version, second.RunID, testPublicationClient(f.c))
 			if mode != "late_after_delivery" {
 				if err == nil {
 					t.Fatal("conflicting/unknown set delivered")
@@ -642,7 +645,7 @@ func TestMC8(t *testing.T) {
 				require(t, f.s.executeLifecycleStep(context.Background(), run, lifecycle, executionbackend.LifecycleCandidate{Action: executionbackend.LifecyclePrepareWorkspace, Input: executionbackend.LifecycleInput{Workspace: &intent}}))
 				fixed, err = f.s.workerFlowContext(run)
 				require(t, err)
-				require(t, bindPolicyResources(context.Background(), fixed.config, fixed.execution, fixed.execution.Workspace.Worktree, nil))
+				require(t, bindPolicyResources(context.Background(), fixed.config, f.s.runtime.Directory, f.s.runtime.ProcessHost, fixed.execution, fixed.execution.Workspace.Worktree, nil))
 				require(t, f.s.commitWorker(run))
 			}
 			ctx, cancel := context.WithCancel(context.Background())

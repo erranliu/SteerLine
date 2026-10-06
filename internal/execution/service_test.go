@@ -165,14 +165,10 @@ func newFixture(t *testing.T) *fixture {
 	if output, err := exec.Command("git", "-C", f.c.Repository, "remote", "set-url", "origin", f.server.URL+"/owner/repo.git").CombinedOutput(); err != nil {
 		t.Fatalf("set native fixture remote: %v: %s", err, output)
 	}
-	f.c.Claimant = "native-fixture"
-	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll, f.c.CommandTimeout, f.c.ShutdownGrace = "100ms", "100ms", "100ms", "5s", "1s"
+	f.c.CommandTimeout = "5s"
 	f.c.PR = executionmodel.PRProviderConfig{Kind: "gitea", BaseURL: f.server.URL, Repository: "owner/repo"}
 	setNeutralProfile(t, &f.c, neutralSettings{Executable: executable})
 	f.c.WorkflowProtocol = executionmodel.Version
-	if err = f.c.ResolveIdentity(context.Background()); err != nil {
-		t.Fatal(err)
-	}
 	return f
 }
 
@@ -194,7 +190,6 @@ func (f *fixture) service(t *testing.T) *Service {
 
 func TestIdleServiceDoesNotPublishOnNoOpPolls(t *testing.T) {
 	f := newFixture(t)
-	f.c.Heartbeat, f.c.TaskPoll, f.c.PRPoll = "30s", "500ms", "500ms"
 	s := f.service(t)
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
@@ -408,9 +403,10 @@ func seedFakeCapabilities(t *testing.T, c Config) {
 		t.Fatal(err)
 	}
 	evidence := path + "#sha256=" + hex.EncodeToString(sum[:])
-	backend, protocol := BackendFor(c).Identity()
+	dependencies, _ := neutralFixtureRuntime(c)
+	backend, protocol := BackendFor(c, dependencies.Directory).Identity()
 	version := "fixture-version-1"
-	report := capabilityReport(backend, protocol, TargetFor(c), AgentFor(c), version)
+	report := capabilityReport(backend, protocol, TargetFor(c, dependencies.Directory), AgentFor(c), version)
 	for i := range report.Capabilities {
 		name := report.Capabilities[i].Name
 		if name == "output_turns" || name == "output_final_answer" {

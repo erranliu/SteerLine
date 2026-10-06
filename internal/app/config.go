@@ -54,20 +54,20 @@ func StateRoot() string { return filepath.Join(HomeDir(), "state") }
 // LoadConfig reads the project file and fixed execution catalog as one
 // application configuration. The returned catalog belongs to this config
 // instance and is reused by all of its entry paths.
-func LoadConfig(path string) (execution.Config, error) { return loadConfig(path, nil, nil, true) }
+func LoadConfig(path string) (Config, error) { return loadConfig(path, nil, nil, true) }
 
-func LoadQueryConfig(path string) (execution.Config, error) { return loadConfig(path, nil, nil, false) }
+func LoadQueryConfig(path string) (Config, error) { return loadConfig(path, nil, nil, false) }
 
-func LoadConfigWithDirectory(path string, directory *execution.ExecutionDirectory, host executionbackend.ManagedProcessHost) (execution.Config, error) {
+func LoadConfigWithDirectory(path string, directory *execution.ExecutionDirectory, host executionbackend.ManagedProcessHost) (Config, error) {
 	if directory == nil || host == nil {
-		return execution.Config{}, errors.New("execution directory and process host are required")
+		return Config{}, errors.New("execution directory and process host are required")
 	}
 	return loadConfig(path, directory, host, true)
 }
 
-func loadConfig(path string, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost, requireSupport bool) (execution.Config, error) {
+func loadConfig(path string, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost, requireSupport bool) (Config, error) {
 	input := defaultProjectConfigInput()
-	config := input.executionConfig()
+	config := configFromProjectInput(input)
 	projectPath, err := filepath.Abs(path)
 	if err != nil {
 		return config, err
@@ -79,7 +79,7 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 	if err = decodeStrictJSON(projectBytes, &input); err != nil {
 		return config, err
 	}
-	config = input.executionConfig()
+	config = configFromProjectInput(input)
 	if config.TaskAuthority != "native" {
 		return config, errors.New("task_authority must be explicitly set to native; Beads is not supported")
 	}
@@ -95,7 +95,7 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 	if err := config.PublicationPolicy.Validate(); err != nil {
 		return config, err
 	}
-	if err := publication.ValidateNonSecret(input.PR, config.Git); err != nil {
+	if err := publication.ValidateNonSecret(publication.Config(input.PR), config.Git); err != nil {
 		return config, err
 	}
 	globalPath := GlobalExecutionConfigPath()
@@ -133,7 +133,7 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 	config.ExecutionDirectory = directory
 	config.ExecutionProfiles = global.ExecutionProfiles
 	config.DefaultExecutionProfile = global.DefaultProfile
-	config.BindApplicationConfig(directory, projectPath, globalPath, loadedConfigDigest(projectBytes, globalBytes), true)
+	config.bindApplicationFiles(projectPath, globalPath, loadedConfigDigest(projectBytes, globalBytes), true)
 	if err := validateQueryProfiles(config); err != nil {
 		return config, err
 	}
@@ -208,7 +208,7 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 	return config, nil
 }
 
-func validateQueryProfiles(config execution.Config) error {
+func validateQueryProfiles(config Config) error {
 	seen := map[string]bool{}
 	for _, profile := range config.ExecutionProfiles {
 		if !regexp.MustCompile(`^[a-z][a-z0-9-]{0,63}$`).MatchString(profile.ID) || seen[profile.ID] || strings.TrimSpace(profile.Name) == "" {
@@ -223,7 +223,7 @@ func validateQueryProfiles(config execution.Config) error {
 	return nil
 }
 
-func repositoryStateKey(config execution.Config, processHost executionbackend.ManagedProcessHost) (string, error) {
+func repositoryStateKey(config Config, processHost executionbackend.ManagedProcessHost) (string, error) {
 	repository, err := workspace.ResolveRepository(context.Background(), workspace.Git{
 		Command: executionbackend.LaunchCommand{Executable: config.Git.Executable, Args: append([]string(nil), config.Git.Args...)},
 		Timeout: positiveDuration(config.CommandTimeout, 30*time.Second), Start: processHost.StartManaged,

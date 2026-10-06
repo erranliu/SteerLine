@@ -3,9 +3,10 @@ package host
 import (
 	"context"
 	"errors"
-	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	execution "github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -53,6 +54,14 @@ type neutralBinding struct {
 	SessionID  string `json:"session_id,omitempty"`
 }
 
+func executionInputsForHostFixture(c execution.Config) []executionbackend.ImplementationConfigInput {
+	inputs := make([]executionbackend.ImplementationConfigInput, 0, len(c.ImplementationData))
+	for _, value := range c.ImplementationData {
+		inputs = append(inputs, executionbackend.ImplementationConfigInput{ImplementationKey: value.ImplementationKey, CodecVersion: value.CodecVersion, Payload: append([]byte(nil), value.Payload...)})
+	}
+	return inputs
+}
+
 func neutralCodecs() []execution.ImplementationProfileCodec {
 	return []execution.ImplementationProfileCodec{{Key: neutralProfileKey, Version: 1, Normalize: func(data []byte, policy executionbackend.ExecutionPolicy, host, agent string) ([]byte, []string, error) {
 		var value neutralSettings
@@ -77,6 +86,7 @@ func neutralCodecs() []execution.ImplementationProfileCodec {
 }
 
 func newNeutralDirectory(agents ...string) (*execution.ExecutionDirectory, error) {
+	var directory *execution.ExecutionDirectory
 	key := execution.ExecutionRegistrationKey{Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Agent: "fixture"}
 	entry := execution.ExecutionRegistration{Key: key, ProfileKey: "fixture/stream-v1", Host: "local", WorkspaceBranchPrefix: "fixture", LocalWorkspace: true, ProfileCodecKeys: []string{neutralProfileKey}, QuestionCodecKey: neutralQuestionKey, QuestionCodecVersion: 1,
 		Target: func(c execution.Config) executionbackend.ExecutionTarget {
@@ -91,7 +101,7 @@ func newNeutralDirectory(agents ...string) (*execution.ExecutionDirectory, error
 			return &neutralLifecycle{setup: setup.Clone()}, nil
 		},
 		ProbeRequirements: func(_ context.Context, c execution.Config) (executionbackend.CapabilityReport, error) {
-			return capabilityReport(key.Backend, key.Protocol, execution.TargetFor(c), execution.AgentFor(c), "fixture-version-1"), nil
+			return capabilityReport(key.Backend, key.Protocol, execution.TargetFor(c, directory), execution.AgentFor(c), "fixture-version-1"), nil
 		},
 		QueryTool:      queryHostRequirementTool,
 		ValidateConfig: func(context.Context, execution.Config) error { return nil }, Preflight: func(context.Context, execution.Config) error { return nil }, PrepareClaim: func(context.Context, execution.Config) (execution.ClaimPreparation, error) {
@@ -126,7 +136,9 @@ func newNeutralDirectory(agents ...string) (*execution.ExecutionDirectory, error
 		}
 		entries = append(entries, registration)
 	}
-	return execution.NewExecutionDirectory("fixture-directory-v1", neutralCodecs(), entries)
+	var err error
+	directory, err = execution.NewExecutionDirectory("fixture-directory-v1", neutralCodecs(), entries)
+	return directory, err
 }
 
 func neutralProfileSettings(c execution.Config) neutralSettings {
@@ -141,28 +153,82 @@ func neutralProfileSettings(c execution.Config) neutralSettings {
 
 func neutralProfile(t *testing.T, id, name string, value neutralSettings) execution.ExecutionProfile {
 	t.Helper()
-	directory, err := newNeutralDirectory()
-	require(t, err)
-	c := execution.Config{ExecutionDirectory: directory, ExecutionProfiles: []execution.ExecutionProfile{{ID: id, Name: name, Host: "local", Agent: "fixture", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(value)}}}}}
-	c.BindApplicationConfig(directory, "", "", "fixture-accepted-v1", true)
-	return c.AvailableExecutionProfiles()[0]
+	return execution.ExecutionProfile{ID: id, Name: name, Host: "local", Agent: "fixture",
+		ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(value)}}}
 }
-func withNeutralProfile(c execution.Config, value neutralSettings) execution.Config {
+
+type hostFixtureCatalog struct {
+	directory *execution.ExecutionDirectory
+	catalog   execution.ProfileCatalog
+}
+
+var hostFixtureCatalogs sync.Map
+
+func rememberHostFixtureCatalog(c execution.Config, catalog execution.ProfileCatalog) {
+	hostFixtureCatalogs.Store(c.FixedProfileDigest(), hostFixtureCatalog{directory: catalog.Directory, catalog: catalog})
+}
+
+func hostFixtureRuntime(c execution.Config) execution.RuntimeDependencies {
+	if value, ok := hostFixtureCatalogs.Load(c.FixedProfileDigest()); ok {
+		fixture := value.(hostFixtureCatalog)
+		return execution.RuntimeDependencies{Directory: fixture.directory, ProcessHost: testProcessHost{}, Profiles: hostTestProfilePort{fixture}}
+	}
 	directory, err := newNeutralDirectory()
 	if err != nil {
 		panic(err)
 	}
-	digest := c.LoadedConfigDigest()
+	profile := execution.ExecutionProfile{ID: execution.ProjectExecutionProfileID, Name: "Fixture", Host: c.Host, Agent: c.Agent,
+		ExecutionPolicy: c.ExecutionPolicy, PublicationPolicy: c.PublicationPolicy, ImplementationConfigs: executionInputsForHostFixture(c)}
+	catalog := execution.ProfileCatalog{Base: c, Directory: directory, Profiles: []execution.ExecutionProfile{profile}, DefaultID: profile.ID, Global: true, PolicySource: "fixture:config"}
+	fixture := hostFixtureCatalog{directory: directory, catalog: catalog}
+	rememberHostFixtureCatalog(c, catalog)
+	return execution.RuntimeDependencies{Directory: directory, ProcessHost: testProcessHost{}, Profiles: hostTestProfilePort{fixture}}
+}
+
+func hostFixtureCatalogFor(c execution.Config) execution.ProfileCatalog {
+	if value, ok := hostFixtureCatalogs.Load(c.FixedProfileDigest()); ok {
+		return value.(hostFixtureCatalog).catalog
+	}
+	return hostFixtureRuntime(c).Profiles.(hostTestProfilePort).fixture.catalog
+}
+
+type hostTestProfilePort struct{ fixture hostFixtureCatalog }
+
+func (p hostTestProfilePort) DefaultProfileID() string { return p.fixture.catalog.DefaultProfileID() }
+func (p hostTestProfilePort) HasMultipleProfiles() bool {
+	return p.fixture.catalog.HasMultipleProfiles()
+}
+func (p hostTestProfilePort) ResolveExecutionProfile(id, digest string) (execution.Config, executionmodel.FixedExecutionProfile, error) {
+	config, profile, err := p.fixture.catalog.ResolveExecutionProfile(id, digest)
+	if err != nil {
+		return execution.Config{}, executionmodel.FixedExecutionProfile{}, err
+	}
+	return config, profile.Freeze(p.fixture.directory, config.Identity()), nil
+}
+func withNeutralProfile(c execution.Config, value neutralSettings) execution.Config {
+	_ = resolveHostTestIdentity(context.Background(), &c)
+	directory, err := newNeutralDirectory()
+	if err != nil {
+		panic(err)
+	}
+	digest := c.AcceptedConfigVersion()
 	if digest == "" {
 		digest = "fixture-accepted-v1"
 	}
-	c.BindApplicationConfig(directory, "", "", digest, false)
-	c.ProcessHost = testProcessHost{}
+	c.BindAcceptedConfigVersion(digest)
+	c.BindRepositoryIdentity(c.Identity())
 	if c.WorktreeRoot == "" && c.RunDir != "" {
 		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	}
-	p := execution.ExecutionProfile{ID: execution.ProjectExecutionProfileID, Name: "项目默认", Host: "local", Agent: "fixture", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(value)}}}
-	return c.ApplyExecutionProfile(p)
+	p := execution.ExecutionProfile{ID: execution.ProjectExecutionProfileID, Name: "项目默认", Host: "local", Agent: "fixture",
+		ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(value)}}}
+	catalog := execution.ProfileCatalog{Base: c, Directory: directory, Profiles: []execution.ExecutionProfile{p}, DefaultID: p.ID, Global: true, PolicySource: "fixture:config"}
+	selected, _, err := catalog.ResolveExecutionProfile(p.ID, "")
+	if err != nil {
+		panic(err)
+	}
+	rememberHostFixtureCatalog(selected, catalog)
+	return selected
 }
 
 func setNeutralProfile(t *testing.T, c *execution.Config, value neutralSettings) {
@@ -251,10 +317,7 @@ func neutralPolicyReceipt(profile, path string, e *executionmodel.ExecutionRecor
 }
 
 func newNeutralService(c execution.Config) (*execution.Service, error) {
-	if c.ExecutionDirectory == nil {
-		c = withNeutralProfile(c, neutralSettings{Executable: os.Args[0]})
-	}
-	c.ProcessHost = testProcessHost{}
+	dependencies := hostFixtureRuntime(c)
 	var err error
 	c, err = testPrepareServiceConfig(c)
 	if err != nil {
@@ -265,7 +328,8 @@ func newNeutralService(c execution.Config) (*execution.Service, error) {
 		return nil, err
 	}
 	stores := execution.ServiceStorage{State: db, Commands: db, Worker: db, Conversations: db, Records: db, Resources: testExecutionResources{}, Close: db.Close}
-	service, err := execution.NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, stores, fullFixtureTaskService(db, c), fullFixtureTaskService(db, c), NewServiceHost(hostConfigForTest(c), "", "", nil, testHostAdmission{config: c}, nil))
+	work := fullFixtureTaskService(db, c)
+	service, err := execution.NewService(c, dependencies, execution.RuntimeSettings{Claimant: hostConfigForTest(c).Claimant, Heartbeat: 5 * time.Second, ShutdownGrace: 10 * time.Second}, dependencies.Directory.LifecycleResolver(), neutralConversationSources{}, stores, work, work, NewServiceHost(hostConfigForTest(c), "", "", nil, testHostAdmission{config: c}, nil))
 	if err != nil {
 		_ = db.Close()
 	}

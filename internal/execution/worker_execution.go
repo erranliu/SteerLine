@@ -9,22 +9,15 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
-	if c.ExecutionDirectory == nil {
-		return errors.New("execution directory is required")
-	}
-	return requireWorkerFlowCapabilitiesWithResolver(ctx, c, c.ExecutionDirectory)
-}
-
-func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, resolver executionbackend.LifecycleResolver) error {
-	if err := validateWorkflowConfig(&c, nil); err != nil {
+func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, directory *ExecutionDirectory, processHost executionbackend.ManagedProcessHost, resolver executionbackend.LifecycleResolver) error {
+	if err := validateWorkflowConfig(c, directory); err != nil {
 		return err
 	}
-	entry, err := registrationFor(c)
+	entry, err := registrationFor(c, directory)
 	if err != nil {
 		return err
 	}
-	setup, err := lifecycleSetupForConfig(c, entry)
+	setup, err := lifecycleSetupForConfig(c, entry, processHost)
 	if err != nil {
 		return err
 	}
@@ -72,33 +65,11 @@ func copyWorkerFlowConfig(c Config) Config {
 		e := c.requirementsEvaluation.Clone()
 		c.requirementsEvaluation = &e
 	}
-	c.ExecutableTypes = append([]string(nil), c.ExecutableTypes...)
 	c.Git.Args = append([]string(nil), c.Git.Args...)
 	c.ImplementationData = CloneImplementationData(c.ImplementationData)
 	c.ImplementationDisplay = append([]string(nil), c.ImplementationDisplay...)
-	profiles := make([]ExecutionProfile, len(c.ExecutionProfiles))
-	copy(profiles, c.ExecutionProfiles)
-	for i := range profiles {
-		profiles[i].ExecutionRequirements = profiles[i].ExecutionRequirements.Clone()
-		profiles[i].Publication = clonePublicationSettings(profiles[i].Publication)
-		if profiles[i].RequirementsEvaluation != nil {
-			e := profiles[i].RequirementsEvaluation.Clone()
-			profiles[i].RequirementsEvaluation = &e
-		}
-		profiles[i].ImplementationConfigs = cloneImplementationInputs(profiles[i].ImplementationConfigs)
-		profiles[i].ImplementationData = CloneImplementationData(profiles[i].ImplementationData)
-		profiles[i].ImplementationDisplay = append([]string(nil), profiles[i].ImplementationDisplay...)
-	}
-	c.ExecutionProfiles = profiles
 	c.PR.Query.Args = append([]string(nil), c.PR.Query.Args...)
 	c.PR.Close.Args = append([]string(nil), c.PR.Close.Args...)
-	if c.workerEnv != nil {
-		env := make(map[string]string, len(c.workerEnv))
-		for key, value := range c.workerEnv {
-			env[key] = value
-		}
-		c.workerEnv = env
-	}
 	return c
 }
 
@@ -168,7 +139,7 @@ func prepareLocalWorkerWorkspace(s *Service, ctx context.Context, run *reconstru
 		return false, err
 	}
 	execution := fixed.execution
-	preparation, err := prepareWorktree(ctx, fixed.config, run)
+	preparation, err := prepareWorktree(ctx, fixed.config, s.runtime.Directory, s.runtime.ProcessHost, run)
 	if err != nil {
 		status := string(preparation.Status)
 		if status != string(executionbackend.OperationRejected) {

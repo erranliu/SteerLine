@@ -56,7 +56,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *reconstruc
 	workflow, execution, old := fixed.workflow, fixed.execution, fixed.attempt
 	if !execution.RecoveryRequired ||
 		(execution.RecoveryState != "interrupted" && execution.RecoveryState != "completed") ||
-		execution.Process == nil || s.Config.ProcessHost.InspectProcess(execution.Process) != "process absent" {
+		execution.Process == nil || s.runtime.ProcessHost.InspectProcess(execution.Process) != "process absent" {
 		return errors.New("the original worker process and its descendants are not confirmed stopped")
 	}
 	if execution.Workspace.Worktree == "" || run.WorktreePath == nil || canonical(*run.WorktreePath) != canonical(execution.Workspace.Worktree) {
@@ -258,7 +258,7 @@ func (s *Service) startManuallyRecoveredInitialWorker(ctx context.Context, run *
 				return err
 			}
 			if _, err := os.Lstat(run.WorkspaceIntent.Path); os.IsNotExist(err) {
-				preparation, prepareErr := prepareWorktree(ctx, fixed.config, run)
+				preparation, prepareErr := prepareWorktree(ctx, fixed.config, s.runtime.Directory, s.runtime.ProcessHost, run)
 				if prepareErr != nil {
 					status := string(preparation.Status)
 					if status != string(executionbackend.OperationRejected) {

@@ -218,6 +218,18 @@ func (directory *ExecutionDirectory) ResolveIdentity(key ExecutionRegistrationKe
 }
 
 func (directory *ExecutionDirectory) NormalizeProfile(inputs []executionbackend.ImplementationConfigInput, policy executionbackend.ExecutionPolicy, host, agent, projectID, profileID, acceptedVersion string) ([]executionbackend.ImplementationDataEnvelope, []string, error) {
+	return directory.normalizeProfile(inputs, policy, host, agent, projectID, profileID, acceptedVersion, true)
+}
+
+// NormalizeProfileInputs canonicalizes app-owned profile inputs into frozen
+// envelopes without deciding whether the selected policy is currently
+// supported. The app uses this projection for query and diagnostics paths;
+// admission still calls NormalizeProfile, which also validates selection.
+func (directory *ExecutionDirectory) NormalizeProfileInputs(inputs []executionbackend.ImplementationConfigInput, policy executionbackend.ExecutionPolicy, host, agent, projectID, profileID, acceptedVersion string) ([]executionbackend.ImplementationDataEnvelope, []string, error) {
+	return directory.normalizeProfile(inputs, policy, host, agent, projectID, profileID, acceptedVersion, false)
+}
+
+func (directory *ExecutionDirectory) normalizeProfile(inputs []executionbackend.ImplementationConfigInput, policy executionbackend.ExecutionPolicy, host, agent, projectID, profileID, acceptedVersion string, validateSelection bool) ([]executionbackend.ImplementationDataEnvelope, []string, error) {
 	if directory == nil {
 		return nil, nil, errors.New("execution directory is required")
 	}
@@ -267,7 +279,7 @@ func (directory *ExecutionDirectory) NormalizeProfile(inputs []executionbackend.
 			return nil, nil, fmt.Errorf("execution profile is missing required codec %q", required)
 		}
 	}
-	if entry.ValidateProfileSelection != nil {
+	if validateSelection && entry.ValidateProfileSelection != nil {
 		if err := entry.ValidateProfileSelection(policy, agent, payloads); err != nil {
 			return nil, nil, err
 		}
@@ -307,7 +319,7 @@ func (directory *ExecutionDirectory) ValidateProfileData(c Config) error {
 		return errors.New("configuration has no selected implementation profile")
 	}
 	inputs := implementationInputsFromData(c.ImplementationData)
-	data, _, err := directory.NormalizeProfile(inputs, c.ExecutionPolicy, c.hostName(), c.agentName(), ConfigurationProjectIdentity(c), c.selectedProfileID, c.acceptedConfigVersion())
+	data, _, err := directory.NormalizeProfile(inputs, c.ExecutionPolicy, c.hostName(), c.agentName(), ConfigurationProjectIdentity(c), c.selectedProfileID, c.acceptedConfigVersion)
 	if err != nil {
 		return err
 	}
@@ -341,18 +353,18 @@ func equalImplementationData(a, b []executionbackend.ImplementationDataEnvelope)
 	return true
 }
 
-func registrationFor(c Config) (ExecutionRegistration, error) {
-	if c.ExecutionDirectory == nil {
+func registrationFor(c Config, directory *ExecutionDirectory) (ExecutionRegistration, error) {
+	if directory == nil {
 		return ExecutionRegistration{}, errors.New("execution directory is required")
 	}
-	return c.ExecutionDirectory.Resolve(c)
+	return directory.Resolve(c)
 }
 
-func workerFlowRegistrationFor(config Config, run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) (ExecutionRegistration, error) {
+func workerFlowRegistrationFor(config Config, directory *ExecutionDirectory, run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) (ExecutionRegistration, error) {
 	if run == nil || execution == nil {
 		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "worker flow has no fixed run or execution"}
 	}
-	entry, err := registrationFor(config)
+	entry, err := registrationFor(config, directory)
 	if err != nil {
 		return ExecutionRegistration{}, err
 	}
@@ -366,11 +378,11 @@ func sameConfiguredExecutionTarget(actual, configured executionbackend.Execution
 	return actual.ID != "" && actual.ID == configured.ID && actual.ConnectionID == configured.ConnectionID && actual.ExternalRuntime == configured.ExternalRuntime
 }
 
-func executionUsesLocalWorkspace(c Config, backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, agent string) bool {
-	if c.ExecutionDirectory == nil {
+func executionUsesLocalWorkspace(c Config, directory *ExecutionDirectory, backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, agent string) bool {
+	if directory == nil {
 		return false
 	}
-	entry, err := c.ExecutionDirectory.ResolveIdentity(ExecutionRegistrationKey{Backend: backend, Protocol: protocol, Agent: agent})
+	entry, err := directory.ResolveIdentity(ExecutionRegistrationKey{Backend: backend, Protocol: protocol, Agent: agent})
 	return err == nil && entry.LocalWorkspace
 }
 
@@ -392,8 +404,8 @@ func (b rejectedExecutionBackend) InspectWorkspace(context.Context, executionbac
 	return executionbackend.WorkspaceInspection{}, b.err
 }
 
-func BackendFor(c Config) executionbackend.ExecutionBackend {
-	entry, err := registrationFor(c)
+func BackendFor(c Config, directory *ExecutionDirectory) executionbackend.ExecutionBackend {
+	entry, err := registrationFor(c, directory)
 	if err != nil {
 		return rejectedExecutionBackend{err}
 	}
@@ -404,8 +416,8 @@ func AgentFor(c Config) executionbackend.AgentSpec {
 	return executionbackend.AgentSpec{Name: c.agentName()}
 }
 
-func TargetFor(c Config) executionbackend.ExecutionTarget {
-	entry, err := registrationFor(c)
+func TargetFor(c Config, directory *ExecutionDirectory) executionbackend.ExecutionTarget {
+	entry, err := registrationFor(c, directory)
 	if err != nil {
 		return executionbackend.ExecutionTarget{}
 	}
@@ -420,11 +432,11 @@ func (s *Service) workerFlowRegistration(run *reconstructiontypes.RunView) (Exec
 	if fixed.workflow.WorkflowVersion != executionmodel.Version {
 		return ExecutionRegistration{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "unsupported fixed workflow version"}
 	}
-	return workerFlowRegistrationFor(fixed.config, run, fixed.execution)
+	return workerFlowRegistrationFor(fixed.config, s.runtime.Directory, run, fixed.execution)
 }
 
-func linkedWorktreeWriteArgs(ctx context.Context, c Config, worktree string) ([]string, error) {
-	entry, err := registrationFor(c)
+func linkedWorktreeWriteArgs(ctx context.Context, c Config, directory *ExecutionDirectory, worktree string) ([]string, error) {
+	entry, err := registrationFor(c, directory)
 	if err != nil {
 		return nil, err
 	}

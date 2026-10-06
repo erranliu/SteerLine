@@ -15,7 +15,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-func configuredLifecycleApp(t *testing.T) execution.Config {
+func configuredLifecycleApp(t *testing.T) Config {
 	t.Helper()
 	root := t.TempDir()
 	t.Setenv("STEERLINE_HOME", filepath.Join(root, "home"))

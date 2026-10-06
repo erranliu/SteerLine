@@ -27,7 +27,7 @@ func (s *Service) BeginActor(ctx context.Context) error {
 	}
 	s.State.Service.Ready = false
 	s.State.Service.Status = "running"
-	s.State.Service.HeartbeatIntervalMS = duration(s.Config.Heartbeat).Milliseconds()
+	s.State.Service.HeartbeatIntervalMS = s.runtimeSettings.Heartbeat.Milliseconds()
 	if e := s.publishCheckpoint(); e != nil {
 		return e
 	}

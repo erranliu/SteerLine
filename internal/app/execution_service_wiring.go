@@ -25,27 +25,27 @@ func (r executionServiceLifetime) Close() error { return r.service.Close() }
 
 // NewService uses the directory and process adapter already bound to the
 // loaded application configuration.
-func NewService(config execution.Config) (*execution.Service, error) {
+func NewService(config Config) (*execution.Service, error) {
 	return NewServiceWithLifecycleResolver(config, config.ExecutionDirectory)
 }
 
 // NewServiceWithLifecycleResolver permits an explicit decorator around the
 // same catalog's lifecycle ports, while preserving all other app wiring.
-func NewServiceWithLifecycleResolver(config execution.Config, resolver executionbackend.LifecycleResolver) (*execution.Service, error) {
+func NewServiceWithLifecycleResolver(config Config, resolver executionbackend.LifecycleResolver) (*execution.Service, error) {
 	return NewServiceWithPorts(config, resolver, codexworker.NewConversationAdapter())
 }
 
 // NewServiceWithPorts composes explicitly supplied execution and history ports
 // with the directory already accepted by this application instance.
-func NewServiceWithPorts(config execution.Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort) (*execution.Service, error) {
+func NewServiceWithPorts(config Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort) (*execution.Service, error) {
 	return newServiceWithHost(config, resolver, sources, nil)
 }
 
-func newConfiguredServiceWithHost(config execution.Config, host hostport.HostPort) (*execution.Service, error) {
+func newConfiguredServiceWithHost(config Config, host hostport.HostPort) (*execution.Service, error) {
 	return newServiceWithHost(config, config.ExecutionDirectory, codexworker.NewConversationAdapter(), host)
 }
 
-func newServiceWithHost(config execution.Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort, host hostport.HostPort) (*execution.Service, error) {
+func newServiceWithHost(config Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort, host hostport.HostPort) (*execution.Service, error) {
 	if config.ExecutionDirectory == nil || config.ProcessHost == nil {
 		return nil, errors.New("application configuration is missing its execution directory or process host")
 	}
@@ -67,7 +67,7 @@ func newServiceWithHost(config execution.Config, resolver executionbackend.Lifec
 		host = steerline.NewServiceHost(hostConfig, "", "", nil, serviceAdmission{config: &config}, consoleActivityFormatter{})
 	}
 	stores := execution.ServiceStorage{State: connection, Commands: connection, Worker: connection, Conversations: connection, Records: connection, Resources: executionResources{}, Close: connection.Close}
-	service, err := execution.NewService(config, config.ExecutionDirectory, resolver, sources, config.ProcessHost, stores, tasks, tasks, host)
+	service, err := execution.NewService(config.executionConfig(), config.runtimeDependencies(), config.runtimeSettings(), resolver, sources, stores, tasks, tasks, host)
 	return service, err
 
 }

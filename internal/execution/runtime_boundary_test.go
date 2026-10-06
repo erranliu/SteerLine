@@ -27,7 +27,7 @@ func TestWorkerBindingRollsBackWithItsCheckpoint(t *testing.T) {
 	execution.Workspace.Branch, execution.Workspace.Base = execution.WorkspaceIntent.Branch, execution.WorkspaceIntent.BaseCommit
 	execution.PolicyResources = neutralPolicyReceipt(s.workflowRecord(run).ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	s.refreshRun(run)
-	ref := executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Target: TargetFor(s.Config), Agent: AgentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, External: *identity, Generation: "generation"}
+	ref := executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Target: TargetFor(s.Config, s.runtime.Directory), Agent: AgentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, External: *identity, Generation: "generation"}
 	_, err = testSQLite(s).db.Exec(`CREATE TRIGGER reject_binding_checkpoint BEFORE INSERT ON projection BEGIN SELECT RAISE(FAIL,'binding checkpoint failure'); END`)
 	require(t, err)
 	if err := s.commitWorkerBinding(run, ref); err == nil {
@@ -61,7 +61,7 @@ func TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding(t *testing.T) {
 	execution.Workspace.Branch, execution.Workspace.Base = execution.WorkspaceIntent.Branch, execution.WorkspaceIntent.BaseCommit
 	execution.PolicyResources = neutralPolicyReceipt(s.workflowRecord(run).ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	s.refreshRun(run)
-	ref := executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Target: TargetFor(s.Config), Agent: AgentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, External: *identity, Generation: "generation"}
+	ref := executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Target: TargetFor(s.Config, s.runtime.Directory), Agent: AgentFor(s.Config), RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, External: *identity, Generation: "generation"}
 	require(t, s.commitWorkerBinding(run, ref))
 	records := s.records
 	process := &recordedStopProcess{identity: *identity, beforeKill: func() {

@@ -7,7 +7,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/execution"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -111,7 +110,7 @@ func run() error {
 	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
-	var c execution.Config
+	var c steerlineapp.Config
 	var product *productclient.Client
 	var e error
 	switch command {

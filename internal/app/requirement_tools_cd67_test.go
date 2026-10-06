@@ -33,7 +33,7 @@ func TestRequirementToolsUseWorkerEnvironment(t *testing.T) {
 	// A service PATH that is excluded from the actual worker must not prove a
 	// target tool exists. No query may use the service PATH as a substitute.
 	for _, id := range []string{"go", "python"} {
-		e := queryHostRequirementTool(context.Background(), c, id)
+		e := queryHostRequirementTool(context.Background(), c.executionConfig(), id, c.ExecutionDirectory, c.ProcessHost)
 		if e.Status != executionbackend.RequirementMissing {
 			t.Fatalf("service environment proved %s after worker PATH removal: %+v", id, e)
 		}

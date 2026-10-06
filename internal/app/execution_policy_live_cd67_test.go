@@ -1,7 +1,6 @@
 package app
 
 import (
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"bytes"
 	"context"
 	"crypto/rand"
@@ -10,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -75,12 +75,13 @@ func TestExecutionPolicyNativeToolsLive(t *testing.T) {
 	require(t, c.ResolveIdentity(ctx))
 	profile := unitProjectProfile(c).Freeze(c.Identity())
 	c = c.ApplyFixedExecutionProfile(profile)
-	e := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: nativePolicyID(), WorkflowRunID: nativePolicyID(), CurrentAttemptID: nativePolicyID(), Generation: nativePolicyID(), ConfigurationDigest: profile.Digest, Target: nativePolicyTarget(c)}
+	executionConfig := c.executionConfig()
+	e := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: nativePolicyID(), WorkflowRunID: nativePolicyID(), CurrentAttemptID: nativePolicyID(), Generation: nativePolicyID(), ConfigurationDigest: profile.Digest, Target: nativePolicyTarget(executionConfig, c.ExecutionDirectory)}
 	run := &reconstructiontypes.RunView{RunID: e.WorkflowRunID, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID}
 	path := filepath.Join(root, "linked")
 	var terminal orcaworker.Terminal
 	var runtimeID string
-	client := orcaworker.New(nativeTerminalConfig(c, nativePolicyTarget(c)))
+	client := orcaworker.New(nativeTerminalConfig(executionConfig, nativePolicyTarget(executionConfig, c.ExecutionDirectory), c.ProcessHost, c.ExecutionDirectory))
 	if host == "local" {
 		git(repository, "worktree", "add", "--quiet", "-b", "policy59-local", path, "HEAD")
 	} else {
@@ -96,13 +97,13 @@ func TestExecutionPolicyNativeToolsLive(t *testing.T) {
 		require(t, err)
 		path = filepath.FromSlash(worktree.Path)
 		e.Workspace = executionmodel.WorkspaceEvidence{Repository: c.Identity(), Worktree: path, Branch: strings.TrimPrefix(worktree.Branch, "refs/heads/")}
-		writeArgs, err := linkedWorktreeWriteArgs(ctx, c, path)
+		writeArgs, err := linkedWorktreeWriteArgs(ctx, executionConfig, path, c.ProcessHost)
 		require(t, err)
-		require(t, bindNativePolicyProbeResources(ctx, c, &e, path, writeArgs))
-		command, err := managedTerminalCommand(c, path, e.PolicyResources.WriteRoots[1:])
+		require(t, bindNativePolicyProbeResources(ctx, executionConfig, c.ExecutionDirectory, c.ProcessHost, &e, path, writeArgs))
+		command, err := managedTerminalCommand(executionConfig, path, e.PolicyResources.WriteRoots[1:], c.ExecutionDirectory)
 		require(t, err)
 		title := "policy59-" + e.ExecutionID
-		raw, err = orcaworker.CreateFixedAgentTerminal(ctx, client.MetaCall, worktree.ID, title, mustTerminalSettings(c).Shell, command)
+		raw, err = orcaworker.CreateFixedAgentTerminal(ctx, client.MetaCall, worktree.ID, title, mustTerminalSettings(executionConfig, c.ExecutionDirectory).Shell, command)
 		require(t, err)
 		terminal, err = orcaworker.ParseFixedAgentTerminalReceipt(raw, worktree.ID, title)
 		require(t, err)
@@ -112,9 +113,9 @@ func TestExecutionPolicyNativeToolsLive(t *testing.T) {
 	t.Logf("isolated native resources: %s / %s", root, path)
 	run.WorktreePath = &path
 	e.Workspace.Worktree = path
-	writeArgs, err := linkedWorktreeWriteArgs(ctx, c, path)
+	writeArgs, err := linkedWorktreeWriteArgs(ctx, executionConfig, path, c.ProcessHost)
 	require(t, err)
-	require(t, bindNativePolicyProbeResources(ctx, c, &e, path, writeArgs))
+	require(t, bindNativePolicyProbeResources(ctx, executionConfig, c.ExecutionDirectory, c.ProcessHost, &e, path, writeArgs))
 	script := filepath.Join(path, "policy59-probe.ps1")
 	resultFile := filepath.Join(path, "policy59-result.json")
 	nonce := nativePolicyID()
@@ -316,8 +317,9 @@ func TestExecutionPolicyNativeToolsCollectLive(t *testing.T) {
 	c := bindUnitDirectory(t, Config{Repository: filepath.Dir(e.Workspace.Repository), CommandTimeout: "90s", Git: executionbackend.Command{Executable: "git"}})
 	require(t, c.ResolveIdentity(context.Background()))
 	c = c.ApplyFixedExecutionProfile(saved.Profile)
-	require(t, verifyNativePolicyProbeResources(c, &e, saved.Profile.Digest, e.Workspace.Worktree))
-	client := orcaworker.New(nativeTerminalConfig(c, nativePolicyTarget(c)))
+	executionConfig := c.executionConfig()
+	require(t, verifyNativePolicyProbeResources(executionConfig, c.ExecutionDirectory, &e, saved.Profile.Digest, e.Workspace.Worktree))
+	client := orcaworker.New(nativeTerminalConfig(executionConfig, nativePolicyTarget(executionConfig, c.ExecutionDirectory), c.ProcessHost, c.ExecutionDirectory))
 	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
 	defer cancel()
 	fact, idle, err := orcaworker.InspectAgentInput(ctx, client.MetaCall, orcaworker.TerminalIdentity{Kind: e.Process.Kind, Handle: e.Process.Terminal, RuntimeID: e.Process.RuntimeID, Incarnation: e.Process.Incarnation})
@@ -459,8 +461,8 @@ func nativePolicyCanonical(path string) string {
 
 func nativePolicyTrimBOM(raw []byte) []byte { return bytes.TrimPrefix(raw, []byte{0xef, 0xbb, 0xbf}) }
 
-func nativePolicyTarget(c Config) executionbackend.ExecutionTarget {
-	entry, err := c.ExecutionDirectory.Resolve(c)
+func nativePolicyTarget(c execution.Config, directory *execution.ExecutionDirectory) executionbackend.ExecutionTarget {
+	entry, err := directory.Resolve(c)
 	if err != nil {
 		panic(err)
 	}
@@ -475,8 +477,8 @@ func nativePolicyResourceDigest(resources executionmodel.PolicyResources) string
 	return hex.EncodeToString(sum[:])
 }
 
-func bindNativePolicyProbeResources(ctx context.Context, c Config, e *executionmodel.ExecutionRecord, path string, linked []string) error {
-	entry, err := c.ExecutionDirectory.Resolve(c)
+func bindNativePolicyProbeResources(ctx context.Context, c execution.Config, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost, e *executionmodel.ExecutionRecord, path string, linked []string) error {
+	entry, err := directory.Resolve(c)
 	if err != nil {
 		return err
 	}
@@ -485,7 +487,7 @@ func bindNativePolicyProbeResources(ctx context.Context, c Config, e *executionm
 	}
 	profile := c.ImplementationData[0]
 	id := execution.PolicyResourceIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}
-	value, err := entry.BuildPolicyResource(ctx, execution.PolicyResourceBuildRequest{ProfileData: c.ImplementationData, ProjectID: c.Identity(), ProfileID: profile.ProfileID, AcceptedConfigVersion: profile.AcceptedConfigVersion, Resource: id, Policy: c.ExecutionPolicy, Host: c.Host, Agent: c.Agent, Workspace: path, LinkedWorktreeArgs: linked, RepositoryPath: c.Repository, CommandTimeout: 90 * time.Second})
+	value, err := entry.BuildPolicyResource(ctx, execution.PolicyResourceBuildRequest{ProcessHost: processHost, ProfileData: c.ImplementationData, ProjectID: c.Identity(), ProfileID: profile.ProfileID, AcceptedConfigVersion: profile.AcceptedConfigVersion, Resource: id, Policy: c.ExecutionPolicy, Host: c.Host, Agent: c.Agent, Workspace: path, LinkedWorktreeArgs: linked, RepositoryPath: c.Repository, CommandTimeout: 90 * time.Second})
 	if err != nil {
 		return err
 	}
@@ -501,12 +503,12 @@ func bindNativePolicyProbeResources(ctx context.Context, c Config, e *executionm
 	return nil
 }
 
-func verifyNativePolicyProbeResources(c Config, e *executionmodel.ExecutionRecord, digest, path string) error {
+func verifyNativePolicyProbeResources(c execution.Config, directory *execution.ExecutionDirectory, e *executionmodel.ExecutionRecord, digest, path string) error {
 	r := e.PolicyResources
 	if r == nil || r.Version != 3 || r.Digest != nativePolicyResourceDigest(*r) || r.ProfileDigest != digest || r.Workspace != path || len(r.TemporaryRoots) != 0 || r.ImplementationData.ConfigDigest != digest {
 		return errors.New("original acceptance resource snapshot differs")
 	}
-	entry, err := c.ExecutionDirectory.Resolve(c)
+	entry, err := directory.Resolve(c)
 	if err != nil {
 		return err
 	}
@@ -549,10 +551,11 @@ func nativePolicyBindingEnvelope(e *executionmodel.ExecutionRecord) (executionba
 
 func nativePolicyBackend(t *testing.T, c Config, run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord, profile executionmodel.FixedExecutionProfile) codexworker.Backend {
 	t.Helper()
-	entry, err := c.ExecutionDirectory.Resolve(c)
+	executionConfig := c.executionConfig()
+	entry, err := c.ExecutionDirectory.Resolve(executionConfig)
 	require(t, err)
 	snapshot := executionbackend.LifecycleSnapshot{Ref: executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol, Target: e.Target, Agent: executionbackend.AgentSpec{Name: c.Agent}, RunID: run.RunID, AttemptID: run.AttemptID, WorkspacePath: *run.WorktreePath}, Session: executionbackend.SessionContext{ProjectID: c.Identity(), ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, WorkflowRunID: run.RunID, Agent: executionbackend.AgentSpec{Name: c.Agent}}, ResourceGeneration: e.Generation, ConfigurationDigest: e.ConfigurationDigest}
-	port, err := entry.Lifecycle(executionbackend.LifecycleSetup{Snapshot: snapshot, ProfileData: c.ImplementationData, ProfileID: profile.ID, AcceptedConfigVersion: profile.AcceptedConfigVersion, Policy: c.ExecutionPolicy, ProcessHost: c.ProcessHost, RunDirectory: c.RunDir, RepositoryPath: c.Repository, CommandTimeout: 90 * time.Second, BlockedEnvironment: []string{"GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN"}})
+	port, err := entry.Lifecycle(executionbackend.LifecycleSetup{Snapshot: snapshot, ProfileData: executionConfig.ImplementationData, ProfileID: profile.ID, AcceptedConfigVersion: profile.AcceptedConfigVersion, Policy: executionConfig.ExecutionPolicy, ProcessHost: c.ProcessHost, RunDirectory: executionConfig.RunDir, RepositoryPath: executionConfig.Repository, CommandTimeout: 90 * time.Second, BlockedEnvironment: []string{"GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN"}})
 	require(t, err)
 	actual, ok := port.(*codexworker.ExecutionLifecycle)
 	if !ok {

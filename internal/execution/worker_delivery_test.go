@@ -39,7 +39,8 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 	created := time.Now().UTC()
 	url := "https://git.example/o/r/pulls/8"
 	wf := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: created, UpdatedAt: created}
-	fixed := c.projectExecutionProfile().Freeze(c.Identity())
+	dependencies, _ := neutralFixtureRuntime(c)
+	fixed := testProjectExecutionProfile(c).Freeze(dependencies.Directory, c.Identity())
 	wf.ExecutionProfile, wf.ConfigDigest = &fixed, fixed.AcceptedConfigVersion
 	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: wf.SelectedResult, CurrentAttemptID: "attempt-8", ConfigurationDigest: wf.ExecutionProfile.Digest, WorkflowRunID: wf.WorkflowRunID, Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "idle", Workspace: executionmodel.WorkspaceEvidence{Branch: "fixture/task-8", Dirty: true}, CreatedAt: created, UpdatedAt: created}
 	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "generation", workerFlowMockSession)
@@ -128,8 +129,9 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	at := time.Now().UTC()
 	url := "https://forge.invalid/org/repo/pulls/8"
 	wf := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: "8", WorkflowVersion: executionmodel.Version, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: at, UpdatedAt: at}
-	require(t, c.BindPublicationTarget(ctx))
-	fixed := c.projectExecutionProfile().Freeze()
+	dependencies, _ := neutralFixtureRuntime(c)
+	require(t, c.BindPublicationTarget(ctx, dependencies.ProcessHost))
+	fixed := testProjectExecutionProfile(c).Freeze(dependencies.Directory, c.Identity())
 	if !neutralVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("delivery fixture did not freeze a valid execution profile")
 	}

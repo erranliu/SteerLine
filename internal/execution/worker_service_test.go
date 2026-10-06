@@ -31,7 +31,6 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
 	c.WorkflowProtocol, c.Host, c.Agent = executionmodel.Version, "local", "fixture"
-	c.Claimant = "operator"
 	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	if err := c.PrepareWorktreeRoot(); err != nil {
 		t.Fatal(err)

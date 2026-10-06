@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -40,27 +39,11 @@ func nativeTaskRecord(tasks []taskmodel.TaskRecord, id string) *taskmodel.TaskRe
 	}
 	return nil
 }
-func (c Config) RequireNativeTaskAuthority() error {
-	if c.TaskAuthority != "native" {
-		return errors.New("task_authority=native is required; Beads is not an active product task source")
-	}
-	return nil
-}
-
 func recordFingerprint(value any) string { return operationDigest(mustJSON(value)) }
 
 type commandReplayed struct{ Status string }
 
 func (commandReplayed) Error() string { return "command already applied" }
-
-func defaultRequestedBy() string {
-	for _, key := range []string{"STEERLINE_ANSWERED_BY", "USERNAME", "USER"} {
-		if value := strings.TrimSpace(os.Getenv(key)); value != "" {
-			return value
-		}
-	}
-	return "unknown"
-}
 
 func resolveProspectivePath(input string) (string, error) {
 	path, err := filepath.Abs(input)

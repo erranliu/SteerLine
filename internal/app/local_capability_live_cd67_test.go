@@ -40,14 +40,15 @@ func TestLiveLocalCapabilityEvidence(t *testing.T) {
 	}
 	c := Config{Repository: repo, RunDir: filepath.Join(root, "state"), Host: "local", Agent: "codex", CommandTimeout: "30s"}
 	setTestCodexProfile(t, &c, codexworker.ProfileConfig{Executable: executable})
-	entry, err := c.ExecutionDirectory.Resolve(c)
+	executionConfig := c.executionConfig()
+	entry, err := c.ExecutionDirectory.Resolve(executionConfig)
 	require(t, err)
-	backend := entry.Backend(c)
+	backend := entry.Backend(executionConfig)
 	stopper, ok := backend.(executionbackend.ExecutionStopper)
 	if !ok {
 		t.Fatal("application backend has no managed stop port")
 	}
-	target := entry.Target(c)
+	target := entry.Target(executionConfig)
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
 	probe, err := backend.Probe(ctx, target, executionbackend.AgentSpec{Name: c.Agent})

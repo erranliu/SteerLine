@@ -95,7 +95,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 	if err != nil {
 		return err
 	}
-	if _, err := workerFlowRegistrationFor(config, run, execution); err != nil {
+	if _, err := workerFlowRegistrationFor(config, s.runtime.Directory, run, execution); err != nil {
 		return err
 	}
 	answer, err := ReadDecisionAnswer(run)

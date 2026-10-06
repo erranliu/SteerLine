@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"reflect"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
@@ -14,7 +15,7 @@ func PolicyResourceDigest(p executionmodel.PolicyResources) string {
 	return digestValue(p)
 }
 
-func verifyPolicyResources(c Config, p *executionmodel.PolicyResources, profileDigest, workspace string, records ...*executionmodel.ExecutionRecord) error {
+func verifyPolicyResources(c Config, directory *ExecutionDirectory, p *executionmodel.PolicyResources, profileDigest, workspace string, records ...*executionmodel.ExecutionRecord) error {
 	if p == nil || p.Version != 3 || p.Digest != PolicyResourceDigest(*p) || p.ProfileDigest != profileDigest || p.Workspace != workspace || len(p.TemporaryRoots) != 0 || p.ImplementationData.ConfigDigest != profileDigest {
 		return errors.New("execution policy resource snapshot differs from original settings or identity")
 	}
@@ -28,7 +29,7 @@ func verifyPolicyResources(c Config, p *executionmodel.PolicyResources, profileD
 		identity = PolicyResourceIdentity{ProjectID: record.ProjectIdentity, ExecutionID: record.ExecutionID,
 			AttemptID: record.CurrentAttemptID, Generation: record.Generation, ConfigDigest: record.ConfigurationDigest}
 	}
-	entry, err := registrationFor(c)
+	entry, err := registrationFor(c, directory)
 	if err != nil {
 		return err
 	}
@@ -47,12 +48,12 @@ func verifyPolicyResources(c Config, p *executionmodel.PolicyResources, profileD
 	return nil
 }
 
-func bindPolicyResources(ctx context.Context, c Config, e *executionmodel.ExecutionRecord, workspace string, linkedArgs []string) error {
+func bindPolicyResources(ctx context.Context, c Config, directory *ExecutionDirectory, processHost executionbackend.ManagedProcessHost, e *executionmodel.ExecutionRecord, workspace string, linkedArgs []string) error {
 	manualRestart := awaitingRecoveryResources(e)
 	if e.PolicyResources == nil && (e.Process != nil || e.SessionID != "") && !manualRestart {
 		return errors.New("original execution policy resource snapshot is missing; preserve the external session")
 	}
-	if err := validateWorkflowConfig(&c, nil); err != nil {
+	if err := validateWorkflowConfig(c, directory); err != nil {
 		return err
 	}
 	if e.Generation == "" {
@@ -60,13 +61,13 @@ func bindPolicyResources(ctx context.Context, c Config, e *executionmodel.Execut
 	}
 	profileDigest := c.fixedProfileDigest
 	if profileDigest == "" {
-		profileDigest = c.projectExecutionProfile().Digest()
+		return errors.New("execution has no fixed profile digest")
 	}
 	if e.ConfigurationDigest != "" && e.ConfigurationDigest != profileDigest {
 		return errors.New("execution configuration digest differs from the accepted profile")
 	}
 	e.ConfigurationDigest = profileDigest
-	entry, err := registrationFor(c)
+	entry, err := registrationFor(c, directory)
 	if err != nil {
 		return err
 	}
@@ -76,9 +77,9 @@ func bindPolicyResources(ctx context.Context, c Config, e *executionmodel.Execut
 	identity := PolicyResourceIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID,
 		AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: profileDigest}
 	bound, err := entry.BuildPolicyResource(ctx, PolicyResourceBuildRequest{
-		ProcessHost: c.ProcessHost,
+		ProcessHost: processHost,
 		ProfileData: CloneImplementationData(c.ImplementationData), ProjectID: ConfigurationProjectIdentity(c),
-		ProfileID: c.selectedProfileID, AcceptedConfigVersion: c.acceptedConfigVersion(), Resource: identity,
+		ProfileID: c.selectedProfileID, AcceptedConfigVersion: c.acceptedConfigVersion, Resource: identity,
 		Policy: c.ExecutionPolicy, Host: c.hostName(), Agent: c.agentName(), Workspace: workspace,
 		LinkedWorktreeArgs: append([]string(nil), linkedArgs...), RepositoryPath: c.Repository,
 		CommandTimeout: duration(c.CommandTimeout),

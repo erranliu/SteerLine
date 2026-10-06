@@ -2,8 +2,6 @@ package execution
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
@@ -15,8 +13,8 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func queryCredentialRequirement(c Config, r executionbackend.CredentialRequirement) executionbackend.RequirementEvidence {
-	e := executionbackend.RequirementEvidence{ID: r.ID, Site: r.Site, Version: "provider-reference-v1", Target: TargetFor(c), Status: executionbackend.RequirementUnknown, Source: "provider:reference-unavailable", CheckedAt: now()}
+func queryCredentialRequirement(c Config, r executionbackend.CredentialRequirement, directory *ExecutionDirectory) executionbackend.RequirementEvidence {
+	e := executionbackend.RequirementEvidence{ID: r.ID, Site: r.Site, Version: "provider-reference-v1", Target: TargetFor(c, directory), Status: executionbackend.RequirementUnknown, Source: "provider:reference-unavailable", CheckedAt: now()}
 	if r.ID != "pr.token_env" || r.Site != "service" {
 		return e
 	}
@@ -34,12 +32,12 @@ func queryCredentialRequirement(c Config, r executionbackend.CredentialRequireme
 
 // Evaluation is deliberately separate from the mandatory worker preflight.
 // Reports loaded here have already had their native evidence references checked.
-func evaluateExecutionRequirements(ctx context.Context, c Config) (executionbackend.RequirementsEvaluation, error) {
-	return evaluateExecutionRequirementsWithRecords(ctx, c, executionRecords{root: c.RunDir})
+func evaluateExecutionRequirements(ctx context.Context, c Config, directory *ExecutionDirectory) (executionbackend.RequirementsEvaluation, error) {
+	return evaluateExecutionRequirementsWithRecords(ctx, c, executionRecords{root: c.RunDir}, directory)
 }
 
-func evaluateExecutionRequirementsWithRecords(ctx context.Context, c Config, records executionRecords) (executionbackend.RequirementsEvaluation, error) {
-	entry, err := registrationFor(c)
+func evaluateExecutionRequirementsWithRecords(ctx context.Context, c Config, records executionRecords, directory *ExecutionDirectory) (executionbackend.RequirementsEvaluation, error) {
+	entry, err := registrationFor(c, directory)
 	if err != nil {
 		return executionbackend.RequirementsEvaluation{}, err
 	}
@@ -64,15 +62,15 @@ func evaluateExecutionRequirementsWithRecords(ctx context.Context, c Config, rec
 		e.Tools = append(e.Tools, entry.QueryTool(ctx, c, tool.ID))
 	}
 	for _, ref := range c.ExecutionRequirements.Credentials {
-		e.Credentials = append(e.Credentials, queryCredentialRequirement(c, ref))
+		e.Credentials = append(e.Credentials, queryCredentialRequirement(c, ref, directory))
 	}
 	return e, c.ExecutionRequirements.Match(e, key)
 }
 
 // EvaluateRequirements reads the selected target's requirement evidence using
 // the configuration's explicit directory. It grants no mutation authority.
-func (c Config) EvaluateRequirements(ctx context.Context) (executionbackend.RequirementsEvaluation, error) {
-	return evaluateExecutionRequirements(ctx, c)
+func (c Config) EvaluateRequirements(ctx context.Context, directory *ExecutionDirectory) (executionbackend.RequirementsEvaluation, error) {
+	return evaluateExecutionRequirements(ctx, c, directory)
 }
 
 func requirementsEvidenceDigest(e *executionbackend.RequirementsEvaluation) string {
@@ -94,12 +92,12 @@ func verifyRequirementsSnapshot(p executionmodel.FixedExecutionProfile, director
 	if len(p.ImplementationData) > 0 {
 		projectID = p.ImplementationData[0].ProjectID
 	}
-	c := Config{ExecutionDirectory: directory, Host: p.Host, Agent: p.Agent, selectedProfileID: p.ID, configDigest: p.AcceptedConfigVersion, identity: projectID, ImplementationData: CloneImplementationData(p.ImplementationData), fixedProfileDigest: p.Digest}
-	entry, err := registrationFor(c)
+	c := Config{Host: p.Host, Agent: p.Agent, selectedProfileID: p.ID, acceptedConfigVersion: p.AcceptedConfigVersion, identity: projectID, ImplementationData: CloneImplementationData(p.ImplementationData), fixedProfileDigest: p.Digest}
+	entry, err := registrationFor(c, directory)
 	if err != nil {
 		return false
 	}
-	key := executionbackend.CapabilityReport{Version: 1, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol, Target: TargetFor(c), Agent: AgentFor(c)}
+	key := executionbackend.CapabilityReport{Version: 1, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol, Target: TargetFor(c, directory), Agent: AgentFor(c)}
 	if e.Capabilities != nil {
 		key.PlatformVersion = e.Capabilities.PlatformVersion
 		key.AgentVersion = e.Capabilities.AgentVersion
@@ -119,37 +117,18 @@ func clonePublicationSettings(p executionmodel.PublicationSettings) executionmod
 
 // Recheck the exact accepted file bytes inside the claim transaction. A changed
 // candidate must be reloaded and evaluated; neither profile nor evidence is reused.
-func verifyClaimConfigFiles(c Config) error {
-	if c.executionConfigPath == "" {
+func verifyClaimConfigFiles(verifier ConfigVerifier) error {
+	if verifier == nil {
 		return nil
-	} // Explicit in-memory configuration.
-	project, err := os.ReadFile(c.policySource)
-	if err != nil {
-		return err
 	}
-	global, err := os.ReadFile(c.executionConfigPath)
-	if err != nil {
-		return err
-	}
-	if loadedConfigDigest(project, global) != c.configDigest {
-		return nativeErr("stale_profile", "project or execution configuration changed during claim evaluation")
-	}
-	return nil
-}
-
-func loadedConfigDigest(project, global []byte) string {
-	h := sha256.New()
-	h.Write(project)
-	h.Write([]byte{0})
-	h.Write(global)
-	return hex.EncodeToString(h.Sum(nil))
+	return verifier.VerifyCurrentConfig()
 }
 
 func (s *Service) checkCurrentExecutionRequirements(ctx context.Context, fixed workerFlowContext) error {
 	if fixed.config.ExecutionRequirements.Empty() {
 		return nil
 	}
-	evaluation, err := evaluateExecutionRequirementsWithRecords(ctx, fixed.config, s.records)
+	evaluation, err := evaluateExecutionRequirementsWithRecords(ctx, fixed.config, s.records, s.runtime.Directory)
 	if err == nil {
 		fixed.execution.CurrentRequirementsEvaluation = &evaluation
 		if fixed.execution.CurrentRequirementsError != nil {

@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	"github.com/erranliu/SteerLine/internal/execution"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
@@ -15,9 +16,9 @@ import (
 )
 
 func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
-	c := execution.Config{WorkflowProtocol: executionmodel.Version, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionbackend.PublicationPolicy{Publisher: "worker"}, PR: executionmodel.PRProviderConfig{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}, Host: "orca_supervised", Agent: "codex"}
+	c := steerlineapp.Config{TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionbackend.PublicationPolicy{Publisher: "worker"}, PR: executionmodel.PRProviderConfig{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}, Host: "orca_supervised", Agent: "codex"}
 	setNativeImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}, &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote-env", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1})
-	entry, err := c.ExecutionDirectory.Resolve(c)
+	entry, err := c.ExecutionDirectory.Resolve(c.ExecutionConfig())
 	if err != nil || entry.ValidatePublicationPolicy(c.PublicationPolicy, publication.Config(c.PR)) != nil {
 		t.Fatal("existing remote worker publication was removed")
 	}
@@ -37,20 +38,28 @@ func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
 }
 
 func TestRemotePublicationClaimRequiresPermissionEvidence(t *testing.T) {
-	c, _, store := nativeAdmissionFixture(t)
+	fixture := newLifecycleProjectBase(t, "local", false)
+	c := fixture.config
 	c.Host, c.Agent = "orca_supervised", "codex"
 	c.PublicationPolicy.Publisher = executionbackend.PublisherWorker
 	c.PR = executionmodel.PRProviderConfig{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}
 	setNativeImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "must-not-be-called", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}, &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote-env", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", ExpectedCodexVersion: "0.159.2", PollInterval: "1s", CapabilityReportVersion: 1})
+	t.Setenv("STEERLINE_TEST_REMOTE_URL", "https://forge.invalid/org/repo.git")
+	project, err := steerlineapp.OpenNativeTaskProject(context.Background(), &c)
+	require(t, err)
+	require(t, project.Close())
+	store, err := steerlineapp.OpenNativeTaskCommandStore(context.Background(), &c)
+	require(t, err)
+	defer store.Close()
 	// Missing enforcement evidence must reject before Git, version, or remote
 	// probes, even though this route's existing worker publication is supported.
 	c.Git.Executable = "must-not-be-called"
-	entry, err := c.ExecutionDirectory.Resolve(c)
+	entry, err := c.ExecutionDirectory.Resolve(c.ExecutionConfig())
 	require(t, err)
 	require(t, entry.ValidatePublicationPolicy(c.PublicationPolicy, publication.Config(c.PR)))
 	before, err := store.Query(context.Background(), c.Identity())
 	require(t, err)
-	_, err = (appExecutionCommands(t, store, c)).ClaimNativeTask(context.Background(), c, execution.TaskClaimOptions{TaskID: "60", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1})
+	_, err = (appExecutionCommands(t, store, c)).ClaimNativeTask(context.Background(), c.ExecutionConfig(), execution.TaskClaimOptions{TaskID: "60", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: 1})
 	if err == nil || !strings.Contains(err.Error(), "enforcement evidence") || strings.Contains(err.Error(), "must-not-be-called") {
 		t.Fatalf("remote publication bypassed its permission admission gate: %v", err)
 	}

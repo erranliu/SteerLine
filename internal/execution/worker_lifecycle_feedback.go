@@ -25,11 +25,11 @@ func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *recon
 		return executionmodel.ErrTurnStale
 	}
 	if lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots {
-		args, err := linkedWorktreeWriteArgs(ctx, fixed.config, execution.Workspace.Worktree)
+		args, err := linkedWorktreeWriteArgs(ctx, fixed.config, s.runtime.Directory, execution.Workspace.Worktree)
 		if err != nil {
 			return err
 		}
-		if err := bindPolicyResources(ctx, fixed.config, execution, execution.Workspace.Worktree, args); err != nil {
+		if err := bindPolicyResources(ctx, fixed.config, s.runtime.Directory, s.runtime.ProcessHost, execution, execution.Workspace.Worktree, args); err != nil {
 			return err
 		}
 	}

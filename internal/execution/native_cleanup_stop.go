@@ -44,7 +44,7 @@ func (s *Service) reconcileRunStop(ctx context.Context, run *reconstructiontypes
 	requestOp.LifecycleIdentity = &executionbackend.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionbackend.LifecycleBindingDigest(snapshot), Ref: *op.Ref}
 	request := executionbackend.LifecycleRequest{Snapshot: snapshot, Operation: requestOp, Input: executionbackend.LifecycleInput{Stop: &executionbackend.StopInput{TurnID: snapshot.Session.CurrentTurnID}}}
 	records := s.records
-	err = s.dispatchLifecycleEffect(ctx, run, stopReconciliationPort{LifecyclePort: lifecycle, backend: BackendFor(fixed.config), ref: *op.Ref}, request, true, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
+	err = s.dispatchLifecycleEffect(ctx, run, stopReconciliationPort{LifecyclePort: lifecycle, backend: BackendFor(fixed.config, s.runtime.Directory), ref: *op.Ref}, request, true, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 		if err := result.receipt.ValidateFor(request); err != nil {
 			return err
 		}
@@ -92,14 +92,14 @@ func (s *Service) stopRunExecution(ctx context.Context, r *reconstructiontypes.R
 	if ref.RunID != r.RunID || ref.AttemptID != r.AttemptID || r.Process == nil || ref.External != *r.Process {
 		return executionbackend.Operation{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "active execution binding does not match runtime identity"}
 	}
-	entry, registryErr := registrationFor(config)
+	entry, registryErr := registrationFor(config, s.runtime.Directory)
 	if registryErr != nil {
 		return executionbackend.Operation{}, registryErr
 	}
 	if entry.Key.Backend != ref.Backend || entry.Key.Protocol != ref.Protocol || entry.Key.Agent != ref.Agent.Name {
 		return executionbackend.Operation{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "configured backend/protocol differs from fixed execution"}
 	}
-	stopper, stopperErr := executionStopperFor(config)
+	stopper, stopperErr := executionStopperFor(config, s.runtime.Directory)
 	if stopperErr != nil {
 		return executionbackend.Operation{}, stopperErr
 	}
@@ -107,7 +107,7 @@ func (s *Service) stopRunExecution(ctx context.Context, r *reconstructiontypes.R
 	payload := struct {
 		Policy string
 		Grace  string
-	}{"fixed_local_execution_stop", config.ShutdownGrace}
+	}{"fixed_local_execution_stop", s.runtimeSettings.ShutdownGrace.String()}
 	op := executionbackend.Operation{Version: executionbackend.ExecutionRecordVersion, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: executionbackend.OperationPending, StartedAt: now(), UpdatedAt: now(), Ref: &ref}
 	if old, loadErr := records.loadOperation(r.RunID, r.AttemptID, opID); loadErr == nil {
 		if old.Action != op.Action || old.PayloadDigest != op.PayloadDigest || old.Target != op.Target {
@@ -198,7 +198,7 @@ func (s *Service) confirmExecutionStop(op executionbackend.Operation) (bool, err
 		}
 		ref = &loaded
 	}
-	backend := BackendFor(config)
+	backend := BackendFor(config, s.runtime.Directory)
 	obs, err := backend.Observe(context.Background(), *ref)
 	if err != nil {
 		op.Status, op.Diagnostic, op.UpdatedAt = executionbackend.OperationUnknown, err.Error(), now()

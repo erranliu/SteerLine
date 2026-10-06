@@ -13,11 +13,12 @@ import (
 
 func TestWorkerFlowAdapterUsesFixedProtocol(t *testing.T) {
 	config := workerContextConfigFixture()
-	fixed := config.projectExecutionProfile().Freeze()
-	target := TargetFor(config)
+	dependencies, _ := neutralFixtureRuntime(config)
+	fixed := testProjectExecutionProfile(config).Freeze(dependencies.Directory, config.Identity())
+	target := TargetFor(config, dependencies.Directory)
 	run := &reconstruction.RunView{RunID: "run", ExecutionID: "execution", AttemptID: "attempt", Host: "local", Agent: "fixture", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Target: target}
 	service := Service{
-		Config: config,
+		Config: config, runtime: dependencies,
 		domain: reconstruction.Snapshot{WorkflowRuns: []executionmodel.WorkflowRunRecord{{ProjectIdentity: ConfigurationProjectIdentity(config), WorkflowRunID: "run", WorkflowVersion: executionmodel.Version, Repository: config.Repository, Branch: config.Branch, ConfigDigest: fixed.AcceptedConfigVersion, ExecutionProfile: &fixed}},
 			Executions: []executionmodel.ExecutionRecord{{ProjectIdentity: ConfigurationProjectIdentity(config), ConfigurationDigest: fixed.Digest, CurrentAttemptID: run.AttemptID, ExecutionID: "execution", WorkflowRunID: "run", Agent: "fixture", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Target: target}},
 			Attempts:   []executionmodel.StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}}},
@@ -78,28 +79,29 @@ func TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent(t *testing.T)
 
 func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
 	config := workerContextConfigFixture()
-	entry, err := registrationFor(config)
+	dependencies, _ := neutralFixtureRuntime(config)
+	entry, err := registrationFor(config, dependencies.Directory)
 	require(t, err)
 	foreign := entry
 	foreign.Host, foreign.ProfileKey = "other-fixture-host", "fixture/other-stream-v1"
 	foreign.Key.Protocol = "fixture_other_stream_v1"
-	config.ExecutionDirectory, err = NewExecutionDirectory(config.ExecutionDirectory.Version(), neutralCodecs(), []ExecutionRegistration{entry, foreign})
+	directory, err := NewExecutionDirectory(dependencies.Directory.Version(), neutralCodecs(), []ExecutionRegistration{entry, foreign})
 	require(t, err)
-	target := TargetFor(config)
+	target := TargetFor(config, directory)
 	run := &reconstruction.RunView{Host: config.Host, Agent: config.Agent, Backend: string(entry.Key.Backend), Protocol: string(entry.Key.Protocol), Target: target}
 	record := &executionmodel.ExecutionRecord{Agent: config.Agent, Backend: run.Backend, Protocol: run.Protocol, Target: target}
-	mode, err := workerFlowRegistrationFor(config, run, record)
+	mode, err := workerFlowRegistrationFor(config, directory, run, record)
 	require(t, err)
 	if mode.Key.Protocol != neutralProtocol {
 		t.Fatalf("fixed protocol was replaced: %+v", mode)
 	}
 	changed := config
 	changed.Host = "other-fixture-host"
-	if _, err := workerFlowRegistrationFor(changed, run, record); !feedbackIdentityMismatch(err) {
+	if _, err := workerFlowRegistrationFor(changed, directory, run, record); !feedbackIdentityMismatch(err) {
 		t.Fatalf("replacement host routed fixed feedback: %v", err)
 	}
 	record.Protocol = string(executionbackend.ProtocolLocalProcess)
-	if _, err := workerFlowRegistrationFor(config, run, record); !feedbackIdentityMismatch(err) {
+	if _, err := workerFlowRegistrationFor(config, directory, run, record); !feedbackIdentityMismatch(err) {
 		t.Fatalf("replacement protocol routed fixed feedback: %v", err)
 	}
 }

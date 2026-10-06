@@ -16,16 +16,16 @@ import (
 // These test-only helpers prepare SQLite state for service-host fixtures. App
 // project construction is covered through the real app entry point in tests/integration.
 func openHostFixtureNativeProject(ctx context.Context, c *execution.Config) (*sqlite.SQLiteStore, error) {
-	if c == nil || c.RequireNativeTaskAuthority() != nil {
-		return nil, nativeErr("authority_mismatch", "native task project requires task_authority=native")
+	if c == nil {
+		return nil, nativeErr("authority_mismatch", "native task project config is required")
 	}
-	if err := c.ValidateTaskCommandConfiguration(); err != nil {
-		return nil, err
+	if c.Repository == "" || c.Remote == "" || c.Branch == "" {
+		return nil, errors.New("repository, remote and branch are required")
 	}
 	if err := validateNativeStateLocation(*c); err != nil {
 		return nil, err
 	}
-	if err := c.ResolveIdentity(ctx); err != nil {
+	if err := resolveHostTestIdentity(ctx, c); err != nil {
 		return nil, err
 	}
 	path := filepath.Join(c.RunDir, "steerline.db")
@@ -42,7 +42,7 @@ func openHostFixtureNativeProject(ctx context.Context, c *execution.Config) (*sq
 	if err = ensureNativeStateClean(c.RunDir, c.Repository, fixtureCapabilityValidation{}); err != nil {
 		return nil, err
 	}
-	target, err := c.TaskRepositoryTarget(ctx)
+	target, err := c.TaskRepositoryTarget(ctx, testProcessHost{})
 	if err != nil {
 		return nil, err
 	}
@@ -62,13 +62,13 @@ func openHostFixtureNativeProject(ctx context.Context, c *execution.Config) (*sq
 }
 
 func openHostFixtureNativeReader(ctx context.Context, c *execution.Config) (*sqlite.SQLiteStore, error) {
-	if c == nil || c.RequireNativeTaskAuthority() != nil {
-		return nil, nativeErr("authority_mismatch", "native task reader requires task_authority=native")
+	if c == nil {
+		return nil, nativeErr("authority_mismatch", "native task reader config is required")
 	}
 	if err := validateNativeStateLocation(*c); err != nil {
 		return nil, err
 	}
-	if err := c.ResolveIdentity(ctx); err != nil {
+	if err := resolveHostTestIdentity(ctx, c); err != nil {
 		return nil, err
 	}
 	path := filepath.Join(c.RunDir, "steerline.db")
@@ -79,16 +79,16 @@ func openHostFixtureNativeReader(ctx context.Context, c *execution.Config) (*sql
 }
 
 func openHostFixtureNativeCommandStore(ctx context.Context, c *execution.Config) (*sqlite.SQLiteStore, error) {
-	if c == nil || c.RequireNativeTaskAuthority() != nil {
-		return nil, nativeErr("authority_mismatch", "native task command requires task_authority=native")
+	if c == nil {
+		return nil, nativeErr("authority_mismatch", "native task command config is required")
 	}
-	if err := c.ValidateTaskCommandConfiguration(); err != nil {
-		return nil, err
+	if c.Repository == "" || c.Remote == "" || c.Branch == "" {
+		return nil, errors.New("repository, remote and branch are required")
 	}
 	if err := validateNativeStateLocation(*c); err != nil {
 		return nil, err
 	}
-	if err := c.ResolveIdentity(ctx); err != nil {
+	if err := resolveHostTestIdentity(ctx, c); err != nil {
 		return nil, err
 	}
 	path := filepath.Join(c.RunDir, "steerline.db")
@@ -131,7 +131,7 @@ func openBoundNativeStore(ctx context.Context, c execution.Config, path string) 
 	if err != nil {
 		return nil, err
 	}
-	target, err := c.TaskRepositoryTarget(ctx)
+	target, err := c.TaskRepositoryTarget(ctx, testProcessHost{})
 	if err != nil {
 		return nil, err
 	}

@@ -18,8 +18,6 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-type Config = execution.Config
-
 type ExecutionProfile = execution.ExecutionProfile
 
 const WorkerFlowVersion = executionmodel.Version
@@ -81,8 +79,8 @@ func localGlobalExecutionFixture(t *testing.T) {
 	writeGlobalExecutionFixture(t, []ExecutionProfile{testExecutionProfile(t, "local", "Local", "local", "codex", codexworker.ProfileConfig{Executable: "codex"}, nil)}, "local")
 }
 
-func codexProfileSettings(c Config) codexworker.ProfileConfig {
-	value, _ := codexSettings(c)
+func codexProfileSettings(c execution.Config, directories ...*execution.ExecutionDirectory) codexworker.ProfileConfig {
+	value, _ := codexSettings(c, directories...)
 	return value
 }
 
@@ -102,7 +100,9 @@ func testVerifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile) boo
 	return err == nil && (Config{ExecutionDirectory: directory}).CheckFixedProfile(p) == nil
 }
 
-func nativeOrcaFixedAgentCommand(c Config) (string, error) { return managedTerminalCommand(c, "", nil) }
+func nativeOrcaFixedAgentCommand(c execution.Config, directories ...*execution.ExecutionDirectory) (string, error) {
+	return managedTerminalCommand(c, "", nil, directories...)
+}
 
 func mustJSON(value any) []byte {
 	raw, err := json.Marshal(value)
@@ -176,7 +176,8 @@ func bindUnitDirectory(t *testing.T, c Config) Config {
 	directory, err := NewBuiltinDirectory(host)
 	require(t, err)
 	c.ProcessHost = host
-	c.BindApplicationConfig(directory, "fixture-project.json", "fixture-global.json", "fixture-accepted-v1", true)
+	c.ExecutionDirectory = directory
+	c.bindApplicationFiles("fixture-project.json", "fixture-global.json", "fixture-accepted-v1", true)
 	return c
 }
 
@@ -193,8 +194,9 @@ func boundProfile(c Config, p ExecutionProfile) ExecutionProfile {
 func digestValue(value any) string { return shortDigest(value) }
 
 func unitProjectProfile(c Config) ExecutionProfile {
-	inputs := make([]executionbackend.ImplementationConfigInput, 0, len(c.ImplementationData))
-	for _, e := range c.ImplementationData {
+	executionConfig := c.executionConfig()
+	inputs := make([]executionbackend.ImplementationConfigInput, 0, len(executionConfig.ImplementationData))
+	for _, e := range executionConfig.ImplementationData {
 		inputs = append(inputs, executionbackend.ImplementationConfigInput{ImplementationKey: e.ImplementationKey, CodecVersion: e.CodecVersion, Payload: e.Payload})
 	}
 	return boundProfile(c, ExecutionProfile{ID: ProjectExecutionProfileID, Name: "Project default", Host: c.Host, Agent: c.Agent, ImplementationConfigs: inputs})
@@ -213,7 +215,7 @@ func setTestCodexProfile(t *testing.T, c *Config, worker codexworker.ProfileConf
 	t.Helper()
 	var terminal *orcaworker.ProfileConfig
 	if c.Host != "local" {
-		settings, _ := terminalSettings(*c)
+		settings, _ := terminalSettings(c.executionConfig(), c.ExecutionDirectory)
 		terminal = &settings
 	}
 	setTestImplementationProfiles(t, c, worker, terminal)

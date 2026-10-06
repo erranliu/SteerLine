@@ -28,7 +28,7 @@ type taskDiscardIntent struct {
 }
 
 func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, taskID, requestID string, expectedVersion uint64, reason, requestedBy string) (taskmodel.TaskDiscardReceipt, error) {
-	if err := validateWorkflowConfig(&config, nil); err != nil {
+	if err := validateWorkflowConfig(config, c.runtime.Directory); err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err
 	}
 	if c.Store == nil || c.Project == "" || config.Identity() != c.Project {
@@ -41,7 +41,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		return taskmodel.TaskDiscardReceipt{}, nativeErr("immutable_task", "discard requires request identity, expected version and reason")
 	}
 	if strings.TrimSpace(requestedBy) == "" {
-		requestedBy = defaultRequestedBy()
+		requestedBy = c.defaultRequestedBy()
 	}
 	reason = strings.TrimSpace(reason)
 	if len(reason) > 4000 {
@@ -80,13 +80,13 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		return taskmodel.TaskDiscardReceipt{}, err
 	}
 	if w := latestNativeWorkflow(snapshot.WorkflowRuns, taskID); w != nil {
-		config, err = fixedWorkflowPublicationConfig(config, *w)
+		config, err = fixedWorkflowPublicationConfig(config, *w, c.runtime.Directory)
 		if err != nil {
 			return taskmodel.TaskDiscardReceipt{}, err
 		}
 	}
 	authority := snapshot.Graph.Authority
-	if err = validateNativeConfiguredTarget(ctx, config, authority); err != nil {
+	if err = validateNativeConfiguredTarget(ctx, config, authority, c.runtime.ProcessHost); err != nil {
 		return taskmodel.TaskDiscardReceipt{}, err
 	}
 	plan, task, err := taskDiscardPlanFromSnapshot(snapshot)
@@ -211,7 +211,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "publication outcome is not conclusive")
 	}
 	if intent.PRURL != "" {
-		target, targetErr := configuredRepositoryTarget(ctx, config)
+		target, targetErr := configuredRepositoryTarget(ctx, config, c.runtime.ProcessHost)
 		if targetErr != nil || config.PR.ValidateRemote(target) != nil {
 			return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "PR provider configuration does not match the fixed repository target")
 		}
@@ -223,7 +223,7 @@ func (c CommandService) DiscardNativeTask(ctx context.Context, config Config, ta
 	if executionmodel.CandidateBindings(knownSnapshot.WorkflowRuns, knownSnapshot.Executions, taskID) != intent.CandidateBindings {
 		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", "candidate bindings changed before full PR verification")
 	}
-	known, verifyErr := verifyKnownCandidatePRs(ctx, config, knownSnapshot, taskID, nil, "")
+	known, verifyErr := verifyKnownCandidatePRs(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, knownSnapshot, taskID, nil, "")
 	if verifyErr != nil && !isNativeErrorCode(verifyErr, "already_merged") {
 		return persistDiscardPending(ctx, sqlite, c.Project, requestID, staged, intent, "merge_state_unknown", verifyErr.Error())
 	}

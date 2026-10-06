@@ -28,7 +28,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskReco
 	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
 		return err
 	}
-	if err := c.BindPublicationTarget(ctx); err != nil {
+	if err := c.BindPublicationTarget(ctx, s.runtime.ProcessHost); err != nil {
 		return err
 	}
 	lifecycle, fixed, err := s.lifecycleForRun(run)
@@ -39,7 +39,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskReco
 	if err != nil {
 		return err
 	}
-	report, err := lifecycle.PreflightLifecycle(ctx, lifecycleSetupForRun(run, fixed, snapshot))
+	report, err := lifecycle.PreflightLifecycle(ctx, lifecycleSetupForRun(run, fixed, s.runtime.ProcessHost, snapshot))
 	if err != nil {
 		return err
 	}
@@ -203,7 +203,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructionty
 		return errors.New("worker turn has no fixed worker attempt")
 	}
 	c := fixed.config
-	if err := verifyPublicationTargetForRun(ctx, c, run); err != nil {
+	if err := verifyPublicationTargetForRun(ctx, c, s.runtime.Directory, s.runtime.ProcessHost, run); err != nil {
 		return err
 	}
 	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {

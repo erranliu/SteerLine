@@ -110,11 +110,11 @@ type workerCommitAttachment struct {
 
 func (s *Service) commitWorkerAttached(run *reconstruction.RunView, attachment workerCommitAttachment, operationIDs ...string) error {
 	if attachment.Binding != nil {
-		if s.Config.ExecutionDirectory == nil {
+		if s.runtime.Directory == nil {
 			s.discardWorkerCandidates(operationIDs...)
 			return errors.New("execution directory is required for binding commitment")
 		}
-		if err := s.Config.ExecutionDirectory.ValidateRef(*attachment.Binding); err != nil {
+		if err := s.runtime.Directory.ValidateRef(*attachment.Binding); err != nil {
 			s.discardWorkerCandidates(operationIDs...)
 			return err
 		}

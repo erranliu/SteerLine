@@ -21,15 +21,14 @@ func (s *Service) processCandidateControl(ctx context.Context, req productapi.Co
 	at := now()
 	result.AcceptedAt = &at
 	if req.Action == "start_candidate" {
-		base := s.projectExecutionConfig()
 		profileID := payload.ExecutionProfileID
 		if profileID == "" {
-			if len(base.ExecutionProfiles) != 0 {
+			if s.runtime.Profiles.HasMultipleProfiles() {
 				return s.rejectControl(req, digest, "invalid_request", errors.New("candidate start requires a profile selection"))
 			}
-			profileID = ProjectExecutionProfileID
+			profileID = s.runtime.Profiles.DefaultProfileID()
 		}
-		config, profile, err := base.ResolveExecutionProfile(profileID, payload.ExecutionProfileDigest)
+		config, profile, err := s.runtime.Profiles.ResolveExecutionProfile(profileID, payload.ExecutionProfileDigest)
 		if err != nil {
 			return s.rejectControl(req, digest, "stale_profile", err)
 		}

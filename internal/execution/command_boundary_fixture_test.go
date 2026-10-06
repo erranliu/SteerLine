@@ -9,7 +9,9 @@ import (
 
 func newTestCommandService(store CommandStore, config Config) CommandService {
 	tasks := taskapp.Service{Reader: taskCommandReader{CommandStore: store}, Input: taskInputForTest(config), Documents: taskDocumentsForTest(config)}
-	return NewCommandService(store, config.Identity(), tasks, tasks)
+	command := NewCommandService(store, config.Identity(), tasks, tasks)
+	command.runtime, _ = neutralFixtureRuntime(config)
+	return command
 }
 
 type taskCommandReader struct{ CommandStore }

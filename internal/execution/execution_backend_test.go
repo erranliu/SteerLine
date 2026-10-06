@@ -90,7 +90,7 @@ func TestLocalReadOutputUsesBoundedExecutionCursor(t *testing.T) {
 	}
 	cfg := Config{Host: "local", RunDir: runDir}
 	backend := localExecutionBackend{config: cfg}
-	ref := executionbackend.ExecutionRef{Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Target: TargetFor(cfg), RunID: runID, AttemptID: attemptID}
+	ref := executionbackend.ExecutionRef{Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Target: testTargetFor(cfg), RunID: runID, AttemptID: attemptID}
 	first, err := backend.ReadOutput(context.Background(), ref, "", 4)
 	if err != nil || string(first.Data) != "abcd" || first.NextCursor == "" {
 		t.Fatalf("first bounded read: %#v, %v", first, err)
@@ -135,8 +135,8 @@ func TestNativeCapabilityCheckKeepsFixedAgent(t *testing.T) {
 	c := workerContextConfigFixture()
 	c.RunDir = t.TempDir()
 	resources := fixtureResources{}
-	backend := BackendFor(c)
-	fixedTarget, fixedAgent := TargetFor(c), AgentFor(c)
+	backend := testBackendFor(c)
+	fixedTarget, fixedAgent := testTargetFor(c), AgentFor(c)
 	report, err := backend.Probe(context.Background(), fixedTarget, fixedAgent)
 	require(t, err)
 	data := []byte("isolated neutral workspace inspection fact")

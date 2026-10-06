@@ -5,12 +5,11 @@ import (
 	"errors"
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
-	"github.com/erranliu/SteerLine/internal/execution"
 )
 
 // PrepareServiceConfig performs center-owned admission and recovery checks
 // before application composition opens and injects the writer resource.
-func PrepareServiceConfig(c execution.Config) (execution.Config, error) {
+func PrepareServiceConfig(c Config) (Config, error) {
 	if c.ExecutionDirectory == nil || c.ProcessHost == nil {
 		return c, errors.New("execution directory and process host are required")
 	}
@@ -36,7 +35,7 @@ func PrepareServiceConfig(c execution.Config) (execution.Config, error) {
 	return c, nil
 }
 
-func admitServiceConfig(c execution.Config) (execution.Config, error) {
+func admitServiceConfig(c Config) (Config, error) {
 	if err := c.ValidateAdmission(); err != nil {
 		return c, err
 	}

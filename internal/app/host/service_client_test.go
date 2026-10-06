@@ -30,7 +30,7 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	rt.UpdatedAt, rt.HeartbeatAt = now(), now()
 	rt.Service.Mode, rt.Service.Status, rt.Service.Ready = "scheduler", "running", true
 	rt.Service.PID, rt.Service.ProcessIdentity = id.PID, id
-	rt.Service.ConfigDigest = c.LoadedConfigDigest()
+	rt.Service.ConfigDigest = c.AcceptedConfigVersion()
 	rt.Service.ControlProtocol, rt.Service.Capabilities = ControlProtocolVersion, []string{"stop_service"}
 	write := func(value reconstruction.Runtime) {
 		t.Helper()
@@ -78,7 +78,7 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	changed.Service.StartupID = ptr(newID())
 	changed.Service.ConfigDigest = strings.Repeat("f", 64)
 	oldConfig := c
-	oldConfig.BindApplicationConfig(oldConfig.ExecutionDirectory, "", "", changed.Service.ConfigDigest, false)
+	oldConfig.BindAcceptedConfigVersion(changed.Service.ConfigDigest)
 	if e := os.MkdirAll(filepath.Join(c.RunDir, "service", "startups", *changed.Service.StartupID), 0700); e != nil {
 		t.Fatal(e)
 	}
@@ -259,7 +259,7 @@ func lifecycleConfigFile(t *testing.T, f *fixture, runDir string) (execution.Con
 	c.WorkflowProtocol = executionmodel.Version
 	c.RunDir = runDir
 	c.WorktreeRoot = ""
-	profile := c.AvailableExecutionProfiles()[0]
+	profile := hostFixtureCatalogFor(c).AvailableExecutionProfiles()[0]
 	profile.ID, profile.Name = "local", "Local"
 	writeGlobalExecutionFixture(t, []execution.ExecutionProfile{profile}, "local")
 	data := projectConfigJSON(t, c)
@@ -270,7 +270,6 @@ func lifecycleConfigFile(t *testing.T, f *fixture, runDir string) (execution.Con
 	require(t, os.WriteFile(configPath, data, 0600))
 	loaded, err := loadFixtureConfig(configPath)
 	require(t, err)
-	require(t, loaded.ResolveIdentity(context.Background()))
 	return loaded, configPath
 }
 

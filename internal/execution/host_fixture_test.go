@@ -73,10 +73,8 @@ func fixtureStateKey(identity string) string {
 }
 func openFixtureProject(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
 	*c = testConfigWithDirectory(*c)
-	if err := c.ResolveIdentity(ctx); err != nil {
-		return nil, err
-	}
-	target, err := c.TaskRepositoryTarget(ctx)
+	dependencies, _ := neutralFixtureRuntime(*c)
+	target, err := configuredRepositoryTarget(ctx, *c, dependencies.ProcessHost)
 	if err != nil {
 		return nil, err
 	}
@@ -124,7 +122,7 @@ func loadFixtureRuntime(c Config) (*reconstruction.Runtime, error) {
 	}
 	return &runtime, nil
 }
-func checkFixtureStoredExecutions(ctx context.Context, c Config) error {
+func checkFixtureStoredExecutions(ctx context.Context, c Config, directories ...*ExecutionDirectory) error {
 	db, err := sqlite.OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		return err
@@ -134,7 +132,14 @@ func checkFixtureStoredExecutions(ctx context.Context, c Config) error {
 	if err != nil {
 		return err
 	}
-	return c.ValidateStoredExecutions(reconstruction.SnapshotFromStorage(snapshot))
+	directory := (*ExecutionDirectory)(nil)
+	if len(directories) > 0 {
+		directory = directories[0]
+	} else {
+		dependencies, _ := neutralFixtureRuntime(c)
+		directory = dependencies.Directory
+	}
+	return c.ValidateStoredExecutions(reconstruction.SnapshotFromStorage(snapshot), directory)
 }
 func newFixtureTasks(reader *sqlite.SQLiteStore, c Config) taskapp.Service {
 	commands := NewTaskCommands(reader, c)
@@ -278,7 +283,7 @@ func (fixtureHost) CurrentProcessIdentity() (*executionbackend.ProcessIdentity, 
 	return resourceprocess.CurrentIdentity()
 }
 func runTestService(ctx context.Context, s *Service, mode string) error {
-	return scheduler.Run(ctx, s, scheduler.Schedule{TaskPoll: duration(s.Config.TaskPoll), PRPoll: duration(s.Config.PRPoll), Heartbeat: duration(s.Config.Heartbeat), FindStop: s.host.FindStopRequest}, mode)
+	return scheduler.Run(ctx, s, scheduler.Schedule{TaskPoll: 10 * time.Second, PRPoll: 30 * time.Second, Heartbeat: s.runtimeSettings.Heartbeat, FindStop: s.host.FindStopRequest}, mode)
 }
 
 var _ hostport.HostPort = fixtureHost{}

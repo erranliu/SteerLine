@@ -17,7 +17,6 @@ import (
 
 func TestTM08Heartbeat(t *testing.T) {
 	c, _ := nativeTaskFixture(t)
-	c.Heartbeat = "2s"
 	reader, err := openHostFixtureNativeProject(context.Background(), &c)
 	if err != nil {
 		t.Fatal(err)
@@ -26,6 +25,7 @@ func TestTM08Heartbeat(t *testing.T) {
 		t.Fatal(err)
 	}
 	hostConfig := hostConfigForTest(c)
+	hostConfig.Heartbeat = "2s"
 	db, err := openHostFixtureNativeCommandStore(context.Background(), &c)
 	if err != nil {
 		t.Fatal(err)

@@ -25,7 +25,7 @@ func StartService(ctx context.Context, configPath string, options steerline.Star
 	return StartConfiguredService(ctx, config, configPath, options)
 }
 
-func StartConfiguredService(ctx context.Context, config execution.Config, configPath string, options steerline.StartServiceOptions) (steerline.ServiceStartResult, error) {
+func StartConfiguredService(ctx context.Context, config Config, configPath string, options steerline.StartServiceOptions) (steerline.ServiceStartResult, error) {
 	if config.ExecutionDirectory == nil || config.ProcessHost == nil {
 		return steerline.ServiceStartResult{}, errors.New("execution directory and process host are required")
 	}
@@ -48,11 +48,11 @@ func StartConfiguredService(ctx context.Context, config execution.Config, config
 	return steerline.StartService(ctx, hostConfig, configPath, options)
 }
 
-func RunConfiguredService(ctx context.Context, config execution.Config, mode, startupID, console string) error {
+func RunConfiguredService(ctx context.Context, config Config, mode, startupID, console string) error {
 	return runConfiguredService(ctx, config, mode, startupID, console, nil)
 }
 
-func runConfiguredService(ctx context.Context, config execution.Config, mode, startupID, console string, onConstruct func(*execution.Service)) error {
+func runConfiguredService(ctx context.Context, config Config, mode, startupID, console string, onConstruct func(*execution.Service)) error {
 	if config.ExecutionDirectory == nil || config.ProcessHost == nil {
 		return errors.New("execution directory and process host are required")
 	}

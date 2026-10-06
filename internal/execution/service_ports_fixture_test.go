@@ -21,12 +21,33 @@ type testProcessHost struct{}
 func mustTestDirectory() (*ExecutionDirectory, error) { return newNeutralDirectory() }
 
 func testConfigWithDirectory(c Config) Config {
-	if c.ExecutionDirectory == nil {
-		c = withNeutralProfile(c, neutralSettings{Executable: os.Args[0]})
+	host := executionbackend.ManagedProcessHost(testProcessHost{})
+	originalIdentity := c.identity
+	if c.identity == "" && c.Repository != "" {
+		if c.Git.Executable == "" {
+			c.Git.Executable = "git"
+		}
+		repository, err := workspace.ResolveRepository(context.Background(), workspace.Git{Command: executionbackend.LaunchCommand{Executable: c.Git.Executable, Args: append([]string(nil), c.Git.Args...)}, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second), Start: host.StartManaged}, c.Repository)
+		if err == nil {
+			c.Repository = repository.Path
+			c.BindRepositoryIdentity(canonical(repository.CommonDir))
+		}
 	}
-	c.ProcessHost = testProcessHost{}
+	if originalIdentity != c.identity && c.selectedProfileID != "" {
+		if _, ok := neutralFixtureCatalogs.Load(c.fixedProfileDigest); ok {
+			_, catalog := neutralFixtureRuntime(c)
+			catalog.Base = c
+			if selected, _, err := catalog.ResolveExecutionProfile(c.selectedProfileID, ""); err == nil {
+				rememberNeutralCatalog(selected, catalog)
+				c = selected
+			}
+		}
+	}
 	if c.WorktreeRoot == "" && c.RunDir != "" {
 		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
+	}
+	if c.selectedProfileID == "" {
+		c = withNeutralProfile(c, neutralSettings{Executable: os.Args[0]})
 	}
 	return c
 }
@@ -59,15 +80,14 @@ func inspectTestWorkspace(ctx context.Context, c Config, ref executionbackend.Ex
 		return executionbackend.WorkspaceInspection{}, errors.New("workspace ref is incomplete")
 	}
 	if c.Identity() == "" {
-		if err := c.ResolveIdentity(ctx); err != nil {
-			return executionbackend.WorkspaceInspection{}, err
-		}
+		return executionbackend.WorkspaceInspection{}, errors.New("app-resolved repository identity is required")
 	}
-	repository, err := workspaceRepository(c)
+	deps, _ := neutralFixtureRuntime(c)
+	repository, err := workspaceRepository(c, deps.Directory)
 	if err != nil {
 		return executionbackend.WorkspaceInspection{}, err
 	}
-	inspection, err := workspace.Inspect(ctx, workspaceGit(c), repository, &executionbackend.WorkspaceIntent{Path: ref.WorkspacePath, Branch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit})
+	inspection, err := workspace.Inspect(ctx, workspaceGit(c, testProcessHost{}), repository, &executionbackend.WorkspaceIntent{Path: ref.WorkspacePath, Branch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit})
 	if err != nil {
 		return executionbackend.WorkspaceInspection{}, err
 	}
@@ -92,7 +112,7 @@ func fixtureGlobalExecutionConfigPath() string {
 }
 
 func fixtureRepositoryStateKey(c Config) (string, error) {
-	repository, err := workspace.ResolveRepository(context.Background(), workspaceGit(testConfigWithDirectory(c)), c.Repository)
+	repository, err := workspace.ResolveRepository(context.Background(), workspaceGit(testConfigWithDirectory(c), testProcessHost{}), c.Repository)
 	if err != nil {
 		return "", err
 	}
@@ -100,7 +120,26 @@ func fixtureRepositoryStateKey(c Config) (string, error) {
 }
 
 func loadFixtureConfig(path string) (Config, error) {
-	c := Config{Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: executionbackend.Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
+	type projectInput struct {
+		PublicationPolicy     executionbackend.PublicationPolicy     `json:"publication_policy"`
+		ExecutionPolicy       executionbackend.ExecutionPolicy       `json:"execution_policy"`
+		ExecutionRequirements executionbackend.ExecutionRequirements `json:"execution_requirements,omitempty"`
+		Repository            string                                 `json:"repository"`
+		TaskAuthority         string                                 `json:"task_authority,omitempty"`
+		Remote                string                                 `json:"remote"`
+		Branch                string                                 `json:"branch"`
+		RunDir                string                                 `json:"run_dir"`
+		WorktreeRoot          string                                 `json:"worktree_root"`
+		Git                   executionbackend.Command               `json:"git"`
+		WorkflowProtocol      string                                 `json:"workflow_protocol,omitempty"`
+		CommandTimeout        string                                 `json:"command_timeout"`
+		Host                  string                                 `json:"host"`
+		Agent                 string                                 `json:"agent"`
+		ExecutionProfiles     []ExecutionProfile                     `json:"execution_profiles,omitempty"`
+		DefaultProfile        string                                 `json:"default_execution_profile,omitempty"`
+		PR                    executionmodel.PRProviderConfig        `json:"pr"`
+	}
+	c := Config{}
 	projectPath, err := filepath.Abs(path)
 	if err != nil {
 		return c, err
@@ -109,25 +148,35 @@ func loadFixtureConfig(path string) (Config, error) {
 	if err != nil {
 		return c, err
 	}
-	if err := decode(projectBytes, &c); err != nil {
+	var input projectInput
+	if err := decode(projectBytes, &input); err != nil {
 		return c, err
 	}
-	if c.TaskAuthority != "native" {
+	if input.TaskAuthority != "native" {
 		return c, errors.New("task_authority must be explicitly set to native; Beads is not supported")
 	}
-	if c.WorkflowProtocol != executionmodel.Version {
+	if input.Remote == "" {
+		input.Remote = "origin"
+	}
+	if input.CommandTimeout == "" {
+		input.CommandTimeout = "30s"
+	}
+	if input.Git.Executable == "" {
+		input.Git.Executable = "git"
+	}
+	if input.WorkflowProtocol != executionmodel.Version {
 		return c, errors.New("workflow_protocol must be worker-flow-v1")
 	}
-	if err := c.ExecutionPolicy.Validate(); err != nil {
+	if err := input.ExecutionPolicy.Validate(); err != nil {
 		return c, err
 	}
-	if err := c.ExecutionRequirements.Validate(); err != nil {
+	if err := input.ExecutionRequirements.Validate(); err != nil {
 		return c, err
 	}
-	if err := publication.ValidateNonSecret(publication.Config(c.PR), c.Git); err != nil {
+	if err := publication.ValidateNonSecret(publication.Config(input.PR), input.Git); err != nil {
 		return c, err
 	}
-	if c.Host != "" || c.Agent != "" || len(c.ExecutionProfiles) != 0 || c.DefaultExecutionProfile != "" {
+	if input.Host != "" || input.Agent != "" || len(input.ExecutionProfiles) != 0 || input.DefaultProfile != "" {
 		return c, errors.New("execution profiles belong in global execution config")
 	}
 	globalPath := fixtureGlobalExecutionConfigPath()
@@ -150,9 +199,10 @@ func loadFixtureConfig(path string) (Config, error) {
 	if err != nil {
 		return c, err
 	}
-	c.ExecutionDirectory, c.ProcessHost = directory, testProcessHost{}
-	c.ExecutionProfiles, c.DefaultExecutionProfile = global.ExecutionProfiles, global.DefaultProfile
-	c.BindApplicationConfig(directory, projectPath, globalPath, loadedConfigDigest(projectBytes, globalBytes), true)
+	c = Config{PublicationPolicy: input.PublicationPolicy, ExecutionPolicy: input.ExecutionPolicy, ExecutionRequirements: input.ExecutionRequirements,
+		Repository: input.Repository, Remote: input.Remote, Branch: input.Branch, RunDir: input.RunDir, WorktreeRoot: input.WorktreeRoot,
+		Git: input.Git, WorkflowProtocol: input.WorkflowProtocol, CommandTimeout: input.CommandTimeout, PR: input.PR}
+	c.BindAcceptedConfigVersion(digestValue([]string{string(projectBytes), string(globalBytes)}))
 	base := filepath.Dir(projectPath)
 	if c.Repository == "" || c.Branch == "" {
 		return c, errors.New("repository and branch are required")
@@ -160,10 +210,13 @@ func loadFixtureConfig(path string) (Config, error) {
 	if !filepath.IsAbs(c.Repository) {
 		c.Repository = filepath.Join(base, c.Repository)
 	}
-	key, err := fixtureRepositoryStateKey(c)
+	repository, err := workspace.ResolveRepository(context.Background(), workspaceGit(c, testProcessHost{}), c.Repository)
 	if err != nil {
 		return c, err
 	}
+	c.Repository = repository.Path
+	c.BindRepositoryIdentity(canonical(repository.CommonDir))
+	key := fixtureStateKey(repository.CommonDir)
 	stateRoot := fixtureStateRoot()
 	if c.RunDir == "" {
 		c.RunDir = filepath.Join(stateRoot, key)
@@ -175,7 +228,8 @@ func loadFixtureConfig(path string) (Config, error) {
 	} else if !filepath.IsAbs(c.WorktreeRoot) {
 		c.WorktreeRoot = filepath.Join(base, c.WorktreeRoot)
 	}
-	if err := validateExecutionProfiles(c); err != nil {
+	catalog := ProfileCatalog{Base: c, Directory: directory, Profiles: global.ExecutionProfiles, DefaultID: global.DefaultProfile, Global: true, PolicySource: projectPath}
+	if err := catalog.Validate(); err != nil {
 		return c, err
 	}
 	initial := global.ExecutionProfiles[0]
@@ -186,8 +240,13 @@ func loadFixtureConfig(path string) (Config, error) {
 			}
 		}
 	}
-	c = c.ApplyExecutionProfile(initial)
-	if err := c.ValidateAdmission(); err != nil {
+	selected, _, err := catalog.ResolveExecutionProfile(initial.ID, "")
+	if err != nil {
+		return c, err
+	}
+	c = selected
+	rememberNeutralCatalog(c, catalog)
+	if err := c.ValidateAdmission(directory); err != nil {
 		return c, err
 	}
 	return c, nil

@@ -11,10 +11,10 @@ type commandWiringStore interface {
 	taskStorage
 }
 
-func NewCommandService(store commandWiringStore, config execution.Config) (execution.CommandService, error) {
+func NewCommandService(store commandWiringStore, config Config) (execution.CommandService, error) {
 	if store == nil || config.Identity() == "" || config.ExecutionDirectory == nil {
 		return execution.CommandService{}, errors.New("command construction requires a store, fixed project and execution directory")
 	}
 	tasks := NewTaskService(taskCommandStore{store: store}, config)
-	return execution.NewCommandService(store, config.Identity(), tasks, tasks), nil
+	return execution.NewCommandServiceWithRuntime(store, config.Identity(), tasks, tasks, config.runtimeDependencies()), nil
 }

@@ -29,7 +29,7 @@ func TestCLIExecutionProfileIsBoundIntoStartTaskRequest(t *testing.T) {
 	}
 	workerPayload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: os.Args[0], WindowsSandbox: "unelevated"})
 	hostPayload, _ := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{Executable: "fixture-host", Shell: "cmd.exe", WaitTimeout: "1m"})
-	config := execution.Config{
+	config := Config{
 		Repository: repository, Git: executionbackend.Command{Executable: "git"},
 		ExecutionPolicy:   executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"},
 		PublicationPolicy: executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker},
@@ -37,7 +37,8 @@ func TestCLIExecutionProfileIsBoundIntoStartTaskRequest(t *testing.T) {
 		ExecutionProfiles: []execution.ExecutionProfile{{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: workerPayload}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: hostPayload}}}},
 	}
 	config.ProcessHost = host
-	config.BindApplicationConfig(directory, "fixture", "", "accepted", true)
+	config.ExecutionDirectory = directory
+	config.bindApplicationFiles("fixture", "", "accepted", true)
 	config.RunDir = filepath.Join(t.TempDir(), "state")
 	ref := api.ProjectRef{ConfigPath: "fixture"}
 	resources, err := clientResources(context.Background(), config, ref)

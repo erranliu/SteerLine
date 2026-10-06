@@ -2,7 +2,6 @@ package app
 
 import (
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
-	"github.com/erranliu/SteerLine/internal/execution"
 )
 
 type applicationStore interface {
@@ -17,7 +16,7 @@ type clientCommands struct {
 	lock  *steerline.RepoLock
 }
 
-func newClientCommands(store applicationStore, config execution.Config, lock *steerline.RepoLock) (*clientCommands, error) {
+func newClientCommands(store applicationStore, config Config, lock *steerline.RepoLock) (*clientCommands, error) {
 	execution, err := NewCommandService(store, config)
 	if err != nil {
 		return nil, err

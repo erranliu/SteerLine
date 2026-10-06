@@ -5,15 +5,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	"github.com/erranliu/SteerLine/internal/execution"
 )
 
-func ValidateNativeStateLocation(config execution.Config) error {
+func ValidateNativeStateLocation(config Config) error {
 	return validateNativeStateLocation(config)
 }
 
-func validateNativeStateLocation(config execution.Config) error {
+func validateNativeStateLocation(config Config) error {
 	if err := config.ResolveIdentity(context.Background()); err != nil {
 		return err
 	}

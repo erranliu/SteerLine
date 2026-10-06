@@ -63,7 +63,7 @@ func (c CommandService) RecordNativeWorkspaceCleanupProgress(ctx context.Context
 		return err
 	}
 	if strings.TrimSpace(requestedBy) == "" {
-		requestedBy = defaultRequestedBy()
+		requestedBy = c.defaultRequestedBy()
 	}
 	request, err := taskmodel.CanonicalJSON(mustJSON(struct {
 		TaskID      string `json:"task_id"`
@@ -111,7 +111,7 @@ func (c CommandService) RecordNativeCleanupReceipt(ctx context.Context, taskID, 
 		return taskmodel.TaskRecord{}, err
 	}
 	if strings.TrimSpace(requestedBy) == "" {
-		requestedBy = defaultRequestedBy()
+		requestedBy = c.defaultRequestedBy()
 	}
 	request, err := taskmodel.CanonicalJSON(mustJSON(struct {
 		TaskID      string          `json:"task_id"`

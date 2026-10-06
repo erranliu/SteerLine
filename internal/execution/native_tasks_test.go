@@ -62,6 +62,7 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	repo := filepath.Join(t.TempDir(), "repo")
 	remote := filepath.Join(t.TempDir(), "origin.git")
+	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", remote)
 	require(t, os.CopyFS(repo, os.DirFS(nativeSeedRepo)))
 	require(t, os.CopyFS(remote, os.DirFS(nativeSeedRemote)))
 	output, err := exec.Command("git", "-C", repo, "remote", "set-url", "origin", remote).CombinedOutput()
@@ -69,7 +70,8 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 		t.Fatalf("fixture remote: %v: %s", err, output)
 	}
 	commit := nativeSeedCommit
-	c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, Repository: repo, Remote: "origin", Branch: "main", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "10s", ShutdownGrace: "10s", ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Git: executionbackend.Command{Executable: "git"}}
+	c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), WorkflowProtocol: executionmodel.Version, Repository: repo, Remote: "origin", Branch: "main", CommandTimeout: "10s", Git: executionbackend.Command{Executable: "git"}}
+	c.Git = executionbackend.Command{Executable: os.Args[0], Args: []string{"--fake", "publication-git", "git"}}
 	setNeutralProfile(t, &c, neutralSettings{Executable: os.Args[0]})
 	key, err := fixtureRepositoryStateKey(c)
 	if err != nil {
@@ -77,7 +79,6 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 	}
 	c.RunDir = filepath.Join(fixtureStateRoot(), key)
 	c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
-	c.Git = executionbackend.Command{Executable: os.Args[0], Args: []string{"--fake", "publication-git", "git"}}
 	return c, commit
 }
 
@@ -96,7 +97,8 @@ func nativeContract(t *testing.T, c Config, commit, id string) taskmodel.TaskCon
 	spec := nativeRef(t, c, commit, "docs/spec/task-core.spec.md")
 	plan := nativeRef(t, c, commit, "docs/spec/task-core.plan.md")
 	common := nativeRef(t, c, commit, "docs/spec/native-task-constraints.md")
-	target, err := configuredRepositoryTarget(context.Background(), c)
+	dependencies, _ := neutralFixtureRuntime(c)
+	target, err := configuredRepositoryTarget(context.Background(), c, dependencies.ProcessHost)
 	if err != nil {
 		t.Fatal(err)
 	}

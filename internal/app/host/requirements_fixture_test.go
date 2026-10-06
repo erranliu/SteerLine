@@ -10,7 +10,7 @@ import (
 )
 
 func queryHostRequirementTool(_ context.Context, c execution.Config, id string) executionbackend.RequirementEvidence {
-	e := executionbackend.RequirementEvidence{ID: id, Site: "target", Target: execution.TargetFor(c), Status: executionbackend.RequirementUnknown, Source: "neutral:declared-tool-fact", CheckedAt: now()}
+	e := executionbackend.RequirementEvidence{ID: id, Site: "target", Target: testHostTargetFor(c), Status: executionbackend.RequirementUnknown, Source: "neutral:declared-tool-fact", CheckedAt: now()}
 	if id == "git" {
 		if c.Git.Executable == "git" || len(c.Git.Args) > 0 {
 			e.Status, e.Version = executionbackend.RequirementPresent, "fixture-tool-v1"
@@ -31,7 +31,11 @@ func queryHostRequirementTool(_ context.Context, c execution.Config, id string) 
 }
 
 func queryRemoteRequirementTool(_ context.Context, c execution.Config, id string) executionbackend.RequirementEvidence {
-	return executionbackend.RequirementEvidence{ID: id, Site: "target", Target: execution.TargetFor(c), Status: executionbackend.RequirementUnknown, Source: "neutral:unavailable-target-tool", CheckedAt: now()}
+	return executionbackend.RequirementEvidence{ID: id, Site: "target", Target: testHostTargetFor(c), Status: executionbackend.RequirementUnknown, Source: "neutral:unavailable-target-tool", CheckedAt: now()}
+}
+
+func testHostTargetFor(c execution.Config) executionbackend.ExecutionTarget {
+	return execution.TargetFor(c, hostFixtureRuntime(c).Directory)
 }
 
 func capabilityReport(backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec, version string) executionbackend.CapabilityReport {

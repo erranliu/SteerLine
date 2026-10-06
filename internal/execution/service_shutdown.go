@@ -46,13 +46,13 @@ func (s *Service) shutdown() {
 			s.setError(errors.New("active worker has no fixed workflow run"))
 			return
 		}
-		config, err := s.executionConfigForRun(run)
+		_, err := s.executionConfigForRun(run)
 		if err != nil {
 			s.setError(err)
 			return
 		}
 		stoppingWorker := s.workers[runID]
-		ctx, cancel := context.WithTimeout(context.Background(), duration(config.ShutdownGrace))
+		ctx, cancel := context.WithTimeout(context.Background(), s.runtimeSettings.ShutdownGrace)
 		err = stoppingWorker.detachLocalObservation(ctx)
 		cancel()
 		if err != nil {

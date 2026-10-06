@@ -7,12 +7,11 @@ import (
 	"path/filepath"
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
-	"github.com/erranliu/SteerLine/internal/execution"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
-func preflightWorkerFlowState(ctx context.Context, c execution.Config) error {
+func preflightWorkerFlowState(ctx context.Context, c Config) error {
 	if c.WorkflowProtocol != executionmodel.Version {
 		return nil
 	}

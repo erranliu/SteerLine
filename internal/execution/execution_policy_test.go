@@ -18,7 +18,9 @@ func workspacePolicyFixture() executionbackend.ExecutionPolicy {
 func TestProjectPolicyMissingBoundResourcesAreNotReconstructed(t *testing.T) {
 	c := Config{ExecutionPolicy: workspacePolicyFixture()}
 	e := executionmodel.ExecutionRecord{Generation: "original-generation", Process: &executionbackend.ProcessIdentity{Kind: "local"}}
-	if err := bindPolicyResources(context.Background(), c, &e, "workspace", nil); err == nil || !strings.Contains(err.Error(), "snapshot is missing") {
+	c = withNeutralProfile(c, neutralSettings{Executable: "fixture"})
+	dependencies, _ := neutralFixtureRuntime(c)
+	if err := bindPolicyResources(context.Background(), c, dependencies.Directory, dependencies.ProcessHost, &e, "workspace", nil); err == nil || !strings.Contains(err.Error(), "snapshot is missing") {
 		t.Fatalf("missing original resources were reconstructed: %v", err)
 	}
 	if e.PolicyResources != nil {

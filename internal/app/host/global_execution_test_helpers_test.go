@@ -15,10 +15,12 @@ import (
 func publicationSnapshotFixture(t *testing.T, c execution.Config) executionmodel.FixedExecutionProfile {
 	t.Helper()
 	c = withNeutralProfile(c, neutralProfileSettings(c))
-	require(t, c.ValidateTaskCommandConfiguration())
-	require(t, c.BindPublicationTarget(context.Background()))
-	p := c.AvailableExecutionProfiles()[0].Freeze()
-	if !execution.VerifyFixedExecutionProfile(p, c.ExecutionDirectory) {
+	dependencies := hostFixtureRuntime(c)
+	require(t, c.ValidateTaskCommandConfiguration(dependencies.Directory))
+	require(t, c.BindPublicationTarget(context.Background(), dependencies.ProcessHost))
+	profile := hostFixtureCatalogFor(c).AvailableExecutionProfiles()[0]
+	p := profile.Freeze(dependencies.Directory, c.Identity())
+	if !execution.VerifyFixedExecutionProfile(p, dependencies.Directory) {
 		t.Fatal("invalid publication snapshot fixture")
 	}
 	return p
@@ -53,6 +55,13 @@ func projectConfigJSON(t *testing.T, c execution.Config) []byte {
 	for _, field := range []string{"host", "agent", "model", "reasoning_effort", "sandbox", "profile", "execution_profiles", "default_execution_profile"} {
 		delete(fields, field)
 	}
+	fields["task_authority"], _ = json.Marshal("native")
+	fields["claimant"], _ = json.Marshal("operator")
+	fields["executable_types"], _ = json.Marshal([]string{"task", "bug", "feature", "chore"})
+	fields["task_poll"], _ = json.Marshal("10s")
+	fields["pr_poll"], _ = json.Marshal("30s")
+	fields["heartbeat"], _ = json.Marshal("5s")
+	fields["shutdown_grace"], _ = json.Marshal("10s")
 	data, err = json.Marshal(fields)
 	if err != nil {
 		t.Fatal(err)

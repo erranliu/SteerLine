@@ -144,7 +144,7 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 	if len(evidence.PRCandidates) == 1 {
 		candidate := evidence.PRCandidates[0]
 		workflow.PRCandidateURL = candidate
-		info, queryErr := publicationClient(fixed.config).Query(context.Background(), candidate)
+		info, queryErr := publicationClient(fixed.config, s.runtime.ProcessHost).Query(context.Background(), candidate)
 		if queryErr == nil {
 			queryErr = BindWorkerPR(workflow, execution, info, candidate, fixed.config.PR.Repository, false)
 		}

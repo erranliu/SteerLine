@@ -21,7 +21,7 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *reconstruct
 	if err != nil {
 		return err
 	}
-	receipt, err := (s.commandService(fixed.config.identity)).CompleteNativeTask(ctx, fixed.config, task.TaskID, task.Version, workflow.WorkflowRunID, publicationClient(fixed.config))
+	receipt, err := (s.commandService(fixed.config.identity)).CompleteNativeTask(ctx, fixed.config, task.TaskID, task.Version, workflow.WorkflowRunID, publicationClient(fixed.config, s.runtime.ProcessHost))
 	if err != nil {
 		return err
 	}

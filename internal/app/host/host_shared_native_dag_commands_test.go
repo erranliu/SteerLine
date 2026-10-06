@@ -105,8 +105,10 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c execution.Conf
 		c.PublicationPolicy.Publisher = "worker"
 		setNeutralProfile(t, &c, settings)
 	}
-	require(t, c.BindPublicationTarget(ctx))
-	fixed := c.AvailableExecutionProfiles()[0].Freeze()
+	dependencies := hostFixtureRuntime(c)
+	require(t, c.BindPublicationTarget(ctx, dependencies.ProcessHost))
+	profile := hostFixtureCatalogFor(c).AvailableExecutionProfiles()[0]
+	fixed := profile.Freeze(dependencies.Directory, c.Identity())
 	if !neutralVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("published discard fixture has no valid frozen profile")
 	}

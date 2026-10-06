@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -19,33 +20,33 @@ func TestProjectPolicyClaimRejectsStaticConflictsBeforeNativeQuery(t *testing.T)
 	codex := nativeProfileSettings(c)
 	codex.Executable = filepath.Join(t.TempDir(), "must-never-be-called.exe")
 	setNativeProfile(t, &c, codex)
-	for _, mutate := range []func(*execution.Config){
-		func(c *execution.Config) { c.ExecutionPolicy = executionbackend.ExecutionPolicy{} },
-		func(c *execution.Config) {
+	for _, mutate := range []func(*steerlineapp.Config){
+		func(c *steerlineapp.Config) { c.ExecutionPolicy = executionbackend.ExecutionPolicy{} },
+		func(c *steerlineapp.Config) {
 			settings := nativeProfileSettings(*c)
 			settings.Args = []string{"--add-dir=C:/"}
 			setNativeProfile(t, c, settings)
 		},
-		func(c *execution.Config) {
+		func(c *steerlineapp.Config) {
 			settings := nativeProfileSettings(*c)
 			settings.Args = []string{"-c", "approval_policy=on-request"}
 			setNativeProfile(t, c, settings)
 		},
-		func(c *execution.Config) {
+		func(c *steerlineapp.Config) {
 			settings := nativeProfileSettings(*c)
 			settings.ReasoningEffort = "unrecognized"
 			setNativeProfile(t, c, settings)
 		},
-		func(c *execution.Config) {
+		func(c *steerlineapp.Config) {
 			settings := nativeProfileSettings(*c)
 			settings.Profile = "native-profile"
 			setNativeProfile(t, c, settings)
 		},
-		func(c *execution.Config) { c.Host = "orca_supervised" },
+		func(c *steerlineapp.Config) { c.Host = "orca_supervised" },
 	} {
 		candidate := c
 		mutate(&candidate)
-		_, err := commands.ClaimNativeTask(context.Background(), candidate, execution.TaskClaimOptions{TaskID: "59"})
+		_, err := commands.ClaimNativeTask(context.Background(), candidate.ExecutionConfig(), execution.TaskClaimOptions{TaskID: "59"})
 		if err == nil || strings.Contains(err.Error(), "must-never-be-called") {
 			t.Fatalf("static policy conflict reached executable lookup: %v", err)
 		}
@@ -70,7 +71,7 @@ func TestProjectPolicyNativeReportsRetainOriginalSnapshotDigests(t *testing.T) {
 		if historicalProfileValid(report.Profile) {
 			t.Fatalf("old native report was accepted as current format: %s", name)
 		}
-		if historicalResourceError((execution.Config{}).ApplyFixedExecutionProfile(report.Profile), report.Execution.PolicyResources, report.Profile.Digest, report.Execution.Workspace.Worktree, &report.Execution) == nil {
+		if historicalResourceError(execution.Config{}, report.Execution.PolicyResources, report.Profile.Digest, report.Execution.Workspace.Worktree, &report.Execution) == nil {
 			t.Fatalf("historical native permission receipt was accepted as current evidence: %s", name)
 		}
 	}

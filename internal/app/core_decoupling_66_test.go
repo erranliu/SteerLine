@@ -70,18 +70,18 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		if options.Clients == nil || options.RunID != "focused-run" || options.ApplicationHome != HomeDir() {
 			t.Fatal("console entry retained hidden default sources or paths")
 		}
-		if _, err := NewCommandService(nil, execution.Config{}); err == nil {
+		if _, err := NewCommandService(nil, Config{}); err == nil {
 			t.Fatal("command entry accepted missing store/project/directory")
 		}
 		if _, err := NewBuiltinDirectory(nil); err == nil {
 			t.Fatal("missing process host was accepted")
 		}
 		state := filepath.Join(t.TempDir(), "absent-state")
-		c := execution.Config{TaskAuthority: "native", RunDir: state, Repository: "must-not-be-read"}
+		c := Config{TaskAuthority: "native", RunDir: state, Repository: "must-not-be-read"}
 		if _, err := NewService(c); err == nil {
 			t.Fatal("app constructed an implicit catalog")
 		}
-		if _, err := execution.NewService(c, nil, nil, nil, nil, execution.ServiceStorage{}, nil, nil, nil); err == nil {
+		if _, err := execution.NewService(c.executionConfig(), execution.RuntimeDependencies{}, execution.RuntimeSettings{}, nil, nil, execution.ServiceStorage{}, nil, nil, nil); err == nil {
 			t.Fatal("core accepted missing ports")
 		}
 		if _, err := OpenNativeTaskProject(context.Background(), &c); err == nil || !strings.Contains(err.Error(), "directory") {
@@ -90,7 +90,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		if _, err := os.Stat(state); !os.IsNotExist(err) {
 			t.Fatal("rejected construction created state")
 		}
-		if _, err := CertifyExecutionBackend(context.Background(), execution.Config{RunDir: state}, []string{"missing.json"}); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
+		if _, err := CertifyExecutionBackend(context.Background(), Config{RunDir: state}, []string{"missing.json"}); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
 			t.Fatalf("capability entry lost its authority admission: %v", err)
 		}
 		c.TaskAuthority, c.WorkflowProtocol, c.Git.Executable = "native", executionmodel.Version, "must-not-be-called"
@@ -179,9 +179,9 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		if fresh[0].Payload[0] == '[' || public[0] == "changed" || fresh[0].ValidateProfileIdentity("project", "profile", "accepted") != nil {
 			t.Fatal("profile data or display leaked between instances")
 		}
-		c := execution.Config{Repository: "fixture", Branch: "main", Remote: "origin", ExecutionPolicy: policy, PublicationPolicy: executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}, PR: executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "org/repo", Query: executionbackend.Command{Executable: "gh"}}}
-		c.BindApplicationConfig(first, "explicit", "", "accepted", false)
-		c = c.ApplyExecutionProfile(execution.ExecutionProfile{ID: "fixture", Name: "Fixture", Host: "local", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{input}})
+		c := Config{Repository: "fixture", Branch: "main", Remote: "origin", ExecutionPolicy: policy, PublicationPolicy: executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}, PR: executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "org/repo", Query: executionbackend.Command{Executable: "gh"}}, ExecutionDirectory: first}
+		c.bindApplicationFiles("explicit", "", "accepted", false)
+		c = c.ApplyExecutionProfile(ExecutionProfile{ID: "fixture", Name: "Fixture", Host: "local", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{input}})
 		frozen := c.AvailableExecutionProfiles()[0].Freeze()
 		if err := c.CheckFixedProfile(frozen); err != nil {
 			t.Fatal(err)

@@ -28,27 +28,45 @@ type testProcessHost struct{}
 func mustTestDirectory() (*execution.ExecutionDirectory, error) { return newNeutralDirectory() }
 
 func testConfigWithDirectory(c execution.Config) execution.Config {
-	if c.ExecutionDirectory == nil {
+	if _, ok := hostFixtureCatalogs.Load(c.FixedProfileDigest()); !ok {
 		c = withNeutralProfile(c, neutralSettings{Executable: os.Args[0]})
 	}
-	c.ProcessHost = testProcessHost{}
 	if c.WorktreeRoot == "" && c.RunDir != "" {
 		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	}
+	_ = resolveHostTestIdentity(context.Background(), &c)
 	return c
+}
+
+func resolveHostTestIdentity(ctx context.Context, c *execution.Config) error {
+	if c == nil || c.Identity() != "" {
+		return nil
+	}
+	processHost := testProcessHost{}
+	command := c.Git
+	if command.Executable == "" {
+		command.Executable = "git"
+	}
+	repository, err := workspace.ResolveRepository(ctx, workspace.Git{Command: executionbackend.LaunchCommand{Executable: command.Executable, Args: append([]string(nil), command.Args...)}, Timeout: 30 * time.Second, Start: processHost.StartManaged}, c.Repository)
+	if err != nil {
+		return err
+	}
+	c.Repository = repository.Path
+	c.BindRepositoryIdentity(canonical(repository.CommonDir))
+	return nil
 }
 
 func hostConfigForTest(c execution.Config) Config {
 	identity := c.Identity()
 	if identity == "" {
-		_ = c.ResolveIdentity(context.Background())
+		_ = resolveHostTestIdentity(context.Background(), &c)
 		identity = c.Identity()
 	}
 	h := Config{
 		Repository: c.Repository, RepositoryIdentity: identity, Remote: c.Remote, Branch: c.Branch, RunDir: c.RunDir,
-		Claimant: c.Claimant, ConfigDigest: c.LoadedConfigDigest(), TaskAuthority: c.TaskAuthority,
-		WorkflowProtocol: c.WorkflowProtocol, TaskPoll: c.TaskPoll, PRPoll: c.PRPoll, Heartbeat: c.Heartbeat,
-		CommandTimeout: c.CommandTimeout, ShutdownGrace: c.ShutdownGrace, ProcessFacts: resourceprocess.NewServiceFacts(),
+		Claimant: "operator", ConfigDigest: c.AcceptedConfigVersion(), TaskAuthority: "native",
+		WorkflowProtocol: c.WorkflowProtocol, TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s",
+		CommandTimeout: c.CommandTimeout, ShutdownGrace: "10s", ProcessFacts: resourceprocess.NewServiceFacts(),
 		CapabilityValidation: fixtureCapabilityValidation{}, ControlValidation: fixtureControlValidation{},
 	}
 	h.RuntimeReader = func(ctx context.Context, input Config) (*reconstruction.Runtime, error) {
@@ -79,10 +97,14 @@ func hostConfigForTest(c execution.Config) Config {
 }
 
 func executionConfigForHostTest(base execution.Config, input Config) (execution.Config, error) {
-	base.Repository, base.Remote, base.Branch, base.RunDir, base.Claimant = input.Repository, input.Remote, input.Branch, input.RunDir, input.Claimant
-	if err := base.ResolveIdentity(context.Background()); err != nil {
+	base.Repository, base.Remote, base.Branch, base.RunDir = input.Repository, input.Remote, input.Branch, input.RunDir
+	processHost := testProcessHost{}
+	repository, err := workspace.ResolveRepository(context.Background(), workspace.Git{Command: executionbackend.LaunchCommand{Executable: base.Git.Executable, Args: append([]string(nil), base.Git.Args...)}, Timeout: 30 * time.Second, Start: processHost.StartManaged}, base.Repository)
+	if err != nil {
 		return base, err
 	}
+	base.Repository = repository.Path
+	base.BindRepositoryIdentity(canonical(repository.CommonDir))
 	if base.Identity() != input.Identity() {
 		return base, errors.New("host test identity differs from execution fixture")
 	}
@@ -146,15 +168,16 @@ func inspectTestWorkspace(ctx context.Context, c execution.Config, ref execution
 		return executionbackend.WorkspaceInspection{}, errors.New("workspace ref is incomplete")
 	}
 	if c.Identity() == "" {
-		if err := c.ResolveIdentity(ctx); err != nil {
+		if err := resolveHostTestIdentity(ctx, &c); err != nil {
 			return executionbackend.WorkspaceInspection{}, err
 		}
 	}
-	repository, err := workspace.ResolveRepository(ctx, c.WorkspaceGit(), c.Repository)
+	processHost := testProcessHost{}
+	repository, err := workspace.ResolveRepository(ctx, c.WorkspaceGit(processHost), c.Repository)
 	if err != nil {
 		return executionbackend.WorkspaceInspection{}, err
 	}
-	inspection, err := workspace.Inspect(ctx, c.WorkspaceGit(), repository, &executionbackend.WorkspaceIntent{Path: ref.WorkspacePath, Branch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit})
+	inspection, err := workspace.Inspect(ctx, c.WorkspaceGit(processHost), repository, &executionbackend.WorkspaceIntent{Path: ref.WorkspacePath, Branch: ref.WorkspaceBranch, BaseCommit: ref.BaseCommit})
 	if err != nil {
 		return executionbackend.WorkspaceInspection{}, err
 	}
@@ -180,7 +203,7 @@ func fixtureGlobalExecutionConfigPath() string {
 
 func fixtureRepositoryStateKey(c execution.Config) (string, error) {
 	if c.Identity() == "" {
-		if err := c.ResolveIdentity(context.Background()); err != nil {
+		if err := resolveHostTestIdentity(context.Background(), &c); err != nil {
 			return "", err
 		}
 	}
@@ -208,7 +231,7 @@ func fixtureStateKeyFromIdentity(identity string) string {
 }
 
 func validateNativeStateLocation(c execution.Config) error {
-	if err := c.ResolveIdentity(context.Background()); err != nil {
+	if err := resolveHostTestIdentity(context.Background(), &c); err != nil {
 		return err
 	}
 	expected := filepath.Join(fixtureStateRoot(), fixtureStateKeyFromIdentity(c.Identity()))
@@ -219,7 +242,33 @@ func validateNativeStateLocation(c execution.Config) error {
 }
 
 func loadFixtureConfig(path string) (execution.Config, error) {
-	c := execution.Config{Remote: "origin", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "30s", ShutdownGrace: "10s", Git: executionbackend.Command{Executable: "git"}, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, StallTimeout: "5m"}
+	type projectInput struct {
+		PublicationPolicy       executionbackend.PublicationPolicy     `json:"publication_policy"`
+		ExecutionPolicy         executionbackend.ExecutionPolicy       `json:"execution_policy"`
+		ExecutionRequirements   executionbackend.ExecutionRequirements `json:"execution_requirements,omitempty"`
+		Repository              string                                 `json:"repository"`
+		TaskAuthority           string                                 `json:"task_authority,omitempty"`
+		Remote                  string                                 `json:"remote"`
+		Branch                  string                                 `json:"branch"`
+		RunDir                  string                                 `json:"run_dir"`
+		WorktreeRoot            string                                 `json:"worktree_root"`
+		Claimant                string                                 `json:"claimant"`
+		Git                     executionbackend.Command               `json:"git"`
+		WorkflowProtocol        string                                 `json:"workflow_protocol,omitempty"`
+		ExecutableTypes         []string                               `json:"executable_types"`
+		TaskPoll                string                                 `json:"task_poll"`
+		PRPoll                  string                                 `json:"pr_poll"`
+		Heartbeat               string                                 `json:"heartbeat"`
+		CommandTimeout          string                                 `json:"command_timeout"`
+		ShutdownGrace           string                                 `json:"shutdown_grace"`
+		Host                    string                                 `json:"host"`
+		Agent                   string                                 `json:"agent"`
+		ExecutionProfiles       []execution.ExecutionProfile           `json:"execution_profiles,omitempty"`
+		DefaultExecutionProfile string                                 `json:"default_execution_profile,omitempty"`
+		StallTimeout            string                                 `json:"stall_timeout"`
+		PR                      executionmodel.PRProviderConfig        `json:"pr"`
+	}
+	c := execution.Config{}
 	projectPath, err := filepath.Abs(path)
 	if err != nil {
 		return c, err
@@ -228,25 +277,26 @@ func loadFixtureConfig(path string) (execution.Config, error) {
 	if err != nil {
 		return c, err
 	}
-	if err := decode(projectBytes, &c); err != nil {
+	var input projectInput
+	if err := decode(projectBytes, &input); err != nil {
 		return c, err
 	}
-	if c.TaskAuthority != "native" {
+	if input.TaskAuthority != "native" {
 		return c, errors.New("task_authority must be explicitly set to native; Beads is not supported")
 	}
-	if c.WorkflowProtocol != executionmodel.Version {
+	if input.WorkflowProtocol != executionmodel.Version {
 		return c, errors.New("workflow_protocol must be worker-flow-v1")
 	}
-	if err := c.ExecutionPolicy.Validate(); err != nil {
+	if err := input.ExecutionPolicy.Validate(); err != nil {
 		return c, err
 	}
-	if err := c.ExecutionRequirements.Validate(); err != nil {
+	if err := input.ExecutionRequirements.Validate(); err != nil {
 		return c, err
 	}
-	if err := publication.ValidateNonSecret(publication.Config(c.PR), c.Git); err != nil {
+	if err := publication.ValidateNonSecret(publication.Config(input.PR), input.Git); err != nil {
 		return c, err
 	}
-	if c.Host != "" || c.Agent != "" || len(c.ExecutionProfiles) != 0 || c.DefaultExecutionProfile != "" {
+	if input.Host != "" || input.Agent != "" || len(input.ExecutionProfiles) != 0 || input.DefaultExecutionProfile != "" {
 		return c, errors.New("execution profiles belong in global execution config")
 	}
 	globalPath := fixtureGlobalExecutionConfigPath()
@@ -269,9 +319,19 @@ func loadFixtureConfig(path string) (execution.Config, error) {
 	if err != nil {
 		return c, err
 	}
-	c.ExecutionDirectory, c.ProcessHost = directory, testProcessHost{}
-	c.ExecutionProfiles, c.DefaultExecutionProfile = global.ExecutionProfiles, global.DefaultProfile
-	c.BindApplicationConfig(directory, projectPath, globalPath, operationDigest(append(append([]byte(nil), projectBytes...), globalBytes...)), true)
+	if input.Remote == "" {
+		input.Remote = "origin"
+	}
+	if input.Git.Executable == "" {
+		input.Git.Executable = "git"
+	}
+	if input.CommandTimeout == "" {
+		input.CommandTimeout = "30s"
+	}
+	c = execution.Config{PublicationPolicy: input.PublicationPolicy, ExecutionPolicy: input.ExecutionPolicy, ExecutionRequirements: input.ExecutionRequirements,
+		Repository: input.Repository, Remote: input.Remote, Branch: input.Branch, RunDir: input.RunDir, WorktreeRoot: input.WorktreeRoot,
+		Git: input.Git, WorkflowProtocol: input.WorkflowProtocol, CommandTimeout: input.CommandTimeout, PR: input.PR}
+	c.BindAcceptedConfigVersion(operationDigest(append(append([]byte(nil), projectBytes...), globalBytes...)))
 	base := filepath.Dir(projectPath)
 	if c.Repository == "" || c.Branch == "" {
 		return c, errors.New("repository and branch are required")
@@ -279,10 +339,13 @@ func loadFixtureConfig(path string) (execution.Config, error) {
 	if !filepath.IsAbs(c.Repository) {
 		c.Repository = filepath.Join(base, c.Repository)
 	}
-	key, err := fixtureRepositoryStateKey(c)
+	repository, err := workspace.ResolveRepository(context.Background(), c.WorkspaceGit(testProcessHost{}), c.Repository)
 	if err != nil {
 		return c, err
 	}
+	c.Repository = repository.Path
+	c.BindRepositoryIdentity(canonical(repository.CommonDir))
+	key := fixtureStateKeyFromIdentity(c.Identity())
 	stateRoot := fixtureStateRoot()
 	if c.RunDir == "" {
 		c.RunDir = filepath.Join(stateRoot, key)
@@ -294,7 +357,8 @@ func loadFixtureConfig(path string) (execution.Config, error) {
 	} else if !filepath.IsAbs(c.WorktreeRoot) {
 		c.WorktreeRoot = filepath.Join(base, c.WorktreeRoot)
 	}
-	if err := c.ValidateProfiles(); err != nil {
+	catalog := execution.ProfileCatalog{Base: c, Directory: directory, Profiles: global.ExecutionProfiles, DefaultID: global.DefaultProfile, Global: true, PolicySource: projectPath}
+	if err := catalog.Validate(); err != nil {
 		return c, err
 	}
 	initial := global.ExecutionProfiles[0]
@@ -305,7 +369,14 @@ func loadFixtureConfig(path string) (execution.Config, error) {
 			}
 		}
 	}
-	c = c.ApplyExecutionProfile(initial)
+	c, _, err = catalog.ResolveExecutionProfile(initial.ID, "")
+	if err != nil {
+		return c, err
+	}
+	rememberHostFixtureCatalog(c, catalog)
+	if err := c.ValidateAdmission(directory); err != nil {
+		return c, err
+	}
 	if err := validateNativeStateLocation(c); err != nil {
 		return c, err
 	}
@@ -348,7 +419,8 @@ func testRunConfiguredService(ctx context.Context, config execution.Config, mode
 }
 
 func testPrepareServiceConfig(c execution.Config) (execution.Config, error) {
-	if err := c.ValidateAdmission(); err != nil {
+	dependencies := hostFixtureRuntime(c)
+	if err := c.ValidateAdmission(dependencies.Directory); err != nil {
 		return c, err
 	}
 	if err := validateNativeStateLocation(c); err != nil {

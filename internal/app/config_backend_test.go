@@ -50,11 +50,11 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 		return cfg
 	}
 	orca := write("orca")
-	if codexProfileSettings(orca).ReasoningEffort != "" || orca.WorkflowProtocol != WorkerFlowVersion {
+	if codexProfileSettings(orca.executionConfig()).ReasoningEffort != "" || orca.WorkflowProtocol != WorkerFlowVersion {
 		t.Fatalf("Orca worker flow acquired old project steps or a local model default: %+v", orca)
 	}
 	local := write("local")
-	if codexProfileSettings(local).ReasoningEffort != "high" || local.Host != "local" {
+	if codexProfileSettings(local.executionConfig()).ReasoningEffort != "high" || local.Host != "local" {
 		t.Fatalf("local Codex defaults changed: %+v", local)
 	}
 }
@@ -126,11 +126,11 @@ func TestTerminalFullAccessProfileKeepsReadinessAndFrozenAuthority(t *testing.T)
 	require(t, config.ResolveIdentity(context.Background()))
 	selected, accepted, err := config.ResolveExecutionProfile("orca", "")
 	require(t, err)
-	if err := validateTerminalConfig(context.Background(), selected); err != nil || terminalReadinessRequired(selected) != (runtime.GOOS == "windows") {
+	if err := validateTerminalConfig(context.Background(), selected, config.ExecutionDirectory); err != nil || terminalReadinessRequired(selected, config.ExecutionDirectory) != (runtime.GOOS == "windows") {
 		t.Fatalf("full access lost admission or readiness: %v", err)
 	}
-	fixed := accepted.Freeze(config.Identity())
-	if accepted.Digest() != fixed.Digest || selected.CheckFixedProfile(fixed) != nil || fixed.ExecutionPolicy.Filesystem.WriteScope != "host" || codexProfileSettings(selected).WindowsSandbox != "" {
+	fixed := accepted.Freeze(config.ExecutionDirectory, config.Identity())
+	if accepted.Digest(config.ExecutionDirectory) != fixed.Digest || config.CheckFixedProfile(fixed) != nil || fixed.ExecutionPolicy.Filesystem.WriteScope != "host" || codexProfileSettings(selected, config.ExecutionDirectory).WindowsSandbox != "" {
 		t.Fatal("full access changed while selecting and freezing the profile")
 	}
 }

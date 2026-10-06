@@ -298,7 +298,7 @@ func sameNativePhysicalProcess(a, b executionbackend.ProcessIdentity) bool {
 
 type integrationFixture struct {
 	configPath     string
-	config         execution.Config
+	config         steerlineapp.Config
 	repository     string
 	bareRemote     string
 	remoteURL      string
@@ -383,7 +383,6 @@ func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) inte
 	require(t, os.WriteFile(configPath, projectData, 0600))
 	config, err := steerlineapp.LoadConfig(configPath)
 	require(t, err)
-	config.Claimant = "integration"
 	if openAuthority {
 		project, err := steerlineapp.OpenNativeTaskProject(context.Background(), &config)
 		require(t, err)
@@ -447,16 +446,19 @@ func claimIntegrationTask(t *testing.T, ctx context.Context, fixture integration
 	if len(profiles) != 1 || len(page.Tasks) != 1 {
 		t.Fatalf("fixture query returned %d tasks and %d execution profiles", len(page.Tasks), len(profiles))
 	}
-	_, err = commands.ClaimNativeTask(ctx, fixture.config, execution.TaskClaimOptions{
+	_, err = commands.ClaimNativeTask(ctx, fixture.config.ExecutionConfig(), execution.TaskClaimOptions{
 		TaskID: fmt.Sprint(taskID), RequestID: newID(), ExpectedTaskVersion: page.Tasks[0].Version,
 		ExpectedAuthorityVersion: page.AuthorityVersion, RequestedBy: "operator", Explicit: true,
-		ExecutionProfile: &profiles[0], ServiceInstanceID: serviceInstanceID,
+		ExecutionProfile: func() *executionmodel.FixedExecutionProfile {
+			fixed := profiles[0].Freeze(fixture.config.ExecutionDirectory, fixture.config.Identity())
+			return &fixed
+		}(), ServiceInstanceID: serviceInstanceID,
 	})
 	require(t, err)
 	require(t, store.Close())
 }
 
-func appExecutionCommands(t *testing.T, store *sqlite.SQLiteStore, config execution.Config) execution.CommandService {
+func appExecutionCommands(t *testing.T, store *sqlite.SQLiteStore, config steerlineapp.Config) execution.CommandService {
 	t.Helper()
 	commands, err := steerlineapp.NewCommandService(store, config)
 	require(t, err)
@@ -551,7 +553,7 @@ func (r *integrationLifecycleResolver) count(protocol executionbackend.Execution
 
 type runningIntegrationService struct {
 	service    *execution.Service
-	config     execution.Config
+	config     steerlineapp.Config
 	reader     *sqlite.SQLiteStore
 	queries    productquery.Service
 	instanceID string
@@ -561,11 +563,11 @@ type runningIntegrationService struct {
 	closed     bool
 }
 
-func startIntegrationService(t *testing.T, parent context.Context, config execution.Config, resolver executionbackend.LifecycleResolver) *runningIntegrationService {
+func startIntegrationService(t *testing.T, parent context.Context, config steerlineapp.Config, resolver executionbackend.LifecycleResolver) *runningIntegrationService {
 	return startIntegrationServiceWithSources(t, parent, config, resolver, nil)
 }
 
-func startIntegrationServiceWithSources(t *testing.T, parent context.Context, config execution.Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort) *runningIntegrationService {
+func startIntegrationServiceWithSources(t *testing.T, parent context.Context, config steerlineapp.Config, resolver executionbackend.LifecycleResolver, sources conversationtypes.ConversationSourcePort) *runningIntegrationService {
 	t.Helper()
 	if decorated, ok := resolver.(*integrationLifecycleResolver); ok {
 		decorated.directory = config.ExecutionDirectory
@@ -637,7 +639,7 @@ type integrationRunSnapshot struct {
 	execution *executionmodel.ExecutionRecord
 }
 
-func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningIntegrationService, config execution.Config,
+func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningIntegrationService, config steerlineapp.Config,
 	predicate func(*reconstructiontypes.RunView, *executionmodel.ExecutionRecord) bool) integrationRunSnapshot {
 	t.Helper()
 	var result integrationRunSnapshot
@@ -730,7 +732,7 @@ func waitFor(t *testing.T, timeout time.Duration, predicate func() bool) {
 	t.Fatal("timed out waiting for the public lifecycle/query state")
 }
 
-func submitIntegrationAnswer(t *testing.T, ctx context.Context, config execution.Config, run *reconstructiontypes.RunView) {
+func submitIntegrationAnswer(t *testing.T, ctx context.Context, config steerlineapp.Config, run *reconstructiontypes.RunView) {
 	t.Helper()
 	if run == nil || run.Decision == nil || run.Decision.Status != "pending" {
 		t.Fatal("public answer submission lacks the displayed pending decision")
@@ -742,7 +744,7 @@ func submitIntegrationAnswer(t *testing.T, ctx context.Context, config execution
 	submitIntegrationAnswerOption(t, ctx, config, run, option)
 }
 
-func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config execution.Config, run *reconstructiontypes.RunView, option string) {
+func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config steerlineapp.Config, run *reconstructiontypes.RunView, option string) {
 	t.Helper()
 	if option == "open_terminal" || option == "recheck_environment" {
 		candidate := productquery.Candidate(&productquery.CandidateView{RunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, EnvironmentBlocker: run.EnvironmentBlocker})
@@ -803,7 +805,7 @@ func submitIntegrationAnswerOption(t *testing.T, ctx context.Context, config exe
 	}
 }
 
-func assertQueriedTaskPhase(t *testing.T, ctx context.Context, config execution.Config, taskID, phase string) {
+func assertQueriedTaskPhase(t *testing.T, ctx context.Context, config steerlineapp.Config, taskID, phase string) {
 	t.Helper()
 	reader, err := steerlineapp.OpenNativeTaskReader(ctx, &config)
 	require(t, err)

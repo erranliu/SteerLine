@@ -37,7 +37,7 @@ func (c CommandService) SetNativeDispatchState(ctx context.Context, update Nativ
 		return executionmodel.ProjectTaskAuthority{}, nativeErr("invalid_batch", "dispatch mode must be auto or manual")
 	}
 	if strings.TrimSpace(update.RequestedBy) == "" {
-		update.RequestedBy = defaultRequestedBy()
+		update.RequestedBy = c.defaultRequestedBy()
 	}
 	requestBytes, err := json.Marshal(struct {
 		Mode        *string `json:"mode,omitempty"`

@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -26,7 +27,7 @@ func participatingCandidates(workflows []executionmodel.WorkflowRunRecord, taskI
 
 // selectedID="" requires every known PR to be verified unmerged. Delivery
 // requires exactly the selected eligible PR merged, with all siblings known.
-func verifyKnownCandidatePRs(ctx context.Context, config Config, snapshot storageports.TaskCandidateSnapshot, taskID string, verifier TaskDeliveryVerifier, selectedID string) ([]executionmodel.VerifiedCandidatePR, error) {
+func verifyKnownCandidatePRs(ctx context.Context, config Config, directory *ExecutionDirectory, processHost executionbackend.ManagedProcessHost, snapshot storageports.TaskCandidateSnapshot, taskID string, verifier TaskDeliveryVerifier, selectedID string) ([]executionmodel.VerifiedCandidatePR, error) {
 	seen := map[string]string{}
 	results := []executionmodel.VerifiedCandidatePR{}
 	merged := 0
@@ -38,7 +39,7 @@ func verifyKnownCandidatePRs(ctx context.Context, config Config, snapshot storag
 		if w.PRCandidateURL != "" && w.PRCandidateURL != w.PRURL {
 			urls = append(urls, w.PRCandidateURL)
 		}
-		fixed, err := fixedWorkflowPublicationConfig(config, w)
+		fixed, err := fixedWorkflowPublicationConfig(config, w, directory)
 		if err != nil {
 			return nil, err
 		}
@@ -52,7 +53,7 @@ func verifyKnownCandidatePRs(ctx context.Context, config Config, snapshot storag
 				return nil, nativeErr("authority_mismatch", "known PR verifier differs from candidate's frozen provider")
 			}
 			if query == nil {
-				query = publicationClient(fixed)
+				query = publicationClient(fixed, processHost)
 			}
 			info, err := query.Query(ctx, url)
 			if err != nil || info.State != "open" && info.State != "closed_unmerged" && info.State != "merged" {
@@ -168,7 +169,7 @@ func (c CommandService) AbandonNativeCandidate(ctx context.Context, config Confi
 			return CandidateAbandonReceipt{}, nativeErr("idempotency_conflict", "candidate exit request was reused")
 		}
 	}
-	_, verificationErr := verifyKnownCandidatePRs(ctx, config, snapshot, options.TaskID, nil, "")
+	_, verificationErr := verifyKnownCandidatePRs(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, snapshot, options.TaskID, nil, "")
 	receipt := CandidateAbandonReceipt{RequestID: options.RequestID, TaskID: options.TaskID, WorkflowRunID: options.WorkflowRunID, Status: "abandoned"}
 	status := "accepted"
 	if verificationErr != nil {

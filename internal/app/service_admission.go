@@ -6,12 +6,11 @@ import (
 	"path/filepath"
 
 	"github.com/erranliu/SteerLine/internal/app/host"
-	"github.com/erranliu/SteerLine/internal/execution"
 )
 
 // serviceAdmission binds the host's small startup facts back to this app's
 // configuration. The host never receives the broad execution configuration.
-type serviceAdmission struct{ config *execution.Config }
+type serviceAdmission struct{ config *Config }
 
 func (a serviceAdmission) syncHostFacts(input host.Config) error {
 	if a.config == nil {
@@ -20,7 +19,7 @@ func (a serviceAdmission) syncHostFacts(input host.Config) error {
 	return syncExecutionHostFacts(a.config, input)
 }
 
-func syncExecutionHostFacts(config *execution.Config, input host.Config) error {
+func syncExecutionHostFacts(config *Config, input host.Config) error {
 	if err := config.ResolveIdentity(context.Background()); err != nil {
 		return err
 	}
@@ -68,7 +67,7 @@ func (a serviceAdmission) InitializeNativeProject(ctx context.Context, input hos
 	return store.Close()
 }
 
-func validateNativeStore(ctx context.Context, config execution.Config) error {
+func validateNativeStore(ctx context.Context, config Config) error {
 	path := filepath.Join(config.RunDir, "steerline.db")
 	reader, err := openBoundNativeReader(ctx, config, path)
 	if err != nil {

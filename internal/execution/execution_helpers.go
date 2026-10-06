@@ -97,12 +97,12 @@ func applyWorkflowWorkspaceTarget(run *reconstructiontypes.RunView, execution *e
 	execution.Target.BaseRevision = workspace.Base
 }
 
-func prepareWorktreeOnly(ctx context.Context, c Config, run *reconstructiontypes.RunView) error {
-	_, err := prepareWorktree(ctx, c, run)
+func prepareWorktreeOnly(ctx context.Context, c Config, directory *ExecutionDirectory, processHost executionbackend.ManagedProcessHost, run *reconstructiontypes.RunView) error {
+	_, err := prepareWorktree(ctx, c, directory, processHost, run)
 	return err
 }
 
-func prepareWorktree(ctx context.Context, c Config, run *reconstructiontypes.RunView) (workspace.Preparation, error) {
+func prepareWorktree(ctx context.Context, c Config, directory *ExecutionDirectory, processHost executionbackend.ManagedProcessHost, run *reconstructiontypes.RunView) (workspace.Preparation, error) {
 	intent := run.WorkspaceIntent
 	if intent == nil {
 		return workspace.Preparation{Status: executionbackend.OperationRejected}, errors.New("missing durable workspace intent")
@@ -110,11 +110,11 @@ func prepareWorktree(ctx context.Context, c Config, run *reconstructiontypes.Run
 	if err := c.PrepareWorktreeRoot(); err != nil {
 		return workspace.Preparation{Status: executionbackend.OperationRejected}, err
 	}
-	repository, err := workspaceRepository(c)
+	repository, err := workspaceRepository(c, directory)
 	if err != nil {
 		return workspace.Preparation{Status: executionbackend.OperationRejected}, err
 	}
-	return workspace.Prepare(ctx, workspaceGit(c), repository, c.WorktreeRoot, intent)
+	return workspace.Prepare(ctx, workspaceGit(c, processHost), repository, c.WorktreeRoot, intent)
 }
 
 func mustJSON(value any) []byte { data, _ := json.Marshal(value); return data }

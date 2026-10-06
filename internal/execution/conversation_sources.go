@@ -87,7 +87,7 @@ func validateDiscoveredConversationOwner(discovery conversationtypes.Conversatio
 }
 
 func (s *Service) collectConversationHistoryPage(ctx context.Context, source conversationtypes.ConversationHistorySource) (bool, error) {
-	if s.conversationSources == nil || s.Config.ProcessHost == nil {
+	if s.conversationSources == nil || s.runtime.ProcessHost == nil {
 		return false, errors.New("conversation source port and managed process host are required")
 	}
 	event := source.Event
@@ -127,7 +127,7 @@ func (s *Service) collectConversationHistoryPage(ctx context.Context, source con
 		}
 	}
 	batch, err := s.conversationSources.ReadHistory(ctx, conversationtypes.ConversationHistoryReadRequest{Source: source, Cursor: previousCursor, HasCheckpoint: hadCheckpoint,
-		Repository: s.Config.Repository, RunDirectory: s.Config.RunDir, PlatformVersion: platformVersion}, s.Config.ProcessHost.StartManaged)
+		Repository: s.Config.Repository, RunDirectory: s.Config.RunDir, PlatformVersion: platformVersion}, s.runtime.ProcessHost.StartManaged)
 	if err != nil {
 		return false, err
 	}

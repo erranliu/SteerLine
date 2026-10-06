@@ -98,9 +98,6 @@ func TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEff
 	if _, err := LoadDatabaseRuntime(hostConfigForTest(c)); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
 		t.Fatalf("LoadDatabaseRuntime did not reject missing native authority: %v", err)
 	}
-	if _, err := execution.InspectRecovery(context.Background(), c, "run", nil); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
-		t.Fatalf("InspectRecovery did not reject missing native authority: %v", err)
-	}
 	assertAuthorityError("VerifyTaskContractFiles", fullFixtureTaskService(nil, c).VerifyContractFiles(context.Background(), taskmodel.TaskContract{}))
 	if _, err := os.Stat(runDir); !os.IsNotExist(err) {
 		t.Fatalf("rejected direct entrypoint created service state: %v", err)

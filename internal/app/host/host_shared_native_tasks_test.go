@@ -70,7 +70,7 @@ func nativeTaskFixture(t *testing.T) (execution.Config, string) {
 		t.Fatalf("fixture remote: %v: %s", err, output)
 	}
 	commit := nativeSeedCommit
-	c := execution.Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, Repository: repo, Remote: "origin", Branch: "main", TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s", CommandTimeout: "10s", ShutdownGrace: "10s", ExecutableTypes: []string{"task", "bug", "feature", "chore"}, Git: executionbackend.Command{Executable: "git"}}
+	c := execution.Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), WorkflowProtocol: executionmodel.Version, Repository: repo, Remote: "origin", Branch: "main", CommandTimeout: "10s", Git: executionbackend.Command{Executable: "git"}}
 	setNeutralProfile(t, &c, neutralSettings{Executable: os.Args[0]})
 	key, err := fixtureRepositoryStateKey(c)
 	if err != nil {
@@ -97,7 +97,8 @@ func nativeContract(t *testing.T, c execution.Config, commit, id string) taskmod
 	spec := nativeRef(t, c, commit, "docs/spec/task-core.spec.md")
 	plan := nativeRef(t, c, commit, "docs/spec/task-core.plan.md")
 	common := nativeRef(t, c, commit, "docs/spec/native-task-constraints.md")
-	target, err := c.TaskRepositoryTarget(context.Background())
+	dependencies := hostFixtureRuntime(c)
+	target, err := c.TaskRepositoryTarget(context.Background(), dependencies.ProcessHost)
 	if err != nil {
 		t.Fatal(err)
 	}

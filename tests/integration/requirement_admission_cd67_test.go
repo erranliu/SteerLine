@@ -5,16 +5,16 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/execution"
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 func TestExecutionRequirementsCannotInferOtherTargetEnvironment(t *testing.T) {
 	for _, host := range []string{"orca", "orca_supervised"} {
-		c := execution.Config{Host: host, Agent: "codex"}
+		c := steerlineapp.Config{TaskAuthority: "native", WorkflowProtocol: "worker-flow-v1", Host: host, Agent: "codex", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
 		orca := &orcaworker.ProfileConfig{Executable: "must-not-run", Shell: "cmd.exe", WaitTimeout: "1m"}
 		if host == "orca_supervised" {
 			remoteSettings := &remote.ProfileConfig{ConnectionID: "connection", EnvironmentID: "remote", RepositorySelector: "repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1}

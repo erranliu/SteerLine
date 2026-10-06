@@ -1,10 +1,10 @@
 package integration
 
 import (
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"context"
 	"encoding/json"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"os/exec"
@@ -24,7 +24,7 @@ import (
 const liveNativeQuestion = "Call steerline_ask with one question (id choice, header Choice, question Should I reply A or B?, options A and B, allow_free_text false). Wait for the answer. Then reply with the chosen letter only."
 
 type appServerHostExitReceipt struct {
-	Config     execution.Config                 `json:"config"`
+	Config     steerlineapp.Config              `json:"config"`
 	ConfigPath string                           `json:"config_path"`
 	Home       string                           `json:"home"`
 	RunID      string                           `json:"run_id"`
@@ -92,7 +92,7 @@ func createNativeLiveTask(t *testing.T, ctx context.Context, f *integrationFixtu
 	require(t, err)
 }
 
-func nativeLiveAnswer(t *testing.T, ctx context.Context, c execution.Config, run *reconstructiontypes.RunView, option, note string) {
+func nativeLiveAnswer(t *testing.T, ctx context.Context, c steerlineapp.Config, run *reconstructiontypes.RunView, option, note string) {
 	t.Helper()
 	_, _, err := steerlineapp.SubmitDecisionAnswer(ctx, c, steerlineapp.AnswerOptions{RunID: run.RunID, DecisionID: run.Decision.ID, ExpectedVersion: run.Decision.Version, Option: option, Note: note, By: "operator"})
 	require(t, err)

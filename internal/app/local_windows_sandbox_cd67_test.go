@@ -21,7 +21,7 @@ func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
 	changed := config
 	setTestCodexProfile(t, &changed, codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "unelevated"})
 	restored := changed.ApplyFixedExecutionProfile(fixed)
-	if codexProfileSettings(restored).WindowsSandbox != "elevated" {
+	if codexProfileSettings(restored.executionConfig()).WindowsSandbox != "elevated" {
 		t.Fatal("current config changed frozen mode")
 	}
 	fixed.ImplementationData[0].Payload[0] = '['
@@ -42,9 +42,9 @@ func TestLocalWindowsSandboxProfileFreezesAndRestores(t *testing.T) {
 		}
 		invalid := Config{Host: "local", Agent: "codex", WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture()}
 		setTestCodexProfile(t, &invalid, codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "unelevated"})
-		entry, err := invalid.ExecutionDirectory.Resolve(invalid)
+		entry, err := invalid.ExecutionDirectory.Resolve(invalid.executionConfig())
 		require(t, err)
-		if err := entry.ValidateConfig(context.Background(), invalid); err == nil {
+		if err := entry.ValidateConfig(context.Background(), invalid.executionConfig()); err == nil {
 			t.Fatal("claim validation accepted unsupported sandbox")
 		}
 	}

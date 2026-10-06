@@ -24,7 +24,7 @@ func TestCD66FixedProfileRecovery(t *testing.T) {
 	t.Run("changed_config_keeps_native_original_identity_and_manual_gate", func(t *testing.T) { testIntegratedNativeSessionGate(t, true) })
 }
 
-func changedIntegrationConfig(t *testing.T, fixture integrationFixture) execution.Config {
+func changedIntegrationConfig(t *testing.T, fixture integrationFixture) steerlineapp.Config {
 	t.Helper()
 	raw, err := os.ReadFile(steerlineapp.GlobalExecutionConfigPath())
 	require(t, err)
@@ -136,7 +136,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 	t.Run("terminal_evidence_keeps_agent_and_resource_proofs", TestOrcaCertificationRequiresAgentAndTerminalEvidence)
 	t.Run("service_entries_reject_missing_catalog_before_target", func(t *testing.T) {
 		state := t.TempDir() + "/absent"
-		config := execution.Config{TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, Repository: "must-not-be-read", RunDir: state, Git: executionbackend.Command{Executable: "must-not-be-called"}}
+		config := steerlineapp.Config{TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, Repository: "must-not-be-read", RunDir: state, Git: executionbackend.Command{Executable: "must-not-be-called"}}
 		if _, err := steerlineapp.StartConfiguredService(context.Background(), config, "unused.json", steerline.StartServiceOptions{}); err == nil || !strings.Contains(err.Error(), "directory") {
 			t.Fatalf("start reached target without directory: %v", err)
 		}

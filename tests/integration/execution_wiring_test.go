@@ -1,11 +1,11 @@
 package integration
 
 import (
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"path/filepath"
@@ -64,13 +64,15 @@ func (f appCandidateFixture) start(t *testing.T, instance string) (executionmode
 	t.Helper()
 	p := f.page(t)
 	profiles := f.f.config.AvailableExecutionProfiles()
-	options := execution.TaskClaimOptions{TaskID: "901", RequestID: newID(), ExpectedTaskVersion: p.Tasks[0].Version, ExpectedAuthorityVersion: p.AuthorityVersion, ExpectedGraphRevision: p.GraphRevision, RequestedBy: "operator", Explicit: true, ExecutionProfile: &profiles[0], ServiceInstanceID: instance}
+	options := execution.TaskClaimOptions{TaskID: "901", RequestID: newID(), ExpectedTaskVersion: p.Tasks[0].Version, ExpectedAuthorityVersion: p.AuthorityVersion, ExpectedGraphRevision: p.GraphRevision, RequestedBy: "operator", Explicit: true, ServiceInstanceID: instance}
+	fixed := profiles[0].Freeze(f.f.config.ExecutionDirectory, f.f.config.Identity())
+	options.ExecutionProfile = &fixed
 	var receipt executionmodel.TaskClaimReceipt
 	var err error
 	if p.Tasks[0].Status == "open" {
-		receipt, err = f.commands.ClaimNativeTask(f.ctx, f.f.config, options)
+		receipt, err = f.commands.ClaimNativeTask(f.ctx, f.f.config.ExecutionConfig(), options)
 	} else {
-		receipt, err = f.commands.StartNativeCandidate(f.ctx, f.f.config, options)
+		receipt, err = f.commands.StartNativeCandidate(f.ctx, f.f.config.ExecutionConfig(), options)
 	}
 	require(t, err)
 	return receipt, options
@@ -91,7 +93,7 @@ func (f appCandidateFixture) abandon(t *testing.T, id string) {
 		graph, err := f.store.TaskGraphSnapshot(f.ctx, f.f.config.Identity())
 		require(t, err)
 		task := graph.ByID["901"]
-		r, err := f.commands.AbandonNativeCandidate(f.ctx, f.f.config, execution.CandidateAbandonOptions{TaskID: "901", WorkflowRunID: id, RequestID: newID(), ExpectedTaskVersion: task.Version, ExpectedCandidateVersion: candidateVersion, RequestedBy: "operator", Reason: "comparison complete"})
+		r, err := f.commands.AbandonNativeCandidate(f.ctx, f.f.config.ExecutionConfig(), execution.CandidateAbandonOptions{TaskID: "901", WorkflowRunID: id, RequestID: newID(), ExpectedTaskVersion: task.Version, ExpectedCandidateVersion: candidateVersion, RequestedBy: "operator", Reason: "comparison complete"})
 		require(t, err)
 		if r.Status != "abandoned" {
 			t.Fatalf("exit: %+v", r)
@@ -180,13 +182,13 @@ func TestMC9(t *testing.T) {
 	for i := 1; i < 5; i++ {
 		last, options = f.start(t, "")
 	}
-	replayed, err := f.commands.StartNativeCandidate(f.ctx, f.f.config, options)
+	replayed, err := f.commands.StartNativeCandidate(f.ctx, f.f.config.ExecutionConfig(), options)
 	require(t, err)
 	if replayed.WorkflowRunID != last.WorkflowRunID {
 		t.Fatal("at-limit replay replaced original candidate")
 	}
 	options.RequestID = newID()
-	if _, err = f.commands.StartNativeCandidate(f.ctx, f.f.config, options); err == nil || !strings.Contains(err.Error(), "candidate_limit_reached") {
+	if _, err = f.commands.StartNativeCandidate(f.ctx, f.f.config.ExecutionConfig(), options); err == nil || !strings.Contains(err.Error(), "candidate_limit_reached") {
 		t.Fatalf("sixth candidate: %v", err)
 	}
 	f.abandon(t, first.WorkflowRunID)
@@ -224,7 +226,7 @@ func TestMC7(t *testing.T) {
 	if next.WorkflowRunID == a.WorkflowRunID || next.WorkflowRunID == b.WorkflowRunID {
 		t.Fatal("restart revived original candidate")
 	}
-	r, err := f.commands.DiscardNativeTask(f.ctx, f.f.config, "901", newID(), 2, "discard experiment", "operator")
+	r, err := f.commands.DiscardNativeTask(f.ctx, f.f.config.ExecutionConfig(), "901", newID(), 2, "discard experiment", "operator")
 	require(t, err)
 	if r.Status != "discarded" || f.page(t).Tasks[0].Status != "discarded" {
 		t.Fatal("app discard failed")
@@ -345,10 +347,11 @@ func TestTM04ExecutionWiring(t *testing.T) {
 		defer db.Close()
 		p := f.page(t)
 		profile := f.f.config.AvailableExecutionProfiles()[0]
-		options := execution.TaskClaimOptions{TaskID: "901", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: p.AuthorityVersion, RequestedBy: "operator", Explicit: true, ExecutionProfile: &profile}
+		fixed := profile.Freeze(f.f.config.ExecutionDirectory, f.f.config.Identity())
+		options := execution.TaskClaimOptions{TaskID: "901", RequestID: newID(), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: p.AuthorityVersion, RequestedBy: "operator", Explicit: true, ExecutionProfile: &fixed}
 		_, err = db.ExecContext(f.ctx, `CREATE TRIGGER fail_execution_audit BEFORE INSERT ON operations BEGIN SELECT RAISE(ABORT,'execution audit failure'); END`)
 		require(t, err)
-		if r, err := f.commands.ClaimNativeTask(f.ctx, f.f.config, options); err == nil || r.WorkflowRunID != "" {
+		if r, err := f.commands.ClaimNativeTask(f.ctx, f.f.config.ExecutionConfig(), options); err == nil || r.WorkflowRunID != "" {
 			t.Fatalf("failed commit exposed claim: %+v/%v", r, err)
 		}
 		before := f.page(t)
@@ -357,11 +360,11 @@ func TestTM04ExecutionWiring(t *testing.T) {
 		}
 		_, err = db.ExecContext(f.ctx, `DROP TRIGGER fail_execution_audit`)
 		require(t, err)
-		claimed, err := f.commands.ClaimNativeTask(f.ctx, f.f.config, options)
+		claimed, err := f.commands.ClaimNativeTask(f.ctx, f.f.config.ExecutionConfig(), options)
 		require(t, err)
 		original, err := f.store.Query(f.ctx, f.f.config.Identity())
 		require(t, err)
-		replayed, err := f.commands.ClaimNativeTask(f.ctx, f.f.config, options)
+		replayed, err := f.commands.ClaimNativeTask(f.ctx, f.f.config.ExecutionConfig(), options)
 		require(t, err)
 		after, err := f.store.Query(f.ctx, f.f.config.Identity())
 		require(t, err)
@@ -456,7 +459,7 @@ func TestTM06ResourceWiring(t *testing.T) {
 		{"orca", string(executionbackend.ProtocolOrcaTerminalV2), "github.com/erranliu/SteerLine/internal/execution/adapters/orca.NewExecutionLifecycle", "github.com/erranliu/SteerLine/internal/execution/adapters/orca"},
 		{"orca_supervised", string(executionbackend.ProtocolOrcaSupervised), "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote.NewExecutionLifecycle", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"},
 	} {
-		config := execution.Config{Host: test.host, Agent: "codex", ProcessHost: host}
+		config := execution.Config{Host: test.host, Agent: "codex"}
 		entry, err := directory.Resolve(config)
 		require(t, err)
 		if string(entry.Key.Protocol) != test.wantProtocol {

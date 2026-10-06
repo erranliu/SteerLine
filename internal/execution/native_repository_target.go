@@ -5,12 +5,13 @@ import (
 	"net/url"
 	"strings"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
-func configuredRepositoryTarget(ctx context.Context, c Config) (string, error) {
-	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: c.ProcessHost}
+func configuredRepositoryTarget(ctx context.Context, c Config, processHost executionbackend.ManagedProcessHost) (string, error) {
+	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: processHost}
 	if c.Remote == "" || c.Branch == "" {
 		return "", nativeErr("authority_mismatch", "native project requires a fixed remote and branch")
 	}
@@ -45,11 +46,11 @@ func configuredRepositoryTarget(ctx context.Context, c Config) (string, error) {
 	return target, nil
 }
 
-func validateNativeConfiguredTarget(ctx context.Context, c Config, authority executionmodel.ProjectTaskAuthority) error {
+func validateNativeConfiguredTarget(ctx context.Context, c Config, authority executionmodel.ProjectTaskAuthority, processHost executionbackend.ManagedProcessHost) error {
 	if c.Remote != authority.Remote || c.Branch != authority.Branch {
 		return nativeErr("authority_mismatch", "configured remote or branch differs from the registered native project")
 	}
-	target, err := configuredRepositoryTarget(ctx, c)
+	target, err := configuredRepositoryTarget(ctx, c, processHost)
 	if err != nil {
 		return err
 	}

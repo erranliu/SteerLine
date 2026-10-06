@@ -3,7 +3,6 @@ package execution
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,11 +17,9 @@ import (
 func TestUnregisteredWorkerFlowConfigurationCannotClaim(t *testing.T) {
 	for _, host := range []string{"unregistered-a", "unregistered-b"} {
 		t.Run(host, func(t *testing.T) {
-			c := Config{ExecutionDirectory: neutralExecutionDirectory(t), WorkflowProtocol: executionmodel.Version, Host: host, Agent: "fixture"}
-			err := requireWorkerFlowCapabilities(context.Background(), c)
-			var backend *executionbackend.BackendError
-			if !errors.As(err, &backend) || backend.Code != executionbackend.BackendUnsupported {
-				t.Fatalf("unregistered configuration reached an external claim path: %v", err)
+			c := Config{WorkflowProtocol: executionmodel.Version, Host: host, Agent: "fixture"}
+			if _, err := registrationFor(c, neutralExecutionDirectory(t)); err == nil {
+				t.Fatal("unregistered configuration reached an external claim path")
 			}
 		})
 	}
@@ -90,7 +87,7 @@ func TestFreshWorkerFlowRuntimeUsesDistinctFormat(t *testing.T) {
 func TestWorkerFlowRejectsOldLocalExecutionProtocol(t *testing.T) {
 	c, commit, store := openDAGFixture(t)
 	ctx := context.Background()
-	c.WorkflowProtocol, c.Host, c.Agent, c.Claimant = executionmodel.Version, "local", "fixture", "operator"
+	c.WorkflowProtocol, c.Host, c.Agent = executionmodel.Version, "local", "fixture"
 	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
 		t.Fatalf("push fixture base: %v: %s", err, out)
 	}

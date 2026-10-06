@@ -30,11 +30,11 @@ type AnswerOptions struct {
 
 // SubmitAnswerDecision publishes one immutable answer command to the live
 // service's SQLite authority. It never falls back to a file or offline writer.
-func SubmitAnswerDecision(ctx context.Context, c execution.Config, runID, decisionID, optionID, note, requestedBy string, expectedDecisionVersion, expectedRunRevision uint64, expectedInstance, commandID string, answers ...map[string][]string) (storageports.CommandRecord, bool, error) {
+func SubmitAnswerDecision(ctx context.Context, c Config, runID, decisionID, optionID, note, requestedBy string, expectedDecisionVersion, expectedRunRevision uint64, expectedInstance, commandID string, answers ...map[string][]string) (storageports.CommandRecord, bool, error) {
 	return submitAnswerDecisionWithStore(ctx, c, nil, runID, decisionID, optionID, note, requestedBy, expectedDecisionVersion, expectedRunRevision, expectedInstance, commandID, answers...)
 }
 
-func submitAnswerDecisionWithStore(ctx context.Context, c execution.Config, store *sqlite.SQLiteStore, runID, decisionID, optionID, note, requestedBy string, expectedDecisionVersion, expectedRunRevision uint64, expectedInstance, commandID string, answers ...map[string][]string) (storageports.CommandRecord, bool, error) {
+func submitAnswerDecisionWithStore(ctx context.Context, c Config, store *sqlite.SQLiteStore, runID, decisionID, optionID, note, requestedBy string, expectedDecisionVersion, expectedRunRevision uint64, expectedInstance, commandID string, answers ...map[string][]string) (storageports.CommandRecord, bool, error) {
 	if strings.TrimSpace(runID) == "" {
 		return storageports.CommandRecord{}, false, errors.New("answer requires a run ID")
 	}
@@ -180,7 +180,7 @@ func submitAnswerDecisionWithStore(ctx context.Context, c execution.Config, stor
 			return storageports.CommandRecord{}, false, taskError("environment_blocked", "resolve the environment blocker before sending feedback")
 		}
 	}
-	if err = execution.DecisionReplyEligibility(ctx, c, run); err != nil {
+	if err = execution.DecisionReplyEligibility(ctx, c.executionConfig(), run); err != nil {
 		return storageports.CommandRecord{}, false, err
 	}
 	if err = executionmodel.ValidateDecisionAnswer(&run.Decision.Request, &answer); err != nil {
@@ -215,7 +215,7 @@ func serviceHasCapability(runtimeState *reconstructiontypes.Runtime, action stri
 	return false
 }
 
-func readConfiguredRuntime(ctx context.Context, config execution.Config) (*reconstructiontypes.Runtime, error) {
+func readConfiguredRuntime(ctx context.Context, config Config) (*reconstructiontypes.Runtime, error) {
 	if err := config.RequireNativeTaskAuthority(); err != nil {
 		return nil, err
 	}
@@ -249,16 +249,16 @@ func runtimeRunByID(runtimeState *reconstructiontypes.Runtime, runID string) *re
 
 // AnswerDecision is the CLI wrapper over the same current CommandService path
 // used by the console. Offline execution is read-only and returns an error.
-func AnswerDecision(c execution.Config, o AnswerOptions) error {
+func AnswerDecision(c Config, o AnswerOptions) error {
 	_, _, err := SubmitDecisionAnswer(context.Background(), c, o)
 	return err
 }
 
-func SubmitDecisionAnswer(ctx context.Context, c execution.Config, o AnswerOptions) (storageports.CommandRecord, bool, error) {
+func SubmitDecisionAnswer(ctx context.Context, c Config, o AnswerOptions) (storageports.CommandRecord, bool, error) {
 	return submitDecisionAnswerWithStore(ctx, c, nil, o)
 }
 
-func submitDecisionAnswerWithStore(ctx context.Context, c execution.Config, store *sqlite.SQLiteStore, o AnswerOptions) (storageports.CommandRecord, bool, error) {
+func submitDecisionAnswerWithStore(ctx context.Context, c Config, store *sqlite.SQLiteStore, o AnswerOptions) (storageports.CommandRecord, bool, error) {
 	if strings.TrimSpace(o.RunID) == "" {
 		return storageports.CommandRecord{}, false, errors.New("answer requires a run ID or task ID")
 	}

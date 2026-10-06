@@ -187,15 +187,14 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 			return s.rejectControl(*req, digest, "stale_target", executionmodel.ErrTurnStale)
 		}
 	case "start_task":
-		base := s.projectExecutionConfig()
 		profileID := payload.ExecutionProfileID
 		if profileID == "" {
-			if len(base.ExecutionProfiles) != 0 {
+			if s.runtime.Profiles.HasMultipleProfiles() {
 				return s.rejectControl(*req, digest, "invalid_request", errors.New("start_task requires an execution profile selection"))
 			}
-			profileID = ProjectExecutionProfileID
+			profileID = s.runtime.Profiles.DefaultProfileID()
 		}
-		if _, _, profileErr := base.ResolveExecutionProfile(profileID, payload.ExecutionProfileDigest); profileErr != nil {
+		if _, _, profileErr := s.runtime.Profiles.ResolveExecutionProfile(profileID, payload.ExecutionProfileDigest); profileErr != nil {
 			return s.rejectControl(*req, digest, "stale_profile", profileErr)
 		}
 		if s.State.Control.DispatchMode != "manual" {
@@ -212,7 +211,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 			return s.rejectControl(*req, digest, code, err)
 		}
 	case "set_dispatch_mode":
-		if payload.Mode == "auto" && s.projectExecutionConfig().DefaultProfileID() == "" {
+		if payload.Mode == "auto" && s.runtime.Profiles.DefaultProfileID() == "" {
 			return s.rejectControl(*req, digest, "invalid_request", errors.New("automatic dispatch requires default_execution_profile"))
 		}
 	case "pause_dispatch":
@@ -220,7 +219,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 			return s.rejectControl(*req, digest, "invalid_request", errors.New("dispatch is already paused"))
 		}
 	case "resume_dispatch":
-		if s.State.Control.DispatchMode == "auto" && s.projectExecutionConfig().DefaultProfileID() == "" {
+		if s.State.Control.DispatchMode == "auto" && s.runtime.Profiles.DefaultProfileID() == "" {
 			return s.rejectControl(*req, digest, "invalid_request", errors.New("automatic dispatch requires default_execution_profile"))
 		}
 		if !s.State.Control.DispatchPaused {
@@ -383,7 +382,7 @@ func (s *Service) validateReadyTarget(ctx context.Context, taskID string) error 
 		return fmt.Errorf("native task readiness could not be verified: %w", err)
 	}
 	for _, task := range ready {
-		if task.TaskID == taskID && contains(s.Config.ExecutableTypes, task.Type) {
+		if task.TaskID == taskID && s.taskWork.CanExecuteType(task.Type) {
 			return nil
 		}
 	}
@@ -426,7 +425,7 @@ func (s *Service) applyControlAction(ctx context.Context, req productapi.Control
 	case "start_task":
 		profileID := payload.ExecutionProfileID
 		if profileID == "" {
-			profileID = ProjectExecutionProfileID
+			profileID = s.runtime.Profiles.DefaultProfileID()
 		}
 		if run := s.find(op.RunID); run != nil {
 			if s.lifecycleEffectPending(run.RunID) {

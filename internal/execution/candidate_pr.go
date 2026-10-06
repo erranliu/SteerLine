@@ -14,7 +14,7 @@ func (s *Service) pollRetiredCandidatePRs(ctx context.Context, run *reconstructi
 	w, e, c := fixed.workflow, fixed.execution, fixed.config
 	urls := uniqueSorted(append(append(append([]string(nil), w.PRHistory...), w.PRURL), w.PRCandidateURL))
 	for _, url := range urls {
-		info, err := publicationClient(c).Query(ctx, url)
+		info, err := publicationClient(c, s.runtime.ProcessHost).Query(ctx, url)
 		if err != nil {
 			continue
 		}

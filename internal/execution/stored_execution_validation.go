@@ -8,9 +8,9 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
-func (c Config) ValidateStoredExecutions(snapshot reconstruction.Snapshot) error {
+func (c Config) ValidateStoredExecutions(snapshot reconstruction.Snapshot, directory *ExecutionDirectory) error {
 	for _, workflow := range snapshot.WorkflowRuns {
-		if workflow.WorkflowVersion != executionmodel.Version || workflow.ExecutionProfile == nil || !VerifyFixedExecutionProfile(*workflow.ExecutionProfile, c.ExecutionDirectory) || workflow.ConfigDigest != workflow.ExecutionProfile.AcceptedConfigVersion {
+		if workflow.WorkflowVersion != executionmodel.Version || workflow.ExecutionProfile == nil || !VerifyFixedExecutionProfile(*workflow.ExecutionProfile, directory) || workflow.ConfigDigest != workflow.ExecutionProfile.AcceptedConfigVersion {
 			return nativeErr("unsupported_schema", "worker-flow-v1 refuses an old WorkflowRun; preserve the original state and external session")
 		}
 	}
@@ -30,8 +30,8 @@ func (c Config) ValidateStoredExecutions(snapshot reconstruction.Snapshot) error
 		if err := validateExecutionImplementationData(&execution); err != nil {
 			return nativeErr("unsupported_schema", "execution implementation binding is invalid: "+err.Error())
 		}
-		fixedConfig := c.ApplyFixedExecutionProfile(*fixedProfile)
-		entry, resolveErr := registrationFor(fixedConfig)
+		fixedConfig := c.ApplyFixedExecutionProfile(*fixedProfile, directory)
+		entry, resolveErr := registrationFor(fixedConfig, directory)
 		if resolveErr != nil || execution.Backend != string(entry.Key.Backend) || execution.Agent != entry.Key.Agent || execution.Protocol != string(entry.Key.Protocol) {
 			return nativeErr("unsupported_schema", "fixed execution profile differs from the persisted run identity")
 		}
@@ -41,7 +41,7 @@ func (c Config) ValidateStoredExecutions(snapshot reconstruction.Snapshot) error
 			}
 			matched := false
 			for _, workflow := range snapshot.WorkflowRuns {
-				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && verifyPolicyResources(fixedConfig, execution.PolicyResources, workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, &execution) == nil {
+				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && verifyPolicyResources(fixedConfig, directory, execution.PolicyResources, workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, &execution) == nil {
 					matched = true
 				}
 			}
@@ -56,7 +56,7 @@ func (c Config) ValidateStoredExecutions(snapshot reconstruction.Snapshot) error
 			}
 			matched := false
 			for _, workflow := range snapshot.WorkflowRuns {
-				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && VerifyFixedExecutionProfile(*workflow.ExecutionProfile, c.ExecutionDirectory) && workflow.ExecutionProfile.Digest == env.ProfileDigest {
+				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.ExecutionProfile != nil && VerifyFixedExecutionProfile(*workflow.ExecutionProfile, directory) && workflow.ExecutionProfile.Digest == env.ProfileDigest {
 					matched = true
 				}
 			}

@@ -179,9 +179,6 @@ func (s *Service) requireDecisionReplyCapability(ctx context.Context, run *recon
 // CLI, console client and service handler. It checks the immutable execution
 // binding and verified reply capabilities for this exact target.
 func DecisionReplyEligibility(ctx context.Context, c Config, run *reconstructiontypes.RunView) error {
-	if err := c.RequireNativeTaskAuthority(); err != nil {
-		return err
-	}
 	if run == nil || run.Decision == nil || run.Decision.Status != "pending" {
 		return errors.New("decision is not pending on the current native run")
 	}

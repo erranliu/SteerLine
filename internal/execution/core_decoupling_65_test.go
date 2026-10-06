@@ -91,7 +91,7 @@ func TestCD65HistoryBudgetRotatesSources(t *testing.T) {
 	require(t, err)
 	defer store.Close()
 	port := &testConversationHistoryPort{}
-	service := &Service{Config: Config{identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
+	service := &Service{Config: Config{identity: "project"}, runtime: RuntimeDependencies{ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
 	active := testHistorySource("active", false)
 	historical := make([]conversationtypes.ConversationHistorySource, 5)
 	for i := range historical {
@@ -148,7 +148,7 @@ func TestCD65HistoryCursorCommitsWithItsConversationBatch(t *testing.T) {
 	require(t, err)
 	defer store.Close()
 	port := &testConversationHistoryPort{}
-	service := &Service{Config: Config{identity: "project", ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
+	service := &Service{Config: Config{identity: "project"}, runtime: RuntimeDependencies{ProcessHost: testProcessHost{}}, domainStore: store, commandStore: store, conversationStore: store, conversationSources: port}
 	source := testHistorySource("commit-source", false)
 	_, err = store.db.Exec(`CREATE TRIGGER reject_history_batch BEFORE INSERT ON conversation_events BEGIN SELECT RAISE(FAIL, 'history batch commit failed'); END`)
 	require(t, err)

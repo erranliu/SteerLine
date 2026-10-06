@@ -17,8 +17,8 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func executionStopperFor(c Config) (executionbackend.ExecutionStopper, error) {
-	entry, err := registrationFor(c)
+func executionStopperFor(c Config, directory *ExecutionDirectory) (executionbackend.ExecutionStopper, error) {
+	entry, err := registrationFor(c, directory)
 	if err != nil {
 		return nil, err
 	}

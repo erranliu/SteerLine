@@ -26,7 +26,7 @@ type TaskClaimOptions struct {
 	RequestedBy              string
 	Explicit                 bool
 	WorkflowRunID            string
-	ExecutionProfile         *ExecutionProfile
+	ExecutionProfile         *executionmodel.FixedExecutionProfile
 	ServiceInstanceID        string
 	startCandidate           bool
 	controlRequestDigest     string
@@ -47,10 +47,10 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if config.WorkflowProtocol != executionmodel.Version {
 		return executionmodel.TaskClaimReceipt{}, nativeErr("unsupported_schema", "only worker-flow-v1 may claim a task")
 	}
-	if err := validateWorkflowConfig(&config, nil); err != nil {
+	if err := validateWorkflowConfig(config, c.runtime.Directory); err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
 	}
-	entry, err := registrationFor(config)
+	entry, err := registrationFor(config, c.runtime.Directory)
 	if err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
 	}
@@ -66,11 +66,23 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if options.ServiceInstanceID != "" && !executionbackend.StableExecutionID(options.ServiceInstanceID) {
 		return executionmodel.TaskClaimReceipt{}, nativeErr("invalid_batch", "claim service instance identity is invalid")
 	}
-	if options.ExecutionProfile != nil && !options.ExecutionProfile.MatchesConfig(config) {
+	if options.ExecutionProfile != nil && (!VerifyFixedExecutionProfile(*options.ExecutionProfile, c.runtime.Directory) || options.ExecutionProfile.ID != config.selectedProfileID || options.ExecutionProfile.Digest != config.fixedProfileDigest) {
 		return executionmodel.TaskClaimReceipt{}, nativeErr("contract_mismatch", "selected execution profile differs from the claim configuration")
 	}
 	if strings.TrimSpace(options.RequestedBy) == "" {
-		options.RequestedBy = defaultRequestedBy()
+		if c.Work == nil {
+			return executionmodel.TaskClaimReceipt{}, nativeErr("authority_mismatch", "task work port is required")
+		}
+		options.RequestedBy = c.Work.DefaultRequestedBy()
+	}
+	if options.ExecutionProfile == nil && c.runtime.Profiles != nil {
+		selected, fixed, resolveErr := c.runtime.Profiles.ResolveExecutionProfile(c.runtime.Profiles.DefaultProfileID(), "")
+		if resolveErr == nil && selected.fixedProfileDigest == config.fixedProfileDigest {
+			options.ExecutionProfile = &fixed
+		}
+	}
+	if options.ExecutionProfile == nil {
+		return executionmodel.TaskClaimReceipt{}, nativeErr("stale_profile", "claim requires one resolved execution profile")
 	}
 	requestBody := struct {
 		TaskID               string `json:"task_id"`
@@ -93,7 +105,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	}
 	if options.ExecutionProfile != nil {
 		requestBody.ProfileID = options.ExecutionProfile.ID
-		requestBody.ProfileDigest = options.ExecutionProfile.Digest()
+		requestBody.ProfileDigest = options.ExecutionProfile.Digest
 	}
 	requestRaw, _ := json.Marshal(requestBody)
 	requestPayload, err := taskmodel.CanonicalJSON(requestRaw)
@@ -107,7 +119,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	}
 
 	if !config.ExecutionRequirements.Empty() {
-		evaluation, err := evaluateExecutionRequirements(ctx, config)
+		evaluation, err := evaluateExecutionRequirements(ctx, config, c.runtime.Directory)
 		if err != nil {
 			return executionmodel.TaskClaimReceipt{}, err
 		}
@@ -117,15 +129,18 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
 	}
-	if err := requireWorkerFlowCapabilities(ctx, config); err != nil {
+	if err := requireWorkerFlowCapabilitiesWithResolver(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, c.runtime.Directory.LifecycleResolver()); err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
 	}
-	if err := config.BindPublicationTarget(ctx); err != nil {
+	if err := config.BindPublicationTarget(ctx, c.runtime.ProcessHost); err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
 	}
 	if options.ExecutionProfile != nil {
-		p := config.bindProjectPolicy(*options.ExecutionProfile)
-		options.ExecutionProfile = &p
+		fixed := *options.ExecutionProfile
+		fixed.Publication = config.publicationSettings()
+		fixed.Digest = fixedExecutionProfileDigest(fixed)
+		config.fixedProfileDigest = fixed.Digest
+		options.ExecutionProfile = &fixed
 	}
 	graph, err := sqlite.TaskGraphSnapshot(ctx, c.Project)
 	if err != nil {
@@ -137,7 +152,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if options.startCandidate && (options.ExpectedGraphRevision == 0 || graph.Authority.GraphRevision != options.ExpectedGraphRevision) {
 		return executionmodel.TaskClaimReceipt{}, nativeErr("stale_version", "candidate start requires current graph revision")
 	}
-	if err = validateNativeConfiguredTarget(ctx, config, graph.Authority); err != nil {
+	if err = validateNativeConfiguredTarget(ctx, config, graph.Authority, c.runtime.ProcessHost); err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
 	}
 	task, exists := graph.ByID[options.TaskID]
@@ -171,15 +186,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		return executionmodel.TaskClaimReceipt{}, nativeErr("stale_version", "fixed work graph changed")
 	}
 	task = work.Record
-	allowed := map[string]bool{}
-	types := config.ExecutableTypes
-	if len(types) == 0 {
-		types = []string{"task", "bug", "feature", "chore"}
-	}
-	for _, typ := range types {
-		allowed[typ] = true
-	}
-	if !allowed[task.Type] {
+	if !c.Work.CanExecuteType(task.Type) {
 		return executionmodel.TaskClaimReceipt{}, nativeErr("task_not_ready", "task type is not executable in this project")
 	}
 	contract := work.Contract
@@ -203,17 +210,17 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		if err != nil {
 			return executionmodel.TaskClaimReceipt{}, err
 		}
-		if _, err = verifyKnownCandidatePRs(ctx, config, candidateSnapshot, task.TaskID, nil, ""); err != nil {
+		if _, err = verifyKnownCandidatePRs(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, candidateSnapshot, task.TaskID, nil, ""); err != nil {
 			return executionmodel.TaskClaimReceipt{}, err
 		}
 	}
-	base, err := acquireNativeBase(ctx, config)
+	base, err := acquireNativeBase(ctx, config, c.runtime.ProcessHost)
 	if err != nil {
 		return executionmodel.TaskClaimReceipt{}, nativeErr("task_not_ready", "fixed target branch base could not be acquired: "+err.Error())
 	}
 	if options.startCandidate {
 		base = commonBase
-		if _, err := (Runner{Dir: config.Repository, Timeout: duration(config.CommandTimeout), ProcessHost: config.ProcessHost}).Output(ctx, config.Git, "cat-file", "-e", base+"^{commit}"); err != nil {
+		if _, err := (Runner{Dir: config.Repository, Timeout: duration(config.CommandTimeout), ProcessHost: c.runtime.ProcessHost}).Output(ctx, config.Git, "cat-file", "-e", base+"^{commit}"); err != nil {
 			return executionmodel.TaskClaimReceipt{}, nativeErr("base_missing_delivery", "selected execution cannot acquire the experiment's common base")
 		}
 	}
@@ -228,32 +235,23 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 			return executionmodel.TaskClaimReceipt{}, nativeErr("task_not_ready", "predecessor delivery changed during claim preflight")
 		}
 		predecessorMerges[edge.PredecessorID] = delivery.MergeCommit
-		r := Runner{Dir: config.Repository, Timeout: duration(config.CommandTimeout), ProcessHost: config.ProcessHost}
+		r := Runner{Dir: config.Repository, Timeout: duration(config.CommandTimeout), ProcessHost: c.runtime.ProcessHost}
 		if _, e := r.Output(ctx, config.Git, "merge-base", "--is-ancestor", delivery.MergeCommit, base); e != nil {
 			return executionmodel.TaskClaimReceipt{}, nativeErr("base_missing_delivery", "acquired branch base does not contain a verified predecessor merge commit")
 		}
 	}
 	backend, protocol := entry.Key.Backend, entry.Key.Protocol
-	target := TargetFor(config)
+	target := TargetFor(config, c.runtime.Directory)
 	target.Branch, target.BaseRevision = config.Branch, base
-	claimant := strings.TrimSpace(config.Claimant)
-	if claimant == "" {
-		claimant = options.RequestedBy
-	}
+	claimant := options.RequestedBy
 	created := time.Now().UTC()
 	workflowRunID, executionID, attemptID := options.WorkflowRunID, newID(), newID()
 	if workflowRunID == "" {
 		workflowRunID = newID()
 	}
-	wfr := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, ConfigDigest: config.acceptedConfigVersion(), Phase: "queued", Repository: config.Repository, Branch: config.Branch, SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
-	if options.ExecutionProfile != nil {
-		fixed := options.ExecutionProfile.Freeze(config.identity)
-		wfr.ExecutionProfile = &fixed
-	}
-	if wfr.ExecutionProfile == nil {
-		fixed := config.projectExecutionProfile().Freeze(config.identity)
-		wfr.ExecutionProfile = &fixed
-	}
+	wfr := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Project, WorkflowRunID: workflowRunID, TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, ConfigDigest: config.acceptedConfigVersion, Phase: "queued", Repository: config.Repository, Branch: config.Branch, SelectedResult: executionID, CreatedAt: created, UpdatedAt: created}
+	fixed := *options.ExecutionProfile
+	wfr.ExecutionProfile = &fixed
 	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Project, ExecutionID: executionID, CurrentAttemptID: attemptID, Generation: newID(), ConfigurationDigest: wfr.ExecutionProfile.Digest, OwnerServiceInstanceID: options.ServiceInstanceID, WorkflowRunID: workflowRunID, Agent: config.agentName(), Backend: string(backend), Protocol: string(protocol), Target: target, Workspace: executionmodel.WorkspaceEvidence{Repository: config.identity, Branch: config.Branch, Base: base}, Status: "pending", CurrentStep: "worker", CreatedAt: created, UpdatedAt: created}
 	if claimPreparation.RequiresReadiness {
 		timeout := claimPreparation.WaitTimeout
@@ -275,10 +273,10 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		}
 	}
 	operationRequest, _ := json.Marshal(map[string]any{"task_id": task.TaskID, "task_version": options.ExpectedTaskVersion, "authority_version": options.ExpectedAuthorityVersion, "workflow_run_id": workflowRunID, "execution_id": executionID, "attempt_id": attemptID, "base_commit": base, "predecessor_merge_commits": predecessorMerges, "requested_by": options.RequestedBy})
-	if err := verifyClaimConfigFiles(config); err != nil {
+	if err := verifyClaimConfigFiles(c.runtime.ConfigVerifier); err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
 	}
-	if !VerifyFixedExecutionProfile(*wfr.ExecutionProfile, config.ExecutionDirectory) {
+	if !VerifyFixedExecutionProfile(*wfr.ExecutionProfile, c.runtime.Directory) {
 		return executionmodel.TaskClaimReceipt{}, nativeErr("stale_profile", "claim snapshot changed after evaluation")
 	}
 	command := storageports.CommandRecord{ProjectIdentity: c.Project, CommandID: options.RequestID, Kind: kind, TargetID: task.TaskID, ExpectedVersion: options.ExpectedTaskVersion, IdempotencyKey: options.RequestID, RequestedBy: options.RequestedBy, Payload: requestPayload, Status: "in_flight", CreatedAt: created}
@@ -304,10 +302,10 @@ func replayTaskStart(old storageports.CommandRecord, payload []byte, taskID stri
 	return receipt, nil
 }
 
-func acquireNativeBase(ctx context.Context, c Config) (string, error) {
+func acquireNativeBase(ctx context.Context, c Config, processHost executionbackend.ManagedProcessHost) (string, error) {
 	ref := fmt.Sprintf("refs/remotes/%s/%s", c.Remote, c.Branch)
 	spec := fmt.Sprintf("+refs/heads/%s:%s", c.Branch, ref)
-	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: c.ProcessHost}
+	r := Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: processHost}
 	if _, err := r.Output(ctx, c.Git, "fetch", "--no-tags", "--", c.Remote, spec); err != nil {
 		return "", err
 	}

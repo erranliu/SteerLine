@@ -2,8 +2,12 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,72 +21,102 @@ import (
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
-// Native fixtures encode configuration values and use the actual app catalog.
-// They contain no copy of its implementation factories or center write state.
-func builtinFixtureConfig(t *testing.T, c execution.Config, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remoteSettings ...*remote.ProfileConfig) execution.Config {
+// builtinFixtureConfig loads an app-owned project config with an injected
+// implementation directory. Lower execution APIs receive only its selected
+// frozen profile through Config.ExecutionConfig().
+func builtinFixtureConfig(t *testing.T, c steerlineapp.Config, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remoteSettings ...*remote.ProfileConfig) steerlineapp.Config {
 	t.Helper()
-	host := steerlineapp.NewProcessHost(10 * time.Second)
-	directory, err := steerlineapp.NewBuiltinDirectory(host)
-	require(t, err)
-	c.ProcessHost = host
-	accepted := c.LoadedConfigDigest()
-	if accepted == "" {
-		accepted = "fixture-native-accepted-v1"
-	}
-	c.BindApplicationConfig(directory, "fixture-project.json", "fixture-global.json", accepted, true)
-	p := execution.ExecutionProfile{ID: execution.ProjectExecutionProfileID, Name: "Native fixture", Host: c.Host, Agent: c.Agent}
-	payload, err := codexworker.EncodeProfileConfig(worker)
-	require(t, err)
-	p.ImplementationConfigs = append(p.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
-	if terminal != nil {
-		payload, err := orcaworker.EncodeProfileConfig(*terminal)
-		require(t, err)
-		p.ImplementationConfigs = append(p.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
-	}
-	if len(remoteSettings) > 0 && remoteSettings[0] != nil {
-		payload, err := remote.EncodeProfileConfig(*remoteSettings[0])
-		require(t, err)
-		p.ImplementationConfigs = append(p.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: remote.ProfileCodecKey, CodecVersion: 1, Payload: payload})
-	}
-	c.ExecutionProfiles = []execution.ExecutionProfile{p}
-	c.DefaultExecutionProfile = p.ID
-	c = c.ApplyExecutionProfile(p)
-	// A static rejection is still inspected as raw configuration input in
-	// these negative fixtures. Preserve its scoped codec values for read-only
-	// diagnostics; ValidateProfiles and Claim continue to reject admission.
-	if len(c.ImplementationData) == 0 {
-		project := c.Identity()
-		if project == "" {
-			project = "unresolved-project"
-		}
-		for _, input := range p.ImplementationConfigs {
-			e, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{ImplementationKey: input.ImplementationKey, CodecVersion: input.CodecVersion, Purpose: executionbackend.ImplementationConfigPurpose, ProjectID: project, ProfileID: p.ID, AcceptedConfigVersion: accepted}, input.Payload)
-			require(t, err)
-			c.ImplementationData = append(c.ImplementationData, e)
+	if c.Repository == "" {
+		c.Repository = filepath.Join(t.TempDir(), "repository")
+		require(t, os.MkdirAll(c.Repository, 0700))
+		command := exec.Command("git", "init", "--quiet", "--initial-branch=main", c.Repository)
+		if out, err := command.CombinedOutput(); err != nil {
+			t.Fatalf("init profile fixture repository: %v: %s", err, out)
 		}
 	}
-	return c
-}
-
-func nativeProfileSettings(c execution.Config) codexworker.ProfileConfig {
-	data, _ := c.DecodeImplementationConfig(codexworker.ProfileCodecKey)
-	if len(data) == 0 {
-		for _, p := range c.ExecutionProfiles {
-			for _, input := range p.ImplementationConfigs {
-				if input.ImplementationKey == codexworker.ProfileCodecKey {
-					data = input.Payload
-				}
+	if c.Branch == "" {
+		c.Branch = "main"
+	}
+	if c.Remote == "" {
+		c.Remote = "origin"
+	}
+	if c.Git.Executable == "" {
+		c.Git.Executable = "git"
+	}
+	if c.CommandTimeout == "" {
+		c.CommandTimeout = "15s"
+	}
+	if c.PR.BaseURL != "" && c.PR.Repository != "" {
+		remoteURL := strings.TrimSuffix(c.PR.BaseURL, "/") + "/" + c.PR.Repository + ".git"
+		setRemote := exec.Command("git", "-C", c.Repository, "remote", "set-url", c.Remote, remoteURL)
+		if out, err := setRemote.CombinedOutput(); err != nil {
+			addRemote := exec.Command("git", "-C", c.Repository, "remote", "add", c.Remote, remoteURL)
+			if addOut, addErr := addRemote.CombinedOutput(); addErr != nil {
+				t.Fatalf("configure profile fixture remote: set=%v %s add=%v %s", err, out, addErr, addOut)
 			}
 		}
 	}
-	value, _ := codexworker.DecodeProfileConfig(data)
-	return value
+	profile := execution.ExecutionProfile{ID: execution.ProjectExecutionProfileID, Name: "Native fixture", Host: c.Host, Agent: c.Agent}
+	payload, err := codexworker.EncodeProfileConfig(worker)
+	require(t, err)
+	profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
+	if terminal != nil {
+		payload, err = orcaworker.EncodeProfileConfig(*terminal)
+		require(t, err)
+		profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
+	}
+	if len(remoteSettings) > 0 && remoteSettings[0] != nil {
+		payload, err = remote.EncodeProfileConfig(*remoteSettings[0])
+		require(t, err)
+		profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: remote.ProfileCodecKey, CodecVersion: 1, Payload: payload})
+	}
+	global, err := json.Marshal(map[string]any{"version": 2, "default_execution_profile": profile.ID, "execution_profiles": []execution.ExecutionProfile{profile}})
+	require(t, err)
+	globalPath := steerlineapp.GlobalExecutionConfigPath()
+	require(t, os.MkdirAll(filepath.Dir(globalPath), 0700))
+	require(t, os.WriteFile(globalPath, global, 0600))
+	project := map[string]any{
+		"repository": c.Repository, "remote": nonEmpty(c.Remote, "origin"), "branch": nonEmpty(c.Branch, "main"),
+		"run_dir": c.RunDir, "worktree_root": c.WorktreeRoot, "task_authority": "native", "workflow_protocol": executionmodel.Version,
+		"claimant": "integration", "task_poll": "1s", "pr_poll": "30s", "heartbeat": "1s", "command_timeout": nonEmpty(c.CommandTimeout, "15s"), "shutdown_grace": "5s",
+		"executable_types": []string{"task"}, "git": c.Git, "execution_policy": c.ExecutionPolicy,
+		"publication_policy": c.PublicationPolicy, "execution_requirements": c.ExecutionRequirements, "pr": c.PR,
+	}
+	if c.Git.Executable == "" {
+		project["git"] = executionbackend.Command{Executable: "git"}
+	}
+	projectData, err := json.Marshal(project)
+	require(t, err)
+	projectPath := filepath.Join(t.TempDir(), "fixture-project.json")
+	require(t, os.WriteFile(projectPath, projectData, 0600))
+	loaded, err := steerlineapp.LoadQueryConfig(projectPath)
+	require(t, err)
+	return loaded
 }
 
-func fixtureBoundProfile(c execution.Config) execution.ExecutionProfile {
-	for _, p := range c.AvailableExecutionProfiles() {
-		if p.Host == c.Host && p.Agent == c.Agent {
-			return p
+func nonEmpty(value, fallback string) string {
+	if value != "" {
+		return value
+	}
+	return fallback
+}
+
+func nativeProfileSettings(c steerlineapp.Config) codexworker.ProfileConfig {
+	for _, profile := range c.ExecutionProfiles {
+		for _, input := range profile.ImplementationConfigs {
+			if input.ImplementationKey == codexworker.ProfileCodecKey {
+				value, _ := codexworker.DecodeProfileConfig(input.Payload)
+				return value
+			}
+		}
+	}
+	return codexworker.ProfileConfig{}
+}
+
+func fixtureBoundProfile(c steerlineapp.Config) execution.ExecutionProfile {
+	for _, profile := range c.AvailableExecutionProfiles() {
+		if profile.Host == c.Host && profile.Agent == c.Agent {
+			return profile
 		}
 	}
 	panic("fixture profile was not projected")
@@ -97,55 +131,57 @@ func executionPublicationFixture() executionbackend.PublicationPolicy {
 }
 
 func hostPublicationProviderFixture() executionmodel.PRProviderConfig {
-	return executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: os.Args[0], Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: executionbackend.Command{Executable: os.Args[0], Args: []string{"pr", "close", "{pr_url}"}}}
+	return executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: "git", Args: []string{"status"}}, Close: executionbackend.Command{Executable: "git", Args: []string{"status"}}}
 }
 
-func setNativeImplementationProfiles(t *testing.T, c *execution.Config, w codexworker.ProfileConfig, o *orcaworker.ProfileConfig, r ...*remote.ProfileConfig) {
-	*c = builtinFixtureConfig(t, *c, w, o, r...)
+func setNativeImplementationProfiles(t *testing.T, c *steerlineapp.Config, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remotes ...*remote.ProfileConfig) {
+	if c == nil {
+		t.Fatal("app config is required")
+	}
+	*c = builtinFixtureConfig(t, *c, worker, terminal, remotes...)
 }
 
-func setNativeProfile(t *testing.T, c *execution.Config, w codexworker.ProfileConfig) {
-	var o *orcaworker.ProfileConfig
-	var r []*remote.ProfileConfig
+func setNativeProfile(t *testing.T, c *steerlineapp.Config, worker codexworker.ProfileConfig) {
+	var terminal *orcaworker.ProfileConfig
+	var remoteSettings []*remote.ProfileConfig
 	if c.Host != "local" {
-		data, _ := c.DecodeImplementationConfig(orcaworker.ProfileCodecKey)
-		v, _ := orcaworker.DecodeProfileConfig(data)
-		o = &v
+		settings := orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "5s"}
+		terminal = &settings
 	}
 	if c.Host == "orca_supervised" {
-		data, _ := c.DecodeImplementationConfig(remote.ProfileCodecKey)
-		v, _ := remote.DecodeProfileConfig(data)
-		r = append(r, &v)
+		settings := remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "term-coordinator", PollInterval: "2s", CapabilityReportVersion: 1}
+		remoteSettings = append(remoteSettings, &settings)
 	}
-	setNativeImplementationProfiles(t, c, w, o, r...)
+	setNativeImplementationProfiles(t, c, worker, terminal, remoteSettings...)
 }
 
-func nativeAdmissionFixture(t *testing.T) (execution.Config, string, *sqlite.SQLiteStore) {
+func nativeAdmissionFixture(t *testing.T) (steerlineapp.Config, string, *sqlite.SQLiteStore) {
 	t.Helper()
-	f := newLifecycleProject(t, "local")
-	store, err := steerlineapp.OpenNativeTaskCommandStore(context.Background(), &f.config)
+	fixture := newLifecycleProject(t, "local")
+	store, err := steerlineapp.OpenNativeTaskCommandStore(context.Background(), &fixture.config)
 	require(t, err)
 	t.Cleanup(func() { _ = store.Close() })
-	return f.config, f.commit, store
+	return fixture.config, fixture.commit, store
 }
 
-func nativeConfigError(c execution.Config) error {
+func nativeConfigError(c steerlineapp.Config) error {
 	if err := c.ValidateProfiles(); err != nil {
 		return err
 	}
-	entry, err := c.ExecutionDirectory.Resolve(c)
+	selected := c.ExecutionConfig()
+	entry, err := c.ExecutionDirectory.Resolve(selected)
 	if err != nil {
 		return err
 	}
-	return entry.ValidateConfig(context.Background(), c)
+	return entry.ValidateConfig(context.Background(), selected)
 }
 
 func historicalProfileValid(p executionmodel.FixedExecutionProfile) bool {
 	d, err := steerlineapp.NewBuiltinDirectory(steerlineapp.NewProcessHost(time.Second))
-	return err == nil && (execution.Config{ExecutionDirectory: d}).CheckFixedProfile(p) == nil
+	return err == nil && (steerlineapp.Config{ExecutionDirectory: d}).CheckFixedProfile(p) == nil
 }
 
-func historicalResourceError(_ execution.Config, r *executionmodel.PolicyResources, digest, path string, e *executionmodel.ExecutionRecord) error {
+func historicalResourceError(_ execution.Config, r *executionmodel.PolicyResources, digest, _ string, e *executionmodel.ExecutionRecord) error {
 	if r == nil || r.Version != 3 {
 		return errors.New("historical resource wrapper unsupported")
 	}
@@ -155,28 +191,30 @@ func historicalResourceError(_ execution.Config, r *executionmodel.PolicyResourc
 
 func digestValue(value any) string { return string(mustJSON(value)) }
 
-func nativeRequirementConfig(t *testing.T) execution.Config {
-	return builtinFixtureConfig(t, execution.Config{Host: "local", Agent: "codex", WorkflowProtocol: executionmodel.Version, TaskAuthority: "native", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}, codexworker.ProfileConfig{Executable: os.Args[0]}, nil)
+func nativeRequirementConfig(t *testing.T) steerlineapp.Config {
+	t.Helper()
+	return builtinFixtureConfig(t, steerlineapp.Config{Host: "local", Agent: "codex", WorkflowProtocol: executionmodel.Version, TaskAuthority: "native", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}, codexworker.ProfileConfig{Executable: os.Args[0]}, nil)
 }
 
-func nativeTarget(c execution.Config) executionbackend.ExecutionTarget {
-	entry, err := c.ExecutionDirectory.Resolve(c)
+func nativeTarget(c steerlineapp.Config) executionbackend.ExecutionTarget {
+	entry, err := c.ExecutionDirectory.Resolve(c.ExecutionConfig())
 	if err != nil {
 		return executionbackend.ExecutionTarget{}
 	}
-	return entry.Target(c)
+	return entry.Target(c.ExecutionConfig())
 }
 
-func requireNativeFlowCapabilities(ctx context.Context, c execution.Config) error {
+func requireNativeFlowCapabilities(ctx context.Context, c steerlineapp.Config) error {
 	if err := c.ValidateProfiles(); err != nil {
 		return err
 	}
-	entry, err := c.ExecutionDirectory.Resolve(c)
+	config := c.ExecutionConfig()
+	entry, err := c.ExecutionDirectory.Resolve(config)
 	if err != nil {
 		return err
 	}
-	if err := entry.ValidateConfig(ctx, c); err != nil {
+	if err := entry.ValidateConfig(ctx, config); err != nil {
 		return err
 	}
-	return entry.Preflight(ctx, c)
+	return entry.Preflight(ctx, config)
 }

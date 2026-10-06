@@ -15,11 +15,11 @@ func TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority(t *testin
 		t.Fatalf("valid snapshot rejected: %+v", original)
 	}
 	c.ExecutionPolicy.Network = "deny"
-	codex := codexProfileSettings(c)
+	codex := codexProfileSettings(c.executionConfig())
 	codex.WindowsSandbox = "unelevated"
 	setTestCodexProfile(t, &c, codex)
 	restored := c.ApplyFixedExecutionProfile(original)
-	if restored.ExecutionPolicy.Network != "allow" || codexProfileSettings(restored).WindowsSandbox != "elevated" {
+	if restored.ExecutionPolicy.Network != "allow" || codexProfileSettings(restored.executionConfig()).WindowsSandbox != "elevated" {
 		t.Fatal("current config rewrote existing authority")
 	}
 	for _, mutate := range []func(*executionmodel.FixedExecutionProfile){

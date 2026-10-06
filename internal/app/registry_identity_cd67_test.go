@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
@@ -15,7 +16,7 @@ func TestWorkerFlowModeUsesFixedExecutionIdentity(t *testing.T) {
 		want executionbackend.ExecutionProtocol
 	}{{"local", executionbackend.ProtocolLocalCodexAppServer}, {"orca", executionbackend.ProtocolOrcaTerminalV2}, {"orca_supervised", executionbackend.ProtocolOrcaSupervised}} {
 		t.Run(test.host, func(t *testing.T) {
-			entry, err := d.Resolve(Config{Host: test.host, Agent: "codex"})
+			entry, err := d.Resolve(execution.Config{Host: test.host, Agent: "codex"})
 			require(t, err)
 			if entry.Key.Protocol != test.want || entry.Lifecycle == nil {
 				t.Fatalf("native route has wrong protocol or missing lifecycle: %+v", entry)

@@ -130,7 +130,7 @@ func neutralPreparationService(t *testing.T, mode string) (*Service, *reconstruc
 func neutralPreparationServiceWithPolicy(t *testing.T, mode string, policy executionbackend.ExecutionPolicy) (*Service, *reconstructiontypes.RunView, *neutralPreparationResolver) {
 	t.Helper()
 	s, run := neutralAuditServiceWithPolicy(t, policy)
-	require(t, prepareWorktreeOnly(context.Background(), s.Config, run))
+	require(t, prepareWorktreeOnly(context.Background(), s.Config, s.runtime.Directory, s.runtime.ProcessHost, run))
 	run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(run.WorkspaceIntent.Path), ptr(run.WorkspaceIntent.Branch), ptr(run.WorkspaceIntent.BaseCommit)
 	workflow, e := s.workflowRecords(run)
 	inspected, err := inspectTestWorkspace(context.Background(), s.Config, executionbackend.ExecutionRef{WorkspacePath: run.WorkspaceIntent.Path, WorkspaceBranch: run.WorkspaceIntent.Branch, BaseCommit: run.WorkspaceIntent.BaseCommit})

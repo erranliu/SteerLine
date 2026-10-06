@@ -3,24 +3,23 @@ package app
 import (
 	"context"
 
-	"github.com/erranliu/SteerLine/internal/execution"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 // NewTaskCommands extracts only fixed task input and injects narrow I/O ports.
-func NewTaskCommands(store taskStorage, config execution.Config) taskapp.Commands {
+func NewTaskCommands(store taskStorage, config Config) taskapp.Commands {
 	tasks := NewTaskService(nil, config)
 	return taskapp.Commands{Store: taskCommandStore{store}, Documents: tasks.Documents, Input: tasks.Input}
 }
 
 type clientTaskCommands struct {
 	store  taskStorage
-	config execution.Config
+	config Config
 }
 
-func newClientTaskCommands(store taskStorage, config execution.Config) clientTaskCommands {
+func newClientTaskCommands(store taskStorage, config Config) clientTaskCommands {
 	return clientTaskCommands{store: store, config: config}
 }
 func (r *clientTaskCommands) Validate(ctx context.Context, payload []byte) (productapi.TaskBatchValidation, error) {

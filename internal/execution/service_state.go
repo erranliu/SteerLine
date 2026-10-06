@@ -8,6 +8,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -22,10 +23,12 @@ type Service struct {
 	taskResults          TaskResultPort
 	Config               Config
 	baseConfig           Config
+	runtime              RuntimeDependencies
+	runtimeSettings      RuntimeSettings
 	lifecycleResolver    executionbackend.LifecycleResolver
 	conversationSources  conversationtypes.ConversationSourcePort
 	dispatchConfig       *Config
-	dispatchProfile      *ExecutionProfile
+	dispatchProfile      *executionmodel.FixedExecutionProfile
 	State                reconstruction.Runtime
 	domain               reconstruction.Snapshot
 	committed            reconstruction.Snapshot

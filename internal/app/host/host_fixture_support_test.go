@@ -78,7 +78,7 @@ func publishFixtureCheckpoint(service *execution.Service) error {
 func controlReviewService(t *testing.T) *execution.Service {
 	t.Helper()
 	service := newFixture(t).service(t)
-	service.Config.BindApplicationConfig(service.Config.ExecutionDirectory, "", "", "lifecycle-review-config", false)
+	service.Config.BindAcceptedConfigVersion("lifecycle-review-config")
 	hostConfig := hostConfigForTest(service.Config)
 	service.State.Service.Mode = "scheduler"
 	service.State.Service.Status = "running"
@@ -101,7 +101,7 @@ func controlReviewService(t *testing.T) *execution.Service {
 	service.State.Service.StartupID = &startupID
 	service.State.Service.PID = identity.PID
 	service.State.Service.ProcessIdentity = identity
-	service.State.Service.ConfigDigest = service.Config.LoadedConfigDigest()
+	service.State.Service.ConfigDigest = service.Config.AcceptedConfigVersion()
 	if err := publishFixtureCheckpoint(service); err != nil {
 		t.Fatal(err)
 	}
@@ -110,6 +110,7 @@ func controlReviewService(t *testing.T) *execution.Service {
 
 func newHostFixtureService(c execution.Config, host hostport.HostPort) (*execution.Service, error) {
 	c = testConfigWithDirectory(c)
+	dependencies := hostFixtureRuntime(c)
 	var err error
 	c, err = testPrepareServiceConfig(c)
 	if err != nil {
@@ -121,7 +122,7 @@ func newHostFixtureService(c execution.Config, host hostport.HostPort) (*executi
 	}
 	tasks := fullFixtureTaskService(db, c)
 	stores := execution.ServiceStorage{State: db, Commands: db, Worker: db, Conversations: db, Records: db, Resources: testExecutionResources{}, Close: db.Close}
-	return execution.NewService(c, c.ExecutionDirectory, c.ExecutionDirectory, neutralConversationSources{}, c.ProcessHost, stores, tasks, tasks, host)
+	return execution.NewService(c, dependencies, execution.RuntimeSettings{Heartbeat: 5 * time.Second, ShutdownGrace: 10 * time.Second}, dependencies.Directory.LifecycleResolver(), neutralConversationSources{}, stores, tasks, tasks, host)
 }
 func isNativeErrorCode(err error, codes ...string) bool {
 	var value *taskmodel.Error

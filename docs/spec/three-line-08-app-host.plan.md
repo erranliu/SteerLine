@@ -10,13 +10,27 @@
 
 3. 清空并删除主包/contracts 与旧 app 门面，更新守卫、所有消费者及后续产品任务实际路径。
 
+### F1 余项：真实配置所有者拆分
+
+以实际读者为准，`LoadConfig`、`LoadQueryConfig`、`LoadConfigWithDirectory` 返回 `internal/app.Config`。app.Config 是唯一的已加载项目/全局配置，持有文件路径与 digest、profile catalog/default、原始项目输入和 app 构造的 adapter/runtime dependencies。它分别投影以下 owner input，不把自身或全字段副本交给执行 actor：
+
+| 唯一输入/依赖 | 字段边界 | 实际读者 |
+| --- | --- | --- |
+| app.Config | 原始 project/global 字节身份、路径、catalog/default、profile 选择、state root/repository key、ProcessHost/ExecutionDirectory 构造入口 | `internal/app/config.go`、`directory.go`、客户端构造、service assembly |
+| taskapp.Input | native authority、project identity、remote/branch、claimant/default requester、executable types | `internal/task.Service`、task commands/documents；ready/fixed 类型过滤归 task work port |
+| host.Config | repository/path/identity、remote/branch/run_dir、claimant、config digest、authority/protocol、task/PR/heartbeat/shutdown timers、ProcessFacts 和 host admission/validation ports | `internal/app/host` startup/connection/control/scheduler loop |
+| execution.Config（冻结 execution input） | identity、repository/remote/branch/worktree/run root、workflow protocol、Git/timeout、pure PR provider、execution/publication policy、requirements 和单个选中 profile 的 immutable implementation envelopes/accepted digest | execution service、claim/worker、fixed-profile validation 和恢复 reattach |
+| execution runtime dependencies/ports | ExecutionDirectory、ManagedProcessHost、profile resolver、当前 app config digest verifier、resources/record/store ports | `execution.Service` 固定生命周期；runtime dependencies 不进入每 workflow 冻结值 |
+
+`execution.Config` 不再拥有 task executable/authority、host poll/heartbeat/claimant、project/global file paths、global profile catalog/default、ExecutionDirectory 或 ProcessHost。app profile resolver 只返回被请求的单一 frozen execution input；app config verifier 只回答已接受 project/global digest 是否仍有效，不把 app paths 送进 execution。Service 的 base/frozen 值和 `executionConfigForRun`/worker context 不复制 catalog、file state 或 host/task runtime fields。保留 `FixedExecutionProfile` 的现有版本、字段、digest 和数据库 wire shape。
+
 实施中维护 `docs/validation/three-line-08-app-host/ownership.md` 和 `test-mapping.json`：记录实际旧/新文件、类型/端口、构造消费者及迁入测试父/子名称、断言所有者。前置已迁的定义/接线不重复迁移。共享文件按 Spec 的唯一修改所有者顺序集成，每步消费者与测试立即可运行。
 
 ## 测试计划
 
 验证目标按最终所有者执行：宿主断言位于 `internal/app/host`，真实 app/host 组合断言位于 `tests/integration`。现有 `TestMC1`–`TestMC9` 已由前置迁入 `internal/execution/candidate_workers_test.go`；保持 execution 所有权，记录其真实 parent/subtest，不按历史根包路径重新归组。优先保留迁入测试的断言，只补 Spec 未覆盖缺口；不能新增仅镜像实现的测试。迁移影响命令时在同次修订到唯一实际包，零匹配或 skip 不算通过。
 
-环境：Windows 临时 Git/SQLite/受控后端，STEERLINE_HOME 指向本轮隔离目录并在结束后恢复；不设置原生 opt-in。下表输出路径为证据目录基名，每次使用新的空运行子目录，不覆盖前置报告。原始 Go JSON、runner summary、身份/版本/原请求回执和必要清理结果一并保留。
+环境：Windows 临时 Git/SQLite/受控后端，STEERLINE_HOME 指向本轮隔离目录并在结束后恢复；不设置原生 opt-in。L1 的 quick-boundary 包合并长运行 TM04 恢复与其他边界组，Go 测试超时为 15m；测试选择保持不变。下表输出路径为证据目录基名，每次使用新的空运行子目录，不覆盖前置报告。原始 Go JSON、runner summary、身份/版本/原请求回执和必要清理结果一并保留。
 
 | 级别/组或场景 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
 | --- | --- | --- | --- | --- | --- |
@@ -26,12 +40,14 @@
 | 定向 Go：E2E SnapshotContext sample | Windows；独立 SQLite fixture 与隔离 STEERLINE_HOME，无模型/原生 opt-in | `go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/e2e-snapshot/commit-bound-02 -- ./tests/e2e/internal/testenv -run '^TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions$' -count=1` | E2E/host fixture 类型迁移后 | `SnapshotContext` 只接受同数据库身份/版本的产品页与执行事实 | `docs/validation/three-line-08-app-host/e2e-snapshot/` |
 | 定向 Go：F1–F4 app ownership and lifecycle regressions | Windows；真实 app config、隔离 SQLite/STEERLINE_HOME、受控 Codex fixture，无原生 opt-in | `go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/review-fixes/app-final-01 -- ./internal/app -run '^(TestNativeProjectInitializesOnceAndRejectsMismatchedBinding|TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM|TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites|TestRunConfiguredServiceClosesTransferredStoreOnReturn)$' -count=1` | 配置/host boundary 和 app lifetime 修复后 | CAS 重放返回 `stale_version`；app 严格 decoder 保留 BOM 与单值规则；Beads 拒绝不创建 run state；真实服务返回后 SQLite 连接关闭 | `docs/validation/three-line-08-app-host/review-fixes/app-final-01/` |
 | 定向 Go：F1 host dependency closure negative | Windows；合成 host→execution→workspace 图加仓库 Windows/Linux 依赖图 | `go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/review-fixes/boundary-final-01 -- ./internal/coreboundary -run '^TestTM08AppHostBoundary$' -count=1` | host 依赖守卫取消 closure skip 后 | 合成传递图命中禁用 workspace；实际 Windows/Linux host 闭包无违规 | `docs/validation/three-line-08-app-host/review-fixes/boundary-final-01/` |
-| L1 固定最小入口 | Windows；隔离 STEERLINE_HOME，无原生 opt-in | `go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1/review-fixes-01` | 定向修复与自查完成后一次 | 固定规则、TM05/TM06/TM07、原组合 TM04、TM08 host dependency guard 与新 app/CAS/decoder/生命周期断言均非零命中且通过，无意外 live | `docs/validation/three-line-08-app-host/l1/review-fixes-01/` |
-| 条件追加：L3 controlled `recovery.waiting-merge-restart` | Windows；原 Task/SQLite/Workflow 受控恢复现场 | `go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled -scenario=recovery.waiting-merge-restart -out docs/validation/three-line-08-app-host/recovery` | 仅当实现实际改变恢复行为时 | 原身份、数据库、执行与工作区保留且不重派；否则不选择此组 | `docs/validation/three-line-08-app-host/recovery/` |
+| 定向 Go：F1 配置投影与 profile 解析 | Windows；真实 app LoadConfig + 两个 isolated profile，受控 fixture | `go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/review-fixes/config-projection-03 -- ./internal/app -run '^TestAppConfigProjectsOwnerInputsAndSelectedProfile$' -count=1` | app.Config 与 execution runtime/frozen input 切换后 | app 返回 app-owned 配置；host/task 投影可实际驱动对应 owner；分别选择两个 profile 时冻结输入保留 accepted digest/policy/implementation identity，且不改固定 profile wire bytes | `docs/validation/three-line-08-app-host/review-fixes/config-projection-03/` |
+| 定向 Go：TM04 claim/receipt/turn/recovery | Windows；原集成 SQLite、同 project identity、受控 Codex fixture | `go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/review-fixes/tm04-config-03 -- ./tests/integration -run '^TestTM04ExecutionWiring$' -count=1` | execution.Config/service constructor 与 app profile/config ports 切换后 | 原三个 subtest 实际命中；claim CAS rollback、original receipt/idempotency、两 turn、manual recovery 与不重派保持 | `docs/validation/three-line-08-app-host/review-fixes/tm04-config-03/` |
+| L1 固定最小入口 | Windows；隔离 STEERLINE_HOME，无原生 opt-in | `go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1/review-fixes-04` | quick-boundary 10m Go timeout 暴露组合超时并上调至 15m 后重跑 | 固定规则、TM05/TM06/TM07、原组合 TM04、TM08 host dependency guard 与新 app owner projection/CAS/decoder/lifecycle 断言均非零命中且通过，无意外 live | `docs/validation/three-line-08-app-host/l1/review-fixes-04/` |
+| 条件追加：L3 controlled `recovery.waiting-merge-restart` | Windows；原 Task/SQLite/Workflow 受控恢复现场 | `go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled -scenario=recovery.waiting-merge-restart -out docs/validation/three-line-08-app-host/recovery/config-split-01` | F1 freeze/reattach 接线完成后，先按下文恢复条件评估 | 原身份、数据库、执行与工作区保留且不重派；只在冻结值或恢复授权/决策改变时选择此组 | `docs/validation/three-line-08-app-host/recovery/config-split-01/` |
 
 边界类变更在本阶段同步既有守卫/负向注入及 L1 选择；扫描全 OS/build tag 源码，核对 Windows/Linux 生产直接及传递依赖。跨系统只做依赖图/编译不冒充运行行为。新增场景或环境能力须先登记包/测试/ID与命令，再执行；当前已注册 E2E 入口和环境约定见 [E2E README](../../tests/e2e/README.md)。
 
-不选 Full/L2/live：宿主承载迁移通过受控进程和真实 app 构造代表验证。#40/#41 的版本/24小时和 #39 原生验收各自负责；只有恢复行为实际变化才追加已注册的 L3 controlled `recovery.waiting-merge-restart`。L1 选择须保留 TM05/TM06/TM07、原 TM04 组合回归及新增 TM08 host/app 断言。
+不选 Full/L2/live。#40/#41 的版本/24小时和 #39 原生验收各自负责。F1 接线后逐字段比对 `FixedExecutionProfile`、accepted digest、implementation envelopes、workspace/resource identity 与 original-session authorization。若只改变所有者且这些值和恢复决策逐字段保持，记录具体旧/新 call paths 与 TM04/recovery representative 的实测证据后不选 L3；若任何冻结字段或恢复决策/授权实际改变，则运行上表已注册的 L3 controlled `recovery.waiting-merge-restart`，记录结果。L1 选择须保留 TM05/TM06/TM07、原 TM04 组合回归及新增 TM08 host/app 断言。F1 的调用路径与逐字段恢复比对证据记入 `docs/validation/three-line-08-app-host/recovery/config-owner-comparison.md`。
 
 ## 自查与交付
 

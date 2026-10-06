@@ -61,13 +61,13 @@ func (s *Service) acceptStartedWorkerTurn(run *reconstructiontypes.RunView, work
 	return nil
 }
 
-func lifecycleSetupForRun(run *reconstructiontypes.RunView, fixed workerFlowContext, snapshot executionbackend.LifecycleSnapshot) executionbackend.LifecycleSetup {
+func lifecycleSetupForRun(run *reconstructiontypes.RunView, fixed workerFlowContext, processHost executionbackend.ManagedProcessHost, snapshot executionbackend.LifecycleSnapshot) executionbackend.LifecycleSetup {
 	blocked := append([]string(nil), fixed.config.publicationSettings().AuthenticationRefs...)
 	blocked = append(blocked, "BEADS_*", "BD_*", "GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_*", "GIT_CONFIG_VALUE_*")
 	return executionbackend.LifecycleSetup{
 		Snapshot: snapshot.Clone(), ProfileData: CloneImplementationData(fixed.config.ImplementationData),
-		ProfileID: fixed.config.selectedProfileID, AcceptedConfigVersion: fixed.config.acceptedConfigVersion(),
-		Policy: fixed.config.ExecutionPolicy, ProcessHost: fixed.config.ProcessHost, RepositoryPath: fixed.config.Repository,
+		ProfileID: fixed.config.selectedProfileID, AcceptedConfigVersion: fixed.config.acceptedConfigVersion,
+		Policy: fixed.config.ExecutionPolicy, ProcessHost: processHost, RepositoryPath: fixed.config.Repository,
 		RunDirectory: fixed.config.RunDir, CommandTimeout: duration(fixed.config.CommandTimeout),
 		AttemptNumber: run.DomainAttemptNumber, BlockedEnvironment: blocked,
 		GitExecutable: fixed.config.Git.Executable, GitArgs: append([]string(nil), fixed.config.Git.Args...),
@@ -75,11 +75,9 @@ func lifecycleSetupForRun(run *reconstructiontypes.RunView, fixed workerFlowCont
 	}
 }
 
-func lifecycleSetupForConfig(c Config, entry ExecutionRegistration) (executionbackend.LifecycleSetup, error) {
+func lifecycleSetupForConfig(c Config, entry ExecutionRegistration, processHost executionbackend.ManagedProcessHost) (executionbackend.LifecycleSetup, error) {
 	if c.identity == "" {
-		if err := c.ResolveIdentity(context.Background()); err != nil {
-			return executionbackend.LifecycleSetup{}, err
-		}
+		return executionbackend.LifecycleSetup{}, errors.New("app-resolved repository identity is required")
 	}
 	ref := executionbackend.ExecutionRef{
 		Version: executionbackend.ExecutionRecordVersion, Backend: entry.Key.Backend, Protocol: entry.Key.Protocol,
@@ -98,8 +96,8 @@ func lifecycleSetupForConfig(c Config, entry ExecutionRegistration) (executionba
 	blocked = append(blocked, "BEADS_*", "BD_*", "GH_TOKEN", "GITHUB_TOKEN", "GITEA_TOKEN", "GIT_CONFIG_COUNT", "GIT_CONFIG_KEY_*", "GIT_CONFIG_VALUE_*")
 	return executionbackend.LifecycleSetup{
 		Snapshot: snapshot, ProfileData: CloneImplementationData(c.ImplementationData),
-		ProfileID: c.selectedProfileID, AcceptedConfigVersion: c.acceptedConfigVersion(),
-		Policy: c.ExecutionPolicy, ProcessHost: c.ProcessHost,
+		ProfileID: c.selectedProfileID, AcceptedConfigVersion: c.acceptedConfigVersion,
+		Policy: c.ExecutionPolicy, ProcessHost: processHost,
 		RepositoryPath: c.Repository, RunDirectory: c.RunDir, CommandTimeout: duration(c.CommandTimeout),
 		AttemptNumber: 1, BlockedEnvironment: blocked, GitExecutable: c.Git.Executable,
 		GitArgs: append([]string(nil), c.Git.Args...), RemoteName: c.Remote, TargetBranch: c.Branch,
@@ -115,7 +113,7 @@ func (s *Service) lifecycleForRun(run *reconstructiontypes.RunView) (executionba
 	if err != nil {
 		return nil, workerFlowContext{}, err
 	}
-	port, err := s.lifecycleResolver.ResolveLifecycle(lifecycleSetupForRun(run, fixed, snapshot).Clone())
+	port, err := s.lifecycleResolver.ResolveLifecycle(lifecycleSetupForRun(run, fixed, s.runtime.ProcessHost, snapshot).Clone())
 	if err != nil {
 		return nil, workerFlowContext{}, err
 	}
@@ -716,12 +714,12 @@ func (s *Service) startWorkerLifecycle(ctx context.Context, run *reconstructiont
 	}
 	policyCapabilities := lifecycle.PolicyCapabilities()
 	if policyCapabilities.LinkedWorkspaceWriteRoots {
-		args, err := linkedWorktreeWriteArgs(ctx, fixed.config, fixed.execution.Workspace.Worktree)
+		args, err := linkedWorktreeWriteArgs(ctx, fixed.config, s.runtime.Directory, fixed.execution.Workspace.Worktree)
 		if err != nil {
 			return err
 		}
 		input.LinkedWorktreeArgs = args
-		if err := bindPolicyResources(ctx, fixed.config, fixed.execution, fixed.execution.Workspace.Worktree, input.LinkedWorktreeArgs); err != nil {
+		if err := bindPolicyResources(ctx, fixed.config, s.runtime.Directory, s.runtime.ProcessHost, fixed.execution, fixed.execution.Workspace.Worktree, input.LinkedWorktreeArgs); err != nil {
 			return err
 		}
 	}
@@ -871,7 +869,7 @@ func (s *Service) interruptOwnedLocalTurn(runID string, owned executionbackend.S
 		return
 	}
 	request := lifecycleRequest(snapshot, *operation, executionbackend.LifecycleStopObservation, input)
-	ctx, cancel := context.WithTimeout(context.Background(), positiveDuration(fixed.config.ShutdownGrace, 5*time.Second))
+	ctx, cancel := context.WithTimeout(context.Background(), positiveDuration(s.runtimeSettings.ShutdownGrace.String(), 5*time.Second))
 	defer cancel()
 	_ = s.dispatchLifecycleEffect(ctx, run, lifecycleStopEffectPort{LifecyclePort: lifecycle, handle: owned}, request, false, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 		if err := result.receipt.ValidateFor(request); err != nil {
@@ -990,12 +988,12 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *reconstructiont
 		lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots && fixed.execution.PolicyResources == nil {
 		var linkedArgs []string
 		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace" {
-			linkedArgs, err = linkedWorktreeWriteArgs(ctx, fixed.config, fixed.execution.Workspace.Worktree)
+			linkedArgs, err = linkedWorktreeWriteArgs(ctx, fixed.config, s.runtime.Directory, fixed.execution.Workspace.Worktree)
 			if err != nil {
 				return err
 			}
 		}
-		if err = bindPolicyResources(ctx, fixed.config, fixed.execution, fixed.execution.Workspace.Worktree, linkedArgs); err != nil {
+		if err = bindPolicyResources(ctx, fixed.config, s.runtime.Directory, s.runtime.ProcessHost, fixed.execution, fixed.execution.Workspace.Worktree, linkedArgs); err != nil {
 			return err
 		}
 		if err = s.commitWorker(run); err != nil {
@@ -1075,12 +1073,12 @@ func (s *Service) applyLifecycleStepReceipt(run *reconstructiontypes.RunView, re
 	if receipt.Process != nil && fixed.execution.PolicyResources == nil && lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots {
 		var linkedArgs []string
 		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace" {
-			linkedArgs, err = linkedWorktreeWriteArgs(ctx, fixed.config, fixed.execution.Workspace.Worktree)
+			linkedArgs, err = linkedWorktreeWriteArgs(ctx, fixed.config, s.runtime.Directory, fixed.execution.Workspace.Worktree)
 			if err != nil {
 				return err
 			}
 		}
-		if err = bindPolicyResources(ctx, fixed.config, fixed.execution, fixed.execution.Workspace.Worktree, linkedArgs); err != nil {
+		if err = bindPolicyResources(ctx, fixed.config, s.runtime.Directory, s.runtime.ProcessHost, fixed.execution, fixed.execution.Workspace.Worktree, linkedArgs); err != nil {
 			return err
 		}
 	}

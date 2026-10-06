@@ -17,11 +17,11 @@ func TestWorkerFlowContextKeepsFixedRunAndCopiesConfig(t *testing.T) {
 	settings := neutralProfileSettings(config)
 	settings.Args = []string{"--no-alt-screen"}
 	setNeutralProfile(t, &config, settings)
-	config.workerEnv = map[string]string{"A": "original"}
-	fixedProfile := config.projectExecutionProfile().Freeze(ConfigurationProjectIdentity(config))
-	run.Host, run.Agent, run.Backend, run.Protocol, run.Target = "local", "fixture", "local", string(neutralProtocol), TargetFor(config)
+	dependencies, _ := neutralFixtureRuntime(config)
+	fixedProfile := testProjectExecutionProfile(config).Freeze(dependencies.Directory, ConfigurationProjectIdentity(config))
+	run.Host, run.Agent, run.Backend, run.Protocol, run.Target = "local", "fixture", "local", string(neutralProtocol), TargetFor(config, dependencies.Directory)
 	service := Service{
-		Config: config,
+		Config: config, baseConfig: config, runtime: dependencies,
 		domain: reconstruction.Snapshot{WorkflowRuns: []executionmodel.WorkflowRunRecord{{ProjectIdentity: ConfigurationProjectIdentity(config), WorkflowRunID: "run", WorkflowVersion: executionmodel.Version, Repository: config.Repository, Branch: config.Branch, ConfigDigest: fixedProfile.AcceptedConfigVersion, ExecutionProfile: &fixedProfile}},
 			Executions: []executionmodel.ExecutionRecord{{ProjectIdentity: ConfigurationProjectIdentity(config), ExecutionID: "execution", WorkflowRunID: "run", CurrentAttemptID: run.AttemptID, ConfigurationDigest: fixedProfile.Digest}},
 			Attempts:   []executionmodel.StepAttemptRecord{{AttemptID: "attempt", ExecutionID: "execution"}}},
@@ -31,8 +31,7 @@ func TestWorkerFlowContextKeepsFixedRunAndCopiesConfig(t *testing.T) {
 		t.Fatalf("fixed worker context lost its identity: %+v %v", fixed, err)
 	}
 	fixed.config.ImplementationData[0].Payload[0] = '['
-	fixed.config.workerEnv["A"] = "changed"
-	if neutralProfileSettings(service.Config).Args[0] != "--no-alt-screen" || service.Config.workerEnv["A"] != "original" {
+	if neutralProfileSettings(service.Config).Args[0] != "--no-alt-screen" {
 		t.Fatal("fixed worker context shares mutable configuration with the project")
 	}
 	wrong := *run
@@ -48,12 +47,17 @@ func TestWorkerFlowContextsDoNotExchangeExecutionProfiles(t *testing.T) {
 		neutralProfile(t, "first", "First", neutralSettings{Executable: "fixture-a", Model: "model-a", Args: []string{"--search"}}),
 		neutralProfile(t, "second", "Second", neutralSettings{Executable: "fixture-b", Model: "model-b", Args: []string{"--no-alt-screen"}}),
 	}
-	service := Service{Config: base, baseConfig: base}
+	dependencies, _ := neutralFixtureRuntime(base)
+	catalog := ProfileCatalog{Base: base, Directory: dependencies.Directory, Profiles: routes, DefaultID: "first", Global: true, PolicySource: "fixture:config"}
+	service := Service{Config: base, baseConfig: base, runtime: dependencies}
 	for _, route := range routes {
 		id := route.ID
-		fixed := base.bindProjectPolicy(route).Freeze(ConfigurationProjectIdentity(base))
-		selected := base.ApplyFixedExecutionProfile(fixed)
-		run := &reconstruction.RunView{RunID: id, ExecutionID: id + "-execution", AttemptID: id + "-attempt", Host: "local", Agent: "fixture", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Target: TargetFor(selected), ExecutionStatus: "pending"}
+		selected, profile, err := catalog.ResolveExecutionProfile(id, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		fixed := profile.Freeze(dependencies.Directory, ConfigurationProjectIdentity(base))
+		run := &reconstruction.RunView{RunID: id, ExecutionID: id + "-execution", AttemptID: id + "-attempt", Host: "local", Agent: "fixture", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Target: TargetFor(selected, dependencies.Directory), ExecutionStatus: "pending"}
 		service.State.Runs = append(service.State.Runs, run)
 		service.domain.WorkflowRuns = append(service.domain.WorkflowRuns, executionmodel.WorkflowRunRecord{ProjectIdentity: ConfigurationProjectIdentity(base), WorkflowRunID: id, WorkflowVersion: executionmodel.Version, Repository: base.Repository, Branch: base.Branch, ConfigDigest: fixed.AcceptedConfigVersion, ExecutionProfile: &fixed})
 		service.domain.Executions = append(service.domain.Executions, executionmodel.ExecutionRecord{ProjectIdentity: ConfigurationProjectIdentity(base), ExecutionID: run.ExecutionID, WorkflowRunID: id, CurrentAttemptID: run.AttemptID, ConfigurationDigest: fixed.Digest})

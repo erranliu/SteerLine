@@ -8,11 +8,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/execution"
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(t *testing.T) {
@@ -57,7 +58,7 @@ func TestSupervisedOrcaRequiresPinnedModelAndKeepsStopUnsupported(t *testing.T) 
 
 func TestSupervisedOrcaExecutionBindingRequiresExactDispatchIdentity(t *testing.T) {
 	c := supervisedAdmissionConfig(t)
-	entry, err := c.ExecutionDirectory.Resolve(c)
+	entry, err := c.ExecutionDirectory.Resolve(c.ExecutionConfig())
 	require(t, err)
 	runID, attemptID := newID(), newID()
 	ref := executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaSupervised, Target: nativeTarget(c), Agent: executionbackend.AgentSpec{Name: c.Agent}, RunID: runID, AttemptID: attemptID, WorkspacePath: "C:/remote/worktree", WorkspaceBranch: "erranliu/remote", BaseCommit: strings.Repeat("a", 40), External: executionbackend.ProcessIdentity{Kind: "orca_supervised", RuntimeID: "runtime-1", OrchestrationRun: "run-1", Task: "task-1", Dispatch: "dispatch-1", ExecutionHost: "host-1", WorktreeID: "repo-1::C:/remote/worktree"}}
@@ -68,43 +69,43 @@ func TestSupervisedOrcaExecutionBindingRequiresExactDispatchIdentity(t *testing.
 	if err := entry.ValidateRef(ref); err == nil {
 		t.Fatal("supervised binding without its exact Dispatch was accepted")
 	}
-	entry, err = c.ExecutionDirectory.Resolve(c)
+	entry, err = c.ExecutionDirectory.Resolve(c.ExecutionConfig())
 	backend, protocol := string(entry.Key.Backend), string(entry.Key.Protocol)
 	if err != nil || backend != string(executionbackend.BackendOrca) || protocol != string(executionbackend.ProtocolOrcaSupervised) {
 		t.Fatalf("backend resolution = %q/%q, %v", backend, protocol, err)
 	}
 }
 
-func supervisedAdmissionConfig(t *testing.T) execution.Config {
+func supervisedAdmissionConfig(t *testing.T) steerlineapp.Config {
 	t.Setenv("STEERLINE_FAKE_SUPERVISED_REMOTE_URL", "https://git.example/owner/repo.git")
-	return builtinFixtureConfig(t, execution.Config{Host: "orca_supervised", Agent: "codex", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionbackend.PublicationPolicy{Publisher: "worker"}, PR: hostPublicationProviderFixture()}, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "must-not-run", Shell: "powershell.exe", WaitTimeout: "5s"}, &remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "term-coordinator", PollInterval: "2s", CapabilityReportVersion: 1})
+	return builtinFixtureConfig(t, steerlineapp.Config{Host: "orca_supervised", Agent: "codex", TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionbackend.PublicationPolicy{Publisher: "worker"}, PR: hostPublicationProviderFixture()}, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "must-not-run", Shell: "powershell.exe", WaitTimeout: "5s"}, &remote.ProfileConfig{ConnectionID: "home-connection", EnvironmentID: "env-home", RepositorySelector: "id:repo-test", CoordinatorTerminal: "term-coordinator", PollInterval: "2s", CapabilityReportVersion: 1})
 }
 
-func nativeTerminalSettings(c execution.Config) orcaworker.ProfileConfig {
-	for _, p := range c.ExecutionProfiles {
-		for _, input := range p.ImplementationConfigs {
+func nativeTerminalSettings(c steerlineapp.Config) orcaworker.ProfileConfig {
+	for _, profile := range c.ExecutionProfiles {
+		for _, input := range profile.ImplementationConfigs {
 			if input.ImplementationKey == orcaworker.ProfileCodecKey {
-				v, _ := orcaworker.DecodeProfileConfig(input.Payload)
-				return v
+				value, _ := orcaworker.DecodeProfileConfig(input.Payload)
+				return value
 			}
 		}
 	}
 	return orcaworker.ProfileConfig{}
 }
 
-func nativeRemoteSettings(c execution.Config) remote.ProfileConfig {
-	for _, p := range c.ExecutionProfiles {
-		for _, input := range p.ImplementationConfigs {
+func nativeRemoteSettings(c steerlineapp.Config) remote.ProfileConfig {
+	for _, profile := range c.ExecutionProfiles {
+		for _, input := range profile.ImplementationConfigs {
 			if input.ImplementationKey == remote.ProfileCodecKey {
-				v, _ := remote.DecodeProfileConfig(input.Payload)
-				return v
+				value, _ := remote.DecodeProfileConfig(input.Payload)
+				return value
 			}
 		}
 	}
 	return remote.ProfileConfig{}
 }
 
-func nativeRemoteConfig(c execution.Config) remote.Config {
+func nativeRemoteConfig(c steerlineapp.Config) remote.Config {
 	w, o, r := nativeProfileSettings(c), nativeTerminalSettings(c), nativeRemoteSettings(c)
 	client := orcaworker.New(orcaworker.Config{Repository: c.Repository, CommandTimeout: c.CommandTimeout, Output: func(ctx context.Context, timeout time.Duration, args ...string) ([]byte, error) {
 		ctx, cancel := context.WithTimeout(ctx, timeout)

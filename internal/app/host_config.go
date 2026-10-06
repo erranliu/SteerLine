@@ -45,7 +45,7 @@ func (applicationCapabilityValidation) Verify(root string, report executionbacke
 
 // hostRuntimeConfig is the only conversion from the app's broad configured
 // service to the host's process, control, metadata and runtime-read inputs.
-func hostRuntimeConfig(ctx context.Context, config execution.Config) (host.Config, error) {
+func hostRuntimeConfig(ctx context.Context, config Config) (host.Config, error) {
 	if err := config.RequireNativeTaskAuthority(); err != nil {
 		return host.Config{}, err
 	}
@@ -91,11 +91,11 @@ func hostRuntimeConfig(ctx context.Context, config execution.Config) (host.Confi
 
 // BuildHostConfig extracts the narrow process-host inputs from a fully loaded
 // application config for callers that need to invoke a host operation directly.
-func BuildHostConfig(ctx context.Context, config execution.Config) (host.Config, error) {
+func BuildHostConfig(ctx context.Context, config Config) (host.Config, error) {
 	return hostRuntimeConfig(ctx, config)
 }
 
-func connectHostService(ctx context.Context, config execution.Config) host.ServiceConnection {
+func connectHostService(ctx context.Context, config Config) host.ServiceConnection {
 	hostConfig, err := hostRuntimeConfig(ctx, config)
 	if err != nil {
 		return host.ServiceConnection{State: host.ConnectionIdentityError, Diagnostic: err.Error(), CanStart: false, Capabilities: []string{}}
@@ -103,7 +103,7 @@ func connectHostService(ctx context.Context, config execution.Config) host.Servi
 	return host.ConnectService(ctx, hostConfig)
 }
 
-func connectHostServiceFromSnapshot(ctx context.Context, config execution.Config, observation host.ObservationSnapshot) host.ServiceConnection {
+func connectHostServiceFromSnapshot(ctx context.Context, config Config, observation host.ObservationSnapshot) host.ServiceConnection {
 	hostConfig, err := hostRuntimeConfig(ctx, config)
 	if err != nil {
 		return host.ServiceConnection{State: host.ConnectionIdentityError, Diagnostic: err.Error(), CanStart: false, Capabilities: []string{}}
@@ -111,7 +111,7 @@ func connectHostServiceFromSnapshot(ctx context.Context, config execution.Config
 	return host.ConnectServiceFromSnapshot(ctx, hostConfig, observation)
 }
 
-func observeHostRuntime(ctx context.Context, config execution.Config, runtimeState *reconstruction.Runtime, readErr error, sampledAt time.Time) host.ObservationSnapshot {
+func observeHostRuntime(ctx context.Context, config Config, runtimeState *reconstruction.Runtime, readErr error, sampledAt time.Time) host.ObservationSnapshot {
 	hostConfig, err := hostRuntimeConfig(ctx, config)
 	if err != nil {
 		return host.ObservationSnapshot{State: host.SnapshotReadFailed, SampledAt: sampledAt.UTC(), Error: err.Error()}
@@ -119,7 +119,7 @@ func observeHostRuntime(ctx context.Context, config execution.Config, runtimeSta
 	return host.ObserveRuntimeSnapshot(hostConfig, runtimeState, readErr, sampledAt)
 }
 
-func ensureRunDirOutsideRepository(ctx context.Context, config execution.Config) error {
+func ensureRunDirOutsideRepository(ctx context.Context, config Config) error {
 	if config.RunDir == "" || config.Repository == "" {
 		return errors.New("repository and run_dir are required")
 	}

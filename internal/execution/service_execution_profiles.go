@@ -18,8 +18,7 @@ func (s *Service) projectExecutionConfig() Config {
 }
 
 func (s *Service) selectDispatchProfile(id, digest string) error {
-	base := s.projectExecutionConfig()
-	selected, profile, err := base.ResolveExecutionProfile(id, digest)
+	selected, profile, err := s.runtime.Profiles.ResolveExecutionProfile(id, digest)
 	if err != nil {
 		return err
 	}
@@ -30,8 +29,7 @@ func (s *Service) selectDispatchProfile(id, digest string) error {
 }
 
 func (s *Service) selectDefaultDispatchProfile() error {
-	base := s.projectExecutionConfig()
-	id := base.DefaultProfileID()
+	id := s.runtime.Profiles.DefaultProfileID()
 	if id == "" {
 		return errors.New("automatic dispatch requires default_execution_profile")
 	}
@@ -51,11 +49,11 @@ func (s *Service) executionConfigForRun(run *reconstructiontypes.RunView) (Confi
 			return Config{}, errors.New("execution snapshot v5 is required; preserve original state and external session")
 		}
 		fixed := *workflow.ExecutionProfile
-		if fixed.ID == "" || !VerifyFixedExecutionProfile(fixed, base.ExecutionDirectory) || workflow.ConfigDigest != fixed.AcceptedConfigVersion {
+		if fixed.ID == "" || !VerifyFixedExecutionProfile(fixed, s.runtime.Directory) || workflow.ConfigDigest != fixed.AcceptedConfigVersion {
 			return Config{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "fixed execution profile identity is incomplete"}
 		}
-		config := base.ApplyFixedExecutionProfile(fixed)
-		if err := validateWorkflowConfig(&config, nil); err != nil {
+		config := base.ApplyFixedExecutionProfile(fixed, s.runtime.Directory)
+		if err := validateWorkflowConfig(config, s.runtime.Directory); err != nil {
 			return Config{}, err
 		}
 		for i := range s.domain.Executions {
@@ -72,7 +70,7 @@ func (s *Service) executionConfigForRun(run *reconstructiontypes.RunView) (Confi
 				return Config{}, errors.New("bound execution lost its original policy resource snapshot")
 			}
 			if e.WorkflowRunID == workflow.WorkflowRunID && e.PolicyResources != nil {
-				if err := verifyPolicyResources(config, e.PolicyResources, fixed.Digest, e.Workspace.Worktree, e); err != nil {
+				if err := verifyPolicyResources(config, s.runtime.Directory, e.PolicyResources, fixed.Digest, e.Workspace.Worktree, e); err != nil {
 					return Config{}, err
 				}
 			}
@@ -91,12 +89,12 @@ func (s *Service) executionConfigForRun(run *reconstructiontypes.RunView) (Confi
 		if workflow.WorkflowVersion != executionmodel.Version {
 			return Config{}, fmt.Errorf("fixed execution profile uses an unsupported workflow version")
 		}
-		entry, err := registrationFor(config)
+		entry, err := registrationFor(config, s.runtime.Directory)
 		backend, protocol := executionbackend.BackendKind(""), executionbackend.ExecutionProtocol("")
 		if err == nil {
 			backend, protocol = entry.Key.Backend, entry.Key.Protocol
 		}
-		if err != nil || run.Host != fixed.Host || run.Agent != fixed.Agent || run.Backend != string(backend) || run.Protocol != string(protocol) || !sameConfiguredExecutionTarget(run.Target, TargetFor(config)) {
+		if err != nil || run.Host != fixed.Host || run.Agent != fixed.Agent || run.Backend != string(backend) || run.Protocol != string(protocol) || !sameConfiguredExecutionTarget(run.Target, TargetFor(config, s.runtime.Directory)) {
 			return Config{}, errors.New("fixed execution profile differs from the persisted run identity")
 		}
 		return config, nil

@@ -550,21 +550,10 @@ func TestNativeInitializationRefusesExistingBeadsTaskDatabase(t *testing.T) {
 	}
 }
 
-func TestNewServiceRejectsNonNativeAuthorityBeforeCreatingState(t *testing.T) {
-	c, _ := nativeTaskFixture(t)
-	c.TaskAuthority = ""
-	if _, err := newTestService(c); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
-		t.Fatalf("direct service construction accepted missing native authority: %v", err)
-	}
-	if _, err := os.Stat(c.RunDir); !os.IsNotExist(err) {
-		t.Fatalf("authority rejection created a replacement state directory: %v", err)
-	}
-}
-
 func TestNativeStoreRejectsRetiredSQLiteRunProjectionBeforeAuthorityOpen(t *testing.T) {
 	ctx := context.Background()
 	c, _ := nativeTaskFixture(t)
-	if err := c.ResolveIdentity(ctx); err != nil {
+	if err := resolveHostTestIdentity(ctx, &c); err != nil {
 		t.Fatal(err)
 	}
 	path := filepath.Join(c.RunDir, "steerline.db")

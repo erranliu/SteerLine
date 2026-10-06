@@ -17,9 +17,10 @@ import (
 func TestNativeEvidenceCertificationRequiresFixedTargetAndVersion(t *testing.T) {
 	fixture := newLifecycleProject(t, "local")
 	c := fixture.config
-	entry, err := c.ExecutionDirectory.Resolve(c)
+	executionConfig := c.ExecutionConfig()
+	entry, err := c.ExecutionDirectory.Resolve(executionConfig)
 	require(t, err)
-	probe, err := entry.ProbeRequirements(context.Background(), c)
+	probe, err := entry.ProbeRequirements(context.Background(), executionConfig)
 	require(t, err)
 	path := filepath.Join(t.TempDir(), "local-native.json")
 	evidence := map[string]any{"version": 1, "captured_at": time.Now().UTC(), "platform": runtime.GOOS + "/" + runtime.GOARCH, "backend": "local", "protocol": "local_codex_app_server_v1", "target_id": probe.Target.ID, "agent": "codex", "codex_version": probe.PlatformVersion, "output_sha256": strings.Repeat("a", 64), "output_bytes": 77, "stop_status": "confirmed", "process_absent": true}
@@ -68,9 +69,10 @@ func TestNativeEvidenceCertificationRequiresFixedTargetAndVersion(t *testing.T) 
 func TestOrcaCertificationRequiresAgentAndTerminalEvidence(t *testing.T) {
 	fixture := newLifecycleProject(t, "orca")
 	c := fixture.config
-	entry, err := c.ExecutionDirectory.Resolve(c)
+	executionConfig := c.ExecutionConfig()
+	entry, err := c.ExecutionDirectory.Resolve(executionConfig)
 	require(t, err)
-	probe, err := entry.ProbeRequirements(context.Background(), c)
+	probe, err := entry.ProbeRequirements(context.Background(), executionConfig)
 	require(t, err)
 	common := map[string]any{"version": 1, "captured_at": time.Now().UTC(), "platform": runtime.GOOS + "/" + runtime.GOARCH, "backend": "orca", "protocol": "orca_terminal_v2", "target_id": probe.Target.ID, "agent": "codex", "orca_version": probe.PlatformVersion, "codex_version": probe.AgentVersion, "stop_status": "confirmed"}
 	write := func(name string, fields map[string]any) string {

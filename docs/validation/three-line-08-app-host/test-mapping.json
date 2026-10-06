@@ -1277,5 +1277,71 @@
       "phase": "precommit-diagnostic",
       "source_head": "c0e16a864eb2f419648059f18d3a914c5e762d65"
     }
-  ]
+  ],
+  "f1_config_owner_followup": {
+    "source_commit": "cbf341e3b9ac53d461168fcf776f436f23da327b",
+    "phase": "pre-rebase worktree validation",
+    "runs": [
+      {
+        "id": "F1.config-projection",
+        "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/review-fixes/config-projection-03 -- ./internal/app -run '^TestAppConfigProjectsOwnerInputsAndSelectedProfile$' -count=1",
+        "summary": "docs/validation/three-line-08-app-host/review-fixes/config-projection-03/summary.json",
+        "status": "passed",
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "actual_tests": [
+          "TestAppConfigProjectsOwnerInputsAndSelectedProfile"
+        ]
+      },
+      {
+        "id": "TM04.execution-wiring",
+        "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/review-fixes/tm04-config-03 -- ./tests/integration -run '^TestTM04ExecutionWiring$' -count=1",
+        "summary": "docs/validation/three-line-08-app-host/review-fixes/tm04-config-03/summary.json",
+        "status": "passed",
+        "passed_tests": 4,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "actual_tests": [
+          "TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt",
+          "TestTM04ExecutionWiring/intent_binding_and_two_original_turns",
+          "TestTM04ExecutionWiring/original_request_ack_and_manual_recovery"
+        ]
+      },
+      {
+        "id": "L1.fixed-minimal",
+        "command": "go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1/review-fixes-04",
+        "summary": "docs/validation/three-line-08-app-host/l1/review-fixes-04/summary.json",
+        "status": "passed",
+        "groups": 12,
+        "passed_tests": 451,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "passed_packages": 27,
+        "actual_tests_include": [
+          "TestAppConfigProjectsOwnerInputsAndSelectedProfile",
+          "TestCD67AdditionalImplementation/remote_model_and_cancellation_admission",
+          "TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
+          "TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt",
+          "TestTM04ExecutionWiring/intent_binding_and_two_original_turns",
+          "TestTM04ExecutionWiring/original_request_ack_and_manual_recovery",
+          "TestTM08AppHostWiring/default_app_host_composition"
+        ]
+      }
+    ],
+    "diagnostic_attempts": [
+      {
+        "id": "L1.fixed-minimal-10m-package-timeout",
+        "command": "go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1/review-fixes-03",
+        "summary": "docs/validation/three-line-08-app-host/l1/review-fixes-03/summary.json",
+        "status": "incomplete_runner_timeout",
+        "reason": "The combined quick-boundary package reached Go's 10m package timeout during TM04 manual recovery; no assertion failure was reported. The scoped runner timeout was raised to 15m without changing test selection, and L1 then passed."
+      }
+    ],
+    "recovery_l3": {
+      "scenario": "recovery.waiting-merge-restart",
+      "selected": false,
+      "reason": "Frozen profile fields, accepted config digest, workspace/resource binding and original-session recovery authorization are unchanged; see recovery/config-owner-comparison.md."
+    }
+  }
 }

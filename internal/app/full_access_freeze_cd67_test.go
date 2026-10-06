@@ -39,7 +39,7 @@ func TestFullAccessProfileFreezeSurvivesClaimValidation(t *testing.T) {
 		if restored.ExecutionDirectory != c.ExecutionDirectory {
 			t.Fatal("frozen profile lost its injected execution directory")
 		}
-		if restored.ExecutionPolicy.Filesystem.WriteScope != "host" || codexProfileSettings(restored).WindowsSandbox != "" {
+		if restored.ExecutionPolicy.Filesystem.WriteScope != "host" || codexProfileSettings(restored.executionConfig()).WindowsSandbox != "" {
 			t.Fatal("frozen full-access authority was not restored")
 		}
 		original.ImplementationData[0].Payload[0] = '['

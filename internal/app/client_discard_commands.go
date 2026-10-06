@@ -12,11 +12,11 @@ type clientDiscardCommands struct {
 	service interface {
 		DiscardNativeTask(context.Context, execution.Config, string, string, uint64, string, string) (taskmodel.TaskDiscardReceipt, error)
 	}
-	config execution.Config
+	config Config
 }
 
 func (r *clientDiscardCommands) Discard(ctx context.Context, in productapi.DiscardInput) (productapi.TaskDiscardReceipt, error) {
-	value, err := r.service.DiscardNativeTask(ctx, r.config, in.TaskID, in.RequestID, in.ExpectedVersion, in.Reason, in.RequestedBy)
+	value, err := r.service.DiscardNativeTask(ctx, r.config.executionConfig(), in.TaskID, in.RequestID, in.ExpectedVersion, in.Reason, in.RequestedBy)
 	if err != nil {
 		return productapi.TaskDiscardReceipt{}, err
 	}

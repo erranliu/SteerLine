@@ -231,7 +231,7 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 		require(t, err)
 		defer store.Close()
 		command := appExecutionCommands(t, store, config2)
-		_, err = command.AbandonNativeCandidate(ctx, config2, execution.CandidateAbandonOptions{TaskID: "901", WorkflowRunID: first.run.RunID, RequestID: newID(), ExpectedTaskVersion: delivered.Tasks[0].Version, ExpectedCandidateVersion: first.run.ControlRevision, RequestedBy: "operator", Reason: "must reject known merged candidate"})
+		_, err = command.AbandonNativeCandidate(ctx, config2.ExecutionConfig(), execution.CandidateAbandonOptions{TaskID: "901", WorkflowRunID: first.run.RunID, RequestID: newID(), ExpectedTaskVersion: delivered.Tasks[0].Version, ExpectedCandidateVersion: first.run.ControlRevision, RequestedBy: "operator", Reason: "must reject known merged candidate"})
 		if err == nil || !strings.Contains(err.Error(), "already_merged") {
 			t.Fatalf("real merged delivery allowed exit: %v", err)
 		}

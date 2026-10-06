@@ -15,7 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
-func Preflight(ctx context.Context, c *execution.Config, checkSkills bool) error {
+func Preflight(ctx context.Context, c *Config, checkSkills bool) error {
 	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return err
 	}
@@ -25,7 +25,7 @@ func Preflight(ctx context.Context, c *execution.Config, checkSkills bool) error
 // preflightNative validates a native project without resolving or invoking a
 // Beads executable. A check never initializes a database or adopts an existing
 // state directory.
-func preflightNative(ctx context.Context, c *execution.Config) error {
+func preflightNative(ctx context.Context, c *Config) error {
 	if err := c.ValidateTaskCommandConfiguration(); err != nil {
 		return err
 	}
@@ -40,7 +40,7 @@ func preflightNative(ctx context.Context, c *execution.Config) error {
 		return err
 	}
 	if entry.ValidateConfig != nil {
-		if err := entry.ValidateConfig(ctx, *c); err != nil {
+		if err := entry.ValidateConfig(ctx, c.executionConfig()); err != nil {
 			return err
 		}
 	}
@@ -62,7 +62,7 @@ func preflightNative(ctx context.Context, c *execution.Config) error {
 	}
 	git.Dir = c.Repository
 	if entry.Preflight != nil {
-		if err := entry.Preflight(ctx, *c); err != nil {
+		if err := entry.Preflight(ctx, c.executionConfig()); err != nil {
 			return err
 		}
 	}

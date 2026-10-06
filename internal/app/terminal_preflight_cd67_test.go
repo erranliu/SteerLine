@@ -76,11 +76,12 @@ func TestExecutionBackendCommonCapabilityContract(t *testing.T) {
 		}
 		c.ExecutionProfiles, c.DefaultExecutionProfile = []ExecutionProfile{profile}, profile.ID
 		c = c.ApplyExecutionProfile(profile)
-		entry, err := c.ExecutionDirectory.Resolve(c)
+		executionConfig := c.executionConfig()
+		entry, err := c.ExecutionDirectory.Resolve(executionConfig)
 		require(t, err)
-		backend := entry.Backend(c)
+		backend := entry.Backend(executionConfig)
 		kind, protocol := backend.Identity()
-		report, err := backend.Probe(context.Background(), entry.Target(c), executionbackend.AgentSpec{Name: c.Agent})
+		report, err := backend.Probe(context.Background(), entry.Target(executionConfig), executionbackend.AgentSpec{Name: c.Agent})
 		require(t, err)
 		if report.Backend != kind || report.Protocol != protocol || report.CheckedAt.IsZero() {
 			t.Fatalf("production probe lost fixed backend identity: %+v", report)
@@ -106,7 +107,7 @@ func TestLocalObservationRejectsReusedPIDIdentity(t *testing.T) {
 	identity.Created = "different-process-generation"
 	directory, err := NewBuiltinDirectory(host)
 	require(t, err)
-	config := Config{Host: "local", Agent: "codex"}
+	config := Config{Host: "local", Agent: "codex"}.executionConfig()
 	entry, err := directory.Resolve(config)
 	require(t, err)
 	ref := executionbackend.ExecutionRef{Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalCodexAppServer, Target: entry.Target(config), External: identity}
@@ -139,9 +140,10 @@ func TestOrcaPreflightRequiresConfiguredCodexPolicyMapping(t *testing.T) {
 	// satisfy the rejection assertion.
 	applyProfile(codexworker.ProfileConfig{Executable: missing, WindowsSandbox: "unelevated", Model: "fixture-fixed-model", ReasoningEffort: "high"})
 	require(t, c.ValidateProfiles())
-	entry, err := c.ExecutionDirectory.Resolve(c)
+	entry, err := c.ExecutionDirectory.Resolve(c.executionConfig())
 	require(t, err)
-	_, err = entry.Backend(c).Probe(context.Background(), entry.Target(c), executionbackend.AgentSpec{Name: c.Agent})
+	executionConfig := c.executionConfig()
+	_, err = entry.Backend(executionConfig).Probe(context.Background(), entry.Target(executionConfig), executionbackend.AgentSpec{Name: c.Agent})
 	if err == nil || !strings.Contains(err.Error(), "missing-worker.exe") {
 		t.Fatalf("fixed local tool was not required by the native backend: %v", err)
 	}

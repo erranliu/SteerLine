@@ -15,7 +15,6 @@ import (
 
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
-	"github.com/erranliu/SteerLine/internal/execution"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
@@ -156,9 +155,12 @@ func TestStartServiceReportsPreflightFailureAndPendingHandshake(t *testing.T) {
 func TestRunCommandRejectsLegacyTaskAuthorityBeforeWritingState(t *testing.T) {
 	fixture := newLifecycleProjectBase(t, "local", false)
 	f := &cliLifecycleFixture{c: fixture.config, path: fixture.configPath}
-	config := f.c
-	config.TaskAuthority = "beads"
-	data, err := json.Marshal(config)
+	fields := map[string]json.RawMessage{}
+	raw, err := os.ReadFile(f.path)
+	require(t, err)
+	require(t, json.Unmarshal(raw, &fields))
+	fields["task_authority"] = mustJSON("beads")
+	data, err := json.Marshal(fields)
 	require(t, err)
 	configPath := filepath.Join(t.TempDir(), "legacy-config.json")
 	require(t, os.WriteFile(configPath, data, 0600))
@@ -172,7 +174,7 @@ func TestRunCommandRejectsLegacyTaskAuthorityBeforeWritingState(t *testing.T) {
 }
 
 type cliLifecycleFixture struct {
-	c    execution.Config
+	c    steerlineapp.Config
 	path string
 }
 
@@ -221,7 +223,7 @@ func buildProductLifecycleCLI(t *testing.T) string {
 
 func cliDetachedChildSupported(t *testing.T) bool { t.Helper(); return runtime.GOOS != "windows" }
 
-func readCLIStartupRecord(c execution.Config, id string) (steerline.StartupRecord, error) {
+func readCLIStartupRecord(c steerlineapp.Config, id string) (steerline.StartupRecord, error) {
 	var r steerline.StartupRecord
 	raw, err := os.ReadFile(filepath.Join(c.RunDir, "service", "startups", id, "startup.json"))
 	if err == nil {
@@ -241,7 +243,7 @@ func terminateCLIProcess(identity *executionbackend.ProcessIdentity) error {
 	return p.Kill()
 }
 
-func observeCLIStartupExit(c execution.Config, id string, budget time.Duration) (steerline.ServiceConnection, error) {
+func observeCLIStartupExit(c steerlineapp.Config, id string, budget time.Duration) (steerline.ServiceConnection, error) {
 	hostConfig, err := steerlineapp.BuildHostConfig(context.Background(), c)
 	if err != nil {
 		return steerline.ServiceConnection{}, err

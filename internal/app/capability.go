@@ -45,7 +45,7 @@ type capabilityEvidence struct {
 	StopConfirmed         bool                               `json:"stop_confirmed"`
 }
 
-func CertifyExecutionBackend(ctx context.Context, config execution.Config, paths []string) (executionbackend.CapabilityReport, error) {
+func CertifyExecutionBackend(ctx context.Context, config Config, paths []string) (executionbackend.CapabilityReport, error) {
 	if config.TaskAuthority != "native" {
 		return executionbackend.CapabilityReport{}, errors.New("task_authority=native is required")
 	}
@@ -61,7 +61,8 @@ func CertifyExecutionBackend(ctx context.Context, config execution.Config, paths
 	if err := config.ValidateProfiles(); err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
-	if err := config.ExecutionDirectory.ValidateProfileData(config); err != nil {
+	executionConfig := config.executionConfig()
+	if err := config.ExecutionDirectory.ValidateProfileData(executionConfig); err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
 	if config.Identity() == "" {
@@ -72,11 +73,11 @@ func CertifyExecutionBackend(ctx context.Context, config execution.Config, paths
 	if config.ExecutionDirectory == nil {
 		return executionbackend.CapabilityReport{}, errors.New("execution directory is required")
 	}
-	entry, err := config.ExecutionDirectory.Resolve(config)
+	entry, err := config.ExecutionDirectory.Resolve(executionConfig)
 	if err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
-	probe, err := entry.ProbeRequirements(ctx, config)
+	probe, err := entry.ProbeRequirements(ctx, executionConfig)
 	if err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
@@ -170,7 +171,7 @@ func CertifyExecutionBackend(ctx context.Context, config execution.Config, paths
 			}
 		}
 	}
-	if err := execution.SaveExecutionCapabilityReport(config, executionResources{}, probe); err != nil {
+	if err := execution.SaveExecutionCapabilityReport(config.executionConfig(), executionResources{}, probe); err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
 	return probe, nil

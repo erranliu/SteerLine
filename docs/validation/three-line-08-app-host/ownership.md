@@ -30,3 +30,17 @@ Starting tree: `c7eac10aab147fbb9aeaefb9341d5c979d2201c3` (#79 / PR #223).
 `internal/app/host` owns service process start/stop, exact control transport, immutable request/receipt validation, service identity and startup records, lifecycle locks, heartbeat, console output and platform host behavior. It consumes the narrow `host.Config`, `ApplicationAdmission`, `ProcessFactsPort`, the execution scheduler/host ports and an injected activity formatter. The all-tag source guard traverses the complete production dependency closure, including reconstruction and storage ports; it rejects SQLite, backend adapters, product query/console, process/workspace/provider implementations, task services and app composition. `internal/app` remains the single composition root for config, concrete storage and adapter construction.
 
 The full file and type ownership inventory, moved test parents, and validation runs are in [test-mapping.json](test-mapping.json).
+
+## Remaining F1 configuration ownership split
+
+The app now owns loaded configuration end to end. `LoadConfig`, `LoadQueryConfig` and `LoadConfigWithDirectory` return `app.Config`; strict project JSON decoding uses `app.ProjectConfigInput`, and app composition attaches project/global file identity, the profile catalog/default, `ExecutionDirectory` and `ProcessHost`.
+
+| Owner value | Projection path | Boundary |
+| --- | --- | --- |
+| `app.Config` | `internal/app/config.go`, `project_config_input.go`, `config_runtime.go` | Retains loaded project/global facts, catalog, selection and app construction ports. |
+| `task.Input` | `NewTaskService` / `NewTaskCommands` | Receives authority, project identity, repository routing, executable types and the default task requester. |
+| `host.Config` | `hostRuntimeConfig` / `BuildHostConfig` | Receives repository/state identity, authority/protocol, host timers, claimant and host admission/process-facts ports. |
+| `execution.Config` | `app.Config.ExecutionConfig()` | Receives repository/workspace/Git/timeout/policy/workflow values and one selected profile's frozen implementation envelopes. It contains no task authority, host timers/claimant, app file paths/catalog, `ExecutionDirectory` or `ProcessHost`. |
+| `execution.RuntimeDependencies` and `RuntimeSettings` | `NewCommandServiceWithRuntime` / service construction | Carry app profile/config verifiers, process host/directory and service claimant/heartbeat/shutdown settings outside frozen execution state. |
+
+`TestAppConfigProjectsOwnerInputsAndSelectedProfile` exercises the real app loader, host/task projections, profile selection, accepted config digest and fixed profile wire identity. `TestTM04ExecutionWiring` checks claim, receipt replay, two turns and manual recovery through the app-built execution service. Current evidence locations and actual runner hits are listed in `test-mapping.json` and the Plan.

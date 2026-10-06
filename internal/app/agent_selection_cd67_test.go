@@ -31,7 +31,7 @@ func TestNativeOrcaAgentSelectionUsesFrozenProfile(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		frozen := profile.Freeze(base.Identity())
+		frozen := profile.Freeze(base.ExecutionDirectory, base.Identity())
 		if base.CheckFixedProfile(frozen) != nil {
 			t.Fatal("profile digest changed while freezing")
 		}

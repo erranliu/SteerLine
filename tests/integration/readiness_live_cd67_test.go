@@ -103,7 +103,8 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 		store, err := steerlineapp.OpenNativeTaskCommandStore(ctx, &c)
 		require(t, err)
 		profiles := c.AvailableExecutionProfiles()
-		_, err = (appExecutionCommands(t, store, c)).ClaimNativeTask(ctx, c, execution.TaskClaimOptions{TaskID: "9001154", RequestID: newID(), ExpectedTaskVersion: page.Tasks[0].Version, ExpectedAuthorityVersion: page.AuthorityVersion, RequestedBy: "acceptance", Explicit: true, ExecutionProfile: &profiles[0], ServiceInstanceID: service.instanceID})
+		fixed := profiles[0].Freeze(c.ExecutionDirectory, c.Identity())
+		_, err = (appExecutionCommands(t, store, c)).ClaimNativeTask(ctx, c.ExecutionConfig(), execution.TaskClaimOptions{TaskID: "9001154", RequestID: newID(), ExpectedTaskVersion: page.Tasks[0].Version, ExpectedAuthorityVersion: page.AuthorityVersion, RequestedBy: "acceptance", Explicit: true, ExecutionProfile: &fixed, ServiceInstanceID: service.instanceID})
 		require(t, err)
 		require(t, store.Close())
 	}
@@ -199,7 +200,7 @@ func findReadinessLiveProfile(t *testing.T, runtime *reconstructiontypes.Runtime
 	return profile
 }
 
-func startReadinessLiveService(t *testing.T, ctx context.Context, c execution.Config) *runningIntegrationService {
+func startReadinessLiveService(t *testing.T, ctx context.Context, c steerlineapp.Config) *runningIntegrationService {
 	t.Helper()
 	service, err := steerlineapp.NewService(c)
 	require(t, err)

@@ -7,7 +7,6 @@ import (
 	"time"
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
-	"github.com/erranliu/SteerLine/internal/execution"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -15,7 +14,7 @@ import (
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func LoadDatabaseRuntime(c execution.Config) (*reconstruction.Runtime, error) {
+func LoadDatabaseRuntime(c Config) (*reconstruction.Runtime, error) {
 	if err := c.RequireNativeTaskAuthority(); err != nil {
 		return nil, err
 	}
@@ -43,7 +42,7 @@ func LoadDatabaseRuntime(c execution.Config) (*reconstruction.Runtime, error) {
 	return &view, nil
 }
 
-func OpenNativeTaskProject(ctx context.Context, c *execution.Config) (*sqlite.SQLiteStore, error) {
+func OpenNativeTaskProject(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
 	if c == nil {
 		return nil, taskError("authority_mismatch", "native project configuration is required")
 	}
@@ -103,7 +102,7 @@ func OpenNativeTaskProject(ctx context.Context, c *execution.Config) (*sqlite.SQ
 	return openBoundNativeReader(ctx, *c, path)
 }
 
-func OpenNativeTaskReader(ctx context.Context, c *execution.Config) (*sqlite.SQLiteStore, error) {
+func OpenNativeTaskReader(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
 	if c == nil || c.RequireNativeTaskAuthority() != nil {
 		return nil, taskError("authority_mismatch", "native task reader requires task_authority=native")
 	}
@@ -120,7 +119,7 @@ func OpenNativeTaskReader(ctx context.Context, c *execution.Config) (*sqlite.SQL
 	return openBoundNativeReader(ctx, *c, path)
 }
 
-func OpenNativeTaskCommandStore(ctx context.Context, c *execution.Config) (*sqlite.SQLiteStore, error) {
+func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
 	if c == nil || c.RequireNativeTaskAuthority() != nil {
 		return nil, taskError("authority_mismatch", "native task command requires task_authority=native")
 	}
@@ -150,7 +149,7 @@ func OpenNativeTaskCommandStore(ctx context.Context, c *execution.Config) (*sqli
 	return writer, nil
 }
 
-func openBoundNativeReader(ctx context.Context, c execution.Config, path string) (_ *sqlite.SQLiteStore, retErr error) {
+func openBoundNativeReader(ctx context.Context, c Config, path string) (_ *sqlite.SQLiteStore, retErr error) {
 	reader, err := sqlite.OpenSQLiteReader(path)
 	if err != nil {
 		return nil, err
@@ -166,7 +165,7 @@ func openBoundNativeReader(ctx context.Context, c execution.Config, path string)
 	return reader, nil
 }
 
-func validateWriterBinding(ctx context.Context, c execution.Config, store *sqlite.SQLiteStore) error {
+func validateWriterBinding(ctx context.Context, c Config, store *sqlite.SQLiteStore) error {
 	if err := store.ValidateStoredFormat(ctx); err != nil {
 		return err
 	}

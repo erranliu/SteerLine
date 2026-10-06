@@ -16,17 +16,17 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 	t.Run("resource_candidates", TestCD66CandidateResourceIdentityAndCommitRollback)
 	t.Run("missing_readiness_rejects_before_reopen_write", func(t *testing.T) {
 		service, run := neutralAuditService(t)
-		entry, err := registrationFor(service.Config)
+		entry, err := registrationFor(service.Config, service.runtime.Directory)
 		require(t, err)
 		entry.ReadinessRequired = func(Config) bool { return true }
 		config := service.Config
-		config.ExecutionDirectory = neutralDirectoryWithReplacement(t, config.ExecutionDirectory, entry)
+		directory := neutralDirectoryWithReplacement(t, service.runtime.Directory, entry)
 		if service.executionRecord(run).Environment != nil {
 			t.Fatal("fixture must lack required preparation evidence")
 		}
 		_, before, err := service.domainStore.DatabaseVersion(context.Background())
 		require(t, err)
-		if err := checkFixtureStoredExecutions(context.Background(), config); err == nil || !strings.Contains(err.Error(), "preparation intent") {
+		if err := checkFixtureStoredExecutions(context.Background(), config, directory); err == nil || !strings.Contains(err.Error(), "preparation intent") {
 			t.Fatalf("missing original readiness was accepted: %v", err)
 		}
 		_, after, err := service.domainStore.DatabaseVersion(context.Background())
@@ -50,16 +50,17 @@ func TestCD66CandidateResourceIdentityAndCommitRollback(t *testing.T) {
 	})
 	t.Run("resource_builder_cannot_change_original_owner", func(t *testing.T) {
 		config := workerContextConfigFixture()
-		entry, err := registrationFor(config)
+		dependencies, _ := neutralFixtureRuntime(config)
+		entry, err := registrationFor(config, dependencies.Directory)
 		require(t, err)
 		entry.BuildPolicyResource = func(_ context.Context, request PolicyResourceBuildRequest) (PolicyResourceBuildResult, error) {
 			request.Resource.ProjectID = "foreign"
 			result, err := neutralBuildPolicyResource(context.Background(), request)
 			return PolicyResourceBuildResult{Envelope: result.Envelope, WriteRoots: result.WriteRoots}, err
 		}
-		config.ExecutionDirectory = neutralDirectoryWithReplacement(t, config.ExecutionDirectory, entry)
+		directory := neutralDirectoryWithReplacement(t, dependencies.Directory, entry)
 		record := executionmodel.ExecutionRecord{ProjectIdentity: "project", ExecutionID: newID(), CurrentAttemptID: newID(), Generation: newID()}
-		if err := bindPolicyResources(context.Background(), config, &record, "workspace", nil); err == nil {
+		if err := bindPolicyResources(context.Background(), config, directory, testProcessHost{}, &record, "workspace", nil); err == nil {
 			t.Fatal("foreign resource owner was accepted")
 		}
 		if record.PolicyResources != nil {
@@ -69,7 +70,7 @@ func TestCD66CandidateResourceIdentityAndCommitRollback(t *testing.T) {
 	t.Run("invalid_binding_restores_private_candidates", func(t *testing.T) {
 		config := workerContextConfigFixture()
 		service := Service{Config: config, committed: reconstruction.Snapshot{Tasks: []taskmodel.TaskRecord{{TaskID: "task", Status: "open"}}}, domain: reconstruction.Snapshot{Tasks: []taskmodel.TaskRecord{{TaskID: "task", Status: "closed"}}}, pendingOperations: map[string]string{"pending": "run"}}
-		ref := executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Agent: executionbackend.AgentSpec{Name: "fixture"}, Target: TargetFor(config), RunID: newID(), AttemptID: newID(), WorkspacePath: "workspace", WorkspaceBranch: "fixture/task", BaseCommit: strings.Repeat("a", 40), External: executionbackend.ProcessIdentity{Kind: "os", Created: "original", Executable: "never-run"}}
+		ref := executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Agent: executionbackend.AgentSpec{Name: "fixture"}, Target: testTargetFor(config), RunID: newID(), AttemptID: newID(), WorkspacePath: "workspace", WorkspaceBranch: "fixture/task", BaseCommit: strings.Repeat("a", 40), External: executionbackend.ProcessIdentity{Kind: "os", Created: "original", Executable: "never-run"}}
 		if err := service.commitWorkerAttached(&reconstruction.RunView{RunID: "run"}, workerCommitAttachment{Binding: &ref}, "pending"); err == nil {
 			t.Fatal("incomplete resource identity was committed")
 		}

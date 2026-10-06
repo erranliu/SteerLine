@@ -16,7 +16,7 @@ func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
 	c := workerContextConfigFixture()
 	c.requirementsEvaluation = &executionbackend.RequirementsEvaluation{Tools: []executionbackend.RequirementEvidence{{Source: "original"}}}
 	before := c.PR.Query.Args[0]
-	p := c.AvailableExecutionProfiles()[0]
+	p := testProfileCatalogFor(c).AvailableExecutionProfiles()[0]
 	p.Publication.Provider.Query.Args[0] = "changed"
 	p.RequirementsEvaluation.Tools[0].Source = "changed"
 	if c.PR.Query.Args[0] != before || c.requirementsEvaluation.Tools[0].Source != "original" {
@@ -26,7 +26,8 @@ func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
 
 func TestResolutionAuditRegistrationRejectsBaseTargetDrift(t *testing.T) {
 	c := withNeutralProfile(Config{ExecutionPolicy: workspacePolicyFixture()}, neutralSettings{Executable: "fixture-agent", Target: executionbackend.ExecutionTarget{ID: "fixture:peer", ConnectionID: "peer", ExternalRuntime: "original"}})
-	target := TargetFor(c)
+	dependencies, _ := neutralFixtureRuntime(c)
+	target := TargetFor(c, dependencies.Directory)
 	run := &reconstructiontypes.RunView{Host: c.Host, Agent: c.Agent, Backend: "fixture", Protocol: string(neutralProtocol), Target: target}
 	record := &executionmodel.ExecutionRecord{Agent: c.Agent, Backend: run.Backend, Protocol: run.Protocol, Target: target}
 	for _, field := range []string{"connection", "runtime"} {
@@ -38,7 +39,7 @@ func TestResolutionAuditRegistrationRejectsBaseTargetDrift(t *testing.T) {
 			r.Target.ExternalRuntime = "other"
 			e.Target.ExternalRuntime = "other"
 		}
-		if _, err := workerFlowRegistrationFor(c, &r, &e); err == nil {
+		if _, err := workerFlowRegistrationFor(c, dependencies.Directory, &r, &e); err == nil {
 			t.Fatalf("unchanged target ID hid %s drift", field)
 		}
 	}
@@ -53,7 +54,7 @@ func TestResolutionAuditRestoresOriginalWorkspaceRoot(t *testing.T) {
 	if canonical(c.WorktreeRoot) != canonical(want) {
 		t.Fatalf("restored execution used new worktree root: %s", c.WorktreeRoot)
 	}
-	require(t, prepareWorktreeOnly(context.Background(), c, run))
+	require(t, prepareWorktreeOnly(context.Background(), c, s.runtime.Directory, s.runtime.ProcessHost, run))
 	if _, err = os.Stat(run.WorkspaceIntent.Path); err != nil {
 		t.Fatal("original workspace was not prepared", err)
 	}
@@ -90,12 +91,13 @@ func TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents(t *testing.T) {
 
 func TestResolutionAuditEvidenceCannotChangeUnderOriginalProfileDigest(t *testing.T) {
 	c := workerContextConfigFixture()
+	dependencies, _ := neutralFixtureRuntime(c)
 	c.Repository = t.TempDir()
 	c.ExecutionRequirements.Tools = []executionbackend.ToolRequirement{{ID: "git"}}
-	e, err := evaluateExecutionRequirements(context.Background(), c)
+	e, err := evaluateExecutionRequirements(context.Background(), c, dependencies.Directory)
 	require(t, err)
 	c.requirementsEvaluation = &e
-	fixed := c.projectExecutionProfile().Freeze()
+	fixed := testProjectExecutionProfile(c).Freeze(dependencies.Directory, c.Identity())
 	changed := fixed.RequirementsEvaluation.Clone()
 	changed.CheckedAt = changed.CheckedAt.Add(time.Second)
 	fixed.RequirementsEvaluation = &changed

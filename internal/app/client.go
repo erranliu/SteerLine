@@ -44,7 +44,7 @@ func ClientResources(ctx context.Context, ref productapi.ProjectRef) (productcli
 	return clientResources(ctx, c, ref)
 }
 
-func clientResources(ctx context.Context, c execution.Config, ref productapi.ProjectRef) (productclient.Resources, error) {
+func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (productclient.Resources, error) {
 	if err := c.ResolveIdentity(ctx); err != nil {
 		return productclient.Resources{}, err
 	}
@@ -144,11 +144,11 @@ func clientResources(ctx context.Context, c execution.Config, ref productapi.Pro
 			if err != nil {
 				return productapi.ControlPayload{}, err
 			}
-			return productapi.ControlPayload{TaskID: id, ExecutionProfileID: p.ID, ExecutionProfileDigest: p.Digest()}, nil
+			return productapi.ControlPayload{TaskID: id, ExecutionProfileID: p.ID, ExecutionProfileDigest: p.Digest(c.ExecutionDirectory)}, nil
 		},
 		InspectRecovery: func(ctx context.Context, id string) (productapi.RecoveryInspection, error) {
-			result, err := execution.InspectRecovery(ctx, c, id, func(ctx context.Context, config execution.Config) (*reconstruction.Runtime, error) {
-				return LoadDatabaseRuntime(config)
+			result, err := execution.InspectRecovery(ctx, c.executionConfig(), c.runtimeDependencies(), id, func(ctx context.Context, _ execution.Config) (*reconstruction.Runtime, error) {
+				return LoadDatabaseRuntime(c)
 			})
 			return recoveryInspection(result), err
 		},
@@ -165,7 +165,7 @@ type clientReader struct {
 		DatabaseVersion(context.Context) (string, uint64, error)
 	}
 	project         string
-	config          execution.Config
+	config          Config
 	executableTypes []string
 	freshness       time.Duration
 }
@@ -203,7 +203,7 @@ func (r *clientReader) ReadProject(ctx context.Context, selected string, _ produ
 	return query.ProjectPage(view, selected, r.freshness, observation, connection, decisionReasons, r.executableTypes)
 }
 
-func applicationProjectObservation(ctx context.Context, config execution.Config, snapshot storageports.ApplicationProjectSnapshot) steerline.ObservationSnapshot {
+func applicationProjectObservation(ctx context.Context, config Config, snapshot storageports.ApplicationProjectSnapshot) steerline.ObservationSnapshot {
 	sampledAt := snapshot.ProjectView.SampledAt
 	if sampledAt.IsZero() {
 		sampledAt = time.Now().UTC()
@@ -284,7 +284,7 @@ func (r *clientReader) DatabaseVersion(ctx context.Context) (string, uint64, err
 // These compile-time assertions keep the injected port tied to real consumers.
 var _ productclient.Reader = (*clientReader)(nil)
 
-type clientControl struct{ config execution.Config }
+type clientControl struct{ config Config }
 
 func (r clientControl) Submit(ctx context.Context, in productapi.ControlInput) (productapi.ControlRequest, error) {
 	if err := ctx.Err(); err != nil {
@@ -338,10 +338,10 @@ func (r clientControl) Stop(ctx context.Context, by string, timeout time.Duratio
 	return steerline.StopService(ctx, hostConfig, by, timeout)
 }
 
-type clientDecision struct{ config execution.Config }
+type clientDecision struct{ config Config }
 
 func (r clientDecision) Eligibility(ctx context.Context, run *productapi.CandidateSummary) error {
-	return execution.DecisionReplyEligibility(ctx, r.config, runtimeDecisionFacts(run))
+	return execution.DecisionReplyEligibility(ctx, r.config.executionConfig(), runtimeDecisionFacts(run))
 }
 
 func (r clientDecision) Submit(ctx context.Context, in productapi.DecisionInput) (productapi.CommandReceipt, bool, error) {
@@ -365,7 +365,7 @@ func (r clientDecision) Answer(ctx context.Context, in productapi.AnswerInput) (
 	return query.CommandReceipt(record), submitted, err
 }
 
-func openDecisionStore(ctx context.Context, config execution.Config) (execution.Config, *sqlite.SQLiteStore, error) {
+func openDecisionStore(ctx context.Context, config Config) (Config, *sqlite.SQLiteStore, error) {
 	store, err := OpenNativeTaskCommandStore(ctx, &config)
 	if err != nil {
 		return config, nil, err
@@ -420,14 +420,14 @@ func productConnection(value steerline.ServiceConnection, observation productapi
 	return productapi.ServiceConnection{Snapshot: valueObservation, Process: value.Process, State: value.State, IdentityMatched: value.IdentityMatched, ConfigMatched: value.ConfigMatched, Protocol: value.Protocol, Capabilities: append([]string(nil), value.Capabilities...), CanControl: value.CanControl, CanStop: value.CanStop, CanStart: value.CanStart, StartupID: value.StartupID, Diagnostic: value.Diagnostic}
 }
 
-func decisionAvailability(ctx context.Context, c execution.Config, run *reconstruction.RunView, connection steerline.ServiceConnection) string {
+func decisionAvailability(ctx context.Context, c Config, run *reconstruction.RunView, connection steerline.ServiceConnection) string {
 	if run == nil || run.Decision == nil {
 		return "当前没有待回答的问题"
 	}
 	if run.Decision.RequestPath != "" || run.Decision.AnswerPath != "" {
 		return "问题绑定了已移除的 sidecar-answer 格式；保留状态并转入人工恢复，不导入答案文件"
 	}
-	if err := execution.DecisionReplyEligibility(ctx, c, run); err != nil {
+	if err := execution.DecisionReplyEligibility(ctx, c.executionConfig(), run); err != nil {
 		return err.Error()
 	}
 	if !connection.CanControl || connection.Snapshot.Runtime == nil {
@@ -488,16 +488,16 @@ func ptr[T any](v T) *T { return &v }
 
 // projectPresentation exposes only accepted non-secret display fields and fixed
 // profile digests. Configuration compilation stays with the original owner.
-func projectPresentation(c execution.Config) productapi.ProjectPresentation {
+func projectPresentation(c Config) productapi.ProjectPresentation {
 	result := productapi.ProjectPresentation{NativeWorkflow: c.WorkflowProtocol == executionmodel.Version, ConfigDigest: c.LoadedConfigDigest(), TaskAuthority: c.TaskAuthority, WorkflowProtocol: c.WorkflowProtocol, ShutdownGrace: c.ShutdownGrace, DefaultProfileID: c.DefaultProfileID()}
 	for _, p := range c.AvailableExecutionProfiles() {
-		reason := p.StaticUnavailableReason()
+		reason := p.StaticUnavailableReason(c.ExecutionDirectory)
 		if reason == "" {
-			if _, _, err := c.ResolveExecutionProfile(p.ID, p.Digest()); err != nil {
+			if _, _, err := c.ResolveExecutionProfile(p.ID, p.Digest(c.ExecutionDirectory)); err != nil {
 				reason = err.Error()
 			}
 		}
-		fixed := executionmodel.FixedExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Digest: p.Digest(), AcceptedConfigVersion: p.AcceptedConfigVersion, PolicySource: p.PolicySource, PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ExecutionPolicy: p.ExecutionPolicy, ImplementationDisplay: append([]string(nil), p.ImplementationDisplay...), ExecutionRequirements: p.ExecutionRequirements}
+		fixed := executionmodel.FixedExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Digest: p.Digest(c.ExecutionDirectory), AcceptedConfigVersion: p.AcceptedConfigVersion, PolicySource: p.PolicySource, PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ExecutionPolicy: p.ExecutionPolicy, ImplementationDisplay: append([]string(nil), p.ImplementationDisplay...), ExecutionRequirements: p.ExecutionRequirements}
 		summary := query.Profile(fixed)
 		summary.UnavailableReason = reason
 		result.Profiles = append(result.Profiles, summary)
