@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "task": 82,
+  "starting_head": "9483afa13a9306e9852ef365c0746d1b5335c10f",
+  "starting_tree": "e076672f16eeb574bf36471e3a8ca6846972c99a",
+  "predecessor": {
+    "task": 81,
+    "pr": "https://github.com/erranliu/SteerLine/pull/226",
+    "final_head": "5aa714b74c66cadc9d5197413080c3a29d48ce1b",
+    "merged_at": "2026-10-06T08:31:38Z",
+    "merge_commit": "9483afa13a9306e9852ef365c0746d1b5335c10f",
+    "parents": [
+      "e3ef412fd9bd00aab2b8f06c62d97686f937b44d",
+      "5aa714b74c66cadc9d5197413080c3a29d48ce1b"
+    ],
+    "history": "docs/validation/three-line-09-testkit-integration/test-mapping.json",
+    "note": "All prior testkit/integration migrations are already merged. #82 uses current owners and does not recreate those packages or reports."
+  },
+  "plan_target_correction": {
+    "fixed_acceptance_ids": ["TM10.1", "TM10.2", "TM10.3"],
+    "planned_but_absent_parent_names": [
+      "TestTM10TaskSelection",
+      "TestTM10ExecutionRule",
+      "TestTM10ConsoleInteraction"
+    ],
+    "resolution": "Keep the fixed Spec acceptance unchanged. Use existing actual owner parents listed below instead of adding mirror tests or relying on a zero-match union. The Plan's old internal/steerline/candidate_workers_test.go path is retired and the escaped Markdown table union was not a valid shell regex. Each final command is recorded verbatim in its test-feedback summary."
+  },
+  "proofs": [
+    {
+      "acceptance": "TM10.1/task-selection-priority",
+      "old_planned_parent": "TestTM10TaskSelection (not present in current source)",
+      "source_owner": "internal/task/model",
+      "production_path": [
+        "internal/task.Service.Ready",
+        "internal/task/model.ReadyTasks",
+        "internal/task/model.StableTaskOrder"
+      ],
+      "old_actual_test_owner": "internal/task/model/taskgraph_test.go",
+      "actual_parent": "TestStableTaskOrderUsesPriorityTimeAndNumericID",
+      "subtests": [],
+      "assertions": "Exact priority, CreatedAt, numeric-ID and dependency-constrained topological order; production sort is called by task-owned ReadyTasks.",
+      "mutation": "overlay only: reverse x.Priority < y.Priority comparator; same parent must fail and report a changed order.",
+      "after_revert": "run identical package/test without overlay; same source hash/tree and parent pass."
+    },
+    {
+      "acceptance": "TM10.1/execution-rule-recovery-capacity",
+      "old_planned_parent": "TestTM10ExecutionRule (not present in current source)",
+      "old_planned_mc_path": "internal/steerline/candidate_workers_test.go",
+      "old_actual_mc_path": "internal/steerline/candidate_workers_test.go",
+      "source_owner": "internal/execution",
+      "actual_mc_path": "internal/execution/candidate_workers_test.go",
+      "app_integration_owner": "tests/integration/execution_wiring_test.go",
+      "actual_parents": [
+        "TestMC9",
+        "TestCandidateResumeErrorDoesNotStarveSibling"
+      ],
+      "subtests": [],
+      "assertions": "MC9 preserves the original request replay, start-time five-participant refusal, immediate release, and complete candidate history; sibling recovery preserves the original error and still resumes a healthy independent candidate.",
+      "mutation": "overlay only: return the first retired-candidate resume error before the loop visits later siblings; TestCandidateResumeErrorDoesNotStarveSibling must fail its healthy-sibling assertion.",
+      "after_revert": "run both actual owner parents without overlay; no task/console source change."
+    },
+    {
+      "acceptance": "TM10.1/console-interaction",
+      "old_planned_parent": "TestTM10ConsoleInteraction (not present in current source)",
+      "old_console_path": "internal/steerline/console/interaction_test.go",
+      "source_owner": "internal/console",
+      "actual_console_path": "internal/console/interaction_test.go",
+      "actual_parent": "TestUX4RejectPreservesDraftAndBlockerStaysIndependent",
+      "actual_real_app_path": "tests/integration/candidate_console_test.go",
+      "actual_real_app_parent": "TestCandidateConsoleWiring",
+      "subtests": [],
+      "assertions": "Product API fixture verifies blocked input is not sent, draft/reason remain visible, and clearing the blocker never auto-submits. Real integration constructs app, client, SQLite, service and console; it verifies the public candidate request identity and fifth-participating display/refusal path.",
+      "mutation": "overlay only: remove the environment-blocker submit barrier; UX4 must fail on unexpected submission/command.",
+      "after_revert": "run UX4 and real app integration without overlay; product/api fixture and real app wiring stay unchanged."
+    }
+  ],
+  "selected_runs": {
+    "task_probe_runs": [
+      "docs/validation/three-line-10-independence-cleanup/independence/task-before-20261006-01/",
+      "docs/validation/three-line-10-independence-cleanup/independence/task-mutated-20261006-01/",
+      "docs/validation/three-line-10-independence-cleanup/independence/task-restored-20261006-01/"
+    ],
+    "execution_probe_runs": [
+      "docs/validation/three-line-10-independence-cleanup/independence/execution-before-20261006-01/",
+      "docs/validation/three-line-10-independence-cleanup/independence/execution-mutated-20261006-01/",
+      "docs/validation/three-line-10-independence-cleanup/independence/execution-restored-20261006-01/"
+    ],
+    "console_probe_runs": [
+      "docs/validation/three-line-10-independence-cleanup/independence/console-before-20261006-01/",
+      "docs/validation/three-line-10-independence-cleanup/independence/console-mutated-20261006-01/",
+      "docs/validation/three-line-10-independence-cleanup/independence/console-restored-20261006-01/"
+    ],
+    "l1": "docs/validation/three-line-10-independence-cleanup/l1-20261006-01/",
+    "delivery_basic": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-01/",
+    "recovery_waiting_merge_restart": "docs/validation/three-line-10-independence-cleanup/recovery-20261006-01/"
+  },
+  "reports": "Filled from the commit-bound test-feedback summaries after runs complete."
+}
