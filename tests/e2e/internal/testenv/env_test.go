@@ -22,16 +22,17 @@ func TestTwoProjectsIsolateTasksGitAndCleanup(t *testing.T) {
 	}
 	runDir := t.TempDir()
 	run := Run{Root: root, Binary: filepath.Join(runDir, "steerline.exe"), Helper: filepath.Join(runDir, "helper.exe"), Output: filepath.Join(runDir, "output"), Scratch: filepath.Join(runDir, "scratch")}
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	buildCtx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	for _, b := range []struct{ path, pkg string }{{run.Binary, "./cmd/steerline"}, {run.Helper, "./tests/e2e/testdata/controlled-helper"}} {
 		cmd := exec.Command("go", "build", "-o", b.path, b.pkg)
 		cmd.Dir = root
 		cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-		if err := testprocess.Run(ctx, cmd); err != nil {
+		if err := testprocess.Run(buildCtx, cmd); err != nil {
 			t.Fatal(err)
 		}
 	}
+	cancel()
 	s := newScenario(t, "isolation", run)
 	// The test process's global catalog must not participate in either project's
 	// readiness read. Each CLI and snapshot belongs to its isolated home/database.
@@ -46,9 +47,9 @@ func TestTwoProjectsIsolateTasksGitAndCleanup(t *testing.T) {
 	b.StartService()
 	a.StopService()
 	b.StopService()
-	ap, err := a.Driver.Tasks(ctx)
+	ap, err := a.Driver.Tasks(s.Context)
 	s.Must(err)
-	bp, err := b.Driver.Tasks(ctx)
+	bp, err := b.Driver.Tasks(s.Context)
 	s.Must(err)
 	if ap.ProjectID == bp.ProjectID || ap.DatabaseID == bp.DatabaseID || a.Home == b.Home || a.Provider == b.Provider || len(ap.Tasks) != 2 || len(bp.Tasks) != 2 {
 		t.Fatal("projects share identity or task state")
@@ -73,7 +74,7 @@ func TestTwoProjectsIsolateTasksGitAndCleanup(t *testing.T) {
 	if b.git(b.Repo, "rev-parse", "HEAD") != before {
 		t.Fatal("A cleanup damaged B")
 	}
-	bp2, err := b.Driver.Tasks(ctx)
+	bp2, err := b.Driver.Tasks(s.Context)
 	s.Must(err)
 	if bp2.DatabaseID != bp.DatabaseID || bp2.DatabaseRevision != bp.DatabaseRevision {
 		t.Fatal("A cleanup changed B's database")
