@@ -1343,5 +1343,97 @@
       "selected": false,
       "reason": "Frozen profile fields, accepted config digest, workspace/resource binding and original-session recovery authorization are unchanged; see recovery/config-owner-comparison.md."
     }
+  },
+  "f1_profile_port_repair": {
+    "base": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+    "previous_head": "52b8f06f8e97586188ed909208b54d8b41c4d959",
+    "fix_commit": "613e56a8bef9288b395d1888dea802435ebf435f",
+    "runs": [
+      {
+        "id": "F1.profile-port-projection",
+        "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/review-fixes/config-projection-04 -- ./internal/app -run '^TestAppConfigProjectsOwnerInputsAndSelectedProfile$' -count=1",
+        "summary": "docs/validation/three-line-08-app-host/review-fixes/config-projection-04/summary.json",
+        "status": "passed",
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "actual_tests": [
+          "TestAppConfigProjectsOwnerInputsAndSelectedProfile"
+        ],
+        "asserts": [
+          "default profile ID and multiple-profile status",
+          "default and second-profile selected implementation payloads",
+          "accepted config/source identity and fixed profile wire identity",
+          "stale profile digest rejection",
+          "appProfilePort retains only execution.ProfileCatalog"
+        ]
+      },
+      {
+        "id": "F1.candidate-profile-port-service",
+        "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/review-fixes/candidate-profileport-01 -- ./tests/integration -run '^TestCandidateConsoleWiring$' -count=1",
+        "summary": "docs/validation/three-line-08-app-host/review-fixes/candidate-profileport-01/summary.json",
+        "status": "passed",
+        "passed_tests": 2,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "actual_tests": [
+          "TestCandidateConsoleWiring"
+        ],
+        "asserts": [
+          "app service default profile p0",
+          "candidate request with profile p1 and its exact digest",
+          "actual worker lifecycle and confirmed candidate receipt",
+          "candidate limit and original decision/session history"
+        ]
+      },
+      {
+        "id": "TM04.profile-port-claim-recovery",
+        "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/review-fixes/tm04-profileport-01 -- ./tests/integration -run '^TestTM04ExecutionWiring$' -count=1",
+        "summary": "docs/validation/three-line-08-app-host/review-fixes/tm04-profileport-01/summary.json",
+        "status": "passed",
+        "passed_tests": 4,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "actual_tests": [
+          "TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt",
+          "TestTM04ExecutionWiring/intent_binding_and_two_original_turns",
+          "TestTM04ExecutionWiring/original_request_ack_and_manual_recovery"
+        ]
+      },
+      {
+        "id": "compile-all-packages",
+        "command": "go test ./... -run '^$'",
+        "status": "passed",
+        "command_exit_code": 0
+      },
+      {
+        "id": "L1.fixed-minimal-profile-port-repair",
+        "command": "go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1/review-fixes-05",
+        "summary": "docs/validation/three-line-08-app-host/l1/review-fixes-05/summary.json",
+        "status": "passed",
+        "source_commit": "613e56a8bef9288b395d1888dea802435ebf435f",
+        "worktree_status": "clean (this run's logs and summary excluded)",
+        "execution_seconds": 810.2749105,
+        "groups": 12,
+        "passed_tests": 451,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "passed_packages": 27,
+        "actual_tests_include": [
+          "TestAppConfigProjectsOwnerInputsAndSelectedProfile",
+          "TestCD67AdditionalImplementation/remote_model_and_cancellation_admission",
+          "TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
+          "TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt",
+          "TestTM04ExecutionWiring/intent_binding_and_two_original_turns",
+          "TestTM04ExecutionWiring/original_request_ack_and_manual_recovery",
+          "TestTM08AppHostWiring/default_app_host_composition"
+        ]
+      }
+    ],
+    "recovery_l3": {
+      "scenario": "recovery.waiting-merge-restart",
+      "selected": false,
+      "reason": "The port storage boundary changed; profile identity/digest, execution and resource binding, and original-session authorization remain the same. See recovery/config-owner-comparison.md."
+    }
   }
 }
