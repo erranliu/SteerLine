@@ -106,11 +106,12 @@ func TestFullPackageEnumerationIncludesTestkitOwners(t *testing.T) {
 }
 
 func TestFullCoverageRequiresExecutionPartitionsAndCompleteOtherOwners(t *testing.T) {
-	for _, mode := range []string{"complete", "old partition owner", "missing test", "duplicate test", "execution repeated in others", "host omitted", "wrong reported owner"} {
+	for _, mode := range []string{"complete", "old partition owner", "missing test", "duplicate test", "execution repeated in others", "host omitted", "wrong reported owner", "missing integration test", "duplicate integration test", "integration repeated in others", "wrong integration owner"} {
 		t.Run(mode, func(t *testing.T) {
 			root := t.TempDir()
 			report := scopedReport{Scope: "full", CorePackage: fullCorePackage,
-				CoreTests: []string{"TestA", "TestB", "TestC"}, AllPackages: []string{fullCorePackage, corePackage, "task"}}
+				CoreTests: []string{"TestA", "TestB", "TestC"}, IntegrationPackage: boundaryPackage,
+				IntegrationTests: []string{"TestIA", "TestIB", "TestIC"}, AllPackages: []string{fullCorePackage, boundaryPackage, corePackage, "task"}}
 			if mode == "wrong reported owner" {
 				report.CorePackage = corePackage
 			}
@@ -137,12 +138,30 @@ func TestFullCoverageRequiresExecutionPartitionsAndCompleteOtherOwners(t *testin
 				raw += packageEvent("pass", pkg)
 				addGroup(fmt.Sprintf("core-%d", i+1), []string{assigned}, []string{pkg}, raw)
 			}
+			for i, assigned := range report.IntegrationTests {
+				pkg, name := boundaryPackage, assigned
+				if mode == "wrong integration owner" {
+					pkg = corePackage
+				}
+				if mode == "duplicate integration test" && i == 1 {
+					name = "TestIA"
+				}
+				raw := packageEvent("start", pkg)
+				if mode != "missing integration test" || i != 1 {
+					raw += strings.ReplaceAll(event("run", name)+event("pass", name), corePackage, pkg)
+				}
+				raw += packageEvent("pass", pkg)
+				addGroup(fmt.Sprintf("integration-%d", i+1), []string{assigned}, []string{pkg}, raw)
+			}
 			others := []string{corePackage, "task"}
 			if mode == "host omitted" {
 				others = []string{"task"}
 			}
 			if mode == "execution repeated in others" {
 				others = append(others, fullCorePackage)
+			}
+			if mode == "integration repeated in others" {
+				others = append(others, boundaryPackage)
 			}
 			var raw string
 			for _, pkg := range others {
@@ -154,5 +173,21 @@ func TestFullCoverageRequiresExecutionPartitionsAndCompleteOtherOwners(t *testin
 				t.Fatalf("coverage mode %q: %v", mode, problems)
 			}
 		})
+	}
+}
+
+func TestPrepareIntegrationPartitionEnumeratesBusinessWiring(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	binary, dir, err := prepareTestPackage(ctx, t.TempDir(), boundaryPackage, "integration")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names, err := listCoreTests(ctx, binary, dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(names, "TestCandidateConsoleWiring") || !slices.Contains(names, "TestTM04ExecutionWiring") {
+		t.Fatal("Full integration partition omitted current business owners")
 	}
 }

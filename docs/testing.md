@@ -18,7 +18,7 @@
 | E2E 基础设施 | 测试环境、driver、codec、证据和清理 | 无真实模型 |
 | 编译检查 | 检查包与带 tag 场景能否编译 | 不执行场景，不构成测试通过证据 |
 
-Full 将当前 `internal/execution` 业务包由三个独立进程各运行一组，同时以一个独立串行 Go 命令完整运行其余包（`-p=1 -parallel=1`，包括 `internal/app/host` 服务宿主）。共四组并发，各自使用独立测试进程和产物目录，保留 50 分钟总期限及各组原期限。报告的 `core_package` 保存实际划分的包，并核对该包的顶层用例和其他包均不遗漏、不重复。它与 L3 的“多组端到端场景”是两个范围；完整项目验收应明确选择哪些入口，而不是把它们都称为 Full。
+Full 将 `internal/execution` 和 `tests/integration` 两个业务包分别按顶层用例划为三组。每个 worker 顺序运行自己的 execution 分区和 integration 分区；另一个独立串行 Go 命令完整运行其余包（`-p=1 -parallel=1`，包括 `internal/app/host` 服务宿主）。最多四组命令并发，各包使用独立测试进程和产物目录，保留 50 分钟总期限及各组原期限。报告的 `core_package`、`integration_package` 和两份用例枚举记录实际所有者，并核对各顶层用例和其他包均不遗漏、不重复。它与 L3 的“多组端到端场景”是两个范围；完整项目验收应明确选择哪些入口，而不是把它们都称为 Full。
 
 ## L1、定向与 Full
 
