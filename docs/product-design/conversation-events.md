@@ -1,10 +1,10 @@
 # Conversation events v2
 
-Status: the persisted read model now has verified native turn/phase/final/replay support for Windows local Codex and explicitly bound local Orca Codex sessions. Other targets retain their reported limits; see the [capability report](validation/pr-04b-conversation-capabilities-2026-09-24.json) and [acceptance report](validation/pr-04b-conversation-events-2026-09-24.md).
+Status: the persisted read model now has verified native turn/phase/final/replay support for Windows local Codex and explicitly bound local Orca Codex sessions. Other targets retain their reported limits; see the [capability report](../validation/pr-04b-conversation-capabilities-2026-09-24.json) and [acceptance report](../validation/pr-04b-conversation-events-2026-09-24.md).
 
 ## Model
 
-`ConversationEvent` is the backend-neutral record for the 4C console. It carries project, workflow, execution, attempt, backend, protocol, agent, target, external reference, source segment and source cursor identity. Session, turn, item and source-event IDs each carry `native`, `derived` or `unknown` identity quality. Source byte ranges, sequence/revision, event time when present, receive time and evidence accompany the normalized type.
+`ConversationEvent` is the backend-neutral record for product conversation reads and console presentation. It carries project, workflow, execution, attempt, backend, protocol, agent, target, external reference, source segment and source cursor identity. Session, turn, item and source-event IDs each carry `native`, `derived` or `unknown` identity quality. Source byte ranges, sequence/revision, event time when present, receive time and evidence accompany the normalized type.
 
 Each source carries a required `source_role`: `canonical` for verified conversation history and `fallback` for raw or terminal observations. Validation rejects missing or unsupported roles. The event version is 2. Readers reject version 1 events; there is no conversion path for earlier development data.
 
@@ -34,7 +34,7 @@ Orca terminal v2 output is read on a collector goroutine bound to the fixed runt
 
 Conversation events, immutable body revisions, current message bodies, raw event bytes and source cursors live in the current `steerline.db` SQLite authority. `CommitConversation` writes normalized events, raw bytes, body revisions, dedupe identity and the source checkpoint in one transaction. A source event replay is idempotent. An out-of-order or conflicting revision retains the last known body and adds a diagnostic. Local raw JSONL replay is batched and uses the source file identity to open a new segment after replacement.
 
-The current SQLite schema is 11 and the runtime snapshot is 16. Older databases and snapshots are inspected and rejected; no conversation-table or index upgrade runs on them. Initialize a new current-format database for operation.
+Current persisted formats are listed in the [data model](data-model.md#当前格式来源). Older databases and snapshots are inspected and rejected; no conversation-table or index upgrade runs on them. Initialize a new current-format database for operation.
 
 The current local checkpoint records an anchored byte position. Startup verifies this format before dispatch, then resumes after the committed byte offset and restores the turn mapper from persisted events. Mapper state is reconstructed from committed session/turn facts for each batch, so a failed commit cannot consume candidate state. It checks file identity, short byte anchors and same-size modification time. An unsupported older checkpoint blocks startup with its original state intact. A changed source opens a new segment with a visible gap; conflicting bytes under one event identity do not advance the cursor. Large raw records beyond 8 MiB produce an explicit gap. Worker output uses bounded backpressure so a full observation queue does not silently drop conversation events.
 
@@ -45,7 +45,7 @@ The current local checkpoint records an anchored byte position. Startup verifies
 - Raw pages default to and cap at 1 MiB. They return bytes and a content digest under the PR 1 bounded-read contract.
 - The event page contains body/raw references for large content. Reading a page does not read arbitrary paths or write runtime/business state.
 
-The existing `activity.jsonl` remains the clipped display derivative described by [Activity contract](activity.md). Conversation history and full result summaries have separate bodies and revisions; deleting or rebuilding an activity view does not change them.
+Activity reads committed SQLite events as described by the [Activity contract](activity.md); there is no activity.jsonl mirror or file fallback. Conversation history and full result summaries have separate bodies and revisions; activity summaries do not replace those bodies.
 
 ## Console presentation
 
@@ -55,6 +55,8 @@ Fold choices and reading anchors live in a versioned UI-owned file under `<STEER
 
 When verified turn/phase capability is unavailable, the console identifies the source and uses the `执行过程 / 执行摘要` fallback labels. It does not infer a final reply from the last visible text or infer turn boundaries from quiet time. A turn end does not change waiting-decision, waiting-PR-merge or task completion state.
 
-## Verified scope and remaining gates
+## Capability and evidence boundaries
 
-E-A9 is accepted for the measured Windows local Codex 0.156.1 and local Orca 1.4.209 Codex targets. Both real two-turn histories passed the same mapper, body-hash and persisted-cursor replay checks; Orca history also contains real tool events. The internal Orca launcher was exercised with two real turns and retained Orca's own Codex environment. The raw `exec --json` and terminal streams retain their original limitations; the verified public history source supplies the missing fields. Remote Orca, other agents and actual host wait/failure/cancellation source samples remain untested. Other fault-injection gaps are listed in the acceptance report.
+The historical E-A9 report covers the measured Windows local Codex 0.156.1 and local Orca 1.4.209 Codex targets. Both real two-turn histories passed the same mapper, body-hash and persisted-cursor replay checks; Orca history also contains real tool events. The internal Orca launcher was exercised with two real turns and retained Orca's own Codex environment. The raw `exec --json` and terminal streams retain their original limitations; the verified public history source supplies the missing fields. Remote Orca, other agents and actual host wait/failure/cancellation source samples remain untested. Other fault-injection gaps are listed in the acceptance report.
+
+The dated report describes its original sample, not a current version allowlist or automatic capability grant. Current targets must satisfy their bound implementation reports; remaining native verification is tracked in the [Spec index](../spec/README.md) and [roadmap](../roadmap/roadmap.md).

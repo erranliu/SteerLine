@@ -4,6 +4,8 @@
 
 ## 系统边界
 
+整体职责与生命周期原则见[架构总览](../architecture.md)，本页维护实际代码与端口归属。
+
 CLI 和 TUI 使用同一个产品客户端。`internal/app` 读取配置并组装具体 adapter、SQLite 和各消费者端口；`internal/app/host` 承载服务进程、文件控制协议、启动/退出观察、锁与心跳，并通过注入端口调用 execution actor。任务和执行状态仍由唯一业务 actor 决定，再由 SQLite 专用提交接口校验身份、前值和版本。产品查询只把同一数据库快照投影为 `product/api` 页面。
 
 ```mermaid
@@ -94,7 +96,7 @@ The #82 [`source-index.json`](../validation/three-line-10-independence-cleanup/s
 
 ## Build, install and launch sources
 
-The repository-root [`build.ps1`](../../build.ps1) builds `./cmd/steerline` to `bin/steerline.exe` on Windows; [`build.bat`](../../build.bat) is its double-click wrapper. They build only and do not install or switch a running service. `steerline install` copies the running executable through `internal/app.InstallSelf` to the configured application home. `steerline launchers` calls `internal/app/host.InstallLaunchers`, which writes the embedded `console.bat`, `service-window.bat` and launcher README into that home. The service process enters through `cmd/steerline` and `internal/app/host`; there is no separate legacy root host package. Fixed stable/dev runtime selection is still not delivered.
+The repository-root [`build.ps1`](../../build.ps1) builds `./cmd/steerline` to `bin/steerline.exe` on Windows; [`build.bat`](../../build.bat) is its double-click wrapper. They build only and do not install or switch a running service. `steerline install` copies the running executable through `internal/app.InstallSelf` to the configured application home. `steerline launchers` calls `internal/app/host.InstallLaunchers`, which writes the embedded `console.bat`, `service-window.bat` and launcher README into that home. The service process enters through `cmd/steerline` and `internal/app/host`; there is no separate legacy root host package. Installation/debug path isolation is the current planned increment; full stable/dev version management is outside the current roadmap.
 
 ## Platform-specific source owners
 
@@ -119,7 +121,7 @@ Execution recovery reads the service checkpoint together with task authority/gra
 
 Conversation event writes and their source checkpoints still commit atomically. Query pages expose `product/api` DTOs; raw source cursors, implementation attributes and persisted event values remain execution-owned. Host heartbeat writes service metadata only. Stopping the service does not imply that an external worker exited.
 
-The current persisted-format boundary remains strict: profile v6, `builtin-execution-v2`, policy resources v3, SQLite schema 14, checkpoint/runtime schema 18 and conversation event v2. Unsupported or retired formats are rejected without migration, old-format reads, dual writes or rollback paths.
+The current persisted-format source table is maintained in the [data model](../product-design/data-model.md#当前格式来源). Unsupported or retired formats are rejected without migration, old-format reads, dual writes or rollback paths.
 
 ## Verification and source locations
 

@@ -118,4 +118,4 @@ flowchart LR
 - viewer 用下标保存选择、用 run_id 判断日志是否切换，分别会受到排序和同 run 重试的影响。
 - 决策文件目前使用固定文件名，答案可覆盖；多窗口控制台需要补齐冲突规则和多轮留档。
 
-设计依据：当前 [状态模型](../../../state-model.md)、[数据契约](../../../data-contract.md)、[人工决策](../../../decisions.md)、[Hosting v2 实现](../retired/hosting-spec.md)、[目标 Hosting 红线](../../../hosting.md)、[Activity 契约](../../../activity.md)。
+设计依据：当前 [状态模型](../../../product-design/data-model.md)、[数据契约](../../../product-design/data-model.md)、[人工决策](../../../product-design/decisions.md)、[Hosting v2 实现](../retired/hosting-spec.md)、[目标 Hosting 红线](../../../architecture.md)、[Activity 契约](../../../product-design/activity.md)。

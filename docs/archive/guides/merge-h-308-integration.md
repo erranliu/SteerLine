@@ -1,6 +1,6 @@
 # merge-h-308-code 接入（历史记录）
 
-> Historical record from the earlier Beads-backed integration. Its dedicated config sample and completion adapter were retired by [Beads-path removal](../spec/completed/beads-path-removal.spec.md); do not follow the setup steps below as current operating instructions. Current setup uses explicit native authority, fixed project steps and center-owned delivery. See [native config](../../../examples/config.json), [worktree preparation](../../worktree-preparation.md), and [hosting](../../hosting.md).
+> Historical record from the earlier Beads-backed integration. Its dedicated config sample and completion adapter were retired by [Beads-path removal](../spec/completed/beads-path-removal.spec.md); do not follow the setup steps below as current operating instructions. Current setup uses explicit native authority, fixed project steps and center-owned delivery. See [native config](../../../examples/config.json), [worktree preparation](../../product-design/worktree-preparation.md), and [hosting](../../architecture.md).
 
 目标：`C:/Projects/merge-h-308-code`，Gitea `http://192.168.0.66:3000/zymobile/merge-h-308-code`，远端 origin，主线 AIRefactor（来自仓库 `.codex/gitea.json`）。检查版本为 bd 1.1.2、codex-cli 0.145.0、Gitea 1.27.1。
 
@@ -33,4 +33,4 @@ Steerline 测试覆盖 PR 未合并不调用 completion、回执 task/run/PR 错
 
 本次创建技能不执行其业务工作流：没有领取/关闭业务任务，没有真实模型开发、创建/合并业务 PR 或真实结项。已有 Beads 运行文件不纳入技能交付。
 
-当时的约定见 [技能契约](skill-contract.md) 与 [worktree 准备](../../worktree-preparation.md)；结项协议已退役。
+当时的约定见 [技能契约](skill-contract.md) 与 [worktree 准备](../../product-design/worktree-preparation.md)；结项协议已退役。

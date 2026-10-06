@@ -12,7 +12,7 @@
 
 - [产品愿景](../../roadmap/product-vision.md)：一阶段同Task多候选、独立会话/工作区/PR和唯一交付；二阶段Codex主agent、人的确认、规划和原生UI。
 - [第一阶段交付](../../roadmap/phase-1-delivery.md)、[多候选Spec](../../archive/spec/completed/candidate-workers.spec.md)、[候选界面Spec](../../archive/spec/completed/candidate-console.spec.md)：首次领取、后续候选、精确身份、集合竞争、迟到合并和资源结算。
-- [二阶段技术架构](../../phase-2/technical-architecture.md)、[共同接口约束](../../spec/phase2-constraints.md)、[本机协议Spec](../../spec/phase2-local-api.spec.md)：Go服务与C#/WinUI分离，HTTP/JSON/SSE、领域接线、离线读取和版本语义。
+- [二阶段技术架构](../../product-design/planning-architecture.md)、[共同接口约束](../../spec/phase2-constraints.md)、[本机协议Spec](../../spec/phase2-local-api.spec.md)：Go服务与C#/WinUI分离，HTTP/JSON/SSE、领域接线、离线读取和版本语义。
 - [规划草稿Spec](../../spec/phase2-planning-drafts.spec.md)、[规划会话Spec](../../spec/phase2-planning-sessions.spec.md)、[文档发布Spec](../../spec/phase2-document-publish.spec.md)、[主agent能力Spec](../../spec/phase2-agent-capabilities.spec.md)：独立规划身份、固定worktree、写入guard、受控工具、人确认和部分副作用恢复。
 - 当前源码的 `contracts/conversation.go` 必填Execution/Attempt，`persistence/ports.go` 同时引用任务与执行纯值，`clientcontracts` 仍公开Domain/Runtime：用于核对迁移风险，不把当前约束误当作未来规划来源的契约。
 

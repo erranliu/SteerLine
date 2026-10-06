@@ -20,4 +20,4 @@
 
 `steerline run -console pretty|summary|json|off` 保持。TTY 下默认 pretty；summary 输出生命周期，json 输出活动 JSONL，off 静默。json 控制台 seq 只表示当前服务输出流的顺序，不作为数据库身份或恢复游标。
 
-破坏性 payload 变更才提升 ActivityVersion；本次仅移除诊断副本，活动 v1、FixedExecutionProfile v6、SQLite 12/runtime 17/PolicyResources v3 保持。未新增兼容读取或事件重放路径。
+破坏性 payload 变更才提升 ActivityVersion。活动版本由其 payload 契约决定，不与数据库/服务 checkpoint 版本混为一谈；持久格式统一见[数据模型](data-model.md#当前格式来源)。不通过旧镜像兼容读取或补画事件。

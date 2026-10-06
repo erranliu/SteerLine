@@ -1,23 +1,28 @@
 # 文档入口
 
-当前第一阶段支持与验收范围是本地 Codex 和本机 Orca，运行协议为 `worker-flow-v1`。任务/执行/产品控制台三线、适配资源、SQLite、应用宿主与测试目录整理已交付；版本线与二期规划仍在推进。
+SteerLine 的整体职责、具体产品设计、后续规划、执行契约与验证证据分别维护。当前执行与验收范围是本地 Codex 和本机 Orca；规划与原生 UI 的拟议设计不表示已经交付。
 
 | 阅读目的 | 入口 |
 | --- | --- |
+| 系统整体职责与业务权威 | [架构总览](architecture.md) |
+| 当前代码、模块与接口归属 | [代码架构](architecture/current-code-architecture.md) |
+| 配置、数据、反馈、会话与 UI 设计 | [产品设计](product-design/README.md) |
 | 当前目标与剩余任务 | [Roadmap](roadmap/roadmap.md) · [执行依赖](roadmap/execution-map.md) · [产品愿景](roadmap/product-vision.md) |
-| 未交付规格与待补验收 | [Spec / Plan 索引](spec/README.md) |
-| 当前模块归属与源码 | [代码架构](architecture/current-code-architecture.md) |
-| 配置、数据和工作区 | [执行配置](execution-profiles.md) · [数据契约](data-contract.md) · [工作区准备](worktree-preparation.md) |
-| 反馈、会话与活动 | [决策与反馈](decisions.md) · [会话事件](conversation-events.md) · [Activity](activity.md) |
-| 业务权威与状态边界 | [Hosting](hosting.md) · [状态模型](state-model.md) |
-| 测试入口与场景 | [测试指南](testing.md) · [分级 E2E](../tests/e2e/README.md) |
-| 二期产品设计与原型 | [第二阶段](phase-2/README.md) |
-| 已交付规格和历史规划 | [归档索引](archive/README.md) |
-| 原始验证证据 | [validation/](validation/) |
+| 未交付规格与待补验收 | [Spec / Plan](spec/README.md) |
+| 全项目测试方法与入口 | [测试指南](testing.md) · [分级 E2E](../tests/e2e/README.md) |
+| 历史规格、流程与配置 | [归档](archive/README.md) |
+| 原始验证事实 | [validation/](validation/) |
 
-## 目录维护
+## 目录边界
 
-- `roadmap/` 只保留剩余规划及仍适用的产品约束；`task-ids/` 保留全部已分配身份，号码不复用。
-- `spec/` 保留未交付 Spec/Plan、明确未闭合的定向验收和当前共同约束。
-- 已执行的 Spec 与配套 Plan 一起移入 `archive/spec/completed/`；被替代的流程、远端探针及旧操作说明放入 `archive/spec/retired/` 或 `archive/guides/`。
-- `validation/` 保留原证据。历史命令、固定路径、commit 和摘要属于原验证时点；归档移动不改写它们，也不改中心固定任务契约。
+- docs 根目录只放对整个项目长期有效的整体文档：本入口、架构总览和测试指南。
+- product-design/ 放长期维护的具体产品设计；按功能命名，明确当前契约、拟议方案和验证限制，不按阶段编号积累目录。
+- architecture/ 放当前代码架构和源码索引，不重复维护产品规则。
+- roadmap/ 放后续目标、剩余任务和依赖；task-ids/ 保留所有已分配身份，号码不复用。
+- spec/ 放独立任务 Spec/Plan、未闭合的定向验收和共同执行约束。产品设计不替代任务固定契约。
+- validation/ 保存验证报告和原始证据；历史命令、路径、commit、摘要及工具版本属于原验证时点。
+- archive/ 保存有独有追溯价值的已交付或被替代资料。过期说明先吸收仍有效内容，再删除；没有独有价值的重复文档不另行归档。
+
+新设计进入对应子目录并更新索引；整体文档只保留摘要和链接。规则有唯一维护位置，持久格式以[源码定位表](product-design/data-model.md#当前格式来源)为准。移动时修复当前导航，保留历史 Canonical Spec 路径和固定契约；不让导航调整改写中心 Task 或外部资源状态。
+
+文档调整用 scripts/check_doc_links.py、roadmap_task_id.py check 和 git diff --check 验证；纯导航、文字及源码注释修改不启动产品或模型测试。

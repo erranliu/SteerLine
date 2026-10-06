@@ -6,7 +6,7 @@
 
 ## 已实现并验证的部分
 
-本报告记录 4A 首次交付及其 Windows 原生验收。首次交付使用版本化文件保存执行绑定与 Operation；PR #26 后这两类权威记录已迁入 `steerline.db`。当前存储格式和恢复规则以[数据契约](../data-contract.md)为准，原生平台证据仍用于证明后端行为。
+本报告记录 4A 首次交付及其 Windows 原生验收。首次交付使用版本化文件保存执行绑定与 Operation；PR #26 后这两类权威记录已迁入 `steerline.db`。当前存储格式和恢复规则以[数据契约](../product-design/data-model.md)为准，原生平台证据仍用于证明后端行为。
 
 - 同一 `ExecutionBackend` 接口承载 local `local_process` 和 Orca `orca_terminal_v2` 启动；service 仍独占 claim、槽位和业务状态转换。
 - 当前 runtime 格式为 v5，旧 v1–v4 明确拒绝；首版以版本化 `execution/v1` 文件保存 binding/operation/capability，后续 binding 与 Operation 已迁入 SQLite，`execution/v1` 仅保留能力证据。启动意图先持久化；binding 固定 backend/protocol/target/agent/workspace/external identity；相同 Operation ID 的异负载被拒绝。
@@ -55,4 +55,4 @@ PR #26 集成基线 `e9ba805`（Windows/amd64，2026-09-24）复核：`go test .
 
 ## Spec 02 衔接
 
-PR #26 复用上述具体后端，执行 binding/Operation 已改为同一 SQLite 数据库中的记录。本文原生证据记录 PR 4A 当时的验证结果；当前存储格式与恢复规则以 [数据契约](../data-contract.md) 为准。旧文件式执行记录不导入，检测到时保留现场并拒绝有副作用的启动。
+PR #26 复用上述具体后端，执行 binding/Operation 已改为同一 SQLite 数据库中的记录。本文原生证据记录 PR 4A 当时的验证结果；当前存储格式与恢复规则以 [数据契约](../product-design/data-model.md) 为准。旧文件式执行记录不导入，检测到时保留现场并拒绝有副作用的启动。

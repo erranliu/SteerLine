@@ -5,13 +5,15 @@
 ## 范围与前置
 
 硬前置：#49、#50、#51、#52、#42，传递包含 #36。
-依赖 [Roadmap/DAG UI](phase2-roadmap-ui.spec.md)、[执行 UI](phase2-execution-ui.spec.md)、[规划对话 UI](phase2-conversation-ui.spec.md)、[审阅 UI](phase2-review-ui.spec.md)、[持续 worker](../archive/spec/completed/worker-flow.spec.md)及[第一阶段组合验收](phase1-release-acceptance.spec.md)。这些任务完整交付后才执行本任务；不以条件分支跳过某后端。遵守[共同约束](phase2-constraints.md)。
+依赖 [Roadmap/DAG UI](phase2-roadmap-ui.spec.md)、[执行 UI](phase2-execution-ui.spec.md)、[规划对话 UI](phase2-conversation-ui.spec.md)、[审阅 UI](phase2-review-ui.spec.md)，复用已具备持续 worker 基础，并消费[第一阶段单安装版组合验收](phase1-release-acceptance.spec.md)。传递包含 #83 安装/调试路径隔离，不包含延后的 #40/#41；不要求双 channel、版本选择、提升或跨构建状态接管。这些任务完整交付后才执行本任务，不以条件分支跳过某本机后端。遵守[共同约束](phase2-constraints.md)。
+
+实施前核对中心的固定 Task commit/摘要/依赖，仓库修订不覆盖旧契约；已创建不同范围时须先受控替换并同步消费者身份。草稿/审核/正式准入的新机制尚需在实施前与相关上游规格一并固定；本次只调整运行基线和本机范围，不宣称已包含新审核协议。
 
 本任务拥有第二阶段最终交付判定，交付可复现验收脚本/夹具、真实 Windows 操作证据、产品路径说明和必要的集成接线修复。原生 UI 成为本阶段完整日常入口；保留现有 CLI/TUI 诊断能力，不要求删除它们。新功能或上游契约变更超出此范围时另行规划，不能靠改动完成定义掩盖失败。
 
 ## 两条真实任务链
 
-使用隔离、已注册的原生测试项目与测试托管仓库，记录实际二进制、CLI/Orca 版本、权限和资源。local Codex 与 Orca 远端分别运行一组至少两个有硬依赖的任务，起点为 WinUI 与主 agent 讨论目标：
+使用隔离、已注册的原生测试项目与测试托管仓库，固定单安装版 Go 服务产物及对应 WinUI 客户端，记录实际路径、摘要、CLI/Orca 版本、权限和资源。本地 Codex 与本机 Orca 分别运行一组至少两个有硬依赖的任务，起点为 WinUI 与主 agent 讨论目标：
 讨论 → 同意编写规格/预留 ID → 生成独立 Spec/Plan → 审阅整套差异和拟定依赖 → 人确认发布 → 人将规划规格集成到执行目标分支 → 中心创建 → 原生 UI 观察与原 worker 持续反馈 → worker 实现/提交/创建 PR → 人合并任务 PR → 中心真实核验 TaskDelivery → 后继就绪并完成。
 
 不得导入旧 Beads fixture 代替原生来源，不从历史 JSON 重建一个伪完成投影。每个任务独立 PR，未合并时后继不可执行。任一 worker 的自然语言成功或终端退出不能代替真实 PR 合并及 TaskDelivery。测试 PR 由用户明确合并，系统只核验。
@@ -29,7 +31,7 @@
 | 编号 | 通过条件 |
 | --- | --- |
 | E2E1 | 本机两任务真实完整链通过，独立 PR 人工合并、TaskDelivery 与后继释放可追踪 |
-| E2E2 | Orca 远端同等原生链通过，版本/能力/取消限制正确，无生产门槛绕过 |
+| E2E2 | 本机 Orca 同等原生链通过，版本/能力/停止限制正确，无生产门槛绕过；不纳入远端组合 |
 | E2E3 | 从交付事实发起 documents_only 更新并人工确认，零新任务/零新占号 |
 | E2E4 | 上述故障矩阵在原身份/原中心恢复或明确阻塞，无重复副作用与错误释放 |
 | E2E5 | 所有主要日常操作可由 WinUI 完成，离线/未知/审批与业务决策区分，无必需的隐式私有日志操作 |

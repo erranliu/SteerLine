@@ -23,7 +23,7 @@ SteerLine 围绕同一 worker 会话管理任务的启动、观察、用户反�
 | 既有定义 | 本任务改变的边界 |
 | --- | --- |
 | [中心执行模型](../retired/02-execution-model-and-adapter.md)、[执行架构](../../../spec/execution-architecture.spec.md) | 移除中心固定五步、逐步派发、候选验证链及修复轮数；采用本 Spec 的主状态和持续会话 |
-| [人工介入](pr-05-intervention.spec.md)、[决策协议](../../../decisions.md) | 统一反馈入口，向原会话送达；不要求 agent 回传业务答案应用证明，不以回答为由重建步骤 worker |
+| [人工介入](pr-05-intervention.spec.md)、[决策协议](../../../product-design/decisions.md) | 统一反馈入口，向原会话送达；不要求 agent 回传业务答案应用证明，不以回答为由重建步骤 worker |
 | [远程执行](../retired/03-remote-execution-and-viewer.md) | 保留认证目标、消息关联、输出与当前格式恢复；不再为项目步骤分别创建/释放 Dispatch 或核验逐步结果信封 |
 | [原生接入](beads-exit.spec.md)及原生任务共同约束的执行部分 | 保留固定 Spec/Plan、任务领取和真实交付；移除 TaskDelivery 对 verify/review/publish_pr 步骤回执链的依赖 |
 | [控制台](pr-04-console.spec.md) | 未完成且需人工输入的任务统一进入待决策；失败/未知及资源信息作为原因和观察事实展示 |

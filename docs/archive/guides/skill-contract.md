@@ -2,7 +2,7 @@
 
 This page retains the earlier minimal-step and supervised-remote contract for historical/protocol reference. Current phase-1 work uses the continuous worker flow on local Codex/local Orca only; remote steps and the old five-step gates are not current delivery or acceptance prerequisites.
 
-本页记录已退役的 `minimal-v1` 步骤契约，不是当前配置或运行说明。正式服务仅接受 `worker-flow-v1`；见 [worker-flow Spec](../spec/completed/worker-flow.spec.md) 和 [数据契约](../../data-contract.md)。
+本页记录已退役的 `minimal-v1` 步骤契约，不是当前配置或运行说明。正式服务仅接受 `worker-flow-v1`；见 [worker-flow Spec](../spec/completed/worker-flow.spec.md) 和 [数据契约](../../product-design/data-model.md)。
 
 Native projects use `workflow_definition: minimal-v1` and committed `project_steps`. Every step receives a JSON object whose root schema is `native-task/v1`; its `step_input` contains the current step inputs and prerequisite results. The top level binds the fixed project, task contract and digest, workflow run, execution, attempt, repository, work branch and base commit.
 
