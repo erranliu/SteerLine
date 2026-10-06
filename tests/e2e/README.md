@@ -48,7 +48,7 @@ Run 持有本次产品/helper 构建和选择；Scenario 持有 scratch/证据�
 
 任务创建/查询使用当前 CLI。领取使用公开 SubmitControl/WaitControlReceipt，先 ResolveIdentity 再计算 Profile digest，与控制台/服务一致。执行身份通过公开 reader/query 的同一事务读取，不直接写 SQL 或读取私有业务状态。
 
-分级 runner 在 E2E 测试进程中清除继承的 `STEERLINE_*` 变量；driver 启动的产品/service/helper 进程会显式得到当前 Project 的 home 和 controlled provider-state 路径。Project 在进程内轮询 service runtime 时，通过同一 driver 获取项目身份，再从本次 Project 的明确数据库路径读取组合快照。readiness、任务和执行证据因此保持同一项目归属；读取不依赖机器上的全局 execution profile，也无需修改测试进程的全局环境。该适配不增加产品权限、service 或 E2E 场景能力。
+分级 runner 在 E2E 测试进程中清除继承的 `STEERLINE_*` 变量；driver 启动的产品/service/helper 进程会显式得到当前 Project 的 home 和 controlled provider-state 路径。Project 在正式 task validate/create 成功后绑定项目和数据库身份；轮询 service runtime 时，从本次 Project 的明确数据库路径读取组合快照，并核对快照身份。readiness、任务和执行证据因此保持同一项目归属；读取不依赖机器上的全局 execution profile，也无需修改测试进程的全局环境。该适配不增加产品权限、service 或 E2E 场景能力。
 
 controlled 使用真实 SteerLine、Git、SQLite，helper 实现最小 app-server 和 GitHub provider。worker 真实 commit/push/create；中心查询与核验真实合并后提交交付。loopback `git http-backend` 执行真实传输，Git 适配器保留正式 remote 身份及原始输出；外部 PR 状态只存于 provider 文件。
 
