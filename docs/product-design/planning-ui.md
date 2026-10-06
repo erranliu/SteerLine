@@ -1,8 +1,8 @@
-# 第二阶段 UI 设计草案
+# 规划与原生界面交互设计
 
-状态：产品交互说明；选定范围已分别形成[独立 Spec/Plan](../spec/README.md)。技术边界见[技术架构方案](technical-architecture.md)，产品交付目标见[第二阶段愿景](../roadmap/product-vision.md)。
+状态：产品交互说明；选定范围已分别形成[独立 Spec/Plan](../spec/README.md)。技术边界见[技术架构方案](planning-architecture.md)，产品交付目标见[第二阶段愿景](../roadmap/product-vision.md)。
 
-页面视觉与演示交互见[可交互原型](prototype/index.html)，原型说明与迭代约定见[prototype README](prototype/README.md)。原型只表现页面状态，不连接真实服务或 Codex。
+页面视觉与演示交互见[可交互原型](prototypes/planning-ui/index.html)，原型说明与迭代约定见[prototype README](prototypes/planning-ui/README.md)。原型只表现页面状态，不连接真实服务或 Codex。
 
 ## 草稿与审核的新交互边界
 
@@ -82,19 +82,19 @@ UI 与服务查询展示的正式 `docs/roadmap/` 和 `docs/spec/` 内容始终�
 
 Roadmap 页以目标和文档为主线，保留原 Markdown 的可读全文，也提供目标摘要、关联 Spec/Plan、版本和未确认差异。点击目标可以在右侧打开相关约束：项目 `AGENTS.md`、[roadmap 规则](../roadmap/readme.md)、[Spec 索引与规则](../spec/README.md)、架构及控制台约束。约束面板引用原文件与位置，不能维护一份会过期的复制文本。
 
-DAG 页默认同时给出可搜索的任务列表和所选任务一层上下游；需要时扩展深度。节点标注状态、阻塞原因和交付证据；被丢弃的前置及其后继阻塞仍可查看。大型图按[既有图查询契约](../archive/spec/completed/dag-view.spec.md)分页或标明截断，不把不完整图显示成全图，也不提供直接拖边修改依赖。任务详情通往 Spec、Plan、运行、决策、PR 和合并核验。
+DAG 页默认同时给出可搜索的任务列表和所选任务一层上下游；需要时扩展深度。节点标注状态、阻塞原因和交付证据；被丢弃的前置及其后继阻塞仍可查看。大型图按现有产品查询接口分页或标明截断，接口归属见[代码架构](../architecture/current-code-architecture.md)，不把不完整图显示成全图，也不提供直接拖边修改依赖。任务详情通往 Spec、Plan、运行、决策、PR 和合并核验。
 
 拟规划任务可以在文档审阅页预览依赖变化，但只有中心已创建任务进入正式 DAG 图。Roadmap 和 DAG 均标明各自的文档版本或中心快照版本；不能用虚线草稿节点混入正式任务而不说明来源。
 
 ## 替代第一阶段 viewer
 
-“执行与待处理”页复用第一阶段的统一 Query/Command 和会话模型。列表按 Ready、运行中、待决策、待合并、需处理、历史筛选；详情显示 Task / WorkflowRun / Execution / Attempt 的准确身份、阶段、能力、最后采样时间和可用动作原因。消息按真实轮次组织，过程可折叠，最终回复完整可读；缺口、失败和未解决问题不能因折叠消失。具体语义沿用[控制台 Spec](../archive/spec/completed/pr-04-console.spec.md)与[会话 Spec](../archive/spec/completed/pr-04b-conversation-events.spec.md)。
+“执行与待处理”页复用第一阶段的统一 Query/Command 和会话模型。列表按 Ready、运行中、待决策、待合并、需处理、历史筛选；详情显示 Task / WorkflowRun / Execution / Attempt 的准确身份、阶段、能力、最后采样时间和可用动作原因。消息按真实轮次组织，过程可折叠，最终回复完整可读；缺口、失败和未解决问题不能因折叠消失。具体语义沿用[会话设计](conversation-events.md)、[Activity](activity.md)与[决策反馈](decisions.md)，读取当前产品 Query/Command。
 
 操作反馈分开显示“已提交、服务已接受、已执行、被拒绝、结果待核实”。发送前保存完整原信封；重连先查询原结果，服务明确 command_not_found 时可用原 ID/内容/版本幂等补交，已有记录只对账，不生成新命令或重放外部动作。决策卡片绑定原问题和 attempt，分别展示答案保存、平台接收、轮次开始及应用证明。Windows UI 关闭不停止服务或 worker；服务关闭时保留历史和离线诊断，不依缓存 Ready 发命令。
 
 ### 结果待核实时的详情
 
-当命令回执丢失、服务失联或外部动作结果不明，选中运行的详情顶部使用持久警示区展示：原请求/Operation ID、精确 Task/Execution/Attempt、最后可信阶段及采样时间、仍可能存在的 worker 或远端资源。主操作是“查询原请求”；若自动对账仍无结论，显示已有的人工核实入口和所需证据。期间禁用会生成新执行、再次回答或释放资源的按钮，并在原位置写明原因。重新连接只更新同一个操作的进度，不清除警示或替换目标。远端取消不可用时不显示可点击的停止动作。
+当命令回执丢失、服务失联或外部动作结果不明，选中运行的详情顶部使用持久警示区展示：原请求/Operation ID、精确 Task/Execution/Attempt、最后可信阶段及采样时间、仍可能存在的本机 worker 与资源。主操作是“查询原请求”；若自动对账仍无结论，显示已有的人工核实入口和所需证据。期间禁用会生成新执行、再次回答或释放资源的按钮，并在原位置写明原因。重新连接只更新同一个操作的进度，不清除警示或替换目标。本机停止能力未验证或状态不明时，不显示可执行的停止动作；远端不属于当前界面交付范围。
 
 ## UI 验收情景
 

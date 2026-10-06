@@ -2,7 +2,7 @@
 
 这些资料描述旧 `minimal-v1`、中心步骤编排、早期 hosting 和远端协议实验，已经被当前本机持续 worker 范围替代。归档表示退出当前执行入口，不表示原列出的全部验收、远端权限、取消或故障门槛完成。
 
-当前运行说明见[数据契约](../../../data-contract.md)、[Hosting](../../../hosting.md)和[当前 Spec](../../../spec/README.md)。原版本、命令、状态和证据保持历史含义。
+当前运行说明见[数据契约](../../../product-design/data-model.md)、[Hosting](../../../architecture.md)和[当前 Spec](../../../spec/README.md)。原版本、命令、状态和证据保持历史含义。
 
 | Spec / 记录 | 配套 Plan |
 | --- | --- |

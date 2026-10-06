@@ -1,6 +1,6 @@
 # 执行架构共同约束
 
-本文保留当前执行任务需要复用的共同边界，不单独启动实现任务。当前协议为 `worker-flow-v1`；中心五步编排、项目验证/修复门槛和答案应用证明属于退役流程。当前配置与数据字段见[数据契约](../data-contract.md)，源码归属见[代码架构](../architecture/current-code-architecture.md)。
+本文保留当前执行任务需要复用的共同边界，不单独启动实现任务。当前协议为 `worker-flow-v1`；中心五步编排、项目验证/修复门槛和答案应用证明属于退役流程。当前配置与数据字段见[数据契约](../product-design/data-model.md)，源码归属见[代码架构](../architecture/current-code-architecture.md)。
 
 ## 平台与职责
 

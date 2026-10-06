@@ -12,7 +12,7 @@
 
 4. **接入统一决策。** 扩展现有 Decision 请求/答案 DTO 以保留原生多题和请求身份；查询与运行投影不得覆盖同时待答的请求。两类反馈共用 `answer_decision`，分别回复原请求或启动原 thread 的新 turn。更新控制台提示、送达进度和失效反馈处理；等待回答时保留 active turn。恢复采用有界逐执行核验，核验结束后允许其他合格任务继续。执行验收 A 的一条双任务真机闭环，其余输入和故障分支按 B 自动验证。
 
-5. **回归与交付。** A–C 三组验收按 Spec 记录证据；C 复用现有 PR/TaskDelivery 回归，未修改交付逻辑时不另设人工合并验收。实现审计已完成完整 Go 测试，主线同步及补验按当前 AGENTS.md 使用最小入口与定向测试，并运行 `go vet` 和 Windows/Linux 构建；仅在新改动或失败影响结论时补验。证据保存在 `docs/validation/local-codex-app-server/`，标明真实、模拟和未测范围。更新 [数据契约](../data-contract.md)、[决策说明](../decisions.md)、[会话事件说明](../conversation-events.md)和受影响运行说明；执行 `git diff --check`。本次实现可合并并使用新本地路径；仅 race detector 的环境补验留在第一阶段残留。
+5. **回归与交付。** A–C 三组验收按 Spec 记录证据；C 复用现有 PR/TaskDelivery 回归，未修改交付逻辑时不另设人工合并验收。实现审计已完成完整 Go 测试，主线同步及补验按当前 AGENTS.md 使用最小入口与定向测试，并运行 `go vet` 和 Windows/Linux 构建；仅在新改动或失败影响结论时补验。证据保存在 `docs/validation/local-codex-app-server/`，标明真实、模拟和未测范围。更新 [数据契约](../product-design/data-model.md)、[决策说明](../product-design/decisions.md)、[会话事件说明](../product-design/conversation-events.md)和受影响运行说明；执行 `git diff --check`。本次实现可合并并使用新本地路径；仅 race detector 的环境补验留在第一阶段残留。
 
 
 ## 测试计划（本次文档整理）
@@ -21,7 +21,7 @@
 
 | 级别 / 组 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
 | --- | --- | --- | --- | --- | --- |
-| 文档静态 / doc-links | 当前仓库、Python 3 | `python docs/validation/document-cleanup-2026-10-06/check_docs.py` | 归档及引用修正后 | 导航无缺失目标，活动表一致，Spec/Plan 成对归档 | `docs/validation/document-cleanup-2026-10-06/README.md` |
+| 文档静态 / doc-links | 当前仓库、Python 3 | `python scripts/check_doc_links.py` | 产品设计迁移及引用修正后 | 本地导航无缺失目标 | `docs/validation/product-design-layout-2026-10-07/README.md` |
 | 文档静态 / task-identities | 当前 Git 仓库、Python 3 | `python scripts/roadmap_task_id.py check`；`git diff --check` | 交付前 | 任务 ID、名称和 Spec/Plan 一致，无空白错误 | 同上 |
 
 不选择 L1/L2/L3、Full 或原生真机组：本次没有修改实现、测试场景、协议或平台接线，运行它们不能补齐文档导航证据；后续实际实现或补验仍按原 Spec 的范围选择。无需新增场景或测试环境能力。

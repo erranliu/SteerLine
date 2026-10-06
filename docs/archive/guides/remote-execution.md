@@ -1,6 +1,6 @@
 # 历史记录：有人值守的远程执行 MVP
 
-> 本页仅保留旧 minimal-v1 远端试验记录，不是当前一期运行指南。第一阶段只交付/验收本地 Codex 与本机 Orca，远程流程后续另行规划；以下操作、版本和证据属于原试验当时的范围，不构成当前支持声明、研发前置或验收门槛。当前本机配置见[全局执行配置](../../execution-profiles.md)。
+> 本页仅保留旧 minimal-v1 远端试验记录，不是当前一期运行指南。第一阶段只交付/验收本地 Codex 与本机 Orca，远程流程后续另行规划；以下操作、版本和证据属于原试验当时的范围，不构成当前支持声明、研发前置或验收门槛。当前本机配置见[全局执行配置](../../product-design/execution-profiles.md)。
 
 原试验最小交付使用一个本机 SteerLine 中心，通过 Orca 在已认证的 Windows 远端运行 Codex。初始交付目标为台式机64g，中心 Orca 1.4.209、远端 1.4.215，命名方案固定 `gpt-6-luna` / `xhigh`。远端不运行 SteerLine 服务。使用范围和门槛见 [Spec 03](../spec/retired/03-remote-execution-and-viewer.md#有人值守-mvp-交付边界)。
 

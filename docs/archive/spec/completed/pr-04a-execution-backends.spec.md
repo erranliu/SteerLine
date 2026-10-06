@@ -2,7 +2,7 @@
 
 任务 ID：0；任务名称：双执行后端。
 
-状态：已实现。首版于 PR #21 交付；PR #26 将执行绑定与 Operation 权威存储迁入 SQLite。验收见[验证报告](../../../validation/pr-04a-execution-backends.md)，当前存储契约见[数据契约](../../../data-contract.md)。对应 [Plan](pr-04a-execution-backends.plan.md)。依据：[总览](console-upgrade.md)、[执行架构共同约束](../../../spec/execution-architecture.spec.md)。
+状态：已实现。首版于 PR #21 交付；PR #26 将执行绑定与 Operation 权威存储迁入 SQLite。验收见[验证报告](../../../validation/pr-04a-execution-backends.md)，当前存储契约见[数据契约](../../../product-design/data-model.md)。对应 [Plan](pr-04a-execution-backends.plan.md)。依据：[总览](console-upgrade.md)、[执行架构共同约束](../../../spec/execution-architecture.spec.md)。
 
 ## B1：职责与长期支持边界
 

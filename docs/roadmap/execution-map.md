@@ -12,9 +12,8 @@
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 40 | 固定版本与双入口 | 不可变构建、stable/dev 固定入口和身份 | 无 | [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) |
-| 41 | dev 隔离与 stable 提升 | 独立 home、静止可恢复会话下的受控提升 | `#40`、`#36` | [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) |
-| 42 | 第一阶段集成验收 | 本机双链与版本组合、stable 24 小时、dev 并行和提升恢复 | `#39`、`#41` | [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) |
+| 83 | 本机安装与调试路径隔离 | 固定安装 exe、显式调试 exe/home、状态隔离与共存 | 无 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) |
+| 42 | 第一阶段集成验收 | 单安装版双本机链、24 小时、调试共存与同构建重启 | `#39`、`#83` | [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) |
 | 43 | Codex 规划主 agent 能力验证 | 规划 agent 权限与受控工具能力证明 | 无 | [Spec](../spec/phase2-agent-capabilities.spec.md) · [Plan](../spec/phase2-agent-capabilities.plan.md) |
 | 44 | WinUI 基座与原生输入 | Windows 原生窗口、IME/多行输入和导航基座 | 无 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) |
 | 45 | 本机客户端协议与历史查询 | 五阶段/原会话反馈的本机 HTTP/SSE 与离线查询 | `#36` | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) |
@@ -31,10 +30,8 @@
 flowchart LR
     W36["已具备 #36 持续 worker"]
     A39["已具备 #39 本机候选验收"]
-    V40["#40 固定版本"] --> V41["#41 隔离/提升"]
-    W36 --> V41
-    A39 --> A42["#42 第一阶段组合"]
-    V41 --> A42
+    I83["#83 安装/调试隔离"] --> A42["#42 单安装版组合/24小时/重启"]
+    A39 --> A42
     W36 --> API45["#45 本机 API"]
     API45 --> P46["#46 规划草稿"]
     P46 --> S47["#47 规划会话"]
@@ -55,19 +52,23 @@ flowchart LR
     A42 --> A53
 ```
 
+仓库关系不自动修改中心 DAG。实施前核对已创建任务的固定契约；若中心仍固定旧版本前置或其他旧范围，须先受控替换并同步消费者身份/依赖。移出规划的任务须按中心受控流程处置，本页不宣告运行时已处置，也不掩盖旧任务后继阻塞。
+
 ## 接口和共享修改
 
 | 所有者 | 交接内容 | 集成规则 |
 | --- | --- | --- |
-| #36 | 主阶段、原会话输入/输出、PR 关联和 TaskDelivery | #41/#45 消费；不另建步骤或专用恢复状态机 |
+| #36 | 主阶段、原会话输入/输出、PR 关联和 TaskDelivery | #42/#45 消费；不另建步骤或专用恢复状态机 |
 | 已具备本机候选 | 各配置固定身份、独立反馈、宽松五候选检查、放弃与唯一交付 | #42 复用，迁移按实际影响定向重验；放弃不保证停止，数量不建硬槽 |
-| #40/#41 | 固定版本选择、真实工作轮次及恢复条件 | 配置/服务恢复入口串行集成；空闲会话不被直接视作活动进程 |
+| #83 | 实际 exe/home/config 传递、安装/调试入口及状态隔离 | #42 消费；启动器、console 启服、项目 re-exec 串行集成；不引入版本选择 |
 | #43/#47 | 规划 agent 的权限、受控工具及会话 | 可复用底层会话能力，规划 guard 与任务 worker 权限分别管理 |
 | #45/#46/#48 | 传输、草稿权威、正式发布与中心创建 | 复用 Query/Command；发布/反馈各自按同一个写者和原请求对账 |
 | #44 | 原生输入和导航组件 | 页面复用同一客户端、草稿和正文组件；共享导航串行集成 |
 
 ## 验收分工
 
-单 worker 持续交互与本机多候选竞争已有证据；#42 仍验固定版本、24 小时和提升组合，#53 仍验完整规划/UI/执行闭环。接口或平台改变的部分定向重验，不重复完整上游矩阵。
+单 worker 持续交互与本机多候选竞争已有证据。#83 用最小 controlled 共存场景验实际路径/子进程/误用拒绝；#42 在固定安装 exe 上验双本机链、同构建当前格式重启及 24 小时，#53 验完整规划/UI/执行闭环。#53 消费 #42 的单安装版结论，不等待完整双版本管理。现有 L2/L3 按影响复用，短时 E2E 不等于安装入口或长期运行已验收。
+
+优先推进 #45 → #50，#43/#44 可按各自前置准备；#42 的长运行只阻塞最终验收，不增加 API/UI 开工前置。涉及新草稿/审核准入范围的任务在实施前重新固定对应 Spec/Plan；不凭优先级建议改变既有硬前置。
 
 不同任务人工并行和自动派发策略沿既有能力；共享工作区、平台宿主、构建或 SQLite 接线时串行协调。新任务只有固定前置整体交付后可领取，没有接口提前完成的放行状态。

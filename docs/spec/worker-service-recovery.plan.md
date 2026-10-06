@@ -64,7 +64,7 @@ SR1/SR2 尽量合并到现有 worker-flow、app-server、Orca fake、Command/Dec
 
 实现最终候选运行 `go run ./cmd/test-feedback -quick`，追加未被入口覆盖的 SR1/SR2 定向用例和 SR3 一条本机闭环。Windows 候选构建按真机需要执行；改动跨平台进程代码时增加 Linux 编译核验。已有定向测试通过后，仅在新改动或具体风险出现时扩大范围，默认不跑全量。
 
-更新 [worker-flow](../archive/spec/completed/worker-flow.spec.md)、[本地 app-server](local-codex-app-server.spec.md)、[Orca native](worker-flow-orca-native.spec.md)的适用边界及配套 Plan，更新 [数据契约](../data-contract.md)、[决策说明](../decisions.md)、相关运行说明与 [执行架构共同约束](execution-architecture.spec.md)。保留旧验收的原始事实，注明新语义由本 Spec 替代，不把新编写的文档视为验收通过。
+更新 [worker-flow](../archive/spec/completed/worker-flow.spec.md)、[本地 app-server](local-codex-app-server.spec.md)、[Orca native](worker-flow-orca-native.spec.md)的适用边界及配套 Plan，更新 [数据契约](../product-design/data-model.md)、[决策说明](../product-design/decisions.md)、相关运行说明与 [执行架构共同约束](execution-architecture.spec.md)。保留旧验收的原始事实，注明新语义由本 Spec 替代，不把新编写的文档视为验收通过。
 
 证据记录在 `docs/validation/worker-service-recovery/`：代码/CLI 版本、测试方式、原/新 Attempt 与进程或 terminal 身份、thread/turn 或 Dispatch、原问题、用户继续命令和是否产生外部发送。验证目录和测试进程按归属清理；不访问 `C:\SteerlineRuntime`、#101、现有 Orca 终端，也不领取真实任务。
 
@@ -77,7 +77,7 @@ SR1/SR2 尽量合并到现有 worker-flow、app-server、Orca fake、Command/Dec
 
 | 级别 / 组 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
 | --- | --- | --- | --- | --- | --- |
-| 文档静态 / doc-links | 当前仓库、Python 3 | `python docs/validation/document-cleanup-2026-10-06/check_docs.py` | 归档及引用修正后 | 导航无缺失目标，活动表一致，Spec/Plan 成对归档 | `docs/validation/document-cleanup-2026-10-06/README.md` |
+| 文档静态 / doc-links | 当前仓库、Python 3 | `python scripts/check_doc_links.py` | 产品设计迁移及引用修正后 | 本地导航无缺失目标 | `docs/validation/product-design-layout-2026-10-07/README.md` |
 | 文档静态 / task-identities | 当前 Git 仓库、Python 3 | `python scripts/roadmap_task_id.py check`；`git diff --check` | 交付前 | 任务 ID、名称和 Spec/Plan 一致，无空白错误 | 同上 |
 
 不选择 L1/L2/L3、Full 或原生真机组：本次没有修改实现、测试场景、协议或平台接线，运行它们不能补齐文档导航证据；后续实际实现或补验仍按原 Spec 的范围选择。无需新增场景或测试环境能力。

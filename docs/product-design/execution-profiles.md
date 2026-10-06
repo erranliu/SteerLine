@@ -4,7 +4,7 @@
 
 所有项目共享 `<STEERLINE_HOME>/execution.json` 中的执行方案。当前全局文件使用 `version: 2`；每个方案通过带实现 key 和 codec 版本的 `implementation_configs` 提交原生配置，配置载荷由对应实现严格解码。项目文件显式配置 execution_policy 和 publication_policy，定义宿主读取、none/workspace/host 写入、Git 元数据、工具网络和 escalation=deny；仓库、任务与 PR 仍归项目。`host`、`agent`、`execution_profiles` 和 `default_execution_profile` 都只能写在全局文件的方案中。每个项目仍有独立的服务和 native Task DAG。
 
-先将 [执行配置示例](../examples/execution.json) 复制到 `<STEERLINE_HOME>/execution.json`，再按机器环境修改。至少配置一套方案；有多套方案且启用自动派发时，须指定 `default_execution_profile`。只有一套方案时，它自动成为默认方案。完整项目文件见 [项目示例](../examples/config.json)。
+先将 [执行配置示例](../../examples/execution.json) 复制到 `<STEERLINE_HOME>/execution.json`，再按机器环境修改。至少配置一套方案；有多套方案且启用自动派发时，须指定 `default_execution_profile`。只有一套方案时，它自动成为默认方案。完整项目文件见 [项目示例](../../examples/config.json)。
 
 ```json
 {
@@ -41,63 +41,13 @@ steerline control -config <project.json> -action start_task -task-id <id> -execu
 
 按 `s` 打开全局方案列表，`↑/↓` 选择，`Enter` 确认，`Esc` 取消。服务在领取前核对方案 ID、摘要、Task 资格与目标能力；同一 Task 领取时冻结方案。编辑或删除全局方案不会重定向已开始的任务。控制台和服务加载的项目或全局文件内容不同时，控制台阻止新启动和自动派发；修改配置后重启服务并重新打开控制台。
 
-Orca 本机 Codex 方案使用 `host=orca`、`agent=codex`，并在 `implementation_configs` 中分别提供 `codex.worker-profile` 与 `orca.worker-profile`。项目要求 workspace 写入、Git 元数据写入与网络 allow；Codex codec 校验 `windows_sandbox`（`elevated` 或 `unelevated`）及 `executable`，Orca codec 校验其 `executable`、PowerShell `shell` 和正的 `wait_timeout`。model 和 reasoning_effort 可分别省略；省略时保留启动器默认解析语义。
+Orca 本机 Codex 方案使用 `host=orca`、`agent=codex`，并在 `implementation_configs` 中分别提供 `codex.worker-profile` 与 `orca.worker-profile`。项目策略可选择受限 workspace 写入或显式 host 全访问，并要求该目标实际支持的网络和 Git 元数据组合。受限方案由 Codex codec 校验 `windows_sandbox`（`elevated` 或 `unelevated`）及 `executable`；全访问方案不设置 windows_sandbox。Orca codec 校验其 `executable`、PowerShell `shell` 和正的 `wait_timeout`。model 和 reasoning_effort 可分别省略；省略时保留启动器默认解析语义。
 
-有无显式 model 都使用同一受管命令，冻结 `approval_policy=never`、Windows sandbox、严格配置校验及 linked worktree 写入根目录。原始 `codex.args` 当前只允许独立的 `--no-alt-screen`、`--no-daemon`、`--search`；子命令、配置/Profile 注入、权限覆盖与目录扩张均在资源创建前拒绝。领取前的 CLI/Orca 查询不初始化沙箱；领取后在原 terminal 上运行 readiness 工具探针，核对真实工具事件、原子收据及原生成功结算后，才派发一次业务任务。
+有无显式 model 都使用同一受管命令，冻结 `approval_policy=never`、实际权限映射和资源根；受限方案另行冻结 Windows sandbox 与 linked worktree 写入根目录。原始 `codex.args` 当前只允许独立的 `--no-alt-screen`、`--no-daemon`、`--search`；子命令、配置/Profile 注入、权限覆盖与目录扩张均在资源创建前拒绝。领取前的 CLI/Orca 查询不初始化沙箱；领取后在原 terminal 上运行 readiness 工具探针，核对真实工具事件、原子收据及原生成功结算后，才派发一次业务任务。
 
-控制台显示冻结权限、环境核验及阻断来源。宿主等待时，文字保留原目标而不注入菜单；中心选项可打开原 terminal 或重新检查。重新检查先对账原操作，不用新会话替换丢失会话，不延长旧准备期限。运行中的 Execution 不受配置文件编辑影响。其他 agent 缺少完整项目策略落实证据时不可领取。local 同样冻结策略、受理配置版本和精确资源；当前一期只启用两种本机路径；下节只保留远端资料，不是当前可运行方案引导。
+控制台显示冻结权限、环境核验及阻断来源。宿主等待时，文字保留原目标而不注入菜单；中心选项可打开原 terminal 或重新检查。重新检查先对账原操作，不用新会话替换丢失会话，不延长旧准备期限。运行中的 Execution 不受配置文件编辑影响。其他 agent 缺少完整项目策略落实证据时不可领取。local 同样冻结策略、受理配置版本和精确资源；当前一期只启用两种本机路径；远端配置见[历史资料](../archive/guides/orca-remote-configuration.md)，不属于当前操作引导。
 
-本次已完成审计修复及隔离真机服务闭环；[验收记录](validation/worker-environment-readiness/README.md)区分真实工具证据、受控故障回归及已通过的真机服务闭环。
-
-## 远程 Orca worker
-
-> 保留配置/协议资料，非当前第一阶段操作入口。第一阶段只含本地 Codex 与本机 Orca；远端新 worker 准入尚缺目标权限证据，本节不表示该流程可交付或已通过验收，也不构成本机任务的前置。
-
-远程方案与本地 Codex、本地 Orca 共用 Task、Decision、Operation 和 PR 交付规则。Run 与协调 inbox 位于中心，工作区与 agent 位于指定远端。首次创建远端工作区和 worker，后续轮次复用同一终端与 incarnation；不创建本地替代执行。
-
-在全局文件的 `execution_profiles` 中添加以下方案，替换连接、仓库与协调终端的真实标识：
-
-```json
-{
-  "id": "orca-remote",
-  "name": "远程 Orca Codex",
-  "host": "orca_supervised",
-  "agent": "codex",
-  "implementation_configs": [
-    {
-      "implementation_key": "codex.worker-profile",
-      "codec_version": 1,
-      "payload": {"executable": "<远端使用的 Codex 命令>", "model": "<明确模型>", "reasoning_effort": "high"}
-    },
-    {
-      "implementation_key": "orca.worker-profile",
-      "codec_version": 1,
-      "payload": {"executable": "<本机 Orca 原生可执行文件>", "shell": "powershell.exe", "wait_timeout": "2m"}
-    },
-    {
-      "implementation_key": "orca.supervised-profile",
-      "codec_version": 1,
-      "payload": {
-        "connection_id": "<environment list 返回的 pairedDeviceId>",
-        "environment_id": "<已保存的 environment ID>",
-        "repository_selector": "id:<远端 repo ID>",
-        "coordinator_terminal": "<中心已打开的 bootstrap terminal handle>",
-        "poll_interval": "2s",
-        "capability_report_version": 1,
-        "remote_cancel_available": false
-      }
-    }
-  ]
-}
-```
-
-远程协议与身份链路保留，但目前 worker-start 未返回绑定实际目标/版本的文件、网络及越权策略证据，所以所请求 execution_policy 在领取前明确拒绝。原先的连接/版本族/remote/federation 检查仍属于远程适配；不能据此推定权限落实，不降级到本机。配置中的协调终端用于预检，每次 WorkflowRun 另建独立的中心协调终端。远端必须已具备 Codex、项目工具和 PR 发布权限。
-
-原生 question 进入共享 Decision；活动 Dispatch 的反馈通过消息投递，已结算轮次的反馈通过原终端开启下一轮。输入回执丢失时只核对原 Task/Dispatch 或 question history，不重复启动或回答。中心重启保留原执行并重新核验，旧服务保存的未投递输入需要重新确认；断连或身份变化保留资源并显示未核实。远端路径按执行主机返回值保存，不按中心操作系统转换。
-
-`worker_done` 只证明轮次结算。提供方证明对应 PR 已合并后才写 TaskDelivery、关闭 Task，并 release 已结算 worker 和关闭排空的中心协调终端；远端 worktree 保留。远程取消仍不可用，停止中心监督不会被显示为远端进程已经退出。
-
-当前实现已通过隔离协议与 Service 测试。2026-09-30 保存的“台式机64g”连接不可达，本次未完成双机真机验收。
+实际能力按目标与版本核验；[验收记录](../validation/worker-environment-readiness/README.md)区分真实工具证据、受控故障回归及已通过的真机服务闭环。
 
 ## Windows 本地 Codex 沙箱
 
@@ -106,6 +56,8 @@ Windows 本地受限方案将 `codex.windows_sandbox` 固定为 `elevated`（省
 显式 `unelevated` 只可用于本地 `read-only`；本地 `workspace-write` 使用 linked worktree 的分散可写根，unelevated 无法落实此策略，控制台标记方案不可用、领取入口提前拒绝。`codex.args` 不能重复覆盖受管的 Windows sandbox 值。非 Windows 启动不注入 Windows 参数；Orca 的受管启动和就绪流程见上文。
 
 配置校验和成功创建 app-server 不证明实际工具已可执行。elevated 沙箱须在这台机器的原生 Codex 入口完成必要的系统设置；SteerLine 不自动配置 Windows 账户、ACL 或防火墙，不自动回退到 unelevated 或 danger-full-access。设置方式见[官方 Windows sandbox 文档](https://learn.chatgpt.com/docs/windows/windows-sandbox)。原有运行保持冻结权限，不通过编辑全局文件更换已有会话的沙箱方式。
+
+Windows 本机 local/Orca 的显式 host 写入加 network allow 映射为 danger-full-access / approval_policy=never，windows_sandbox 必须省略；host 写入加 network deny 仍拒绝。全访问是显式项目策略，不能从受限方案失败自动降级得来。实际组合及工具版本核验以 [Codex policy codec](../../internal/execution/adapters/codex/policy.go) 为准；E2E 完全访问和 elevated 初始化的不同前置见[E2E 环境指南](../../tests/e2e/README.md)。
 
 ## 项目策略与配置受理
 
@@ -119,9 +71,9 @@ Windows 本地受限方案将 `codex.windows_sandbox` 固定为 `elevated`（省
 
 原始参数仅接受独立的 --no-alt-screen、--no-daemon、--search；长短选项、等号和分离值形式的权限、目录、model/effort、配置/Profile、子命令或未知参数均拒绝。model 与 effort 独立：Orca 可分别省略，local 保留 high 默认；原生观察到的默认模型不是固定要求。
 
-领取时冻结 FixedExecutionProfile v6 的策略、来源、受理配置版本、实现配置封套及完整摘要；资源阶段以 PolicyResources v3 保存通用 workspace/Git 根与 Codex codec 资源封套，沿用现有原子附件事务。准备、业务轮、反馈与恢复输入检查原快照/资源，不从运行中的仓库修改或新配置文件补造授权。重新加载由现有服务入口显式受理，对新 Execution 生效；已有执行保持原值。runtime checkpoint 当前格式为 17，旧格式拒绝且保留现场。
+领取时在 FixedExecutionProfile 中冻结策略、来源、受理配置版本、实现配置封套及完整摘要；资源阶段以 PolicyResources 保存通用 workspace/Git 根与 Codex codec 资源封套，沿用现有原子附件事务。准备、业务轮、反馈与恢复输入检查原快照/资源，不从运行中的仓库修改或新配置文件补造授权。重新加载由现有服务入口显式受理，对新 Execution 生效；已有执行保持原值。持久格式见[数据模型](data-model.md#当前格式来源)，旧格式拒绝且保留现场。
 
-控制台由同一 ProjectView 的 checkpoint/Domain 显示冻结要求、版本、来源、资源和核验范围。设置核验与实际工具核验分开；未观察的工具值显示未核验。服务与控制台配置摘要不同或读取部分错误时阻止新启动。新策略原生工具证据见[本轮验收](validation/execution-isolation-06-policy/README.md)。
+控制台由同一 ProjectView 的 checkpoint/Domain 显示冻结要求、版本、来源、资源和核验范围。设置核验与实际工具核验分开；未观察的工具值显示未核验。服务与控制台配置摘要不同或读取部分错误时阻止新启动。新策略原生工具证据见[本轮验收](../validation/execution-isolation-06-policy/README.md)。
 
 
 ## 项目发布责任
@@ -130,7 +82,7 @@ Windows 本地受限方案将 `codex.windows_sandbox` 固定为 `elevated`（省
 
 worker 的执行策略和本身凭据必须允许 Git 推送及 PR 创建；中心的 token_env 只用于查询/关闭，不自动下发给 worker。仅有 query 或成功创建会话不能证明发布能力。worker 的成功、URL 和 worker_done 均不代替 provider 的真实 merged 证据。
 
-冻结快照保留 publisher、原 provider/查询与关闭命令、Git、单一 fetch/push URL、base 与认证引用。后续轮次、恢复、PR 查询/关闭/交付使用原快照；远程目标变化仍拒绝副作用。秘密值不入库或写入产物。当前 SQLite schema 13、runtime/checkpoint schema 18 明确拒绝旧开发数据，不迁移、回填或回退。历史真机报告保留原始证据格式。
+冻结快照保留 publisher、原 provider/查询与关闭命令、Git、单一 fetch/push URL、base 与认证引用。后续轮次、恢复、PR 查询/关闭/交付使用原快照；远程目标变化仍拒绝副作用。秘密值不入库或写入产物。当前持久格式明确拒绝旧开发数据，不迁移、回填或回退；版本见[数据模型](data-model.md#当前格式来源)。历史真机报告保留原始证据格式。
 
 环境阻断是执行状态旁路，保留业务问题及本地草稿。阻断时新回答明确拒绝；未产生投递意图的已保存回答作废并保留审计，恢复后重新提交。已有未知投递只核对原回执。控制台 Ctrl+O 打开原终端，Ctrl+E 重新检查原环境；CLI 的 control -action open_terminal/recheck_environment -run-id <RunID> 使用同一精确 blocker/turn/attempt/version 目标。
 
@@ -158,8 +110,8 @@ worker 的执行策略和本身凭据必须允许 Git 推送及 PR 创建；中�
 
 内建注册键为 `local/codex/local_codex_app_server_v1`、`orca/codex/orca_terminal_v2`、`orca/codex/orca_supervised`；具体目标单独绑定。未知、重复或歧义组合拒绝，注册是固定代码组装，没有插件加载。准备、启动、观察/停止构造、事件/结算、等待/反馈、恢复与清理都由原记录选择注册操作。
 
-FixedExecutionProfile v6 在同一快照中保存需求、非秘密评估、独立证据摘要及 `builtin-execution-v2` 实现配置版本。完整配置摘要包含需求及原权限/发布/Profile 配置，实际资源继续单独核验。证据摘要也纳入完整 Profile 摘要。原 worktree 根从持久 WorkspaceIntent 恢复。领取事务重新读取已受理的项目和全局文件字节摘要；查验后改变配置必须重新加载并检查。重启使用原快照，当前工具/引用丢失只新增 Execution 的阻断事实，不改历史快照。控制台使用同一 ProjectView 展示领取时与当前检查的时间和来源。checkpoint schema 17、SQLite schema 12 及资源格式 v3 生效；旧 Profile 明确拒绝，不回填。
+冻结的 FixedExecutionProfile 在同一快照中保存需求、非秘密评估、独立证据摘要及 `builtin-execution-v2` 实现配置版本。完整配置摘要包含需求及原权限/发布/Profile 配置，实际资源继续单独核验。证据摘要也纳入完整 Profile 摘要。原 worktree 根从持久 WorkspaceIntent 恢复。领取事务重新读取已受理的项目和全局文件字节摘要；查验后改变配置必须重新加载并检查。重启使用原快照，当前工具/引用丢失只新增 Execution 的阻断事实，不改历史快照。控制台使用同一 ProjectView 展示领取时与当前检查的时间和来源。持久格式统一见[数据模型](data-model.md#当前格式来源)；旧 Profile 明确拒绝，不回填。
 
-验证与限制见 [#61 验收记录](validation/execution-isolation-08-resolution/README.md)。远程两轮 Service 成功场景仍被前置权限缺证门槛拒绝，未把协议 mock 当作权限或双机认证。
+历史验证范围见 [执行需求验收记录](../validation/execution-isolation-08-resolution/README.md)。远程两轮 Service 成功场景仍被前置权限缺证门槛拒绝，未把协议 mock 当作权限或双机认证。
 
 固定发布元数据只保留 provider/query/close、Git/remote/base 和认证引用。中心 create 字段与命令展示已删除；v5 快照明确拒绝恢复，当前 v6 不迁移旧发布元数据。

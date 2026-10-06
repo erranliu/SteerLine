@@ -1,10 +1,10 @@
-# 第二阶段技术架构方案
+# 规划与原生客户端架构设计
 
 状态：产品与架构方案；已选范围的执行要求见[独立 Spec/Plan 索引](../spec/README.md)及[共同接口](../spec/phase2-constraints.md)。范围依据：[第二阶段产品愿景](../roadmap/product-vision.md)、[架构约束](../roadmap/architecture-constraints.md)、[控制台约束](../roadmap/console-constraints.md)。
 
 ## 目标与边界
 
-第二阶段让人在 SteerLine 原生 UI 中与 Codex 主 agent 讨论目标、审阅规划草稿和影响，明确确认任务创建与执行决策，并追溯目标、Spec/Plan、DAG、运行、PR 和交付证据。主agent仅支持Codex；后续[草稿审核目标](../roadmap/phase2-draft-roadmap-admission.md)增加由服务独立调度的固定审核角色，判断Spec内容与前置成熟度，不开放主agent调用子agent或通用多agent编排。以下协议/Publication细节是现有基础方案，受新准入流程影响的部分在正式实施前修订，并非已实现审核。任务执行仍沿用本机 Codex 与 Orca 远端两条后端；主 agent 会话和任务 worker 的执行身份分开。
+第二阶段让人在 SteerLine 原生 UI 中与 Codex 主 agent 讨论目标、审阅规划草稿和影响，明确确认任务创建与执行决策，并追溯目标、Spec/Plan、DAG、运行、PR 和交付证据。主agent仅支持Codex；后续[草稿审核目标](../roadmap/phase2-draft-roadmap-admission.md)增加由服务独立调度的固定审核角色，判断Spec内容与前置成熟度，不开放主agent调用子agent或通用多agent编排。以下协议/Publication细节是现有基础方案，受新准入流程影响的部分在正式实施前修订，并非已实现审核。当前任务执行沿用本地 Codex 与本机 Orca 两条后端，远端不在当前交付范围；主 agent 会话和任务 worker 的执行身份分开。
 
 每个项目为主 agent 绑定一个持久的规划 worktree。新 session 使用同一目录的新 Codex thread，不继承旧 session 的消息、摘要或 fork 历史；worktree 中的文件状态保持原样。多个历史 session 可浏览，但同一规划 worktree 的写入轮次必须串行，避免两个 session 同时修改同一套文档。任务 worker 使用其执行身份绑定的工作区，不借用规划 worktree。
 
@@ -43,7 +43,7 @@ flowchart LR
 
 ## 业务接口与数据流
 
-第一阶段已交付的[中心执行模型 Spec](../archive/spec/retired/02-execution-model-and-adapter.md)提供 Go 的 SQLite 单写者、`QueryService` 和 `CommandService`；[会话 Spec](../archive/spec/completed/pr-04b-conversation-events.spec.md)提供规范事件、正文与分页。第二阶段实施前应核对已落地接口与本方案所需的差异；`#3` 的本机原生验收和 `#4`/`#6` 的远端生产门槛仍按[执行依赖图](../roadmap/execution-map.md)独立完成。第二阶段在现有业务权威外增加薄的本机协议适配层，不让 C# 客户端重写业务校验，也不把现有 `control/requests` 文件目录、SQLite 表或 Codex JSON-RPC 直接作为 UI 契约。
+已有核心提供 SQLite 单写、产品 Query/Command 和规范会话/正文读取。当前边界和源码归属见[代码架构](../architecture/current-code-architecture.md)，会话契约见[会话设计](conversation-events.md)。本机原生待补范围按[当前 Spec 索引](../spec/README.md)维护；历史远端试验不成为二期前置。本机客户端协议只增加传输适配层，不让 C# 客户端重写业务校验，不把 control/requests 文件目录、SQLite 表或 Codex JSON-RPC 直接作为 UI 契约。
 
 客户端协议至少覆盖三类操作：
 
@@ -59,7 +59,7 @@ flowchart LR
 
 ## 本机连接与生命周期
 
-Windows UI 与 Go 服务是两个独立进程。现有[服务窗口契约](../archive/spec/completed/pr-03-service-lifecycle.spec.md)继续适用：用户从固定入口打开可见服务窗口；退出 UI 不停止服务或 worker；关闭服务窗口结束服务，UI 显示离线或待核实状态，不自行创建替代服务。主 agent 的 app-server 由服务持有，UI 关闭不直接终止会话；服务重启后按持久 thread ID 恢复并对账。
+Windows UI 与 Go 服务是两个独立进程。[整体生命周期边界](../architecture.md#生命周期反馈与恢复)继续适用：用户从固定入口打开可见服务窗口；退出 UI 不停止服务或 worker；关闭服务窗口结束服务，UI 显示离线或待核实状态，不自行创建替代服务。主 agent 的 app-server 由服务持有，UI 关闭不直接终止会话；服务重启后按持久 thread ID 恢复并对账。
 
 建议服务仅在本机回环地址开放客户端协议，使用随机端口与仅本机用户可读的实例凭证。发现记录包含协议版本、项目及服务实例身份；客户端连接后核对身份和能力，凭证放在请求头，不放入 URL 或日志。实际 Windows ACL、浏览器来源拒绝、端口冲突和旧实例记录的处理须在实施 Spec 中验证。该本机协议不直接开放远程访问。
 
