@@ -16,7 +16,12 @@ func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
 	c := workerContextConfigFixture()
 	c.requirementsEvaluation = &executionbackend.RequirementsEvaluation{Tools: []executionbackend.RequirementEvidence{{Source: "original"}}}
 	before := c.PR.Query.Args[0]
-	p := testProfileCatalogFor(c).AvailableExecutionProfiles()[0]
+	catalog := testProfileCatalogFor(c)
+	catalog.Base = c
+	p := catalog.AvailableExecutionProfiles()[0]
+	if p.RequirementsEvaluation == nil || len(p.RequirementsEvaluation.Tools) != 1 {
+		t.Fatal("returned profile lost the configured requirements evidence")
+	}
 	p.Publication.Provider.Query.Args[0] = "changed"
 	p.RequirementsEvaluation.Tools[0].Source = "changed"
 	if c.PR.Query.Args[0] != before || c.requirementsEvaluation.Tools[0].Source != "original" {
