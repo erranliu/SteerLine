@@ -462,20 +462,33 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 				}
 				if e.Environment != nil && e.Environment.Blocker != nil {
 					reason := e.Environment.Blocker.Fact.Reason
-					if (reason == "agent_input_unverified" || reason == "resource_preparation_unverified" || reason == "preparation_dispatch_unverified" || reason == "business_dispatch_unverified") && !rechecked {
-						rechecked = true
+					handled, err := recheckNativeEnvironmentOnce(reason, &rechecked, func() error {
 						_, err := p.Driver.Run(p.Scenario.Context, "answer", "-config", p.Config, "-run-id", e.WorkflowRunID, "-option", "recheck_environment", "-by", "e2e")
+						return err
+					})
+					if handled {
 						return false, err
 					}
-					if reason != "agent_input_unverified" {
-						p.Scenario.t.Fatalf("native environment blocked: %s; see latest-phase snapshot", reason)
-					}
+					p.Scenario.t.Fatalf("native environment blocked: %s; see latest-phase snapshot", reason)
 				}
 			}
 		}
 		return len(snap.Domain.WorkflowRuns) == 1 && snap.Domain.WorkflowRuns[0].Phase == phase && len(snap.Domain.Executions) == 1 && snap.Domain.Executions[0].Status != "active", nil
 	})
 	return result
+}
+
+func recheckNativeEnvironmentOnce(reason string, rechecked *bool, recheck func() error) (bool, error) {
+	switch reason {
+	case "agent_input_unverified", "resource_preparation_unverified", "preparation_dispatch_unverified", "business_dispatch_unverified":
+		if *rechecked {
+			return true, nil
+		}
+		*rechecked = true
+		return true, recheck()
+	default:
+		return false, nil
+	}
 }
 
 func (p *Project) Merge() {
