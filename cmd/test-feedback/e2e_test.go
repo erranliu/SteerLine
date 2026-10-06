@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/testfeedback"
+	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
 )
 
 func TestLevelSelectionsRejectAmbiguity(t *testing.T) {
@@ -18,7 +18,7 @@ func TestLevelSelectionsRejectAmbiguity(t *testing.T) {
 			t.Fatalf("accepted %v", args)
 		}
 	}
-	opts, err := parseOptions([]string{"-level=L1", "--", "./internal/testfeedback", "-count=1"})
+	opts, err := parseOptions([]string{"-level=L1", "--", "./internal/testkit/feedback", "-count=1"})
 	if err != nil || !opts.quick || opts.workers != 1 {
 		t.Fatalf("L1 alias: %+v %v", opts, err)
 	}

@@ -85,7 +85,7 @@ go test ./cmd/test-feedback ./tests/e2e/internal/... -count=1
 go test -tags=e2e ./tests/e2e/internal/... ./tests/e2e/cmd/... -count=1
 
 # 依赖边界：生产不能依赖测试工具，场景通过测试适配层访问实现
-go test ./internal/testboundary -count=1
+go test ./internal/testkit/boundary/... -count=1
 
 # 普通 Go 包编译检查
 go run ./cmd/test-feedback -build-only

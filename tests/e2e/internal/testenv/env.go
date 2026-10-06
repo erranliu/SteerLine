@@ -21,7 +21,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-	"github.com/erranliu/SteerLine/internal/testprocess"
+	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
@@ -67,7 +67,7 @@ type Snapshot struct {
 	Page    storageports.NativeTaskPage `json:"page"`
 	Domain  reconstruction.Snapshot     `json:"domain"`
 	Helper  controlled.State            `json:"helper"`
-	Runtime *reconstruction.Runtime `json:"runtime,omitempty"`
+	Runtime *reconstruction.Runtime     `json:"runtime,omitempty"`
 }
 
 func NewScenario(t *testing.T, id string) *Scenario {

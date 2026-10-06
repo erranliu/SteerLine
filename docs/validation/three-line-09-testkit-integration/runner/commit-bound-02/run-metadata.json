@@ -1,0 +1,16 @@
+{
+  "id": "targeted-runner-testkit",
+  "source_commit": "576dd464ffc3586c5da8d4cbd72d9316b598df76",
+  "worktree_before": "",
+  "command": "go run ./cmd/test-feedback -out docs/validation/three-line-09-testkit-integration/runner/commit-bound-02 -- ./cmd/test-feedback ./internal/testkit/boundary/... ./internal/testkit/feedback ./internal/testkit/process -count=1 -timeout=5m",
+  "goos": "windows",
+  "steerline_home": "%TEMP%\\sl81r02",
+  "started_at": "2026-10-06T06:23:16.5876815Z",
+  "finished_at": "2026-10-06T06:23:29.3715394Z",
+  "elapsed_seconds": 12.784,
+  "exit_code": 0,
+  "steerline_home_contents_before_cleanup": [],
+  "steerline_home_cleanup": "removed; verified under %TEMP%",
+  "steerline_home_env_restored": true,
+  "cleanup_manifest": "docs/validation/three-line-09-testkit-integration/cleanup-manifest.json"
+}

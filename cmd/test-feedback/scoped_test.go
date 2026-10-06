@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/testfeedback"
+	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
 )
 
 func TestAssignTestsCoversNewNamesOnceAndBalancesLongCases(t *testing.T) {
