@@ -28,7 +28,7 @@ go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delive
 | --- | --- | --- |
 | L2 controlled | `smoke.delivery` | 正式创建/领取 A、发布 PR、合并前 B 阻塞，合并后原 A 交付且 B 就绪但未启动 |
 | L2 live | `smoke.local-codex` / `smoke.orca-codex` | 真实模型、真实 SteerlineTest GitHub PR、合并交付、依赖解锁和正数 usage |
-| L3 controlled | `delivery.basic` | 独立受控交付闭环 |
+| L3 controlled | `delivery.basic` | 验证唯一 Delivery 解锁后继；后继首次执行固定到已核验 merge commit |
 | L3 controlled | `recovery.waiting-merge-restart` | 等待合并后重启，原任务/数据库/工作流/执行/工作区保持，不重派，再正常交付 |
 | L3 live | `delivery.local-codex` / `delivery.orca-codex` | 真实模型配 loopback provider，分别独立交付 |
 | L3 live | `recovery.local-codex` / `recovery.orca-codex` | 真实执行后重启保持原身份，usage 不增加，再合并交付 |
