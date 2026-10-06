@@ -238,29 +238,21 @@ func runScoped(opts options) int {
 			return scopedSetupError(opts.out, &report, e)
 		}
 		assignments := assignTests(report.CoreTests, weights, 3)
-		groups := make([]scopedGroup, 3)
-		var wg sync.WaitGroup
-		for i := range groups {
-			wg.Add(1)
-			go func(i int) {
-				defer wg.Done()
-				id := fmt.Sprintf("core-%d", i+1)
-				args := []string{"go", "tool", "test2json", "-t", "-p", fullCorePackage, binary, "-test.v=test2json", "-test.count=1", "-test.parallel=1", "-test.timeout=45m", "-test.run=" + exactPattern(assignments[i])}
-				groups[i] = runGroup(ctx, opts.out, id, coreDir, args, assignments[i], []string{fullCorePackage}, true)
-			}(i)
-		}
-		wg.Wait()
-		report.Groups = append(report.Groups, groups...)
 		others := make([]string, 0, len(packages)-1)
 		for _, pkg := range packages {
 			if pkg != fullCorePackage {
 				others = append(others, pkg)
 			}
 		}
-		if len(others) > 0 {
+		groups := runFullGroups(len(assignments), func(i int) scopedGroup {
+			id := fmt.Sprintf("core-%d", i+1)
+			args := []string{"go", "tool", "test2json", "-t", "-p", fullCorePackage, binary, "-test.v=test2json", "-test.count=1", "-test.parallel=1", "-test.timeout=45m", "-test.run=" + exactPattern(assignments[i])}
+			return runGroup(ctx, opts.out, id, coreDir, args, assignments[i], []string{fullCorePackage}, true)
+		}, func() scopedGroup {
 			args := append([]string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1"}, others...)
-			report.Groups = append(report.Groups, runGroup(ctx, opts.out, "other-packages", "", args, nil, others, false))
-		}
+			return runGroup(ctx, opts.out, "other-packages", "", args, nil, others, false)
+		})
+		report.Groups = append(report.Groups, groups...)
 	}
 	report.ExecutionSecs = time.Since(execution).Seconds()
 	report.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -279,6 +271,26 @@ func runScoped(opts options) int {
 		return 1
 	}
 	return 0
+}
+
+// The remaining packages have their own serial Go command. Starting it alongside
+// the three execution workers keeps both owners within the same Full deadline.
+func runFullGroups(workers int, runCore func(int) scopedGroup, runOthers func() scopedGroup) []scopedGroup {
+	groups := make([]scopedGroup, workers+1)
+	var wg sync.WaitGroup
+	wg.Add(workers + 1)
+	for i := 0; i < workers; i++ {
+		go func(i int) {
+			defer wg.Done()
+			groups[i] = runCore(i)
+		}(i)
+	}
+	go func() {
+		defer wg.Done()
+		groups[workers] = runOthers()
+	}()
+	wg.Wait()
+	return groups
 }
 
 func scopedSetupError(out string, report *scopedReport, err error) int {

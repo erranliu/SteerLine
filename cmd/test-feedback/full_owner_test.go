@@ -14,6 +14,41 @@ import (
 	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
 )
 
+func TestFullOtherPackagesStartBeforeExecutionWorkersFinish(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+	entered := make(chan int, 3)
+	release := make(chan struct{})
+	groups := runFullGroups(3, func(i int) scopedGroup {
+		entered <- i
+		select {
+		case <-release:
+		case <-ctx.Done():
+		}
+		return scopedGroup{ID: fmt.Sprintf("core-%d", i+1)}
+	}, func() scopedGroup {
+		for i := 0; i < 3; i++ {
+			select {
+			case <-entered:
+			case <-ctx.Done():
+			}
+		}
+		close(release)
+		return scopedGroup{ID: "other-packages"}
+	})
+	if ctx.Err() != nil {
+		t.Fatal("other packages waited for the execution workers to finish")
+	}
+	if len(groups) != 4 || groups[3].ID != "other-packages" {
+		t.Fatal("Full lost the separately reported remaining package group")
+	}
+	for i := 0; i < 3; i++ {
+		if groups[i].ID != fmt.Sprintf("core-%d", i+1) {
+			t.Fatal("parallel Full changed the execution group report order")
+		}
+	}
+}
+
 func TestPrepareFullCoreEnumeratesExecutionBusinessTests(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
