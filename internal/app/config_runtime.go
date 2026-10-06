@@ -212,7 +212,31 @@ func (c Config) executionConfig() execution.Config {
 func (c Config) ExecutionConfig() execution.Config { return c.executionConfig() }
 
 func (c Config) profileCatalog() execution.ProfileCatalog {
-	return execution.ProfileCatalog{Base: c.executionBase(), Directory: c.ExecutionDirectory, Profiles: append([]execution.ExecutionProfile(nil), c.ExecutionProfiles...), DefaultID: c.DefaultExecutionProfile, Global: c.globalExecution, PolicySource: c.projectPath}
+	base := c.executionBase()
+	base.ExecutionRequirements = base.ExecutionRequirements.Clone()
+	base.Git.Args = append([]string(nil), base.Git.Args...)
+	base.PR.Query.Args = append([]string(nil), base.PR.Query.Args...)
+	base.PR.Close.Args = append([]string(nil), base.PR.Close.Args...)
+	return execution.ProfileCatalog{Base: base, Directory: c.ExecutionDirectory, Profiles: cloneExecutionProfiles(c.ExecutionProfiles), DefaultID: c.DefaultExecutionProfile, Global: c.globalExecution, PolicySource: c.projectPath}
+}
+
+func cloneExecutionProfiles(profiles []execution.ExecutionProfile) []execution.ExecutionProfile {
+	if profiles == nil {
+		return nil
+	}
+	cloned := append([]execution.ExecutionProfile(nil), profiles...)
+	for i := range cloned {
+		inputs := profiles[i].ImplementationConfigs
+		if inputs == nil {
+			continue
+		}
+		cloned[i].ImplementationConfigs = make([]executionbackend.ImplementationConfigInput, len(inputs))
+		for j, input := range inputs {
+			input.Payload = append([]byte(nil), input.Payload...)
+			cloned[i].ImplementationConfigs[j] = input
+		}
+	}
+	return cloned
 }
 
 func (c Config) AcceptedConfigVersion() string {
@@ -225,7 +249,7 @@ func (c Config) AcceptedConfigVersion() string {
 func (c Config) runtimeDependencies() execution.RuntimeDependencies {
 	return execution.RuntimeDependencies{
 		Directory: c.ExecutionDirectory, ProcessHost: c.ProcessHost,
-		Profiles: appProfilePort{config: c}, ConfigVerifier: appConfigVerifier{project: c.projectPath, global: c.executionPath, digest: c.configDigest},
+		Profiles: appProfilePort{catalog: c.profileCatalog()}, ConfigVerifier: appConfigVerifier{project: c.projectPath, global: c.executionPath, digest: c.configDigest},
 	}
 }
 
@@ -233,18 +257,20 @@ func (c Config) runtimeSettings() execution.RuntimeSettings {
 	return execution.RuntimeSettings{Claimant: c.Claimant, Heartbeat: positiveDuration(c.Heartbeat, 5*time.Second), ShutdownGrace: positiveDuration(c.ShutdownGrace, 10*time.Second)}
 }
 
-type appProfilePort struct{ config Config }
+// appProfilePort keeps only the execution facts needed to resolve one entry.
+// It must not retain app.Config, which also owns task/host settings and file state.
+type appProfilePort struct{ catalog execution.ProfileCatalog }
 
-func (p appProfilePort) DefaultProfileID() string { return p.config.DefaultProfileID() }
+func (p appProfilePort) DefaultProfileID() string { return p.catalog.DefaultProfileID() }
 func (p appProfilePort) HasMultipleProfiles() bool {
-	return len(p.config.AvailableExecutionProfiles()) > 1
+	return p.catalog.HasMultipleProfiles()
 }
 func (p appProfilePort) ResolveExecutionProfile(id, digest string) (execution.Config, executionmodel.FixedExecutionProfile, error) {
-	config, profile, err := p.config.ResolveExecutionProfile(id, digest)
+	config, profile, err := p.catalog.ResolveExecutionProfile(id, digest)
 	if err != nil {
 		return execution.Config{}, executionmodel.FixedExecutionProfile{}, err
 	}
-	fixed := profile.Freeze(p.config.ExecutionDirectory, config.Identity())
+	fixed := profile.Freeze(p.catalog.Directory, config.Identity())
 	if fixed.Digest == "" {
 		return execution.Config{}, executionmodel.FixedExecutionProfile{}, errors.New("selected execution profile could not be frozen")
 	}

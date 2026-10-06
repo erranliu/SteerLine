@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
+	"github.com/erranliu/SteerLine/internal/execution"
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -64,7 +66,31 @@ func TestAppConfigProjectsOwnerInputsAndSelectedProfile(t *testing.T) {
 		t.Fatalf("frozen execution input lost selected route or project identity: %+v", executionConfig)
 	}
 
-	selected, fixed, err := config.runtimeDependencies().Profiles.ResolveExecutionProfile("safe", "")
+	profiles := config.runtimeDependencies().Profiles
+	if profiles.DefaultProfileID() != "fast" || !profiles.HasMultipleProfiles() {
+		t.Fatalf("profile port lost its catalog default or profile count: default=%q multiple=%t", profiles.DefaultProfileID(), profiles.HasMultipleProfiles())
+	}
+	portType := reflect.TypeOf(appProfilePort{})
+	catalogField, hasCatalog := portType.FieldByName("catalog")
+	if portType.NumField() != 1 || !hasCatalog || catalogField.Type != reflect.TypeOf(execution.ProfileCatalog{}) {
+		t.Fatalf("app profile port retains data outside its bounded resolver catalog: %v", portType)
+	}
+	defaultConfig, defaultFixed, err := profiles.ResolveExecutionProfile("fast", "")
+	require(t, err)
+	if defaultFixed.ID != "fast" || defaultFixed.Digest == "" || defaultFixed.AcceptedConfigVersion != config.LoadedConfigDigest() || defaultFixed.PolicySource != config.projectPath {
+		t.Fatalf("default profile lost its accepted config/source identity: %+v", defaultFixed)
+	}
+	defaultPayload, err := defaultConfig.DecodeImplementationConfig(codexworker.ProfileCodecKey, config.ExecutionDirectory)
+	require(t, err)
+	defaultSettings, err := codexworker.DecodeProfileConfig(defaultPayload)
+	require(t, err)
+	if defaultSettings.Executable != "codex-fast" {
+		t.Fatalf("profile port did not select the configured default implementation: %+v", defaultSettings)
+	}
+	if _, _, err := profiles.ResolveExecutionProfile("fast", "stale-profile-digest"); err == nil || !strings.Contains(err.Error(), "stale_profile") {
+		t.Fatalf("profile port accepted a stale profile digest: %v", err)
+	}
+	selected, fixed, err := profiles.ResolveExecutionProfile("safe", "")
 	require(t, err)
 	if fixed.ID != "safe" || fixed.Digest == "" || fixed.AcceptedConfigVersion != config.LoadedConfigDigest() || selected.Host != "local" {
 		t.Fatalf("profile port did not return one exact frozen selection: config=%+v fixed=%+v", selected, fixed)
