@@ -108,7 +108,7 @@
         },
         {
           "parent": "TestTM06ContractValueClosure",
-          "subtests": ["internal/product/api", "internal/product/api/alongside_execution_model_path", "internal/product/query/taskgraph", "internal/product/query/taskgraph/alongside_execution_model_path"],
+          "subtests": ["product/api", "product/api/alongside_execution_model_path", "product/query/taskgraph", "product/query/taskgraph/alongside_execution_model_path"],
           "assertions": "An unrelated transitive helper cannot expose product DTO/query implementations, even when another legal execution model path exists; inactive-tag and Windows/Linux go-list checks both reject."
         },
         {
@@ -148,7 +148,7 @@
         { "parent": "TestParseKeepsNestedDurationsSeparateAndUsesTimestampWall", "subtests": [], "assertions": "Keep nested parent/child/package durations separate, use event timestamps for wall time, and retain slowest ordering." },
         { "parent": "TestParseDoesNotSumParallelPackageTimesAsWallTime", "subtests": [], "assertions": "Parallel package elapsed totals must not be reported as event wall time." },
         { "parent": "TestParseReportsFailuresSkipsAndProcessExit", "subtests": [], "assertions": "Preserve failed/skipped tests and packages plus process exit status." },
-        { "parent": "TestParseRejectsMalformedTruncatedAndMissingTerminalEvents", "subtests": ["malformed", "truncated", "missing package end"], "assertions": "Malformed, truncated, or unfinished logs are incomplete and cannot pass." },
+        { "parent": "TestParseRejectsMalformedTruncatedAndMissingTerminalEvents", "subtests": ["malformed", "truncated", "missing_package_end"], "assertions": "Malformed, truncated, or unfinished logs are incomplete and cannot pass." },
         { "parent": "TestParseTreatsProcessFailureWithoutTerminalTestsAsIncomplete", "subtests": [], "assertions": "A non-zero process exit without a terminal test failure is incomplete." },
         { "parent": "TestParseToolchainBuildEventsPreservesActualFailures", "subtests": [], "assertions": "Preserve toolchain build-fail/build-output records and the actual package failure identity." }
       ]
@@ -193,7 +193,7 @@
       "subtests": {
         "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests": ["product/query/taskgraph", "task", "task/model", "execution/model", "execution/backend", "execution/conversation", "product/api", "storage/ports"],
         "TestCD67CoreBoundary/negative_source_fixtures": ["mixed_case_text_in_other_os_test", "mixed_case_filename", "direct_import_behind_tag", "transitive_helper_edge", "nested_generated_name_is_not_an_exclusion", "top_level_output_name_is_not_an_exclusion", "reverse_implementation_edge", "reverse_storage_edge", "concrete_storage_edge", "transitive_storage_edge", "reverse_client_subpackage"],
-        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests": ["app/host", "database/sql", "modernc.org/sqlite", "storage/sqlite", "execution/adapters/codex", "execution/adapters/orcaremote", "execution/process", "product/client", "product/query", "execution/workspace", "execution/publication", "app", "transitive_test_helper"]
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests": ["github.com/erranliu/SteerLine/internal/app/host", "database/sql", "modernc.org/sqlite", "github.com/erranliu/SteerLine/internal/storage/sqlite", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", "github.com/erranliu/SteerLine/internal/execution/process", "github.com/erranliu/SteerLine/internal/product/client", "github.com/erranliu/SteerLine/internal/product/query", "github.com/erranliu/SteerLine/internal/execution/workspace", "github.com/erranliu/SteerLine/internal/execution/publication", "github.com/erranliu/SteerLine/internal/app", "transitive_test_helper"]
       },
       "assertion": "The existing cross-module caller remains in tests/integration; all positive owner inventory, all negative injected paths, and Windows/Linux production graphs remain asserted."
     }
