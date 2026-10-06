@@ -1,0 +1,17 @@
+{
+  "id": "fixed-l1",
+  "source_commit": "576dd464ffc3586c5da8d4cbd72d9316b598df76",
+  "worktree_before": "",
+  "command": "go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-09-testkit-integration/l1/commit-bound-01",
+  "goos": "windows",
+  "steerline_home": "%TEMP%\\sl81l01",
+  "native_opt_in": false,
+  "started_at": "2026-10-06T06:36:27.0402116Z",
+  "finished_at": "2026-10-06T06:52:47.3719018Z",
+  "elapsed_seconds": 980.332,
+  "exit_code": 0,
+  "steerline_home_contents_before_cleanup": [],
+  "steerline_home_cleanup": "removed; verified under %TEMP%",
+  "steerline_home_env_restored": true,
+  "cleanup_manifest": "docs/validation/three-line-09-testkit-integration/cleanup-manifest.json"
+}

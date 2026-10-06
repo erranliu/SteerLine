@@ -1,0 +1,92 @@
+{
+  "source_commit": "576dd464ffc3586c5da8d4cbd72d9316b598df76",
+  "isolated_homes": [
+    {
+      "run_id": "runner/commit-bound-01/run-metadata.json",
+      "temp_home": "%TEMP%\\sl81r01",
+      "contents_before_cleanup": [],
+      "removed": true,
+      "environment_restored": true
+    },
+    {
+      "run_id": "runner/commit-bound-02/run-metadata.json",
+      "temp_home": "%TEMP%\\sl81r02",
+      "contents_before_cleanup": [],
+      "removed": true,
+      "environment_restored": true
+    },
+    {
+      "run_id": "integration/commit-bound-01/run-metadata.json",
+      "temp_home": "%TEMP%\\sl81i01",
+      "contents_before_cleanup": [
+        {
+          "relative_path": "execution.json",
+          "bytes": 849,
+          "sha256": "8A39218F45758F1BF5ED38622A50B9742B0EF19D1890D7C9AC5F572900ACB993"
+        }
+      ],
+      "removed": true,
+      "environment_restored": true
+    },
+    {
+      "run_id": "e2e-build/commit-bound-01/run-metadata.json",
+      "temp_home": "%TEMP%\\sl81e01",
+      "contents_before_cleanup": [],
+      "removed": true,
+      "environment_restored": true
+    },
+    {
+      "run_id": "l1/commit-bound-01/run-metadata.json",
+      "temp_home": "%TEMP%\\sl81l01",
+      "contents_before_cleanup": [],
+      "removed": true,
+      "environment_restored": true
+    }
+  ],
+  "duplicate_invocation_logs": [
+    {
+      "run_id": "targeted-runner-testkit-initial",
+      "temp_file": "%TEMP%\\sl81r01-invocation.log",
+      "evidence_file": "runner/commit-bound-01/invocation.log",
+      "bytes": 617,
+      "sha256": "1BE2EAA92E7C1961628D61FF2D035B0BB5CB2ACBAEE1B99BFAD9452EF2DCD5C7",
+      "verified_copy_then_removed": true
+    },
+    {
+      "run_id": "targeted-runner-testkit",
+      "temp_file": "%TEMP%\\sl81r02-invocation.log",
+      "evidence_file": "runner/commit-bound-02/invocation.log",
+      "bytes": 132,
+      "sha256": "098947044493C22A1EE03F3234F9EC3862556BF9E1BAB0BF6A9F83433CC67CF9",
+      "verified_copy_then_removed": true
+    },
+    {
+      "run_id": "fixed-quick-boundary-integration",
+      "temp_file": "%TEMP%\\sl81i01-invocation.log",
+      "evidence_file": "integration/commit-bound-01/invocation.log",
+      "bytes": 138,
+      "sha256": "A13C8F2DF9CB870A041042E86EC6B61E28A53A4DE9A3FB0BA5D88747AD749B28",
+      "verified_copy_then_removed": true
+    },
+    {
+      "run_id": "registered-e2e-build",
+      "temp_file": "%TEMP%\\sl81e01-go-test.log",
+      "evidence_file": "e2e-build/commit-bound-01/go-test.log",
+      "bytes": 947,
+      "sha256": "BE80AAD51087D842FED95B3745D0A7711D5243D290F69DA1000E43F9205B6717",
+      "verified_copy_then_removed": true
+    },
+    {
+      "run_id": "fixed-l1",
+      "temp_file": "%TEMP%\\sl81l01-invocation.log",
+      "evidence_file": "l1/commit-bound-01/invocation.log",
+      "bytes": 160,
+      "sha256": "EFC95DDE2A375EF3A2A5FE3751A9B633FA879D17F5744A97F613C2820F9A22E9",
+      "verified_copy_then_removed": true
+    }
+  ],
+  "all_task_temp_homes_removed": true,
+  "all_temporary_environments_restored": true,
+  "all_invocation_log_copies_hash_verified": true,
+  "duplicate_temp_log_files_removed": true
+}

@@ -1,0 +1,22 @@
+{
+  "id": "fixed-quick-boundary-integration",
+  "source_commit": "576dd464ffc3586c5da8d4cbd72d9316b598df76",
+  "worktree_before": "",
+  "command": "go run ./cmd/test-feedback -out docs/validation/three-line-09-testkit-integration/integration/commit-bound-01 -- ./tests/integration -run '^(TestCD67CoreBoundary|TestCD67AdditionalImplementation|TestTM04ExecutionWiring|TestTM06ResourceWiring|TestTM07StorageWiring|TestTM08AppHostWiring|TestAppRequirementsClaimFreezesEvaluatedProfile)$' -count=1 -timeout=15m",
+  "goos": "windows",
+  "steerline_home": "%TEMP%\\sl81i01",
+  "started_at": "2026-10-06T06:23:57.1907045Z",
+  "finished_at": "2026-10-06T06:35:30.0678048Z",
+  "elapsed_seconds": 692.877,
+  "exit_code": 0,
+  "steerline_home_contents_before_cleanup": [
+    {
+      "relative_path": "execution.json",
+      "bytes": 849,
+      "sha256": "8A39218F45758F1BF5ED38622A50B9742B0EF19D1890D7C9AC5F572900ACB993"
+    }
+  ],
+  "steerline_home_cleanup": "removed; verified under %TEMP%",
+  "steerline_home_env_restored": true,
+  "cleanup_manifest": "docs/validation/three-line-09-testkit-integration/cleanup-manifest.json"
+}

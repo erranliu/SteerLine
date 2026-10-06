@@ -59,7 +59,12 @@
       "internal/testkit/protocol/supervised.go",
       "internal/testkit/protocol/terminal.go"
     ],
-    "note": "Do not remigrate these #80 files or rewrite their verification status. TestMC* ownership is in internal/execution/tests/integration, not the deleted old root package."
+    "test_mc_owners": {
+      "execution_unit": "internal/execution/candidate_workers_test.go",
+      "real_app_integration": "tests/integration/execution_wiring_test.go",
+      "retired_plan_path": "internal/steerline/candidate_workers_test.go"
+    },
+    "note": "Do not remigrate these #80 files or rewrite their verification status. TestMC* owners are the current execution unit and real-app integration files above, not the deleted old root package."
   },
   "package_moves": [
     {
@@ -257,7 +262,7 @@
     { "level": "L2/L3/live", "reason": "No E2E scenario or environment capability changes; registered scenario code is compile checked, not executed." },
     { "level": "native acceptance", "reason": "Process implementation moves without behavior changes; existing #38/#39 evidence remains historical and is not re-claimed." }
   ],
-  "implementation_source_commit": "pending",
+  "implementation_source_commit": "576dd464ffc3586c5da8d4cbd72d9316b598df76",
   "runs": [
     {
       "id": "targeted-runner-testkit-initial",
@@ -278,6 +283,107 @@
       "diagnosis": "The moved boundary package is three directories below the repository root, not four; its root calculations ascended one level too far. The E2E boundary test's list helper also retained a now-unused runtime.Caller variable and os import.",
       "evidence": "docs/validation/three-line-09-testkit-integration/runner/commit-bound-01/",
       "disposition": "preserved verbatim and rerunning on the repaired source commit in the fresh runner/commit-bound-02 directory"
+    },
+    {
+      "id": "targeted-runner-testkit",
+      "source_commit": "576dd464ffc3586c5da8d4cbd72d9316b598df76",
+      "status": "passed",
+      "command_exit_code": 0,
+      "runner_wall_seconds": 11.7288741,
+      "wrapper_elapsed_seconds": 12.784,
+      "package_count": 5,
+      "test_count": 108,
+      "passed_tests": 108,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "package_summaries": [
+        { "package": "internal/testkit/boundary", "status": "pass" },
+        { "package": "internal/testkit/boundary/e2e", "status": "pass" },
+        { "package": "internal/testkit/feedback", "status": "pass" },
+        { "package": "internal/testkit/process", "status": "pass" },
+        { "package": "cmd/test-feedback", "status": "pass" }
+      ],
+      "actual_full_inventory_test": "TestFullPackageEnumerationIncludesTestkitOwners:pass",
+      "summary": "docs/validation/three-line-09-testkit-integration/runner/commit-bound-02/summary.json",
+      "raw_test_events": "docs/validation/three-line-09-testkit-integration/runner/commit-bound-02/go-test.jsonl",
+      "invocation": "docs/validation/three-line-09-testkit-integration/runner/commit-bound-02/invocation.log",
+      "metadata": "docs/validation/three-line-09-testkit-integration/runner/commit-bound-02/run-metadata.json"
+    },
+    {
+      "id": "fixed-quick-boundary-integration",
+      "source_commit": "576dd464ffc3586c5da8d4cbd72d9316b598df76",
+      "status": "passed",
+      "command_exit_code": 0,
+      "runner_wall_seconds": 692.0894906,
+      "wrapper_elapsed_seconds": 692.877,
+      "package_count": 1,
+      "test_count": 59,
+      "passed_tests": 59,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "selected_parents": ["TestCD67CoreBoundary", "TestCD67AdditionalImplementation", "TestTM04ExecutionWiring", "TestTM06ResourceWiring", "TestTM07StorageWiring", "TestTM08AppHostWiring", "TestAppRequirementsClaimFreezesEvaluatedProfile"],
+      "critical_actual_subtests": [
+        "TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt:pass",
+        "TestTM04ExecutionWiring/intent_binding_and_two_original_turns:pass",
+        "TestTM04ExecutionWiring/original_request_ack_and_manual_recovery:pass",
+        "TestTM08AppHostWiring/default_app_host_composition:pass",
+        "TestAppRequirementsClaimFreezesEvaluatedProfile/default_profile:pass",
+        "TestAppRequirementsClaimFreezesEvaluatedProfile/explicit_selected_profile:pass"
+      ],
+      "summary": "docs/validation/three-line-09-testkit-integration/integration/commit-bound-01/summary.json",
+      "raw_test_events": "docs/validation/three-line-09-testkit-integration/integration/commit-bound-01/go-test.jsonl",
+      "invocation": "docs/validation/three-line-09-testkit-integration/integration/commit-bound-01/invocation.log",
+      "metadata": "docs/validation/three-line-09-testkit-integration/integration/commit-bound-01/run-metadata.json"
+    },
+    {
+      "id": "registered-e2e-build",
+      "source_commit": "576dd464ffc3586c5da8d4cbd72d9316b598df76",
+      "status": "compile_passed",
+      "command_exit_code": 0,
+      "elapsed_seconds": 4.898,
+      "compiled_package_count": 11,
+      "scenario_tests_executed": 0,
+      "scenario_registry_ids": 10,
+      "suite_registry_unchanged_from_source_commit": true,
+      "output_contains_no_tests_to_run": true,
+      "log": "docs/validation/three-line-09-testkit-integration/e2e-build/commit-bound-01/go-test.log",
+      "metadata": "docs/validation/three-line-09-testkit-integration/e2e-build/commit-bound-01/run-metadata.json"
+    },
+    {
+      "id": "fixed-l1",
+      "source_commit": "576dd464ffc3586c5da8d4cbd72d9316b598df76",
+      "status": "passed",
+      "command_exit_code": 0,
+      "wrapper_elapsed_seconds": 980.332,
+      "group_execution_seconds": 977.0960619,
+      "group_count": 12,
+      "enumerated_package_count": 27,
+      "test_count": 459,
+      "passed_tests": 459,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "original_fixed_selection_tests_retained": 457,
+      "new_boundary_assertion_tests": ["TestProductionSourcesUseOnlyOwnedTestkitSupport", "TestIntegrationDoesNotImportE2EInternal"],
+      "groups": [
+        { "id": "quick-core", "packages": 1, "tests": 4, "passed": 4, "failed": 0, "skipped": 0 },
+        { "id": "quick-rules", "packages": 16, "tests": 258, "passed": 258, "failed": 0, "skipped": 0 },
+        { "id": "quick-execution", "packages": 1, "tests": 19, "passed": 19, "failed": 0, "skipped": 0 },
+        { "id": "quick-execution-boundary", "packages": 1, "tests": 45, "passed": 45, "failed": 0, "skipped": 0 },
+        { "id": "quick-owner-remote", "packages": 1, "tests": 15, "passed": 15, "failed": 0, "skipped": 0 },
+        { "id": "quick-owner-codec", "packages": 1, "tests": 14, "passed": 14, "failed": 0, "skipped": 0 },
+        { "id": "quick-owner-identity", "packages": 1, "tests": 17, "passed": 17, "failed": 0, "skipped": 0 },
+        { "id": "quick-owner-codexapp", "packages": 1, "tests": 4, "passed": 4, "failed": 0, "skipped": 0 },
+        { "id": "quick-owner-workspace", "packages": 1, "tests": 2, "passed": 2, "failed": 0, "skipped": 0 },
+        { "id": "quick-owner-publication", "packages": 1, "tests": 9, "passed": 9, "failed": 0, "skipped": 0 },
+        { "id": "quick-owner-app", "packages": 1, "tests": 13, "passed": 13, "failed": 0, "skipped": 0 },
+        { "id": "quick-boundary", "packages": 1, "tests": 59, "passed": 59, "failed": 0, "skipped": 0 }
+      ],
+      "summary": "docs/validation/three-line-09-testkit-integration/l1/commit-bound-01/summary.json",
+      "quick_boundary_raw_test_events": "docs/validation/three-line-09-testkit-integration/l1/commit-bound-01/quick-boundary/test.jsonl",
+      "all_group_evidence": "docs/validation/three-line-09-testkit-integration/l1/commit-bound-01/",
+      "metadata": "docs/validation/three-line-09-testkit-integration/l1/commit-bound-01/run-metadata.json"
     }
   ]
 }
