@@ -335,12 +335,33 @@ func (p *Project) StartService() {
 			s.t.Fatal("service exited; see log")
 		default:
 		}
-		runtime, err := driver.ReadRuntime(s.Context, p.Config)
+		runtime, err := p.readRuntime(s.Context)
 		if err != nil {
 			return false, err
 		}
 		return runtime != nil && runtime.Service.Ready, nil
 	})
+}
+
+// readRuntime scopes this in-process app config load to the same project home
+// passed to the service and helper processes. The E2E runner intentionally
+// clears inherited STEERLINE_* variables; restore the runner environment after
+// this one read so one project cannot change another project's config lookup.
+func (p *Project) readRuntime(ctx context.Context) (runtime *reconstruction.Runtime, err error) {
+	previous, hadPrevious := os.LookupEnv("STEERLINE_HOME")
+	if err := os.Setenv("STEERLINE_HOME", p.Home); err != nil {
+		return nil, err
+	}
+	defer func() {
+		var restoreErr error
+		if hadPrevious {
+			restoreErr = os.Setenv("STEERLINE_HOME", previous)
+		} else {
+			restoreErr = os.Unsetenv("STEERLINE_HOME")
+		}
+		err = errors.Join(err, restoreErr)
+	}()
+	return driver.ReadRuntime(ctx, p.Config)
 }
 
 func (p *Project) StopService() {

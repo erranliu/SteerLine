@@ -6,7 +6,7 @@ Starting base is the true PR226/#81 merge `9483afa13a9306e9852ef365c0746d1b5335c
 
 The current consumer/deletion audit is in [deletion-inventory.md](deletion-inventory.md). The final owner and test boundaries are in [ownership.md](ownership.md), and actual prior/new test parents, subtests and fixed TM10 mapping are in [test-mapping.json](test-mapping.json). Three real owner-rule probes and their mutation/restoration records are in [independence.md](independence.md).
 
-The only user-visible documentation corrections are current package, build/install/launcher and test paths. No product behavior, persisted format, task/candidate rule, contract, runner registration, test skip, test interface, or native support claim is changed. Historic validation/failure records and their referenced source artifacts remain intact.
+The only user-visible documentation corrections are current package, build/install/launcher and test paths. No product behavior, persisted format, task/candidate rule, contract, runner registration, test skip, test interface, or native support claim is changed. The one test-fixture correction keeps the in-process readiness read on the same existing `Project.Home` as its spawned service and restores `STEERLINE_HOME` immediately; it does not add a capability or scenario. Historic validation/failure records and their referenced source artifacts remain intact.
 
 ## Commit-bound verification
 

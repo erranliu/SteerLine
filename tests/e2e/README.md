@@ -48,6 +48,8 @@ Run 持有本次产品/helper 构建和选择；Scenario 持有 scratch/证据�
 
 任务创建/查询使用当前 CLI。领取使用公开 SubmitControl/WaitControlReceipt，先 ResolveIdentity 再计算 Profile digest，与控制台/服务一致。执行身份通过公开 reader/query 的同一事务读取，不直接写 SQL 或读取私有业务状态。
 
+分级 runner 在 E2E 测试进程中清除继承的 `STEERLINE_*` 变量；driver 启动的产品/service/helper 进程会显式得到当前 Project 的 home。Project 在进程内轮询 service runtime 时，也必须临时将 `STEERLINE_HOME` 绑定到同一个 Project home，并在读取后恢复原环境。这样不会读取机器上的全局 execution profile，也不会让相邻 Project 串用配置；它不增加产品权限、service 或 E2E 场景能力。
+
 controlled 使用真实 SteerLine、Git、SQLite，helper 实现最小 app-server 和 GitHub provider。worker 真实 commit/push/create；中心查询与核验真实合并后提交交付。loopback `git http-backend` 执行真实传输，Git 适配器保留正式 remote 身份及原始输出；外部 PR 状态只存于 provider 文件。
 
 受控场景业务上限 5 分钟，真实场景 10 分钟；多轮 `candidates` 组为 20 分钟（双候选、反馈、本机故障/放弃/新增、在途落选、合并和后继）。最后业务断言完成后冻结期限结果并停止业务 I/O，`body_finished_at` 记录该边界；独立停止服务与资源清理不改变业务期限结果，业务过期或清理失败仍不能通过。普通驱动命令 30 秒，原生资源操作 45 秒；Orca 准备总期限 4 分钟，服务清理 30 秒，外部资源清理各 2 分钟。按真实条件等待，失败不自动重跑。

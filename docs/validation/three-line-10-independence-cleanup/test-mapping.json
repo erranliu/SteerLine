@@ -25,6 +25,33 @@
     ],
     "resolution": "Keep the fixed Spec acceptance unchanged. Use existing actual owner parents listed below instead of adding mirror tests or relying on a zero-match union. The Plan's old internal/steerline/candidate_workers_test.go path is retired and the escaped Markdown table union was not a valid shell regex. Each final command is recorded verbatim in its test-feedback summary."
   },
+  "environment_diagnostics": {
+    "initial_l1": {
+      "run": "docs/validation/three-line-10-independence-cleanup/l1-20261006-01/",
+      "source_commit": "d87a714baeea5aa8a8d0173deb5a232cf0ba1d47",
+      "result": "incomplete after the 15-minute quick-boundary group; actual GIT_DIR too big failures were caused by integration Git worktrees under the longer AppData TEMP root",
+      "preserved": true
+    },
+    "short_temp_diagnostic": {
+      "run": "docs/validation/three-line-10-independence-cleanup/independence/l1-path-diagnostic-20261006-01/",
+      "source_commit": "d87a714baeea5aa8a8d0173deb5a232cf0ba1d47",
+      "parent": "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+      "result": "2 run/pass, 0 fail/skip under C:\\Users\\lmas1\\Temp; no GIT_DIR diagnostic"
+    },
+    "initial_delivery": {
+      "run": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-01/",
+      "source_commit": "d87a714baeea5aa8a8d0173deb5a232cf0ba1d47",
+      "result": "TestBasicDelivery failed at service readiness because the in-process readiness reader did not bind STEERLINE_HOME to the scenario Project.Home; e2eEnvironment clears inherited STEERLINE_* variables",
+      "scenario_cleanup_complete": true,
+      "preserved": true
+    },
+    "fix": {
+      "owner": "tests/e2e/internal/testenv.Project.readRuntime",
+      "change": "Temporarily bind STEERLINE_HOME to the current Project.Home for the in-process app configuration/runtime read, then restore the prior process value. Service/helper child environments were already project-scoped by driver.Environment.",
+      "new_e2e_scenario_or_environment": false,
+      "product_policy_or_acceptance_changed": false
+    }
+  },
   "proofs": [
     {
       "acceptance": "TM10.1/task-selection-priority",
@@ -56,8 +83,12 @@
       ],
       "subtests": [],
       "assertions": "MC9 preserves the original request replay, start-time five-participant refusal, immediate release, and complete candidate history; sibling recovery preserves the original error and still resumes a healthy independent candidate.",
-      "mutation": "overlay only: return the first retired-candidate resume error before the loop visits later siblings; TestCandidateResumeErrorDoesNotStarveSibling must fail its healthy-sibling assertion.",
-      "after_revert": "run both actual owner parents without overlay; no task/console source change."
+      "mutation": "The first retired-candidate overlay is retained as a non-triggering diagnostic: its actual parent selection passed 2/2 because the parent did not exercise that branch. The corrected overlay changes only the active resumeRegisteredWorkerFlow error aggregation to return before the next sibling; then TestCandidateResumeErrorDoesNotStarveSibling fails its healthy-sibling assertion while TestMC9 passes.",
+      "after_revert": "Run both actual owner parents without overlay after the corrected active-branch probe; no task/console source change.",
+      "non_triggering_attempt": "docs/validation/three-line-10-independence-cleanup/independence/execution-mutated-20261006-01/",
+      "active_branch_probe": "docs/validation/three-line-10-independence-cleanup/probes/execution-active-branch/",
+      "active_branch_mutation_run": "docs/validation/three-line-10-independence-cleanup/independence/execution-active-branch-mutated-20261006-01/",
+      "restored_run": "docs/validation/three-line-10-independence-cleanup/independence/execution-active-branch-restored-20261006-01/"
     },
     {
       "acceptance": "TM10.1/console-interaction",
@@ -68,10 +99,13 @@
       "actual_parent": "TestUX4RejectPreservesDraftAndBlockerStaysIndependent",
       "actual_real_app_path": "tests/integration/candidate_console_test.go",
       "actual_real_app_parent": "TestCandidateConsoleWiring",
-      "subtests": [],
+      "subtests": {
+        "TestUX4RejectPreservesDraftAndBlockerStaysIndependent": [],
+        "TestCandidateConsoleWiring": ["merged_PR_service_guard"]
+      },
       "assertions": "Product API fixture verifies blocked input is not sent, draft/reason remain visible, and clearing the blocker never auto-submits. Real integration constructs app, client, SQLite, service and console; it verifies the public candidate request identity and fifth-participating display/refusal path.",
-      "mutation": "overlay only: remove the environment-blocker submit barrier; UX4 must fail on unexpected submission/command.",
-      "after_revert": "run UX4 and real app integration without overlay; product/api fixture and real app wiring stay unchanged."
+      "mutation": "overlay only: remove the environment-blocker submit barrier; UX4 must fail on unexpected submission/command. TestCandidateConsoleWiring separately runs against the real app/client/SQLite fixture before the overlay.",
+      "after_revert": "run UX4 without overlay; the real app wiring parent remains recorded in the pre-overlay run, with unchanged source/tree hashes."
     }
   ],
   "selected_runs": {
@@ -83,15 +117,20 @@
     "execution_probe_runs": [
       "docs/validation/three-line-10-independence-cleanup/independence/execution-before-20261006-01/",
       "docs/validation/three-line-10-independence-cleanup/independence/execution-mutated-20261006-01/",
-      "docs/validation/three-line-10-independence-cleanup/independence/execution-restored-20261006-01/"
+      "docs/validation/three-line-10-independence-cleanup/independence/execution-active-branch-mutated-20261006-01/",
+      "docs/validation/three-line-10-independence-cleanup/independence/execution-active-branch-restored-20261006-01/"
     ],
     "console_probe_runs": [
       "docs/validation/three-line-10-independence-cleanup/independence/console-before-20261006-01/",
       "docs/validation/three-line-10-independence-cleanup/independence/console-mutated-20261006-01/",
       "docs/validation/three-line-10-independence-cleanup/independence/console-restored-20261006-01/"
     ],
-    "l1": "docs/validation/three-line-10-independence-cleanup/l1-20261006-01/",
-    "delivery_basic": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-01/",
+    "l1_initial_failed_run": "docs/validation/three-line-10-independence-cleanup/l1-20261006-01/",
+    "l1_short_path_diagnostic": "docs/validation/three-line-10-independence-cleanup/independence/l1-path-diagnostic-20261006-01/",
+    "l1_pre_testenv_fix_pass": "docs/validation/three-line-10-independence-cleanup/l1-20261006-02/",
+    "l1_final_source": "docs/validation/three-line-10-independence-cleanup/l1-20261006-03/",
+    "delivery_basic_initial_failure": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-01/",
+    "delivery_basic": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-02/",
     "recovery_waiting_merge_restart": "docs/validation/three-line-10-independence-cleanup/recovery-20261006-01/"
   },
   "reports": "Filled from the commit-bound test-feedback summaries after runs complete."
