@@ -344,22 +344,34 @@ func (p *Project) StartService() {
 }
 
 // readRuntime scopes this in-process app config load to the same project home
-// passed to the service and helper processes. The E2E runner intentionally
-// clears inherited STEERLINE_* variables; restore the runner environment after
-// this one read so one project cannot change another project's config lookup.
+// and controlled provider state passed to the service and helper processes.
+// The E2E runner intentionally clears inherited STEERLINE_* variables; restore
+// the runner environment after this one read so projects cannot share config.
 func (p *Project) readRuntime(ctx context.Context) (runtime *reconstruction.Runtime, err error) {
-	previous, hadPrevious := os.LookupEnv("STEERLINE_HOME")
+	previousHome, hadHome := os.LookupEnv("STEERLINE_HOME")
+	previousState, hadState := os.LookupEnv("STEERLINE_E2E_CONTROLLED_STATE")
+	restore := func() error {
+		var restoreErr error
+		if hadState {
+			restoreErr = errors.Join(restoreErr, os.Setenv("STEERLINE_E2E_CONTROLLED_STATE", previousState))
+		} else {
+			restoreErr = errors.Join(restoreErr, os.Unsetenv("STEERLINE_E2E_CONTROLLED_STATE"))
+		}
+		if hadHome {
+			restoreErr = errors.Join(restoreErr, os.Setenv("STEERLINE_HOME", previousHome))
+		} else {
+			restoreErr = errors.Join(restoreErr, os.Unsetenv("STEERLINE_HOME"))
+		}
+		return restoreErr
+	}
 	if err := os.Setenv("STEERLINE_HOME", p.Home); err != nil {
 		return nil, err
 	}
+	if err := os.Setenv("STEERLINE_E2E_CONTROLLED_STATE", p.Provider); err != nil {
+		return nil, errors.Join(err, restore())
+	}
 	defer func() {
-		var restoreErr error
-		if hadPrevious {
-			restoreErr = os.Setenv("STEERLINE_HOME", previous)
-		} else {
-			restoreErr = os.Unsetenv("STEERLINE_HOME")
-		}
-		err = errors.Join(err, restoreErr)
+		err = errors.Join(err, restore())
 	}()
 	return driver.ReadRuntime(ctx, p.Config)
 }

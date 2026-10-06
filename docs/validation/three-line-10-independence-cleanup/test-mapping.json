@@ -45,9 +45,16 @@
       "scenario_cleanup_complete": true,
       "preserved": true
     },
+    "home_only_retry": {
+      "run": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-02/",
+      "source_commit": "fbad8755deebf84ce1358dce9d4469eadc5996a8",
+      "result": "After Project.Home scoping, the exact failure moved to the controlled-helper Git lookup because the in-process reader also lacked STEERLINE_E2E_CONTROLLED_STATE",
+      "scenario_cleanup_complete": true,
+      "preserved": true
+    },
     "fix": {
       "owner": "tests/e2e/internal/testenv.Project.readRuntime",
-      "change": "Temporarily bind STEERLINE_HOME to the current Project.Home for the in-process app configuration/runtime read, then restore the prior process value. Service/helper child environments were already project-scoped by driver.Environment.",
+      "change": "Temporarily bind both STEERLINE_HOME and STEERLINE_E2E_CONTROLLED_STATE to the current Project's home and provider path for the in-process app configuration/runtime read, then restore both prior process values on success or error. This matches driver.Environment for service/helper children.",
       "new_e2e_scenario_or_environment": false,
       "product_policy_or_acceptance_changed": false
     }
@@ -128,9 +135,10 @@
     "l1_initial_failed_run": "docs/validation/three-line-10-independence-cleanup/l1-20261006-01/",
     "l1_short_path_diagnostic": "docs/validation/three-line-10-independence-cleanup/independence/l1-path-diagnostic-20261006-01/",
     "l1_pre_testenv_fix_pass": "docs/validation/three-line-10-independence-cleanup/l1-20261006-02/",
-    "l1_final_source": "docs/validation/three-line-10-independence-cleanup/l1-20261006-03/",
+    "l1_final_source": "docs/validation/three-line-10-independence-cleanup/l1-20261006-04/",
     "delivery_basic_initial_failure": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-01/",
-    "delivery_basic": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-02/",
+    "delivery_basic_home_only_retry": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-02/",
+    "delivery_basic": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-03/",
     "recovery_waiting_merge_restart": "docs/validation/three-line-10-independence-cleanup/recovery-20261006-01/"
   },
   "reports": "Filled from the commit-bound test-feedback summaries after runs complete."
