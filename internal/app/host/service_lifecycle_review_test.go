@@ -83,22 +83,27 @@ func TestLifecycleAuditRejectedStartupPreservesOwnerFiles(t *testing.T) {
 func TestDirectServiceAndControlEntrypointsRejectMissingNativeAuthorityBeforeEffects(t *testing.T) {
 	runDir := filepath.Join(t.TempDir(), "state")
 	c := execution.Config{Repository: filepath.Join(t.TempDir(), "not-a-repository"), RunDir: runDir}
+	hostConfig := hostConfigForTest(c)
+	hostConfig.TaskAuthority = ""
+	hostConfig.RepositoryIdentity = c.Repository
 	assertAuthorityError := func(name string, err error) {
 		t.Helper()
-		if err == nil || !strings.Contains(err.Error(), "task_authority=native") {
+		if err == nil || !strings.Contains(err.Error(), "task_authority") || !strings.Contains(err.Error(), "native") {
 			t.Fatalf("%s did not reject missing native authority: %v", name, err)
 		}
 	}
-	assertAuthorityError("RunConfiguredService", testRunConfiguredService(context.Background(), c, "manual", "", "off"))
-	_, stopErr := StopService(context.Background(), hostConfigForTest(c), "operator", time.Second)
+	assertAuthorityError("RunConfiguredService", RunConfiguredService(context.Background(), hostConfig, "manual", "", "off", nil, nil, nil))
+	_, stopErr := StopService(context.Background(), hostConfig, "operator", time.Second)
 	assertAuthorityError("StopService", stopErr)
-	if _, err := ControlSnapshot(hostConfigForTest(c)); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
+	if _, err := ControlSnapshot(hostConfig); err == nil || !strings.Contains(err.Error(), "task_authority") {
 		t.Fatalf("ControlSnapshot did not reject missing native authority: %v", err)
 	}
-	if _, err := LoadDatabaseRuntime(hostConfigForTest(c)); err == nil || !strings.Contains(err.Error(), "task_authority=native") {
+	if _, err := LoadDatabaseRuntime(hostConfig); err == nil || !strings.Contains(err.Error(), "task_authority") {
 		t.Fatalf("LoadDatabaseRuntime did not reject missing native authority: %v", err)
 	}
-	assertAuthorityError("VerifyTaskContractFiles", fullFixtureTaskService(nil, c).VerifyContractFiles(context.Background(), taskmodel.TaskContract{}))
+	tasks := fullFixtureTaskService(nil, c)
+	tasks.Input.Authority = ""
+	assertAuthorityError("VerifyTaskContractFiles", tasks.VerifyContractFiles(context.Background(), taskmodel.TaskContract{}))
 	if _, err := os.Stat(runDir); !os.IsNotExist(err) {
 		t.Fatalf("rejected direct entrypoint created service state: %v", err)
 	}

@@ -196,14 +196,6 @@ func ReadApplicationProjectSnapshot(ctx context.Context, database, project, sele
 	return reader.ReadApplicationProjectSnapshot(ctx, project, selected, limit)
 }
 
-func ReadRuntime(ctx context.Context, configPath string) (*executionreconstruction.Runtime, error) {
-	config, err := steerlineapp.LoadConfig(configPath)
-	if err != nil {
-		return nil, err
-	}
-	return steerlineapp.LoadDatabaseRuntime(config)
-}
-
 // MainView exposes the same public read transaction for fixture diagnostics.
 func MainView(args []string) error {
 	fs := flag.NewFlagSet("E2E view", flag.ContinueOnError)

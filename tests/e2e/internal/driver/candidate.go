@@ -145,7 +145,7 @@ func MainCandidate(args []string) error {
 			return err
 		}
 		defer reader.Close()
-		d, err := productquery.NewService(reader, c.Identity()).Workflow(ctx, "")
+		d, err := productquery.NewService(reader, c.Identity()).Workflow(ctx, in.RunID)
 		if err != nil {
 			return err
 		}

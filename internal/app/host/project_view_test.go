@@ -2,7 +2,6 @@ package host
 
 import (
 	"context"
-	"path/filepath"
 	"testing"
 	"time"
 
@@ -70,9 +69,9 @@ func TestProjectViewFreshnessChecksUseHostSnapshot(t *testing.T) {
 		})
 	}
 	observation := ObserveRuntimeSnapshot(hostConfig, runtime, nil, view.SampledAt)
-	invalid := service.Config
-	invalid.Git.Executable = filepath.Join(t.TempDir(), "missing-git")
-	connection := ConnectServiceFromSnapshot(ctx, hostConfigForTest(invalid), observation)
+	invalid := hostConfig
+	invalid.RepositoryIdentity = ""
+	connection := ConnectServiceFromSnapshot(ctx, invalid, observation)
 	if connection.State != ConnectionIdentityError || connection.CanControl || connection.CanStart || connection.Snapshot.Runtime != observation.Runtime {
 		t.Fatal("failed identity check discarded the supplied read-only snapshot")
 	}

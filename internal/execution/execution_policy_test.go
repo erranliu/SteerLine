@@ -16,7 +16,7 @@ func workspacePolicyFixture() executionbackend.ExecutionPolicy {
 }
 
 func TestProjectPolicyMissingBoundResourcesAreNotReconstructed(t *testing.T) {
-	c := Config{ExecutionPolicy: workspacePolicyFixture()}
+	c := Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
 	e := executionmodel.ExecutionRecord{Generation: "original-generation", Process: &executionbackend.ProcessIdentity{Kind: "local"}}
 	c = withNeutralProfile(c, neutralSettings{Executable: "fixture"})
 	dependencies, _ := neutralFixtureRuntime(c)
