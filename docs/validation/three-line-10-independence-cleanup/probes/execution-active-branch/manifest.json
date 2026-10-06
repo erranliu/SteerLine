@@ -15,5 +15,5 @@
   "patch_path": "probes/execution-active-branch/patch.diff",
   "patch_sha256": "e3ee721eeebaba9f54942b5005149330c0f8df09c91ba3dd36cb8c068e4b8ac7",
   "expected_mutation_exit": 1,
-  "exact_test_feedback_command": "go run ./cmd/test-feedback -out docs/validation/three-line-10-independence-cleanup/independence/execution-active-branch-mutated-20261006-01 -- -overlay=docs/validation/three-line-10-independence-cleanup/probes/execution-active-branch/overlay.json internal/execution/worker_recovery.go -run '^(TestMC9|TestCandidateResumeErrorDoesNotStarveSibling)$' -count=1"
+  "exact_test_feedback_command": "go run ./cmd/test-feedback -out docs/validation/three-line-10-independence-cleanup/independence/execution-active-branch-mutated-20261006-01 -- -overlay=docs/validation/three-line-10-independence-cleanup/probes/execution-active-branch/overlay.json ./internal/execution -run '^(TestMC9|TestCandidateResumeErrorDoesNotStarveSibling)$' -count=1"
 }
