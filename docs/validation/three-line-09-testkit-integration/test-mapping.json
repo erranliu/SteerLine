@@ -1,0 +1,262 @@
+{
+  "schema_version": 1,
+  "task": 81,
+  "starting_head": "e3ef412fd9bd00aab2b8f06c62d97686f937b44d",
+  "predecessor": {
+    "task": 80,
+    "pr": "https://github.com/erranliu/SteerLine/pull/225",
+    "final_head": "f4bc42ba1b345ae9f46abe06dc3d75ce61ed7d5d",
+    "merged_at": "2026-10-06T05:53:10Z",
+    "merge_commit": "e3ef412fd9bd00aab2b8f06c62d97686f937b44d",
+    "history": "docs/validation/three-line-08-app-host/test-mapping.json",
+    "already_delivered_moves": [
+      "internal/steerlineintegration/** -> tests/integration/**",
+      "internal/steerline/integration/cli_test.go -> tests/integration/cli_test.go",
+      "internal/steerline/testprotocol/** -> internal/testkit/protocol/**"
+    ],
+    "current_integration_inventory": [
+      "tests/integration/additional_implementation_fixture_test.go",
+      "tests/integration/additional_publication_fixture_test.go",
+      "tests/integration/candidate_console_test.go",
+      "tests/integration/capability_composition_test.go",
+      "tests/integration/cli_lifecycle_cd67_test.go",
+      "tests/integration/cli_test.go",
+      "tests/integration/cli_window_windows_cd67_test.go",
+      "tests/integration/conversation_history_fixture_test.go",
+      "tests/integration/conversation_native_acceptance_test.go",
+      "tests/integration/core_decoupling_63_test.go",
+      "tests/integration/core_decoupling_65_test.go",
+      "tests/integration/core_decoupling_66_test.go",
+      "tests/integration/core_decoupling_67_additional_test.go",
+      "tests/integration/core_decoupling_67_boundary_test.go",
+      "tests/integration/execution_requirements_app_test.go",
+      "tests/integration/execution_wiring_test.go",
+      "tests/integration/host_config_fixture_test.go",
+      "tests/integration/lifecycle_test.go",
+      "tests/integration/native_environment_cd67_test.go",
+      "tests/integration/native_feedback_resume_test.go",
+      "tests/integration/native_profile_fixture_test.go",
+      "tests/integration/policy_admission_cd67_test.go",
+      "tests/integration/readiness_live_cd67_test.go",
+      "tests/integration/remote_admission_cd67_test.go",
+      "tests/integration/remote_fake_test.go",
+      "tests/integration/remote_protocol_test.go",
+      "tests/integration/requirement_admission_cd67_test.go",
+      "tests/integration/scoped_storage_reads_test.go",
+      "tests/integration/storage_snapshot_regressions_test.go",
+      "tests/integration/supervised_configuration_cd67_test.go",
+      "tests/integration/task_commands_fixture_test.go",
+      "tests/integration/task_wiring_test.go",
+      "tests/integration/worker_codex_live_test.go",
+      "tests/integration/worker_recovery_live_cd67_test.go"
+    ],
+    "current_protocol_inventory": [
+      "internal/testkit/protocol/appserver.go",
+      "internal/testkit/protocol/native_lock_other.go",
+      "internal/testkit/protocol/native_lock_windows.go",
+      "internal/testkit/protocol/native_lock_windows_test.go",
+      "internal/testkit/protocol/native_orca.go",
+      "internal/testkit/protocol/supervised.go",
+      "internal/testkit/protocol/terminal.go"
+    ],
+    "note": "Do not remigrate these #80 files or rewrite their verification status. TestMC* ownership is in internal/execution/tests/integration, not the deleted old root package."
+  },
+  "package_moves": [
+    {
+      "from_package": "github.com/erranliu/SteerLine/internal/coreboundary",
+      "to_package": "github.com/erranliu/SteerLine/internal/testkit/boundary",
+      "files": [
+        { "from": "internal/coreboundary/check.go", "to": "internal/testkit/boundary/check.go", "role": "all-tag source and Windows/Linux production dependency scanner" },
+        { "from": "internal/coreboundary/execution_boundary_test.go", "to": "internal/testkit/boundary/execution_boundary_test.go", "role": "TM04/05/06/07/08 guard fixtures and closure assertions" }
+      ],
+      "tests": [
+        {
+          "parent": "TestTM04ExecutionBoundary",
+          "subtests": [
+            "task_implementation_in_inactive_tag",
+            "old_host_in_other_os",
+            "concrete_storage_in_helper",
+            "adapter_in_other_os_test",
+            "product_query_in_execution",
+            "old_projection_in_execution",
+            "product_query_in_helper",
+            "new_product_query_in_helper",
+            "adapter_in_pure_reconstruction",
+            "repository_all_tags_windows_linux"
+          ],
+          "assertions": "Reject direct/transitive task, host, SQL/storage, adapter, product query/projection and reconstruction edges, including inactive tags and other OS tests; require non-empty source and Windows/Linux execution graphs with zero repository violations."
+        },
+        {
+          "parent": "TestTM08AppHostBoundary",
+          "subtests": ["transitive_execution_workspace"],
+          "assertions": "A host -> execution -> workspace path must be found by the full host closure; the real repository host scan must not contain a forbidden implementation edge."
+        },
+        {
+          "parent": "TestTM04ConsoleQueryBoundary",
+          "subtests": ["app/host/query", "app/host/projection", "execution/reconstruction"],
+          "assertions": "Console tests and inactive-tag helpers cannot regain internal query/projection or execution reconstruction access."
+        },
+        {
+          "parent": "TestTM06AdapterBoundary",
+          "subtests": ["execution", "task", "storage/ports", "database/sql", "storage/sqlite", "testkit/protocol", "app", "console", "console#01", "console/activityrender", "product/api", "product/query/taskgraph", "transitive_helper", "backend_resources_and_protocol_are_allowed"],
+          "assertions": "Reject adapter imports of application, task, storage, SQL, testkit, console and product/query values, including helper paths; preserve allowed backend/model/conversation/workspace/Codex codec imports. The duplicated console fixture remains represented."
+        },
+        {
+          "parent": "TestTM06ContractValueClosure",
+          "subtests": ["internal/product/api", "internal/product/api/alongside_execution_model_path", "internal/product/query/taskgraph", "internal/product/query/taskgraph/alongside_execution_model_path"],
+          "assertions": "An unrelated transitive helper cannot expose product DTO/query implementations, even when another legal execution model path exists; inactive-tag and Windows/Linux go-list checks both reject."
+        },
+        {
+          "parent": "TestTM05ProductQueryBoundary",
+          "subtests": ["github.com/erranliu/SteerLine/internal/execution", "github.com/erranliu/SteerLine/internal/console", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", "database/sql", "github.com/erranliu/SteerLine/internal/helper"],
+          "assertions": "Reject execution, adapter, console, SQL and helper dependencies from product/query, including inactive-tag imports."
+        },
+        {
+          "parent": "TestTM07StorageBoundary",
+          "subtests": ["adapter_dependency", "application_dependency", "query_use_case", "storage_sqlite_in_reconstruction", "storage_ports_in_reconstruction"],
+          "assertions": "Reject adapter/app SQL-owner leaks and application calls from SQLite; reconstruction cannot import concrete SQLite but can import the storage port."
+        }
+      ]
+    },
+    {
+      "from_package": "github.com/erranliu/SteerLine/internal/testboundary",
+      "to_package": "github.com/erranliu/SteerLine/internal/testkit/boundary/e2e",
+      "files": [
+        { "from": "internal/testboundary/boundary_test.go", "to": "internal/testkit/boundary/e2e/boundary_test.go", "role": "production/test and E2E layer checks" }
+      ],
+      "tests": [
+        { "parent": "TestProductionHasNoTestDependencies", "subtests": [], "assertions": "Production closures rooted at cmd/steerline, app and execution cannot reach tests, runner or any testkit owner." },
+        { "parent": "TestProductionSourcesUseOnlyOwnedTestkitSupport", "subtests": [], "new": true, "assertions": "Walk every Go source file including OS/tag/generated files; only cmd/test-feedback may import feedback/process, and only the enumerated E2E helper packages may import process. No global cmd/production exemption." },
+        { "parent": "TestIntegrationDoesNotImportE2EInternal", "subtests": [], "new": true, "assertions": "Walk every tests/integration Go source file and reject direct imports of tests/e2e/internal regardless of active OS/build tag." },
+        { "parent": "TestE2EScenariosUseTestAdapters", "subtests": [], "assertions": "With e2e build tag, scenario/helper direct imports stay behind driver/native/evidence and existing product value contracts." },
+        { "parent": "TestBoundaryRulesRejectTransitiveLeaksAndDirectImplementationImports", "subtests": [], "assertions": "Synthetic transitive production leaks are reported; product value contracts remain allowed and ordinary scenarios cannot import production implementation packages." }
+      ]
+    },
+    {
+      "from_package": "github.com/erranliu/SteerLine/internal/testfeedback",
+      "to_package": "github.com/erranliu/SteerLine/internal/testkit/feedback",
+      "files": [
+        { "from": "internal/testfeedback/summary.go", "to": "internal/testkit/feedback/summary.go", "role": "Go test JSON event summary" },
+        { "from": "internal/testfeedback/summary_test.go", "to": "internal/testkit/feedback/summary_test.go", "role": "package-local summary contract tests" }
+      ],
+      "tests": [
+        { "parent": "TestParseKeepsNestedDurationsSeparateAndUsesTimestampWall", "subtests": [], "assertions": "Keep nested parent/child/package durations separate, use event timestamps for wall time, and retain slowest ordering." },
+        { "parent": "TestParseDoesNotSumParallelPackageTimesAsWallTime", "subtests": [], "assertions": "Parallel package elapsed totals must not be reported as event wall time." },
+        { "parent": "TestParseReportsFailuresSkipsAndProcessExit", "subtests": [], "assertions": "Preserve failed/skipped tests and packages plus process exit status." },
+        { "parent": "TestParseRejectsMalformedTruncatedAndMissingTerminalEvents", "subtests": ["malformed", "truncated", "missing package end"], "assertions": "Malformed, truncated, or unfinished logs are incomplete and cannot pass." },
+        { "parent": "TestParseTreatsProcessFailureWithoutTerminalTestsAsIncomplete", "subtests": [], "assertions": "A non-zero process exit without a terminal test failure is incomplete." },
+        { "parent": "TestParseToolchainBuildEventsPreservesActualFailures", "subtests": [], "assertions": "Preserve toolchain build-fail/build-output records and the actual package failure identity." }
+      ]
+    },
+    {
+      "from_package": "github.com/erranliu/SteerLine/internal/testprocess",
+      "to_package": "github.com/erranliu/SteerLine/internal/testkit/process",
+      "files": [
+        { "from": "internal/testprocess/process.go", "to": "internal/testkit/process/process.go", "role": "process owner and Wait/Stop/Run lifecycle" },
+        { "from": "internal/testprocess/process_unix.go", "to": "internal/testkit/process/process_unix.go", "role": "Unix process-group implementation" },
+        { "from": "internal/testprocess/process_windows.go", "to": "internal/testkit/process/process_windows.go", "role": "Windows Job descendant lifecycle implementation" },
+        { "from": "internal/testprocess/process_test.go", "to": "internal/testkit/process/process_test.go", "role": "generic cleanup error contract" },
+        { "from": "internal/testprocess/process_windows_test.go", "to": "internal/testkit/process/process_windows_test.go", "role": "Windows child-process ownership/cleanup fixture" }
+      ],
+      "tests": [
+        { "parent": "TestProcessReportsDescendantCleanupFailure", "subtests": [], "assertions": "Wait/Stop preserve both the root exit error and descendant cleanup failure; clean cleanup does not replace the original command error." },
+        { "parent": "TestOwnedProcessWaitsForDescendants", "subtests": ["parent-exit", "stop"], "assertions": "Done is published only after eight child processes exit and exclusive child-file handles release; cleanup succeeds immediately without retrying deletion." },
+        { "parent": "TestOwnedProcessHelper", "subtests": [], "assertions": "Preserve the Windows parent/child fixture entry used by both ownership cases." }
+      ]
+    }
+  ],
+  "consumers": [
+    {
+      "file": "cmd/test-feedback/scoped.go",
+      "changes": ["testfeedback import -> internal/testkit/feedback", "quick-rules package -> internal/testkit/boundary/e2e", "quick-execution-boundary package -> internal/testkit/boundary"],
+      "assertion": "The original L1 parent/subtest selection remains unchanged; the moved support tests are assigned to their final owners without duplicate package runs."
+    },
+    {
+      "file": "cmd/test-feedback/main.go, cmd/test-feedback/e2e.go, cmd/test-feedback/scoped_test.go, cmd/test-feedback/e2e_test.go, cmd/test-feedback/full_owner_test.go",
+      "changes": ["summary types/parser imports -> internal/testkit/feedback", "L1 option parser fixture path -> ./internal/testkit/feedback"],
+      "assertion": "Runner summaries and full coverage checks use the only feedback package; `TestFullPackageEnumerationIncludesTestkitOwners` requires boundary, boundary/e2e, feedback, process and protocol in `go list ./...`."
+    },
+    {
+      "files": ["cmd/test-feedback/process_unix.go", "cmd/test-feedback/process_windows.go", "tests/e2e/cmd/sandbox-setup/main.go", "tests/e2e/internal/controlled/gitserver.go", "tests/e2e/internal/controlled/state.go", "tests/e2e/internal/driver/driver.go", "tests/e2e/internal/native/orca.go", "tests/e2e/internal/testenv/env.go", "tests/e2e/internal/testenv/env_test.go", "tests/e2e/internal/testenv/github.go", "tests/e2e/internal/testenv/live.go"],
+      "changes": ["testprocess import -> internal/testkit/process"],
+      "assertion": "Only the existing tool and E2E resource helpers consume the process owner; Windows/Unix build tags and cleanup behavior stay unchanged."
+    },
+    {
+      "file": "tests/integration/core_decoupling_67_boundary_test.go",
+      "changes": ["coreboundary import -> internal/testkit/boundary"],
+      "tests": ["TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests", "TestCD67CoreBoundary/negative_source_fixtures", "TestCD67CoreBoundary/repository_all_tags_and_production_graphs", "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests"],
+      "subtests": {
+        "TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests": ["product/query/taskgraph", "task", "task/model", "execution/model", "execution/backend", "execution/conversation", "product/api", "storage/ports"],
+        "TestCD67CoreBoundary/negative_source_fixtures": ["mixed_case_text_in_other_os_test", "mixed_case_filename", "direct_import_behind_tag", "transitive_helper_edge", "nested_generated_name_is_not_an_exclusion", "top_level_output_name_is_not_an_exclusion", "reverse_implementation_edge", "reverse_storage_edge", "concrete_storage_edge", "transitive_storage_edge", "reverse_client_subpackage"],
+        "TestCD67CoreBoundary/console_negative_all_tags_production_and_tests": ["app/host", "database/sql", "modernc.org/sqlite", "storage/sqlite", "execution/adapters/codex", "execution/adapters/orcaremote", "execution/process", "product/client", "product/query", "execution/workspace", "execution/publication", "app", "transitive_test_helper"]
+      },
+      "assertion": "The existing cross-module caller remains in tests/integration; all positive owner inventory, all negative injected paths, and Windows/Linux production graphs remain asserted."
+    }
+  ],
+  "selection": {
+    "quick_rules": {
+      "package": "github.com/erranliu/SteerLine/internal/testkit/boundary/e2e",
+      "parents": ["TestProductionHasNoTestDependencies", "TestProductionSourcesUseOnlyOwnedTestkitSupport", "TestIntegrationDoesNotImportE2EInternal", "TestE2EScenariosUseTestAdapters", "TestBoundaryRulesRejectTransitiveLeaksAndDirectImplementationImports"]
+    },
+    "quick_execution_boundary": {
+      "package": "github.com/erranliu/SteerLine/internal/testkit/boundary",
+      "parents": ["TestTM04ExecutionBoundary", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure", "TestTM05ProductQueryBoundary", "TestTM07StorageBoundary", "TestTM08AppHostBoundary"]
+    },
+    "quick_boundary": {
+      "package": "github.com/erranliu/SteerLine/tests/integration",
+      "parents": ["TestCD67CoreBoundary", "TestCD67AdditionalImplementation", "TestTM04ExecutionWiring", "TestTM06ResourceWiring", "TestTM07StorageWiring", "TestTM08AppHostWiring", "TestAppRequirementsClaimFreezesEvaluatedProfile"],
+      "critical_subtests": ["TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt", "TestTM04ExecutionWiring/intent_binding_and_two_original_turns", "TestTM04ExecutionWiring/original_request_ack_and_manual_recovery", "TestTM08AppHostWiring/default_app_host_composition", "TestAppRequirementsClaimFreezesEvaluatedProfile/default_profile", "TestAppRequirementsClaimFreezesEvaluatedProfile/explicit_selected_profile"]
+    },
+    "full": {
+      "enumerator": "go list ./...",
+      "execution_partition": "github.com/erranliu/SteerLine/internal/execution",
+      "testkit_packages_in_inventory": ["internal/testkit/boundary", "internal/testkit/boundary/e2e", "internal/testkit/feedback", "internal/testkit/process", "internal/testkit/protocol"]
+    },
+    "e2e_registration": {
+      "file": "tests/e2e/suites.json",
+      "unchanged": true,
+      "scenario_ids": ["smoke.delivery", "smoke.local-codex", "smoke.orca-codex", "delivery.basic", "delivery.local-codex", "delivery.orca-codex", "recovery.waiting-merge-restart", "recovery.local-codex", "recovery.orca-codex", "candidates.local"]
+    }
+  },
+  "planned_runs": [
+    {
+      "id": "targeted-runner-testkit",
+      "level": "targeted Go",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-09-testkit-integration/runner/commit-bound-01 -- ./cmd/test-feedback ./internal/testkit/boundary/... ./internal/testkit/feedback ./internal/testkit/process -count=1 -timeout=5m",
+      "environment": "Windows; unique short STEERLINE_HOME under $env:TEMP; no model/native opt-in; empty new runner output directory",
+      "expected": ["runner/Full owner enumeration", "all-tag production/testkit and integration/E2E-internal guards", "TM04/05/06/07/08 boundary fixtures", "feedback parser parents/subtests", "Windows Job descendant parents/subtests"],
+      "evidence": "docs/validation/three-line-09-testkit-integration/runner/commit-bound-01/"
+    },
+    {
+      "id": "fixed-quick-boundary-integration",
+      "level": "targeted Go / fixed quick-boundary group",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-09-testkit-integration/integration/commit-bound-01 -- ./tests/integration -run '^(TestCD67CoreBoundary|TestCD67AdditionalImplementation|TestTM04ExecutionWiring|TestTM06ResourceWiring|TestTM07StorageWiring|TestTM08AppHostWiring|TestAppRequirementsClaimFreezesEvaluatedProfile)$' -count=1 -timeout=15m",
+      "environment": "Windows; isolated real app construction with controlled fixtures; no live/native opt-in; original quick-boundary Go timeout 15m",
+      "expected": ["all seven fixed quick-boundary parent assignments", "the original three TM04 wiring subtests", "default/explicit requirements claim subtests", "zero skip"],
+      "evidence": "docs/validation/three-line-09-testkit-integration/integration/commit-bound-01/"
+    },
+    {
+      "id": "registered-e2e-build",
+      "level": "compile only",
+      "command": "go test -tags=e2e ./tests/e2e/... -run '^$'",
+      "environment": "Windows; no scenario body or live environment",
+      "expected": ["all E2E-tagged packages compile", "suites.json remains the same ten IDs and maps"],
+      "evidence": "docs/validation/three-line-09-testkit-integration/e2e-build/commit-bound-01/"
+    },
+    {
+      "id": "fixed-l1",
+      "level": "L1",
+      "command": "go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-09-testkit-integration/l1/commit-bound-01",
+      "environment": "Windows; unique short STEERLINE_HOME under $env:TEMP; no live/native opt-in",
+      "expected": ["all fixed L1 packages/groups", "original selected parents/subtests remain non-zero PASS", "zero failure/skip"],
+      "evidence": "docs/validation/three-line-09-testkit-integration/l1/commit-bound-01/"
+    }
+  ],
+  "not_selected": [
+    { "level": "Full", "reason": "go list ./... package inclusion has a targeted regression; the task does not change product test behavior or Full partition policy." },
+    { "level": "L2/L3/live", "reason": "No E2E scenario or environment capability changes; registered scenario code is compile checked, not executed." },
+    { "level": "native acceptance", "reason": "Process implementation moves without behavior changes; existing #38/#39 evidence remains historical and is not re-claimed." }
+  ],
+  "implementation_source_commit": "pending",
+  "runs": []
+}

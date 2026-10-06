@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/coreboundary"
+	coreboundary "github.com/erranliu/SteerLine/internal/testkit/boundary"
 )
 
 func TestCD67CoreBoundary(t *testing.T) {

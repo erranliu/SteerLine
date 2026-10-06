@@ -50,7 +50,7 @@ The host does not open SQL, import backend adapters, or apply task/execution tra
 | `internal/product/query` | Read-only projections and composition of product pages from storage ports. No SQL or business writer. |
 | `internal/console` | TUI navigation and view state; consumes only product API values and injected client interfaces. |
 | `internal/storage/ports` and `internal/storage/sqlite` | Consumer-owned narrow read/commit declarations; one SQLite implementation owns schema, SQL, WAL, CAS and transactions. |
-| `internal/testkit` and `tests/integration`, `tests/e2e` | Test-only protocol fixtures, real application composition tests, and registered controlled/native E2E scenarios. Production imports are forbidden. |
+| `internal/testkit` and `tests/integration`, `tests/e2e` | Test-only boundary guards, Go test feedback, process ownership and protocol fixtures; real application composition tests; registered controlled/native E2E scenarios. Product production imports are forbidden. |
 
 The former `internal/steerline` host/facade, `internal/steerlineapp`, `internal/steerline/contracts` and `internal/steerlineintegration` packages have no production or test import path. Tests moved to their owner or to `tests/integration`; no forwarding aliases remain.
 
@@ -68,7 +68,11 @@ The current persisted-format boundary remains strict: profile v6, `builtin-execu
 
 The boundary tests scan all OS/build-tag source files and the Windows/Linux production dependency graphs. `test-feedback -level=L1` remains the fixed quick/rule/owner selection; E2E level and scenario selection remains explicit in [`tests/e2e/README.md`](../../tests/e2e/README.md). Full, L2 and live L3 are not default requirements.
 
+Test-only support has one owner under [`internal/testkit`](../../internal/testkit): [`boundary`](../../internal/testkit/boundary/check.go) scans production ownership and architecture closures; [`boundary/e2e`](../../internal/testkit/boundary/e2e/boundary_test.go) checks test-tool consumers and E2E/import boundaries; [`feedback`](../../internal/testkit/feedback/summary.go) parses Go test events; [`process`](../../internal/testkit/process/process.go) owns test subprocess trees; and [`protocol`](../../internal/testkit/protocol) contains protocol fixtures. `cmd/test-feedback` is the only non-test source allowed to import `feedback` and `process`; the existing E2E setup/driver/native helpers may import `process`. No product source may import testkit or `tests`. Real app and cross-module tests stay in [`tests/integration`](../../tests/integration); they cannot import `tests/e2e/internal`.
+
 Task #80 ownership, moved test parents/subtests, selected groups and evidence paths are recorded in [`docs/validation/three-line-08-app-host/ownership.md`](../validation/three-line-08-app-host/ownership.md), [`test-mapping.json`](../validation/three-line-08-app-host/test-mapping.json) and [`README.md`](../validation/three-line-08-app-host/README.md).
+
+Task #81's source inventory, support-package parent/subtest mapping and commit-bound evidence are recorded in [`docs/validation/three-line-09-testkit-integration/ownership.md`](../validation/three-line-09-testkit-integration/ownership.md), [`test-mapping.json`](../validation/three-line-09-testkit-integration/test-mapping.json) and [`README.md`](../validation/three-line-09-testkit-integration/README.md). The #80 links above remain the source of history for the integration files already delivered in PR225; #81 does not replay or rewrite those moves.
 
 ## Key source entry points
 
@@ -80,3 +84,5 @@ Task #80 ownership, moved test parents/subtests, selected groups and evidence pa
 | Runtime reconstruction | [`internal/execution/reconstruction/runtime.go`](../../internal/execution/reconstruction/runtime.go), [`internal/execution/reconstruction/run.go`](../../internal/execution/reconstruction/run.go) |
 | Product reads and client | [`internal/product/query/project_page.go`](../../internal/product/query/project_page.go), [`internal/product/client/client.go`](../../internal/product/client/client.go), [`internal/console/interfaces.go`](../../internal/console/interfaces.go) |
 | Storage ports and SQLite | [`internal/storage/ports`](../../internal/storage/ports), [`internal/storage/sqlite`](../../internal/storage/sqlite) |
+| Test feedback and process support | [`internal/testkit/feedback`](../../internal/testkit/feedback), [`internal/testkit/process`](../../internal/testkit/process), [`internal/testkit/protocol`](../../internal/testkit/protocol) |
+| Boundary guards and integration tests | [`internal/testkit/boundary`](../../internal/testkit/boundary), [`internal/testkit/boundary/e2e`](../../internal/testkit/boundary/e2e), [`tests/integration`](../../tests/integration) |

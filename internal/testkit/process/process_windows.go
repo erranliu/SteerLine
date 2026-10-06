@@ -1,6 +1,6 @@
 //go:build windows
 
-package testprocess
+package process
 
 import (
 	"context"

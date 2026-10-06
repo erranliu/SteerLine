@@ -1,6 +1,6 @@
-// Package coreboundary checks the source and dependency boundaries of the core.
+// Package boundary checks source and dependency boundaries.
 // It lives outside the core so the checker cannot weaken the boundary it checks.
-package coreboundary
+package boundary
 
 import (
 	"context"
@@ -154,7 +154,7 @@ func executionForbidden(pkg string) bool {
 	if pkg == core || pkg == module+"/internal/task" || forbidden(pkg) || pkg == "database/sql" || strings.HasPrefix(pkg, "modernc.org/sqlite") {
 		return true
 	}
-	for _, owner := range []string{module + "/internal/storage/sqlite", console, productQuery, module + "/internal/product/client", module + "/internal/testboundary", module + "/internal/testfeedback"} {
+	for _, owner := range []string{module + "/internal/storage/sqlite", console, productQuery, module + "/internal/product/client"} {
 		if pkg == owner || strings.HasPrefix(pkg, owner+"/") {
 			return true
 		}

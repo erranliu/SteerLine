@@ -1,15 +1,21 @@
-package testboundary
+package e2e
 
 import (
 	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"io"
+	"io/fs"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -20,7 +26,7 @@ const module = "github.com/erranliu/SteerLine"
 func under(path, prefix string) bool { return path == prefix || strings.HasPrefix(path, prefix+"/") }
 
 func testOnly(path string) bool {
-	for _, suffix := range []string{"/tests", "/cmd/test-feedback", "/internal/testfeedback", "/internal/testprocess", "/internal/testboundary", "/internal/testkit/protocol"} {
+	for _, suffix := range []string{"/tests", "/cmd/test-feedback", "/internal/testkit"} {
 		if under(path, module+suffix) {
 			return true
 		}
@@ -33,13 +39,53 @@ type goPackage struct {
 	Imports, TestImports, XTestImports []string
 }
 
+func repositoryRoot(t *testing.T) string {
+	t.Helper()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("missing source location")
+	}
+	return filepath.Clean(filepath.Join(filepath.Dir(file), "../../../.."))
+}
+
+func walkGoSources(t *testing.T, root string, visit func(path, importer string, file *ast.File)) {
+	t.Helper()
+	err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if entry.IsDir() {
+			if entry.Name() == ".git" {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasSuffix(entry.Name(), ".go") {
+			return nil
+		}
+		parsed, err := parser.ParseFile(token.NewFileSet(), path, nil, 0)
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(root, filepath.Dir(path))
+		if err != nil {
+			return err
+		}
+		visit(path, module+"/"+filepath.ToSlash(rel), parsed)
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
 func list(t *testing.T, args ...string) []goPackage {
 	t.Helper()
 	_, file, _, _ := runtime.Caller(0)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "go", append([]string{"list", "-json"}, args...)...)
-	cmd.Dir = filepath.Clean(filepath.Join(filepath.Dir(file), "../.."))
+	cmd.Dir = repositoryRoot(t)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	raw, err := cmd.Output()
@@ -106,6 +152,67 @@ func TestProductionHasNoTestDependencies(t *testing.T) {
 	}
 	if failures := violations(graph, roots); len(failures) > 0 {
 		t.Fatalf("production imports test tooling:\n%s", strings.Join(failures, "\n"))
+	}
+}
+
+func TestProductionSourcesUseOnlyOwnedTestkitSupport(t *testing.T) {
+	process := module + "/internal/testkit/process"
+	feedback := module + "/internal/testkit/feedback"
+	allowed := map[string]map[string]bool{
+		module + "/cmd/test-feedback": {
+			feedback: true,
+			process:  true,
+		},
+		module + "/tests/e2e/cmd/sandbox-setup":   {process: true},
+		module + "/tests/e2e/internal/controlled": {process: true},
+		module + "/tests/e2e/internal/driver":     {process: true},
+		module + "/tests/e2e/internal/native":     {process: true},
+		module + "/tests/e2e/internal/testenv":    {process: true},
+	}
+	var failures []string
+	walkGoSources(t, repositoryRoot(t), func(path, importer string, file *ast.File) {
+		if strings.HasSuffix(path, "_test.go") {
+			return
+		}
+		for _, spec := range file.Imports {
+			dependency, err := strconv.Unquote(spec.Path.Value)
+			if err != nil {
+				t.Errorf("%s: invalid import: %v", path, err)
+				continue
+			}
+			if under(dependency, module+"/tests") && !(under(importer, module+"/tests/e2e") && under(dependency, module+"/tests/e2e/internal")) {
+				failures = append(failures, filepath.ToSlash(path)+" -> "+dependency)
+			}
+			if under(dependency, module+"/internal/testkit") && !allowed[importer][dependency] {
+				failures = append(failures, filepath.ToSlash(path)+" -> "+dependency)
+			}
+		}
+	})
+	if len(failures) > 0 {
+		sort.Strings(failures)
+		t.Fatalf("production source has a testkit/tests dependency outside its named tool owner:\n%s", strings.Join(failures, "\n"))
+	}
+}
+
+func TestIntegrationDoesNotImportE2EInternal(t *testing.T) {
+	root := repositoryRoot(t)
+	integration := filepath.Join(root, "tests", "integration")
+	var failures []string
+	walkGoSources(t, integration, func(path, importer string, file *ast.File) {
+		for _, spec := range file.Imports {
+			dependency, err := strconv.Unquote(spec.Path.Value)
+			if err != nil {
+				t.Errorf("%s: invalid import: %v", path, err)
+				continue
+			}
+			if under(dependency, module+"/tests/e2e/internal") {
+				failures = append(failures, filepath.ToSlash(path)+" -> "+dependency)
+			}
+		}
+	})
+	if len(failures) > 0 {
+		sort.Strings(failures)
+		t.Fatalf("tests/integration imports E2E internal packages:\n%s", strings.Join(failures, "\n"))
 	}
 }
 

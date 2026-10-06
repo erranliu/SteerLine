@@ -19,7 +19,7 @@ import (
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
-	"github.com/erranliu/SteerLine/internal/testprocess"
+	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 )
 
 type Client struct {

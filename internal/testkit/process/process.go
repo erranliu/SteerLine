@@ -1,5 +1,5 @@
-// Package testprocess owns test child processes and their descendants.
-package testprocess
+// Package process owns test child processes and their descendants.
+package process
 
 import (
 	"context"

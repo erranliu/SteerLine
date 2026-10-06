@@ -1,4 +1,4 @@
-package testprocess
+package process
 
 import (
 	"context"

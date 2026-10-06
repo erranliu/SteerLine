@@ -17,7 +17,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/testfeedback"
+	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
 )
 
 type e2eScenario struct {

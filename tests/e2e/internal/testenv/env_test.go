@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/testprocess"
+	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 )
 

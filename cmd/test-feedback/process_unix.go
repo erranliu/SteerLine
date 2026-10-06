@@ -4,7 +4,7 @@ package main
 
 import (
 	"context"
-	"github.com/erranliu/SteerLine/internal/testprocess"
+	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"os/exec"
 )
 

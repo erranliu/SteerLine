@@ -19,7 +19,7 @@ import (
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/testprocess"
+	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 )
 
 // gitServer is a loopback CGI transport for the real Git http-backend.

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/testprocess"
+	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 )
 
 type OrcaEnvironment struct{ Executable, Home, LogDir, PowerShellDir string }

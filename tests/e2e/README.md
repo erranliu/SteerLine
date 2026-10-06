@@ -42,7 +42,7 @@ go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delive
 
 依赖边界保持同仓、同 go.mod：driver 调用产品现有控制/查询接口；native 集中原生可执行文件、执行配置和 Orca CLI 解码；evidence 通过实现 codec 验证原 profile/resource/session/回合，输出测试自有模型数据与统一校验。testenv 和业务场景只组织现场、消费适配层及 contracts/task 数据合同，不直接导入生产 facade 或 Codex/Orca 实现包。实现重构时优先修改适配层，不复制 codec 或增加测试专用生产接口。
 
-L1/quick 固定执行 `internal/testboundary`：检查生产依赖闭包不能到达 tests、runner、fixture、测试进程包；检查启用 e2e tag 的 Go 导入（包括场景测试和 helper），实现依赖只能出现在 driver/native/evidence。fixture 包作为库存入口时不视为生产入口，但生产经任何中间包引用 fixture 都会失败。可独立运行 `go test ./internal/testboundary -count=1`，无模型请求。
+L1/quick 固定执行 `internal/testkit/boundary/e2e`，并在 `internal/testkit/boundary` 运行 execution/product/storage 边界：检查生产依赖闭包不能到达 testkit、tests、runner 或 fixture；检查启用 e2e tag 的 Go 导入（包括场景测试和 helper），实现依赖只能出现在 driver/native/evidence。fixture 包作为库存入口时不视为生产入口，但生产经任何中间包引用 fixture 都会失败。可独立运行 `go test ./internal/testkit/boundary/... -count=1`，无模型请求。
 
 Run 持有本次产品/helper 构建和选择；Scenario 持有 scratch/证据；Project 持有 home、Git、SQLite、服务/provider；Task 来自正式创建回执，Spec/Plan 真实提交并绑定。不同项目不共享可写资源，重启保留原现场，重跑创建新现场。服务/helper 子进程使用 Windows Job 所有权管理，清理本次进程树。
 

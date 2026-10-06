@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/testfeedback"
+	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
 )
 
 func TestPrepareFullCoreEnumeratesExecutionBusinessTests(t *testing.T) {
@@ -29,6 +30,43 @@ func TestPrepareFullCoreEnumeratesExecutionBusinessTests(t *testing.T) {
 	}
 	if !slices.Contains(names, "TestCandidateResumeErrorDoesNotStarveSibling") || !slices.Contains(names, "TestWorkerFlowClaimNeedsNoProjectSteps") {
 		t.Fatal("Full partition omitted the migrated execution business tests")
+	}
+}
+
+func TestFullPackageEnumerationIncludesTestkitOwners(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	_, file, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("missing source location")
+	}
+	original, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		if err := os.Chdir(original); err != nil {
+			t.Error(err)
+		}
+	}()
+	if err := os.Chdir(filepath.Clean(filepath.Join(filepath.Dir(file), "../.."))); err != nil {
+		t.Fatal(err)
+	}
+	packages, err := listPackages(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []string{
+		"github.com/erranliu/SteerLine/internal/testkit/boundary",
+		"github.com/erranliu/SteerLine/internal/testkit/boundary/e2e",
+		"github.com/erranliu/SteerLine/internal/testkit/feedback",
+		"github.com/erranliu/SteerLine/internal/testkit/process",
+		"github.com/erranliu/SteerLine/internal/testkit/protocol",
+	}
+	for _, owner := range want {
+		if !slices.Contains(packages, owner) {
+			t.Errorf("Full package enumeration omitted testkit owner %s", owner)
+		}
 	}
 }
 

@@ -1,4 +1,4 @@
-package coreboundary
+package boundary
 
 import (
 	"context"
@@ -52,7 +52,7 @@ func TestTM04ExecutionBoundary(t *testing.T) {
 		if !ok {
 			t.Fatal("source location unavailable")
 		}
-		report, err := Check(context.Background(), filepath.Clean(filepath.Join(filepath.Dir(file), "../..")))
+		report, err := Check(context.Background(), filepath.Clean(filepath.Join(filepath.Dir(file), "../../../..")))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -88,7 +88,7 @@ func TestTM08AppHostBoundary(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	_, file, _, _ := runtime.Caller(0)
-	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	root := filepath.Clean(filepath.Join(filepath.Dir(file), "../../../.."))
 	report, err := Check(ctx, root)
 	if err != nil {
 		t.Fatal(err)

@@ -1,4 +1,4 @@
-package testfeedback
+package feedback
 
 import (
 	"bufio"
