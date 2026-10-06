@@ -222,10 +222,10 @@
     {
       "id": "targeted-runner-testkit",
       "level": "targeted Go",
-      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-09-testkit-integration/runner/commit-bound-01 -- ./cmd/test-feedback ./internal/testkit/boundary/... ./internal/testkit/feedback ./internal/testkit/process -count=1 -timeout=5m",
+      "command": "go run ./cmd/test-feedback -out docs/validation/three-line-09-testkit-integration/runner/commit-bound-02 -- ./cmd/test-feedback ./internal/testkit/boundary/... ./internal/testkit/feedback ./internal/testkit/process -count=1 -timeout=5m",
       "environment": "Windows; unique short STEERLINE_HOME under $env:TEMP; no model/native opt-in; empty new runner output directory",
       "expected": ["runner/Full owner enumeration", "all-tag production/testkit and integration/E2E-internal guards", "TM04/05/06/07/08 boundary fixtures", "feedback parser parents/subtests", "Windows Job descendant parents/subtests"],
-      "evidence": "docs/validation/three-line-09-testkit-integration/runner/commit-bound-01/"
+      "evidence": "docs/validation/three-line-09-testkit-integration/runner/commit-bound-02/"
     },
     {
       "id": "fixed-quick-boundary-integration",
@@ -258,5 +258,26 @@
     { "level": "native acceptance", "reason": "Process implementation moves without behavior changes; existing #38/#39 evidence remains historical and is not re-claimed." }
   ],
   "implementation_source_commit": "pending",
-  "runs": []
+  "runs": [
+    {
+      "id": "targeted-runner-testkit-initial",
+      "source_commit": "8865040b509952858c169a420a1251e875ed7ccc",
+      "status": "failed",
+      "command_exit_code": 1,
+      "runner_wall_seconds": 14.8819104,
+      "wrapper_elapsed_seconds": 18.942,
+      "test_count": 103,
+      "passed_tests": 100,
+      "failed_tests": 3,
+      "skipped_tests": 0,
+      "failed_tests_and_build": [
+        "internal/testkit/boundary:TestTM04ExecutionBoundary/repository_all_tags_windows_linux (windows go list used the wrong root)",
+        "internal/testkit/boundary:TestTM08AppHostBoundary (windows go list used the wrong root)",
+        "internal/testkit/boundary/e2e build (unused os import and unused local file after moving list root resolution)"
+      ],
+      "diagnosis": "The moved boundary package is three directories below the repository root, not four; its root calculations ascended one level too far. The E2E boundary test's list helper also retained a now-unused runtime.Caller variable and os import.",
+      "evidence": "docs/validation/three-line-09-testkit-integration/runner/commit-bound-01/",
+      "disposition": "preserved verbatim and rerunning on the repaired source commit in the fresh runner/commit-bound-02 directory"
+    }
+  ]
 }

@@ -10,7 +10,6 @@ import (
 	"go/token"
 	"io"
 	"io/fs"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -81,7 +80,6 @@ func walkGoSources(t *testing.T, root string, visit func(path, importer string, 
 
 func list(t *testing.T, args ...string) []goPackage {
 	t.Helper()
-	_, file, _, _ := runtime.Caller(0)
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	cmd := exec.CommandContext(ctx, "go", append([]string{"list", "-json"}, args...)...)
