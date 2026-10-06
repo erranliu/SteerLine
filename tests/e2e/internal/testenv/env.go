@@ -47,6 +47,7 @@ type Scenario struct {
 type Project struct {
 	Scenario                                                              *Scenario
 	Name, Root, Home, Repo, Remote, RemoteURL, Config, Database, Provider string
+	ProjectID, DatabaseID                                                 string
 	Driver                                                                driver.Client
 	Service                                                               *testprocess.Process
 	GitServer                                                             *testprocess.Process
@@ -304,6 +305,9 @@ func (p *Project) CreateTasks() {
 	if !validation.Valid {
 		s.t.Fatalf("invalid task batch: %+v", validation)
 	}
+	if validation.ProjectID != batch.ProjectID || validation.DatabaseID == "" {
+		s.t.Fatal("task validation did not bind the owned project/database identity")
+	}
 	raw, err = p.Driver.Run(s.Context, "task", "create", "-config", p.Config, "-file", input, "-request-id", strings.ReplaceAll(uuid.NewString(), "-", ""), "-expected-authority-version", strconv.FormatUint(validation.AuthorityVersion, 10), "-by", "e2e")
 	s.Must(err)
 	var receipt taskmodel.TaskBatchReceipt
@@ -311,6 +315,7 @@ func (p *Project) CreateTasks() {
 	if receipt.Status != "accepted" {
 		s.t.Fatalf("unexpected create receipt: %+v", receipt)
 	}
+	p.ProjectID, p.DatabaseID = validation.ProjectID, validation.DatabaseID
 	for key, t := range p.Tasks {
 		id, ok := receipt.TaskIDs[key]
 		if !ok {
@@ -405,17 +410,19 @@ func snapshotFromApplicationRead(read storageports.ApplicationProjectSnapshot) (
 
 func (p *Project) SnapshotContext(ctx context.Context) (Snapshot, error) {
 	var snap Snapshot
-	page, err := p.Driver.Tasks(ctx)
-	if err != nil {
-		return snap, err
+	if p.ProjectID == "" || p.DatabaseID == "" {
+		return snap, errors.New("project snapshot lacks its validated project/database identity")
 	}
-	read, err := driver.ReadApplicationProjectSnapshot(ctx, p.Database, page.ProjectID, "", 100)
+	read, err := driver.ReadApplicationProjectSnapshot(ctx, p.Database, p.ProjectID, "", 100)
 	if err != nil {
 		return snap, err
 	}
 	snap, err = snapshotFromApplicationRead(read)
 	if err != nil {
 		return snap, err
+	}
+	if snap.Page.ProjectID != p.ProjectID || snap.Page.DatabaseID != p.DatabaseID {
+		return snap, errors.New("project snapshot differs from its validated project/database identity")
 	}
 	snap.Helper, err = controlled.Read(p.Provider)
 	if err == nil && p.RealPR && !strings.HasPrefix(p.Scenario.ID, "candidates.") {
