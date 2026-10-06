@@ -1435,5 +1435,139 @@
       "selected": false,
       "reason": "The port storage boundary changed; profile identity/digest, execution and resource binding, and original-session authorization remain the same. See recovery/config-owner-comparison.md."
     }
+  },
+  "f1_nonempty_requirements_claim_repair": {
+    "base": "c7eac10aab147fbb9aeaefb9341d5c979d2201c3",
+    "reviewed_head": "cdd47b1992cc479c2d3a07c1e76e40d745c69c85",
+    "fix_commit": "3258c99281edf44bb5ca6f335aa04670fdfcdb26",
+    "review_comment": "https://github.com/erranliu/SteerLine/pull/225#issuecomment-6008962968",
+    "preserved_baseline_diagnostics": {
+      "directory": "docs/validation/three-line-08-app-host/review-fixes/review80-final-cdd47b19/",
+      "report": "docs/validation/three-line-08-app-host/review-fixes/review80-final-cdd47b19/review80-final-cdd47b19-report.md",
+      "requirements_fixture_failure": {
+        "source_summary": "docs/validation/three-line-08-app-host/review-fixes/review80-final-cdd47b19/requirements-claim/summary.json",
+        "source_raw_log": "docs/validation/three-line-08-app-host/review-fixes/review80-final-cdd47b19/requirements-claim/go-test.jsonl",
+        "observed_exit": 1,
+        "diagnostic": "neutral profile settings were decoded after accepted-version rebinding, yielding empty fixture executable"
+      },
+      "actual_app_failure": {
+        "source_summary": "docs/validation/three-line-08-app-host/review-fixes/review80-final-cdd47b19/actual-app-requirements/summary.json",
+        "source_raw_log": "docs/validation/three-line-08-app-host/review-fixes/review80-final-cdd47b19/actual-app-requirements/go-test.jsonl",
+        "observed_exit": 1,
+        "tests": 3,
+        "failed_tests": 3,
+        "skipped_tests": 0,
+        "explicit_error": "contract_mismatch: selected execution profile differs from the claim configuration",
+        "default_error": "stale_profile: claim snapshot changed after evaluation"
+      }
+    },
+    "runs": [
+      {
+        "id": "execution-requirements-claim-restart",
+        "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/review-fixes/requirements-claim-03 -- ./internal/execution -run '^TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot$' -count=1 -timeout=3m",
+        "summary": "docs/validation/three-line-08-app-host/review-fixes/requirements-claim-03/summary.json",
+        "status": "passed",
+        "source_commit_at_run": "cdd47b1992cc479c2d3a07c1e76e40d745c69c85",
+        "worktree_state_at_run": "review-identified changes under test; targeted run is diagnostic, final certificate is the clean-source L1 run below",
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "actual_tests": [
+          "TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot"
+        ],
+        "claims": [
+          "missing credential refuses without changing the task",
+          "accepted config drift refuses without changing the task",
+          "Git and credential evidence freeze into a strictly verified profile",
+          "frozen JSON bytes equal the base bindProjectPolicy+Freeze semantics",
+          "restart-time current blocker does not mutate historical fixed bytes"
+        ],
+        "evaluated_profile": {
+          "digest": "a016f91904a196d1e503a58ddc9a2701e340eb1f7ca4acb2deb9cfbb442f7d57",
+          "requirements_evidence_digest": "0e89e5595c257b595b496528841e619e3fb7b6d72ce2526887c70b4848168a82",
+          "accepted_config_version": "013a554b8384dfbf51f487f90dd8e07a210c9b5b63dad590fe5d341bcd15732d",
+          "frozen_json_sha256": "30a8fb90c5f2f6b98aae7a939e10b306ea82081c02a572a62cf5e76784043476"
+        }
+      },
+      {
+        "id": "actual-app-explicit-and-default-requirements-claim",
+        "command": "go run ./cmd/test-feedback -out docs/validation/three-line-08-app-host/review-fixes/requirements-app-claim-03 -- ./tests/integration -run '^TestAppRequirementsClaimFreezesEvaluatedProfile$' -count=1 -timeout=3m",
+        "summary": "docs/validation/three-line-08-app-host/review-fixes/requirements-app-claim-03/summary.json",
+        "status": "passed",
+        "source_commit_at_run": "cdd47b1992cc479c2d3a07c1e76e40d745c69c85",
+        "worktree_state_at_run": "review-identified changes under test; targeted run is diagnostic, final certificate is the clean-source L1 run below",
+        "passed_tests": 3,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "actual_tests": [
+          "TestAppRequirementsClaimFreezesEvaluatedProfile",
+          "TestAppRequirementsClaimFreezesEvaluatedProfile/default_profile",
+          "TestAppRequirementsClaimFreezesEvaluatedProfile/explicit_selected_profile"
+        ],
+        "asserts": [
+          "real app.LoadConfig and ResolveIdentity",
+          "actual Git and provider credential evidence present",
+          "pre-evaluation profile fails strict VerifyFixedExecutionProfile",
+          "default and explicit claims commit evaluated profiles passing strict verification",
+          "accepted config and policy-source identity remain bound",
+          "request replay with original selection digest returns original receipt",
+          "frozen evidence JSON contains no credential value"
+        ],
+        "frozen_profiles": [
+          {
+            "selection": "default",
+            "selected_digest": "cfeb0ed86368b21f021f5fe700aa421d262620a0bbab03792aec9dcde56e3983",
+            "final_digest": "21be1603d05f5405fffe77403b40f2ca5c876131b1d3808af82de85b751b3197",
+            "evidence_digest": "bfebec5dd519009901384d701f2f547a72c4b284e67bdb99c4eb88a32bf2f345",
+            "accepted_config_version": "2966a56108e58cef384068fe26df84f7973179f5f1ada369bf08fecda42d8b28",
+            "profile_json_sha256": "b186d159e77fbf97ba3963d887ad5afbb52aacf867c5ba7dbf604a01883cb3e1"
+          },
+          {
+            "selection": "explicit",
+            "selected_digest": "ef9f43c2690eb43d8e6f846352188f358a9936270174fbd8135ed95b1605fa61",
+            "final_digest": "49d6d93d26cbbf9dc6f0309ed81af026416fddfd2cb28a11fc922a34aeffdc40",
+            "evidence_digest": "6d113d8f7b7fcc3be2e240d9ccefa3781778aa3faca95db950484578589c8131",
+            "accepted_config_version": "a50d9a7a77a638b4427e0b9c9e03a78e62ea443865a1ff6e6e5e6a551fd34dac",
+            "profile_json_sha256": "0a61a2c477081c03a7716f78abb6ab479a1189847f9bfa675a0700009ca06a90"
+          }
+        ]
+      },
+      {
+        "id": "compile-all-packages",
+        "command": "go test ./... -run '^$'",
+        "status": "passed",
+        "command_exit_code": 0
+      },
+      {
+        "id": "L1.fixed-minimal-requirements-claim-repair",
+        "command": "go run ./cmd/test-feedback -level=L1 -out docs/validation/three-line-08-app-host/l1/review-fixes-06",
+        "summary": "docs/validation/three-line-08-app-host/l1/review-fixes-06/summary.json",
+        "status": "passed",
+        "source_commit": "3258c99281edf44bb5ca6f335aa04670fdfcdb26",
+        "worktree_status": "clean (this run's logs and summary excluded)",
+        "execution_seconds": 1010.8337968,
+        "groups": 12,
+        "passed_tests": 457,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "passed_packages": 27,
+        "actual_tests_include": [
+          "TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot",
+          "TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal",
+          "TestExecutionRequirementsDoNotUpgradeProbeToVerified",
+          "TestAppRequirementsClaimFreezesEvaluatedProfile/default_profile",
+          "TestAppRequirementsClaimFreezesEvaluatedProfile/explicit_selected_profile",
+          "TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt",
+          "TestTM04ExecutionWiring/intent_binding_and_two_original_turns",
+          "TestTM04ExecutionWiring/original_request_ack_and_manual_recovery",
+          "TestTM08AppHostWiring/default_app_host_composition"
+        ]
+      }
+    ],
+    "recovery_l3": {
+      "scenario": "recovery.waiting-merge-restart",
+      "selected": false,
+      "reason": "The evaluated non-empty FixedExecutionProfile JSON matches the original base evaluate+bindProjectPolicy+Freeze semantics; request/workspace/resource identity and recovery authorization are unchanged. The registered waiting-merge-restart scenario does not configure non-empty execution requirements. See recovery/config-owner-comparison.md."
+    }
   }
 }
