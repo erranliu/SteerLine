@@ -2,14 +2,14 @@ package execution
 
 import (
 	"context"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func (s *Service) resumeWorkerWorkspace(ctx context.Context, task *taskmodel.TaskRecord, run *contracts.Run) (bool, error) {
+func (s *Service) resumeWorkerWorkspace(ctx context.Context, task *taskmodel.TaskRecord, run *reconstructiontypes.RunView) (bool, error) {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return false, err
@@ -20,7 +20,7 @@ func (s *Service) resumeWorkerWorkspace(ctx context.Context, task *taskmodel.Tas
 		return true, s.waitWorkerFlow(run, "原 worker 尚无可核实的进程或 terminal；重开服务不会自动准备工作区或发起执行")
 	}
 	if execution.Process != nil && (execution.PendingTurnID != "" || execution.CurrentTurnID != execution.LastStoppedTurnID) {
-		switch s.Config.ProcessHost.InspectProcess(execution.Process) {
+		switch s.runtime.ProcessHost.InspectProcess(execution.Process) {
 		case "matching process still exists":
 			return false, nil // A live original process cannot be restarted.
 		case "process absent":
@@ -53,7 +53,7 @@ func (s *Service) resumeWorkerWorkspace(ctx context.Context, task *taskmodel.Tas
 		if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
 			return false, err
 		}
-		if err := prepareWorktreeOnly(ctx, c, run); err != nil {
+		if err := prepareWorktreeOnly(ctx, c, s.runtime.Directory, s.runtime.ProcessHost, run); err != nil {
 			return false, s.waitWorkerFlow(run, "Original workspace preparation cannot be reconciled: "+err.Error())
 		}
 	} else if err != nil {

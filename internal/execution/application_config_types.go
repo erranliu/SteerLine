@@ -1,64 +1,70 @@
 package execution
 
 import (
-	"context"
+	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/execution/publication"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
+// Config is the immutable execution value consumed by claim, worker and
+// recovery operations. It contains one selected profile and never owns the
+// application catalog, task admission rules, host timers or runtime adapters.
 type Config struct {
-	ReadRuntime                 func(context.Context, Config) (*contracts.Runtime, error)                  `json:"-"`
-	ValidateNativeStore         func(context.Context, Config) error                                        `json:"-"`
-	ReadPersistedExecutionState func(context.Context, Config) (storageports.ExecutionStateSnapshot, error) `json:"-"`
-	EnsureNativeProject         func(context.Context, Config) error                                        `json:"-"`
-	TaskReader                  storageports.TaskReader                                                    `json:"-"`
-	CommandReader               NativeCommandReader                                                        `json:"-"`
-	CommandWriter               CommandStore                                                               `json:"-"`
-	Resources                   ResourcePort                                                               `json:"-"`
-	ExecutionRecords            ExecutionRecordReader                                                      `json:"-"`
-	ExecutionDirectory          *ExecutionDirectory                                                        `json:"-"`
-	ProcessHost                 executionbackend.ManagedProcessHost                                        `json:"-"`
-	WorkspaceBranchPrefix       string                                                                     `json:"-"`
-	StateRoot                   string                                                                     `json:"-"`
-	RepositoryStateKey          string                                                                     `json:"-"`
-	fixedProfileDigest          string
-	frozenExecutionConfig       bool
-	requirementsEvaluation      *executionbackend.RequirementsEvaluation
-	executionConfigPath         string
-	publicationRemoteURL        string
-	selectedProfileID           string
-	PublicationPolicy           executionbackend.PublicationPolicy     `json:"publication_policy"`
-	ExecutionPolicy             executionbackend.ExecutionPolicy       `json:"execution_policy"`
-	ExecutionRequirements       executionbackend.ExecutionRequirements `json:"execution_requirements,omitempty"`
-	policySource                string
-	Repository                  string                                        `json:"repository"`
-	TaskAuthority               string                                        `json:"task_authority,omitempty"`
-	Remote                      string                                        `json:"remote"`
-	Branch                      string                                        `json:"branch"`
-	RunDir                      string                                        `json:"run_dir"`
-	WorktreeRoot                string                                        `json:"worktree_root"`
-	Claimant                    string                                        `json:"claimant"`
-	Git                         executionbackend.Command                      `json:"git"`
-	ImplementationData          []executionbackend.ImplementationDataEnvelope `json:"-"`
-	ImplementationDisplay       []string                                      `json:"-"`
-	WorkflowProtocol            string                                        `json:"workflow_protocol,omitempty"`
-	ExecutableTypes             []string                                      `json:"executable_types"`
-	TaskPoll                    string                                        `json:"task_poll"`
-	PRPoll                      string                                        `json:"pr_poll"`
-	Heartbeat                   string                                        `json:"heartbeat"`
-	CommandTimeout              string                                        `json:"command_timeout"`
-	ShutdownGrace               string                                        `json:"shutdown_grace"`
-	Agent                       string                                        `json:"agent"`
-	Host                        string                                        `json:"host"`
-	ExecutionProfiles           []ExecutionProfile                            `json:"execution_profiles,omitempty"`
-	DefaultExecutionProfile     string                                        `json:"default_execution_profile,omitempty"`
-	StallTimeout                string                                        `json:"stall_timeout"`
-	PR                          publication.Config                            `json:"pr"`
-	identity                    string
-	workerEnv                   map[string]string
-	configDigest                string
-	globalExecution             bool
+	PublicationPolicy     executionbackend.PublicationPolicy            `json:"publication_policy"`
+	ExecutionPolicy       executionbackend.ExecutionPolicy              `json:"execution_policy"`
+	ExecutionRequirements executionbackend.ExecutionRequirements        `json:"execution_requirements,omitempty"`
+	Repository            string                                        `json:"repository"`
+	Remote                string                                        `json:"remote"`
+	Branch                string                                        `json:"branch"`
+	RunDir                string                                        `json:"run_dir"`
+	WorktreeRoot          string                                        `json:"worktree_root"`
+	Git                   executionbackend.Command                      `json:"git"`
+	ImplementationData    []executionbackend.ImplementationDataEnvelope `json:"-"`
+	ImplementationDisplay []string                                      `json:"-"`
+	WorkflowProtocol      string                                        `json:"workflow_protocol,omitempty"`
+	CommandTimeout        string                                        `json:"command_timeout"`
+	PR                    executionmodel.PRProviderConfig               `json:"pr"`
+	Host                  string                                        `json:"host"`
+	Agent                 string                                        `json:"agent"`
+	WorkspaceBranchPrefix string                                        `json:"-"`
+
+	identity               string
+	fixedProfileDigest     string
+	acceptedConfigVersion  string
+	selectedProfileID      string
+	publicationRemoteURL   string
+	frozenExecutionConfig  bool
+	requirementsEvaluation *executionbackend.RequirementsEvaluation
+}
+
+// RuntimeDependencies are injected when an execution service is composed.
+// They are not copied into workflow or worker snapshots.
+type RuntimeDependencies struct {
+	Directory      *ExecutionDirectory
+	ProcessHost    executionbackend.ManagedProcessHost
+	Profiles       ProfilePort
+	ConfigVerifier ConfigVerifier
+}
+
+// ProfilePort resolves one profile by identity and digest. Implementations are
+// app-owned; execution receives only the selected frozen value.
+type ProfilePort interface {
+	DefaultProfileID() string
+	HasMultipleProfiles() bool
+	ResolveExecutionProfile(string, string) (Config, executionmodel.FixedExecutionProfile, error)
+}
+
+// ConfigVerifier checks that the app-loaded project/global config bytes are
+// still the bytes accepted by the selected profile.
+type ConfigVerifier interface {
+	VerifyCurrentConfig() error
+}
+
+// RuntimeSettings is intentionally limited to app/host facts used to publish
+// the service checkpoint. Scheduling itself stays in the host package.
+type RuntimeSettings struct {
+	Claimant      string
+	Heartbeat     time.Duration
+	ShutdownGrace time.Duration
 }

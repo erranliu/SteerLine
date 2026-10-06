@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,8 +17,8 @@ import (
 	"unicode/utf8"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	queryapi "github.com/erranliu/SteerLine/internal/product/query"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) {
@@ -35,7 +36,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(committed) != 1 || committed[0].Body == nil || committed[0].Body.Bytes != int64(len(text)) || committed[0].Body.Completeness != contracts.BodyPartial {
+	if len(committed) != 1 || committed[0].Body == nil || committed[0].Body.Bytes != int64(len(text)) || committed[0].Body.Completeness != executionvalues.BodyPartial {
 		t.Fatalf("body reference is incomplete: %+v", committed)
 	}
 	duplicate, err := store.CommitConversation(ctx, []ConversationWrite{first}, checkpoint)
@@ -50,7 +51,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 	var restored strings.Builder
 	offset := int64(0)
 	for {
-		page, readErr := query.ReadMessageBody(ctx, *committed[0].Body, offset, 11)
+		page, readErr := query.ReadMessageBody(ctx, conversationBodyAPIRef(*committed[0].Body), offset, 11)
 		if readErr != nil {
 			t.Fatal(readErr)
 		}
@@ -60,7 +61,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 		restored.Write(page.Data)
 		offset = page.NextOffset
 		if page.Complete {
-			if page.SHA256 != committed[0].Body.SHA256 || page.Completeness != contracts.BodyPartial {
+			if page.SHA256 != committed[0].Body.SHA256 || page.Completeness != productapi.BodyPartial {
 				t.Fatalf("body page revision metadata changed: %+v", page)
 			}
 			break
@@ -76,7 +77,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 	if hex.EncodeToString(wholeDigest[:]) != committed[0].Body.SHA256 {
 		t.Fatal("stored body SHA-256 does not match the source text")
 	}
-	rawPage, err := query.ReadRaw(ctx, *committed[0].Raw, 0, 64)
+	rawPage, err := query.ReadRaw(ctx, conversationRawAPIRef(*committed[0].Raw), 0, 64)
 	if err != nil || string(rawPage.Data) != "raw-record-one" || !rawPage.Complete {
 		t.Fatalf("raw reference was not readable: page=%+v err=%v", rawPage, err)
 	}
@@ -86,7 +87,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if updated[0].Body.Revision != committed[0].Body.Revision+1 || updated[0].Body.Completeness != contracts.BodyPartial {
+	if updated[0].Body.Revision != committed[0].Body.Revision+1 || updated[0].Body.Completeness != executionvalues.BodyPartial {
 		t.Fatalf("delta was not stored as a new body revision: %+v", updated[0].Body)
 	}
 	repeatedText := conversationTestWrite("bytes:8:12", 3, "delta", []byte(" tail"), []byte("raw-record-three"))
@@ -98,7 +99,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 		t.Fatalf("a real repeated text event was removed by content dedupe: %+v", repeated[0].Body)
 	}
 	snapshot := conversationTestWrite("bytes:12:16", 4, "snapshot", []byte("replacement"), []byte("raw-record-four"))
-	snapshot.Event.Type = contracts.ConversationMessageSnapshot
+	snapshot.Event.Type = executionvalues.ConversationMessageSnapshot
 	replaced, err := store.CommitConversation(ctx, []ConversationWrite{snapshot}, conversationTestCheckpoint(4, `{"byte_offset":16}`))
 	if err != nil {
 		t.Fatal(err)
@@ -107,7 +108,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 		t.Fatalf("snapshot did not create a distinct revision: %+v", replaced[0].Body)
 	}
 	oldSnapshot := conversationTestWrite("bytes:1:3", 1, "snapshot", []byte("stale"), []byte("raw-stale"))
-	oldSnapshot.Event.Type = contracts.ConversationMessageSnapshot
+	oldSnapshot.Event.Type = executionvalues.ConversationMessageSnapshot
 	conflict, err := store.CommitConversation(ctx, []ConversationWrite{oldSnapshot}, conversationTestCheckpoint(5, `{"byte_offset":20}`))
 	if err != nil {
 		t.Fatal(err)
@@ -138,7 +139,7 @@ func TestConversationSQLiteDedupesBodiesAndPagesUnicodeByRevision(t *testing.T) 
 	if err != nil || len(tail.Events) != 0 {
 		t.Fatalf("tail cursor did not resume after the latest event: %+v %v", tail, err)
 	}
-	if _, err = query.ReadRaw(ctx, ConversationRawRef{ExecutionID: "other", AttemptID: "attempt", ID: committed[0].Raw.ID}, 0, 10); err == nil {
+	if _, err = query.ReadRaw(ctx, productapi.ConversationRawRef{ExecutionID: "other", AttemptID: "attempt", ID: committed[0].Raw.ID}, 0, 10); err == nil {
 		t.Fatal("raw reference crossed execution identity")
 	}
 }
@@ -175,32 +176,32 @@ func TestConversationBodyAndRawCorruptionCannotReadAsComplete(t *testing.T) {
 	events, err := store.CommitConversation(ctx, []ConversationWrite{write}, conversationTestCheckpoint(1, `{"byte_offset":4}`))
 	require(t, err)
 	query := conversationQueries(store, "project")
-	if page, err := query.ReadMessageBody(ctx, *events[0].Body, 0, 64); err != nil || !page.Complete {
+	if page, err := query.ReadMessageBody(ctx, conversationBodyAPIRef(*events[0].Body), 0, 64); err != nil || !page.Complete {
 		t.Fatalf("intact body was unreadable: page=%+v err=%v", page, err)
 	}
 	_, err = store.db.ExecContext(ctx, `UPDATE conversation_bodies SET body=? WHERE project_identity=? AND execution_id=? AND attempt_id=? AND item_key=? AND revision=?`, []byte("HELLO 🙂"), "project", "execution", "attempt", events[0].Body.ItemKey, events[0].Body.Revision)
 	require(t, err)
-	if page, err := query.ReadMessageBody(ctx, *events[0].Body, 0, 64); err == nil || page.Complete {
+	if page, err := query.ReadMessageBody(ctx, conversationBodyAPIRef(*events[0].Body), 0, 64); err == nil || page.Complete {
 		t.Fatalf("modified body was reported complete: page=%+v err=%v", page, err)
 	}
 	_, err = store.db.ExecContext(ctx, `UPDATE conversation_bodies SET body=zeroblob(?) WHERE project_identity=? AND execution_id=? AND attempt_id=? AND item_key=? AND revision=?`, maxConversationBodyBytes+1, "project", "execution", "attempt", events[0].Body.ItemKey, events[0].Body.Revision)
 	require(t, err)
-	if page, err := query.ReadMessageBody(ctx, *events[0].Body, 0, 64); err == nil || page.Complete {
+	if page, err := query.ReadMessageBody(ctx, conversationBodyAPIRef(*events[0].Body), 0, 64); err == nil || page.Complete {
 		t.Fatalf("oversized corrupt body was reported complete: page=%+v err=%v", page, err)
 	}
 	_, err = store.db.ExecContext(ctx, `UPDATE conversation_raw SET payload=? WHERE project_identity=? AND execution_id=? AND attempt_id=? AND raw_id=?`, []byte("RAW-record"), "project", "execution", "attempt", events[0].Raw.ID)
 	require(t, err)
-	if page, err := query.ReadRaw(ctx, *events[0].Raw, 0, 64); err == nil || page.Complete {
+	if page, err := query.ReadRaw(ctx, conversationRawAPIRef(*events[0].Raw), 0, 64); err == nil || page.Complete {
 		t.Fatalf("modified raw record was reported complete: page=%+v err=%v", page, err)
 	}
 	_, err = store.db.ExecContext(ctx, `UPDATE conversation_raw SET payload=zeroblob(?) WHERE project_identity=? AND execution_id=? AND attempt_id=? AND raw_id=?`, maxConversationBodyBytes+1, "project", "execution", "attempt", events[0].Raw.ID)
 	require(t, err)
-	if page, err := query.ReadRaw(ctx, *events[0].Raw, 0, 64); err == nil || page.Complete {
+	if page, err := query.ReadRaw(ctx, conversationRawAPIRef(*events[0].Raw), 0, 64); err == nil || page.Complete {
 		t.Fatalf("oversized corrupt raw record was reported complete: page=%+v err=%v", page, err)
 	}
 	_, err = store.db.ExecContext(ctx, `DELETE FROM conversation_bodies WHERE project_identity=? AND execution_id=? AND attempt_id=? AND item_key=? AND revision=?`, "project", "execution", "attempt", events[0].Body.ItemKey, events[0].Body.Revision)
 	require(t, err)
-	if page, err := query.ReadMessageBody(ctx, *events[0].Body, 0, 64); err == nil || page.Complete {
+	if page, err := query.ReadMessageBody(ctx, conversationBodyAPIRef(*events[0].Body), 0, 64); err == nil || page.Complete {
 		t.Fatalf("missing body was reported complete: page=%+v err=%v", page, err)
 	}
 }
@@ -212,20 +213,20 @@ func TestConversationLongUnicodeFinalIsExactAcrossPages(t *testing.T) {
 	defer store.Close()
 	final := strings.Repeat("末尾 🙂 SteerLine\n", 900)
 	write := conversationTestWrite("final", 1, "complete", []byte(final), []byte("final-source"))
-	write.Event.Type = contracts.ConversationMessageComplete
-	write.Event.Phase = contracts.MessagePhaseFinalAnswer
+	write.Event.Type = executionvalues.ConversationMessageComplete
+	write.Event.Phase = executionvalues.MessagePhaseFinalAnswer
 	events, err := store.CommitConversation(ctx, []ConversationWrite{write}, conversationTestCheckpoint(1, "final-cursor"))
 	require(t, err)
 	ref := events[0].Body
-	if ref == nil || ref.Bytes <= 4096 || ref.Completeness != contracts.BodyComplete {
+	if ref == nil || ref.Bytes <= 4096 || ref.Completeness != executionvalues.BodyComplete {
 		t.Fatalf("final body was truncated or partial: %+v", ref)
 	}
 	query := conversationQueries(store, "project")
 	var restored bytes.Buffer
 	for offset := int64(0); ; {
-		page, err := query.ReadMessageBody(ctx, *ref, offset, 257)
+		page, err := query.ReadMessageBody(ctx, conversationBodyAPIRef(*ref), offset, 257)
 		require(t, err)
-		if !utf8.Valid(page.Data) || page.NextOffset <= offset || page.Completeness != contracts.BodyComplete {
+		if !utf8.Valid(page.Data) || page.NextOffset <= offset || page.Completeness != productapi.BodyComplete {
 			t.Fatalf("Unicode final page is invalid: %+v", page)
 		}
 		restored.Write(page.Data)
@@ -342,7 +343,7 @@ func TestConversationLateOldAttemptCannotCrossNewAttempt(t *testing.T) {
 		if len(page.Events) != 1 || page.Events[0].AttemptID != tc.attempt {
 			t.Fatalf("attempt filter crossed identities: %+v", page.Events)
 		}
-		body, err := query.ReadMessageBody(ctx, tc.ref, 0, 100)
+		body, err := query.ReadMessageBody(ctx, conversationBodyAPIRef(tc.ref), 0, 100)
 		require(t, err)
 		if string(body.Data) != tc.want || !body.Complete {
 			t.Fatalf("attempt body was overwritten: %+v", body)
@@ -459,7 +460,7 @@ func TestConversationCommitRejectsChangedRawAtSameSourceIdentity(t *testing.T) {
 		t.Fatal("source cursor advanced after conflicting raw bytes")
 	}
 	changed = first
-	changed.Event.Type = contracts.ConversationGap
+	changed.Event.Type = executionvalues.ConversationGap
 	changed.Body = nil
 	changed.BodyMode = ""
 	if _, err = store.CommitConversation(ctx, []ConversationWrite{changed}, conversationTestCheckpoint(2, `{"byte_offset":8}`)); err == nil {
@@ -482,12 +483,12 @@ func TestConversationCheckpointPreflightRejectsUnanchoredState(t *testing.T) {
 
 func conversationTestWrite(sourceID string, seq uint64, mode string, body, raw []byte) ConversationWrite {
 	event := ConversationEvent{
-		Version: contracts.ConversationVersion, ProjectID: "project", TaskID: "task", WorkflowID: "workflow",
+		Version: executionvalues.ConversationVersion, ProjectID: "project", TaskID: "task", WorkflowID: "workflow",
 		ExecutionID: "execution", AttemptID: "attempt", Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess,
-		Agent: "fixture", TargetID: "local-test", Source: "fixture-journal", SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment-1",
-		SessionID: "session", SessionQuality: contracts.IdentityNative, TurnID: "turn", TurnQuality: contracts.IdentityDerived,
-		ItemID: "same-item", ItemQuality: contracts.IdentityNative, SourceEventID: sourceID, SourceEventQuality: contracts.IdentityDerived,
-		SourceSeq: seq, Type: contracts.ConversationMessageDelta, Phase: contracts.MessagePhaseUnknown, ReceivedAt: time.Now().UTC(),
+		Agent: "fixture", TargetID: "local-test", Source: "fixture-journal", SourceRole: executionvalues.ConversationSourceFallback, SourceSegment: "segment-1",
+		SessionID: "session", SessionQuality: executionvalues.IdentityNative, TurnID: "turn", TurnQuality: executionvalues.IdentityDerived,
+		ItemID: "same-item", ItemQuality: executionvalues.IdentityNative, SourceEventID: sourceID, SourceEventQuality: executionvalues.IdentityDerived,
+		SourceSeq: seq, Type: executionvalues.ConversationMessageDelta, Phase: executionvalues.MessagePhaseUnknown, ReceivedAt: time.Now().UTC(),
 		Evidence: map[string]string{"identity_rule": "test-byte-range"},
 	}
 	event.ItemKey = conversationItemKey(event, event.ItemID)

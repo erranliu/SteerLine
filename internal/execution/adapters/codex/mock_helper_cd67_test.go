@@ -2,7 +2,7 @@ package codexworker_test
 
 import (
 	"fmt"
-	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
+	"github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"os"
 	"strings"
 	"testing"

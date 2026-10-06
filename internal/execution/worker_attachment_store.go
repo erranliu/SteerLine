@@ -2,18 +2,18 @@ package execution
 
 import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-func (s *Service) commitWorkerBinding(run *contracts.Run, ref executionbackend.ExecutionRef) error {
+func (s *Service) commitWorkerBinding(run *reconstructiontypes.RunView, ref executionbackend.ExecutionRef) error {
 	return s.commitWorkerAttached(run, workerCommitAttachment{Binding: &ref})
 }
 
-func (s *Service) commitExecutionOperation(run *contracts.Run, op executionbackend.Operation, expected string) error {
+func (s *Service) commitExecutionOperation(run *reconstructiontypes.RunView, op executionbackend.Operation, expected string) error {
 	var before *executionbackend.Operation
 	if expected != "" {
-		saved, err := (executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords, resources: s.Config.Resources}).loadOperation(op.RunID, op.AttemptID, op.ID)
+		saved, err := s.records.loadOperation(op.RunID, op.AttemptID, op.ID)
 		if err != nil {
 			return err
 		}

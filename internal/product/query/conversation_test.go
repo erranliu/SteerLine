@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"strings"
 	"testing"
 	"time"
@@ -14,7 +15,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	api "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -44,7 +44,7 @@ func (f conversationCapabilities) ConversationCapabilityReports(ctx context.Cont
 
 func TestConversationQueriesUseIndependentEventPortAndBoundCursor(t *testing.T) {
 	ctx := context.Background()
-	filter := contracts.ConversationFilter{ExecutionID: "execution", AttemptID: "attempt", Source: "codex-app-server"}
+	filter := api.ConversationFilter{ExecutionID: "execution", AttemptID: "attempt", Source: "codex-app-server"}
 	reads := 0
 	service := ConversationService{Project: "project", Events: conversationEvents(func(_ context.Context, project string, got api.ConversationFilter, after int64) (*storageports.ConversationEventRecord, error) {
 		reads++
@@ -54,9 +54,9 @@ func TestConversationQueriesUseIndependentEventPortAndBoundCursor(t *testing.T) 
 		if after >= 2 {
 			return nil, nil
 		}
-		payload, _ := json.Marshal(contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: project, ExecutionID: filter.ExecutionID, AttemptID: filter.AttemptID,
-			Source: filter.Source, SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment", SourceEventID: fmt.Sprintf("event:%d", after+1), SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown,
-			ItemQuality: contracts.IdentityUnknown, SourceEventQuality: contracts.IdentityDerived, Type: contracts.ConversationObservation, Phase: contracts.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()})
+		payload, _ := json.Marshal(executionvalues.ConversationEvent{Version: executionvalues.ConversationVersion, ProjectID: project, ExecutionID: filter.ExecutionID, AttemptID: filter.AttemptID,
+			Source: filter.Source, SourceRole: executionvalues.ConversationSourceFallback, SourceSegment: "segment", SourceEventID: fmt.Sprintf("event:%d", after+1), SessionQuality: executionvalues.IdentityUnknown, TurnQuality: executionvalues.IdentityUnknown,
+			ItemQuality: executionvalues.IdentityUnknown, SourceEventQuality: executionvalues.IdentityDerived, Type: executionvalues.ConversationObservation, Phase: executionvalues.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()})
 		return &storageports.ConversationEventRecord{EventID: after + 1, PayloadBytes: len(payload), Payload: payload}, nil
 	})}
 	first, err := service.ReadConversation(ctx, filter, "", 1)
@@ -75,15 +75,15 @@ func TestConversationQueriesUseIndependentEventPortAndBoundCursor(t *testing.T) 
 	if err != nil || len(last.Events) != 1 || last.Events[0].EventID != 2 || last.HasMore {
 		t.Fatalf("continuation: %+v %v", last, err)
 	}
-	if _, err := service.ReadMessageBody(ctx, contracts.ConversationBodyRef{}, 0, 10); err == nil {
+	if _, err := service.ReadMessageBody(ctx, api.ConversationBodyRef{}, 0, 10); err == nil {
 		t.Fatal("missing body reader accepted")
 	}
 }
 
 func TestConversationPageBudgetDefersOverflowPayloadDecoding(t *testing.T) {
-	payload, _ := json.Marshal(contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt",
-		Source: "fixture", SourceRole: contracts.ConversationSourceFallback, SourceSegment: "segment", SourceEventID: "event:1", SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown,
-		ItemQuality: contracts.IdentityUnknown, SourceEventQuality: contracts.IdentityDerived, Type: contracts.ConversationObservation, Phase: contracts.MessagePhaseUnknown,
+	payload, _ := json.Marshal(executionvalues.ConversationEvent{Version: executionvalues.ConversationVersion, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt",
+		Source: "fixture", SourceRole: executionvalues.ConversationSourceFallback, SourceSegment: "segment", SourceEventID: "event:1", SessionQuality: executionvalues.IdentityUnknown, TurnQuality: executionvalues.IdentityUnknown,
+		ItemQuality: executionvalues.IdentityUnknown, SourceEventQuality: executionvalues.IdentityDerived, Type: executionvalues.ConversationObservation, Phase: executionvalues.MessagePhaseUnknown,
 		ReceivedAt: time.Now().UTC(), Diagnostic: strings.Repeat("x", MaxEventPageBytes-4096)})
 	if len(payload) >= MaxEventPageBytes {
 		t.Fatal("fixture must leave room for a budget boundary")
@@ -94,34 +94,34 @@ func TestConversationPageBudgetDefersOverflowPayloadDecoding(t *testing.T) {
 		}
 		return &storageports.ConversationEventRecord{EventID: 2, PayloadBytes: MaxEventPageBytes, Payload: []byte("invalid JSON")}, nil
 	})}
-	page, err := service.ReadConversation(context.Background(), contracts.ConversationFilter{}, "", 10)
+	page, err := service.ReadConversation(context.Background(), api.ConversationFilter{}, "", 10)
 	if err != nil || len(page.Events) != 1 || !page.HasMore || page.PayloadBytes != len(payload) {
 		t.Fatalf("overflow record was decoded or consumed: %+v %v", page, err)
 	}
-	if _, err := service.ReadConversation(context.Background(), contracts.ConversationFilter{}, page.NextCursor, 10); err == nil {
+	if _, err := service.ReadConversation(context.Background(), api.ConversationFilter{}, page.NextCursor, 10); err == nil {
 		t.Fatal("next page must still encounter the unconsumed corrupt record")
 	}
 }
 
 func TestConversationReaderRejectsPreviousEventFormat(t *testing.T) {
-	old, err := json.Marshal(contracts.ConversationEvent{Version: 1, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Source: "fixture",
-		SourceSegment: "segment", SourceEventID: "old-event", SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown, ItemQuality: contracts.IdentityUnknown,
-		SourceEventQuality: contracts.IdentityDerived, Type: contracts.ConversationObservation, Phase: contracts.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()})
+	old, err := json.Marshal(executionvalues.ConversationEvent{Version: 1, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Source: "fixture",
+		SourceSegment: "segment", SourceEventID: "old-event", SessionQuality: executionvalues.IdentityUnknown, TurnQuality: executionvalues.IdentityUnknown, ItemQuality: executionvalues.IdentityUnknown,
+		SourceEventQuality: executionvalues.IdentityDerived, Type: executionvalues.ConversationObservation, Phase: executionvalues.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()})
 	if err != nil {
 		t.Fatal(err)
 	}
 	service := ConversationService{Project: "project", Events: conversationEvents(func(context.Context, string, api.ConversationFilter, int64) (*storageports.ConversationEventRecord, error) {
 		return &storageports.ConversationEventRecord{EventID: 1, PayloadBytes: len(old), Payload: old}, nil
 	})}
-	if _, err = service.ReadConversation(context.Background(), contracts.ConversationFilter{}, "", 1); err == nil || !strings.Contains(err.Error(), "unsupported schema") && !strings.Contains(err.Error(), "missing versioned identity") {
+	if _, err = service.ReadConversation(context.Background(), api.ConversationFilter{}, "", 1); err == nil || !strings.Contains(err.Error(), "unsupported schema") && !strings.Contains(err.Error(), "missing versioned identity") {
 		t.Fatalf("previous conversation event format was read without migration: %v", err)
 	}
 }
 
 func TestConversationReaderRejectsMissingSourceRole(t *testing.T) {
-	payload, err := json.Marshal(contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt",
-		Source: "fixture", SourceSegment: "segment", SourceEventID: "event:1", SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown,
-		ItemQuality: contracts.IdentityUnknown, SourceEventQuality: contracts.IdentityDerived, Type: contracts.ConversationObservation, Phase: contracts.MessagePhaseUnknown,
+	payload, err := json.Marshal(executionvalues.ConversationEvent{Version: executionvalues.ConversationVersion, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt",
+		Source: "fixture", SourceSegment: "segment", SourceEventID: "event:1", SessionQuality: executionvalues.IdentityUnknown, TurnQuality: executionvalues.IdentityUnknown,
+		ItemQuality: executionvalues.IdentityUnknown, SourceEventQuality: executionvalues.IdentityDerived, Type: executionvalues.ConversationObservation, Phase: executionvalues.MessagePhaseUnknown,
 		ReceivedAt: time.Now().UTC()})
 	if err != nil {
 		t.Fatal(err)
@@ -129,7 +129,7 @@ func TestConversationReaderRejectsMissingSourceRole(t *testing.T) {
 	service := ConversationService{Project: "project", Events: conversationEvents(func(context.Context, string, api.ConversationFilter, int64) (*storageports.ConversationEventRecord, error) {
 		return &storageports.ConversationEventRecord{EventID: 1, PayloadBytes: len(payload), Payload: payload}, nil
 	})}
-	if _, err = service.ReadConversation(context.Background(), contracts.ConversationFilter{}, "", 1); err == nil || !strings.Contains(err.Error(), "source role") {
+	if _, err = service.ReadConversation(context.Background(), api.ConversationFilter{}, "", 1); err == nil || !strings.Contains(err.Error(), "source role") {
 		t.Fatalf("event without an explicit source role was accepted: %v", err)
 	}
 }
@@ -139,11 +139,10 @@ func TestConversationBodyAndRawQueriesUseSeparatePorts(t *testing.T) {
 	text := []byte("你好🙂tail")
 	sum := sha256.Sum256(text)
 	digest := hex.EncodeToString(sum[:])
-	ref := contracts.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "item", Revision: 2, SHA256: digest, Bytes: int64(len(text)), Completeness: contracts.BodyComplete}
+	ref := api.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "item", Revision: 2, SHA256: digest, Bytes: int64(len(text)), Completeness: api.BodyComplete}
 	record := storageports.ConversationBodyRecord{Body: text, TotalBytes: ref.Bytes, SHA256: digest, Completeness: string(ref.Completeness)}
 	service := ConversationService{Project: "project", Bodies: conversationBodies(func(_ context.Context, project string, got api.ConversationBodyRef, limit int) (storageports.ConversationBodyRecord, error) {
-		apiRef := api.ConversationBodyRef{ExecutionID: ref.ExecutionID, AttemptID: ref.AttemptID, ItemKey: ref.ItemKey, Revision: ref.Revision, SHA256: ref.SHA256, Bytes: ref.Bytes, Completeness: api.BodyCompleteness(ref.Completeness)}
-		if project != "project" || got != apiRef || limit != contracts.MaxConversationBodyBytes+1 {
+		if project != "project" || got != ref || limit != executionvalues.MaxConversationBodyBytes+1 {
 			t.Fatalf("lost bounded revision input: %s %+v %d", project, got, limit)
 		}
 		return record, nil
@@ -159,10 +158,9 @@ func TestConversationBodyAndRawQueriesUseSeparatePorts(t *testing.T) {
 	if _, err := service.ReadMessageBody(ctx, ref, 0, 7); err == nil {
 		t.Fatal("corrupt revision was accepted")
 	}
-	rawRef := contracts.ConversationRawRef{ExecutionID: "execution", AttemptID: "attempt", ID: "raw", SHA256: digest, Bytes: int64(len(text))}
+	rawRef := api.ConversationRawRef{ExecutionID: "execution", AttemptID: "attempt", ID: "raw", SHA256: digest, Bytes: int64(len(text))}
 	service = ConversationService{Project: "project", Raw: conversationRaw(func(_ context.Context, project string, got api.ConversationRawRef, limit int) (storageports.ConversationRawRecord, error) {
-		apiRawRef := api.ConversationRawRef{ExecutionID: rawRef.ExecutionID, AttemptID: rawRef.AttemptID, ID: rawRef.ID, SHA256: rawRef.SHA256, Bytes: rawRef.Bytes}
-		if project != "project" || got != apiRawRef || limit != contracts.MaxConversationBodyBytes+1 {
+		if project != "project" || got != rawRef || limit != executionvalues.MaxConversationBodyBytes+1 {
 			t.Fatal("lost raw identity or bound")
 		}
 		return storageports.ConversationRawRecord{Data: text, TotalBytes: rawRef.Bytes, SHA256: digest}, nil

@@ -1,11 +1,11 @@
 package execution
 
 import (
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -28,6 +28,6 @@ type RecoveryInspection struct {
 	ClaimError                                                                             string
 	PR                                                                                     *executionmodel.PRInfo
 	PRError                                                                                string
-	Blockers                                                                               []contracts.ControlBlocker
+	Blockers                                                                               []reconstructiontypes.ControlBlocker
 	ConcurrentActionReason                                                                 string
 }

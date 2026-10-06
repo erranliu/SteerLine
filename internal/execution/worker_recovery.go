@@ -4,17 +4,17 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"strings"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // Operations are bound by their saved request and exact identity components,
 // including host publication which is keyed by WorkflowRun rather than Execution.
-func (s *Service) hasUnknownWorkerOperation(run *contracts.Run) bool {
+func (s *Service) hasUnknownWorkerOperation(run *reconstructiontypes.RunView) bool {
 	for _, op := range s.domain.Operations {
 		if op.Kind == "worker_input_value" {
 			continue
@@ -42,7 +42,7 @@ func (s *Service) hasUnknownWorkerOperation(run *contracts.Run) bool {
 // beginLocalRecoveryAttempt advances the worker generation in one service
 // write. The prior process and session stay on the retired Attempt; its
 // process receipt and execution binding stay at their original paths.
-func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *contracts.Run, mode string) error {
+func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *reconstructiontypes.RunView, mode string) error {
 	if mode == "" {
 		mode = "continue"
 	}
@@ -56,7 +56,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *contracts.
 	workflow, execution, old := fixed.workflow, fixed.execution, fixed.attempt
 	if !execution.RecoveryRequired ||
 		(execution.RecoveryState != "interrupted" && execution.RecoveryState != "completed") ||
-		execution.Process == nil || s.Config.ProcessHost.InspectProcess(execution.Process) != "process absent" {
+		execution.Process == nil || s.runtime.ProcessHost.InspectProcess(execution.Process) != "process absent" {
 		return errors.New("the original worker process and its descendants are not confirmed stopped")
 	}
 	if execution.Workspace.Worktree == "" || run.WorktreePath == nil || canonical(*run.WorktreePath) != canonical(execution.Workspace.Worktree) {
@@ -88,7 +88,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *contracts.
 		owned.Close()
 		delete(s.ownedProcesses, run.RunID)
 	}
-	if !s.Config.Resources.WorkerTreeAbsent(*execution.Process) {
+	if !s.resources.WorkerTreeAbsent(*execution.Process) {
 		return errors.New("original worker descendants may still write to the worktree")
 	}
 	if s.hasUnknownWorkerOperation(run) {
@@ -150,7 +150,7 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *contracts.
 
 // A saved answer from a previous service instance is historical input. A new
 // Decision gives the user a distinct, first-wins authorization for this run.
-func (s *Service) refreshSavedRecoveryDecision(run *contracts.Run, preserveNative bool, reason string) error {
+func (s *Service) refreshSavedRecoveryDecision(run *reconstructiontypes.RunView, preserveNative bool, reason string) error {
 	if run == nil || run.Decision == nil || run.Decision.Status != "answer_saved" {
 		return nil
 	}
@@ -207,7 +207,7 @@ func (s *Service) refreshSavedRecoveryDecision(run *contracts.Run, preserveNativ
 	return s.commitWorker(run)
 }
 
-func (s *Service) startManuallyRecoveredInitialWorker(ctx context.Context, run *contracts.Run, answer executionmodel.DecisionAnswer, commandID string) error {
+func (s *Service) startManuallyRecoveredInitialWorker(ctx context.Context, run *reconstructiontypes.RunView, answer executionmodel.DecisionAnswer, commandID string) error {
 	if answer.OptionID != "continue" || run.Decision == nil || run.Decision.Request.QuestionRoute != nil {
 		return errors.New("initial local execution requires an explicit continue decision")
 	}
@@ -258,7 +258,7 @@ func (s *Service) startManuallyRecoveredInitialWorker(ctx context.Context, run *
 				return err
 			}
 			if _, err := os.Lstat(run.WorkspaceIntent.Path); os.IsNotExist(err) {
-				preparation, prepareErr := prepareWorktree(ctx, fixed.config, run)
+				preparation, prepareErr := prepareWorktree(ctx, fixed.config, s.runtime.Directory, s.runtime.ProcessHost, run)
 				if prepareErr != nil {
 					status := string(preparation.Status)
 					if status != string(executionbackend.OperationRejected) {
@@ -342,7 +342,7 @@ func (s *Service) markServiceRecoveryGate() error {
 	return nil
 }
 
-func (s *Service) markOneServiceRecoveryGate(run *contracts.Run) {
+func (s *Service) markOneServiceRecoveryGate(run *reconstructiontypes.RunView) {
 	if run == nil || run.WorkflowVersion != executionmodel.Version {
 		return
 	}

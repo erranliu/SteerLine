@@ -3,15 +3,15 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"strings"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func (s *Service) finishWorkerFlowFor(run *contracts.Run, workerErr error) error {
+func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerErr error) error {
 	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
 		return err
@@ -144,7 +144,7 @@ func (s *Service) finishWorkerFlowFor(run *contracts.Run, workerErr error) error
 	if len(evidence.PRCandidates) == 1 {
 		candidate := evidence.PRCandidates[0]
 		workflow.PRCandidateURL = candidate
-		info, queryErr := publicationClient(fixed.config).Query(context.Background(), candidate)
+		info, queryErr := publicationClient(fixed.config, s.runtime.ProcessHost).Query(context.Background(), candidate)
 		if queryErr == nil {
 			queryErr = BindWorkerPR(workflow, execution, info, candidate, fixed.config.PR.Repository, false)
 		}

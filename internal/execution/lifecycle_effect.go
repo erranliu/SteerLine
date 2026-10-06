@@ -3,10 +3,10 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 var errLifecycleEffectPending = errors.New("lifecycle action accepted and awaiting its original receipt")
@@ -48,7 +48,7 @@ type lifecycleEffectResult struct {
 
 type pendingLifecycleEffect struct {
 	runID   string
-	apply   func(*contracts.Run, lifecycleEffectResult) error
+	apply   func(*reconstructiontypes.RunView, lifecycleEffectResult) error
 	release func()
 }
 
@@ -90,7 +90,7 @@ func invokeLifecycleEffect(ctx context.Context, port executionbackend.LifecycleP
 	return result
 }
 
-func (s *Service) dispatchLifecycleEffect(ctx context.Context, run *contracts.Run, port executionbackend.LifecyclePort, request executionbackend.LifecycleRequest, reconcile bool, apply func(*contracts.Run, lifecycleEffectResult) error) error {
+func (s *Service) dispatchLifecycleEffect(ctx context.Context, run *reconstructiontypes.RunView, port executionbackend.LifecyclePort, request executionbackend.LifecycleRequest, reconcile bool, apply func(*reconstructiontypes.RunView, lifecycleEffectResult) error) error {
 	if err := request.Validate(); err != nil {
 		return err
 	}

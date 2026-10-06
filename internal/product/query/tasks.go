@@ -6,9 +6,9 @@ import (
 	"encoding/json"
 	"errors"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	taskview "github.com/erranliu/SteerLine/internal/product/query/taskgraph"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -47,7 +47,7 @@ func (q Service) ListNativeTasks(ctx context.Context, cursor string, limit int) 
 			return storageports.NativeTaskPage{}, nativeErr("cursor_invalidated", "cursor encoding is invalid")
 		}
 		var c TaskCursor
-		if contracts.DecodeJSON(raw, &c) != nil || c.Version != 1 || c.ProjectID != q.Project || c.Offset < 0 || c.DatabaseRevision == 0 || len(c.DatabaseID) != 32 {
+		if executionbackend.DecodeStrictJSON(raw, &c, "expected exactly one JSON value") != nil || c.Version != 1 || c.ProjectID != q.Project || c.Offset < 0 || c.DatabaseRevision == 0 || len(c.DatabaseID) != 32 {
 			return storageports.NativeTaskPage{}, nativeErr("cursor_invalidated", "cursor identity or sampling revision is invalid")
 		}
 		offset, expectedDB = c.Offset, c.DatabaseRevision

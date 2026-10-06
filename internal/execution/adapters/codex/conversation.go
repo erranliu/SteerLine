@@ -5,22 +5,22 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"strings"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type ConversationMapper struct {
 	currentTurn    string
-	turnQuality    contracts.IdentityQuality
+	turnQuality    executionvalues.IdentityQuality
 	sessionID      string
-	sessionQuality contracts.IdentityQuality
+	sessionQuality executionvalues.IdentityQuality
 	turnFinalSeen  map[string]bool
 }
 
-func (m *ConversationMapper) MapRecord(event contracts.ConversationEvent, raw []byte) contracts.ConversationWrite {
+func (m *ConversationMapper) MapRecord(event executionvalues.ConversationEvent, raw []byte) executionvalues.ConversationWrite {
 	return m.MapCodexJSONL(event, raw)
 }
 
@@ -28,7 +28,7 @@ func (m *ConversationMapper) MapRecord(event contracts.ConversationEvent, raw []
 // committed conversation projection. Callers discard the returned mapper when
 // its corresponding batch fails to commit and restore it from the same
 // committed snapshot on retry.
-func RestoreConversationMapper(snapshot contracts.ConversationMapperSnapshot) *ConversationMapper {
+func RestoreConversationMapper(snapshot executionvalues.ConversationMapperSnapshot) *ConversationMapper {
 	m := &ConversationMapper{}
 	if snapshot.Session != nil {
 		m.RestoreSession(*snapshot.Session)
@@ -41,52 +41,52 @@ func RestoreConversationMapper(snapshot contracts.ConversationMapperSnapshot) *C
 
 // MapCodexJSONL maps observed JSONL fields only. In particular, turn completion
 // does not promote an item to final_answer, and an absent phase stays unknown.
-func (m *ConversationMapper) MapCodexJSONL(ctx contracts.ConversationEvent, raw []byte) contracts.ConversationWrite {
+func (m *ConversationMapper) MapCodexJSONL(ctx executionvalues.ConversationEvent, raw []byte) executionvalues.ConversationWrite {
 	if m == nil {
 		m = &ConversationMapper{}
 	}
-	ctx.Version = contracts.ConversationVersion
+	ctx.Version = executionvalues.ConversationVersion
 	if ctx.Backend == "" && ctx.Protocol == "" {
 		ctx.Backend, ctx.Protocol = executionbackend.BackendLocal, executionbackend.ProtocolLocalProcess
 	}
 	ctx.Source = "codex-jsonl"
-	ctx.SourceRole = contracts.ConversationSourceFallback
+	ctx.SourceRole = executionvalues.ConversationSourceFallback
 	ctx.SourceSegment = nonEmpty(ctx.SourceSegment, "local-jsonl-v1")
-	ctx.SessionQuality = contracts.IdentityUnknown
-	ctx.TurnQuality = contracts.IdentityUnknown
-	ctx.SourceEventQuality = contracts.IdentityUnknown
-	ctx.ItemQuality = contracts.IdentityUnknown
-	ctx.Phase = contracts.MessagePhaseUnknown
+	ctx.SessionQuality = executionvalues.IdentityUnknown
+	ctx.TurnQuality = executionvalues.IdentityUnknown
+	ctx.SourceEventQuality = executionvalues.IdentityUnknown
+	ctx.ItemQuality = executionvalues.IdentityUnknown
+	ctx.Phase = executionvalues.MessagePhaseUnknown
 	ctx.ReceivedAt = nonZeroTime(ctx.ReceivedAt, time.Now().UTC())
 	ctx.Evidence = cloneStringMap(ctx.Evidence)
 	ctx.Attributes = map[string]any{}
 	if len(raw) > 0 {
-		ctx.Raw = &contracts.ConversationRawRef{}
+		ctx.Raw = &executionvalues.ConversationRawRef{}
 	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &fields); err != nil || fields == nil {
-		ctx.Type = contracts.ConversationUnknown
+		ctx.Type = executionvalues.ConversationUnknown
 		ctx.Status = "unparsed"
 		ctx.Diagnostic = "source line was not a JSON object"
 		ctx.EventIDFallback("raw-line")
 		if strings.HasPrefix(ctx.SourceEventID, "bytes:") || strings.HasPrefix(ctx.SourceEventID, "seq:") {
-			ctx.SourceEventQuality = contracts.IdentityDerived
+			ctx.SourceEventQuality = executionvalues.IdentityDerived
 		}
-		return contracts.ConversationWrite{Event: ctx, Raw: append([]byte(nil), raw...)}
+		return executionvalues.ConversationWrite{Event: ctx, Raw: append([]byte(nil), raw...)}
 	}
 	var eventType string
 	_ = json.Unmarshal(fields["type"], &eventType)
 	ctx.SourceEventID = nonEmpty(ctx.SourceEventID, sourceEventFallback(ctx, raw))
 	if strings.HasPrefix(ctx.SourceEventID, "bytes:") || strings.HasPrefix(ctx.SourceEventID, "seq:") {
-		ctx.SourceEventQuality = contracts.IdentityDerived
+		ctx.SourceEventQuality = executionvalues.IdentityDerived
 	}
 	ctx.SourceSeq = nonZeroUint(ctx.SourceSeq, uintField(fields, "sequence"))
 	ctx.SourceRevision = int64Field(fields, "revision")
 	if turnID := stringField(fields, "turn_id"); turnID != "" {
-		m.currentTurn, m.turnQuality = turnID, contracts.IdentityNative
+		m.currentTurn, m.turnQuality = turnID, executionvalues.IdentityNative
 	}
 	if sessionID := stringField(fields, "thread_id"); sessionID != "" {
-		m.sessionID, m.sessionQuality = sessionID, contracts.IdentityNative
+		m.sessionID, m.sessionQuality = sessionID, executionvalues.IdentityNative
 	}
 	ctx.SessionID, ctx.SessionQuality = m.sessionID, qualityOrUnknown(m.sessionQuality)
 	ctx.TurnID, ctx.TurnQuality = m.currentTurn, qualityOrUnknown(m.turnQuality)
@@ -104,7 +104,7 @@ func (m *ConversationMapper) MapCodexJSONL(ctx contracts.ConversationEvent, raw 
 	itemType := stringField(item, "type")
 	ctx.ItemID = itemID
 	if itemID != "" {
-		ctx.ItemQuality = contracts.IdentityNative
+		ctx.ItemQuality = executionvalues.IdentityNative
 	}
 	ctx.ItemKey = conversationItemKey(ctx, itemID)
 	ctx.Attributes["source_type"] = eventType
@@ -112,45 +112,45 @@ func (m *ConversationMapper) MapCodexJSONL(ctx contracts.ConversationEvent, raw 
 		ctx.Attributes["item_type"] = itemType
 	}
 	phase := nonEmpty(stringField(item, "phase"), stringField(fields, "phase"))
-	if phase == string(contracts.MessagePhaseCommentary) || phase == string(contracts.MessagePhaseFinalAnswer) {
-		ctx.Phase = contracts.MessagePhase(phase)
+	if phase == string(executionvalues.MessagePhaseCommentary) || phase == string(executionvalues.MessagePhaseFinalAnswer) {
+		ctx.Phase = executionvalues.MessagePhase(phase)
 	}
 	var body []byte
 	bodyMode := ""
 	switch eventType {
 	case "thread.started":
-		ctx.Type = contracts.ConversationSession
+		ctx.Type = executionvalues.ConversationSession
 		ctx.SessionID = nonEmpty(m.sessionID, stringField(fields, "thread_id"))
 		if ctx.SessionID != "" {
-			ctx.SessionQuality = contracts.IdentityNative
-			m.sessionID, m.sessionQuality = ctx.SessionID, contracts.IdentityNative
+			ctx.SessionQuality = executionvalues.IdentityNative
+			m.sessionID, m.sessionQuality = ctx.SessionID, executionvalues.IdentityNative
 		}
 	case "turn.started":
 		if id := stringField(fields, "turn_id"); id != "" {
-			m.currentTurn, m.turnQuality = id, contracts.IdentityNative
+			m.currentTurn, m.turnQuality = id, executionvalues.IdentityNative
 		} else {
 			// The persisted source byte range identifies this explicit boundary.
 			m.currentTurn = "derived:" + ctx.SourceEventID
-			m.turnQuality = contracts.IdentityDerived
+			m.turnQuality = executionvalues.IdentityDerived
 			ctx.Evidence["turn_derivation"] = "codex-jsonl-turn-boundary-v1"
 		}
 		if m.turnFinalSeen == nil {
 			m.turnFinalSeen = map[string]bool{}
 		}
-		ctx.TurnID, ctx.TurnQuality, ctx.Type = m.currentTurn, m.turnQuality, contracts.ConversationTurnStarted
-		ctx.FinalAvailability = contracts.FinalUnknown
+		ctx.TurnID, ctx.TurnQuality, ctx.Type = m.currentTurn, m.turnQuality, executionvalues.ConversationTurnStarted
+		ctx.FinalAvailability = executionvalues.FinalUnknown
 	case "turn.completed":
-		ctx.Type, ctx.Status = contracts.ConversationTurnCompleted, "completed"
-		ctx.FinalAvailability = contracts.FinalUnknown
+		ctx.Type, ctx.Status = executionvalues.ConversationTurnCompleted, "completed"
+		ctx.FinalAvailability = executionvalues.FinalUnknown
 		if m.turnFinalSeen[m.currentTurn] {
-			ctx.FinalAvailability = contracts.FinalAvailable
+			ctx.FinalAvailability = executionvalues.FinalAvailable
 		}
 	case "turn.failed":
-		ctx.Type, ctx.Status = contracts.ConversationTurnFailed, "failed"
-		ctx.FinalAvailability = contracts.FinalUnknown
+		ctx.Type, ctx.Status = executionvalues.ConversationTurnFailed, "failed"
+		ctx.FinalAvailability = executionvalues.FinalUnknown
 	case "turn.cancelled":
-		ctx.Type, ctx.Status = contracts.ConversationTurnCancelled, "cancelled"
-		ctx.FinalAvailability = contracts.FinalUnknown
+		ctx.Type, ctx.Status = executionvalues.ConversationTurnCancelled, "cancelled"
+		ctx.FinalAvailability = executionvalues.FinalUnknown
 	case "item.started", "item.updated", "item.completed":
 		switch itemType {
 		case "agent_message":
@@ -161,11 +161,11 @@ func (m *ConversationMapper) MapCodexJSONL(ctx contracts.ConversationEvent, raw 
 			body = []byte(text)
 			switch eventType {
 			case "item.completed":
-				ctx.Type, ctx.Status = contracts.ConversationMessageComplete, "completed"
-				if ctx.Phase == contracts.MessagePhaseFinalAnswer {
-					ctx.FinalAvailability = contracts.FinalUnknown
+				ctx.Type, ctx.Status = executionvalues.ConversationMessageComplete, "completed"
+				if ctx.Phase == executionvalues.MessagePhaseFinalAnswer {
+					ctx.FinalAvailability = executionvalues.FinalUnknown
 					if textPresent {
-						ctx.FinalAvailability = contracts.FinalAvailable
+						ctx.FinalAvailability = executionvalues.FinalAvailable
 						if m.turnFinalSeen == nil {
 							m.turnFinalSeen = map[string]bool{}
 						}
@@ -176,39 +176,39 @@ func (m *ConversationMapper) MapCodexJSONL(ctx contracts.ConversationEvent, raw 
 					bodyMode = "complete"
 				}
 			case "item.updated":
-				ctx.Type, ctx.Status = contracts.ConversationMessageSnapshot, "updated"
+				ctx.Type, ctx.Status = executionvalues.ConversationMessageSnapshot, "updated"
 				if textPresent {
 					bodyMode = "snapshot"
 				}
 			default:
-				ctx.Type, ctx.Status = contracts.ConversationObservation, "started"
+				ctx.Type, ctx.Status = executionvalues.ConversationObservation, "started"
 			}
 		case "command_execution", "mcp_tool_call", "web_search_call":
 			if eventType == "item.started" {
-				ctx.Type, ctx.Status = contracts.ConversationToolStarted, "started"
+				ctx.Type, ctx.Status = executionvalues.ConversationToolStarted, "started"
 			} else if eventType == "item.completed" {
-				ctx.Type, ctx.Status = contracts.ConversationToolCompleted, stringField(item, "status")
+				ctx.Type, ctx.Status = executionvalues.ConversationToolCompleted, stringField(item, "status")
 				if ctx.Status == "" {
 					ctx.Status = "completed"
 				}
 			} else {
-				ctx.Type, ctx.Status = contracts.ConversationToolDelta, "updated"
+				ctx.Type, ctx.Status = executionvalues.ConversationToolDelta, "updated"
 			}
 			ctx.Attributes["title"] = firstNonEmpty(stringField(item, "command"), stringField(item, "name"), itemType)
 			if output := stringField(item, "aggregated_output"); output != "" {
 				body, bodyMode = []byte(output), "snapshot"
 			}
 		default:
-			ctx.Type, ctx.Status = contracts.ConversationUnknown, eventType
+			ctx.Type, ctx.Status = executionvalues.ConversationUnknown, eventType
 		}
 	default:
-		ctx.Type = contracts.ConversationUnknown
+		ctx.Type = executionvalues.ConversationUnknown
 		ctx.Status = eventType
 	}
 	if ctx.Type == "" {
-		ctx.Type = contracts.ConversationUnknown
+		ctx.Type = executionvalues.ConversationUnknown
 	}
-	write := contracts.ConversationWrite{Event: ctx, Body: body, BodyMode: bodyMode, Raw: append([]byte(nil), raw...), BodySource: "codex-jsonl"}
+	write := executionvalues.ConversationWrite{Event: ctx, Body: body, BodyMode: bodyMode, Raw: append([]byte(nil), raw...), BodySource: "codex-jsonl"}
 	return write
 }
 
@@ -235,9 +235,9 @@ func nonZeroUint(value, fallback uint64) uint64 {
 	return value
 }
 
-func qualityOrUnknown(value contracts.IdentityQuality) contracts.IdentityQuality {
+func qualityOrUnknown(value executionvalues.IdentityQuality) executionvalues.IdentityQuality {
 	if value == "" {
-		return contracts.IdentityUnknown
+		return executionvalues.IdentityUnknown
 	}
 	return value
 }
@@ -283,7 +283,7 @@ func int64Field(fields map[string]json.RawMessage, name string) int64 {
 
 func firstNonEmpty(values ...string) string { return nonEmpty(values...) }
 
-func sourceEventFallback(e contracts.ConversationEvent, raw []byte) string {
+func sourceEventFallback(e executionvalues.ConversationEvent, raw []byte) string {
 	if e.SourceSeq != 0 {
 		return fmt.Sprintf("seq:%d", e.SourceSeq)
 	}
@@ -303,11 +303,11 @@ func newSourceID() string { var b [16]byte; _, _ = rand.Read(b[:]); return hex.E
 
 func (m *ConversationMapper) CurrentTurn() string { return m.currentTurn }
 
-func (m *ConversationMapper) RestoreSession(e contracts.ConversationEvent) {
+func (m *ConversationMapper) RestoreSession(e executionvalues.ConversationEvent) {
 	m.sessionID, m.sessionQuality = e.SessionID, e.SessionQuality
 }
 
-func (m *ConversationMapper) RestoreTurn(e contracts.ConversationEvent, finalSeen bool) {
+func (m *ConversationMapper) RestoreTurn(e executionvalues.ConversationEvent, finalSeen bool) {
 	m.currentTurn, m.turnQuality = e.TurnID, e.TurnQuality
 	if m.turnFinalSeen == nil {
 		m.turnFinalSeen = map[string]bool{}

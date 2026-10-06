@@ -5,12 +5,12 @@ import (
 	"errors"
 	"fmt"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
@@ -276,7 +276,7 @@ func (p *Project) CandidateUsage(c Candidate, label string) native.Usage {
 		p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, c.RunID+"-"+label+"-conversation.json"), conversation))
 		finals := map[string]bool{}
 		for _, event := range conversation.Events {
-			if event.Type == contracts.ConversationMessageComplete && event.Phase == contracts.MessagePhaseFinalAnswer && event.SourceRole == contracts.ConversationSourceCanonical {
+			if event.Type == productapi.ConversationMessageComplete && event.Phase == productapi.MessagePhaseFinalAnswer && event.SourceRole == productapi.ConversationSourceCanonical {
 				if event.SessionID != u.Session {
 					return false, errors.New("canonical final belongs to another native session")
 				}

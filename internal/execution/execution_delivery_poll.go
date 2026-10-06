@@ -3,12 +3,12 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *contracts.Run) error {
+func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *reconstructiontypes.RunView) error {
 	if run == nil || run.PR.URL == nil {
 		return nativeErr("merge_state_unknown", "native task has no fixed PR URL")
 	}
@@ -21,7 +21,7 @@ func (s *Service) nativeCompleteMergedTask(ctx context.Context, run *contracts.R
 	if err != nil {
 		return err
 	}
-	receipt, err := (s.commandService(fixed.config.identity)).CompleteNativeTask(ctx, fixed.config, task.TaskID, task.Version, workflow.WorkflowRunID, publicationClient(fixed.config))
+	receipt, err := (s.commandService(fixed.config.identity)).CompleteNativeTask(ctx, fixed.config, task.TaskID, task.Version, workflow.WorkflowRunID, publicationClient(fixed.config, s.runtime.ProcessHost))
 	if err != nil {
 		return err
 	}

@@ -2,20 +2,21 @@ package execution
 
 import (
 	"encoding/json"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 // note queues a canonical event for the next domain transaction.
-func (s *Service) note(r *contracts.Run, source, kind, status, title, detail string, meta map[string]any) {
-	ev := contracts.ActivityEvent{Source: source, Kind: kind, Status: status, Title: title, Detail: detail, Meta: meta}
+func (s *Service) note(r *reconstructiontypes.RunView, source, kind, status, title, detail string, meta map[string]any) {
+	ev := executionvalues.ActivityEvent{Source: source, Kind: kind, Status: status, Title: title, Detail: detail, Meta: meta}
 	s.recordActivity(r, ev)
 	s.emitConsole(ev)
 }
 
-func (s *Service) recordActivity(r *contracts.Run, ev contracts.ActivityEvent) {
+func (s *Service) recordActivity(r *reconstructiontypes.RunView, ev executionvalues.ActivityEvent) {
 	if r == nil {
 		return
 	}

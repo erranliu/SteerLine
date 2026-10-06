@@ -4,14 +4,14 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
-func (s *Service) workflowRecords(run *contracts.Run) (*executionmodel.WorkflowRunRecord, *executionmodel.ExecutionRecord) {
+func (s *Service) workflowRecords(run *reconstructiontypes.RunView) (*executionmodel.WorkflowRunRecord, *executionmodel.ExecutionRecord) {
 	if run == nil {
 		return nil, nil
 	}
@@ -32,7 +32,7 @@ func (s *Service) workflowRecords(run *contracts.Run) (*executionmodel.WorkflowR
 	return workflow, execution
 }
 
-func (s *Service) workflowAttempt(run *contracts.Run, attemptID string) *executionmodel.StepAttemptRecord {
+func (s *Service) workflowAttempt(run *reconstructiontypes.RunView, attemptID string) *executionmodel.StepAttemptRecord {
 	if run == nil {
 		return nil
 	}
@@ -44,7 +44,7 @@ func (s *Service) workflowAttempt(run *contracts.Run, attemptID string) *executi
 	return nil
 }
 
-func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *contracts.Run) (executionmodel.WorkspaceEvidence, error) {
+func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *reconstructiontypes.RunView) (executionmodel.WorkspaceEvidence, error) {
 	if run == nil || run.WorktreePath == nil || run.WorktreeBranch == nil || run.BaseCommit == nil || run.WorkspaceIntent == nil {
 		return executionmodel.WorkspaceEvidence{}, errors.New("worker execution has no recorded workspace")
 	}
@@ -82,14 +82,14 @@ func (s *Service) inspectWorkflowWorkspace(ctx context.Context, run *contracts.R
 	return executionmodel.WorkspaceEvidence{Repository: inspection.Repository, Worktree: inspection.Worktree, Branch: inspection.Branch, Base: inspection.Base, Head: inspection.Head, Dirty: inspection.Dirty, VerifiedAt: inspection.CheckedAt}, nil
 }
 
-func applyWorkflowWorkspaceEvidence(run *contracts.Run, execution *executionmodel.ExecutionRecord, workspace executionmodel.WorkspaceEvidence) {
+func applyWorkflowWorkspaceEvidence(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord, workspace executionmodel.WorkspaceEvidence) {
 	applyWorkflowWorkspaceTarget(run, execution, workspace)
 	execution.Workspace = workspace
 	execution.UpdatedAt = now()
 	refreshExecutionView(run, execution)
 }
 
-func applyWorkflowWorkspaceTarget(run *contracts.Run, execution *executionmodel.ExecutionRecord, workspace executionmodel.WorkspaceEvidence) {
+func applyWorkflowWorkspaceTarget(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord, workspace executionmodel.WorkspaceEvidence) {
 	if execution.Target.WorktreeID == "" {
 		execution.Target.WorktreeID = workspace.Worktree
 	}
@@ -97,12 +97,12 @@ func applyWorkflowWorkspaceTarget(run *contracts.Run, execution *executionmodel.
 	execution.Target.BaseRevision = workspace.Base
 }
 
-func prepareWorktreeOnly(ctx context.Context, c Config, run *contracts.Run) error {
-	_, err := prepareWorktree(ctx, c, run)
+func prepareWorktreeOnly(ctx context.Context, c Config, directory *ExecutionDirectory, processHost executionbackend.ManagedProcessHost, run *reconstructiontypes.RunView) error {
+	_, err := prepareWorktree(ctx, c, directory, processHost, run)
 	return err
 }
 
-func prepareWorktree(ctx context.Context, c Config, run *contracts.Run) (workspace.Preparation, error) {
+func prepareWorktree(ctx context.Context, c Config, directory *ExecutionDirectory, processHost executionbackend.ManagedProcessHost, run *reconstructiontypes.RunView) (workspace.Preparation, error) {
 	intent := run.WorkspaceIntent
 	if intent == nil {
 		return workspace.Preparation{Status: executionbackend.OperationRejected}, errors.New("missing durable workspace intent")
@@ -110,16 +110,16 @@ func prepareWorktree(ctx context.Context, c Config, run *contracts.Run) (workspa
 	if err := c.PrepareWorktreeRoot(); err != nil {
 		return workspace.Preparation{Status: executionbackend.OperationRejected}, err
 	}
-	repository, err := workspaceRepository(c)
+	repository, err := workspaceRepository(c, directory)
 	if err != nil {
 		return workspace.Preparation{Status: executionbackend.OperationRejected}, err
 	}
-	return workspace.Prepare(ctx, workspaceGit(c), repository, c.WorktreeRoot, intent)
+	return workspace.Prepare(ctx, workspaceGit(c, processHost), repository, c.WorktreeRoot, intent)
 }
 
 func mustJSON(value any) []byte { data, _ := json.Marshal(value); return data }
 
-func (s *Service) executionRecord(run *contracts.Run) *executionmodel.ExecutionRecord {
+func (s *Service) executionRecord(run *reconstructiontypes.RunView) *executionmodel.ExecutionRecord {
 	_, execution := s.workflowRecords(run)
 	return execution
 }

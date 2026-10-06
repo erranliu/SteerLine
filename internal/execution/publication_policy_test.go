@@ -9,16 +9,14 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
 func executionPublicationFixture() executionbackend.PublicationPolicy {
 	return executionbackend.PublicationPolicy{Publisher: "worker"}
 }
 
-func hostPublicationProviderFixture() publication.Config {
-	return publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: os.Args[0], Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: executionbackend.Command{Executable: os.Args[0], Args: []string{"pr", "close", "{pr_url}"}}}
+func hostPublicationProviderFixture() executionmodel.PRProviderConfig {
+	return executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: os.Args[0], Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: executionbackend.Command{Executable: os.Args[0], Args: []string{"pr", "close", "{pr_url}"}}}
 }
 
 func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
@@ -47,7 +45,7 @@ func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
 	if strings.Contains(strings.Join(worker, "\n"), "secret-") || strings.Contains(string(data), "secret-") {
 		t.Fatal("host credentials leaked into worker/snapshot")
 	}
-	if err := fixed.BindPublicationTarget(context.Background()); err != nil {
+	if err := fixed.BindPublicationTarget(context.Background(), f.s.runtime.ProcessHost); err != nil {
 		t.Fatal(err)
 	}
 	copy := original
@@ -67,7 +65,7 @@ func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
 
 func TestRetiredPublicationMetadataRejected(t *testing.T) {
 	var settings executionmodel.PublicationSettings
-	if err := contracts.DecodeJSON([]byte(`{"create":{"executable":"retired-publisher"}}`), &settings); err == nil {
+	if err := decode([]byte(`{"create":{"executable":"retired-publisher"}}`), &settings); err == nil {
 		t.Fatal("retired create command accepted by the current metadata schema")
 	}
 }
@@ -92,12 +90,12 @@ func TestPublicationOriginalProviderAfterRestartAndRemoteDrift(t *testing.T) {
 	if digestValue(fixed.publicationSettings()) != digestValue(original.Publication) {
 		t.Fatal("restart redirected provider/reference")
 	}
-	queried, err := publicationClient(fixed).Query(f.ctx, info.URL)
+	queried, err := publicationClient(fixed, s.runtime.ProcessHost).Query(f.ctx, info.URL)
 	require(t, err)
 	if queried.URL != info.URL {
 		t.Fatal("original query lost exact PR")
 	}
-	closed, err := publicationClient(fixed).Close(f.ctx, info.URL)
+	closed, err := publicationClient(fixed, s.runtime.ProcessHost).Close(f.ctx, info.URL)
 	require(t, err)
 	if closed.State != "closed_unmerged" {
 		t.Fatal("original close did not verify closure")
@@ -107,9 +105,9 @@ func TestPublicationOriginalProviderAfterRestartAndRemoteDrift(t *testing.T) {
 	reader := fixed
 	reader.Git = executionbackend.Command{Executable: "git"}
 	f.git(reader.Repository, "remote", "set-url", reader.Remote, original.Publication.RemoteURL)
-	require(t, reader.BindPublicationTarget(f.ctx))
+	require(t, reader.BindPublicationTarget(f.ctx, s.runtime.ProcessHost))
 	f.git(reader.Repository, "remote", "set-url", reader.Remote, "https://changed.invalid/owner/repo.git")
-	if err := reader.BindPublicationTarget(f.ctx); err == nil {
+	if err := reader.BindPublicationTarget(f.ctx, s.runtime.ProcessHost); err == nil {
 		t.Fatal("different physical remote accepted")
 	}
 	if _, err := os.Stat(os.Getenv("STEERLINE_TEST_HOST_GH_FILE") + ".creates"); !os.IsNotExist(err) {

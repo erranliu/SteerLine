@@ -147,12 +147,15 @@ func NewTaskCommands(store taskCommandStorage, config Config) taskapp.Commands {
 }
 
 func taskDocumentsForTest(config Config) taskapp.Documents {
+	dependencies, _ := neutralFixtureRuntime(config)
 	timeout, _ := time.ParseDuration(config.CommandTimeout)
-	return taskDocuments{target: config.TaskRepositoryTarget, repository: config.Repository, git: config.Git, timeout: timeout, processHost: config.ProcessHost}
+	return taskDocuments{target: func(ctx context.Context) (string, error) {
+		return configuredRepositoryTarget(ctx, config, dependencies.ProcessHost)
+	}, repository: config.Repository, git: config.Git, timeout: timeout, processHost: dependencies.ProcessHost}
 }
 
 func taskInputForTest(config Config) taskapp.Input {
-	return taskapp.Input{Project: config.Identity(), Authority: config.TaskAuthority, Remote: config.Remote, Branch: config.Branch, ExecutableTypes: append([]string(nil), config.ExecutableTypes...), DefaultRequestedBy: defaultRequestedBy()}
+	return taskapp.Input{Project: config.Identity(), Authority: "native", Remote: config.Remote, Branch: config.Branch, ExecutableTypes: []string{"task", "bug", "feature", "chore"}, DefaultRequestedBy: "operator"}
 }
 
 func taskCommandStorageForTest(store CommandStore) taskCommandStorage {
@@ -164,26 +167,29 @@ func taskCommandStorageForTest(store CommandStore) taskCommandStorage {
 }
 
 func (c CommandService) ValidateTaskBatch(ctx context.Context, config Config, data []byte) (taskmodel.TaskBatchValidation, error) {
+	if config.Repository == "" || config.Remote == "" || config.Branch == "" {
+		return taskmodel.TaskBatchValidation{}, errors.New("repository, remote and branch are required")
+	}
 	commands := NewTaskCommands(taskCommandStorageForTest(c.Store), config)
 	return commands.ValidateTaskBatch(ctx, data)
 }
 func (c CommandService) CreateTaskBatch(ctx context.Context, config Config, data []byte, request string, version uint64, by string) (taskmodel.TaskBatchReceipt, error) {
-	if err := config.ValidateTaskCommandConfiguration(); err != nil {
-		return taskmodel.TaskBatchReceipt{}, err
+	if config.Repository == "" || config.Remote == "" || config.Branch == "" {
+		return taskmodel.TaskBatchReceipt{}, errors.New("repository, remote and branch are required")
 	}
 	commands := NewTaskCommands(taskCommandStorageForTest(c.Store), config)
 	return commands.CreateTaskBatch(ctx, data, request, version, by)
 }
 func (c CommandService) AddNativeTaskPredecessors(ctx context.Context, config Config, in productapi.TaskPredecessorAddInput) (productapi.TaskPredecessorAddReceipt, error) {
-	if err := config.ValidateTaskCommandConfiguration(); err != nil {
-		return productapi.TaskPredecessorAddReceipt{}, err
+	if config.Repository == "" || config.Remote == "" || config.Branch == "" {
+		return productapi.TaskPredecessorAddReceipt{}, errors.New("repository, remote and branch are required")
 	}
 	commands := NewTaskCommands(taskCommandStorageForTest(c.Store), config)
 	receipt, err := commands.AddNativeTaskPredecessors(ctx, taskmodel.PredecessorAddInput(in))
 	return productapi.TaskPredecessorAddReceipt(receipt), err
 }
 func validateTaskBatchAgainstGraph(ctx context.Context, config Config, batch taskmodel.TaskBatchInput, graph storageports.TaskGraphSnapshot, verify bool) ([]taskmodel.TaskBatchIssue, []string) {
-	return taskmodel.ValidateBatchAgainstGraph(batch, graph.TaskGraph(), config.ExecutableTypes, taskmodel.ValidateContract)
+	return taskmodel.ValidateBatchAgainstGraph(batch, graph.TaskGraph(), taskInputForTest(config).ExecutableTypes, taskmodel.ValidateContract)
 }
 func validateNativePredecessorAddition(graph storageports.TaskGraphSnapshot, id string, predecessors []string) error {
 	return taskmodel.ValidatePredecessorAddition(graph.TaskGraph(), id, predecessors)

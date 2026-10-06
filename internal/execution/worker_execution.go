@@ -3,28 +3,21 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func requireWorkerFlowCapabilities(ctx context.Context, c Config) error {
-	if c.ExecutionDirectory == nil {
-		return errors.New("execution directory is required")
-	}
-	return requireWorkerFlowCapabilitiesWithResolver(ctx, c, c.ExecutionDirectory)
-}
-
-func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, resolver executionbackend.LifecycleResolver) error {
-	if err := validateWorkflowConfig(&c, nil); err != nil {
+func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, directory *ExecutionDirectory, processHost executionbackend.ManagedProcessHost, resolver executionbackend.LifecycleResolver) error {
+	if err := validateWorkflowConfig(c, directory); err != nil {
 		return err
 	}
-	entry, err := registrationFor(c)
+	entry, err := registrationFor(c, directory)
 	if err != nil {
 		return err
 	}
-	setup, err := lifecycleSetupForConfig(c, entry)
+	setup, err := lifecycleSetupForConfig(c, entry, processHost)
 	if err != nil {
 		return err
 	}
@@ -42,14 +35,14 @@ func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, re
 // workerFlowContext binds one persisted run to its fixed profile and records.
 // It is resolved for each operation; no mutable "current worker" slot owns it.
 type workerFlowContext struct {
-	run       *contracts.Run
+	run       *reconstructiontypes.RunView
 	workflow  *executionmodel.WorkflowRunRecord
 	execution *executionmodel.ExecutionRecord
 	attempt   *executionmodel.StepAttemptRecord
 	config    Config
 }
 
-func (s *Service) workerFlowContext(run *contracts.Run) (workerFlowContext, error) {
+func (s *Service) workerFlowContext(run *reconstructiontypes.RunView) (workerFlowContext, error) {
 	if run == nil || run.RunID == "" || run.ExecutionID == "" || run.AttemptID == "" {
 		return workerFlowContext{}, errors.New("worker flow has no fixed run identity")
 	}
@@ -72,37 +65,15 @@ func copyWorkerFlowConfig(c Config) Config {
 		e := c.requirementsEvaluation.Clone()
 		c.requirementsEvaluation = &e
 	}
-	c.ExecutableTypes = append([]string(nil), c.ExecutableTypes...)
 	c.Git.Args = append([]string(nil), c.Git.Args...)
 	c.ImplementationData = CloneImplementationData(c.ImplementationData)
 	c.ImplementationDisplay = append([]string(nil), c.ImplementationDisplay...)
-	profiles := make([]ExecutionProfile, len(c.ExecutionProfiles))
-	copy(profiles, c.ExecutionProfiles)
-	for i := range profiles {
-		profiles[i].ExecutionRequirements = profiles[i].ExecutionRequirements.Clone()
-		profiles[i].Publication = clonePublicationSettings(profiles[i].Publication)
-		if profiles[i].RequirementsEvaluation != nil {
-			e := profiles[i].RequirementsEvaluation.Clone()
-			profiles[i].RequirementsEvaluation = &e
-		}
-		profiles[i].ImplementationConfigs = cloneImplementationInputs(profiles[i].ImplementationConfigs)
-		profiles[i].ImplementationData = CloneImplementationData(profiles[i].ImplementationData)
-		profiles[i].ImplementationDisplay = append([]string(nil), profiles[i].ImplementationDisplay...)
-	}
-	c.ExecutionProfiles = profiles
 	c.PR.Query.Args = append([]string(nil), c.PR.Query.Args...)
 	c.PR.Close.Args = append([]string(nil), c.PR.Close.Args...)
-	if c.workerEnv != nil {
-		env := make(map[string]string, len(c.workerEnv))
-		for key, value := range c.workerEnv {
-			env[key] = value
-		}
-		c.workerEnv = env
-	}
 	return c
 }
 
-func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *contracts.Run, execution *executionmodel.ExecutionRecord, answer executionmodel.DecisionAnswer, commandID string) error {
+func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord, answer executionmodel.DecisionAnswer, commandID string) error {
 	sessionID, _ := executionSessionFacts(execution)
 	if sessionID == "" {
 		execution.Error = ptr("Feedback is saved, but the original worker session is not yet available for delivery")
@@ -162,13 +133,13 @@ func workerFeedbackText(answer executionmodel.DecisionAnswer, request executionm
 	return message
 }
 
-func prepareLocalWorkerWorkspace(s *Service, ctx context.Context, run *contracts.Run, opID string) (bool, error) {
+func prepareLocalWorkerWorkspace(s *Service, ctx context.Context, run *reconstructiontypes.RunView, opID string) (bool, error) {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return false, err
 	}
 	execution := fixed.execution
-	preparation, err := prepareWorktree(ctx, fixed.config, run)
+	preparation, err := prepareWorktree(ctx, fixed.config, s.runtime.Directory, s.runtime.ProcessHost, run)
 	if err != nil {
 		status := string(preparation.Status)
 		if status != string(executionbackend.OperationRejected) {

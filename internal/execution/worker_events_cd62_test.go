@@ -8,7 +8,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -21,11 +20,11 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 		currentQuestions[0].TurnID, currentQuestions[0].Question = "current-turn", "New question"
 		request := DecisionRequestFromEventFact(executionbackend.EventFact{QuestionRoute: &old, Questions: oldQuestions})
 		s := &Service{domain: reconstruction.Snapshot{Decisions: []executionmodel.DecisionRecord{{ExecutionID: "execution", QuestionID: old.QuestionID, Request: mustJSON(request)}}}}
-		seen, err := s.routedQuestionSeen(&contracts.Run{}, &executionmodel.ExecutionRecord{ExecutionID: "execution"}, &current, currentQuestions)
+		seen, err := s.routedQuestionSeen(&reconstruction.RunView{}, &executionmodel.ExecutionRecord{ExecutionID: "execution"}, &current, currentQuestions)
 		if err != nil || seen {
 			t.Fatalf("a call ID from an earlier turn conflicts with a new bound question: seen=%t err=%v", seen, err)
 		}
-		if _, err := s.routedQuestionSeen(&contracts.Run{}, &executionmodel.ExecutionRecord{ExecutionID: "execution"}, &old, currentQuestions); err == nil {
+		if _, err := s.routedQuestionSeen(&reconstruction.RunView{}, &executionmodel.ExecutionRecord{ExecutionID: "execution"}, &old, currentQuestions); err == nil {
 			t.Fatal("changed content for the same original question was accepted")
 		}
 	})
@@ -68,7 +67,7 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 	if err := executionmodel.ValidateDecisionRequest(&request); err != nil {
 		t.Fatal(err)
 	}
-	run := &contracts.Run{RunID: identity.WorkflowRunID, ExecutionID: identity.ExecutionID, AttemptID: identity.AttemptID}
+	run := &reconstruction.RunView{RunID: identity.WorkflowRunID, ExecutionID: identity.ExecutionID, AttemptID: identity.AttemptID}
 	execution := &executionmodel.ExecutionRecord{ProjectIdentity: identity.ProjectID, WorkflowRunID: identity.WorkflowRunID, ExecutionID: identity.ExecutionID,
 		CurrentAttemptID: identity.AttemptID, Generation: identity.Generation, CurrentTurnID: identity.TurnID, Protocol: string(neutralProtocol)}
 	setNeutralBinding(t, execution, "ws://127.0.0.1:12345", identity.Generation, workerFlowMockSession)

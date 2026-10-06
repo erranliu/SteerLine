@@ -8,7 +8,7 @@ import (
 
 func TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion(t *testing.T) {
 	c := workerContextConfigFixture()
-	report := capabilityReport(executionbackend.BackendLocal, neutralProtocol, TargetFor(c), AgentFor(c), "fixture-version-1")
+	report := capabilityReport(executionbackend.BackendLocal, neutralProtocol, testTargetFor(c), AgentFor(c), "fixture-version-1")
 	if report.ExpectedAgentVersion != "" || report.AgentVersion != "" {
 		t.Fatal("optional agent version fixture must remain empty")
 	}

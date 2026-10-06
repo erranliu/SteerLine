@@ -4,12 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	"os"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -23,6 +24,7 @@ type ServiceStorage struct {
 	Worker        storageports.WorkerMetadata
 	Conversations ConversationStore
 	Records       ExecutionRecordReader
+	Resources     ResourcePort
 	Close         func() error
 }
 
@@ -30,44 +32,39 @@ type ServiceStorage struct {
 // directory and its conversation source port. Lifecycle operations receive
 // only execution values and already-persisted operation intents. The application
 // calls PrepareServiceConfig before opening and transferring the connection.
-func NewService(c Config, directory *ExecutionDirectory, resolver executionbackend.LifecycleResolver, conversationSources contracts.ConversationSourcePort, processHost executionbackend.ManagedProcessHost, stores ServiceStorage, work TaskWorkPort, results TaskResultPort, host HostPort) (_ *Service, retErr error) {
-	if c.ExecutionRecords == nil {
-		c.ExecutionRecords = stores.Records
+func NewService(c Config, runtime RuntimeDependencies, settings RuntimeSettings, resolver executionbackend.LifecycleResolver, conversationSources conversationtypes.ConversationSourcePort, stores ServiceStorage, work TaskWorkPort, results TaskResultPort, host hostport.HostPort) (_ *Service, retErr error) {
+	if stores.Close != nil {
+		defer func() {
+			if retErr != nil {
+				retErr = errors.Join(retErr, stores.Close())
+			}
+		}()
 	}
-	if directory == nil || resolver == nil || conversationSources == nil || processHost == nil || c.ExecutionRecords == nil || stores.State == nil || stores.Commands == nil || stores.Worker == nil || stores.Conversations == nil || stores.Close == nil || work == nil || results == nil || host == nil || c.Resources == nil {
+	if runtime.Directory == nil || runtime.ProcessHost == nil || runtime.Profiles == nil || resolver == nil || conversationSources == nil || stores.Records == nil || stores.Resources == nil || stores.State == nil || stores.Commands == nil || stores.Worker == nil || stores.Conversations == nil || stores.Close == nil || work == nil || results == nil || host == nil {
 		return nil, errors.New("execution directory, conversation source, process host and persistence ports are required")
 	}
-	c.ExecutionDirectory = directory
-	c.ProcessHost = processHost
-	var admissionErr error
-	admissionErr = c.ValidateAdmission()
-	if admissionErr != nil {
-		return nil, admissionErr
-	}
-	if err := host.ValidateStateLocation(c); err != nil {
+	if err := c.ValidateAdmission(runtime.Directory); err != nil {
 		return nil, err
 	}
-	defer func() {
-		if retErr != nil {
-			_ = stores.Close()
-		}
-	}()
-	s := &Service{host: host, taskWork: work, taskResults: results, Config: c, baseConfig: c, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: stores.State, commandStore: stores.Commands, conversationStore: stores.Conversations, closeStore: stores.Close, store: &Store{Domain: stores.Worker, Project: c.identity}, workers: map[string]*Worker{}, ownedProcesses: map[string]executionbackend.StopHandle{}}
+	if err := host.ValidateStateLocation(); err != nil {
+		return nil, err
+	}
+	s := &Service{host: host, taskWork: work, taskResults: results, Config: c, baseConfig: c, runtime: runtime, runtimeSettings: settings, lifecycleResolver: resolver, conversationSources: conversationSources, domainStore: stores.State, commandStore: stores.Commands, conversationStore: stores.Conversations, closeStore: stores.Close, store: &Store{Domain: stores.Worker, Project: c.identity}, records: executionRecords{root: c.RunDir, reader: stores.Records, resources: stores.Resources}, resources: stores.Resources, workers: map[string]*Worker{}, ownedProcesses: map[string]executionbackend.StopHandle{}}
 	stored, e := stores.State.ReadExecutionStateSnapshot(context.Background(), c.identity)
 	if e != nil {
 		return nil, e
 	}
 	if c.WorkflowProtocol == executionmodel.Version {
-		if err := c.ValidateStoredExecutions(reconstruction.SnapshotFromStorage(stored)); err != nil {
+		if err := c.ValidateStoredExecutions(reconstruction.SnapshotFromStorage(stored), runtime.Directory); err != nil {
 			return nil, err
 		}
 	}
 	authority := stored.Graph.Authority
-	s.State = contracts.Runtime{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: contracts.Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}, Runs: []*contracts.Run{}, Control: contracts.ControlState{DispatchMode: "auto", Revision: 1, Blockers: []contracts.ControlBlocker{}}}
-	if authority.DispatchMode == "auto" && c.DefaultProfileID() == "" {
+	s.State = reconstruction.Runtime{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: reconstruction.Repository{Path: c.Repository, Remote: c.Remote, Branch: c.Branch, Identity: c.identity}, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}, Runs: []*reconstruction.RunView{}, Control: reconstruction.ControlState{DispatchMode: "auto", Revision: 1, Blockers: []reconstruction.ControlBlocker{}}}
+	if authority.DispatchMode == "auto" && runtime.Profiles.DefaultProfileID() == "" {
 		return nil, errors.New("automatic dispatch requires default_execution_profile")
 	}
-	s.State.Control = contracts.ControlState{DispatchMode: authority.DispatchMode, DispatchPaused: authority.DispatchPaused, Revision: authority.AuthorityVersion, Blockers: []contracts.ControlBlocker{}}
+	s.State.Control = reconstruction.ControlState{DispatchMode: authority.DispatchMode, DispatchPaused: authority.DispatchPaused, Revision: authority.AuthorityVersion, Blockers: []reconstruction.ControlBlocker{}}
 	if stored.Checkpoint != nil {
 		old := reconstruction.RuntimeFromCheckpoint(*stored.Checkpoint, authority.DispatchMode, authority.DispatchPaused, authority.AuthorityVersion)
 		if old.Repository.Identity != c.identity || old.Repository.Remote != c.Remote || old.Repository.Branch != c.Branch {
@@ -104,7 +101,15 @@ func NewService(c Config, directory *ExecutionDirectory, resolver executionbacke
 	}
 	s.State.SchemaVersion = storageports.WorkerFlowRuntimeSchema
 	capabilities := []string{"answer_decision", "open_terminal", "recheck_environment", "start_task", "start_candidate", "abandon_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}
-	s.State.Service = contracts.ServiceState{ExecutionPolicy: c.ExecutionPolicy, PolicySource: c.policySource, InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: c.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: capabilities, ConfigDigest: c.configDigest, HeartbeatIntervalMS: duration(c.Heartbeat).Milliseconds()}
+	selectedProfile := runtime.Profiles.DefaultProfileID()
+	if c.selectedProfileID != "" {
+		selectedProfile = c.selectedProfileID
+	}
+	_, selectedFixed, err := runtime.Profiles.ResolveExecutionProfile(selectedProfile, c.fixedProfileDigest)
+	if err != nil {
+		return nil, fmt.Errorf("resolve initial execution profile: %w", err)
+	}
+	s.State.Service = reconstruction.ServiceState{ExecutionPolicy: c.ExecutionPolicy, PolicySource: selectedFixed.PolicySource, InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: settings.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: capabilities, ConfigDigest: c.acceptedConfigVersion, HeartbeatIntervalMS: settings.Heartbeat.Milliseconds()}
 	identity, err := host.CurrentProcessIdentity()
 	if err != nil {
 		return nil, fmt.Errorf("identify service process: %w", err)

@@ -13,26 +13,24 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
-func (c Config) ValidateProfiles() error { return validateExecutionProfiles(c) }
-
-func validateWorkflowConfig(c *Config, _ []byte) error {
-	entry, err := registrationFor(*c)
+func validateWorkflowConfig(c Config, directory *ExecutionDirectory) error {
+	entry, err := registrationFor(c, directory)
 	if err != nil {
 		return err
 	}
 	if err := c.ExecutionRequirements.Validate(); err != nil {
 		return err
 	}
-	if err := entry.ValidatePublicationPolicy(c.PublicationPolicy, c.PR); err != nil {
+	if err := entry.ValidatePublicationPolicy(c.PublicationPolicy, publication.Config(c.PR)); err != nil {
 		return err
 	}
-	if err := publication.ValidateNonSecret(c.PR, c.Git); err != nil {
+	if err := publication.ValidateNonSecret(publication.Config(c.PR), c.Git); err != nil {
 		return err
 	}
 	if c.WorkflowProtocol != executionmodel.Version {
 		return errors.New("only worker-flow-v1 is supported")
 	}
-	return validateImplementationProfileData(*c)
+	return validateImplementationProfileData(c, directory)
 }
 
 func duration(s string) time.Duration { d, _ := time.ParseDuration(s); return d }

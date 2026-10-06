@@ -9,13 +9,14 @@ import (
 func TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority(t *testing.T) {
 	c := workerContextConfigFixture()
 	setNeutralProfile(t, &c, neutralSettings{Executable: "fixture-agent", Model: "original"})
-	original := c.projectExecutionProfile().Freeze(ConfigurationProjectIdentity(c))
+	dependencies, _ := neutralFixtureRuntime(c)
+	original := testProjectExecutionProfile(c).Freeze(dependencies.Directory, ConfigurationProjectIdentity(c))
 	if !neutralVerifyFixedExecutionProfile(original) {
 		t.Fatal("valid neutral fixed snapshot rejected")
 	}
 	c.ExecutionPolicy.Network = "deny"
 	setNeutralProfile(t, &c, neutralSettings{Executable: "fixture-agent", Model: "changed"})
-	restored := c.ApplyFixedExecutionProfile(original)
+	restored := c.ApplyFixedExecutionProfile(original, dependencies.Directory)
 	if restored.ExecutionPolicy.Network != "allow" || neutralProfileSettings(restored).Model != "original" {
 		t.Fatal("current configuration rewrote original authority")
 	}

@@ -15,7 +15,7 @@ import (
 )
 
 func (s *Service) requireBackendCapabilities(ctx context.Context, backend executionbackend.ExecutionProbe, names ...string) (executionbackend.CapabilityReport, error) {
-	return s.requireBackendCapabilitiesFor(ctx, backend, TargetFor(s.Config), AgentFor(s.Config), names...)
+	return s.requireBackendCapabilitiesFor(ctx, backend, TargetFor(s.Config, s.runtime.Directory), AgentFor(s.Config), names...)
 }
 
 type localOutputCursor struct {
@@ -27,7 +27,7 @@ type localOutputCursor struct {
 }
 
 func (b localExecutionBackend) ReadOutput(ctx context.Context, ref executionbackend.ExecutionRef, cursor string, limit int) (executionbackend.OutputBatch, error) {
-	if ref.Backend != executionbackend.BackendLocal || ref.Protocol != executionbackend.ProtocolLocalProcess || ref.Target != TargetFor(b.config) || !executionbackend.StableExecutionID(ref.RunID) || !executionbackend.StableExecutionID(ref.AttemptID) {
+	if ref.Backend != executionbackend.BackendLocal || ref.Protocol != executionbackend.ProtocolLocalProcess || ref.Target != testTargetFor(b.config) || !executionbackend.StableExecutionID(ref.RunID) || !executionbackend.StableExecutionID(ref.AttemptID) {
 		return executionbackend.OutputBatch{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "output ref does not match the fixed local execution"}
 	}
 	if limit <= 0 || limit > 1<<20 {

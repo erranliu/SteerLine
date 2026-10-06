@@ -3,13 +3,13 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type simplifiedSlowPort struct {
@@ -88,7 +88,7 @@ func TestSimplifiedLifecycleActorDoesNotWaitForEffect(t *testing.T) {
 			s.signalQueue = make(chan Signal, 8)
 			port := &simplifiedSlowPort{entered: make(chan struct{}), release: make(chan struct{})}
 			applied := 0
-			err = s.dispatchLifecycleEffect(ctx, run, port, request, false, func(run *contracts.Run, result lifecycleEffectResult) error {
+			err = s.dispatchLifecycleEffect(ctx, run, port, request, false, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 				if run != s.find(run.RunID) {
 					return errors.New("effect captured an obsolete projection")
 				}

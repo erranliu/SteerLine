@@ -2,9 +2,8 @@ package execution
 
 import (
 	"encoding/json"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"time"
-
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func nonEmpty(values ...string) string {
@@ -30,9 +29,9 @@ func nonZeroUint(value, fallback uint64) uint64 {
 	return value
 }
 
-func qualityOrUnknown(value contracts.IdentityQuality) contracts.IdentityQuality {
+func qualityOrUnknown(value executionvalues.IdentityQuality) executionvalues.IdentityQuality {
 	if value == "" {
-		return contracts.IdentityUnknown
+		return executionvalues.IdentityUnknown
 	}
 	return value
 }

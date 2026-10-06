@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,6 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -83,7 +83,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					continue // Remote cancellation is not available; keep the exact manual item.
 				}
 				worker := s.workers[run.RunID]
-				if _, err := s.requireBackendCapabilitiesFor(ctx, BackendFor(config), TargetFor(config), AgentFor(config), "stop", "observe"); err != nil {
+				if _, err := s.requireBackendCapabilitiesFor(ctx, BackendFor(config, s.runtime.Directory), TargetFor(config, s.runtime.Directory), AgentFor(config), "stop", "observe"); err != nil {
 					s.executionRecord(run).Error = ptr("discarded task worker remains active; verified local stop capability is unavailable: " + clip(err.Error(), 1000))
 					s.refreshRun(run)
 					if commitErr := s.commitWorker(run); commitErr != nil {
@@ -104,7 +104,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					continue
 				}
 				if op.Status != executionbackend.OperationConfirmed {
-					backend := BackendFor(config)
+					backend := BackendFor(config, s.runtime.Directory)
 					observation, observeErr := backend.Observe(ctx, *op.Ref)
 					if observeErr != nil || observation.Liveness != "exited" {
 						s.executionRecord(run).Error = ptr("discarded task worker stop is awaiting confirmed process absence")
@@ -158,7 +158,7 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 
 func (s *Service) reconcileNativePRCleanup(ctx context.Context, task taskmodel.TaskRecord, cleanupItem string) error {
 	prURL := strings.TrimPrefix(cleanupItem, "pull_request_close:")
-	var run *contracts.Run
+	var run *reconstructiontypes.RunView
 	for _, candidate := range s.runs {
 		if candidate == nil || candidate.TaskID != task.TaskID {
 			continue
@@ -182,7 +182,7 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task taskmodel.T
 	if err != nil {
 		return err
 	}
-	info, err := publicationClient(fixed.config).Query(ctx, prURL)
+	info, err := publicationClient(fixed.config, s.runtime.ProcessHost).Query(ctx, prURL)
 	if err != nil || info.State == "unknown" {
 		return errors.Join(err, nativeErr("merge_state_unknown", "discarded PR state could not be verified"))
 	}
@@ -194,10 +194,10 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task taskmodel.T
 	}
 	if info.State == "open" {
 		c := fixed.config
-		if err := c.BindPublicationTarget(ctx); err != nil {
+		if err := c.BindPublicationTarget(ctx, s.runtime.ProcessHost); err != nil {
 			return err
 		}
-		info, err = publicationClient(c).Close(ctx, prURL)
+		info, err = publicationClient(c, s.runtime.ProcessHost).Close(ctx, prURL)
 		if err != nil {
 			var providerErr *publication.Error
 			if errors.As(err, &providerErr) {
@@ -215,7 +215,7 @@ func (s *Service) reconcileNativePRCleanup(ctx context.Context, task taskmodel.T
 	evidence := NativePRCleanupReceipt{WorkflowRunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, AttemptID: attempt.AttemptID, PRURL: info.URL, Repository: info.Repository, BaseBranch: info.BaseBranch, HeadRevision: info.HeadRevision, State: info.State, Merged: info.Merged, ObservedAt: now()}
 	data, _ := json.Marshal(evidence)
 	requestID := digestValue(struct{ TaskID, Item string }{task.TaskID, cleanupItem})[:32]
-	_, err = (s.commandService(s.Config.identity)).RecordNativeCleanupReceipt(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
+	_, err = (s.commandService(s.Config.identity)).RecordNativeCleanupReceipt(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.taskWork.DefaultRequestedBy(), data)
 	return err
 }
 
@@ -226,7 +226,7 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task task
 	for i := range s.domain.Executions {
 		candidate := &s.domain.Executions[i]
 		matches := candidate.Target.WorktreeID == path || candidate.Workspace.Worktree == path
-		if !matches && filepath.IsAbs(path) && executionUsesLocalWorkspace(s.Config, executionbackend.BackendKind(candidate.Backend), executionbackend.ExecutionProtocol(candidate.Protocol), candidate.Agent) {
+		if !matches && filepath.IsAbs(path) && executionUsesLocalWorkspace(s.Config, s.runtime.Directory, executionbackend.BackendKind(candidate.Backend), executionbackend.ExecutionProtocol(candidate.Protocol), candidate.Agent) {
 			matches = canonical(candidate.Target.WorktreeID) == canonical(path) || canonical(candidate.Workspace.Worktree) == canonical(path)
 		}
 		if !matches {
@@ -242,7 +242,7 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task task
 	if execution == nil || workflow == nil || execution.Target.Branch == "" || !taskmodel.ValidCommit(execution.Target.BaseRevision) {
 		return nativeErr("contract_mismatch", "discarded workspace path lacks a fixed branch and base identity")
 	}
-	if !executionUsesLocalWorkspace(s.Config, executionbackend.BackendKind(execution.Backend), executionbackend.ExecutionProtocol(execution.Protocol), execution.Agent) {
+	if !executionUsesLocalWorkspace(s.Config, s.runtime.Directory, executionbackend.BackendKind(execution.Backend), executionbackend.ExecutionProtocol(execution.Protocol), execution.Agent) {
 		return executionbackend.UnsupportedAdapterOperation("WorkspaceCleanup", "remote native worktree cleanup is unavailable")
 	}
 	if !filepath.IsAbs(path) {
@@ -256,19 +256,19 @@ func (s *Service) reconcileNativeWorkspaceCleanup(ctx context.Context, task task
 		return nativeErr("authority_mismatch", "discarded workspace cleanup path no longer matches worktree_root")
 	}
 	intent := &executionbackend.WorkspaceIntent{Path: resolved, Branch: execution.Target.Branch, BaseCommit: execution.Target.BaseRevision}
-	repository, err := workspaceRepository(s.Config)
+	repository, err := workspaceRepository(s.Config, s.runtime.Directory)
 	if err != nil {
 		return err
 	}
-	result, err := workspace.Cleanup(ctx, workspaceGit(s.Config), repository, s.Config.WorktreeRoot, intent)
+	result, err := workspace.Cleanup(ctx, workspaceGit(s.Config, s.runtime.ProcessHost), repository, s.Config.WorktreeRoot, intent)
 	receipt := NativeWorkspaceCleanupReceipt{WorkflowRunID: workflow.WorkflowRunID, ExecutionID: execution.ExecutionID, Repository: execution.Target.ID, Worktree: resolved, Branch: intent.Branch, BaseCommit: intent.BaseCommit, WorktreeGone: result.WorktreeGone, BranchGone: result.BranchGone, ObservedAt: now()}
 	data, _ := json.Marshal(receipt)
 	requestID := digestValue(struct{ TaskID, Item string }{task.TaskID, cleanupItem})[:32]
 	if err != nil {
-		progressErr := (s.commandService(s.Config.identity)).RecordNativeWorkspaceCleanupProgress(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
+		progressErr := (s.commandService(s.Config.identity)).RecordNativeWorkspaceCleanupProgress(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.taskWork.DefaultRequestedBy(), data)
 		return errors.Join(err, progressErr)
 	}
-	_, err = (s.commandService(s.Config.identity)).RecordNativeCleanupReceipt(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
+	_, err = (s.commandService(s.Config.identity)).RecordNativeCleanupReceipt(ctx, task.TaskID, requestID, task.Version, cleanupItem, s.taskWork.DefaultRequestedBy(), data)
 	return err
 }
 
@@ -280,7 +280,7 @@ func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupIt
 	if err != nil || !confirmed {
 		return errors.Join(err, &executionbackend.BackendError{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "native stop operation is not confirmed"})
 	}
-	records := executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords, resources: s.Config.Resources}
+	records := s.records
 	persisted, err := records.loadOperation(op.RunID, op.AttemptID, op.ID)
 	if err != nil || persisted.Status != executionbackend.OperationConfirmed {
 		return errors.Join(err, nativeErr("outcome_unknown", "confirmed stop was not durably recorded"))
@@ -289,7 +289,7 @@ func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupIt
 	if configErr != nil {
 		return configErr
 	}
-	backend := BackendFor(config)
+	backend := BackendFor(config, s.runtime.Directory)
 	observation, err := backend.Observe(ctx, *op.Ref)
 	if err != nil || observation.Liveness != "exited" {
 		return errors.Join(err, nativeErr("outcome_unknown", "fixed local execution is not confirmed absent"))
@@ -304,7 +304,7 @@ func (s *Service) recordNativeStopCleanup(ctx context.Context, taskID, cleanupIt
 	}
 	data, _ := json.Marshal(evidence)
 	requestID := digestValue(struct{ TaskID, Item, OperationID string }{taskID, cleanupItem, op.ID})[:32]
-	_, err = (s.commandService(s.Config.identity)).RecordNativeCleanupReceipt(ctx, taskID, requestID, task.Version, cleanupItem, s.Config.Claimant, data)
+	_, err = (s.commandService(s.Config.identity)).RecordNativeCleanupReceipt(ctx, taskID, requestID, task.Version, cleanupItem, s.taskWork.DefaultRequestedBy(), data)
 	return err
 }
 
@@ -319,7 +319,7 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	if execution == nil || execution.Process == nil {
 		return nativeErr("outcome_unknown", "discarded task has no fixed local process identity")
 	}
-	if !executionUsesLocalWorkspace(s.Config, executionbackend.BackendKind(execution.Backend), executionbackend.ExecutionProtocol(execution.Protocol), execution.Agent) {
+	if !executionUsesLocalWorkspace(s.Config, s.runtime.Directory, executionbackend.BackendKind(execution.Backend), executionbackend.ExecutionProtocol(execution.Protocol), execution.Agent) {
 		return executionbackend.UnsupportedAdapterOperation("StopExecution", "remote native worker cancellation is unavailable")
 	}
 	workflowRunID := execution.WorkflowRunID
@@ -339,11 +339,11 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	if attempt == nil {
 		return nativeErr("outcome_unknown", "discarded task has no active local step attempt")
 	}
-	ref, err := (executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords, resources: s.Config.Resources}).loadBinding(workflowRunID, attempt.AttemptID)
+	ref, err := s.records.loadBinding(workflowRunID, attempt.AttemptID)
 	if err != nil {
 		return err
 	}
-	backend := BackendFor(config)
+	backend := BackendFor(config, s.runtime.Directory)
 	observation, err := backend.Observe(ctx, ref)
 	if err != nil || observation.Liveness != "exited" {
 		return errors.Join(err, nativeErr("outcome_unknown", "fixed local process is live or its state is unknown; it cannot be stopped without the original handle"))
@@ -352,9 +352,9 @@ func (s *Service) reconcileExitedNativeExecution(ctx context.Context, taskID, cl
 	payload := struct {
 		Policy string
 		Grace  string
-	}{"fixed_local_execution_stop", s.Config.ShutdownGrace}
+	}{"fixed_local_execution_stop", s.runtimeSettings.ShutdownGrace.String()}
 	op := executionbackend.Operation{Version: executionbackend.ExecutionRecordVersion, ID: opID, RunID: workflowRunID, AttemptID: attempt.AttemptID, Backend: executionbackend.BackendLocal, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: executionbackend.OperationConfirmed, StartedAt: now(), UpdatedAt: now(), Diagnostic: observation.Diagnostic, Ref: &ref}
-	records := executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords, resources: s.Config.Resources}
+	records := s.records
 	expectedOperation := ""
 	if old, loadErr := records.loadOperation(workflowRunID, attempt.AttemptID, opID); loadErr == nil {
 		expectedOperation = recordFingerprint(old)

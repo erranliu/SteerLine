@@ -5,15 +5,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-func (s *Service) find(id string) *contracts.Run {
-	var selected *contracts.Run
+func (s *Service) find(id string) *reconstructiontypes.RunView {
+	var selected *reconstructiontypes.RunView
 	for _, r := range s.runs {
 		if r != nil && r.RunID == id {
 			return r
@@ -28,7 +28,7 @@ func (s *Service) find(id string) *contracts.Run {
 	return selected
 }
 
-func (s *Service) findExecution(id string) *contracts.Run {
+func (s *Service) findExecution(id string) *reconstructiontypes.RunView {
 	for _, run := range s.runs {
 		if run != nil && run.ExecutionID == id {
 			return run
@@ -114,27 +114,11 @@ func (s *Service) refreshSlotOccupancy() {
 }
 
 func (s *Service) refreshCandidates(ctx context.Context) error {
-	queried := now()
-	tasks, err := s.taskWork.Ready(ctx, s.Config.identity)
-	if err != nil {
-		return err
-	}
-	candidates := make([]contracts.TaskCandidate, 0, len(tasks))
-	for _, task := range tasks {
-		if !contains(s.Config.ExecutableTypes, task.Type) || s.find(task.TaskID) != nil {
-			continue
-		}
-		candidates = append(candidates, contracts.TaskCandidate{TaskID: task.TaskID, Title: task.Title, Type: task.Type})
-	}
-	blockReason := ""
-	if s.State.Control.DispatchMode == "auto" {
-		blockReason = s.slotReason(s.activeControlRequestID())
-	}
-	s.candidateSnapshot = &contracts.TaskSnapshot{Version: 1, InstanceID: s.State.Service.InstanceID, RepositoryIdentity: s.State.Repository.Identity, QueriedAt: queried, LastSuccessAt: &queried, BlockReason: blockReason, Tasks: candidates}
-	return nil
+	_, err := s.taskWork.Ready(ctx, s.Config.identity)
+	return err
 }
 
-func decisionMeta(r *contracts.Run) map[string]any {
+func decisionMeta(r *reconstructiontypes.RunView) map[string]any {
 	if r.Decision == nil {
 		return nil
 	}
@@ -149,7 +133,7 @@ func decisionMeta(r *contracts.Run) map[string]any {
 	return m
 }
 
-func (s *Service) finishedForRun(run *contracts.Run, worker *Worker, err error) error {
+func (s *Service) finishedForRun(run *reconstructiontypes.RunView, worker *Worker, err error) error {
 	if worker != nil {
 		for ev := range worker.Events {
 			if eventErr := s.eventForRun(run, ev); eventErr != nil {
@@ -181,7 +165,7 @@ func (s *Service) pollPRsFor(ctx context.Context, runID string) error {
 	return s.pollNativePRs(ctx, runID)
 }
 
-func (s *Service) eventForRun(run *contracts.Run, ev WorkerEvent) error {
+func (s *Service) eventForRun(run *reconstructiontypes.RunView, ev WorkerEvent) error {
 	ack := func(err error) error {
 		if ev.Processed != nil {
 			ev.Processed <- err
@@ -225,7 +209,7 @@ func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
 		}
 		return nil
 	}
-	var run *contracts.Run
+	var run *reconstructiontypes.RunView
 	for _, candidate := range s.runs {
 		if candidate != nil && candidate.RunID == ev.RunID {
 			run = candidate
@@ -267,6 +251,6 @@ func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
 	return s.commitEvents()
 }
 
-func (s *Service) finishWorkerInLoop(run *contracts.Run, worker *Worker, workerErr error) error {
+func (s *Service) finishWorkerInLoop(run *reconstructiontypes.RunView, worker *Worker, workerErr error) error {
 	return s.finishedForRun(run, worker, workerErr)
 }

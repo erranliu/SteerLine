@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"io"
 	"os"
 	"os/exec"
@@ -18,7 +19,6 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // HistoryClient only uses the public app-server protocol. It never opens
@@ -233,24 +233,24 @@ func (c *HistoryClient) ReadPage(ctx context.Context, id, cursor string) (Histor
 	return page, err
 }
 
-func MapHistoryTurn(base contracts.ConversationEvent, turn HistoryTurn, sequence uint64) ([]contracts.ConversationWrite, error) {
+func MapHistoryTurn(base executionvalues.ConversationEvent, turn HistoryTurn, sequence uint64) ([]executionvalues.ConversationWrite, error) {
 	if turn.ID == "" {
 		return nil, errors.New("Codex history turn omitted native identity")
 	}
-	base.Version = contracts.ConversationVersion
+	base.Version = executionvalues.ConversationVersion
 	base.Source = "codex-app-server"
-	base.SourceRole = contracts.ConversationSourceCanonical
-	base.TurnID, base.TurnQuality = turn.ID, contracts.IdentityNative
-	base.SessionQuality = contracts.IdentityNative
-	base.ItemQuality = contracts.IdentityUnknown
-	base.SourceEventQuality = contracts.IdentityDerived
-	base.Phase = contracts.MessagePhaseUnknown
+	base.SourceRole = executionvalues.ConversationSourceCanonical
+	base.TurnID, base.TurnQuality = turn.ID, executionvalues.IdentityNative
+	base.SessionQuality = executionvalues.IdentityNative
+	base.ItemQuality = executionvalues.IdentityUnknown
+	base.SourceEventQuality = executionvalues.IdentityDerived
+	base.Phase = executionvalues.MessagePhaseUnknown
 	base.ReceivedAt = time.Now().UTC()
 	base.Evidence = map[string]string{"capture": "thread/turns/list", "items_view": "full", "identity_rule": "native-session-turn-item-and-snapshot-v1"}
 	start := base
-	start.Type, start.SourceEventID = contracts.ConversationTurnStarted, "turn:"+turn.ID+":started"
-	start.FinalAvailability = contracts.FinalUnknown
-	writes := []contracts.ConversationWrite{{Event: start}}
+	start.Type, start.SourceEventID = executionvalues.ConversationTurnStarted, "turn:"+turn.ID+":started"
+	start.FinalAvailability = executionvalues.FinalUnknown
+	writes := []executionvalues.ConversationWrite{{Event: start}}
 	terminal := turn.CompletedAt != nil && (turn.Status == "completed" || turn.Status == "failed" || turn.Status == "interrupted")
 	finalSeen := false
 	unknownPhase := false
@@ -271,7 +271,7 @@ func MapHistoryTurn(base contracts.ConversationEvent, turn HistoryTurn, sequence
 			return nil, errors.New("Codex history item omitted native identity")
 		}
 		e := base
-		e.ItemID, e.ItemQuality = item.ID, contracts.IdentityNative
+		e.ItemID, e.ItemQuality = item.ID, executionvalues.IdentityNative
 		e.ItemKey = conversationItemKey(e, item.ID)
 		e.Attributes = map[string]any{"item_type": item.Type}
 		e.SourceEventID = "turn:" + turn.ID + ":item:" + item.ID + ":" + digestValue(struct {
@@ -279,41 +279,41 @@ func MapHistoryTurn(base contracts.ConversationEvent, turn HistoryTurn, sequence
 			Terminal bool
 		}{raw, terminal})
 		e.SourceRevision = int64(sequence)
-		write := contracts.ConversationWrite{Event: e, Raw: append([]byte(nil), raw...), BodySource: "codex-app-server"}
+		write := executionvalues.ConversationWrite{Event: e, Raw: append([]byte(nil), raw...), BodySource: "codex-app-server"}
 		switch item.Type {
 		case "agentMessage":
-			e.Type = contracts.ConversationMessageSnapshot
+			e.Type = executionvalues.ConversationMessageSnapshot
 			if item.Text != nil {
 				write.Body, write.BodyMode = []byte(*item.Text), "snapshot"
 			}
-			if item.Phase == string(contracts.MessagePhaseCommentary) || item.Phase == string(contracts.MessagePhaseFinalAnswer) {
-				e.Phase = contracts.MessagePhase(item.Phase)
+			if item.Phase == string(executionvalues.MessagePhaseCommentary) || item.Phase == string(executionvalues.MessagePhaseFinalAnswer) {
+				e.Phase = executionvalues.MessagePhase(item.Phase)
 			} else {
 				unknownPhase = true
 			}
 			if terminal {
-				e.Type = contracts.ConversationMessageComplete
+				e.Type = executionvalues.ConversationMessageComplete
 				if item.Text != nil {
 					write.BodyMode = "complete"
 				}
 			}
-			if e.Phase == contracts.MessagePhaseFinalAnswer {
+			if e.Phase == executionvalues.MessagePhaseFinalAnswer {
 				if item.Text == nil {
 					missingFinalContent = true
-					e.FinalAvailability = contracts.FinalUnknown
+					e.FinalAvailability = executionvalues.FinalUnknown
 				} else {
 					finalSeen = true
 					if terminal {
-						e.FinalAvailability = contracts.FinalAvailable
+						e.FinalAvailability = executionvalues.FinalAvailable
 					} else {
-						e.FinalAvailability = contracts.FinalPending
+						e.FinalAvailability = executionvalues.FinalPending
 					}
 				}
 			}
 		case "commandExecution", "mcpToolCall", "dynamicToolCall", "fileChange", "webSearch":
-			e.Type, e.Status = contracts.ConversationToolCompleted, item.Status
+			e.Type, e.Status = executionvalues.ConversationToolCompleted, item.Status
 			if item.Status == "inProgress" {
-				e.Type = contracts.ConversationToolStarted
+				e.Type = executionvalues.ConversationToolStarted
 			}
 			if item.Output != "" {
 				write.Body, write.BodyMode = []byte(item.Output), "snapshot"
@@ -322,10 +322,10 @@ func MapHistoryTurn(base contracts.ConversationEvent, turn HistoryTurn, sequence
 				}
 			}
 		case "userMessage":
-			e.Type = contracts.ConversationObservation
+			e.Type = executionvalues.ConversationObservation
 			e.Attributes["role"] = "user"
 		default:
-			e.Type = contracts.ConversationUnknown
+			e.Type = executionvalues.ConversationUnknown
 		}
 		write.Event = e
 		writes = append(writes, write)
@@ -336,24 +336,24 @@ func MapHistoryTurn(base contracts.ConversationEvent, turn HistoryTurn, sequence
 		end.Status = turn.Status
 		switch turn.Status {
 		case "completed":
-			end.Type = contracts.ConversationTurnCompleted
+			end.Type = executionvalues.ConversationTurnCompleted
 		case "failed":
-			end.Type = contracts.ConversationTurnFailed
+			end.Type = executionvalues.ConversationTurnFailed
 		case "interrupted":
-			end.Type = contracts.ConversationTurnCancelled
+			end.Type = executionvalues.ConversationTurnCancelled
 		}
-		end.FinalAvailability = contracts.FinalAbsent
+		end.FinalAvailability = executionvalues.FinalAbsent
 		if finalSeen {
-			end.FinalAvailability = contracts.FinalAvailable
+			end.FinalAvailability = executionvalues.FinalAvailable
 		} else if unknownPhase || missingFinalContent {
-			end.FinalAvailability = contracts.FinalUnknown
+			end.FinalAvailability = executionvalues.FinalUnknown
 		}
 		end.SourceEventID += ":final:" + string(end.FinalAvailability)
 		// Full persisted history is the evidence for absent, not a timeout or idle TUI.
 		end.Evidence = cloneStringMap(base.Evidence)
 		end.Evidence["final_reconciliation"] = "full-native-turn-snapshot"
 		raw, _ := json.Marshal(map[string]any{"id": turn.ID, "status": turn.Status, "error": turn.Error})
-		writes = append(writes, contracts.ConversationWrite{Event: end, Raw: raw})
+		writes = append(writes, executionvalues.ConversationWrite{Event: end, Raw: raw})
 	}
 	for i := range writes {
 		writes[i].Event.SourceSeq = sequence + uint64(i)
@@ -386,7 +386,7 @@ func digestValue(v any) string {
 	return hex.EncodeToString(h[:])
 }
 
-func conversationItemKey(e contracts.ConversationEvent, id string) string {
+func conversationItemKey(e executionvalues.ConversationEvent, id string) string {
 	if id == "" {
 		return ""
 	}
@@ -473,8 +473,8 @@ func InspectHistoryTurn(turn HistoryTurn) (HistoryTurnFacts, error) {
 			return facts, err
 		}
 		if item.Type == "agentMessage" {
-			facts.HasPhase = facts.HasPhase || item.Phase == string(contracts.MessagePhaseCommentary) || item.Phase == string(contracts.MessagePhaseFinalAnswer)
-			if item.Phase == string(contracts.MessagePhaseFinalAnswer) && item.Text != nil {
+			facts.HasPhase = facts.HasPhase || item.Phase == string(executionvalues.MessagePhaseCommentary) || item.Phase == string(executionvalues.MessagePhaseFinalAnswer)
+			if item.Phase == string(executionvalues.MessagePhaseFinalAnswer) && item.Text != nil {
 				facts.HasFinal = true
 				facts.CompleteFinal = turn.CompletedAt != nil
 			}

@@ -1,13 +1,13 @@
 package query
 
 import (
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // ActivityDisplayEvent selects only the canonical activity fields consumed by
 // the terminal formatter. Unrecognized event payload bytes remain in storage.
-func ActivityDisplayEvent(event contracts.ActivityEvent) api.ActivityEvent {
+func ActivityDisplayEvent(event executionvalues.ActivityEvent) api.ActivityEvent {
 	metadata := make(map[string]any, len(event.Meta))
 	for key, value := range event.Meta {
 		metadata[key] = value

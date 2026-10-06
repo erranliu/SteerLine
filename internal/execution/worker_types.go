@@ -2,10 +2,10 @@ package execution
 
 import (
 	"context"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type WorkerEvent struct {
@@ -17,7 +17,7 @@ type WorkerEvent struct {
 	SourceCursor   string
 	Session        string
 	Summary        string
-	Activity       contracts.ActivityEvent
+	Activity       executionvalues.ActivityEvent
 	Raw            []byte
 	SourceSeq      uint64
 	SourceOffset   int64
@@ -77,7 +77,7 @@ func workerFromLifecycle(runID, attemptID string, observer executionbackend.Life
 			value = value.Clone()
 			event := WorkerEvent{
 				RunID: runID, AttemptID: attemptID, Source: "execution", Summary: value.Summary,
-				Activity: contracts.ActivityEvent{Source: "execution", Kind: value.Kind, Status: value.Status, Title: value.Title},
+				Activity: executionvalues.ActivityEvent{Source: "execution", Kind: value.Kind, Status: value.Status, Title: value.Title},
 				Fact:     value.Fact, Implementation: CloneImplementationData(value.Implementation),
 				Candidate:  value.Candidate,
 				DeliveryID: value.DeliveryID, DeliveryFinal: value.DeliveryFinal,

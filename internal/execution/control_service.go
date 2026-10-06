@@ -5,17 +5,29 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"strings"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 var errClaimConflict = errors.New("native task claim conflict")
 
 var errTaskNotReady = errors.New("target task is no longer ready")
+
+func checkpointControlReceipt(receipt productapi.ControlReceipt) executionmodel.ControlReceipt {
+	return executionmodel.ControlReceipt{Version: receipt.Version, RequestID: receipt.RequestID, RequestDigest: receipt.RequestDigest, InstanceID: receipt.InstanceID, Action: receipt.Action,
+		Status: receipt.Status, Code: receipt.Code, Message: receipt.Message, RequestedBy: receipt.RequestedBy, SubmittedAt: receipt.SubmittedAt, AcceptedAt: receipt.AcceptedAt,
+		CompletedAt: receipt.CompletedAt, RunID: receipt.RunID, AttemptID: receipt.AttemptID, DecisionID: receipt.DecisionID, ControlRevision: receipt.ControlRevision, RunRevision: receipt.RunRevision}
+}
+
+func productControlReceipt(receipt executionmodel.ControlReceipt) productapi.ControlReceipt {
+	return productapi.ControlReceipt{Version: receipt.Version, RequestID: receipt.RequestID, RequestDigest: receipt.RequestDigest, InstanceID: receipt.InstanceID, Action: receipt.Action,
+		Status: receipt.Status, Code: receipt.Code, Message: receipt.Message, RequestedBy: receipt.RequestedBy, SubmittedAt: receipt.SubmittedAt, AcceptedAt: receipt.AcceptedAt,
+		CompletedAt: receipt.CompletedAt, RunID: receipt.RunID, AttemptID: receipt.AttemptID, DecisionID: receipt.DecisionID, ControlRevision: receipt.ControlRevision, RunRevision: receipt.RunRevision}
+}
 
 func (s *Service) baseReceipt(req productapi.ControlRequest, digest string, status, code, message string) productapi.ControlReceipt {
 	return productapi.ControlReceipt{Version: 1, RequestID: req.RequestID, RequestDigest: digest, InstanceID: req.InstanceID, Action: req.Action, Status: status, Code: code, Message: message, RequestedBy: req.RequestedBy, SubmittedAt: req.CreatedAt}
@@ -40,7 +52,7 @@ func (s *Service) rejectControl(req productapi.ControlRequest, digest, code stri
 	return nil
 }
 
-func (s *Service) finishControl(op *contracts.ControlOperation, receipt productapi.ControlReceipt) error {
+func (s *Service) finishControl(op *reconstructiontypes.ControlOperation, receipt productapi.ControlReceipt) error {
 	nowAt := now()
 	receipt.CompletedAt = &nowAt
 	receipt.ControlRevision = s.State.Control.Revision + 1
@@ -52,7 +64,7 @@ func (s *Service) finishControl(op *contracts.ControlOperation, receipt producta
 		}
 	}
 	op.Phase = "completed"
-	copy := receipt
+	copy := checkpointControlReceipt(receipt)
 	op.Result = &copy
 	s.State.Control.Operation = op
 	if err := s.publishCheckpoint(); err != nil {
@@ -175,15 +187,14 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 			return s.rejectControl(*req, digest, "stale_target", executionmodel.ErrTurnStale)
 		}
 	case "start_task":
-		base := s.projectExecutionConfig()
 		profileID := payload.ExecutionProfileID
 		if profileID == "" {
-			if len(base.ExecutionProfiles) != 0 {
+			if s.runtime.Profiles.HasMultipleProfiles() {
 				return s.rejectControl(*req, digest, "invalid_request", errors.New("start_task requires an execution profile selection"))
 			}
-			profileID = ProjectExecutionProfileID
+			profileID = s.runtime.Profiles.DefaultProfileID()
 		}
-		if _, _, profileErr := base.ResolveExecutionProfile(profileID, payload.ExecutionProfileDigest); profileErr != nil {
+		if _, _, profileErr := s.runtime.Profiles.ResolveExecutionProfile(profileID, payload.ExecutionProfileDigest); profileErr != nil {
 			return s.rejectControl(*req, digest, "stale_profile", profileErr)
 		}
 		if s.State.Control.DispatchMode != "manual" {
@@ -200,7 +211,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 			return s.rejectControl(*req, digest, code, err)
 		}
 	case "set_dispatch_mode":
-		if payload.Mode == "auto" && s.projectExecutionConfig().DefaultProfileID() == "" {
+		if payload.Mode == "auto" && s.runtime.Profiles.DefaultProfileID() == "" {
 			return s.rejectControl(*req, digest, "invalid_request", errors.New("automatic dispatch requires default_execution_profile"))
 		}
 	case "pause_dispatch":
@@ -208,7 +219,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 			return s.rejectControl(*req, digest, "invalid_request", errors.New("dispatch is already paused"))
 		}
 	case "resume_dispatch":
-		if s.State.Control.DispatchMode == "auto" && s.projectExecutionConfig().DefaultProfileID() == "" {
+		if s.State.Control.DispatchMode == "auto" && s.runtime.Profiles.DefaultProfileID() == "" {
 			return s.rejectControl(*req, digest, "invalid_request", errors.New("automatic dispatch requires default_execution_profile"))
 		}
 		if !s.State.Control.DispatchPaused {
@@ -234,7 +245,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 	if payload.Environment != nil {
 		attemptID = payload.Environment.AttemptID
 	}
-	op := &contracts.ControlOperation{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, Payload: append(json.RawMessage(nil), req.Payload...), Phase: "applying", RunID: runID, AttemptID: attemptID, RequestDigest: digest}
+	op := &reconstructiontypes.ControlOperation{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, Payload: append(json.RawMessage(nil), req.Payload...), Phase: "applying", RunID: runID, AttemptID: attemptID, RequestDigest: digest}
 	s.State.Control.Operation = op
 	if err = s.publishCheckpoint(); err != nil {
 		return err
@@ -273,7 +284,7 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 				}
 			} else if r.ExecutionStatus == "unknown" || r.TaskStatus == "in_progress" && r.ExecutionStatus == "pending" {
 				reason := "start_task side effects require manual reconciliation; request will not be replayed"
-				s.State.Control.Blockers = append(s.State.Control.Blockers, contracts.ControlBlocker{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, RunID: runID, AttemptID: runID, Reason: reason})
+				s.State.Control.Blockers = append(s.State.Control.Blockers, reconstructiontypes.ControlBlocker{RequestID: req.RequestID, Action: req.Action, TaskID: payload.TaskID, RunID: runID, AttemptID: runID, Reason: reason})
 				s.State.SlotOccupied = true
 				result.Status, result.Code, result.Message = "indeterminate", "indeterminate", reason
 			}
@@ -371,14 +382,14 @@ func (s *Service) validateReadyTarget(ctx context.Context, taskID string) error 
 		return fmt.Errorf("native task readiness could not be verified: %w", err)
 	}
 	for _, task := range ready {
-		if task.TaskID == taskID && contains(s.Config.ExecutableTypes, task.Type) {
+		if task.TaskID == taskID && s.taskWork.CanExecuteType(task.Type) {
 			return nil
 		}
 	}
 	return fmt.Errorf("%w: %s is not in the current ready native task set", errTaskNotReady, taskID)
 }
 
-func (s *Service) applyControlAction(ctx context.Context, req productapi.ControlRequest, payload productapi.ControlPayload, op *contracts.ControlOperation, result *productapi.ControlReceipt) error {
+func (s *Service) applyControlAction(ctx context.Context, req productapi.ControlRequest, payload productapi.ControlPayload, op *reconstructiontypes.ControlOperation, result *productapi.ControlReceipt) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -414,7 +425,7 @@ func (s *Service) applyControlAction(ctx context.Context, req productapi.Control
 	case "start_task":
 		profileID := payload.ExecutionProfileID
 		if profileID == "" {
-			profileID = ProjectExecutionProfileID
+			profileID = s.runtime.Profiles.DefaultProfileID()
 		}
 		if run := s.find(op.RunID); run != nil {
 			if s.lifecycleEffectPending(run.RunID) {
@@ -506,7 +517,7 @@ func (s *Service) recoverControlOperation() error {
 		return nil
 	}
 	if op.Phase == "completed" && op.Result != nil {
-		if err := s.writeReceipt(*op.Result); err != nil {
+		if err := s.writeReceipt(productControlReceipt(*op.Result)); err != nil {
 			return err
 		}
 		s.State.Control.Operation = nil
@@ -537,7 +548,7 @@ func (s *Service) recoverControlOperation() error {
 			taskID = payload.TaskID
 		}
 		if status == "indeterminate" {
-			s.State.Control.Blockers = append(s.State.Control.Blockers, contracts.ControlBlocker{RequestID: op.RequestID, Action: op.Action, TaskID: taskID, RunID: op.RunID, AttemptID: op.AttemptID, Reason: message})
+			s.State.Control.Blockers = append(s.State.Control.Blockers, reconstructiontypes.ControlBlocker{RequestID: op.RequestID, Action: op.Action, TaskID: taskID, RunID: op.RunID, AttemptID: op.AttemptID, Reason: message})
 			s.State.SlotOccupied = true
 		}
 	}
@@ -550,7 +561,8 @@ func (s *Service) recoverControlOperation() error {
 	receipt.RunID = op.RunID
 	receipt.AttemptID = op.AttemptID
 	receipt.ControlRevision = s.State.Control.Revision + 1
-	op.Phase, op.Result = "completed", &receipt
+	checkpointReceipt := checkpointControlReceipt(receipt)
+	op.Phase, op.Result = "completed", &checkpointReceipt
 	if err = s.publishCheckpoint(); err != nil {
 		return err
 	}

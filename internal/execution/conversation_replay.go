@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"io"
 	"os"
 	"path/filepath"
@@ -12,7 +14,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type conversationJournalSource struct {
@@ -39,14 +40,14 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 	if s.conversationSources == nil {
 		return nil
 	}
-	discovery := contracts.ConversationDiscovery{ProjectID: s.Config.identity, RunDirectory: s.Config.RunDir, Repository: s.Config.Repository}
+	discovery := conversationtypes.ConversationDiscovery{ProjectID: s.Config.identity, RunDirectory: s.Config.RunDir, Repository: s.Config.Repository}
 	for _, run := range s.runs {
 		if run == nil || run.RunID == "" || run.ExecutionID == "" || run.DomainTaskID == "" {
 			continue
 		}
-		base := contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, AttemptID: run.AttemptID,
+		base := executionmodel.ConversationEvent{Version: executionmodel.ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID, AttemptID: run.AttemptID,
 			ExecutionID: run.ExecutionID, Backend: executionbackend.BackendKind(run.Backend), Protocol: executionbackend.ExecutionProtocol(run.Protocol), Agent: run.Agent, TargetID: run.Target.ID}
-		runSource := contracts.ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath),
+		runSource := conversationtypes.ConversationRunSource{Base: base, RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), Workspace: deref(run.WorktreePath),
 			WorkerFlow: run.WorkflowVersion == executionmodel.Version, Process: conversationProcessSnapshot(run.Process)}
 		for _, attempt := range s.domain.Attempts {
 			if attempt.ExecutionID != run.ExecutionID || attempt.EventPath == "" || !executionbackend.StableExecutionID(attempt.AttemptID) {
@@ -56,7 +57,7 @@ func (s *Service) conversationJournalSources() []conversationJournalSource {
 			if run.WorkflowVersion == executionmodel.Version && attempt.AttemptID == run.AttemptID {
 				ended = run.TaskStatus == "closed" || run.TaskStatus == "discarded"
 			}
-			runSource.Attempts = append(runSource.Attempts, contracts.ConversationAttemptSource{AttemptID: attempt.AttemptID, EventPath: attempt.EventPath, Ended: ended})
+			runSource.Attempts = append(runSource.Attempts, conversationtypes.ConversationAttemptSource{AttemptID: attempt.AttemptID, EventPath: attempt.EventPath, Ended: ended})
 		}
 		discovery.Runs = append(discovery.Runs, runSource)
 	}
@@ -116,7 +117,7 @@ func (s *Service) runConversationReplayQueue(ctx context.Context, requests <-cha
 	}
 }
 
-func (s *Service) reconcileConversationRun(run *contracts.Run) error {
+func (s *Service) reconcileConversationRun(run *reconstructiontypes.RunView) error {
 	if run == nil {
 		return nil
 	}
@@ -152,7 +153,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 	if journalSource == "" {
 		return errors.New("conversation implementation does not support journal replay for this execution")
 	}
-	mapper := s.conversationSources.RestoreMapper(contracts.ConversationMapperSnapshot{})
+	mapper := s.conversationSources.RestoreMapper(executionmodel.ConversationMapperSnapshot{})
 	var sourceSeq uint64
 	checkpoints, err := s.conversationStore.ConversationSourceCheckpoints(ctx, source.ProjectID, source.ExecutionID, source.AttemptID, journalSource)
 	if err != nil {
@@ -161,8 +162,8 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 	segment := s.conversationSources.JournalSegment(source.Backend, source.Protocol, source.FileID)
 	generation := source.FileID
 	knownSegment := false
-	var prior *contracts.ConversationCheckpoint
-	var matching *contracts.ConversationCheckpoint
+	var prior *executionmodel.ConversationCheckpoint
+	var matching *executionmodel.ConversationCheckpoint
 	for i := range checkpoints {
 		checkpoint := checkpoints[i]
 		if checkpoint.SourceIdentity == source.FileID && (matching == nil || checkpoint.UpdatedAt.After(matching.UpdatedAt)) {
@@ -177,7 +178,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 		}
 	}
 	if matching != nil {
-		position, decodeErr := contracts.DecodeConversationJournalPosition(*matching)
+		position, decodeErr := executionmodel.DecodeConversationJournalPosition(*matching)
 		if decodeErr != nil {
 			return decodeErr
 		}
@@ -199,14 +200,14 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 		if previousIdentity == "" && prior != nil {
 			previousIdentity = prior.SourceIdentity
 		}
-		gap := contracts.ConversationEvent{
-			Version: contracts.ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
+		gap := executionmodel.ConversationEvent{
+			Version: executionmodel.ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
 			WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID,
 			Backend: source.Backend, Protocol: source.Protocol, Agent: source.Agent, TargetID: source.TargetID,
-			ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: segment,
-			SourceIdentity: source.FileID, SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown,
-			ItemQuality: contracts.IdentityUnknown, SourceEventID: "source-changed:" + previousIdentity + ":" + source.FileID,
-			SourceEventQuality: contracts.IdentityDerived, Type: contracts.ConversationGap, Phase: contracts.MessagePhaseUnknown,
+			ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: executionmodel.ConversationSourceFallback, SourceSegment: segment,
+			SourceIdentity: source.FileID, SessionQuality: executionmodel.IdentityUnknown, TurnQuality: executionmodel.IdentityUnknown,
+			ItemQuality: executionmodel.IdentityUnknown, SourceEventID: "source-changed:" + previousIdentity + ":" + source.FileID,
+			SourceEventQuality: executionmodel.IdentityDerived, Type: executionmodel.ConversationGap, Phase: executionmodel.MessagePhaseUnknown,
 			Status: "source_changed", ReceivedAt: now(),
 			Diagnostic: "events.jsonl file identity changed; a new source segment was opened",
 			Evidence:   map[string]string{"source_record": "events.jsonl", "source_changed": "true", "previous_identity": previousIdentity, "current_identity": source.FileID},
@@ -219,8 +220,8 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 		if positionErr != nil {
 			return positionErr
 		}
-		checkpoint := contracts.ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: gap.Source, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: checkpointCursor, UpdatedAt: now()}
-		if _, err = s.conversationStore.CommitConversation(ctx, []contracts.ConversationWrite{{Event: gap}}, checkpoint); err != nil {
+		checkpoint := executionmodel.ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: gap.Source, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: checkpointCursor, UpdatedAt: now()}
+		if _, err = s.conversationStore.CommitConversation(ctx, []executionmodel.ConversationWrite{{Event: gap}}, checkpoint); err != nil {
 			return err
 		}
 	}
@@ -243,15 +244,15 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 			}
 			generation = fmt.Sprintf("%s:%d", source.FileID, batch.Cursor.Generation)
 			segment = s.conversationSources.JournalSegment(source.Backend, source.Protocol, generation)
-			mapper, sourceSeq = s.conversationSources.RestoreMapper(contracts.ConversationMapperSnapshot{}), 0
-			gap := contracts.ConversationEvent{
-				Version: contracts.ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
+			mapper, sourceSeq = s.conversationSources.RestoreMapper(executionmodel.ConversationMapperSnapshot{}), 0
+			gap := executionmodel.ConversationEvent{
+				Version: executionmodel.ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
 				WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID,
 				Backend: source.Backend, Protocol: source.Protocol, Agent: source.Agent, TargetID: source.TargetID,
-				ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: segment,
-				SourceIdentity: source.FileID, SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown,
-				ItemQuality: contracts.IdentityUnknown, SourceEventID: "source-changed:" + previousIdentity + ":" + source.FileID,
-				SourceEventQuality: contracts.IdentityDerived, Type: contracts.ConversationGap, Phase: contracts.MessagePhaseUnknown,
+				ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: executionmodel.ConversationSourceFallback, SourceSegment: segment,
+				SourceIdentity: source.FileID, SessionQuality: executionmodel.IdentityUnknown, TurnQuality: executionmodel.IdentityUnknown,
+				ItemQuality: executionmodel.IdentityUnknown, SourceEventID: "source-changed:" + previousIdentity + ":" + source.FileID,
+				SourceEventQuality: executionmodel.IdentityDerived, Type: executionmodel.ConversationGap, Phase: executionmodel.MessagePhaseUnknown,
 				Status: "source_changed", ReceivedAt: now(),
 				Diagnostic: "events.jsonl changed while being reconciled; a new source segment was opened",
 				Evidence:   map[string]string{"source_record": "events.jsonl", "source_changed": "true", "previous_identity": previousIdentity, "current_identity": source.FileID},
@@ -264,13 +265,13 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 			if positionErr != nil {
 				return positionErr
 			}
-			checkpoint := contracts.ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: gap.Source, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: checkpointCursor, UpdatedAt: now()}
-			if _, err = s.conversationStore.CommitConversation(ctx, []contracts.ConversationWrite{{Event: gap}}, checkpoint); err != nil {
+			checkpoint := executionmodel.ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: gap.Source, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: checkpointCursor, UpdatedAt: now()}
+			if _, err = s.conversationStore.CommitConversation(ctx, []executionmodel.ConversationWrite{{Event: gap}}, checkpoint); err != nil {
 				return err
 			}
 		}
 		readCursor = batch.Cursor
-		writes := make([]contracts.ConversationWrite, 0, len(batch.Records))
+		writes := make([]executionmodel.ConversationWrite, 0, len(batch.Records))
 		for _, record := range batch.Records {
 			sourceSeq++
 			end := record.Offset + record.Length
@@ -279,20 +280,20 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 				ByteLength int64  `json:"byte_length"`
 				SourceSeq  uint64 `json:"source_seq"`
 			}{end, record.Length, sourceSeq})
-			base := contracts.ConversationEvent{
-				Version: contracts.ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
+			base := executionmodel.ConversationEvent{
+				Version: executionmodel.ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
 				WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID,
 				Backend: source.Backend, Protocol: source.Protocol, Agent: source.Agent, TargetID: source.TargetID,
-				ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: segment,
+				ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: executionmodel.ConversationSourceFallback, SourceSegment: segment,
 				SourceIdentity: source.FileID, SourceCursor: string(cursor),
-				SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown, ItemQuality: contracts.IdentityUnknown,
-				SourceEventID: fmt.Sprintf("bytes:%d:%d", record.Offset, end), SourceEventQuality: contracts.IdentityDerived,
-				SourceSeq: sourceSeq, Phase: contracts.MessagePhaseUnknown, ReceivedAt: now(),
+				SessionQuality: executionmodel.IdentityUnknown, TurnQuality: executionmodel.IdentityUnknown, ItemQuality: executionmodel.IdentityUnknown,
+				SourceEventID: fmt.Sprintf("bytes:%d:%d", record.Offset, end), SourceEventQuality: executionmodel.IdentityDerived,
+				SourceSeq: sourceSeq, Phase: executionmodel.MessagePhaseUnknown, ReceivedAt: now(),
 				Evidence: map[string]string{"source_record": "events.jsonl", "byte_start": fmt.Sprint(record.Offset), "byte_end": fmt.Sprint(end), "identity_rule": "source-file-byte-range-v1", "replay": "true"},
 			}
 			if record.Oversized {
-				base.Type, base.Status, base.Diagnostic = contracts.ConversationGap, "gap", fmt.Sprintf("source record exceeds %d bytes", JournalMaxRecord)
-				writes = append(writes, contracts.ConversationWrite{Event: base})
+				base.Type, base.Status, base.Diagnostic = executionmodel.ConversationGap, "gap", fmt.Sprintf("source record exceeds %d bytes", JournalMaxRecord)
+				writes = append(writes, executionmodel.ConversationWrite{Event: base})
 				continue
 			}
 			raw := append(append([]byte(nil), record.Data...), '\n')
@@ -308,7 +309,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 			if positionErr != nil {
 				return positionErr
 			}
-			checkpoint := contracts.ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: journalSource, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: checkpointCursor, LocalSeq: sourceSeq, AllowReplay: true, UpdatedAt: now()}
+			checkpoint := executionmodel.ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: journalSource, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: checkpointCursor, LocalSeq: sourceSeq, AllowReplay: true, UpdatedAt: now()}
 			if _, err = s.conversationStore.CommitConversation(ctx, writes, checkpoint); err != nil {
 				return err
 			}
@@ -331,7 +332,7 @@ func (s *Service) replayConversationJournal(ctx context.Context, source conversa
 	}
 }
 
-func (s *Service) replayConversationTail(ctx context.Context, source conversationJournalSource, segment, generation string, mapper contracts.ConversationMapper, data []byte, start int64, oldSeq uint64) error {
+func (s *Service) replayConversationTail(ctx context.Context, source conversationJournalSource, segment, generation string, mapper conversationtypes.ConversationMapper, data []byte, start int64, oldSeq uint64) error {
 	journalSource := s.conversationSources.JournalSource(source.Backend, source.Protocol)
 	sequence := oldSeq + 1
 	raw := append([]byte(nil), data...)
@@ -350,34 +351,34 @@ func (s *Service) replayConversationTail(ctx context.Context, source conversatio
 	}
 	var object map[string]json.RawMessage
 	if err := json.Unmarshal(raw, &object); err != nil || object == nil {
-		event := contracts.ConversationEvent{
-			Version: contracts.ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
+		event := executionmodel.ConversationEvent{
+			Version: executionmodel.ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
 			WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID,
 			Backend: source.Backend, Protocol: source.Protocol, Agent: source.Agent, TargetID: source.TargetID,
-			ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: segment,
-			SourceIdentity: source.FileID, SourceCursor: string(cursor), SessionQuality: contracts.IdentityUnknown,
-			TurnQuality: contracts.IdentityUnknown, ItemQuality: contracts.IdentityUnknown, SourceEventID: fmt.Sprintf("bytes:%d:%d", start, end),
-			SourceEventQuality: contracts.IdentityDerived, SourceSeq: sequence, Type: contracts.ConversationGap, Phase: contracts.MessagePhaseUnknown,
+			ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: executionmodel.ConversationSourceFallback, SourceSegment: segment,
+			SourceIdentity: source.FileID, SourceCursor: string(cursor), SessionQuality: executionmodel.IdentityUnknown,
+			TurnQuality: executionmodel.IdentityUnknown, ItemQuality: executionmodel.IdentityUnknown, SourceEventID: fmt.Sprintf("bytes:%d:%d", start, end),
+			SourceEventQuality: executionmodel.IdentityDerived, SourceSeq: sequence, Type: executionmodel.ConversationGap, Phase: executionmodel.MessagePhaseUnknown,
 			Status: "gap", ReceivedAt: now(), Diagnostic: "unterminated final source row is not a complete JSON object",
 			Evidence: map[string]string{"source_record": "events.jsonl", "byte_start": fmt.Sprint(start), "byte_end": fmt.Sprint(end), "replay": "true", "unterminated_final_record": "true"},
 		}
-		checkpoint := contracts.ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: event.Source, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: string(cursor), LocalSeq: sequence, AllowReplay: true, UpdatedAt: now()}
-		_, err := s.conversationStore.CommitConversation(ctx, []contracts.ConversationWrite{{Event: event, Raw: raw}}, checkpoint)
+		checkpoint := executionmodel.ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: event.Source, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: string(cursor), LocalSeq: sequence, AllowReplay: true, UpdatedAt: now()}
+		_, err := s.conversationStore.CommitConversation(ctx, []executionmodel.ConversationWrite{{Event: event, Raw: raw}}, checkpoint)
 		return err
 	}
-	base := contracts.ConversationEvent{
-		Version: contracts.ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
+	base := executionmodel.ConversationEvent{
+		Version: executionmodel.ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
 		WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID,
 		Backend: source.Backend, Protocol: source.Protocol, Agent: source.Agent, TargetID: source.TargetID,
-		ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: segment,
-		SourceIdentity: source.FileID, SourceCursor: string(cursor), SessionQuality: contracts.IdentityUnknown,
-		TurnQuality: contracts.IdentityUnknown, ItemQuality: contracts.IdentityUnknown, SourceEventID: fmt.Sprintf("bytes:%d:%d", start, end),
-		SourceEventQuality: contracts.IdentityDerived, SourceSeq: sequence, Phase: contracts.MessagePhaseUnknown, ReceivedAt: now(),
+		ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: executionmodel.ConversationSourceFallback, SourceSegment: segment,
+		SourceIdentity: source.FileID, SourceCursor: string(cursor), SessionQuality: executionmodel.IdentityUnknown,
+		TurnQuality: executionmodel.IdentityUnknown, ItemQuality: executionmodel.IdentityUnknown, SourceEventID: fmt.Sprintf("bytes:%d:%d", start, end),
+		SourceEventQuality: executionmodel.IdentityDerived, SourceSeq: sequence, Phase: executionmodel.MessagePhaseUnknown, ReceivedAt: now(),
 		Evidence: map[string]string{"source_record": "events.jsonl", "byte_start": fmt.Sprint(start), "byte_end": fmt.Sprint(end), "identity_rule": "source-file-byte-range-v1", "replay": "true", "unterminated_final_record": "true"},
 	}
 	write := mapper.MapRecord(base, raw)
-	checkpoint := contracts.ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: journalSource, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: string(cursor), LocalSeq: sequence, AllowReplay: true, UpdatedAt: now()}
-	_, err = s.conversationStore.CommitConversation(ctx, []contracts.ConversationWrite{write}, checkpoint)
+	checkpoint := executionmodel.ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: journalSource, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: string(cursor), LocalSeq: sequence, AllowReplay: true, UpdatedAt: now()}
+	_, err = s.conversationStore.CommitConversation(ctx, []executionmodel.ConversationWrite{write}, checkpoint)
 	return err
 }
 
@@ -398,18 +399,18 @@ func (s *Service) replayConversationTailGap(ctx context.Context, source conversa
 	if err != nil {
 		return err
 	}
-	event := contracts.ConversationEvent{
-		Version: contracts.ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
+	event := executionmodel.ConversationEvent{
+		Version: executionmodel.ConversationVersion, ProjectID: source.ProjectID, TaskID: source.TaskID,
 		WorkflowID: source.WorkflowID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID,
 		Backend: source.Backend, Protocol: source.Protocol, Agent: source.Agent, TargetID: source.TargetID,
-		ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: contracts.ConversationSourceFallback, SourceSegment: segment,
-		SourceIdentity: source.FileID, SourceCursor: string(cursor), SessionQuality: contracts.IdentityUnknown,
-		TurnQuality: contracts.IdentityUnknown, ItemQuality: contracts.IdentityUnknown, SourceEventID: fmt.Sprintf("bytes:%d:%d", start, end),
-		SourceEventQuality: contracts.IdentityDerived, SourceSeq: sequence, Type: contracts.ConversationGap, Phase: contracts.MessagePhaseUnknown,
+		ExternalRef: source.ExternalRef, Source: journalSource, SourceRole: executionmodel.ConversationSourceFallback, SourceSegment: segment,
+		SourceIdentity: source.FileID, SourceCursor: string(cursor), SessionQuality: executionmodel.IdentityUnknown,
+		TurnQuality: executionmodel.IdentityUnknown, ItemQuality: executionmodel.IdentityUnknown, SourceEventID: fmt.Sprintf("bytes:%d:%d", start, end),
+		SourceEventQuality: executionmodel.IdentityDerived, SourceSeq: sequence, Type: executionmodel.ConversationGap, Phase: executionmodel.MessagePhaseUnknown,
 		Status: "gap", ReceivedAt: now(), Diagnostic: "unterminated oversized source record at end of a completed attempt",
 		Evidence: map[string]string{"source_record": "events.jsonl", "byte_start": fmt.Sprint(start), "byte_end": fmt.Sprint(end), "replay": "true"},
 	}
-	checkpoint := contracts.ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: event.Source, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: string(cursor), LocalSeq: sequence, AllowReplay: true, UpdatedAt: now()}
-	_, err = s.conversationStore.CommitConversation(ctx, []contracts.ConversationWrite{{Event: event}}, checkpoint)
+	checkpoint := executionmodel.ConversationCheckpoint{ProjectID: source.ProjectID, ExecutionID: source.ExecutionID, AttemptID: source.AttemptID, Source: event.Source, SourceSegment: segment, SourceIdentity: source.FileID, Generation: generation, Cursor: string(cursor), LocalSeq: sequence, AllowReplay: true, UpdatedAt: now()}
+	_, err = s.conversationStore.CommitConversation(ctx, []executionmodel.ConversationWrite{{Event: event}}, checkpoint)
 	return err
 }

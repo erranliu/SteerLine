@@ -1,0 +1,12 @@
+{"Time":"2026-10-06T08:54:13.2882848+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/execution/workspace"}
+{"Time":"2026-10-06T08:54:13.7479071+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/execution/workspace","Test":"TestLocalWorkspacePrepareInspectResourcesAndCleanup"}
+{"Time":"2026-10-06T08:54:13.7479071+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/workspace","Test":"TestLocalWorkspacePrepareInspectResourcesAndCleanup","Output":"=== RUN   TestLocalWorkspacePrepareInspectResourcesAndCleanup\n"}
+{"Time":"2026-10-06T08:54:21.9094395+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/workspace","Test":"TestLocalWorkspacePrepareInspectResourcesAndCleanup","Output":"--- PASS: TestLocalWorkspacePrepareInspectResourcesAndCleanup (8.16s)\n"}
+{"Time":"2026-10-06T08:54:21.9099751+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/execution/workspace","Test":"TestLocalWorkspacePrepareInspectResourcesAndCleanup","Elapsed":8.16}
+{"Time":"2026-10-06T08:54:21.9099751+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/execution/workspace","Test":"TestPrepareRejectsHeadChangedByCheckoutHook"}
+{"Time":"2026-10-06T08:54:21.9099751+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/workspace","Test":"TestPrepareRejectsHeadChangedByCheckoutHook","Output":"=== RUN   TestPrepareRejectsHeadChangedByCheckoutHook\n"}
+{"Time":"2026-10-06T08:54:23.9094538+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/workspace","Test":"TestPrepareRejectsHeadChangedByCheckoutHook","Output":"--- PASS: TestPrepareRejectsHeadChangedByCheckoutHook (2.00s)\n"}
+{"Time":"2026-10-06T08:54:23.9094538+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/execution/workspace","Test":"TestPrepareRejectsHeadChangedByCheckoutHook","Elapsed":2}
+{"Time":"2026-10-06T08:54:23.9094538+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/workspace","Output":"PASS\n"}
+{"Time":"2026-10-06T08:54:23.9150151+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution/workspace","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/execution/workspace\t10.627s\n"}
+{"Time":"2026-10-06T08:54:23.9150151+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/execution/workspace","Elapsed":10.627}

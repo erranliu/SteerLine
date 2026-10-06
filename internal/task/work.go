@@ -19,6 +19,19 @@ type Service struct {
 	Documents Documents
 }
 
+// CanExecuteType and DefaultRequestedBy expose only the task-owned inputs that
+// the execution claim adapter needs. Execution does not retain task config.
+func (s Service) CanExecuteType(taskType string) bool {
+	for _, value := range s.Input.ExecutableTypes {
+		if value == taskType {
+			return true
+		}
+	}
+	return false
+}
+
+func (s Service) DefaultRequestedBy() string { return s.Input.DefaultRequestedBy }
+
 func (s Service) Ready(ctx context.Context, project string) ([]model.TaskRecord, error) {
 	graph, err := s.Reader.TaskSnapshot(ctx, project)
 	if err != nil {

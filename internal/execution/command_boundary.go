@@ -14,6 +14,8 @@ import (
 type TaskWorkPort interface {
 	VerifyContractFiles(context.Context, taskmodel.TaskContract) error
 	Ready(context.Context, string) ([]taskmodel.TaskRecord, error)
+	CanExecuteType(string) bool
+	DefaultRequestedBy() string
 	Fixed(context.Context, string, string, uint64, bool) (taskmodel.FixedWork, error)
 	Claim(taskmodel.FixedWork, string, time.Time) (taskmodel.TaskRecord, error)
 }
@@ -52,6 +54,7 @@ type CommandService struct {
 	Project     string
 	Work        TaskWorkPort
 	taskResults TaskResultPort
+	runtime     RuntimeDependencies
 }
 
 // The app supplies the task work and result capabilities only to execution.
@@ -59,6 +62,23 @@ func NewCommandService(store CommandStore, project string, work TaskWorkPort, re
 	return CommandService{Store: store, Project: project, Work: work, taskResults: results}
 }
 
+// NewCommandServiceWithRuntime composes an app-owned profile verifier and
+// implementation adapters with the bounded command ports.
+func NewCommandServiceWithRuntime(store CommandStore, project string, work TaskWorkPort, results TaskResultPort, runtime RuntimeDependencies) CommandService {
+	service := NewCommandService(store, project, work, results)
+	service.runtime = runtime
+	return service
+}
+
 func (s *Service) commandService(project string) CommandService {
-	return NewCommandService(s.commandStore, project, s.taskWork, s.taskResults)
+	command := NewCommandService(s.commandStore, project, s.taskWork, s.taskResults)
+	command.runtime = s.runtime
+	return command
+}
+
+func (s CommandService) defaultRequestedBy() string {
+	if s.Work == nil {
+		return "unknown"
+	}
+	return s.Work.DefaultRequestedBy()
 }

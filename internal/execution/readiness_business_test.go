@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"sync"
 	"testing"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type neutralPreparationResolver struct {
@@ -122,15 +122,15 @@ func (p neutralPreparationPort) Execute(ctx context.Context, r executionbackend.
 
 // The fake returns only already observed probe/settlement facts. The center
 // owns every Decision, input intent, business turn and persistence write.
-func neutralPreparationService(t *testing.T, mode string) (*Service, *contracts.Run, *neutralPreparationResolver) {
+func neutralPreparationService(t *testing.T, mode string) (*Service, *reconstructiontypes.RunView, *neutralPreparationResolver) {
 	t.Helper()
 	return neutralPreparationServiceWithPolicy(t, mode, workspacePolicyFixture())
 }
 
-func neutralPreparationServiceWithPolicy(t *testing.T, mode string, policy executionbackend.ExecutionPolicy) (*Service, *contracts.Run, *neutralPreparationResolver) {
+func neutralPreparationServiceWithPolicy(t *testing.T, mode string, policy executionbackend.ExecutionPolicy) (*Service, *reconstructiontypes.RunView, *neutralPreparationResolver) {
 	t.Helper()
 	s, run := neutralAuditServiceWithPolicy(t, policy)
-	require(t, prepareWorktreeOnly(context.Background(), s.Config, run))
+	require(t, prepareWorktreeOnly(context.Background(), s.Config, s.runtime.Directory, s.runtime.ProcessHost, run))
 	run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(run.WorkspaceIntent.Path), ptr(run.WorkspaceIntent.Branch), ptr(run.WorkspaceIntent.BaseCommit)
 	workflow, e := s.workflowRecords(run)
 	inspected, err := inspectTestWorkspace(context.Background(), s.Config, executionbackend.ExecutionRef{WorkspacePath: run.WorkspaceIntent.Path, WorkspaceBranch: run.WorkspaceIntent.Branch, BaseCommit: run.WorkspaceIntent.BaseCommit})

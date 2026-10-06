@@ -31,7 +31,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 			return err
 		}
 	} else if s.dispatchProfile == nil {
-		if err := s.selectDispatchProfile(ProjectExecutionProfileID, ""); err != nil {
+		if err := s.selectDispatchProfile(s.runtime.Profiles.DefaultProfileID(), ""); err != nil {
 			return err
 		}
 	}
@@ -49,22 +49,22 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 	}
 	if len(ready) > 0 {
 		if c.WorkflowProtocol == executionmodel.Version {
-			if err = requireWorkerFlowCapabilitiesWithResolver(ctx, c, s.lifecycleResolver); err != nil {
+			if err = requireWorkerFlowCapabilitiesWithResolver(ctx, c, s.runtime.Directory, s.runtime.ProcessHost, s.lifecycleResolver); err != nil {
 				return err
 			}
 		} else {
-			entry, registryErr := registrationFor(c)
+			entry, registryErr := registrationFor(c, s.runtime.Directory)
 			if registryErr != nil {
 				return registryErr
 			}
 			required := append([]string(nil), entry.CleanupCapabilities...)
-			if _, err = s.requireBackendCapabilitiesFor(ctx, BackendFor(c), TargetFor(c), AgentFor(c), required...); err != nil {
+			if _, err = s.requireBackendCapabilitiesFor(ctx, BackendFor(c, s.runtime.Directory), TargetFor(c, s.runtime.Directory), AgentFor(c), required...); err != nil {
 				return err
 			}
 		}
 	}
 	for _, task := range ready {
-		if len(c.ExecutableTypes) > 0 && !contains(c.ExecutableTypes, task.Type) {
+		if !s.taskWork.CanExecuteType(task.Type) {
 			continue
 		}
 		if s.targetTask != "" && s.targetTask != task.TaskID {
@@ -82,7 +82,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if s.reservedRunID != "" {
 			workflowRunID = s.reservedRunID
 		}
-		receipt, claimErr := (s.commandService(c.identity)).ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: task.TaskID, RequestID: requestID, ExpectedTaskVersion: task.Version, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: c.Claimant, Explicit: s.explicitDispatch, WorkflowRunID: workflowRunID, ExecutionProfile: s.dispatchProfile, ServiceInstanceID: s.State.Service.InstanceID})
+		receipt, claimErr := (s.commandService(c.identity)).ClaimNativeTask(ctx, c, TaskClaimOptions{TaskID: task.TaskID, RequestID: requestID, ExpectedTaskVersion: task.Version, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: s.taskWork.DefaultRequestedBy(), Explicit: s.explicitDispatch, WorkflowRunID: workflowRunID, ExecutionProfile: s.dispatchProfile, ServiceInstanceID: s.State.Service.InstanceID})
 		if claimErr != nil {
 			if isNativeErrorCode(claimErr, "task_not_ready", "stale_version", "slot_busy", "dispatch_paused", "wrong_mode", "task_discarded") {
 				if s.targetTask != "" {

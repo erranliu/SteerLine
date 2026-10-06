@@ -16,6 +16,8 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	steerlineapp "github.com/erranliu/SteerLine/internal/app"
+	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/console"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -23,8 +25,6 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerlineapp"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -76,6 +76,10 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 		t.Fatal(err)
 	}
 	c, err := steerlineapp.LoadConfig(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hostConfig, err := steerlineapp.BuildHostConfig(context.Background(), c)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -319,7 +323,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 			if err := updated.(console.Model).Close(); err != nil {
 				t.Fatal(err)
 			}
-			if connection := steerline.ConnectService(context.Background(), c); connection.State != steerline.ConnectionConnected {
+			if connection := steerline.ConnectService(context.Background(), hostConfig); connection.State != steerline.ConnectionConnected {
 				t.Fatalf("TUI exit stopped service: %+v", connection)
 			}
 			if _, err := tuiClient.Request(context.Background(), id); err == nil {
@@ -329,7 +333,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 		if err = client.Close(); err != nil {
 			t.Fatal(err)
 		}
-		if connection := steerline.ConnectService(context.Background(), c); connection.State != steerline.ConnectionConnected {
+		if connection := steerline.ConnectService(context.Background(), hostConfig); connection.State != steerline.ConnectionConnected {
 			t.Fatalf("client close changed service identity/lifetime: %+v", connection)
 		}
 		unchanged, err := os.ReadFile(filepath.Join(c.RunDir, "control", "requests", id, "request.json"))

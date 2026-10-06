@@ -403,7 +403,7 @@ func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {
 	}
 	expectedPackage := g.Packages[0]
 	if strings.HasPrefix(expectedPackage, "./") {
-		expectedPackage = strings.TrimSuffix(corePackage, "/internal/steerline") + "/" + strings.TrimPrefix(expectedPackage, "./")
+		expectedPackage = strings.TrimSuffix(corePackage, "/internal/app/host") + "/" + strings.TrimPrefix(expectedPackage, "./")
 	}
 	if g.Summary.Packages[0].Name != expectedPackage || g.Summary.Packages[0].Status != "pass" {
 		return errors.New("unexpected E2E package result")

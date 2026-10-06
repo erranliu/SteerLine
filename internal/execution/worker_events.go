@@ -3,13 +3,13 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func (s *Service) recordWorkerTurnStarted(run *contracts.Run, workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, turnID string, sessionFacts ...string) (string, error) {
+func (s *Service) recordWorkerTurnStarted(run *reconstructiontypes.RunView, workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, turnID string, sessionFacts ...string) (string, error) {
 	commandID := execution.PendingCommandID
 	fresh := commandID != ""
 	if !fresh && execution.CurrentTurnID == turnID && execution.LastStoppedTurnID != turnID {
@@ -58,7 +58,7 @@ func (s *Service) recordWorkerTurnStarted(run *contracts.Run, workflow *executio
 	return operation.OperationID, TransitionOperation(operation, "confirmed", turnID, mustJSON(map[string]string{"session_id": sessionID, "turn_id": turnID}), "")
 }
 
-func (s *Service) eventWorkerFlowFor(run *contracts.Run, ev WorkerEvent) (resultErr error) {
+func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev WorkerEvent) (resultErr error) {
 	defer func() { ackWorkerEventPersistence(ev, resultErr) }()
 	workflow, execution := s.workflowRecords(run)
 	if run == nil || workflow == nil || execution == nil || workflow.WorkflowVersion != executionmodel.Version {
@@ -260,7 +260,7 @@ func (s *Service) eventWorkerFlowFor(run *contracts.Run, ev WorkerEvent) (result
 	return nil
 }
 
-func (s *Service) routedQuestionSeen(run *contracts.Run, execution *executionmodel.ExecutionRecord, route *executionbackend.ImplementationDataEnvelope, questions []executionbackend.Question) (bool, error) {
+func (s *Service) routedQuestionSeen(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord, route *executionbackend.ImplementationDataEnvelope, questions []executionbackend.Question) (bool, error) {
 	if run.Decision != nil && sameQuestionOrigin(run.Decision.Request.QuestionRoute, route) {
 		if err := sameRoutedQuestion(route, questions, run.Decision.Request.QuestionRoute, run.Decision.Request.Questions); err != nil {
 			return true, err
@@ -308,7 +308,7 @@ func sameRoutedQuestion(route *executionbackend.ImplementationDataEnvelope, ques
 	return nil
 }
 
-func validateQuestionRouteForRun(run *contracts.Run, execution *executionmodel.ExecutionRecord, route *executionbackend.ImplementationDataEnvelope, questions []executionbackend.Question, codecKey string, codecVersion int) error {
+func validateQuestionRouteForRun(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord, route *executionbackend.ImplementationDataEnvelope, questions []executionbackend.Question, codecKey string, codecVersion int) error {
 	if run == nil || execution == nil || route == nil {
 		return errors.New("question route has no fixed execution")
 	}

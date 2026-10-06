@@ -3,11 +3,11 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 type stopReconciliationPort struct {
@@ -27,7 +27,7 @@ func (p stopReconciliationPort) Reconcile(ctx context.Context, request execution
 
 // Observe the original stop request through the shared background channel;
 // reconciliation cannot repeat Kill or occupy a project control checkpoint.
-func (s *Service) reconcileRunStop(ctx context.Context, run *contracts.Run, op executionbackend.Operation) error {
+func (s *Service) reconcileRunStop(ctx context.Context, run *reconstructiontypes.RunView, op executionbackend.Operation) error {
 	if op.Ref == nil || s.lifecycleEffectPending(run.RunID) {
 		return nil
 	}
@@ -43,8 +43,8 @@ func (s *Service) reconcileRunStop(ctx context.Context, run *contracts.Run, op e
 	requestOp.Action = string(executionbackend.LifecycleStopExecution)
 	requestOp.LifecycleIdentity = &executionbackend.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionbackend.LifecycleBindingDigest(snapshot), Ref: *op.Ref}
 	request := executionbackend.LifecycleRequest{Snapshot: snapshot, Operation: requestOp, Input: executionbackend.LifecycleInput{Stop: &executionbackend.StopInput{TurnID: snapshot.Session.CurrentTurnID}}}
-	records := executionRecords{root: fixed.config.RunDir, reader: fixed.config.ExecutionRecords, resources: fixed.config.Resources}
-	err = s.dispatchLifecycleEffect(ctx, run, stopReconciliationPort{LifecyclePort: lifecycle, backend: BackendFor(fixed.config), ref: *op.Ref}, request, true, func(run *contracts.Run, result lifecycleEffectResult) error {
+	records := s.records
+	err = s.dispatchLifecycleEffect(ctx, run, stopReconciliationPort{LifecyclePort: lifecycle, backend: BackendFor(fixed.config, s.runtime.Directory), ref: *op.Ref}, request, true, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 		if err := result.receipt.ValidateFor(request); err != nil {
 			return err
 		}
@@ -76,7 +76,7 @@ func (s *Service) reconcileRunStop(ctx context.Context, run *contracts.Run, op e
 	return err
 }
 
-func (s *Service) stopRunExecution(ctx context.Context, r *contracts.Run, worker *Worker) (executionbackend.Operation, error) {
+func (s *Service) stopRunExecution(ctx context.Context, r *reconstructiontypes.RunView, worker *Worker) (executionbackend.Operation, error) {
 	if r == nil || worker == nil || worker.proc == nil {
 		return executionbackend.Operation{}, errors.New("there is no active execution to stop")
 	}
@@ -84,7 +84,7 @@ func (s *Service) stopRunExecution(ctx context.Context, r *contracts.Run, worker
 	if configErr != nil {
 		return executionbackend.Operation{}, configErr
 	}
-	records := executionRecords{root: config.RunDir, reader: config.ExecutionRecords, resources: config.Resources}
+	records := s.records
 	ref, err := records.loadBinding(r.RunID, r.AttemptID)
 	if err != nil {
 		return executionbackend.Operation{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "active execution has no valid fixed binding", Cause: err}
@@ -92,14 +92,14 @@ func (s *Service) stopRunExecution(ctx context.Context, r *contracts.Run, worker
 	if ref.RunID != r.RunID || ref.AttemptID != r.AttemptID || r.Process == nil || ref.External != *r.Process {
 		return executionbackend.Operation{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "active execution binding does not match runtime identity"}
 	}
-	entry, registryErr := registrationFor(config)
+	entry, registryErr := registrationFor(config, s.runtime.Directory)
 	if registryErr != nil {
 		return executionbackend.Operation{}, registryErr
 	}
 	if entry.Key.Backend != ref.Backend || entry.Key.Protocol != ref.Protocol || entry.Key.Agent != ref.Agent.Name {
 		return executionbackend.Operation{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "configured backend/protocol differs from fixed execution"}
 	}
-	stopper, stopperErr := executionStopperFor(config)
+	stopper, stopperErr := executionStopperFor(config, s.runtime.Directory)
 	if stopperErr != nil {
 		return executionbackend.Operation{}, stopperErr
 	}
@@ -107,7 +107,7 @@ func (s *Service) stopRunExecution(ctx context.Context, r *contracts.Run, worker
 	payload := struct {
 		Policy string
 		Grace  string
-	}{"fixed_local_execution_stop", config.ShutdownGrace}
+	}{"fixed_local_execution_stop", s.runtimeSettings.ShutdownGrace.String()}
 	op := executionbackend.Operation{Version: executionbackend.ExecutionRecordVersion, ID: opID, RunID: r.RunID, AttemptID: r.AttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: "stop", PayloadDigest: digestValue(payload), Status: executionbackend.OperationPending, StartedAt: now(), UpdatedAt: now(), Ref: &ref}
 	if old, loadErr := records.loadOperation(r.RunID, r.AttemptID, opID); loadErr == nil {
 		if old.Action != op.Action || old.PayloadDigest != op.PayloadDigest || old.Target != op.Target {
@@ -138,7 +138,7 @@ func (s *Service) stopRunExecution(ctx context.Context, r *contracts.Run, worker
 	requestOperation.LifecycleIdentity = &executionbackend.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionbackend.LifecycleBindingDigest(snapshot), Ref: *op.Ref}
 	request := executionbackend.LifecycleRequest{Snapshot: snapshot, Operation: requestOperation, Input: executionbackend.LifecycleInput{Stop: &executionbackend.StopInput{TurnID: snapshot.Session.CurrentTurnID}}}
 	port := lifecycleStopEffectPort{LifecyclePort: lifecycle, handle: worker.proc, stopper: stopper, operation: op}
-	err = s.dispatchLifecycleEffect(ctx, r, port, request, false, func(run *contracts.Run, result lifecycleEffectResult) error {
+	err = s.dispatchLifecycleEffect(ctx, r, port, request, false, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 		if err := result.receipt.ValidateFor(request); err != nil {
 			return err
 		}
@@ -168,7 +168,7 @@ func (s *Service) confirmExecutionStop(op executionbackend.Operation) (bool, err
 	if op.ID == "" {
 		return false, errors.New("stop operation is missing")
 	}
-	records := executionRecords{root: config.RunDir, reader: config.ExecutionRecords, resources: config.Resources}
+	records := s.records
 	run := s.find(op.RunID)
 	if run == nil {
 		return false, errors.New("execution stop has no fixed workflow")
@@ -192,13 +192,13 @@ func (s *Service) confirmExecutionStop(op executionbackend.Operation) (bool, err
 	}
 	ref := op.Ref
 	if ref == nil {
-		loaded, err := (executionRecords{root: config.RunDir, reader: config.ExecutionRecords, resources: config.Resources}).loadBinding(op.RunID, op.AttemptID)
+		loaded, err := s.records.loadBinding(op.RunID, op.AttemptID)
 		if err != nil {
 			return false, err
 		}
 		ref = &loaded
 	}
-	backend := BackendFor(config)
+	backend := BackendFor(config, s.runtime.Directory)
 	obs, err := backend.Observe(context.Background(), *ref)
 	if err != nil {
 		op.Status, op.Diagnostic, op.UpdatedAt = executionbackend.OperationUnknown, err.Error(), now()

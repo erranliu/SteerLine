@@ -1,0 +1,7 @@
+{"Time":"2026-10-05T23:05:48.7090086+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/integration"}
+{"Time":"2026-10-05T23:05:49.3851924+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"build integration CLI once: exit status 1\n"}
+{"Time":"2026-10-05T23:05:49.3851924+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"# github.com/erranliu/SteerLine/cmd/steerline\n"}
+{"Time":"2026-10-05T23:05:49.3851924+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"cmd\\steerline\\main.go:422:20: undefined: steerline.Preflight\n"}
+{"Time":"2026-10-05T23:05:49.3857381+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"\n"}
+{"Time":"2026-10-05T23:05:49.3886861+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"FAIL\tgithub.com/erranliu/SteerLine/tests/integration\t0.678s\n"}
+{"Time":"2026-10-05T23:05:49.3886861+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/integration","Elapsed":0.68}

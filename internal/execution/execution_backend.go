@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,11 +15,10 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func executionStopperFor(c Config) (executionbackend.ExecutionStopper, error) {
-	entry, err := registrationFor(c)
+func executionStopperFor(c Config, directory *ExecutionDirectory) (executionbackend.ExecutionStopper, error) {
+	entry, err := registrationFor(c, directory)
 	if err != nil {
 		return nil, err
 	}
@@ -62,11 +62,11 @@ func VerifyStoredCapabilityReport(root string, report executionbackend.Capabilit
 
 // SaveExecutionCapabilityReport persists one already verified, generic report
 // using the center's capability record format.
-func SaveExecutionCapabilityReport(c Config, report executionbackend.CapabilityReport) error {
+func SaveExecutionCapabilityReport(c Config, resources ResourcePort, report executionbackend.CapabilityReport) error {
 	if c.RunDir == "" {
 		return errors.New("run directory is required for a capability report")
 	}
-	records := executionRecords{root: c.RunDir, reader: c.ExecutionRecords, resources: c.Resources}
+	records := executionRecords{root: c.RunDir, resources: resources}
 	if _, err := records.loadCapabilityReport(report); err != nil && !os.IsNotExist(err) {
 		return err
 	}
@@ -186,7 +186,7 @@ func (s *Service) requireBackendCapabilitiesFor(ctx context.Context, backend exe
 	if err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
-	records := executionRecords{root: s.Config.RunDir, reader: s.Config.ExecutionRecords, resources: s.Config.Resources}
+	records := s.records
 	report, err := records.loadCapabilityReport(probe)
 	if os.IsNotExist(err) {
 		if saveErr := records.saveCapabilityReport(probe); saveErr != nil {
@@ -208,7 +208,7 @@ func retiredExecutionCapabilityName(name string) bool {
 	return name == "reply_continue" || name == "retry"
 }
 
-func (s *Service) readRunWorkspace(ctx context.Context, run *contracts.Run) (executionbackend.WorkspaceInspection, error) {
+func (s *Service) readRunWorkspace(ctx context.Context, run *reconstructiontypes.RunView) (executionbackend.WorkspaceInspection, error) {
 	if run == nil || run.WorkflowVersion != executionmodel.Version {
 		return executionbackend.WorkspaceInspection{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "workspace inspection requires its fixed worker-flow-v1 identity"}
 	}
@@ -216,7 +216,7 @@ func (s *Service) readRunWorkspace(ctx context.Context, run *contracts.Run) (exe
 	return executionbackend.WorkspaceInspection{Repository: w.Repository, Worktree: w.Worktree, Branch: w.Branch, Base: w.Base, Head: w.Head, Dirty: w.Dirty, CheckedAt: w.VerifiedAt}, err
 }
 
-func (s *Service) inspectRunProcess(run *contracts.Run) string {
+func (s *Service) inspectRunProcess(run *reconstructiontypes.RunView) string {
 	if run == nil || run.Process == nil {
 		return "execution identity unavailable"
 	}

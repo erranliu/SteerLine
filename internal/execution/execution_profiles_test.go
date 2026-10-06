@@ -13,7 +13,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
@@ -25,7 +24,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 		t.Fatalf("push fixture base: %v: %s", err, out)
 	}
 	profile := neutralProfile(t, "local-strong", "本地高强度", neutralSettings{Executable: os.Args[0], Model: "chosen-model", ReasoningEffort: "xhigh"})
-	base.ExecutionProfiles = []ExecutionProfile{profile}
+	base = withNeutralProfiles(base, []ExecutionProfile{profile}, profile.ID)
 	reader, err := openFixtureProject(ctx, &base)
 	if err != nil {
 		t.Fatal(err)
@@ -53,7 +52,9 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	selected, fixedChoice, err := base.ResolveExecutionProfile(profile.ID, base.bindProjectPolicy(profile).Digest())
+	dependencies, catalog := neutralFixtureRuntime(base)
+	bound := catalog.bindProjectPolicy(profile)
+	selected, fixedChoice, err := testResolveProfile(base, profile.ID, bound.Digest(dependencies.Directory, base.Identity()))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -68,9 +69,9 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	if wf.WorkflowVersion != executionmodel.Version || wf.ExecutionProfile == nil || wf.ExecutionProfile.ID != profile.ID || !neutralVerifyFixedExecutionProfile(*wf.ExecutionProfile) || !slices.Contains(wf.ExecutionProfile.ImplementationDisplay, "Model：chosen-model") || !slices.Contains(wf.ExecutionProfile.ImplementationDisplay, "Reasoning effort：xhigh") || execution.Backend != string(executionbackend.BackendLocal) || execution.CurrentStep != "worker" {
 		t.Fatalf("chosen execution route was not fixed in the claim: %+v / %+v", wf, execution)
 	}
-	base.ExecutionProfiles[0].ImplementationConfigs[0].Payload = mustJSON(neutralSettings{Executable: os.Args[0], Model: "later-edit", ReasoningEffort: "xhigh"})
-	run := &contracts.Run{RunID: wf.WorkflowRunID, Host: "local", Agent: "fixture", Backend: execution.Backend, Protocol: execution.Protocol, Target: execution.Target}
-	service := &Service{Config: base, baseConfig: base, State: contracts.Runtime{}, domain: reconstruction.Snapshot{WorkflowRuns: snapshot.WorkflowRuns}, runs: []*contracts.Run{run}}
+	catalog.Profiles[0].ImplementationConfigs[0].Payload = mustJSON(neutralSettings{Executable: os.Args[0], Model: "later-edit", ReasoningEffort: "xhigh"})
+	run := &reconstruction.RunView{RunID: wf.WorkflowRunID, Host: "local", Agent: "fixture", Backend: execution.Backend, Protocol: execution.Protocol, Target: execution.Target}
+	service := &Service{Config: base, baseConfig: base, runtime: dependencies, State: reconstruction.Runtime{}, domain: reconstruction.Snapshot{WorkflowRuns: snapshot.WorkflowRuns}, runs: []*reconstruction.RunView{run}}
 	fixed, err := service.executionConfigForRun(run)
 	if err != nil || neutralProfileSettings(fixed).Model != "chosen-model" || fixed.ExecutionPolicy.Filesystem.WriteScope != "workspace" {
 		t.Fatalf("recovery adopted the edited preset: %+v / %v", fixed, err)
@@ -80,7 +81,13 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 func TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles(t *testing.T) {
 	ctx := context.Background()
 	base, _ := nativeTaskFixture(t)
-	base.ExecutionProfiles = []ExecutionProfile{neutralProfile(t, "other", "另一个本地配置", neutralSettings{Executable: "fixture"})}
+	dependencies, _ := neutralFixtureRuntime(base)
+	catalog := ProfileCatalog{Base: base, Directory: dependencies.Directory, Profiles: []ExecutionProfile{neutralProfile(t, "other", "另一个本地配置", neutralSettings{Executable: "fixture"})}, Global: false, PolicySource: "fixture:config"}
+	base, _, err := catalog.ResolveExecutionProfile(ProjectExecutionProfileID, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rememberNeutralCatalog(base, catalog)
 	reader, err := openFixtureProject(ctx, &base)
 	if err != nil {
 		t.Fatal(err)
@@ -88,6 +95,7 @@ func TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles(t *testi
 	if err = reader.Close(); err != nil {
 		t.Fatal(err)
 	}
+	catalog.Base = base
 	store, err := openSQLiteFixture(filepath.Join(base.RunDir, "steerline.db"))
 	if err != nil {
 		t.Fatal(err)
@@ -104,7 +112,11 @@ func TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles(t *testi
 		service.Close()
 		t.Fatal("automatic dispatch started without a configured profile")
 	}
-	base.DefaultExecutionProfile = ProjectExecutionProfileID
+	catalog.DefaultID = ProjectExecutionProfileID
+	rememberNeutralCatalog(base, catalog)
+	if err := base.ValidateAdmission(dependencies.Directory); err != nil {
+		t.Fatalf("selected default did not retain a valid frozen input: %v", err)
+	}
 	service, err := newNeutralService(base)
 	if err != nil {
 		t.Fatalf("explicit default did not restore auto mode: %v", err)
@@ -115,11 +127,18 @@ func TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles(t *testi
 func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 	ctx := context.Background()
 	c, commit, store := openDAGFixture(t)
-	c.WorkflowProtocol, c.Claimant = executionmodel.Version, "operator"
-	c.ExecutionProfiles = []ExecutionProfile{
+	c.WorkflowProtocol = executionmodel.Version
+	dependencies, _ := neutralFixtureRuntime(c)
+	catalog := ProfileCatalog{Base: c, Directory: dependencies.Directory, DefaultID: "local-first", Global: true, PolicySource: "fixture:config", Profiles: []ExecutionProfile{
 		neutralProfile(t, "local-first", "First local", neutralSettings{Executable: "fixture", Model: "first-model", ReasoningEffort: "high"}),
 		neutralProfile(t, "local-second", "Second local", neutralSettings{Executable: "fixture", Model: "second-model", ReasoningEffort: "xhigh"}),
+	}}
+	var err error
+	c, _, err = catalog.ResolveExecutionProfile("local-first", "")
+	if err != nil {
+		t.Fatal(err)
 	}
+	rememberNeutralCatalog(c, catalog)
 	if out, err := exec.Command("git", "-C", c.Repository, "push", "--quiet", "origin", "HEAD:refs/heads/main").CombinedOutput(); err != nil {
 		t.Fatalf("push isolated fixture: %v: %s", err, out)
 	}
@@ -144,9 +163,9 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 		t.Fatal(err)
 	}
 	for index, taskID := range []string{"611", "612"} {
-		profile := c.bindProjectPolicy(c.ExecutionProfiles[index])
-		selected := c.ApplyExecutionProfile(profile)
-		receipt, err := commands.ClaimNativeTask(ctx, selected, TaskClaimOptions{TaskID: taskID, RequestID: strings.Repeat(string(rune('e'+index)), 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true, ExecutionProfile: &profile})
+		profileID := catalog.Profiles[index].ID
+		selected, fixed, err := testResolveProfile(c, profileID, "")
+		receipt, err := commands.ClaimNativeTask(ctx, selected, TaskClaimOptions{TaskID: taskID, RequestID: strings.Repeat(string(rune('e'+index)), 32), ExpectedTaskVersion: 1, ExpectedAuthorityVersion: authority.AuthorityVersion, RequestedBy: "operator", Explicit: true, ExecutionProfile: &fixed})
 		if err != nil || receipt.Status != "claim_reserved" {
 			t.Fatalf("claim task %s with local profile: receipt=%+v err=%v", taskID, receipt, err)
 		}
@@ -158,10 +177,15 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 	if err := service.Close(); err != nil {
 		t.Fatal(err)
 	}
-	edited := c
-	edited.ExecutionProfiles = append([]ExecutionProfile(nil), c.ExecutionProfiles...)
-	edited.ExecutionProfiles[0].ImplementationConfigs = cloneImplementationInputs(c.ExecutionProfiles[0].ImplementationConfigs)
-	edited.ExecutionProfiles[0].ImplementationConfigs[0].Payload = mustJSON(neutralSettings{Executable: "fixture", Model: "later-project-edit", ReasoningEffort: "high"})
+	editedCatalog := catalog
+	editedCatalog.Profiles = append([]ExecutionProfile(nil), catalog.Profiles...)
+	editedCatalog.Profiles[0].ImplementationConfigs = cloneImplementationInputs(catalog.Profiles[0].ImplementationConfigs)
+	editedCatalog.Profiles[0].ImplementationConfigs[0].Payload = mustJSON(neutralSettings{Executable: "fixture", Model: "later-project-edit", ReasoningEffort: "high"})
+	edited, _, err := editedCatalog.ResolveExecutionProfile("local-first", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rememberNeutralCatalog(edited, editedCatalog)
 	reopened, err := newNeutralService(edited)
 	if err != nil {
 		t.Fatalf("current-format restart changed the fixed local profiles: %v", err)
@@ -174,7 +198,7 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 		}
 		workflow, execution := reopened.workflowRecords(run)
 		fixed, err := reopened.executionConfigForRun(run)
-		if err != nil || workflow == nil || workflow.WorkflowVersion != executionmodel.Version || workflow.ExecutionProfile == nil || workflow.ExecutionProfile.ID != c.ExecutionProfiles[index].ID || execution == nil || execution.ExecutionID != workflow.SelectedResult || neutralProfileSettings(fixed).Model != neutralProfileFromInputs(c.ExecutionProfiles[index].ImplementationConfigs).Model || len(reopened.domain.Attempts) != 2 {
+		if err != nil || workflow == nil || workflow.WorkflowVersion != executionmodel.Version || workflow.ExecutionProfile == nil || workflow.ExecutionProfile.ID != catalog.Profiles[index].ID || execution == nil || execution.ExecutionID != workflow.SelectedResult || neutralProfileSettings(fixed).Model != neutralProfileFromInputs(catalog.Profiles[index].ImplementationConfigs).Model || len(reopened.domain.Attempts) != 2 {
 			t.Fatalf("task %s adopted another local profile or step chain: workflow=%+v execution=%+v config=%+v err=%v", taskID, workflow, execution, fixed, err)
 		}
 	}

@@ -8,32 +8,27 @@ import (
 	"unicode/utf8"
 
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // InspectRecovery reads the current SQLite projection and performs read-only
 // host, workspace, claim and PR checks. It never constructs a running Service.
-func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspection, error) {
-	if err := c.RequireNativeTaskAuthority(); err != nil {
-		return RecoveryInspection{}, err
-	}
+type RuntimeReader func(context.Context, Config) (*reconstruction.Runtime, error)
+
+func InspectRecovery(ctx context.Context, c Config, dependencies RuntimeDependencies, runID string, readRuntime RuntimeReader) (RecoveryInspection, error) {
 	if strings.TrimSpace(runID) == "" {
 		return RecoveryInspection{}, errors.New("recovery inspection requires a run ID")
 	}
-	if err := c.ResolveIdentity(ctx); err != nil {
-		return RecoveryInspection{}, err
-	}
-	if c.ReadRuntime == nil {
+	if readRuntime == nil {
 		return RecoveryInspection{}, errors.New("bound runtime read port is required")
 	}
-	runtimeState, err := c.ReadRuntime(ctx, c)
+	runtimeState, err := readRuntime(ctx, c)
 	if err != nil {
 		return RecoveryInspection{}, err
 	}
 	if runtimeState == nil || runtimeState.Repository.Identity != c.identity {
 		return RecoveryInspection{}, errors.New("current SQLite runtime projection is unavailable or belongs to another repository")
 	}
-	var run *contracts.Run
+	var run *reconstruction.RunView
 	for _, candidate := range runtimeState.Runs {
 		if candidate != nil && candidate.RunID == runID {
 			run = candidate
@@ -43,11 +38,11 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 	if run == nil {
 		return RecoveryInspection{}, fmt.Errorf("run %s not found", runID)
 	}
-	inspection := RecoveryInspection{Version: 1, SampledAt: now(), RunID: run.RunID, RunRevision: run.ControlRevision, ServiceInstanceID: runtimeState.Service.InstanceID, ServiceStatus: runtimeState.Service.Status, DispatchMode: runtimeState.Control.DispatchMode, DispatchPaused: runtimeState.Control.DispatchPaused, SlotOccupied: runtimeState.SlotOccupied, TaskID: run.TaskID, ExecutionStatus: run.ExecutionStatus, DeliveryStatus: run.FinishTaskStatus, Backend: run.Backend, Protocol: run.Protocol, Target: run.Target, ProcessCheck: "not inspected", Blockers: append([]contracts.ControlBlocker(nil), runtimeState.Control.Blockers...)}
+	inspection := RecoveryInspection{Version: 1, SampledAt: now(), RunID: run.RunID, RunRevision: run.ControlRevision, ServiceInstanceID: runtimeState.Service.InstanceID, ServiceStatus: runtimeState.Service.Status, DispatchMode: runtimeState.Control.DispatchMode, DispatchPaused: runtimeState.Control.DispatchPaused, SlotOccupied: runtimeState.SlotOccupied, TaskID: run.TaskID, ExecutionStatus: run.ExecutionStatus, DeliveryStatus: run.FinishTaskStatus, Backend: run.Backend, Protocol: run.Protocol, Target: run.Target, ProcessCheck: "not inspected", Blockers: append([]reconstruction.ControlBlocker(nil), runtimeState.Control.Blockers...)}
 	if run.Decision != nil {
 		inspection.DecisionID, inspection.DecisionStatus = run.Decision.ID, run.Decision.Status
 	}
-	service := recoveryService(c, *runtimeState)
+	service := recoveryService(c, dependencies, *runtimeState)
 	inspection.ProcessCheck = service.inspectRunProcess(run)
 	workspace, workspaceErr := service.readRunWorkspace(ctx, run)
 	if workspaceErr == nil {
@@ -60,7 +55,7 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 		fixed, configErr := service.executionConfigForRun(run)
 		if configErr != nil {
 			inspection.PRError = configErr.Error()
-		} else if info, queryErr := publicationClient(fixed).Query(ctx, *run.PR.URL); queryErr == nil {
+		} else if info, queryErr := publicationClient(fixed, dependencies.ProcessHost).Query(ctx, *run.PR.URL); queryErr == nil {
 			inspection.PR = &info
 		} else {
 			inspection.PRError = queryErr.Error()
@@ -84,11 +79,11 @@ func InspectRecovery(ctx context.Context, c Config, runID string) (RecoveryInspe
 	return inspection, nil
 }
 
-func recoveryService(c Config, runtimeState contracts.Runtime) Service {
-	return Service{Config: c, lifecycleResolver: c.ExecutionDirectory, State: runtimeState, domain: reconstruction.Snapshot{Tasks: runtimeState.Tasks, WorkflowRuns: runtimeState.WorkflowRuns, Executions: runtimeState.Executions, Attempts: runtimeState.Attempts, Decisions: runtimeState.Decisions, Operations: runtimeState.Operations, Deliveries: runtimeState.Deliveries}, runs: runtimeState.Runs}
+func recoveryService(c Config, dependencies RuntimeDependencies, runtimeState reconstruction.Runtime) Service {
+	return Service{Config: c, runtime: dependencies, lifecycleResolver: dependencies.Directory.LifecycleResolver(), State: runtimeState, domain: reconstruction.Snapshot{Tasks: runtimeState.Tasks, WorkflowRuns: runtimeState.WorkflowRuns, Executions: runtimeState.Executions, Attempts: runtimeState.Attempts, Decisions: runtimeState.Decisions, Operations: runtimeState.Operations, Deliveries: runtimeState.Deliveries}, runs: runtimeState.Runs}
 }
 
-func (s *Service) inspectRecoveryClaim(ctx context.Context, run *contracts.Run, report *RecoveryInspection) {
+func (s *Service) inspectRecoveryClaim(ctx context.Context, run *reconstruction.RunView, report *RecoveryInspection) {
 	for i := range s.domain.Tasks {
 		task := &s.domain.Tasks[i]
 		if task.TaskID == run.DomainTaskID && task.ProjectIdentity == s.Config.identity {

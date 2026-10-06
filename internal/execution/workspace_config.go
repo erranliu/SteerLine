@@ -43,16 +43,16 @@ func planWorkspace(c Config, taskID, runID, base string) (*executionbackend.Work
 	return &executionbackend.WorkspaceIntent{Path: filepath.Join(c.WorktreeRoot, runID), Branch: c.WorkspaceBranchPrefix + "/" + taskID + "-" + runID[:12], BaseCommit: base}, nil
 }
 
-func workspaceGit(c Config) workspace.Git {
+func workspaceGit(c Config, processHost executionbackend.ManagedProcessHost) workspace.Git {
 	timeout := duration(c.CommandTimeout)
 	if timeout <= 0 {
 		timeout = 30 * time.Second
 	}
 	start := func(cmd *exec.Cmd) (executionbackend.StopHandle, error) {
-		if c.ProcessHost == nil {
+		if processHost == nil {
 			return nil, errors.New("managed process host is required for workspace Git")
 		}
-		return c.ProcessHost.StartManaged(cmd)
+		return processHost.StartManaged(cmd)
 	}
 	return workspace.Git{
 		Command: executionbackend.LaunchCommand{Executable: c.Git.Executable, Args: append([]string(nil), c.Git.Args...)},
@@ -61,8 +61,8 @@ func workspaceGit(c Config) workspace.Git {
 	}
 }
 
-func workspaceRepository(c Config) (workspace.Repository, error) {
-	entry, err := registrationFor(c)
+func workspaceRepository(c Config, directory *ExecutionDirectory) (workspace.Repository, error) {
+	entry, err := registrationFor(c, directory)
 	if err != nil || !entry.LocalWorkspace || c.identity == "" || c.Repository == "" {
 		return workspace.Repository{}, errors.New("local Git workspace requires its fixed repository identity")
 	}

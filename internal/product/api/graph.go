@@ -73,6 +73,18 @@ type GraphPage struct {
 	Boundary         GraphBoundary `json:"boundary"`
 }
 
+type TaskGraphExportReceipt struct {
+	Output           string        `json:"output"`
+	ProjectID        string        `json:"project_id"`
+	NodeCount        int           `json:"node_count"`
+	GraphRevision    uint64        `json:"graph_revision"`
+	DatabaseID       string        `json:"database_id"`
+	DatabaseRevision uint64        `json:"database_revision"`
+	SampledAt        string        `json:"sampled_at"`
+	Overwritten      bool          `json:"overwritten"`
+	Boundary         GraphBoundary `json:"boundary"`
+}
+
 // MarshalJSON preserves source text and escapes bidi controls in output.
 func (p GraphPage) MarshalJSON() ([]byte, error) {
 	type plain GraphPage

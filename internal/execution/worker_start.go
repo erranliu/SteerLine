@@ -3,14 +3,14 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskRecord, run *contracts.Run) error {
+func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskRecord, run *reconstructiontypes.RunView) error {
 	if s.candidateBusinessClosed(run) {
 		return nil
 	}
@@ -28,7 +28,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskReco
 	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
 		return err
 	}
-	if err := c.BindPublicationTarget(ctx); err != nil {
+	if err := c.BindPublicationTarget(ctx, s.runtime.ProcessHost); err != nil {
 		return err
 	}
 	lifecycle, fixed, err := s.lifecycleForRun(run)
@@ -39,7 +39,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskReco
 	if err != nil {
 		return err
 	}
-	report, err := lifecycle.PreflightLifecycle(ctx, lifecycleSetupForRun(run, fixed, snapshot))
+	report, err := lifecycle.PreflightLifecycle(ctx, lifecycleSetupForRun(run, fixed, s.runtime.ProcessHost, snapshot))
 	if err != nil {
 		return err
 	}
@@ -71,14 +71,14 @@ type workerWorkspacePreparationInput struct {
 	Workspace     executionbackend.WorkspaceIntent `json:"workspace"`
 }
 
-func workerWorkspaceRequest(run *contracts.Run) (workerWorkspacePreparationInput, error) {
+func workerWorkspaceRequest(run *reconstructiontypes.RunView) (workerWorkspacePreparationInput, error) {
 	if run.WorkspaceIntent == nil {
 		return workerWorkspacePreparationInput{}, nativeErr("inconsistent_delivery", "worker preparation has no fixed workspace intent")
 	}
 	return workerWorkspacePreparationInput{WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, Workspace: *run.WorkspaceIntent}, nil
 }
 
-func (s *Service) prepareWorkerWorkspace(ctx context.Context, task taskmodel.TaskRecord, run *contracts.Run) error {
+func (s *Service) prepareWorkerWorkspace(ctx context.Context, task taskmodel.TaskRecord, run *reconstructiontypes.RunView) error {
 	input, err := workerWorkspaceRequest(run)
 	if err != nil {
 		return err
@@ -150,7 +150,7 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task taskmodel.Tas
 	return s.startInitialWorkerFlowTurn(ctx, task, run)
 }
 
-func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task taskmodel.TaskRecord, run *contracts.Run) error {
+func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task taskmodel.TaskRecord, run *reconstructiontypes.RunView) error {
 	fixed, err := s.workerFlowContext(run)
 	if err != nil {
 		return err
@@ -167,7 +167,7 @@ func (s *Service) startInitialWorkerFlowTurn(ctx context.Context, task taskmodel
 	return s.startWorkerFlowTurn(ctx, run, prompt, newID())
 }
 
-func (s *Service) startWorkerFlowTurn(ctx context.Context, run *contracts.Run, prompt, turnID string) error {
+func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructiontypes.RunView, prompt, turnID string) error {
 	if s.candidateBusinessClosed(run) {
 		return nativeErr("candidate_inactive", "candidate no longer accepts business input")
 	}
@@ -203,7 +203,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *contracts.Run, p
 		return errors.New("worker turn has no fixed worker attempt")
 	}
 	c := fixed.config
-	if err := verifyPublicationTargetForRun(ctx, c, run); err != nil {
+	if err := verifyPublicationTargetForRun(ctx, c, s.runtime.Directory, s.runtime.ProcessHost, run); err != nil {
 		return err
 	}
 	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {

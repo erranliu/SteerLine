@@ -4,14 +4,15 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"path/filepath"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func (s *Service) recordConversationEvent(run *contracts.Run, source WorkerEvent) error {
+func (s *Service) recordConversationEvent(run *reconstructiontypes.RunView, source WorkerEvent) error {
 	if run == nil || len(source.Raw) == 0 && !source.SourceGap && !source.InputWait || s.conversationStore == nil {
 		return nil
 	}
@@ -25,10 +26,10 @@ func (s *Service) recordConversationEvent(run *contracts.Run, source WorkerEvent
 	if !executionbackend.StableExecutionID(attemptID) {
 		return nativeErr("contract_mismatch", "conversation event has no fixed attempt identity")
 	}
-	base := contracts.ConversationEvent{Version: contracts.ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID,
+	base := executionmodel.ConversationEvent{Version: executionmodel.ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID,
 		ExecutionID: run.ExecutionID, AttemptID: attemptID, Backend: executionbackend.BackendKind(run.Backend), Protocol: executionbackend.ExecutionProtocol(run.Protocol),
-		Agent: run.Agent, TargetID: run.Target.ID, SourceEventID: source.SourceEventID, SessionQuality: contracts.IdentityUnknown, TurnQuality: contracts.IdentityUnknown, ItemQuality: contracts.IdentityUnknown}
-	input := contracts.ConversationInput{Event: base, Process: run.Process, Source: source.Source, Segment: source.SourceSegment, Identity: source.SourceIdentity,
+		Agent: run.Agent, TargetID: run.Target.ID, SourceEventID: source.SourceEventID, SessionQuality: executionmodel.IdentityUnknown, TurnQuality: executionmodel.IdentityUnknown, ItemQuality: executionmodel.IdentityUnknown}
+	input := executionmodel.ConversationInput{Event: base, Process: run.Process, Source: source.Source, Segment: source.SourceSegment, Identity: source.SourceIdentity,
 		Cursor: source.SourceCursor, Generation: processGeneration(run.Process), Session: source.Session, SourceSeq: source.SourceSeq,
 		SourceOffset: source.SourceOffset, SourceLength: source.SourceLength, Raw: append([]byte(nil), source.Raw...), Diagnostic: source.Diagnostic,
 		Gap: source.SourceGap, InputWait: source.InputWait, SourceChanged: source.SourceChanged}
@@ -51,9 +52,9 @@ func (s *Service) recordConversationEvent(run *contracts.Run, source WorkerEvent
 		}
 		input.Mapper = snapshot
 	}
-	var mapper contracts.ConversationInputMapper = s.conversationSources
+	var mapper conversationtypes.ConversationInputMapper = s.conversationSources
 	if lifecycle, _, lifecycleErr := s.lifecycleForRun(run); lifecycleErr == nil {
-		if implementationMapper, ok := lifecycle.(contracts.ConversationInputMapper); ok {
+		if implementationMapper, ok := lifecycle.(conversationtypes.ConversationInputMapper); ok {
 			mapper = implementationMapper
 		}
 	} else if run.WorkflowVersion == executionmodel.Version {
@@ -80,7 +81,7 @@ func (s *Service) recordConversationEvent(run *contracts.Run, source WorkerEvent
 				paths = append(paths, attempt.EventPath)
 			}
 		}
-		path, pathErr := s.conversationSources.LiveJournalPath(context.Background(), contracts.ConversationJournalPathRequest{
+		path, pathErr := s.conversationSources.LiveJournalPath(context.Background(), conversationtypes.ConversationJournalPathRequest{
 			RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: attemptID,
 			SourceIdentity: source.SourceIdentity, LogPath: deref(run.LogPath), EventPaths: paths, WorkerFlow: run.WorkflowVersion == executionmodel.Version})
 		if pathErr != nil {
@@ -97,11 +98,11 @@ func (s *Service) recordConversationEvent(run *contracts.Run, source WorkerEvent
 		}
 		if positionErr != nil {
 			gap := event
-			gap.Type, gap.Phase, gap.Status = contracts.ConversationGap, contracts.MessagePhaseUnknown, "source_unavailable"
+			gap.Type, gap.Phase, gap.Status = executionmodel.ConversationGap, executionmodel.MessagePhaseUnknown, "source_unavailable"
 			gap.SourceEventID = "source-unavailable:" + event.SourceEventID
 			gap.Diagnostic = positionErr.Error()
-			gap.SessionQuality, gap.TurnQuality, gap.ItemQuality = contracts.IdentityUnknown, contracts.IdentityUnknown, contracts.IdentityUnknown
-			if _, gapErr := s.conversationStore.CommitConversation(context.Background(), []contracts.ConversationWrite{{Event: gap, Raw: append([]byte(nil), source.Raw...)}}, contracts.ConversationCheckpoint{}); gapErr != nil {
+			gap.SessionQuality, gap.TurnQuality, gap.ItemQuality = executionmodel.IdentityUnknown, executionmodel.IdentityUnknown, executionmodel.IdentityUnknown
+			if _, gapErr := s.conversationStore.CommitConversation(context.Background(), []executionmodel.ConversationWrite{{Event: gap, Raw: append([]byte(nil), source.Raw...)}}, executionmodel.ConversationCheckpoint{}); gapErr != nil {
 				return errors.Join(positionErr, gapErr)
 			}
 			return positionErr
@@ -153,7 +154,7 @@ func conversationProcessSnapshot(process *executionbackend.ProcessIdentity) *exe
 	return &identity
 }
 
-func validateConversationSourceWrites(expected contracts.ConversationEvent, writes []contracts.ConversationWrite) error {
+func validateConversationSourceWrites(expected executionmodel.ConversationEvent, writes []executionmodel.ConversationWrite) error {
 	for _, write := range writes {
 		event := write.Event
 		if event.ProjectID != expected.ProjectID || event.TaskID != expected.TaskID || event.WorkflowID != expected.WorkflowID || event.ExecutionID != expected.ExecutionID || event.AttemptID != expected.AttemptID || event.Backend != expected.Backend || event.Protocol != expected.Protocol || event.Agent != expected.Agent || event.TargetID != expected.TargetID {

@@ -5,11 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func (s *Service) BeginActor(ctx context.Context) error {
@@ -27,7 +27,7 @@ func (s *Service) BeginActor(ctx context.Context) error {
 	}
 	s.State.Service.Ready = false
 	s.State.Service.Status = "running"
-	s.State.Service.HeartbeatIntervalMS = duration(s.Config.Heartbeat).Milliseconds()
+	s.State.Service.HeartbeatIntervalMS = s.runtimeSettings.Heartbeat.Milliseconds()
 	if e := s.publishCheckpoint(); e != nil {
 		return e
 	}
@@ -43,7 +43,7 @@ func (s *Service) BeginActor(ctx context.Context) error {
 	if len(replaySources) > 0 {
 		s.conversationReplayRequests <- replaySources
 	}
-	s.historyRequests = make(chan []contracts.ConversationHistorySource, 1)
+	s.historyRequests = make(chan []conversationtypes.ConversationHistorySource, 1)
 	historyDone := make(chan struct{})
 	s.historyDone = historyDone
 	go func() {

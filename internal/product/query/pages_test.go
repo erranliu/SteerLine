@@ -10,7 +10,6 @@ import (
 
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
 	model "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -44,7 +43,7 @@ func TestTM05PageProjection(t *testing.T) {
 		}
 	})
 	t.Run("conversation_projects_exact_body_raw_and_source_without_checkpoint", func(t *testing.T) {
-		input := contracts.ConversationEvent{ProjectID: "project", WorkflowID: "workflow-b", ExecutionID: "execution-b", AttemptID: "attempt-b", SessionID: "session-b", Source: "canonical", SourceSegment: "segment", SourceCursor: "private-source-checkpoint", ExternalRef: "private-envelope", Body: &contracts.ConversationBodyRef{ExecutionID: "execution-b", AttemptID: "attempt-b", ItemKey: "item", Revision: 3, SHA256: "body-digest", Completeness: contracts.BodyComplete}, Raw: &contracts.ConversationRawRef{ExecutionID: "execution-b", AttemptID: "attempt-b", ID: "raw", SHA256: "raw-digest"}, Attributes: map[string]any{"reason": "中文😀", "private": "private-native-envelope"}}
+		input := model.ConversationEvent{ProjectID: "project", WorkflowID: "workflow-b", ExecutionID: "execution-b", AttemptID: "attempt-b", SessionID: "session-b", Source: "canonical", SourceSegment: "segment", SourceCursor: "private-source-checkpoint", ExternalRef: "private-envelope", Body: &model.ConversationBodyRef{ExecutionID: "execution-b", AttemptID: "attempt-b", ItemKey: "item", Revision: 3, SHA256: "body-digest", Completeness: model.BodyComplete}, Raw: &model.ConversationRawRef{ExecutionID: "execution-b", AttemptID: "attempt-b", ID: "raw", SHA256: "raw-digest"}, Attributes: map[string]any{"reason": "中文😀", "private": "private-native-envelope"}}
 		page, err := ConversationEvent(input)
 		if err != nil {
 			t.Fatal(err)

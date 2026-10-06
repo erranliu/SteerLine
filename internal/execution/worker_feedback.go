@@ -3,13 +3,13 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func (s *Service) waitWorkerFlow(run *contracts.Run, reason string, operationIDs ...string) error {
+func (s *Service) waitWorkerFlow(run *reconstructiontypes.RunView, reason string, operationIDs ...string) error {
 	workflow, execution := s.workflowRecords(run)
 	if workflow == nil || execution == nil || workflow.WorkflowVersion != executionmodel.Version {
 		return errors.New("worker flow wait has no fixed execution")
@@ -75,7 +75,7 @@ func (s *Service) waitWorkerFlow(run *contracts.Run, reason string, operationIDs
 	return s.commitWorker(run, operationIDs...)
 }
 
-func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *contracts.Run) error {
+func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructiontypes.RunView) error {
 	if s.candidateBusinessClosed(run) {
 		return nil
 	}
@@ -95,7 +95,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *contracts.Ru
 	if err != nil {
 		return err
 	}
-	if _, err := workerFlowRegistrationFor(config, run, execution); err != nil {
+	if _, err := workerFlowRegistrationFor(config, s.runtime.Directory, run, execution); err != nil {
 		return err
 	}
 	answer, err := ReadDecisionAnswer(run)

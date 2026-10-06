@@ -20,20 +20,20 @@ import (
 	"github.com/erranliu/SteerLine/internal/testfeedback"
 )
 
-const corePackage = "github.com/erranliu/SteerLine/internal/steerline"
+const corePackage = "github.com/erranliu/SteerLine/internal/app/host"
 
-var quickTests = []string{"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding"}
+var quickTests = []string{"TestTM08ControlIdentity", "TestTM08Heartbeat", "TestTM08Shutdown", "TestServiceLifetimeCloseOnRunError"}
 
 const executionPackage = "github.com/erranliu/SteerLine/internal/execution"
 
 // Full partitions the execution business tests after their move out of the host facade.
 const fullCorePackage = executionPackage
 
-var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput", "TestCandidateResumeErrorDoesNotStarveSibling", "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor"}
+var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput", "TestCandidateResumeErrorDoesNotStarveSibling", "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor", "TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot", "TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal", "TestExecutionRequirementsDoNotUpgradeProbeToVerified"}
 
-const boundaryPackage = "github.com/erranliu/SteerLine/internal/steerlineintegration"
+const boundaryPackage = "github.com/erranliu/SteerLine/tests/integration"
 
-var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImplementation", "TestTM06ResourceWiring", "TestTM07StorageWiring"}
+var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImplementation", "TestTM04ExecutionWiring", "TestTM06ResourceWiring", "TestTM07StorageWiring", "TestTM08AppHostWiring", "TestAppRequirementsClaimFreezesEvaluatedProfile"}
 
 var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary",
@@ -43,6 +43,7 @@ var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/task/model",
 	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/model",
 	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/backend",
+	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/execution/conversation",
 	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/product/api",
 	"TestCD67CoreBoundary/pure_ownership_all_tags_production_and_tests/storage/ports",
 	"TestCD67CoreBoundary/negative_source_fixtures",
@@ -69,6 +70,15 @@ var quickBoundaryAssigned = []string{
 	"TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
 	"TestTM06ResourceWiring",
 	"TestTM07StorageWiring",
+	"TestTM04ExecutionWiring",
+	"TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt",
+	"TestTM04ExecutionWiring/intent_binding_and_two_original_turns",
+	"TestTM04ExecutionWiring/original_request_ack_and_manual_recovery",
+	"TestTM08AppHostWiring",
+	"TestTM08AppHostWiring/default_app_host_composition",
+	"TestAppRequirementsClaimFreezesEvaluatedProfile",
+	"TestAppRequirementsClaimFreezesEvaluatedProfile/default_profile",
+	"TestAppRequirementsClaimFreezesEvaluatedProfile/explicit_selected_profile",
 }
 
 var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{
@@ -77,10 +87,10 @@ var quickRulePackages = append(append([]string{}, taskRulePackages...), []string
 	"github.com/erranliu/SteerLine/internal/product/query",
 	"github.com/erranliu/SteerLine/internal/product/query/taskgraph",
 	"github.com/erranliu/SteerLine/internal/storage/ports",
-	corePackage + "/testprotocol",
+	"github.com/erranliu/SteerLine/internal/testkit/protocol",
+	"github.com/erranliu/SteerLine/internal/execution/scheduler",
 	"github.com/erranliu/SteerLine/internal/execution/model",
 	"github.com/erranliu/SteerLine/internal/execution/backend",
-	corePackage + "/contracts",
 	executionPackage + "/reconstruction",
 	"github.com/erranliu/SteerLine/internal/storage/sqlite",
 	"github.com/erranliu/SteerLine/internal/console", "github.com/erranliu/SteerLine/internal/console/activityrender",
@@ -92,14 +102,14 @@ var quickOwnerCases = []struct {
 	Tests       []string
 }{
 	{"quick-execution", executionPackage, quickExecutionTests},
-	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/coreboundary", []string{"TestTM04ExecutionBoundary", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure", "TestTM05ProductQueryBoundary", "TestTM07StorageBoundary"}},
+	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/coreboundary", []string{"TestTM04ExecutionBoundary", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure", "TestTM05ProductQueryBoundary", "TestTM07StorageBoundary", "TestTM08AppHostBoundary"}},
 	{"quick-owner-remote", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", []string{"TestCD63CodecIdentityAndVersion", "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily", "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift", "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch", "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree", "TestSupervisedRunCoordinatorsAreDistinctAndFenced", "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal", "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall", "TestRemoteContinuationRequiresOriginalPeerAndTerminal", "TestRemoteWorkspaceKeepsPeerPathAndRuntime", "TestRemoteReplyRejectsOversizeWithoutMutation", "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending", "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox", "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID", "TestLoadConfigRequiresExplicitRemoteCancellationFalse"}},
 	{"quick-owner-codec", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", []string{"TestCD63CodecIdentityAndVersion", "TestConversationMapperNativeTwoTurnFixture", "TestHistoryAdapterRejectsOversizedNativeCursor", "TestAppServerLaunchPreservesConfiguredArgs", "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt"}},
 	{"quick-owner-identity", "github.com/erranliu/SteerLine/internal/execution/adapters/orca", []string{"TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess", "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation", "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost", "TestReadinessEvidenceUsesActualPlatformToolBlocks", "TestReadinessReceiptRejectsStaleAndEscapingFiles", "TestActualSavedCommandWrapperProvidesProbeEvidence", "TestActualStringifiedCommandWrapperProvidesProbeEvidence"}},
 	{"quick-owner-codexapp", "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/codexapp", []string{"TestAskToolResponseUsesNativeAnswerEnvelope", "TestCodexAppCallCancellationInterruptsBlockedWrite", "TestCodexSocketHandshakeHonorsCancellationWithoutDeadline", "TestCodexSocketLoopbackHandshakeAndMaskedJSON"}},
 	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestLocalWorkspacePrepareInspectResourcesAndCleanup", "TestPrepareRejectsHeadChangedByCheckoutHook"}},
 	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPRRequiresExactIdentityAndMergeEvidence", "TestUnsupportedProviderDoesNoNetworkOperation"}},
-	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/steerlineapp", []string{"TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestLocalWindowsSandboxProfileFreezesAndRestores", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile", "TestFileQuerySourceReadsCombinedProjectView"}},
+	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/app", []string{"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites", "TestRunConfiguredServiceClosesTransferredStoreOnReturn", "TestAppConfigProjectsOwnerInputsAndSelectedProfile", "TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestLocalWindowsSandboxProfileFreezesAndRestores", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile", "TestFileQuerySourceReadsCombinedProjectView"}},
 }
 
 var quickPackages = func() []string {
@@ -200,12 +210,12 @@ func runScoped(opts options) int {
 		}
 		boundarySelected := false
 		for _, arg := range opts.goTestArgs {
-			if arg == "./internal/steerlineintegration" || arg == boundaryPackage {
+			if arg == "./tests/integration" || arg == boundaryPackage {
 				boundarySelected = true
 			}
 		}
 		if !boundarySelected {
-			args = []string{"go", "test", "-json", "-count=1", "-timeout=10m", "-p", "1", "-parallel", "1", "-run=" + exactPattern(quickBoundaryTests), boundaryPackage}
+			args = []string{"go", "test", "-json", "-count=1", "-timeout=15m", "-p", "1", "-parallel", "1", "-run=" + exactPattern(quickBoundaryTests), boundaryPackage}
 			report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-boundary", "", args, quickBoundaryAssigned, []string{boundaryPackage}, true))
 		}
 		if len(opts.goTestArgs) > 0 {

@@ -8,7 +8,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -36,7 +35,7 @@ func (s *Service) projectActor() error {
 	if err != nil {
 		return err
 	}
-	previous := make(map[string]*contracts.Run, len(s.runs))
+	previous := make(map[string]*reconstruction.RunView, len(s.runs))
 	for _, run := range s.runs {
 		if run != nil {
 			previous[run.RunID] = run
@@ -100,7 +99,7 @@ func snapshotOperation(snapshot *reconstruction.Snapshot, id string) *executionm
 // commitWorker declares the records owned by one fixed worker: its workflow,
 // execution, current attempt, declared decisions, operation receipts and events.
 // It never examines other workers or discovers writes through fingerprints.
-func (s *Service) commitWorker(run *contracts.Run, operationIDs ...string) error {
+func (s *Service) commitWorker(run *reconstruction.RunView, operationIDs ...string) error {
 	return s.commitWorkerAttached(run, workerCommitAttachment{}, operationIDs...)
 }
 
@@ -109,13 +108,13 @@ type workerCommitAttachment struct {
 	ExecutionOperation *storageports.RecordWrite[executionbackend.Operation]
 }
 
-func (s *Service) commitWorkerAttached(run *contracts.Run, attachment workerCommitAttachment, operationIDs ...string) error {
+func (s *Service) commitWorkerAttached(run *reconstruction.RunView, attachment workerCommitAttachment, operationIDs ...string) error {
 	if attachment.Binding != nil {
-		if s.Config.ExecutionDirectory == nil {
+		if s.runtime.Directory == nil {
 			s.discardWorkerCandidates(operationIDs...)
 			return errors.New("execution directory is required for binding commitment")
 		}
-		if err := s.Config.ExecutionDirectory.ValidateRef(*attachment.Binding); err != nil {
+		if err := s.runtime.Directory.ValidateRef(*attachment.Binding); err != nil {
 			s.discardWorkerCandidates(operationIDs...)
 			return err
 		}
@@ -274,7 +273,7 @@ func (s *Service) commitEvents() error {
 	return s.commitDeclared(storageports.WorkerCommit{Project: s.Config.identity, Events: append([]storageports.DomainEvent(nil), s.pendingEvents...), Checkpoint: runtimeCheckpoint(s.State)})
 }
 
-func (s *Service) stageWorkerOperation(run *contracts.Run, id, next, requestID string, receipt []byte, reason string) error {
+func (s *Service) stageWorkerOperation(run *reconstruction.RunView, id, next, requestID string, receipt []byte, reason string) error {
 	if run == nil {
 		return errors.New("worker operation has no fixed run")
 	}
@@ -288,14 +287,14 @@ func (s *Service) stageWorkerOperation(run *contracts.Run, id, next, requestID s
 	return nil
 }
 
-func (s *Service) changeWorkerOperation(run *contracts.Run, id, next, requestID string, receipt []byte, reason string) error {
+func (s *Service) changeWorkerOperation(run *reconstruction.RunView, id, next, requestID string, receipt []byte, reason string) error {
 	if err := s.stageWorkerOperation(run, id, next, requestID, receipt, reason); err != nil {
 		return err
 	}
 	return s.commitWorker(run)
 }
 
-func (s *Service) startWorkerOperation(run *contracts.Run, kind, key string, payload any) (string, error) {
+func (s *Service) startWorkerOperation(run *reconstruction.RunView, kind, key string, payload any) (string, error) {
 	if run == nil || kind == "" || key == "" {
 		return "", errors.New("worker intent has no fixed run")
 	}

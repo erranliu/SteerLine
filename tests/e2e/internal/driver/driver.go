@@ -14,10 +14,9 @@ import (
 	"strings"
 	"time"
 
+	steerlineapp "github.com/erranliu/SteerLine/internal/app"
+	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerlineapp"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	"github.com/erranliu/SteerLine/internal/testprocess"
@@ -117,6 +116,10 @@ func MainControl(args []string) error {
 	if err != nil {
 		return err
 	}
+	hostConfig, err := steerlineapp.BuildHostConfig(context.Background(), c)
+	if err != nil {
+		return err
+	}
 	identityCtx, identityCancel := context.WithTimeout(context.Background(), 25*time.Second)
 	err = c.ResolveIdentity(identityCtx)
 	identityCancel()
@@ -131,13 +134,13 @@ func MainControl(args []string) error {
 		}
 		payload = productapi.ControlPayload{TaskID: *taskID, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest()}
 	}
-	request, err := steerline.SubmitControl(c, *action, payload, "e2e")
+	request, err := steerline.SubmitControl(hostConfig, *action, payload, "e2e")
 	if err != nil {
 		return err
 	}
 	ctx, cancel := context.WithDeadline(context.Background(), request.ExpiresAt)
 	defer cancel()
-	receipt, err := steerline.WaitControlReceipt(ctx, c, request.RequestID, 100*time.Millisecond)
+	receipt, err := steerline.WaitControlReceipt(ctx, hostConfig, request.RequestID, 100*time.Millisecond)
 	if err != nil {
 		return err
 	}
@@ -193,7 +196,7 @@ func ReadApplicationProjectSnapshot(ctx context.Context, database, project, sele
 	return reader.ReadApplicationProjectSnapshot(ctx, project, selected, limit)
 }
 
-func ReadRuntime(ctx context.Context, configPath string) (*contracts.Runtime, error) {
+func ReadRuntime(ctx context.Context, configPath string) (*executionreconstruction.Runtime, error) {
 	config, err := steerlineapp.LoadConfig(configPath)
 	if err != nil {
 		return nil, err

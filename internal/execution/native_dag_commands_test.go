@@ -807,11 +807,9 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	ctx := context.Background()
 	c, commit := nativeTaskFixture(t)
 	remoteURL := server.URL + "/org/repo.git"
-	c.PR = publication.Config{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
+	c.PR = executionmodel.PRProviderConfig{Kind: "gitea", BaseURL: server.URL, Repository: "org/repo"}
 	c.Host, c.Agent = "local", "fixture"
 	c.PublicationPolicy.Publisher = "worker"
-	c.globalExecution = false
-	c.ExecutionProfiles, c.DefaultExecutionProfile = nil, ""
 	setNeutralProfile(t, &c, neutralSettings{Executable: "fixture-agent"})
 	c.Git = executionbackend.Command{Executable: "git"}
 	if out, err := exec.Command("git", "-C", c.Repository, "remote", "set-url", "origin", remoteURL).CombinedOutput(); err != nil {
@@ -905,7 +903,7 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutTaskDelivery(lateDelivery) }); err == nil || !strings.Contains(err.Error(), "task_discarded") {
 		t.Fatalf("late merge created a normal delivery for discarded task: %v", err)
 	}
-	verifier := publication.NewClient(c.PR, Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}, duration(c.CommandTimeout))
+	verifier := publication.NewClient(publication.Config(c.PR), Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout)}, duration(c.CommandTimeout))
 	statesMu.Lock()
 	states["90"] = "unknown"
 	statesMu.Unlock()
@@ -1000,8 +998,9 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	created := time.Now().UTC()
 	workspace := executionmodel.WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-72", Branch: "fixture/72", Base: commit, Head: commit, VerifiedAt: created}
 	run := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-72", TaskID: "72", WorkflowVersion: executionmodel.Version, Phase: "executing", SelectedResult: "exec-72", CreatedAt: created, UpdatedAt: created}
-	require(t, c.BindPublicationTarget(ctx))
-	fixed := c.projectExecutionProfile().Freeze()
+	dependencies, _ := neutralFixtureRuntime(c)
+	require(t, c.BindPublicationTarget(ctx, dependencies.ProcessHost))
+	fixed := testProjectExecutionProfile(c).Freeze(dependencies.Directory, c.Identity())
 	run.ExecutionProfile, run.ConfigDigest, run.Repository, run.Branch = &fixed, fixed.AcceptedConfigVersion, c.Repository, c.Branch
 	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-72", WorkflowRunID: run.WorkflowRunID, Status: "active", CurrentStep: "worker", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
 	execution.ConfigurationDigest = fixed.Digest
@@ -1052,8 +1051,9 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store 
 		c.PublicationPolicy.Publisher = "worker"
 		setNeutralProfile(t, &c, settings)
 	}
-	require(t, c.BindPublicationTarget(ctx))
-	fixed := c.projectExecutionProfile().Freeze()
+	dependencies, _ := neutralFixtureRuntime(c)
+	require(t, c.BindPublicationTarget(ctx, dependencies.ProcessHost))
+	fixed := testProjectExecutionProfile(c).Freeze(dependencies.Directory, c.Identity())
 	if !neutralVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("published discard fixture has no valid frozen profile")
 	}

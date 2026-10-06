@@ -31,7 +31,7 @@ func captureVerifiedResult(t *testing.T, f mcFixture) storageports.ResultCommit 
 	s := &resultCaptureStore{CommandStore: f.store}
 	graph, err := f.store.TaskGraphSnapshot(context.Background(), f.c.Identity())
 	require(t, err)
-	_, err = newTestCommandService(s, f.c).CompleteNativeTask(context.Background(), f.c, "8", graph.ByID["8"].Version, f.first.RunID, publicationClient(f.c))
+	_, err = newTestCommandService(s, f.c).CompleteNativeTask(context.Background(), f.c, "8", graph.ByID["8"].Version, f.first.RunID, testPublicationClient(f.c))
 	if !errors.Is(err, errCapturedResult) || s.commit.Task.Input.ResultID != f.first.RunID {
 		t.Fatalf("real verification did not reach commit: %v", err)
 	}

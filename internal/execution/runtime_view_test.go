@@ -3,14 +3,14 @@ package execution
 import (
 	"bytes"
 	"context"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"strings"
 	"testing"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func waitingDecisionService(t *testing.T) (*Service, *contracts.Run) {
+func waitingDecisionService(t *testing.T) (*Service, *reconstructiontypes.RunView) {
 	t.Helper()
 	service, run := neutralAuditService(t)
 	_, execution := service.workflowRecords(run)

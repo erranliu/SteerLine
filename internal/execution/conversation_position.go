@@ -5,40 +5,40 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"io"
 	"os"
 
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-// contracts.ConversationJournalPosition is the committed source position. The two short
+// executionvalues.ConversationJournalPosition is the committed source position. The two short
 // anchors detect a same-file rewrite before any saved position is reused.
 
-func journalCursorOf(p contracts.ConversationJournalPosition, path string) JournalCursor {
+func journalCursorOf(p executionvalues.ConversationJournalPosition, path string) JournalCursor {
 	return JournalCursor{Path: path, FileID: p.FileID, Generation: p.Generation, Offset: p.ByteOffset, ScanOffset: p.ByteOffset, HeaderLength: p.HeaderLength, HeaderHash: p.HeaderHash, AnchorOffset: p.AnchorOffset, AnchorLength: p.AnchorLength, AnchorHash: p.AnchorHash, Initialized: true}
 }
 
-func currentConversationJournalPosition(ctx context.Context, store ConversationStore, project, execution, attempt, source, segment string, generation uint64, path, fileID string, offset int64, seq uint64) (contracts.ConversationJournalPosition, error) {
+func currentConversationJournalPosition(ctx context.Context, store ConversationStore, project, execution, attempt, source, segment string, generation uint64, path, fileID string, offset int64, seq uint64) (executionvalues.ConversationJournalPosition, error) {
 	if generation == 0 {
-		return contracts.ConversationJournalPosition{}, errors.New("conversation source generation is invalid")
+		return executionvalues.ConversationJournalPosition{}, errors.New("conversation source generation is invalid")
 	}
-	var previous *contracts.ConversationJournalPosition
+	var previous *executionvalues.ConversationJournalPosition
 	checkpoint, err := store.ConversationCheckpoint(ctx, project, execution, attempt, source, segment)
 	if err == nil {
-		position, decodeErr := contracts.DecodeConversationJournalPosition(checkpoint)
+		position, decodeErr := executionvalues.DecodeConversationJournalPosition(checkpoint)
 		if decodeErr != nil {
-			return contracts.ConversationJournalPosition{}, decodeErr
+			return executionvalues.ConversationJournalPosition{}, decodeErr
 		}
 		previous = &position
 	} else if !errors.Is(err, storageports.ErrNotFound) {
-		return contracts.ConversationJournalPosition{}, err
+		return executionvalues.ConversationJournalPosition{}, err
 	}
 	return readConversationJournalPosition(path, fileID, offset, seq, generation, previous)
 }
 
-func readConversationJournalPosition(path, fileID string, offset int64, seq, generation uint64, previous *contracts.ConversationJournalPosition) (contracts.ConversationJournalPosition, error) {
-	position := contracts.ConversationJournalPosition{Version: 2, ByteOffset: offset, SourceSeq: seq, Generation: generation, FileID: fileID}
+func readConversationJournalPosition(path, fileID string, offset int64, seq, generation uint64, previous *executionvalues.ConversationJournalPosition) (executionvalues.ConversationJournalPosition, error) {
+	position := executionvalues.ConversationJournalPosition{Version: 2, ByteOffset: offset, SourceSeq: seq, Generation: generation, FileID: fileID}
 	if offset < 0 || fileID == "" || generation == 0 {
 		return position, errors.New("invalid conversation source position")
 	}
@@ -95,7 +95,7 @@ func readConversationJournalPosition(path, fileID string, offset int64, seq, gen
 	return position, nil
 }
 
-func checkConversationPositionAnchors(f *os.File, p contracts.ConversationJournalPosition) error {
+func checkConversationPositionAnchors(f *os.File, p executionvalues.ConversationJournalPosition) error {
 	check := func(offset int64, length int, expected string) error {
 		if length == 0 {
 			return nil
@@ -115,7 +115,7 @@ func checkConversationPositionAnchors(f *os.File, p contracts.ConversationJourna
 	return check(p.AnchorOffset, p.AnchorLength, p.AnchorHash)
 }
 
-func marshalConversationJournalPosition(p contracts.ConversationJournalPosition) (string, error) {
+func marshalConversationJournalPosition(p executionvalues.ConversationJournalPosition) (string, error) {
 	b, err := json.Marshal(p)
 	return string(b), err
 }

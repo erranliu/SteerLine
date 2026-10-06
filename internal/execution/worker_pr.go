@@ -3,15 +3,15 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
-func (s *Service) offerWorkerPRFeedback(run *contracts.Run, url string) error {
+func (s *Service) offerWorkerPRFeedback(run *reconstructiontypes.RunView, url string) error {
 	if s.candidateBusinessClosed(run) {
 		return nil
 	}
@@ -33,7 +33,7 @@ func (s *Service) offerWorkerPRFeedback(run *contracts.Run, url string) error {
 	return nil
 }
 
-func (s *Service) pollWorkerFlowPR(ctx context.Context, run *contracts.Run, task *taskmodel.TaskRecord, workflow *executionmodel.WorkflowRunRecord) error {
+func (s *Service) pollWorkerFlowPR(ctx context.Context, run *reconstructiontypes.RunView, task *taskmodel.TaskRecord, workflow *executionmodel.WorkflowRunRecord) error {
 	fixed, contextErr := s.workerFlowContext(run)
 	if contextErr != nil {
 		return contextErr
@@ -52,7 +52,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *contracts.Run, task
 		if workflow.PRURL == "" {
 			return nil
 		}
-		_, err := (s.commandService(c.identity)).CompleteNativeTask(ctx, c, task.TaskID, task.Version, workflow.WorkflowRunID, publicationClient(c))
+		_, err := (s.commandService(c.identity)).CompleteNativeTask(ctx, c, task.TaskID, task.Version, workflow.WorkflowRunID, publicationClient(c, s.runtime.ProcessHost))
 		if isNativeErrorCode(err, "task_discarded") {
 			return nil
 		}
@@ -69,7 +69,7 @@ func (s *Service) pollWorkerFlowPR(ctx context.Context, run *contracts.Run, task
 		return nil
 	}
 	queried := now()
-	info, err := publicationClient(c).Query(ctx, url)
+	info, err := publicationClient(c, s.runtime.ProcessHost).Query(ctx, url)
 	workflow.PRQueriedAt = &queried
 	s.refreshRun(run)
 	if err != nil {

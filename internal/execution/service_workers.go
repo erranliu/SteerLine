@@ -3,10 +3,10 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 // Signal is delivered to the single service state machine. Worker
@@ -21,7 +21,7 @@ type Signal struct {
 	recovery *appServerRecoveryResult
 }
 
-func (s *Service) registerWorker(run *contracts.Run, worker *Worker) {
+func (s *Service) registerWorker(run *reconstructiontypes.RunView, worker *Worker) {
 	if run == nil || worker == nil {
 		return
 	}
@@ -170,7 +170,7 @@ func (s *Service) handleWorkerMessage(message Signal) error {
 		}
 		return nil // A late observer message cannot change a replacement attempt.
 	}
-	var run *contracts.Run
+	var run *reconstructiontypes.RunView
 	for _, candidate := range s.runs {
 		if candidate != nil && candidate.RunID == message.runID {
 			run = candidate

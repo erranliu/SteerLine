@@ -1,17 +1,17 @@
 package execution
 
 import (
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"strings"
 	"testing"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func TestSupervisedPrepareKeepsPlatformWorktreeIdentitySeparateFromPath(t *testing.T) {
 	const worktreeID = "repo-test::C:/remote/steerline-run"
-	run := &contracts.Run{Protocol: string(neutralProtocol), Target: executionbackend.ExecutionTarget{WorktreeID: worktreeID}}
+	run := &reconstructiontypes.RunView{Protocol: string(neutralProtocol), Target: executionbackend.ExecutionTarget{WorktreeID: worktreeID}}
 	execution := &executionmodel.ExecutionRecord{Protocol: run.Protocol, Target: run.Target}
 	run.Target.WorktreeID = "incorrect-view-only-id"
 	workspace := executionmodel.WorkspaceEvidence{Worktree: "C:/remote/steerline-run", Branch: "erranliu/steerline-run", Base: strings.Repeat("a", 40), Head: strings.Repeat("a", 40)}

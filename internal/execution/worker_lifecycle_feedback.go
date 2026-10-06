@@ -3,13 +3,13 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
-func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *contracts.Run, execution *executionmodel.ExecutionRecord, answer executionmodel.DecisionAnswer) error {
+func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord, answer executionmodel.DecisionAnswer) error {
 	if run != nil && s.lifecycleEffectPending(run.RunID) {
 		return nil
 	}
@@ -25,11 +25,11 @@ func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *contr
 		return executionmodel.ErrTurnStale
 	}
 	if lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots {
-		args, err := linkedWorktreeWriteArgs(ctx, fixed.config, execution.Workspace.Worktree)
+		args, err := linkedWorktreeWriteArgs(ctx, fixed.config, s.runtime.Directory, execution.Workspace.Worktree)
 		if err != nil {
 			return err
 		}
-		if err := bindPolicyResources(ctx, fixed.config, execution, execution.Workspace.Worktree, args); err != nil {
+		if err := bindPolicyResources(ctx, fixed.config, s.runtime.Directory, s.runtime.ProcessHost, execution, execution.Workspace.Worktree, args); err != nil {
 			return err
 		}
 	}
@@ -53,7 +53,7 @@ func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *contr
 	if err != nil {
 		return err
 	}
-	err = s.dispatchLifecycleEffect(ctx, run, lifecycle, request, false, func(run *contracts.Run, result lifecycleEffectResult) error {
+	err = s.dispatchLifecycleEffect(ctx, run, lifecycle, request, false, func(run *reconstructiontypes.RunView, result lifecycleEffectResult) error {
 		if result.observer != nil {
 			_ = result.observer.Close(context.Background())
 		}
@@ -65,7 +65,7 @@ func (s *Service) deliverLifecycleQuestionAnswer(ctx context.Context, run *contr
 	return err
 }
 
-func (s *Service) reconcileLifecycleQuestionAnswer(ctx context.Context, run *contracts.Run, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext, operation *executionmodel.OperationRecord, input executionbackend.LifecycleInput) error {
+func (s *Service) reconcileLifecycleQuestionAnswer(ctx context.Context, run *reconstructiontypes.RunView, lifecycle executionbackend.LifecyclePort, fixed workerFlowContext, operation *executionmodel.OperationRecord, input executionbackend.LifecycleInput) error {
 	if operation == nil || operation.Status == "pending" {
 		return errors.New("original answer has no persisted send operation")
 	}
@@ -102,7 +102,7 @@ func (s *Service) reconcileLifecycleQuestionAnswer(ctx context.Context, run *con
 	return s.confirmLifecycleQuestionAnswer(run, request, receipt)
 }
 
-func (s *Service) reconcileSavedLifecycleQuestionAnswer(ctx context.Context, run *contracts.Run) error {
+func (s *Service) reconcileSavedLifecycleQuestionAnswer(ctx context.Context, run *reconstructiontypes.RunView) error {
 	if run == nil || run.Decision == nil || run.Decision.Status != "answer_saved" || run.Decision.Request.QuestionRoute == nil {
 		return nil
 	}
@@ -129,7 +129,7 @@ func (s *Service) reconcileSavedLifecycleQuestionAnswer(ctx context.Context, run
 	return s.reconcileLifecycleQuestionAnswer(ctx, run, lifecycle, fixed, operation, input)
 }
 
-func (s *Service) applyLifecycleQuestionAnswerReceipt(run *contracts.Run, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt, executeErr error) error {
+func (s *Service) applyLifecycleQuestionAnswerReceipt(run *reconstructiontypes.RunView, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt, executeErr error) error {
 	if err := receipt.ValidateFor(request); err != nil {
 		return err
 	}
@@ -191,7 +191,7 @@ func (s *Service) applyLifecycleQuestionAnswerReceipt(run *contracts.Run, reques
 	return s.commitWorker(run, request.Operation.ID)
 }
 
-func (s *Service) confirmLifecycleQuestionAnswer(run *contracts.Run, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt) error {
+func (s *Service) confirmLifecycleQuestionAnswer(run *reconstructiontypes.RunView, request executionbackend.LifecycleRequest, receipt executionbackend.LifecycleReceipt) error {
 	if run == nil || run.Decision == nil || run.Decision.ID != request.Input.Feedback.DecisionID || run.Decision.Status != "answer_saved" {
 		return nil
 	}

@@ -22,7 +22,7 @@ type TaskDeliveryVerifier interface {
 // rechecks the task, selected workflow result and fixed gate evidence in one
 // transaction before writing delivery, closed state and graph revision.
 func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, taskID string, expectedTaskVersion uint64, workflowRunID string, verifier TaskDeliveryVerifier) (executionmodel.TaskDeliveryReceipt, error) {
-	if err := validateWorkflowConfig(&config, nil); err != nil {
+	if err := validateWorkflowConfig(config, c.runtime.Directory); err != nil {
 		return executionmodel.TaskDeliveryReceipt{}, err
 	}
 	sqlite := c.Store
@@ -66,7 +66,7 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	found := false
 	for _, w := range snapshot.WorkflowRuns {
 		if w.WorkflowRunID == workflowRunID && w.TaskID == taskID {
-			config, err = fixedWorkflowPublicationConfig(config, w)
+			config, err = fixedWorkflowPublicationConfig(config, w, c.runtime.Directory)
 			found = true
 			break
 		}
@@ -77,13 +77,13 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	if !found {
 		return executionmodel.TaskDeliveryReceipt{}, nativeErr("inconsistent_delivery", "original publication workflow is missing")
 	}
-	if client, ok := verifier.(*publication.Client); ok && !publication.ProviderIdentity(config.PR).Matches(client.Config) {
+	if client, ok := verifier.(*publication.Client); ok && !publication.ProviderIdentity(publication.Config(config.PR)).Matches(client.Config) {
 		return executionmodel.TaskDeliveryReceipt{}, nativeErr("authority_mismatch", "PR verifier differs from the original publication provider")
 	}
 	if verifier == nil {
 		return executionmodel.TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "PR verifier is required")
 	}
-	if err = validateNativeConfiguredTarget(ctx, config, graph.Authority); err != nil {
+	if err = validateNativeConfiguredTarget(ctx, config, graph.Authority, c.runtime.ProcessHost); err != nil {
 		return executionmodel.TaskDeliveryReceipt{}, err
 	}
 	if task.Status == "closed" {
@@ -107,7 +107,7 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	if err != nil {
 		return executionmodel.TaskDeliveryReceipt{}, err
 	}
-	known, verificationErr := verifyKnownCandidatePRs(ctx, config, snapshot, taskID, verifier, workflowRunID)
+	known, verificationErr := verifyKnownCandidatePRs(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, snapshot, taskID, verifier, workflowRunID)
 	if err := verificationErr; err != nil {
 		if isNativeErrorCode(err, "inconsistent_delivery") {
 			_ = c.recordCandidateMergeConflict(ctx, snapshot, taskID, workflowRunID, err.Error(), known...)
@@ -128,7 +128,7 @@ func (c CommandService) CompleteNativeTask(ctx context.Context, config Config, t
 	} else if info.MergedAt == nil || info.MergedAt.IsZero() || info.MergeCommit == nil || !taskmodel.ValidCommit(*info.MergeCommit) {
 		return executionmodel.TaskDeliveryReceipt{}, nativeErr("merge_state_unknown", "merged PR evidence is incomplete")
 	} else {
-		target, targetErr := configuredRepositoryTarget(ctx, config)
+		target, targetErr := configuredRepositoryTarget(ctx, config, c.runtime.ProcessHost)
 		if targetErr != nil || !sameRepositoryTarget(target, graph.Authority.Repository) || config.PR.ValidateRemote(target) != nil {
 			return executionmodel.TaskDeliveryReceipt{}, nativeErr("authority_mismatch", "PR configuration does not match the fixed native repository")
 		}

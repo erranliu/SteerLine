@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,8 +13,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
 func fakeHostGH(args []string) int {
@@ -75,7 +74,7 @@ func fakeHostGH(args []string) int {
 type localWorkerPublicationFixture struct {
 	ctx      context.Context
 	s        *Service
-	run      *contracts.Run
+	run      *reconstructiontypes.RunView
 	c        Config
 	base     string
 	turnID   string
@@ -95,7 +94,7 @@ func newLocalWorkerPublicationFixture(t *testing.T) localWorkerPublicationFixtur
 		t.Fatal(err)
 	}
 	t.Setenv("STEERLINE_TEST_HOST_GH_FILE", filepath.Join(t.TempDir(), "pr.json"))
-	c.PR = publication.Config{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: exe, Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: executionbackend.Command{Executable: exe, Args: []string{"pr", "close", "{pr_url}"}}}
+	c.PR = executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: exe, Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: executionbackend.Command{Executable: exe, Args: []string{"pr", "close", "{pr_url}"}}}
 	turnID := "00000000-0000-0000-0000-000000000001"
 	branch, worktree := run.WorkspaceIntent.Branch, run.WorkspaceIntent.Path
 	require(t, c.PrepareWorktreeRoot())

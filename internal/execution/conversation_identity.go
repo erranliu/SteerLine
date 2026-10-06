@@ -4,11 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
-
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-func conversationItemKey(e contracts.ConversationEvent, itemID string) string {
+func conversationItemKey(e executionvalues.ConversationEvent, itemID string) string {
 	if itemID == "" {
 		return ""
 	}
@@ -17,7 +16,7 @@ func conversationItemKey(e contracts.ConversationEvent, itemID string) string {
 	return hex.EncodeToString(sum[:])
 }
 
-func sourceEventFallback(e contracts.ConversationEvent, raw []byte) string {
+func sourceEventFallback(e executionvalues.ConversationEvent, raw []byte) string {
 	if e.SourceSeq != 0 {
 		return fmt.Sprintf("seq:%d", e.SourceSeq)
 	}

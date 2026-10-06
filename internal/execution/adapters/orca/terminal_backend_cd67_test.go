@@ -13,7 +13,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	"github.com/erranliu/SteerLine/internal/steerline/testprotocol"
+	"github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
 
 func TestMain(m *testing.M) {

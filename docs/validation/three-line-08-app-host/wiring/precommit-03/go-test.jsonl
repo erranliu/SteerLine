@@ -1,0 +1,6 @@
+{"ImportPath":"github.com/erranliu/SteerLine/internal/app","Action":"build-output","Output":"# github.com/erranliu/SteerLine/internal/app\n"}
+{"ImportPath":"github.com/erranliu/SteerLine/internal/app","Action":"build-output","Output":"internal\\app\\directory.go:19:2: \"github.com/erranliu/SteerLine/internal/app/host\" imported as steerline and not used\n"}
+{"ImportPath":"github.com/erranliu/SteerLine/internal/app","Action":"build-fail"}
+{"Time":"2026-10-05T21:06:49.0665465+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/integration"}
+{"Time":"2026-10-05T21:06:49.0670742+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"FAIL\tgithub.com/erranliu/SteerLine/tests/integration [build failed]\n"}
+{"Time":"2026-10-05T21:06:49.0670742+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/integration","Elapsed":0.001,"FailedBuild":"github.com/erranliu/SteerLine/internal/app"}

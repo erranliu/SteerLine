@@ -3,34 +3,36 @@ package execution
 import (
 	"context"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
-func (c *Config) ValidateAdmission() error {
-	if err := c.RequireNativeTaskAuthority(); err != nil {
-		return err
-	}
+// ValidateAdmission validates the selected immutable execution profile. Task
+// authority, project file identity and the profile catalog are admitted by app.
+func (c Config) ValidateAdmission(directory *ExecutionDirectory) error {
 	if c.WorkflowProtocol != executionmodel.Version {
 		return nativeErr("unsupported_schema", "only worker-flow-v1 may start a service; preserve older execution state")
 	}
-	if err := validateWorkflowConfig(c, nil); err != nil {
-		return err
-	}
-	if err := validateExecutionProfiles(*c); err != nil {
-		return err
-	}
-	return c.ResolveIdentity(context.Background())
+	return validateWorkflowConfig(c, directory)
 }
-func (c *Config) ValidateTaskCommandConfiguration() error     { return validateWorkflowConfig(c, nil) }
-func (c Config) Registration() (ExecutionRegistration, error) { return registrationFor(c) }
-func (c Config) WorkspaceGit() workspace.Git                  { return workspaceGit(c) }
-func (c Config) TaskRepositoryTarget(ctx context.Context) (string, error) {
-	return configuredRepositoryTarget(ctx, c)
+
+func (c Config) ValidateTaskCommandConfiguration(directory *ExecutionDirectory) error {
+	return validateWorkflowConfig(c, directory)
 }
-func (c Config) ValidateRepositoryTarget(ctx context.Context, authority executionmodel.ProjectTaskAuthority) error {
-	return validateNativeConfiguredTarget(ctx, c, authority)
+
+func (c Config) Registration(directory *ExecutionDirectory) (ExecutionRegistration, error) {
+	return registrationFor(c, directory)
 }
-func (c Config) LoadedPolicySource() string     { return c.policySource }
-func (c Config) FixedPublicationRemote() string { return c.publicationRemoteURL }
-func (c Config) FixedProfileDigest() string     { return c.fixedProfileDigest }
+
+func (c Config) WorkspaceGit(processHost executionbackend.ManagedProcessHost) workspace.Git {
+	return workspaceGit(c, processHost)
+}
+
+func (c Config) TaskRepositoryTarget(ctx context.Context, processHost executionbackend.ManagedProcessHost) (string, error) {
+	return configuredRepositoryTarget(ctx, c, processHost)
+}
+
+func (c Config) ValidateRepositoryTarget(ctx context.Context, authority executionmodel.ProjectTaskAuthority, processHost executionbackend.ManagedProcessHost) error {
+	return validateNativeConfiguredTarget(ctx, c, authority, processHost)
+}

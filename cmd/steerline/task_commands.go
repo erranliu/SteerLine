@@ -10,9 +10,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	"github.com/erranliu/SteerLine/internal/steerline"
-	steerlineapp "github.com/erranliu/SteerLine/internal/steerlineapp"
+	productclient "github.com/erranliu/SteerLine/internal/product/client"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -230,7 +230,7 @@ func runNativeTaskCommand(args []string) error {
 		if taskExportTargetsNativeState(destination, product.Project().RunDir) {
 			return errors.New("task export output cannot replace native task state files")
 		}
-		receipt, exportErr := steerline.WriteTaskGraphExport(destination, graph, *overwrite)
+		receipt, exportErr := productclient.WriteTaskGraphExport(destination, graph, *overwrite)
 		if exportErr != nil {
 			return exportErr
 		}

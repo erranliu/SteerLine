@@ -9,8 +9,8 @@ import (
 	"os"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -28,7 +28,9 @@ func sameRepositoryTarget(a, b string) bool { return a == b }
 
 func mustJSON(v any) []byte { b, _ := json.Marshal(v); return b }
 
-func decode(b []byte, v any) error { return contracts.DecodeJSON(b, v) }
+func decode(b []byte, v any) error {
+	return executionbackend.DecodeStrictJSON(b, v, "expected exactly one JSON value")
+}
 
 func digestValue(v any) string { return recordFingerprint(v) }
 

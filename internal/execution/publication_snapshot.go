@@ -4,10 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"strings"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 )
 
@@ -26,8 +27,8 @@ func (c Config) publicationSettings() executionmodel.PublicationSettings {
 	return executionmodel.PublicationSettings{Provider: executionmodel.PRProviderConfig(c.PR), Git: c.Git, Remote: c.Remote, RemoteURL: c.publicationRemoteURL, BaseBranch: c.Branch, AuthenticationRefs: refs}
 }
 
-func (c *Config) BindPublicationTarget(ctx context.Context) error {
-	url, err := (Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: c.ProcessHost}).Output(ctx, c.Git, "remote", "get-url", c.Remote)
+func (c *Config) BindPublicationTarget(ctx context.Context, processHost executionbackend.ManagedProcessHost) error {
+	url, err := (Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: processHost}).Output(ctx, c.Git, "remote", "get-url", c.Remote)
 	if err != nil {
 		return errors.New("publication remote cannot be read; original state is preserved")
 	}
@@ -38,7 +39,7 @@ func (c *Config) BindPublicationTarget(ctx context.Context) error {
 	if err := publication.ValidateURL(target); err != nil {
 		return err
 	}
-	push, err := (Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: c.ProcessHost}).Output(ctx, c.Git, "remote", "get-url", "--push", "--all", c.Remote)
+	push, err := (Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: processHost}).Output(ctx, c.Git, "remote", "get-url", "--push", "--all", c.Remote)
 	if err != nil || strings.TrimSpace(string(push)) != target {
 		return errors.New("publication requires one identical fetch/push remote URL")
 	}
@@ -49,26 +50,26 @@ func (c *Config) BindPublicationTarget(ctx context.Context) error {
 	return nil
 }
 
-func publicationClient(c Config) *publication.Client {
-	return publication.NewClient(c.PR, Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: c.ProcessHost}, duration(c.CommandTimeout))
+func publicationClient(c Config, processHost executionbackend.ManagedProcessHost) *publication.Client {
+	return publication.NewClient(publication.Config(c.PR), Runner{Dir: c.Repository, Timeout: duration(c.CommandTimeout), ProcessHost: processHost}, duration(c.CommandTimeout))
 }
 
-func verifyPublicationTargetForRun(ctx context.Context, c Config, run *contracts.Run) error {
-	entry, err := registrationFor(c)
+func verifyPublicationTargetForRun(ctx context.Context, c Config, directory *ExecutionDirectory, processHost executionbackend.ManagedProcessHost, run *reconstructiontypes.RunView) error {
+	entry, err := registrationFor(c, directory)
 	if err != nil {
 		return err
 	}
 	if run != nil && run.WorktreePath != nil && entry.LocalWorkspace {
 		c.Repository = *run.WorktreePath
 	}
-	return c.BindPublicationTarget(ctx)
+	return c.BindPublicationTarget(ctx, processHost)
 }
 
-func fixedWorkflowPublicationConfig(c Config, w executionmodel.WorkflowRunRecord) (Config, error) {
-	if w.ExecutionProfile == nil || !VerifyFixedExecutionProfile(*w.ExecutionProfile, c.ExecutionDirectory) || w.ConfigDigest != w.ExecutionProfile.AcceptedConfigVersion || w.Repository == "" || w.Branch != w.ExecutionProfile.Publication.BaseBranch || w.ExecutionProfile.Publication.RemoteURL == "" {
+func fixedWorkflowPublicationConfig(c Config, w executionmodel.WorkflowRunRecord, directory *ExecutionDirectory) (Config, error) {
+	if w.ExecutionProfile == nil || !VerifyFixedExecutionProfile(*w.ExecutionProfile, directory) || w.ConfigDigest != w.ExecutionProfile.AcceptedConfigVersion || w.Repository == "" || w.Branch != w.ExecutionProfile.Publication.BaseBranch || w.ExecutionProfile.Publication.RemoteURL == "" {
 		return Config{}, errors.New("publication requires the original v6 execution snapshot; preserve original state")
 	}
-	c = c.ApplyFixedExecutionProfile(*w.ExecutionProfile)
+	c = c.ApplyFixedExecutionProfile(*w.ExecutionProfile, directory)
 	c.Repository = w.Repository
 	return copyWorkerFlowConfig(c), nil
 }

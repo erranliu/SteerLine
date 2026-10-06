@@ -90,7 +90,7 @@ func TestLocalReadOutputUsesBoundedExecutionCursor(t *testing.T) {
 	}
 	cfg := Config{Host: "local", RunDir: runDir}
 	backend := localExecutionBackend{config: cfg}
-	ref := executionbackend.ExecutionRef{Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Target: TargetFor(cfg), RunID: runID, AttemptID: attemptID}
+	ref := executionbackend.ExecutionRef{Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Target: testTargetFor(cfg), RunID: runID, AttemptID: attemptID}
 	first, err := backend.ReadOutput(context.Background(), ref, "", 4)
 	if err != nil || string(first.Data) != "abcd" || first.NextCursor == "" {
 		t.Fatalf("first bounded read: %#v, %v", first, err)
@@ -134,9 +134,9 @@ func TestOperationRecordRejectsCorruptionBeforeUse(t *testing.T) {
 func TestNativeCapabilityCheckKeepsFixedAgent(t *testing.T) {
 	c := workerContextConfigFixture()
 	c.RunDir = t.TempDir()
-	c.Resources = fixtureResources{}
-	backend := BackendFor(c)
-	fixedTarget, fixedAgent := TargetFor(c), AgentFor(c)
+	resources := fixtureResources{}
+	backend := testBackendFor(c)
+	fixedTarget, fixedAgent := testTargetFor(c), AgentFor(c)
 	report, err := backend.Probe(context.Background(), fixedTarget, fixedAgent)
 	require(t, err)
 	data := []byte("isolated neutral workspace inspection fact")
@@ -149,9 +149,9 @@ func TestNativeCapabilityCheckKeepsFixedAgent(t *testing.T) {
 			report.Capabilities[i].Evidence = evidencePath + "#sha256=" + hex.EncodeToString(sum[:])
 		}
 	}
-	require(t, (executionRecords{root: c.RunDir, resources: c.Resources}).saveCapabilityReport(report))
+	require(t, (executionRecords{root: c.RunDir, resources: resources}).saveCapabilityReport(report))
 	c.Agent = "changed-default"
-	s := &Service{Config: c}
+	s := &Service{Config: c, records: executionRecords{root: c.RunDir, resources: resources}, resources: resources}
 	if _, err := s.requireBackendCapabilitiesFor(context.Background(), backend, fixedTarget, fixedAgent, "workspace_inspection"); err != nil {
 		t.Fatalf("fixed capability was lost after changing the default agent: %v", err)
 	}

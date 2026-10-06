@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"os/exec"
 	"strings"
@@ -10,7 +11,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 )
 
 func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
@@ -82,7 +82,7 @@ func TestDeadWorkerRecoveryPreservesDecisionAndFreshAnswer(t *testing.T) {
 
 // Recovery observations must carry the same durable original operation as a
 // real lifecycle reconciliation, even when the external observer is a fixture.
-func appServerRecoveryFixture(t *testing.T, service *Service, run *contracts.Run) appServerRecoveryResult {
+func appServerRecoveryFixture(t *testing.T, service *Service, run *reconstructiontypes.RunView) appServerRecoveryResult {
 	t.Helper()
 	execution := service.executionRecord(run)
 	input := executionbackend.TurnInput{CommandID: execution.CurrentCommandID, Prompt: "original persisted input"}

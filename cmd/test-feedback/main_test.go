@@ -16,7 +16,7 @@ func TestFilterGeneratedRunOutputPreservesOtherValidationChanges(t *testing.T) {
 		"?? docs/validation/test-feedback/run with spaces/summary.json",
 		"?? docs/validation/test-feedback/README.md",
 		" M docs/validation/test-feedback/coverage-map.md",
-		" M internal/steerline/service_test.go",
+		" M internal/app/host/service_test.go",
 		"",
 	}, "\x00")
 
@@ -24,7 +24,7 @@ func TestFilterGeneratedRunOutputPreservesOtherValidationChanges(t *testing.T) {
 	want := strings.Join([]string{
 		"?? docs/validation/test-feedback/README.md",
 		" M docs/validation/test-feedback/coverage-map.md",
-		" M internal/steerline/service_test.go",
+		" M internal/app/host/service_test.go",
 	}, "\n")
 	if got != want {
 		t.Fatalf("filtered worktree status = %q, want %q", got, want)

@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -12,15 +13,17 @@ import (
 	"testing"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
 	c := workerContextConfigFixture()
+	dependencies, _ := neutralFixtureRuntime(c)
 	c.Repository = t.TempDir()
 	c.ExecutionRequirements = executionbackend.ExecutionRequirements{Tools: []executionbackend.ToolRequirement{{ID: "git"}}, Credentials: []executionbackend.CredentialRequirement{{ID: "pr.token_env", Site: "service"}}}
 	c.PR.TokenEnv = "STEERLINE_REQUIREMENTS_TOKEN"
 	t.Setenv(c.PR.TokenEnv, "secret-requirement-token")
-	e, err := evaluateExecutionRequirements(context.Background(), c)
+	e, err := evaluateExecutionRequirements(context.Background(), c, dependencies.Directory)
 	require(t, err)
 	if e.Tools[0].Version == "" || e.Credentials[0].Status != executionbackend.RequirementPresent {
 		t.Fatalf("incomplete evidence: %+v", e)
@@ -31,21 +34,21 @@ func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
 		t.Fatal("secret or digest leaked into evidence")
 	}
 	c.ExecutionRequirements.Tools[0].ExactVersion = e.Tools[0].Version
-	_, err = evaluateExecutionRequirements(context.Background(), c)
+	_, err = evaluateExecutionRequirements(context.Background(), c, dependencies.Directory)
 	require(t, err)
 	c.ExecutionRequirements.Tools[0].ExactVersion = "different"
-	if _, err = evaluateExecutionRequirements(context.Background(), c); err == nil {
+	if _, err = evaluateExecutionRequirements(context.Background(), c, dependencies.Directory); err == nil {
 		t.Fatal("wrong exact tool version accepted")
 	}
 	c.ExecutionRequirements.Tools = nil
 	c.PR.TokenEnv = ""
 	t.Setenv("GH_TOKEN", "other-host-login")
-	if _, err = evaluateExecutionRequirements(context.Background(), c); err == nil {
+	if _, err = evaluateExecutionRequirements(context.Background(), c, dependencies.Directory); err == nil {
 		t.Fatal("host login substituted for absent provider reference")
 	}
 	c.PR.TokenEnv = "STEERLINE_REQUIREMENTS_TOKEN"
 	t.Setenv(c.PR.TokenEnv, "")
-	if _, err = evaluateExecutionRequirements(context.Background(), c); err == nil {
+	if _, err = evaluateExecutionRequirements(context.Background(), c, dependencies.Directory); err == nil {
 		t.Fatal("missing token reference accepted")
 	}
 	missing := queryHostRequirementTool(context.Background(), Config{Repository: c.Repository, Git: executionbackend.Command{Executable: filepath.Join(c.Repository, "missing-tool.exe")}}, "git")
@@ -60,14 +63,15 @@ func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
 
 func TestExecutionRequirementsDoNotUpgradeProbeToVerified(t *testing.T) {
 	c := workerContextConfigFixture()
-	c.Resources = fixtureResources{}
+	dependencies, _ := neutralFixtureRuntime(c)
+	resources := fixtureResources{}
 	c.Repository = t.TempDir()
 	c.RunDir = t.TempDir()
 	c.ExecutionRequirements.Capabilities = []string{"workspace_inspection"}
-	if _, err := evaluateExecutionRequirements(context.Background(), c); err == nil {
+	if _, err := evaluateExecutionRequirements(context.Background(), c, dependencies.Directory); err == nil {
 		t.Fatal("version query became verified capability")
 	}
-	entry, err := registrationFor(c)
+	entry, err := registrationFor(c, dependencies.Directory)
 	require(t, err)
 	report, err := entry.ProbeRequirements(context.Background(), c)
 	require(t, err)
@@ -79,25 +83,26 @@ func TestExecutionRequirementsDoNotUpgradeProbeToVerified(t *testing.T) {
 			report.Capabilities[i].Evidence = evidence + "#sha256=" + fmt.Sprintf("%x", sha256.Sum256([]byte("fixture evidence; not native certification")))
 		}
 	}
-	require(t, (executionRecords{root: c.RunDir, resources: c.Resources}).saveCapabilityReport(report))
-	_, err = evaluateExecutionRequirements(context.Background(), c)
+	require(t, (executionRecords{root: c.RunDir, resources: resources}).saveCapabilityReport(report))
+	_, err = evaluateExecutionRequirements(context.Background(), c, dependencies.Directory)
 	require(t, err)
 	require(t, os.WriteFile(evidence, []byte("changed evidence"), 0600))
 	// Evidence loading checks the authenticated file reference, not a mock start.
-	if _, err = evaluateExecutionRequirements(context.Background(), c); err == nil {
+	if _, err = evaluateExecutionRequirements(context.Background(), c, dependencies.Directory); err == nil {
 		t.Fatal("changed native evidence accepted")
 	}
 }
 
 func TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal(t *testing.T) {
 	c := workerContextConfigFixture()
+	dependencies, _ := neutralFixtureRuntime(c)
 	c.Repository = t.TempDir()
 	c.ExecutionRequirements.Tools = []executionbackend.ToolRequirement{{ID: "git"}}
-	e, err := evaluateExecutionRequirements(context.Background(), c)
+	e, err := evaluateExecutionRequirements(context.Background(), c, dependencies.Directory)
 	require(t, err)
 	c.requirementsEvaluation = &e
-	profile := c.projectExecutionProfile()
-	fixed := profile.Freeze()
+	profile := testProjectExecutionProfile(c)
+	fixed := profile.Freeze(dependencies.Directory, c.Identity())
 	if !neutralVerifyFixedExecutionProfile(fixed) {
 		t.Fatal("valid evaluated snapshot rejected")
 	}
@@ -109,7 +114,7 @@ func TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal(t *testing.T) {
 	current := c
 	current.ExecutionRequirements.Tools = []executionbackend.ToolRequirement{{ID: "python"}}
 	current.Git.Executable = "must-not-run"
-	restored := current.ApplyFixedExecutionProfile(fixed)
+	restored := current.ApplyFixedExecutionProfile(fixed, dependencies.Directory)
 	if restored.ExecutionRequirements.Tools[0].ID != "git" || restored.Git.Executable != "git" {
 		t.Fatal("restoration used current requirements or tools")
 	}
@@ -161,23 +166,28 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 		t.Fatal("failed evaluation consumed task")
 	}
 	t.Setenv(c.PR.TokenEnv, "private-value")
-	c.policySource = filepath.Join(t.TempDir(), "project.json")
-	c.executionConfigPath = filepath.Join(t.TempDir(), "execution.json")
+	projectPath := filepath.Join(t.TempDir(), "project.json")
+	globalPath := filepath.Join(t.TempDir(), "execution.json")
 	projectBytes, globalBytes := []byte(`{"execution_requirements":{"tools":[{"id":"git"}]}}`), []byte(`{"execution_profiles":[]}`)
-	require(t, os.WriteFile(c.policySource, projectBytes, 0600))
-	require(t, os.WriteFile(c.executionConfigPath, globalBytes, 0600))
+	require(t, os.WriteFile(projectPath, projectBytes, 0600))
+	require(t, os.WriteFile(globalPath, globalBytes, 0600))
+	digest := fixtureLoadedConfigDigest(projectBytes, globalBytes)
 	claimProfileSettings := neutralProfileSettings(c)
-	c.configDigest = loadedConfigDigest(projectBytes, globalBytes)
+	c.BindAcceptedConfigVersion(digest)
 	setNeutralProfile(t, &c, claimProfileSettings)
-	entry, err := registrationFor(c)
+	dependencies, catalog := neutralFixtureRuntime(c)
+	entry, err := registrationFor(c, dependencies.Directory)
 	require(t, err)
 	fake := entry
 	fake.QueryTool = func(ctx context.Context, config Config, id string) executionbackend.RequirementEvidence {
 		e := entry.QueryTool(ctx, config, id)
-		require(t, os.WriteFile(c.policySource, append(projectBytes, ' '), 0600))
+		require(t, os.WriteFile(projectPath, append(projectBytes, ' '), 0600))
 		return e
 	}
-	c.ExecutionDirectory = neutralDirectoryWithReplacement(t, c.ExecutionDirectory, fake)
+	fakeDirectory := neutralDirectoryWithReplacement(t, dependencies.Directory, fake)
+	commands = newTestCommandService(store, c)
+	commands.runtime.Directory = fakeDirectory
+	commands.runtime.ConfigVerifier = fixtureConfigVerifier{project: projectPath, global: globalPath, digest: digest}
 	_, err = commands.ClaimNativeTask(ctx, c, options)
 	if !isNativeErrorCode(err, "stale_profile") {
 		t.Fatalf("configuration changed during evaluation but claim was accepted: %v", err)
@@ -187,10 +197,56 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	if graph.ByID["8"].Status != "open" {
 		t.Fatal("stale configuration consumed the task")
 	}
-	require(t, os.WriteFile(c.policySource, projectBytes, 0600))
-	c.ExecutionDirectory = neutralDirectoryWithReplacement(t, c.ExecutionDirectory, entry)
+	require(t, os.WriteFile(projectPath, projectBytes, 0600))
+	commands.runtime.Directory = dependencies.Directory
 	_, err = commands.ClaimNativeTask(ctx, c, options)
 	require(t, err)
+	committed, err := store.Query(ctx, c.Identity())
+	require(t, err)
+	var frozen *executionmodel.FixedExecutionProfile
+	workflowRunID := ""
+	var storedExecution *executionmodel.ExecutionRecord
+	for i := range committed.WorkflowRuns {
+		if committed.WorkflowRuns[i].TaskID == "8" {
+			frozen = committed.WorkflowRuns[i].ExecutionProfile
+			workflowRunID = committed.WorkflowRuns[i].WorkflowRunID
+			break
+		}
+	}
+	for i := range committed.Executions {
+		if workflowRunID != "" && committed.Executions[i].WorkflowRunID == workflowRunID {
+			storedExecution = &committed.Executions[i]
+			break
+		}
+	}
+	if frozen == nil || storedExecution == nil || frozen.RequirementsEvaluation == nil ||
+		len(frozen.RequirementsEvaluation.Tools) != 1 || frozen.RequirementsEvaluation.Tools[0].Status != executionbackend.RequirementPresent ||
+		len(frozen.RequirementsEvaluation.Credentials) != 1 || frozen.RequirementsEvaluation.Credentials[0].Status != executionbackend.RequirementPresent ||
+		frozen.RequirementsEvidenceDigest != requirementsEvidenceDigest(frozen.RequirementsEvaluation) || frozen.AcceptedConfigVersion != digest ||
+		storedExecution.ConfigurationDigest != frozen.Digest || !VerifyFixedExecutionProfile(*frozen, dependencies.Directory) {
+		t.Fatalf("requirements claim did not persist one verified evaluated profile: profile=%+v execution=%+v", frozen, storedExecution)
+	}
+	profileBytes := mustJSON(*frozen)
+	if bytes.Contains(profileBytes, []byte("private-value")) {
+		t.Fatal("frozen requirement evidence contains the credential value")
+	}
+	baselineConfig := c
+	baselineConfig.requirementsEvaluation = cloneRequirementsEvaluation(frozen.RequirementsEvaluation)
+	baselineConfig.publicationRemoteURL = frozen.Publication.RemoteURL
+	baselineCatalog := catalog
+	baselineCatalog.Base = baselineConfig
+	var baseline *executionmodel.FixedExecutionProfile
+	for _, profile := range baselineCatalog.AvailableExecutionProfiles() {
+		if profile.ID == frozen.ID {
+			value := profile.Freeze(baselineCatalog.Directory, baselineConfig.Identity())
+			baseline = &value
+			break
+		}
+	}
+	if baseline == nil || !bytes.Equal(profileBytes, mustJSON(*baseline)) {
+		t.Fatalf("new claim freeze differs from the original evaluated bind-and-freeze semantics: current=%s baseline=%s", profileBytes, mustJSON(baseline))
+	}
+	t.Logf("evaluated claim profile exact frozen bytes matched evaluated catalog bind+freeze: digest=%s evidence=%s accepted=%s bytes_sha256=%x", frozen.Digest, frozen.RequirementsEvidenceDigest, frozen.AcceptedConfigVersion, sha256.Sum256(profileBytes))
 	s, err := newNeutralService(c)
 	require(t, err)
 	defer s.Close()
@@ -218,47 +274,71 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 func TestClaimRechecksAcceptedConfigFiles(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	localGlobalExecutionFixture(t)
-	c := workerContextConfigFixture()
-	c.policySource = filepath.Join(t.TempDir(), "project.json")
-	c.executionConfigPath = fixtureGlobalExecutionConfigPath()
+	projectPath := filepath.Join(t.TempDir(), "project.json")
+	globalPath := fixtureGlobalExecutionConfigPath()
 	project := []byte(`{"execution_requirements":{}}`)
-	require(t, os.WriteFile(c.policySource, project, 0600))
-	global, err := os.ReadFile(c.executionConfigPath)
+	require(t, os.WriteFile(projectPath, project, 0600))
+	global, err := os.ReadFile(globalPath)
 	require(t, err)
-	// Reuse the actual config-byte digest algorithm, including its delimiter.
-	c.configDigest = loadedConfigDigest(project, global)
-	require(t, verifyClaimConfigFiles(c))
-	require(t, os.WriteFile(c.policySource, append(project, ' '), 0600))
-	if verifyClaimConfigFiles(c) == nil {
+	verifier := fixtureConfigVerifier{project: projectPath, global: globalPath, digest: fixtureLoadedConfigDigest(project, global)}
+	require(t, verifyClaimConfigFiles(verifier))
+	require(t, os.WriteFile(projectPath, append(project, ' '), 0600))
+	if verifyClaimConfigFiles(verifier) == nil {
 		t.Fatal("project drift accepted")
 	}
-	require(t, os.WriteFile(c.policySource, project, 0600))
-	require(t, os.WriteFile(c.executionConfigPath, append(global, ' '), 0600))
-	if verifyClaimConfigFiles(c) == nil {
+	require(t, os.WriteFile(projectPath, project, 0600))
+	require(t, os.WriteFile(globalPath, append(global, ' '), 0600))
+	if verifyClaimConfigFiles(verifier) == nil {
 		t.Fatal("global profile drift accepted")
 	}
 }
 
+type fixtureConfigVerifier struct{ project, global, digest string }
+
+func (v fixtureConfigVerifier) VerifyCurrentConfig() error {
+	project, err := os.ReadFile(v.project)
+	if err != nil {
+		return err
+	}
+	global, err := os.ReadFile(v.global)
+	if err != nil {
+		return err
+	}
+	if fixtureLoadedConfigDigest(project, global) != v.digest {
+		return nativeErr("stale_profile", "project or execution configuration changed")
+	}
+	return nil
+}
+
+func fixtureLoadedConfigDigest(project, global []byte) string {
+	h := sha256.New()
+	_, _ = h.Write(project)
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write(global)
+	return fmt.Sprintf("%x", h.Sum(nil))
+}
+
 func TestExecutionRegistryRejectsDuplicatesAndRequiresLifecyclePorts(t *testing.T) {
 	c := workerContextConfigFixture()
-	entry, err := registrationFor(c)
+	dependencies, _ := neutralFixtureRuntime(c)
+	entry, err := registrationFor(c, dependencies.Directory)
 	require(t, err)
-	if _, err = NewExecutionDirectory(c.ExecutionDirectory.Version(), neutralCodecs(), []ExecutionRegistration{entry, entry}); err == nil {
+	if _, err = NewExecutionDirectory(dependencies.Directory.Version(), neutralCodecs(), []ExecutionRegistration{entry, entry}); err == nil {
 		t.Fatal("duplicate key accepted")
 	}
-	for _, cfg := range []Config{{ExecutionDirectory: c.ExecutionDirectory, Host: "unknown", Agent: "fixture"}, {ExecutionDirectory: c.ExecutionDirectory, Host: "local", Agent: "unknown"}} {
-		if _, err = registrationFor(cfg); err == nil {
+	for _, cfg := range []Config{{Host: "unknown", Agent: "fixture"}, {Host: "local", Agent: "unknown"}} {
+		if _, err = registrationFor(cfg, dependencies.Directory); err == nil {
 			t.Fatal("unknown combination accepted")
 		}
 	}
-	for _, registered := range c.ExecutionDirectory.entries {
+	for _, registered := range dependencies.Directory.entries {
 		if registered.Lifecycle == nil {
 			t.Fatal("registered implementation has no lifecycle port")
 		}
 	}
 	incomplete := entry
 	incomplete.Lifecycle = nil
-	if _, err = NewExecutionDirectory(c.ExecutionDirectory.Version(), neutralCodecs(), []ExecutionRegistration{incomplete}); err == nil {
+	if _, err = NewExecutionDirectory(dependencies.Directory.Version(), neutralCodecs(), []ExecutionRegistration{incomplete}); err == nil {
 		t.Fatal("registration without a lifecycle port was accepted")
 	}
 }

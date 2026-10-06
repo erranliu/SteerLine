@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestTM04ExecutionBoundary(t *testing.T) {
@@ -64,6 +65,41 @@ func TestTM04ExecutionBoundary(t *testing.T) {
 	})
 }
 
+func TestTM08AppHostBoundary(t *testing.T) {
+	t.Run("transitive_execution_workspace", func(t *testing.T) {
+		graph := map[string][]string{
+			core:      {execution},
+			execution: {execution + "/workspace"},
+		}
+		var found []string
+		visitHostGraph(graph, core, func(path []string) {
+			if hostForbidden(path[len(path)-1]) {
+				found = append(found, strings.Join(path, " -> "))
+			}
+		})
+		want := core + " -> " + execution + " -> " + execution + "/workspace"
+		for _, path := range found {
+			if path == want {
+				return
+			}
+		}
+		t.Fatalf("host closure skipped its execution-to-workspace dependency: got %v, want %s", found, want)
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	_, file, _, _ := runtime.Caller(0)
+	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	report, err := Check(ctx, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, violation := range report.Violations {
+		if strings.Contains(violation, "app host forbidden dependency") {
+			t.Fatalf("host implementation crossed its injected boundary: %s", violation)
+		}
+	}
+}
+
 // Console tests and inactive-tag helpers must not regain internal query or
 // execution reconstruction access when the execution package moves.
 func TestTM04ConsoleQueryBoundary(t *testing.T) {
@@ -101,13 +137,13 @@ func TestTM06AdapterBoundary(t *testing.T) {
 		module + "/internal/storage/ports",
 		"database/sql",
 		module + "/internal/storage/sqlite",
-		module + "/internal/steerline/testprotocol",
-		module + "/internal/steerlineapp",
-		module + "/internal/steerline/console",
+		module + "/internal/testkit/protocol",
+		module + "/internal/app",
+		console,
 		console,
 		console + "/activityrender",
 		module + "/internal/product/api",
-		module + "/internal/steerline/taskview",
+		productQuery + "/taskgraph",
 	} {
 		t.Run(strings.TrimPrefix(dependency, module+"/internal/"), func(t *testing.T) {
 			root := t.TempDir()
@@ -157,7 +193,7 @@ func TestTM06AdapterBoundary(t *testing.T) {
 		if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 			t.Fatal(err)
 		}
-		source := "package codexworker\nimport (_ \"" + execution + "/backend\"; _ \"" + execution + "/model\"; _ \"" + execution + "/workspace\"; _ \"" + execution + "/adapters/protocol/codexapp\"; _ \"" + core + "/contracts\")\n"
+		source := "package codexworker\nimport (_ \"" + execution + "/backend\"; _ \"" + execution + "/model\"; _ \"" + execution + "/conversation\"; _ \"" + execution + "/workspace\"; _ \"" + execution + "/adapters/protocol/codexapp\")\n"
 		if err := os.WriteFile(path, []byte(source), 0600); err != nil {
 			t.Fatal(err)
 		}
@@ -173,14 +209,14 @@ func TestTM06AdapterBoundary(t *testing.T) {
 	})
 }
 
-// Public API values are reachable only through the existing conversation
-// contracts; old taskview imports remain forbidden after its migration. A helper must not turn that migration exception into a bypass.
+// Adapter imports remain closed over execution-owned values. A helper must not
+// let product DTOs or product query implementations bypass that boundary.
 func TestTM06ContractValueClosure(t *testing.T) {
-	for _, dependency := range []string{module + "/internal/product/api", core + "/taskview"} {
-		for _, withContract := range []bool{false, true} {
+	for _, dependency := range []string{module + "/internal/product/api", productQuery + "/taskgraph"} {
+		for _, withModel := range []bool{false, true} {
 			name := strings.TrimPrefix(dependency, module+"/internal/")
-			if withContract {
-				name += "/alongside_allowed_contract_path"
+			if withModel {
+				name += "/alongside_execution_model_path"
 			}
 			t.Run(name, func(t *testing.T) {
 				root := t.TempDir()
@@ -189,9 +225,9 @@ func TestTM06ContractValueClosure(t *testing.T) {
 					"internal/helper/edge.go":            "package helper\nimport _ \"" + module + "/internal/otherhelper\"\n",
 					"internal/otherhelper/edge_plan9.go": "//go:build never_enabled\n\npackage otherhelper\nimport _ \"" + dependency + "\"\n",
 				}
-				if withContract {
-					source += "import _ \"" + core + "/contracts\"\n"
-					files["internal/steerline/contracts/edge.go"] = "package contracts\nimport _ \"" + dependency + "\"\n"
+				if withModel {
+					source += "import _ \"" + execution + "/model\"\n"
+					files["internal/execution/model/edge.go"] = "package model\nimport _ \"" + dependency + "\"\n"
 				}
 				files["internal/execution/adapters/codex/edge.go"] = source
 				for name, source := range files {
@@ -219,7 +255,7 @@ func TestTM06ContractValueClosure(t *testing.T) {
 					"go.mod":                       "module " + module + "\n\ngo 1.23\n",
 					"internal/otherhelper/edge.go": "package otherhelper\nimport _ \"" + dependency + "\"\n",
 				}
-				for _, pkg := range []string{"internal/steerline", "internal/execution", "internal/steerline/contracts", "internal/task/model", "internal/execution/model", "internal/execution/backend", "internal/product/api", "internal/storage/ports", "internal/steerline/taskview", "internal/product/query", "internal/product/query/taskgraph", "internal/console"} {
+				for _, pkg := range []string{"internal/app", "internal/app/host", "internal/execution", "internal/task/model", "internal/execution/model", "internal/execution/backend", "internal/product/api", "internal/storage/ports", "internal/product/query", "internal/product/query/taskgraph", "internal/console"} {
 					path := filepath.Join(root, pkg, "empty.go")
 					if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 						t.Fatal(err)
@@ -274,7 +310,7 @@ func TestTM07StorageBoundary(t *testing.T) {
 		name, dir, source, want string
 	}{
 		{"adapter_dependency", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/execution/adapters/codex\"\n", "storage sqlite forbidden dependency"},
-		{"application_dependency", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/steerlineapp\"\n", "storage sqlite forbidden dependency"},
+		{"application_dependency", "internal/storage/sqlite", "package sqlite\nimport _ \"" + module + "/internal/app\"\n", "storage sqlite forbidden dependency"},
 		{"query_use_case", "internal/storage/sqlite", "package sqlite\nimport productquery \"" + productQuery + "\"\nvar _ = productquery.NewService\n", "storage sqlite product query application call"},
 		{"storage_sqlite_in_reconstruction", "internal/execution/reconstruction", "package reconstruction\nimport _ \"" + storageSQLite + "\"\n", "execution reconstruction dependency"},
 		{"storage_ports_in_reconstruction", "internal/execution/reconstruction", "package reconstruction\nimport _ \"" + module + "/internal/storage/ports\"\n", ""},

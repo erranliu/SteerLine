@@ -3,16 +3,15 @@ package execution
 import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
-func runtimeCheckpoint(v contracts.Runtime) storageports.ServiceCheckpoint {
+func runtimeCheckpoint(v reconstruction.Runtime) storageports.ServiceCheckpoint {
 	return reconstruction.Checkpoint(v)
 }
 
 // projectRuntime is composition for already-loaded rows, without reuse of client Run pointers.
-func projectRuntime(v *contracts.Runtime) error {
+func projectRuntime(v *reconstruction.Runtime) error {
 	snapshot := reconstruction.Snapshot{Tasks: v.Tasks, WorkflowRuns: v.WorkflowRuns, Executions: v.Executions, Attempts: v.Attempts, Decisions: v.Decisions, Operations: v.Operations, Deliveries: v.Deliveries}
 	next, err := reconstruction.Build(snapshot, reconstruction.MetadataOf(*v))
 	if err != nil {
@@ -22,11 +21,13 @@ func projectRuntime(v *contracts.Runtime) error {
 	return nil
 }
 
-func refreshExecutionView(run *contracts.Run, e *executionmodel.ExecutionRecord) {
+func refreshExecutionView(run *reconstruction.RunView, e *executionmodel.ExecutionRecord) {
 	*run = reconstruction.Execution(*run, *e)
 }
 
-func projectSlot(v *contracts.Runtime) { v.SlotOccupied, v.CurrentTask = reconstruction.Slot(*v) }
+func projectSlot(v *reconstruction.Runtime) {
+	v.SlotOccupied, v.CurrentTask = reconstruction.Slot(*v)
+}
 
 func copyPtr[T any](value *T) *T {
 	if value == nil {
@@ -35,12 +36,12 @@ func copyPtr[T any](value *T) *T {
 	return ptr(*value)
 }
 
-func (s *Service) workflowRecord(run *contracts.Run) *executionmodel.WorkflowRunRecord {
+func (s *Service) workflowRecord(run *reconstruction.RunView) *executionmodel.WorkflowRunRecord {
 	workflow, _ := s.workflowRecords(run)
 	return workflow
 }
 
-func (s *Service) refreshRun(run *contracts.Run) {
+func (s *Service) refreshRun(run *reconstruction.RunView) {
 	if run == nil {
 		return
 	}
@@ -57,7 +58,7 @@ func (s *Service) refreshRun(run *contracts.Run) {
 	*run = view
 }
 
-func (s *Service) setRunDecision(run *contracts.Run, decision *executionmodel.DecisionState) {
+func (s *Service) setRunDecision(run *reconstruction.RunView, decision *executionmodel.DecisionState) {
 	execution := s.executionRecord(run)
 	if execution == nil {
 		return
@@ -88,7 +89,7 @@ func (s *Service) setRunDecision(run *contracts.Run, decision *executionmodel.De
 	s.refreshRun(run)
 }
 
-func (s *Service) decisionRecord(run *contracts.Run) *executionmodel.DecisionRecord {
+func (s *Service) decisionRecord(run *reconstruction.RunView) *executionmodel.DecisionRecord {
 	if run == nil || run.Decision == nil {
 		return nil
 	}
@@ -100,7 +101,7 @@ func (s *Service) decisionRecord(run *contracts.Run) *executionmodel.DecisionRec
 	return nil
 }
 
-func (s *Service) setDecisionStatus(run *contracts.Run, status string) {
+func (s *Service) setDecisionStatus(run *reconstruction.RunView, status string) {
 	record := s.decisionRecord(run)
 	record.Status, record.Version, record.UpdatedAt = status, record.Version+1, now()
 	s.markWorkerDecisionWrite(record.DecisionID)

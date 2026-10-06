@@ -1,4 +1,4 @@
-// Package steerlineclient owns the single product adapter. Concrete resource
+// Package client owns the single product adapter. Concrete resource
 // construction is injected by the application; it never imports SQL or app wiring.
 package client
 

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,7 +17,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	contracts "github.com/erranliu/SteerLine/internal/steerline/contracts"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -26,7 +26,7 @@ func TestCommandIdempotencyAndDecisionVersionArbitration(t *testing.T) {
 	s := openDomainTestStore(t)
 	project := "repo:commands"
 	request := executionmodel.DecisionRequest{Question: "choose", AllowFreeText: true}
-	run := &contracts.Run{TaskID: "task", RunID: "wf", DomainTaskID: "task", ExecutionID: "exec", AttemptID: "attempt", ControlRevision: 5, Host: "unregistered", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), WorkflowVersion: "legacy-v1", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &executionmodel.DecisionState{ID: "decision", AttemptID: "attempt", Version: 1, Status: "pending", Request: request}}
+	run := &reconstructiontypes.RunView{TaskID: "task", RunID: "wf", DomainTaskID: "task", ExecutionID: "exec", AttemptID: "attempt", ControlRevision: 5, Host: "unregistered", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), WorkflowVersion: "legacy-v1", ExecutionStatus: "succeeded", FinishTaskStatus: "waiting_decision", Decision: &executionmodel.DecisionState{ID: "decision", AttemptID: "attempt", Version: 1, Status: "pending", Request: request}}
 	projection := storageports.ServiceCheckpoint{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Revision: 1, Repository: storageports.CheckpointRepository{Identity: project}, Service: storageports.CheckpointServiceState{InstanceID: "service", Status: "running", Ready: true}}
 	err := s.transactRecords(ctx, func(tx *fixtureTransaction) error {
 		if err := tx.PutTask(taskmodel.TaskRecord{ProjectIdentity: project, TaskID: "task", Status: "in_progress", Version: 1}); err != nil {
@@ -303,7 +303,7 @@ func seedNativeDecision(t *testing.T, db *sqliteFixture, project, runID, decisio
 		t.Fatalf("seed native decision graph: %v", err)
 	}
 	store := &Store{Domain: db, Project: project}
-	state := contracts.Runtime{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: contracts.Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: contracts.ServiceState{InstanceID: "service-instance", Status: "running", Ready: true, Claimant: "alice"}, Runs: []*contracts.Run{}, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}, Control: contracts.ControlState{DispatchMode: "manual", Revision: 1}}
+	state := reconstructiontypes.Runtime{SchemaVersion: storageports.WorkerFlowRuntimeSchema, Repository: reconstructiontypes.Repository{Identity: project, Path: "repo", Remote: "origin", Branch: "main"}, Service: reconstructiontypes.ServiceState{InstanceID: "service-instance", Status: "running", Ready: true, Claimant: "alice"}, Runs: []*reconstructiontypes.RunView{}, Tasks: []taskmodel.TaskRecord{}, WorkflowRuns: []executionmodel.WorkflowRunRecord{}, Executions: []executionmodel.ExecutionRecord{}, Attempts: []executionmodel.StepAttemptRecord{}, Decisions: []executionmodel.DecisionRecord{}, Control: reconstructiontypes.ControlState{DispatchMode: "manual", Revision: 1}}
 	checkpoint := runtimeCheckpoint(state)
 	if err = store.Publish(&checkpoint); err != nil {
 		t.Fatalf("publish decision test projection: %v", err)
@@ -314,7 +314,7 @@ func TestCheckpointDoesNotSynthesizeControlOperations(t *testing.T) {
 	service, _ := neutralAuditService(t)
 	before := recordFingerprint(service.committed.Operations)
 	for _, action := range []string{"set_dispatch_mode", "stop_service"} {
-		service.State.Control.Operation = &contracts.ControlOperation{RequestID: newID(), Action: action, Phase: "applying", RequestDigest: strings.Repeat("b", 64)}
+		service.State.Control.Operation = &reconstructiontypes.ControlOperation{RequestID: newID(), Action: action, Phase: "applying", RequestDigest: strings.Repeat("b", 64)}
 		require(t, service.publishCheckpoint())
 		snapshot, err := readServiceSnapshot(context.Background(), service.domainStore, service.Config.Identity())
 		require(t, err)

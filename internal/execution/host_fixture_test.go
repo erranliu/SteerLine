@@ -14,13 +14,13 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/execution/scheduler"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"github.com/erranliu/SteerLine/internal/product/query"
-	"github.com/erranliu/SteerLine/internal/steerline/contracts"
-	"github.com/erranliu/SteerLine/internal/steerline/host"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
@@ -73,10 +73,8 @@ func fixtureStateKey(identity string) string {
 }
 func openFixtureProject(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
 	*c = testConfigWithDirectory(*c)
-	if err := c.ResolveIdentity(ctx); err != nil {
-		return nil, err
-	}
-	target, err := c.TaskRepositoryTarget(ctx)
+	dependencies, _ := neutralFixtureRuntime(*c)
+	target, err := configuredRepositoryTarget(ctx, *c, dependencies.ProcessHost)
 	if err != nil {
 		return nil, err
 	}
@@ -105,7 +103,7 @@ func openFixtureProject(ctx context.Context, c *Config) (*sqlite.SQLiteStore, er
 func openFixtureCommandStore(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
 	return openFixtureProject(ctx, c)
 }
-func loadFixtureRuntime(c Config) (*contracts.Runtime, error) {
+func loadFixtureRuntime(c Config) (*reconstruction.Runtime, error) {
 	db, err := sqlite.OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		return nil, err
@@ -124,7 +122,7 @@ func loadFixtureRuntime(c Config) (*contracts.Runtime, error) {
 	}
 	return &runtime, nil
 }
-func checkFixtureStoredExecutions(ctx context.Context, c Config) error {
+func checkFixtureStoredExecutions(ctx context.Context, c Config, directories ...*ExecutionDirectory) error {
 	db, err := sqlite.OpenSQLiteReader(filepath.Join(c.RunDir, "steerline.db"))
 	if err != nil {
 		return err
@@ -134,7 +132,14 @@ func checkFixtureStoredExecutions(ctx context.Context, c Config) error {
 	if err != nil {
 		return err
 	}
-	return c.ValidateStoredExecutions(reconstruction.SnapshotFromStorage(snapshot))
+	directory := (*ExecutionDirectory)(nil)
+	if len(directories) > 0 {
+		directory = directories[0]
+	} else {
+		dependencies, _ := neutralFixtureRuntime(c)
+		directory = dependencies.Directory
+	}
+	return c.ValidateStoredExecutions(reconstruction.SnapshotFromStorage(snapshot), directory)
 }
 func newFixtureTasks(reader *sqlite.SQLiteStore, c Config) taskapp.Service {
 	commands := NewTaskCommands(reader, c)
@@ -145,8 +150,9 @@ func newFixtureTasks(reader *sqlite.SQLiteStore, c Config) taskapp.Service {
 // drives the same execution actor; this creates no alternate business writer.
 type fixtureHost struct{ config Config }
 
-func (h fixtureHost) ValidateStateLocation(c Config) error {
-	if c.StateRoot == "" || c.RepositoryStateKey == "" || c.RepositoryStateKey != fixtureStateKey(c.Identity()) || canonical(c.RunDir) != canonical(filepath.Join(c.StateRoot, c.RepositoryStateKey)) {
+func (h fixtureHost) ValidateStateLocation() error {
+	c := h.config
+	if canonical(c.RunDir) != canonical(filepath.Join(fixtureStateRoot(), fixtureStateKey(c.Identity()))) {
 		return errors.New("fixture state identity differs")
 	}
 	return nil
@@ -180,7 +186,7 @@ func readControlRequest(path string) (productapi.ControlRequest, error) {
 	if len(body) > 3<<20 {
 		return request, errors.New("oversize fixture request")
 	}
-	return request, contracts.DecodeJSON(body, &request)
+	return request, decode(body, &request)
 }
 func (h fixtureHost) ReadControlRequest(id string) (productapi.ControlRequest, error) {
 	return readControlRequest(controlRequestPath(h.config.RunDir, id))
@@ -205,7 +211,7 @@ func ReadControlReceipt(c Config, id string) (*productapi.ControlReceipt, error)
 		return nil, err
 	}
 	var value productapi.ControlReceipt
-	if err = contracts.DecodeJSON(body, &value); err != nil {
+	if err = decode(body, &value); err != nil {
 		return nil, err
 	}
 	return &value, nil
@@ -272,15 +278,15 @@ func (h fixtureHost) FindStopRequest(instance string, seen map[string]bool) (*pr
 	return nil, "", time.Time{}
 }
 func (fixtureHost) PublishReady(string, *executionbackend.ProcessIdentity, string) error { return nil }
-func (fixtureHost) Emit(contracts.ActivityEvent)                                         {}
+func (fixtureHost) Emit(executionmodel.ActivityEvent)                                    {}
 func (fixtureHost) CurrentProcessIdentity() (*executionbackend.ProcessIdentity, error) {
 	return resourceprocess.CurrentIdentity()
 }
 func runTestService(ctx context.Context, s *Service, mode string) error {
-	return host.Run(ctx, s, host.Schedule{TaskPoll: duration(s.Config.TaskPoll), PRPoll: duration(s.Config.PRPoll), Heartbeat: duration(s.Config.Heartbeat), FindStop: s.host.FindStopRequest}, mode)
+	return scheduler.Run(ctx, s, scheduler.Schedule{TaskPoll: 10 * time.Second, PRPoll: 30 * time.Second, Heartbeat: s.runtimeSettings.Heartbeat, FindStop: s.host.FindStopRequest}, mode)
 }
 
-var _ HostPort = fixtureHost{}
+var _ hostport.HostPort = fixtureHost{}
 
 func newFixtureConversationQuery(store storageports.ConversationReader, project string) query.ConversationService {
 	return query.ConversationService{Project: project, Events: store, Bodies: store, Raw: store, Capabilities: store}
