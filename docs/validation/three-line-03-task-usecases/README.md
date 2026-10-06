@@ -1,6 +1,6 @@
 # #75 任务应用用例交付候选
 
-基线：main `c4650056d701a158353836616668bfad25011552`（#74 / PR214），开工时 HEAD 与最新 origin/main 相同。分支 `codex/task-usecases-75`；工作树 `C:\Users\lmas1\.codex\worktrees\a439\SteerLine`。固定依据为 [Spec](../../spec/three-line-03-task-usecases.spec.md)、[Plan](../../spec/three-line-03-task-usecases.plan.md) 与共同约束。本候选待协调独立复审/修复/合并，未合并，不据此启动后继。
+基线：main `c4650056d701a158353836616668bfad25011552`（#74 / PR214），开工时 HEAD 与最新 origin/main 相同。分支 `codex/task-usecases-75`；工作树 `C:\Users\lmas1\.codex\worktrees\a439\SteerLine`。固定依据为 [Spec](../../archive/spec/completed/three-line-03-task-usecases.spec.md)、[Plan](../../archive/spec/completed/three-line-03-task-usecases.plan.md) 与共同约束。本候选待协调独立复审/修复/合并，未合并，不据此启动后继。
 
 创建/固定文档校验、批次和追加前置已经归 `internal/task`。真实 product/app/CLI 调用 task.Commands；原主包创建/追加依赖生产方法与文件删除。任务只持最小 Input、文档读取和任务事务小端口；app 投影 persistence，任务没有完整 Config/Runtime、执行模型/backend、SQL 或产品实现依赖。既有 Ready/Fixed/Claim/Declare/Intent/Discard 唯一规则承接 #74，不复制执行资格/PR/模式/容量/清理。
 

@@ -22,4 +22,4 @@ The active local worker's process identity is reconciled against its persisted a
 
 On restart, SteerLine reconciles saved Operations and the worker attempt against their exact task, execution, attempt and backend identities. It does not recreate a worktree or replay an action whose outcome is unknown. Missing, conflicting or unsupported old state is preserved and rejected before new side effects. Cleanup requires exact resource identities and confirmed state.
 
-The recovery panel reports original bindings and unresolved operations. Unknown actions remain blockers until their original Operation can be reconciled; old five-step retry and acceptance commands are unavailable. See [data contract](data-contract.md), [hosting](hosting.md), and the [worker-flow Spec](spec/worker-flow.spec.md).
+The recovery panel reports original bindings and unresolved operations. Unknown actions remain blockers until their original Operation can be reconciled; old five-step retry and acceptance commands are unavailable. See [data contract](data-contract.md), [hosting](hosting.md), and the [worker-flow Spec](archive/spec/completed/worker-flow.spec.md).

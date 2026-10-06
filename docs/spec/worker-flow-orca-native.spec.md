@@ -10,7 +10,7 @@
 
 将本机 `host=orca` 接入 `worker-flow-v1`，使用 Orca 原生 Run、Task、Dispatch、问答和结算协议。一个 SteerLine Execution 保持一个 agent 会话和工作区；用户可在统一待决策入口回答问题或在本轮结算后继续原会话。新 Execution 更换 Orca 支持且本机可用的 agent 时，只改 Execution Profile 的 agent ID，不修改 SteerLine 代码。
 
-本任务承接 [单 worker Spec](worker-flow.spec.md) §4、WF12 中延期的本机 Orca 接入，保留其五个主状态、固定任务契约、唯一业务权威和真实 PR 合并交付。实现交付后仅解除本机 Orca 的首次派发拒绝；受监管远端、同任务多候选、旧五步执行、Orca 自身修复和替换已经丢失的 agent 会话不在本期范围。
+本任务承接 [单 worker Spec](../archive/spec/completed/worker-flow.spec.md) §4、WF12 中延期的本机 Orca 接入，保留其五个主状态、固定任务契约、唯一业务权威和真实 PR 合并交付。实现交付后仅解除本机 Orca 的首次派发拒绝；受监管远端、同任务多候选、旧五步执行、Orca 自身修复和替换已经丢失的 agent 会话不在本期范围。
 
 沿用 [项目默认规则](../../AGENTS.md)、[原生任务共同约束](native-task-constraints.md)及[第一阶段共同约束](phase1-delivery-constraints.md)。不导入或迁移旧 shell 包装 Codex 的 Orca Execution，不新增旧版兼容、运行中换后端或自动回退分支。发现不支持的已有状态时保留现场并阻止外部副作用。
 

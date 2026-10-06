@@ -4,18 +4,18 @@
 
 ## 业务边界
 
-- 草稿只作为创建命令的输入；任务创建与加入 DAG 是同一个中心事务，没有先创建任务、再单独发布到 DAG 的业务阶段。创建后固定范围、规格、验收和优先级。已建任务的硬前置只可按[追加前置 Spec](native-task-add-predecessors.spec.md)受控增加；不编辑任务契约或删除既有边。
+- 草稿只作为创建命令的输入；任务创建与加入 DAG 是同一个中心事务，没有先创建任务、再单独发布到 DAG 的业务阶段。创建后固定范围、规格、验收和优先级。已建任务的硬前置只可按[追加前置 Spec](../archive/spec/completed/native-task-add-predecessors.spec.md)受控增加；不编辑任务契约或删除既有边。
 - PR 合并前允许显式丢弃任务，已创建到 DAG 或已经开始执行均不取消该资格。丢弃保留任务 ID、契约、依赖和审计事实，不释放后继；活跃执行和外部副作用仍须核实与清理。真实 PR 已合并后拒绝丢弃，不能将已交付事实改写为未交付。
 - 系统不提供任务拆分、已交付任务回退、级联补偿或动态重规划。新流程的继续执行走原 worker 会话反馈；追加硬前置按独立 Spec 执行；不实现父子任务、聚合节点、拆分状态、聚合验收或通用强制写入/整图替换命令；丢弃不是这些操作的替代入口。
 - 拆分与回退是用户行为。尚未交付任务无论是否在执行，都可由用户通过 Codex 分析并人工拆分；人工拆分应保持原对外交付承诺、不让后继提前执行。已交付任务需改变交付事实时按人工回退处置，不作为普通拆分对象。丢弃一项仍被依赖的任务只使后继保持阻塞，不自动改边或将其他任务一并丢弃。
 - 用户自行决定代码、PR、任务记录、依赖及运行现场的处置方式；各任务均不实现该流程，也不承诺自动识别、修复任意人工改动。人工处置不受产品是否提供按钮或命令的限制。
 - 故障恢复、断线对账、原任务契约下的继续执行和人工反馈遵守 #36 新流程。暂停派发不代表 worker 已停止，执行失败不自动重开、释放 claim 或修改依赖；追加前置仍须由显式命令及其资格核验驱动。
 - 只支持同项目硬前置：`A → B` 表示 A 交付后 B 才能领取，多个前置为 AND。不提供条件/OR 边、部分交付放行、跨项目依赖或接口提前满足的特殊门槛。
-- 任务 DAG 只管任务之间的资格。#36 新流程使用持续 worker 会话、统一待决策和真实 PR 交付；实现、测试、修复、审查及提交/创建 PR 由 worker 按任务 Spec/Plan 完成，中心不编排项目步骤。不同任务的人工并行启动遵循 [人工并行启动任务](manual-parallel-start.spec.md)；自动派发保持单活动执行，不增加资源锁系统或自动合并。
+- 任务 DAG 只管任务之间的资格。#36 新流程使用持续 worker 会话、统一待决策和真实 PR 交付；实现、测试、修复、审查及提交/创建 PR 由 worker 按任务 Spec/Plan 完成，中心不编排项目步骤。不同任务的人工并行启动遵循 [人工并行启动任务](../archive/spec/completed/manual-parallel-start.spec.md)；自动派发保持单活动执行，不增加资源锁系统或自动合并。
 
 ## 身份、权威与执行层
 
-复用 [中心执行模型](02-execution-model-and-adapter.md) 的 SQLite、项目身份、仓库锁、QueryService/CommandService、事件及 Operation/outbox；[共同执行约束](execution-architecture.spec.md)、[双后端](pr-04a-execution-backends.spec.md) 与 [会话契约](pr-04b-conversation-events.spec.md) 继续适用。不得建立第二个 TaskStore、状态机、会话模型或业务写者。
+复用 [中心执行模型](../archive/spec/retired/02-execution-model-and-adapter.md) 的 SQLite、项目身份、仓库锁、QueryService/CommandService、事件及 Operation/outbox；[共同执行约束](execution-architecture.spec.md)、[双后端](../archive/spec/completed/pr-04a-execution-backends.spec.md) 与 [会话契约](../archive/spec/completed/pr-04b-conversation-events.spec.md) 继续适用。不得建立第二个 TaskStore、状态机、会话模型或业务写者。
 
 任务、WorkflowRun、Execution、worker session/turn、用户反馈和外部身份分开。#36 的单会话范围只有一个权威活动 WorkflowRun/worker；#37 多候选按其独立契约扩展候选集合。较早轮次的迟到消息不推进新轮次。旧 StepAttempt 步骤链不作为新流程门槛。
 
@@ -31,7 +31,7 @@
 
 丢弃命令先绑定精确任务、当前版本及 PR 身份并核验未合并；合并状态无法核实时保留待核实意图，不宣告已丢弃。丢弃一旦提交即阻止新领取、后续工作轮次和交付关闭，仍在运行或停止结果未知的执行保留原身份、资源占用与清理状态；远端取消不可用时交人工处理。开放 PR 的关闭或其他外部清理单独记录回执；若丢弃后外部仍发生合并，保留冲突证据并交人工处理，不伪造正常交付或自动回退。
 
-原生任务不以整个 [远程闭环](03-remote-execution-and-viewer.md) 完成为前置；启用受监管远端时仍须满足其版本、消息大小和取消能力门槛。worker 不连接中心数据库，不要求远端安装 SteerLine 服务；目标路径和现场事实由对应执行适配器核验，不能转交本机文件 API。
+原生任务不以整个 [远程闭环](../archive/spec/retired/03-remote-execution-and-viewer.md) 完成为前置；启用受监管远端时仍须满足其版本、消息大小和取消能力门槛。worker 不连接中心数据库，不要求远端安装 SteerLine 服务；目标路径和现场事实由对应执行适配器核验，不能转交本机文件 API。
 
 使用当前数据库和命令格式。runtime/候选投影只是可重建读模型，记录 database revision、生成时间和导出错误；数据库提交后投影失败不回滚任务事实。旧状态或未知 schema 拒绝有副作用启动，不导入或伪装成原生历史。
 

@@ -1,6 +1,6 @@
 # 公共执行契约归包验证
 
-日期：2026-09-30。任务 #54；对应 [Spec](../../spec/execution-isolation-01-contracts.spec.md) 与 [Plan](../../spec/execution-isolation-01-contracts.plan.md)。基线 `c2c9f95`（包含 PR161 与新合入的 PR160）。本次只交付第一轮公共契约。
+日期：2026-09-30。任务 #54；对应 [Spec](../../archive/spec/completed/execution-isolation-01-contracts.spec.md) 与 [Plan](../../archive/spec/completed/execution-isolation-01-contracts.plan.md)。基线 `c2c9f95`（包含 PR161 与新合入的 PR160）。本次只交付第一轮公共契约。
 
 ## 类型所有者与交接
 

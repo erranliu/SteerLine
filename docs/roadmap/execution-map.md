@@ -2,8 +2,6 @@
 
 本图对应[主 roadmap](roadmap.md)中的活动规划。每项执行以独立 Spec/Plan 为准，运行时资格以中心 DAG 为权威。
 
-[任务执行控制台解耦与目录整理](three-line-modularization.md) 保留 #76–#82 的剩余任务、固定硬前置和共享修改条件；已具备基础只作为依赖定位。
-
 [二期草稿与审核准入](phase2-draft-roadmap-admission.md)仅登记目标，主agent、独立审核和成熟度等待不成为一期前置，也不自动新增本页的正式任务或DAG边。#43–#53图示仍为原固定基础关系；受新准入机制影响的范围需在实施前重新固定对应Spec/Plan与正式依赖。
 
 ## 固定前置
@@ -56,51 +54,6 @@ flowchart LR
     R52 --> A53
     A42 --> A53
 ```
-
-## 任务执行控制台解耦与目录整理
-
-目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。纯定义、任务边界、task 应用及候选 UI 已具备；后续消费当前接口，迁移只重验实际受影响入口。本机候选验收不成为重构新前置。
-
-| 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
-| --- | --- | --- | --- | --- |
-| 76 | 执行应用用例归包 | 候选/会话/恢复/交付/清理归 execution | `#74` | [Spec](../spec/three-line-04-execution-usecases.spec.md) · [Plan](../spec/three-line-04-execution-usecases.plan.md) |
-| 77 | 产品查询与控制台契约收窄 | 公开 DTO 收窄、唯一 query/client 和 console 归包 | `#74`、`#38` | [Spec](../spec/three-line-05-product-console.spec.md) · [Plan](../spec/three-line-05-product-console.plan.md) |
-| 78 | 执行适配与资源目录归组 | 后端协议与 Git/PR/进程资源归组 | `#76` | [Spec](../spec/three-line-06-adapters-resources.spec.md) · [Plan](../spec/three-line-06-adapters-resources.plan.md) |
-| 79 | 存储目录与消费者端口收口 | 唯一 SQLite 归 storage、消费者窄端口与原子提交 | `#75`、`#76`、`#77` | [Spec](../spec/three-line-07-storage-ports.spec.md) · [Plan](../spec/three-line-07-storage-ports.plan.md) |
-| 80 | 应用组装与服务宿主收口 | 配置构造归 app、服务承载归 host，删除旧主包/contracts | `#75`、`#76`、`#77`、`#78`、`#79` | [Spec](../spec/three-line-08-app-host.spec.md) · [Plan](../spec/three-line-08-app-host.plan.md) |
-| 81 | 测试支持与集成目录整理 | testkit 与 tests/integration、runner/断言映射 | `#80` | [Spec](../spec/three-line-09-testkit-integration.spec.md) · [Plan](../spec/three-line-09-testkit-integration.plan.md) |
-| 82 | 独立开发证明与最终清理 | 三线实际独立改动证明、残留清理与最小交付/恢复组合 | `#81` | [Spec](../spec/three-line-10-independence-cleanup.spec.md) · [Plan](../spec/three-line-10-independence-cleanup.plan.md) |
-
-```mermaid
-flowchart LR
-    B74["已具备 #74 选择/结果边界"] --> M04["#76 执行用例"]
-    B74 --> M05["#77 产品/控制台"]
-    U38["已具备 #38 候选 UI"] --> M05
-    T75["已具备 #75 任务用例"] --> M07["#79 存储/端口"]
-    T75 --> M08["#80 组装/宿主"]
-    M04 --> M06["#78 适配/资源"]
-    M04 --> M07
-    M05 --> M07
-    M04 --> M08
-    M05 --> M08
-    M06 --> M08
-    M07 --> M08
-    M08 --> M09["#81 测试归组"]
-    M09 --> M10["#82 独立开发/清理"]
-```
-
-任务选择/结果边界和 task 应用已具备。#76 已通过 PR219 合入；#77 产品读取/客户端工作在独立工作树继续，#78 适配与资源目录迁移基于 #76 在本分支执行。#79+ 当前未启动；#79 的剩余硬前置为 #77，后续仍按任务表和各自 Spec 的完整条件推进。
-
-| 并行工作 | 开工与接口条件 | 共享修改与集成条件 |
-| --- | --- | --- |
-| #76 与 #77 | #76 已合入 PR219；#77 继续在独立工作树 | execution 与 product/console 各自归包；Service/Config/提交协调及 app/cmd/runner 共用段指定一个集成所有者，定义端口与公共构造按现行接口交接顺序集成 |
-| #78 与未完成产品/存储工作 | #76 已整体交付；#77 仍是 #79 的硬前置 | adapter/资源与其他目录分别所有；backend/API 形状先由定义所有者集成，构造段顺序修改 |
-| 剩余迁移与本机候选验收复用 | 已具备本机候选、原会话和真实交付证据 | 纯搬包复用未变证据；身份、协议、启动、权限或宿主实际变化才定向重验，现场运行固定 executable/config，不用旧构建证明新行为 |
-| 与 #40/#41、#45 或规划基础 | 各自既定 Spec 前置仍成立 | 共享配置、类型、恢复和 app 接线确定唯一所有者；不新增全面重构硬前置 |
-
-共同字段与协调段按已交付拆分继续归位。每项完整迁移真实消费者、构造、测试和守卫，不能把编译修复留给 #80；不留永久 alias、转发或第二写路径。公共类型变更先顺序集成，再推进消费者。
-
-本表表达剩余规划；执行仍以各任务固定 Spec/Plan、中心 DAG 和用户当前授权为准。
 
 ## 接口和共享修改
 

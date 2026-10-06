@@ -6,7 +6,7 @@
 
 Go 服务复用现有 SQLite、QueryService/CommandService、Operation 和规范事件/正文存储。UI 是 C# WinUI 3 客户端，主 agent 仅支持本机 Codex app-server；任务 worker 使用 #36 持续会话的 local Codex / Orca 后端。规划 session、任务 Execution 和外部 thread 身份分开。主 agent 不直接启动任务、创建 DAG、运行实现或调用子 agent。
 
-适用[执行共同约束](execution-architecture.spec.md)、[原生任务共同约束](native-task-constraints.md)、[服务生命周期](pr-03-service-lifecycle.spec.md)、[会话契约](pr-04b-conversation-events.spec.md)、[固定 DAG](task-dag.spec.md)。当前开发版本不建设旧状态迁移或自动覆盖；当前格式重启、幂等、交付核验必须保留。引用历史 Spec 时只复用当前有效接口，历史兼容说明不扩展本组任务范围。
+适用[执行共同约束](execution-architecture.spec.md)、[原生任务共同约束](native-task-constraints.md)、[服务生命周期](../archive/spec/completed/pr-03-service-lifecycle.spec.md)、[会话契约](../archive/spec/completed/pr-04b-conversation-events.spec.md)、[固定 DAG](../archive/spec/completed/task-dag.spec.md)。当前开发版本不建设旧状态迁移或自动覆盖；当前格式重启、幂等、交付核验必须保留。引用历史 Spec 时只复用当前有效接口，历史兼容说明不扩展本组任务范围。
 
 所有未完成前置均是同项目 AND 硬依赖：前置真实交付且领取 base 含其成果后才可执行。公共接口在本组 Spec 中定义，不把任务内部的接口里程碑当成 DAG 放行事件。无依赖关系只意味着可以独立开发，不改变现有执行槽数量或调度策略。
 

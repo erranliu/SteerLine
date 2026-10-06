@@ -6,7 +6,7 @@
 
 ## 1. 范围与依据
 
-将 `worker-flow-v1` 的本机 Codex 执行从 `codex exec` / `exec resume` 替换为 app-server，支持原生轮次、运行中问答和结束后反馈。沿用 [worker-flow](worker-flow.spec.md)、[人工并行](manual-parallel-start.spec.md)及[会话事件](pr-04b-conversation-events.spec.md)的业务契约；本 Spec 优先规定本地执行、问答投递和恢复方式。
+将 `worker-flow-v1` 的本机 Codex 执行从 `codex exec` / `exec resume` 替换为 app-server，支持原生轮次、运行中问答和结束后反馈。沿用 [worker-flow](../archive/spec/completed/worker-flow.spec.md)、[人工并行](../archive/spec/completed/manual-parallel-start.spec.md)及[会话事件](../archive/spec/completed/pr-04b-conversation-events.spec.md)的业务契约；本 Spec 优先规定本地执行、问答投递和恢复方式。
 
 SQLite 继续是唯一业务权威，复用 Execution、Decision、Command、Operation 和会话存储。领取、固定工作区、PR 归属核验、真实合并与唯一 TaskDelivery 事务继续生效。Orca 接入、自动并行调度及新的审批界面不属于本次范围。
 
@@ -63,7 +63,7 @@ RPC、观察和恢复按 Execution 独立进行，结果携带运行、原生身
 
 ### 第一阶段残留（2026-09-29）
 
-以下要求与结果同步至 [Roadmap 第一阶段残留](../roadmap/roadmap.md#第一阶段残留)。A/B 已补验，保留完成记录以明确通过边界；当前证据见 [验收状态](../validation/local-codex-app-server/status.md)。
+以下要求与结果同步至 [验收状态](../validation/local-codex-app-server/status.md)。A/B 已补验，保留完成记录以明确通过边界；当前证据见 [验收状态](../validation/local-codex-app-server/status.md)。
 
 - **A：服务级双任务真机闭环，已通过。** 真实 SteerLine Service 中第一条原生问答待答时第二任务完成；重建服务后恢复原 call/thread/turn，答案只送达原请求，结束后原 thread/worktree 的新 turn 完成。冻结配置及并行隔离由现有定向测试和本次服务级证据共同核对。
 - **B：独立进程生命周期及隔离回归，已通过。** 在 WMI 启动、确认不在 Job Object 的宿主上，服务反馈三种输入形式通过；承载服务的子进程于待答时退出后，独立 app-server 保持存活，新进程重接原请求并完成 turn。相关回执及进程身份见[补验记录](../validation/local-codex-app-server/acceptance-2026-09-29.md)。

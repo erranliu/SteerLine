@@ -43,7 +43,7 @@ flowchart LR
 
 ## 业务接口与数据流
 
-第一阶段已交付的[中心执行模型 Spec](../spec/02-execution-model-and-adapter.md)提供 Go 的 SQLite 单写者、`QueryService` 和 `CommandService`；[会话 Spec](../spec/pr-04b-conversation-events.spec.md)提供规范事件、正文与分页。第二阶段实施前应核对已落地接口与本方案所需的差异；`#3` 的本机原生验收和 `#4`/`#6` 的远端生产门槛仍按[执行依赖图](../roadmap/execution-map.md)独立完成。第二阶段在现有业务权威外增加薄的本机协议适配层，不让 C# 客户端重写业务校验，也不把现有 `control/requests` 文件目录、SQLite 表或 Codex JSON-RPC 直接作为 UI 契约。
+第一阶段已交付的[中心执行模型 Spec](../archive/spec/retired/02-execution-model-and-adapter.md)提供 Go 的 SQLite 单写者、`QueryService` 和 `CommandService`；[会话 Spec](../archive/spec/completed/pr-04b-conversation-events.spec.md)提供规范事件、正文与分页。第二阶段实施前应核对已落地接口与本方案所需的差异；`#3` 的本机原生验收和 `#4`/`#6` 的远端生产门槛仍按[执行依赖图](../roadmap/execution-map.md)独立完成。第二阶段在现有业务权威外增加薄的本机协议适配层，不让 C# 客户端重写业务校验，也不把现有 `control/requests` 文件目录、SQLite 表或 Codex JSON-RPC 直接作为 UI 契约。
 
 客户端协议至少覆盖三类操作：
 
@@ -59,7 +59,7 @@ flowchart LR
 
 ## 本机连接与生命周期
 
-Windows UI 与 Go 服务是两个独立进程。现有[服务窗口契约](../spec/pr-03-service-lifecycle.spec.md)继续适用：用户从固定入口打开可见服务窗口；退出 UI 不停止服务或 worker；关闭服务窗口结束服务，UI 显示离线或待核实状态，不自行创建替代服务。主 agent 的 app-server 由服务持有，UI 关闭不直接终止会话；服务重启后按持久 thread ID 恢复并对账。
+Windows UI 与 Go 服务是两个独立进程。现有[服务窗口契约](../archive/spec/completed/pr-03-service-lifecycle.spec.md)继续适用：用户从固定入口打开可见服务窗口；退出 UI 不停止服务或 worker；关闭服务窗口结束服务，UI 显示离线或待核实状态，不自行创建替代服务。主 agent 的 app-server 由服务持有，UI 关闭不直接终止会话；服务重启后按持久 thread ID 恢复并对账。
 
 建议服务仅在本机回环地址开放客户端协议，使用随机端口与仅本机用户可读的实例凭证。发现记录包含协议版本、项目及服务实例身份；客户端连接后核对身份和能力，凭证放在请求头，不放入 URL 或日志。实际 Windows ACL、浏览器来源拒绝、端口冲突和旧实例记录的处理须在实施 Spec 中验证。该本机协议不直接开放远程访问。
 

@@ -2,7 +2,7 @@
 
 Windows amd64 / Go 1.26.4，2026-10-04。从最新 origin/main `95237e6abc76fbee743ebc347aa1ef599a76efab` 开始；分支 `codex/three-line-types-73`，worktree `C:\Users\lmas1\.codex\worktrees\a562\SteerLine`。各 runner 使用独立 STEERLINE_HOME 子进程环境，无原生 opt-in；宿主环境未持久改写。正式 runner 报告如实记录基线 commit 与脏工作树，最终源码由 [source-index.json](source-index.json) 的逐文件 hash 固定。
 
-固定执行依据：[Spec](../../spec/three-line-01-types.spec.md) / [Plan](../../spec/three-line-01-types.plan.md)；任务身份 73 保留。
+固定执行依据：[Spec](../../archive/spec/completed/three-line-01-types.spec.md) / [Plan](../../archive/spec/completed/three-line-01-types.plan.md)；任务身份 73 保留。
 
 ## 最终行为与责任
 
