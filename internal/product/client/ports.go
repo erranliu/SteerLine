@@ -14,16 +14,14 @@ import (
 type Reader interface {
 	Close() error
 	ReadProject(context.Context, string, api.ProjectSnapshot) api.ProjectSnapshot
+	RecentActivity(context.Context, string, string, string) (api.LogBatch, error)
 	ShowTask(context.Context, string) (api.TaskPage, error)
 	ListTasks(context.Context, string, int) (api.TaskPage, error)
 	TaskGraph(context.Context, string, int) (api.GraphPage, error)
 	QueryTaskGraph(context.Context, api.GraphFilter) (api.GraphPage, error)
 	Conversation(context.Context, api.ConversationFilter, string, int) (api.ConversationPage, error)
 	Body(context.Context, api.ConversationBodyRef, int64, int) (api.ConversationBodyPage, error)
-	Raw(context.Context, api.ConversationRawRef, int64, int) (api.ConversationRawPage, error)
-	Capabilities(context.Context, api.CapabilityFilter) ([]api.ConversationCapabilityReport, error)
 	Command(context.Context, string) (api.CommandReceipt, error)
-	Activity(context.Context, string, string, string, api.ActivityCursor) (api.LogBatch, error)
 }
 
 type TaskCommands interface {
@@ -60,7 +58,6 @@ type Resources struct {
 	TaskSnapshot                        func(context.Context) (*api.TaskCandidates, error)
 	ResolveStartTask                    func(context.Context, string, string) (api.ControlPayload, error)
 	InspectRecovery                     func(context.Context, string) (api.RecoveryInspection, error)
-	CursorAfter                         func(api.ConversationFilter, int64) (string, error)
 	Close                               func() error
 }
 

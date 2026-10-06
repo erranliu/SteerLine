@@ -19,7 +19,7 @@ func TestTaskSelectionAndTwoFocusRegions(t *testing.T) {
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.width, m.height = 120, 40
 	view := m.View()
-	for _, want := range []string{"任务列表 [焦点]", "▸", "详情", "任务动态 · 活动", "────────"} {
+	for _, want := range []string{"任务列表 [焦点]", "▸", "详情", "运行与反馈"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("stacked layout lost %q:\n%s", want, view)
 		}
@@ -27,16 +27,13 @@ func TestTaskSelectionAndTwoFocusRegions(t *testing.T) {
 	selected := m.projects[0].selectedKey
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = updated.(Model)
-	if m.projects[0].focus != 1 || !strings.Contains(m.View(), "任务动态 [焦点]") || !strings.Contains(m.View(), "▸") {
+	if m.projects[0].focus != 1 || !strings.Contains(m.View(), "运行与反馈") || !strings.Contains(m.View(), "▸") {
 		t.Fatal("activity focus hid the selected task")
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 	m = updated.(Model)
 	if m.projects[0].selectedKey != selected {
 		t.Fatal("activity scrolling changed the selected task")
-	}
-	if !m.projects[0].view.Follow {
-		t.Fatal("scrolling an empty activity pane disabled follow mode")
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = updated.(Model)
@@ -130,8 +127,8 @@ func TestCompletedTaskShowsHistoricalExecutionInFourColumns(t *testing.T) {
 			t.Fatalf("completed task detail lost %q:\n%s", want, detail)
 		}
 	}
-	if listPanelWidth(m) < 55 || activityPanelWidth(m) < 40 {
-		t.Fatalf("panel widths do not fit four columns: list=%d detail=%d", listPanelWidth(m), activityPanelWidth(m))
+	if listPanelWidth(m) < 55 || detailPanelWidth(m) < 40 {
+		t.Fatalf("panel widths do not fit four columns: list=%d detail=%d", listPanelWidth(m), detailPanelWidth(m))
 	}
 	_, _, _, _, _, attention := projectCounts(m.projects[0], now)
 	if attention != 0 || filterAllows(5, rowRun, run) || !filterAllows(6, rowRun, run) || taskNextAction(run) != "无" {
@@ -159,17 +156,18 @@ func TestTaskPreviewKeepsOneIdentityAndShowsFixedExecutionPlan(t *testing.T) {
 	if row == nil || row.run == nil {
 		t.Fatal("running task was not selected")
 	}
-	preview := strings.Join(renderDetailPreview(m, m.projects[0], row, 120, 100), "\n")
+	preview := strings.Join(renderDetail(m, m.projects[0], row, 120, 100), "\n")
 	for _, want := range []string{"执行方案：orca · codex · Model：gpt-6-luna · Reasoning effort：xhigh", "任务关系", "后继任务：104"} {
 		if !strings.Contains(preview, want) {
 			t.Fatalf("task preview lost %q: %s", want, preview)
 		}
 	}
-	for _, hidden := range []string{"任务状态：", "执行状态：", "run_id：", "中心只读快照"} {
+	for _, hidden := range []string{"run_id：", "中心只读快照"} {
 		if strings.Contains(preview, hidden) {
 			t.Fatalf("task preview repeated %q: %s", hidden, preview)
 		}
 	}
+	m.detailExpanded = true
 	full := strings.Join(renderDetail(m, m.projects[0], row, 120, 100), "\n")
 	if strings.Count(full, "任务 102 · 进行中的任务") != 1 || !strings.Contains(full, "任务状态：进行中") || !strings.Contains(full, "执行状态：执行中") || !strings.Contains(full, "run_id：run-102") {
 		t.Fatalf("full detail lost facts or repeated task identity: %s", full)
@@ -189,7 +187,8 @@ func TestPendingDecisionPreviewHidesRunIdentity(t *testing.T) {
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.projects[0].selectedKey = "task:" + run.TaskID
 	row := m.selectedRow(0)
-	preview := strings.Join(renderDetailPreview(m, m.projects[0], row, 120, 200), "\n")
+	preview := strings.Join(renderDetail(m, m.projects[0], row, 120, 200), "\n")
+	m.detailExpanded = true
 	full := strings.Join(renderDetail(m, m.projects[0], row, 120, 200), "\n")
 	if strings.Contains(preview, "run_id：") || !strings.Contains(preview, "问题：") || !strings.Contains(full, "run_id："+run.RunID) {
 		t.Fatalf("decision preview/full identity mismatch: preview=%s full=%s", preview, full)

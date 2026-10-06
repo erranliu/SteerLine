@@ -43,7 +43,7 @@ func ConversationCursorAfter(project string, filter api.ConversationFilter, afte
 	if project == "" || after < 0 {
 		return "", errors.New("conversation cursor requires a project and non-negative event ID")
 	}
-	raw, err := json.Marshal(conversationQueryCursor{Version: 1, Project: project, Filter: filter, After: after})
+	raw, err := json.Marshal(conversationQueryCursor{Version: 2, Project: project, Filter: filter, After: after})
 	if err != nil {
 		return "", err
 	}
@@ -51,6 +51,9 @@ func ConversationCursorAfter(project string, filter api.ConversationFilter, afte
 }
 
 func (q ConversationService) ReadConversation(ctx context.Context, filter api.ConversationFilter, cursor string, limit int) (api.ConversationPage, error) {
+	if filter.FinalsOnly && (filter.WorkflowID == "" || filter.ExecutionID == "") {
+		return api.ConversationPage{}, errors.New("final replies require an exact workflow and execution")
+	}
 	if q.Events == nil || q.Project == "" {
 		return api.ConversationPage{}, errors.New("conversation query requires a store and project identity")
 	}
@@ -67,7 +70,7 @@ func (q ConversationService) ReadConversation(ctx context.Context, filter api.Co
 			return api.ConversationPage{}, &CursorError{Code: "cursor_invalidated"}
 		}
 		var saved conversationQueryCursor
-		if json.Unmarshal(raw, &saved) != nil || saved.Version != 1 || saved.Project != q.Project || saved.Filter != filter || saved.After < 0 {
+		if json.Unmarshal(raw, &saved) != nil || saved.Version != 2 || saved.Project != q.Project || saved.Filter != filter || saved.After < 0 {
 			return api.ConversationPage{}, &CursorError{Code: "cursor_invalidated"}
 		}
 		after = saved.After

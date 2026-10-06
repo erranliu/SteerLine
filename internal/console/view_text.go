@@ -16,6 +16,15 @@ func padDisplay(value string, width int) string {
 	return value + strings.Repeat(" ", max(0, width-lipgloss.Width(value)))
 }
 
+func firstText(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 func fitLines(lines []string, width, height int) []string {
 	out := make([]string, 0, height)
 	for i := 0; i < height; i++ {

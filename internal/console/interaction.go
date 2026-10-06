@@ -167,7 +167,7 @@ func renderCandidateOverview(state projectState, row *consoleRow) []string {
 		}
 		chips = append(chips, label+" "+candidateHumanStatus(state, r))
 	}
-	controls := "F6/F7 切换并行 · Enter 会话 · d 完整详情"
+	controls := "F6/F7 切换并行 · Enter 详情 · d 完整详情"
 	if row.run.Decision != nil && row.run.Decision.Status == "pending" && row.run.Abandonment == nil && row.run.TaskStatus != "closed" && !feedbackInProgress(state, row.run) {
 		controls = "a/Enter 回复 · F6/F7 切换并行 · d 完整详情"
 	}
@@ -223,7 +223,7 @@ func renderAnswerDialog(m Model, state projectState, height int) string {
 	if d.details {
 		return renderAnswerDetails(m, state, height)
 	}
-	request, ok := decisionRequestFor(state, d.runID, d.decisionID)
+	request := d.request
 	var run *api.CandidateSummary
 	for _, r := range candidateRuns(state, "") {
 		if r.RunID == d.runID {
@@ -235,78 +235,69 @@ func renderAnswerDialog(m Model, state projectState, height int) string {
 	if ids := strings.Split(d.identity, "\x00"); len(ids) == 4 {
 		session = shortSession(ids[3])
 	}
-	header := wrapLines([]string{"人工决策 · 显式提交 → " + candidateLabel(state, run), "session " + safeTerminalText(session)}, m.width)
+	header := "人工决策 · 显式提交 → " + candidateLabel(state, run) + " · session " + safeTerminalText(session)
 	note := append([]rune(nil), d.note...)
-	if d.noteFocus && d.cursor >= 0 && d.cursor <= len(note) {
+	if d.noteFocus && state.focus != 0 && d.cursor >= 0 && d.cursor <= len(note) {
 		note = append(note, 0)
 		copy(note[d.cursor+1:], note[d.cursor:])
 		note[d.cursor] = '│'
 	}
-	if len(note) == 0 {
-		note = []rune("│")
-	}
 	noteLines := wrapLines(strings.Split(safeTerminalText(string(note)), "\n"), m.width)
-	noteRows := max(1, min(3, height/6))
-	cursorLine := len(noteLines) - 1
+	cursorLine := max(0, len(noteLines)-1)
 	for i, line := range noteLines {
 		if strings.Contains(line, "│") {
 			cursorLine = i
 			break
 		}
 	}
-	noteStart := max(0, cursorLine-noteRows+1)
-	noteTitle := "补充说明（可选）"
-	if len(request.Options) == 0 || d.optionIndex == len(request.Options) {
-		noteTitle = "你的答复"
+	noteRows := max(1, min(3, (height-7)/2))
+	start := max(0, cursorLine-noteRows+1)
+	focus := "[列表焦点]"
+	if state.focus == 1 {
+		focus = "[选项焦点]"
 	}
-	if d.noteFocus {
-		noteTitle += " [输入焦点]"
+	if state.focus == 2 {
+		focus = "[输入焦点]"
 	}
-	noteTitle += fmt.Sprintf(" · %d/4000", len(d.note))
-	bottom := []string{noteTitle}
-	bottom = append(bottom, fitLines(noteLines[noteStart:], m.width, noteRows)...)
-	bottom = append(bottom, "")
-	for _, line := range feedbackPreview(state, d, request) {
-		bottom = append(bottom, truncate(line, m.width))
-	}
+	bottom := []string{fmt.Sprintf("%s 补充说明 / 你的答复 · %d/4000", focus, len(d.note))}
+	bottom = append(bottom, fitLines(noteLines[start:], m.width, noteRows)...)
+	preview := feedbackPreview(state, d, request)
+	bottom = append(bottom, preview[0]+" · "+preview[1], preview[2])
 	if d.error != "" {
-		bottom = append(bottom, truncate("未提交："+safeTerminalText(d.error), m.width))
+		bottom = append(bottom, "未提交："+safeTerminalText(d.error))
 	}
 	if run != nil && run.EnvironmentBlocker != nil {
-		bottom = append(bottom, truncate("环境受阻，草稿保留；解除后重新提交", m.width))
+		bottom = append(bottom, "环境受阻，草稿保留；解除后重新提交")
 	}
-	area := max(1, height-len(header)-len(bottom)-1)
-	questionRows := max(1, min(3, area/3))
-	question := []string{"问题：" + safeTerminalText(request.Question)}
-	if !ok {
-		question = []string{"原问题暂不可读；草稿保留"}
+	available := max(0, height-len(bottom)-2)
+	upper := []string{"问题：" + safeTerminalInlineText(request.Question)}
+	count := len(request.Options)
+	if request.AllowFreeText && count > 0 {
+		count++
 	}
-	upper := fitLines(wrapLines(question, m.width), m.width, questionRows)
-	if len(request.Options) == 0 {
+	if count == 0 {
 		upper = append(upper, "无固定选项，直接输入答复")
 	} else {
-		optionRows := max(1, area-questionRows-1)
-		count := len(request.Options)
-		if request.AllowFreeText {
-			count++
-		}
-		upper = append(upper, fmt.Sprintf("选择 %d/%d · ↑↓（F8 查看完整背景/选项详情）", d.optionIndex+1, count))
-		start := max(0, d.optionIndex-optionRows/2)
-		start = min(start, max(0, count-optionRows))
-		for i := start; i < min(count, start+optionRows); i++ {
+		rows := max(0, available-1)
+		begin := min(max(0, d.optionIndex-rows/2), max(0, count-rows))
+		for i := begin; i < min(count, begin+rows); i++ {
 			label := "自定义答复"
 			if i < len(request.Options) {
-				label = fmt.Sprintf("%d. %s", i+1, request.Options[i].Label)
+				label = request.Options[i].Label
 			}
 			marker := "[ ] "
 			if i == d.optionIndex {
 				marker = "[x] "
 			}
-			upper = append(upper, truncate(marker+safeTerminalInlineText(label), m.width))
+			upper = append(upper, fmt.Sprintf("%s%d. %s", marker, i+1, safeTerminalInlineText(label)))
 		}
 	}
-	lines := append(header, fitLines(upper, m.width, area)...)
-	lines = append(lines, "")
+	lines := []string{truncate(header, m.width)}
+	lines = append(lines, fitLines(upper, m.width, available)...)
 	lines = append(lines, bottom...)
+	lines = append(lines, "Tab 焦点 · Enter 换行 · F2 提交 · F8 背景 · Esc 保留")
+	for i, line := range lines {
+		lines[i] = truncate(line, m.width)
+	}
 	return strings.Join(fitLines(lines, m.width, height), "\n")
 }

@@ -364,7 +364,6 @@ type LogBatch struct {
 	Activity    []ActivityEvent `json:"activity"`
 	Diagnostics []string        `json:"diagnostics"`
 }
-type CapabilityFilter struct{ Backend, Protocol, TargetID, ExecutionID, AttemptID, Source, SourceIdentity string }
 
 type RecoveryInspection struct {
 	Version                int                `json:"version"`

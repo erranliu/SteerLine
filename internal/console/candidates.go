@@ -14,13 +14,6 @@ type CandidateDraft struct {
 	OptionIndex int
 	Note        string
 }
-type CandidateReading struct {
-	AttemptID, AnchorGroup, AnchorItem, ReadGroup, ReadItem, BodyKind string
-	AnchorRevision, ReadRevision, BodyOffset                          int64
-	AnchorLine, ReadLine, DetailScroll, LogScroll                     int
-	BodyPages                                                         []int64
-	Follow                                                            bool
-}
 
 func candidateIdentity(r *api.CandidateSummary) string {
 	return strings.Join([]string{r.TaskID, r.RunID, r.ExecutionID, r.SessionID}, "\x00")
@@ -53,47 +46,6 @@ func candidateFilterAllows(state projectState, filter int, taskID string) bool {
 	return false
 }
 
-func storeCandidateReading(s *projectState) {
-	if s.readingIdentity == "" {
-		return
-	}
-	if s.view.Reading == nil {
-		s.view.Reading = map[string]CandidateReading{}
-	}
-	v := s.view
-	s.view.Reading[s.readingIdentity] = CandidateReading{s.attemptID, v.AnchorGroup, v.AnchorItem, v.ReadGroup, v.ReadItem, s.bodyKind, v.AnchorRevision, v.ReadRevision, s.bodyViewOffset, v.AnchorLine, v.ReadLine, s.detailScroll, s.logScroll, append([]int64(nil), s.bodyPages...), v.Follow}
-}
-
-func switchCandidateReading(s *projectState, run *api.CandidateSummary) {
-	if s.view.Candidates == nil {
-		s.view.Candidates = map[string]string{}
-	}
-	s.view.Candidates[run.TaskID] = run.RunID
-	id := candidateIdentity(run)
-	if s.readingIdentity == id {
-		return
-	}
-	if s.readingIdentity != "" {
-		storeCandidateReading(s)
-		clearReadingAnchor(s)
-		s.attemptID = ""
-		s.view.Follow = true
-	} else if len(s.view.Reading) > 0 {
-		clearReadingAnchor(s)
-		s.attemptID = ""
-		s.view.Follow = true
-	}
-	s.readingIdentity = id
-	if v, ok := s.view.Reading[id]; ok {
-		s.attemptID = v.AttemptID
-		s.view.AnchorGroup, s.view.AnchorItem, s.view.ReadGroup, s.view.ReadItem = v.AnchorGroup, v.AnchorItem, v.ReadGroup, v.ReadItem
-		s.view.AnchorRevision, s.view.ReadRevision, s.view.AnchorLine, s.view.ReadLine = v.AnchorRevision, v.ReadRevision, v.AnchorLine, v.ReadLine
-		s.view.BodyOffset, s.view.BodyKind, s.view.Follow = v.BodyOffset, v.BodyKind, v.Follow
-		s.bodyViewOffset, s.bodyKind, s.bodyPages = v.BodyOffset, v.BodyKind, append([]int64(nil), v.BodyPages...)
-		s.detailScroll, s.logScroll = v.DetailScroll, v.LogScroll
-	}
-}
-
 func (m Model) cycleCandidate(delta int) (tea.Model, tea.Cmd) {
 	s := &m.projects[m.selected]
 	row := m.selectedRow(m.selected)
@@ -114,15 +66,14 @@ func (m Model) cycleCandidate(delta int) (tea.Model, tea.Cmd) {
 		}
 	}
 	i = (i + delta + len(runs)) % len(runs)
-	storeCandidateReading(s)
-	if s.view.Candidates == nil {
-		s.view.Candidates = map[string]string{}
+	m.leaveAnswer()
+	if s.candidates == nil {
+		s.candidates = map[string]string{}
 	}
-	s.view.Candidates[row.taskID] = runs[i].RunID
-	switchCandidateReading(s, runs[i])
+	s.candidates[row.taskID] = runs[i].RunID
 	m.expandedDetailScroll = 0
 	m.saveProjectView(m.selected)
-	return m.refreshSelectedLogs(m.selected)
+	return m.refreshSelected(m.selected)
 }
 
 func candidateStartReason(s projectState, row *consoleRow, now time.Time) string {
@@ -320,7 +271,7 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 			lines = append(lines, "  PR："+safeTerminalText(*r.PR.URL)+" · "+safeTerminalText(r.PR.State))
 		}
 		if r.Summary != nil {
-			lines = append(lines, "  最终回复摘要："+safeTerminalText(*r.Summary)+"（完整正文按 f/n 读取规范记录）")
+			lines = append(lines, "  最终回复摘要："+safeTerminalText(*r.Summary)+"（完整正文在候选详情查看；[ / ] 选择历史回复）")
 		}
 	}
 	lines = append(lines, "新增只做开始时5个参与检查；并发偶尔超额照实展示。", "无硬名额、预留、队列或自动补位。", "指标缺口：未提供评分/排名、token/费用比较。", "采样："+sampleTime(s.snapshot))

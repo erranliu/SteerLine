@@ -1,0 +1,17 @@
+{
+  "scope": "physical Go lines in internal and cmd including comments/blanks; split by _test.go; docs and tests/integration excluded",
+  "implementation": {
+    "before": 66906,
+    "after": 65464,
+    "net_removed": 1442
+  },
+  "tests": {
+    "before": 33524,
+    "after": 33514,
+    "net_removed": 10
+  },
+  "console": {
+    "before": 6981,
+    "after": 5523
+  }
+}

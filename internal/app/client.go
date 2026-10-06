@@ -249,32 +249,17 @@ func (r *clientReader) Conversation(ctx context.Context, filter productapi.Conve
 func (r *clientReader) Body(ctx context.Context, ref productapi.ConversationBodyRef, offset int64, limit int) (productapi.ConversationBodyPage, error) {
 	return r.ConversationService.ReadMessageBody(ctx, ref, offset, limit)
 }
-func (r *clientReader) Raw(ctx context.Context, ref productapi.ConversationRawRef, offset int64, limit int) (productapi.ConversationRawPage, error) {
-	return r.ConversationService.ReadRaw(ctx, ref, offset, limit)
+
+func (r *clientReader) RecentActivity(ctx context.Context, run, execution, attempt string) (productapi.LogBatch, error) {
+	return r.Service.ReadRecentActivity(ctx, run, execution, attempt)
 }
-func (r *clientReader) Capabilities(ctx context.Context, f productapi.CapabilityFilter) ([]productapi.ConversationCapabilityReport, error) {
-	records, err := r.ConversationService.ReadCapabilities(ctx, executionbackend.BackendKind(f.Backend), executionbackend.ExecutionProtocol(f.Protocol), f.TargetID, 100)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]productapi.ConversationCapabilityReport, 0, len(records))
-	for _, report := range records {
-		if f.ExecutionID != "" && report.ExecutionID != f.ExecutionID || f.AttemptID != "" && report.AttemptID != f.AttemptID || f.Source != "" && report.Source != f.Source || f.SourceIdentity != "" && report.SourceIdentity != f.SourceIdentity {
-			continue
-		}
-		out = append(out, report)
-	}
-	return out, nil
-}
+
 func (r *clientReader) Command(ctx context.Context, id string) (productapi.CommandReceipt, error) {
 	record, err := r.store.Command(ctx, r.project, id)
 	if errors.Is(err, storageports.ErrNotFound) {
 		return productapi.CommandReceipt{}, errors.Join(productapi.ErrRecordNotFound, err)
 	}
 	return query.CommandReceipt(record), err
-}
-func (r *clientReader) Activity(ctx context.Context, runID, executionID, attemptID string, cursor productapi.ActivityCursor) (productapi.LogBatch, error) {
-	return r.Service.ReadActivity(ctx, runID, executionID, attemptID, cursor)
 }
 
 func (r *clientReader) DatabaseVersion(ctx context.Context) (string, uint64, error) {

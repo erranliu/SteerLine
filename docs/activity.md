@@ -1,6 +1,6 @@
 # Activity 契约：数据库事件与服务控制台
 
-中心活动只随业务状态写入 SQLite events。产品 Activity 查询绑定明确的项目/Run/Execution/Attempt，以数据库 EventID 排序和推进游标；没有中心 activity.jsonl 镜像、文件 seq 恢复、格式探测或 raw fallback。
+中心活动只随业务状态写入 SQLite events。控制台右下仅通过RecentActivity读取所选候选当前Attempt的最新10条活动短摘要，不提供时间线、工具正文展开或历史翻页。服务窗口输出、规范活动采集和诊断读取仍保留。产品 Activity 查询绑定明确的项目/Run/Execution/Attempt，以数据库 EventID 排序和推进游标；没有中心 activity.jsonl 镜像、文件 seq 恢复、格式探测或 raw fallback。
 
 ## 活动记录
 
@@ -21,3 +21,9 @@
 `steerline run -console pretty|summary|json|off` 保持。TTY 下默认 pretty；summary 输出生命周期，json 输出活动 JSONL，off 静默。json 控制台 seq 只表示当前服务输出流的顺序，不作为数据库身份或恢复游标。
 
 破坏性 payload 变更才提升 ActivityVersion；本次仅移除诊断副本，活动 v1、FixedExecutionProfile v6、SQLite 12/runtime 17/PolicyResources v3 保持。未新增兼容读取或事件重放路径。
+
+## 三窗运行与反馈
+
+右上显示候选/冻结方案/状态/环境/PR；右下优先显示当前问题或答案预览与回执，没有问题时显示运行状态和最多10条短摘要。RecentActivity在同一读取事务中核验项目/Workflow/Execution/Attempt并选择最新活动，命令等非活动事件不占摘要数量；按字节预算拒绝补画过大/缺失payload。UI不保存原始meta/工具全文，候选或Attempt变化清空样本并拒绝旧响应。
+
+右下按a激活既有Unicode编辑器，Tab循环列表/选项/输入，Enter换行，F2单次提交。长背景用F8只读查看，完整最终回复用f；普通回答不切整页详情。

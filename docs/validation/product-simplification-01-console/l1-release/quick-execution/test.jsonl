@@ -1,0 +1,3 @@
+{"Time":"2026-10-07T07:56:43.2140982+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/execution"}
+{"Time":"2026-10-07T07:56:43.4139885+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/execution","Test":"TestCandidateOpenPRPollPreservesOriginalPendingInput"}
+{"Time":"2026-10-07T07:56:43.4139885+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/execution","Test":"TestCandidateOpenPRPollPreservesOriginalPendingInput","Output":"=== RUN   TestCandidateOpenPRPollPreservesOriginalPendingInput\n"}

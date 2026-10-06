@@ -1,12 +1,8 @@
 package console
 
 import (
-	"context"
-	"encoding/json"
 	"fmt"
 	api "github.com/erranliu/SteerLine/internal/product/api"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -65,6 +61,7 @@ func TestCC1(t *testing.T) {
 	if decisions != 1 || attention != 1 {
 		t.Fatal("Task counters counted candidates", decisions, attention)
 	}
+	m.detailExpanded = true
 	text := strings.Join(renderDetail(m, m.projects[0], m.selectedRow(0), 120, 1000), "\n")
 	for i := 0; i < 5; i++ {
 		for _, want := range []string{fmt.Sprintf("candidate-%d", i), fmt.Sprintf("方案%d", i), fmt.Sprintf("session-%d", i)} {
@@ -80,134 +77,33 @@ func TestCC1(t *testing.T) {
 }
 
 func TestCC2(t *testing.T) {
-	m, c := ccFixture(t, 2)
-	m, _ = m.refreshSelectedLogs(0)
-	s := &m.projects[0]
-	oldKey, oldGeneration := s.conversationKey, s.conversationGeneration
-	s.bodyText = "A正文"
-	s.view.AnchorItem = "A-item"
-	s.view.AnchorRevision = 2
-	s.detailScroll = 4
+	m, _ := ccFixture(t, 2)
+	m, _ = m.refreshFinalReplies(0)
+	oldKey, oldGeneration := m.projects[0].finalKey, m.projects[0].finalGeneration
+	m.projects[0].bodyText = "A正文"
 	m, _ = ccKey(m, runeKey('a'))
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyTab})
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("候选甲草稿")})
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyEsc})
 	m, _ = ccKey(m, runeKey('}'))
-	if m.selectedRow(0).run.RunID != "candidate-1" || m.projects[0].bodyText != "" || m.projects[0].view.AnchorItem != "" {
-		t.Fatal("candidate switch crossed body/anchor")
+	if m.selectedRow(0).run.RunID != "candidate-1" || m.projects[0].bodyText != "" {
+		t.Fatal("candidate switch crossed final body")
 	}
-	if m.projects[0].conversationFilter.WorkflowID != "candidate-1" || m.projects[0].conversationFilter.ExecutionID != "execution-1" || m.projects[0].conversationFilter.SessionID != "session-1" {
-		t.Fatal("canonical query lost precise session")
-	}
-	next, _ := m.Update(conversationMsg{projectKey: s.ref.Key, identity: s.ref.Identity, key: oldKey, generation: oldGeneration, page: api.ConversationPage{Events: []api.ConversationEvent{{EventID: 1}}}})
+	next, _ := m.Update(finalRepliesMsg{projectKey: m.projects[0].ref.Key, identity: m.projects[0].ref.Identity, key: oldKey, generation: oldGeneration, page: api.ConversationPage{Events: []api.ConversationEvent{{EventID: 1}}}})
 	m = next.(Model)
-	if len(m.projects[0].conversationEvents) != 0 {
-		t.Fatal("late source changed B")
+	if len(m.projects[0].finalEvents) != 0 {
+		t.Fatal("late response crossed candidates")
 	}
-	// The selected ID is held even if a fresh page temporarily omits it.
-	pinned := m.projects[0].view.Candidates["38"]
-	previousRuns := m.projects[0].snapshot.Observation.Page.Runs
-	m.projects[0].snapshot.Observation.Page.Runs = m.projects[0].snapshot.Observation.Page.Runs[:1]
-	if m.selectedRow(0).run != nil || m.projects[0].view.Candidates["38"] != pinned {
-		t.Fatal("missing candidate silently selected sibling")
-	}
-	page := m.projects[0].snapshot.NativeTasks
-	m.projects[0].snapshot.NativeTasks = nil
-	gap := strings.Join(renderDetail(m, m.projects[0], m.selectedRow(0), 120, 100), "\n")
-	if !strings.Contains(gap, "暂不可读") {
-		t.Fatal("combined canonical gap was not shown", gap)
-	}
-	m.projects[0].snapshot.NativeTasks = page
-	m.projects[0].snapshot.Observation.Page.Runs = previousRuns
 	runs := m.projects[0].snapshot.Observation.Page.Runs
 	runs[0], runs[1] = runs[1], runs[0]
 	if m.selectedRow(0).run.RunID != "candidate-1" {
-		t.Fatal("reorder changed ID selection")
+		t.Fatal("reorder changed selection")
 	}
 	m, _ = ccKey(m, runeKey('{'))
 	m, _ = ccKey(m, runeKey('a'))
-	if string(m.answer.note) != "候选甲草稿" || m.projects[0].view.AnchorItem != "A-item" {
-		t.Fatal("A draft/reading not restored")
+	if string(m.answer.note) != "候选甲草稿" {
+		t.Fatal("candidate draft lost")
 	}
-	r := m.selectedRow(0).run
-	r.EnvironmentBlocker = &api.EnvironmentBlocker{ID: "blocker-A", Version: 2, TurnID: "turn-A", Fact: api.EnvironmentFact{Reason: "原终端不可输入"}}
-	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyF2})
-	if c.decisionCalls != 0 || m.answer == nil || !strings.Contains(m.answer.error, "环境阻断") {
-		t.Fatal("blocked draft was sent")
-	}
-	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyEsc})
-	updated, environmentCmd := m.createAction("recheck_environment", "")
-	m = updated.(Model)
-	if environmentCmd == nil {
-		t.Fatal(m.status)
-	}
-	m, _ = ccKey(m, runeKey('}'))
-	next, _ = m.Update(environmentCmd())
-	m = next.(Model)
-	var environment api.ControlPayload
-	if err := json.Unmarshal(c.request.Payload, &environment); err != nil {
-		t.Fatal(err)
-	}
-	if environment.Environment == nil || environment.Environment.RunID != "candidate-0" || environment.Environment.ExecutionID != "execution-0" || environment.Environment.BlockerID != "blocker-A" || environment.Environment.Version != 2 {
-		t.Fatal("environment action retargeted after candidate switch", environment)
-	}
-	m, _ = ccKey(m, runeKey('{'))
-	r.EnvironmentBlocker = nil
-	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyEsc})
-	if c.decisionCalls != 0 {
-		t.Fatal("clear blocker auto sent")
-	}
-	if err := m.saveProjectView(0); err != nil {
-		t.Fatal(err)
-	}
-	v, err := readViewFile(m.profile.path())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if v.Projects["cc"].Candidates["38"] != "candidate-0" || v.Projects["cc"].Drafts[candidateIdentity(r)+"\x00"+r.Decision.ID].Note != "候选甲草稿" {
-		t.Fatal("restart preferences lost identity")
-	}
-	// Reopen a real UI view profile, not merely decoding JSON in the same model.
-	home := t.TempDir()
-	profile, prefs, _, err := acquireViewProfile(home)
-	if err != nil {
-		t.Fatal(err)
-	}
-	prefs.Projects[m.projects[0].ref.Key] = v.Projects["cc"]
-	prefs.ActiveProject = "cc"
-	if err := writeViewFile(profile.path(), prefs); err != nil {
-		t.Fatal(err)
-	}
-	profile.close()
-	ref := m.projects[0].ref
-	client := m.projects[0].client.(*testClient)
-	client.query.snapshot = m.projects[0].snapshot
-	reopened, err := NewModel(context.Background(), []ProjectRef{ref}, Options{Clients: map[string]ConsoleClient{ref.Key: client}, ApplicationHome: home, Clock: m.clock})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer reopened.Close()
-	cmd := reopened.readProject(0)
-	next, _ = reopened.Update(cmd())
-	reopened = next.(Model)
-	if reopened.selectedRow(0) == nil || reopened.selectedRow(0).run.RunID != "candidate-0" {
-		t.Fatal("reopen changed selected candidate")
-	}
-	reopened, _ = ccKey(reopened, runeKey('a'))
-	if reopened.answer == nil || string(reopened.answer.note) != "候选甲草稿" {
-		t.Fatal("reopen lost draft")
-	}
-	// A native log on disk cannot fill a canonical database gap.
-	path := filepath.Join(t.TempDir(), "raw.jsonl")
-	os.WriteFile(path, []byte("forbidden raw fallback"), 0600)
-	r.LogPath = &path
-	m.projects[0].conversationEvents = nil
-	m.projects[0].conversationError = "规范数据库正文缺失"
-	text := strings.Join(allSessionLines(m.projects[0], m.selectedRow(0), 120), "\n")
-	if strings.Contains(text, "forbidden raw fallback") || !strings.Contains(text, "规范数据库正文缺失") {
-		t.Fatal(text)
-	}
-	t.Log("exact candidate draft/reading persisted; late event discarded; blocker preserved Decision and required explicit resubmit; raw file ignored")
 }
 
 func TestCC3(t *testing.T) {
@@ -292,6 +188,7 @@ func TestCC4(t *testing.T) {
 	r.ResourceStatus = "unknown"
 	r.PRHistory = []string{"https://example.invalid/historical/1"}
 	m, _ = ccKey(m, runeKey('{'))
+	m.detailExpanded = true
 	text = strings.Join(renderDetail(m, m.projects[0], m.selectedRow(0), 120, 1000), "\n")
 	for _, want := range []string{"历史/已放弃", "资源 unknown", "historical/1", "worker 停止独立核实"} {
 		if !strings.Contains(text, want) {

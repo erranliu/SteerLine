@@ -201,12 +201,16 @@ func readBoundEvents(ctx context.Context, db QueryContext, project, workflow, ex
 	if err != nil {
 		return nil, err
 	}
+	return scanEventRows(rows)
+}
+
+func scanEventRows(rows *sql.Rows) ([]storageports.DomainEvent, error) {
 	defer rows.Close()
 	out := []storageports.DomainEvent{}
 	for rows.Next() {
 		var v storageports.DomainEvent
 		var received string
-		if err = rows.Scan(&v.EventID, &v.ProjectIdentity, &v.TaskID, &v.WorkflowRunID, &v.ExecutionID, &v.AttemptID, &v.ExternalSource, &v.ExternalID, &v.Type, &received, &v.PayloadBytes, &v.PayloadDigest, &v.Payload); err != nil {
+		if err := rows.Scan(&v.EventID, &v.ProjectIdentity, &v.TaskID, &v.WorkflowRunID, &v.ExecutionID, &v.AttemptID, &v.ExternalSource, &v.ExternalID, &v.Type, &received, &v.PayloadBytes, &v.PayloadDigest, &v.Payload); err != nil {
 			return nil, err
 		}
 		v.ReceivedAt, _ = time.Parse(time.RFC3339Nano, received)

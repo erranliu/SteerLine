@@ -187,14 +187,6 @@ func (c *Client) Body(ctx context.Context, body api.ConversationBodyRef, offset 
 	})
 }
 
-func (c *Client) Raw(ctx context.Context, raw api.ConversationRawRef, offset int64, limit int) (api.ConversationRawPage, error) {
-	return read(ctx, c, func(r Reader) (api.ConversationRawPage, error) { return r.Raw(ctx, raw, offset, limit) })
-}
-
-func (c *Client) Capabilities(ctx context.Context, f api.CapabilityFilter) ([]api.ConversationCapabilityReport, error) {
-	return read(ctx, c, func(r Reader) ([]api.ConversationCapabilityReport, error) { return r.Capabilities(ctx, f) })
-}
-
 func (c *Client) Command(ctx context.Context, id string) (api.CommandReceipt, error) {
 	return read(ctx, c, func(r Reader) (api.CommandReceipt, error) { return r.Command(ctx, id) })
 }
@@ -416,25 +408,8 @@ func (c *Client) ReadProject(ctx context.Context, selected string, previous api.
 	return result
 }
 
-func (c *Client) Activity(ctx context.Context, runID, executionID, attemptID string, cursor api.ActivityCursor) (api.LogBatch, error) {
-	if runID == "" || executionID == "" || attemptID == "" {
-		return api.LogBatch{}, errors.New("activity query identity is missing")
-	}
-	if cursor.Initialized && (cursor.RunID != runID || cursor.ExecutionID != executionID || cursor.AttemptID != attemptID) {
-		return api.LogBatch{}, errors.New("activity cursor belongs to another execution or attempt")
-	}
-	return read(ctx, c, func(r Reader) (api.LogBatch, error) { return r.Activity(ctx, runID, executionID, attemptID, cursor) })
-}
-
-func (c *Client) CursorAfter(filter api.ConversationFilter, after int64) (string, error) {
-	if err := c.begin(context.Background()); err != nil {
-		return "", err
-	}
-	defer c.mu.RUnlock()
-	if c.resources.CursorAfter == nil {
-		return "", unsupported("conversation cursors")
-	}
-	return c.resources.CursorAfter(filter, after)
+func (c *Client) RecentActivity(ctx context.Context, run, execution, attempt string) (api.LogBatch, error) {
+	return read(ctx, c, func(r Reader) (api.LogBatch, error) { return r.RecentActivity(ctx, run, execution, attempt) })
 }
 
 func (c *Client) InspectRecovery(ctx context.Context, id string) (api.RecoveryInspection, error) {

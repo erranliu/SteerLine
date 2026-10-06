@@ -13,16 +13,10 @@ import (
 	"time"
 )
 
-const viewFileVersion = 1
+const viewFileVersion = 2
 const maxViewFileBytes = 4 << 20
 
 var savedRequestIDPattern = regexp.MustCompile(`^[0-9a-f]{32}$`)
-
-type FoldChoice struct {
-	Manual        *bool `json:"manual,omitempty"`
-	KeepExpanded  bool  `json:"keep_expanded,omitempty"`
-	AutoProcessed bool  `json:"auto_processed,omitempty"`
-}
 
 type SavedAction struct {
 	DecisionIdentity       string                `json:"decision_identity,omitempty"`
@@ -44,41 +38,17 @@ type SavedAction struct {
 }
 
 type ProjectView struct {
-	Candidates       map[string]string           `json:"candidates,omitempty"`
-	Reading          map[string]CandidateReading `json:"candidate_reading,omitempty"`
-	Drafts           map[string]CandidateDraft   `json:"candidate_drafts,omitempty"`
-	ConfigPath       string                      `json:"config_path"`
-	RunDir           string                      `json:"run_dir"`
-	SelectedKey      string                      `json:"selected_key,omitempty"`
-	SelectionPending bool                        `json:"selection_pending,omitempty"`
-	Filter           string                      `json:"filter,omitempty"`
-	Panel            string                      `json:"panel,omitempty"`
-	AttemptID        string                      `json:"attempt_id,omitempty"`
-	AttemptPinned    bool                        `json:"attempt_pinned,omitempty"` // Only an explicit history choice pins an attempt across refreshes and restarts.
-	Follow           bool                        `json:"follow"`
-	AnchorGroup      string                      `json:"anchor_group,omitempty"`
-	AnchorItem       string                      `json:"anchor_item,omitempty"`
-	AnchorRevision   int64                       `json:"anchor_revision,omitempty"`
-	AnchorLine       int                         `json:"anchor_line,omitempty"`
-	ReadGroup        string                      `json:"read_group,omitempty"`
-	ReadItem         string                      `json:"read_item,omitempty"`
-	ReadRevision     int64                       `json:"read_revision,omitempty"`
-	ReadLine         int                         `json:"read_line,omitempty"`
-	BodyOffset       int64                       `json:"body_offset,omitempty"`
-	BodyPages        []int64                     `json:"body_pages,omitempty"`
-	BodyKind         string                      `json:"body_kind,omitempty"`
-	DetailScroll     int                         `json:"detail_scroll,omitempty"`
-	LogScroll        int                         `json:"log_scroll,omitempty"`
-	Outstanding      map[string]string           `json:"outstanding,omitempty"`
-	Actions          map[string]SavedAction      `json:"actions,omitempty"`
-	Groups           map[string]FoldChoice       `json:"groups,omitempty"`
+	ConfigPath  string                    `json:"config_path"`
+	RunDir      string                    `json:"run_dir"`
+	Drafts      map[string]CandidateDraft `json:"candidate_drafts,omitempty"`
+	Outstanding map[string]string         `json:"outstanding,omitempty"`
+	Actions     map[string]SavedAction    `json:"actions,omitempty"`
 }
 
 type ViewFile struct {
-	Version       int                    `json:"version"`
-	UpdatedAt     time.Time              `json:"updated_at"`
-	ActiveProject string                 `json:"active_project,omitempty"`
-	Projects      map[string]ProjectView `json:"projects"`
+	Version   int                    `json:"version"`
+	UpdatedAt time.Time              `json:"updated_at"`
+	Projects  map[string]ProjectView `json:"projects"`
 }
 
 func emptyViewFile() ViewFile {
@@ -87,7 +57,7 @@ func emptyViewFile() ViewFile {
 
 // viewProfile holds an OS lock for one console window. A second live window
 // gets its own directory; once that window exits, a later launch reuses its
-// most recently used profile and restores its own view choices.
+// most recently used operation journal and restores only drafts and requests.
 type viewProfile struct {
 	dir  string
 	lock *viewLock
@@ -129,14 +99,20 @@ func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
 		if lockErr != nil {
 			continue
 		}
-		view, readErr := readViewFile(filepath.Join(dir, "view.v1.json"))
+		view, readErr := readViewFile(filepath.Join(dir, "view.json"))
+		if _, legacyErr := os.Lstat(filepath.Join(dir, "view.v1.json")); legacyErr == nil {
+			readErr = errors.New("retired UI journal exists; preserve it for manual reconciliation")
+			view = ViewFile{}
+		}
 		stamp := time.Time{}
 		diagnostic := ""
 		if readErr == nil {
 			stamp = view.UpdatedAt
 		} else {
-			diagnostic = "视图偏好损坏或版本不受支持，已重置"
-			if info, statErr := os.Stat(filepath.Join(dir, "view.v1.json")); statErr == nil {
+			diagnostic = "操作记录损坏或版本不受支持；保留原文件，仅允许只读查看与原请求人工对账"
+			if info, statErr := os.Stat(filepath.Join(dir, "view.json")); statErr == nil {
+				stamp = info.ModTime()
+			} else if info, legacyStatErr := os.Stat(filepath.Join(dir, "view.v1.json")); legacyStatErr == nil {
 				stamp = info.ModTime()
 			}
 		}
@@ -168,7 +144,7 @@ func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
 		selected.view = emptyViewFile()
 		diagnostic = selected.diagnostic
 		if diagnostic == "" {
-			diagnostic = "视图偏好版本不受支持，已重置"
+			diagnostic = "操作记录版本不受支持；保留原文件，禁止新外发"
 		}
 	}
 	return selected.profile, selected.view, diagnostic, nil
@@ -193,7 +169,7 @@ func (p *viewProfile) path() string {
 	if p == nil {
 		return ""
 	}
-	return filepath.Join(p.dir, "view.v1.json")
+	return filepath.Join(p.dir, "view.json")
 }
 
 func readViewFile(path string) (ViewFile, error) {
@@ -220,15 +196,20 @@ func readViewFile(path string) (ViewFile, error) {
 		return ViewFile{}, errors.New("view preferences have an invalid size")
 	}
 	var view ViewFile
-	if err = json.Unmarshal(data, &view); err != nil {
+	decoder := json.NewDecoder(strings.NewReader(string(data)))
+	decoder.DisallowUnknownFields()
+	if err = decoder.Decode(&view); err != nil {
 		return ViewFile{}, err
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		return ViewFile{}, errors.New("operation journal contains trailing data")
 	}
 	if view.Version != viewFileVersion || view.Projects == nil {
 		return ViewFile{}, errors.New("view preferences have an unsupported format")
 	}
 	for key, project := range view.Projects {
-		if key == "" || len(view.Projects) > 1024 || (project.Groups != nil && len(project.Groups) > 50000) || len(project.Outstanding) > 256 || len(project.Actions) > 256 || len(project.Candidates) > 1024 || len(project.Reading) > 4096 || len(project.Drafts) > 4096 || project.AnchorRevision < 0 || project.AnchorLine < 0 || project.ReadRevision < 0 || project.ReadLine < 0 || project.BodyOffset < 0 || project.DetailScroll < 0 || project.LogScroll < 0 || !validBodyPages(project.BodyPages, project.BodyOffset) || !validSavedFilter(project.Filter) || !validSavedPanel(project.Panel) || !validBodyKind(project.BodyKind) {
-			return ViewFile{}, errors.New("view preferences contain invalid or excessive state")
+		if key == "" || len(view.Projects) > 1024 || len(project.Outstanding) > 256 || len(project.Actions) > 256 || len(project.Drafts) > 4096 {
+			return ViewFile{}, errors.New("operation journal contains invalid or excessive state")
 		}
 		for requestID, taskKey := range project.Outstanding {
 			action, exists := project.Actions[requestID]
@@ -241,16 +222,6 @@ func readViewFile(path string) (ViewFile, error) {
 				return ViewFile{}, errors.New("view preferences contain an invalid action record")
 			}
 		}
-		for groupID := range project.Groups {
-			if groupID == "" {
-				return ViewFile{}, errors.New("view preferences contain an invalid group identity")
-			}
-		}
-		for id, reading := range project.Reading {
-			if id == "" || reading.AnchorRevision < 0 || reading.ReadRevision < 0 || reading.AnchorLine < 0 || reading.ReadLine < 0 || reading.DetailScroll < 0 || reading.LogScroll < 0 || !validBodyKind(reading.BodyKind) || !validBodyPages(reading.BodyPages, reading.BodyOffset) {
-				return ViewFile{}, errors.New("view preferences contain invalid candidate reading state")
-			}
-		}
 		for id, draft := range project.Drafts {
 			if id == "" || draft.OptionIndex < -1 {
 				return ViewFile{}, errors.New("view preferences contain invalid candidate draft state")
@@ -260,39 +231,6 @@ func readViewFile(path string) (ViewFile, error) {
 	return view, nil
 }
 
-func validSavedFilter(value string) bool {
-	switch value {
-	case "", "all", "ready", "running", "decision", "merge", "attention", "history":
-		return true
-	}
-	return false
-}
-func validSavedPanel(value string) bool {
-	switch value {
-	case "", "detail", "activity", "session", "final", "list", "decisions", "recovery":
-		return true
-	}
-	return false
-}
-func validBodyKind(value string) bool { return value == "" || value == "process" || value == "final" }
-func validBodyPages(values []int64, current int64) bool {
-	if len(values) == 0 {
-		return current == 0
-	}
-	if len(values) > 257 || values[0] != 0 {
-		return false
-	}
-	found := false
-	for i, value := range values {
-		if value < 0 || i > 0 && value <= values[i-1] {
-			return false
-		}
-		if value == current {
-			found = true
-		}
-	}
-	return found
-}
 func validSavedAction(value string) bool {
 	switch value {
 	case "open_terminal", "recheck_environment", "start_candidate", "abandon_candidate", "start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "answer_decision":

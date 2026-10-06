@@ -63,3 +63,14 @@ func (q Service) ReadActivity(ctx context.Context, run, execution, attempt strin
 	}
 	return ProjectActivity(q.Project, run, execution, attempt, cursor, binding, events)
 }
+
+func (q Service) ReadRecentActivity(ctx context.Context, run, execution, attempt string) (api.LogBatch, error) {
+	if q.Activity == nil || q.Project == "" || run == "" || execution == "" || attempt == "" {
+		return api.LogBatch{}, errors.New("recent activity requires an exact project/run/execution/attempt")
+	}
+	binding, events, err := q.Activity.ReadRecentActivityView(ctx, q.Project, run, execution, attempt)
+	if err != nil {
+		return api.LogBatch{}, err
+	}
+	return ProjectActivity(q.Project, run, execution, attempt, api.ActivityCursor{}, binding, events)
+}

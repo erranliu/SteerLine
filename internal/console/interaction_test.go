@@ -121,7 +121,7 @@ func TestUX2PreviewSubmitEndsCurrentHumanInteraction(t *testing.T) {
 		}
 	}
 	m, cmd := ccKey(m, tea.KeyMsg{Type: tea.KeyF2})
-	if cmd == nil || m.answer != nil || m.projects[0].panel != 2 {
+	if cmd == nil || m.answer != nil || m.projects[0].focus != 1 {
 		t.Fatal("F2 did not return to original session")
 	}
 	if !strings.Contains(m.View(), "待交互 4") || run.Decision.Status != "pending" {
