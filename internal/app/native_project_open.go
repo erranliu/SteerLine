@@ -123,6 +123,9 @@ func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*sqlite.SQLiteS
 	if c == nil || c.RequireNativeTaskAuthority() != nil {
 		return nil, taskError("authority_mismatch", "native task command requires task_authority=native")
 	}
+	if err := c.ValidateProfiles(); err != nil {
+		return nil, err
+	}
 	if err := c.ValidateTaskCommandConfiguration(); err != nil {
 		return nil, err
 	}
