@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	"os"
 	"path/filepath"
 	"strings"
@@ -274,24 +273,19 @@ func (p *Project) CandidateUsage(c Candidate, label string) native.Usage {
 			return false, err
 		}
 		p.Scenario.Must(controlled.Write(filepath.Join(p.Scenario.Output, c.RunID+"-"+label+"-conversation.json"), conversation))
-		finals := map[string]bool{}
-		for _, event := range conversation.Events {
-			if event.Type == productapi.ConversationMessageComplete && event.Phase == productapi.MessagePhaseFinalAnswer && event.SourceRole == productapi.ConversationSourceCanonical {
-				if event.SessionID != u.Session {
-					return false, errors.New("canonical final belongs to another native session")
-				}
-				finals[event.TurnID] = true
-			}
+		finals, err := evidence.CandidateFinalCount(conversation.Events, u.Session)
+		if err != nil {
+			return false, err
 		}
 		expected := int(snap.Domain.Executions[0].TurnNumber)
 		if snap.Domain.Executions[0].Backend == "orca" {
 			expected++
 		}
-		if len(finals) >= expected && len(conversation.Bodies) > 0 {
+		if finals >= expected && len(conversation.Bodies) > 0 {
 			return true, nil
 		}
 		if time.Now().After(canonicalDeadline) {
-			p.Scenario.t.Fatalf("canonical original candidate final/body missing: native turns=%d expected=%d; see conversation.json", len(finals), expected)
+			p.Scenario.t.Fatalf("canonical original candidate final/body missing: final items=%d expected=%d; see conversation.json", finals, expected)
 		}
 		return false, nil
 	})
