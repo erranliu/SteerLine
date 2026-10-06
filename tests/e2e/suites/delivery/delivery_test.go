@@ -40,7 +40,9 @@ func TestBasicDelivery(t *testing.T) {
 	// The snapshot above proves B became ready and stayed unstarted after A's
 	// unique Delivery. Starting B then proves its real execution base is A's
 	// recorded merge commit, not a separately sampled or reconstructed guess.
-	p.Claim("b")
+	// Dispatch is already active after A's original claim; do not submit a
+	// second resume_dispatch request while starting the newly ready task.
+	s.Must(p.Driver.Control(s.Context, s.Run.Helper, "start_task", p.Tasks["b"].ID))
 	var successor testenv.Snapshot
 	s.Wait("successor base follows delivered merge", func() (bool, error) {
 		var err error

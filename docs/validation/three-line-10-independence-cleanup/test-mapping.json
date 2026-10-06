@@ -52,6 +52,13 @@
       "scenario_cleanup_complete": true,
       "preserved": true
     },
+    "successor_claim_diagnostic": {
+      "run": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-04/",
+      "source_commit": "6dbd1ca6fc61e91b1506345a33d9700ebce2b13b",
+      "result": "A had exactly one Delivery and B was ready/unstarted; the helper's repeated resume_dispatch was correctly rejected because dispatch was already active",
+      "scenario_cleanup_complete": true,
+      "preserved": true
+    },
     "fix": {
       "owner": "tests/e2e/internal/testenv.Project.readRuntime",
       "change": "Temporarily bind both STEERLINE_HOME and STEERLINE_E2E_CONTROLLED_STATE to the current Project's home and provider path for the in-process app configuration/runtime read, then restore both prior process values on success or error. This matches driver.Environment for service/helper children.",
@@ -126,10 +133,10 @@
       "new_assertions_in_existing_parent": [
         "Before claiming the successor, Task B is dependency-ready and has no WorkflowRun.",
         "Task A has exactly one Delivery selected from its original workflow and a non-empty verified merge commit.",
-        "Claim Task B through the existing product control path, read the real execution snapshot, and assert its persisted Workspace.Base equals Task A's Delivery.MergeCommit.",
+        "Start Task B with the existing start_task product control (without a redundant resume_dispatch), read the real execution snapshot, and assert its persisted Workspace.Base equals Task A's Delivery.MergeCommit.",
         "Starting B does not replace or duplicate Task A's original Delivery."
       ],
-      "evidence_run": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-04"
+      "evidence_run": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-05"
     },
     {
       "acceptance": "TM10.3/recovery.waiting-merge-restart",
@@ -162,11 +169,12 @@
     "l1_initial_failed_run": "docs/validation/three-line-10-independence-cleanup/l1-20261006-01/",
     "l1_short_path_diagnostic": "docs/validation/three-line-10-independence-cleanup/independence/l1-path-diagnostic-20261006-01/",
     "l1_pre_testenv_fix_pass": "docs/validation/three-line-10-independence-cleanup/l1-20261006-02/",
-    "l1_final_source": "docs/validation/three-line-10-independence-cleanup/l1-20261006-05/",
+    "l1_final_source": "docs/validation/three-line-10-independence-cleanup/l1-20261006-06/",
     "delivery_basic_initial_failure": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-01/",
     "delivery_basic_home_only_retry": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-02/",
     "delivery_basic_home_provider_fix_pass": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-03/",
-    "delivery_basic": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-04/",
+    "delivery_basic_successor_claim_diagnostic": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-04/",
+    "delivery_basic": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-05/",
     "recovery_waiting_merge_restart": "docs/validation/three-line-10-independence-cleanup/recovery-20261006-01/"
   },
   "reports": "Filled from the commit-bound test-feedback summaries after runs complete."
