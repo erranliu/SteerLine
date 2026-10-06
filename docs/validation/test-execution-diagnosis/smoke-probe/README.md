@@ -4,7 +4,7 @@
 
 ## 用例内容
 
-`TestNativeMinimalClosedLoopSmoke` 从[原本机闭环](../../../../internal/steerline/native_tasks_test.go)取必要初始化，创建 A → B；本机进程测试 worker 在真实临时 Git 仓库和 SQLite 中完成 A 的 implement、verify、publish_pr，人工合并门槛前 B 仍阻塞。测试重启中心并核对原 WorkflowRun/PR 等待状态，随后通过隔离的测试 PR 提供者返回固定 head 合并回执，中心关闭 A、写入唯一 TaskDelivery、解锁 B。B 不再执行；流程配置 `review_required=false`，完整审查、失败重试、Decision、清理及受监管 Orca 独有场景仍在原测试中。
+`TestNativeMinimalClosedLoopSmoke` 从[原本机闭环](../../../../internal/execution/native_tasks_test.go)取必要初始化，创建 A → B；本机进程测试 worker 在真实临时 Git 仓库和 SQLite 中完成 A 的 implement、verify、publish_pr，人工合并门槛前 B 仍阻塞。测试重启中心并核对原 WorkflowRun/PR 等待状态，随后通过隔离的测试 PR 提供者返回固定 head 合并回执，中心关闭 A、写入唯一 TaskDelivery、解锁 B。B 不再执行；流程配置 `review_required=false`，完整审查、失败重试、Decision、清理及受监管 Orca 独有场景仍在原测试中。
 
 这个用例实际启动本机测试 worker，并调用原中心查询/命令与恢复代码。PR 回执来自测试提供者，不能证明真实 GitHub/Gitea 合并。另保留原 `TestNativeDeliveryNeedsExactMergedPRAndReleasesSuccessorOnce` 的错误 PR/交付门槛检查，再运行 taskgraph 和 remoteprotocol 的完整纯规则测试。
 
@@ -29,4 +29,4 @@ go test -count=1 -timeout=2m ./internal/steerline/taskgraph ./internal/steerline
 
 ## 采用边界
 
-快速结果只标为 `quick`，适用于日常编辑后与受影响的定向测试一起使用。稳定候选集成或实现 PR 交付前仍运行一次完整无缓存套件；既有任务已固定的完整/真机要求保持。快速套件不会据单次成功推断失败重试、未知外部结果、Orca 或真实 PR 合并已通过。[Spec 草案](../../../spec/test-execution-efficiency.spec.md)固定实现与门槛，尚未创建中心任务。
+快速结果只标为 `quick`，适用于日常编辑后与受影响的定向测试一起使用。稳定候选集成或实现 PR 交付前仍运行一次完整无缓存套件；既有任务已固定的完整/真机要求保持。快速套件不会据单次成功推断失败重试、未知外部结果、Orca 或真实 PR 合并已通过。[Spec 草案](../../../archive/spec/completed/test-execution-efficiency.spec.md)固定实现与门槛，尚未创建中心任务。

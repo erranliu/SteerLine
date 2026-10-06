@@ -2,7 +2,7 @@
 
 Task 81 starts at `e3ef412fd9bd00aab2b8f06c62d97686f937b44d`, the merge commit of #80 / [PR225](https://github.com/erranliu/SteerLine/pull/225). It moves the remaining boundary, feedback and process support to `internal/testkit`, updates consumers and test selection, and keeps the already delivered #80 cross-module tests in `tests/integration`.
 
-The source/test inventory is in [ownership.md](ownership.md); [test-mapping.json](test-mapping.json) records every moved parent/subtest and assertion owner, the fixed L1/Full/E2E paths, and commit-bound commands. The plan is [three-line-09-testkit-integration.plan.md](../../spec/three-line-09-testkit-integration.plan.md). The #80 report and its pass/fail history remain unchanged at [three-line-08-app-host](../three-line-08-app-host/README.md).
+The source/test inventory is in [ownership.md](ownership.md); [test-mapping.json](test-mapping.json) records every moved parent/subtest and assertion owner, the fixed L1/Full/E2E paths, and commit-bound commands. The plan is [three-line-09-testkit-integration.plan.md](../../archive/spec/completed/three-line-09-testkit-integration.plan.md). The #80 report and its pass/fail history remain unchanged at [three-line-08-app-host](../three-line-08-app-host/README.md).
 
 ## Validation results
 

@@ -1,6 +1,6 @@
 # 工作区与 Git 资源迁移验证
 
-日期：2026-09-30。任务 #55；依据 [Spec](../../spec/execution-isolation-02-workspace.spec.md) 与 [Plan](../../spec/execution-isolation-02-workspace.plan.md)。状态：实现及最小验收通过，待单 PR 合入。
+日期：2026-09-30。任务 #55；依据 [Spec](../../archive/spec/completed/execution-isolation-02-workspace.spec.md) 与 [Plan](../../archive/spec/completed/execution-isolation-02-workspace.plan.md)。状态：实现及最小验收通过，待单 PR 合入。
 
 ## 所有权与交接
 

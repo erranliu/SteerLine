@@ -1,6 +1,6 @@
 # 测试设计审计与基线修复结果
 
-日期：2026-10-01。依据：[修复 Plan](../../../spec/test-baseline-repair.plan.md)。[原始失败基线](../baseline-2026-10-01/README.md)保留历史事实。
+日期：2026-10-01。依据：[修复 Plan](../../../archive/spec/completed/test-baseline-repair.plan.md)。[原始失败基线](../baseline-2026-10-01/README.md)保留历史事实。
 
 最终候选 `1343772` 的完整三进程回归通过：343 个核心顶层入口覆盖完整，各分组和其他包均零失败；准备 2.57 秒、执行 756.27 秒。18 个测试/子测试按原有原生或显式验收条件跳过，无新增 skip。见[原始完整汇总](full-summary.json)和[原失败到当前通过用例的逐项映射](results.json)。原始 JSON/stderr 保留在汇总中的输出根。
 

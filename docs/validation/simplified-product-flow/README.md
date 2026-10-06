@@ -1,6 +1,6 @@
 # 收敛执行与反馈流程验证
 
-基线：#201 后 5aafff4，已含 #199 和 #200。行为依据：[Spec](../../spec/simplified-product-flow.spec.md)，测试选择：[Plan](../../spec/simplified-product-flow.plan.md)。当前改动不修改候选方案和三线模块化路线图。
+基线：#201 后 5aafff4，已含 #199 和 #200。行为依据：[Spec](../../archive/spec/completed/simplified-product-flow.spec.md)，测试选择：[Plan](../../archive/spec/completed/simplified-product-flow.plan.md)。当前改动不修改候选方案和三线模块化路线图。
 
 ## 结果
 

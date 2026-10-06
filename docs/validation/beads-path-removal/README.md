@@ -1,6 +1,6 @@
 # Beads path removal validation
 
-This report records the implementation and regression evidence for [Spec 12](../../spec/beads-path-removal.spec.md). The accepted #11 baseline is in [test-feedback results](../test-feedback/results.md); this report compares its latest complete run with a fresh complete run after the removal.
+This report records the implementation and regression evidence for [Spec 12](../../archive/spec/completed/beads-path-removal.spec.md). The accepted #11 baseline is in [test-feedback results](../test-feedback/results.md); this report compares its latest complete run with a fresh complete run after the removal.
 
 The full run uses the repository runner:
 

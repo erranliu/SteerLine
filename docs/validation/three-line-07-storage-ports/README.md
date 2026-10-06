@@ -1,6 +1,6 @@
 # #79 存储目录与消费者端口验证
 
-依据：[Spec](../../spec/three-line-07-storage-ports.spec.md) · [Plan](../../spec/three-line-07-storage-ports.plan.md) · [迁移归属](ownership.md) · [测试映射](test-mapping.json)
+依据：[Spec](../../archive/spec/completed/three-line-07-storage-ports.spec.md) · [Plan](../../archive/spec/completed/three-line-07-storage-ports.plan.md) · [迁移归属](ownership.md) · [测试映射](test-mapping.json)
 
 ## 当前结果
 

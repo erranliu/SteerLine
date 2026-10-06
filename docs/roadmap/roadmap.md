@@ -47,31 +47,12 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 | 52 | 文档审阅与确认原生界面 | 规划文档差异、固定版本确认与发布回执 | `#44`、`#48` | [Spec](../spec/phase2-review-ui.spec.md) · [Plan](../spec/phase2-review-ui.plan.md) |
 | 53 | 第二阶段完整闭环验收 | 规划到真实任务交付再回规划的完整产品链 | `#49`、`#50`、`#51`、`#52`、`#42` | [Spec](../spec/phase2-integration.spec.md) · [Plan](../spec/phase2-integration.plan.md) |
 
-## 任务执行控制台解耦与目录整理
-
-目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。完整范围、目标目录、所有权、阶段依赖与验收方向见 [目标roadmap](three-line-modularization.md)。任务负责挑选工作，执行负责并发派发、交付核验与结项并向任务提交结果，控制台消费稳定产品契约。
-
-纯类型、任务选择/结果小端口及 task 应用用例已具备。剩余从 #76 的执行用例迁包继续，产品/控制台、适配、存储和宿主各消费现行小端口；本机候选迁移按实际接线影响定向重验。当前源码归属按需查[架构索引](../architecture/current-code-architecture.md)。#43/#44/#45 不等待全部整理。
-
-| 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
-| --- | --- | --- | --- | --- |
-| 76 | 执行应用用例归包 | 候选/会话/恢复/交付/清理归 execution | `#74` | [Spec](../spec/three-line-04-execution-usecases.spec.md) · [Plan](../spec/three-line-04-execution-usecases.plan.md) |
-| 77 | 产品查询与控制台契约收窄 | 公开 DTO 收窄、唯一 query/client 和 console 归包 | `#74`、`#38` | [Spec](../spec/three-line-05-product-console.spec.md) · [Plan](../spec/three-line-05-product-console.plan.md) |
-| 78 | 执行适配与资源目录归组 | 后端协议与 Git/PR/进程资源归组 | `#76` | [Spec](../spec/three-line-06-adapters-resources.spec.md) · [Plan](../spec/three-line-06-adapters-resources.plan.md) |
-| 79 | 存储目录与消费者端口收口 | 唯一 SQLite 归 storage、消费者窄端口与原子提交 | `#75`、`#76`、`#77` | [Spec](../spec/three-line-07-storage-ports.spec.md) · [Plan](../spec/three-line-07-storage-ports.plan.md) |
-| 80 | 应用组装与服务宿主收口 | 配置构造归 app、服务承载归 host，删除旧主包/contracts | `#75`、`#76`、`#77`、`#78`、`#79` | [Spec](../spec/three-line-08-app-host.spec.md) · [Plan](../spec/three-line-08-app-host.plan.md) |
-| 81 | 测试支持与集成目录整理 | testkit 与 tests/integration、runner/断言映射 | `#80` | [Spec](../spec/three-line-09-testkit-integration.spec.md) · [Plan](../spec/three-line-09-testkit-integration.plan.md) |
-| 82 | 独立开发证明与最终清理 | 三线实际独立改动证明、残留清理与最小交付/恢复组合 | `#81` | [Spec](../spec/three-line-10-independence-cleanup.spec.md) · [Plan](../spec/three-line-10-independence-cleanup.plan.md) |
-
 ## 推进顺序
 
 - #40、#43、#44 可在隔离资源上准备；#36 仅作为已具备基础保留，后继仍按各自固定 Spec 开工。
 - 本机候选基线已具备；#40 → #41，再由 #42 汇合本机候选与版本能力，硬前置 ID 保留在任务表。
-- #76/#77 的固定基础已具备；#76 → #78，#76/#77 完成后满足 #79 的剩余前置，相关任务整体交付后进入 #80 → #81 → #82。共享类型、构造和提交协调段顺序集成。
 - #36 → #45 后分为规划链与执行 UI；#53 汇合原生页面及第一阶段组合验收。
 
 ## 规划约束
 
 [架构约束](architecture-constraints.md) · [控制台约束](console-constraints.md) · [第一阶段交付](phase-1-delivery.md)
-
-#76 已由 PR219 合入；#77 在独立工作树继续产品读取/客户端工作，#78 基于该硬前置迁移适配器与资源目录。#79–#82 未由当前任务启动，后续仍按固定 Spec 与 DAG 前置执行。共享构造按[现行接口交接](../validation/three-line-04-execution-usecases/interface-handoff.md)和各任务所有权顺序集成。

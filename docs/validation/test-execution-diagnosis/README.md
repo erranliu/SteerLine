@@ -1,6 +1,6 @@
 # 测试执行耗时定位与方案选择
 
-2026-09-28 对源码 `543f0d4e9dd9559f253de663d3ffb646ceecf079` 完成测试执行定位。用户要求先确定具体改法，再形成独立 Spec/Plan；本次没有分配任务 ID、创建中心任务、修改 DAG 或应用产品代码变更。最终方案见 [Spec 草案](../../spec/test-execution-efficiency.spec.md)与 [Plan 草案](../../spec/test-execution-efficiency.plan.md)。
+2026-09-28 对源码 `543f0d4e9dd9559f253de663d3ffb646ceecf079` 完成测试执行定位。用户要求先确定具体改法，再形成独立 Spec/Plan；本次没有分配任务 ID、创建中心任务、修改 DAG 或应用产品代码变更。最终方案见 [Spec 草案](../../archive/spec/completed/test-execution-efficiency.spec.md)与 [Plan 草案](../../archive/spec/completed/test-execution-efficiency.plan.md)。
 
 ## 环境与完整对照
 

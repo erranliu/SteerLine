@@ -1,6 +1,6 @@
 # #57 Codex 执行适配器迁移验收
 
-基线：`9a3fe7beb88f11d9a21d8827018c5d86f641c16c`（origin/main），包含 #55 的 `fc5142922fb3e959c4637f5f394be9dc41101ecf` 和 #56。交付依据：[Spec](../../spec/execution-isolation-04-codex.spec.md) / [Plan](../../spec/execution-isolation-04-codex.plan.md)。未实施 #58–#61。
+基线：`9a3fe7beb88f11d9a21d8827018c5d86f641c16c`（origin/main），包含 #55 的 `fc5142922fb3e959c4637f5f394be9dc41101ecf` 和 #56。交付依据：[Spec](../../archive/spec/completed/execution-isolation-04-codex.spec.md) / [Plan](../../archive/spec/completed/execution-isolation-04-codex.plan.md)。未实施 #58–#61。
 
 ## 最终所有者与交接
 

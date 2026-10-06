@@ -4,7 +4,7 @@
 
 ## 范围与前置
 
-无未完成硬前置。复用现有安装/启动器、[服务生命周期](pr-03-service-lifecycle.spec.md)与[共同约束](phase1-delivery-constraints.md)。交付不可变版本目录和 stable/dev 各自的服务、控制台、任务 CLI 固定入口；#41 负责实际环境隔离和受控提升。首阶段产品平台是 Windows；Linux Go 构建保持通过，不把构建结果当作 Linux 安装验收。
+无未完成硬前置。复用现有安装/启动器、[服务生命周期](../archive/spec/completed/pr-03-service-lifecycle.spec.md)与[共同约束](phase1-delivery-constraints.md)。交付不可变版本目录和 stable/dev 各自的服务、控制台、任务 CLI 固定入口；#41 负责实际环境隔离和受控提升。首阶段产品平台是 Windows；Linux Go 构建保持通过，不把构建结果当作 Linux 安装验收。
 
 ## 构建与选择
 

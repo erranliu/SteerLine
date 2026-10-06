@@ -5,7 +5,7 @@
 ## 范围与前置
 
 硬前置：#49、#50、#51、#52、#42，传递包含 #36。
-依赖 [Roadmap/DAG UI](phase2-roadmap-ui.spec.md)、[执行 UI](phase2-execution-ui.spec.md)、[规划对话 UI](phase2-conversation-ui.spec.md)、[审阅 UI](phase2-review-ui.spec.md)、[持续 worker](worker-flow.spec.md)及[第一阶段组合验收](phase1-release-acceptance.spec.md)。这些任务完整交付后才执行本任务；不以条件分支跳过某后端。遵守[共同约束](phase2-constraints.md)。
+依赖 [Roadmap/DAG UI](phase2-roadmap-ui.spec.md)、[执行 UI](phase2-execution-ui.spec.md)、[规划对话 UI](phase2-conversation-ui.spec.md)、[审阅 UI](phase2-review-ui.spec.md)、[持续 worker](../archive/spec/completed/worker-flow.spec.md)及[第一阶段组合验收](phase1-release-acceptance.spec.md)。这些任务完整交付后才执行本任务；不以条件分支跳过某后端。遵守[共同约束](phase2-constraints.md)。
 
 本任务拥有第二阶段最终交付判定，交付可复现验收脚本/夹具、真实 Windows 操作证据、产品路径说明和必要的集成接线修复。原生 UI 成为本阶段完整日常入口；保留现有 CLI/TUI 诊断能力，不要求删除它们。新功能或上游契约变更超出此范围时另行规划，不能靠改动完成定义掩盖失败。
 

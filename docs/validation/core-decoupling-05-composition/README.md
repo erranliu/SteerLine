@@ -1,6 +1,6 @@
 # #66 内置实现组装与主包依赖反转：交付与复审记录
 
-记录日期：2026-10-02。执行依据：[Spec](../../spec/core-decoupling-05-composition.spec.md)、[Plan](../../spec/core-decoupling-05-composition.plan.md)、[共同约束](../../spec/core-decoupling-constraints.md)。
+记录日期：2026-10-02。执行依据：[Spec](../../archive/spec/completed/core-decoupling-05-composition.spec.md)、[Plan](../../archive/spec/completed/core-decoupling-05-composition.plan.md)、[共同约束](../../archive/spec/completed/core-decoupling-constraints.md)。
 
 **状态：协调会话已独立复审、修复并完成完全访问环境最小验收，等待本 PR 合并。#67 仅在平台确认本 PR 真实合并后启动。以下执行阶段记录保留其原候选和失败结果，不能用来认证后续源码。**
 

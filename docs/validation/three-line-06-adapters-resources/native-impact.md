@@ -15,6 +15,6 @@
 
 - #39 的原生 wiring 和候选会话/资源证据：`docs/validation/candidate-native-acceptance/native-wiring-final/summary.json`、`local-08/summary.json`。它们覆盖本地 Codex/本机 Orca 原 session、process tree、binding、候选交付和清理；本次移动没有改变这些值、命令或权限。
 - #39 的固定 L1 参考：`docs/validation/candidate-native-acceptance/l1-final/summary.json`。#78 仍按本 Plan 对当前新构造路径实际运行一次 L1，并保存为独立证据，不把历史报告当作本次 L1。
-- 本次定向证据计划见 [Plan](../../spec/three-line-06-adapters-resources.plan.md)；实际 run/pass/skip、Go 版本、命令、耗时与输出应以同目录 `README.md` 和各自 test-feedback `summary.json` 为准。
+- 本次定向证据计划见 [Plan](../../archive/spec/completed/three-line-06-adapters-resources.plan.md)；实际 run/pass/skip、Go 版本、命令、耗时与输出应以同目录 `README.md` 和各自 test-feedback `summary.json` 为准。
 
 未选择 Full/L2/L3/live：纯目录移动没有变化到模型接入、权限、原生协议、PR 网络/provider 或真实后端能力；第一阶段 remote remains refusal-only。只在隔离临时目录用本地子进程验证资源 Host，不替换用户/现场 executable 或配置。

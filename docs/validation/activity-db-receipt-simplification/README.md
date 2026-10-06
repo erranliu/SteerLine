@@ -1,6 +1,6 @@
 # 数据库活动与操作回执收口验证
 
-行为依据：[Spec](../../spec/activity-db-receipt-simplification.spec.md)、[Plan](../../spec/activity-db-receipt-simplification.plan.md)。基线 main 886a520（#205），未修改候选规格或路线图。
+行为依据：[Spec](../../archive/spec/completed/activity-db-receipt-simplification.spec.md)、[Plan](../../archive/spec/completed/activity-db-receipt-simplification.plan.md)。基线 main 886a520（#205），未修改候选规格或路线图。
 
 ## 行数
 

@@ -82,13 +82,13 @@ UI 与服务查询展示的正式 `docs/roadmap/` 和 `docs/spec/` 内容始终�
 
 Roadmap 页以目标和文档为主线，保留原 Markdown 的可读全文，也提供目标摘要、关联 Spec/Plan、版本和未确认差异。点击目标可以在右侧打开相关约束：项目 `AGENTS.md`、[roadmap 规则](../roadmap/readme.md)、[Spec 索引与规则](../spec/README.md)、架构及控制台约束。约束面板引用原文件与位置，不能维护一份会过期的复制文本。
 
-DAG 页默认同时给出可搜索的任务列表和所选任务一层上下游；需要时扩展深度。节点标注状态、阻塞原因和交付证据；被丢弃的前置及其后继阻塞仍可查看。大型图按[既有图查询契约](../spec/dag-view.spec.md)分页或标明截断，不把不完整图显示成全图，也不提供直接拖边修改依赖。任务详情通往 Spec、Plan、运行、决策、PR 和合并核验。
+DAG 页默认同时给出可搜索的任务列表和所选任务一层上下游；需要时扩展深度。节点标注状态、阻塞原因和交付证据；被丢弃的前置及其后继阻塞仍可查看。大型图按[既有图查询契约](../archive/spec/completed/dag-view.spec.md)分页或标明截断，不把不完整图显示成全图，也不提供直接拖边修改依赖。任务详情通往 Spec、Plan、运行、决策、PR 和合并核验。
 
 拟规划任务可以在文档审阅页预览依赖变化，但只有中心已创建任务进入正式 DAG 图。Roadmap 和 DAG 均标明各自的文档版本或中心快照版本；不能用虚线草稿节点混入正式任务而不说明来源。
 
 ## 替代第一阶段 viewer
 
-“执行与待处理”页复用第一阶段的统一 Query/Command 和会话模型。列表按 Ready、运行中、待决策、待合并、需处理、历史筛选；详情显示 Task / WorkflowRun / Execution / Attempt 的准确身份、阶段、能力、最后采样时间和可用动作原因。消息按真实轮次组织，过程可折叠，最终回复完整可读；缺口、失败和未解决问题不能因折叠消失。具体语义沿用[控制台 Spec](../spec/pr-04-console.spec.md)与[会话 Spec](../spec/pr-04b-conversation-events.spec.md)。
+“执行与待处理”页复用第一阶段的统一 Query/Command 和会话模型。列表按 Ready、运行中、待决策、待合并、需处理、历史筛选；详情显示 Task / WorkflowRun / Execution / Attempt 的准确身份、阶段、能力、最后采样时间和可用动作原因。消息按真实轮次组织，过程可折叠，最终回复完整可读；缺口、失败和未解决问题不能因折叠消失。具体语义沿用[控制台 Spec](../archive/spec/completed/pr-04-console.spec.md)与[会话 Spec](../archive/spec/completed/pr-04b-conversation-events.spec.md)。
 
 操作反馈分开显示“已提交、服务已接受、已执行、被拒绝、结果待核实”。发送前保存完整原信封；重连先查询原结果，服务明确 command_not_found 时可用原 ID/内容/版本幂等补交，已有记录只对账，不生成新命令或重放外部动作。决策卡片绑定原问题和 attempt，分别展示答案保存、平台接收、轮次开始及应用证明。Windows UI 关闭不停止服务或 worker；服务关闭时保留历史和离线诊断，不依缓存 Ready 发命令。
 

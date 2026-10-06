@@ -4,7 +4,7 @@
 
 ## 范围与前置
 
-硬前置：#36 [持续 worker 流程](worker-flow.spec.md)。消费已有 Query/Command、五阶段状态和原会话反馈，不以多候选交付或全面 SQL 搬包为前置。
+硬前置：#36 [持续 worker 流程](../archive/spec/completed/worker-flow.spec.md)。消费已有 Query/Command、五阶段状态和原会话反馈，不以多候选交付或全面 SQL 搬包为前置。
 遵守[第二阶段共同约束](phase2-constraints.md)。交付现有执行能力的本机协议适配和离线查询；规划提案、会话和发布的业务模型由其所属任务实现，本任务只提供固定接线方式和 unsupported 响应。
 
 ## 连接和认证

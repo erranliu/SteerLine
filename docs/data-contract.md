@@ -42,7 +42,7 @@ worker 或用户提供的 URL 只是线索。中心经配置的 provider 查询�
 
 ## 控制入口
 
-`steerline task list/show/graph/export` 只读中心权威；validate/create/discard/add-predecessors 通过固定版本与请求 ID 操作。控制台或 CLI 的 `answer_decision` 共享 CommandService 提交路径。正式服务入口只运行 `worker-flow-v1`；旧五步的 retry、mark-stopped、task reopen 和项目步骤验证器没有当前 CLI 入口。旧状态的人工核实边界见 [worker-flow Spec](spec/worker-flow.spec.md)。
+`steerline task list/show/graph/export` 只读中心权威；validate/create/discard/add-predecessors 通过固定版本与请求 ID 操作。控制台或 CLI 的 `answer_decision` 共享 CommandService 提交路径。正式服务入口只运行 `worker-flow-v1`；旧五步的 retry、mark-stopped、task reopen 和项目步骤验证器没有当前 CLI 入口。旧状态的人工核实边界见 [worker-flow Spec](archive/spec/completed/worker-flow.spec.md)。
 
 本任务的 [逐项验收状态](validation/worker-flow/status.md) 区分已验证、推迟和发布前人工合并链。文档中的协议定义本身不代表所有 WF1–WF12 已通过。
 

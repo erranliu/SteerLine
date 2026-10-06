@@ -1,6 +1,6 @@
 # #68 主包解耦重构后代码清理
 
-依据 [Spec](../../spec/core-decoupling-07-cleanup.spec.md)、[Plan](../../spec/core-decoupling-07-cleanup.plan.md)及两个共同约束。实际工作区 `C:/Users/lmas1/.codex/worktrees/fc3b/SteerLine`；起点为最新 main `d8bacbd75994a183c6d54c027abe103d26ae6896`，PR190 平台确认 `mergedAt=2026-10-03T05:16:14Z`、最终 head `f77724a066afd0c43b7fda28c9bbabf77954a9b8`。分支 `codex/68-core-cleanup`，执行设置 `gpt-6.1-sol / high`，覆盖 runner 默认设置。本任务只交付清理 PR，等待协调独立复审/修复与真实合并；未启动 #69–#72。
+依据 [Spec](../../archive/spec/completed/core-decoupling-07-cleanup.spec.md)、[Plan](../../archive/spec/completed/core-decoupling-07-cleanup.plan.md)及两个共同约束。实际工作区 `C:/Users/lmas1/.codex/worktrees/fc3b/SteerLine`；起点为最新 main `d8bacbd75994a183c6d54c027abe103d26ae6896`，PR190 平台确认 `mergedAt=2026-10-03T05:16:14Z`、最终 head `f77724a066afd0c43b7fda28c9bbabf77954a9b8`。分支 `codex/68-core-cleanup`，执行设置 `gpt-6.1-sol / high`，覆盖 runner 默认设置。本任务只交付清理 PR，等待协调独立复审/修复与真实合并；未启动 #69–#72。
 
 ## 删除依据与唯一所有者
 

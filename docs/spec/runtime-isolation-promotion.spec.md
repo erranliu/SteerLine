@@ -4,7 +4,7 @@
 
 ## 范围与前置
 
-硬前置：#40 [固定版本与双入口](versioned-runtime.spec.md)、#36 [持续 worker 流程](worker-flow.spec.md)。遵守[第一阶段共同约束](phase1-delivery-constraints.md)。交付独立 stable/dev home 和可恢复的受控版本选择；不维护项目五步、自动回滚或通用迁移框架。
+硬前置：#40 [固定版本与双入口](versioned-runtime.spec.md)、#36 [持续 worker 流程](../archive/spec/completed/worker-flow.spec.md)。遵守[第一阶段共同约束](phase1-delivery-constraints.md)。交付独立 stable/dev home 和可恢复的受控版本选择；不维护项目五步、自动回滚或通用迁移框架。
 
 ## 隔离与维护资格
 

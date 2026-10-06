@@ -131,6 +131,6 @@ go run ./cmd/test-feedback -level=L1 ('-out=' + (Join-Path $runRoot 'l1'))
 
 新写或修改的实现 Plan 应列出最小必要的测试级别、组/场景 ID、环境、命令、时点、通过条件及证据位置；未选择相关组时说明原因。纯文档改动检查链接、命令和场景注册一致性即可，不默认要求 L1、Full 或付费场景。
 
-[分级体系 Spec](spec/tiered-e2e-testing.spec.md) · [真实模型接入 Spec](spec/live-tiered-e2e.spec.md) · [依赖边界 Spec](spec/e2e-dependency-boundaries.spec.md)
+[分级体系 Spec](archive/spec/completed/tiered-e2e-testing.spec.md) · [真实模型接入 Spec](archive/spec/completed/live-tiered-e2e.spec.md) · [依赖边界 Spec](archive/spec/completed/e2e-dependency-boundaries.spec.md)
 
 #75 任务应用迁包的定向入口、旧/新测试父子名称和真实 app/CLI/SQLite 回滚证据见 [任务用例验证](validation/three-line-03-task-usecases/README.md)。固定 L1 已包含 task/model 与 task 应用测试；不默认启用 Full/L2/L3/live。
