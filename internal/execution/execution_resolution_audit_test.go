@@ -25,7 +25,7 @@ func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
 }
 
 func TestResolutionAuditRegistrationRejectsBaseTargetDrift(t *testing.T) {
-	c := withNeutralProfile(Config{ExecutionPolicy: workspacePolicyFixture()}, neutralSettings{Executable: "fixture-agent", Target: executionbackend.ExecutionTarget{ID: "fixture:peer", ConnectionID: "peer", ExternalRuntime: "original"}})
+	c := withNeutralProfile(Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}, neutralSettings{Executable: "fixture-agent", Target: executionbackend.ExecutionTarget{ID: "fixture:peer", ConnectionID: "peer", ExternalRuntime: "original"}})
 	dependencies, _ := neutralFixtureRuntime(c)
 	target := TargetFor(c, dependencies.Directory)
 	run := &reconstructiontypes.RunView{Host: c.Host, Agent: c.Agent, Backend: "fixture", Protocol: string(neutralProtocol), Target: target}
