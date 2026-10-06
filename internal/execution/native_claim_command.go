@@ -66,7 +66,10 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if options.ServiceInstanceID != "" && !executionbackend.StableExecutionID(options.ServiceInstanceID) {
 		return executionmodel.TaskClaimReceipt{}, nativeErr("invalid_batch", "claim service instance identity is invalid")
 	}
-	if options.ExecutionProfile != nil && (!VerifyFixedExecutionProfile(*options.ExecutionProfile, c.runtime.Directory) || options.ExecutionProfile.ID != config.selectedProfileID || options.ExecutionProfile.Digest != config.fixedProfileDigest) {
+	if options.ExecutionProfile != nil && (!verifyPreEvaluationExecutionProfile(*options.ExecutionProfile, c.runtime.Directory) ||
+		options.ExecutionProfile.ID != config.selectedProfileID || options.ExecutionProfile.Digest != config.fixedProfileDigest ||
+		options.ExecutionProfile.AcceptedConfigVersion != config.acceptedConfigVersion ||
+		options.ExecutionProfile.Host != config.hostName() || options.ExecutionProfile.Agent != config.agentName()) {
 		return executionmodel.TaskClaimReceipt{}, nativeErr("contract_mismatch", "selected execution profile differs from the claim configuration")
 	}
 	if strings.TrimSpace(options.RequestedBy) == "" {
@@ -77,7 +80,9 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	}
 	if options.ExecutionProfile == nil && c.runtime.Profiles != nil {
 		selected, fixed, resolveErr := c.runtime.Profiles.ResolveExecutionProfile(c.runtime.Profiles.DefaultProfileID(), "")
-		if resolveErr == nil && selected.fixedProfileDigest == config.fixedProfileDigest {
+		if resolveErr == nil && selected.fixedProfileDigest == config.fixedProfileDigest &&
+			verifyPreEvaluationExecutionProfile(fixed, c.runtime.Directory) &&
+			fixed.AcceptedConfigVersion == config.acceptedConfigVersion && fixed.Host == config.hostName() && fixed.Agent == config.agentName() {
 			options.ExecutionProfile = &fixed
 		}
 	}
@@ -136,9 +141,9 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		return executionmodel.TaskClaimReceipt{}, err
 	}
 	if options.ExecutionProfile != nil {
-		fixed := *options.ExecutionProfile
-		fixed.Publication = config.publicationSettings()
-		fixed.Digest = fixedExecutionProfileDigest(fixed)
+		// Keep the request payload's selected profile digest unchanged; only the
+		// persisted frozen profile gains this claim-time evidence snapshot.
+		fixed := freezeClaimExecutionProfile(*options.ExecutionProfile, config)
 		config.fixedProfileDigest = fixed.Digest
 		options.ExecutionProfile = &fixed
 	}
@@ -282,6 +287,15 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	command := storageports.CommandRecord{ProjectIdentity: c.Project, CommandID: options.RequestID, Kind: kind, TargetID: task.TaskID, ExpectedVersion: options.ExpectedTaskVersion, IdempotencyKey: options.RequestID, RequestedBy: options.RequestedBy, Payload: requestPayload, Status: "in_flight", CreatedAt: created}
 	operation := executionmodel.OperationRecord{ProjectIdentity: c.Project, OperationID: options.RequestID, IdempotencyKey: options.RequestID, Kind: kind, Status: "pending", PayloadDigest: operationDigest(operationRequest), Request: operationRequest, CreatedAt: created, UpdatedAt: created}
 	return sqlite.CommitTaskClaim(ctx, storageports.ClaimCommit{Before: task, After: nextTask, Contract: contract, AuthorityVersion: options.ExpectedAuthorityVersion, GraphRevision: graph.Authority.GraphRevision, Candidate: options.startCandidate, Explicit: options.Explicit, ExpectedPRBindings: executionmodel.CandidatePRBindings(candidateSnapshot.WorkflowRuns, task.TaskID), PredecessorMerges: predecessorMerges, Workflow: wfr, Execution: execution, Attempt: attempt, Command: command, Operation: operation})
+}
+
+func freezeClaimExecutionProfile(selected executionmodel.FixedExecutionProfile, config Config) executionmodel.FixedExecutionProfile {
+	selected.ExecutionRequirements = config.ExecutionRequirements.Clone()
+	selected.RequirementsEvaluation = cloneRequirementsEvaluation(config.requirementsEvaluation)
+	selected.RequirementsEvidenceDigest = requirementsEvidenceDigest(selected.RequirementsEvaluation)
+	selected.Publication = clonePublicationSettings(config.publicationSettings())
+	selected.Digest = fixedExecutionProfileDigest(selected)
+	return selected
 }
 
 func replayTaskClaim(old storageports.CommandRecord, payload []byte, taskID string, requestedBy string) (executionmodel.TaskClaimReceipt, error) {

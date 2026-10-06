@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/json"
@@ -12,6 +13,7 @@ import (
 	"testing"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func TestExecutionRequirementsExistenceAndNonSecretEvidence(t *testing.T) {
@@ -170,10 +172,10 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	require(t, os.WriteFile(projectPath, projectBytes, 0600))
 	require(t, os.WriteFile(globalPath, globalBytes, 0600))
 	digest := fixtureLoadedConfigDigest(projectBytes, globalBytes)
-	c.BindAcceptedConfigVersion(digest)
 	claimProfileSettings := neutralProfileSettings(c)
+	c.BindAcceptedConfigVersion(digest)
 	setNeutralProfile(t, &c, claimProfileSettings)
-	dependencies, _ := neutralFixtureRuntime(c)
+	dependencies, catalog := neutralFixtureRuntime(c)
 	entry, err := registrationFor(c, dependencies.Directory)
 	require(t, err)
 	fake := entry
@@ -199,6 +201,52 @@ func TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot(t *tes
 	commands.runtime.Directory = dependencies.Directory
 	_, err = commands.ClaimNativeTask(ctx, c, options)
 	require(t, err)
+	committed, err := store.Query(ctx, c.Identity())
+	require(t, err)
+	var frozen *executionmodel.FixedExecutionProfile
+	workflowRunID := ""
+	var storedExecution *executionmodel.ExecutionRecord
+	for i := range committed.WorkflowRuns {
+		if committed.WorkflowRuns[i].TaskID == "8" {
+			frozen = committed.WorkflowRuns[i].ExecutionProfile
+			workflowRunID = committed.WorkflowRuns[i].WorkflowRunID
+			break
+		}
+	}
+	for i := range committed.Executions {
+		if workflowRunID != "" && committed.Executions[i].WorkflowRunID == workflowRunID {
+			storedExecution = &committed.Executions[i]
+			break
+		}
+	}
+	if frozen == nil || storedExecution == nil || frozen.RequirementsEvaluation == nil ||
+		len(frozen.RequirementsEvaluation.Tools) != 1 || frozen.RequirementsEvaluation.Tools[0].Status != executionbackend.RequirementPresent ||
+		len(frozen.RequirementsEvaluation.Credentials) != 1 || frozen.RequirementsEvaluation.Credentials[0].Status != executionbackend.RequirementPresent ||
+		frozen.RequirementsEvidenceDigest != requirementsEvidenceDigest(frozen.RequirementsEvaluation) || frozen.AcceptedConfigVersion != digest ||
+		storedExecution.ConfigurationDigest != frozen.Digest || !VerifyFixedExecutionProfile(*frozen, dependencies.Directory) {
+		t.Fatalf("requirements claim did not persist one verified evaluated profile: profile=%+v execution=%+v", frozen, storedExecution)
+	}
+	profileBytes := mustJSON(*frozen)
+	if bytes.Contains(profileBytes, []byte("private-value")) {
+		t.Fatal("frozen requirement evidence contains the credential value")
+	}
+	baselineConfig := c
+	baselineConfig.requirementsEvaluation = cloneRequirementsEvaluation(frozen.RequirementsEvaluation)
+	baselineConfig.publicationRemoteURL = frozen.Publication.RemoteURL
+	baselineCatalog := catalog
+	baselineCatalog.Base = baselineConfig
+	var baseline *executionmodel.FixedExecutionProfile
+	for _, profile := range baselineCatalog.AvailableExecutionProfiles() {
+		if profile.ID == frozen.ID {
+			value := profile.Freeze(baselineCatalog.Directory, baselineConfig.Identity())
+			baseline = &value
+			break
+		}
+	}
+	if baseline == nil || !bytes.Equal(profileBytes, mustJSON(*baseline)) {
+		t.Fatalf("new claim freeze differs from the original evaluated bind-and-freeze semantics: current=%s baseline=%s", profileBytes, mustJSON(baseline))
+	}
+	t.Logf("evaluated claim profile exact frozen bytes matched evaluated catalog bind+freeze: digest=%s evidence=%s accepted=%s bytes_sha256=%x", frozen.Digest, frozen.RequirementsEvidenceDigest, frozen.AcceptedConfigVersion, sha256.Sum256(profileBytes))
 	s, err := newNeutralService(c)
 	require(t, err)
 	defer s.Close()

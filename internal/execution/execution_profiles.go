@@ -112,10 +112,22 @@ func cloneRequirementsEvaluation(value *executionbackend.RequirementsEvaluation)
 }
 
 func VerifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile, directory *ExecutionDirectory) bool {
+	return verifyFixedExecutionProfile(p, directory, false)
+}
+
+// verifyPreEvaluationExecutionProfile validates the selected profile identity
+// before claim-time requirements are evaluated. A missing evaluation is
+// allowed only at this boundary; the persisted claim profile is verified by
+// VerifyFixedExecutionProfile after its evaluation has been frozen.
+func verifyPreEvaluationExecutionProfile(p executionmodel.FixedExecutionProfile, directory *ExecutionDirectory) bool {
+	return verifyFixedExecutionProfile(p, directory, true)
+}
+
+func verifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile, directory *ExecutionDirectory, allowPendingRequirements bool) bool {
 	if directory == nil || p.Version != fixedExecutionProfileVersion || p.ImplementationVersion != directory.Version() ||
 		p.ImplementationKey == "" || p.ID == "" || p.Name == "" || p.AcceptedConfigVersion == "" ||
 		p.PolicySource == "" || p.Digest == "" || p.Digest != fixedExecutionProfileDigest(p) ||
-		!verifyRequirementsSnapshot(p, directory) ||
+		!verifyRequirementsSnapshot(p, directory, allowPendingRequirements) ||
 		publication.ValidateSettings(p.Publication) != nil || p.ExecutionPolicy.Validate() != nil ||
 		p.PolicyDigest != digestValue(p.ExecutionPolicy) {
 		return false

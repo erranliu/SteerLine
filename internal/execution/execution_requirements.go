@@ -80,12 +80,12 @@ func requirementsEvidenceDigest(e *executionbackend.RequirementsEvaluation) stri
 	return digestValue(e)
 }
 
-func verifyRequirementsSnapshot(p executionmodel.FixedExecutionProfile, directory *ExecutionDirectory) bool {
+func verifyRequirementsSnapshot(p executionmodel.FixedExecutionProfile, directory *ExecutionDirectory, allowPending bool) bool {
 	if p.ExecutionRequirements.Validate() != nil || requirementsEvidenceDigest(p.RequirementsEvaluation) != p.RequirementsEvidenceDigest {
 		return false
 	}
 	if p.RequirementsEvaluation == nil {
-		return p.ExecutionRequirements.Empty()
+		return p.ExecutionRequirements.Empty() || allowPending
 	}
 	e := *p.RequirementsEvaluation
 	projectID := ""

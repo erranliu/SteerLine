@@ -29,11 +29,11 @@ const executionPackage = "github.com/erranliu/SteerLine/internal/execution"
 // Full partitions the execution business tests after their move out of the host facade.
 const fullCorePackage = executionPackage
 
-var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput", "TestCandidateResumeErrorDoesNotStarveSibling", "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor"}
+var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput", "TestCandidateResumeErrorDoesNotStarveSibling", "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor", "TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot", "TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal", "TestExecutionRequirementsDoNotUpgradeProbeToVerified"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/tests/integration"
 
-var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImplementation", "TestTM04ExecutionWiring", "TestTM06ResourceWiring", "TestTM07StorageWiring", "TestTM08AppHostWiring"}
+var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImplementation", "TestTM04ExecutionWiring", "TestTM06ResourceWiring", "TestTM07StorageWiring", "TestTM08AppHostWiring", "TestAppRequirementsClaimFreezesEvaluatedProfile"}
 
 var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary",
@@ -76,6 +76,9 @@ var quickBoundaryAssigned = []string{
 	"TestTM04ExecutionWiring/original_request_ack_and_manual_recovery",
 	"TestTM08AppHostWiring",
 	"TestTM08AppHostWiring/default_app_host_composition",
+	"TestAppRequirementsClaimFreezesEvaluatedProfile",
+	"TestAppRequirementsClaimFreezesEvaluatedProfile/default_profile",
+	"TestAppRequirementsClaimFreezesEvaluatedProfile/explicit_selected_profile",
 }
 
 var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{
