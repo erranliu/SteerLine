@@ -28,7 +28,7 @@ go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delive
 | --- | --- | --- |
 | L2 controlled | `smoke.delivery` | 正式创建/领取 A、发布 PR、合并前 B 阻塞，合并后原 A 交付且 B 就绪但未启动 |
 | L2 live | `smoke.local-codex` / `smoke.orca-codex` | 真实模型、真实 SteerlineTest GitHub PR、合并交付、依赖解锁和正数 usage |
-| L3 controlled | `delivery.basic` | 独立受控交付闭环 |
+| L3 controlled | `delivery.basic` | 验证 A 唯一 Delivery 解锁 B；B dependency-ready 且未创建 WorkflowRun |
 | L3 controlled | `recovery.waiting-merge-restart` | 等待合并后重启，原任务/数据库/工作流/执行/工作区保持，不重派，再正常交付 |
 | L3 live | `delivery.local-codex` / `delivery.orca-codex` | 真实模型配 loopback provider，分别独立交付 |
 | L3 live | `recovery.local-codex` / `recovery.orca-codex` | 真实执行后重启保持原身份，usage 不增加，再合并交付 |
@@ -47,6 +47,8 @@ L1/quick 固定执行 `internal/testkit/boundary/e2e`，并在 `internal/testkit
 Run 持有本次产品/helper 构建和选择；Scenario 持有 scratch/证据；Project 持有 home、Git、SQLite、服务/provider；Task 来自正式创建回执，Spec/Plan 真实提交并绑定。不同项目不共享可写资源，重启保留原现场，重跑创建新现场。服务/helper 子进程使用 Windows Job 所有权管理，清理本次进程树。
 
 任务创建/查询使用当前 CLI。领取使用公开 SubmitControl/WaitControlReceipt，先 ResolveIdentity 再计算 Profile digest，与控制台/服务一致。执行身份通过公开 reader/query 的同一事务读取，不直接写 SQL 或读取私有业务状态。
+
+分级 runner 在 E2E 测试进程中清除继承的 `STEERLINE_*` 变量；driver 启动的产品/service/helper 进程会显式得到当前 Project 的 home 和 controlled provider-state 路径。Project 在进程内轮询 service runtime 时，也必须临时将 `STEERLINE_HOME` 和 `STEERLINE_E2E_CONTROLLED_STATE` 绑定到同一个 Project，再在读取后恢复原环境。这样不会读取机器上的全局 execution profile，也不会让相邻 Project 串用配置；它不增加产品权限、service 或 E2E 场景能力。
 
 controlled 使用真实 SteerLine、Git、SQLite，helper 实现最小 app-server 和 GitHub provider。worker 真实 commit/push/create；中心查询与核验真实合并后提交交付。loopback `git http-backend` 执行真实传输，Git 适配器保留正式 remote 身份及原始输出；外部 PR 状态只存于 provider 文件。
 

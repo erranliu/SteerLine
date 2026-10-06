@@ -1,0 +1,12 @@
+{"Time":"2026-10-06T17:39:18.2463683+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/integration"}
+{"Time":"2026-10-06T17:39:19.8014054+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestCD67AdditionalImplementation"}
+{"Time":"2026-10-06T17:39:19.8014054+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestCD67AdditionalImplementation","Output":"=== RUN   TestCD67AdditionalImplementation\n"}
+{"Time":"2026-10-06T17:39:19.8014054+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer"}
+{"Time":"2026-10-06T17:39:19.8019396+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer","Output":"=== RUN   TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer\n"}
+{"Time":"2026-10-06T17:40:21.67102+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer","Output":"--- PASS: TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer (61.87s)\n"}
+{"Time":"2026-10-06T17:40:21.67102+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer","Elapsed":61.87}
+{"Time":"2026-10-06T17:40:21.67102+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestCD67AdditionalImplementation","Output":"--- PASS: TestCD67AdditionalImplementation (61.87s)\n"}
+{"Time":"2026-10-06T17:40:21.67102+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestCD67AdditionalImplementation","Elapsed":61.87}
+{"Time":"2026-10-06T17:40:21.67102+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"PASS\n"}
+{"Time":"2026-10-06T17:40:21.6838465+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"ok  \tgithub.com/erranliu/SteerLine/tests/integration\t63.438s\n"}
+{"Time":"2026-10-06T17:40:21.6838465+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/integration","Elapsed":63.438}

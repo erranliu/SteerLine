@@ -1,0 +1,9 @@
+{"Time":"2026-10-06T17:13:41.6326266+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/console"}
+{"Time":"2026-10-06T17:13:42.1991013+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/console","Test":"TestUX4RejectPreservesDraftAndBlockerStaysIndependent"}
+{"Time":"2026-10-06T17:13:42.1991013+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/console","Test":"TestUX4RejectPreservesDraftAndBlockerStaysIndependent","Output":"=== RUN   TestUX4RejectPreservesDraftAndBlockerStaysIndependent\n"}
+{"Time":"2026-10-06T17:13:42.2238306+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/console","Test":"TestUX4RejectPreservesDraftAndBlockerStaysIndependent","Output":"    interaction_test.go:193: blocker was treated as an accepted response\n"}
+{"Time":"2026-10-06T17:13:42.2243883+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/console","Test":"TestUX4RejectPreservesDraftAndBlockerStaysIndependent","Output":"--- FAIL: TestUX4RejectPreservesDraftAndBlockerStaysIndependent (0.03s)\n"}
+{"Time":"2026-10-06T17:13:42.2243883+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/internal/console","Test":"TestUX4RejectPreservesDraftAndBlockerStaysIndependent","Elapsed":0.03}
+{"Time":"2026-10-06T17:13:42.2243883+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/console","Output":"FAIL\n"}
+{"Time":"2026-10-06T17:13:42.2266686+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/console","Output":"FAIL\tgithub.com/erranliu/SteerLine/internal/console\t0.594s\n"}
+{"Time":"2026-10-06T17:13:42.2266686+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/internal/console","Elapsed":0.594}

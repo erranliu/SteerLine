@@ -1,0 +1,214 @@
+{
+  "schema_version": 1,
+  "task": 82,
+  "starting_head": "9483afa13a9306e9852ef365c0746d1b5335c10f",
+  "starting_tree": "e076672f16eeb574bf36471e3a8ca6846972c99a",
+  "predecessor": {
+    "task": 81,
+    "pr": "https://github.com/erranliu/SteerLine/pull/226",
+    "final_head": "5aa714b74c66cadc9d5197413080c3a29d48ce1b",
+    "merged_at": "2026-10-06T08:31:38Z",
+    "merge_commit": "9483afa13a9306e9852ef365c0746d1b5335c10f",
+    "parents": [
+      "e3ef412fd9bd00aab2b8f06c62d97686f937b44d",
+      "5aa714b74c66cadc9d5197413080c3a29d48ce1b"
+    ],
+    "history": "docs/validation/three-line-09-testkit-integration/test-mapping.json",
+    "note": "All prior testkit/integration migrations are already merged. #82 uses current owners and does not recreate those packages or reports."
+  },
+  "plan_target_correction": {
+    "fixed_acceptance_ids": ["TM10.1", "TM10.2", "TM10.3"],
+    "planned_but_absent_parent_names": [
+      "TestTM10TaskSelection",
+      "TestTM10ExecutionRule",
+      "TestTM10ConsoleInteraction"
+    ],
+    "resolution": "Keep the fixed Spec acceptance unchanged. Use existing actual owner parents listed below instead of adding mirror tests or relying on a zero-match union. The Plan's old internal/steerline/candidate_workers_test.go path is retired and the escaped Markdown table union was not a valid shell regex. Each final command is recorded verbatim in its test-feedback summary."
+  },
+  "environment_diagnostics": {
+    "initial_l1": {
+      "run": "docs/validation/three-line-10-independence-cleanup/l1-20261006-01/",
+      "source_commit": "d87a714baeea5aa8a8d0173deb5a232cf0ba1d47",
+      "result": "incomplete after the 15-minute quick-boundary group; actual GIT_DIR too big failures were caused by integration Git worktrees under the longer AppData TEMP root",
+      "preserved": true
+    },
+    "short_temp_diagnostic": {
+      "run": "docs/validation/three-line-10-independence-cleanup/independence/l1-path-diagnostic-20261006-01/",
+      "source_commit": "d87a714baeea5aa8a8d0173deb5a232cf0ba1d47",
+      "parent": "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+      "result": "2 run/pass, 0 fail/skip under C:\\Users\\lmas1\\Temp; no GIT_DIR diagnostic"
+    },
+    "final_l1_longer_temp_id": {
+      "run": "docs/validation/three-line-10-independence-cleanup/l1-20261006-07/",
+      "source_commit": "b098dfa89de7bbd2bc4b3745465659de7aa1f1f2",
+      "result": "12 groups; 456 tests, 5 failed, 0 skipped; quick-boundary incomplete. Three integration child failures reported fatal '$GIT_DIR' too big under the longer sl82-l1-final-20261006-01 temporary root. Preserved as a diagnostic, not a pass.",
+      "preserved": true
+    },
+    "final_l1_shortest_root_diagnostic": {
+      "run": "docs/validation/three-line-10-independence-cleanup/independence/l1-path-diagnostic-final-20261006-01/",
+      "source_commit": "b098dfa89de7bbd2bc4b3745465659de7aa1f1f2",
+      "temporary_root": "C:\\Users\\lmas1\\Temp\\sl82-p",
+      "selected_children": [
+        "TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
+        "TestCD67AdditionalImplementation/supported_app_server_receipt_barriers",
+        "TestTM04ExecutionWiring/intent_binding_and_two_original_turns"
+      ],
+      "result": "5 test events including the selected children passed, 0 failed/skipped; true exit 0; supports the subsequent full L1 rerun with a shorter root."
+    },
+    "final_l1_shortest_root_pass": {
+      "run": "docs/validation/three-line-10-independence-cleanup/l1-20261006-08/",
+      "source_commit": "b098dfa89de7bbd2bc4b3745465659de7aa1f1f2",
+      "result": "12 groups; 459 run/pass, 0 fail/skip; passed=true, complete=true; true exit 0.",
+      "temporary_root": "C:\\Users\\lmas1\\Temp\\sl82-z",
+      "preserved": true
+    },
+    "initial_delivery": {
+      "run": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-01/",
+      "source_commit": "d87a714baeea5aa8a8d0173deb5a232cf0ba1d47",
+      "result": "TestBasicDelivery failed at service readiness because the in-process readiness reader did not bind STEERLINE_HOME to the scenario Project.Home; e2eEnvironment clears inherited STEERLINE_* variables",
+      "scenario_cleanup_complete": true,
+      "preserved": true
+    },
+    "home_only_retry": {
+      "run": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-02/",
+      "source_commit": "fbad8755deebf84ce1358dce9d4469eadc5996a8",
+      "result": "After Project.Home scoping, the exact failure moved to the controlled-helper Git lookup because the in-process reader also lacked STEERLINE_E2E_CONTROLLED_STATE",
+      "scenario_cleanup_complete": true,
+      "preserved": true
+    },
+    "successor_claim_diagnostic": {
+      "run": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-04/",
+      "source_commit": "6dbd1ca6fc61e91b1506345a33d9700ebce2b13b",
+      "result": "A had exactly one Delivery and B was ready/unstarted; the helper's repeated resume_dispatch was correctly rejected because dispatch was already active",
+      "scenario_cleanup_complete": true,
+      "preserved": true
+    },
+    "successor_start_barrier_diagnostics": {
+      "delivery_run": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-05/",
+      "recovery_run": "docs/validation/three-line-10-independence-cleanup/independence/recovery-successor-probe-20261006-01/",
+      "result": "One direct start_task request in each temporary test probe was rejected with original worker operation must be reconciled before another action. Neither request was retried. The recovery output preserves its receipt, final snapshot, logs and source patch. The temporary test-only start requests were withdrawn; these diagnostics are not registered-scene acceptance passes.",
+      "recovery_cleanup_complete": true,
+      "preserved": true
+    },
+    "fix": {
+      "owner": "tests/e2e/internal/testenv.Project.readRuntime",
+      "change": "Temporarily bind both STEERLINE_HOME and STEERLINE_E2E_CONTROLLED_STATE to the current Project's home and provider path for the in-process app configuration/runtime read, then restore both prior process values on success or error. This matches driver.Environment for service/helper children.",
+      "new_e2e_scenario_or_environment": false,
+      "product_policy_or_acceptance_changed": false
+    }
+  },
+  "proofs": [
+    {
+      "acceptance": "TM10.1/task-selection-priority",
+      "old_planned_parent": "TestTM10TaskSelection (not present in current source)",
+      "source_owner": "internal/task/model",
+      "production_path": [
+        "internal/task.Service.Ready",
+        "internal/task/model.ReadyTasks",
+        "internal/task/model.StableTaskOrder"
+      ],
+      "old_actual_test_owner": "internal/task/model/taskgraph_test.go",
+      "actual_parent": "TestStableTaskOrderUsesPriorityTimeAndNumericID",
+      "subtests": [],
+      "assertions": "Exact priority, CreatedAt, numeric-ID and dependency-constrained topological order; production sort is called by task-owned ReadyTasks.",
+      "mutation": "overlay only: reverse x.Priority < y.Priority comparator; same parent must fail and report a changed order.",
+      "after_revert": "run identical package/test without overlay; same source hash/tree and parent pass."
+    },
+    {
+      "acceptance": "TM10.1/execution-rule-recovery-capacity",
+      "old_planned_parent": "TestTM10ExecutionRule (not present in current source)",
+      "old_planned_mc_path": "internal/steerline/candidate_workers_test.go",
+      "old_actual_mc_path": "internal/steerline/candidate_workers_test.go",
+      "source_owner": "internal/execution",
+      "actual_mc_path": "internal/execution/candidate_workers_test.go",
+      "app_integration_owner": "tests/integration/execution_wiring_test.go",
+      "actual_parents": [
+        "TestMC9",
+        "TestCandidateResumeErrorDoesNotStarveSibling"
+      ],
+      "subtests": [],
+      "assertions": "MC9 preserves the original request replay, start-time five-participant refusal, immediate release, and complete candidate history; sibling recovery preserves the original error and still resumes a healthy independent candidate.",
+      "mutation": "The first retired-candidate overlay is retained as a non-triggering diagnostic: its actual parent selection passed 2/2 because the parent did not exercise that branch. The corrected overlay changes only the active resumeRegisteredWorkerFlow error aggregation to return before the next sibling; then TestCandidateResumeErrorDoesNotStarveSibling fails its healthy-sibling assertion while TestMC9 passes.",
+      "after_revert": "Run both actual owner parents without overlay after the corrected active-branch probe; no task/console source change.",
+      "non_triggering_attempt": "docs/validation/three-line-10-independence-cleanup/independence/execution-mutated-20261006-01/",
+      "active_branch_probe": "docs/validation/three-line-10-independence-cleanup/probes/execution-active-branch/",
+      "active_branch_mutation_run": "docs/validation/three-line-10-independence-cleanup/independence/execution-active-branch-mutated-20261006-01/",
+      "restored_run": "docs/validation/three-line-10-independence-cleanup/independence/execution-active-branch-restored-20261006-01/"
+    },
+    {
+      "acceptance": "TM10.1/console-interaction",
+      "old_planned_parent": "TestTM10ConsoleInteraction (not present in current source)",
+      "old_console_path": "internal/steerline/console/interaction_test.go",
+      "source_owner": "internal/console",
+      "actual_console_path": "internal/console/interaction_test.go",
+      "actual_parent": "TestUX4RejectPreservesDraftAndBlockerStaysIndependent",
+      "actual_real_app_path": "tests/integration/candidate_console_test.go",
+      "actual_real_app_parent": "TestCandidateConsoleWiring",
+      "subtests": {
+        "TestUX4RejectPreservesDraftAndBlockerStaysIndependent": [],
+        "TestCandidateConsoleWiring": ["merged_PR_service_guard"]
+      },
+      "assertions": "Product API fixture verifies blocked input is not sent, draft/reason remain visible, and clearing the blocker never auto-submits. Real integration constructs app, client, SQLite, service and console; it verifies the public candidate request identity and fifth-participating display/refusal path.",
+      "mutation": "overlay only: remove the environment-blocker submit barrier; UX4 must fail on unexpected submission/command. TestCandidateConsoleWiring separately runs against the real app/client/SQLite fixture before the overlay.",
+      "after_revert": "run UX4 without overlay; the real app wiring parent remains recorded in the pre-overlay run, with unchanged source/tree hashes."
+    }
+  ],
+  "controlled_scenarios": [
+    {
+      "acceptance": "TM10.3/delivery.basic",
+      "registered_id": "delivery.basic",
+      "level": "L3",
+      "environment": "controlled",
+      "package": "tests/e2e/suites/delivery",
+      "parent": "TestBasicDelivery",
+      "existing_assertions": [
+        "Before claiming the successor, Task B is dependency-ready and has no WorkflowRun.",
+        "Task A's original workflow delivery is retained while its successor becomes dependency-ready and remains unstarted."
+      ],
+      "evidence_run": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-06"
+    },
+    {
+      "acceptance": "TM10.3/recovery.waiting-merge-restart",
+      "registered_id": "recovery.waiting-merge-restart",
+      "level": "L3",
+      "environment": "controlled",
+      "package": "tests/e2e/suites/recovery",
+      "parent": "TestWaitingMergeRestart",
+      "existing_assertions": "Preserve the same task, database, workflow, execution, attempt, workspace, request/session identity and single unique Delivery across restart; do not redrive or alter the delivery; verify the successor unlock and existing cleanup.",
+      "evidence_run": "docs/validation/three-line-10-independence-cleanup/recovery-20261006-02/"
+    }
+  ],
+  "selected_runs": {
+    "task_probe_runs": [
+      "docs/validation/three-line-10-independence-cleanup/independence/task-before-20261006-01/",
+      "docs/validation/three-line-10-independence-cleanup/independence/task-mutated-20261006-01/",
+      "docs/validation/three-line-10-independence-cleanup/independence/task-restored-20261006-01/"
+    ],
+    "execution_probe_runs": [
+      "docs/validation/three-line-10-independence-cleanup/independence/execution-before-20261006-01/",
+      "docs/validation/three-line-10-independence-cleanup/independence/execution-mutated-20261006-01/",
+      "docs/validation/three-line-10-independence-cleanup/independence/execution-active-branch-mutated-20261006-01/",
+      "docs/validation/three-line-10-independence-cleanup/independence/execution-active-branch-restored-20261006-01/"
+    ],
+    "console_probe_runs": [
+      "docs/validation/three-line-10-independence-cleanup/independence/console-before-20261006-01/",
+      "docs/validation/three-line-10-independence-cleanup/independence/console-mutated-20261006-01/",
+      "docs/validation/three-line-10-independence-cleanup/independence/console-restored-20261006-01/"
+    ],
+    "l1_initial_failed_run": "docs/validation/three-line-10-independence-cleanup/l1-20261006-01/",
+    "l1_short_path_diagnostic": "docs/validation/three-line-10-independence-cleanup/independence/l1-path-diagnostic-20261006-01/",
+    "l1_pre_testenv_fix_pass": "docs/validation/three-line-10-independence-cleanup/l1-20261006-02/",
+    "l1_final_source_first_attempt": "docs/validation/three-line-10-independence-cleanup/l1-20261006-07/",
+    "l1_final_source_path_diagnostic": "docs/validation/three-line-10-independence-cleanup/independence/l1-path-diagnostic-final-20261006-01/",
+    "l1_final_source": "docs/validation/three-line-10-independence-cleanup/l1-20261006-08/",
+    "delivery_basic_initial_failure": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-01/",
+    "delivery_basic_home_only_retry": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-02/",
+    "delivery_basic_home_provider_fix_pass": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-03/",
+    "delivery_basic_successor_claim_diagnostic": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-04/",
+    "delivery_basic_successor_start_barrier": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-05/",
+    "recovery_successor_start_barrier": "docs/validation/three-line-10-independence-cleanup/independence/recovery-successor-probe-20261006-01/",
+    "delivery_basic": "docs/validation/three-line-10-independence-cleanup/delivery-20261006-06/",
+    "recovery_waiting_merge_restart": "docs/validation/three-line-10-independence-cleanup/recovery-20261006-02/"
+  },
+  "reports": "Every selected run path above contains its raw test-feedback output, true process exit, source commit and cleanup evidence; controlled scenes also include their snapshots, request receipts and service/provider logs."
+}

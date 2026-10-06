@@ -1,0 +1,14 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\delivery-20261006-04\\build\\steerline.exe",
+    "task",
+    "validate",
+    "-config",
+    "C:\\Users\\lmas1\\Temp\\sl82-delivery-20261006-04\\t\\steerline-e2e-1671820113\\delivery.basic\\delivery\\project.json",
+    "-file",
+    "C:\\Users\\lmas1\\Temp\\sl82-delivery-20261006-04\\t\\steerline-e2e-1671820113\\delivery.basic\\delivery\\tasks.json"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\"valid\":true,\"project_id\":\"c:\\\\users\\\\lmas1\\\\temp\\\\sl82-delivery-20261006-04\\\\t\\\\steerline-e2e-1671820113\\\\delivery.basic\\\\delivery\\\\repo\\\\.git\",\"task_count\":2,\"dependency_count\":1,\"authority_version\":1,\"graph_revision\":0,\"database_revision\":1,\"database_id\":\"be208caf6cd6bd5de9595bd39c3bfeb7\",\"sampled_at\":\"2026-10-06T10:49:56.9753544Z\",\"issues\":null}\n"
+}

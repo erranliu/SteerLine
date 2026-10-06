@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "source_commit": "8da65c7fb81dddc2300350b202efdf9d47e9f03e",
+  "source_tree": "e749b32947da86bf39b795cc8e3cacb7db2a1485",
+  "source_path": "tests/e2e/suites/recovery/waiting_merge_restart_test.go",
+  "source_sha256_before": "8792b9fe65d48af44629ce94e240e8e23a490cc1b2c340fc29a1667226d1f0fe",
+  "source_sha256_mutated": "d982a1a5df7d0638212e40ec791a84b9e46d79dc51dd66b4d29b1ae1dbbd19d3",
+  "patch_sha256": "4684d3e9c74ccc3347efe9e64ea448dcb9e99771b8045a16ff69b16319ee0235",
+  "selected_scenario": "recovery.waiting-merge-restart",
+  "selected_parent": "TestWaitingMergeRestart",
+  "test_mutation": "After the original restart/reconciliation and unique delivery, submit one new start_task for the ready successor, read its actual execution base, and do not retry if the receipt is rejected.",
+  "expected_behavior": "Pass only if the one original product request is accepted and successor Workspace.Base equals the original Delivery.MergeCommit; preserve any pending-operation failure as a diagnostic.",
+  "exact_runner_command": "run-feedback.ps1 -RunId recovery-successor-probe-20261006-01 -TempParent C:\\Users\\lmas1\\Temp -FeedbackArgs @(-level=L3,-suite=recovery,-env=controlled,-scenario=recovery.waiting-merge-restart,-out=docs/validation/three-line-10-independence-cleanup/independence/recovery-successor-probe-20261006-01)",
+  "post_probe_withdrawal": "Restored tests/e2e/suites/recovery/waiting_merge_restart_test.go from source-before.go.txt; SHA-256 verified as 8792b9fe65d48af44629ce94e240e8e23a490cc1b2c340fc29a1667226d1f0fe; source diff clean.",
+  "attempt_status": "run_failed_preserved; temporary source mutation withdrawn",
+  "output_directory": "docs/validation/three-line-10-independence-cleanup/independence/recovery-successor-probe-20261006-01/",
+  "true_process_exit_code": 1,
+  "parent_result": "TestWaitingMergeRestart: 1 run, 0 pass, 1 fail, 0 skip; cleanup_complete=true",
+  "control_receipt": {
+    "request_id": "4ed58d003a3b9226112f370472f8af35",
+    "status": "failed",
+    "code": "failed",
+    "message": "original worker operation must be reconciled before another action",
+    "retry_count": 0
+  },
+  "read_only_snapshot_after_rejection": {
+    "delivery_count": 1,
+    "delivery_merge_commit": "279543c5d09df1db61f8faa0145098d4ec9981f5",
+    "successor_workflow_run_id": "bd327a782b5600ffc79584960f65d0bf",
+    "successor_execution_id": "67f815cbf04cc48bb36f3a44933c0ca6",
+    "successor_workspace_base": "279543c5d09df1db61f8faa0145098d4ec9981f5",
+    "note": "Captured after the single failed start_task receipt; do not treat as a successful start or acceptance pass."
+  }
+}

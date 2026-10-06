@@ -1,0 +1,9 @@
+{"Time":"2026-10-06T17:57:44.5127554+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery"}
+{"Time":"2026-10-06T17:57:45.3879449+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery"}
+{"Time":"2026-10-06T17:57:45.3879449+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery","Output":"=== RUN   TestBasicDelivery\n"}
+{"Time":"2026-10-06T18:02:45.3842926+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery","Output":"    delivery_test.go:15: service readiness: context deadline exceeded (last error: execution profile project-default: unsupported: requested execution_policy (read=host write=host git=false network=allow escalation=deny) lacks remote worker-start enforcement evidence: environment=env-home connection=home-connection repository=id:repo-test Codex=unverified)\n"}
+{"Time":"2026-10-06T18:02:50.8469717+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery","Output":"--- FAIL: TestBasicDelivery (305.46s)\n"}
+{"Time":"2026-10-06T18:02:50.8469717+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery","Elapsed":305.46}
+{"Time":"2026-10-06T18:02:50.8469717+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Output":"FAIL\n"}
+{"Time":"2026-10-06T18:02:50.8549928+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Output":"FAIL\tgithub.com/erranliu/SteerLine/tests/e2e/suites/delivery\t306.347s\n"}
+{"Time":"2026-10-06T18:02:50.8549928+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Elapsed":306.347}

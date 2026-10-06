@@ -1,0 +1,21 @@
+{
+  "run_id": "task-mutated-20261006-01",
+  "source_commit": "d87a714baeea5aa8a8d0173deb5a232cf0ba1d47",
+  "runner_status": "failed",
+  "runner_complete": true,
+  "true_exit": 1,
+  "parent_tests": 1,
+  "passed_tests": 0,
+  "failed_tests": 1,
+  "skipped_tests": 0,
+  "temporary_root": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl82-task-mutated-20261006-01",
+  "resolved_root_matches_literal": true,
+  "inside_temp_parent": true,
+  "home_contents_after_runner": [],
+  "temp_contents_after_runner": [],
+  "home_and_temp_empty": true,
+  "recursive_cleanup_command": "Remove-Item -LiteralPath <verified exact run root> -Recurse -Force",
+  "recursive_cleanup_attempted_on_this_root": false,
+  "recursive_cleanup_result": "The first exact-root recursive cleanup command was rejected; this root is preserved under the no-bypass rule. No removal attempt was made for this run.",
+  "temporary_root_removed": false
+}

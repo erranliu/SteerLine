@@ -1,0 +1,14 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\independence\\recovery-successor-probe-20261006-01\\build\\steerline.exe",
+    "task",
+    "validate",
+    "-config",
+    "C:\\Users\\lmas1\\Temp\\sl82-recovery-successor-probe-20261006-01\\t\\steerline-e2e-3218198380\\recovery.waiting-merge-restart\\recovery\\project.json",
+    "-file",
+    "C:\\Users\\lmas1\\Temp\\sl82-recovery-successor-probe-20261006-01\\t\\steerline-e2e-3218198380\\recovery.waiting-merge-restart\\recovery\\tasks.json"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\"valid\":true,\"project_id\":\"c:\\\\users\\\\lmas1\\\\temp\\\\sl82-recovery-successor-probe-20261006-01\\\\t\\\\steerline-e2e-3218198380\\\\recovery.waiting-merge-restart\\\\recovery\\\\repo\\\\.git\",\"task_count\":2,\"dependency_count\":1,\"authority_version\":1,\"graph_revision\":0,\"database_revision\":1,\"database_id\":\"c153dce20862690919f4023d07bd1e3c\",\"sampled_at\":\"2026-10-06T11:15:57.4814529Z\",\"issues\":null}\n"
+}

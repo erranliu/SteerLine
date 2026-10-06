@@ -1,0 +1,26 @@
+[
+  {
+    "created_at": "2026-10-06T11:15:43.7845902Z",
+    "kind": "project",
+    "path": "C:\\Users\\lmas1\\Temp\\sl82-recovery-successor-probe-20261006-01\\t\\steerline-e2e-3218198380\\recovery.waiting-merge-restart\\recovery",
+    "pid": 0
+  },
+  {
+    "created_at": "2026-10-06T11:15:44.9779305Z",
+    "kind": "process",
+    "path": "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\independence\\recovery-successor-probe-20261006-01\\build\\controlled-helper.exe",
+    "pid": 26656
+  },
+  {
+    "created_at": "2026-10-06T11:16:14.2566875Z",
+    "kind": "process",
+    "path": "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\independence\\recovery-successor-probe-20261006-01\\build\\steerline.exe",
+    "pid": 32280
+  },
+  {
+    "created_at": "2026-10-06T11:17:24.0829014Z",
+    "kind": "process",
+    "path": "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\independence\\recovery-successor-probe-20261006-01\\build\\steerline.exe",
+    "pid": 16032
+  }
+]

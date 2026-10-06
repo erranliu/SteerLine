@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "description": "Per-run identity, size and SHA-256 for generated Windows executables referenced by test-feedback build_sha256. Run selections and build logs remain in adjacent reports.",
+  "files": [
+    {
+      "path": "delivery-20261006-01/build/controlled-helper.exe",
+      "source_commit": "d87a714baeea5aa8a8d0173deb5a232cf0ba1d47",
+      "source_tree": "b30d95e709d126a04c7621f1d024b1f8846df59d",
+      "size_bytes": 17477120,
+      "sha256": "c438935e8b30dfbf95d11da1355bcb703d7c597ad6f40cdf2bca5c7adfc95a10"
+    },
+    {
+      "path": "delivery-20261006-01/build/steerline.exe",
+      "source_commit": "d87a714baeea5aa8a8d0173deb5a232cf0ba1d47",
+      "source_tree": "b30d95e709d126a04c7621f1d024b1f8846df59d",
+      "size_bytes": 24239104,
+      "sha256": "bcfb6959e7c21b67cf6ef3fd4a2385cb7a7ce9bd3b1b757fd1638f577a415b33"
+    },
+    {
+      "path": "delivery-20261006-02/build/controlled-helper.exe",
+      "source_commit": "fbad8755deebf84ce1358dce9d4469eadc5996a8",
+      "source_tree": "7b6de57f78087d0c00d7ab9425341351bb1489a3",
+      "size_bytes": 17477120,
+      "sha256": "c438935e8b30dfbf95d11da1355bcb703d7c597ad6f40cdf2bca5c7adfc95a10"
+    },
+    {
+      "path": "delivery-20261006-02/build/steerline.exe",
+      "source_commit": "fbad8755deebf84ce1358dce9d4469eadc5996a8",
+      "source_tree": "7b6de57f78087d0c00d7ab9425341351bb1489a3",
+      "size_bytes": 24239104,
+      "sha256": "bcfb6959e7c21b67cf6ef3fd4a2385cb7a7ce9bd3b1b757fd1638f577a415b33"
+    },
+    {
+      "path": "delivery-20261006-03/build/controlled-helper.exe",
+      "source_commit": "b64305be4ba29cffd1a947abb4c8eaf21f181b47",
+      "source_tree": "1e27c1e02db8e19ad3cc094a1d2677e97d2f5502",
+      "size_bytes": 17477120,
+      "sha256": "c438935e8b30dfbf95d11da1355bcb703d7c597ad6f40cdf2bca5c7adfc95a10"
+    },
+    {
+      "path": "delivery-20261006-03/build/steerline.exe",
+      "source_commit": "b64305be4ba29cffd1a947abb4c8eaf21f181b47",
+      "source_tree": "1e27c1e02db8e19ad3cc094a1d2677e97d2f5502",
+      "size_bytes": 24239104,
+      "sha256": "bcfb6959e7c21b67cf6ef3fd4a2385cb7a7ce9bd3b1b757fd1638f577a415b33"
+    },
+    {
+      "path": "delivery-20261006-04/build/controlled-helper.exe",
+      "source_commit": "6dbd1ca6fc61e91b1506345a33d9700ebce2b13b",
+      "source_tree": "cf2d590ba2577faf70507d77acf569158f59d86b",
+      "size_bytes": 17477120,
+      "sha256": "c438935e8b30dfbf95d11da1355bcb703d7c597ad6f40cdf2bca5c7adfc95a10"
+    },
+    {
+      "path": "delivery-20261006-04/build/steerline.exe",
+      "source_commit": "6dbd1ca6fc61e91b1506345a33d9700ebce2b13b",
+      "source_tree": "cf2d590ba2577faf70507d77acf569158f59d86b",
+      "size_bytes": 24239104,
+      "sha256": "bcfb6959e7c21b67cf6ef3fd4a2385cb7a7ce9bd3b1b757fd1638f577a415b33"
+    },
+    {
+      "path": "delivery-20261006-05/build/controlled-helper.exe",
+      "source_commit": "8da65c7fb81dddc2300350b202efdf9d47e9f03e",
+      "source_tree": "e749b32947da86bf39b795cc8e3cacb7db2a1485",
+      "size_bytes": 17477120,
+      "sha256": "c438935e8b30dfbf95d11da1355bcb703d7c597ad6f40cdf2bca5c7adfc95a10"
+    },
+    {
+      "path": "delivery-20261006-05/build/steerline.exe",
+      "source_commit": "8da65c7fb81dddc2300350b202efdf9d47e9f03e",
+      "source_tree": "e749b32947da86bf39b795cc8e3cacb7db2a1485",
+      "size_bytes": 24239104,
+      "sha256": "bcfb6959e7c21b67cf6ef3fd4a2385cb7a7ce9bd3b1b757fd1638f577a415b33"
+    },
+    {
+      "path": "delivery-20261006-06/build/controlled-helper.exe",
+      "source_commit": "b098dfa89de7bbd2bc4b3745465659de7aa1f1f2",
+      "source_tree": "36273dab6ee1095c7e1fc0df0ee388488042ef22",
+      "size_bytes": 17477120,
+      "sha256": "c438935e8b30dfbf95d11da1355bcb703d7c597ad6f40cdf2bca5c7adfc95a10"
+    },
+    {
+      "path": "delivery-20261006-06/build/steerline.exe",
+      "source_commit": "b098dfa89de7bbd2bc4b3745465659de7aa1f1f2",
+      "source_tree": "36273dab6ee1095c7e1fc0df0ee388488042ef22",
+      "size_bytes": 24239104,
+      "sha256": "bcfb6959e7c21b67cf6ef3fd4a2385cb7a7ce9bd3b1b757fd1638f577a415b33"
+    },
+    {
+      "path": "independence/recovery-successor-probe-20261006-01/build/controlled-helper.exe",
+      "source_commit": "8da65c7fb81dddc2300350b202efdf9d47e9f03e",
+      "source_tree": "e749b32947da86bf39b795cc8e3cacb7db2a1485",
+      "size_bytes": 17477120,
+      "sha256": "c438935e8b30dfbf95d11da1355bcb703d7c597ad6f40cdf2bca5c7adfc95a10"
+    },
+    {
+      "path": "independence/recovery-successor-probe-20261006-01/build/steerline.exe",
+      "source_commit": "8da65c7fb81dddc2300350b202efdf9d47e9f03e",
+      "source_tree": "e749b32947da86bf39b795cc8e3cacb7db2a1485",
+      "size_bytes": 24239104,
+      "sha256": "bcfb6959e7c21b67cf6ef3fd4a2385cb7a7ce9bd3b1b757fd1638f577a415b33"
+    },
+    {
+      "path": "recovery-20261006-02/build/controlled-helper.exe",
+      "source_commit": "b098dfa89de7bbd2bc4b3745465659de7aa1f1f2",
+      "source_tree": "36273dab6ee1095c7e1fc0df0ee388488042ef22",
+      "size_bytes": 17477120,
+      "sha256": "c438935e8b30dfbf95d11da1355bcb703d7c597ad6f40cdf2bca5c7adfc95a10"
+    },
+    {
+      "path": "recovery-20261006-02/build/steerline.exe",
+      "source_commit": "b098dfa89de7bbd2bc4b3745465659de7aa1f1f2",
+      "source_tree": "36273dab6ee1095c7e1fc0df0ee388488042ef22",
+      "size_bytes": 24239104,
+      "sha256": "bcfb6959e7c21b67cf6ef3fd4a2385cb7a7ce9bd3b1b757fd1638f577a415b33"
+    }
+  ]
+}

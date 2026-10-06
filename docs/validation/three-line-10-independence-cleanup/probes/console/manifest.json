@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "owner": "console",
+  "source_commit": "d87a714baeea5aa8a8d0173deb5a232cf0ba1d47",
+  "source_tree_before": "b30d95e709d126a04c7621f1d024b1f8846df59d",
+  "source_tree_after_generation": "b30d95e709d126a04c7621f1d024b1f8846df59d",
+  "source_path": "internal/console/model.go",
+  "source_absolute_path": "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\internal\\console\\model.go",
+  "source_sha256_before": "50e4361c490bc335137ccefcbc697787fcc990db173c127e5d50d71b8ebc1340",
+  "source_sha256_mutated": "aebf9f1a91fb8114559f8cf4a86c1060f35a051d78cccd4811579ed9b7e5eb8b",
+  "source_sha256_in_worktree_after_generation": "50e4361c490bc335137ccefcbc697787fcc990db173c127e5d50d71b8ebc1340",
+  "mutation": "Remove only the environmental blocker barrier before decision-answer submission.",
+  "selected_test": "^(TestUX4RejectPreservesDraftAndBlockerStaysIndependent|TestCandidateConsoleWiring)$",
+  "overlay_path": "probes/console/overlay.json",
+  "patch_path": "probes/console/patch.diff",
+  "patch_sha256": "d2e34d95439c5639cdc9f2d6dfb126805c3963a24c5c40a4f89c701df7bb51ae",
+  "expected_mutation_exit": 1,
+  "actual_mutation_process_exit": 1,
+  "exact_test_feedback_command": "go run ./cmd/test-feedback -out docs/validation/three-line-10-independence-cleanup/independence/console-mutated-20261006-01 -- -overlay=docs/validation/three-line-10-independence-cleanup/probes/console/overlay.json ./internal/console -run '^TestUX4RejectPreservesDraftAndBlockerStaysIndependent$' -count=1",
+  "actual_run_output": "docs/validation/three-line-10-independence-cleanup/independence/console-mutated-20261006-01/",
+  "disposition": "completed_negative_rule_proof",
+  "result_note": "The mutation completed with true process exit 1: TestUX4RejectPreservesDraftAndBlockerStaysIndependent failed its original blocker-submission assertion (interaction_test.go:193). This expected negative-rule result is not a product pass. The no-overlay restored run completed with true exit 0, 1/1 pass and 0 fail/skip; original summary/raw results remain unchanged."
+}

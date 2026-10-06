@@ -54,6 +54,63 @@ The host does not open SQL, import backend adapters, or apply task/execution tra
 
 The former `internal/steerline` host/facade, `internal/steerlineapp`, `internal/steerline/contracts` and `internal/steerlineintegration` packages have no production or test import path. Tests moved to their owner or to `tests/integration`; no forwarding aliases remain.
 
+## Current package inventory
+
+At the #82 source commit, Windows `go list ./...` enumerates 42 packages. This includes the `docs/validation` helper package; it is not a product dependency. E2E scenario files use the `e2e` build tag, so their packages are listed separately from the default Go inventory below. No package remains under the retired `internal/steerline`, `internal/steerlineapp`, or `internal/steerlineintegration` roots.
+
+| Owner / purpose | Current packages |
+| --- | --- |
+| Product commands and runner | `cmd/orca-probe`, `cmd/steerline`, `cmd/test-feedback` |
+| Validation helper | `docs/validation` |
+| Composition and host | `internal/app`, `internal/app/host` |
+| Console | `internal/console`, `internal/console/activityrender` |
+| Task | `internal/task`, `internal/task/model` |
+| Execution actor and pure values | `internal/execution`, `internal/execution/backend`, `internal/execution/conversation`, `internal/execution/hostport`, `internal/execution/model`, `internal/execution/reconstruction`, `internal/execution/scheduler` |
+| Execution effects | `internal/execution/adapters/codex`, `internal/execution/adapters/orca`, `internal/execution/adapters/orcaremote`, `internal/execution/adapters/protocol/codexapp`, `internal/execution/process`, `internal/execution/publication`, `internal/execution/workspace` |
+| Product contracts and reads | `internal/product/api`, `internal/product/client`, `internal/product/query`, `internal/product/query/taskgraph` |
+| Storage | `internal/storage/ports`, `internal/storage/sqlite` |
+| Test support | `internal/testkit/boundary`, `internal/testkit/boundary/e2e`, `internal/testkit/feedback`, `internal/testkit/process`, `internal/testkit/protocol` |
+| Integration and E2E helpers | `tests/integration`, `tests/e2e/cmd/sandbox-setup`, `tests/e2e/internal/controlled`, `tests/e2e/internal/driver`, `tests/e2e/internal/evidence`, `tests/e2e/internal/native`, `tests/e2e/internal/testenv` |
+
+The tagged scenario owners are `tests/e2e/smoke`, `tests/e2e/live`, and `tests/e2e/suites/{candidates,delivery,recovery}`. IDs, levels, environments and exact top-level tests remain owned by [`tests/e2e/suites.json`](../../tests/e2e/suites.json) and the [E2E guide](../../tests/e2e/README.md). Integration tests own real app composition; they may not import `tests/e2e/internal`.
+
+## Public boundaries and entry points
+
+| Public boundary | Main declarations / production entry |
+| --- | --- |
+| Task input, graph, qualification and result values | `internal/task/model`; `task.Service.Ready` reaches `model.ReadyTasks` and its `StableTaskOrder` rule; `task.Commands` receives only task-specific ports. |
+| Execution records and neutral adapter values | `internal/execution/model` and `internal/execution/backend`; the unique `execution.Service` / `execution.CommandService` own dispatch, recovery, delivery and cleanup. |
+| Host calls into execution | `execution.HostPort` and scheduler callbacks in `internal/execution`; `internal/app/host` uses injected ports and does not implement domain transitions. |
+| Serializable product surface | `internal/product/api`; `internal/product/client` is the one injected Go client; `internal/product/query` projects read-only storage values. |
+| Atomic persistence declarations | `internal/storage/ports`; `internal/storage/sqlite` is the sole SQL/schema/transaction implementation. |
+| Composition inputs | `internal/app.Config`, `LoadConfig`, `NewService` and the app wiring files bind the concrete adapters, ports and SQLite owner. |
+| Main executable | `cmd/steerline/main.go` routes `console`, `run`/`start-service`, task and product commands. |
+| Test feedback executable | `cmd/test-feedback` selects L1, Full, scoped Go tests and registered controlled/live E2E scenarios; only its feedback/process imports are allowed outside tests. |
+| Diagnostic executable | `cmd/orca-probe` emits capability evidence and does not create product tasks, workers or messages. |
+
+The complete changed-symbol and assertion ownership ledgers for prior moves remain in [#75 source/test maps](../validation/three-line-03-task-usecases/ownership.md), [#76 moved symbols and test map](../validation/three-line-04-execution-usecases/moved-symbols.json), [#77 owner/test map](../validation/three-line-05-product-console/ownership.md), [#79 storage ownership](../validation/three-line-07-storage-ports/ownership.md), [#80 app/host ownership](../validation/three-line-08-app-host/ownership.md), and [#81 testkit/integration ownership](../validation/three-line-09-testkit-integration/ownership.md). The final deletion, independence and actual parent/subtest map is in [#82 validation](../validation/three-line-10-independence-cleanup/README.md).
+
+The #82 [`source-index.json`](../validation/three-line-10-independence-cleanup/source-index.json) records each Go file across all OS/build-tag variants, its imports and SHA-256, and every exported top-level declaration by package at the exact source commit. `_test.go` files are marked separately; their actual assertion owners and selected parents are mapped in `test-mapping.json`.
+
+## Build, install and launch sources
+
+The repository-root [`build.ps1`](../../build.ps1) builds `./cmd/steerline` to `bin/steerline.exe` on Windows; [`build.bat`](../../build.bat) is its double-click wrapper. They build only and do not install or switch a running service. `steerline install` copies the running executable through `internal/app.InstallSelf` to the configured application home. `steerline launchers` calls `internal/app/host.InstallLaunchers`, which writes the embedded `console.bat`, `service-window.bat` and launcher README into that home. The service process enters through `cmd/steerline` and `internal/app/host`; there is no separate legacy root host package. Fixed stable/dev runtime selection is still not delivered.
+
+## Platform-specific source owners
+
+These files are selected by Go OS/build constraints and remain in their actual owners; the source scanner covers inactive OS/tag files too.
+
+| Concern | Current files |
+| --- | --- |
+| Service host | `internal/app/host/platform_windows.go`, `internal/app/host/platform_linux.go` and matching platform tests |
+| Console preference file semantics | `internal/console/preferences_windows.go`, `internal/console/preferences_unix.go` |
+| Execution journal and process facts | `internal/execution/journal_platform_{windows,linux,other}.go`; `internal/execution/process/facts_{windows,linux,other}.go`; `service_facts_{windows,linux,other}.go` |
+| Process replacement and ownership | `internal/execution/process/replace_{windows,unix}.go`; `internal/testkit/process/process_{windows,unix}.go`; `cmd/test-feedback/process_{windows,unix}.go` |
+| Test protocol lock and controlled state replacement | `internal/testkit/protocol/native_lock_{windows,other}.go`; `tests/e2e/internal/controlled/state_replace_{windows,other}.go` |
+| E2E platform helpers | `tests/e2e/cmd/sandbox-setup/elevation_{windows,other}.go`; `tests/e2e/internal/native/{sandbox,candidate_fault}_{windows,other}.go` |
+
+`TestCD67CoreBoundary` retains all-tag source negatives and direct/transitive Windows/Linux production closure checks. These checks prove dependency structure for both target OSes; a Windows run does not claim Linux runtime behavior.
+
 ## Persistent state and recovery
 
 SQLite remains the only persistent business authority. Claim, task result, unique delivery, discard, command receipt and their checkpoint changes still validate original identity and versions in their existing transaction boundaries. External Git or provider facts remain independent observations; no cross-system atomicity is inferred.
@@ -78,7 +135,7 @@ Task #81's source inventory, support-package parent/subtest mapping and commit-b
 
 | Flow | Source |
 | --- | --- |
-| CLI composition | [`cmd/steerline/main.go`](../../cmd/steerline/main.go), [`internal/app/config.go`](../../internal/app/config.go), [`internal/app/execution_service_wiring.go`](../../internal/app/execution_service_wiring.go) |
+| CLI composition and installation | [`cmd/steerline/main.go`](../../cmd/steerline/main.go), [`internal/app/config.go`](../../internal/app/config.go), [`internal/app/execution_service_wiring.go`](../../internal/app/execution_service_wiring.go), [`internal/app/host/launchers.go`](../../internal/app/host/launchers.go), [`build.ps1`](../../build.ps1) |
 | Host loop and control | [`internal/app/host/service_client.go`](../../internal/app/host/service_client.go), [`internal/app/host/control_protocol.go`](../../internal/app/host/control_protocol.go), [`internal/execution/scheduler/loop.go`](../../internal/execution/scheduler/loop.go) |
 | Execution actor and ports | [`internal/execution/service_construction.go`](../../internal/execution/service_construction.go), [`internal/execution/host_ports.go`](../../internal/execution/host_ports.go), [`internal/execution/service_commit.go`](../../internal/execution/service_commit.go) |
 | Runtime reconstruction | [`internal/execution/reconstruction/runtime.go`](../../internal/execution/reconstruction/runtime.go), [`internal/execution/reconstruction/run.go`](../../internal/execution/reconstruction/run.go) |
@@ -86,3 +143,4 @@ Task #81's source inventory, support-package parent/subtest mapping and commit-b
 | Storage ports and SQLite | [`internal/storage/ports`](../../internal/storage/ports), [`internal/storage/sqlite`](../../internal/storage/sqlite) |
 | Test feedback and process support | [`internal/testkit/feedback`](../../internal/testkit/feedback), [`internal/testkit/process`](../../internal/testkit/process), [`internal/testkit/protocol`](../../internal/testkit/protocol) |
 | Boundary guards and integration tests | [`internal/testkit/boundary`](../../internal/testkit/boundary), [`internal/testkit/boundary/e2e`](../../internal/testkit/boundary/e2e), [`tests/integration`](../../tests/integration) |
+| Final cleanup evidence | [`deletion-inventory.md`](../validation/three-line-10-independence-cleanup/deletion-inventory.md), [`independence.md`](../validation/three-line-10-independence-cleanup/independence.md), [`ownership.md`](../validation/three-line-10-independence-cleanup/ownership.md), [`test-mapping.json`](../validation/three-line-10-independence-cleanup/test-mapping.json) |

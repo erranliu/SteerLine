@@ -1,0 +1,20 @@
+{
+  "command": [
+    "C:\\Users\\lmas1\\.codex\\worktrees\\e951\\SteerLine\\docs\\validation\\three-line-10-independence-cleanup\\recovery-20261006-02\\build\\steerline.exe",
+    "task",
+    "create",
+    "-config",
+    "C:\\Users\\lmas1\\Temp\\sl82-recovery-final-20261006-01\\t\\steerline-e2e-481131803\\recovery.waiting-merge-restart\\recovery\\project.json",
+    "-file",
+    "C:\\Users\\lmas1\\Temp\\sl82-recovery-final-20261006-01\\t\\steerline-e2e-481131803\\recovery.waiting-merge-restart\\recovery\\tasks.json",
+    "-request-id",
+    "831d0f48645e4af0862bfaed7b5b9bdf",
+    "-expected-authority-version",
+    "1",
+    "-by",
+    "e2e"
+  ],
+  "error": "\u003cnil\u003e",
+  "stderr": "",
+  "stdout": "{\"request_id\":\"831d0f48645e4af0862bfaed7b5b9bdf\",\"batch_id\":\"c313d351e2613f5a920eb98b88761a83\",\"task_ids\":{\"a\":\"1\",\"b\":\"2\"},\"graph_revision\":1,\"payload_digest\":\"3ddde3f1d0c6919b445bc7691c14754e60622d4d5bf8fec3cc7aa7904d402e2a\",\"status\":\"accepted\",\"dispatch_note\":\"Task creation does not start work. If dispatch is already auto and unpaused, normal polling may consider these tasks.\"}\n"
+}

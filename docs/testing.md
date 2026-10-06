@@ -18,7 +18,7 @@
 | E2E 基础设施 | 测试环境、driver、codec、证据和清理 | 无真实模型 |
 | 编译检查 | 检查包与带 tag 场景能否编译 | 不执行场景，不构成测试通过证据 |
 
-Full 将当前 `internal/execution` 业务包由三个独立进程各运行一组，其余包随后完整执行（包括 `internal/steerline` 主机适配层）。报告的 `core_package` 保存实际划分的包，并核对该包的顶层用例和其他包均不遗漏、不重复。它与 L3 的“多组端到端场景”是两个范围；完整项目验收应明确选择哪些入口，而不是把它们都称为 Full。
+Full 将当前 `internal/execution` 业务包由三个独立进程各运行一组，其余包随后完整执行（包括 `internal/app/host` 服务宿主）。报告的 `core_package` 保存实际划分的包，并核对该包的顶层用例和其他包均不遗漏、不重复。它与 L3 的“多组端到端场景”是两个范围；完整项目验收应明确选择哪些入口，而不是把它们都称为 Full。
 
 ## L1、定向与 Full
 
@@ -30,7 +30,7 @@ go run ./cmd/test-feedback -level=L1
 go run ./cmd/test-feedback -level=L1 -- ./cmd/test-feedback -run '^TestLevelSelectionsRejectAmbiguity$' -count=1
 
 # 只跑指定包，并保存报告
-go run ./cmd/test-feedback -- ./internal/steerline/console -count=1
+go run ./cmd/test-feedback -- ./internal/console -count=1
 
 # 完整确定性回归：三 worker 入口
 go run ./cmd/test-feedback -workers=3
@@ -102,13 +102,13 @@ go test -tags=e2e ./tests/e2e/... -run '^$' -count=1
 
 | 检查 | 前置与范围 | 测试来源 |
 | --- | --- | --- |
-| 本地 Orca host wait | `STEERLINE_ORCA_HOST_WAIT_PROBE` 指向包含原 workspace/terminal/runtime/incarnation 的隔离现场 JSON；检查原终端等待事实 | [TestOrcaNativeHostWait](../internal/steerline/orcaworker/host_wait_live_cd67_test.go) |
-| 历史/实验：Orca 远端 P10 reply gate（非一期） | 显式 `STEERLINE_REAL_P10_REPLY_PROBE=1` 及源码列出的原 Run/Task/Dispatch/question 等字段；会对真实原问题发送回复 | [TestSupervisedOrcaRealP10ReplyGate](../internal/steerline/orca_remote_worker/p10_live_cd67_test.go) |
-| 原运行恢复预览 | `STEERLINE_REAL_RECOVERY_CONFIG` / `STEERLINE_REAL_RECOVERY_RUN_ID`；读取隔离原现场 | [TestRealIsolatedRecoveryPreview](../internal/steerline/recovery_real_probe_test.go) |
-| Windows 服务窗口 / Ctrl+C helper | 只由绑定原进程、启动回执和报告路径的专门探针调用 | [Windows 平台测试](../internal/steerline/platform_windows_test.go) |
+| 本地 Orca host wait | `STEERLINE_ORCA_HOST_WAIT_PROBE` 指向包含原 workspace/terminal/runtime/incarnation 的隔离现场 JSON；检查原终端等待事实 | [TestOrcaNativeHostWait](../internal/execution/adapters/orca/host_wait_live_cd67_test.go) |
+| 历史/实验：Orca 远端 P10 reply gate（非一期） | 显式 `STEERLINE_REAL_P10_REPLY_PROBE=1` 及源码列出的原 Run/Task/Dispatch/question 等字段；会对真实原问题发送回复 | [TestSupervisedOrcaRealP10ReplyGate](../internal/execution/adapters/orcaremote/p10_live_cd67_test.go) |
+| 原运行恢复预览 | `STEERLINE_REAL_RECOVERY_CONFIG` / `STEERLINE_REAL_RECOVERY_RUN_ID`；读取隔离原现场 | [TestRealIsolatedRecoveryPreview](../internal/app/host/recovery_real_probe_test.go) |
+| Windows 服务窗口 / Ctrl+C helper | 只由绑定原进程、启动回执和报告路径的专门探针调用 | [Windows 平台测试](../internal/app/host/platform_windows_test.go) |
 | elevated sandbox 凭据检查与设置 | 为显式需要 elevated 的开发场景使用；无 token 的检查和可能触发 UAC 的初始化是两步 | [E2E 指南的 sandbox 工具](../tests/e2e/README.md#真实环境)、[设置脚本](../scripts/setup-e2e-sandbox.ps1) |
 
-示例：已按源码准备好 host-wait probe 后，运行 `go test ./internal/steerline/orcaworker -run '^TestOrcaNativeHostWait$' -count=1 -v`。报告该原生测试的结果，不把其他 opt-in 测试的 skip 算作通过。
+示例：已按源码准备好 host-wait probe 后，运行 `go test ./internal/execution/adapters/orca -run '^TestOrcaNativeHostWait$' -count=1 -v`。报告该原生测试的结果，不把其他 opt-in 测试的 skip 算作通过。
 
 ## 产物与判断
 
