@@ -33,9 +33,19 @@ func TestTwoProjectsIsolateTasksGitAndCleanup(t *testing.T) {
 		}
 	}
 	s := newScenario(t, "isolation", run)
+	// The test process's global catalog must not participate in either project's
+	// readiness read. Each CLI and snapshot belongs to its isolated home/database.
+	outsideHome := filepath.Join(runDir, "outside-home")
+	s.Must(os.MkdirAll(outsideHome, 0700))
+	s.Must(os.WriteFile(filepath.Join(outsideHome, "execution.json"), []byte("invalid outside catalog"), 0600))
+	t.Setenv("STEERLINE_HOME", outsideHome)
 	a, b := s.NewProject("a"), s.NewProject("b")
 	a.CreateTasks()
 	b.CreateTasks()
+	a.StartService()
+	b.StartService()
+	a.StopService()
+	b.StopService()
 	ap, err := a.Driver.Tasks(ctx)
 	s.Must(err)
 	bp, err := b.Driver.Tasks(ctx)
