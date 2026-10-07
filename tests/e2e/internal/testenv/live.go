@@ -100,8 +100,17 @@ git add -- result.txt
 git -c user.name=E2E -c user.email=e2e@example.invalid -c commit.gpgsign=false commit -m 'SteerLine real E2E delivery'
 if ($LASTEXITCODE -ne 0) { throw 'commit failed' }
 $branch = git symbolic-ref --short HEAD
-git push origin ('HEAD:refs/heads/' + $branch)
-if ($LASTEXITCODE -ne 0) { throw 'push failed' }
+# The shell credential helper cannot run in the unelevated Windows sandbox.
+# Keep the test token out of argv/config/logs and scope its header to this remote.
+$env:GIT_CONFIG_COUNT = '1'
+$env:GIT_CONFIG_KEY_0 = 'http.https://github.com/erranliu/SteerlineTest.git.extraheader'
+$env:GIT_CONFIG_VALUE_0 = 'AUTHORIZATION: basic ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('x-access-token:' + $env:GH_TOKEN))
+try {
+  git -c credential.helper= push origin ('HEAD:refs/heads/' + $branch)
+  if ($LASTEXITCODE -ne 0) { throw 'push failed' }
+} finally {
+  Remove-Item Env:GIT_CONFIG_COUNT,Env:GIT_CONFIG_KEY_0,Env:GIT_CONFIG_VALUE_0 -ErrorAction SilentlyContinue
+}
 gh pr create --repo '%s' --base '%s' --head $branch --draft --title 'SteerLine E2E %s' --body 'Isolated native gpt-6-luna medium delivery test. Disposable test branches.'
 if ($LASTEXITCODE -ne 0) { throw 'PR create failed' }
 `, filepath.Join(p.Home, "github-token"), githubRepository, p.BaseBranch, s.ID)
@@ -268,8 +277,8 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		}
 		u, usageEvidence, err = native.AppServerTurnUsage(raw, session, e.CurrentTurnID)
 	} else {
-		// Only this project's home is scanned. Exactly one native session must match
-		// the bound workspace; user/global sessions cannot become usage evidence.
+		// Only this project's home is scanned. Exactly one root native session must
+		// match; guardian/subagent logs sharing its cwd are separate executions.
 		matches := 0
 		err = filepath.WalkDir(filepath.Join(p.Home, "codex", "sessions"), func(path string, d os.DirEntry, walkErr error) error {
 			if walkErr != nil {
@@ -282,13 +291,11 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 			if readErr != nil {
 				return readErr
 			}
-			var first struct {
-				Payload struct {
-					Cwd string `json:"cwd"`
-				} `json:"payload"`
+			matched, matchErr := native.BusinessRolloutMatches(raw, e.Workspace.Worktree)
+			if matchErr != nil {
+				return matchErr
 			}
-			line, _, _ := strings.Cut(string(raw), "\n")
-			if json.Unmarshal([]byte(line), &first) != nil || !sameLocalPath(first.Payload.Cwd, e.Workspace.Worktree) {
+			if !matched {
 				return nil
 			}
 			matches++

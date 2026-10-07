@@ -43,7 +43,9 @@ func TestCD64OriginalSessionReconciliation(t *testing.T) {
 }
 
 func testIntegratedAppServerTwoTurns(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	// Include project setup, first-turn persistence and a second original turn
+	// in the shared fixture budget under Full's parallel process load.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	fixture := newLifecycleProject(t, "local")
 	createIntegrationTask(t, ctx, fixture, 901)
@@ -90,7 +92,9 @@ func testIntegratedNativeSessionGate(t *testing.T, changeConfig bool) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native Orca protocol fixture uses the Windows host contract")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
+	// Five native Dispatches, service restart and mutation-loss reconciliation
+	// precede the final incarnation rejection; bound the entire fixture flow.
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 	fixture := newLifecycleProject(t, "orca")
 	initial := testprotocol.NativeOrcaState{EnvironmentMode: true, BusinessActive: true, FirstBusinessDispatch: 2, EndReadinessOnBusiness: true, LoseQuestionAckOnce: true, LoseReplyOnce: true}
@@ -352,8 +356,10 @@ func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) inte
 	implementationConfigs := []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: codexPayload}}
 	stateDir := filepath.Join(root, "native-protocol")
 	if host == "orca" {
+		// This positive fixture checks original binding, not deadline expiry;
+		// its real helper/tool processes also run under Full's parallel load.
 		orcaPayload, encodeErr := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{
-			Executable: os.Args[0], Args: []string{"--fake", "native-orca", stateDir}, Shell: "powershell.exe", WaitTimeout: "1m",
+			Executable: os.Args[0], Args: []string{"--fake", "native-orca", stateDir}, Shell: "powershell.exe", WaitTimeout: "2m",
 		})
 		require(t, encodeErr)
 		implementationConfigs = append(implementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaPayload})

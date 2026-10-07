@@ -110,7 +110,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		}
 	})
 	t.Run("unknown_key_version_and_duplicate_input_reject_before_target", func(t *testing.T) {
-		for _, inputs := range [][]executionbackend.ImplementationConfigInput{{{ImplementationKey: "unknown", CodecVersion: 1, Payload: payload}}, {{ImplementationKey: input.ImplementationKey, CodecVersion: 2, Payload: payload}}, {input, input}} {
+		for _, inputs := range [][]executionbackend.ImplementationConfigInput{{{ImplementationKey: "unknown", CodecVersion: 1, Payload: payload}}, {{ImplementationKey: input.ImplementationKey, CodecVersion: input.CodecVersion + 1, Payload: payload}}, {input, input}} {
 			if _, _, err := directory.NormalizeProfile(inputs, "local", "codex", "project", "profile", "accepted"); err == nil {
 				t.Fatal("invalid codec input accepted")
 			}

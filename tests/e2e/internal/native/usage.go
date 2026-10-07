@@ -53,6 +53,43 @@ type Usage struct {
 	Tokens  Tokens `json:"tokens"`
 }
 
+// BusinessRolloutMatches selects the original root session. Native automatic
+// review creates a separate guardian/subagent session with the same cwd.
+func BusinessRolloutMatches(raw []byte, cwd string) (bool, error) {
+	line, _, _ := bytes.Cut(raw, []byte("\n"))
+	var header struct {
+		Type    string `json:"type"`
+		Payload struct {
+			ID     string          `json:"id"`
+			Cwd    string          `json:"cwd"`
+			Parent string          `json:"parent_thread_id"`
+			Source json.RawMessage `json:"source"`
+		} `json:"payload"`
+	}
+	if err := json.Unmarshal(line, &header); err != nil {
+		return false, err
+	}
+	if header.Type != "session_meta" || header.Payload.ID == "" {
+		return false, errors.New("native rollout session metadata identity missing")
+	}
+	if header.Payload.Parent != "" {
+		return false, nil
+	}
+	source := bytes.TrimSpace(header.Payload.Source)
+	if len(source) > 0 && source[0] == '{' {
+		var origin struct {
+			Subagent json.RawMessage `json:"subagent"`
+		}
+		if err := json.Unmarshal(source, &origin); err != nil {
+			return false, err
+		}
+		if len(origin.Subagent) > 0 && string(origin.Subagent) != "null" {
+			return false, nil
+		}
+	}
+	return samePath(header.Payload.Cwd, cwd), nil
+}
+
 // AppServerUsage takes the last cumulative thread total for the bound turn.
 // Repeated incremental notifications are not independently billed samples.
 func AppServerUsage(raw []byte, session, turn string) (Usage, []byte, error) {

@@ -174,7 +174,9 @@ func runScoped(opts options) int {
 		report.WeightSource = "testdata/core-test-weights.json (serial baseline 543f0d4; top-level elapsed, floor 0.05s)"
 	}
 	report.Environment = collectEnvironment(opts.cacheCondition, opts.nativeNote, opts.out, nil)
-	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Minute)
+	// Keep room for the bounded multi-turn integration fixtures as well as
+	// each worker's core partition; missing terminal events still fail coverage.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
 	defer cancel()
 	var packages []string
 	var err error

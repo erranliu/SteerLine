@@ -244,7 +244,9 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *taskmodel
 		if run.Decision != nil && run.Decision.Status == "answer_saved" {
 			return true, s.refreshSavedRecoveryDecision(run, false, "服务重开后请确认旧答案；原轮次不会自动继续。")
 		}
-		if execution.RecoveryState == "completed" && run.Decision != nil && run.Decision.Status == "pending" {
+		// An optional feedback decision cannot replace a verified PR's merge gate
+		// merely because the completed worker process disappeared during restart.
+		if execution.RecoveryState == "completed" && fixed.workflow.Phase != "waiting_pr_merge" && run.Decision != nil && run.Decision.Status == "pending" {
 			if record := s.decisionRecord(run); record != nil && (record.RecoveryVersion != execution.RecoveryVersion || record.RecoveryState != execution.RecoveryState) {
 				oldID := record.DecisionID
 				s.setDecisionStatus(run, "superseded")

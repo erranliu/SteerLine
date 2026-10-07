@@ -10,7 +10,7 @@
 | --- | --- | --- |
 | [一期验收](phase1.md) | 人工参与为主，自动采样/检查辅助 | 新组合验收未执行，P1A1–P1A5 待验；不是执行 DAG 任务 |
 | [二期完整产品链](phase2.md) | 人工产品链与自动故障检查 | 能力尚未齐备，E2E1–E2E6 待验；不是执行 DAG 任务 |
-| [最近基线](latest-baseline.md) · [原结果索引](baseline-results.json) | 自动化与原生测试的历史结果 | 只证明所列原源码/环境，不冒充当前候选全量通过 |
+| [最近基线](latest-baseline.md) · [#238 后重跑](all-tests-after-238-2026-10-07.md) · [原结果索引](baseline-results.json) | 自动化与原生测试结果 | 本次 Full、L1 与全部 10 个 E2E 已通过；保留默认 skip 和原失败，范围见记录 |
 | [本机候选](candidate-acceptance.md) | 双本机链及原反馈/交付 | 保留原已通过范围和限制 |
 | [人工确认](manual-acceptance.md) | CC5 的用户人工验证 | 原 #38 的明确范围已验，不扩展到新界面或其他任务 |
 | [控制台](product-console.md) | 三窗/输入的自动及原生验证 | 保留原结果及覆盖边界，不额外增加物理 IME 验收门槛 |

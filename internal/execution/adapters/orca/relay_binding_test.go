@@ -19,11 +19,15 @@ func TestDoneRequestBindsCurrentTurn(t *testing.T) {
 		t.Fatal(err)
 	}
 	request := DoneRequest{WorkflowRunID: runID, TurnID: turn.TurnID, TaskID: turn.TaskID, DispatchID: turn.DispatchID, DispatchCapability: "dcap_test-only", Outcome: "failed", Subject: "Could not finish", Body: "The worker reported an error."}
+	withBOM := false
 	write := func() {
 		t.Helper()
 		data, err := json.Marshal(request)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if withBOM {
+			data = append([]byte{0xef, 0xbb, 0xbf}, data...)
 		}
 		if err := os.WriteFile(path, data, 0600); err != nil {
 			t.Fatal(err)
@@ -32,6 +36,11 @@ func TestDoneRequestBindsCurrentTurn(t *testing.T) {
 	write()
 	if got, err := ReadDoneRequest(path, worktree, runID, turn.TurnID, turn.TaskID, turn.DispatchID); err != nil || got == nil || got.Outcome != "failed" {
 		t.Fatalf("current relay request rejected: %+v, %v", got, err)
+	}
+	withBOM = true
+	write()
+	if got, err := ReadDoneRequest(path, worktree, runID, turn.TurnID, turn.TaskID, turn.DispatchID); err != nil || got == nil || *got != request {
+		t.Fatalf("PowerShell UTF-8 BOM changed or blocked the bound relay: %+v, %v", got, err)
 	}
 	request.DispatchCapability = ""
 	write()

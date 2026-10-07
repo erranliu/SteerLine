@@ -68,7 +68,7 @@ Run 持有本次产品/helper 构建和选择；Scenario 持有 scratch/证据�
 
 controlled 使用真实 SteerLine、Git、SQLite，helper 实现最小 app-server 和 GitHub provider。worker 真实 commit/push/create；中心查询与核验真实合并后提交交付。loopback `git http-backend` 执行真实传输，Git 适配器保留正式 remote 身份及原始输出；外部 PR 状态只存于 provider 文件。
 
-受控场景业务上限 5 分钟，真实场景 10 分钟；多轮 `candidates` 组为 20 分钟（双候选、反馈、本机故障/放弃/新增、在途落选、合并和后继）。最后业务断言完成后冻结期限结果并停止业务 I/O，`body_finished_at` 记录该边界；独立停止服务与资源清理不改变业务期限结果，业务过期或清理失败仍不能通过。普通驱动命令 30 秒，原生资源操作 45 秒；Orca 准备总期限 4 分钟，服务清理 30 秒，外部资源清理各 2 分钟。按真实条件等待，失败不自动重跑。
+受控场景业务上限 5 分钟，真实场景 10 分钟；多轮 `candidates` 组为 30 分钟（多个真实业务回合、Orca readiness 和自动审核，覆盖双候选、反馈、本机故障/放弃/新增、在途落选、合并和后继）。最后业务断言完成后冻结期限结果并停止业务 I/O，`body_finished_at` 记录该边界；独立停止服务与资源清理不改变业务期限结果，业务过期或清理失败仍不能通过。普通驱动命令 30 秒，原生资源操作 45 秒；Orca 准备总期限 4 分钟，服务清理 30 秒，外部资源清理各 2 分钟。按真实条件等待，失败不自动重跑。
 
 ## 真实环境
 
@@ -101,6 +101,8 @@ go test ./tests/e2e/internal/native -run '^TestSandboxReadinessExistingAccounts$
 
 L2 使用用户授权的 [SteerlineTest](https://github.com/erranliu/SteerlineTest)，需要 gh 写权限。每次克隆独立仓库，以 `codex/e2e/<随机ID>/<场景>/base` 保存最小 fixture 树及测试合同，不改变 main。正式 worker 分支针对该 base 创建真实 PR。local-codex 与 orca-codex 均由模型执行 fixture publish.ps1，真实 commit/push/gh create。测试按匹配的 head SHA 转 ready 并合并，由真实 provider 确认交付。清理只关闭本次仍 open 的 PR、删除本次分支，保留真实 GitHub PR 历史。认证只存在项目 scratch，以环境引用传递，不写入产物。
 
+真实 GitHub 发布脚本为本次 push 设置仅限 SteerlineTest remote 的 HTTP 认证环境，并清除 shell credential helper；推送后清除这些环境项。测试 token 不写入 argv、Git 配置文件或日志，避免依赖 unelevated Windows 沙箱中无法启动的 Git Bash credential helper。该适配仅用于测试 fixture，产品权限和凭据来源不变。
+
 L3 live 使用 loopback Git/PR provider，两条链路均执行真实模型；与无 token 环境分别选择。Orca 使用真实 CLI 创建、绑定、结算、清理资源。测试 CLI 适配器为新建终端注入隔离环境；当前版本长文本注入若明确停在 Pasted Content 输入框，则完成该原终端的一次 Enter，不重发文本。readiness 探针、业务命令和结算都需要真实模型及原生证据，不合成权限或成功回执。
 
 长提示提交前先等待原终端的粘贴草稿稳定至少一秒，并记录提交后状态；accepted/bytesWritten 不代表 agent 已启动。readiness 的 JavaScript exec wrapper 必须保留完整原生工具结果 JSON，不能只打印 stdout 或手写 exit 文本。原输入目标短暂未就绪时，场景可通过正式 recheck_environment 一次检查原环境，保持原 Task/terminal/Dispatch，不能重发旧业务输入。
@@ -112,6 +114,8 @@ L3 Orca 发布脚本使用 origin 的正式仓库身份，仅对单次 push 以 
 summary.json 保存源码/工作树、构建 SHA-256、精确选择、命令、耗时、coverage、清理和 blocked_scenarios；各组保留原始 Go JSON 日志及 stderr。scenarios/<id> 保存公开状态、命令回执、服务日志、资源清单及 scenario.json。L2 live 还须报告真实已合并 PR 的 URL/仓库/状态，否则不能通过。
 
 `*-usage.json` 及筛选原生事件 JSONL 记录 input/cached/output/reasoning/total 和 session/turn/cwd。local 使用绑定 thread/turn 的 app-server 通知；Orca 使用本项目 home 的 session JSONL，核对 cwd 和每个 turn_context 的模型/effort。累计值取最后样本，不重复相加。缺失、零值、身份或模型不符均失败；重启和交付轮询不得增加 usage。数值是 CLI 使用报告，不换算价格或推断账单。
+
+Orca usage 只选择与工作区匹配的唯一原始 root 会话；`session_meta` 中有 `parent_thread_id` 或 `source.subagent` 的自动审核/子 agent 日志不作为业务会话证据。不能依据模型名筛掉 root 会话；业务会话的错误模型/effort 仍失败。
 
 成功/失败均保存诊断，停止本次资源，关闭句柄并删除 scratch；证据目录独立保留。native-logs 仅保存本项目原生日志，不复制凭据/私有 SQLite，认证值脱敏。失败、skip、零匹配、缺失/重复/非法/截断日志、超时、证据缺失、清理或报告写入失败均不能通过。断电后的跨运行回收不属当前最小范围。
 

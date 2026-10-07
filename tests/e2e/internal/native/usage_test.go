@@ -35,6 +35,36 @@ func TestRolloutUsageRequiresOwnedCwdAndPinnedModelEffort(t *testing.T) {
 	}
 }
 
+func TestBusinessRolloutMatchesExcludesReviewChildrenWithoutHidingWrongBusinessModels(t *testing.T) {
+	root := `{"type":"session_meta","payload":{"id":"root","cwd":"C:/owned","source":"vscode"}}` + "\n"
+	for _, tc := range []struct {
+		raw  string
+		want bool
+	}{
+		{root, true},
+		{strings.ReplaceAll(root, "C:/owned", "C:/other"), false},
+		{`{"type":"session_meta","payload":{"id":"review","cwd":"C:/owned","parent_thread_id":"root","source":{"subagent":{"other":"guardian"}}}}`, false},
+		{`{"type":"session_meta","payload":{"id":"review","cwd":"C:/owned","source":{"subagent":{"other":"guardian"}}}}`, false},
+	} {
+		got, err := BusinessRolloutMatches([]byte(tc.raw), "C:/owned")
+		if err != nil || got != tc.want {
+			t.Fatalf("root/child selection: got=%v err=%v", got, err)
+		}
+	}
+	for _, bad := range []string{"{", `{"type":"session_meta","payload":{"cwd":"C:/owned"}}`} {
+		if _, err := BusinessRolloutMatches([]byte(bad), "C:/owned"); err == nil {
+			t.Fatal("invalid session metadata accepted")
+		}
+	}
+	wrong := root + `{"type":"turn_context","payload":{"turn_id":"turn","model":"codex-auto-review","effort":"low"}}`
+	if matched, err := BusinessRolloutMatches([]byte(wrong), "C:/owned"); err != nil || !matched {
+		t.Fatal("business session was filtered by its model")
+	}
+	if _, _, err := RolloutUsage([]byte(wrong), "C:/owned"); err == nil {
+		t.Fatal("wrong business model was accepted")
+	}
+}
+
 func TestRolloutUsageWaitsForMatchingTurnCompletion(t *testing.T) {
 	pending := `{"type":"session_meta","payload":{"id":"session","cwd":"C:/owned"}}
 {"type":"event_msg","payload":{"type":"task_started","turn_id":"turn"}}

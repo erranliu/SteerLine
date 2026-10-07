@@ -1,6 +1,7 @@
 package testenv
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"os"
@@ -13,7 +14,10 @@ import (
 func (p *Project) captureNativeDiagnostics() error {
 	var secrets []string
 	if token, err := os.ReadFile(filepath.Join(p.Home, "github-token")); err == nil {
-		secrets = append(secrets, strings.TrimSpace(string(token)))
+		value := strings.TrimSpace(string(token))
+		if value != "" {
+			secrets = append(secrets, value, base64.StdEncoding.EncodeToString([]byte("x-access-token:"+value)))
+		}
 	}
 	if auth, err := os.ReadFile(filepath.Join(p.Home, "codex", "auth.json")); err == nil {
 		var data map[string]any

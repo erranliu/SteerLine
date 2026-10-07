@@ -95,7 +95,9 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		timeout = 10 * time.Minute
 	}
 	if strings.HasPrefix(id, "candidates.") {
-		timeout = 20 * time.Minute
+		// Real business turns plus Orca readiness and automatic review
+		// share this deadline; keep each operation's own bound unchanged.
+		timeout = 30 * time.Minute
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	s := &Scenario{Run: run, ID: id, Root: filepath.Join(run.Scratch, id), Output: filepath.Join(run.Output, "scenarios", id), Context: ctx, cancel: cancel, t: t}

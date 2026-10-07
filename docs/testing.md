@@ -32,7 +32,7 @@ git diff --check
 | E2E 基础设施 | 测试环境、driver、codec、证据和清理 | 无真实模型 |
 | 编译检查 | 检查包与带 tag 场景能否编译 | 不执行场景，不构成测试通过证据 |
 
-Full 将 `internal/execution` 和 `tests/integration` 两个业务包分别按顶层用例划为三组。每个 worker 顺序运行自己的 execution 分区和 integration 分区；另一个独立串行 Go 命令完整运行其余包（`-p=1 -parallel=1`，包括 `internal/app/host` 服务宿主）。最多四组命令并发，各包使用独立测试进程和产物目录，保留 50 分钟总期限及各组原期限。报告的 `core_package`、`integration_package` 和两份用例枚举记录实际所有者，并核对各顶层用例和其他包均不遗漏、不重复。它与 L3 的“多组端到端场景”是两个范围；完整项目验收应明确选择哪些入口，而不是把它们都称为 Full。
+Full 将 `internal/execution` 和 `tests/integration` 两个业务包分别按顶层用例划为三组。每个 worker 顺序运行自己的 execution 分区和 integration 分区；另一个独立串行 Go 命令完整运行其余包（`-p=1 -parallel=1`，包括 `internal/app/host` 服务宿主）。最多四组命令并发，各包使用独立测试进程和产物目录，总期限为 60 分钟，各组命令仍保留原期限。报告的 `core_package`、`integration_package` 和两份用例枚举记录实际所有者，并核对各顶层用例和其他包均不遗漏、不重复。它与 L3 的“多组端到端场景”是两个范围；完整项目验收应明确选择哪些入口，而不是把它们都称为 Full。
 
 ## L1、定向与 Full
 
@@ -77,9 +77,9 @@ go run ./cmd/test-feedback -level=L1 -- ./internal/execution -run '^TestCandidat
 
 ## L2 与 L3
 
-L2/L3 当前在 Windows 上串行运行。controlled 使用真实 SteerLine、Git、SQLite 和受控 worker/provider；live 使用真实 Codex/Orca。真实场景固定 `gpt-6-luna` / `medium`，完全访问映射为 `danger-full-access` / `approval_policy=never`。
+L2/L3 当前在 Windows 上串行运行。controlled 使用真实 SteerLine、Git、SQLite 和受控 worker/provider；live 使用真实 Codex/Orca。真实场景固定 `gpt-6-luna` / `medium`，采用当前 Windows 原生方案：`workspace-write`、`unelevated`、`on-request`、`auto_review` 和网络访问，核对冻结身份及精确写根。
 
-live 需要本机已登录的 `codex-cli 0.159.2`；Orca 链路另需本地 Orca。完整 L2 还需要 `gh` 对 [SteerlineTest](https://github.com/erranliu/SteerlineTest) 的写权限。场景使用独立 Codex home 和测试项目；完全访问测试不需要 elevated sandbox 初始化。具体环境准备、权限断言、usage 和资源所有权见 [E2E 环境指南](../tests/e2e/README.md)。
+live 需要本机已登录的 `codex-cli 0.159.2`；Orca 链路另需本地 Orca。完整 L2 还需要 `gh` 对 [SteerlineTest](https://github.com/erranliu/SteerlineTest) 的写权限。场景使用独立 Codex home 和测试项目，不需要 elevated sandbox 管理员初始化。具体环境准备、权限断言、usage 和资源所有权见 [E2E 环境指南](../tests/e2e/README.md)。
 
 ```powershell
 # 固定 L2：先 controlled，再两条真实链路；门槛失败不进入真实阶段

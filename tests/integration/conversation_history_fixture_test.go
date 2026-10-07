@@ -8,7 +8,7 @@ import (
 	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	productdto "github.com/erranliu/SteerLine/internal/product/api"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
-	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,9 +20,19 @@ import (
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
-func TestCodexHistoryNativeFixtures(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "pr-04b-public-history-native-2026-09-25.json"))
+// Historical native receipts belong to the immutable evidence snapshot, not
+// the current documentation tree. Preserve the original bytes and assertions.
+func historicalConversationFixture(t *testing.T, name string) []byte {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	raw, err := exec.CommandContext(ctx, "git", "show", "172cea6c6530b6693b742324a9c1d4f9aeb17b6d:docs/validation/"+name).Output()
 	require(t, err)
+	return raw
+}
+
+func TestCodexHistoryNativeFixtures(t *testing.T) {
+	raw := historicalConversationFixture(t, "pr-04b-public-history-native-2026-09-25.json")
 	var fixture struct {
 		Samples []struct {
 			Backend executionbackend.BackendKind `json:"backend"`
@@ -91,8 +101,7 @@ func TestCodexHistoryNativeFixtures(t *testing.T) {
 }
 
 func TestCodexHistoryRealLocalToolInterleaveFixture(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "pr-04b-local-tool-interleave-2026-09-25.json"))
-	require(t, err)
+	raw := historicalConversationFixture(t, "pr-04b-local-tool-interleave-2026-09-25.json")
 	var fixture struct {
 		Thread codexworker.HistoryThread `json:"thread"`
 	}
@@ -142,8 +151,7 @@ func TestCodexHistoryRealLocalToolInterleaveFixture(t *testing.T) {
 // TestCodexHistoryRealSourceReplacement uses two exact isolated local probe
 // sessions from one workspace. It is gated because CI has no such sessions.
 func TestCodexHistoryRealCancelledTurnFixture(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "pr-04b-native-cancelled-2026-09-25.json"))
-	require(t, err)
+	raw := historicalConversationFixture(t, "pr-04b-native-cancelled-2026-09-25.json")
 	var fixture struct {
 		Thread codexworker.HistoryThread `json:"thread"`
 	}
@@ -160,8 +168,7 @@ func TestCodexHistoryRealCancelledTurnFixture(t *testing.T) {
 }
 
 func TestCodexHistoryRealFailedTurnFixture(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "pr-04b-native-failed-2026-09-25.json"))
-	require(t, err)
+	raw := historicalConversationFixture(t, "pr-04b-native-failed-2026-09-25.json")
 	var fixture struct {
 		Thread codexworker.HistoryThread `json:"thread"`
 	}

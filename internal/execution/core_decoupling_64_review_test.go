@@ -51,6 +51,25 @@ func (r inspectionResolver) ResolveLifecycle(executionbackend.LifecycleSetup) (e
 }
 
 func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
+	t.Run("completed_worker_preserves_verified_PR_merge_gate", func(t *testing.T) {
+		s, run := waitingDecisionService(t)
+		t.Cleanup(func() { _ = s.Close() })
+		s.lifecycleResolver = recoveryOnlyResolver{}
+		execution, workflow := s.executionRecord(run), s.workflowRecord(run)
+		workflow.Phase, workflow.SelectedResult, workflow.PRURL, workflow.PRState = "waiting_pr_merge", execution.ExecutionID, "https://git.example/org/repo/pulls/8", "open"
+		execution.CurrentTurnID, execution.LastStoppedTurnID = "completed-turn", "completed-turn"
+		execution.PendingCommandID, execution.PendingTurnID = "", ""
+		execution.RecoveryRequired = true
+		execution.RecoveryVersion++
+		s.refreshRun(run)
+		decisionID, sessionID, attemptID, workspace := run.Decision.ID, execution.SessionID, execution.CurrentAttemptID, execution.Workspace
+		if handled, err := s.resumeLifecycleWorkerFlow(context.Background(), nil, run); err != nil || !handled {
+			t.Fatalf("completed worker recovery failed: handled=%v err=%v", handled, err)
+		}
+		if workflow.Phase != "waiting_pr_merge" || workflow.PRURL != "https://git.example/org/repo/pulls/8" || workflow.SelectedResult != execution.ExecutionID || run.Decision == nil || run.Decision.ID != decisionID || run.Decision.Status != "pending" || execution.SessionID != sessionID || execution.CurrentAttemptID != attemptID || execution.Workspace != workspace || execution.RecoveryState != "completed" {
+			t.Fatal("completed worker recovery replaced its PR merge gate, feedback or fixed identity")
+		}
+	})
 	t.Run("recovery_preview_uses_original_lifecycle_port", func(t *testing.T) {
 		s, run := neutralAuditService(t)
 		execution := s.executionRecord(run)
