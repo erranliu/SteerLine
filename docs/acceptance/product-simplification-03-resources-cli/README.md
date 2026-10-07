@@ -77,3 +77,5 @@ SQLite16、FixedExecutionProfile8（冻结 provider 删除 close），graph nati
 修复不改变adapter stop/release/ack协议，也不引入任何生产Close/Delete，控测不冒充native/live。原生接口继续由既有adapter负责，未知/不支持不假装停止。构建、受影响go vet、文档/diff通过；未跑Full或新的live。
 
 采样范围：audit-l1/controlled在最后补充winner冻结状态限定之前执行；随后MC6定向对该限定复验，构建/vet再次通过。没有将原记录重标为最后提交所有场景重新执行。主分支2d0e811b仅整理验收目录/文档；本批精选记录随其规则迁入acceptance，原日志仍在原本地validation/临时路径，不移动或重写原时点事实。第三批及三批行数按审计后重算，新增最小回归测试净增已如实列出。
+
+额外规划注册静态检查发现registry #49与共享Git ref名称不一致；origin/main 2d0e811b的49.json与本分支一致，本PR没有修改roadmap/编号脚本。这是现有全仓规划状态问题，未在本任务改写共享编号或外部DAG，不能将该额外检查列为通过。本批构建、测试、导航及副作用检查不依赖该注册项。
