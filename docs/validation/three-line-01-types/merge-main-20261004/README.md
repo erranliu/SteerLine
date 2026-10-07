@@ -15,6 +15,6 @@ Windows amd64 / Go 1.26.4；各 runner 使用独立 STEERLINE_HOME，无原生 o
 | backend Markdown PR clues 与 testprocess 后代清理修复 | 6 parent/subtest run/pass，0 skip；两个包均非零 | [repairs](repairs/summary.json) |
 | Windows/Linux `go build ./...` | 退出 0；Linux 只编译 | [build](build.json) |
 
-上述范围依 [Plan](../../../spec/three-line-01-types.plan.md) 的冲突集成补充执行。未重跑 Full/L2/L3/live 或全部 L1；保留原 #73 与 main 的既有验证，本次只重验接线和实际受影响行为。CC5 Windows 人工证据延期随 main 保留，不被受控 TUI 测试替代。
+上述范围依 [Plan](../../../archive/spec/completed/three-line-01-types.plan.md) 的冲突集成补充执行。未重跑 Full/L2/L3/live 或全部 L1；保留原 #73 与 main 的既有验证，本次只重验接线和实际受影响行为。CC5 Windows 人工证据延期随 main 保留，不被受控 TUI 测试替代。
 
 最新候选源码与实际 import 索引见 [source-index.json](source-index.json)；原 #73 source-index/coverage 和首次失败/修复报告保留原值。当前架构索引、test-mapping.json 已指向/登记此次集成。没有新的未解决冲突或验证问题；#74 后继归属及原身份/版本/提交屏障保持。

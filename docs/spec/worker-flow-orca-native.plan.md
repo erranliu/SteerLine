@@ -65,7 +65,7 @@
 
 ## 6. 配置/UI 文档与交付回归
 
-更新 Profile 可用性、启动设置来源、待决策和会话 DTO：呈现已保存、平台接受、回合活动、输出不完整及宿主审批阻断的真实区别；用户仍使用既有统一反馈入口。更新 `docs/data-contract.md`、`docs/decisions.md`、相关运行说明和 worker-flow 的实际支持状态。
+更新 Profile 可用性、启动设置来源、待决策和会话 DTO：呈现已保存、平台接受、回合活动、输出不完整及宿主审批阻断的真实区别；用户仍使用既有统一反馈入口。更新 `docs/product-design/data-model.md`、`docs/product-design/decisions.md`、相关运行说明和 worker-flow 的实际支持状态。
 
 用隔离 SQLite 和 provider 测试 PR 错配、关闭未合并后续聊、真实 merge 唯一交付及后继解锁。维护 local Codex 的现有回归，确认新增 Orca 分支没有改变其会话验证。用两种 agent ID 的契约测试验证参数转发，第二种真实 agent 的缺失单独记录。
 
@@ -80,3 +80,14 @@ go run ./cmd/test-feedback -quick
 在隔离测试项目记录构建版本、冻结 Profile、Execution、Orca Run/Task/Dispatch、question/answer/Delivery、terminal/incarnation 和 PR 身份，逐项交付 ON1–ON11 清单。真实测试 PR 的合并由用户完成；合并前只记录中心链路已到待合并。第二 agent 未可用时报告跨 agent 真机未验证。
 
 完成条件：Spec §9 规定的实现 PR 门槛通过，人工合并链与第二 agent 能力认证的实际状态明确，无未说明的自动回退或历史状态迁移。提交实现 PR 前核对固定任务契约；本 Plan 不授权发布生产二进制、修改生产数据库或代用户合并测试 PR。
+
+## 测试计划（本次导航调整）
+
+本次只更新设计文档位置，不改变 ON 场景的实现、限制或待补验收状态。
+
+| 级别 / 组 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
+| --- | --- | --- | --- | --- | --- |
+| 文档静态 / doc-links | 当前仓库、Python 3 | python scripts/check_doc_links.py | 设计迁移与引用修正后 | 本地导航无缺失目标 | docs/validation/product-design-layout-2026-10-07/README.md |
+| 文档静态 / task-identities、whitespace | 当前 Git 仓库 | python scripts/roadmap_task_id.py check；git diff --check | 文档交付前 | 当前身份、名称、入口一致，无差异格式错误 | 同上 |
+
+不选择 L1/L2/L3、Full 或原生 ON 实验：本次没有改变产品逻辑、协议、测试登记或后端接线，导航检查不能补齐原生验收缺口。无需新增产品测试场景或环境能力。

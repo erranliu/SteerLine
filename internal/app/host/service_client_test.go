@@ -125,8 +125,13 @@ func TestConnectionClassifiesProcessAndSnapshotIndependently(t *testing.T) {
 	wrongRepo.Service.PID = 2_000_000_000
 	wrongRepo.Service.ProcessIdentity = &executionbackend.ProcessIdentity{Kind: "os", PID: wrongRepo.Service.PID, Created: "unused", Executable: "unused"}
 	write(wrongRepo)
-	if got := ConnectService(context.Background(), hostConfigForTest(c)); got.State != ConnectionIdentityError || got.CanStart {
-		t.Fatalf("mismatched repository must not be treated as offline: %+v", got)
+	hostConfig := hostConfigForTest(c)
+	if got := ConnectService(context.Background(), hostConfig); got.State != ConnectionCorrupt || got.CanStart || got.CanControl || got.CanStop {
+		t.Fatalf("database identity rejection must not be treated as offline: %+v", got)
+	}
+	observation := ObserveRuntimeSnapshot(hostConfig, &wrongRepo, nil, now())
+	if got := ConnectServiceFromSnapshot(context.Background(), hostConfig, observation); got.State != ConnectionIdentityError || got.CanStart || got.Snapshot.Runtime != &wrongRepo {
+		t.Fatalf("supplied mismatched repository must remain visible and blocked: %+v", got)
 	}
 }
 

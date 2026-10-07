@@ -2,8 +2,6 @@
 
 本图对应[主 roadmap](roadmap.md)中的活动规划。每项执行以独立 Spec/Plan 为准，运行时资格以中心 DAG 为权威。
 
-[任务执行控制台解耦与目录整理](three-line-modularization.md) 保留 #76–#82 的剩余任务、固定硬前置和共享修改条件；已具备基础只作为依赖定位。
-
 [二期草稿与审核准入](phase2-draft-roadmap-admission.md)仅登记目标，主agent、独立审核和成熟度等待不成为一期前置，也不自动新增本页的正式任务或DAG边。#43–#53图示仍为原固定基础关系；受新准入机制影响的范围需在实施前重新固定对应Spec/Plan与正式依赖。
 
 ## 固定前置
@@ -14,9 +12,8 @@
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 40 | 固定版本与双入口 | 不可变构建、stable/dev 固定入口和身份 | 无 | [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) |
-| 41 | dev 隔离与 stable 提升 | 独立 home、静止可恢复会话下的受控提升 | `#40`、`#36` | [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) |
-| 42 | 第一阶段集成验收 | 本机双链与版本组合、stable 24 小时、dev 并行和提升恢复 | `#39`、`#41` | [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) |
+| 83 | 本机安装与调试路径隔离 | 固定安装 exe、显式调试 exe/home、状态隔离与共存 | 无 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) |
+| 42 | 第一阶段集成验收 | 单安装版双本机链、24 小时、调试共存与同构建重启 | `#39`、`#83` | [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) |
 | 43 | Codex 规划主 agent 能力验证 | 规划 agent 权限与受控工具能力证明 | 无 | [Spec](../spec/phase2-agent-capabilities.spec.md) · [Plan](../spec/phase2-agent-capabilities.plan.md) |
 | 44 | WinUI 基座与原生输入 | Windows 原生窗口、IME/多行输入和导航基座 | 无 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) |
 | 45 | 本机客户端协议与历史查询 | 五阶段/原会话反馈的本机 HTTP/SSE 与离线查询 | `#36` | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) |
@@ -33,10 +30,8 @@
 flowchart LR
     W36["已具备 #36 持续 worker"]
     A39["已具备 #39 本机候选验收"]
-    V40["#40 固定版本"] --> V41["#41 隔离/提升"]
-    W36 --> V41
-    A39 --> A42["#42 第一阶段组合"]
-    V41 --> A42
+    I83["#83 安装/调试隔离"] --> A42["#42 单安装版组合/24小时/重启"]
+    A39 --> A42
     W36 --> API45["#45 本机 API"]
     API45 --> P46["#46 规划草稿"]
     P46 --> S47["#47 规划会话"]
@@ -57,64 +52,23 @@ flowchart LR
     A42 --> A53
 ```
 
-## 任务执行控制台解耦与目录整理
-
-目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。纯定义、任务边界、task 应用及候选 UI 已具备；后续消费当前接口，迁移只重验实际受影响入口。本机候选验收不成为重构新前置。
-
-| 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
-| --- | --- | --- | --- | --- |
-| 76 | 执行应用用例归包 | 候选/会话/恢复/交付/清理归 execution | `#74` | [Spec](../spec/three-line-04-execution-usecases.spec.md) · [Plan](../spec/three-line-04-execution-usecases.plan.md) |
-| 77 | 产品查询与控制台契约收窄 | 公开 DTO 收窄、唯一 query/client 和 console 归包 | `#74`、`#38` | [Spec](../spec/three-line-05-product-console.spec.md) · [Plan](../spec/three-line-05-product-console.plan.md) |
-| 78 | 执行适配与资源目录归组 | 后端协议与 Git/PR/进程资源归组 | `#76` | [Spec](../spec/three-line-06-adapters-resources.spec.md) · [Plan](../spec/three-line-06-adapters-resources.plan.md) |
-| 79 | 存储目录与消费者端口收口 | 唯一 SQLite 归 storage、消费者窄端口与原子提交 | `#75`、`#76`、`#77` | [Spec](../spec/three-line-07-storage-ports.spec.md) · [Plan](../spec/three-line-07-storage-ports.plan.md) |
-| 80 | 应用组装与服务宿主收口 | 配置构造归 app、服务承载归 host，删除旧主包/contracts | `#75`、`#76`、`#77`、`#78`、`#79` | [Spec](../spec/three-line-08-app-host.spec.md) · [Plan](../spec/three-line-08-app-host.plan.md) |
-| 81 | 测试支持与集成目录整理 | testkit 与 tests/integration、runner/断言映射 | `#80` | [Spec](../spec/three-line-09-testkit-integration.spec.md) · [Plan](../spec/three-line-09-testkit-integration.plan.md) |
-| 82 | 独立开发证明与最终清理 | 三线实际独立改动证明、残留清理与最小交付/恢复组合 | `#81` | [Spec](../spec/three-line-10-independence-cleanup.spec.md) · [Plan](../spec/three-line-10-independence-cleanup.plan.md) |
-
-```mermaid
-flowchart LR
-    B74["已具备 #74 选择/结果边界"] --> M04["#76 执行用例"]
-    B74 --> M05["#77 产品/控制台"]
-    U38["已具备 #38 候选 UI"] --> M05
-    T75["已具备 #75 任务用例"] --> M07["#79 存储/端口"]
-    T75 --> M08["#80 组装/宿主"]
-    M04 --> M06["#78 适配/资源"]
-    M04 --> M07
-    M05 --> M07
-    M04 --> M08
-    M05 --> M08
-    M06 --> M08
-    M07 --> M08
-    M08 --> M09["#81 测试归组"]
-    M09 --> M10["#82 独立开发/清理"]
-```
-
-任务选择/结果边界和 task 应用已具备。#76 已通过 PR219 合入；#77 产品读取/客户端工作在独立工作树继续，#78 适配与资源目录迁移基于 #76 在本分支执行。#79+ 当前未启动；#79 的剩余硬前置为 #77，后续仍按任务表和各自 Spec 的完整条件推进。
-
-| 并行工作 | 开工与接口条件 | 共享修改与集成条件 |
-| --- | --- | --- |
-| #76 与 #77 | #76 已合入 PR219；#77 继续在独立工作树 | execution 与 product/console 各自归包；Service/Config/提交协调及 app/cmd/runner 共用段指定一个集成所有者，定义端口与公共构造按现行接口交接顺序集成 |
-| #78 与未完成产品/存储工作 | #76 已整体交付；#77 仍是 #79 的硬前置 | adapter/资源与其他目录分别所有；backend/API 形状先由定义所有者集成，构造段顺序修改 |
-| 剩余迁移与本机候选验收复用 | 已具备本机候选、原会话和真实交付证据 | 纯搬包复用未变证据；身份、协议、启动、权限或宿主实际变化才定向重验，现场运行固定 executable/config，不用旧构建证明新行为 |
-| 与 #40/#41、#45 或规划基础 | 各自既定 Spec 前置仍成立 | 共享配置、类型、恢复和 app 接线确定唯一所有者；不新增全面重构硬前置 |
-
-共同字段与协调段按已交付拆分继续归位。每项完整迁移真实消费者、构造、测试和守卫，不能把编译修复留给 #80；不留永久 alias、转发或第二写路径。公共类型变更先顺序集成，再推进消费者。
-
-本表表达剩余规划；执行仍以各任务固定 Spec/Plan、中心 DAG 和用户当前授权为准。
+仓库关系不自动修改中心 DAG。实施前核对已创建任务的固定契约；若中心仍固定旧版本前置或其他旧范围，须先受控替换并同步消费者身份/依赖。移出规划的任务须按中心受控流程处置，本页不宣告运行时已处置，也不掩盖旧任务后继阻塞。
 
 ## 接口和共享修改
 
 | 所有者 | 交接内容 | 集成规则 |
 | --- | --- | --- |
-| #36 | 主阶段、原会话输入/输出、PR 关联和 TaskDelivery | #41/#45 消费；不另建步骤或专用恢复状态机 |
+| #36 | 主阶段、原会话输入/输出、PR 关联和 TaskDelivery | #42/#45 消费；不另建步骤或专用恢复状态机 |
 | 已具备本机候选 | 各配置固定身份、独立反馈、宽松五候选检查、放弃与唯一交付 | #42 复用，迁移按实际影响定向重验；放弃不保证停止，数量不建硬槽 |
-| #40/#41 | 固定版本选择、真实工作轮次及恢复条件 | 配置/服务恢复入口串行集成；空闲会话不被直接视作活动进程 |
+| #83 | 实际 exe/home/config 传递、安装/调试入口及状态隔离 | #42 消费；启动器、console 启服、项目 re-exec 串行集成；不引入版本选择 |
 | #43/#47 | 规划 agent 的权限、受控工具及会话 | 可复用底层会话能力，规划 guard 与任务 worker 权限分别管理 |
 | #45/#46/#48 | 传输、草稿权威、正式发布与中心创建 | 复用 Query/Command；发布/反馈各自按同一个写者和原请求对账 |
 | #44 | 原生输入和导航组件 | 页面复用同一客户端、草稿和正文组件；共享导航串行集成 |
 
 ## 验收分工
 
-单 worker 持续交互与本机多候选竞争已有证据；#42 仍验固定版本、24 小时和提升组合，#53 仍验完整规划/UI/执行闭环。接口或平台改变的部分定向重验，不重复完整上游矩阵。
+单 worker 持续交互与本机多候选竞争已有证据。#83 用最小 controlled 共存场景验实际路径/子进程/误用拒绝；#42 在固定安装 exe 上验双本机链、同构建当前格式重启及 24 小时，#53 验完整规划/UI/执行闭环。#53 消费 #42 的单安装版结论，不等待完整双版本管理。现有 L2/L3 按影响复用，短时 E2E 不等于安装入口或长期运行已验收。
+
+优先推进 #45 → #50，#43/#44 可按各自前置准备；#42 的长运行只阻塞最终验收，不增加 API/UI 开工前置。涉及新草稿/审核准入范围的任务在实施前重新固定对应 Spec/Plan；不凭优先级建议改变既有硬前置。
 
 不同任务人工并行和自动派发策略沿既有能力；共享工作区、平台宿主、构建或 SQLite 接线时串行协调。新任务只有固定前置整体交付后可领取，没有接口提前完成的放行状态。

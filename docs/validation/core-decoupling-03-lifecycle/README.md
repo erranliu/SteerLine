@@ -1,6 +1,6 @@
 # 通用执行生命周期验收记录
 
-任务 #64；依据 [Spec](../../spec/core-decoupling-03-lifecycle.spec.md)、[Plan](../../spec/core-decoupling-03-lifecycle.plan.md)。实现 [PR185](https://github.com/erranliu/SteerLine/pull/185) 的最终审核评论绑定候选 head/base、实际报告与合并回执；完整运行状态在仓库外。
+任务 #64；依据 [Spec](../../archive/spec/completed/core-decoupling-03-lifecycle.spec.md)、[Plan](../../archive/spec/completed/core-decoupling-03-lifecycle.plan.md)。实现 [PR185](https://github.com/erranliu/SteerLine/pull/185) 的最终审核评论绑定候选 head/base、实际报告与合并回执；完整运行状态在仓库外。
 
 ## 所有者与消费者
 

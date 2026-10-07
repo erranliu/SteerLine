@@ -1,6 +1,6 @@
 # #58 Orca 执行适配器迁移验收
 
-基线：`6e728cfda1f2aeaf9973f145f550b406ca4bf96f`（PR170 合并提交）。开工前已 fetch origin/main，并确认 HEAD 与 origin/main 均包含此提交。交付依据：[Spec](../../spec/execution-isolation-05-orca.spec.md) / [Plan](../../spec/execution-isolation-05-orca.plan.md)。本轮范围止于 #58。
+基线：`6e728cfda1f2aeaf9973f145f550b406ca4bf96f`（PR170 合并提交）。开工前已 fetch origin/main，并确认 HEAD 与 origin/main 均包含此提交。交付依据：[Spec](../../archive/spec/completed/execution-isolation-05-orca.spec.md) / [Plan](../../archive/spec/completed/execution-isolation-05-orca.plan.md)。本轮范围止于 #58。
 
 ## 最终所有者
 

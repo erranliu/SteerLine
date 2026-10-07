@@ -6,7 +6,7 @@
 
 单候选退出后保留 PR/worktree 已是当前行为，本批不重复宣称交付此能力。实际新增取舍是：整个 Task 丢弃后也不自动关闭 PR、删除工作区或分支，由人处置；精简重复 CLI 和高级 DAG 查询/文件导出。
 
-本 Spec 替代 [固定 DAG](task-dag.spec.md)、[原生任务共同约束](native-task-constraints.md)及原接线中 Task 丢弃后的破坏性自动清理要求，以及 [关系视图](dag-view.spec.md)的高级筛选/专用导出要求。丢弃资格、停止/对账、必要协议收尾、唯一交付与基本 DAG 行为继续成立。历史 Spec 不回写。
+本 Spec 替代 [固定 DAG](../archive/spec/completed/task-dag.spec.md)、[原生任务共同约束](native-task-constraints.md)及原接线中 Task 丢弃后的破坏性自动清理要求，以及 [关系视图](../archive/spec/completed/dag-view.spec.md)的高级筛选/专用导出要求。丢弃资格、停止/对账、必要协议收尾、唯一交付与基本 DAG 行为继续成立。历史 Spec 不回写。
 
 ## 退出、丢弃与人工处置
 

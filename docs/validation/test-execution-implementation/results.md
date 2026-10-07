@@ -1,6 +1,6 @@
 # 测试执行提速：实现验证
 
-2026-09-28，在 `9877cb0` 基础上的实现工作区验证。Windows/amd64、Go 1.26.4、20 个逻辑 CPU、沿用 Go 构建缓存；`-count=1`，未启用真实 Codex、Orca、PR 或可见窗口验收。产品业务代码、SQLite 配置和构建策略未改。本次按 [Spec](../../spec/test-execution-efficiency.spec.md) 和 [Plan](../../spec/test-execution-efficiency.plan.md) 独立实施，未创建 SteerLine 中心任务或 DAG 边。
+2026-09-28，在 `9877cb0` 基础上的实现工作区验证。Windows/amd64、Go 1.26.4、20 个逻辑 CPU、沿用 Go 构建缓存；`-count=1`，未启用真实 Codex、Orca、PR 或可见窗口验收。产品业务代码、SQLite 配置和构建策略未改。本次按 [Spec](../../archive/spec/completed/test-execution-efficiency.spec.md) 和 [Plan](../../archive/spec/completed/test-execution-efficiency.plan.md) 独立实施，未创建 SteerLine 中心任务或 DAG 边。
 
 ## 快速与完整套件
 

@@ -249,7 +249,7 @@ func TestCM69WriteConsumersDoNotAccessConcreteTransactions(t *testing.T) {
 		})
 	}
 	// Only named, operation-specific callback interfaces cross the write boundary.
-	contracts := []string{"../steerline/persistence/ports.go"}
+	var contracts []string
 	owned, err := filepath.Glob("../storage/ports/*.go")
 	require(t, err)
 	if len(owned) == 0 {

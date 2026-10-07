@@ -1,10 +1,12 @@
 # Spec：dev 隔离与 stable 提升
 
-任务 ID：41；任务名称：dev 隔离与 stable 提升；目标：`PHASE1-RUNTIME`。配套 [Plan](runtime-isolation-promotion.plan.md)。状态：待实现与验收，一个独立实现 PR 交付。
+任务 ID：41；任务名称：dev 隔离与 stable 提升；目标：`PHASE1-RUNTIME`。配套 [Plan](runtime-isolation-promotion.plan.md)。状态：延后，未交付，不作为当前执行入口。原任务身份保留。
+
+下文保留原双 channel 维护与提升草案。当前安装/调试路径隔离由 #83 独立交付，#42 只验单安装版和同构建当前格式重启，不消费本任务；#53 也不等待本任务。重新启用前复核 #40/#83 实际能力、当前格式和维护需求，重新固定 Spec/Plan 与测试计划。仓库状态不自动修改中心 Task 的固定契约或派发资格。
 
 ## 范围与前置
 
-硬前置：#40 [固定版本与双入口](versioned-runtime.spec.md)、#36 [持续 worker 流程](worker-flow.spec.md)。遵守[第一阶段共同约束](phase1-delivery-constraints.md)。交付独立 stable/dev home 和可恢复的受控版本选择；不维护项目五步、自动回滚或通用迁移框架。
+原草案硬前置：#40 [固定版本与双入口](versioned-runtime.spec.md)、#36 持续 worker 基础；重新启用时复核，不构成当前开工许可。遵守[第一阶段共同约束](phase1-delivery-constraints.md)。拟交付完整双 channel 环境和可恢复的受控版本选择；不维护项目五步、自动回滚或通用迁移框架。
 
 ## 隔离与维护资格
 
@@ -38,4 +40,4 @@ stable/dev 使用不同规范 home、测试仓库及所有可写运行目录。�
 | RP6 | 错版本/home、并行提升、部分项目失败及选择后启动失败明确记录，只结算本请求 |
 | RP7 | 屏障与启动/发送/配置变更竞争按真实中心入口核验；既有消息/PR 观察不丢失，不虚构项目步骤或发布锁 |
 
-使用隔离 Windows home、测试仓库和已支持的原会话模式，保存 `docs/validation/runtime-isolation-promotion/` 证据；#42 验组合版本及持续运行。
+重新启用时使用隔离 Windows home、测试仓库和已支持的原会话模式，拟保存 docs/validation/runtime-isolation-promotion/ 证据。提升组合验收届时另行固定，不复用当前 #42 的单安装版完成定义冒充提升证明。

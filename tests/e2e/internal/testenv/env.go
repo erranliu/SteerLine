@@ -47,6 +47,7 @@ type Scenario struct {
 type Project struct {
 	Scenario                                                              *Scenario
 	Name, Root, Home, Repo, Remote, RemoteURL, Config, Database, Provider string
+	ProjectID, DatabaseID                                                 string
 	Driver                                                                driver.Client
 	Service                                                               *testprocess.Process
 	GitServer                                                             *testprocess.Process
@@ -304,6 +305,9 @@ func (p *Project) CreateTasks() {
 	if !validation.Valid {
 		s.t.Fatalf("invalid task batch: %+v", validation)
 	}
+	if validation.ProjectID != batch.ProjectID || validation.DatabaseID == "" {
+		s.t.Fatal("task validation did not bind the owned project/database identity")
+	}
 	raw, err = p.Driver.Run(s.Context, "task", "create", "-config", p.Config, "-file", input, "-request-id", strings.ReplaceAll(uuid.NewString(), "-", ""), "-expected-authority-version", strconv.FormatUint(validation.AuthorityVersion, 10), "-by", "e2e")
 	s.Must(err)
 	var receipt taskmodel.TaskBatchReceipt
@@ -311,6 +315,7 @@ func (p *Project) CreateTasks() {
 	if receipt.Status != "accepted" {
 		s.t.Fatalf("unexpected create receipt: %+v", receipt)
 	}
+	p.ProjectID, p.DatabaseID = validation.ProjectID, validation.DatabaseID
 	for key, t := range p.Tasks {
 		id, ok := receipt.TaskIDs[key]
 		if !ok {
@@ -335,45 +340,12 @@ func (p *Project) StartService() {
 			s.t.Fatal("service exited; see log")
 		default:
 		}
-		runtime, err := p.readRuntime(s.Context)
+		snapshot, err := p.Snapshot()
 		if err != nil {
 			return false, err
 		}
-		return runtime != nil && runtime.Service.Ready, nil
+		return snapshot.Runtime != nil && snapshot.Runtime.Service.Ready, nil
 	})
-}
-
-// readRuntime scopes this in-process app config load to the same project home
-// and controlled provider state passed to the service and helper processes.
-// The E2E runner intentionally clears inherited STEERLINE_* variables; restore
-// the runner environment after this one read so projects cannot share config.
-func (p *Project) readRuntime(ctx context.Context) (runtime *reconstruction.Runtime, err error) {
-	previousHome, hadHome := os.LookupEnv("STEERLINE_HOME")
-	previousState, hadState := os.LookupEnv("STEERLINE_E2E_CONTROLLED_STATE")
-	restore := func() error {
-		var restoreErr error
-		if hadState {
-			restoreErr = errors.Join(restoreErr, os.Setenv("STEERLINE_E2E_CONTROLLED_STATE", previousState))
-		} else {
-			restoreErr = errors.Join(restoreErr, os.Unsetenv("STEERLINE_E2E_CONTROLLED_STATE"))
-		}
-		if hadHome {
-			restoreErr = errors.Join(restoreErr, os.Setenv("STEERLINE_HOME", previousHome))
-		} else {
-			restoreErr = errors.Join(restoreErr, os.Unsetenv("STEERLINE_HOME"))
-		}
-		return restoreErr
-	}
-	if err := os.Setenv("STEERLINE_HOME", p.Home); err != nil {
-		return nil, err
-	}
-	if err := os.Setenv("STEERLINE_E2E_CONTROLLED_STATE", p.Provider); err != nil {
-		return nil, errors.Join(err, restore())
-	}
-	defer func() {
-		err = errors.Join(err, restore())
-	}()
-	return driver.ReadRuntime(ctx, p.Config)
 }
 
 func (p *Project) StopService() {
@@ -438,17 +410,19 @@ func snapshotFromApplicationRead(read storageports.ApplicationProjectSnapshot) (
 
 func (p *Project) SnapshotContext(ctx context.Context) (Snapshot, error) {
 	var snap Snapshot
-	page, err := p.Driver.Tasks(ctx)
-	if err != nil {
-		return snap, err
+	if p.ProjectID == "" || p.DatabaseID == "" {
+		return snap, errors.New("project snapshot lacks its validated project/database identity")
 	}
-	read, err := driver.ReadApplicationProjectSnapshot(ctx, p.Database, page.ProjectID, "", 100)
+	read, err := driver.ReadApplicationProjectSnapshot(ctx, p.Database, p.ProjectID, "", 100)
 	if err != nil {
 		return snap, err
 	}
 	snap, err = snapshotFromApplicationRead(read)
 	if err != nil {
 		return snap, err
+	}
+	if snap.Page.ProjectID != p.ProjectID || snap.Page.DatabaseID != p.DatabaseID {
+		return snap, errors.New("project snapshot differs from its validated project/database identity")
 	}
 	snap.Helper, err = controlled.Read(p.Provider)
 	if err == nil && p.RealPR && !strings.HasPrefix(p.Scenario.ID, "candidates.") {
@@ -495,20 +469,33 @@ func (p *Project) WaitPhase(phase string) Snapshot {
 				}
 				if e.Environment != nil && e.Environment.Blocker != nil {
 					reason := e.Environment.Blocker.Fact.Reason
-					if (reason == "agent_input_unverified" || reason == "resource_preparation_unverified" || reason == "preparation_dispatch_unverified" || reason == "business_dispatch_unverified") && !rechecked {
-						rechecked = true
+					handled, err := recheckNativeEnvironmentOnce(reason, &rechecked, func() error {
 						_, err := p.Driver.Run(p.Scenario.Context, "answer", "-config", p.Config, "-run-id", e.WorkflowRunID, "-option", "recheck_environment", "-by", "e2e")
+						return err
+					})
+					if handled {
 						return false, err
 					}
-					if reason != "agent_input_unverified" {
-						p.Scenario.t.Fatalf("native environment blocked: %s; see latest-phase snapshot", reason)
-					}
+					p.Scenario.t.Fatalf("native environment blocked: %s; see latest-phase snapshot", reason)
 				}
 			}
 		}
 		return len(snap.Domain.WorkflowRuns) == 1 && snap.Domain.WorkflowRuns[0].Phase == phase && len(snap.Domain.Executions) == 1 && snap.Domain.Executions[0].Status != "active", nil
 	})
 	return result
+}
+
+func recheckNativeEnvironmentOnce(reason string, rechecked *bool, recheck func() error) (bool, error) {
+	switch reason {
+	case "agent_input_unverified", "resource_preparation_unverified", "preparation_dispatch_unverified", "business_dispatch_unverified":
+		if *rechecked {
+			return true, nil
+		}
+		*rechecked = true
+		return true, recheck()
+	default:
+		return false, nil
+	}
 }
 
 func (p *Project) Merge() {

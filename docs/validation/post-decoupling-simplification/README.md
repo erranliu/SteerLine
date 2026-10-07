@@ -1,6 +1,6 @@
 # 解耦后的代码精简
 
-日期：2026-10-04。用户授权执行死代码清理、重复小规则合并、严格 JSON 解码去重并提 PR。基线 `ace6181a050e7598e83a235b37bf625d7855289b`，分支 `codex/post-decoupling-simplification`。实施与测试范围见 [Plan](../../spec/post-decoupling-simplification.plan.md)。
+日期：2026-10-04。用户授权执行死代码清理、重复小规则合并、严格 JSON 解码去重并提 PR。基线 `ace6181a050e7598e83a235b37bf625d7855289b`，分支 `codex/post-decoupling-simplification`。实施与测试范围见 [Plan](../../archive/spec/completed/post-decoupling-simplification.plan.md)。
 
 ## 删除与唯一所有者
 

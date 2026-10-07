@@ -70,6 +70,9 @@ func hostConfigForTest(c execution.Config) Config {
 		CapabilityValidation: fixtureCapabilityValidation{}, ControlValidation: fixtureControlValidation{},
 	}
 	h.RuntimeReader = func(ctx context.Context, input Config) (*reconstruction.Runtime, error) {
+		if err := input.RequireNativeTaskAuthority(); err != nil {
+			return nil, err
+		}
 		resolved, err := executionConfigForHostTest(c, input)
 		if err != nil {
 			return nil, err

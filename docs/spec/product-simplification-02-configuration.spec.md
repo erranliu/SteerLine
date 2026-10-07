@@ -4,7 +4,7 @@
 
 参考源码基线：`75474dcece26d807367e106a89a992f01f53fafd`。硬前置：[第一批](product-simplification-01-console.spec.md)合入；实际实施基线记录第一批合入后的提交。遵守第一批“目标与共同边界”，完整保留多后端、远端与多候选，不合并各后端的原生解释。
 
-本 Spec 替代 [项目权限策略](execution-isolation-06-policy.spec.md)中的自由组合配置，以及 [执行需求注册](execution-isolation-08-resolution.spec.md)中的可选 `execution_requirements`、认证和工具匹配；原生权限落实、必要能力、执行注册、配置冻结和发布责任继续成立。历史 Spec 不回写。
+本 Spec 替代 [项目权限策略](../archive/spec/completed/execution-isolation-06-policy.spec.md)中的自由组合配置，以及 [执行需求注册](../archive/spec/completed/execution-isolation-08-resolution.spec.md)中的可选 `execution_requirements`、认证和工具匹配；原生权限落实、必要能力、执行注册、配置冻结和发布责任继续成立。历史 Spec 不回写。
 
 ## 权限模式
 

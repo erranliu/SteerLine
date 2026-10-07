@@ -138,22 +138,24 @@ type scopedGroup struct {
 }
 
 type scopedReport struct {
-	SchemaVersion   int           `json:"schema_version"`
-	Scope           string        `json:"scope"`
-	Phase           string        `json:"phase"`
-	StartedAt       string        `json:"started_at"`
-	FinishedAt      string        `json:"finished_at"`
-	PreparationSecs float64       `json:"preparation_seconds"`
-	ExecutionSecs   float64       `json:"execution_seconds"`
-	Environment     environment   `json:"environment"`
-	CorePackage     string        `json:"core_package"`
-	CoreTests       []string      `json:"enumerated_core_tests,omitempty"`
-	AllPackages     []string      `json:"enumerated_packages"`
-	WeightSource    string        `json:"weight_source,omitempty"`
-	Groups          []scopedGroup `json:"groups"`
-	Complete        bool          `json:"complete"`
-	Passed          bool          `json:"passed"`
-	Errors          []string      `json:"errors"`
+	SchemaVersion      int           `json:"schema_version"`
+	Scope              string        `json:"scope"`
+	Phase              string        `json:"phase"`
+	StartedAt          string        `json:"started_at"`
+	FinishedAt         string        `json:"finished_at"`
+	PreparationSecs    float64       `json:"preparation_seconds"`
+	ExecutionSecs      float64       `json:"execution_seconds"`
+	Environment        environment   `json:"environment"`
+	CorePackage        string        `json:"core_package"`
+	CoreTests          []string      `json:"enumerated_core_tests,omitempty"`
+	IntegrationPackage string        `json:"integration_package,omitempty"`
+	IntegrationTests   []string      `json:"enumerated_integration_tests,omitempty"`
+	AllPackages        []string      `json:"enumerated_packages"`
+	WeightSource       string        `json:"weight_source,omitempty"`
+	Groups             []scopedGroup `json:"groups"`
+	Complete           bool          `json:"complete"`
+	Passed             bool          `json:"passed"`
+	Errors             []string      `json:"errors"`
 }
 
 func runScoped(opts options) int {
@@ -185,13 +187,22 @@ func runScoped(opts options) int {
 	} else {
 		report.AllPackages = packages
 	}
-	var binary, coreDir string
+	var binary, coreDir, integrationBinary, integrationDir string
 	if opts.workers == 3 {
 		binary, coreDir, err = prepareCore(ctx, opts.out)
 		if err != nil {
 			return scopedSetupError(opts.out, &report, err)
 		}
 		report.CoreTests, err = listCoreTests(ctx, binary, coreDir)
+		if err != nil {
+			return scopedSetupError(opts.out, &report, err)
+		}
+		report.IntegrationPackage = boundaryPackage
+		integrationBinary, integrationDir, err = prepareTestPackage(ctx, opts.out, boundaryPackage, "integration")
+		if err != nil {
+			return scopedSetupError(opts.out, &report, err)
+		}
+		report.IntegrationTests, err = listCoreTests(ctx, integrationBinary, integrationDir)
 		if err != nil {
 			return scopedSetupError(opts.out, &report, err)
 		}
@@ -238,29 +249,28 @@ func runScoped(opts options) int {
 			return scopedSetupError(opts.out, &report, e)
 		}
 		assignments := assignTests(report.CoreTests, weights, 3)
-		groups := make([]scopedGroup, 3)
-		var wg sync.WaitGroup
-		for i := range groups {
-			wg.Add(1)
-			go func(i int) {
-				defer wg.Done()
-				id := fmt.Sprintf("core-%d", i+1)
-				args := []string{"go", "tool", "test2json", "-t", "-p", fullCorePackage, binary, "-test.v=test2json", "-test.count=1", "-test.parallel=1", "-test.timeout=45m", "-test.run=" + exactPattern(assignments[i])}
-				groups[i] = runGroup(ctx, opts.out, id, coreDir, args, assignments[i], []string{fullCorePackage}, true)
-			}(i)
-		}
-		wg.Wait()
-		report.Groups = append(report.Groups, groups...)
+		integrationAssignments := assignTests(report.IntegrationTests, weights, 3)
+		integrationGroups := make([]scopedGroup, 3)
 		others := make([]string, 0, len(packages)-1)
 		for _, pkg := range packages {
-			if pkg != fullCorePackage {
+			if pkg != fullCorePackage && pkg != boundaryPackage {
 				others = append(others, pkg)
 			}
 		}
-		if len(others) > 0 {
+		groups := runFullGroups(len(assignments), func(i int) scopedGroup {
+			id := fmt.Sprintf("core-%d", i+1)
+			args := []string{"go", "tool", "test2json", "-t", "-p", fullCorePackage, binary, "-test.v=test2json", "-test.count=1", "-test.parallel=1", "-test.timeout=45m", "-test.run=" + exactPattern(assignments[i])}
+			core := runGroup(ctx, opts.out, id, coreDir, args, assignments[i], []string{fullCorePackage}, true)
+			id = fmt.Sprintf("integration-%d", i+1)
+			args = []string{"go", "tool", "test2json", "-t", "-p", boundaryPackage, integrationBinary, "-test.v=test2json", "-test.count=1", "-test.parallel=1", "-test.timeout=45m", "-test.run=" + exactPattern(integrationAssignments[i])}
+			integrationGroups[i] = runGroup(ctx, opts.out, id, integrationDir, args, integrationAssignments[i], []string{boundaryPackage}, true)
+			return core
+		}, func() scopedGroup {
 			args := append([]string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1"}, others...)
-			report.Groups = append(report.Groups, runGroup(ctx, opts.out, "other-packages", "", args, nil, others, false))
-		}
+			return runGroup(ctx, opts.out, "other-packages", "", args, nil, others, false)
+		})
+		report.Groups = append(report.Groups, groups...)
+		report.Groups = append(report.Groups, integrationGroups...)
 	}
 	report.ExecutionSecs = time.Since(execution).Seconds()
 	report.FinishedAt = time.Now().UTC().Format(time.RFC3339Nano)
@@ -281,6 +291,26 @@ func runScoped(opts options) int {
 	return 0
 }
 
+// The remaining packages have their own serial Go command. Starting it alongside
+// the three execution workers keeps both owners within the same Full deadline.
+func runFullGroups(workers int, runCore func(int) scopedGroup, runOthers func() scopedGroup) []scopedGroup {
+	groups := make([]scopedGroup, workers+1)
+	var wg sync.WaitGroup
+	wg.Add(workers + 1)
+	for i := 0; i < workers; i++ {
+		go func(i int) {
+			defer wg.Done()
+			groups[i] = runCore(i)
+		}(i)
+	}
+	go func() {
+		defer wg.Done()
+		groups[workers] = runOthers()
+	}()
+	wg.Wait()
+	return groups
+}
+
 func scopedSetupError(out string, report *scopedReport, err error) int {
 	report.Errors = append(report.Errors, err.Error())
 	report.Complete = false
@@ -299,7 +329,7 @@ func listPackages(ctx context.Context) ([]string, error) {
 	if len(packages) == 0 {
 		return nil, fmt.Errorf("go list returned no packages")
 	}
-	for _, required := range []string{corePackage, fullCorePackage} {
+	for _, required := range []string{corePackage, fullCorePackage, boundaryPackage} {
 		found := false
 		for _, pkg := range packages {
 			if pkg == required {
@@ -314,19 +344,23 @@ func listPackages(ctx context.Context) ([]string, error) {
 }
 
 func prepareCore(ctx context.Context, out string) (string, string, error) {
-	dirBytes, err := exec.CommandContext(ctx, "go", "list", "-f", "{{.Dir}}", fullCorePackage).CombinedOutput()
+	return prepareTestPackage(ctx, out, fullCorePackage, "core")
+}
+
+func prepareTestPackage(ctx context.Context, out, pkg, name string) (string, string, error) {
+	dirBytes, err := exec.CommandContext(ctx, "go", "list", "-f", "{{.Dir}}", pkg).CombinedOutput()
 	if err != nil {
 		return "", "", fmt.Errorf("locate core: %w: %s", err, dirBytes)
 	}
 	dir := strings.TrimSpace(string(dirBytes))
-	binary, err := filepath.Abs(filepath.Join(out, "core.test"))
+	binary, err := filepath.Abs(filepath.Join(out, name+".test"))
 	if err != nil {
 		return "", "", err
 	}
 	if runtime.GOOS == "windows" {
 		binary += ".exe"
 	}
-	output, err := exec.CommandContext(ctx, "go", "test", "-c", "-o", binary, fullCorePackage).CombinedOutput()
+	output, err := exec.CommandContext(ctx, "go", "test", "-c", "-o", binary, pkg).CombinedOutput()
 	if err != nil {
 		return "", "", fmt.Errorf("compile core: %w: %s", err, output)
 	}
@@ -515,8 +549,12 @@ func checkScopedCoverage(report scopedReport) []string {
 	if report.Scope == "full" && report.CorePackage != fullCorePackage {
 		failures = append(failures, "full core package differs from the execution test owner")
 	}
+	if report.Scope == "full" && (report.IntegrationPackage != boundaryPackage || len(report.IntegrationTests) == 0) {
+		failures = append(failures, "full integration partition differs from the integration test owner")
+	}
 	seenPackages := map[string]int{}
 	seenCore := map[string]int{}
+	seenIntegration := map[string]int{}
 	for _, group := range report.Groups {
 		if group.Error != "" {
 			failures = append(failures, group.ID+": "+group.Error)
@@ -565,10 +603,13 @@ func checkScopedCoverage(report scopedReport) []string {
 					failures = append(failures, fmt.Sprintf("%s: missing assigned test %s", group.ID, name))
 				}
 			}
-			if strings.HasPrefix(group.ID, "core-") || group.ID == "quick-core" {
+			if strings.HasPrefix(group.ID, "core-") || strings.HasPrefix(group.ID, "integration-") || group.ID == "quick-core" {
 				expectedPackage := corePackage
 				if strings.HasPrefix(group.ID, "core-") {
 					expectedPackage = fullCorePackage
+				}
+				if strings.HasPrefix(group.ID, "integration-") {
+					expectedPackage = boundaryPackage
 				}
 				for key := range runs {
 					pkg, test, _ := strings.Cut(key, "\x00")
@@ -590,13 +631,24 @@ func checkScopedCoverage(report scopedReport) []string {
 			}
 		}
 		if strings.HasPrefix(group.ID, "core-") {
-			if packages[fullCorePackage] != 1 {
+			if packages[fullCorePackage] != 1 || len(packages) != 1 {
 				failures = append(failures, group.ID+": core package has no terminal")
 			}
 			for key, count := range runs {
 				pkg, test, _ := strings.Cut(key, "\x00")
 				if pkg == fullCorePackage && !strings.Contains(test, "/") {
 					seenCore[test] += count
+				}
+			}
+		}
+		if strings.HasPrefix(group.ID, "integration-") {
+			if packages[boundaryPackage] != 1 || len(packages) != 1 {
+				failures = append(failures, group.ID+": integration package has no unique terminal")
+			}
+			for key, count := range runs {
+				pkg, test, _ := strings.Cut(key, "\x00")
+				if pkg == boundaryPackage && !strings.Contains(test, "/") {
+					seenIntegration[test] += count
 				}
 			}
 		}
@@ -610,12 +662,20 @@ func checkScopedCoverage(report scopedReport) []string {
 		if len(seenCore) != len(report.CoreTests) {
 			failures = append(failures, "core top-level test set differs from enumeration")
 		}
+		for _, name := range report.IntegrationTests {
+			if seenIntegration[name] != 1 {
+				failures = append(failures, fmt.Sprintf("integration test %s ran %d times", name, seenIntegration[name]))
+			}
+		}
+		if len(seenIntegration) != len(report.IntegrationTests) {
+			failures = append(failures, "integration top-level test set differs from enumeration")
+		}
 		for _, pkg := range report.AllPackages {
-			if pkg != fullCorePackage && seenPackages[pkg] != 1 {
+			if pkg != fullCorePackage && pkg != boundaryPackage && seenPackages[pkg] != 1 {
 				failures = append(failures, fmt.Sprintf("package %s completed %d times", pkg, seenPackages[pkg]))
 			}
 		}
-		if len(seenPackages) != len(report.AllPackages)-1 {
+		if len(seenPackages) != len(report.AllPackages)-2 {
 			failures = append(failures, "other package set differs from enumeration")
 		}
 	} else {

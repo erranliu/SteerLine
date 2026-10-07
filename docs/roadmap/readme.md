@@ -9,11 +9,10 @@ SteerLine 现阶段的产品目标是：以 roadmap 为核心的自动化软件�
 ## 文档组织
 
 - [product-vision.md](product-vision.md) 描述从当前版本出发的后续产品目标和计划。不限定颗粒度，可以是一句话目标，也可以是具体版本交付计划、功能设计或技术选型；可选链接产品设计文档，不要求列执行约束、Spec 链接或排定执行依赖。
-- [roadmap.md](roadmap.md) 是近期与后续推进的主入口，只把尚待交付的任务列在活动清单；已结项任务的回执留在 `docs/validation/`，必要时作为后继依赖链接。
+- [roadmap.md](roadmap.md) 是近期与后续推进的主入口，只把尚待交付的任务列在活动清单；已执行的 Spec/Plan 移入 `docs/archive/spec/completed/`，回执留在 `docs/validation/`，必要时作为后继依赖链接。
 - [execution-map.md](execution-map.md) 直接列出已规划且尚未交付的执行 Spec、各自的开工与交付前置，以及跨 Spec 的接口交接、共享冲突和并行条件。每项任务与独立 Spec/Plan 同时进入活动 roadmap，不等到开始实现才补关系。
 - Roadmap 可以由多个文档组成，主文档负责组织和链接。
 - [phase2-draft-roadmap-admission.md](phase2-draft-roadmap-admission.md)维护二期草稿、独立审核及前置成熟度准入目标；一期稳定任务执行不依赖该机制，当前不创建新执行任务。
-- [three-line-modularization.md](three-line-modularization.md) 维护任务、执行、控制台解耦与目录整理的目标结构及 #73–#82 正式任务的独立 Spec/Plan、依赖与并行条件。
 - 长期约束、局部系统约束通常放在独立文档中，主文档只链接相关约束，不重复展开。
 - 主文档不维护文档形成、提交、PR 创建或合并情况，不设置这些状态列、提交 SHA、合并清单或基线核对记录。规划内容的增删体现项目进展，无需记录维护动作本身。
 
@@ -81,7 +80,7 @@ python scripts/roadmap_task_id.py check
 - Roadmap及其目标、关系表和约束页默认不引用已交付Spec/Plan，不把历史验收过程加入后续任务的通用必读材料。
 - 仍被后续依赖的已具备能力，用一句能力说明和必要边界承接。确需核对实现时链接当前接口/源码或架构定位，证据仅在本任务需要复核时按需查阅；不把旧Spec批量改链到一串历史验收文档。
 - 未完成执行任务保留自己的Spec/Plan入口，硬前置ID和任务身份不因精简引用而改变。部分完成能力只保留剩余要求，确有必要时链接其未验收的明确段落。
-- 历史Spec/Plan与证据保留在原目录或索引；只有本任务必须核验的版本、协议或安全条件才作为窄范围引用，不要求自动展开其传递引用。
+- 已执行的Spec/Plan归入 `docs/archive/spec/completed/`，退役流程资料归入 `docs/archive/spec/retired/`，证据保留在 `docs/validation/`；只有本任务必须核验的版本、协议或安全条件才作为窄范围引用，不要求自动展开其传递引用。
 
 ## 随项目进度维护
 

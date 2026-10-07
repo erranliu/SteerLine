@@ -27,22 +27,22 @@
 
 ## #4：P01–P13
 
-以下按[固定 Spec](../spec/01-orca-remote-protocol.md)中的编号索引已有记录。旧 home 目标的协议与版本族证据按原测量范围复用；台式机64g 的 UAC 和 P13 受监管负向另有目标专属样本。[协议汇总](../spec/orca-probe/remaining-gates.md)保存早期失败试次，不将其改记为通过。
+以下按[固定 Spec](../archive/spec/retired/01-orca-remote-protocol.md)中的编号索引已有记录。旧 home 目标的协议与版本族证据按原测量范围复用；台式机64g 的 UAC 和 P13 受监管负向另有目标专属样本。[协议汇总](../archive/spec/retired/orca-probe/remaining-gates.md)保存早期失败试次，不将其改记为通过。
 
 | ID | 结论与证据 |
 | --- | --- |
 | P01 | 通过；[新目标独立能力与五步](spec03-desktop64g-2026-09-28.md)记录真实远端身份与非驻留执行。 |
-| P02 | 通过；[远端固定 base 与仓库入口](../spec/orca-probe/remaining-gates.md)及[当前目标闭环](spec03-desktop64g-followup-2026-09-28/README.md)。 |
-| P03 | 通过；[分页、缺口与 source_changed](../spec/orca-probe/samples/p03-output-2026-09-24.json)。 |
+| P02 | 通过；[远端固定 base 与仓库入口](../archive/spec/retired/orca-probe/remaining-gates.md)及[当前目标闭环](spec03-desktop64g-followup-2026-09-28/README.md)。 |
+| P03 | 通过；[分页、缺口与 source_changed](../archive/spec/retired/orca-probe/samples/p03-output-2026-09-24.json)。 |
 | P04 | 通过；[真实业务问题与同 Attempt 应用](spec03-desktop64g-followup-2026-09-28/README.md)。 |
-| P05 | 通过；[受监管结果及失败回执](../spec/orca-probe/remaining-gates.md)。 |
-| P06 | 通过；[暂断与原 Dispatch 恢复](../spec/orca-probe/samples/p06-transient-2026-09-24.json)。 |
-| P07 | 通过；[中心派发、消息、回答边界重启](../spec/orca-probe/samples/p07-center-restarts-2026-09-24.json)。 |
-| P08 | 通过；[有/无 request ID 响应丢失](../spec/orca-probe/samples/p08-response-loss-2026-09-24.json)。 |
+| P05 | 通过；[受监管结果及失败回执](../archive/spec/retired/orca-probe/remaining-gates.md)。 |
+| P06 | 通过；[暂断与原 Dispatch 恢复](../archive/spec/retired/orca-probe/samples/p06-transient-2026-09-24.json)。 |
+| P07 | 通过；[中心派发、消息、回答边界重启](../archive/spec/retired/orca-probe/samples/p07-center-restarts-2026-09-24.json)。 |
+| P08 | 通过；[有/无 request ID 响应丢失](../archive/spec/retired/orca-probe/samples/p08-response-loss-2026-09-24.json)。 |
 | P09 | 通过；[当前目标五个 Dispatch 结算与释放](spec03-desktop64g-followup-2026-09-28/README.md)。 |
-| P10 | 当前支持版本范围通过；[真实回复超 8 KiB 发送前拒绝](../spec/orca-probe/samples/p10-home-live-reply-size-2026-09-27.json)与[台式机64g UAC 人工拒绝/批准](spec03-desktop64g-2026-09-28.md)。 |
-| P11 | 通过；[脚本文件回执、退出和重连](../spec/orca-probe/samples/p11-file-receipt-2026-09-24.json)，内建终端 stdout 丢失仍按已记录限制处理。 |
+| P10 | 当前支持版本范围通过；[真实回复超 8 KiB 发送前拒绝](../archive/spec/retired/orca-probe/samples/p10-home-live-reply-size-2026-09-27.json)与[台式机64g UAC 人工拒绝/批准](spec03-desktop64g-2026-09-28.md)。 |
+| P11 | 通过；[脚本文件回执、退出和重连](../archive/spec/retired/orca-probe/samples/p11-file-receipt-2026-09-24.json)，内建终端 stdout 丢失仍按已记录限制处理。 |
 | P12 | 通过；[当前目标原生五步同工作树、逐步新 Dispatch](spec03-desktop64g-followup-2026-09-28/README.md)。 |
-| P13 | 通过；[真实正向和非零退出负向](../spec/orca-probe/remaining-gates.md)，以及[SteerlineTest 两项中心入口单字段负向注入](spec01-p13-steerlinetest-2026-09-28/README.md)。 |
+| P13 | 通过；[真实正向和非零退出负向](../archive/spec/retired/orca-probe/remaining-gates.md)，以及[SteerlineTest 两项中心入口单字段负向注入](spec01-p13-steerlinetest-2026-09-28/README.md)。 |
 
 结项前，中心 #4 的本次原生 verify Attempt 为 `outcome_unknown`；原 Dispatch 已被精确 abandon，原绑定 terminal 后续由人工关闭并观察到退出。结项命令在中心完成这条 unknown 的代码核验对账前必须拒绝关闭 #4。该对账与 #3/#4 最终 Delivery 已完成，见[原中心回执](phase1-task-closure-2026-09-28/README.md)。两个失败 Run 均保留为真实历史，不把既有 PR 冒充为新候选。

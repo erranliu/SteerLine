@@ -30,7 +30,7 @@ SQLite `Reader.TaskGraphSnapshot`、事务内 `TaskGraphSnapshotTx`、`persisten
 - 全 OS/build-tag 源扫描和 Windows/Linux 依赖图：`boundary-01` 的 `TestCD67CoreBoundary`；实现位于 `internal/coreboundary`，精确选择位于 `cmd/test-feedback/scoped.go`。
 - 真实 app/client/SQLite/受控后端命令路径：`wiring-02` 的 `TestCandidateConsoleWiring`，最终状态在报告完成后记录。
 
-所有验收命令、环境、时点、通过条件和证据目录见 [实现计划](../../spec/three-line-05-product-console.plan.md) 与本目录 [证据索引](README.md)。
+所有验收命令、环境、时点、通过条件和证据目录见 [实现计划](../../archive/spec/completed/three-line-05-product-console.plan.md) 与本目录 [证据索引](README.md)。
 
 ## 协调集成后的唯一所有者
 

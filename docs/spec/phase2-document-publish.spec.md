@@ -4,7 +4,7 @@
 
 ## 范围与前置
 
-硬前置：#46。依赖[规划提案与受控草稿](phase2-planning-drafts.spec.md)，遵守[共同约束](phase2-constraints.md)、[任务契约](task-core.spec.md)和[固定 DAG](task-dag.spec.md)。
+硬前置：#46。依赖[规划提案与受控草稿](phase2-planning-drafts.spec.md)，遵守[共同约束](phase2-constraints.md)、[任务契约](../archive/spec/completed/task-core.spec.md)和[固定 DAG](../archive/spec/completed/task-dag.spec.md)。
 交付 documents_only 与 task_batch 两种发布、固定 Git 文档版本、中心创建和全部部分失败恢复。不自动开始任务，不自动合并任何 PR。
 
 ## 确认和准备

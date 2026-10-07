@@ -591,7 +591,7 @@ func TestNativeStoreRejectsRetiredSQLiteRunProjectionBeforeAuthorityOpen(t *test
 }
 
 func TestNativeCursorErrorHasStableCode(t *testing.T) {
-	var native *taskmodel.Error
+	var native *HostError
 	if !errors.As(nativeErr("cursor_invalidated", "expired"), &native) || native.Code != "cursor_invalidated" {
 		t.Fatalf("native error code missing: %+v", native)
 	}

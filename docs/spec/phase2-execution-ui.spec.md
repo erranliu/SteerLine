@@ -4,7 +4,7 @@
 
 ## 范围与前置
 
-硬前置：#44 [WinUI 基座](phase2-winui-foundation.spec.md)、#45 [本机客户端协议](phase2-local-api.spec.md)，传递包含 #36 [持续 worker](worker-flow.spec.md)。遵守[第二阶段共同约束](phase2-constraints.md)。只交付真实中心状态、会话、反馈和 PR 的原生界面，不新增状态机或后端规则；多候选能力未提供时明确 unsupported。
+硬前置：#44 [WinUI 基座](phase2-winui-foundation.spec.md)、#45 [本机客户端协议](phase2-local-api.spec.md)，传递包含 #36 [持续 worker](../archive/spec/completed/worker-flow.spec.md)。遵守[第二阶段共同约束](phase2-constraints.md)。只交付真实中心状态、会话、反馈和 PR 的原生界面，不新增状态机或后端规则；多候选能力未提供时明确 unsupported。
 
 ## 展示与反馈
 

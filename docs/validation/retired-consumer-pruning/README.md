@@ -1,6 +1,6 @@
 # 退役消费者清理验证
 
-范围依据：[Spec](../../spec/retired-consumer-pruning.spec.md)、[Plan](../../spec/retired-consumer-pruning.plan.md)。基线 main 9413865，含 #202–#204；最后一次 rebase 只加入候选文档，不改变已测试源码。
+范围依据：[Spec](../../archive/spec/completed/retired-consumer-pruning.spec.md)、[Plan](../../archive/spec/completed/retired-consumer-pruning.plan.md)。基线 main 9413865，含 #202–#204；最后一次 rebase 只加入候选文档，不改变已测试源码。
 
 ## 精简结果
 

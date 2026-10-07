@@ -278,6 +278,21 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 		if err = json.Unmarshal(output, &queried); err != nil || queried.RequestID != id || queried.Status != "indeterminate" {
 			t.Fatalf("unknown CLI receipt became success or changed ID: %s / %v", output, err)
 		}
+		// This fixture publishes the test process's identity without a running
+		// service loop. Refresh only its heartbeat before positive liveness reads.
+		heartbeat := func() {
+			writer, err := sqlite.OpenSQLiteStore(filepath.Join(c.RunDir, "steerline.db"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = writer.Heartbeat(context.Background(), c.Identity())
+			if closeErr := writer.Close(); err == nil {
+				err = closeErr
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+		}
 
 		t.Run("CM72 actual console shares product adapter and original receipt", func(t *testing.T) {
 			refs, options, err := steerlineapp.PrepareConsole(context.Background(), configPath, "")
@@ -296,6 +311,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 			if result, err := tuiClient.Receipt(context.Background(), id); err != nil || result.Status != "indeterminate" || result.RequestID != id {
 				t.Fatalf("TUI changed original CLI receipt: %+v / %v", result, err)
 			}
+			heartbeat()
 			if snapshot := tuiClient.ReadProject(context.Background(), "70", productapi.ProjectSnapshot{}); snapshot.Connection.State != productapi.ConnectionConnected || snapshot.HistoryError != "" {
 				t.Fatalf("actual console failed reading project: %+v", snapshot)
 			}
@@ -323,6 +339,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 			if err := updated.(console.Model).Close(); err != nil {
 				t.Fatal(err)
 			}
+			heartbeat()
 			if connection := steerline.ConnectService(context.Background(), hostConfig); connection.State != steerline.ConnectionConnected {
 				t.Fatalf("TUI exit stopped service: %+v", connection)
 			}
@@ -333,6 +350,7 @@ func TestNativeTaskBatchCLIValidatesCreatesAndDiscardsFixedTaskIDs(t *testing.T)
 		if err = client.Close(); err != nil {
 			t.Fatal(err)
 		}
+		heartbeat()
 		if connection := steerline.ConnectService(context.Background(), hostConfig); connection.State != steerline.ConnectionConnected {
 			t.Fatalf("client close changed service identity/lifetime: %+v", connection)
 		}

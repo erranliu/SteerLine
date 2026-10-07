@@ -14,18 +14,18 @@
 
 | 范围 | 当前证据 |
 | --- | --- |
-| PS1-01–04及隐形编辑器保护 | [最终定向报告](three-pane-final/summary.json)：console/query/client通过 |
+| PS1-01–04及隐形编辑器保护 | [最终定向报告](three-pane-release-no-skip/summary.json)：console/query/client通过 |
 | 最新10条、同事务、来源/准备轮隔离 | [SQLite定向报告](three-pane-sqlite/summary.json)：通过 |
 | 当前真实app/SQLite/受控worker接线 | [内嵌反馈报告](inline-integration-refreshed/summary.json)：两方案/两候选、切换草稿隔离、同一候选续跑通过；用户动作在未提交前显式刷新/核对，不重发未知请求 |
 | PS1-05 Windows原生终端/PTY | [输入捕获](terminal-three-pane/capture.json) / [原始VT记录](terminal-three-pane/native-output.json)：80×24实际终端，中文两行、F8、P1→P2→P1及一次F2后仍绑定candidate-0/decision-0；完整最终回复末尾可滚动到达，测试进程退出PASS |
-| L1 | `l1-three-pane/`最终报告另行记录；此前`l1/`失败不能替代最终通过 |
+| L1 | `l1-release/`最终完整报告另行记录；`l1-three-pane/`的功能/边界组通过但默认终端fixture skip使总报告不完整，随后改用显式测试标签；此前失败不能替代最终通过 |
 | 静态 | 受影响包go vet、当前产品构建及git diff --check通过 |
 
 终端fixture只注入公开product DTOs，不启动模型或发布PR。Windows PTY证明真实终端VT/UTF-8解析与实际程序渲染，不证明物理IME、桌面截图或远端后端原生能力。宽屏三窗、问题版本变化、焦点/窄屏尺寸由定向测试覆盖；没有把Go fake KeyMsg称为该PTY输入证据。
 
 ## 初次失败与范围修订
 
-- 两栏初稿的三分钟五候选接线两次耗尽总准备期限，错误为context deadline exceeded；原始`integration/`、`integration-final/`报告保留。五分钟fixture的旧布局接线通过只作历史，最终版本改用最小两候选内嵌接线，并未放宽既有五候选测试默认期限。
+- 两栏初稿的三分钟五候选接线两次耗尽总准备期限，错误为context deadline exceeded；原始`integration/`、`integration-final/`报告保留。五分钟fixture的旧布局接线通过只作历史，最终版本改用最小两候选内嵌接线，本批未放宽既有五候选测试默认期限；随后合并main已存在的五分钟期限和follow-up执行修复。
 - 新两候选接线初次在F2前未重新采样原问题，续跑等待超时；`inline-integration/`失败保留。最终测试在原请求尚未提交时模拟明确Esc/刷新/a核对同一草稿后F2；仍拒绝未知结果的新请求重试。
 - 首次L1在同时运行多组服务fixture期间，app构造30秒期限超时，integration边界组15分钟超时；报告complete=false。app构造原用例随后单独通过（21.433秒），未修改生产或该期限。最终L1重新按固定入口执行，不删慢用例、不改runner选择或超时来制造通过。
 - 旧桌面窗口截图实际被聊天窗口覆盖，未保存为终端截图或验收证据；改用明确隔离PTY，原桌面fixture停止标记已发送。
@@ -34,4 +34,8 @@
 
 删除 `conversation.go`、`conversation_anchor.go`、`view_conversation.go`、`model_update_conversation.go`的完整阅读/折叠/锚点逻辑；`model_navigation.go`仅剩简单滚动。阅读偏好/正文分页/历史attempt选择字段和旧UI入口删除。原输入、幂等、失败、身份及正文断言迁移或补测；[退役测试映射](retired-tests.json)保留历史名称，不将删除断言当成新实现通过。
 
-[同口径统计](line-summary.json)比较internal和cmd中的Go物理行数（含注释/空行，按_test.go区分，含未变更测试支持代码）；文档和tests/integration不计入该口径。当前实现净减约1,447行、console实现由6,981至约5,518行；最终提交前重算准确值。保留三窗/摘要/内嵌输入的新增代码已计入，不重复计算共享退役代码，不以压缩排版计收益。
+[同口径统计](line-summary.json)比较internal和cmd中的Go物理行数（含注释/空行，按_test.go区分，含未变更测试支持代码）；文档和tests/integration不计入该口径。当前实现净减约1,442行、console实现由6,981至约5,523行；最终提交前重算准确值。保留三窗/摘要/内嵌输入的新增代码已计入，不重复计算共享退役代码，不以压缩排版计收益。
+
+## 主分支同步
+
+合并`69c839be`，两处冲突仅在移至product-design的活动/会话说明。保留main的新数据模型版本定位和目录整理，同时保留三窗、RecentActivity与内嵌反馈说明。当前Spec保持原文件名，已完成资料引用更新为archive路径；未恢复退役版本任务或旧格式兼容路径。

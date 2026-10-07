@@ -1,6 +1,6 @@
 # 执行隔离清理与验收
 
-日期：2026-10-01。基线：`7350e84`，PR #174 已合入。此轮遵守[既有共同约束](../../spec/execution-isolation-constraints.md)，不重做 #54–#61 的配置、快照和业务事务。
+日期：2026-10-01。基线：`7350e84`，PR #174 已合入。此轮遵守[既有共同约束](../../archive/spec/completed/execution-isolation-constraints.md)，不重做 #54–#61 的配置、快照和业务事务。
 
 ## 所有者与删除清单
 

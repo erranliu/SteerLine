@@ -13,7 +13,7 @@ import (
 
 // RenderOptions controls human rendering of activity records. Rendering never
 // affects the stored data and may change between releases; the JSONL contract in
-// docs/activity.md is what stays stable.
+// docs/product-design/activity.md is what stays stable.
 type RenderOptions struct {
 	Color      bool
 	MaxLines   int // max detail lines; <=0 means default

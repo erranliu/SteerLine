@@ -18,7 +18,7 @@ go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recove
 go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delivery.orca-codex'
 ```
 
-保留 `-quick` 和 `-workers=3`；后者将当前 `internal/execution` 业务包划分到三个 worker，再完整运行其余包，是完整确定性 Go 回归，不包含带 e2e tag 的场景。L2/L3 当前支持 Windows、串行。L2 默认 gated：先验证 controlled（包括证据和清理），通过才进入两条真实链路；失败不会创建真实会话或发模型请求。L2 禁止直接选择 live 绕过门槛；显式 controlled 的报告 coverage 为 gate-only。L3 必须显式指定 controlled/live 和 suite；组、场景可以逗号多选，未知、重复、零匹配或跨环境选择失败。PowerShell 的带点场景 ID 参数需加引号。
+保留 `-quick` 和 `-workers=3`；后者将 `internal/execution` 与 `tests/integration` 各自划分为三组，每个 worker 顺序运行两个包的对应分区，同时以独立串行命令完整运行其余包，最多四组命令并发，是完整确定性 Go 回归，不包含带 e2e tag 的场景。L2/L3 当前支持 Windows、串行。L2 默认 gated：先验证 controlled（包括证据和清理），通过才进入两条真实链路；失败不会创建真实会话或发模型请求。L2 禁止直接选择 live 绕过门槛；显式 controlled 的报告 coverage 为 gate-only。L3 必须显式指定 controlled/live 和 suite；组、场景可以逗号多选，未知、重复、零匹配或跨环境选择失败。PowerShell 的带点场景 ID 参数需加引号。
 
 不能混用原始 Go 参数、quick/full/build-only。`-out` 指定空目录；默认写入系统临时目录 `steerline-test-feedback/<运行时间>`，拒绝覆盖已有产物。
 
@@ -48,7 +48,7 @@ Run 持有本次产品/helper 构建和选择；Scenario 持有 scratch/证据�
 
 任务创建/查询使用当前 CLI。领取使用公开 SubmitControl/WaitControlReceipt，先 ResolveIdentity 再计算 Profile digest，与控制台/服务一致。执行身份通过公开 reader/query 的同一事务读取，不直接写 SQL 或读取私有业务状态。
 
-分级 runner 在 E2E 测试进程中清除继承的 `STEERLINE_*` 变量；driver 启动的产品/service/helper 进程会显式得到当前 Project 的 home 和 controlled provider-state 路径。Project 在进程内轮询 service runtime 时，也必须临时将 `STEERLINE_HOME` 和 `STEERLINE_E2E_CONTROLLED_STATE` 绑定到同一个 Project，再在读取后恢复原环境。这样不会读取机器上的全局 execution profile，也不会让相邻 Project 串用配置；它不增加产品权限、service 或 E2E 场景能力。
+分级 runner 在 E2E 测试进程中清除继承的 `STEERLINE_*` 变量；driver 启动的产品/service/helper 进程会显式得到当前 Project 的 home 和 controlled provider-state 路径。Project 在正式 task validate/create 成功后绑定项目和数据库身份；轮询 service runtime 时，从本次 Project 的明确数据库路径读取组合快照，并核对快照身份。readiness、任务和执行证据因此保持同一项目归属；读取不依赖机器上的全局 execution profile，也无需修改测试进程的全局环境。该适配不增加产品权限、service 或 E2E 场景能力。
 
 controlled 使用真实 SteerLine、Git、SQLite，helper 实现最小 app-server 和 GitHub provider。worker 真实 commit/push/create；中心查询与核验真实合并后提交交付。loopback `git http-backend` 执行真实传输，Git 适配器保留正式 remote 身份及原始输出；外部 PR 状态只存于 provider 文件。
 

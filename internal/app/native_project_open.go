@@ -7,6 +7,7 @@ import (
 	"time"
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
+	"github.com/erranliu/SteerLine/internal/execution"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
@@ -122,6 +123,14 @@ func OpenNativeTaskReader(ctx context.Context, c *Config) (*sqlite.SQLiteStore, 
 func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*sqlite.SQLiteStore, error) {
 	if c == nil || c.RequireNativeTaskAuthority() != nil {
 		return nil, taskError("authority_mismatch", "native task command requires task_authority=native")
+	}
+	if c.ExecutionDirectory == nil {
+		return nil, taskError("unsupported_profile", "execution directory is required")
+	}
+	for _, profile := range c.AvailableExecutionProfiles() {
+		if _, _, err := c.ExecutionDirectory.NormalizeProfileInputs(profile.ImplementationConfigs, profile.ExecutionPolicy, profile.Host, profile.Agent, execution.ConfigurationProjectIdentity(c.executionBase()), profile.ID, profile.AcceptedConfigVersion); err != nil {
+			return nil, err
+		}
 	}
 	if err := c.ValidateTaskCommandConfiguration(); err != nil {
 		return nil, err

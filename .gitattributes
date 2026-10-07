@@ -1,3 +1,5 @@
 # Archived diagnostic patches retain the original whitespace from Go diffs.
 docs/validation/test-execution-diagnosis/probes/*.patch whitespace=-blank-at-eol,-space-before-tab
 docs/validation/test-execution-diagnosis/reduction-audit/*.patch whitespace=-blank-at-eol,-space-before-tab
+# Raw terminal diagnostics preserve padded screen rows verbatim.
+docs/validation/product-simplification-01-console/*.txt whitespace=-blank-at-eol,-space-before-tab

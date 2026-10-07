@@ -77,15 +77,15 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 			t.Fatal("missing process host was accepted")
 		}
 		state := filepath.Join(t.TempDir(), "absent-state")
-		c := Config{TaskAuthority: "native", RunDir: state, Repository: "must-not-be-read"}
+		c := Config{TaskAuthority: "native", RunDir: state, Repository: "must-not-be-read", Remote: "origin", Branch: "main", Git: executionbackend.Command{Executable: "git"}}
 		if _, err := NewService(c); err == nil {
 			t.Fatal("app constructed an implicit catalog")
 		}
 		if _, err := execution.NewService(c.executionConfig(), execution.RuntimeDependencies{}, execution.RuntimeSettings{}, nil, nil, execution.ServiceStorage{}, nil, nil, nil); err == nil {
 			t.Fatal("core accepted missing ports")
 		}
-		if _, err := OpenNativeTaskProject(context.Background(), &c); err == nil || !strings.Contains(err.Error(), "directory") {
-			t.Fatalf("missing directory reached project initialization: %v", err)
+		if _, err := OpenNativeTaskProject(context.Background(), &c); err == nil || !strings.Contains(err.Error(), "process host") {
+			t.Fatalf("missing process host reached project initialization: %v", err)
 		}
 		if _, err := os.Stat(state); !os.IsNotExist(err) {
 			t.Fatal("rejected construction created state")
@@ -179,8 +179,8 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 		if fresh[0].Payload[0] == '[' || public[0] == "changed" || fresh[0].ValidateProfileIdentity("project", "profile", "accepted") != nil {
 			t.Fatal("profile data or display leaked between instances")
 		}
-		c := Config{Repository: "fixture", Branch: "main", Remote: "origin", ExecutionPolicy: policy, PublicationPolicy: executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}, PR: executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "org/repo", Query: executionbackend.Command{Executable: "gh"}}, ExecutionDirectory: first}
-		c.bindApplicationFiles("explicit", "", "accepted", false)
+		c := Config{Repository: "fixture", Branch: "main", Remote: "origin", Git: executionbackend.Command{Executable: "git"}, ExecutionPolicy: policy, PublicationPolicy: executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}, PR: executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "org/repo", Query: executionbackend.Command{Executable: "gh"}}, ExecutionDirectory: first}
+		c.bindApplicationFiles("explicit", "", "accepted", true)
 		c = c.ApplyExecutionProfile(ExecutionProfile{ID: "fixture", Name: "Fixture", Host: "local", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{input}})
 		frozen := c.AvailableExecutionProfiles()[0].Freeze()
 		if err := c.CheckFixedProfile(frozen); err != nil {

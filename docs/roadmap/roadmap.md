@@ -6,17 +6,18 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 第一阶段统一只交付和验收本地 Codex 与本机 Orca。远程准入、派发、反馈、恢复、取消及本机/远端混合流程暂移出一期，也不列作一期阻塞或待补验；后续另行规划。保留既有远端代码、协议定义及历史证据，不将它们声明为当前支持或完成条件。Git remote 和托管 PR 发布仍属于本机交付链。
 
-一期由外部提供稳定roadmap，复用已具备的持续worker、原会话反馈、恢复及唯一交付基础。分叉只用于人工对比执行方案：默认一个，各自冻结不同配置；开始时已达5个拒绝，允许竞态偶尔超出；合并前可放弃退出实验，合并后拒绝。保留原会话、原请求、资源事实和唯一交付，不建严格名额、自动评分/融合或实验调度器。版本线保持原目标。#39 的本机双后端候选、独立反馈、唯一交付、原会话恢复与放弃增量已完成；后续按需复用[当前证据](../validation/candidate-native-acceptance/README.md)，不要求追读已交付规格。
+一期由外部提供稳定roadmap，复用已具备的持续worker、原会话反馈、恢复及唯一交付基础。分叉只用于人工对比执行方案：默认一个，各自冻结不同配置；开始时已达5个拒绝，允许竞态偶尔超出；合并前可放弃退出实验，合并后拒绝。保留原会话、原请求、资源事实和唯一交付，不建严格名额、自动评分/融合或实验调度器。#39 的本机双后端候选、独立反馈、唯一交付、原会话恢复与放弃增量已完成；后续按需复用[当前证据](../validation/candidate-native-acceptance/README.md)，不要求追读已交付规格。
+
+近期运行目标收敛为一个本机安装版本与独立源码调试路径共存，完整 stable/dev 双 channel 和受控提升延后。已有分级 E2E 降低回归成本；安装入口和长期运行仍须验证，不能用 runner 临时构建或短时 smoke 代替。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
-| 40 | 固定版本与双入口 | 不可变构建、stable/dev 固定入口和身份 | 无 | [Spec](../spec/versioned-runtime.spec.md) · [Plan](../spec/versioned-runtime.plan.md) |
-| 41 | dev 隔离与 stable 提升 | 独立 home、静止可恢复会话下的受控提升 | `#40`、`#36` | [Spec](../spec/runtime-isolation-promotion.spec.md) · [Plan](../spec/runtime-isolation-promotion.plan.md) |
-| 42 | 第一阶段集成验收 | 本机双链与版本组合、stable 24 小时、dev 并行和提升恢复 | `#39`、`#41` | [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) |
+| 83 | 本机安装与调试路径隔离 | 固定安装 exe、显式调试 exe/home、状态隔离与共存 | 无 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) |
+| 42 | 第一阶段集成验收 | 单安装版双本机链、24 小时、调试共存与同构建重启 | `#39`、`#83` | [Spec](../spec/phase1-release-acceptance.spec.md) · [Plan](../spec/phase1-release-acceptance.plan.md) |
 
 ## 第一阶段剩余验证
 
-持续 worker、本机双后端候选、独立原会话反馈/重启、真实 PR 核验、唯一 TaskDelivery 与后继 base 已具备；候选控制台的 CC5 人工输入也已确认通过。#42 按需复用[本机验收入口](../validation/candidate-native-acceptance/README.md)，仍须独立完成固定版本、两条组合链、24 小时及提升验收。
+持续 worker、本机双后端候选、独立原会话反馈/重启、真实 PR 核验、唯一 TaskDelivery 与后继 base 已具备；候选控制台的 CC5 人工输入也已确认通过。#42 按需复用[本机验收入口](../validation/candidate-native-acceptance/README.md)，在精确安装产物上完成两条组合链、24 小时与同构建重启；不做版本提升。24 小时可在安装/执行能力稳定后安排，不阻塞二期 API/UI 按自身前置研发。
 
 以下仅保留尚未被当前证据完整覆盖的范围，后续验证 Plan 按实际改动选择，不重新加入已完成的单会话或真实 PR 链：
 
@@ -31,7 +32,7 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 二期采用[草稿roadmap与审核准入目标](phase2-draft-roadmap-admission.md)：主agent自由规划，独立审核内容及前置成熟度，SteerLine受控纳入正式任务集合。该新增机制目前是目标级规划，不分配任务ID或新Spec；下表 #43–#53是既有接口/会话/UI基础，涉及草稿、发布与准入的范围在实现前按新目标核对并形成正式修订，不能把现有Spec宣称为已包含审核agent。
 
-本机API直接消费 #36，不等待分叉或全面搬包；#43/#44能力与UI基座可独立准备，执行界面复用原阶段与反馈。
+近期产品主线优先 #45 本机 API，再由 #44/#45 交付 #50 执行与待处理界面，复用已有阶段与反馈。#43 先验证规划 agent 的实际能力，#44 提供原生输入基座；两者可独立准备。不等待完整双版本管理或全面目录整理。草稿、审核、发布与准入范围在正式实施前对齐二期目标。
 
 | 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
 | --- | --- | --- | --- | --- |
@@ -47,31 +48,14 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 | 52 | 文档审阅与确认原生界面 | 规划文档差异、固定版本确认与发布回执 | `#44`、`#48` | [Spec](../spec/phase2-review-ui.spec.md) · [Plan](../spec/phase2-review-ui.plan.md) |
 | 53 | 第二阶段完整闭环验收 | 规划到真实任务交付再回规划的完整产品链 | `#49`、`#50`、`#51`、`#52`、`#42` | [Spec](../spec/phase2-integration.spec.md) · [Plan](../spec/phase2-integration.plan.md) |
 
-## 任务执行控制台解耦与目录整理
-
-目标：`TASK-EXECUTION-CONSOLE-DECOUPLING`。完整范围、目标目录、所有权、阶段依赖与验收方向见 [目标roadmap](three-line-modularization.md)。任务负责挑选工作，执行负责并发派发、交付核验与结项并向任务提交结果，控制台消费稳定产品契约。
-
-纯类型、任务选择/结果小端口及 task 应用用例已具备。剩余从 #76 的执行用例迁包继续，产品/控制台、适配、存储和宿主各消费现行小端口；本机候选迁移按实际接线影响定向重验。当前源码归属按需查[架构索引](../architecture/current-code-architecture.md)。#43/#44/#45 不等待全部整理。
-
-| 任务 ID | 任务名称 | 交付范围 | 硬前置 | 执行规格 |
-| --- | --- | --- | --- | --- |
-| 76 | 执行应用用例归包 | 候选/会话/恢复/交付/清理归 execution | `#74` | [Spec](../spec/three-line-04-execution-usecases.spec.md) · [Plan](../spec/three-line-04-execution-usecases.plan.md) |
-| 77 | 产品查询与控制台契约收窄 | 公开 DTO 收窄、唯一 query/client 和 console 归包 | `#74`、`#38` | [Spec](../spec/three-line-05-product-console.spec.md) · [Plan](../spec/three-line-05-product-console.plan.md) |
-| 78 | 执行适配与资源目录归组 | 后端协议与 Git/PR/进程资源归组 | `#76` | [Spec](../spec/three-line-06-adapters-resources.spec.md) · [Plan](../spec/three-line-06-adapters-resources.plan.md) |
-| 79 | 存储目录与消费者端口收口 | 唯一 SQLite 归 storage、消费者窄端口与原子提交 | `#75`、`#76`、`#77` | [Spec](../spec/three-line-07-storage-ports.spec.md) · [Plan](../spec/three-line-07-storage-ports.plan.md) |
-| 80 | 应用组装与服务宿主收口 | 配置构造归 app、服务承载归 host，删除旧主包/contracts | `#75`、`#76`、`#77`、`#78`、`#79` | [Spec](../spec/three-line-08-app-host.spec.md) · [Plan](../spec/three-line-08-app-host.plan.md) |
-| 81 | 测试支持与集成目录整理 | testkit 与 tests/integration、runner/断言映射 | `#80` | [Spec](../spec/three-line-09-testkit-integration.spec.md) · [Plan](../spec/three-line-09-testkit-integration.plan.md) |
-| 82 | 独立开发证明与最终清理 | 三线实际独立改动证明、残留清理与最小交付/恢复组合 | `#81` | [Spec](../spec/three-line-10-independence-cleanup.spec.md) · [Plan](../spec/three-line-10-independence-cleanup.plan.md) |
-
 ## 推进顺序
 
-- #40、#43、#44 可在隔离资源上准备；#36 仅作为已具备基础保留，后继仍按各自固定 Spec 开工。
-- 本机候选基线已具备；#40 → #41，再由 #42 汇合本机候选与版本能力，硬前置 ID 保留在任务表。
-- #76/#77 的固定基础已具备；#76 → #78，#76/#77 完成后满足 #79 的剩余前置，相关任务整体交付后进入 #80 → #81 → #82。共享类型、构造和提交协调段顺序集成。
-- #36 → #45 后分为规划链与执行 UI；#53 汇合原生页面及第一阶段组合验收。
+- #83 先交付最小共存；#43/#44/#45 可按各自前置准备，共享启动器、宿主与客户端接线串行集成。
+- 本机候选基线已具备；#83 → #42 验单安装版、组合链、当前格式重启与 24 小时运行，不依赖完整双版本管理。
+- #36 → #45，优先 #44/#45 → #50；规划链按能力验证及新审核准入方向继续细化，#53 汇合四个页面与修订后的 #42。
+
+本页只修改仓库规划，不自动暂停中心派发、删边或改写已冻结契约。实施前核对中心 Task 的 commit/摘要/依赖；移出规划的旧任务若仍在中心待派发，须经受控操作处置。#42/#53 若已固定不同范围，应先受控替换并同步身份及消费者依赖，保留旧历史和未结算资源事实，不能把文档新图当作 Ready 回执。
 
 ## 规划约束
 
 [架构约束](architecture-constraints.md) · [控制台约束](console-constraints.md) · [第一阶段交付](phase-1-delivery.md)
-
-#76 已由 PR219 合入；#77 在独立工作树继续产品读取/客户端工作，#78 基于该硬前置迁移适配器与资源目录。#79–#82 未由当前任务启动，后续仍按固定 Spec 与 DAG 前置执行。共享构造按[现行接口交接](../validation/three-line-04-execution-usecases/interface-handoff.md)和各任务所有权顺序集成。

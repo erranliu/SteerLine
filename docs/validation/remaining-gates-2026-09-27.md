@@ -1,6 +1,6 @@
 # 剩余验收核对（2026-09-27）
 
-基线：`908deac`，Windows/amd64，Go 1.26.4，Codex CLI 0.157.1，本机 Orca 1.4.209。此记录补充 [PR 5 验证](pr-05-intervention.md)和 [Orca 协议剩余门槛](../spec/orca-probe/remaining-gates.md)，不改变原有真机验收结论。
+基线：`908deac`，Windows/amd64，Go 1.26.4，Codex CLI 0.157.1，本机 Orca 1.4.209。此记录补充 [PR 5 验证](pr-05-intervention.md)和 [Orca 协议剩余门槛](../archive/spec/retired/orca-probe/remaining-gates.md)，不改变原有真机验收结论。
 
 ## 已完成的独立核对
 
@@ -30,7 +30,7 @@
 
 上述状态修正及 CLI 等待回执边界修正后，`go test ./... -count=1 -timeout 20m` 全部通过（核心包 417.605 秒），`go vet ./...`、Windows 构建、Linux/amd64 交叉构建与 `git diff --check` 通过。此前一次并行完整回归中 CLI 延迟回执测试超时；单测通过而整包失败，随后把测试的正常异步回执等待预算从 1 秒增至 5 秒，并使查询本身撞到期限时仍返回“原 command_id 未确认”而不是裸 context 错误。修正后 CLI 包连续三轮和最终完整回归均通过。
 - 读取 Orca 当前环境和资源清单：本机为 1.4.209；已登记的一个远端无法连接，home 远端为 1.4.210 且可连接，并有一个正在运行的 Codex 终端。没有停止、回复或重启任何终端。用户随后明确允许本机 1.4.209/home 1.4.210 的小版本号差异用于远端流程和验收；这改变了后续验收范围，不倒填旧能力报告为混合版本实测。
-- 与原始验证基线并行推进的主线现已将 `remoteprotocol` verify 校验器接入受监管中心状态机；P13 正负向 verify 真机回执见[Orca 剩余门槛](../spec/orca-probe/remaining-gates.md)。本轮没有重测该远端路径，也不撤销主线已有证据。
+- 与原始验证基线并行推进的主线现已将 `remoteprotocol` verify 校验器接入受监管中心状态机；P13 正负向 verify 真机回执见[Orca 剩余门槛](../archive/spec/retired/orca-probe/remaining-gates.md)。本轮没有重测该远端路径，也不撤销主线已有证据。
 
 同一 95013 工作树另建裸 Orca 终端 `term_e1741f3d-8d3b-4430-83db-5f6e3addfe7b`，incarnation `7729b38e-d897-4d1d-8faa-da43a27851a0`，确认它存活且与原 worker 身份不同。在它存活时再次重启隔离 SteerLine 服务，SQLite 仍只有原三条 step attempt；续跑 attempt `89bf0e3dc08de6850725af3eb45f6468` 保持 `outcome_unknown`，Decision 保持 `reply_accepted`，执行仍 blocked，且没有新的 worker 终端。服务通过 `stop_service` 回执 `49c8cf2156c4b9e5c47eaa020f68c256` 停止，随后仅关闭该裸测试终端。这证明同工作树的不同终端没有被冒认；未模拟同 handle 的 incarnation 替换，H-A6 仍未全通过。[身份样本](pr-05-orca-resuming-death-2026-09-27.json)。
 
@@ -57,7 +57,7 @@
 | #3 H-A6、H-A14、H-A15 | 95012 已取得绑定证明、Decision.applied 与同 attempt 重启对账；旧隔离 95013 验证 resuming 中终端死亡不重派，H-A15 验证 Orca 实际创建原续跑终端后回执丢失、同 SQLite 重启保留原 Attempt/Operation/占槽且不重派。新的[活跃 worker 同句柄 incarnation 注入](pr-05-h6-incarnation-2026-09-28.json)验证身份拒绝、unknown/占槽保留与同库重启不重派；Orca 平台真实产生这种同句柄换代尚未观察。H-A15 回执没有平台 request ID，所以不支持自动确认应用。95008/95009/95010 的失败 attempts 不重放；95011 的 failed 决策与 publish unknown 现场不回写成成功。 |
 | #3 H-A16 与恢复确认 | [合格的本机原生恢复预览与确认](pr-05-recovery-confirmation-2026-09-28.json)已通过。仍须在有真实可读 turn/final 事件的 TTY 会话里核对精确轮次折叠与导航；原 95010 无可读 session 记录，不能作为折叠通过证据。 |
 | #4 P10 | 本机中心 1.4.209/home 远端 1.4.210 已验证命令权限提示的观察和人工处置；活跃 home 问题上的 8553 字节序列化回复已在实际发送入口拒绝，并保留原问题供有界回复。剩余早期管理员/UAC 提示本身及处置的完整可见捕获。 |
-| #4 P13 | 主线已接入中心校验器，正负向受监管 verify 回执和有界修复循环已有真机证据。本轮未重测远端；其余无效结果按[现行门槛](../spec/orca-probe/remaining-gates.md)分别核对，不把纯函数测试单独当作端到端证据。 |
+| #4 P13 | 主线已接入中心校验器，正负向受监管 verify 回执和有界修复循环已有真机证据。本轮未重测远端；其余无效结果按[现行门槛](../archive/spec/retired/orca-probe/remaining-gates.md)分别核对，不把纯函数测试单独当作端到端证据。 |
 
 ## home 远端 P10 探测进展
 
@@ -67,7 +67,7 @@
 
 当时的下一步是取得用户对原测试终端的停止授权，并让后续权限探测使用会请求人工批准的 Codex 启动方式；不能把 YOLO 的自动放行或 `agentWait: null` 记作人工处置通过。
 
-后续得到用户授权后，对原 Dispatch `ctx_af2f5c09ad0b` 执行精确 `worker-stop`。Orca 返回 `stopped/closed_agent_terminal/ptyKilled=true`；执行端再读到 `exited`、`exitCause=operator_close`，原 Task 失败并保留可追溯身份。随后在同一隔离 worktree 以 `codex -s workspace-write -a on-request` 启动新终端，通过 `retry-of` 将原 Task 的新 Dispatch `ctx_6cc7d85f505d` 绑定到它。Codex 终端显示任务开始，短暂请求超时和自动重连后出现只读 `whoami` 的批准提示。Orca `worker-show` 对该精确 Dispatch 返回 `observation.status=live`、`exactWorker=true` 与 `agentWait={source:prompt-text, reason:agent-interactive-prompt}`。提示在记录时尚未答复；这只验证宿主提示可观察，不验证人工处置结果，也不满足 P10 的 8 KiB 发送前拒绝门槛。脱敏摘要见[真机样本](../spec/orca-probe/samples/p10-host-permission-2026-09-27.json)。
+后续得到用户授权后，对原 Dispatch `ctx_af2f5c09ad0b` 执行精确 `worker-stop`。Orca 返回 `stopped/closed_agent_terminal/ptyKilled=true`；执行端再读到 `exited`、`exitCause=operator_close`，原 Task 失败并保留可追溯身份。随后在同一隔离 worktree 以 `codex -s workspace-write -a on-request` 启动新终端，通过 `retry-of` 将原 Task 的新 Dispatch `ctx_6cc7d85f505d` 绑定到它。Codex 终端显示任务开始，短暂请求超时和自动重连后出现只读 `whoami` 的批准提示。Orca `worker-show` 对该精确 Dispatch 返回 `observation.status=live`、`exactWorker=true` 与 `agentWait={source:prompt-text, reason:agent-interactive-prompt}`。提示在记录时尚未答复；这只验证宿主提示可观察，不验证人工处置结果，也不满足 P10 的 8 KiB 发送前拒绝门槛。脱敏摘要见[真机样本](../archive/spec/retired/orca-probe/samples/p10-host-permission-2026-09-27.json)。
 
 操作者随后在该终端作一次性批准。终端显示 `You approved codex to run whoami this time`，只读命令返回 home 用户身份；同一 Dispatch 的 `agentWait` 变为 `null`。这验证了宿主提示的观察与人工处置，没有把它冒充业务 ask。Codex worker 在最后两次尝试 `orca orchestration check` 和发送 `worker_done` 时失败：其 `workspace-write` 沙箱不能读取 home 的 `%APPDATA%\\orca\\orca-runtime.json`，报 `Orca is not running`；中心从主机侧查询仍确认 Orca 1.4.210 `ready/connected`。因此没有 worker_done 回执，不能把 Orca Task 标成成功。Codex 轮次结束后，对精确 Dispatch `ctx_6cc7d85f505d` 执行 `worker-stop`；返回 `stopped/closed_agent_terminal/ptyKilled=true`，执行端 fleet 读到 `exited`，两次探测尝试均为已停止的失败 Dispatch，没有继续运行的测试 worker。P10 仍缺 8 KiB 发送前拒绝；远端 Codex 在 `workspace-write` 下无法调用 Orca CLI 也须在后续适配器设计中处理。
 

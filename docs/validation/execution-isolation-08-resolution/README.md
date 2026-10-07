@@ -1,6 +1,6 @@
 # #61 执行需求与注册验证
 
-基线：`ef52f94`（#59/#60 已合入）；日期：2026-10-01。实现对应 [Spec](../../spec/execution-isolation-08-resolution.spec.md) 和 [Plan](../../spec/execution-isolation-08-resolution.plan.md)。验证是确定性契约、真实 Git fixture 和原协议/Service 回归；没有新启动行为、生产部署、中心建任务、数据库迁移或真机/双机重新认证。
+基线：`ef52f94`（#59/#60 已合入）；日期：2026-10-01。实现对应 [Spec](../../archive/spec/completed/execution-isolation-08-resolution.spec.md) 和 [Plan](../../archive/spec/completed/execution-isolation-08-resolution.plan.md)。验证是确定性契约、真实 Git fixture 和原协议/Service 回归；没有新启动行为、生产部署、中心建任务、数据库迁移或真机/双机重新认证。
 
 ## 配置、注册与所有者
 

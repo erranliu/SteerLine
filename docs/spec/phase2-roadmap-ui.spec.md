@@ -4,7 +4,7 @@
 
 ## 范围与前置
 
-硬前置：#44、#48。依赖 [WinUI 基座](phase2-winui-foundation.spec.md)、[正式文档发布](phase2-document-publish.spec.md)，通过后者取得 #46 的真实规划查询。遵守[共同约束](phase2-constraints.md)和[图查询契约](dag-view.spec.md)。交付原生 Roadmap 与 DAG 浏览，不创建任务或编辑运行时依赖。
+硬前置：#44、#48。依赖 [WinUI 基座](phase2-winui-foundation.spec.md)、[正式文档发布](phase2-document-publish.spec.md)，通过后者取得 #46 的真实规划查询。遵守[共同约束](phase2-constraints.md)和[图查询契约](../archive/spec/completed/dag-view.spec.md)。交付原生 Roadmap 与 DAG 浏览，不创建任务或编辑运行时依赖。
 
 ## Roadmap 页面
 

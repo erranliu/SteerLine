@@ -4,7 +4,7 @@
 
 # #67 主包隔离守卫与测试归位：受限执行交接
 
-记录日期：2026-10-02。依据 [Spec](../../spec/core-decoupling-06-boundary.spec.md)、[Plan](../../spec/core-decoupling-06-boundary.plan.md)、[共同约束](../../spec/core-decoupling-constraints.md)。
+记录日期：2026-10-02。依据 [Spec](../../archive/spec/completed/core-decoupling-06-boundary.spec.md)、[Plan](../../archive/spec/completed/core-decoupling-06-boundary.plan.md)、[共同约束](../../archive/spec/completed/core-decoupling-constraints.md)。
 
 **状态：#67 未完成，不能合并；仍需完成 root 测试归位、quick 接入、完整映射与最终组合验收。第三中性实现的原输入/重启人工确认/唯一交付及资源结算闭环已在协调的完全访问环境定向通过，但不代替 #67 整体交付。**
 
