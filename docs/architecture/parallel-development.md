@@ -23,16 +23,16 @@
 
 | 功能 / 状态 | 主要归属 | 可相对独立推进的范围 | 需要协调的触发点 | 当前资料与定位 |
 | --- | --- | --- | --- | --- |
-| 任务契约、DAG 与资格 / 已有 | task、task/model | 固定契约下的任务校验、查询、选择纯规则及任务应用用例 | TaskContract/身份改变、领取与结果端口、前置/丢弃/后继释放语义 | [数据模型](../product-design/data-model.md)、[任务输入与文档端口](../../internal/task/commands.go)、[纯模型](../../internal/task/model/) |
+| 任务契约、DAG 与资格 / 已有 | task、task/model | 固定契约下的任务校验、查询、选择纯规则及任务应用用例 | TaskContract/身份改变、领取与结果端口、前置/丢弃/后继释放语义 | [数据模型](../product-design/data-model.md)、[任务输入与文档端口](../../internal/task/commands.go)、[纯模型](../../internal/task/model) |
 | 候选、派发、反馈、恢复与交付 / 已有 | execution | 沿现有小端口修改明确用例，保持 actor 和提交屏障 | 多项用例共改 WorkflowRun/Execution、Decision 路由、Operation 意图/回执、控制版本或恢复授权；同模块内也需划分共享所有者 | [反馈](../product-design/decisions.md)、[执行共同约束](../spec/execution-architecture.spec.md)、[提交屏障](../../internal/execution/service_commit.go) |
-| Codex / 本机 Orca 接入 / 已有 | execution/adapters/codex、orca | 实现自身协议、观察和能力核验；不改中心业务状态机 | 共享 Codex codec、backend 契约、权限/资源封套、绑定格式、会话/轮次或错误分类改变 | [执行配置](../product-design/execution-profiles.md)、[后端契约](../../internal/execution/backend/)、[共享协议 codec](../../internal/execution/adapters/protocol/codexapp/) |
+| Codex / 本机 Orca 接入 / 已有 | execution/adapters/codex、orca | 实现自身协议、观察和能力核验；不改中心业务状态机 | 共享 Codex codec、backend 契约、权限/资源封套、绑定格式、会话/轮次或错误分类改变 | [执行配置](../product-design/execution-profiles.md)、[后端契约](../../internal/execution/backend)、[共享协议 codec](../../internal/execution/adapters/protocol/codexapp) |
 | 工作区、PR/provider 与进程资源 / 已有 | execution/workspace、publication、process | 既有调用契约下的 Git/provider/OS 操作和事实核验 | base/remote、PR 归属、进程树所有权、清理条件或资源意图改变；共同执行结算需协调 | [工作区设计](../product-design/worktree-preparation.md)、[交付规则](../product-design/data-model.md#pr-与交付)、[资源源码](current-code-architecture.md#module-owners) |
 | 会话与活动采集/读取 / 已有 | execution/conversation、采集 adapter、product/query、storage | 来源 mapper、正文读取和活动展示可沿固定模型分别改进 | 来源/轮次/正文修订、规范来源选择、去重游标或写入与 checkpoint 原子性改变 | [会话](../product-design/conversation-events.md)、[Activity](../product-design/activity.md)、[会话存储端口](../../internal/execution/conversation_ports.go) |
-| 产品查询与 Go 客户端 / 已有 | product/api、query、client | 稳定 DTO 下的只读投影、查询组合、客户端行为 | 公开字段/错误/能力/游标语义、请求目标、同快照要求或命令受理规则改变 | [产品 API](../../internal/product/api/)、[客户端小端口](../../internal/product/client/ports.go)、[查询组装](../../internal/product/query/ports.go) |
-| 当前执行 TUI / 已有 | console | 稳定产品契约下的布局、输入、候选选择、提示及只读详情 | 新后台能力、公共 DTO、草稿/原请求绑定、窗口记录或共享焦点/导航改变 | [控制台设计](../product-design/execution-console.md)、[当前源码](../../internal/console/) |
+| 产品查询与 Go 客户端 / 已有 | product/api、query、client | 稳定 DTO 下的只读投影、查询组合、客户端行为 | 公开字段/错误/能力/游标语义、请求目标、同快照要求或命令受理规则改变 | [产品 API](../../internal/product/api)、[客户端小端口](../../internal/product/client/ports.go)、[查询组装](../../internal/product/query/ports.go) |
+| 当前执行 TUI / 已有 | console | 稳定产品契约下的布局、输入、候选选择、提示及只读详情 | 新后台能力、公共 DTO、草稿/原请求绑定、窗口记录或共享焦点/导航改变 | [控制台设计](../product-design/execution-console.md)、[当前源码](../../internal/console) |
 | 持久化与原子提交 / 已有 | storage/ports、sqlite | 已明确语义下的读取或提交实现；消费者仍经窄端口 | schema、唯一约束、CAS/版本、同事务快照、checkpoint 与领域记录提交边界改变 | [数据模型与格式来源](../product-design/data-model.md)、[提交契约](../../internal/storage/ports/transactions.go)、[快照端口](../../internal/storage/ports/application_snapshot.go) |
 | 配置、应用组装与服务宿主 / 已有 | app、app/host | 稳定宿主/产品端口下的配置加载、进程控制和入口能力 | 公共构造、目录注册、配置摘要、exe/home 传递、实例/锁、启动与停服规则改变 | [整体生命周期](../architecture.md#生命周期反馈与恢复)、[组装/宿主源码](current-code-architecture.md#build-install-and-launch-sources) |
-| 测试支持与环境 / 已有 | testkit、tests/integration、tests/e2e | 独立 owner 用例和场景，复用正式 driver/codec | 共享 fixture、driver/native/evidence、runner 登记/期限/清理、进程环境变量、账号/终端/仓库资源竞争 | [测试指南](../testing.md)、[E2E 环境](../../tests/e2e/README.md)、[测试边界源码](../../internal/testkit/boundary/) |
+| 测试支持与环境 / 已有 | testkit、tests/integration、tests/e2e | 独立 owner 用例和场景，复用正式 driver/codec | 共享 fixture、driver/native/evidence、runner 登记/期限/清理、进程环境变量、账号/终端/仓库资源竞争 | [测试指南](../testing.md)、[E2E 环境](../../tests/e2e/README.md)、[测试边界源码](../../internal/testkit/boundary) |
 | 规划草稿、会话、审核与准入 / 拟议 | 未来规划领域；尚非完整实现模块 | 先验证能力和固定领域/权限边界，再按稳定契约拆领域用例 | 草稿/正式文档权威、审核快照与授权、Git/SQLite 部分完成、规划写入 guard、任务创建端口及会话来源身份 | [规划架构](../product-design/planning-architecture.md)、[审核准入目标](../roadmap/drafts/phase2-draft-roadmap-admission.md)；新契约在实施前正式对齐 |
 | 本机 HTTP/SSE 与原生 UI / 拟议 | 后续产品传输、Windows 客户端及页面 | 已交付协议/组件基础上的独立页面和领域消费；能力验证与界面原型可分别准备 | 同一客户端协议、共享导航/输入组件、消息/权限/回执语义及未具备的服务能力 | [拟议界面](../product-design/planning-ui.md)、[规划入口](../roadmap/RoadmapGuide.md) |
 
@@ -73,13 +73,14 @@
 2. 每个候选任务写清产品成果、主要所有者、输入/输出契约、共同语义/代码/资源、最小通过条件；列明范围内是否改变接口或格式。
 3. 对实际有交接或共享影响的任务对，选择上述安排，分别记录可固定、可开工和可合入条件。不要求全任务做无意义的两两矩阵。
 4. 共同基础按真实独立成果拆分。若没有独立通过条件，或双方核心语义尚未稳定，保持同一交付任务或留草稿，不能制造只写签名的“已完成前置”。
-5. 正式准入前固定独立 Spec/Plan 和任务身份，取得实际 DAG 回执后同步 execution-map；当前空正式表不从草稿回填。Spec 写职责、契约及硬前置；Plan 写共享段所有权、集成顺序和最小测试计划，不让本页成为隐式执行要求。
+5. 在草稿阶段按[验收流程](../acceptance/README.md)规划自动/人工行为，建立任务专属的一份或多份 acceptance 文档并从草稿链接，单份文档不覆盖多任务，未定内容明确标注。鼓励同时识别独立验收活动并安排，但不强制串成固定执行路径。人工组织/判断为主的阶段活动不作为任务；自动验收可独立成任务或纳入实现。少量人工项尽量后置，标明参与人/窗口、截止阶段与实际阻塞范围，避免成为无关任务的开工前置。
+6. 正式准入前固定独立 Spec/Plan、任务身份及 acceptance 记录，取得实际 DAG 回执后同步 execution-map；当前空正式表不从草稿回填。Spec 写职责、契约及硬前置；Plan 写共享段所有权、集成顺序和最小测试计划，不让本页成为隐式执行要求。准入不要求删除草稿条目；真正执行完成后移除，草稿无需维护实时状态。
 
 建议在本轮关系说明中使用以下简表；每项任务仍遵循一个任务、一份 Spec/Plan、一个实现 PR：
 
-| 任务 | 成果 / 主要模块 | 契约变更与消费者 | 共享冲突与所有者 | 开工条件 / 集成顺序 | 最小测试与证据 |
+| 任务 | 成果 / 主要模块 | 契约变更与消费者 | 共享冲突与所有者 | 开工条件 / 集成顺序 | 最小测试与验收安排 |
 | --- | --- | --- | --- | --- | --- |
-| 本轮任务 ID | 可独立交付的功能 | 既有契约或具体新增边界 | 语义、共享接线或原生资源 | 硬前置、未稳定点、后合入核验 | 对应 Plan 的组/场景、环境和证据定位 |
+| 本轮任务 ID | 可独立交付的功能 | 既有契约或具体新增边界 | 语义、共享接线或原生资源 | 硬前置、未稳定点、后合入核验 | Plan 的组/场景、环境；acceptance 链接，人工参与/窗口及可后置范围 |
 
 该简表不是新增任务状态或自动调度协议。架构改善优先解决反复出现的共享修改和上下文负担；不为提高表面任务数量拆出大量无法独立验收的半成品。
 
@@ -100,11 +101,11 @@
 | 影响范围 | 当前验证定位 | 说明 |
 | --- | --- | --- |
 | 单 owner 规则 | [任务纯规则用例](../../internal/task/model/taskgraph_test.go)、[执行恢复隔离用例](../../internal/execution/candidate_resume_isolation_test.go)、[控制台交互用例](../../internal/console/interaction_test.go) | 定向选受影响规则；这些用例不证明所有同模块变更可以独立 |
-| 公共边界、端口、组装 | [依赖守卫](../../internal/testkit/boundary/)、[真实 app/client 接线](../../tests/integration/candidate_console_test.go)、[L1 选择](../../cmd/test-feedback/scoped.go) | 接线或公共契约变化核对实际消费者，fixture 保持正式接口；源码闭包按已有平台守卫核验 |
+| 公共边界、端口、组装 | [依赖守卫](../../internal/testkit/boundary)、[真实 app/client 接线](../../tests/integration/candidate_console_test.go)、[L1 选择](../../cmd/test-feedback/scoped.go) | 接线或公共契约变化核对实际消费者，fixture 保持正式接口；源码闭包按已有平台守卫核验 |
 | 交付与恢复组合 | [登记场景](../../tests/e2e/suites.json)：delivery.basic、recovery.waiting-merge-restart（controlled）及对应 live 场景 | controlled 和 live 分别选择；delivery.basic 只证明 A 交付及 B 就绪，不证明 B 的后继执行 |
-| 双本机候选与原生资源 | 登记的 candidates.local 及[本机验收摘要](../validation/candidate-acceptance.md) | 按真实身份、目标和构建判断覆盖；当前 E2E runner 的串行/权限/清理约束保持，账号与终端不能默认当作可并行资源 |
+| 双本机候选与原生资源 | 登记的 candidates.local 及[本机验收摘要](../acceptance/candidate-acceptance.md) | 按真实身份、目标和构建判断覆盖；当前 E2E runner 的串行/权限/清理约束保持，账号与终端不能默认当作可并行资源 |
 
-已有[任务/执行/控制台独立 owner 探针的固定历史记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/three-line-10-independence-cleanup/independence.md)证明了当时几个明确规则可在所属边界被修改和检验；它们不是所有功能组合或当前任意接口变化的独立性证明。历史失败、未触发分支、原生未测范围和不同源码基线通过[验收摘要与历史快照](../validation/README.md)追溯，不能算作当前通过。后续新增证据链接到对应模块/边界的最小摘要，原始运行产物放临时目录，不要求规划者追读全部归档 Spec。
+已有[任务/执行/控制台独立 owner 探针的固定历史记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/three-line-10-independence-cleanup/independence.md)证明了当时几个明确规则可在所属边界被修改和检验；它们不是所有功能组合或当前任意接口变化的独立性证明。历史失败、未触发分支、原生未测范围和不同源码基线通过[验收摘要与历史快照](../acceptance/README.md)追溯，不能算作当前通过。后续新增证据链接到对应模块/边界的最小摘要，原始运行产物放临时目录，不要求规划者追读全部归档 Spec。
 
 没有专门契约测试时，先使用受影响 owner 用例和真实组装入口；只有确有未覆盖边界才新增最小场景/环境能力，并在 Plan 说明。新增契约/测试说明形成后更新本页链接，保持正文由对应所有者维护。
 

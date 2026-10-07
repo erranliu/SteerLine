@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./internal/execution",
+    "-run",
+    "^TestPS3Audit|^TestPS3StopReceiptIsAtomicAndReplaysOriginalEvidence$",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-07T10:06:37.5014938Z",
+  "finished_at": "2026-10-07T10:08:44.0376694Z",
+  "wall_seconds": 126.5387949,
+  "environment": {
+    "source_commit": "acfbd3a003dbdaf7455b88622ca01245975a5b28",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled",
+    "worktree_dirty_at_sampling": true,
+    "worktree_status_sha256": "676e84c7ef8364de6efaa4700bbf772c2f22c41ed8fe85c1aa63918fcec17fa7"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 1,
+    "passed_packages": 1,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 10,
+    "passed_tests": 10,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "status": "pass", "elapsed_seconds": 123.781}
+    ],
+    "tests": [
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt", "status": "pass", "elapsed_seconds": 86.26},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3StopReceiptIsAtomicAndReplaysOriginalEvidence", "status": "pass", "elapsed_seconds": 37.27},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3StopReceiptIsAtomicAndReplaysOriginalEvidence/true", "status": "pass", "elapsed_seconds": 23.69},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt/supported_nonlocal_host", "status": "pass", "elapsed_seconds": 17.8},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt/restart_absent_terminal", "status": "pass", "elapsed_seconds": 15.73},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt/unsupported_cancel", "status": "pass", "elapsed_seconds": 14.97},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt/owned_handle_only", "status": "pass", "elapsed_seconds": 14.09},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3StopReceiptIsAtomicAndReplaysOriginalEvidence/false", "status": "pass", "elapsed_seconds": 13.57},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt/terminal_attempt", "status": "pass", "elapsed_seconds": 11.91},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt/supported_non_os", "status": "pass", "elapsed_seconds": 11.75}
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 123.7784842,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/product-simplification-03-resources-cli/audit-stop-final/go-test.jsonl",
+  "stderr_log": "docs/validation/product-simplification-03-resources-cli/audit-stop-final/go-test.stderr.txt",
+  "evidence_selection": {
+    "kind": "selected original report",
+    "original_report_sha256": "3459bc96ee1e9e2a551c8a7df09a38dbcc9469c67119b89b2ad9ea789d71fa7a",
+    "original_report_local": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-ps3-audit-original-reports\\audit-stop-final.json",
+    "omitted": "full worktree status and duplicate slowest_tests; original source/environment/timestamps, commands, coverage and individual outcomes preserved"
+  }
+}

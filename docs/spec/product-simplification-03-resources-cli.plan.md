@@ -13,7 +13,7 @@
 
 ## 测试计划
 
-证据根 `docs/validation/product-simplification-03-resources-cli/`；完整原始输出留本地，提交精选摘要与范围，失败不覆盖。入口见[测试指南](../testing.md)、[E2E 约定](../../tests/e2e/README.md)。
+证据根 `docs/acceptance/product-simplification-03-resources-cli/`；完整原始输出留本地，提交精选摘要与范围，失败不覆盖。入口见[测试指南](../testing.md)、[E2E 约定](../../tests/e2e/README.md)。
 
 | 级别 / 组、场景 ID | 环境与命令 | 时点 | 通过条件与证据位置 |
 | --- | --- | --- | --- |
@@ -27,15 +27,15 @@
 
 ## 实际选择与结果
 
-实现版本为SQLite16/fixed profile8/graph及cursor v2；checkpoint19/Codex codecs2保持。删除与保留消费者、副作用分类、实际源文件位置和行数见[验收记录](../validation/product-simplification-03-resources-cli/README.md)。
+实现版本为SQLite16/fixed profile8/graph及cursor v2；checkpoint19/Codex codecs2保持。删除与保留消费者、副作用分类、实际源文件位置和行数见[验收记录](../acceptance/product-simplification-03-resources-cli/README.md)。
 
 资源实际定向采用TestPS3、MC6（弃候选/多合并/晚合并）、MC8（晚启动/晚反馈/未知停止）、三个TaskDiscard、ExecutionStopIntent、两条WorkerFlowDelivery、冻结provider重启/漂移及SQLite旧格式拒绝；28项27通过，1旧停止断言修正后只重跑该项及Orca停止/remote ack共6项，全部通过。精确原命令与结果在对应summary.json，原失败不改写。CLI/规则最终42项、console完整112项通过。UI发现并修复丢弃Task旧问题/合并提示错误；补验console全包、L1，不扩展live。
 
 当前固定L1 12组passed/complete=true（110.085秒）；L3只选recovery.waiting-merge-restart，保持30秒普通命令/5分钟业务及原清理期限，通过164.934秒，cleanup_complete=true。初次旧AssertFullAccess编译失败修正为既有FixedNativeLaunch；随后并发运行task create超时，原失败留存。独立运行通过，未放宽期限，负载影响只作推测。E2E基础设施tag编译、当前构建/go vet/文档/diff通过。不跑Full/完整L2/live：产品原生release/ack及adapter协议无变化；已有保留所有者的可控定向与一个L3覆盖当前改动。
 
-行数按8e46537f与最终internal+cmd（含空白/注释、分列测试，排除docs/日志/integration）比较：生产净减1317、测试净减13；三批各自差值生产合计3945、测试合计1145，不计其他PR或重复收益。完整原始证据留本地，仅精选摘要入库。最后局部变量/注释改名不变行为，历史PR显示由最终console全包覆盖，不重复原生或L3。
+行数按8e46537f与最终internal+cmd（含空白/注释、分列测试，排除docs/日志/integration）比较：审计后生产净减1291、测试净增172；三批各自差值生产合计3919、测试合计净减960，不计其他PR或重复收益。完整原始证据留本地，仅精选摘要入库。最后局部变量/注释改名不变行为，历史PR显示由最终console全包覆盖，不重复原生或L3。
 
-独立实现已提交[PR #238](https://github.com/erranliu/SteerLine/pull/238)，待评审，未合并。
+独立实现已提交[PR #238](https://github.com/erranliu/SteerLine/pull/238)，质量审计与必要复验完成，交付状态以PR为准。
 
 ## PR #238 合并前质量审计
 
@@ -50,3 +50,7 @@
 | 静态 | 产品构建、受影响go vet、文档链接、diff检查 | 合并前；全部通过，无新生产Close/Delete入口 | audit摘要 |
 
 不改变原生adapter stop/release/ack实现或增加远端取消，只按已有后端能力调用原精确停止/查询；控测不冒充native/live证明。既有L3等待合并重启已覆盖普通交付，若审计修复改到它的生产路径则重跑同一controlled场景；否则保留原采样说明，不再开live/Full。
+
+审计结果：停止/原子专项10项、生命周期回归14项、console/CLI/规则130项、L1 12组（123.448秒）、MC6获胜/落选/多合并/迟到场景及同一L3 controlled重启交付通过。修复已注册非local支持被过滤、owned-only丢失、终态Attempt结算和非OS限制；完整绑定/原操作格式加强，物理停止与冻结业务历史分离。保留观察流排空及迟到输出，明确停止后不计活动槽；客户端最终提交拒绝已退出Task。原生adapter协议及生产资源保留不变，不跑Full/live。最后winner冻结状态限定由MC6定向复验，构建/vet再过，未追认L1/L3为最后提交全部重跑。
+
+同步main 2d0e811b的acceptance工作流，所有本任务验收方法、失败/通过记录和精选证据以[专属记录](../acceptance/product-simplification-03-resources-cli/README.md)为准；原始报告沿原实际输出路径留本地。当前行数1291生产净减/172测试净增，三批合计3919生产/960测试净减；其他main改动仅文档，不计收益。

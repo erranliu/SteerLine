@@ -29,4 +29,4 @@
 | EX5 | PR 建立、未合并关闭和真实合并由中心状态驱动；UI 不自行决定完成 |
 | EX6 | Windows 中文/多行输入、窄窗口、跨项目迟到消息、服务窗口关闭和离线历史真实验证 |
 
-证据保存在 `docs/validation/phase2-execution-ui/`。先验页面/协议与原生构建，变更 Go 接线时回归对应领域；完整产品链由 #53 验收。
+证据保存在 `docs/validation/phase2-execution-ui/`。先验页面/协议与原生构建，变更 Go 接线时回归对应领域；完整产品链由 [二期验收活动](../acceptance/phase2.md) 验收。

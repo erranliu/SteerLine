@@ -43,13 +43,37 @@ SQLite16、FixedExecutionProfile8（冻结 provider 删除 close），graph nati
 
 ## 行数与证据范围
 
-[同口径行数](line-summary.json)：internal+cmd物理Go行（含空白/注释，生产与_test分列，排除docs/logs/tests/integration）；第三批生产65196→63879，净减1317；测试33237→33224，净减13，已计入新增必要测试和测试清理工具的移动。
+[同口径行数](line-summary.json)：internal+cmd物理Go行（含空白/注释，生产与_test分列，排除docs/logs/tests/integration）；第三批生产65196→63905，净减1291；测试33237→33409，净增172（审计回归已计入），已计入新增必要测试和测试清理工具的移动。
 
 | 批次 | 生产净减 | 测试净减 | 各自实际比较基线 |
 | --- | ---: | ---: | --- |
 | 1 三窗/反馈 | 1417 | -102（净增） | 69c839be，原结果固定在172cea6c历史快照 |
 | 2 固定原生配置 | 1211 | 1234 | 6c16b8dc，不计其他PR收益 |
-| 3 资源/CLI | 1317 | 13 | 8e46537f（前两批已合入） |
-| 分批合计 | 3945 | 1145 | 各批独立差值相加，不把其他主分支变化纳入 |
+| 3 资源/CLI | 1291 | -172（净增） | 8e46537f（前两批已合入） |
+| 分批合计 | 3919 | 960 | 各批独立差值相加，不把其他主分支变化纳入 |
 
 单候选保留资源原已存在、第二批认证删除和第一批共享阅读收益不重复计入本批。原始输出与重复/失败资料按主分支约定留本地；只提交精选当前/已说明的历史报告，保留原采样source_commit、dirty状态摘要、命令、时间、逐测试结果与原报告SHA256/本地位置。采样source_commit是实施基线而不是干净已提交实现；不将原采样追认为最后提交的全部场景重跑。最后仅移除无用局部名/注释及补历史定位展示，后者有最终console全包回归；无原生行为变化，不重复controlled/live。
+
+## PR #238 质量审计、修复与合并前复验
+
+本次审计复现并修复：
+
+- 停止消费循环按host字符串排除非local，却遗漏已注册且支持精确停止的后端；没有worker观察器但仍持有本次owned handle时，也没有使用原handle。现在统一经原adapter/原请求执行，未知只查原请求；不增加远端取消能力。
+- 停止回执硬编码OS身份并拒绝已结束Attempt，导致原资源已经确认退出仍无法结算。现在核验完整当前目标、agent、session generation、worktree/branch/base与既有操作格式；资源停止不覆盖succeeded/failed/rejected等业务历史。重启只按原CurrentAttempt/原binding查缺席，不按新PID或标题kill。
+- 过早移除worker观察项会丢弃排队中的原输出/ack；现在保留原观察流到排空，明确确认的物理停止另存原operation ID/观察时间，不能被迟到业务事实抹掉。派发只计算仍活动/未知的执行；保留资源、排空观察或已退出问题不阻塞无关任务。获胜的冻结业务状态/Delivery仍保留，不以物理停止改写已交付快照。
+- 客户端最终答案提交缺少closed/discarded检查，原问题ID和版本不变时仍可能创建外发。新增最后提交门，拒绝已退出Task并保留草稿；不依赖前一轮UI刷新或服务端拒绝来遮盖。
+
+[有效停止失败复现](audit-stop-valid-before/summary.json)保留三处实际失败：支持的非local宿主被跳过、只有owned handle未停止、终态Attempt不能结算。[UI失败复现](audit-ui-before.json)仅摘原混合报告的有效UI失败；先前停止夹具因试图改写原冻结Profile、session generation/policy资源不完整而失败，保留本地，修正夹具后复现，不削弱生产身份检查。
+
+| 必要复验 | 实际结果 |
+| --- | --- |
+| [停止/原子回执专项](audit-stop-final/summary.json) | 10项全通过；支持/不支持、非OS身份、owned-only、终态Attempt、原绑定重启只读absence、原请求不重发、迟到输出、外部branch/错误格式拒绝及回滚/重放 |
+| [相关生命周期回归](audit-regression/summary.json) | 14项全通过；资源/PR保留、未知与迟到、Orca原terminal停止和remote原ack对账保持 |
+| [console/CLI/图与DAG规则](audit-console-cli/summary.json) | 130项通过，包含新增最终提交拒绝；只读定位和退役CLI保持 |
+| [L1](audit-l1/summary.json) | 12组passed/complete，123.448秒，不改变固定覆盖或期限 |
+| [获胜/落选/多合并与迟到交付](audit-delivery/summary.json) | MC6父/子场景通过；最后限定已交付winner业务状态冻结，物理停止单独表达 |
+| [受控重启交付](audit-controlled/summary.json)与[清理](audit-controlled/scenario.json) | recovery.waiting-merge-restart通过，原身份不重派、一次Delivery/后继ready，cleanup_complete=true；既定30秒/5分钟/清理期限保持 |
+
+修复不改变adapter stop/release/ack协议，也不引入任何生产Close/Delete，控测不冒充native/live。原生接口继续由既有adapter负责，未知/不支持不假装停止。构建、受影响go vet、文档/diff通过；未跑Full或新的live。
+
+采样范围：audit-l1/controlled在最后补充winner冻结状态限定之前执行；随后MC6定向对该限定复验，构建/vet再次通过。没有将原记录重标为最后提交所有场景重新执行。主分支2d0e811b仅整理验收目录/文档；本批精选记录随其规则迁入acceptance，原日志仍在原本地validation/临时路径，不移动或重写原时点事实。第三批及三批行数按审计后重算，新增最小回归测试净增已如实列出。

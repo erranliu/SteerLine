@@ -24,7 +24,7 @@
       "comparison_base": "6c16b8dcf9a2d532049f14e9036e16542063d5a0",
       "implementation_net_removed": 1211,
       "tests_net_removed": 1234,
-      "source": "docs/validation/product-simplification-02-configuration/line-summary.json"
+      "source": "docs/acceptance/product-simplification-02-configuration/line-summary.json"
     },
     {
       "batch": 3,

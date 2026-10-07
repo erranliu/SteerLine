@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./internal/execution",
+    "-run",
+    "^TestPS3Audit",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-07T09:46:10.6880372Z",
+  "finished_at": "2026-10-07T09:46:42.8647003Z",
+  "wall_seconds": 32.177326,
+  "environment": {
+    "source_commit": "acfbd3a003dbdaf7455b88622ca01245975a5b28",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled",
+    "worktree_dirty_at_sampling": true,
+    "worktree_status_sha256": "19f47b79acbc9417c6db9b4867e0ae0824f33c5b12e0b91d210df4d0dd17ae67"
+  },
+  "process_error": "exit status 1",
+  "summary": {
+    "status": "failed",
+    "passed": false,
+    "complete": true,
+    "command_exit_code": 1,
+    "package_count": 1,
+    "passed_packages": 0,
+    "failed_packages": [
+      "github.com/erranliu/SteerLine/internal/execution"
+    ],
+    "skipped_packages": [],
+    "test_count": 4,
+    "passed_tests": 0,
+    "failed_tests": 4,
+    "skipped_tests": 0,
+    "packages": [
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "status": "fail", "elapsed_seconds": 27.978}
+    ],
+    "tests": [
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt", "status": "fail", "elapsed_seconds": 27.75},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt/supported_nonlocal_host", "status": "fail", "elapsed_seconds": 10.98},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt/owned_handle_only", "status": "fail", "elapsed_seconds": 9.18},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt/terminal_attempt", "status": "fail", "elapsed_seconds": 7.59}
+    ],
+    "failures": [
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt", "status": "fail", "elapsed_seconds": 27.75},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt/supported_nonlocal_host", "status": "fail", "elapsed_seconds": 10.98},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt/owned_handle_only", "status": "fail", "elapsed_seconds": 9.18},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3AuditDiscardStopsSupportedHostsAndSettlesTerminalAttempt/terminal_attempt", "status": "fail", "elapsed_seconds": 7.59}
+    ],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 27.9772426,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/product-simplification-03-resources-cli/audit-stop-valid-before/go-test.jsonl",
+  "stderr_log": "docs/validation/product-simplification-03-resources-cli/audit-stop-valid-before/go-test.stderr.txt",
+  "evidence_selection": {
+    "kind": "selected original report",
+    "original_report_sha256": "fb5f96c1b94460bbb4011b8dd3cc471fa8b6ef6482fc8301fa96a1247ec6a2e6",
+    "original_report_local": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-ps3-audit-original-reports\\audit-stop-valid-before.json",
+    "omitted": "full worktree status and duplicate slowest_tests; original source/environment/timestamps, commands, coverage and individual outcomes preserved"
+  }
+}

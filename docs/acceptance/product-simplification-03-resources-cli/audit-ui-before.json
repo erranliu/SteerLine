@@ -1,0 +1,14 @@
+{
+  "kind": "selected test result from original mixed report",
+  "original_report_local": "docs\\validation\\product-simplification-03-resources-cli\\audit-before\\summary.json",
+  "original_report_sha256": "4a5c0600e9ad4eb0d53f18cb2c07191f6e624c641bcc669fbaec5c587207b754",
+  "tests": [
+    {
+      "package": "github.com/erranliu/SteerLine/internal/console",
+      "name": "TestPS3AuditFinalSubmitRejectsDiscardedTaskEvenWithUnchangedDecision",
+      "status": "fail",
+      "elapsed_seconds": 0
+    }
+  ],
+  "note": "other failures in the original report were fixture setup failures, not counted as stop reproductions; valid stop reproductions are separately preserved"
+}

@@ -45,7 +45,7 @@ cancel 只允许 awaiting_spec_integration，或尚未登记中心创建意图�
 | --- | --- |
 | DP1 | documents_only 完整发布不占号；task_batch 全文件固定且不改变既有契约 |
 | DP2 | tree/commit、ref CAS、文件物化、实际 index 替换与正式指针前后注入崩溃；恢复后 HEAD/index/文件一致，连续发布和同步不出现意外 dirty 状态 |
-| DP3 | 发布与按 #46 契约建立的 turn/edit owner 竞争、外部改动和旧 generation 全部拒绝；未知 owner 不释放。此处用服务消费者夹具，不依赖 #47；真实 Codex 交叉验收归 #53 |
+| DP3 | 发布与按 #46 契约建立的 turn/edit owner 竞争、外部改动和旧 generation 全部拒绝；未知 owner 不释放。此处用服务消费者夹具，不依赖 #47；真实 Codex 交叉验收归 [二期验收活动](../acceptance/phase2.md) |
 | DP4 | 未集成或同内容 squash/cherry-pick 不创建；保留规划提交的人工 merge/fast-forward 且 blob 一致后才按原 ID 创建，并可再次同步 |
 | DP5 | Git 已完成/中心未完成、中心已完成/回执丢失均按原操作结算，只有一个 commit 身份与一个 batch |
 | DP6 | UI/离线查询同时读新旧版本与结果待核实状态一致；草稿、正式、已创建三个事实不混同 |
