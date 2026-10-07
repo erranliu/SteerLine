@@ -7,8 +7,8 @@ import (
 
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	"github.com/erranliu/SteerLine/internal/execution"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -16,24 +16,22 @@ import (
 )
 
 func TestPublicationAndPermissionChecksRemainCombined(t *testing.T) {
-	c := steerlineapp.Config{TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionbackend.PublicationPolicy{Publisher: "worker"}, PR: executionmodel.PRProviderConfig{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}, Host: "orca_supervised", Agent: "codex"}
+	c := steerlineapp.Config{TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, PublicationPolicy: executionbackend.PublicationPolicy{Publisher: "worker"}, PR: executionmodel.PRProviderConfig{Kind: "gitea", BaseURL: "https://forge.invalid", Repository: "org/repo"}, Host: "orca_supervised", Agent: "codex"}
 	setNativeImplementationProfiles(t, &c, codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "high"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m"}, &remote.ProfileConfig{ConnectionID: "peer", EnvironmentID: "remote-env", RepositorySelector: "id:repo", CoordinatorTerminal: "terminal", PollInterval: "1s", CapabilityReportVersion: 1})
 	entry, err := c.ExecutionDirectory.Resolve(c.ExecutionConfig())
 	if err != nil || entry.ValidatePublicationPolicy(c.PublicationPolicy, publication.Config(c.PR)) != nil {
 		t.Fatal("existing remote worker publication was removed")
 	}
-	if reason := fixtureBoundProfile(c).StaticUnavailableReason(); !strings.Contains(reason, "requested execution_policy") {
+	if reason := fixtureBoundProfile(c).StaticUnavailableReason(); !strings.Contains(reason, "enforcement evidence") {
 		t.Fatalf("remote permission evidence gate lost: %s", reason)
 	}
 	c.Host = "local"
 	c.PublicationPolicy.Publisher = "worker"
 	c.PR = hostPublicationProviderFixture()
-	c.ExecutionPolicy.Network = "deny"
 	settings := nativeProfileSettings(c)
-	settings.Args = []string{"--search"}
 	setNativeProfile(t, &c, settings)
-	if err := nativeConfigError(c); err == nil || !strings.Contains(err.Error(), "live web search") {
-		t.Fatalf("publication bypassed network deny: %v", err)
+	if err := nativeConfigError(c); err != nil {
+		t.Fatalf("valid fixed local configuration rejected: %v", err)
 	}
 }
 

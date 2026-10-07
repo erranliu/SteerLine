@@ -39,7 +39,7 @@ func openHostFixtureNativeProject(ctx context.Context, c *execution.Config) (*sq
 		return nil, err
 	}
 	defer lock.Close()
-	if err = ensureNativeStateClean(c.RunDir, c.Repository, fixtureCapabilityValidation{}); err != nil {
+	if err = ensureNativeStateClean(c.RunDir, c.Repository); err != nil {
 		return nil, err
 	}
 	target, err := c.TaskRepositoryTarget(ctx, testProcessHost{})

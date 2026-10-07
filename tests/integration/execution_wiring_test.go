@@ -5,8 +5,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -21,6 +19,8 @@ import (
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskapp "github.com/erranliu/SteerLine/internal/task"
@@ -444,14 +444,10 @@ func TestTM06ResourceWiring(t *testing.T) {
 	codexPayload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex"})
 	require(t, err)
 	codexEnvelope, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{
-		CodecVersion: 1, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: codexworker.ProfileCodecKey,
+		CodecVersion: 2, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: codexworker.ProfileCodecKey,
 		ProjectID: "project", ProfileID: "profile", AcceptedConfigVersion: "accepted",
 	}, codexPayload)
 	require(t, err)
-	policy := executionbackend.ExecutionPolicy{
-		Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true},
-		Network:    "allow", Escalation: "deny",
-	}
 	for _, test := range []struct {
 		host, wantProtocol, factory, backendPackage string
 	}{
@@ -476,7 +472,7 @@ func TestTM06ResourceWiring(t *testing.T) {
 					Session: executionbackend.SessionContext{ProjectID: "project", WorkflowRunID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Agent: executionbackend.AgentSpec{Name: "codex"}},
 				},
 				ProfileData: []executionbackend.ImplementationDataEnvelope{codexEnvelope}, ProfileID: "profile", AcceptedConfigVersion: "accepted",
-				Policy: policy, ProcessHost: host, RepositoryPath: workspacePath, RunDirectory: filepath.Join(t.TempDir(), "run"),
+				ProcessHost: host, RepositoryPath: workspacePath, RunDirectory: filepath.Join(t.TempDir(), "run"),
 			}
 			lifecycle, err := entry.Lifecycle(setup)
 			require(t, err)

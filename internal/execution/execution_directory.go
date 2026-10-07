@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"slices"
 	"strings"
 	"time"
@@ -12,6 +11,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 // ExecutionRegistrationKey is the persisted, generic identity of one execution
@@ -28,7 +28,7 @@ type ExecutionRegistrationKey struct {
 type ImplementationProfileCodec struct {
 	Key       string
 	Version   int
-	Normalize func([]byte, executionbackend.ExecutionPolicy, string, string) ([]byte, []string, error)
+	Normalize func([]byte, string, string) ([]byte, []string, error)
 }
 
 // ClaimPreparation carries only center-owned timing and gate inputs. The
@@ -54,13 +54,13 @@ type PolicyResourceBuildRequest struct {
 	ProfileID             string
 	AcceptedConfigVersion string
 	Resource              PolicyResourceIdentity
-	Policy                executionbackend.ExecutionPolicy
-	Host                  string
-	Agent                 string
-	Workspace             string
-	LinkedWorktreeArgs    []string
-	RepositoryPath        string
-	CommandTimeout        time.Duration
+
+	Host               string
+	Agent              string
+	Workspace          string
+	LinkedWorktreeArgs []string
+	RepositoryPath     string
+	CommandTimeout     time.Duration
 }
 
 type PolicyResourceBuildResult struct {
@@ -71,20 +71,19 @@ type PolicyResourceBuildResult struct {
 // ExecutionRegistration binds generic service ports to one fixed execution
 // identity. The application supplies all factories and platform behavior.
 type ExecutionRegistration struct {
-	Key                       ExecutionRegistrationKey
-	ProfileKey                string
-	WorkspaceBranchPrefix     string
-	LocalWorkspace            bool
-	ProfileCodecKeys          []string
-	QuestionCodecKey          string
-	QuestionCodecVersion      int
-	Host                      string
-	Backend                   func(Config) executionbackend.ExecutionBackend
-	Target                    func(Config) executionbackend.ExecutionTarget
-	ProbeRequirements         func(context.Context, Config) (executionbackend.CapabilityReport, error)
-	QueryTool                 func(context.Context, Config, string) executionbackend.RequirementEvidence
+	Key                   ExecutionRegistrationKey
+	ProfileKey            string
+	WorkspaceBranchPrefix string
+	LocalWorkspace        bool
+	ProfileCodecKeys      []string
+	QuestionCodecKey      string
+	QuestionCodecVersion  int
+	Host                  string
+	Backend               func(Config) executionbackend.ExecutionBackend
+	Target                func(Config) executionbackend.ExecutionTarget
+
 	Lifecycle                 func(executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error)
-	ValidateProfileSelection  func(executionbackend.ExecutionPolicy, string, map[string][]byte) error
+	ValidateProfileSelection  func(string, map[string][]byte) error
 	ValidateConfig            func(context.Context, Config) error
 	Preflight                 func(context.Context, Config) error
 	PrepareClaim              func(context.Context, Config) (ClaimPreparation, error)
@@ -157,7 +156,7 @@ func NewExecutionDirectory(version string, codecs []ImplementationProfileCodec, 
 		if _, exists := directory.routes[route]; exists {
 			return nil, fmt.Errorf("ambiguous execution route %q", route)
 		}
-		if entry.Lifecycle == nil || entry.QuestionCodecKey == "" || entry.QuestionCodecVersion <= 0 || entry.Backend == nil || entry.Target == nil || entry.ProbeRequirements == nil || entry.QueryTool == nil || entry.ValidateConfig == nil || entry.Preflight == nil || entry.PrepareClaim == nil || entry.ReadinessRequired == nil || entry.BuildPolicyResource == nil || entry.VerifyPolicyResource == nil || entry.LinkedWorktreeWriteArgs == nil || entry.ValidatePublicationPolicy == nil || entry.ValidateRef == nil {
+		if entry.Lifecycle == nil || entry.QuestionCodecKey == "" || entry.QuestionCodecVersion <= 0 || entry.Backend == nil || entry.Target == nil || entry.ValidateConfig == nil || entry.Preflight == nil || entry.PrepareClaim == nil || entry.ReadinessRequired == nil || entry.BuildPolicyResource == nil || entry.VerifyPolicyResource == nil || entry.LinkedWorktreeWriteArgs == nil || entry.ValidatePublicationPolicy == nil || entry.ValidateRef == nil {
 			return nil, fmt.Errorf("execution directory contains incomplete operations: %+v", key)
 		}
 		if len(entry.ProfileCodecKeys) == 0 {
@@ -217,19 +216,19 @@ func (directory *ExecutionDirectory) ResolveIdentity(key ExecutionRegistrationKe
 	return entry, nil
 }
 
-func (directory *ExecutionDirectory) NormalizeProfile(inputs []executionbackend.ImplementationConfigInput, policy executionbackend.ExecutionPolicy, host, agent, projectID, profileID, acceptedVersion string) ([]executionbackend.ImplementationDataEnvelope, []string, error) {
-	return directory.normalizeProfile(inputs, policy, host, agent, projectID, profileID, acceptedVersion, true)
+func (directory *ExecutionDirectory) NormalizeProfile(inputs []executionbackend.ImplementationConfigInput, host, agent, projectID, profileID, acceptedVersion string) ([]executionbackend.ImplementationDataEnvelope, []string, error) {
+	return directory.normalizeProfile(inputs, host, agent, projectID, profileID, acceptedVersion, true)
 }
 
 // NormalizeProfileInputs canonicalizes app-owned profile inputs into frozen
-// envelopes without deciding whether the selected policy is currently
+// envelopes without deciding whether the selected target is currently
 // supported. The app uses this projection for query and diagnostics paths;
 // admission still calls NormalizeProfile, which also validates selection.
-func (directory *ExecutionDirectory) NormalizeProfileInputs(inputs []executionbackend.ImplementationConfigInput, policy executionbackend.ExecutionPolicy, host, agent, projectID, profileID, acceptedVersion string) ([]executionbackend.ImplementationDataEnvelope, []string, error) {
-	return directory.normalizeProfile(inputs, policy, host, agent, projectID, profileID, acceptedVersion, false)
+func (directory *ExecutionDirectory) NormalizeProfileInputs(inputs []executionbackend.ImplementationConfigInput, host, agent, projectID, profileID, acceptedVersion string) ([]executionbackend.ImplementationDataEnvelope, []string, error) {
+	return directory.normalizeProfile(inputs, host, agent, projectID, profileID, acceptedVersion, false)
 }
 
-func (directory *ExecutionDirectory) normalizeProfile(inputs []executionbackend.ImplementationConfigInput, policy executionbackend.ExecutionPolicy, host, agent, projectID, profileID, acceptedVersion string, validateSelection bool) ([]executionbackend.ImplementationDataEnvelope, []string, error) {
+func (directory *ExecutionDirectory) normalizeProfile(inputs []executionbackend.ImplementationConfigInput, host, agent, projectID, profileID, acceptedVersion string, validateSelection bool) ([]executionbackend.ImplementationDataEnvelope, []string, error) {
 	if directory == nil {
 		return nil, nil, errors.New("execution directory is required")
 	}
@@ -255,7 +254,7 @@ func (directory *ExecutionDirectory) normalizeProfile(inputs []executionbackend.
 			return nil, nil, fmt.Errorf("unknown, duplicate or unsupported implementation codec %q/%d", input.ImplementationKey, input.CodecVersion)
 		}
 		seen[input.ImplementationKey] = true
-		payload, projection, err := codec.Normalize(input.Payload, policy, host, agent)
+		payload, projection, err := codec.Normalize(input.Payload, host, agent)
 		if err != nil {
 			return nil, nil, fmt.Errorf("implementation codec %s rejected profile: %w", codec.Key, err)
 		}
@@ -280,7 +279,7 @@ func (directory *ExecutionDirectory) normalizeProfile(inputs []executionbackend.
 		}
 	}
 	if validateSelection && entry.ValidateProfileSelection != nil {
-		if err := entry.ValidateProfileSelection(policy, agent, payloads); err != nil {
+		if err := entry.ValidateProfileSelection(agent, payloads); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -319,7 +318,7 @@ func (directory *ExecutionDirectory) ValidateProfileData(c Config) error {
 		return errors.New("configuration has no selected implementation profile")
 	}
 	inputs := implementationInputsFromData(c.ImplementationData)
-	data, _, err := directory.NormalizeProfile(inputs, c.ExecutionPolicy, c.hostName(), c.agentName(), ConfigurationProjectIdentity(c), c.selectedProfileID, c.acceptedConfigVersion)
+	data, _, err := directory.NormalizeProfile(inputs, c.hostName(), c.agentName(), ConfigurationProjectIdentity(c), c.selectedProfileID, c.acceptedConfigVersion)
 	if err != nil {
 		return err
 	}

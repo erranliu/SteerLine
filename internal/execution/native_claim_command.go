@@ -66,7 +66,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if options.ServiceInstanceID != "" && !executionbackend.StableExecutionID(options.ServiceInstanceID) {
 		return executionmodel.TaskClaimReceipt{}, nativeErr("invalid_batch", "claim service instance identity is invalid")
 	}
-	if options.ExecutionProfile != nil && (!verifyPreEvaluationExecutionProfile(*options.ExecutionProfile, c.runtime.Directory) ||
+	if options.ExecutionProfile != nil && (!VerifyFixedExecutionProfile(*options.ExecutionProfile, c.runtime.Directory) ||
 		options.ExecutionProfile.ID != config.selectedProfileID || options.ExecutionProfile.Digest != config.fixedProfileDigest ||
 		options.ExecutionProfile.AcceptedConfigVersion != config.acceptedConfigVersion ||
 		options.ExecutionProfile.Host != config.hostName() || options.ExecutionProfile.Agent != config.agentName()) {
@@ -81,7 +81,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	if options.ExecutionProfile == nil && c.runtime.Profiles != nil {
 		selected, fixed, resolveErr := c.runtime.Profiles.ResolveExecutionProfile(c.runtime.Profiles.DefaultProfileID(), "")
 		if resolveErr == nil && selected.fixedProfileDigest == config.fixedProfileDigest &&
-			verifyPreEvaluationExecutionProfile(fixed, c.runtime.Directory) &&
+			VerifyFixedExecutionProfile(fixed, c.runtime.Directory) &&
 			fixed.AcceptedConfigVersion == config.acceptedConfigVersion && fixed.Host == config.hostName() && fixed.Agent == config.agentName() {
 			options.ExecutionProfile = &fixed
 		}
@@ -123,13 +123,6 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		return replayTaskStart(old, requestPayload, options.TaskID, options.RequestedBy, kind)
 	}
 
-	if !config.ExecutionRequirements.Empty() {
-		evaluation, err := evaluateExecutionRequirements(ctx, config, c.runtime.Directory)
-		if err != nil {
-			return executionmodel.TaskClaimReceipt{}, err
-		}
-		config.requirementsEvaluation = &evaluation
-	}
 	claimPreparation, err := entry.PrepareClaim(ctx, config)
 	if err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
@@ -290,9 +283,6 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 }
 
 func freezeClaimExecutionProfile(selected executionmodel.FixedExecutionProfile, config Config) executionmodel.FixedExecutionProfile {
-	selected.ExecutionRequirements = config.ExecutionRequirements.Clone()
-	selected.RequirementsEvaluation = cloneRequirementsEvaluation(config.requirementsEvaluation)
-	selected.RequirementsEvidenceDigest = requirementsEvidenceDigest(selected.RequirementsEvaluation)
 	selected.Publication = clonePublicationSettings(config.publicationSettings())
 	selected.Digest = fixedExecutionProfileDigest(selected)
 	return selected

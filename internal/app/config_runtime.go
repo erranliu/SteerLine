@@ -123,10 +123,6 @@ func (c Config) ValidateStoredExecutions(snapshot reconstruction.Snapshot) error
 	return c.executionConfig().ValidateStoredExecutions(snapshot, c.ExecutionDirectory)
 }
 
-func (c Config) EvaluateRequirements(ctx context.Context) (executionbackend.RequirementsEvaluation, error) {
-	return c.executionConfig().EvaluateRequirements(ctx, c.ExecutionDirectory)
-}
-
 func (c Config) DecodeImplementationConfig(key string) ([]byte, error) {
 	return c.executionConfig().DecodeImplementationConfig(key, c.ExecutionDirectory)
 }
@@ -178,15 +174,15 @@ func (c Config) ApplyExecutionProfile(profile execution.ExecutionProfile) Config
 func (c Config) withExecutionConfig(config execution.Config) Config {
 	c.Repository, c.Remote, c.Branch, c.RunDir, c.WorktreeRoot = config.Repository, config.Remote, config.Branch, config.RunDir, config.WorktreeRoot
 	c.Git, c.WorkflowProtocol, c.CommandTimeout = config.Git, config.WorkflowProtocol, config.CommandTimeout
-	c.PublicationPolicy, c.ExecutionPolicy, c.ExecutionRequirements = config.PublicationPolicy, config.ExecutionPolicy, config.ExecutionRequirements
+	c.PublicationPolicy = config.PublicationPolicy
 	c.PR, c.Host, c.Agent = executionmodel.PRProviderConfig(config.PR), config.Host, config.Agent
 	return c
 }
 
 func (c Config) executionBase() execution.Config {
 	config := execution.Config{
-		PublicationPolicy: c.PublicationPolicy, ExecutionPolicy: c.ExecutionPolicy, ExecutionRequirements: c.ExecutionRequirements,
-		Repository: c.Repository, Remote: c.Remote, Branch: c.Branch, RunDir: c.RunDir, WorktreeRoot: c.WorktreeRoot,
+		PublicationPolicy: c.PublicationPolicy,
+		Repository:        c.Repository, Remote: c.Remote, Branch: c.Branch, RunDir: c.RunDir, WorktreeRoot: c.WorktreeRoot,
 		Git: c.Git, WorkflowProtocol: c.WorkflowProtocol, CommandTimeout: c.CommandTimeout, PR: executionmodel.PRProviderConfig(c.PR),
 		Host: c.Host, Agent: c.Agent,
 	}
@@ -213,11 +209,11 @@ func (c Config) ExecutionConfig() execution.Config { return c.executionConfig() 
 
 func (c Config) profileCatalog() execution.ProfileCatalog {
 	base := c.executionBase()
-	base.ExecutionRequirements = base.ExecutionRequirements.Clone()
+
 	base.Git.Args = append([]string(nil), base.Git.Args...)
 	base.PR.Query.Args = append([]string(nil), base.PR.Query.Args...)
 	base.PR.Close.Args = append([]string(nil), base.PR.Close.Args...)
-	return execution.ProfileCatalog{Base: base, Directory: c.ExecutionDirectory, Profiles: cloneExecutionProfiles(c.ExecutionProfiles), DefaultID: c.DefaultExecutionProfile, Global: c.globalExecution, PolicySource: c.projectPath}
+	return execution.ProfileCatalog{Base: base, Directory: c.ExecutionDirectory, Profiles: cloneExecutionProfiles(c.ExecutionProfiles), DefaultID: c.DefaultExecutionProfile, Global: c.globalExecution}
 }
 
 func cloneExecutionProfiles(profiles []execution.ExecutionProfile) []execution.ExecutionProfile {

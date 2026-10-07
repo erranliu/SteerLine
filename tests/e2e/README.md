@@ -72,9 +72,9 @@ controlled 使用真实 SteerLine、Git、SQLite，helper 实现最小 app-serve
 
 ## 真实环境
 
-L2 smoke 的两条真实链路和 L3 controlled/live 所有场景均采用显式完全访问（host 写入、network allow → danger-full-access、approval_policy=never）。真实执行固定 `gpt-6-luna` / `medium`。不复制/预检 sandbox 账号、不运行 sandbox canary，不需要管理员初始化。L2 的受控门槛保持原配置；L3 级别由 runner 明确传入，新增组也采用同一权限。共享断言核对实际冻结权限/资源契约，recovery 重启后再次核对。
+L2/L3与controlled/live使用当前固定Windows Codex方案：workspace-write、unelevated、on-request、auto_review、network allow。真实执行仍固定gpt-6-luna/medium。隔离Codex home只复制认证并写入本次仓库信任，不复制sandbox账号或全局项目配置，不需要管理员初始化。受管命令由adapter生成，用户不配置raw args或权限覆盖；恢复核对原冻结配置、精确根和资源。worker不继承启动它的Codex App会话权限。
 
-真实执行需要本机 `codex-cli 0.159.2`（当前产品权限映射）、Codex 登录认证和本地 Orca。每个真实项目创建独立 Codex home，只复制来源 auth.json，写入最小模型和本次仓库信任配置，不复制 sandbox 账号、历史或全局项目配置。来源为当前 CODEX_HOME，未设置时使用用户 .codex。独立 worker 按 SteerLine execution_policy 启动，不继承启动它的 Codex App 会话的“完全访问”模式。
+真实执行使用已核对的codex-cli 0.159.2、Codex登录认证和本机Orca。特殊工具/缓存或Git维护的原生拒绝照实报告，不以切换完全访问或修复ACL使验收通过。最小自动审核验收见[第二批记录](../../docs/validation/product-simplification-02-configuration/README.md)。
 
 以下 sandbox 工具供其他需要 elevated 的开发场景显式使用，不属于 L2/L3 前置条件。
 

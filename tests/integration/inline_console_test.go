@@ -23,9 +23,9 @@ func TestPS1InlineConsoleWiring(t *testing.T) {
 	f := newLifecycleProject(t, "local")
 	var profiles []any
 	for i := 0; i < 2; i++ {
-		payload, err := codex.EncodeProfileConfig(codex.ProfileConfig{Executable: os.Args[0], Model: fmt.Sprintf("fixture-%d", i), WindowsSandbox: "unelevated"})
+		payload, err := codex.EncodeProfileConfig(codex.ProfileConfig{Executable: os.Args[0], Model: fmt.Sprintf("fixture-%d", i)})
 		require(t, err)
-		profiles = append(profiles, map[string]any{"id": fmt.Sprintf("p%d", i), "name": fmt.Sprintf("方案%d", i), "host": "local", "agent": "codex", "implementation_configs": []backend.ImplementationConfigInput{{ImplementationKey: codex.ProfileCodecKey, CodecVersion: 1, Payload: payload}}})
+		profiles = append(profiles, map[string]any{"id": fmt.Sprintf("p%d", i), "name": fmt.Sprintf("方案%d", i), "host": "local", "agent": "codex", "implementation_configs": []backend.ImplementationConfigInput{{ImplementationKey: codex.ProfileCodecKey, CodecVersion: 2, Payload: payload}}})
 	}
 	require(t, os.WriteFile(app.GlobalExecutionConfigPath(), mustJSON(map[string]any{"version": 2, "default_execution_profile": "p0", "execution_profiles": profiles}), 0600))
 	var err error

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -20,6 +19,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func OpenClient(ctx context.Context, path string) (*productclient.Client, error) {
@@ -482,7 +482,7 @@ func projectPresentation(c Config) productapi.ProjectPresentation {
 				reason = err.Error()
 			}
 		}
-		fixed := executionmodel.FixedExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Digest: p.Digest(c.ExecutionDirectory), AcceptedConfigVersion: p.AcceptedConfigVersion, PolicySource: p.PolicySource, PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ExecutionPolicy: p.ExecutionPolicy, ImplementationDisplay: append([]string(nil), p.ImplementationDisplay...), ExecutionRequirements: p.ExecutionRequirements}
+		fixed := executionmodel.FixedExecutionProfile{ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent, Digest: p.Digest(c.ExecutionDirectory), AcceptedConfigVersion: p.AcceptedConfigVersion, PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ImplementationDisplay: append([]string(nil), p.ImplementationDisplay...)}
 		summary := query.Profile(fixed)
 		summary.UnavailableReason = reason
 		result.Profiles = append(result.Profiles, summary)

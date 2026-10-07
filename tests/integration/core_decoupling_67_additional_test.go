@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,20 +16,21 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
 func additionalDirectory(t *testing.T, ledger *additionalLedger) *execution.ExecutionDirectory {
 	t.Helper()
 	key := execution.ExecutionRegistrationKey{Backend: "fixture", Protocol: additionalProtocol, Agent: "fixture"}
-	codec := execution.ImplementationProfileCodec{Key: additionalKey, Version: 1, Normalize: func(data []byte, policy executionbackend.ExecutionPolicy, host, agent string) ([]byte, []string, error) {
+	codec := execution.ImplementationProfileCodec{Key: additionalKey, Version: 1, Normalize: func(data []byte, host, agent string) ([]byte, []string, error) {
 		var value struct {
 			Target string `json:"target"`
 		}
 		if err := json.Unmarshal(data, &value); err != nil {
 			return nil, nil, err
 		}
-		if value.Target != "fixture:fixed" || host != "fixture" || agent != "fixture" || policy.Filesystem.WriteScope != "none" || policy.Network != "deny" {
+		if value.Target != "fixture:fixed" || host != "fixture" || agent != "fixture" {
 			return nil, nil, errors.New("fixture supports only its fixed offline, read-only target")
 		}
 		return bytes.Clone(data), []string{"isolated fake; native permissions unverified"}, nil
@@ -42,12 +42,7 @@ func additionalDirectory(t *testing.T, ledger *additionalLedger) *execution.Exec
 		Lifecycle: port, Target: func(execution.Config) executionbackend.ExecutionTarget {
 			return executionbackend.ExecutionTarget{ID: "fixture:fixed"}
 		}, Backend: func(execution.Config) executionbackend.ExecutionBackend { return &additionalPort{ledger: ledger} },
-		ProbeRequirements: func(_ context.Context, c execution.Config) (executionbackend.CapabilityReport, error) {
-			return additionalReport(executionbackend.ExecutionRef{Backend: key.Backend, Protocol: key.Protocol, Target: executionbackend.ExecutionTarget{ID: "fixture:fixed"}, Agent: executionbackend.AgentSpec{Name: c.Agent}}), nil
-		},
-		QueryTool: func(_ context.Context, _ execution.Config, id string) executionbackend.RequirementEvidence {
-			return executionbackend.RequirementEvidence{ID: id, Site: "target", Target: executionbackend.ExecutionTarget{ID: "fixture:fixed"}, Status: executionbackend.RequirementUnknown, Source: "fixture:tools-unsupported", CheckedAt: time.Now().UTC()}
-		},
+
 		ValidateConfig: func(context.Context, execution.Config) error { return nil }, Preflight: func(context.Context, execution.Config) error { return nil }, PrepareClaim: func(context.Context, execution.Config) (execution.ClaimPreparation, error) {
 			return execution.ClaimPreparation{}, nil
 		}, ReadinessRequired: func(execution.Config) bool { return false },
@@ -259,7 +254,7 @@ func testAdditionalImplementationWithCandidateGuard(t *testing.T, candidateGuard
 	// The fake does not certify missing tools, permission evidence or alternate
 	// targets. The same accepted catalog refuses each unsupported new claim.
 	for _, target := range []string{"fixture:changed", ""} {
-		_, _, err := directory.NormalizeProfile([]executionbackend.ImplementationConfigInput{{ImplementationKey: additionalKey, CodecVersion: 1, Payload: mustJSON(map[string]string{"target": target})}}, config2.ExecutionPolicy, "fixture", "fixture", config2.Identity(), "fixture", config2.LoadedConfigDigest())
+		_, _, err := directory.NormalizeProfile([]executionbackend.ImplementationConfigInput{{ImplementationKey: additionalKey, CodecVersion: 1, Payload: mustJSON(map[string]string{"target": target})}}, "fixture", "fixture", config2.Identity(), "fixture", config2.LoadedConfigDigest())
 		if err == nil {
 			t.Fatal("alternate target admitted")
 		}

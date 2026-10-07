@@ -12,9 +12,8 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	productapi "github.com/erranliu/SteerLine/internal/product/api"
-
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
@@ -53,7 +52,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 		t.Fatal(err)
 	}
 	dependencies, catalog := neutralFixtureRuntime(base)
-	bound := catalog.bindProjectPolicy(profile)
+	bound := catalog.bindProjectConfiguration(profile)
 	selected, fixedChoice, err := testResolveProfile(base, profile.ID, bound.Digest(dependencies.Directory, base.Identity()))
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +72,7 @@ func TestNativeClaimPersistsChosenExecutionProfile(t *testing.T) {
 	run := &reconstruction.RunView{RunID: wf.WorkflowRunID, Host: "local", Agent: "fixture", Backend: execution.Backend, Protocol: execution.Protocol, Target: execution.Target}
 	service := &Service{Config: base, baseConfig: base, runtime: dependencies, State: reconstruction.Runtime{}, domain: reconstruction.Snapshot{WorkflowRuns: snapshot.WorkflowRuns}, runs: []*reconstruction.RunView{run}}
 	fixed, err := service.executionConfigForRun(run)
-	if err != nil || neutralProfileSettings(fixed).Model != "chosen-model" || fixed.ExecutionPolicy.Filesystem.WriteScope != "workspace" {
+	if err != nil || neutralProfileSettings(fixed).Model != "chosen-model" {
 		t.Fatalf("recovery adopted the edited preset: %+v / %v", fixed, err)
 	}
 }
@@ -82,7 +81,7 @@ func TestAutomaticDispatchRequiresAnExplicitDefaultWithMultipleProfiles(t *testi
 	ctx := context.Background()
 	base, _ := nativeTaskFixture(t)
 	dependencies, _ := neutralFixtureRuntime(base)
-	catalog := ProfileCatalog{Base: base, Directory: dependencies.Directory, Profiles: []ExecutionProfile{neutralProfile(t, "other", "另一个本地配置", neutralSettings{Executable: "fixture"})}, Global: false, PolicySource: "fixture:config"}
+	catalog := ProfileCatalog{Base: base, Directory: dependencies.Directory, Profiles: []ExecutionProfile{neutralProfile(t, "other", "另一个本地配置", neutralSettings{Executable: "fixture"})}, Global: false}
 	base, _, err := catalog.ResolveExecutionProfile(ProjectExecutionProfileID, "")
 	if err != nil {
 		t.Fatal(err)
@@ -129,7 +128,7 @@ func TestWorkerFlowClaimsFreezeIndependentLocalProfiles(t *testing.T) {
 	c, commit, store := openDAGFixture(t)
 	c.WorkflowProtocol = executionmodel.Version
 	dependencies, _ := neutralFixtureRuntime(c)
-	catalog := ProfileCatalog{Base: c, Directory: dependencies.Directory, DefaultID: "local-first", Global: true, PolicySource: "fixture:config", Profiles: []ExecutionProfile{
+	catalog := ProfileCatalog{Base: c, Directory: dependencies.Directory, DefaultID: "local-first", Global: true, Profiles: []ExecutionProfile{
 		neutralProfile(t, "local-first", "First local", neutralSettings{Executable: "fixture", Model: "first-model", ReasoningEffort: "high"}),
 		neutralProfile(t, "local-second", "Second local", neutralSettings{Executable: "fixture", Model: "second-model", ReasoningEffort: "xhigh"}),
 	}}

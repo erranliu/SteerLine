@@ -14,10 +14,6 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
-func (s *Service) requireBackendCapabilities(ctx context.Context, backend executionbackend.ExecutionProbe, names ...string) (executionbackend.CapabilityReport, error) {
-	return s.requireBackendCapabilitiesFor(ctx, backend, TargetFor(s.Config, s.runtime.Directory), AgentFor(s.Config), names...)
-}
-
 type localOutputCursor struct {
 	Version   int    `json:"v"`
 	RunID     string `json:"r"`

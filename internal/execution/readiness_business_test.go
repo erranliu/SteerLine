@@ -4,13 +4,13 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"sync"
 	"testing"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 type neutralPreparationResolver struct {
@@ -122,14 +122,10 @@ func (p neutralPreparationPort) Execute(ctx context.Context, r executionbackend.
 
 // The fake returns only already observed probe/settlement facts. The center
 // owns every Decision, input intent, business turn and persistence write.
+
 func neutralPreparationService(t *testing.T, mode string) (*Service, *reconstructiontypes.RunView, *neutralPreparationResolver) {
 	t.Helper()
-	return neutralPreparationServiceWithPolicy(t, mode, workspacePolicyFixture())
-}
-
-func neutralPreparationServiceWithPolicy(t *testing.T, mode string, policy executionbackend.ExecutionPolicy) (*Service, *reconstructiontypes.RunView, *neutralPreparationResolver) {
-	t.Helper()
-	s, run := neutralAuditServiceWithPolicy(t, policy)
+	s, run := neutralAuditService(t)
 	require(t, prepareWorktreeOnly(context.Background(), s.Config, s.runtime.Directory, s.runtime.ProcessHost, run))
 	run.WorktreePath, run.WorktreeBranch, run.BaseCommit = ptr(run.WorkspaceIntent.Path), ptr(run.WorkspaceIntent.Branch), ptr(run.WorkspaceIntent.BaseCommit)
 	workflow, e := s.workflowRecords(run)
@@ -139,10 +135,7 @@ func neutralPreparationServiceWithPolicy(t *testing.T, mode string, policy execu
 	e.Process = &executionbackend.ProcessIdentity{Kind: "fixture", RuntimeID: "fixture-runtime", Terminal: "fixture-terminal", Incarnation: "fixture-incarnation"}
 	setNeutralBinding(t, e, "fixture-original", e.Process.Incarnation, "fixture-session")
 	e.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, e.Workspace.Worktree, e)
-	if policy.Filesystem.WriteScope == "host" {
-		e.PolicyResources.WriteRoots = nil
-		e.PolicyResources.Digest = PolicyResourceDigest(*e.PolicyResources)
-	}
+
 	id := newID()
 	started := now()
 	probe := executionbackend.ProbeIdentity{Execution: e.ExecutionID, Turn: id, Nonce: newID(), ProfileDigest: workflow.ExecutionProfile.Digest, Runtime: e.Process.RuntimeID, Terminal: e.Process.Terminal, Incarnation: e.Process.Incarnation, Worktree: e.Workspace.Worktree}

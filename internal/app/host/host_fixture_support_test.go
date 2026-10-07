@@ -22,9 +22,6 @@ import (
 
 const workerFlowMockSession = "00000000-0000-0000-0000-000000000008"
 
-func workspacePolicyFixture() executionbackend.ExecutionPolicy {
-	return executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
-}
 func executionPublicationFixture() executionbackend.PublicationPolicy {
 	return executionbackend.PublicationPolicy{Publisher: "worker"}
 }

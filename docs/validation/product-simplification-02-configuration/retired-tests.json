@@ -1,0 +1,117 @@
+[
+  {
+    "file": "internal/execution/backend/policy_test.go",
+    "test": "TestExecutionPolicyRequiresExplicitAuthority",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/execution/backend/requirements_test.go",
+    "test": "TestRequirementsMatchBoundEvidence",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/execution/backend/requirements_test.go",
+    "test": "TestRequirementsRejectUnregisteredAndDuplicateItems",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/execution/execution_requirements_test.go",
+    "test": "TestExecutionRequirementsExistenceAndNonSecretEvidence",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/execution/execution_requirements_test.go",
+    "test": "TestExecutionRequirementsDoNotUpgradeProbeToVerified",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/execution/execution_requirements_test.go",
+    "test": "TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/execution/execution_requirements_test.go",
+    "test": "TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/execution/execution_requirements_test.go",
+    "test": "TestClaimRechecksAcceptedConfigFiles",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/execution/execution_requirements_test.go",
+    "test": "TestExecutionRegistryRejectsDuplicatesAndRequiresLifecyclePorts",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/execution/capability_snapshot_business_test.go",
+    "test": "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/app/requirement_tools_cd67_test.go",
+    "test": "TestRequirementVersionParsers",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/app/requirement_tools_cd67_test.go",
+    "test": "TestRequirementToolsUseWorkerEnvironment",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/app/full_access_freeze_cd67_test.go",
+    "test": "TestFullAccessProfileFreezeSurvivesClaimValidation",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/execution/adapters/codex/policy_test.go",
+    "test": "TestExplicitHostPolicyMapsBothWindowsWorkersToFullAccess",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/execution/adapters/codex/policy_test.go",
+    "test": "TestProjectPolicyCompilerSupportsOnlyVerifiedTargetMappings",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/execution/adapters/codex/policy_test.go",
+    "test": "TestProjectPolicyRejectsAllManagedOverridesBeforeNativeCalls",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/execution/adapters/codex/policy_test.go",
+    "test": "TestNetworkDenyRejectsLiveSearchAndDisablesInheritedSearch",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "internal/execution/adapters/codex/windows_sandbox_test.go",
+    "test": "TestLocalWindowsSandboxArgs",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "tests/integration/execution_requirements_app_test.go",
+    "test": "TestAppRequirementsClaimFreezesEvaluatedProfile",
+    "reason": "retired arbitrary policy/optional requirement/authenticated file-report path; mandatory input/snapshot/native checks replaced by PS2 scenarios"
+  },
+  {
+    "file": "tests/integration/capability_composition_test.go",
+    "test": "TestNativeEvidenceCertificationRequiresFixedTargetAndVersion",
+    "reason": "retired certification/report/optional requirement matching; mandatory native preflight retained"
+  },
+  {
+    "file": "tests/integration/capability_composition_test.go",
+    "test": "TestOrcaCertificationRequiresAgentAndTerminalEvidence",
+    "reason": "retired certification/report/optional requirement matching; mandatory native preflight retained"
+  },
+  {
+    "file": "internal/app/execution_policy_live_cd67_test.go",
+    "test": "TestExecutionPolicyNativeToolsLive",
+    "reason": "replaced by PS2 native developer/automatic-review and real original-resource recovery scenario; shared codec/resource helpers retained"
+  },
+  {
+    "file": "internal/app/execution_policy_live_cd67_test.go",
+    "test": "TestExecutionPolicyNativeToolsCollectLive",
+    "reason": "replaced by PS2 native developer/automatic-review and real original-resource recovery scenario; shared codec/resource helpers retained"
+  }
+]

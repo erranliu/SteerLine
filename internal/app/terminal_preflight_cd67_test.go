@@ -131,14 +131,14 @@ func TestOrcaPreflightRequiresConfiguredCodexPolicyMapping(t *testing.T) {
 		c.ExecutionProfiles, c.DefaultExecutionProfile = []ExecutionProfile{profile}, profile.ID
 		c = c.ApplyExecutionProfile(profile)
 	}
-	applyProfile(codexworker.ProfileConfig{Executable: missing, WindowsSandbox: "unelevated"})
+	applyProfile(codexworker.ProfileConfig{Executable: missing})
 	if err := Preflight(context.Background(), &c, false); err == nil || !strings.Contains(err.Error(), "missing-worker.exe") {
 		t.Fatalf("native policy mapping did not require its fixed tool: %v", err)
 	}
 	// A fixed model actually requires the configured local tool. Probe the
 	// production registration so an unrelated profile-format error cannot
 	// satisfy the rejection assertion.
-	applyProfile(codexworker.ProfileConfig{Executable: missing, WindowsSandbox: "unelevated", Model: "fixture-fixed-model", ReasoningEffort: "high"})
+	applyProfile(codexworker.ProfileConfig{Executable: missing, Model: "fixture-fixed-model", ReasoningEffort: "high"})
 	require(t, c.ValidateProfiles())
 	entry, err := c.ExecutionDirectory.Resolve(c.executionConfig())
 	require(t, err)

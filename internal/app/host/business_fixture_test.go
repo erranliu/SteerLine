@@ -63,12 +63,9 @@ func executionInputsForHostFixture(c execution.Config) []executionbackend.Implem
 }
 
 func neutralCodecs() []execution.ImplementationProfileCodec {
-	return []execution.ImplementationProfileCodec{{Key: neutralProfileKey, Version: 1, Normalize: func(data []byte, policy executionbackend.ExecutionPolicy, host, agent string) ([]byte, []string, error) {
+	return []execution.ImplementationProfileCodec{{Key: neutralProfileKey, Version: 1, Normalize: func(data []byte, host, agent string) ([]byte, []string, error) {
 		var value neutralSettings
 		if err := decode(data, &value); err != nil {
-			return nil, nil, err
-		}
-		if err := policy.Validate(); err != nil {
 			return nil, nil, err
 		}
 		if value.Executable == "" {
@@ -100,10 +97,7 @@ func newNeutralDirectory(agents ...string) (*execution.ExecutionDirectory, error
 		Lifecycle: func(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 			return &neutralLifecycle{setup: setup.Clone()}, nil
 		},
-		ProbeRequirements: func(_ context.Context, c execution.Config) (executionbackend.CapabilityReport, error) {
-			return capabilityReport(key.Backend, key.Protocol, execution.TargetFor(c, directory), execution.AgentFor(c), "fixture-version-1"), nil
-		},
-		QueryTool:      queryHostRequirementTool,
+
 		ValidateConfig: func(context.Context, execution.Config) error { return nil }, Preflight: func(context.Context, execution.Config) error { return nil }, PrepareClaim: func(context.Context, execution.Config) (execution.ClaimPreparation, error) {
 			return execution.ClaimPreparation{}, nil
 		}, ReadinessRequired: func(execution.Config) bool { return false },
@@ -178,8 +172,8 @@ func hostFixtureRuntime(c execution.Config) execution.RuntimeDependencies {
 		panic(err)
 	}
 	profile := execution.ExecutionProfile{ID: execution.ProjectExecutionProfileID, Name: "Fixture", Host: c.Host, Agent: c.Agent,
-		ExecutionPolicy: c.ExecutionPolicy, PublicationPolicy: c.PublicationPolicy, ImplementationConfigs: executionInputsForHostFixture(c)}
-	catalog := execution.ProfileCatalog{Base: c, Directory: directory, Profiles: []execution.ExecutionProfile{profile}, DefaultID: profile.ID, Global: true, PolicySource: "fixture:config"}
+		PublicationPolicy: c.PublicationPolicy, ImplementationConfigs: executionInputsForHostFixture(c)}
+	catalog := execution.ProfileCatalog{Base: c, Directory: directory, Profiles: []execution.ExecutionProfile{profile}, DefaultID: profile.ID, Global: true}
 	fixture := hostFixtureCatalog{directory: directory, catalog: catalog}
 	rememberHostFixtureCatalog(c, catalog)
 	return execution.RuntimeDependencies{Directory: directory, ProcessHost: testProcessHost{}, Profiles: hostTestProfilePort{fixture}}
@@ -222,7 +216,7 @@ func withNeutralProfile(c execution.Config, value neutralSettings) execution.Con
 	}
 	p := execution.ExecutionProfile{ID: execution.ProjectExecutionProfileID, Name: "项目默认", Host: "local", Agent: "fixture",
 		ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(value)}}}
-	catalog := execution.ProfileCatalog{Base: c, Directory: directory, Profiles: []execution.ExecutionProfile{p}, DefaultID: p.ID, Global: true, PolicySource: "fixture:config"}
+	catalog := execution.ProfileCatalog{Base: c, Directory: directory, Profiles: []execution.ExecutionProfile{p}, DefaultID: p.ID, Global: true}
 	selected, _, err := catalog.ResolveExecutionProfile(p.ID, "")
 	if err != nil {
 		panic(err)

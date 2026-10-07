@@ -11,9 +11,8 @@ import (
 // recovery operations. It contains one selected profile and never owns the
 // application catalog, task admission rules, host timers or runtime adapters.
 type Config struct {
-	PublicationPolicy     executionbackend.PublicationPolicy            `json:"publication_policy"`
-	ExecutionPolicy       executionbackend.ExecutionPolicy              `json:"execution_policy"`
-	ExecutionRequirements executionbackend.ExecutionRequirements        `json:"execution_requirements,omitempty"`
+	PublicationPolicy executionbackend.PublicationPolicy `json:"publication_policy"`
+
 	Repository            string                                        `json:"repository"`
 	Remote                string                                        `json:"remote"`
 	Branch                string                                        `json:"branch"`
@@ -29,13 +28,12 @@ type Config struct {
 	Agent                 string                                        `json:"agent"`
 	WorkspaceBranchPrefix string                                        `json:"-"`
 
-	identity               string
-	fixedProfileDigest     string
-	acceptedConfigVersion  string
-	selectedProfileID      string
-	publicationRemoteURL   string
-	frozenExecutionConfig  bool
-	requirementsEvaluation *executionbackend.RequirementsEvaluation
+	identity              string
+	fixedProfileDigest    string
+	acceptedConfigVersion string
+	selectedProfileID     string
+	publicationRemoteURL  string
+	frozenExecutionConfig bool
 }
 
 // RuntimeDependencies are injected when an execution service is composed.

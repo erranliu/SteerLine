@@ -1,0 +1,90 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./internal/execution/adapters/orca",
+    "./cmd/test-feedback",
+    "-run",
+    "Test(Platform|NativeReadiness|Scoped|DefaultOutput|PS2|CandidateSession)",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-07T02:39:45.1505398Z",
+  "finished_at": "2026-10-07T02:39:49.0493688Z",
+  "wall_seconds": 3.898912,
+  "environment": {
+    "source_commit": "ae32f3008d301bfdd89a92e1452392608d43bda0",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled",
+    "worktree_dirty_at_sampling": true,
+    "worktree_status_sha256": "ff6167ef9dbbb7f1815061b3767ae6f112fe6485db330c6b16fef896ede9495f"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 2,
+    "passed_packages": 2,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 9,
+    "passed_tests": 9,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {"package": "github.com/erranliu/SteerLine/cmd/test-feedback", "status": "pass", "elapsed_seconds": 1.222},
+      {"package": "github.com/erranliu/SteerLine/internal/execution/adapters/orca", "status": "pass", "elapsed_seconds": 0.759}
+    ],
+    "tests": [
+      {"package": "github.com/erranliu/SteerLine/cmd/test-feedback", "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents", "status": "pass", "elapsed_seconds": 0.32},
+      {"package": "github.com/erranliu/SteerLine/cmd/test-feedback", "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/complete", "status": "pass", "elapsed_seconds": 0.1},
+      {"package": "github.com/erranliu/SteerLine/cmd/test-feedback", "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/missing", "status": "pass", "elapsed_seconds": 0.06},
+      {"package": "github.com/erranliu/SteerLine/cmd/test-feedback", "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/truncated", "status": "pass", "elapsed_seconds": 0.05},
+      {"package": "github.com/erranliu/SteerLine/cmd/test-feedback", "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/duplicate", "status": "pass", "elapsed_seconds": 0.04},
+      {"package": "github.com/erranliu/SteerLine/cmd/test-feedback", "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/skip", "status": "pass", "elapsed_seconds": 0.04},
+      {"package": "github.com/erranliu/SteerLine/cmd/test-feedback", "name": "TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents/invalid", "status": "pass", "elapsed_seconds": 0.03},
+      {"package": "github.com/erranliu/SteerLine/internal/execution/adapters/orca", "name": "TestCandidateSessionLaunchKeepsOriginalHistoryIntentAndPolicy", "status": "pass", "elapsed_seconds": 0.02},
+      {"package": "github.com/erranliu/SteerLine/cmd/test-feedback", "name": "TestScopedOptionsAndNativeSwitchGate", "status": "pass", "elapsed_seconds": 0}
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 1.2223091,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/product-simplification-02-configuration/post-sync/go-test.jsonl",
+  "stderr_log": "docs/validation/product-simplification-02-configuration/post-sync/go-test.stderr.txt",
+  "evidence_selection": {
+    "kind": "selected original runner report",
+    "original_report_sha256": "eb2f1be1470956306423a26bf94ef28f19dc14eb4ab3c1b625932791312626b9",
+    "original_report_local": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-ps2-original-reports-before-public-selection\\post-sync.json",
+    "omitted": "full worktree status and duplicated slowest_tests; original timestamps, commands, source/environment, assigned tests and test outcomes retained"
+  }
+}

@@ -30,7 +30,7 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <console|run|start-service|stop-service|check|control|tasks|task|stop|answer|certify-backend|home|install|launchers|projects> [-config config.json]")
+		return fmt.Errorf("usage: steerline <console|run|start-service|stop-service|check|control|tasks|task|stop|answer|home|install|launchers|projects> [-config config.json]")
 	}
 	if os.Args[1] == "task" {
 		return runNativeTaskCommand(os.Args[2:])
@@ -50,7 +50,6 @@ func run() error {
 	controlMode := fs.String("mode", "", "control set_dispatch_mode value: auto|manual")
 	requestID := fs.String("request-id", "", "control request to query")
 	waitReceipt := fs.Bool("wait", false, "control: wait for a terminal receipt")
-	evidence := fs.String("evidence", "", "certify-backend: comma-separated Windows native evidence JSON files")
 	option := fs.String("option", "", "answer: chosen decision option id")
 	decisionID := fs.String("decision-id", "", "answer: pending decision id (defaults to the run's pending decision)")
 	note := fs.String("note", "", "answer: optional human note")
@@ -74,7 +73,7 @@ func run() error {
 	if command == "codex-session-launch" {
 		return steerlineapp.RunSessionLauncher(context.Background(), *config, steerlineapp.NewProcessHost(30*time.Second))
 	}
-	if command != "run" && command != "start-service" && command != "stop-service" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "certify-backend" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
+	if command != "run" && command != "start-service" && command != "stop-service" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
 		return fmt.Errorf("unknown command %q", command)
 	}
 	if command == "run" && *dispatchMode != "manual" && *dispatchMode != "auto" {
@@ -126,22 +125,7 @@ func run() error {
 			return e
 		}
 	}
-	if command == "certify-backend" {
-		if strings.TrimSpace(*evidence) == "" {
-			return fmt.Errorf("certify-backend requires -evidence")
-		}
-		paths := make([]string, 0)
-		for _, raw := range strings.Split(*evidence, ",") {
-			if value := strings.TrimSpace(raw); value != "" {
-				paths = append(paths, value)
-			}
-		}
-		report, err := steerlineapp.CertifyExecutionBackend(ctx, c, paths)
-		if err != nil {
-			return err
-		}
-		return json.NewEncoder(os.Stdout).Encode(report)
-	}
+
 	if command == "start-service" {
 		result, err := steerlineapp.StartConfiguredService(ctx, c, *config, steerline.StartServiceOptions{})
 		if err != nil {

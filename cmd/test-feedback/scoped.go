@@ -31,7 +31,7 @@ const fullCorePackage = executionPackage
 
 // Recovery, multi-turn and candidate orchestration belong to directed regression
 // or Full. L1 keeps one claim plus the immutable identity and delivery rules.
-var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal", "TestExecutionRequirementsDoNotUpgradeProbeToVerified"}
+var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestPS2MandatoryLifecycleCapabilitiesKeepFixedIdentity", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/tests/integration"
 
@@ -104,7 +104,7 @@ var quickOwnerCases = []struct {
 	{"quick-owner-codexapp", "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/codexapp", []string{"TestAskToolResponseUsesNativeAnswerEnvelope", "TestCodexAppCallCancellationInterruptsBlockedWrite", "TestCodexSocketHandshakeHonorsCancellationWithoutDeadline", "TestCodexSocketLoopbackHandshakeAndMaskedJSON"}},
 	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestLocalWorkspacePrepareInspectResourcesAndCleanup", "TestPrepareRejectsHeadChangedByCheckoutHook"}},
 	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPRRequiresExactIdentityAndMergeEvidence", "TestUnsupportedProviderDoesNoNetworkOperation"}},
-	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/app", []string{"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites", "TestAppConfigProjectsOwnerInputsAndSelectedProfile", "TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestLocalWindowsSandboxProfileFreezesAndRestores", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile"}},
+	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/app", []string{"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites", "TestAppConfigProjectsOwnerInputsAndSelectedProfile", "TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestPS2TerminalFixedProfileKeepsReadinessAndFrozenAuthority", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestPS2FixedWindowsProfilesFreezeAndRestore", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile"}},
 }
 
 var quickPackages = func() []string {

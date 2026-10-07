@@ -50,7 +50,7 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 		if err := found.ValidateProfileIdentity(setup.Snapshot.Session.ProjectID, setup.ProfileID, setup.AcceptedConfigVersion); err != nil {
 			return nil, err
 		}
-		if found.CodecVersion != 1 || found.Purpose != executionbackend.ImplementationConfigPurpose {
+		if found.CodecVersion != profileVersion(key) || found.Purpose != executionbackend.ImplementationConfigPurpose {
 			return nil, fmt.Errorf("unsupported implementation profile %q", key)
 		}
 		return append([]byte(nil), found.Payload...), nil
@@ -96,7 +96,7 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 	if codex.Model != "" {
 		config.AgentVersion = func(ctx context.Context) (string, error) {
 			out, err := setup.ProcessHost.OutputCommand(ctx, executionbackend.LaunchCommand{
-				Executable: codex.Executable, Args: append(append([]string(nil), codex.Args...), "--version"), WorkingDirectory: setup.RepositoryPath,
+				Executable: codex.Executable, Args: append([]string(nil), "--version"), WorkingDirectory: setup.RepositoryPath,
 			})
 			return strings.TrimSpace(string(out)), err
 		}
@@ -111,6 +111,13 @@ func nativeTargetID(config ProfileConfig) string {
 	}{config.Executable, append([]string(nil), config.Args...)})[:24]
 }
 
+func profileVersion(key string) int {
+	if key == codexworker.ProfileCodecKey {
+		return codexworker.ProfileCodecVersion
+	}
+	return 1
+}
+
 func (l *ExecutionLifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
 	return executionbackend.LifecyclePolicyCapabilities{LinkedWorkspaceWriteRoots: true, SeparateTurnStart: true, ActiveTurnFeedback: true, ResumeActiveObservation: true}
 }
@@ -119,7 +126,7 @@ func (l *ExecutionLifecycle) PreflightLifecycle(ctx context.Context, setup execu
 	if err := sameNativeTarget(l.setup.Snapshot.Ref, setup.Snapshot.Ref); err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
-	if err := ValidateProfileSelection(setup.Policy, setup.Snapshot.Ref.Agent.Name, mustEncodeCodex(l.codex), mustEncodeOrca(l.orca)); err != nil {
+	if err := ValidateProfileSelection(setup.Snapshot.Ref.Agent.Name, mustEncodeCodex(l.codex), mustEncodeOrca(l.orca)); err != nil {
 		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: err.Error(), Cause: err}
 	}
 	if err := CheckStatus(ctx, l.client.Call); err != nil {
@@ -428,24 +435,24 @@ func nativeReceipt(request executionbackend.LifecycleRequest, disposition execut
 }
 
 func (l *ExecutionLifecycle) fixedAgentLaunch() bool {
-	return l.codex.Model != "" || l.codex.WindowsSandbox != ""
+	return runtime.GOOS == "windows" || l.codex.Model != ""
 }
 
 func (l *ExecutionLifecycle) agentCommand(worktree string) (executionbackend.LaunchCommand, error) {
-	permissions, err := codexworker.CompilePolicy(l.setup.Policy, runtime.GOOS, "orca", "codex", l.codex.WindowsSandbox, l.codex.Profile, l.codex.Args)
+	permissions, err := codexworker.NativePermissions(runtime.GOOS, "orca", "codex")
 	if err != nil {
 		return executionbackend.LaunchCommand{}, err
 	}
-	if err := codexworker.ValidateManagedArgs(l.codex.Args); err != nil {
+	if err := codexworker.ValidateManagedArgs(nil); err != nil {
 		return executionbackend.LaunchCommand{}, err
 	}
 	executable, err := codexworker.NativeExecutable(l.codex.Executable)
 	if err != nil {
 		return executionbackend.LaunchCommand{}, err
 	}
-	command, err := codexworker.ManagedCommand(codexworker.ManagedCommandOptions{Policy: l.setup.Policy,
+	command, err := codexworker.ManagedCommand(codexworker.ManagedCommandOptions{
 		WorkingDirectory: worktree, Host: "orca", Agent: "codex", Model: l.codex.Model,
-		ReasoningEffort: l.codex.ReasoningEffort, Executable: executable, Args: l.codex.Args,
+		ReasoningEffort: l.codex.ReasoningEffort, Executable: executable, Args: nil,
 		Sandbox: permissions.Sandbox, WindowsSandbox: permissions.WindowsSandbox})
 	if err != nil {
 		return executionbackend.LaunchCommand{}, err
@@ -466,7 +473,7 @@ func (l *ExecutionLifecycle) agentLaunchCommand(snapshot executionbackend.Lifecy
 	}
 	dir := filepath.Join(l.setup.RunDirectory, "runs", snapshot.Session.WorkflowRunID, "turns", snapshot.Session.ExecutionID)
 	requestPath := filepath.Join(dir, "session-launch.json")
-	policy, err := codexworker.CompilePolicy(l.setup.Policy, runtime.GOOS, "orca", "codex", l.codex.WindowsSandbox, l.codex.Profile, l.codex.Args)
+	policy, err := codexworker.NativePermissions(runtime.GOOS, "orca", "codex")
 	if err != nil {
 		return executionbackend.LaunchCommand{}, err
 	}

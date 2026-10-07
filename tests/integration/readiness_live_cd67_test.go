@@ -5,8 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"net/url"
 	"os"
 	"os/exec"
@@ -23,6 +21,8 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -54,15 +54,15 @@ func TestWorkerEnvironmentNativeReadinessLive(t *testing.T) {
 		host, repository = parsed.Host, strings.TrimPrefix(parsed.Path, "/")
 	}
 	repository = strings.TrimSuffix(repository, ".git")
-	payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: worker, WindowsSandbox: "unelevated"})
+	payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: worker})
 	require(t, err)
 	terminal, err := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "4m"})
 	require(t, err)
-	inputs := []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: terminal}}
+	inputs := []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: terminal}}
 	require(t, os.MkdirAll(filepath.Dir(steerlineapp.GlobalExecutionConfigPath()), 0700))
 	global := map[string]any{"version": 2, "default_execution_profile": "readiness", "execution_profiles": []map[string]any{{"id": "readiness", "name": "Registered isolated readiness", "host": "orca", "agent": "codex", "implementation_configs": inputs}}}
 	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), mustJSON(global), 0600))
-	project := map[string]any{"task_authority": "native", "workflow_protocol": executionmodel.Version, "repository": repo, "remote": "origin", "branch": "main", "claimant": "readiness-acceptance", "executable_types": []string{"task"}, "git": executionbackend.Command{Executable: "git"}, "command_timeout": "10s", "task_poll": "10s", "pr_poll": "30s", "heartbeat": "5s", "shutdown_grace": "10s", "execution_policy": workspacePolicyFixture(), "publication_policy": executionbackend.PublicationPolicy{Publisher: "worker"}, "pr": publication.Config{Kind: "command", BaseURL: "https://" + host, Repository: repository, Query: executionbackend.Command{Executable: "git", Args: []string{"status"}}}}
+	project := map[string]any{"task_authority": "native", "workflow_protocol": executionmodel.Version, "repository": repo, "remote": "origin", "branch": "main", "claimant": "readiness-acceptance", "executable_types": []string{"task"}, "git": executionbackend.Command{Executable: "git"}, "command_timeout": "10s", "task_poll": "10s", "pr_poll": "30s", "heartbeat": "5s", "shutdown_grace": "10s", "publication_policy": executionbackend.PublicationPolicy{Publisher: "worker"}, "pr": publication.Config{Kind: "command", BaseURL: "https://" + host, Repository: repository, Query: executionbackend.Command{Executable: "git", Args: []string{"status"}}}}
 	configPath := filepath.Join(home, "readiness-project.json")
 	require(t, os.WriteFile(configPath, mustJSON(project), 0600))
 	c, err := steerlineapp.LoadConfig(configPath)

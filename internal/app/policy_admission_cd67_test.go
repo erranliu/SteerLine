@@ -13,7 +13,7 @@ import (
 func TestProjectPolicyRejectsMissingOrOldConfiguration(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	writeGlobalExecutionFixture(t, []ExecutionProfile{testExecutionProfile(t, "local", "Local", "local", "codex", codexworker.ProfileConfig{Executable: "codex"}, nil)}, "local")
-	body := map[string]any{"publication_policy": executionPublicationFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion}
+	body := map[string]any{"publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion}
 	path := filepath.Join(t.TempDir(), "project.json")
 	write := func() {
 		t.Helper()
@@ -22,13 +22,11 @@ func TestProjectPolicyRejectsMissingOrOldConfiguration(t *testing.T) {
 		require(t, os.WriteFile(path, data, 0600))
 	}
 	write()
-	if _, err := LoadConfig(path); err == nil || !strings.Contains(err.Error(), "execution_policy") {
-		t.Fatalf("missing authority accepted: %v", err)
+	if _, err := LoadConfig(path); err != nil {
+		t.Fatalf("fixed default configuration rejected: %v", err)
 	}
-	body["execution_policy"] = workspacePolicyFixture()
-	body["pr"] = hostPublicationProviderFixture()
-	for _, field := range []string{"sandbox", "windows_sandbox"} {
-		body[field] = "workspace-write"
+	for _, field := range []string{"execution_policy", "execution_requirements", "sandbox", "windows_sandbox", "approval_policy", "approvals_reviewer"} {
+		body[field] = nil
 		write()
 		if _, err := LoadConfig(path); err == nil {
 			t.Fatalf("old project authorization field accepted: %s", field)
@@ -51,13 +49,15 @@ func TestProjectPolicyRejectsMissingOrOldConfiguration(t *testing.T) {
 
 func TestProjectPolicyRejectsGlobalConflictsBeforeRepositoryProbe(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
-	writeGlobalExecutionFixture(t, []ExecutionProfile{testExecutionProfile(t, "local", "Local", "local", "codex", codexworker.ProfileConfig{Executable: "codex", Args: []string{"--config", "sandbox_mode=danger-full-access"}}, nil)}, "local")
+	profile := testExecutionProfile(t, "local", "Local", "local", "codex", codexworker.ProfileConfig{Executable: "codex"}, nil)
+	profile.ImplementationConfigs[0].Payload = []byte(`{"executable":"codex","args":[]}`)
+	writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "local")
 	path := filepath.Join(t.TempDir(), "project.json")
-	raw, err := json.Marshal(map[string]any{"publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": t.TempDir(), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "git": map[string]string{"executable": "must-never-be-called"}})
+	raw, err := json.Marshal(map[string]any{"publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(), "repository": t.TempDir(), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "git": map[string]string{"executable": "must-never-be-called"}})
 	require(t, err)
 	require(t, os.WriteFile(path, raw, 0600))
 	_, err = LoadConfig(path)
-	if err == nil || !strings.Contains(err.Error(), "unsupported managed launch") {
+	if err == nil || !strings.Contains(err.Error(), "unknown field") {
 		t.Fatalf("unsafe args reached repository identity probe: %v", err)
 	}
 }

@@ -85,7 +85,7 @@ func ProbeManagedCLI(ctx context.Context, command executionbackend.Command, outp
 	if err != nil {
 		return err
 	}
-	for _, flag := range []string{"--strict-config", "--sandbox", "--ask-for-approval", "never", "--config"} {
+	for _, flag := range []string{"--strict-config", "--sandbox", "--ask-for-approval", "on-request", "--config"} {
 		if !strings.Contains(string(help), flag) {
 			return fmt.Errorf("Codex CLI does not support managed launch parameter %s", flag)
 		}

@@ -51,7 +51,11 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 		if err := found.ValidateProfileIdentity(snapshot.Session.ProjectID, setup.ProfileID, setup.AcceptedConfigVersion); err != nil {
 			return nil, err
 		}
-		if found.CodecVersion != 1 || found.Purpose != executionbackend.ImplementationConfigPurpose {
+		version := 1
+		if key == codexworker.ProfileCodecKey {
+			version = codexworker.ProfileCodecVersion
+		}
+		if found.CodecVersion != version || found.Purpose != executionbackend.ImplementationConfigPurpose {
 			return nil, fmt.Errorf("unsupported supervised profile envelope %q", key)
 		}
 		return append([]byte(nil), found.Payload...), nil
@@ -126,7 +130,7 @@ func (l *ExecutionLifecycle) PreflightLifecycle(ctx context.Context, setup execu
 	if err := sameLifecycleTarget(l.setup.Snapshot.Ref, setup.Snapshot.Ref); err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
-	if err := ValidateProfileSelection(setup.Policy, setup.Snapshot.Ref.Agent.Name, l.codexPayload, l.orcaPayload, l.remotePayload); err != nil {
+	if err := ValidateProfileSelection(setup.Snapshot.Ref.Agent.Name, l.codexPayload, l.orcaPayload, l.remotePayload); err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
 	pair, err := Preflight(ctx, l.config)

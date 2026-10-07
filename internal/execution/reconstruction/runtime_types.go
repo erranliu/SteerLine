@@ -38,8 +38,6 @@ type Runtime struct {
 }
 
 type ServiceState struct {
-	ExecutionPolicy     executionbackend.ExecutionPolicy  `json:"execution_policy"`
-	PolicySource        string                            `json:"policy_source"`
 	Mode                string                            `json:"mode"`
 	InstanceID          string                            `json:"instance_id"`
 	PID                 int                               `json:"pid"`

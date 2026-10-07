@@ -22,7 +22,7 @@ func NormalizeProfilePayload(payload []byte) ([]byte, []string, error) {
 	return encoded, []string{"目标环境：" + settings.EnvironmentID, "连接：" + settings.ConnectionID}, err
 }
 
-func ValidateProfileSelection(policy executionbackend.ExecutionPolicy, agent string, codexPayload, orcaPayload, remotePayload []byte) error {
+func ValidateProfileSelection(agent string, codexPayload, orcaPayload, remotePayload []byte) error {
 	codex, err := codexworker.DecodeProfileConfig(codexPayload)
 	if err != nil {
 		return err
@@ -42,7 +42,7 @@ func ValidateProfileSelection(policy executionbackend.ExecutionPolicy, agent str
 	if err := selected.Validate(); err != nil {
 		return err
 	}
-	return CheckPolicy(policy, selected.Settings.Settings)
+	return CheckPolicy(selected.Settings.Settings)
 }
 
 // ProfileConfig is owned by the remote implementation codec.

@@ -6,12 +6,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
-
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 type LaunchConfig struct {
-	Policy         executionbackend.ExecutionPolicy
 	Executable     string
 	Args           []string
 	Profile        string
@@ -24,7 +21,10 @@ type LaunchConfig struct {
 // LaunchServer starts the fixed native app-server. The caller supplies its
 // platform process starter and persists the returned identity before a turn.
 func LaunchServer[T any](config LaunchConfig, start func(*exec.Cmd) (T, error), environment func([]string) []string) (identity T, process *os.Process, endpoint string, err error) {
-	permissions, err := CompilePolicy(config.Policy, runtime.GOOS, "local", "codex", config.WindowsSandbox, config.Profile, config.Args)
+	if err = (Config{Sandbox: config.Sandbox, WindowsSandbox: config.WindowsSandbox, Args: config.Args, Profile: config.Profile}).Validate(runtime.GOOS); err != nil {
+		return identity, nil, "", err
+	}
+	permissions, err := NativePermissions(runtime.GOOS, "local", "codex")
 	if err != nil {
 		return identity, nil, "", err
 	}

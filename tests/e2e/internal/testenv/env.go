@@ -214,16 +214,12 @@ func (s *Scenario) NewProject(name string) *Project {
 	p.git(p.Repo, "remote", "set-url", "origin", p.RemoteURL)
 	s.Must(controlled.Write(p.Provider, controlled.State{GitURL: "http://" + address + "/e2e/project.git"}))
 	query := map[string]any{"executable": s.Run.Helper, "args": []string{"provider", "--e2e-state", p.Provider}}
-	policy := map[string]any{"filesystem": map[string]any{"read_scope": "host", "write_scope": "workspace", "git_metadata_write": true}, "network": "allow", "escalation": "deny"}
-	if s.Run.Level == "L3" {
-		policy = fullAccessPolicy()
-	}
 	s.Must(controlled.Write(p.Config, map[string]any{
 		"repository": p.Repo, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v1", "worktree_root": filepath.Join(p.Home, "worktrees"), "claimant": "e2e", "git": map[string]any{"executable": s.Run.Helper, "args": []string{"git"}},
-		"publication_policy": map[string]any{"publisher": "worker"}, "execution_policy": policy,
-		"pr": map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "e2e/project", "query": query, "close": query}, "task_poll": "100ms", "pr_poll": "100ms", "heartbeat": "100ms", "command_timeout": "30s", "shutdown_grace": "5s",
+		"publication_policy": map[string]any{"publisher": "worker"},
+		"pr":                 map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "e2e/project", "query": query, "close": query}, "task_poll": "100ms", "pr_poll": "100ms", "heartbeat": "100ms", "command_timeout": "30s", "shutdown_grace": "5s",
 	}))
-	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 2, "execution_profiles": []any{map[string]any{"id": "controlled", "name": "Controlled E2E", "host": "local", "agent": "codex", "implementation_configs": []any{map[string]any{"implementation_key": "codex.worker-profile", "codec_version": 1, "payload": map[string]any{"executable": s.Run.Helper}}}}}, "default_execution_profile": "controlled"}))
+	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 2, "execution_profiles": []any{map[string]any{"id": "controlled", "name": "Controlled E2E", "host": "local", "agent": "codex", "implementation_configs": []any{map[string]any{"implementation_key": "codex.worker-profile", "codec_version": 2, "payload": map[string]any{"executable": s.Run.Helper}}}}}, "default_execution_profile": "controlled"}))
 	commandLogs := filepath.Join(s.Output, name+"-commands")
 	s.Must(os.MkdirAll(commandLogs, 0700))
 	p.Driver = driver.Client{Binary: s.Run.Binary, Config: p.Config, Home: p.Home, StatePath: p.Provider, LogDir: commandLogs}

@@ -10,12 +10,11 @@
       "implementation_configs": [
         {
           "implementation_key": "codex.worker-profile",
-          "codec_version": 1,
+          "codec_version": 2,
           "payload": {
             "executable": "codex.exe",
             "model": "gpt-6-luna",
-            "reasoning_effort": "medium",
-            "windows_sandbox": "elevated"
+            "reasoning_effort": "medium"
           }
         }
       ]
@@ -28,12 +27,11 @@
       "implementation_configs": [
         {
           "implementation_key": "codex.worker-profile",
-          "codec_version": 1,
+          "codec_version": 2,
           "payload": {
             "executable": "codex.exe",
             "model": "gpt-6-luna",
-            "reasoning_effort": "xhigh",
-            "windows_sandbox": "elevated"
+            "reasoning_effort": "xhigh"
           }
         }
       ]
@@ -46,12 +44,11 @@
       "implementation_configs": [
         {
           "implementation_key": "codex.worker-profile",
-          "codec_version": 1,
+          "codec_version": 2,
           "payload": {
             "executable": "codex.exe",
             "model": "gpt-6-luna",
-            "reasoning_effort": "xhigh",
-            "windows_sandbox": "unelevated"
+            "reasoning_effort": "xhigh"
           }
         },
         {
@@ -73,12 +70,11 @@
       "implementation_configs": [
         {
           "implementation_key": "codex.worker-profile",
-          "codec_version": 1,
+          "codec_version": 2,
           "payload": {
             "executable": "codex.exe",
             "model": "gpt-6-luna",
-            "reasoning_effort": "medium",
-            "windows_sandbox": "unelevated"
+            "reasoning_effort": "medium"
           }
         },
         {
@@ -100,12 +96,11 @@
       "implementation_configs": [
         {
           "implementation_key": "codex.worker-profile",
-          "codec_version": 1,
+          "codec_version": 2,
           "payload": {
             "executable": "codex.exe",
             "model": "gpt-6-luna",
-            "reasoning_effort": "high",
-            "windows_sandbox": "unelevated"
+            "reasoning_effort": "high"
           }
         },
         {

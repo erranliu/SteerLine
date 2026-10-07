@@ -88,7 +88,7 @@ func fakeCodexCommand(args []string) int {
 		}
 	}
 	if slicesContains(args, "--help") {
-		fmt.Println("--strict-config --sandbox --ask-for-approval never --config")
+		fmt.Println("--strict-config --sandbox --ask-for-approval on-request --config")
 		return 0
 	}
 	if slicesContains(args, "--stdio") {
@@ -638,7 +638,7 @@ func TestMain(m *testing.M) {
 		os.Exit(0)
 	}
 	if len(os.Args) > 1 && os.Args[1] == "--help" {
-		fmt.Println("--strict-config --sandbox --ask-for-approval never --config")
+		fmt.Println("--strict-config --sandbox --ask-for-approval on-request --config")
 		os.Exit(0)
 	}
 	if strings.Contains(joined, "app-server") && !strings.HasPrefix(os.Args[1], "-test") {

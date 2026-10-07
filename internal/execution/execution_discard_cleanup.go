@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,6 +12,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -83,8 +83,8 @@ func (s *Service) reconcileNativeCleanup(ctx context.Context) error {
 					continue // Remote cancellation is not available; keep the exact manual item.
 				}
 				worker := s.workers[run.RunID]
-				if _, err := s.requireBackendCapabilitiesFor(ctx, BackendFor(config, s.runtime.Directory), TargetFor(config, s.runtime.Directory), AgentFor(config), "stop", "observe"); err != nil {
-					s.executionRecord(run).Error = ptr("discarded task worker remains active; verified local stop capability is unavailable: " + clip(err.Error(), 1000))
+				if _, err := executionStopperFor(config, s.runtime.Directory); err != nil {
+					s.executionRecord(run).Error = ptr("discarded task worker remains active; original local stop adapter is unavailable: " + clip(err.Error(), 1000))
 					s.refreshRun(run)
 					if commitErr := s.commitWorker(run); commitErr != nil {
 						return commitErr

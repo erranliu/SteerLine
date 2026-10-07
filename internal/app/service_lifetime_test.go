@@ -20,7 +20,7 @@ func configuredLifecycleApp(t *testing.T) Config {
 	root := t.TempDir()
 	t.Setenv("STEERLINE_HOME", filepath.Join(root, "home"))
 	t.Setenv("STEERLINE_APP_SERVER_FIXTURE", "1")
-	profile := testExecutionProfile(t, "local", "Local", "local", "codex", codexworker.ProfileConfig{Executable: os.Args[0], WindowsSandbox: "elevated"}, nil)
+	profile := testExecutionProfile(t, "local", "Local", "local", "codex", codexworker.ProfileConfig{Executable: os.Args[0]}, nil)
 	writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "local")
 	repository := projectRepo(t)
 	if output, err := exec.Command("git", "-C", repository, "remote", "add", "origin", "https://github.com/owner/repo.git").CombinedOutput(); err != nil {

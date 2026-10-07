@@ -3,10 +3,10 @@ package execution
 import (
 	"context"
 	"errors"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func requireWorkerFlowCapabilitiesWithResolver(ctx context.Context, c Config, directory *ExecutionDirectory, processHost executionbackend.ManagedProcessHost, resolver executionbackend.LifecycleResolver) error {
@@ -60,11 +60,6 @@ func (s *Service) workerFlowContext(run *reconstructiontypes.RunView) (workerFlo
 }
 
 func copyWorkerFlowConfig(c Config) Config {
-	c.ExecutionRequirements = c.ExecutionRequirements.Clone()
-	if c.requirementsEvaluation != nil {
-		e := c.requirementsEvaluation.Clone()
-		c.requirementsEvaluation = &e
-	}
 	c.Git.Args = append([]string(nil), c.Git.Args...)
 	c.ImplementationData = CloneImplementationData(c.ImplementationData)
 	c.ImplementationDisplay = append([]string(nil), c.ImplementationDisplay...)

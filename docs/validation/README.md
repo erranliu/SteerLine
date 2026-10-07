@@ -11,6 +11,7 @@
 | #38 CC5 用户人工确认 | [人工确认原文](manual-acceptance.md) |
 | #234 三窗主界面体验及质量审计 | [主界面验收](console-primary-workspace.md) |
 | #231 三窗及内嵌反馈 | [控制台验收](product-console.md) |
+| 第二批固定原生配置与附加需求删除 | [配置精简验收](product-simplification-02-configuration/README.md) |
 | 原生准备工具证据 | [准备验收](worker-readiness.md) |
 | RoadmapGuide、草稿/正式静态边界与执行技能 | [规划文档检查](roadmap-planning.md) |
 

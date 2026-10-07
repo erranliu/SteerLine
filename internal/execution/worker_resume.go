@@ -2,10 +2,10 @@ package execution
 
 import (
 	"context"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -50,9 +50,6 @@ func (s *Service) resumeWorkerWorkspace(ctx context.Context, task *taskmodel.Tas
 		return false, s.waitWorkerFlow(run, "Saved workspace preparation has no fixed worktree identity")
 	}
 	if _, err := os.Lstat(run.WorkspaceIntent.Path); os.IsNotExist(err) && preparation.Status != "confirmed" {
-		if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
-			return false, err
-		}
 		if err := prepareWorktreeOnly(ctx, c, s.runtime.Directory, s.runtime.ProcessHost, run); err != nil {
 			return false, s.waitWorkerFlow(run, "Original workspace preparation cannot be reconciled: "+err.Error())
 		}

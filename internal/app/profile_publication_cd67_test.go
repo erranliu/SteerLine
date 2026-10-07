@@ -40,7 +40,7 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 	provider.Close = executionbackend.Command{Executable: "gh", Args: []string{"pr", "close", "{pr_url}", "--repo", "{repository}"}}
 	project, err := json.Marshal(map[string]any{
 		"repository": repository, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion,
-		"git": executionbackend.Command{Executable: "git"}, "execution_policy": workspacePolicyFixture(),
+		"git":                executionbackend.Command{Executable: "git"},
 		"publication_policy": map[string]string{"publisher": "worker"}, "pr": provider,
 	})
 	require(t, err)
@@ -67,12 +67,12 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 }
 
 func mixedPublicationProfiles() []ExecutionProfile {
-	localCodex, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex.exe", WindowsSandbox: "elevated"})
-	orcaCodex, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex.exe", WindowsSandbox: "unelevated"})
+	localCodex, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex.exe"})
+	orcaCodex, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex.exe"})
 	orcaOptions, _ := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{Executable: "orca.exe", Shell: "powershell.exe", WaitTimeout: "15m"})
 	return []ExecutionProfile{
-		{ID: "local", Name: "Local", Host: "local", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: localCodex}}},
-		{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaCodex}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaOptions}}},
+		{ID: "local", Name: "Local", Host: "local", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: localCodex}}},
+		{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: orcaCodex}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: orcaOptions}}},
 	}
 }
 

@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -24,16 +24,19 @@ func must[T any](t *testing.T, value T, err error) T {
 func fixture(t *testing.T) reconstruction.Snapshot {
 	t.Helper()
 	e := executionmodel.ExecutionRecord{ProjectIdentity: "project", ExecutionID: "execution", CurrentAttemptID: "attempt", Generation: "generation", ConfigurationDigest: "config", Protocol: string(executionbackend.ProtocolLocalCodexAppServer)}
-	policy := executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "host"}, Network: "allow", Escalation: "deny"}
-	profile := &executionmodel.FixedExecutionProfile{ID: "profile", AcceptedConfigVersion: "accepted", Host: "local", Agent: "codex", ExecutionPolicy: policy}
+	profile := &executionmodel.FixedExecutionProfile{ID: "profile", AcceptedConfigVersion: "accepted", Host: "local", Agent: "codex"}
 	payload, err := json.Marshal(codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "medium"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	data, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{CodecVersion: 1, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: codexworker.ProfileCodecKey, ProjectID: e.ProjectIdentity, ProfileID: profile.ID, AcceptedConfigVersion: profile.AcceptedConfigVersion}, payload)
+	data, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{CodecVersion: 2, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: codexworker.ProfileCodecKey, ProjectID: e.ProjectIdentity, ProfileID: profile.ID, AcceptedConfigVersion: profile.AcceptedConfigVersion}, payload)
 	profile.ImplementationData = []executionbackend.ImplementationDataEnvelope{must(t, data, err)}
-	resource, err := codexworker.NewPolicyResourceEnvelope(codexworker.PolicyResourceIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, codexworker.PolicyResourcePayload{NativeVersion: codexworker.PolicyCodexVersion, Contract: codexworker.FullAccessPolicyContract, Settings: executionbackend.LaunchCommand{Executable: "codex"}})
-	e.PolicyResources = &executionmodel.PolicyResources{ImplementationData: must(t, resource, err)}
+	permissions, err := codexworker.NativePermissions("windows", "local", "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resource, err := codexworker.NewPolicyResourceEnvelope(codexworker.PolicyResourceIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, codexworker.PolicyResourcePayload{NativeVersion: codexworker.PolicyCodexVersion, Contract: codexworker.PolicyContract, Settings: executionbackend.LaunchCommand{Executable: "codex", Args: permissions.Args()}})
+	e.PolicyResources = &executionmodel.PolicyResources{WriteRoots: []string{"workspace"}, ImplementationData: must(t, resource, err)}
 	binding, err := codexworker.NewAppServerBindingEnvelope(codexworker.AppServerBindingIdentity{ProjectID: e.ProjectIdentity, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Generation: e.Generation, ConfigDigest: e.ConfigurationDigest}, codexworker.AppServerBinding{Endpoint: "ws://127.0.0.1:12345", SessionID: thread, Generation: "native-generation"})
 	e.ImplementationData = []executionbackend.ImplementationDataEnvelope{must(t, binding, err)}
 	return reconstruction.Snapshot{Executions: []executionmodel.ExecutionRecord{e}, WorkflowRuns: []executionmodel.WorkflowRunRecord{{ExecutionProfile: profile}}}
@@ -41,7 +44,7 @@ func fixture(t *testing.T) reconstruction.Snapshot {
 
 func TestExecutionEvidencePreservesBoundIdentityAndAuthority(t *testing.T) {
 	domain := fixture(t)
-	if err := FullAccess(domain); err != nil {
+	if err := FixedNativeLaunch(domain); err != nil {
 		t.Fatal(err)
 	}
 	model, err := ModelSelection(domain)
@@ -67,7 +70,7 @@ func TestExecutionEvidencePreservesBoundIdentityAndAuthority(t *testing.T) {
 			case "config":
 				e.ConfigurationDigest = "other"
 			}
-			if err := FullAccess(d); err == nil {
+			if err := FixedNativeLaunch(d); err == nil {
 				t.Fatal("foreign permission receipt accepted")
 			}
 			if _, err := Session(*e); err == nil {
@@ -81,7 +84,7 @@ func TestExecutionEvidencePreservesBoundIdentityAndAuthority(t *testing.T) {
 	}
 	domain = fixture(t)
 	domain.Executions[0].PolicyResources = nil
-	if err := FullAccess(domain); err == nil {
+	if err := FixedNativeLaunch(domain); err == nil {
 		t.Fatal("configured authority accepted without launch evidence")
 	}
 }

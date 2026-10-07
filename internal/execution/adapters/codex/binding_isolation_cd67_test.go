@@ -11,8 +11,8 @@ import (
 	"os/exec"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
@@ -56,7 +56,7 @@ func TestCD63BindingCodecIsolation(t *testing.T) {
 		operation := executionbackend.Operation{Version: 1, ID: newID(), RunID: copy.WorkflowRunID, AttemptID: copy.CurrentAttemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Action: string(executionbackend.LifecyclePrepareSession), PayloadDigest: operationDigest(mustJSON(input)), Status: executionbackend.OperationInFlight, Ref: &ref}
 		operation.LifecycleIdentity = &executionbackend.LifecycleOperationIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, ConfigurationDigest: snapshot.ConfigurationDigest, ResourceGeneration: snapshot.ResourceGeneration, InputBindingDigest: executionbackend.LifecycleBindingDigest(snapshot), Ref: snapshot.Ref}
 		startCalled := false
-		lifecycle := codexworker.ExecutionLifecycle{Backend: codexworker.Backend{Config: codexworker.Config{Policy: workspacePolicyFixture(), Executable: os.Args[0], Workspace: workspace, RunDir: t.TempDir(), RunID: copy.WorkflowRunID, ServerDir: serverDir, Sandbox: "workspace-write", WindowsSandbox: "elevated"}, Process: codexworker.ProcessPort{Start: func(*exec.Cmd) (executionbackend.StopHandle, error) {
+		lifecycle := codexworker.ExecutionLifecycle{Backend: codexworker.Backend{Config: codexworker.Config{Executable: os.Args[0], Workspace: workspace, RunDir: t.TempDir(), RunID: copy.WorkflowRunID, ServerDir: serverDir, Sandbox: "workspace-write", WindowsSandbox: "elevated"}, Process: codexworker.ProcessPort{Start: func(*exec.Cmd) (executionbackend.StopHandle, error) {
 			startCalled = true
 			return nil, errors.New("unexpected process start")
 		}, Inspect: func(*executionbackend.ProcessIdentity) string { return "matching process still exists" }, NewGeneration: newID, WriteAtomic: AtomicWrite}}}
@@ -159,10 +159,6 @@ func newID() string {
 }
 
 func AtomicWrite(path string, data []byte) error { return os.WriteFile(path, data, 0600) }
-
-func workspacePolicyFixture() executionbackend.ExecutionPolicy {
-	return executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
-}
 
 func require(t *testing.T, err error) {
 	t.Helper()

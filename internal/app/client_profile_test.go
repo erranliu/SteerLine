@@ -9,8 +9,8 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
@@ -27,14 +27,14 @@ func TestCLIExecutionProfileIsBoundIntoStartTaskRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	workerPayload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: os.Args[0], WindowsSandbox: "unelevated"})
+	workerPayload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: os.Args[0]})
 	hostPayload, _ := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{Executable: "fixture-host", Shell: "cmd.exe", WaitTimeout: "1m"})
 	config := Config{
 		Repository: repository, Git: executionbackend.Command{Executable: "git"},
-		ExecutionPolicy:   executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"},
+
 		PublicationPolicy: executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker},
 		PR:                executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: os.Args[0]}},
-		ExecutionProfiles: []execution.ExecutionProfile{{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: workerPayload}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: hostPayload}}}},
+		ExecutionProfiles: []execution.ExecutionProfile{{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: workerPayload}, {ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: hostPayload}}}},
 	}
 	config.ProcessHost = host
 	config.ExecutionDirectory = directory

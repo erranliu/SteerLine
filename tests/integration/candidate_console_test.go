@@ -30,9 +30,9 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	f := newLifecycleProject(t, "local")
 	var profiles []any
 	for i := 0; i < 6; i++ {
-		payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: os.Args[0], Model: fmt.Sprintf("fixture-model-%d", i), WindowsSandbox: "unelevated"})
+		payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: os.Args[0], Model: fmt.Sprintf("fixture-model-%d", i)})
 		require(t, err)
-		profiles = append(profiles, map[string]any{"id": fmt.Sprintf("p%d", i), "name": fmt.Sprintf("隔离方案%d", i), "host": "local", "agent": "codex", "implementation_configs": []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload}}})
+		profiles = append(profiles, map[string]any{"id": fmt.Sprintf("p%d", i), "name": fmt.Sprintf("隔离方案%d", i), "host": "local", "agent": "codex", "implementation_configs": []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload}}})
 	}
 	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), mustJSON(map[string]any{"version": 2, "default_execution_profile": "p0", "execution_profiles": profiles}), 0600))
 	var err error

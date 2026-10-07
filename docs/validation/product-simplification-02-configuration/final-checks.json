@@ -1,0 +1,95 @@
+{
+  "targeted-fixed": {
+    "passed": true,
+    "complete": true,
+    "test_count": 23,
+    "passed_tests": 23,
+    "skipped_tests": 0
+  },
+  "wiring-native-fixed": {
+    "passed": true,
+    "complete": true,
+    "test_count": 5,
+    "passed_tests": 5,
+    "skipped_tests": 0
+  },
+  "remote-fixed": {
+    "passed": true,
+    "complete": true,
+    "test_count": 19,
+    "passed_tests": 18,
+    "skipped_tests": 1
+  },
+  "resources-fixed": {
+    "passed": true,
+    "complete": true,
+    "test_count": 171,
+    "passed_tests": 170,
+    "skipped_tests": 1
+  },
+  "native-local-http": {
+    "complete": true,
+    "development": {
+      "nonce": "acaca041766013c66c913b68b57633f0",
+      "sibling_denied": true,
+      "project_test": true,
+      "commit": "bd10f295801a76e316d3c17fed4b4c4593211e9c",
+      "pushed": "bd10f295801a76e316d3c17fed4b4c4593211e9c"
+    },
+    "recovery": null,
+    "review_marker_written": true,
+    "uac_observed": false,
+    "uac_observation": "no administrator initialization or launch requested; capture records native output"
+  },
+  "native-orca-verified": {
+    "complete": true,
+    "development": {
+      "nonce": "f90f68de35340fcbbfb3e9fbd2ad694c",
+      "sibling_denied": true,
+      "project_test": true,
+      "commit": "9eb77caba16dd444fe5c6bac404c9f7de4ba2c43",
+      "pushed": "9eb77caba16dd444fe5c6bac404c9f7de4ba2c43"
+    },
+    "recovery": {
+      "SessionAvailable": true,
+      "ManagedProcess": true,
+      "ProcessAbsent": false
+    },
+    "review_marker_written": true,
+    "uac_observed": false,
+    "uac_observation": "no administrator initialization or launch requested; capture records native output"
+  },
+  "source-final": {
+    "passed": true,
+    "complete": true,
+    "test_count": 35,
+    "passed_tests": 35,
+    "skipped_tests": 0
+  },
+  "post-sync": {
+    "passed": true,
+    "complete": true,
+    "test_count": 9,
+    "passed_tests": 9,
+    "skipped_tests": 0
+  },
+  "cleanup": {
+    "owned_orca_worktrees_removed": 8,
+    "copied_authentication_files_removed": true,
+    "scope": "exact new PS2 fixture IDs/paths only"
+  },
+  "l1-release": {
+    "passed": true,
+    "complete": true,
+    "group_count": 12,
+    "passed_groups": 12,
+    "execution_seconds": 1159.5207554
+  },
+  "l1-main-sync": {
+    "passed": true,
+    "complete": true,
+    "group_count": 12,
+    "passed_groups": 12,
+    "execution_seconds": 113.9189652
+  }
+}

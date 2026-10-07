@@ -1,0 +1,233 @@
+{
+  "candidate": "C:\\Users\\lmas1\\orca\\workspaces\\repo\\ps2-b1f9eb4d0c19",
+  "complete": true,
+  "development": {
+    "nonce": "f90f68de35340fcbbfb3e9fbd2ad694c",
+    "sibling_denied": true,
+    "project_test": true,
+    "commit": "9eb77caba16dd444fe5c6bac404c9f7de4ba2c43",
+    "pushed": "9eb77caba16dd444fe5c6bac404c9f7de4ba2c43"
+  },
+  "execution": {
+    "policy_resources": {
+      "version": 3,
+      "digest": "43708c58b2b2329a07b89a1e80aeb7f87753cecf88cf252da7f066b20fdaf884",
+      "profile_digest": "6ec3d40fd8245b80e54fd1987161885699490a5aebcdc84f4b3273f81aec92af",
+      "workspace": "C:\\Users\\lmas1\\orca\\workspaces\\repo\\ps2-b1f9eb4d0c19",
+      "write_roots": [
+        "C:\\Users\\lmas1\\orca\\workspaces\\repo\\ps2-b1f9eb4d0c19",
+        "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-orca-3398420067\\repo\\.git\\objects",
+        "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-orca-3398420067\\repo\\.git\\refs",
+        "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-orca-3398420067\\repo\\.git\\logs",
+        "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-orca-3398420067\\repo\\.git\\worktrees\\ps2-b1f9eb4d0c19"
+      ],
+      "temporary_roots": [],
+      "implementation_data": {
+        "version": 1,
+        "codec_version": 2,
+        "purpose": "execution-resources",
+        "implementation_key": "codex.policy-resources",
+        "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-ps2-orca-3398420067\\repo\\.git",
+        "execution_id": "b1f9eb4d0c19bf03fb036256f672f7ec",
+        "attempt_id": "6f3970f5bcf5830d244e83db9a063349",
+        "generation": "9538e2450f5f4858f4e536b57759da29",
+        "config_digest": "6ec3d40fd8245b80e54fd1987161885699490a5aebcdc84f4b3273f81aec92af",
+        "digest": "f3dfee93e58f430daeb76498b88e73c7864b96f8c8fa360501d4b79f4a837ddc",
+        "payload": {
+          "native_version": "codex-cli 0.159.2",
+          "contract": "codex-policy-v2:0.159.2:unelevated:explicit-roots:no-temp:auto_review",
+          "settings": {
+            "Executable": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+            "Args": [
+              "--model",
+              "gpt-6-luna",
+              "--config",
+              "model_reasoning_effort=medium",
+              "--no-daemon",
+              "--strict-config",
+              "--config",
+              "sandbox_mode=workspace-write",
+              "--config",
+              "windows.sandbox=unelevated",
+              "--config",
+              "approval_policy=on-request",
+              "--config",
+              "approvals_reviewer=auto_review",
+              "--config",
+              "sandbox_workspace_write.writable_roots=[]",
+              "--config",
+              "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+              "--config",
+              "sandbox_workspace_write.exclude_slash_tmp=true",
+              "--config",
+              "sandbox_workspace_write.network_access=true",
+              "--add-dir",
+              "C:\\Users\\lmas1\\orca\\workspaces\\repo\\ps2-b1f9eb4d0c19",
+              "--add-dir",
+              "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-orca-3398420067\\repo\\.git\\objects",
+              "--add-dir",
+              "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-orca-3398420067\\repo\\.git\\refs",
+              "--add-dir",
+              "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-orca-3398420067\\repo\\.git\\logs",
+              "--add-dir",
+              "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-orca-3398420067\\repo\\.git\\worktrees\\ps2-b1f9eb4d0c19",
+              "--cd",
+              "C:\\Users\\lmas1\\orca\\workspaces\\repo\\ps2-b1f9eb4d0c19"
+            ],
+            "WorkingDirectory": "C:\\Users\\lmas1\\orca\\workspaces\\repo\\ps2-b1f9eb4d0c19",
+            "EnvironmentRefs": null
+          }
+        }
+      }
+    },
+    "generation": "9538e2450f5f4858f4e536b57759da29",
+    "configuration_digest": "6ec3d40fd8245b80e54fd1987161885699490a5aebcdc84f4b3273f81aec92af",
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-ps2-orca-3398420067\\repo\\.git",
+    "execution_id": "b1f9eb4d0c19bf03fb036256f672f7ec",
+    "current_attempt_id": "6f3970f5bcf5830d244e83db9a063349",
+    "workflow_run_id": "e6d384480c6ce97a1e7ee23c76254be9",
+    "process": {
+      "kind": "orca",
+      "terminal": "term_796d190b-db61-4f02-b280-ecd3adb26311",
+      "runtime_id": "f2df0f50-5dfa-4828-9766-4123851ab5a5",
+      "incarnation": "666f9a2e-2646-4f91-a1c4-a5cd123d8c17",
+      "worktree_id": "e0748205-f47a-4e07-bda6-c102324d6d23::C:/Users/lmas1/orca/workspaces/repo/ps2-b1f9eb4d0c19"
+    },
+    "target": {
+      "id": "orca:a5e52fcb3dc3e41be50bff53"
+    },
+    "workspace": {
+      "repository": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-ps2-orca-3398420067\\repo\\.git",
+      "worktree": "C:\\Users\\lmas1\\orca\\workspaces\\repo\\ps2-b1f9eb4d0c19",
+      "branch": "ps2-b1f9eb4d0c19",
+      "verified_at": "0001-01-01T00:00:00Z"
+    },
+    "status": "",
+    "created_at": "0001-01-01T00:00:00Z",
+    "updated_at": "0001-01-01T00:00:00Z"
+  },
+  "host": "orca",
+  "native_journal": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-orca-3398420067\\codex\\sessions\\2026\\10\\07\\rollout-2026-10-07T09-54-49-01a11412-0adb-77f1-8238-740fe601715b.jsonl",
+  "profile": {
+    "implementation_version": "builtin-execution-v3",
+    "implementation_key": "orca/orca_terminal_v2/codex",
+    "implementation_data": [
+      {
+        "version": 1,
+        "codec_version": 2,
+        "purpose": "profile-config",
+        "implementation_key": "codex.worker-profile",
+        "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-ps2-orca-3398420067\\repo\\.git",
+        "profile_id": "project-default",
+        "accepted_config_version": "fixture-accepted-v1",
+        "digest": "13cd0f85803d922f32aee922d52a50d73fd9cc3b9f390265e8b219ce4f879b58",
+        "payload": {
+          "executable": "C:/Users/lmas1/.local/bin/node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe",
+          "model": "gpt-6-luna",
+          "reasoning_effort": "medium"
+        }
+      },
+      {
+        "version": 1,
+        "codec_version": 1,
+        "purpose": "profile-config",
+        "implementation_key": "orca.worker-profile",
+        "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-ps2-orca-3398420067\\repo\\.git",
+        "profile_id": "project-default",
+        "accepted_config_version": "fixture-accepted-v1",
+        "digest": "6dc185dc2e1a3f0674549170fb02fac062349005021fc90dfc2559c7567fad9d",
+        "payload": {
+          "executable": "orca",
+          "args": null,
+          "shell": "powershell.exe",
+          "wait_timeout": "4m",
+          "keep_terminal": false,
+          "activate": false
+        }
+      }
+    ],
+    "implementation_display": [
+      "权限：workspace-write",
+      "Windows 权限：unelevated",
+      "审批：on-request · auto_review",
+      "Model：gpt-6-luna",
+      "Reasoning effort：medium"
+    ],
+    "publication_policy": {
+      "publisher": "worker"
+    },
+    "publication": {
+      "provider": {
+        "kind": "command",
+        "base_url": "https://github.com",
+        "repository": "owner/repo",
+        "token_env": "",
+        "query": {
+          "executable": "C:\\Program Files\\GitHub CLI\\gh.exe",
+          "args": null
+        },
+        "close": {
+          "executable": "",
+          "args": null
+        }
+      },
+      "git": {
+        "executable": "C:\\Program Files\\Git\\cmd\\git.exe",
+        "args": null
+      },
+      "remote": "",
+      "remote_url": "",
+      "base_branch": "main",
+      "authentication_refs": [
+        "SSH_AUTH_SOCK",
+        "GIT_CONFIG_GLOBAL",
+        "GIT_SSH_COMMAND",
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "GH_CONFIG_DIR"
+      ]
+    },
+    "version": 7,
+    "accepted_config_version": "fixture-accepted-v1",
+    "id": "project-default",
+    "name": "Project default",
+    "digest": "6ec3d40fd8245b80e54fd1987161885699490a5aebcdc84f4b3273f81aec92af",
+    "host": "orca",
+    "agent": "codex"
+  },
+  "recovery": {
+    "SessionAvailable": true,
+    "ManagedProcess": true,
+    "ProcessAbsent": false
+  },
+  "review_marker_written": true,
+  "review_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-orca-3398420067\\approved-review-marker.txt",
+  "root": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-orca-3398420067",
+  "send_receipt": {
+    "send": {
+      "handle": "term_796d190b-db61-4f02-b280-ecd3adb26311",
+      "accepted": true,
+      "bytesWritten": 1105,
+      "prompt": {
+        "requestId": "3b3342fe-c0e4-4809-be3a-5299e871bb35",
+        "stages": [
+          "input_accepted",
+          "turn_started"
+        ],
+        "provider": "codex",
+        "observation": "supported",
+        "processIncarnation": "666f9a2e-2646-4f91-a1c4-a5cd123d8c17",
+        "generation": 92,
+        "baselineWorkingSequence": 1,
+        "baselineExplicitWorkingStartedAt": null,
+        "baselinePermissionSequence": 0
+      }
+    },
+    "mutation": {
+      "requestId": "3b3342fe-c0e4-4809-be3a-5299e871bb35",
+      "replayed": false
+    }
+  },
+  "uac_observation": "no administrator initialization or launch requested; capture records native output",
+  "uac_observed": false
+}

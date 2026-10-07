@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./tests/integration",
+    "-run",
+    "^Test(NativeOrcaFixed|PS2Fixed|RemotePublication|PublicationAndPermission)",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-07T01:10:29.3652169Z",
+  "finished_at": "2026-10-07T01:14:27.8428446Z",
+  "wall_seconds": 238.4833989,
+  "environment": {
+    "source_commit": "172cea6c6530b6693b742324a9c1d4f9aeb17b6d",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled",
+    "worktree_dirty_at_sampling": true,
+    "worktree_status_sha256": "9ad132b698da4d5759227cf899801b8c6f7e39c2fdfe333c4fcf521dafd2bf79"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 1,
+    "passed_packages": 1,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 5,
+    "passed_tests": 5,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {"package": "github.com/erranliu/SteerLine/tests/integration", "status": "pass", "elapsed_seconds": 235.488}
+    ],
+    "tests": [
+      {"package": "github.com/erranliu/SteerLine/tests/integration", "name": "TestNativeOrcaFixedLunaLaunchReconcilesRenamedTerminalAfterRestart", "status": "pass", "elapsed_seconds": 120.68},
+      {"package": "github.com/erranliu/SteerLine/tests/integration", "name": "TestNativeOrcaFixedLunaLaunchReconcilesOriginalTerminal", "status": "pass", "elapsed_seconds": 84.66},
+      {"package": "github.com/erranliu/SteerLine/tests/integration", "name": "TestPS2FixedConfigurationKeepsMandatoryChecks", "status": "pass", "elapsed_seconds": 13.04},
+      {"package": "github.com/erranliu/SteerLine/tests/integration", "name": "TestRemotePublicationClaimRequiresPermissionEvidence", "status": "pass", "elapsed_seconds": 10.93},
+      {"package": "github.com/erranliu/SteerLine/tests/integration", "name": "TestPublicationAndPermissionChecksRemainCombined", "status": "pass", "elapsed_seconds": 4.29}
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 235.4825098,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/product-simplification-02-configuration/wiring-native-fixed/go-test.jsonl",
+  "stderr_log": "docs/validation/product-simplification-02-configuration/wiring-native-fixed/go-test.stderr.txt",
+  "evidence_selection": {
+    "kind": "selected original runner report",
+    "original_report_sha256": "ceaf21786f9d757b60d358d62566353a7c51492ab14010574794c8d028cf0dae",
+    "original_report_local": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-ps2-original-reports-before-public-selection\\wiring-native-fixed.json",
+    "omitted": "full worktree status and duplicated slowest_tests; original timestamps, commands, source/environment, assigned tests and test outcomes retained"
+  }
+}

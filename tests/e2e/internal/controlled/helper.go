@@ -32,7 +32,6 @@ func argument(args []string, key string) string {
 }
 
 func Main(args []string) error {
-
 	if len(args) > 0 && args[0] == "git-server" {
 		return gitServer(argument(args, "--root"), argument(args, "--address-file"), argument(args, "--e2e-state"))
 	}
@@ -67,7 +66,7 @@ func Main(args []string) error {
 	}
 	for _, a := range args {
 		if a == "--help" {
-			fmt.Println("app-server --listen --stdio --strict-config --sandbox --ask-for-approval never --config")
+			fmt.Println("app-server --listen --stdio --strict-config --sandbox --ask-for-approval on-request --config")
 			return nil
 		}
 	}

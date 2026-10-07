@@ -2,8 +2,6 @@ package execution
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -67,15 +65,6 @@ func TestExecutionRecordsPinBindingsAndOperations(t *testing.T) {
 	}
 }
 
-func TestCapabilityReportRejectsRetiredWholeRunActions(t *testing.T) {
-	for _, name := range []string{"reply_continue", "retry"} {
-		report := executionbackend.CapabilityReport{Version: 1, Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Target: executionbackend.ExecutionTarget{ID: "local"}, Agent: executionbackend.AgentSpec{Name: "fixture"}, PlatformVersion: "fixture", CheckedAt: now(), Capabilities: []executionbackend.Capability{{Name: name, Status: executionbackend.CapabilityUnsupported}}}
-		if err := (executionRecords{root: t.TempDir(), resources: fixtureResources{}}).saveCapabilityReport(report); err == nil {
-			t.Fatalf("capability report retained retired whole-run action %q", name)
-		}
-	}
-}
-
 func TestLocalReadOutputUsesBoundedExecutionCursor(t *testing.T) {
 	runID := newID()
 	attemptID := runID
@@ -128,34 +117,5 @@ func TestOperationRecordRejectsCorruptionBeforeUse(t *testing.T) {
 	}
 	if _, err := r.loadOperation(run, attempt, "op"); err == nil {
 		t.Fatal("expected operation path conflict to be reported")
-	}
-}
-
-func TestNativeCapabilityCheckKeepsFixedAgent(t *testing.T) {
-	c := workerContextConfigFixture()
-	c.RunDir = t.TempDir()
-	resources := fixtureResources{}
-	backend := testBackendFor(c)
-	fixedTarget, fixedAgent := testTargetFor(c), AgentFor(c)
-	report, err := backend.Probe(context.Background(), fixedTarget, fixedAgent)
-	require(t, err)
-	data := []byte("isolated neutral workspace inspection fact")
-	sum := sha256.Sum256(data)
-	evidencePath := filepath.Join(c.RunDir, "fixture-evidence.json")
-	require(t, fixtureAtomicWrite(evidencePath, data))
-	for i := range report.Capabilities {
-		if report.Capabilities[i].Name == "workspace_inspection" {
-			report.Capabilities[i].Status = executionbackend.CapabilityVerified
-			report.Capabilities[i].Evidence = evidencePath + "#sha256=" + hex.EncodeToString(sum[:])
-		}
-	}
-	require(t, (executionRecords{root: c.RunDir, resources: resources}).saveCapabilityReport(report))
-	c.Agent = "changed-default"
-	s := &Service{Config: c, records: executionRecords{root: c.RunDir, resources: resources}, resources: resources}
-	if _, err := s.requireBackendCapabilitiesFor(context.Background(), backend, fixedTarget, fixedAgent, "workspace_inspection"); err != nil {
-		t.Fatalf("fixed capability was lost after changing the default agent: %v", err)
-	}
-	if _, err := s.requireBackendCapabilities(context.Background(), backend, "workspace_inspection"); err == nil {
-		t.Fatal("new default agent reused evidence for another fixed agent")
 	}
 }

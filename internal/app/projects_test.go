@@ -12,7 +12,7 @@ import (
 
 func minimalConfig(repo string) Config {
 	return Config{
-		PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(),
+		PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(),
 		TaskAuthority:    "native",
 		WorkflowProtocol: WorkerFlowVersion,
 		Repository:       repo,

@@ -70,7 +70,7 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 		t.Fatalf("fixture remote: %v: %s", err, output)
 	}
 	commit := nativeSeedCommit
-	c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), WorkflowProtocol: executionmodel.Version, Repository: repo, Remote: "origin", Branch: "main", CommandTimeout: "10s", Git: executionbackend.Command{Executable: "git"}}
+	c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), WorkflowProtocol: executionmodel.Version, Repository: repo, Remote: "origin", Branch: "main", CommandTimeout: "10s", Git: executionbackend.Command{Executable: "git"}}
 	c.Git = executionbackend.Command{Executable: os.Args[0], Args: []string{"--fake", "publication-git", "git"}}
 	setNeutralProfile(t, &c, neutralSettings{Executable: os.Args[0]})
 	key, err := fixtureRepositoryStateKey(c)

@@ -42,12 +42,9 @@ type neutralBinding struct {
 }
 
 func neutralCodecs() []ImplementationProfileCodec {
-	return []ImplementationProfileCodec{{Key: neutralProfileKey, Version: 1, Normalize: func(data []byte, policy executionbackend.ExecutionPolicy, host, agent string) ([]byte, []string, error) {
+	return []ImplementationProfileCodec{{Key: neutralProfileKey, Version: 1, Normalize: func(data []byte, host, agent string) ([]byte, []string, error) {
 		var value neutralSettings
 		if err := decode(data, &value); err != nil {
-			return nil, nil, err
-		}
-		if err := policy.Validate(); err != nil {
 			return nil, nil, err
 		}
 		if value.Executable == "" {
@@ -79,10 +76,7 @@ func newNeutralDirectory(agents ...string) (*ExecutionDirectory, error) {
 		Lifecycle: func(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 			return &neutralLifecycle{setup: setup.Clone()}, nil
 		},
-		ProbeRequirements: func(_ context.Context, c Config) (executionbackend.CapabilityReport, error) {
-			return capabilityReport(key.Backend, key.Protocol, TargetFor(c, directory), AgentFor(c), "fixture-version-1"), nil
-		},
-		QueryTool:      queryHostRequirementTool,
+
 		ValidateConfig: func(context.Context, Config) error { return nil }, Preflight: func(context.Context, Config) error { return nil }, PrepareClaim: func(context.Context, Config) (ClaimPreparation, error) { return ClaimPreparation{}, nil }, ReadinessRequired: func(Config) bool { return false },
 		BuildPolicyResource: neutralBuildPolicyResource, VerifyPolicyResource: neutralVerifyPolicyResource,
 		LinkedWorktreeWriteArgs: func(context.Context, Config, string) ([]string, error) { return nil, nil }, ValidTurnID: func(value string) bool { return value != "" }, CleanupCapabilities: []string{"start", "observe", "stop", "workspace_inspection", "output_reading"},
@@ -175,7 +169,7 @@ func withNeutralProfiles(c Config, profiles []ExecutionProfile, defaultID string
 	if c.WorktreeRoot == "" && c.RunDir != "" {
 		c.WorktreeRoot = filepath.Join(c.RunDir, "worktrees")
 	}
-	catalog := ProfileCatalog{Base: c, Directory: directory, Profiles: append([]ExecutionProfile(nil), profiles...), DefaultID: defaultID, Global: true, PolicySource: "fixture:config"}
+	catalog := ProfileCatalog{Base: c, Directory: directory, Profiles: append([]ExecutionProfile(nil), profiles...), DefaultID: defaultID, Global: true}
 	selectedID := defaultID
 	if selectedID == "" && len(profiles) == 1 {
 		selectedID = profiles[0].ID
@@ -212,11 +206,11 @@ func neutralFixtureRuntime(config Config) (RuntimeDependencies, ProfileCatalog) 
 		panic(err)
 	}
 	profile := ExecutionProfile{directory: directory, ID: config.selectedProfileID, Name: "Fixture", Host: config.Host, Agent: config.Agent,
-		ExecutionPolicy: config.ExecutionPolicy, PublicationPolicy: config.PublicationPolicy, Publication: config.publicationSettings(),
-		ExecutionRequirements: config.ExecutionRequirements.Clone(), AcceptedConfigVersion: config.acceptedConfigVersion, PolicySource: "fixture:config",
+		PublicationPolicy: config.PublicationPolicy, Publication: config.publicationSettings(),
+		AcceptedConfigVersion: config.acceptedConfigVersion,
 		ImplementationConfigs: implementationInputsFromData(config.ImplementationData), ImplementationData: CloneImplementationData(config.ImplementationData), ImplementationDisplay: append([]string(nil), config.ImplementationDisplay...), projectIdentity: config.Identity()}
 	profile.directory = directory
-	catalog := ProfileCatalog{Base: config, Directory: directory, Profiles: []ExecutionProfile{profile}, DefaultID: profile.ID, Global: true, PolicySource: "fixture:config"}
+	catalog := ProfileCatalog{Base: config, Directory: directory, Profiles: []ExecutionProfile{profile}, DefaultID: profile.ID, Global: true}
 	rememberNeutralCatalog(config, catalog)
 	return RuntimeDependencies{Directory: directory, ProcessHost: testProcessHost{}, Profiles: neutralTestProfilePort{neutralFixtureCatalog{directory: directory, catalog: catalog}}}, catalog
 }

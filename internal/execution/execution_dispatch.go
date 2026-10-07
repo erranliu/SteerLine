@@ -53,14 +53,7 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 				return err
 			}
 		} else {
-			entry, registryErr := registrationFor(c, s.runtime.Directory)
-			if registryErr != nil {
-				return registryErr
-			}
-			required := append([]string(nil), entry.CleanupCapabilities...)
-			if _, err = s.requireBackendCapabilitiesFor(ctx, BackendFor(c, s.runtime.Directory), TargetFor(c, s.runtime.Directory), AgentFor(c), required...); err != nil {
-				return err
-			}
+			return errors.New("unsupported workflow format; preserve original state")
 		}
 	}
 	for _, task := range ready {

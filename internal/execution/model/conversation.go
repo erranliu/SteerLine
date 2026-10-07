@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	ConversationVersion       = 2
+	ConversationVersion      = 2
 	MaxConversationBodyBytes = 16 << 20
 )
 

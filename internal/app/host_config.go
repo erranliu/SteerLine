@@ -10,7 +10,6 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution"
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
@@ -32,15 +31,6 @@ func (applicationControlValidation) RequestDigest(request productapi.ControlRequ
 }
 func (applicationControlValidation) TerminalStatus(status string) bool {
 	return execution.TerminalControlStatus(status)
-}
-
-type applicationCapabilityValidation struct{}
-
-func (applicationCapabilityValidation) Key(report executionbackend.CapabilityReport) string {
-	return execution.CapabilityReportKey(report)
-}
-func (applicationCapabilityValidation) Verify(root string, report executionbackend.CapabilityReport) error {
-	return execution.VerifyStoredCapabilityReport(root, report)
 }
 
 // hostRuntimeConfig is the only conversion from the app's broad configured
@@ -85,7 +75,7 @@ func hostRuntimeConfig(ctx context.Context, config Config) (host.Config, error) 
 			}
 			return ensureRunDirOutsideRepository(ctx, resolved)
 		},
-		CapabilityValidation: applicationCapabilityValidation{}, ControlValidation: applicationControlValidation{},
+		ControlValidation: applicationControlValidation{},
 	}, nil
 }
 

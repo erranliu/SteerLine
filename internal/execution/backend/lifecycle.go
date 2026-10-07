@@ -730,17 +730,17 @@ type LifecycleSetup struct {
 	ProfileData           []ImplementationDataEnvelope
 	ProfileID             string
 	AcceptedConfigVersion string
-	Policy                ExecutionPolicy
-	ProcessHost           ManagedProcessHost
-	RepositoryPath        string
-	RunDirectory          string
-	CommandTimeout        time.Duration
-	AttemptNumber         int
-	BlockedEnvironment    []string
-	GitExecutable         string
-	GitArgs               []string
-	RemoteName            string
-	TargetBranch          string
+
+	ProcessHost        ManagedProcessHost
+	RepositoryPath     string
+	RunDirectory       string
+	CommandTimeout     time.Duration
+	AttemptNumber      int
+	BlockedEnvironment []string
+	GitExecutable      string
+	GitArgs            []string
+	RemoteName         string
+	TargetBranch       string
 }
 
 func (setup LifecycleSetup) Clone() LifecycleSetup {

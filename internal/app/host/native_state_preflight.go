@@ -2,12 +2,9 @@ package host
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -28,7 +25,7 @@ func preflightNativeStatePath(c Config) error {
 	}
 	path := filepath.Join(c.RunDir, "steerline.db")
 	if _, err := os.Stat(path); err == nil {
-		if err := ensureNativeStateFilesAllowed(c.RunDir, c.CapabilityValidation); err != nil {
+		if err := ensureNativeStateFilesAllowed(c.RunDir); err != nil {
 			return err
 		}
 		if c.ValidateNativeStore == nil {
@@ -38,17 +35,13 @@ func preflightNativeStatePath(c Config) error {
 	} else if !os.IsNotExist(err) {
 		return err
 	}
-	return ensureNativeStateClean(c.RunDir, c.Repository, c.CapabilityValidation)
+	return ensureNativeStateClean(c.RunDir, c.Repository)
 }
 
 func PreflightNativeStatePath(c Config) error { return preflightNativeStatePath(c) }
 
-func EnsureNativeStateClean(runDir, repository string, validators ...CapabilityValidationPort) error {
-	var validator CapabilityValidationPort
-	if len(validators) > 0 {
-		validator = validators[0]
-	}
-	return ensureNativeStateClean(runDir, repository, validator)
+func EnsureNativeStateClean(runDir, repository string) error {
+	return ensureNativeStateClean(runDir, repository)
 }
 
 func ensureRunDirOutsideRepository(c Config) error {
@@ -90,7 +83,7 @@ func ensureNativeRepositoryHasNoBeads(repository string) error {
 	return nil
 }
 
-func ensureNativeStateClean(runDir, repository string, validator CapabilityValidationPort) error {
+func ensureNativeStateClean(runDir, repository string) error {
 	if err := ensureNativeRepositoryHasNoBeads(repository); err != nil {
 		return err
 	}
@@ -110,10 +103,6 @@ func ensureNativeStateClean(runDir, repository string, validator CapabilityValid
 			if err := validateNativeServiceTree(runDir, repository); err != nil {
 				return err
 			}
-		case "execution":
-			if err := validateNativeExecutionArtifacts(filepath.Join(runDir, entry.Name()), validator); err != nil {
-				return err
-			}
 		case "steerline.lock":
 			if err := validateNativeRunLock(filepath.Join(runDir, entry.Name())); err != nil {
 				return err
@@ -125,7 +114,7 @@ func ensureNativeStateClean(runDir, repository string, validator CapabilityValid
 	return nil
 }
 
-func ensureNativeStateFilesAllowed(runDir string, validator CapabilityValidationPort) error {
+func ensureNativeStateFilesAllowed(runDir string) error {
 	entries, err := os.ReadDir(runDir)
 	if err != nil {
 		return err
@@ -154,10 +143,6 @@ func ensureNativeStateFilesAllowed(runDir string, validator CapabilityValidation
 			}
 		case "runs", "worktrees":
 			if err := validateNativeRunDirectories(filepath.Join(runDir, entry.Name())); err != nil {
-				return err
-			}
-		case "execution":
-			if err := validateNativeExecutionArtifacts(filepath.Join(runDir, entry.Name()), validator); err != nil {
 				return err
 			}
 		default:
@@ -240,60 +225,6 @@ func validateNativeControlTree(runDir string) error {
 			var receipt productapi.ControlReceipt
 			if readErr != nil || decode(data, &receipt) != nil || receipt.RequestID != strings.TrimSuffix(entry.Name(), ".json") || receipt.Version != ControlProtocolVersion {
 				return nativeErr("authority_mismatch", "native control receipt is invalid or mismatched")
-			}
-		}
-	}
-	return nil
-}
-
-func validateNativeExecutionArtifacts(root string, validator CapabilityValidationPort) error {
-	info, err := os.Lstat(root)
-	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
-		return nativeErr("authority_mismatch", "native execution evidence root must be a real directory")
-	}
-	children, err := os.ReadDir(root)
-	if err != nil || len(children) != 1 || children[0].Name() != "v1" || !children[0].IsDir() {
-		return nativeErr("authority_mismatch", "native execution evidence contains an unsupported format")
-	}
-	v1 := filepath.Join(root, "v1")
-	for _, folder := range []string{"capabilities", "evidence"} {
-		dir := filepath.Join(v1, folder)
-		entries, readErr := os.ReadDir(dir)
-		if os.IsNotExist(readErr) {
-			continue
-		}
-		if readErr != nil {
-			return readErr
-		}
-		for _, entry := range entries {
-			if nativeAtomicTemp(entry.Name()) {
-				continue
-			}
-			if entry.IsDir() || !regexp.MustCompile(`^[0-9a-f]{64}\.json$`).MatchString(entry.Name()) {
-				return nativeErr("authority_mismatch", "native execution evidence contains an unknown file")
-			}
-			path := filepath.Join(dir, entry.Name())
-			fileInfo, statErr := os.Lstat(path)
-			if statErr != nil || !fileInfo.Mode().IsRegular() || fileInfo.Mode()&os.ModeSymlink != 0 {
-				return nativeErr("authority_mismatch", "native execution evidence must use regular files")
-			}
-			data, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return readErr
-			}
-			if folder == "evidence" {
-				sum := sha256.Sum256(data)
-				if entry.Name() != hex.EncodeToString(sum[:])+".json" {
-					return nativeErr("authority_mismatch", "native execution evidence digest differs from its filename")
-				}
-				continue
-			}
-			var report executionbackend.CapabilityReport
-			if validator == nil || decode(data, &report) != nil || report.Version != 1 || entry.Name() != validator.Key(report)+".json" {
-				return nativeErr("authority_mismatch", "native capability report identity or digest is invalid")
-			}
-			if verifyErr := validator.Verify(filepath.Dir(root), report); verifyErr != nil {
-				return nativeErr("authority_mismatch", "native capability report evidence is invalid: "+verifyErr.Error())
 			}
 		}
 	}

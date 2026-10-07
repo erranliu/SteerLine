@@ -24,10 +24,10 @@ func AppServerLaunch(executable string, args []string, profile, endpoint string)
 }
 
 func ThreadStartParams(worktree, sandbox, model string, dynamicTools []any) (map[string]any, error) {
-	if worktree == "" {
+	if worktree == "" || sandbox != "workspace-write" {
 		return nil, errors.New("Codex app-server thread has no fixed worktree")
 	}
-	params := map[string]any{"cwd": worktree, "sandbox": sandbox, "approvalPolicy": "never"}
+	params := map[string]any{"cwd": worktree, "sandbox": sandbox, "approvalPolicy": "on-request", "approvalsReviewer": "auto_review"}
 	if model != "" {
 		params["model"] = model
 	}
@@ -55,11 +55,6 @@ func TurnStartParams(worktree, threadID, commandID, prompt, sandbox, model, effo
 	}
 	policy := map[string]any{}
 	switch sandbox {
-	case "read-only":
-		policy["type"] = "readOnly"
-		policy["networkAccess"] = false
-	case "danger-full-access":
-		policy["type"] = "dangerFullAccess"
 	case "workspace-write":
 		policy["type"] = "workspaceWrite"
 		policy["writableRoots"] = append([]string(nil), writableRoots...)
@@ -69,7 +64,7 @@ func TurnStartParams(worktree, threadID, commandID, prompt, sandbox, model, effo
 	default:
 		return nil, fmt.Errorf("unsupported Codex sandbox %q", sandbox)
 	}
-	params := map[string]any{"threadId": threadID, "input": []map[string]string{{"type": "text", "text": prompt}}, "clientUserMessageId": commandID, "cwd": worktree, "sandboxPolicy": policy, "approvalPolicy": "never"}
+	params := map[string]any{"threadId": threadID, "input": []map[string]string{{"type": "text", "text": prompt}}, "clientUserMessageId": commandID, "cwd": worktree, "sandboxPolicy": policy, "approvalPolicy": "on-request", "approvalsReviewer": "auto_review"}
 	if model != "" {
 		params["model"] = model
 	}

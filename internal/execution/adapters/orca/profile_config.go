@@ -29,7 +29,7 @@ func NormalizeProfilePayload(payload []byte, host string) ([]byte, []string, err
 	return encoded, nil, err
 }
 
-func ValidateProfileSelection(policy executionbackend.ExecutionPolicy, agent string, codexPayload, orcaPayload []byte) error {
+func ValidateProfileSelection(agent string, codexPayload, orcaPayload []byte) error {
 	codex, err := codexworker.DecodeProfileConfig(codexPayload)
 	if err != nil {
 		return err
@@ -38,10 +38,7 @@ func ValidateProfileSelection(policy executionbackend.ExecutionPolicy, agent str
 	if err != nil {
 		return err
 	}
-	if (policy.Filesystem.WriteScope != "workspace" && policy.Filesystem.WriteScope != "host") || codex.Profile != "" {
-		return errors.New("Orca worker-flow requires a supported project policy and no Codex profile")
-	}
-	if agent != "codex" && (codex.Model != "" || codex.Profile != "" || codex.ReasoningEffort != "") {
+	if agent != "codex" && (codex.Model != "" || codex.ReasoningEffort != "") {
 		return errors.New("Orca model, profile and reasoning_effort overrides require agent=codex")
 	}
 	if codex.Model != "" && orca.Shell != "powershell.exe" && orca.Shell != "pwsh.exe" {
@@ -88,7 +85,7 @@ func (c ProfileConfig) Validate() error {
 func ValidateLocalTargetArgs(args []string) error {
 	for _, arg := range args {
 		if arg == "--environment" || arg == "--pairing-code" || strings.HasPrefix(arg, "--environment=") || strings.HasPrefix(arg, "--pairing-code=") {
-			return errors.New("local Orca target cannot be redirected through orca.args; remote execution_policy requires the remote protocol adapter")
+			return errors.New("local Orca target cannot be redirected through orca.args; remote execution requires the remote protocol adapter")
 		}
 	}
 	return nil

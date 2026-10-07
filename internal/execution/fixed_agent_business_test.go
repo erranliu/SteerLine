@@ -13,11 +13,11 @@ func TestFixedProfileRetainsSelectedAgent(t *testing.T) {
 	directory, err := newNeutralDirectory("fixture", "alternative")
 	require(t, err)
 	for _, agent := range []string{"fixture", "alternative"} {
-		base := Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Host: "local", Agent: agent, WorkflowProtocol: executionmodel.Version}
+		base := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Host: "local", Agent: agent, WorkflowProtocol: executionmodel.Version}
 		base.BindAcceptedConfigVersion("fixture-accepted-v1")
 		profile := ExecutionProfile{ID: "fixture-" + agent, Name: "Fixture " + agent, Host: "local", Agent: agent,
 			ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: neutralProfileKey, CodecVersion: 1, Payload: mustJSON(neutralSettings{Executable: "fixture"})}}}
-		catalog := ProfileCatalog{Base: base, Directory: directory, Profiles: []ExecutionProfile{profile}, DefaultID: profile.ID, Global: true, PolicySource: "fixture:config"}
+		catalog := ProfileCatalog{Base: base, Directory: directory, Profiles: []ExecutionProfile{profile}, DefaultID: profile.ID, Global: true}
 		require(t, catalog.Validate())
 		selected, selectedProfile, err := catalog.ResolveExecutionProfile(profile.ID, "")
 		require(t, err)

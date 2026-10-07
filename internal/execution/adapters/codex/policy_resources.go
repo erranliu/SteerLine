@@ -29,12 +29,12 @@ type PolicyResourceBuildRequest struct {
 	ProfileData      []executionbackend.ImplementationDataEnvelope
 	ProfileIdentity  ProfileConfigIdentity
 	ResourceIdentity PolicyResourceIdentity
-	Policy           executionbackend.ExecutionPolicy
-	Host             string
-	Agent            string
-	GOOS             string
-	Workspace        string
-	LinkedWriteArgs  []string
+
+	Host            string
+	Agent           string
+	GOOS            string
+	Workspace       string
+	LinkedWriteArgs []string
 }
 
 type PolicyVersionProbe func(context.Context, string) (string, error)
@@ -58,7 +58,7 @@ func NewPolicyResourceEnvelope(identity PolicyResourceIdentity, payload PolicyRe
 		return executionbackend.ImplementationDataEnvelope{}, err
 	}
 	return executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{
-		CodecVersion: 1, Purpose: executionbackend.ImplementationResourcePurpose,
+		CodecVersion: 2, Purpose: executionbackend.ImplementationResourcePurpose,
 		ImplementationKey: PolicyResourcesCodecKey, ProjectID: identity.ProjectID,
 		ExecutionID: identity.ExecutionID, AttemptID: identity.AttemptID,
 		Generation: identity.Generation, ConfigDigest: identity.ConfigDigest,
@@ -77,7 +77,7 @@ func BuildPolicyResourceEnvelope(ctx context.Context, request PolicyResourceBuil
 	if err != nil {
 		return BoundPolicyResources{}, err
 	}
-	permissions, err := CompilePolicy(request.Policy, request.GOOS, request.Host, request.Agent, settings.WindowsSandbox, settings.Profile, settings.Args)
+	permissions, err := NativePermissions(request.GOOS, request.Host, request.Agent)
 	if err != nil {
 		return BoundPolicyResources{}, err
 	}
@@ -103,11 +103,11 @@ func BuildPolicyResourceEnvelope(ctx context.Context, request PolicyResourceBuil
 	var command executionbackend.LaunchCommand
 	switch request.Host {
 	case "local":
-		command = executionbackend.LaunchCommand{Executable: native, Args: append(append([]string(nil), settings.Args...), permissions.Args()...), WorkingDirectory: request.Workspace}
+		command = executionbackend.LaunchCommand{Executable: native, Args: append([]string(nil), permissions.Args()...), WorkingDirectory: request.Workspace}
 	case "orca":
 		command, err = ManagedCommand(ManagedCommandOptions{
-			Policy: request.Policy, Host: request.Host, Agent: request.Agent, Executable: native,
-			Args: settings.Args, WindowsSandbox: permissions.WindowsSandbox, Sandbox: permissions.Sandbox,
+			Host: request.Host, Agent: request.Agent, Executable: native,
+			Args: nil, WindowsSandbox: permissions.WindowsSandbox, Sandbox: permissions.Sandbox,
 			Model: settings.Model, ReasoningEffort: settings.ReasoningEffort,
 			WorkingDirectory: request.Workspace, WriteRoots: roots,
 		})
@@ -139,7 +139,7 @@ func profileConfigFromEnvelopes(data []executionbackend.ImplementationDataEnvelo
 	if found == nil {
 		return ProfileConfig{}, errors.New("Codex profile configuration envelope is missing")
 	}
-	if found.CodecVersion != 1 {
+	if found.CodecVersion != ProfileCodecVersion {
 		return ProfileConfig{}, errors.New("unsupported Codex profile configuration version")
 	}
 	if err := found.ValidateProfileIdentity(identity.ProjectID, identity.ProfileID, identity.AcceptedConfigVersion); err != nil {
@@ -149,7 +149,7 @@ func profileConfigFromEnvelopes(data []executionbackend.ImplementationDataEnvelo
 }
 
 func DecodePolicyResourceEnvelope(envelope executionbackend.ImplementationDataEnvelope, identity PolicyResourceIdentity) (PolicyResourcePayload, error) {
-	if envelope.ImplementationKey != PolicyResourcesCodecKey || envelope.CodecVersion != 1 {
+	if envelope.ImplementationKey != PolicyResourcesCodecKey || envelope.CodecVersion != 2 {
 		return PolicyResourcePayload{}, errors.New("unsupported permission resource codec")
 	}
 	if err := envelope.ValidateResourceIdentity(identity.ProjectID, identity.ExecutionID, identity.AttemptID, identity.Generation, identity.ConfigDigest); err != nil {
@@ -159,8 +159,51 @@ func DecodePolicyResourceEnvelope(envelope executionbackend.ImplementationDataEn
 	if err := executionbackend.DecodeStrictJSON(envelope.Payload, &payload, "permission resource payload has trailing JSON"); err != nil {
 		return PolicyResourcePayload{}, err
 	}
-	if (payload.Contract != PolicyContract && payload.Contract != FullAccessPolicyContract) || VerifyPolicyVersion(payload.NativeVersion) != nil || payload.Settings.Executable == "" {
+	if payload.Contract != PolicyContract || VerifyPolicyVersion(payload.NativeVersion) != nil || payload.Settings.Executable == "" {
 		return PolicyResourcePayload{}, errors.New("permission resource evidence is incomplete or unsupported")
 	}
+	if err := validateNativeLaunchArgs(payload.Settings.Args); err != nil {
+		return PolicyResourcePayload{}, err
+	}
 	return payload, nil
+}
+
+func validateNativeLaunchArgs(args []string) error {
+	permissions, _ := NativePermissions("windows", "local", "codex")
+	expected := map[string]string{}
+	for i := 0; i < len(permissions.Args()); i += 2 {
+		key, value, _ := strings.Cut(permissions.Args()[i+1], "=")
+		expected[key] = value
+	}
+	seen := map[string]bool{}
+	for i := 0; i < len(args); i++ {
+		switch args[i] {
+		case "--no-daemon", "--strict-config":
+		case "--model", "--add-dir", "--cd":
+			i++
+			if i >= len(args) || args[i] == "" {
+				return errors.New("native launch has an incomplete argument")
+			}
+		case "--config":
+			i++
+			if i >= len(args) {
+				return errors.New("native launch has an incomplete setting")
+			}
+			key, value, _ := strings.Cut(args[i], "=")
+			if key == "model_reasoning_effort" && ValidReasoningEffort(value) {
+				continue
+			}
+			want, exists := expected[key]
+			if !exists || value != want || seen[key] {
+				return errors.New("native launch setting differs from the fixed contract: " + key)
+			}
+			seen[key] = true
+		default:
+			return errors.New("native launch has an unsupported argument")
+		}
+	}
+	if len(seen) != len(expected) {
+		return errors.New("native launch is missing fixed sandbox/reviewer settings")
+	}
+	return nil
 }

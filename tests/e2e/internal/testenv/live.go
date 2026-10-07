@@ -24,7 +24,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	}
 	p := s.NewProject(name)
 	p.Chain = chain
-	s.Must(native.SeedAuth(s.Run.AuthHome, filepath.Join(p.Home, "codex"), "full-access"))
+	s.Must(native.SeedAuth(s.Run.AuthHome, filepath.Join(p.Home, "codex"), "unelevated"))
 	s.Must(native.TrustProject(filepath.Join(p.Home, "codex"), p.Repo))
 	if strings.HasPrefix(s.ID, "smoke.") || strings.HasPrefix(s.ID, "candidates.") {
 		p.enableGitHub()
@@ -84,7 +84,6 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	s.Must(json.Unmarshal(raw, &config))
 	config["publication_policy"] = map[string]string{"publisher": publisher}
 	config["command_timeout"] = "60s"
-	config["execution_policy"] = fullAccessPolicy()
 	s.Must(controlled.Write(p.Config, config))
 	implementations := native.WorkerImplementationConfigs(codex, orcaConfig)
 	profile := map[string]any{"id": chain, "name": "Real E2E " + chain, "host": host, "agent": "codex", "implementation_configs": implementations}
@@ -326,7 +325,7 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 		s.t.Fatal("native worker did not publish fixture PR")
 	}
 	e := before.Domain.Executions[0]
-	p.AssertFullAccess(before)
+	p.AssertFixedNativeLaunch(before)
 	if e.Process == nil || e.Workspace.Worktree == "" || e.TurnNumber != 1 {
 		s.t.Fatal("native execution identity/turn missing")
 	}
@@ -366,7 +365,7 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	if restart {
 		p.RestartService()
 		after := p.WaitPhase("waiting_pr_merge")
-		p.AssertFullAccess(after)
+		p.AssertFixedNativeLaunch(after)
 		p.Record("after-restart", after)
 		a := after.Domain.Executions[0]
 		originalSession, bindErr := ExecutionSession(e)
@@ -384,7 +383,7 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	}
 	p.Merge()
 	done := p.WaitPhase("completed")
-	p.AssertFullAccess(done)
+	p.AssertFixedNativeLaunch(done)
 	p.Record("completed", done)
 	for _, task := range done.Page.Tasks {
 		if task.TaskID == p.Tasks["a"].ID && (task.Status != "closed" || task.Delivery == nil || task.Delivery.SelectedWorkflowRunID != e.WorkflowRunID) {

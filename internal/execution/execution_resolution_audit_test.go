@@ -2,35 +2,31 @@ package execution
 
 import (
 	"context"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func TestResolutionAuditProfilesDoNotAliasProjectValues(t *testing.T) {
 	c := workerContextConfigFixture()
-	c.requirementsEvaluation = &executionbackend.RequirementsEvaluation{Tools: []executionbackend.RequirementEvidence{{Source: "original"}}}
+
 	before := c.PR.Query.Args[0]
 	catalog := testProfileCatalogFor(c)
 	catalog.Base = c
 	p := catalog.AvailableExecutionProfiles()[0]
-	if p.RequirementsEvaluation == nil || len(p.RequirementsEvaluation.Tools) != 1 {
-		t.Fatal("returned profile lost the configured requirements evidence")
-	}
+
 	p.Publication.Provider.Query.Args[0] = "changed"
-	p.RequirementsEvaluation.Tools[0].Source = "changed"
-	if c.PR.Query.Args[0] != before || c.requirementsEvaluation.Tools[0].Source != "original" {
+	if c.PR.Query.Args[0] != before {
 		t.Fatal("returned profile aliases project configuration")
 	}
 }
 
 func TestResolutionAuditRegistrationRejectsBaseTargetDrift(t *testing.T) {
-	c := withNeutralProfile(Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}, neutralSettings{Executable: "fixture-agent", Target: executionbackend.ExecutionTarget{ID: "fixture:peer", ConnectionID: "peer", ExternalRuntime: "original"}})
+	c := withNeutralProfile(Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}, neutralSettings{Executable: "fixture-agent", Target: executionbackend.ExecutionTarget{ID: "fixture:peer", ConnectionID: "peer", ExternalRuntime: "original"}})
 	dependencies, _ := neutralFixtureRuntime(c)
 	target := TargetFor(c, dependencies.Directory)
 	run := &reconstructiontypes.RunView{Host: c.Host, Agent: c.Agent, Backend: "fixture", Protocol: string(neutralProtocol), Target: target}
@@ -62,53 +58,6 @@ func TestResolutionAuditRestoresOriginalWorkspaceRoot(t *testing.T) {
 	require(t, prepareWorktreeOnly(context.Background(), c, s.runtime.Directory, s.runtime.ProcessHost, run))
 	if _, err = os.Stat(run.WorkspaceIntent.Path); err != nil {
 		t.Fatal("original workspace was not prepared", err)
-	}
-}
-
-func TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents(t *testing.T) {
-	tokenEnv := "STEERLINE_AUDIT_TOKEN"
-	t.Setenv(tokenEnv, "reference-present")
-	r := executionbackend.ExecutionRequirements{Credentials: []executionbackend.CredentialRequirement{{ID: "pr.token_env", Site: "service"}}}
-	s, run := neutralAuditServiceWithRequirements(t, workspacePolicyFixture(), r, tokenEnv)
-	t.Setenv(tokenEnv, "")
-	entry, err := s.workerFlowRegistration(run)
-	require(t, err)
-	if entry.Lifecycle == nil {
-		t.Fatal("original execution has no lifecycle port for observation")
-	}
-	fixed, err := s.workerFlowContext(run)
-	require(t, err)
-	fixed.execution.Status = "active"
-	if err = s.checkCurrentExecutionRequirements(context.Background(), fixed); err == nil {
-		t.Fatal("missing reference did not block new input")
-	}
-	if fixed.execution.Status != "active" {
-		t.Fatal("requirement check overwrote original native liveness")
-	}
-	before := len(s.domain.Operations)
-	if _, err = s.startWorkerOperation(run, "start_worker_turn", "audit-new-intent", struct{}{}); err == nil {
-		t.Fatal("missing reference allowed new native intent")
-	}
-	if len(s.domain.Operations) != before {
-		t.Fatal("rejected requirement created intent")
-	}
-}
-
-func TestResolutionAuditEvidenceCannotChangeUnderOriginalProfileDigest(t *testing.T) {
-	c := workerContextConfigFixture()
-	dependencies, _ := neutralFixtureRuntime(c)
-	c.Repository = t.TempDir()
-	c.ExecutionRequirements.Tools = []executionbackend.ToolRequirement{{ID: "git"}}
-	e, err := evaluateExecutionRequirements(context.Background(), c, dependencies.Directory)
-	require(t, err)
-	c.requirementsEvaluation = &e
-	fixed := testProjectExecutionProfile(c).Freeze(dependencies.Directory, c.Identity())
-	changed := fixed.RequirementsEvaluation.Clone()
-	changed.CheckedAt = changed.CheckedAt.Add(time.Second)
-	fixed.RequirementsEvaluation = &changed
-	fixed.RequirementsEvidenceDigest = requirementsEvidenceDigest(&changed)
-	if neutralVerifyFixedExecutionProfile(fixed) {
-		t.Fatal("evidence replacement retained original full profile digest")
 	}
 }
 

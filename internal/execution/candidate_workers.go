@@ -4,13 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"strings"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -69,7 +69,7 @@ func verifyKnownCandidatePRs(ctx context.Context, config Config, directory *Exec
 			if err := publication.ValidateWorkerPRIdentity(info, url, fixed.PR.Repository, w.Branch, e.Workspace.Branch); err != nil {
 				return nil, nativeErr("merge_state_unknown", "known PR differs from its fixed candidate branch: "+url)
 			}
-			results = append(results, executionmodel.VerifiedCandidatePR{w.WorkflowRunID, url, info})
+			results = append(results, executionmodel.VerifiedCandidatePR{WorkflowID: w.WorkflowRunID, URL: url, Info: info})
 			if info.Merged || info.State == "merged" {
 				merged++
 				if selectedID == "" {
