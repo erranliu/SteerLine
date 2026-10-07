@@ -27,7 +27,7 @@
 | 编号 | 通过条件 |
 | --- | --- |
 | PS1 | 真机新 session 无旧上下文且同 worktree；恢复只打开原 thread |
-| PS2 | 两个真实 session、人工编辑和按 #46 契约建立的 publish owner 争用统一 guard；迟到工具和旧 generation 拒绝。发布消费者可用夹具，真实 #48 交叉验收归 #53 |
+| PS2 | 两个真实 session、人工编辑和按 #46 契约建立的 publish owner 争用统一 guard；迟到工具和旧 generation 拒绝。发布消费者可用夹具，真实 #48 交叉验收归 [二期验收活动](../acceptance/phase2.md) |
 | PS3 | 真实流式正文、最终回复、审批/拒绝、steer、中断逐项有明确状态与回执 |
 | PS4 | 服务在 start/工具保存/轮次结束窗口退出后按原身份恢复或阻塞，没有第二 thread/turn 或重复写 |
 | PS5 | exec/子 agent/产品命令绕过被代码拒绝，凭证及宿主私有信息不进入模型正文 |

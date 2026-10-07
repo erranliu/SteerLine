@@ -1,6 +1,6 @@
 # Spec：固定原生沙箱与自动审批，移除附加需求
 
-目标：`PRODUCT-SIMPLIFICATION`；批次：2。状态：实现、最小验证及自查完成，待独立PR评审，未分配 Task ID；本批[实施Plan](product-simplification-02-configuration.plan.md)、[独立实现PR #236](https://github.com/erranliu/SteerLine/pull/236)。依据：2026-10-07 已接受并审计的取舍 4、5，以及本次确定的单一沙箱与自动审批方案。实现与真实验收见[记录](../validation/product-simplification-02-configuration/README.md)。
+目标：`PRODUCT-SIMPLIFICATION`；批次：2。状态：实现、最小验证及自查完成，待独立PR评审，未分配 Task ID；本批[实施Plan](product-simplification-02-configuration.plan.md)、[独立实现PR #236](https://github.com/erranliu/SteerLine/pull/236)。依据：2026-10-07 已接受并审计的取舍 4、5，以及本次确定的单一沙箱与自动审批方案。实现与真实验收见[记录](../acceptance/product-simplification-02-configuration/README.md)。
 
 参考源码基线：`75474dcece26d807367e106a89a992f01f53fafd`。硬前置：[第一批](product-simplification-01-console.spec.md)合入；实际实施基线记录第一批合入后的提交。遵守第一批“目标与共同边界”，完整保留多后端、远端与多候选，不合并各后端的原生解释。
 

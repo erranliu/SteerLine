@@ -2,7 +2,9 @@
 
 本目录保留候选 Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段只运行和验收本地 Codex 与本机 Orca。正式任务应有独立 Spec/Plan 和实现 PR，但文档存在不表示已入 DAG。日常执行只从[正式执行清单](../roadmap/execution-map.md)选择，下表目前属于[草稿候选](../roadmap/drafts/roadmap.md)。
 
-已执行的 Spec 与配套 Plan 见[已交付归档](../archive/spec/completed/README.md)；退役流程和远端试验见[历史资料](../archive/spec/retired/README.md)。归档中的旧状态文字和路径属于原交付时点，不能当作当前待办。任务 ID 身份记录保留；原始验证数据从[清理前固定 Git 快照](../validation/README.md#历史取证)读取。
+Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具体自动/人工步骤与实时已验/待验结果统一维护于[acceptance](../acceptance/README.md)。正式准入前为相应任务建立验收记录并绑定场景 ID；execution-map 同步验收汇总及所有未验文档。旧计划中的 docs/validation 路径只用于定位原证据，不作为新结果写入入口：新原始日志用 runner 默认临时目录或本次新建的空临时目录，长期记录只提交 acceptance 的最小摘要。人工为主活动不准入；少量人工项按允许范围后置。
+
+已执行的 Spec 与配套 Plan 见[已交付归档](../archive/spec/completed/README.md)；退役流程和远端试验见[历史资料](../archive/spec/retired/README.md)。归档中的旧状态文字和路径属于原交付时点，不能当作当前待办。任务 ID 身份记录保留；原始验证数据从[清理前固定 Git 快照](../acceptance/history.md#历史取证)读取。
 
 ## 产品精简（三批，待实施）
 
@@ -18,7 +20,7 @@
 
 ## 控制台体验优化
 
-目标：`CONSOLE-PRIMARY-WORKSPACE`。依据 2026-10-07 用户确认的三窗主界面操作与可读性方案；未分配 Task ID，实现及定向/终端验证完成，已有[实施 Plan](console-primary-workspace.plan.md)与 [PR #234](https://github.com/erranliu/SteerLine/pull/234)；固定 L1 超时，缺失项补跑通过，限制见[验证记录](../validation/console-primary-workspace.md)。以产品精简第一批的三窗实现为功能前置，不依赖第二/三批；后续一份实施 Plan、一个独立实现 PR。
+目标：`CONSOLE-PRIMARY-WORKSPACE`。依据 2026-10-07 用户确认的三窗主界面操作与可读性方案；未分配 Task ID，实现及定向/终端验证完成，已有[实施 Plan](console-primary-workspace.plan.md)与 [PR #234](https://github.com/erranliu/SteerLine/pull/234)；固定 L1 超时，缺失项补跑通过，限制见[验证记录](../acceptance/console-primary-workspace.md)。以产品精简第一批的三窗实现为功能前置，不依赖第二/三批；后续一份实施 Plan、一个独立实现 PR。
 
 | 范围 | Spec |
 | --- | --- |
@@ -29,7 +31,6 @@
 | 任务 ID | 任务名称 | 剩余拟议前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |
 | 83 | 本机安装与调试路径隔离 | 无 | [Spec](local-runtime-isolation.spec.md) | [Plan](local-runtime-isolation.plan.md) |
-| 42 | 第一阶段集成验收 | `#83` | [Spec](phase1-release-acceptance.spec.md) | [Plan](phase1-release-acceptance.plan.md) |
 | 43 | Codex 规划主 agent 能力验证 | 无 | [Spec](phase2-agent-capabilities.spec.md) | [Plan](phase2-agent-capabilities.plan.md) |
 | 44 | WinUI 基座与原生输入 | 无 | [Spec](phase2-winui-foundation.spec.md) | [Plan](phase2-winui-foundation.plan.md) |
 | 45 | 本机客户端协议与历史查询 | 无 | [Spec](phase2-local-api.spec.md) | [Plan](phase2-local-api.plan.md) |
@@ -40,7 +41,6 @@
 | 50 | 执行与待处理原生界面 | `#44`、`#45` | [Spec](phase2-execution-ui.spec.md) | [Plan](phase2-execution-ui.plan.md) |
 | 51 | 规划对话原生界面 | `#44`、`#47` | [Spec](phase2-conversation-ui.spec.md) | [Plan](phase2-conversation-ui.plan.md) |
 | 52 | 文档审阅与确认原生界面 | `#44`、`#48` | [Spec](phase2-review-ui.spec.md) | [Plan](phase2-review-ui.plan.md) |
-| 53 | 第二阶段完整闭环验收 | `#49`、`#50`、`#51`、`#52`、`#42` | [Spec](phase2-integration.spec.md) | [Plan](phase2-integration.plan.md) |
 
 ## 延后版本草案
 
@@ -57,9 +57,9 @@
 
 | 范围 | Spec / Plan | 剩余边界与证据 |
 | --- | --- | --- |
-| local Codex app-server | [Spec](local-codex-app-server.spec.md) · [Plan](local-codex-app-server.plan.md) | A/B/C 已完成，定向 race detector 仍受工具链条件限制；见[状态](../validation/pending-acceptance.md#local-codex-app-server) |
-| 本机 Orca 原生编排 | [Spec](worker-flow-orca-native.spec.md) · [Plan](worker-flow-orca-native.plan.md) | 活动轮次输入、消息竞争/故障、完整输出和独立生命周期仍按原 ON 场景核验；见[验收边界](../validation/pending-acceptance.md#orca-native) |
-| worker 停服恢复 | [Spec](worker-service-recovery.spec.md) · [Plan](worker-service-recovery.plan.md) | local 闭环已验证，Orca 新 agent 安全重建仍缺真机证据；见[验证记录](../validation/pending-acceptance.md#worker-停服恢复) |
+| local Codex app-server | [Spec](local-codex-app-server.spec.md) · [Plan](local-codex-app-server.plan.md) | A/B/C 已完成，定向 race detector 仍受工具链条件限制；见[状态](../acceptance/pending-acceptance.md#local-codex-app-server) |
+| 本机 Orca 原生编排 | [Spec](worker-flow-orca-native.spec.md) · [Plan](worker-flow-orca-native.plan.md) | 活动轮次输入、消息竞争/故障、完整输出和独立生命周期仍按原 ON 场景核验；见[验收边界](../acceptance/pending-acceptance.md#orca-native) |
+| worker 停服恢复 | [Spec](worker-service-recovery.spec.md) · [Plan](worker-service-recovery.plan.md) | local 闭环已验证，Orca 新 agent 安全重建仍缺真机证据；见[验证记录](../acceptance/pending-acceptance.md#worker-停服恢复) |
 
 ## 共同约束
 
@@ -69,3 +69,7 @@
 - [第二阶段](phase2-constraints.md)：受控规划、文档发布、原生 UI 和公共传输。
 
 当前实现与模块边界见[代码架构](../architecture/current-code-architecture.md)，测试选择见[测试指南](../testing.md)。已完成的执行隔离、主包解耦与三线迁移规格及其阶段约束一并归档，不再列作活动执行入口。
+
+## 人工为主的阶段验收
+
+原 #42/#53 不作为执行任务候选；身份保留历史，原 Spec/Plan 已退役。自动与人工行为、通过条件和状态分别见[一期验收](../acceptance/phase1.md)及[二期验收](../acceptance/phase2.md)。自动验收可独立成任务或进入实施 Plan，具体行为和记录都链接 acceptance。

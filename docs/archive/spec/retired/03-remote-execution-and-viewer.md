@@ -6,7 +6,7 @@
 
 同日[新主机后续记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-desktop64g-followup-2026-09-28/README.md)保存一次 Decision 的可见画面保守上界 2.215 秒、原生五步与固定 head 的 PR #89 合并。工作区固定 base 误用和冗余手写身份断言造成的两次独立失败仍保留；修正后的试次没有远端人工补按 Enter。后续 [SteerlineTest Task 105](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-viewer-task105-2026-09-28/README.md) 的 implement→verify 从中心 SQLite 持久时间到可见 `source=screen` 同 Attempt 的保守上界为 1.334 秒；当前目标的 Decision 和步骤转换样本均通过 4 秒门槛。Task 105 的完整交付及其他故障路径另行核对。
 
-验收归属收口：#6 完成定义要求远端五步、原生问答、故障安全、重启/幂等对账、真实合并结项与可见 viewer 达标，不要求在单主机先跑长期无人值守矩阵。固定 stable 构建连续 24 小时、跨任务资源与无人操作窗口属于 [#42 集成验收](../../../spec/phase1-release-acceptance.spec.md)。#6 的 R01–R19 仍按第 8 节核对；已在同一兼容版本族和受测调用路径通过的回执可复用，变更影响的路径和新主机特有的身份、权限、时延、失联及失败关闭行为须针对性补证。此边界不减弱未知结果禁止重派、精确 PR 合并核验和资源结算要求。
+验收归属收口：#6 完成定义要求远端五步、原生问答、故障安全、重启/幂等对账、真实合并结项与可见 viewer 达标，不要求在单主机先跑长期无人值守矩阵。固定 stable 构建连续 24 小时、跨任务资源与无人操作窗口属于 [#42 集成验收](phase1-release-acceptance.spec.md)。#6 的 R01–R19 仍按第 8 节核对；已在同一兼容版本族和受测调用路径通过的回执可复用，变更影响的路径和新主机特有的身份、权限、时延、失联及失败关闭行为须针对性补证。此边界不减弱未知结果禁止重派、精确 PR 合并核验和资源结算要求。
 
 任务 ID：6；任务名称：分阶段远程闭环。
 

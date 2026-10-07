@@ -1,6 +1,6 @@
 # Spec：本机 Codex app-server 执行迁移
 
-适用说明（2026-09-30）：服务退出后 worker 必须独立存活、重开自动接续旧输入的规定已由[停服恢复 Spec](worker-service-recovery.spec.md)替代。下文 2026-09-29 的 A/B 验收保留为当时宿主的历史事实；本机受限 Job 的新闭环见[本次验证](../validation/pending-acceptance.md#worker-停服恢复)。
+适用说明（2026-09-30）：服务退出后 worker 必须独立存活、重开自动接续旧输入的规定已由[停服恢复 Spec](worker-service-recovery.spec.md)替代。下文 2026-09-29 的 A/B 验收保留为当时宿主的历史事实；本机受限 Job 的新闭环见[本次验证](../acceptance/pending-acceptance.md#worker-停服恢复)。
 
 状态：实现及 A/B/C 验收已完成；仅定向 Go race detector 因当前工具链限制留待补验。配套 [Plan](local-codex-app-server.plan.md)。
 
@@ -63,7 +63,7 @@ RPC、观察和恢复按 Execution 独立进行，结果携带运行、原生身
 
 ### 第一阶段残留（2026-09-29）
 
-以下要求与结果同步至 [验收状态](../validation/pending-acceptance.md#local-codex-app-server)。A/B 已补验，保留完成记录以明确通过边界；当前证据见 [验收状态](../validation/pending-acceptance.md#local-codex-app-server)。
+以下要求与结果同步至 [验收状态](../acceptance/pending-acceptance.md#local-codex-app-server)。A/B 已补验，保留完成记录以明确通过边界；当前证据见 [验收状态](../acceptance/pending-acceptance.md#local-codex-app-server)。
 
 - **A：服务级双任务真机闭环，已通过。** 真实 SteerLine Service 中第一条原生问答待答时第二任务完成；重建服务后恢复原 call/thread/turn，答案只送达原请求，结束后原 thread/worktree 的新 turn 完成。冻结配置及并行隔离由现有定向测试和本次服务级证据共同核对。
 - **B：独立进程生命周期及隔离回归，已通过。** 在 WMI 启动、确认不在 Job Object 的宿主上，服务反馈三种输入形式通过；承载服务的子进程于待答时退出后，独立 app-server 保持存活，新进程重接原请求并完成 turn。相关回执及进程身份见[补验记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/local-codex-app-server/acceptance-2026-09-29.md)。

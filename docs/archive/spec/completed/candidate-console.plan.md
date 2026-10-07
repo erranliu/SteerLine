@@ -1,6 +1,6 @@
 # Plan：候选观察界面
 
-任务 ID：38；任务名称：候选观察界面。唯一执行依据：[Spec](candidate-console.spec.md)。起点 `28b81d82f4afb3e158cf96bd5cbf257fa48b7adc`（#37 已合入）；分支 `codex/candidate-console-38`。原实现已合入；CC5 与本次交互增量已获用户人工确认通过。最新状态见[人工确认记录](../../../validation/manual-acceptance.md)，历史延期记录保留。
+任务 ID：38；任务名称：候选观察界面。唯一执行依据：[Spec](candidate-console.spec.md)。起点 `28b81d82f4afb3e158cf96bd5cbf257fa48b7adc`（#37 已合入）；分支 `codex/candidate-console-38`。原实现已合入；CC5 与本次交互增量已获用户人工确认通过。最新状态见[人工确认记录](../../../acceptance/manual-acceptance.md)，历史延期记录保留。
 
 ## 实际实现
 

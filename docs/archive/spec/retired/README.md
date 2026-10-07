@@ -11,5 +11,9 @@
 | [Spec 03：最小状态机的分阶段远程闭环与 viewer 人工决策](03-remote-execution-and-viewer.md) | [Plan](03-remote-execution-and-viewer.plan.md) |
 | [执行架构 Spec：共同约束](execution-architecture.spec.md) | — |
 | [Native local and Orca execution](hosting-spec.md) | — |
+| [原 #42 一期集成验收](phase1-release-acceptance.spec.md) | [原 Plan](phase1-release-acceptance.plan.md) |
+| [原 #53 二期完整闭环验收](phase2-integration.spec.md) | [原 Plan](phase2-integration.plan.md) |
+
+原 #42/#53 是人工组织为主的阶段验收，不再作为执行任务候选；ID 保留历史且不复用。现行自动/人工行为和状态分别由[一期](../../../acceptance/phase1.md)和[二期](../../../acceptance/phase2.md)验收文档维护，归档不取消外部 SteerLine 已有任务。
 
 [Orca 协议探针与原始样本](orca-probe/README.md)

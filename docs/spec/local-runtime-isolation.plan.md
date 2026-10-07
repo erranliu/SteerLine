@@ -8,7 +8,7 @@
 2. 提供 scripts/debug-runtime.ps1，显式接收调试 Home、Config、日常 InstalledHome 及服务/控制台/CLI 操作，定位本工作树构建产物。规范化路径并拒绝重叠、越界和缺失，环境只作用于本次进程；本脚本为规划入口，实施时交付。
 3. 修正调试 console 启服及子进程的 exe/home 传递，保持安装入口使用安装 exe；补充最小构建 commit/dirty 信息和运行诊断。复用实例核验与仓库锁，不增加 channel 或选择记录。
 4. 在现有 E2E testenv/driver/native 适配层增加临时安装目录与源码调试入口能力，登记 runtime.installed-debug-isolation。每个项目显式选择实际 exe，复用受控后端及原断言；不另建任务状态机或绕过产品命令。
-5. 完成 LI1–LI4 的同一次 Windows 现场验证及简短维护说明，向 #42 交接安装/调试命令、实际路径与证据。失败、清理失败或身份不明不能通过。
+5. 完成 LI1–LI4 的同一次 Windows 现场验证及简短维护说明，向 [一期验收活动](../acceptance/phase1.md) 交接安装/调试命令、实际路径与证据。失败、清理失败或身份不明不能通过。
 
 ## 测试计划
 

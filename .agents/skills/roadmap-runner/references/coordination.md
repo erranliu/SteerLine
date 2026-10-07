@@ -71,7 +71,7 @@ task 的一级字段按键替换（嵌套对象须提供完整对象）。run �
 - `merge`：head、commit、merged_at；只有平台已确认真实合并后记录。`observed_merge` 可单独记未复审就被外部合并的事实，保留待决。
 - `blocker`、`decisions`：实际失败及待用户决定内容、原始用户批准记录。不得以记录例外替代取得批准。
 
-仅余人工补验时，无需逐项申请 `accepted_exception`。先实际把待验内容写入正式条目的验收备注或 validation（不改变中心状态），保留原验收条件、操作步骤及取证位置，并核对记录；然后填写：
+仅余允许后置的少量人工补验时，无需逐项申请 `accepted_exception`。先实际把待验内容写入 docs/acceptance/，在 execution-map 同步验收汇总和待验链接（不改变中心状态），保留原验收条件、参与人/窗口、操作步骤及取证位置，并核对记录；后续不依赖该结果且无明确先验要求时填写：
 
 ```json
 {
@@ -83,7 +83,7 @@ task 的一级字段按键替换（嵌套对象须提供完整对象）。run �
     {
       "check_id": "manual-check-id",
       "reason": "implemented feature awaits human interaction",
-      "roadmap_path": "/absolute/project/docs/roadmap/execution-map.md#manual-validation"
+      "roadmap_path": "/absolute/project/docs/acceptance/task-acceptance.md#manual-validation"
     }
   ]
 }
@@ -91,7 +91,9 @@ task 的一级字段按键替换（嵌套对象须提供完整对象）。run �
 
 `non_manual_status` 包括实现复审、必需自动验证及其他非人工前置，必须真实通过；不能把失败、unsupported 或缺能力填成通过。`manual_pending` 是已登记人工项的定位，不是通过证据。状态助手检查元数据完整性，不代替读取清单或实际验证。PR 评论列同一清单，正常合入并推进；run 完成时保留清单及未验事实，不等待人工结果才暂停 heartbeat。用户要求先完成人工验收、或人工验收已出现真实失败时，继续使用原阻塞规则。
 
-已合入 task 的原审核、验证和合并证据仍不可修改；补验结果另写正式条目验收备注或 validation，也可保存在 run.decisions。原 `manual_pending` 保留的是合入时尚未人工验证的事实；这些外部流程记录不改变中心 Task/DAG 状态。
+`roadmap_path` 是现有状态格式中的验收记录定位字段，值指向 acceptance 文档；协调者实际核对记录并同步 execution-map 的待验链接。元数据不代替文档明细或正式汇总。
+
+已合入 task 的原审核、验证和合并证据仍不可修改；补验结果另写 docs/acceptance/ 的具体项并同步正式汇总，可在 run.decisions 保留定位。原 `manual_pending` 保留的是合入时尚未人工验证的事实；这些外部流程记录不改变中心 Task/DAG 状态。人工为主活动不作为执行成员，明确先验门槛及已知失败仍阻塞。
 
 task phase：`pending → creating → running → pr_ready → reviewing → ready_to_merge → merged`；停顿用 `blocked` 或 `needs_user_decision`。run phase：`active / paused / needs_user_decision / complete`。每次读取/写入都校验基本证据；助手不自动推断 Git 或 session 状态。
 
