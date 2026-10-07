@@ -92,7 +92,7 @@ The tagged scenario owners are `tests/e2e/smoke`, `tests/e2e/live`, and `tests/e
 | Test feedback executable | `cmd/test-feedback` selects L1, Full, scoped Go tests and registered controlled/live E2E scenarios; only its feedback/process imports are allowed outside tests. |
 | Diagnostic executable | `cmd/orca-probe` emits capability evidence and does not create product tasks, workers or messages. |
 
-Historical migration ledgers and source inventories are available from the [fixed Git snapshot](../acceptance/history.md#历史取证). Current ownership is defined by the source tables on this page and the boundary guards, not inventories at a prior commit.
+Historical migration ledgers and source inventories are available from the [fixed Git snapshot](../acceptance/archive/completed/history.md#历史取证). Current ownership is defined by the source tables on this page and the boundary guards, not inventories at a prior commit.
 
 ## Build, install and launch sources
 

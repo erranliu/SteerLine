@@ -1,35 +1,30 @@
-# 正式执行 Roadmap：中心 DAG 映射
+# 正式执行 Roadmap
 
-本文件是仓库内执行与验收汇总的真相源。实际 Task/DAG 由外部 SteerLine 管理，正式任务成员、状态/版本、依赖和契约依据工具回执/查询同步；本文件不操作数据库。验收明细由 docs/acceptance 维护，本文件同步已验/待验摘要并链接未验文档。草稿可以保留已准入任务且不严格维护实时状态，不能作为执行或验收状态来源。
+## 当前任务
 
-## 当前正式清单
+| 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
+| --- | --- | --- | --- | --- | --- |
+| 83 | 本机安装与调试路径隔离 | 无 | 待中心准入 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | 未验；[记录](../acceptance/local-runtime-isolation.md) |
+| 45 | 本机客户端协议与历史查询 | 无 | 待中心准入 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | 未验；[记录](../acceptance/phase2-local-api.md) |
+| 44 | WinUI 基座与原生输入 | #45 | 待中心准入 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 未验；[记录](../acceptance/phase2-winui-foundation.md)，人工项最迟2.1签收 |
 
-当前任务条目为空，按本次要求重置。同步状态：待核对；本次没有读取、清空或取消中心已有 Task/DAG，不宣称中心 DAG 为空。空表不安排任何新任务执行，也不能从草稿或旧运行状态自动补入任务。
+## 推进顺序
 
-| 任务 ID | 任务名称 | DAG 状态 / 版本 | 剩余未满足前置 | 固定 Spec / Plan | DAG / 准入证据 | 验收汇总 / 待验文档 |
-| --- | --- | --- | --- | --- | --- | --- |
+1. 固定上述三项文档版本，办理中心准入并核对回执；当前暂不派发。
+2. #83与#45无新增硬依赖，共享宿主接线串行合入；#45交付后推进#44。
+3. 后续界面任务留在[草稿](drafts/roadmap.md)，原型确认后再纳入。
 
-## 待验收索引（不是 DAG 任务）
+## 待人工验收
 
-| 活动 / 范围 | 当前验收状态 | 文档与安排 |
+| 范围 | 状态 / 安排 | 明细 |
 | --- | --- | --- |
-| 一期单安装版签收 | 待验收 | [一期活动](../acceptance/phase1.md)：原 #42 人工组织范围已转出，不作为执行成员 |
-| 二期完整产品链签收 | 待验收，功能尚未齐备 | [二期活动](../acceptance/phase2.md)：原 #53 不作为执行成员 |
-| 本机 Codex app-server | 定向 race 待验收 | [专属记录](../acceptance/local-codex-app-server.md)：待工具链和真实结果，不改称人工补验 |
-| 本机 Orca 原生编排 | 所列 ON 项待验收 | [专属记录](../acceptance/worker-flow-orca-native.md)：保留原生故障/输出/生命周期缺口 |
-| worker 停服恢复 | Orca 安全重建待验收 | [专属记录](../acceptance/worker-service-recovery.md)：无法核实仍保持未知并禁用替代 worker |
+| 一期单安装版签收 | 实现收尾#83已排入；交付并满足准备条件后组织人工签收 | [一期活动](../acceptance/phase1.md) |
+| #44原生输入与可达性 | #44已排入；交付后验UI2-M/UI4-M，最迟2.1签收 | [记录](../acceptance/phase2-winui-foundation.md) |
 
-正式 Task 执行完成或受控归档后若仍有允许后置的人工项，验收文档继续在此索引，不要求保留为活动 DAG 成员。全部相关项真正已验后再移除待验链接，记录留在 acceptance。
+自动补验：[Codex race](../acceptance/local-codex-app-server.md) · [Orca原生编排](../acceptance/worker-flow-orca-native.md) · [Orca安全重建](../acceptance/worker-service-recovery.md)。
 
-## 准入和同步规则
+## 同步状态
 
-- 草稿任务可以先取得全局唯一 Task ID，正式准入沿用同一 ID。通过外部 SteerLine 接口创建 Task/DAG，再以工具结果核对并同步本文件；文件同步不自动调用工具。编号、草稿保存或手工增加 Markdown 行都不直接入图，两边结果未核实一致时不认定已准入或可执行。
-- 人工验收为主的活动不进入正式任务表或执行 DAG。自动验收可独立任务或随任务执行；少量人工尽量后置，自动/必需条件通过后保持待验链接并继续无关工作，不把真实失败、关键前置或明确先验门槛当作可豁免补验。
-- 草稿经人的授权、固定内容及相应审核/机械校验，再由现有任务创建流程入 DAG。二期自动审核准入尚未交付，当前仍按已支持流程取得真实创建回执；编辑本文件不创建 Task。
-- 只有核对实际项目、原任务 ID、Task 版本、完整依赖、固定 Spec/Plan commit/摘要和创建回执后，才能增加正式条目。临时草稿、仅有 Spec/Plan、已占号或 PR 存在都不等于已入 DAG。
-- 表中只显示尚未满足的前置；已交付依赖在中心及固定契约中保留，以必要的已具备能力摘要说明，不继续画成待完成节点。完整原依赖及对应证据必须能从 DAG 查询/回执追溯，不能删除真实依赖边来伪造就绪。
-- 准入、依赖或状态变化后，以及每次执行/恢复前，用同一项目的当前 DAG 核对并刷新映射。记录同步来源、时间和版本；信息未知、不一致或缺少回执时，不按文件派发，不把静态检查当作实时同步证明。
-- 完成、丢弃和归档依实际中心事实更新；不以 PR 合并单独推定 TaskDelivery，也不以删去文件行取消 worker。已经开始的原执行仍按原身份核实；文件重置不自动停止它。
-- 准入时不要求从草稿删行，真正执行完成并核对本文件状态后才移除草稿任务条目。验收状态与 Task 执行状态分别更新；明细/汇总冲突时按真实证据核对修正，不读取草稿的旧状态作决定。
+最近中心查询：2026-10-07，配置校验失败。固定commit/摘要、Task/DAG版本及创建回执待核对；详见[准入记录](../acceptance/roadmap-admission.md)。
 
-模块并行原则见[并行开发指南](../architecture/parallel-development.md)，草稿和正式边界见[目录规则](RoadmapGuide.md)。草稿的依赖建议、共享冲突和合入安排留在草稿；正式条目的说明不能改写实际 DAG 或固定任务契约。
+流程规则见[RoadmapGuide](RoadmapGuide.md)；[二期节点验收](../acceptance/phase2.md)目前仅规划。

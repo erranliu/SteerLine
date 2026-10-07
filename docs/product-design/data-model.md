@@ -91,7 +91,7 @@ Execution 的 `environment` 保存领取时的 Profile digest、准备 turn/nonc
 
 准备收据、类型化工具调用/结果证据和原生结算分别持久化，整批 Delivery 先落盘再 ack。宿主 blocker 保存 reason/confidence/source、原身份、时间及绑定目标，通过已有 Decision 与 Operation 提供中心动作；普通文字与原 worker question 分别保存。重复检查共享 blocker 的未完成 Operation；未知投递先读取原 Dispatch 历史。过期文字及问题保留历史，不改投新轮次。
 
-准备超时和首次业务启动观察超时保持原外部事实。晚到准备成功只补历史，需显式重新检查后才能接纳；正常业务执行没有额外总时限。等待 PR 合并的终端诊断不回退主阶段，已提交交付不被迟到观察重开。当前格式拒绝缺少冻结准备/资源事实的受管 Execution，不迁移旧记录。实际验收状态见[环境验收记录](../acceptance/worker-readiness.md)。
+准备超时和首次业务启动观察超时保持原外部事实。晚到准备成功只补历史，需显式重新检查后才能接纳；正常业务执行没有额外总时限。等待 PR 合并的终端诊断不回退主阶段，已提交交付不被迟到观察重开。当前格式拒绝缺少冻结准备/资源事实的受管 Execution，不迁移旧记录。实际验收状态见[环境验收记录](../acceptance/archive/completed/worker-readiness.md)。
 
 ## 本地 Windows sandbox 配置冻结
 

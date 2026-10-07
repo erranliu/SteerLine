@@ -7,9 +7,10 @@
 | 已交付规格、计划及阶段约束 | [completed](spec/completed/README.md) | 追溯原交付；当前实现以源码与架构索引为准 |
 | 退役执行流程和远端试验 | [retired](spec/retired/README.md) | 未完成历史门槛保留，不表示一期支持 |
 | 已完成三线重构 roadmap | [三线规划](roadmap/three-line-modularization.md) | #73–#82 全部合入；不再是执行入口 |
+| 验收历史结果与旧方案 | [验收归档](../acceptance/archive/README.md) | 已结算与待重定分开，失败/限制及证据字节保持 |
 | 历史配置 | [远程 Orca 配置](guides/orca-remote-configuration.md) | 原连接/协议记录，不表示当前支持或权限验收通过 |
 | 历史操作指南 | [远端 MVP](guides/remote-execution.md) · [旧步骤契约](guides/skill-contract.md) · [Beads 项目接入](guides/merge-h-308-integration.md) · [旧发布步骤](guides/steps/steerline-publish-pr.md) | 只供历史核对 |
 
-当前验收摘要及历史证据取证入口见 [validation/](../acceptance/README.md)，任务身份仍在 [task-ids/](../roadmap/task-ids)。导航链接已适配新位置；历史命令、Canonical Spec 路径、SHA 和 JSON 回执不批量重写。固定契约仍读取其原 commit 的原路径。
+当前验收摘要及历史证据取证入口见 [验收入口](../acceptance/README.md)，任务身份仍在 [task-ids/](../roadmap/task-ids)。导航链接已适配新位置；历史命令、Canonical Spec 路径、SHA 和 JSON 回执不批量重写。固定契约仍读取其原 commit 的原路径。
 
 [当前文档](../README.md) · [剩余规划](../roadmap/drafts/roadmap.md) · [当前规格](../spec/README.md)

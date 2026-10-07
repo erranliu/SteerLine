@@ -1,6 +1,6 @@
 # L1 精简与并行验证（2026-10-07）
 
-实现范围及测试计划见 [Plan](../spec/l1-test-feedback.plan.md)，日常与定向入口见[测试总入口](../testing.md)。固定选择见 [scoped.go](../../cmd/test-feedback/scoped.go)。
+实现范围及测试计划见 [Plan](../../../spec/l1-test-feedback.plan.md)，日常与定向入口见[测试总入口](../../../testing.md)。固定选择见 [scoped.go](../../../../cmd/test-feedback/scoped.go)。
 
 ## 结果
 

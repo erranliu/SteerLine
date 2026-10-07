@@ -29,7 +29,7 @@ native 的 app-server usage 适配要求精确新 turn/started；仅排除其前
 
 CN4/CN8 的故障路径由 `native.DisconnectCandidate` 对隔离 local app-server 的同一 Windows handle 校验 PID/creation/executable 和原 session envelope 后终止；真实连接丢失与业务 stop Operation 区分。通过产品提交原 Decision 的 fault-probe，确认原 Execution/session 不替换、turn 不增加；原 Orca 兄弟继续反馈/PR，再按精确 Task/run 当前版本提交放弃。收到实验退出回执立即人工开始新的 local 候选，不等待停止事实，核对原 base/历史/PR保留和新候选正数 usage。晚到验证改用这个新增候选，原故障样本仍保留逐执行证据。
 
-本次实际定向命令：`go run ./cmd/test-feedback -out docs/validation/candidate-native-acceptance/native-wiring-01 -- ./internal/steerline/orcaworker ./internal/steerline/codexworker ./internal/steerline '-run=TestCandidateSessionLaunch|TestMC[56]|TestNativeLifecycle|TestExecution|TestConversation|TestCodex|TestManaged|TestResume' -count=1`，27测试事件通过、无 fail/skip；覆盖原 session launch 意图/权限、CN5/MC5–MC6 和规范采集。适配器最终命令采用下表包、runner/testboundary 与必要场景；每次新空目录，最终精确命令/构建及结果见 [证据入口](../../../acceptance/candidate-acceptance.md)。
+本次实际定向命令：`go run ./cmd/test-feedback -out docs/validation/candidate-native-acceptance/native-wiring-01 -- ./internal/steerline/orcaworker ./internal/steerline/codexworker ./internal/steerline '-run=TestCandidateSessionLaunch|TestMC[56]|TestNativeLifecycle|TestExecution|TestConversation|TestCodex|TestManaged|TestResume' -count=1`，27测试事件通过、无 fail/skip；覆盖原 session launch 意图/权限、CN5/MC5–MC6 和规范采集。适配器最终命令采用下表包、runner/testboundary 与必要场景；每次新空目录，最终精确命令/构建及结果见 [证据入口](../../../acceptance/archive/completed/candidate-acceptance.md)。
 
 只保留 L3 `candidates.local`（规划包 `tests/e2e/suites/candidates`、测试 `TestCandidateLocal`、env=live）；执行聊天按实际实现更新包/test 名、`tests/e2e/suites.json` 和 E2E README。删除本任务的 `candidates.remote` 与 `candidates.mixed` 远端场景登记及专用门槛，不把它们列作 skip/blocked，也不强制保留无人使用的远端 fixture。保留已有通用生产/适配层的远端准入规则。
 
@@ -42,7 +42,7 @@ CN4/CN8 的故障路径由 `native.DisconnectCandidate` 对隔离 local app-serv
 | L3 candidates.local：CN1–CN4、CN6–CN8 | 隔离 Windows，本地 Codex + 本机 Orca、真实模型/Git/PR | `go run ./cmd/test-feedback -level=L3 -suite=candidates -env=live '-scenario=candidates.local' -out docs/validation/candidate-native-acceptance/local` | 场景登记、两种本机能力和固定构建核对后 | 两候选真实重叠、独立反馈/规范正文/正数 usage、唯一交付/后继 base、重启/一例故障与放弃边界有完整原生证据，清理正确 | local/summary、规范状态/回执、原生身份、PR 和资源记录 |
 | L1 固定最小入口 | 隔离 STEERLINE_HOME，无 live 环境变量 | `go run ./cmd/test-feedback -level=L1 -out docs/validation/candidate-native-acceptance/l1` | 自查与集成修复完成后一次 | 原业务/守卫通过，不意外重跑 live，E2E 导入边界未放宽 | l1/summary 与原始 JSON |
 
-每次使用新的空证据目录，固定实际合并操作者；零匹配、skip、实际本机环境/原生证据或清理不足不能记为通过。仅尚未执行的人工操作验收按当前规则登记 roadmap 后推进，实际发现的功能/正文失败仍须修复。不默认选择完整 L2、Full、所有模型或 live recovery；24 小时和版本提升归 #42，五候选数量和竞态允许超额复用既有受控证据。本机验收及协调复审的实际构建、命令和结果见[证据入口](../../../acceptance/candidate-acceptance.md)。
+每次使用新的空证据目录，固定实际合并操作者；零匹配、skip、实际本机环境/原生证据或清理不足不能记为通过。仅尚未执行的人工操作验收按当前规则登记 roadmap 后推进，实际发现的功能/正文失败仍须修复。不默认选择完整 L2、Full、所有模型或 live recovery；24 小时和版本提升归 #42，五候选数量和竞态允许超额复用既有受控证据。本机验收及协调复审的实际构建、命令和结果见[证据入口](../../../acceptance/archive/completed/candidate-acceptance.md)。
 
 ## 协调最终验证
 

@@ -1,52 +1,37 @@
 # 第二阶段共同接口约束
 
-本文件是独立 Spec 可引用的共同约束，不是执行任务，不承担多个实现 PR 的合并验收。每个任务各有独立 Spec、Plan 和实现 PR；交付范围与硬前置见各任务 Spec。
+本页维护当前可固定的公共边界，不是执行任务。二期分为 [2.1 DAG/执行 UI](../acceptance/phase2-execution.md)、[2.2 草稿/artifact/人工事项](../acceptance/phase2-planning.md)、[2.3 主 agent](../acceptance/phase2-main-agent.md) 三个验收节点。2.2/2.3 流程及原型仍迭代；旧 Proposal/Publication 字段、全工作区锁和发布算法不作为近期隐式要求。
 
-## 权威与固定依赖
+## 权威与依赖
 
-Go 服务复用现有 SQLite、QueryService/CommandService、Operation 和规范事件/正文存储。UI 是 C# WinUI 3 客户端，主 agent 仅支持本机 Codex app-server；任务 worker 使用 #36 持续会话的 local Codex / Orca 后端。规划 session、任务 Execution 和外部 thread 身份分开。主 agent 不直接启动任务、创建 DAG、运行实现或调用子 agent。
+沿当前 Go Query/Command、SQLite 单业务权威、原 Operation/回执和唯一 TaskDelivery。UI 是 C# WinUI 3 客户端；任务 worker 保留本地 Codex/本机 Orca与多候选。UI不访问库、私有日志或直接推进后端状态。规划 session 与任务执行身份分别建模，具体规划契约等 2.2/2.3 成熟后固定。
 
-适用[执行共同约束](execution-architecture.spec.md)、[原生任务共同约束](native-task-constraints.md)、[服务生命周期](../archive/spec/completed/pr-03-service-lifecycle.spec.md)、[会话契约](../archive/spec/completed/pr-04b-conversation-events.spec.md)、[固定 DAG](../archive/spec/completed/task-dag.spec.md)。当前开发版本不建设旧状态迁移或自动覆盖；当前格式重启、幂等、交付核验必须保留。引用历史 Spec 时只复用当前有效接口，历史兼容说明不扩展本组任务范围。
+硬依赖须真实交付且领取 base 含其成果。#44 为真实 API 联调依赖 #45；#49/#50 依赖 #44/#45，并在准入前确认 2.1 最小原型。共享文件合入顺序、提前设计或人工阶段签收不自动形成 DAG 放行。近期候选 #83/#45/#44 不等待未定规划流程。
 
-所有未完成前置均是同项目 AND 硬依赖：前置真实交付且领取 base 含其成果后才可执行。公共接口在本组 Spec 中定义，不把任务内部的接口里程碑当成 DAG 放行事件。无依赖关系只意味着可以独立开发，不改变现有执行槽数量或调度策略。
+现行精简规格覆盖历史控制台、资源和高级图要求时，以被选定的当前产品范围为准；不通过历史引用恢复完整过程阅读器或自动资源删除。当前开发格式不迁移、双写或回退。
 
-## 公共传输契约
+## 当前传输
 
-本机产品协议版本为 steerline-client/v1；HTTP 路由以 /v1/projects/{project_id} 为根。该版本与 Codex JSON-RPC、Orca 和 #36 的 worker 协议版本分开。服务发现和认证由本机客户端协议任务实现；业务 DTO 和路由由所属领域任务实现，传输层不提前伪造未交付领域。
+本机协议 steerline-client/v1，项目根 /v1/projects/{project_id}。#45 负责认证/实例、现有查询/命令及原请求对账；#44 交付窄客户端，#49/#50消费。DTO复用现有 product/api；查询携带实际对象/快照版本与采样时间，分页过期刷新，不构造跨 Git/SQLite 的全局快照。
 
-读响应携带 project_id、service_instance_id（离线为 null）、sampled_at、来源标志 live/offline、对象版本；多对象结果区分 database_revision、document_version 与各自游标，不制造跨 Git/SQLite 的全局原子快照。列表 items、next_cursor、has_more 显式返回；游标失效返回 cursor_invalidated，客户端刷新而不拼接新旧分页。
+命令携带 request_id、project_id、服务核验的 actor、精确目标/expected_version 和 payload。原内容重复返回原记录，异内容拒绝。客户端发送前保存完整原信封，重开优先查询；同项目权威明确 command_not_found 才能同 ID/内容/版本补交。服务必须先持久仲裁再做副作用，未知外部结果只对账，离线/身份错误不代表未收到。
 
-所有业务命令包含 request_id、project_id、actor（服务校验的本机用户身份）、目标对象和 expected_version、领域 payload。相同 request_id 和规范 payload 返回原记录，不同内容拒绝 idempotency_conflict。重连后按原 ID 查询；响应为 submitted/accepted/applied/rejected/outcome_unknown 之一及 error、领域 result。accepted 不表示副作用或 agent 已应用。未知动作在对账前不得重新发起。
+回执区分 submitted/accepted/applied/rejected/outcome_unknown；accepted 不表示 agent 已读或业务完成。错误用实际 code/reason 提示；未知能力 unsupported。不要求 SSE、离线查询进程或通用 future handler；后续确需时再固定增量契约。
 
-客户端在发送前持久保存完整命令信封及摘要，区分仅本地已保存与服务已登记。对原项目权威查询明确返回 command_not_found 时，可以将原 ID、原 payload、原 expected_version 幂等补交到同一项目权威；不得换 ID、自动改版本或借此重复调用 Codex/Orca/Git。服务必须先以唯一请求记录完成仲裁再执行任何外部动作，并发旧发送和补交只能产生一个业务操作。已有 accepted/outcome_unknown 回执只对账；连不上服务或身份不符不视作未收到。此规则覆盖发送前客户端退出、请求未送达、服务登记前中断和登记后响应丢失。
+## 人工事项与规划的已定边界
 
-SSE 只通知持久变化，带可查询的事件身份/游标；先入库后通知，历史不足时明确 reset_required 并重新查询。各领域在自己的业务提交后产生事件，客户端补读结果为准。错误至少含 code、message、object_ids、field，UI 按 code 分支。没有能力返回 unsupported，未知结果返回 outcome_unknown，冲突返回 stale_version/workspace_conflict；不得用空成功代替拒绝。
+TaskDelivery、人工验收结果和启动资格是三个事实。人工后验收记录关联任务/交付版本、步骤、证据及结果，允许后置者不阻塞无关后续；真实失败按影响处理，不能靠“待人工”绕过。
 
-## 领域归属及最小交接
+必要前置操作描述对象、责任人/窗口或待安排、完成条件与实际阻塞范围。只能依据系统核验的事实，或明确允许的精确人工作证解除对应阻塞，UI勾选不是通用资格。已知自动失败、缺权限、未知执行不能被人工确认覆盖。已有环境阻断及核验入口归 2.1；自定义前置操作定义、后验收登记与artifact交互归 2.2。
 
-| 领域 | 实现归属 | 交接对象 |
-| --- | --- | --- |
-| 身份发现、认证、执行查询/命令、SSE 传输、离线只读承载 | 本机客户端协议任务 | 现有任务/图/会话 DTO 及命令回执 |
-| 规划 worktree、提案、ID 预留、草稿、文档读模型、共享写入仲裁 | 规划提案与受控草稿任务 | PlanningWorkspace、Proposal、DraftFile、DocumentSnapshot、GoalRef、写入 guard |
-| Codex 进程、thread/turn 绑定、规范会话事件、审批与输入 | 规划会话任务 | PlanningSession、PlanningTurn、InputReceipt、Approval；使用共享 guard |
-| 固定版本发布、Git/中心创建对账、正式文档版本推进 | 正式文档发布任务 | Publication、固定 commit/manifest、task batch 回执；使用共享 guard |
+草稿编辑与正式任务区分；固定送审快照后仍可继续编辑新草稿。正式准入绑定精确版本、授权、审核结论及原请求；外部创建和文件同步分别核对，不宣称原子事务。不为等待审核/人工集成默认锁死全部草稿。具体存储、审核接口和恢复流程未固定，不提前建立通用事项/审批/提醒框架。
 
-PlanningWorkspace 绑定项目、规范仓库、固定 worktree 路径/分支、当前正式 document_version、写入 owner 和 generation。Proposal 含 proposal_id、mode（documents_only/task_batch）、version、base_document_version、goal_refs、预留 task_ids、文件清单和状态。DraftFile 含服务分配 file_id、正式目标路径、正文摘要与版本。DocumentSnapshot 以固定 Git commit 和路径/blob 清单定位一套正式内容；GoalRef 显式关联稳定 goal_id 与文档路径/锚点，不以标题相似性推断身份。
+## UI 与验证
 
-PlanningSession 绑定 workspace_id 和实际 Codex thread_id；PlanningTurn 绑定 session、generation、外部 turn_id、请求、状态与来源能力。Publication 固定 proposal/version、基线、完整 manifest 摘要、人工确认记录、原 request_id、Git 操作与中心 batch 操作身份。领域任务可增加实现必需字段，不能改变以上身份或交接语义；共同变更须同步所有消费者规格。
+关闭 UI 不停止服务或 worker；服务离线/错误身份禁用变更，展示实际服务窗口入口，不自动开替代服务。项目/目标切换拒绝旧响应，原未发送输入与未结算请求保留精确归属。
 
-## 共享写入与读取规则
+任务Plan逐项或按明确ID范围覆盖全部自动验收项，列场景/命令、环境、时点、通过条件与专属登记位置；缺驱动/场景/环境能力须在实施中补齐或明确前置。必要回归与产品自动验收分别标记，静态检查不代替业务/原生证据。
 
-规划提案任务拥有唯一的项目规划写入仲裁。agent 轮次、草稿编辑、预留、文档发布和基线同步均经该入口，服务单写；session 局部锁不能替代它。owner/generation 与未完成动作持久化，获取和释放均在服务事务内校验；运行时文件访问再验证 token，旧进程/迟到工具请求不能凭旧 token 写入。发布必须等待活动轮次结算，不抢占锁或仅靠 TTL 判断旧执行消失。
+每个实现 Plan 选择最小测试级别、组/场景 ID、环境、命令、时点、通过条件和专属 acceptance 证据。Go 改动按实际影响选定向及一次 L1；C# 改动选原生构建和组件/真实接线；不默认 Full/L2/L3/live。真实 Windows 输入人工确认可集中后置到相应节点签收前，已知失败必须修复。
 
-服务启动先恢复未完成的规划副作用与原 owner，再开放新写入；无法核验原进程或发布结果则保留阻塞和只读历史。正式文档查询只读已发布 commit/blob，不直接读正在逐文件更新的 worktree；离线只读入口同样读取已提交版本。外部 worktree 修改引发 workspace_conflict，阻止发布和新写入，保留差异，不自动 stash/reset。
-
-原始 worktree 路径不承诺给外部无锁进程提供多文件原子切换；服务查询的正式版本必须始终完整。Codex 只读仓库的轮次在发布/恢复期间禁止启动，已有轮次结算后才可切换文件，避免看到半套正式路径。
-
-## UI 共用规则与验证
-
-项目选择、导航、输入框与本地视图状态由 WinUI 基座提供；后续页面使用同一导航与客户端实例。未发送输入按项目/session 保存，阅读位置与跟随状态独立；界面缓存不赋予操作资格。UI 关闭不停止服务、agent 或 worker；离线时展示固定服务窗口入口，用户主动重开服务。客户端不能自动开替代服务、升级权限或访问 SQLite/私有日志。
-
-共享 Go 接线由后合入任务复核当前接口并跑受影响回归；共享 WinUI 导航在基座交付后接页面，不复制项目选择和连接状态。真实 Windows 验收固定构建、平台、身份和证据路径；模拟测试只证明列明范围。每项实现交付自己的验收表、可重复命令及未测项，行为、状态和最小结果记录于 docs/acceptance/<任务文件名前缀>.md，原始证据放临时目录。完整产品闭环另由[二期验收活动](../acceptance/phase2.md)承担，不进入执行 DAG。
-
-本组按[测试指南](../testing.md)和任务 Plan 的最小测试计划执行：全部自动验收项有明确映射，受影响 Go 用例定向回归并按影响选择一次 L1、受影响包 vet 与构建；公共平台路径变化时补 Windows/Linux 代表编译。仅 C#/UI 改动运行原生构建、对应 UI/契约自动验收，人工项另约窗口；不宣称 Linux UI 通过。不默认全量或全部 live；确需 Full 时说明未覆盖风险并使用现有并行入口，不重新采用旧串行全套门槛。纯规格编写只做身份、链接、引用方向、依赖与语义检查，不运行实现测试或宣称平台能力通过。仓库修订不改写外部 SteerLine 已冻结的任务契约。
+每任务一份或多份专属验收文档，不覆盖兄弟任务。三个节点验收活动分别引用任务结果，不占 Task ID、不入执行 DAG，不替代任务验收。原始产物在临时目录，仓库只留最小摘要。纯文档修订只做身份、链接及差异检查。

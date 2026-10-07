@@ -1,6 +1,8 @@
 # 任务 #43 验收规划：Codex 规划主 agent 能力验证
 
-唯一任务归属：#43。来源：[Spec](../spec/phase2-agent-capabilities.spec.md) / [Plan](../spec/phase2-agent-capabilities.plan.md)。本文件是该任务专属验收文档，不覆盖其他任务；验收流程见[入口](README.md)。
+> 本轮状态：#43不再安排独立探测交付；以下旧验收仅参考，未执行、不算通过。必要接入门槛纳入重定后的#47，见[2.3节点](../../phase2-main-agent.md)。不注销外部已存在任务。
+
+唯一任务归属：#43。来源：[Spec](../../../spec/phase2-agent-capabilities.spec.md) / [Plan](../../../spec/phase2-agent-capabilities.plan.md)。本文件是该任务专属验收文档，不覆盖其他任务；验收流程见[入口](../../README.md)。
 
 状态：仅草稿规划，待验收。现有范围尚需按二期方向或实际能力细化，本次不执行、不宣称已具备自动化驱动或原生能力，不改固定契约。以下按现有 Spec 的 AC1–AC5 规划，范围改变时同步修订；具体命令、构建 commit/摘要及未确定环境在执行前固定。
 

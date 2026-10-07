@@ -1,6 +1,6 @@
 # 延后任务 #40 验收规划：固定版本与双入口
 
-唯一任务归属：#40。来源：[Spec](../spec/versioned-runtime.spec.md) / [Plan](../spec/versioned-runtime.plan.md)。状态：延后草案、待验收；不属于当前草稿 roadmap 或执行入口，补写文档不重新启用、不分配新 Task ID。重新启用前按实际维护需求重定范围和前置，不能以当前路径隔离/同构建恢复证明版本选择或提升。
+唯一任务归属：#40。来源：[Spec](../../../spec/versioned-runtime.spec.md) / [Plan](../../../spec/versioned-runtime.plan.md)。状态：延后草案、待验收；不属于当前草稿 roadmap 或执行入口，补写文档不重新启用、不分配新 Task ID。重新启用前按实际维护需求重定范围和前置，不能以当前路径隔离/同构建恢复证明版本选择或提升。
 
 ## 自动验收
 

@@ -1,88 +1,33 @@
 # 规划与原生客户端架构设计
 
-状态：产品与架构方案；已选范围的执行要求见[独立 Spec/Plan 索引](../spec/README.md)及[共同接口](../spec/phase2-constraints.md)。范围依据：[第二阶段产品愿景](../roadmap/product-vision.md)、[架构约束](../roadmap/architecture-constraints.md)、[当前执行控制台](execution-console.md)和[会话展示](conversation-events.md)。
+状态：二期分步设计。当前可固定边界见[共同约束](../spec/phase2-constraints.md)，排期见[二期草稿](../roadmap/drafts/phase2-delivery.md)。2.2/2.3流程和原型未定，旧Proposal/Publication/全worktree锁与发布算法不是近期执行要求。
 
-## 目标与边界
+## 已选技术与权威
 
-第二阶段让人在 SteerLine 原生 UI 中与 Codex 主 agent 讨论目标、审阅规划草稿和影响，明确确认任务创建与执行决策，并追溯目标、Spec/Plan、DAG、运行、PR 和交付证据。主agent仅支持Codex；后续[草稿审核目标](../roadmap/drafts/phase2-draft-roadmap-admission.md)增加由服务独立调度的固定审核角色，判断Spec内容与前置成熟度，不开放主agent调用子agent或通用多agent编排。以下协议/Publication细节是现有基础方案，受新准入流程影响的部分在正式实施前修订，并非已实现审核。当前任务执行沿用本地 Codex 与本机 Orca 两条后端，远端不在当前交付范围；主 agent 会话和任务 worker 的执行身份分开。
+Windows客户端继续采用C# WinUI 3；产品核心沿现有Go服务、SQLite业务权威和Query/Command；主agent未来接本机Codex app-server，任务worker仍为本地Codex/本机Orca。规划会话不伪造Task/Execution身份。客户端不直接写库、解析私有日志或调用后端推进业务状态。
 
-每个项目为主 agent 绑定一个持久的规划 worktree。新 session 使用同一目录的新 Codex thread，不继承旧 session 的消息、摘要或 fork 历史；worktree 中的文件状态保持原样。多个历史 session 可浏览，但同一规划 worktree 的写入轮次必须串行，避免两个 session 同时修改同一套文档。任务 worker 使用其执行身份绑定的工作区，不借用规划 worktree。
+近期#45适配已有DTO/命令到回环HTTP，保持随机实例凭证、身份/版本核验、原请求幂等与未知结果对账。#44交付真实客户端/输入与查询联调，硬依赖#45；不建设完整离线查询进程或持久SSE通知平台。#49/#50在2.1原型确认后接页面，共享客户端/输入和最小导航。
 
-UI 是客户端，不是任务、规划、决策或交付状态的业务写者。服务必须校验人的确认、版本和当前资格；Codex 的建议或文本输出本身不构成创建任务或推进 roadmap 的授权。第二阶段不重做第一阶段的执行状态机、后端适配器或数据库权威。
+## 2.1 执行与关系
 
-## 技术选择
+稳定契约由人工提供，现有任务DAG决定资格，现有actor/Operation与TaskDelivery处理执行事实。UI只消费真实任务/候选/直接关系/阻塞、活动/final/问题/PR及命令回执。沿当前精简接口，不恢复高级图查询或完整过程阅读器；无需新的草稿领域作为前置。
 
-| 层 | 第二阶段选择 | 职责 |
-| --- | --- | --- |
-| Windows UI | C# + WinUI 3 / Windows App SDK | 原生窗口、输入编辑、导航、列表、图与证据展示；保存可恢复的视图状态 |
-| 产品核心 | 现有 Go 服务 | Query/Command、规划提案和版本、任务 DAG、执行、决策、PR 核验及恢复 |
-| 主 agent | 本机 Codex CLI 的 `app-server`，由 Go 服务经 stdio 管理 | Codex 会话、轮次、流式消息、工具事件和 Codex 审批 |
-| 本机客户端协议 | 服务提供的版本化 HTTP/JSON 查询与命令、SSE 事件流 | 供原生 UI 连接、补读和重连；不作为另一套业务状态来源 |
-| 持久化 | 复用第一阶段交付的 SQLite 与受管正文/事件存储 | Go 服务单写；UI 不访问表、Codex 私有日志或 Orca 原始协议 |
+## 2.2 待固定边界
 
-Windows UI 采用 WinUI 3，选型参考[微软文档](https://learn.microsoft.com/en-us/windows/apps/get-started/)；[OpenAI Docs](https://learn.chatgpt.com/docs/app-server)提供 app-server 会话、审批与事件协议，并区分稳定与实验字段。第二阶段按能力验证 Spec 固定实际通过的 Codex 版本、权限配置和字段，不能以文档存在某个方法代替 Windows 原生验收。
+人工草稿维护、文档/产物关联、后验收与必要前置操作是该节点成果，不依赖主agent。草稿内容可继续调整，固定快照才用于审核/正式准入；任务身份不因准入重编号。
 
-输入区使用 WinUI 原生文本控件承载编辑、输入法、选区和撤销；Markdown、代码差异等只读内容可在 UI 设计时评估局部使用 WebView2，不因此把整个界面或业务逻辑改成网页。
+仓库acceptance是验收明细，execution-map是仓库执行/验收汇总，中心仍是Task/DAG和启动资格权威。UI/服务的登记与文档同步、版本与证据、前置条件的领域所有者/持久化/执行前校验须在选定Spec固定，不能让客户端勾选替代权威门槛。
 
-主 agent 可读整个仓库，但项目内写入只允许发生在 `docs/**`。由于正式 execution-map.md 及其固定 Spec/Plan 路径必须始终有效，drafts/ 内选定草稿 作为草稿不参与执行准入，建议 Codex 进程对 worktree 使用只读权限配置；它提交目标路径和候选正文给 Go 的受控文档写入口，服务仅将允许的 Markdown 草稿写到固定 worktree 的 `docs/.steerline-drafts/`。正式路径只由服务在完整校验和人工确认后发布。这样新 session 仍能读取前一 session 留下的目录状态，同时不能直接制造实现代码、测试或任意 artifact。默认 `workspace-write` 会把当前目录纳入可写工作区，不能用它实现这条限制。受控写入口可经 Codex app-server 客户端工具或本机 MCP 提供，具体协议以真实版本探测后固定。[OpenAI Docs：Permissions](https://learn.chatgpt.com/docs/permissions)。
+已知规则：后验收与交付分别表达；允许后置者不阻塞无关后续，失败按影响修复；必要前置仅由核实事实或明确允许的人工作证满足，不覆盖自动失败/缺权限/未知执行。不预建通用artifact库、事项系统或任意审批/提醒。先用两个代表流程确认最小模型。
 
-草稿目录由服务分配身份和目标路径，限制文件类型、大小及数量；不接受路径遍历、目录联接或指向工作区外的链接。服务不把草稿当作已发布的 roadmap、Spec 或 Plan。Codex 命令、工具和子进程的实际权限仍须在 Windows 原生沙箱中验证；仅靠提示词或检查最终 Git diff 不能证明越界写入没有发生。
+## 2.3 待固定边界
 
-```mermaid
-flowchart LR
-    Win[Windows WinUI 3] --> API[SteerLine 本机客户端协议]
-    Mac[未来 macOS 原生 UI] --> API
-    Linux[未来 Linux 原生 UI] --> API
-    API --> QC[Go QueryService / CommandService]
-    QC --> DB[(唯一业务存储)]
-    QC --> Agent[Codex app-server：主 agent]
-    QC --> Exec[local Codex / Orca：任务执行]
-```
+主agent及固定审核角色消费稳定草稿/人工事项/执行查询。必要权限验证纳入#47接入实现：禁止通用执行/越界/子agent，受控读取/保存，未知轮次不重复发送。优先复用既有Codex codec/动态工具，确有阻塞才评估替代；不继承worker宽权限。
 
-各平台届时运行各自的本机 Go 服务；图中共用的是协议与核心代码，不是跨平台连接同一台服务。macOS/Linux UI 是未来接入位置，不表示这些平台的服务生命周期、Codex 或 Orca 能力已通过原生验收。
+报告和人授权绑定固定快照，版本改变需重新核对；审核/人工集成等待不默认锁死全部草稿。正式契约/目标分支内容核验、原创建请求、部分完成与execution-map同步必须真实对账；Git/SQLite没有原子事务。具体工作区、文档版本、提交/同步和恢复算法待成熟Spec固定，不默认要求旧祖先限制与确定性index物化链。
 
-## 业务接口与数据流
+## 生命周期与验证
 
-已有核心提供 SQLite 单写、产品 Query/Command 和规范会话/正文读取。当前边界和源码归属见[代码架构](../architecture/current-code-architecture.md)，会话契约见[会话设计](conversation-events.md)。本机原生待补范围按[当前 Spec 索引](../spec/README.md)维护；历史远端试验不成为二期前置。本机客户端协议只增加传输适配层，正式任务映射只在核对中心 DAG 后同步，不从 drafts/ 内选定草稿 草稿直接派发；不让 C# 客户端重写业务校验，不把 control/requests 文件目录、SQLite 表或 Codex JSON-RPC 直接作为 UI 契约。
+用户从实际服务窗口入口启动Go服务；UI关闭不停止服务/worker，离线只读已有观察并禁变更，不创建替代服务。主agent进程归属/同构建恢复在实际接入时验证。
 
-客户端协议至少覆盖三类操作：
-
-1. **查询**：项目/服务状态、目标及草稿版本、任务与 DAG、会话和运行、决策、PR 与证据；分页结果携带稳定对象 ID、数据版本和查询游标。查询不能隐式改变业务状态。
-2. **命令**：保存或审阅草稿、确认创建任务批次、启动任务、提交决策等。请求携带精确目标、预期版本、幂等键和发起者；响应区分已提交、已接受、已执行、被拒绝和结果待核实。服务端再次核验资格，不能依赖按钮禁用。
-3. **事件**：SSE 提示客户端有新状态或会话输出。事件携带可恢复的服务查询游标；断线后先从持久查询补读，再继续订阅。SSE 只负责传递更新，不作为唯一持久记录或执行完成证据。
-
-例如，主 agent 提出三个任务时，UI 先展示拆分和依赖。具体草稿任务可以提前取得唯一 Task ID；人确认进入规格编写时沿用该 ID，未编号者先分配，再建立受控草稿槽，由主 agent 写候选 roadmap、Spec 和 Plan。人的“确认创建”绑定整套草稿版本、原 Task ID 和正式基线，服务发布文档并提交专用规划分支。规格尚未进入执行目标分支时，保留原 publication 并等待用户以保留规划 commit 的 merge/fast-forward 集成，服务不自动合并或推送。核验祖先和契约内容后，按受控准入以原 ID 纳入 execution-map 并创建对应中心 Task/DAG，两边结果核对后才认定正式准入。同内容 squash/cherry-pick 不符合原基础方案的同步条件。创建尚未开始时人可受控结束等待，已发布文档和占号保留，提案回到 needs_review。Git/数据库部分完成和未知结果沿原 ID/请求核实，不重新编号或重复创建；放弃草稿不取消已创建 Task。原基础算法见[正式发布 Spec](../spec/phase2-document-publish.spec.md)，与新审核准入有关的范围仍须在实施前正式对齐。
-
-主 agent 不能修改 `.git` 或 Git 共享引用。正式任务 ID 的占用、`task-ids` 记录、规划文档的 Git 提交及中心 DAG 创建由 SteerLine 在相应的人工确认后按固定身份办理。提交前对整套候选文档执行路径、类型、身份、链接、依赖与 Spec/Plan 一一对应校验，并核对固定文件版本；`roadmap_task_id.py check` 是已有校验的一部分，不能当成全部语义质量检查。发布期间锁定该规划 worktree 的写入与正式文档读取；故障后先按 Git 与操作记录恢复或阻止新动作，不把部分写入的正式目录当作有效版本。任一步骤结果待核实时保留原身份与现场，不自动再占号或重派。
-
-多个 Markdown 文件无法靠逐个覆盖获得原子可见性。实施 Spec 必须给出整套正式文档的可见版本、发布锁和崩溃恢复算法，并用故障注入证明 UI 与服务查询始终读取上一套或下一套完整有效版本；如果原始文件路径也被要求在发布的每个瞬间都可供外部进程无锁读取，则需另行设计原子目录/版本切换，不能把普通逐文件复制宣称为满足要求。SteerLine 无法阻止其他程序直接改动工作树；检测到外部修改时应立即阻止相关发布和任务创建，保留差异供人核实。
-
-## 本机连接与生命周期
-
-Windows UI 与 Go 服务是两个独立进程。[整体生命周期边界](../architecture.md#生命周期反馈与恢复)继续适用：用户从固定入口打开可见服务窗口；退出 UI 不停止服务或 worker；关闭服务窗口结束服务，UI 显示离线或待核实状态，不自行创建替代服务。主 agent 的 app-server 由服务持有，UI 关闭不直接终止会话；服务重启后按持久 thread ID 恢复并对账。
-
-建议服务仅在本机回环地址开放客户端协议，使用随机端口与仅本机用户可读的实例凭证。发现记录包含协议版本、项目及服务实例身份；客户端连接后核对身份和能力，凭证放在请求头，不放入 URL 或日志。实际 Windows ACL、浏览器来源拒绝、端口冲突和旧实例记录的处理须在实施 Spec 中验证。该本机协议不直接开放远程访问。
-
-服务在线时 UI 从服务查询；服务离线而需要重新打开历史时，由同一 Go `QueryService` 的只读命令入口返回相同 DTO。这个短时只读入口不得启动调度、消费命令或改写 SQLite，UI 也不自行解析数据库。其具体命令和权限边界留待实施 Spec 固定。
-
-## Codex 主 agent 边界
-
-每个规划会话绑定可恢复的 Codex thread ID；Go 服务读取 app-server 事件并关联 SteerLine 的项目、提案版本和 artifact ID。对话文字、工具活动、提案草稿、人工确认和任务执行结果分别建模。Codex 的工具审批不替代 SteerLine 的产品确认；主 agent 不持有绕过 `CommandService` 创建任务或更改 DAG 的入口。
-
-主 agent 只能产出文档候选，不能编写或运行嗅探器、测试、实现代码等执行产物。此类需求先写成符合目录规则的任务 Spec/Plan，再由 SteerLine 依任务 DAG 派发执行。服务需要验证 Codex CLI 是否能对主 agent 禁用或拦截通用执行工具；若不能代码化保证“只规划、不执行”，该能力是第二阶段的交付阻塞，不能只靠提示词或 UI 隐藏按钮宣称满足。固定配置还须设置 `agents.enabled=false` 禁用多 agent 工具，并在目标版本验证其生效。[OpenAI Docs：配置项](https://learn.chatgpt.com/docs/config-file/config-reference)。
-
-输入框、草稿保存、多行编辑、历史输入复用属于 UI；会话恢复、轮次开始、运行中追加输入及中断通过经验证的 app-server 方法实现。已发送输入的“编辑并重跑”仅在真实 Codex App 对照中确认会话历史与文件状态语义均可一致实现时提供，否则第二阶段不显示该入口。不得将仅回退对话历史包装成文件已回退。禁用子 agent 的方法及单 agent 约束也须通过实际 Codex 版本验证，不能仅靠 UI 隐藏入口。
-
-## 未来原生平台的扩展点
-
-未来平台分别实现原生窗口、输入法、文件选择器、通知、快捷键和安装体验，复用同一版本化产品协议及 Go 业务规则。Go 中只有服务承载、进程与工作区等平台事实通过受限适配器分别实现和验收；Windows 可见服务窗口策略不强加给 macOS/Linux。新平台启用前分别验证 Codex CLI、沙箱、Git 与执行后端能力，不把 Windows 的实测结论直接移植过去。
-
-跨平台共享的是业务 DTO、命令语义、错误码、事件游标和协议契约测试，而不是 UI 控件树或第二套数据库模型。新增平台时不需要重新实现任务状态机，也不需要把 WinUI 代码抽成预设的通用 UI 框架。
-
-## 实施前须固定的验证
-
-- 第一阶段 Query/Command、会话与 DAG 的实际交付接口；若有差异，以先落地的业务权威为准，修订本方案后再写第二阶段 Spec。
-- 本机协议的版本、身份、凭证保护、离线只读与事件补读；UI 重启和服务重启均不得重复提交有副作用命令。
-- Codex app-server 的 Windows 原生会话恢复、流式事件、审批、单 agent 约束，以及与 Codex App 输入行为的实测差异。
-- 固定规划 worktree 上的“全仓可读、仅 `docs/**` 可写”、新 session 不继承对话上下文、并发写入串行化，以及非文档产物拒绝。
-- 原生 UI 关闭、重新打开、切项目和服务窗口关闭时，草稿、阅读位置、待决策与运行事实分别保持正确；不能用 UI 状态代替服务回执。
+每任务最小测试/专属验收，三个节点独立签收；不以原型证明生产或平台能力。当前文档仅说明采用/待定边界，不建立空planning/review包。其它平台UI、版本升级和通用多agent编排不属于本轮。

@@ -1,6 +1,8 @@
 # 任务 #48 验收规划：正式文档发布与任务创建
 
-唯一任务归属：#48。来源：[Spec](../spec/phase2-document-publish.spec.md) / [Plan](../spec/phase2-document-publish.plan.md)。本文件是该任务专属验收文档，不覆盖其他任务；验收流程见[入口](README.md)。
+> 本轮状态：仅2.2/2.3旧方案参考，待重定，不进入近期执行/验收安排。下表旧场景不是本轮已冻结通过条件；流程及原型确认后同步对应Spec/Plan和本任务专属记录。新节点活动见[二期验收导航](../../phase2.md)。
+
+唯一任务归属：#48。来源：[Spec](../../../spec/phase2-document-publish.spec.md) / [Plan](../../../spec/phase2-document-publish.plan.md)。本文件是该任务专属验收文档，不覆盖其他任务；验收流程见[入口](../../README.md)。
 
 状态：仅草稿规划，待验收。现有范围尚需按二期方向或实际能力细化，本次不执行、不宣称已具备自动化驱动或原生能力，不改固定契约。以下按现有 Spec 的 DP1–DP9 规划，范围改变时同步修订；具体命令、构建 commit/摘要及未确定环境在执行前固定。
 
@@ -12,7 +14,7 @@
 | --- | --- | --- | --- |
 | DP1-A | 自动 | documents_only 完整发布不占号；task_batch 全文件固定且不改变既有契约 | 待验收，未执行，无新证据 |
 | DP2-A | 自动 | tree/commit、ref CAS、文件物化、实际 index 替换与正式指针前后注入崩溃；恢复后 HEAD/index/文件一致，连续发布和同步不出现意外 dirty 状态 | 待验收，未执行，无新证据 |
-| DP3-A | 自动 | 发布与按 #46 契约建立的 turn/edit owner 竞争、外部改动和旧 generation 全部拒绝；未知 owner 不释放。此处用服务消费者夹具，不依赖 #47；真实 Codex 交叉验收归 [二期验收活动](../acceptance/phase2.md) | 待验收，未执行，无新证据 |
+| DP3-A | 自动 | 发布与按 #46 契约建立的 turn/edit owner 竞争、外部改动和旧 generation 全部拒绝；未知 owner 不释放。此处用服务消费者夹具，不依赖 #47；真实 Codex 交叉验收归 [二期验收活动](../../phase2.md) | 待验收，未执行，无新证据 |
 | DP4-A | 自动 | 未集成或同内容 squash/cherry-pick 不创建；保留规划提交的人工 merge/fast-forward 且 blob 一致后才按原 ID 创建，并可再次同步 | 待验收，未执行，无新证据 |
 | DP5-A | 自动 | Git 已完成/中心未完成、中心已完成/回执丢失均按原操作结算，只有一个 commit 身份与一个 batch | 待验收，未执行，无新证据 |
 | DP6-A | 自动 | UI/离线查询同时读新旧版本与结果待核实状态一致；草稿、正式、已创建三个事实不混同 | 待验收，未执行，无新证据 |

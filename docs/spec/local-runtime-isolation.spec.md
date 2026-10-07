@@ -1,6 +1,6 @@
 # Spec：本机安装与调试路径隔离
 
-任务 ID：83；任务名称：本机安装与调试路径隔离；目标：`PHASE1-RUNTIME`。配套 [Plan](local-runtime-isolation.plan.md)。状态：待实现与验收，一个独立实现 PR 交付。
+任务 ID：83；任务名称：本机安装与调试路径隔离；目标：`PHASE1-RUNTIME`。配套 [Plan](local-runtime-isolation.plan.md)及[专属验收](../acceptance/local-runtime-isolation.md)。状态：已纳入执行规划、待中心准入及实现/验收，一个独立实现 PR 交付。
 
 ## 范围与前置
 
@@ -31,4 +31,4 @@
 | LI3 | 缺少调试路径、home 重叠、显式状态/工作区越出调试 home 拒绝；同仓库跨 home 第二写者被原锁拒绝；误连实例的写命令仍被拒绝 |
 | LI4 | Windows 中文/空格路径及无关 cwd 可启动并显示准确身份；维护说明区分中心停服、外部执行结算、同构建重启和人工更新 |
 
-使用真实 Windows 进程、Git、SQLite 与受控后端完成一次最小共存场景，无模型请求；证据保存于 docs/validation/local-runtime-isolation/。安装与调试入口缺陷由本任务修复；业务交付、当前格式恢复及 24 小时运行由 [一期验收活动](../acceptance/phase1.md) 组合验收。
+使用真实 Windows 进程、Git、SQLite 与受控后端完成一次最小共存场景，无模型请求；原始证据保存于本次临时目录，最小摘要与待验状态记录于专属acceptance。安装与调试入口缺陷由本任务修复；业务交付、当前格式恢复及 24 小时运行由 [一期验收活动](../acceptance/phase1.md) 组合验收。

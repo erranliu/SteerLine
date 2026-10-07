@@ -1,78 +1,68 @@
 # SteerLine 草稿 Roadmap
 
-本文件用于讨论后续目标、功能拆分、候选 Spec/Plan、依赖和优先级，允许继续修改；下表现有编号及文档均为草稿候选，不表示已创建 Task 或进入中心 DAG。日常执行只读取[正式执行清单](../execution-map.md)，该清单本次先清空；不能从草稿自动选任务或回填正式条目。
+本页为本轮选定草稿，用于一期收尾及二期三节点规划。编号/文档不产生执行资格。用户已确认的#83/#45/#44列入[execution-map](../execution-map.md)，状态为待中心准入；中心同步待核对，不推定实际DAG为空。派发仍须工具回执及资格核验。
 
-草稿任务可提前分配唯一 Task ID，下表的任务身份在后续正式准入时沿用。Task/DAG 由外部工具 SteerLine 管理；正式准入通过其接口办理并以回执/查询同步 execution-map，不能把草稿编号或文件编辑当成入图或执行资格。
+规划按[RoadmapGuide](../RoadmapGuide.md)和[并行开发指南](../../architecture/parallel-development.md)。本次只修订仓库草稿；若外部已冻结旧任务，须先核对并受控处置，不能把本轮依赖/名称变化写成工具变更。每个执行任务保持独立 Spec/Plan、一个实现 PR及专属 acceptance。
 
-本轮已按各任务的自动验收项补齐 Plan 映射和能力补齐安排。表中验收文档维护具体项与结果，Plan 安排实现、验收执行和登记；待新增场景不是当前可执行能力，人工项单列窗口及实际阻塞范围。入图前继续固定未定范围/参数，不以文档完善证明已准入或已验。
+## 一期收尾
 
-每次修改本草稿先读[RoadmapGuide](../RoadmapGuide.md)，再使用[并行开发指南](../../architecture/parallel-development.md)。候选准入需固定内容与授权、核对相关审核/机械校验，再通过现有 SteerLine 创建流程取得真实 DAG 回执并同步正式映射。二期自动审核机制尚未交付，本次只建立文档边界。
+一期只交付/验收本地 Codex与本机 Orca；远端存量实现及历史试验不构成一期门槛。已具备持续 worker、同任务人工多候选、独立原会话反馈、恢复、真实PR核验、唯一TaskDelivery及后继base。默认一个候选，开始时参与数达5拒绝，不建严格名额、自动评分/融合或实验调度器。
 
-## 执行、候选与版本
+近期只补一个本机安装版本与源码调试共存，不建设 stable/dev 双 channel、提升或跨开发格式兼容。人工组织的一期组合/24小时/同构建恢复见[一期活动](../../acceptance/phase1.md)，不是任务，不阻塞无关二期研发。
 
-第一阶段统一只交付和验收本地 Codex 与本机 Orca。远程准入、派发、反馈、恢复、取消及本机/远端混合流程暂移出一期，也不列作一期阻塞或待补验；后续另行规划。保留既有远端代码、协议定义及历史证据，不将它们声明为当前支持或完成条件。Git remote 和托管 PR 发布仍属于本机交付链。
+定向待补仍见[app-server race](../../acceptance/local-codex-app-server.md)、[Orca活动输入/故障/生命周期](../../acceptance/worker-flow-orca-native.md)、[停服恢复](../../acceptance/worker-service-recovery.md)。按当前支持及产品精简核对适用范围；完整transcript阅读不再作为新界面交付要求，未验证的执行/恢复风险不能因此略过。
 
-一期由外部提供稳定roadmap，复用已具备的持续worker、原会话反馈、恢复及唯一交付基础。分叉只用于人工对比执行方案：默认一个，各自冻结不同配置；开始时已达5个拒绝，允许竞态偶尔超出；合并前可放弃退出实验，合并后拒绝。保留原会话、原请求、资源事实和唯一交付，不建严格名额、自动评分/融合或实验调度器。已具备的本机双后端候选、独立反馈、唯一交付、原会话恢复与放弃增量已完成；后续按需复用[当前验收摘要](../../acceptance/candidate-acceptance.md)，不要求追读已交付规格。
+## 近期准入候选：只固定确定会使用的能力
 
-近期运行目标收敛为一个本机安装版本与独立源码调试路径共存，完整 stable/dev 双 channel 和受控提升延后。已有分级 E2E 降低回归成本；安装入口和长期运行仍须验证，不能用 runner 临时构建或短时 smoke 代替。
+本批已按用户确认纳入正式执行规划，待固定材料与中心准入，不代表当前可执行。草稿保留用于范围讨论，准入状态以execution-map为准；共同宿主接线指定单一修改所有者并串行合入。
 
-| 任务 ID | 任务名称 | 交付范围 | 剩余拟议前置 | 执行规格 | 验收规划 |
+| 任务 ID | 任务名称 | 交付范围 / 所有者 | 剩余拟议前置 | 执行规格 | 专属验收 |
 | --- | --- | --- | --- | --- | --- |
-| 83 | 本机安装与调试路径隔离 | 固定安装 exe、显式调试 exe/home、状态隔离与共存 | 无 | [Spec](../../spec/local-runtime-isolation.spec.md) · [Plan](../../spec/local-runtime-isolation.plan.md) | [验收](../../acceptance/local-runtime-isolation.md) |
+| 83 | 本机安装与调试路径隔离 | 现有安装/宿主：显式exe/home/config、状态隔离、诊断及一次受控共存 | 无 | [Spec](../../spec/local-runtime-isolation.spec.md) · [Plan](../../spec/local-runtime-isolation.plan.md) | [验收](../../acceptance/local-runtime-isolation.md) |
+| 45 | 本机客户端协议与历史查询 | 产品传输/宿主：现有任务、双本机候选、基本图、反馈/活动/final/PR及原请求回执 | 无 | [Spec](../../spec/phase2-local-api.spec.md) · [Plan](../../spec/phase2-local-api.plan.md) | [验收](../../acceptance/phase2-local-api.md) |
+| 44 | WinUI 基座与原生输入 | Windows客户端：工程/真实窗口、IME与多行、最小客户端及真实查询联调 | #45 | [Spec](../../spec/phase2-winui-foundation.spec.md) · [Plan](../../spec/phase2-winui-foundation.plan.md) | [验收](../../acceptance/phase2-winui-foundation.md) |
 
-## 第一阶段剩余验证
+#83 与 #45 无新增业务硬依赖；exe/home/服务发现/宿主是共同集成面，后合入者复核另一项成果。#45拥有HTTP接线，#83拥有路径与启动器；如共改同一段由先合入者交付、后者适配。#44最终交付需要真实 #45，所以为硬前置；输入/窗口可提前设计，不以设计准备获得领取资格。
 
-持续 worker、本机双后端候选、独立原会话反馈/重启、真实 PR 核验、唯一 TaskDelivery 与后继 base 已具备；候选控制台的 CC5 人工输入也已确认通过。人工组织的一期组合/24小时/恢复活动由[一期验收](../../acceptance/phase1.md)安排，不作为执行 DAG 任务；自动化验收能力的真实缺口另行规划。
+近期不包含 SSE/持久通知平台、完整离线查询、新规划DTO、通用artifact/人工事项框架、最终规划导航或完整视图偏好。#44人工输入体验可在自动通过后集中后置到2.1签收前；已知误发/串线必须修复。
 
-以下仅保留尚未被当前证据完整覆盖的范围，后续验证 Plan 按实际改动选择，不重新加入已完成的单会话或真实 PR 链：
+## 二期三个验收节点
 
-- **定向 race detector**：具备 CGO/C 工具链后验证 app-server 并行、恢复与回复；既有 A/B 服务级闭环证据及原状态按需从[待补验收摘要](../../acceptance/pending-acceptance.md)核对。
-- **Orca 活动轮次输入（ON3）**：仍需核验活动轮次原 question/message 的纯文字及选项＋备注回复、重复提交与原 Dispatch 归属；轮次结束后的候选反馈与原请求重放已具备。
-- **Orca 消息竞争与故障（ON5、ON7）**：仍需定向覆盖活跃 send/worker_done 竞争、迟到 question/旧 Dispatch、Orca 自身断联、agent 未识别、审批阻断和身份变化。已具备的本地 Codex 连接故障及 Orca 兄弟继续证据可复用。
-- **Orca 输出与独立生命周期（ON8、ON9）**：规范最终正文与本次 owned 资源清理已具备；完整 transcript 边界、中心单独停止观察时的原终端/工作区事实仍需定向核验。
-
-第二种 Orca agent 在具备实际目标和环境后另行规划，不属于当前仅 Codex 的一期交付前置。
-
-## 原生 UI 与受控规划
-
-二期采用[草稿roadmap与审核准入目标](phase2-draft-roadmap-admission.md)：主agent自由规划，独立审核内容及前置成熟度，SteerLine受控纳入正式任务集合。该新增机制目前是目标级规划，不分配任务ID或新Spec；下表 #43–#52是既有接口/会话/UI基础，涉及草稿、发布与准入的范围在正式准入前按新目标核对并形成修订，不能把现有Spec宣称为已包含审核agent。
-
-近期产品主线优先 #45 本机 API，再由 #44/#45 交付 #50 执行与待处理界面，复用已有阶段与反馈。#43 先验证规划 agent 的实际能力，#44 提供原生输入基座；两者可独立准备。不等待完整双版本管理或全面目录整理。草稿、审核、发布与准入范围在正式实施前对齐二期目标。
-
-| 任务 ID | 任务名称 | 交付范围 | 剩余拟议前置 | 执行规格 | 验收规划 |
-| --- | --- | --- | --- | --- | --- |
-| 43 | Codex 规划主 agent 能力验证 | 规划 agent 权限与受控工具能力证明 | 无 | [Spec](../../spec/phase2-agent-capabilities.spec.md) · [Plan](../../spec/phase2-agent-capabilities.plan.md) | [验收](../../acceptance/phase2-agent-capabilities.md) |
-| 44 | WinUI 基座与原生输入 | Windows 原生窗口、IME/多行输入和导航基座 | 无 | [Spec](../../spec/phase2-winui-foundation.spec.md) · [Plan](../../spec/phase2-winui-foundation.plan.md) | [验收](../../acceptance/phase2-winui-foundation.md) |
-| 45 | 本机客户端协议与历史查询 | 五阶段/原会话反馈的本机 HTTP/SSE 与离线查询 | 无 | [Spec](../../spec/phase2-local-api.spec.md) · [Plan](../../spec/phase2-local-api.plan.md) | [验收](../../acceptance/phase2-local-api.md) |
-| 46 | 规划提案与受控草稿 | 规划工作区、提案/ID 预留、草稿与文档权威 | `#45` | [Spec](../../spec/phase2-planning-drafts.spec.md) · [Plan](../../spec/phase2-planning-drafts.plan.md) | [验收](../../acceptance/phase2-planning-drafts.md) |
-| 47 | Codex 规划会话服务 | 受控规划会话、草稿工具和写入仲裁接线 | `#43`、`#46` | [Spec](../../spec/phase2-planning-sessions.spec.md) · [Plan](../../spec/phase2-planning-sessions.plan.md) | [验收](../../acceptance/phase2-planning-sessions.md) |
-| 48 | 正式文档发布与任务创建 | 正式文档版本、目标分支集成与中心创建 | `#46` | [Spec](../../spec/phase2-document-publish.spec.md) · [Plan](../../spec/phase2-document-publish.plan.md) | [验收](../../acceptance/phase2-document-publish.md) |
-| 49 | Roadmap 与 DAG 原生浏览 | Roadmap/DAG 原生浏览与精确关联 | `#44`、`#48` | [Spec](../../spec/phase2-roadmap-ui.spec.md) · [Plan](../../spec/phase2-roadmap-ui.plan.md) | [验收](../../acceptance/phase2-roadmap-ui.md) |
-| 50 | 执行与待处理原生界面 | 五阶段、完整会话与统一反馈原生页面 | `#44`、`#45` | [Spec](../../spec/phase2-execution-ui.spec.md) · [Plan](../../spec/phase2-execution-ui.plan.md) | [验收](../../acceptance/phase2-execution-ui.md) |
-| 51 | 规划对话原生界面 | 规划会话和受控草稿工具的原生对话 | `#44`、`#47` | [Spec](../../spec/phase2-conversation-ui.spec.md) · [Plan](../../spec/phase2-conversation-ui.plan.md) | [验收](../../acceptance/phase2-conversation-ui.md) |
-| 52 | 文档审阅与确认原生界面 | 规划文档差异、固定版本确认与发布回执 | `#44`、`#48` | [Spec](../../spec/phase2-review-ui.spec.md) · [Plan](../../spec/phase2-review-ui.plan.md) | [验收](../../acceptance/phase2-review-ui.md) |
-
-## 推进顺序
-
-- #83 先交付最小共存；#43/#44/#45 可按拟议前置讨论和准备方案，正式实施须先入 DAG，共享启动器、宿主与客户端接线串行集成。
-- 本机候选基线已具备；#83 提供隔离能力，人工组织的一期验收在 acceptance 中独立安排，不形成 #42 执行任务。
-- 已具备持续 worker 基础；拟优先 #44/#45 → #50；规划链按能力验证及新审核准入方向继续细化，二期完整链由 acceptance 的阶段活动签收；原 #53 不作为执行任务。
-
-本页修改只影响草稿。表格展示尚未满足的拟议前置，持续 worker 与本机候选等已交付能力作为基线摘要；现存 Spec/Plan 的完整原依赖及中心固定契约保留。实施前须完成受控准入并进入正式执行清单，不能凭草稿改边或已有编号推定 Ready。
-
-## 规划约束
-
-草稿识别出任务时就链接其专属验收文档；上表已分别建立初步规划。任务与验收文档是一对一或一对多关系，不以共享记录覆盖多个任务。具体命令、环境与人工窗口可随范围成熟再固定，实时已验/待验结果留在 acceptance 和正式汇总。
-
-### 独立验收活动（非执行任务）
-
-| 活动 | 范围与安排建议 | 验收文档 |
+| 节点 | 可用成果与验收范围 | 成熟度 / 规划文档 |
 | --- | --- | --- |
-| 一期单安装版签收 | 共存、双本机链、同构建恢复及 24 小时；准备真实产物后集中约窗口 | [一期活动](../../acceptance/phase1.md) |
-| 二期完整产品链签收 | 真实 UI/规划/执行能力具备后组织操作与故障检查 | [二期活动](../../acceptance/phase2.md) |
+| 2.1 DAG与执行UI | 人工提供稳定任务契约，原生UI替代现有控制台日常操作，基本DAG/候选/反馈/PR与阻塞准确 | 能力边界已定，最小页面原型待确认；[节点验收](../../acceptance/phase2-execution.md) |
+| 2.2 Roadmap草稿、artifact与人工事项 | 没有主agent也能人工维护草稿、查看关联产物、办理后验收及必要前置操作 | 流程/模型/原型继续迭代；[节点验收](../../acceptance/phase2-planning.md) |
+| 2.3 主agent接入 | 消费已具备草稿/人工事项/执行能力，接入真实会话、权限、工具及确定后的固定审核/授权准入 | 流程/原型继续迭代；[节点验收](../../acceptance/phase2-main-agent.md) |
 
-规划时鼓励识别此类独立活动与人参与策略，但不强制新增活动或把它们串成所有任务的执行路径；它们的文档可引用相关任务专属结果，不代替各任务验收文档，不自动占 Task ID 或进入 DAG。
+节点为人工参与的验收活动，不占Task ID、不入执行DAG。各任务专属验收仍独立维护；节点签收不自动阻塞无关后续开发。二期流程归[推进边界](phase2-delivery.md)，审核方向归[目标草稿](phase2-draft-roadmap-admission.md)。当前原型含旧演示，不是已确认实现契约。
 
-[架构约束](../architecture-constraints.md) · [执行控制台设计](../../product-design/execution-console.md) · [产品交付节点](../product-vision.md)
+## 下一批：2.1最小原型确认后
 
-#42/#53 的旧编号保留历史，人工验收为主的范围已移入 acceptance，不重用这些 ID。草稿任务准入后可以保留在本页，不严格维护实时状态；execution-map 是执行与验收汇总的仓库真相源。真正执行完成后才从本页移除任务条目，待补验事项留在 acceptance 和正式清单待验索引。
+按用户最新要求，#49/#50已移出execution-map的本批准入准备范围，继续保留在本草稿；原型确认并补齐固定材料后再办理正式准入。原Task ID、Spec/Plan及专属验收链接保留。
+
+| 任务 ID | 任务名称 | 交付范围 | 剩余拟议前置 | 执行规格 | 专属验收 |
+| --- | --- | --- | --- | --- | --- |
+| 49 | DAG 与任务原生浏览 | 真实任务/直接前置后继、阻塞、基本图分页、Spec/Plan及交付定位 | #44、#45；准入前确认2.1原型 | [Spec](../../spec/phase2-roadmap-ui.spec.md) · [Plan](../../spec/phase2-roadmap-ui.plan.md) | [验收](../../acceptance/phase2-roadmap-ui.md) |
+| 50 | 执行与待处理原生界面 | 当前控制台日常操作、双本机多候选、原问题反馈、有界活动/final/PR与原请求对账 | #44、#45；准入前确认2.1原型 | [Spec](../../spec/phase2-execution-ui.spec.md) · [Plan](../../spec/phase2-execution-ui.plan.md) | [验收](../../acceptance/phase2-execution-ui.md) |
+
+#49不再等待#48，也不在本任务实现完整roadmap/草稿浏览。#49/#50可分开实现，共用客户端/输入和最小导航；先合入的页面拥有共享导航接线，后合入者复核。原型未确认前不提前铺大量页面/视图模型。2.1真实验收后再决定控制台退役范围。
+
+## 待重定候选：不提前冻结2.2/2.3
+
+以下身份保留，但旧正文是参考方案，不进入近期送审/派发范围，不成为#44/#45/#49/#50的隐式要求。流程/原型成熟后先确定独立成果，再修订Spec/Plan和专属验收；确有新增成果再分配新ID，不强行套旧任务。
+
+| 任务 ID | 任务名称 | 本轮处理 | 参考材料 | 专属验收 |
+| --- | --- | --- | --- | --- |
+| 46 | 规划提案与受控草稿 | 2.2待重定：受控自由草稿及快照；旧提案/槽/全锁不预先采用 | [Spec](../../spec/phase2-planning-drafts.spec.md) · [Plan](../../spec/phase2-planning-drafts.plan.md) | [验收](../../acceptance/archive/superseded/phase2-planning-drafts.md) |
+| 48 | 正式文档发布与任务创建 | 2.2/2.3待重定：固定内容、授权/审核、目标规格核验及原请求准入；旧Publication算法不冻结 | [Spec](../../spec/phase2-document-publish.spec.md) · [Plan](../../spec/phase2-document-publish.plan.md) | [验收](../../acceptance/archive/superseded/phase2-document-publish.md) |
+| 52 | 文档审阅与确认原生界面 | 待重定；人工后验收/必要前置界面先推导，不直接套旧发布页面 | [Spec](../../spec/phase2-review-ui.spec.md) · [Plan](../../spec/phase2-review-ui.plan.md) | [验收](../../acceptance/archive/superseded/phase2-review-ui.md) |
+| 47 | Codex 规划会话服务 | 2.3待重定；接入门槛在本任务验证实际权限/受控草稿工具，复用已有会话能力 | [Spec](../../spec/phase2-planning-sessions.spec.md) · [Plan](../../spec/phase2-planning-sessions.plan.md) | [验收](../../acceptance/archive/superseded/phase2-planning-sessions.md) |
+| 51 | 规划对话原生界面 | 2.3待重定；等待确定的会话/草稿交互，不先造对话骨架 | [Spec](../../spec/phase2-conversation-ui.spec.md) · [Plan](../../spec/phase2-conversation-ui.plan.md) | [验收](../../acceptance/archive/superseded/phase2-conversation-ui.md) |
+
+#43“Codex规划主agent能力验证”不再安排独立探测项目；身份和[旧Spec](../../spec/phase2-agent-capabilities.spec.md)/[旧Plan](../../spec/phase2-agent-capabilities.plan.md)/[专属记录](../../acceptance/archive/superseded/phase2-agent-capabilities.md)保留，必要接入验证纳入重定后的#47。不是放宽权限门槛，也不声明中心旧Task已取消。
+
+## 推进与人工安排
+
+近期 #83 与 #45 先落实，#45 → #44 → 原型确认后的 #49/#50。同期继续2.1原型和2.2/2.3流程讨论；一期24小时不作传递硬前置。人工后验收、必要前置与artifact交互先用代表流程推导，见[2.2验收规划](../../acceptance/phase2-planning.md)，不立通用事项/审批/提醒引擎。
+
+允许后置人工项登记参与人/窗口或待安排、截止节点及阻塞范围；真实失败/关键能力缺口不得后置。执行资格必须核对实际DAG与固定契约。#40/#41完整版本管理继续延期；#42/#53人工活动旧编号不复用。
