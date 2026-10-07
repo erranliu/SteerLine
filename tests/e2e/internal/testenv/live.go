@@ -102,16 +102,14 @@ if ($LASTEXITCODE -ne 0) { throw 'commit failed' }
 $branch = git symbolic-ref --short HEAD
 # The shell credential helper cannot run in the unelevated Windows sandbox.
 # Keep the test token out of argv/config/logs and scope its header to this remote.
-$env:GIT_CONFIG_COUNT = '2'
-$env:GIT_CONFIG_KEY_0 = 'credential.helper'
-$env:GIT_CONFIG_VALUE_0 = ''
-$env:GIT_CONFIG_KEY_1 = 'http.https://github.com/erranliu/SteerlineTest.git.extraheader'
-$env:GIT_CONFIG_VALUE_1 = 'AUTHORIZATION: basic ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('x-access-token:' + $env:GH_TOKEN))
+$env:GIT_CONFIG_COUNT = '1'
+$env:GIT_CONFIG_KEY_0 = 'http.https://github.com/erranliu/SteerlineTest.git.extraheader'
+$env:GIT_CONFIG_VALUE_0 = 'AUTHORIZATION: basic ' + [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes('x-access-token:' + $env:GH_TOKEN))
 try {
-  git push origin ('HEAD:refs/heads/' + $branch)
+  git -c credential.helper= push origin ('HEAD:refs/heads/' + $branch)
   if ($LASTEXITCODE -ne 0) { throw 'push failed' }
 } finally {
-  Remove-Item Env:GIT_CONFIG_COUNT,Env:GIT_CONFIG_KEY_0,Env:GIT_CONFIG_VALUE_0,Env:GIT_CONFIG_KEY_1,Env:GIT_CONFIG_VALUE_1 -ErrorAction SilentlyContinue
+  Remove-Item Env:GIT_CONFIG_COUNT,Env:GIT_CONFIG_KEY_0,Env:GIT_CONFIG_VALUE_0 -ErrorAction SilentlyContinue
 }
 gh pr create --repo '%s' --base '%s' --head $branch --draft --title 'SteerLine E2E %s' --body 'Isolated native gpt-6-luna medium delivery test. Disposable test branches.'
 if ($LASTEXITCODE -ne 0) { throw 'PR create failed' }
