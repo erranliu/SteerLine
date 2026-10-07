@@ -1,6 +1,6 @@
 # Spec：保留资源人工处置与精简命令入口
 
-目标：`PRODUCT-SIMPLIFICATION`；批次：3。状态：实现、最小验证及自查完成，待独立PR评审，未分配 Task ID；本批[实施 Plan](product-simplification-03-resources-cli.plan.md)、一个独立实现 PR。依据：2026-10-07 用户要求编写审计后的三批规格，覆盖修订后的取舍 3、8。
+目标：`PRODUCT-SIMPLIFICATION`；批次：3。状态：实现、最小验证及自查完成，待独立PR评审，未分配 Task ID；本批[实施 Plan](product-simplification-03-resources-cli.plan.md)、[独立实现 PR #238](https://github.com/erranliu/SteerLine/pull/238)。依据：2026-10-07 用户要求编写审计后的三批规格，覆盖修订后的取舍 3、8。
 
 参考源码基线：`75474dcece26d807367e106a89a992f01f53fafd`。硬前置：[第二批](product-simplification-02-configuration.spec.md)已通过[PR #236](https://github.com/erranliu/SteerLine/pull/236)合入；实际实施基线记录前两批合入后的提交。遵守 [第一批](product-simplification-01-console.spec.md)“目标与共同边界”。
 
