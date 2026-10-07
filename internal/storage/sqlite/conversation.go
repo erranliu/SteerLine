@@ -47,6 +47,9 @@ func (s Reader) NextConversationEvent(ctx context.Context, project string, filte
 		statement += ` AND turn_id=?`
 		args = append(args, filter.TurnID)
 	}
+	if filter.FinalsOnly {
+		statement += ` AND (event_type='gap' OR (phase='final_answer' AND event_type IN ('message.delta','message.snapshot','message.completed') AND turn_id<>'' AND NOT EXISTS (SELECT 1 FROM executions e WHERE e.project_identity=conversation_events.project_identity AND e.execution_id=conversation_events.execution_id AND (json_extract(e.payload,'$.environment.preparation.turn_id')=conversation_events.turn_id OR EXISTS (SELECT 1 FROM json_each(e.payload,'$.environment.history') h WHERE json_extract(h.value,'$.turn_id')=conversation_events.turn_id)))))`
+	}
 	statement += ` ORDER BY event_id LIMIT 1`
 	var record storageports.ConversationEventRecord
 	err := s.db.QueryRowContext(ctx, statement, args...).Scan(&record.EventID, &record.PayloadBytes, &record.Payload)

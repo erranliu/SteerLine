@@ -23,6 +23,8 @@ func (c *testClock) Now() time.Time { return c.now }
 func (c *testClock) After(time.Duration) <-chan time.Time { return make(chan time.Time) }
 
 type testQuerySource struct {
+	bodies   map[string]string
+	badBody  bool
 	snapshot ProjectSnapshot
 	activity LogBatch
 	page     api.ConversationPage
@@ -71,7 +73,7 @@ func modelForTest(refs []ProjectRef, snapshots []ProjectSnapshot, control *testC
 	clock := &testClock{now: now}
 	m := Model{ctx: context.Background(), clock: clock, selected: 0, width: 120, height: 40, profile: nil, prefs: emptyViewFile()}
 	for i, ref := range refs {
-		m.projects = append(m.projects, projectState{client: &testClient{query: &testQuerySource{}, control: control, ref: ref}, ref: ref, snapshot: snapshots[i], snapshotLoaded: true, selectedKey: "task:task-B", view: ProjectView{Follow: true, Groups: map[string]FoldChoice{}, Outstanding: map[string]string{}, Actions: map[string]SavedAction{}}, actions: map[string]*actionState{}})
+		m.projects = append(m.projects, projectState{client: &testClient{query: &testQuerySource{}, control: control, ref: ref}, ref: ref, snapshot: snapshots[i], snapshotLoaded: true, selectedKey: "task:task-B", view: ProjectView{Outstanding: map[string]string{}, Actions: map[string]SavedAction{}}, candidates: map[string]string{}, actions: map[string]*actionState{}})
 	}
 	return m
 }
@@ -105,7 +107,7 @@ func TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID(
 	if cmd != nil || m.answer == nil || m.answer.optionIndex != 10 {
 		t.Fatalf("recommended option was not only preselected: dialog=%+v cmd=%v", m.answer, cmd)
 	}
-	updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyF8})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyF8})
 	m = updated.(Model)
 	all := renderAnswerDialog(m, m.projects[0], 200)
 	for _, want := range []string{"详细说明 12：完整内容", "背景第二行", run.Decision.ID} {
@@ -113,34 +115,36 @@ func TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID(
 			t.Fatalf("full decision evidence missing %q", want)
 		}
 	}
-	updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyF8})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyF8})
 	m = updated.(Model)
 	for i := 0; i < 13; i++ {
-		updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyDown})
+		updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyDown})
 		m = updated.(Model)
 	}
 	if m.answer.optionIndex != 10 {
 		t.Fatalf("arrow navigation did not cycle all twelve declared options and custom answer: %d", m.answer.optionIndex)
 	}
-	updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyTab})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = updated.(Model)
-	updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("漢字\n第二行")})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("漢字\n第二行")})
 	m = updated.(Model)
-	updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyLeft})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyLeft})
 	m = updated.(Model)
-	updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyBackspace})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 	m = updated.(Model)
 	if got := string(m.answer.note); got != "漢字\n第行" {
 		t.Fatalf("Unicode multi-line editing lost the cursor or pasted text: %q", got)
 	}
-	updated, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyTab})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = updated.(Model)
-	updated, cmd = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
+	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
+	m = updated.(Model)
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'1'}})
 	m = updated.(Model)
 	if cmd != nil {
 		t.Fatal("numeric option shortcut submitted without explicit confirmation")
 	}
-	updated, cmd = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyF2})
+	updated, cmd = m.Update(tea.KeyMsg{Type: tea.KeyF2})
 	m = updated.(Model)
 	if cmd == nil || m.answer != nil || control.decisionCalls != 0 {
 		t.Fatalf("submission did not first persist and defer the command: cmd=%v dialog=%+v calls=%d", cmd, m.answer, control.decisionCalls)
@@ -189,7 +193,7 @@ func TestDecisionAnswerDraftSurvivesStaleRevisionAndLengthRejection(t *testing.T
 	m.projects[0].selectedKey = "task:" + run.TaskID
 	updated, _ := m.answerSelectedDecision()
 	m = updated.(Model)
-	_, _ = m.handleDecisionAnswerKey(tea.KeyMsg{Type: tea.KeyTab})
+	_, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m.answer.note = []rune("preserve this answer")
 	run.ControlRevision++
 	updated, cmd := m.submitDecisionAnswer()
@@ -455,282 +459,32 @@ func TestFailedRefreshKeepsLastGoodReadOnlyDataAndCurrentError(t *testing.T) {
 	}
 }
 
-func TestFoldReducerUsesExplicitTurnAndPreservesManualIntent(t *testing.T) {
-	turn := api.ConversationEvent{Version: api.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "codex-app-server", SourceSegment: "segment", SessionID: "s", SessionQuality: api.IdentityNative, TurnID: "turn-1", TurnQuality: api.IdentityNative, Type: api.ConversationTurnStarted, Phase: api.MessagePhaseUnknown, FinalAvailability: api.FinalPending}
-	commentary := turn
-	commentary.EventID = 2
-	commentary.Type = api.ConversationMessageDelta
-	commentary.ItemID = "same"
-	commentary.ItemQuality = api.IdentityNative
-	commentary.Phase = api.MessagePhaseCommentary
-	completedMessage := commentary
-	completedMessage.EventID = 3
-	completedMessage.Type = api.ConversationMessageComplete
-	ended := turn
-	ended.EventID = 4
-	ended.Type = api.ConversationTurnFailed
-	ended.Status = "failed"
-	ended.Diagnostic = "worker exit 23"
-	choices := map[string]FoldChoice{}
-	view, changed := BuildConversationView([]api.ConversationEvent{turn, commentary, completedMessage, ended}, choices)
-	if !changed || len(view.Groups) != 1 {
-		t.Fatalf("expected one explicit turn group: %+v", view)
-	}
-	group := view.Groups[0]
-	if Folded(group, choices[group.ID]) == false || choices[group.ID].AutoProcessed == false {
-		t.Fatal("failed turn should auto fold once")
-	}
-	if len(group.Process) != 2 || group.Process[1].Type != api.ConversationMessageComplete || len(group.Finals) != 0 {
-		t.Fatalf("message completion must not become final or end boundary: %+v", group)
-	}
-	open := false
-	choices[group.ID] = FoldChoice{AutoProcessed: true, Manual: &open}
-	lateFinal := turn
-	lateFinal.EventID = 5
-	lateFinal.Type = api.ConversationMessageComplete
-	lateFinal.ItemID = "same"
-	lateFinal.Phase = api.MessagePhaseFinalAnswer
-	lateFinal.Body = &api.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "final-1", Revision: 1, Bytes: 30, Completeness: api.BodyComplete}
-	view, changed = BuildConversationView([]api.ConversationEvent{turn, commentary, completedMessage, ended, lateFinal}, choices)
-	if changed || len(view.Groups[0].Finals) != 1 || Folded(view.Groups[0], choices[group.ID]) {
-		t.Fatal("late final must retain its turn and manual expansion")
-	}
-	if view.Groups[0].FinalState != api.FinalAvailable {
-		t.Fatalf("final availability was lost: %s", view.Groups[0].FinalState)
-	}
-}
-
 func TestLateFinalReclassifiesSameItemAndOlderRevisionCannotOverwrite(t *testing.T) {
-	base := api.ConversationEvent{Version: api.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "codex-app-server", SourceSegment: "segment", SessionID: "s", SessionQuality: api.IdentityNative, TurnID: "turn", TurnQuality: api.IdentityNative, ItemID: "item", ItemKey: "stable-item", ItemQuality: api.IdentityNative, SourceEventQuality: api.IdentityNative, Type: api.ConversationMessageSnapshot, Phase: api.MessagePhaseUnknown}
-	process := base
-	process.EventID = 2
-	process.SourceRevision = 2
-	process.Body = &api.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "stable-item", Revision: 2, Bytes: 12, Completeness: api.BodyPartial}
-	older := base
-	older.EventID = 3
+	m, _ := ccFixture(t, 1)
+	m, _ = m.refreshFinalReplies(0)
+	event := finalFixture(m, 1, "turn", "item", "完整回复")
+	event.SourceRevision = 2
+	next, _ := m.Update(finalRepliesMsg{projectKey: m.projects[0].ref.Key, identity: m.projects[0].ref.Identity, key: m.projects[0].finalKey, generation: m.projects[0].finalGeneration, page: api.ConversationPage{Events: []api.ConversationEvent{event}}})
+	m = next.(Model)
+	older := event
 	older.SourceRevision = 1
-	older.Body = &api.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "stable-item", Revision: 1, Bytes: 5, Completeness: api.BodyPartial}
-	final := base
-	final.EventID = 4
-	final.SourceRevision = 3
-	final.Type = api.ConversationMessageComplete
-	final.Phase = api.MessagePhaseFinalAnswer
-	final.Body = &api.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "stable-item", Revision: 3, Bytes: 20, Completeness: api.BodyComplete}
-	view, _ := BuildConversationView([]api.ConversationEvent{process, older, final}, map[string]FoldChoice{})
-	if len(view.Groups) != 1 || len(view.Groups[0].Process) != 0 || len(view.Groups[0].Finals) != 1 {
-		t.Fatalf("late final did not reclassify the stable item: %+v", view.Groups)
-	}
-	if view.Groups[0].Finals[0].Body.Revision != 3 {
-		t.Fatalf("older revision overwrote final body: %+v", view.Groups[0].Finals[0])
-	}
-	processOnly, _ := BuildConversationView([]api.ConversationEvent{process, older}, map[string]FoldChoice{})
-	if len(processOnly.Groups[0].Process) != 1 || processOnly.Groups[0].Process[0].Body.Revision != 2 {
-		t.Fatalf("late older process revision overwrote newer state: %+v", processOnly.Groups[0].Process)
-	}
-	newerProcess := process
-	newerProcess.EventID = 5
-	newerProcess.SourceRevision = 4
-	newerProcess.Body = &api.ConversationBodyRef{ExecutionID: "e", AttemptID: "a", ItemKey: "stable-item", Revision: 4, Bytes: 24, Completeness: api.BodyPartial}
-	staleFinal, _ := BuildConversationView([]api.ConversationEvent{newerProcess, final}, map[string]FoldChoice{})
-	if len(staleFinal.Groups[0].Process) != 1 || len(staleFinal.Groups[0].Finals) != 0 || staleFinal.Groups[0].Process[0].Body.Revision != 4 || staleFinal.Groups[0].FinalState == api.FinalAvailable {
-		t.Fatalf("older final reclassified a newer process revision: %+v", staleFinal.Groups[0])
+	older.EventID = 9
+	older.Body = nil
+	next, _ = m.Update(finalRepliesMsg{projectKey: m.projects[0].ref.Key, identity: m.projects[0].ref.Identity, key: m.projects[0].finalKey, generation: m.projects[0].finalGeneration, page: api.ConversationPage{Events: []api.ConversationEvent{older}}})
+	m = next.(Model)
+	if len(m.projects[0].finalEvents) != 1 || m.projects[0].finalEvents[0].SourceRevision != 2 || m.projects[0].finalEvents[0].Body == nil {
+		t.Fatal("older revision replaced final", m.projects[0].finalEvents)
 	}
 }
 
 func TestFinalPhaseDoesNotPromoteNonMessageEvents(t *testing.T) {
-	event := api.ConversationEvent{Version: api.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "source", SourceSegment: "segment", SessionID: "session", SessionQuality: api.IdentityNative, TurnID: "turn", TurnQuality: api.IdentityNative, ItemID: "tool", ItemKey: "tool-key", ItemQuality: api.IdentityNative, SourceEventQuality: api.IdentityNative, Type: api.ConversationToolCompleted, Phase: api.MessagePhaseFinalAnswer}
-	view, _ := BuildConversationView([]api.ConversationEvent{event}, map[string]FoldChoice{})
-	if len(view.Groups) != 1 || len(view.Groups[0].Finals) != 0 || len(view.Groups[0].Process) != 1 {
-		t.Fatalf("non-message event was presented as a final reply: %+v", view.Groups)
-	}
-}
-
-func TestSessionScrollAnchorMovesToGroupHeaderWhenAutoFoldHidesItem(t *testing.T) {
-	base := api.ConversationEvent{Version: api.ConversationVersion, ProjectID: "p", TaskID: "task", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Source: "codex-app-server", SourceSegment: "segment", SessionID: "session", SessionQuality: api.IdentityNative, TurnID: "turn", TurnQuality: api.IdentityNative, Phase: api.MessagePhaseUnknown}
-	started := base
-	started.Type = api.ConversationTurnStarted
-	message := base
-	message.EventID = 2
-	message.Type = api.ConversationMessageComplete
-	message.ItemID = "item"
-	message.ItemKey = "item-key"
-	message.ItemQuality = api.IdentityNative
-	message.Phase = api.MessagePhaseCommentary
-	message.Body = &api.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "body-key", Revision: 1, Bytes: 120, Completeness: api.BodyComplete}
-	completed := base
-	completed.EventID = 3
-	completed.Type = api.ConversationTurnCompleted
-	completed.Status = "completed"
-	state := projectState{view: ProjectView{Groups: map[string]FoldChoice{}}, conversationEvents: []api.ConversationEvent{started, message}, detailScroll: 0}
-	run := &api.CandidateSummary{RunID: "workflow", TaskID: "task", ExecutionID: "execution", AttemptID: "attempt", ExecutionStatus: "running"}
-	row := &consoleRow{kind: rowRun, run: run}
-	view, _ := BuildConversationView(state.conversationEvents, state.view.Groups)
-	lines := allSessionLines(state, row, 90)
-	needle := "[" + itemToken(message) + "]"
-	itemLine := -1
-	for i, line := range lines {
-		if strings.Contains(line, needle) {
-			itemLine = i
-			break
-		}
-	}
-	if itemLine < 0 {
-		t.Fatal("process item was not rendered with a stable anchor")
-	}
-	state.detailScroll = itemLine
-	captureSessionAnchor(&state, row, 90)
-	if state.view.ReadGroup != view.Groups[0].ID || state.view.ReadItem != "body:body-key" {
-		t.Fatalf("session anchor did not retain group/item identity: %+v", state.view)
-	}
-	state.conversationEvents = append(state.conversationEvents, completed)
-	BuildConversationView(state.conversationEvents, state.view.Groups)
-	if hidden := restoreSessionAnchor(&state, row, 90); !hidden {
-		t.Fatal("folding the anchored group should relocate reading to its header")
-	}
-	collapsed := allSessionLines(state, row, 90)
-	headerToken := "[" + groupToken(view.Groups[0].ID) + "]"
-	headerLine := -1
-	for i, line := range collapsed {
-		if strings.Contains(line, headerToken) {
-			headerLine = i
-			break
-		}
-	}
-	if headerLine < 0 || state.detailScroll != headerLine {
-		t.Fatalf("scroll anchor missed the folded turn header: scroll=%d header=%d", state.detailScroll, headerLine)
-	}
-}
-
-func TestConsoleNativeLocalAndOrcaFixtureUseSameFoldScript(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "pr-04b-public-history-native-2026-09-25.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	var fixture struct {
-		Samples []struct {
-			Backend  string `json:"backend"`
-			Protocol string `json:"protocol"`
-			Source   string `json:"source"`
-			Thread   struct {
-				ID    string `json:"id"`
-				Turns []struct {
-					ID, Status             string
-					StartedAt, CompletedAt int64
-					Items                  []struct{ ID, Type, Phase, Text, Status string }
-				} `json:"turns"`
-			} `json:"thread"`
-		} `json:"samples"`
-	}
-	if err = json.Unmarshal(raw, &fixture); err != nil {
-		t.Fatal(err)
-	}
-	if len(fixture.Samples) != 2 {
-		t.Fatalf("need local and Orca native samples, got %d", len(fixture.Samples))
-	}
-	for _, sample := range fixture.Samples {
-		t.Run(sample.Backend, func(t *testing.T) {
-			var events []api.ConversationEvent
-			for turnIndex, turn := range sample.Thread.Turns {
-				startTime := time.Unix(turn.StartedAt, 0).UTC()
-				endTime := time.Unix(turn.CompletedAt, 0).UTC()
-				base := api.ConversationEvent{Version: api.ConversationVersion, ProjectID: "native-project", WorkflowID: "native-workflow", ExecutionID: "native-execution", AttemptID: "native-attempt", Backend: string(sample.Backend), Protocol: string(sample.Protocol), Agent: "codex", TargetID: "native-target", Source: sample.Source, SourceSegment: "native-segment", SourceIdentity: "native-source", SessionID: sample.Thread.ID, SessionQuality: api.IdentityNative, TurnID: turn.ID, TurnQuality: api.IdentityNative, Phase: api.MessagePhaseUnknown, OccurredAt: &startTime, ReceivedAt: startTime}
-				started := base
-				started.EventID = int64(len(events) + 1)
-				started.Type = api.ConversationTurnStarted
-				events = append(events, started)
-				for itemIndex, item := range turn.Items {
-					event := base
-					event.EventID = int64(len(events) + 1)
-					event.ItemID = item.ID
-					event.ItemKey = fmt.Sprintf("item-%d-%d", turnIndex, itemIndex)
-					event.ItemQuality = api.IdentityNative
-					event.SourceEventID = "fixture:" + item.ID
-					event.SourceEventQuality = api.IdentityNative
-					switch item.Type {
-					case "agentMessage":
-						event.Type = api.ConversationMessageComplete
-						event.Phase = api.MessagePhase(item.Phase)
-						event.Body = &api.ConversationBodyRef{ExecutionID: event.ExecutionID, AttemptID: event.AttemptID, ItemKey: event.ItemKey, Revision: 1, Bytes: int64(len(item.Text)), Completeness: api.BodyComplete}
-					case "commandExecution":
-						event.Type = api.ConversationToolCompleted
-						event.Status = item.Status
-					case "reasoning":
-						event.Type = api.ConversationObservation
-					default:
-						continue
-					}
-					events = append(events, event)
-				}
-				ended := base
-				ended.EventID = int64(len(events) + 1)
-				ended.Type = api.ConversationTurnCompleted
-				ended.Status = turn.Status
-				ended.FinalAvailability = api.FinalAvailable
-				ended.OccurredAt = &endTime
-				events = append(events, ended)
-			}
-			choices := map[string]FoldChoice{}
-			view, changed := BuildConversationView(events, choices)
-			if !changed || len(view.Groups) != 2 {
-				t.Fatalf("native %s fixture did not produce two folded turns: %+v", sample.Backend, view)
-			}
-			finals, commentary, tools := 0, 0, 0
-			for _, group := range view.Groups {
-				if !Folded(group, choices[group.ID]) {
-					t.Fatal("completed native turn was not folded")
-				}
-				finals += len(group.Finals)
-				for _, event := range group.Process {
-					if event.Phase == api.MessagePhaseCommentary {
-						commentary++
-					}
-					if event.Type == api.ConversationToolCompleted {
-						tools++
-					}
-				}
-			}
-			if finals != 2 || commentary < 1 {
-				t.Fatalf("native message phases were lost: finals=%d commentary=%d", finals, commentary)
-			}
-			if sample.Backend == string("orca") && tools < 2 {
-				t.Fatalf("Orca tool activity lost: %d", tools)
-			}
-			state := projectState{view: ProjectView{Groups: choices, Follow: true}, conversationEvents: events}
-			run := &api.CandidateSummary{RunID: "native-workflow", TaskID: "native-task", ExecutionID: "native-execution", AttemptID: "native-attempt", Backend: sample.Backend, Protocol: sample.Protocol}
-			row := &consoleRow{kind: rowRun, run: run}
-			for _, width := range []int{80, 170} {
-				rendered := strings.Join(renderSession(state, row, width, 24, time.Now()), "\n")
-				if !strings.Contains(rendered, "final_answer") || !strings.Contains(rendered, "completed") {
-					t.Fatalf("native %s render at width %d lost final/terminal status:\n%s", sample.Backend, width, rendered)
-				}
-			}
-		})
-	}
-}
-
-func TestStableTurnKeysSeparateSameItemIDsAndUnknownTurnDoesNotFold(t *testing.T) {
-	base := api.ConversationEvent{Version: api.ConversationVersion, ProjectID: "p", ExecutionID: "e", AttemptID: "a", Source: "source", SourceSegment: "seg", SessionID: "session", SessionQuality: api.IdentityNative, ItemID: "same", ItemQuality: api.IdentityNative, Phase: api.MessagePhaseUnknown}
-	a := base
-	a.TurnID = "turn-a"
-	a.TurnQuality = api.IdentityNative
-	a.Type = api.ConversationTurnStarted
-	b := base
-	b.TurnID = "turn-b"
-	b.TurnQuality = api.IdentityNative
-	b.Type = api.ConversationTurnStarted
-	unknown := base
-	unknown.TurnID = ""
-	unknown.TurnQuality = api.IdentityUnknown
-	unknown.Type = api.ConversationTurnFailed
-	choices := map[string]FoldChoice{}
-	view, _ := BuildConversationView([]api.ConversationEvent{a, b, unknown}, choices)
-	if len(view.Groups) != 3 {
-		t.Fatalf("turn IDs and unknown scope must remain distinct: %d", len(view.Groups))
-	}
-	for _, group := range view.Groups {
-		if group.TurnID == "" && Folded(group, choices[group.ID]) {
-			t.Fatal("unknown turn boundary must not auto fold")
-		}
+	m, _ := ccFixture(t, 1)
+	m, _ = m.refreshFinalReplies(0)
+	event := finalFixture(m, 1, "turn", "tool", "not a final")
+	event.Type = api.ConversationToolCompleted
+	next, _ := m.Update(finalRepliesMsg{projectKey: m.projects[0].ref.Key, identity: m.projects[0].ref.Identity, key: m.projects[0].finalKey, generation: m.projects[0].finalGeneration, page: api.ConversationPage{Events: []api.ConversationEvent{event}}})
+	if len(next.(Model).projects[0].finalEvents) != 0 {
+		t.Fatal("tool promoted to final")
 	}
 }
 
@@ -820,126 +574,29 @@ func TestViewPreferencesCorruptionIsLocalToViewFile(t *testing.T) {
 }
 
 func TestViewPreferencesRejectInvalidOffsetsAndActionIdentity(t *testing.T) {
-	path := filepath.Join(t.TempDir(), "view.v1.json")
-	view := emptyViewFile()
-	view.Projects["project"] = ProjectView{ConfigPath: "config.json", RunDir: "state", BodyOffset: -1, Groups: map[string]FoldChoice{}, Actions: map[string]SavedAction{}}
-	data, err := json.Marshal(view)
-	if err != nil {
+	path := filepath.Join(t.TempDir(), "view.json")
+	id := "0123456789abcdef0123456789abcdef"
+	cases := []ProjectView{
+		{Actions: map[string]SavedAction{"not-an-id": {Action: "start_task", Status: "submitted", TargetInstance: "instance"}}},
+		{Outstanding: map[string]string{id: "task:A"}},
+		{Actions: map[string]SavedAction{id: {Action: "start_task", Status: "submitted", TargetInstance: ""}}},
+	}
+	for _, project := range cases {
+		view := emptyViewFile()
+		view.Projects["project"] = project
+		raw, _ := json.Marshal(view)
+		if err := os.WriteFile(path, raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := readViewFile(path); err == nil {
+			t.Fatal("invalid action identity accepted")
+		}
+	}
+	if err := os.WriteFile(path, []byte(`{"version":2,"projects":{},"panel":"session"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	if err = os.WriteFile(path, data, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = readViewFile(path); err == nil {
-		t.Fatal("negative body offset was accepted")
-	}
-	view.Projects["project"] = ProjectView{ConfigPath: "config.json", RunDir: "state", Groups: map[string]FoldChoice{}, Actions: map[string]SavedAction{"not-an-id": {Action: "start_task", Status: "submitted", TargetInstance: "instance"}}}
-	data, err = json.Marshal(view)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(path, data, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = readViewFile(path); err == nil {
-		t.Fatal("invalid saved request identity was accepted")
-	}
-	requestID := "0123456789abcdef0123456789abcdef"
-	view.Projects["project"] = ProjectView{ConfigPath: "config.json", RunDir: "state", Groups: map[string]FoldChoice{}, Outstanding: map[string]string{requestID: "task:task-A"}, Actions: map[string]SavedAction{}}
-	data, err = json.Marshal(view)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = os.WriteFile(path, data, 0600); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = readViewFile(path); err == nil {
-		t.Fatal("outstanding request without its immutable action identity was accepted")
-	}
-	oversized, err := os.Create(filepath.Join(t.TempDir(), "oversized.json"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = oversized.Truncate(maxViewFileBytes + 1); err != nil {
-		oversized.Close()
-		t.Fatal(err)
-	}
-	oversizedPath := oversized.Name()
-	if err = oversized.Close(); err != nil {
-		t.Fatal(err)
-	}
-	if _, err = readViewFile(oversizedPath); err == nil {
-		t.Fatal("oversized view file was accepted")
-	}
-	if panelIndex(panelName(4)) != 4 {
-		t.Fatal("narrow list panel did not survive a preference round trip")
-	}
-}
-
-func TestBodyPagingUsesExactUTF8SafePageOffsets(t *testing.T) {
-	now := time.Now().UTC()
-	ref := testProject("alpha")
-	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, now)}, &testControlClient{}, now)
-	state := &m.projects[0]
-	state.bodyRef = &api.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "body", Revision: 1, Bytes: 200000, Completeness: api.BodyComplete}
-	state.bodyEvent = "body-event"
-	state.bodyPages = []int64{0, 65533}
-	state.bodyViewOffset = 65533
-	state.bodyOffset = 131066
-	updated, cmd := m.pageBody(false)
-	m = updated.(Model)
-	if cmd == nil || m.projects[0].bodyViewOffset != 0 {
-		t.Fatalf("previous page did not use the exact recorded start: %d", m.projects[0].bodyViewOffset)
-	}
-	m.projects[0].bodyBusy = false
-	m.projects[0].bodyViewOffset = 0
-	m.projects[0].bodyOffset = 65533
-	updated, cmd = m.pageBody(true)
-	m = updated.(Model)
-	if cmd == nil || m.projects[0].bodyViewOffset != 65533 {
-		t.Fatalf("next page did not reuse the UTF-8-safe offset: %d", m.projects[0].bodyViewOffset)
-	}
-}
-
-func TestBodyResponseIsBoundToGenerationAndRevision(t *testing.T) {
-	now := time.Now().UTC()
-	ref := testProject("alpha")
-	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, now)}, &testControlClient{}, now)
-	oldRef := api.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "same", Revision: 1, SHA256: "old", Bytes: 3, Completeness: api.BodyComplete}
-	newRef := oldRef
-	newRef.Revision, newRef.SHA256 = 2, "new"
-	state := &m.projects[0]
-	state.bodyRef, state.bodyEvent, state.bodyGeneration, state.bodyBusy = &newRef, "same-event", 2, true
-	updated, _ := m.Update(bodyMsg{projectKey: ref.Key, identity: ref.Identity, eventKey: "same-event", generation: 1, body: oldRef, page: api.ConversationBodyPage{Data: []byte("old")}})
-	m = updated.(Model)
-	if m.projects[0].bodyText != "" || !m.projects[0].bodyBusy {
-		t.Fatal("stale body response changed the active revision")
-	}
-	updated, _ = m.Update(bodyMsg{projectKey: ref.Key, identity: ref.Identity, eventKey: "same-event", generation: 2, body: newRef, page: api.ConversationBodyPage{ItemKey: "same", Revision: 2, Offset: 0, NextOffset: 3, TotalBytes: 3, SHA256: "new", Completeness: api.BodyComplete, Complete: true, Data: []byte("new")}})
-	m = updated.(Model)
-	if m.projects[0].bodyText != "new" || m.projects[0].bodyBusy {
-		t.Fatal("matching body response was not accepted")
-	}
-	m.projects[0].bodyGeneration, m.projects[0].bodyBusy, m.projects[0].bodyText = 3, true, ""
-	updated, _ = m.Update(bodyMsg{projectKey: ref.Key, identity: ref.Identity, eventKey: "same-event", generation: 3, body: newRef, page: api.ConversationBodyPage{ItemKey: "same", Revision: 1, Offset: 0, NextOffset: 3, TotalBytes: 3, SHA256: "new", Completeness: api.BodyComplete, Complete: true, Data: []byte("bad")}})
-	m = updated.(Model)
-	if m.projects[0].bodyError == "" || m.projects[0].bodyText != "" {
-		t.Fatal("mismatched body page was rendered")
-	}
-}
-
-func TestBackgroundProjectBodyResponseStaysWithItsProject(t *testing.T) {
-	now := time.Now().UTC()
-	a, b := testProject("a"), testProject("b")
-	m := modelForTest([]ProjectRef{a, b}, []ProjectSnapshot{readySnapshot(a, now), readySnapshot(b, now)}, &testControlClient{}, now)
-	ref := api.ConversationBodyRef{ExecutionID: "execution", AttemptID: "attempt", ItemKey: "body", Revision: 1, SHA256: "digest", Bytes: 4, Completeness: api.BodyComplete}
-	m.projects[0].bodyRef, m.projects[0].bodyEvent, m.projects[0].bodyGeneration, m.projects[0].bodyBusy = &ref, "event", 1, true
-	m.selected = 1
-	page := api.ConversationBodyPage{ItemKey: "body", Revision: 1, Offset: 0, NextOffset: 4, TotalBytes: 4, SHA256: "digest", Completeness: api.BodyComplete, Complete: true, Data: []byte("text")}
-	updated, _ := m.Update(bodyMsg{projectKey: a.Key, identity: a.Identity, eventKey: "event", generation: 1, body: ref, page: page})
-	m = updated.(Model)
-	if m.projects[0].bodyText != "text" || m.projects[0].bodyBusy || m.projects[1].bodyText != "" {
-		t.Fatalf("background body response crossed or vanished between projects: a=%q b=%q", m.projects[0].bodyText, m.projects[1].bodyText)
+	if _, err := readViewFile(path); err == nil {
+		t.Fatal("retired preference accepted")
 	}
 }
 
@@ -958,12 +615,13 @@ func TestViewFileKeepsRequestIdentityWithoutCachingReceiptText(t *testing.T) {
 func TestConsoleTextEscapesTerminalControlCharacters(t *testing.T) {
 	got := safeTerminalText("hello\x1b[2J\x00world\n")
 	if strings.ContainsRune(got, '\x1b') || !strings.Contains(got, "␛") || !strings.Contains(got, "\\u0000") {
-		t.Fatalf("unsafe terminal text: %q", got)
+		t.Fatalf("unsafe text: %q", got)
 	}
-	state := projectState{view: ProjectView{Follow: true}, activityEvents: []api.ActivityEvent{{Kind: "bad\x1b[2J", ItemID: "item\x00", Status: "failed", Meta: map[string]any{"exit_code": "\x1b[2J"}}}}
-	rendered := strings.Join(renderActivity(state, nil, 80, 10), "\n")
-	if strings.ContainsRune(rendered, '\x1b') || strings.Contains(rendered, "bad\u001b") {
-		t.Fatalf("activity metadata reached terminal unsanitized: %q", rendered)
+	m, _ := ccFixture(t, 1)
+	m.projects[0].bodyText = "工具输出\x1b[2J危险"
+	rendered := strings.Join(finalReplyLines(m.projects[0]), "\n")
+	if strings.ContainsRune(rendered, '\x1b') {
+		t.Fatal("terminal control reached renderer")
 	}
 }
 
@@ -988,8 +646,8 @@ func TestNarrowConsoleKeepsDetailAndSelectionEntryReachable(t *testing.T) {
 	m = updated.(Model)
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = updated.(Model)
-	if !strings.Contains(m.View(), "任务动态 · 活动") || m.projects[0].focus != 1 {
-		t.Fatal("Tab did not focus task activity")
+	if !strings.Contains(m.View(), "运行与反馈") || m.projects[0].focus != 1 {
+		t.Fatal("Tab did not focus running/feedback pane")
 	}
 	updated, _ = m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	m = updated.(Model)
@@ -997,23 +655,6 @@ func TestNarrowConsoleKeepsDetailAndSelectionEntryReachable(t *testing.T) {
 	m = updated.(Model)
 	if control.calls != 0 || len(m.projects[0].actions) != 0 {
 		t.Fatal("narrow list navigation must not create or start an execution")
-	}
-}
-
-func TestPanelScrollHeightMatchesWrappedFooter(t *testing.T) {
-	now := time.Now().UTC()
-	ref := testProject("alpha")
-	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, now)}, &testControlClient{}, now)
-	m.width, m.height = 80, 24
-	footerLines := wrapLines(strings.Split(renderFooter(m, m.projects[0]), "\n"), m.width)
-	expected := max(1, max(3, m.height-3-len(footerLines))-1)
-	if got := activityPanelHeight(m); got != expected {
-		t.Fatalf("narrow scroll viewport=%d, render viewport=%d", got, expected)
-	}
-	m.width = 170
-	expected = max(1, consoleContentHeight(m)-detailPanelHeight(m)-2)
-	if got := activityPanelHeight(m); got != expected {
-		t.Fatalf("wide scroll viewport=%d, render viewport=%d", got, expected)
 	}
 }
 

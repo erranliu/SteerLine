@@ -7,6 +7,7 @@ import (
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	"os"
 	"time"
+	"unicode/utf8"
 )
 
 // Only exercised pure ports are implemented; unused ports cannot perform I/O.
@@ -27,20 +28,28 @@ func (c *testClient) ReadProject(_ context.Context, selected string, _ api.Proje
 	return c.query.snapshot
 }
 
-func (c *testClient) Activity(context.Context, string, string, string, api.ActivityCursor) (api.LogBatch, error) {
-	return c.query.activity, nil
+func (c *testClient) RecentActivity(_ context.Context, run, execution, attempt string) (api.LogBatch, error) {
+	batch := c.query.activity
+	batch.Cursor = api.ActivityCursor{RunID: run, ExecutionID: execution, AttemptID: attempt, Initialized: true}
+	return batch, nil
 }
 
 func (c *testClient) Conversation(context.Context, api.ConversationFilter, string) (api.ConversationPage, error) {
 	return c.query.page, nil
 }
 
-func (c *testClient) Body(context.Context, api.ConversationBodyRef, int64, int) (api.ConversationBodyPage, error) {
+func (c *testClient) Body(_ context.Context, ref api.ConversationBodyRef, offset int64, limit int) (api.ConversationBodyPage, error) {
+	if text, ok := c.query.bodies[ref.ItemKey]; ok {
+		end := min(int64(len(text)), offset+int64(limit))
+		for end < int64(len(text)) && end > offset && !utf8.RuneStart(text[end]) {
+			end--
+		}
+		if c.query.badBody {
+			return api.ConversationBodyPage{}, errors.New("body read failed")
+		}
+		return api.ConversationBodyPage{ItemKey: ref.ItemKey, Revision: ref.Revision, Offset: offset, NextOffset: end, TotalBytes: int64(len(text)), SHA256: ref.SHA256, Completeness: ref.Completeness, Complete: end == int64(len(text)), Data: []byte(text[offset:end])}, nil
+	}
 	return c.query.body, nil
-}
-
-func (c *testClient) Capabilities(context.Context, api.CapabilityFilter) ([]api.ConversationCapabilityReport, error) {
-	return nil, nil
 }
 
 func (c *testClient) SubmitControl(_ context.Context, in api.ControlInput) (api.ControlRequest, error) {
@@ -86,10 +95,6 @@ func (c *testClient) Command(context.Context, string) (api.CommandReceipt, error
 
 func (c *testClient) DecisionEligibility(context.Context, *api.CandidateSummary) error {
 	return c.control.eligibilityErr
-}
-
-func (c *testClient) CursorAfter(api.ConversationFilter, int64) (string, error) {
-	return "fixture-cursor", nil
 }
 
 func (c *testClient) InspectRecovery(context.Context, string) (api.RecoveryInspection, error) {

@@ -1,0 +1,18 @@
+{
+  "scope": "physical Go lines in internal and cmd including blanks/comments; docs and tests/integration excluded",
+  "comparison_base": "69c839be4d11b36c0ccf2a07eb34332e7f5fc7e7",
+  "implementation": {
+    "before": 66975,
+    "after": 65558,
+    "net_removed": 1417
+  },
+  "tests": {
+    "before": 33631,
+    "after": 33733,
+    "net_removed": -102
+  },
+  "console": {
+    "before": 6981,
+    "after": 5548
+  }
+}

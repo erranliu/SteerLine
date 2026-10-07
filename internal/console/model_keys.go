@@ -11,9 +11,6 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.profileChoice != nil {
 		return m.handleExecutionProfileChoice(key)
 	}
-	if m.answer != nil {
-		return m.handleDecisionAnswerKey(key)
-	}
 	if m.confirm != nil {
 		return m.handleConfirm(key)
 	}
@@ -23,6 +20,51 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	}
+	if m.answer != nil {
+		switch key.String() {
+		case "f6", "f7":
+			m.leaveAnswer()
+			delta := 1
+			if key.String() == "f6" {
+				delta = -1
+			}
+			return m.cycleCandidate(delta)
+		case "tab", "shift+tab":
+			if m.answer.details {
+				return m, nil
+			}
+			state := &m.projects[m.selected]
+			delta := 1
+			if key.String() == "shift+tab" {
+				delta = -1
+			}
+			state.focus = (state.focus + delta + 3) % 3
+			if len(m.answer.request.Options) == 0 && state.focus == 1 {
+				state.focus = (state.focus + delta + 3) % 3
+			}
+			m.answer.noteFocus = state.focus == 2
+			return m, nil
+		case "f2":
+			if !m.answer.details && compactLayout(m) && m.projects[m.selected].focus == 0 {
+				m.projects[m.selected].focus = 1
+				if m.answer.noteFocus {
+					m.projects[m.selected].focus = 2
+				}
+				m.status = "已返回原答案草稿；核对预览后按 F2 提交"
+				return m, nil
+			}
+			return m.handleDecisionAnswerKey(key)
+		case "f8", "esc", "ctrl+c":
+			return m.handleDecisionAnswerKey(key)
+		case "ctrl+e":
+			return m.createAction("recheck_environment", "")
+		case "ctrl+o":
+			return m.createAction("open_terminal", "")
+		}
+		if m.answer.details || m.projects[m.selected].focus != 0 {
+			return m.handleDecisionAnswerKey(key)
+		}
+	}
 	if m.selected < 0 || m.selected >= len(m.projects) {
 		if key.String() == "q" || key.String() == "ctrl+c" {
 			return m, tea.Quit
@@ -30,18 +72,11 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	state := &m.projects[m.selected]
-	if key.String() == "ctrl+e" {
-		return m.createAction("recheck_environment", "")
-	}
-	if key.String() == "ctrl+o" {
-		return m.createAction("open_terminal", "")
-	}
 	if m.detailExpanded {
 		switch key.String() {
-		case "q", "ctrl+c":
-			return m, tea.Quit
-		case "d", "enter", "esc":
+		case "esc", "d", "enter":
 			m.detailExpanded = false
+			m.detailSection = ""
 			return m, nil
 		case "up", "k":
 			return m.scrollExpandedDetail(-1)
@@ -51,113 +86,110 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m.scrollExpandedDetail(-8)
 		case "pgdown":
 			return m.scrollExpandedDetail(8)
-		case "s", "a", "m", "p", "x", "i", "{", "}", "f6", "f7", "b", "z":
-			m.detailExpanded = false
-		default:
-			return m, nil
-		}
-	}
-	if state.panel == 6 {
-		switch key.String() {
-		case "esc":
-			state.panel = 0
-			m.saveProjectView(m.selected)
-			return m, nil
-		case "r":
-			return m.inspectSelectedRecovery()
-		case "[", "]":
-			if state.recoveryReport != nil && len(state.recoveryReport.Blockers) > 0 {
-				count := len(state.recoveryReport.Blockers)
-				if key.String() == "]" {
-					state.recoveryBlockerIndex = (state.recoveryBlockerIndex + 1) % count
-				} else {
-					state.recoveryBlockerIndex = (state.recoveryBlockerIndex - 1 + count) % count
-				}
-			}
-			return m, nil
 		}
 	}
 	switch key.String() {
+	case "q", "ctrl+c":
+		m.saveProjectView(m.selected)
+		return m, tea.Quit
+	case "ctrl+e":
+		return m.createAction("recheck_environment", "")
+	case "ctrl+o":
+		return m.createAction("open_terminal", "")
 	case "{", "f6":
 		return m.cycleCandidate(-1)
 	case "}", "f7":
 		return m.cycleCandidate(1)
 	case "b":
+		m.detailExpanded = false
 		return m.startAdditionalCandidate()
 	case "z":
 		return m.prepareCandidateAbandon()
-	case "q", "ctrl+c":
-		m.saveProjectView(m.selected)
-		return m, tea.Quit
 	case "left", "h":
+		m.detailExpanded = false
 		return m.moveProject(-1)
 	case "right", "l":
+		m.detailExpanded = false
 		return m.moveProject(1)
 	case "tab", "shift+tab":
-		state.focus = 1 - state.focus
+		if state.focus == 0 {
+			state.focus = 1
+		} else {
+			state.focus = 0
+		}
 		return m, nil
 	case "up", "k":
-		if state.focus == 1 {
+		if state.focus != 0 {
 			return m.scrollPanel(-1)
 		}
 		return m.moveSelection(-1)
 	case "down", "j":
-		if state.focus == 1 {
+		if state.focus != 0 {
 			return m.scrollPanel(1)
 		}
 		return m.moveSelection(1)
+	case "pgup":
+		if state.focus != 0 {
+			return m.scrollPanel(-8)
+		}
+		return m.moveSelection(-8)
+	case "pgdown":
+		if state.focus != 0 {
+			return m.scrollPanel(8)
+		}
+		return m.moveSelection(8)
 	case "r":
 		state.lastRefresh = time.Time{}
+		state.finalReadAt = time.Time{}
 		return m, m.readProject(m.selected)
 	case "enter":
-		if row := m.selectedRow(m.selected); row != nil && row.run != nil {
-			if row.run.Decision != nil && row.run.Decision.Status == "pending" && row.run.Abandonment == nil && row.run.TaskStatus != "closed" && !feedbackInProgress(*state, row.run) {
-				return m.answerSelectedDecision()
-			}
-			state.panel, state.focus = 2, 1
-			return m, nil
+		if row := m.selectedRow(m.selected); row != nil && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" && row.run.Abandonment == nil && row.run.TaskStatus != "closed" && !feedbackInProgress(*state, row.run) {
+			return m.answerSelectedDecision()
 		}
 		m.detailExpanded = true
+		m.detailSection = ""
 		m.expandedDetailScroll = 0
 		return m, nil
 	case "d":
+		m.leaveAnswer()
 		m.detailExpanded = true
+		m.detailSection = ""
 		m.expandedDetailScroll = 0
 		return m, nil
+	case "f":
+		m.leaveAnswer()
+		m.detailExpanded = true
+		m.detailSection = "final"
+		m.expandedDetailScroll = 0
+		return m, nil
+	case "v":
+		m.leaveAnswer()
+		m.detailExpanded = true
+		m.detailSection = "history"
+		m.expandedDetailScroll = 0
+		return m, nil
+	case "u":
+		m.leaveAnswer()
+		m.detailSection = "inspection"
+		return m.inspectSelectedRecovery()
+	case "[":
+		m.expandedDetailScroll = 0
+		return m.cycleFinal(-1)
+	case "]":
+		m.expandedDetailScroll = 0
+		return m.cycleFinal(1)
 	case "t":
 		state.focus = 0
 		return m, nil
 	case "a":
-		if row := m.selectedRow(m.selected); row != nil && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" {
-			return m.answerSelectedDecision()
-		}
-		state.panel = 1
-		state.focus = 1
-		m.saveProjectView(m.selected)
-		return m, nil
-	case "A":
-		state.panel = 1
-		state.focus = 1
-		m.saveProjectView(m.selected)
-		return m, nil
-	case "c":
-		state.panel = 2
-		state.focus = 1
-		m.saveProjectView(m.selected)
-		return m, nil
-	case "f":
-		state.panel = 3
-		state.focus = 1
-		m.finalIndex = 0
-		m.saveProjectView(m.selected)
-		return m, nil
-	case "u":
-		return m.inspectSelectedRecovery()
-	case "v":
-		state.panel = 5
-		state.focus = 1
-		m.saveProjectView(m.selected)
-		return m, nil
+		return m.answerSelectedDecision()
+	case "s":
+		m.detailExpanded = false
+		return m.startSelected()
+	case "m":
+		return m.toggleMode()
+	case "x":
+		return m.prepareStop()
 	case "1":
 		return m.changeFilter(0)
 	case "2":
@@ -172,62 +204,9 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.changeFilter(5)
 	case "7":
 		return m.changeFilter(6)
-	case "[", "]":
-		return m.cycleAttempt(key.String() == "]")
-	case "s":
-		return m.startSelected()
-	case "m":
-		return m.toggleMode()
-	case "x":
-		return m.prepareStop()
-	case "e":
-		return m.toggleGroup()
-	case ",":
-		return m.cycleGroup(-1)
-	case ".":
-		return m.cycleGroup(1)
-	case "=":
-		return m.keepGroupOpen()
-	case "n":
-		return m.nextFinal()
-	case "o":
-		return m.openProcessBody()
-	case "y":
-		return m.loadMoreConversation()
-	case "<":
-		return m.pageBody(false)
-	case ">":
-		return m.pageBody(true)
-	case "g":
-		if state.panel == 0 || state.panel == 1 {
-			lines := allActivityLines(*state, m.selectedRow(m.selected), activityPanelWidth(m))
-			height := activityPanelHeight(m)
-			state.logScroll = max(0, len(lines)-height)
-		}
-		state.view.Follow = false
-		m.saveProjectView(m.selected)
-		return m, nil
-	case "G":
-		state.view.Follow = true
-		state.logScroll = 0
-		m.status = "已跳到最新"
-		m.saveProjectView(m.selected)
-		var cmd tea.Cmd
-		m, cmd = m.refreshSelectedLogs(m.selected)
-		return m, cmd
-	case "pgup":
-		if state.focus == 0 {
-			return m.moveSelection(-8)
-		}
-		return m.scrollPanel(-8)
-	case "pgdown":
-		if state.focus == 0 {
-			return m.moveSelection(8)
-		}
-		return m.scrollPanel(8)
 	case "?":
+		m.leaveAnswer()
 		m.help = true
-		return m, nil
 	}
 	return m, nil
 }
@@ -243,19 +222,27 @@ func (m Model) handleDecisionAnswerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	keyName := key.String()
+	if dialog.details {
+		switch keyName {
+		case "pgup", "up":
+			dialog.scroll = max(0, dialog.scroll-8)
+		case "pgdown", "down":
+			dialog.scroll += 8
+		case "esc":
+			dialog.details = false
+		}
+		return m, nil
+	}
 	defer m.saveDecisionDraft()
 	switch keyName {
 	case "esc", "ctrl+c":
 		m.saveDecisionDraft()
 		m.answer = nil
+		m.projects[m.selected].focus = 1
 		m.status = "已关闭答案草稿；答案未提交"
 		return m, nil
 	case "f2":
 		return m.submitDecisionAnswer()
-	case "tab":
-		dialog.noteFocus = !dialog.noteFocus
-		dialog.error = ""
-		return m, nil
 	case "pgup":
 		dialog.scroll = max(0, dialog.scroll-8)
 		return m, nil
@@ -267,8 +254,7 @@ func (m Model) handleDecisionAnswerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			dialog.cursor = moveRuneCursorVertical(dialog.note, dialog.cursor, keyName == "down")
 			return m, nil
 		}
-		state := &m.projects[m.selected]
-		request, ok := decisionRequestFor(*state, dialog.runID, dialog.decisionID)
+		request, ok := dialog.request, dialog.request.Question != ""
 		if !ok {
 			dialog.error = "原问题详情暂不可读；草稿保留"
 			return m, nil
@@ -322,6 +308,7 @@ func (m Model) handleDecisionAnswerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "enter":
 		if !dialog.noteFocus {
 			dialog.noteFocus = true
+			m.projects[m.selected].focus = 2
 			return m, nil
 		}
 		insertAnswerRunes(dialog, []rune{'\n'})
@@ -330,8 +317,7 @@ func (m Model) handleDecisionAnswerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if !dialog.noteFocus {
 		if key.Type == tea.KeyRunes && len(key.Runes) == 1 && key.Runes[0] >= '1' && key.Runes[0] <= '9' {
-			state := &m.projects[m.selected]
-			request, ok := decisionRequestFor(*state, dialog.runID, dialog.decisionID)
+			request, ok := dialog.request, dialog.request.Question != ""
 			if ok && int(key.Runes[0]-'1') < len(request.Options) {
 				dialog.optionIndex = int(key.Runes[0] - '1')
 			}

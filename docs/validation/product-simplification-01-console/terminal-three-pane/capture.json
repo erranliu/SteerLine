@@ -1,0 +1,18 @@
+{
+  "answer": {
+    "decision_id": "decision-0",
+    "run_id": "candidate-0",
+    "option_id": "o10",
+    "note": "中文第一行\n第二行",
+    "answered_by": "",
+    "answered_at": "0001-01-01T00:00:00Z",
+    "expected_decision_version": 3,
+    "expected_run_revision": 9,
+    "service_instance_id": "instance-cc"
+  },
+  "decision_calls": 1,
+  "environment": "Windows native terminal with controlled product DTOs",
+  "height": 24,
+  "journal_format": 2,
+  "width": 80
+}

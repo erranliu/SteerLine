@@ -25,6 +25,7 @@ func TestNativeTaskAndItsRunShareOneListRow(t *testing.T) {
 	if len(rows) != 2 || rows[0].kind != rowRun || rows[0].key != "task:"+run.TaskID || rows[1].taskID != "103" {
 		t.Fatalf("native task and run were not coalesced in task order: %+v", rows)
 	}
+	m.detailExpanded = true
 	detail := strings.Join(renderDetail(m, m.projects[0], &rows[0], 120, 60), "\n")
 	if !strings.Contains(detail, "后继任务：104") || !strings.Contains(detail, "执行：running") || !strings.Contains(detail, "宿主终端标识：term-native-102") {
 		t.Fatalf("coalesced row lost task relations or execution detail: %s", detail)

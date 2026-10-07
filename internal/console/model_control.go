@@ -85,7 +85,8 @@ func (m Model) inspectSelectedRecovery() (tea.Model, tea.Cmd) {
 		m.status = "请选择一个 run 后查看恢复核验报告"
 		return m, nil
 	}
-	state.panel = 6
+	m.detailExpanded = true
+	m.expandedDetailScroll = 0
 	state.focus = 1
 	state.recoveryRunID = row.run.RunID
 	state.recoveryReport = nil

@@ -1,0 +1,73 @@
+--- FAIL: TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID (0.09s)
+    console_test.go:136: Unicode multi-line editing lost the cursor or pasted text: ""
+--- FAIL: TestNarrowConsoleKeepsDetailAndSelectionEntryReachable (0.00s)
+    console_test.go:635: narrow console lost "d 完整详情":
+        SteerLine · 执行控制台
+        项目 1/1   alpha 
+        服务 已连接  ·  派发 手动  ·  Ready 1
+        任务列表 · Tab 运行与反馈 · a 原地回复
+        任务列表 [焦点] · 1 项 · 1 全部
+        筛选 1全部  2Ready  3进行中  4待决策
+             5待合并  6需处理  7历史
+        任务编号 任务状态 执行状态       任务名称
+        ▸ task-B   可开始   —              Build B
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        ←→ 项目 · Tab 列表/反馈 · 1–7 筛选 · ↑↓ 选择/滚动 · d 详情 · s 选方案 · m 模式 ·
+        x 停服 · ? 帮助 · q 退出                                                        
+--- FAIL: TestTaskSelectionAndTwoFocusRegions (0.00s)
+    layout_test.go:24: stacked layout lost "候选详情":
+        SteerLine · 执行控制台
+        项目 1/1   alpha 
+        服务 已连接  ·  派发 手动  ·  Ready 2
+        任务列表 [焦点] · 2 项 · 1 全部                                   │候选与执行 · d 完整身份/资源
+        筛选 1全部  2Ready  3进行中  4待决策                              │任务 task-B · Build B
+             5待合并  6需处理  7历史                                      │操作：s 选择执行方案并开始任务 task-B
+        任务编号 任务状态 执行状态       任务名称                         │
+        ▸ task-B   可开始   —              Build B                        │
+          task-C   可开始   —              Build C                        │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │─────────────────────────────────────────────────────
+                                                                          │运行与反馈                                           
+                                                                          │所选任务暂无执行；按 s 选择方案开始。                
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+                                                                          │
+        ←→ 项目 · Tab 列表/反馈 · 1–7 筛选 · ↑↓ 选择/滚动 · d 详情 · s 选方案 · m 模式 · x 停服 · ? 帮助 · q 退出               
+FAIL
+FAIL	github.com/erranliu/SteerLine/internal/console	1.264s
+FAIL

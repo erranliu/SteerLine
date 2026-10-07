@@ -12,29 +12,14 @@ type Lifecycle interface {
 	Close() error
 }
 
-type TaskClient interface {
-	ShowTask(context.Context, string) (api.TaskPage, error)
-	ListTasks(context.Context, string, int) (api.TaskPage, error)
-	TaskGraph(context.Context, string, int) (api.GraphPage, error)
-	QueryTaskGraph(context.Context, api.GraphFilter) (api.GraphPage, error)
-	ValidateTaskBatch(context.Context, []byte) (api.TaskBatchValidation, error)
-	CreateTaskBatch(context.Context, api.CreateInput) (api.TaskBatchReceipt, error)
-	DiscardTask(context.Context, api.DiscardInput) (api.TaskDiscardReceipt, error)
-	AddPredecessors(context.Context, api.TaskPredecessorAddInput) (api.TaskPredecessorAddReceipt, error)
-}
-
 type ProjectQueries interface {
 	ReadProject(context.Context, string, api.ProjectSnapshot) api.ProjectSnapshot
-	TaskSnapshot(context.Context) (*api.TaskCandidates, error)
-	Activity(context.Context, string, string, string, api.ActivityCursor) (api.LogBatch, error)
+	RecentActivity(context.Context, string, string, string) (api.LogBatch, error)
 }
 
 type ConversationQueries interface {
 	Conversation(context.Context, api.ConversationFilter, string) (api.ConversationPage, error)
 	Body(context.Context, api.ConversationBodyRef, int64, int) (api.ConversationBodyPage, error)
-	Raw(context.Context, api.ConversationRawRef, int64, int) (api.ConversationRawPage, error)
-	CursorAfter(api.ConversationFilter, int64) (string, error)
-	Capabilities(context.Context, api.CapabilityFilter) ([]api.ConversationCapabilityReport, error)
 }
 
 type Controls interface {

@@ -76,6 +76,7 @@ type actionState struct {
 }
 
 type decisionAnswerDialog struct {
+	request         api.DecisionRequest
 	details         bool
 	identity        string
 	projectKey      string
@@ -103,53 +104,37 @@ type projectState struct {
 	refreshID      uint64
 	lastRefresh    time.Time
 
-	selectedKey   string
-	selectionHold bool
-	filter        int
-	panel         int
-	focus         int // 0: task list, 1: task activity
-	attemptID     string
-
-	readingIdentity string
-	actions         map[string]*actionState
-
+	selectedKey        string
+	selectionHold      bool
+	filter             int
+	focus              int // 0: task list, 1: lower pane/options, 2: answer text
+	lowerScroll        int
+	feedbackKey        string
 	activityKey        string
-	activityCursor     api.ActivityCursor
-	activityEvents     []api.ActivityEvent
-	activityError      string
-	activityInFlight   bool
 	activityGeneration uint64
+	activityBusy       bool
+	activityReadAt     time.Time
+	recentActivity     []activitySummary
+	activityError      string
 
-	conversationKey        string
-	conversationFilter     api.ConversationFilter
-	conversationCursor     string
-	conversationTailCursor string
-	conversationEvents     []api.ConversationEvent
-	conversationMore       bool
-	conversationTailMore   bool
-	conversationError      string
-	conversationInFlight   bool
-	conversationGeneration uint64
-	capabilities           []api.ConversationCapabilityReport
-	capabilityError        string
-	capabilityInFlight     bool
-	capabilityGeneration   uint64
+	actions map[string]*actionState
 
-	bodyRef            *api.ConversationBodyRef
-	bodyOffset         int64
-	bodyViewOffset     int64
-	bodyPages          []int64
-	bodyText           string
-	bodyError          string
-	bodyMore           bool
-	bodyBusy           bool
-	bodyGeneration     uint64
-	bodyEvent          string
-	bodyRestorePending bool
-	bodyKind           string
-	detailScroll       int
-	logScroll          int
-
+	finalKey             string
+	finalFilter          api.ConversationFilter
+	finalEvents          []api.ConversationEvent
+	finalError           string
+	finalBusy            bool
+	finalReadAt          time.Time
+	finalGeneration      uint64
+	finalSelected        string
+	finalPinned          bool
+	bodyRef              *api.ConversationBodyRef
+	bodyText             string
+	bodyError            string
+	bodyBusy             bool
+	bodyGeneration       uint64
+	detailScroll         int
+	candidates           map[string]string
 	recoveryRunID        string
 	recoveryReport       *api.RecoveryInspection
 	recoveryError        string
@@ -204,10 +189,10 @@ type Model struct {
 	profileChoice        *executionProfileChoice
 	answer               *decisionAnswerDialog
 	help                 bool
+	detailSection        string
 	detailExpanded       bool
 	expandedDetailScroll int
 	status               string
-	finalIndex           int
 
 	runFocus string
 }
@@ -244,10 +229,7 @@ func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, e
 	for _, ref := range refs {
 		view, exists := prefs.Projects[ref.Key]
 		if !exists {
-			view = ProjectView{ConfigPath: ref.ConfigPath, RunDir: ref.RunDir, Follow: true, Panel: "activity", Groups: map[string]FoldChoice{}, Outstanding: map[string]string{}}
-		}
-		if view.Groups == nil {
-			view.Groups = map[string]FoldChoice{}
+			view = ProjectView{}
 		}
 		if view.Outstanding == nil {
 			view.Outstanding = map[string]string{}
@@ -255,13 +237,7 @@ func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, e
 		if view.Actions == nil {
 			view.Actions = map[string]SavedAction{}
 		}
-		attemptID := ""
-		if view.AttemptPinned {
-			attemptID = view.AttemptID
-		}
-		state := projectState{client: options.Clients[ref.Key], ref: ref, view: view, selectedKey: view.SelectedKey, selectionHold: view.SelectionPending, filter: filterIndex(view.Filter), panel: panelIndex(view.Panel), attemptID: attemptID, detailScroll: view.DetailScroll, logScroll: view.LogScroll, actions: map[string]*actionState{}}
-		state.bodyKind = view.BodyKind
-		state.bodyPages = append([]int64(nil), view.BodyPages...)
+		state := projectState{client: options.Clients[ref.Key], ref: ref, view: view, candidates: map[string]string{}, actions: map[string]*actionState{}}
 		for requestID, saved := range view.Actions {
 			_, outstanding := view.Outstanding[requestID]
 			if saved.Status == "submitting" {
@@ -277,14 +253,7 @@ func NewModel(ctx context.Context, refs []ProjectRef, options Options) (Model, e
 	}
 	if len(m.projects) > 0 {
 		m.selected = 0
-		if prefs.ActiveProject != "" {
-			for i := range m.projects {
-				if m.projects[i].ref.Key == prefs.ActiveProject {
-					m.selected = i
-					break
-				}
-			}
-		}
+
 	}
 	return m, nil
 }
@@ -349,22 +318,6 @@ func (m Model) readProject(index int) tea.Cmd {
 	}
 }
 
-func (m Model) readActivity(index int, runID, executionID, attemptID, key string) tea.Cmd {
-	state := &m.projects[index]
-	if state.activityInFlight {
-		return nil
-	}
-	state.activityGeneration++
-	generation := state.activityGeneration
-	state.activityInFlight = true
-	base := state.activityCursor
-	query, ctx, ref := state.client, m.ctx, state.ref
-	return func() tea.Msg {
-		batch, err := query.Activity(ctx, runID, executionID, attemptID, base)
-		return activityResultMsg{projectKey: ref.Key, identity: ref.Identity, key: key, generation: generation, base: base, batchActivity: batch.Activity, next: batch.Cursor, reset: batch.Reset, diagnostics: batch.Diagnostics, err: err}
-	}
-}
-
 func selectedNativeTaskID(state projectState) string {
 	if state.ref.Presentation.TaskAuthority != "native" {
 		return ""
@@ -373,70 +326,6 @@ func selectedNativeTaskID(state projectState) string {
 		return strings.TrimPrefix(state.selectedKey, "task:")
 	}
 	return ""
-}
-
-func (m Model) readConversation(index int, cursor, key, mode string) tea.Cmd {
-	state := &m.projects[index]
-	if state.conversationInFlight {
-		return nil
-	}
-	state.conversationGeneration++
-	generation := state.conversationGeneration
-	state.conversationInFlight = true
-	query, ctx, ref, filter := state.client, m.ctx, state.ref, state.conversationFilter
-	return func() tea.Msg {
-		page, err := query.Conversation(ctx, filter, cursor)
-		return conversationMsg{projectKey: ref.Key, identity: ref.Identity, key: key, generation: generation, cursor: cursor, mode: mode, page: page, err: err}
-	}
-}
-
-func (m Model) readCapabilities(index int, events []api.ConversationEvent, key string) tea.Cmd {
-	state := &m.projects[index]
-	if state.capabilityInFlight {
-		return nil
-	}
-	state.capabilityInFlight = true
-	state.capabilityGeneration++
-	generation := state.capabilityGeneration
-	query, ctx, ref := state.client, m.ctx, state.ref
-	events = append([]api.ConversationEvent(nil), events...)
-	return func() tea.Msg {
-		seen := map[string]bool{}
-		var reports []api.ConversationCapabilityReport
-		var queryErrors []error
-		for _, event := range events {
-			if event.Backend == "" || event.Protocol == "" || event.TargetID == "" {
-				continue
-			}
-			targetKey := strings.Join([]string{string(event.Backend), string(event.Protocol), event.TargetID, event.ExecutionID, event.AttemptID, event.Source, event.SourceIdentity}, "\x00")
-			if seen[targetKey] {
-				continue
-			}
-			seen[targetKey] = true
-			current, err := query.Capabilities(ctx, api.CapabilityFilter{Backend: event.Backend, Protocol: event.Protocol, TargetID: event.TargetID, ExecutionID: event.ExecutionID, AttemptID: event.AttemptID, Source: event.Source, SourceIdentity: event.SourceIdentity})
-			if err != nil {
-				queryErrors = append(queryErrors, err)
-				continue
-			}
-			reports = append(reports, current...)
-		}
-		return capabilityMsg{projectKey: ref.Key, identity: ref.Identity, key: key, generation: generation, reports: reports, err: errors.Join(queryErrors...)}
-	}
-}
-
-func (m Model) readBody(index int, event api.ConversationEvent, offset int64) tea.Cmd {
-	state := &m.projects[index]
-	if event.Body == nil || state.bodyBusy {
-		return nil
-	}
-	state.bodyBusy = true
-	state.bodyGeneration++
-	generation := state.bodyGeneration
-	ref, body, query, ctx := state.ref, *event.Body, state.client, m.ctx
-	return func() tea.Msg {
-		page, err := query.Body(ctx, body, offset, 64<<10)
-		return bodyMsg{projectKey: ref.Key, identity: ref.Identity, eventKey: conversationItemKey(event), generation: generation, body: body, offset: offset, page: page, err: err}
-	}
 }
 
 func (m Model) submitControl(index int, action, taskID, requestID string, instance string, revision uint64) tea.Cmd {
@@ -509,42 +398,6 @@ type projectMsg struct {
 	key, identity         string
 	generation, requestID uint64
 	snapshot              ProjectSnapshot
-}
-
-type activityResultMsg struct {
-	projectKey, identity, key string
-	generation                uint64
-	base                      api.ActivityCursor
-	batchActivity             []api.ActivityEvent
-	next                      api.ActivityCursor
-	reset                     bool
-	diagnostics               []string
-	err                       error
-}
-
-type conversationMsg struct {
-	projectKey, identity, key string
-	generation                uint64
-	cursor                    string
-	mode                      string
-	page                      api.ConversationPage
-	err                       error
-}
-
-type capabilityMsg struct {
-	projectKey, identity, key string
-	generation                uint64
-	reports                   []api.ConversationCapabilityReport
-	err                       error
-}
-
-type bodyMsg struct {
-	projectKey, identity, eventKey string
-	generation                     uint64
-	body                           api.ConversationBodyRef
-	offset                         int64
-	page                           api.ConversationBodyPage
-	err                            error
 }
 
 type actionSubmittedMsg struct {
@@ -624,10 +477,18 @@ func (m Model) answerSelectedDecision() (tea.Model, tea.Cmd) {
 		}
 	}
 	m.answer = &decisionAnswerDialog{identity: candidateIdentity(row.run), projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, runID: row.run.RunID, decisionID: decision.ID, runRevision: row.run.ControlRevision, decisionVersion: decision.Version, optionIndex: optionIndex}
+	m.answer.request = decision.Request
+	m.answer.request.Options = append([]api.DecisionOption(nil), decision.Request.Options...)
 	m.answer.noteFocus = len(decision.Request.Options) == 0
 	if draft, ok := state.view.Drafts[m.answer.identity+"\x00"+decision.ID]; ok {
 		m.answer.optionIndex, m.answer.note, m.answer.cursor, m.answer.noteFocus = draft.OptionIndex, []rune(draft.Note), len([]rune(draft.Note)), true
 	}
+	state.focus = 1
+	state.lowerScroll = 0
+	if m.answer.noteFocus {
+		state.focus = 2
+	}
+	m.detailExpanded = false
 	m.status = "决策草稿已打开；推荐选项只是预选，需要显式提交"
 	return m, nil
 }
@@ -705,7 +566,8 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.answer = nil
-	state.panel, state.focus = 2, 1
+	state.focus = 1
+	state.lowerScroll = 0
 	m.detailExpanded = false
 	m.status = candidateLabel(*state, run) + " 反馈已提交；等待保存/送达回执"
 	return m, m.submitDecisionCommand(index, answer, "", requestID)
@@ -810,12 +672,12 @@ func decisionRequestFor(state projectState, runID, decisionID string) (api.Decis
 }
 
 func (m *Model) reopenDecisionDraft(index int, action *actionState) {
-	if index < 0 || index >= len(m.projects) || action == nil {
+	if index < 0 || index >= len(m.projects) || index != m.selected || action == nil || m.detailExpanded || m.help || m.confirm != nil || m.profileChoice != nil {
 		return
 	}
 	state := &m.projects[index]
 	row := m.selectedRow(index)
-	if row == nil || row.run == nil || row.run.RunID != action.RunID || m.answer != nil {
+	if row == nil || row.run == nil || row.run.RunID != action.RunID || row.run.Decision == nil || row.run.Decision.ID != action.DecisionID || row.run.Decision.Status != "pending" || m.answer != nil {
 		return
 	}
 	request, ok := decisionRequestFor(*state, action.RunID, action.DecisionID)
@@ -834,6 +696,10 @@ func (m *Model) reopenDecisionDraft(index int, action *actionState) {
 	}
 	note := []rune(action.DecisionDraftNote)
 	m.answer = &decisionAnswerDialog{identity: action.DecisionIdentity, projectKey: state.ref.Key, instance: action.TargetInstance, runID: action.RunID, decisionID: action.DecisionID, runRevision: action.DecisionRevision, decisionVersion: action.DecisionVersion, optionIndex: optionIndex, note: note, cursor: len(note), noteFocus: true, error: action.Message}
+	m.answer.request = request
+	m.answer.request.Options = append([]api.DecisionOption(nil), request.Options...)
+	state.focus = 2
+	state.lowerScroll = 0
 }
 
 func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
@@ -844,14 +710,12 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateTick()
 	case projectMsg:
 		return m.updateProject(msg)
+	case recentActivityMsg:
+		return m.updateRecentActivity(msg)
 	case recoveryInspectionMsg:
 		return m.updateRecoveryInspection(msg)
-	case activityResultMsg:
-		return m.updateActivity(msg)
-	case conversationMsg:
-		return m.updateConversation(msg)
-	case capabilityMsg:
-		return m.updateCapability(msg)
+	case finalRepliesMsg:
+		return m.updateFinalReplies(msg)
 	case bodyMsg:
 		return m.updateBody(msg)
 	case actionSubmittedMsg:
@@ -930,7 +794,7 @@ func (m Model) rows(index int) []consoleRow {
 	runsByTask := map[string]*api.CandidateSummary{}
 	for _, run := range candidateRuns(*state, "") {
 		id := firstText(run.DomainTaskID, run.TaskID)
-		if runsByTask[id] == nil || state.view.Candidates[id] == run.RunID {
+		if runsByTask[id] == nil || state.candidates[id] == run.RunID {
 			runsByTask[id] = run
 		}
 	}
@@ -948,7 +812,7 @@ func (m Model) rows(index int) []consoleRow {
 	}
 	appendRun := func(run *api.CandidateSummary) {
 		row := consoleRow{key: "task:" + run.TaskID, kind: rowRun, taskID: run.TaskID, title: run.Title, run: run, native: nativeByID[firstText(run.DomainTaskID, run.TaskID)]}
-		if pin := state.view.Candidates[run.TaskID]; pin != "" && pin != run.RunID {
+		if pin := state.candidates[run.TaskID]; pin != "" && pin != run.RunID {
 			row.run = nil
 			row.kind = rowNative
 		}
@@ -1073,49 +937,6 @@ func filterName(index int) string {
 	return "all"
 }
 
-func panelIndex(name string) int {
-	switch name {
-	case "activity":
-		return 1
-	case "session":
-		return 2
-	case "final":
-		return 3
-	case "list":
-		return 4
-	case "decisions":
-		return 5
-	case "recovery":
-		return 6
-	}
-	return 0
-}
-
-func panelName(index int) string {
-	switch index {
-	case 1:
-
-		return "activity"
-	case 2:
-
-		return "session"
-	case 3:
-
-		return "final"
-	case 4:
-
-		return "list"
-	case 5:
-
-		return "decisions"
-	case 6:
-
-		return "recovery"
-	}
-
-	return "activity"
-}
-
 func rowExists(rows []consoleRow, key string) bool {
 	for _, row := range rows {
 		if row.key == key {
@@ -1145,140 +966,68 @@ func (m Model) selectedRow(index int) *consoleRow {
 	return nil
 }
 
-func (m Model) refreshSelectedLogs(index int) (Model, tea.Cmd) {
+func (m Model) refreshFinalReplies(index int) (Model, tea.Cmd) {
 	if index < 0 || index >= len(m.projects) {
 		return m, nil
 	}
 	state := &m.projects[index]
 	row := m.selectedRow(index)
-	if row == nil || row.run == nil {
-		storeCandidateReading(state)
-		clearReadingAnchor(state)
-		state.readingIdentity = ""
-		state.activityGeneration++
-		state.conversationGeneration++
-		state.activityInFlight, state.conversationInFlight = false, false
-		state.activityKey, state.conversationKey = "", ""
-		state.activityEvents = nil
-		state.conversationEvents = nil
+	key := ""
+	if row != nil && row.run != nil {
+		key = candidateIdentity(row.run)
+	}
+	if key != state.finalKey {
+		state.finalGeneration++
+		state.bodyGeneration++
+		state.finalKey, state.finalReadAt = key, time.Time{}
+		state.finalEvents, state.finalError, state.finalSelected = nil, "", ""
+		state.finalPinned, state.finalBusy, state.bodyBusy = false, false, false
+		state.bodyRef, state.bodyText, state.bodyError = nil, "", ""
+		state.detailScroll = 0
+		state.recoveryGeneration++
+		state.recoveryReport, state.recoveryError, state.recoveryBusy = nil, "", false
+	}
+	if key == "" || state.finalBusy || !state.finalReadAt.IsZero() && m.clock.Now().Sub(state.finalReadAt) < 5*time.Second {
 		return m, nil
 	}
-	run := row.run
-	switchCandidateReading(state, run)
-	attemptID := run.AttemptID
-	if state.attemptID != "" {
-		attemptID = state.attemptID
+	if row.run.ExecutionID == "" {
+		state.finalError = "当前候选缺少 execution_id，无法核验最终回复"
+		return m, nil
 	}
-	if attemptID == "" {
-		attemptID = run.RunID
-	}
-	activityKey := strings.Join([]string{run.RunID, run.ExecutionID, attemptID}, "\x00")
-	if state.activityKey != activityKey {
-		state.activityInFlight = false
-		state.activityKey, state.activityCursor = activityKey, api.ActivityCursor{}
-		state.activityEvents, state.activityError = nil, ""
-		state.activityGeneration++
-	}
-	conversationKey := strings.Join([]string{run.TaskID, run.RunID, run.ExecutionID, run.SessionID, attemptID}, "\x00")
-	var cmds []tea.Cmd
-	if state.conversationKey != conversationKey {
-		state.conversationInFlight = false
-		state.conversationKey = conversationKey
-		sessionID := run.SessionID
-		// Historical attempts have their own canonical session records; the
-		// current session must not filter them out or be guessed for them.
-		if state.attemptID != "" && attemptID != run.AttemptID {
-			sessionID = ""
-		}
-		state.conversationFilter = api.ConversationFilter{WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: attemptID, SessionID: sessionID}
-		state.conversationCursor, state.conversationTailCursor, state.conversationMore, state.conversationTailMore = "", "", false, false
-		state.conversationEvents, state.conversationError = nil, ""
-		state.capabilityError = ""
-		state.conversationGeneration++
-		state.capabilityInFlight = false
-		state.capabilityGeneration++
-		state.bodyGeneration++
-		state.bodyBusy = false
-		state.bodyRef, state.bodyText, state.bodyError, state.bodyOffset, state.bodyEvent = nil, "", "", 0, ""
-		state.bodyViewOffset = 0
-		state.bodyRestorePending = state.view.AnchorItem != ""
-		if run.ExecutionID != "" {
-			cmds = append(cmds, m.readConversation(index, "", conversationKey, "head"))
-		} else {
-			state.conversationError = "当前执行缺少 execution_id，不能安全读取会话"
-		}
-	}
-	if state.view.Follow && !state.activityInFlight {
-		cmds = append(cmds, m.readActivity(index, run.RunID, run.ExecutionID, attemptID, activityKey))
-	}
-	return m, tea.Batch(cmds...)
+	state.finalFilter = api.ConversationFilter{WorkflowID: row.run.RunID, ExecutionID: row.run.ExecutionID, SessionID: row.run.SessionID, FinalsOnly: true}
+	return m, m.readFinalReplies(index)
 }
 
 func (m *Model) saveProjectView(index int) error {
+	if m.prefsErr != "" {
+		return errors.New(m.prefsErr)
+	}
 	if index < 0 || index >= len(m.projects) || m.profile == nil {
 		return nil
 	}
 	state := &m.projects[index]
-	storeCandidateReading(state)
 	state.view.ConfigPath, state.view.RunDir = state.ref.ConfigPath, state.ref.RunDir
-	state.view.SelectedKey, state.view.Filter, state.view.Panel = state.selectedKey, filterName(state.filter), panelName(state.panel)
-	state.view.SelectionPending = state.selectionHold
-	state.view.AttemptID = state.attemptID
-	state.view.AttemptPinned = state.attemptID != ""
-	state.view.DetailScroll, state.view.LogScroll = state.detailScroll, state.logScroll
-	state.view.BodyOffset = state.bodyViewOffset
-	state.view.BodyPages = append([]int64(nil), state.bodyPages...)
-	state.view.BodyKind = state.bodyKind
-	state.view.AnchorLine = state.detailScroll
-	state.view.Groups = m.foldChoices(index)
+	unresolved := 0
+	for _, action := range state.actions {
+		if !action.Resolved {
+			unresolved++
+		}
+	}
+	if unresolved > 256 {
+		return errors.New("未知请求超过操作日志上限；先按原 ID 对账，不能丢弃请求身份")
+	}
 	state.view.Actions = savedActions(state.actions, 256)
-	state.view.Outstanding = make(map[string]string)
+	state.view.Outstanding = map[string]string{}
 	for id, action := range state.actions {
 		if _, saved := state.view.Actions[id]; saved && !action.Resolved && action.Status != "applied" && action.Status != "rejected" && action.Status != "failed" {
 			state.view.Outstanding[id] = "task:" + action.TaskID
 		}
 	}
-	if index == m.selected {
-		m.prefs.ActiveProject = state.ref.Key
-	}
 	m.prefs.Projects[state.ref.Key] = state.view
 	if err := writeViewFile(m.profile.path(), m.prefs); err != nil {
-		m.prefsErr = "保存视图偏好失败：" + err.Error()
-		return err
+		return fmt.Errorf("保存操作记录失败：%w", err)
 	}
-	m.prefsErr = ""
 	return nil
-}
-
-func clearReadingAnchor(state *projectState) {
-	if state == nil {
-		return
-	}
-	state.view.AnchorGroup, state.view.AnchorItem, state.view.ReadGroup, state.view.ReadItem, state.view.BodyKind = "", "", "", "", ""
-	state.view.AnchorRevision, state.view.ReadRevision, state.view.AnchorLine, state.view.ReadLine, state.view.BodyOffset = 0, 0, 0, 0, 0
-	state.view.BodyPages = nil
-	state.bodyRef, state.bodyEvent = nil, ""
-	state.bodyGeneration++
-	state.bodyBusy = false
-	state.bodyText, state.bodyError = "", ""
-	state.bodyOffset, state.bodyViewOffset = 0, 0
-	state.bodyPages = nil
-	state.bodyMore, state.bodyRestorePending, state.bodyKind = false, false, ""
-	state.detailScroll, state.logScroll = 0, 0
-}
-
-func appendBodyPage(values []int64, offset int64) []int64 {
-	for _, value := range values {
-		if value == offset {
-			return values
-		}
-	}
-	if len(values) >= 257 {
-		return values
-	}
-	values = append(values, offset)
-	sort.Slice(values, func(i, j int) bool { return values[i] < values[j] })
-	return values
 }
 
 func savedActions(actions map[string]*actionState, limit int) map[string]SavedAction {
@@ -1311,13 +1060,6 @@ func savedActions(actions map[string]*actionState, limit int) map[string]SavedAc
 	return out
 }
 
-func (m Model) foldChoices(index int) map[string]FoldChoice {
-	if index < 0 || index >= len(m.projects) {
-		return nil
-	}
-	return m.projects[index].view.Groups
-}
-
 func (m Model) moveProject(delta int) (tea.Model, tea.Cmd) {
 	if len(m.projects) == 0 {
 		return m, nil
@@ -1332,6 +1074,7 @@ func (m Model) moveProject(delta int) (tea.Model, tea.Cmd) {
 	if next == m.selected {
 		return m, nil
 	}
+	m.leaveAnswer()
 	m.selected = next
 	m.generation++
 	m.status = ""
@@ -1340,7 +1083,7 @@ func (m Model) moveProject(delta int) (tea.Model, tea.Cmd) {
 		return m, m.readProject(next)
 	}
 	var cmd tea.Cmd
-	m, cmd = m.refreshSelectedLogs(next)
+	m, cmd = m.refreshSelected(next)
 	return m, cmd
 }
 
@@ -1373,13 +1116,13 @@ func (m Model) moveSelection(delta int) (tea.Model, tea.Cmd) {
 	if rows[index].key == state.selectedKey {
 		return m, nil
 	}
-	storeCandidateReading(state)
+	m.leaveAnswer()
 	state.selectedKey = rows[index].key
 	state.selectionHold = false
 	m.status = ""
 	m.saveProjectView(m.selected)
 	var cmd tea.Cmd
-	m, cmd = m.refreshSelectedLogs(m.selected)
+	m, cmd = m.refreshSelected(m.selected)
 	return m, cmd
 }
 
@@ -1391,20 +1134,18 @@ func (m Model) changeFilter(filter int) (tea.Model, tea.Cmd) {
 	if state.filter == filter {
 		return m, nil
 	}
+	m.leaveAnswer()
 	state.filter = filter
 	rows := m.rows(m.selected)
 	if !rowExists(rows, state.selectedKey) {
-		storeCandidateReading(state)
 		state.selectedKey = firstRowKey(rows)
 		state.selectionHold = state.selectedKey == ""
 	}
 	m.saveProjectView(m.selected)
-	return m.refreshSelectedLogs(m.selected)
+	return m.refreshSelected(m.selected)
 }
 
 func (m Model) View() string { return render(m) }
-
-func sameCursor(a, b api.ActivityCursor) bool { return a == b }
 
 func stringValue(value *string) string {
 	if value == nil {

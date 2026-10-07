@@ -152,6 +152,7 @@ type ConversationCapabilityReport struct {
 }
 
 type ConversationFilter struct {
+	FinalsOnly  bool   `json:"finals_only,omitempty"`
 	WorkflowID  string `json:"workflow_id,omitempty"`
 	ExecutionID string `json:"execution_id,omitempty"`
 	AttemptID   string `json:"attempt_id,omitempty"`

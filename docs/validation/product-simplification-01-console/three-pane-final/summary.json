@@ -1,0 +1,839 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./internal/console",
+    "./internal/product/query",
+    "./internal/product/client",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-06T23:37:47.9749208Z",
+  "finished_at": "2026-10-06T23:37:52.2593858Z",
+  "wall_seconds": 4.2845537,
+  "environment": {
+    "source_commit": "75474dcece26d807367e106a89a992f01f53fafd",
+    "worktree_status": " M README.md\n M docs/activity.md\n M docs/conversation-events.md\n M docs/spec/README.md\n M internal/app/client.go\n M internal/console/activity_decision.go\n M internal/console/activity_decision_test.go\n M internal/console/activityrender/render.go\n M internal/console/activityrender/render_test.go\n D internal/console/attempt_follow_test.go\n M internal/console/candidates.go\n M internal/console/candidates_test.go\n M internal/console/client_fixture_test.go\n M internal/console/composition_fixture_test.go\n M internal/console/console_test.go\n D internal/console/conversation.go\n D internal/console/conversation_anchor.go\n M internal/console/execution_profile.go\n M internal/console/execution_profile_test.go\n M internal/console/injection_test.go\n M internal/console/interaction.go\n M internal/console/interaction_test.go\n M internal/console/interfaces.go\n M internal/console/layout_test.go\n M internal/console/model.go\n M internal/console/model_control.go\n M internal/console/model_keys.go\n M internal/console/model_navigation.go\n M internal/console/model_update_actions.go\n D internal/console/model_update_conversation.go\n M internal/console/model_update_project.go\n M internal/console/native_row_test.go\n M internal/console/preferences.go\n M internal/console/preferences_io.go\n M internal/console/preferences_unix.go\n M internal/console/preferences_windows.go\n M internal/console/presentation.go\n M internal/console/profile_choice.go\n M internal/console/profile_choice_test.go\n M internal/console/source.go\n M internal/console/view.go\n D internal/console/view_conversation.go\n M internal/console/view_tasks.go\n M internal/console/view_text.go\n M internal/product/api/conversation.go\n M internal/product/api/pages.go\n M internal/product/client/client.go\n M internal/product/client/ports.go\n M internal/product/query/activity.go\n M internal/product/query/conversation.go\n M internal/storage/ports/query.go\n M internal/storage/sqlite/activity_view.go\n M internal/storage/sqlite/activity_view_test.go\n M internal/storage/sqlite/application_snapshot.go\n M internal/storage/sqlite/atomic_replay.go\n M internal/storage/sqlite/checkpoint.go\n M internal/storage/sqlite/connections.go\n M internal/storage/sqlite/conversation.go\n M internal/storage/sqlite/conversation_store.go\n M internal/storage/sqlite/conversation_test.go\n M internal/storage/sqlite/execution_state_snapshot.go\n M internal/storage/sqlite/execution_state_snapshot_test.go\n M internal/storage/sqlite/fixtures_test.go\n M internal/storage/sqlite/graph.go\n M internal/storage/sqlite/helpers.go\n M internal/storage/sqlite/migrated_conversation_test.go\n M internal/storage/sqlite/migrated_native_task_audit_test.go\n M internal/storage/sqlite/migrated_project_view_test.go\n M internal/storage/sqlite/migrated_sqlite_store_test.go\n M internal/storage/sqlite/ownership_test.go\n M internal/storage/sqlite/project.go\n M internal/storage/sqlite/project_view.go\n M internal/storage/sqlite/reader.go\n M internal/storage/sqlite/reader_test.go\n M internal/storage/sqlite/record_validation.go\n M internal/storage/sqlite/records.go\n M internal/storage/sqlite/runtime_preflight.go\n M internal/storage/sqlite/schema_ownership_test.go\n M internal/storage/sqlite/schema_preflight.go\n M internal/storage/sqlite/service_checkpoint.go\n M internal/storage/sqlite/sqlite_native_authority.go\n M internal/storage/sqlite/sqlite_store.go\n M internal/storage/sqlite/sqlite_store_checkpoint.go\n M internal/storage/sqlite/sqlite_store_read.go\n M internal/storage/sqlite/sqlite_store_schema.go\n M internal/storage/sqlite/sqlite_store_write.go\n M internal/storage/sqlite/sqlite_store_write_commands.go\n M internal/storage/sqlite/sqlite_store_write_execution.go\n M internal/storage/sqlite/sqlite_store_write_native.go\n M internal/storage/sqlite/sqlite_task_graph.go\n M internal/storage/sqlite/sqlite_task_ports.go\n M internal/storage/sqlite/sqlite_worker_commit.go\n M internal/storage/sqlite/sqlite_write_ports.go\n M internal/storage/sqlite/state_revision.go\n M internal/storage/sqlite/task_candidate_snapshot.go\n M internal/storage/sqlite/task_claim_commit.go\n M internal/storage/sqlite/task_discard_commit.go\n M internal/storage/sqlite/task_result_commit.go\n M internal/storage/sqlite/tasks.go\n M internal/storage/sqlite/values.go\n M internal/storage/sqlite/worker_attachment_store.go\n M internal/storage/sqlite/workflow_view.go\n M tests/integration/candidate_console_test.go\n?? docs/spec/product-simplification-01-console.plan.md\n?? docs/spec/product-simplification-01-console.spec.md\n?? docs/spec/product-simplification-02-configuration.spec.md\n?? docs/spec/product-simplification-03-resources-cli.spec.md\n?? docs/validation/product-simplification-01-console/baseline-lines.json\n?? docs/validation/product-simplification-01-console/baseline-tests.txt\n?? docs/validation/product-simplification-01-console/console-initial.txt\n?? docs/validation/product-simplification-01-console/console-layout.txt\n?? docs/validation/product-simplification-01-console/inline-integration-refreshed/go-test.jsonl\n?? docs/validation/product-simplification-01-console/inline-integration-refreshed/go-test.stderr.txt\n?? docs/validation/product-simplification-01-console/inline-integration-refreshed/summary.json\n?? docs/validation/product-simplification-01-console/inline-integration/go-test.jsonl\n?? docs/validation/product-simplification-01-console/inline-integration/go-test.stderr.txt\n?? docs/validation/product-simplification-01-console/inline-integration/summary.json\n?? docs/validation/product-simplification-01-console/integration-final/go-test.jsonl\n?? docs/validation/product-simplification-01-console/integration-final/go-test.stderr.txt\n?? docs/validation/product-simplification-01-console/integration-final/summary.json\n?? docs/validation/product-simplification-01-console/integration-five-minute/go-test.jsonl\n?? docs/validation/product-simplification-01-console/integration-five-minute/go-test.stderr.txt\n?? docs/validation/product-simplification-01-console/integration-five-minute/summary.json\n?? docs/validation/product-simplification-01-console/integration/go-test.jsonl\n?? docs/validation/product-simplification-01-console/integration/go-test.stderr.txt\n?? docs/validation/product-simplification-01-console/integration/summary.json\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-core/stderr.txt\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-core/test.jsonl\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-execution-boundary/stderr.txt\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-execution-boundary/test.jsonl\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-execution/stderr.txt\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-execution/test.jsonl\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-owner-app/stderr.txt\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-owner-app/test.jsonl\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-owner-codec/stderr.txt\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-owner-codec/test.jsonl\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-owner-codexapp/stderr.txt\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-owner-codexapp/test.jsonl\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-owner-identity/stderr.txt\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-owner-identity/test.jsonl\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-owner-publication/stderr.txt\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-owner-publication/test.jsonl\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-owner-remote/stderr.txt\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-owner-remote/test.jsonl\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-owner-workspace/stderr.txt\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-owner-workspace/test.jsonl\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-rules/stderr.txt\n?? docs/validation/product-simplification-01-console/l1-three-pane/quick-rules/test.jsonl\n?? docs/validation/product-simplification-01-console/l1/quick-boundary/stderr.txt\n?? docs/validation/product-simplification-01-console/l1/quick-boundary/test.jsonl\n?? docs/validation/product-simplification-01-console/l1/quick-core/stderr.txt\n?? docs/validation/product-simplification-01-console/l1/quick-core/test.jsonl\n?? docs/validation/product-simplification-01-console/l1/quick-execution-boundary/stderr.txt\n?? docs/validation/product-simplification-01-console/l1/quick-execution-boundary/test.jsonl\n?? docs/validation/product-simplification-01-console/l1/quick-execution/stderr.txt\n?? docs/validation/product-simplification-01-console/l1/quick-execution/test.jsonl\n?? docs/validation/product-simplification-01-console/l1/quick-owner-app/stderr.txt\n?? docs/validation/product-simplification-01-console/l1/quick-owner-app/test.jsonl\n?? docs/validation/product-simplification-01-console/l1/quick-owner-codec/stderr.txt\n?? docs/validation/product-simplification-01-console/l1/quick-owner-codec/test.jsonl\n?? docs/validation/product-simplification-01-console/l1/quick-owner-codexapp/stderr.txt\n?? docs/validation/product-simplification-01-console/l1/quick-owner-codexapp/test.jsonl\n?? docs/validation/product-simplification-01-console/l1/quick-owner-identity/stderr.txt\n?? docs/validation/product-simplification-01-console/l1/quick-owner-identity/test.jsonl\n?? docs/validation/product-simplification-01-console/l1/quick-owner-publication/stderr.txt\n?? docs/validation/product-simplification-01-console/l1/quick-owner-publication/test.jsonl\n?? docs/validation/product-simplification-01-console/l1/quick-owner-remote/stderr.txt\n?? docs/validation/product-simplification-01-console/l1/quick-owner-remote/test.jsonl\n?? docs/validation/product-simplification-01-console/l1/quick-owner-workspace/stderr.txt\n?? docs/validation/product-simplification-01-console/l1/quick-owner-workspace/test.jsonl\n?? docs/validation/product-simplification-01-console/l1/quick-rules/stderr.txt\n?? docs/validation/product-simplification-01-console/l1/quick-rules/test.jsonl\n?? docs/validation/product-simplification-01-console/l1/summary.json\n?? docs/validation/product-simplification-01-console/line-summary.json\n?? docs/validation/product-simplification-01-console/retired-tests.json\n?? docs/validation/product-simplification-01-console/sqlite-final/go-test.jsonl\n?? docs/validation/product-simplification-01-console/sqlite-final/go-test.stderr.txt\n?? docs/validation/product-simplification-01-console/sqlite-final/summary.json\n?? docs/validation/product-simplification-01-console/targeted-final/go-test.jsonl\n?? docs/validation/product-simplification-01-console/targeted-final/go-test.stderr.txt\n?? docs/validation/product-simplification-01-console/targeted-final/summary.json\n?? docs/validation/product-simplification-01-console/targeted/go-test.jsonl\n?? docs/validation/product-simplification-01-console/targeted/go-test.stderr.txt\n?? docs/validation/product-simplification-01-console/targeted/summary.json\n?? docs/validation/product-simplification-01-console/terminal-three-pane/capture.json\n?? docs/validation/product-simplification-01-console/terminal-three-pane/native-output.json\n?? docs/validation/product-simplification-01-console/terminal/fixture.jsonl\n?? docs/validation/product-simplification-01-console/three-pane-initial.txt\n?? docs/validation/product-simplification-01-console/three-pane-layout.txt\n?? docs/validation/product-simplification-01-console/three-pane-regression.txt\n?? docs/validation/product-simplification-01-console/three-pane-sqlite/go-test.jsonl\n?? docs/validation/product-simplification-01-console/three-pane-sqlite/go-test.stderr.txt\n?? docs/validation/product-simplification-01-console/three-pane-sqlite/summary.json\n?? docs/validation/product-simplification-01-console/three-pane-targeted/go-test.jsonl\n?? docs/validation/product-simplification-01-console/three-pane-targeted/go-test.stderr.txt\n?? docs/validation/product-simplification-01-console/three-pane-targeted/summary.json\n?? internal/console/final_replies.go\n?? internal/console/recent_activity.go\n?? internal/console/simplified_console_test.go\n?? internal/console/terminal_windows_test.go\n?? internal/console/three_pane.go\n?? internal/console/three_pane_test.go\n?? internal/storage/sqlite/final_replies_test.go\n?? internal/storage/sqlite/recent_activity_test.go\n?? tests/integration/inline_console_test.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 3,
+    "passed_packages": 3,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 104,
+    "passed_tests": 103,
+    "failed_tests": 0,
+    "skipped_tests": 1,
+    "packages": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "status": "pass",
+        "elapsed_seconds": 1.7349999999999999
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/client",
+        "status": "pass",
+        "elapsed_seconds": 0.716
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "status": "pass",
+        "elapsed_seconds": 0.577
+      }
+    ],
+    "tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID",
+        "status": "pass",
+        "elapsed_seconds": 0.21
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/client",
+        "name": "TestWaitServiceCommandResolvesIdentityAndKeepsPolling",
+        "status": "pass",
+        "elapsed_seconds": 0.16
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1ThreePaneInlineFocusAndQuestionChanges",
+        "status": "pass",
+        "elapsed_seconds": 0.1
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1InlineModalCannotSubmitHiddenDraft",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1InlineEditorFitsNarrowMainSurface",
+        "status": "pass",
+        "elapsed_seconds": 0.07
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestCC2",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestCC4",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestUX2PreviewSubmitEndsCurrentHumanInteraction",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestViewPreferencesRejectInvalidOffsetsAndActionIdentity",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestCC3",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestCM72RequiresExactInjectedProjectAndQuitOnlyClosesClient",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestEnterOnlyOpensDetailAndStartKeepsOneRequestID",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1InlineListFocusPreservesDraftAndSkipsMissingOptions",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1JournalRestoresDraftAndOnlyQueriesOriginalRequest",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestViewProfilesSeparateLiveWindowsAndRecoverAfterClose",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestCC1",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestDefinitiveStaleSubmissionDoesNotRemainOutstanding",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1DamagedOrOldJournalKeepsFileAndBlocksExternalInput",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestReadyStartChoosesConfiguredProfileAndBindsRequest",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestUX1ParallelNumbersAndPrimarySurface",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestUX4RejectPreservesDraftAndBlockerStaysIndependent",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestConfirmedStopCannotCreateASecondOutstandingRequest",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1CompleteFinalAndHistoryAreCandidateBound",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1DamagedOrOldJournalKeepsFileAndBlocksExternalInput/not_json",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1DamagedOrOldJournalKeepsFileAndBlocksExternalInput/{\"version\":1,\"projects\":{}}",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1RecentActivityIsBoundedAndAttemptBound",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestUX3FreeInputAndNarrowPinnedPreview",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestConversationPageBudgetDefersOverflowPayloadDecoding",
+        "status": "pass",
+        "elapsed_seconds": 0.01
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestBackgroundDecisionRejectionDoesNotOpenAnotherProjectsDraft",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestCandidateCacheMustMatchCurrentConnectionInstance",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestCandidateMergedConflictPresentation",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestClosedTaskWithUncertainExecutionStillNeedsAttention",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestColumnsAlignWithChineseAndLongTaskTitles",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestCompletedTaskShowsHistoricalExecutionInFourColumns",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestConsoleOffersWorkerFlowDecisionWithoutRecoveryActions",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestConsoleTextEscapesTerminalControlCharacters",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestControlRequestIDFromErrorRemainsQueryOnly",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestDecisionAnswerDraftSurvivesStaleRevisionAndLengthRejection",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestEmptyRunningFilterExplainsWhyNativeTasksAreHidden",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestExecutionSettingsOnlyAppearInStartChoiceAndConfigMismatchBlocksStart",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestFailedRefreshKeepsLastGoodReadOnlyDataAndCurrentError",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestFinalPhaseDoesNotPromoteNonMessageEvents",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestHelpAndCompactLayoutFitNarrowAndWideScreens",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestLateFinalReclassifiesSameItemAndOlderRevisionCannotOverwrite",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestLongExecutionProfileListKeepsSelectionVisible",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestLongTaskListKeepsSelectedRowInsideViewport",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestNarrowConsoleKeepsDetailAndSelectionEntryReachable",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestNativeTaskAndItsRunShareOneListRow",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestNativeTaskDetailKeepsBlockersWithoutPlanOrHashes",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestNativeTaskViewKeepsOffPageSelectionAndEscapesText",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestOpenTaskDisplaysAsBlockedWithoutChangingPendingExecution",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestOrcaExecutionProfilesNameAgentModelEffortAndRemoteTarget",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1FinalRejectsUnknownPhaseAndBadBody",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1WindowsTerminalInput",
+        "status": "skip",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPendingDecisionPreviewHidesRunIdentity",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestProjectResponseCannotUpdateNewProjectView",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestProjectSwitchKeepsCurrentIdentityVisibleAndBackgroundNoticeIsolated",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestReconciliationRejectsChangedRequestPayload",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestRefreshTicksDoNotStackSlowProjectReads",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestRunDetailUsesItsFixedProfileAfterProjectConfigChanges",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestRunStatusKeepsBusinessExecutionAndUnknownAxesSeparate",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestStartDisablesStaleCandidatesAndAllowsManualParallel",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestStartIsNotPublishedWhenRequestIdentityCannotBePersisted",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestTM05DecisionAnswerSummary",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestTM05DecisionAnswerSummary/empty",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestTM05DecisionAnswerSummary/free_text",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestTM05DecisionAnswerSummary/option",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestTM05DecisionAnswerSummary/option_and_note",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestTM05DecisionAnswerSummary/unknown_option",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestTaskDetailOnlyShowsItsOwnControlReceipt",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestTaskPreviewKeepsOneIdentityAndShowsFixedExecutionPlan",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestTaskSelectionAndTwoFocusRegions",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestUX5TaskTriggerOrderAcrossWindows",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestUnavailableControlActionKeepsItsReasonInReturnedModel",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestUnicodeLongErrorFitsNarrowAndWidePanels",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestViewFileKeepsRequestIdentityWithoutCachingReceiptText",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestViewPreferencesCorruptionIsLocalToViewFile",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestViewProfileContainmentRejectsSiblingPaths",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/client",
+        "name": "TestCM71ProjectScopeAndErrors",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/client",
+        "name": "TestCM71ProjectScopeAndErrors/identity",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/client",
+        "name": "TestCM71ProjectScopeAndErrors/missing",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/client",
+        "name": "TestCM71ProjectScopeAndErrors/read_failure",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/client",
+        "name": "TestCM71ProjectScopeAndErrors/schema",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/client",
+        "name": "TestCM71ProjectScopeAndErrors/unknown",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/client",
+        "name": "TestCM71ResourceOwnershipAndClosedClient",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/client",
+        "name": "TestTM05OriginalRequest",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestConversationBodyAndRawQueriesUseSeparatePorts",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestConversationCapabilitiesNeedNoUnrelatedReader",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestConversationQueriesUseIndependentEventPortAndBoundCursor",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestConversationReaderRejectsMissingSourceRole",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestConversationReaderRejectsPreviousEventFormat",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestEventQueriesUseOnlyEventReader",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestNativeCandidateSnapshotKeepsDispatchOrderBeyondDetailPage",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestReadyQueriesRejectMissingCapabilityAndProject",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestTM05CanonicalActivityIdentityAndNoRawFallback",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestTM05PageProjection",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestTM05PageProjection/candidate_excludes_private_execution_and_copies_page_values",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestTM05PageProjection/conversation_projects_exact_body_raw_and_source_without_checkpoint",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestTM05PageProjection/history_retains_complete_candidate_numbering_without_private_records",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestTM05PageProjection/task_page_excludes_fixed_contract_and_private_delivery_evidence",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestTM05PageProjection/unique_delivery_projects_winner_and_loser_without_choosing_by_merge",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestTaskCursorRemainsStrictWithoutSQLite",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestTaskQueriesRejectReaderScopeAndCursorDrift",
+        "status": "pass",
+        "elapsed_seconds": 0
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/query",
+        "name": "TestTaskQueriesUseOnlyTaskReader",
+        "status": "pass",
+        "elapsed_seconds": 0
+      }
+    ],
+    "slowest_tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestDecisionAnswerEditorHandlesTwelveOptionsUnicodePasteAndStableCommandID",
+        "status": "pass",
+        "elapsed_seconds": 0.21
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/product/client",
+        "name": "TestWaitServiceCommandResolvesIdentityAndKeepsPolling",
+        "status": "pass",
+        "elapsed_seconds": 0.16
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1ThreePaneInlineFocusAndQuestionChanges",
+        "status": "pass",
+        "elapsed_seconds": 0.1
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1InlineModalCannotSubmitHiddenDraft",
+        "status": "pass",
+        "elapsed_seconds": 0.08
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1InlineEditorFitsNarrowMainSurface",
+        "status": "pass",
+        "elapsed_seconds": 0.07
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestCC2",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestCC4",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestUX2PreviewSubmitEndsCurrentHumanInteraction",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestViewPreferencesRejectInvalidOffsetsAndActionIdentity",
+        "status": "pass",
+        "elapsed_seconds": 0.04
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestCC3",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestCM72RequiresExactInjectedProjectAndQuitOnlyClosesClient",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestEnterOnlyOpensDetailAndStartKeepsOneRequestID",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1InlineListFocusPreservesDraftAndSkipsMissingOptions",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1JournalRestoresDraftAndOnlyQueriesOriginalRequest",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestViewProfilesSeparateLiveWindowsAndRecoverAfterClose",
+        "status": "pass",
+        "elapsed_seconds": 0.03
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestCC1",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestDefinitiveStaleSubmissionDoesNotRemainOutstanding",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1DamagedOrOldJournalKeepsFileAndBlocksExternalInput",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestReadyStartChoosesConfiguredProfileAndBindsRequest",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestUX1ParallelNumbersAndPrimarySurface",
+        "status": "pass",
+        "elapsed_seconds": 0.02
+      }
+    ],
+    "failures": [],
+    "skipped": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1WindowsTerminalInput",
+        "status": "skip",
+        "elapsed_seconds": 0
+      }
+    ],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 1.7353942,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/product-simplification-01-console/three-pane-final/go-test.jsonl",
+  "stderr_log": "docs/validation/product-simplification-01-console/three-pane-final/go-test.stderr.txt"
+}

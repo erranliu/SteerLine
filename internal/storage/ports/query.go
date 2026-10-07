@@ -11,6 +11,7 @@ type WorkflowReader interface {
 // ActivityReader samples identity records and bounded events in one read transaction.
 type ActivityReader interface {
 	ReadActivityView(context.Context, string, string, string, string, int64, int, int) (ActivityBinding, []DomainEvent, error)
+	ReadRecentActivityView(context.Context, string, string, string, string) (ActivityBinding, []DomainEvent, error)
 }
 
 // TaskCandidateReader returns the whole task graph and every candidate fact
