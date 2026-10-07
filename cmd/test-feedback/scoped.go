@@ -176,7 +176,11 @@ func runScoped(opts options) int {
 	report.Environment = collectEnvironment(opts.cacheCondition, opts.nativeNote, opts.out, nil)
 	// Keep room for the bounded multi-turn integration fixtures as well as
 	// each worker's core partition; missing terminal events still fail coverage.
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Minute)
+	timeout := 60 * time.Minute
+	if !opts.quick {
+		timeout = 75 * time.Minute
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 	var packages []string
 	var err error
