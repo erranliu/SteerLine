@@ -19,7 +19,7 @@ PR 提供删除项及依据、唯一所有者、旧到新断言映射和实际�
 
 ## 测试计划
 
-实施起点：`d8bacbd75994a183c6d54c027abe103d26ae6896`，平台确认 #67 PR190 已真实合并。删除项固定在 [候选清单](../../../validation/core-decoupling-07-cleanup/candidate-inventory.json)，消费者、保留项和断言归属见 [交付记录](../../../validation/core-decoupling-07-cleanup/README.md)。不新增场景或测试环境能力。
+实施起点：`d8bacbd75994a183c6d54c027abe103d26ae6896`，平台确认 #67 PR190 已真实合并。删除项固定在 [候选清单](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/core-decoupling-07-cleanup/candidate-inventory.json)，消费者、保留项和断言归属见 [交付记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/core-decoupling-07-cleanup/README.md)。不新增场景或测试环境能力。
 
 | 级别 / 组或场景 ID | 环境、命令 | 时点 | 通过条件 / 证据 |
 | --- | --- | --- | --- |

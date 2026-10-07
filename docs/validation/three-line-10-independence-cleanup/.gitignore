@@ -1,2 +1,0 @@
-# Per-run Windows build products are identified by SHA-256 in the reports.
-**/build/*.exe

@@ -2,7 +2,7 @@
 
 任务 ID：1；任务名称：统一会话事件与完整回复。
 
-状态：基础读模型与持久化已实现；E-A8 与 E-A9 已在报告限定的本机 Windows/Codex 双链路验收，其他故障场景仍有未完成项。依赖：PR 4A。对应 [Plan](pr-04b-conversation-events.plan.md)。下游：[4C 控制台](pr-04-console.spec.md)。验收状态见 [4B 验证报告](../../../validation/pr-04b-conversation-events-2026-09-24.md) 与[能力矩阵](../../../validation/pr-04b-conversation-capabilities-2026-09-24.json)。
+状态：基础读模型与持久化已实现；E-A8 与 E-A9 已在报告限定的本机 Windows/Codex 双链路验收，其他故障场景仍有未完成项。依赖：PR 4A。对应 [Plan](pr-04b-conversation-events.plan.md)。下游：[4C 控制台](pr-04-console.spec.md)。验收状态见 [4B 验证报告](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-04b-conversation-events-2026-09-24.md) 与[能力矩阵](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-04b-conversation-capabilities-2026-09-24.json)。
 
 ## E1：语义与身份
 

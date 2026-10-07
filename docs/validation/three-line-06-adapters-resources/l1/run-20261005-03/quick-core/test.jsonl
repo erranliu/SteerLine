@@ -1,8 +1,0 @@
-{"Time":"2026-10-05T08:11:14.6752507+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerline"}
-{"Time":"2026-10-05T08:11:14.8756052+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding"}
-{"Time":"2026-10-05T08:11:14.8756052+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding","Output":"=== RUN   TestNativeProjectInitializesOnceAndRejectsMismatchedBinding\n"}
-{"Time":"2026-10-05T08:11:19.2239074+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding","Output":"--- PASS: TestNativeProjectInitializesOnceAndRejectsMismatchedBinding (4.35s)\n"}
-{"Time":"2026-10-05T08:11:19.2366591+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding","Elapsed":4.35}
-{"Time":"2026-10-05T08:11:19.2366591+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Output":"PASS\n"}
-{"Time":"2026-10-05T08:11:19.2390511+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerline\t4.564s\n"}
-{"Time":"2026-10-05T08:11:19.2390511+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerline","Elapsed":4.564}

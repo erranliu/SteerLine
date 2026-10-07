@@ -1,8 +1,0 @@
-{"Time":"2026-10-06T00:52:17.6725294+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/e2e/internal/testenv"}
-{"Time":"2026-10-06T00:52:18.370089+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/e2e/internal/testenv","Test":"TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions"}
-{"Time":"2026-10-06T00:52:18.370089+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/internal/testenv","Test":"TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions","Output":"=== RUN   TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions\n"}
-{"Time":"2026-10-06T00:52:18.3716844+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/internal/testenv","Test":"TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions","Output":"--- PASS: TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions (0.00s)\n"}
-{"Time":"2026-10-06T00:52:18.3716844+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/e2e/internal/testenv","Test":"TestApplicationProjectSnapshotRejectsDifferentDatabaseRevisions","Elapsed":0}
-{"Time":"2026-10-06T00:52:18.3716844+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/internal/testenv","Output":"PASS\n"}
-{"Time":"2026-10-06T00:52:18.372203+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/internal/testenv","Output":"ok  \tgithub.com/erranliu/SteerLine/tests/e2e/internal/testenv\t0.699s\n"}
-{"Time":"2026-10-06T00:52:18.372203+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/e2e/internal/testenv","Elapsed":0.7}

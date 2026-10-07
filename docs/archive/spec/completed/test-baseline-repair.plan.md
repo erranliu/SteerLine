@@ -1,6 +1,6 @@
 # Plan：测试设计审计与基线修复
 
-日期：2026-10-01。状态：已完成设计审计和基线修复，完整回归通过，待 PR 评审。依据：用户要求先审计测试设计，再修复[当前失败基线](../../../validation/tiered-e2e-testing/baseline-2026-10-01/README.md)。本计划补充现有分级测试实现，沿用 PR #180，不创建中心任务。
+日期：2026-10-01。状态：已完成设计审计和基线修复，完整回归通过，待 PR 评审。依据：用户要求先审计测试设计，再修复[当前失败基线](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/tiered-e2e-testing/baseline-2026-10-01/README.md)。本计划补充现有分级测试实现，沿用 PR #180，不创建中心任务。
 
 ## 审计结论与修复边界
 

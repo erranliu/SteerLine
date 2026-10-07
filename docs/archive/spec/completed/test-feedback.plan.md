@@ -26,11 +26,11 @@
 
 | Spec 项 | 实施结果 | 验证证据 |
 | --- | --- | --- |
-| T1 范围和边界 | 只改测试工具与测试 fixture；生产协议、状态机、超时和 SQLite 配置未改 | 最终源码差异与 [`coverage-map.md`](../../../validation/test-feedback/coverage-map.md) |
-| T2 运行和汇总 | 新增 `cmd/test-feedback`、JSONL 汇总器、现有日志重汇总入口；保留原始 stdout/stderr，记录提交、工作树、Go/平台/并发/缓存/验收开关 | `internal/testfeedback` 的父子、并行包、失败、跳过、截断和缺失终态用例；[`status-filter-review`](../../../validation/test-feedback/status-filter-review/summary.json) 验证只排除本次运行输出文件 |
+| T1 范围和边界 | 只改测试工具与测试 fixture；生产协议、状态机、超时和 SQLite 配置未改 | 最终源码差异与 [`coverage-map.md`](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/test-feedback/coverage-map.md) |
+| T2 运行和汇总 | 新增 `cmd/test-feedback`、JSONL 汇总器、现有日志重汇总入口；保留原始 stdout/stderr，记录提交、工作树、Go/平台/并发/缓存/验收开关 | `internal/testfeedback` 的父子、并行包、失败、跳过、截断和缺失终态用例；[`status-filter-review`](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/test-feedback/status-filter-review/summary.json) 验证只排除本次运行输出文件 |
 | T3 fixture 精简 | 运行期只读 Git 种子被复制到每例独立 worktree 和 bare remote；同一测试进程内复用当前源码构建的 CLI | 20 个 fixture 的 Git 准备从 160 次进程调用降到 48 次（含一次性种子）；三次配对中位数从 105.02 秒降至 98.15 秒（6.54%） |
-| T4 覆盖与交接 | 原用例无删除、合并、跳过或降层；新增 fixture 可写隔离检查；日常和合入入口、#12/#13 交接写入验证文档 | [`coverage-map.md`](../../../validation/test-feedback/coverage-map.md) 和 [`README.md`](../../../validation/test-feedback/README.md) |
-| T5 最终验证 | 最新完整套件、vet、Windows/Linux 构建及差异检查均通过；记录完整套件时延波动 | [`final-full-after-status-filter`](../../../validation/test-feedback/final-full-after-status-filter/summary.json) 及下表 |
+| T4 覆盖与交接 | 原用例无删除、合并、跳过或降层；新增 fixture 可写隔离检查；日常和合入入口、#12/#13 交接写入验证文档 | [`coverage-map.md`](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/test-feedback/coverage-map.md) 和 [`README.md`](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/test-feedback/README.md) |
+| T5 最终验证 | 最新完整套件、vet、Windows/Linux 构建及差异检查均通过；记录完整套件时延波动 | [`final-full-after-status-filter`](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/test-feedback/final-full-after-status-filter/summary.json) 及下表 |
 
 ### 实际命令和结果
 
@@ -48,3 +48,7 @@
 - `internal/testfeedback/summary.go`、`internal/testfeedback/summary_test.go`
 - `internal/steerline/service_test.go`、`service_client_test.go`、`cli_test.go`
 - `docs/validation/test-feedback/`
+
+## 测试计划（2026-10-07 导航维护）
+
+本次仅将已清理的证据导航改为固定 Git 快照，不改原实现契约或追认历史通过。最小范围为文档静态 `doc-links`、`task-identities`、`whitespace`：当前 Windows/Git/Python 3 环境，交付前执行 `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check`；通过条件为无缺失本地链接、任务身份一致及无空白错误。固定历史链接的目标另用 `git cat-file --batch-check` 核对存在；结果见[本次清理验证](../../../validation/README.md#测试计划与本次结果)。不选择 L1/L2/L3、Full 或原生模型组；导航变更不需要这些验证，不新增场景或环境能力。

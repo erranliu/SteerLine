@@ -1,8 +1,0 @@
-{"Time":"2026-10-04T20:27:23.9208468+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates"}
-{"Time":"2026-10-04T20:27:24.5519882+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal"}
-{"Time":"2026-10-04T20:27:24.5525436+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Output":"=== RUN   TestCandidateLocal\n"}
-{"Time":"2026-10-04T20:45:45.8191637+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Output":"--- PASS: TestCandidateLocal (1101.27s)\n"}
-{"Time":"2026-10-04T20:45:45.8213767+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Test":"TestCandidateLocal","Elapsed":1101.27}
-{"Time":"2026-10-04T20:45:45.8213767+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Output":"PASS\n"}
-{"Time":"2026-10-04T20:45:45.8261841+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Output":"ok  \tgithub.com/erranliu/SteerLine/tests/e2e/suites/candidates\t1101.907s\n"}
-{"Time":"2026-10-04T20:45:45.8267157+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/candidates","Elapsed":1101.908}

@@ -1,6 +1,0 @@
-{"ImportPath":"github.com/erranliu/SteerLine/tests/integration [github.com/erranliu/SteerLine/tests/integration.test]","Action":"build-output","Output":"# github.com/erranliu/SteerLine/tests/integration [github.com/erranliu/SteerLine/tests/integration.test]\n"}
-{"ImportPath":"github.com/erranliu/SteerLine/tests/integration [github.com/erranliu/SteerLine/tests/integration.test]","Action":"build-output","Output":"tests\\integration\\worker_recovery_live_cd67_test.go:17:2: \"github.com/erranliu/SteerLine/internal/app/host\" imported as steerline and not used\n"}
-{"ImportPath":"github.com/erranliu/SteerLine/tests/integration [github.com/erranliu/SteerLine/tests/integration.test]","Action":"build-fail"}
-{"Time":"2026-10-05T23:04:10.8826982+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/integration"}
-{"Time":"2026-10-05T23:04:10.8826982+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"FAIL\tgithub.com/erranliu/SteerLine/tests/integration [build failed]\n"}
-{"Time":"2026-10-05T23:04:10.8826982+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/integration","Elapsed":0,"FailedBuild":"github.com/erranliu/SteerLine/tests/integration [github.com/erranliu/SteerLine/tests/integration.test]"}

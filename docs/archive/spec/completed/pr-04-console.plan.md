@@ -4,7 +4,7 @@
 
 依据：[Spec](pr-04-console.spec.md)。依赖：PR 1–3、4A、4B 审核合并。保留原 PR4 文件路径，本阶段为 4C。
 
-本次实现与验收记录：[PR 4C 控制台验证](../../../validation/pr-04c-console.md)。
+本次实现与验收记录：[PR 4C 控制台验证](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-04c-console.md)。
 
 ## 实施步骤
 
@@ -41,3 +41,7 @@
 ## 风险与回退
 
 多项目和多种异步消息会放大对象错配风险，先实现消息身份，再接动作。不支持的旧 UI 或状态格式应明确拒绝，不能让其发出有副作用命令。
+
+## 测试计划（2026-10-07 导航维护）
+
+本次仅将已清理的证据导航改为固定 Git 快照，不改原实现契约或追认历史通过。最小范围为文档静态 `doc-links`、`task-identities`、`whitespace`：当前 Windows/Git/Python 3 环境，交付前执行 `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check`；通过条件为无缺失本地链接、任务身份一致及无空白错误。固定历史链接的目标另用 `git cat-file --batch-check` 核对存在；结果见[本次清理验证](../../../validation/README.md#测试计划与本次结果)。不选择 L1/L2/L3、Full 或原生模型组；导航变更不需要这些验证，不新增场景或环境能力。

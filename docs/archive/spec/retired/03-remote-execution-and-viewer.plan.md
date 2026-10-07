@@ -1,8 +1,8 @@
 # Plan：分阶段远程闭环与 viewer 决策
 
-2026-09-28 结项：[当前主机受影响故障回执](../../../validation/spec03-current-host-affected-2026-09-28/README.md)已核对台式机64g 上活跃 worker 停服重接不重派，以及身份不可核实保持 fail-closed 和精确人工结算。[最终范围核对](../../../validation/spec03-final-scope-audit-2026-09-28.md)和原中心[PR #110 TaskDelivery](../../../validation/spec03-task6-closure-2026-09-28/README.md)已完成；以下较早“仍待补证”按当时状态保留。
+2026-09-28 结项：[当前主机受影响故障回执](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-current-host-affected-2026-09-28/README.md)已核对台式机64g 上活跃 worker 停服重接不重派，以及身份不可核实保持 fail-closed 和精确人工结算。[最终范围核对](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-final-scope-audit-2026-09-28.md)和原中心[PR #110 TaskDelivery](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-task6-closure-2026-09-28/README.md)已完成；以下较早“仍待补证”按当时状态保留。
 
-2026-09-28 用户将当前 `台式机64g` 的可见 viewer 门槛改为 4 秒内；`home` 的 2 秒原门槛和 1.669 / 1.414 / 1.798 秒回执不变。[当前主机后续回执](../../../validation/spec03-desktop64g-followup-2026-09-28/README.md)中的 Decision 可见画面保守上界为 2.215 秒；后续 [SteerlineTest Task 105](../../../validation/spec03-viewer-task105-2026-09-28/README.md) 的步骤转换为 1.334 秒，均按 4 秒通过各自样本。当前目标受影响故障路径仍由 #6 验收，持续无人值守由 #42 验收。
+2026-09-28 用户将当前 `台式机64g` 的可见 viewer 门槛改为 4 秒内；`home` 的 2 秒原门槛和 1.669 / 1.414 / 1.798 秒回执不变。[当前主机后续回执](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-desktop64g-followup-2026-09-28/README.md)中的 Decision 可见画面保守上界为 2.215 秒；后续 [SteerlineTest Task 105](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-viewer-task105-2026-09-28/README.md) 的步骤转换为 1.334 秒，均按 4 秒通过各自样本。当前目标受影响故障路径仍由 #6 验收，持续无人值守由 #42 验收。
 
 任务 ID：6；任务名称：分阶段远程闭环。
 
@@ -12,15 +12,15 @@
 
 发布记录保留源码/二进制哈希、配置摘要、能力证据来源和部署冒烟结果。#6 保留第 8 节故障安全与当前目标 viewer 门槛；已通过且未受变更影响的版本族证据复用，新主机特有或受影响路径针对性补证。长期无人值守、固定 stable 24 小时与资源窗口交给 #42，不能在此次冒烟中伪报通过；#3/#4 及下游完整交付前置不变。
 
-2026-09-28 新主机验收：[台式机64g 记录](../../../validation/spec03-desktop64g-2026-09-28.md)将首次 Smart App Control 失败保留为独立 Dispatch；用户批准关闭后，以当前主机原回执认证六项受监管能力，在隔离 SteerLine 项目基线完成原生五步、真实业务问答/应用证明、PR #78 固定 head 合并及原中心结项，五个 Dispatch 均 release/exited。首次 `gh` 无会话导致固定发布命令失败，worker 用连接器完成该次 PR；用户完成机器准备后，新隔离 Task 的固定 `gh pr create` 命令创建并合并 PR #85，原 Task 和五个 Dispatch 均结算。重启启用 UAC 后，人工拒绝/批准的系统与进程回执已分开记录，用户另拍下匹配的安全桌面原图，当前目标 P10 可见分支通过。home 的故障矩阵和 viewer 时延证据不直接外推到新主机。
+2026-09-28 新主机验收：[台式机64g 记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-desktop64g-2026-09-28.md)将首次 Smart App Control 失败保留为独立 Dispatch；用户批准关闭后，以当前主机原回执认证六项受监管能力，在隔离 SteerLine 项目基线完成原生五步、真实业务问答/应用证明、PR #78 固定 head 合并及原中心结项，五个 Dispatch 均 release/exited。首次 `gh` 无会话导致固定发布命令失败，worker 用连接器完成该次 PR；用户完成机器准备后，新隔离 Task 的固定 `gh pr create` 命令创建并合并 PR #85，原 Task 和五个 Dispatch 均结算。重启启用 UAC 后，人工拒绝/批准的系统与进程回执已分开记录，用户另拍下匹配的安全桌面原图，当前目标 P10 可见分支通过。home 的故障矩阵和 viewer 时延证据不直接外推到新主机。
 
 执行依据：[Spec](03-remote-execution-and-viewer.md)。开发输入为 [远程协议 Spec](01-orca-remote-protocol.md) 的真实证据及限制、[中心模型 Spec](02-execution-model-and-adapter.md) 已交付的模型和接口；生产启用另受剩余协议门槛约束。
 
-2026-09-28 验收补充：[真实 home 消息到可见 viewer 时延](../../../validation/spec03-viewer-latency-2026-09-28.md)先测出 Decision 2.476 秒失败，随后并行只读源并加快前台刷新；新隔离 Decision 为 1.669 秒，两次远端步骤转换为 1.414 / 1.798 秒。两条任务均按固定 head 真实合并、关闭原 Task 并释放五个 Dispatch。当前目标的 2 秒 viewer 门槛已通过；生产项目认证当时未完成，后续见下段；管理员/UAC 可见捕获仍按原边界开放。下文早期 viewer 失败样本保留其当时结论。
+2026-09-28 验收补充：[真实 home 消息到可见 viewer 时延](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-viewer-latency-2026-09-28.md)先测出 Decision 2.476 秒失败，随后并行只读源并加快前台刷新；新隔离 Decision 为 1.669 秒，两次远端步骤转换为 1.414 / 1.798 秒。两条任务均按固定 head 真实合并、关闭原 Task 并释放五个 Dispatch。当前目标的 2 秒 viewer 门槛已通过；生产项目认证当时未完成，后续见下段；管理员/UAC 可见捕获仍按原边界开放。下文早期 viewer 失败样本保留其当时结论。
 
-同日后续：[SteerLine 仓库 home 能力报告](../../../validation/spec03-production-project-capability-2026-09-28.md)现将六项必需受监管能力绑定到独立的项目工作树及真实 Dispatch/Task/消息/release 回执。首次复用旧终端的 worker_done 失败并按精确身份停止，正常新 agent 终端重试才结算成功。当前报告不包括生产项目的原生五步任务或 PR 演练；UAC 与其余故障门槛仍开放。
+同日后续：[SteerLine 仓库 home 能力报告](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-production-project-capability-2026-09-28.md)现将六项必需受监管能力绑定到独立的项目工作树及真实 Dispatch/Task/消息/release 回执。首次复用旧终端的 worker_done 失败并按精确身份停止，正常新 agent 终端重试才结算成功。当前报告不包括生产项目的原生五步任务或 PR 演练；UAC 与其余故障门槛仍开放。
 
-同日[R07 implement 离线完成与原库恢复](../../../validation/spec03-r07-implement-2026-09-28.md)补齐最后一个独立步骤完成窗口样本；[R01–R19 对照](../../../validation/spec03-fault-matrix-2026-09-28.md)列出每项真机/自动化证据。该隔离任务最终 PR #20 合并、Task 关闭，但 verify/review 的提示提交反复需人工 Enter，生产无人值守启动可靠性仍未通过；不能用 R07 恢复通过掩盖这个实际故障。
+同日[R07 implement 离线完成与原库恢复](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-r07-implement-2026-09-28.md)补齐最后一个独立步骤完成窗口样本；[R01–R19 对照](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-fault-matrix-2026-09-28.md)列出每项真机/自动化证据。该隔离任务最终 PR #20 合并、Task 关闭，但 verify/review 的提示提交反复需人工 Enter，生产无人值守启动可靠性仍未通过；不能用 R07 恢复通过掩盖这个实际故障。
 
 ## 实施顺序
 
@@ -42,7 +42,7 @@
 ## 2026-09-28 原生业务问答与交付
 
 - 新隔离 fixture 固定 implement 的一次 `yes/no` 业务问题。前置探测暴露 native 快照刷新把活跃问答 Run 的 `waiting_decision` 反复改回 `pending`、停止服务后等待中的原 Dispatch 无法重接、Windows 工作树路径的等价表示被答案资格误拒。中心现以同一 Decision/Attempt 的持久记录核对等待状态，恢复时先核验原 Dispatch，工作树路径按规范化绝对路径比较；错误身份仍拒绝。
-- [最终真机闭环](../../../validation/spec03-native-question-2026-09-28.md)只提交无备注的 `yes`，中心确认 reply 后等待远端独立应用证明，未把 reply accepted 当作 applied。worker 指令固定证明消息的七个字段及 8 KiB 发送前检查。任务 91024 的五个独立 Dispatch 全部 succeeded/released，候选、验证和审查 revision 一致；唯一 [测试 PR #17](https://github.com/erranliu/SteerlineTest/pull/17) 在固定 head 合并，中心关闭原 Task。publish 暂记 unknown 后重开同一 SQLite 对账，未重发。失败探测的 Attempt/资源未冒充本次成功。
+- [最终真机闭环](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-native-question-2026-09-28.md)只提交无备注的 `yes`，中心确认 reply 后等待远端独立应用证明，未把 reply accepted 当作 applied。worker 指令固定证明消息的七个字段及 8 KiB 发送前检查。任务 91024 的五个独立 Dispatch 全部 succeeded/released，候选、验证和审查 revision 一致；唯一 [测试 PR #17](https://github.com/erranliu/SteerlineTest/pull/17) 在固定 head 合并，中心关闭原 Task。publish 暂记 unknown 后重开同一 SQLite 对账，未重发。失败探测的 Attempt/资源未冒充本次成功。
 
 ## 当前执行记录（2026-09-25）
 
@@ -149,3 +149,7 @@
 - 用协议替身和存储故障覆盖 Spec R01–R19；真机至少完成 Spec 要求的 R01、R02、R06、R07、R08、R16、R18 及测试 PR 合并/结项路径。
 - 生产启用前完成 [远程协议剩余门槛](orca-probe/remaining-gates.md)与 P13、中心模型交付及本 Spec 验收；真机版本、身份、残留资源和未测项分别记录，不以替身结果代替。
 - 更新 hosting、状态、会话、决策和交付文档，运行相关 Go 测试、静态检查及 `git diff --check`；不扩大未验证版本、远程取消或消息大小能力。
+
+## 测试计划（2026-10-07 导航维护）
+
+本次仅将已清理的证据导航改为固定 Git 快照，不改原实现契约或追认历史通过。最小范围为文档静态 `doc-links`、`task-identities`、`whitespace`：当前 Windows/Git/Python 3 环境，交付前执行 `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check`；通过条件为无缺失本地链接、任务身份一致及无空白错误。固定历史链接的目标另用 `git cat-file --batch-check` 核对存在；结果见[本次清理验证](../../../validation/README.md#测试计划与本次结果)。不选择 L1/L2/L3、Full 或原生模型组；导航变更不需要这些验证，不新增场景或环境能力。

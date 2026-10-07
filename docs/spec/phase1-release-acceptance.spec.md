@@ -4,7 +4,7 @@
 
 ## 范围与前置
 
-硬前置：#39、#83。#39 传递包含 #38/#37/#36；#83 提供本机安装与调试路径隔离。复用已交付的[本机多候选证据](../validation/candidate-native-acceptance/README.md)，依赖[本机安装与调试路径隔离](local-runtime-isolation.spec.md)，遵守[共同约束](phase1-delivery-constraints.md)。#40/#41 延后，不是本任务或 #53 的传递前置。
+硬前置：#39、#83。#39 传递包含 #38/#37/#36；#83 提供本机安装与调试路径隔离。复用已交付的[本机多候选证据](../validation/candidate-acceptance.md)，依赖[本机安装与调试路径隔离](local-runtime-isolation.spec.md)，遵守[共同约束](phase1-delivery-constraints.md)。#40/#41 延后，不是本任务或 #53 的传递前置。
 
 本任务给出第一阶段单安装版可持续使用的交付判定，交付集成验收脚本/记录、运行入口说明、未结算资源清单和维护指引。第一阶段统一只包含本地 Codex 与本机 Orca，不包含远端准入、派发、反馈、恢复、取消或远端组合验收，也不把远端列作阻塞/待补验。只修复本机组合运行的接线缺陷；安装/调试入口和隔离缺陷归 #83。第一阶段采用 CLI/TUI；WinUI 和主 agent 规划闭环归第二阶段。双 channel、dev select、受控提升、跨构建活动状态接管和旧格式兼容不在本任务范围。
 

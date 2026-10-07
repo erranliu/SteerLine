@@ -1,8 +1,0 @@
-{"ImportPath":"github.com/erranliu/SteerLine/internal/app/host [github.com/erranliu/SteerLine/internal/app/host.test]","Action":"build-output","Output":"# github.com/erranliu/SteerLine/internal/app/host [github.com/erranliu/SteerLine/internal/app/host.test]\n"}
-{"ImportPath":"github.com/erranliu/SteerLine/internal/app/host [github.com/erranliu/SteerLine/internal/app/host.test]","Action":"build-output","Output":"internal\\app\\host\\business_fixture_test.go:256:11: undefined: PrepareServiceConfig\n"}
-{"ImportPath":"github.com/erranliu/SteerLine/internal/app/host [github.com/erranliu/SteerLine/internal/app/host.test]","Action":"build-output","Output":"internal\\app\\host\\host_fixture_support_test.go:113:11: undefined: PrepareServiceConfig\n"}
-{"ImportPath":"github.com/erranliu/SteerLine/internal/app/host [github.com/erranliu/SteerLine/internal/app/host.test]","Action":"build-output","Output":"internal\\app\\host\\service_ports_fixture_test.go:229:12: undefined: ValidateApplicationPaths\n"}
-{"ImportPath":"github.com/erranliu/SteerLine/internal/app/host [github.com/erranliu/SteerLine/internal/app/host.test]","Action":"build-fail"}
-{"Time":"2026-10-05T22:23:42.8758364+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/app/host"}
-{"Time":"2026-10-05T22:23:42.8764767+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app/host","Output":"FAIL\tgithub.com/erranliu/SteerLine/internal/app/host [build failed]\n"}
-{"Time":"2026-10-05T22:23:42.8764767+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/internal/app/host","Elapsed":0.001,"FailedBuild":"github.com/erranliu/SteerLine/internal/app/host [github.com/erranliu/SteerLine/internal/app/host.test]"}

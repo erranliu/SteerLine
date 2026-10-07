@@ -1,9 +1,0 @@
-{"Time":"2026-10-07T07:24:31.8622925+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/integration"}
-{"Time":"2026-10-07T07:24:34.8247177+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestPS1InlineConsoleWiring"}
-{"Time":"2026-10-07T07:24:34.8247177+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestPS1InlineConsoleWiring","Output":"=== RUN   TestPS1InlineConsoleWiring\n"}
-{"Time":"2026-10-07T07:27:05.7095981+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestPS1InlineConsoleWiring","Output":"    inline_console_test.go:125: timed out waiting for the public lifecycle/query state\n"}
-{"Time":"2026-10-07T07:27:05.8194021+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestPS1InlineConsoleWiring","Output":"--- FAIL: TestPS1InlineConsoleWiring (151.00s)\n"}
-{"Time":"2026-10-07T07:27:05.8194021+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/integration","Test":"TestPS1InlineConsoleWiring","Elapsed":151}
-{"Time":"2026-10-07T07:27:05.8194021+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"FAIL\n"}
-{"Time":"2026-10-07T07:27:05.8344578+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"FAIL\tgithub.com/erranliu/SteerLine/tests/integration\t153.975s\n"}
-{"Time":"2026-10-07T07:27:05.8344578+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/integration","Elapsed":153.975}

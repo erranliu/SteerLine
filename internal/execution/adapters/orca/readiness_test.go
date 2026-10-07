@@ -38,7 +38,7 @@ func TestProbeContentBuildIsPureAndWritesAreExplicit(t *testing.T) {
 }
 
 func TestReadinessEvidenceUsesActualPlatformToolBlocks(t *testing.T) {
-	data, err := os.ReadFile("../../../../docs/validation/worker-environment-readiness/platform-gate-2026-09-30.json")
+	data, err := os.ReadFile("testdata/platform-gate-2026-09-30.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,7 +130,7 @@ func TestProbeInitializationFailureCannotBeOverwrittenByRetry(t *testing.T) {
 }
 
 func TestActualSavedCommandWrapperProvidesProbeEvidence(t *testing.T) {
-	data, err := os.ReadFile("../../../../docs/validation/worker-environment-readiness/platform-wrapper-audit-2026-09-30.json")
+	data, err := os.ReadFile("testdata/platform-wrapper-audit-2026-09-30.json")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestActualSavedCommandWrapperProvidesProbeEvidence(t *testing.T) {
 }
 
 func TestActualStringifiedCommandWrapperProvidesProbeEvidence(t *testing.T) {
-	data, err := os.ReadFile("../../../../docs/validation/worker-environment-readiness/platform-stringified-wrapper-20261001.json")
+	data, err := os.ReadFile("testdata/platform-stringified-wrapper-20261001.json")
 	if err != nil {
 		t.Fatal(err)
 	}

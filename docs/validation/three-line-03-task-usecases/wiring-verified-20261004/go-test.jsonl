@@ -1,8 +1,0 @@
-{"Time":"2026-10-04T21:01:48.3293852+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration"}
-{"Time":"2026-10-04T21:01:48.5117836+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM03TaskWiring"}
-{"Time":"2026-10-04T21:01:48.5117836+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM03TaskWiring","Output":"=== RUN   TestTM03TaskWiring\n"}
-{"Time":"2026-10-04T21:02:14.7352983+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM03TaskWiring","Output":"--- PASS: TestTM03TaskWiring (26.22s)\n"}
-{"Time":"2026-10-04T21:02:14.7358257+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM03TaskWiring","Elapsed":26.22}
-{"Time":"2026-10-04T21:02:14.7358257+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"PASS\n"}
-{"Time":"2026-10-04T21:02:14.7429192+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerlineintegration\t26.414s\n"}
-{"Time":"2026-10-04T21:02:14.7429192+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Elapsed":26.414}

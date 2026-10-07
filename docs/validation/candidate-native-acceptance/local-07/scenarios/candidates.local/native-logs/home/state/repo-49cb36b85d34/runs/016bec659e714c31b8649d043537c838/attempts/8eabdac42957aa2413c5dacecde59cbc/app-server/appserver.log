@@ -1,8 +1,0 @@
-codex app-server (WebSockets)
-  listening on: ws://127.0.0.1:64486
-  readyz: http://127.0.0.1:64486/readyz
-  healthz: http://127.0.0.1:64486/healthz
-  note: binds localhost only (use SSH port-forwarding for remote access)
-{"timestamp":"2026-10-04T11:08:38.642903Z","level":"WARN","fields":{"message":"Failed to create shell snapshot for powershell: Shell snapshot not supported yet for PowerShell"},"target":"codex_core::shell_snapshot"}
-{"timestamp":"2026-10-04T11:10:05.708599Z","level":"WARN","fields":{"message":"websocket receive error: WebSocket protocol error: Connection reset without closing handshake"},"target":"codex_app_server_transport::transport::websocket"}
-{"timestamp":"2026-10-04T11:10:05.872045Z","level":"WARN","fields":{"message":"websocket receive error: WebSocket protocol error: Connection reset without closing handshake"},"target":"codex_app_server_transport::transport::websocket"}

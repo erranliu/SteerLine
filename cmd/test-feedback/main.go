@@ -327,11 +327,7 @@ func parseOptions(args []string) (options, error) {
 		return opts, fmt.Errorf("-workers=3 only runs the complete deterministic suite")
 	}
 	if opts.out == "" {
-		if opts.quick || opts.workers == 3 || opts.level == "L2" || opts.level == "L3" {
-			opts.out = filepath.Join(os.TempDir(), "steerline-test-feedback", time.Now().UTC().Format("20060102T150405.000000000Z"))
-		} else {
-			opts.out = filepath.Join("docs", "validation", "test-feedback", "runs", time.Now().UTC().Format("20060102T150405Z"))
-		}
+		opts.out = filepath.Join(os.TempDir(), "steerline-test-feedback", time.Now().UTC().Format("20060102T150405.000000000Z"))
 	}
 	opts.goTestArgs = goArgs
 	return opts, nil

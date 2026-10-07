@@ -1,6 +1,0 @@
-{"ImportPath":"github.com/erranliu/SteerLine/tests/integration.test","Action":"build-output","Output":"# github.com/erranliu/SteerLine/tests/integration\n"}
-{"ImportPath":"github.com/erranliu/SteerLine/tests/integration.test","Action":"build-output","Output":"multiple definitions of TestMain\n"}
-{"ImportPath":"github.com/erranliu/SteerLine/tests/integration.test","Action":"build-fail"}
-{"Time":"2026-10-05T21:02:28.1372291+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/integration"}
-{"Time":"2026-10-05T21:02:28.1377588+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"FAIL\tgithub.com/erranliu/SteerLine/tests/integration [setup failed]\n"}
-{"Time":"2026-10-05T21:02:28.1377588+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/integration","Elapsed":0.001,"FailedBuild":"github.com/erranliu/SteerLine/tests/integration.test"}

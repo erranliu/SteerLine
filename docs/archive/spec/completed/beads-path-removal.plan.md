@@ -12,6 +12,10 @@
 
 ## 验证与完成条件
 
-按 LR1–LR6 逐项验收。已运行受影响配置、原生工作流、决策/恢复、PR 和旧状态拒绝用例；最终完整 suite、静态检查、Windows/Linux 构建记录见 [验证结果](../../../validation/beads-path-removal/results.md)。Live Codex、Orca、PR-provider 和可见窗口开关未启用，保持为独立真实平台验收门槛。
+按 LR1–LR6 逐项验收。已运行受影响配置、原生工作流、决策/恢复、PR 和旧状态拒绝用例；最终完整 suite、静态检查、Windows/Linux 构建记录见 [验证结果](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/beads-path-removal/results.md)。Live Codex、Orca、PR-provider 和可见窗口开关未启用，保持为独立真实平台验收门槛。
 
 对每个删除的测试说明删除的是失效产品路径还是重复断言；当前仍有意义的行为必须给出承接位置。比较耗时并解释变动，不通过跳过测试或减少恢复约束达成清理。
+
+## 测试计划（2026-10-07 导航维护）
+
+本次仅将已清理的证据导航改为固定 Git 快照，不改原实现契约或追认历史通过。最小范围为文档静态 `doc-links`、`task-identities`、`whitespace`：当前 Windows/Git/Python 3 环境，交付前执行 `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check`；通过条件为无缺失本地链接、任务身份一致及无空白错误。固定历史链接的目标另用 `git cat-file --batch-check` 核对存在；结果见[本次清理验证](../../../validation/README.md#测试计划与本次结果)。不选择 L1/L2/L3、Full 或原生模型组；导航变更不需要这些验证，不新增场景或环境能力。

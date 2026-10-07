@@ -1,6 +1,6 @@
 # Plan：候选观察界面
 
-任务 ID：38；任务名称：候选观察界面。唯一执行依据：[Spec](candidate-console.spec.md)。起点 `28b81d82f4afb3e158cf96bd5cbf257fa48b7adc`（#37 已合入）；分支 `codex/candidate-console-38`。原实现已合入；CC5 与本次交互增量已获用户人工确认通过。最新状态见[人工确认记录](../../../validation/candidate-interaction-ux/manual-acceptance-20261004.md)，历史延期记录保留。
+任务 ID：38；任务名称：候选观察界面。唯一执行依据：[Spec](candidate-console.spec.md)。起点 `28b81d82f4afb3e158cf96bd5cbf257fa48b7adc`（#37 已合入）；分支 `codex/candidate-console-38`。原实现已合入；CC5 与本次交互增量已获用户人工确认通过。最新状态见[人工确认记录](../../../validation/manual-acceptance.md)，历史延期记录保留。
 
 ## 实际实现
 
@@ -18,7 +18,7 @@
 
 ## 测试计划
 
-所有 runner 产物使用新的空目录；非零命中、无 fail/skip 才计通过。早期失败记录留作诊断，不作为通过证据。最后实际结果见[验收记录](../../../validation/candidate-console/README.md)。
+所有 runner 产物使用新的空目录；非零命中、无 fail/skip 才计通过。早期失败记录留作诊断，不作为通过证据。最后实际结果见[验收记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/candidate-console/README.md)。
 
 | 级别/组或场景 ID | 环境 | 命令 | 执行时点 | 通过条件 | 证据位置 |
 | --- | --- | --- | --- | --- | --- |

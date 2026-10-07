@@ -22,12 +22,12 @@
 - 远程取消不可用。关闭 viewer 不停服；关闭服务窗口只停止中心监督，远端 worker 可能继续。不要以关窗作为已停止证明。已结算的 worker 正常 release。
 - Orca 重启或专用协调终端丢失时，旧句柄不再可靠。先恢复并核验已有执行，再为后续任务更新协调终端；不能通过新句柄接管身份不明的活动执行。
 
-原试验台式机64g 的目标功能、受影响故障与 4 秒 viewer 已按[Spec 03 最终范围](../../validation/spec03-final-scope-audit-2026-09-28.md)核对；原中心 #3/#4/#6 TaskDelivery 均已关闭。Orca 平台自然产生同句柄新 incarnation 未被声称已观察，出现时仍须定向回归。该试验当时的 #29/#32/#24 后续安排只作历史定位，不作为当前一期前置；当前 stable 24 小时与受控提升只按本机范围验收。
+原试验台式机64g 的目标功能、受影响故障与 4 秒 viewer 已按[Spec 03 最终范围](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-final-scope-audit-2026-09-28.md)核对；原中心 #3/#4/#6 TaskDelivery 均已关闭。Orca 平台自然产生同句柄新 incarnation 未被声称已观察，出现时仍须定向回归。该试验当时的 #29/#32/#24 后续安排只作历史定位，不作为当前一期前置；当前 stable 24 小时与受控提升只按本机范围验收。
 
 ## 发布与验证
 
 发布使用固定源码构建，在确认无活动/未知执行后停止项目服务，备份二进制、配置与当前状态，调用构建产物的 `install` 写入同一 home，再以手动模式重启。原生任务库不清空、不转换、不重建。安装目录的发布记录保存源码提交、二进制哈希、项目配置和验证结果；备份只用于人工恢复现场，不提供旧数据兼容路径。
 
-基础五步与命令式发布证据见[台式机64g 原生验收](../../validation/spec03-desktop64g-2026-09-28.md)。交付配置另核对远端模型可启动、项目工具与仓库身份、能力证据可重读、现有任务/Decision/Operation 保留及重启后的服务配置。
+基础五步与命令式发布证据见[台式机64g 原生验收](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-desktop64g-2026-09-28.md)。交付配置另核对远端模型可启动、项目工具与仓库身份、能力证据可重读、现有任务/Decision/Operation 保留及重启后的服务配置。
 
-本次本机安装、项目方案与状态保留结果见[发布回执](../../validation/remote-mvp-release-2026-09-28.md)。
+本次本机安装、项目方案与状态保留结果见[发布回执](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/remote-mvp-release-2026-09-28.md)。
