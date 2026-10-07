@@ -78,8 +78,10 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	}
 	key := func(r rune) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}} }
 	step(key('r'))
-	step(tea.KeyMsg{Type: tea.KeyDown})
 	step(key('s'))
+	if !containsConsoleText(m.View(), "选择执行方案") {
+		t.Fatal("selected ready task did not open its execution profile choice", m.View())
+	}
 	step(tea.KeyMsg{Type: tea.KeyEnter})
 	var primary *productapi.CandidateSummary
 	waitFor(t, 30*time.Second, func() bool {
@@ -191,7 +193,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	// Feedback is submitted through the actual console against the selected original Decision.
 	step(key('r'))
 	step(key('a'))
-	if !strings.Contains(m.View(), "人工决策 · 显式提交") {
+	if !containsConsoleText(m.View(), "提交预览") || !containsConsoleText(m.View(), "你的答复") {
 		t.Fatalf("original decision draft did not open: %s", m.View())
 	}
 	step(tea.KeyMsg{Type: tea.KeyTab})
@@ -227,7 +229,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 		step(tea.KeyMsg{Type: tea.KeyEsc})
 		step(key('r'))
 		step(key('a'))
-		if !strings.Contains(m.View(), "人工决策 · 显式提交") || !strings.Contains(m.View(), "接线验证：精确原候选") {
+		if !containsConsoleText(m.View(), "提交预览") || !containsConsoleText(m.View(), "你的答复") || !containsConsoleText(m.View(), "接线验证：精确原候选") {
 			t.Fatal("explicit refresh lost the original unsent draft", m.View())
 		}
 	}
