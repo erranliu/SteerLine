@@ -1,6 +1,6 @@
 # 第三批：保留资源与命令收口
 
-绑定[Spec](../../spec/product-simplification-03-resources-cli.spec.md)和[Plan](../../spec/product-simplification-03-resources-cli.plan.md)，实施基线8e46537f（第二批已合入）。实现、自查及最小验证完成；多后端、远端协议、多候选、完整任务依赖与唯一交付继续保留。
+绑定[Spec](../../../../spec/product-simplification-03-resources-cli.spec.md)和[Plan](../../../../spec/product-simplification-03-resources-cli.plan.md)，实施基线8e46537f（第二批已合入）。实现、自查及最小验证完成；多后端、远端协议、多候选、完整任务依赖与唯一交付继续保留。
 
 Task 丢弃不再关闭 PR、删除 worktree 或分支，也不生成这些资源的自动待办。Task 只保存 stop_pending 原执行停止身份；实际活动/未知执行、停止意图和退出确认继续单独核验。工作区/分支/PR 历史定位不因资源缺失而丢失，详情显示“保留，需人工处置”和采样时间，明确不是存在/已清理证明。退出业务不复活候选、不新发业务输入；丢弃/放弃后的合并及迟到多合并仍记录冲突，不覆盖唯一 Delivery 或解锁后继。
 

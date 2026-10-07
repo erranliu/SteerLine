@@ -1,6 +1,8 @@
 # Spec：Codex 规划主 agent 能力验证
 
-任务 ID：43；任务名称：Codex 规划主 agent 能力验证；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-agent-capabilities.plan.md)。本任务由一个独立实现 PR 交付。
+> 本轮规划状态：#43不再安排独立完整探测项目；身份和下文旧方案仅保留参考，非准入候选。必要权限/受控草稿工具/未知轮次验证纳入重定后的#47产品接入，不能放宽门槛。此变更不取消外部已有Task。见[二期推进边界](../roadmap/drafts/phase2-delivery.md)。
+
+任务 ID：43；任务名称：Codex 规划主 agent 能力验证；目标：`PHASE2`。旧方案状态：曾编写候选规格，未宣称实现或验收；当前待重定。配套 [Plan](phase2-agent-capabilities.plan.md)。本任务由一个独立实现 PR 交付。
 
 ## 范围与前置
 

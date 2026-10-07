@@ -1,6 +1,6 @@
 # 延后任务 #41 验收规划：dev 隔离与 stable 提升
 
-唯一任务归属：#41。来源：[Spec](../spec/runtime-isolation-promotion.spec.md) / [Plan](../spec/runtime-isolation-promotion.plan.md)。状态：延后草案、待验收；不属于当前草稿 roadmap 或执行入口，补写文档不重新启用、不分配新 Task ID。重新启用前按实际维护需求重定范围和前置，不能以当前路径隔离/同构建恢复证明版本选择或提升。
+唯一任务归属：#41。来源：[Spec](../../../spec/runtime-isolation-promotion.spec.md) / [Plan](../../../spec/runtime-isolation-promotion.plan.md)。状态：延后草案、待验收；不属于当前草稿 roadmap 或执行入口，补写文档不重新启用、不分配新 Task ID。重新启用前按实际维护需求重定范围和前置，不能以当前路径隔离/同构建恢复证明版本选择或提升。
 
 ## 自动验收
 

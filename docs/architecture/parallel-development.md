@@ -33,8 +33,8 @@
 | 持久化与原子提交 / 已有 | storage/ports、sqlite | 已明确语义下的读取或提交实现；消费者仍经窄端口 | schema、唯一约束、CAS/版本、同事务快照、checkpoint 与领域记录提交边界改变 | [数据模型与格式来源](../product-design/data-model.md)、[提交契约](../../internal/storage/ports/transactions.go)、[快照端口](../../internal/storage/ports/application_snapshot.go) |
 | 配置、应用组装与服务宿主 / 已有 | app、app/host | 稳定宿主/产品端口下的配置加载、进程控制和入口能力 | 公共构造、目录注册、配置摘要、exe/home 传递、实例/锁、启动与停服规则改变 | [整体生命周期](../architecture.md#生命周期反馈与恢复)、[组装/宿主源码](current-code-architecture.md#build-install-and-launch-sources) |
 | 测试支持与环境 / 已有 | testkit、tests/integration、tests/e2e | 独立 owner 用例和场景，复用正式 driver/codec | 共享 fixture、driver/native/evidence、runner 登记/期限/清理、进程环境变量、账号/终端/仓库资源竞争 | [测试指南](../testing.md)、[E2E 环境](../../tests/e2e/README.md)、[测试边界源码](../../internal/testkit/boundary) |
-| 规划草稿、会话、审核与准入 / 拟议 | 未来规划领域；尚非完整实现模块 | 先验证能力和固定领域/权限边界，再按稳定契约拆领域用例 | 草稿/正式文档权威、审核快照与授权、Git/SQLite 部分完成、规划写入 guard、任务创建端口及会话来源身份 | [规划架构](../product-design/planning-architecture.md)、[审核准入目标](../roadmap/drafts/phase2-draft-roadmap-admission.md)；新契约在实施前正式对齐 |
-| 本机 HTTP/SSE 与原生 UI / 拟议 | 后续产品传输、Windows 客户端及页面 | 已交付协议/组件基础上的独立页面和领域消费；能力验证与界面原型可分别准备 | 同一客户端协议、共享导航/输入组件、消息/权限/回执语义及未具备的服务能力 | [拟议界面](../product-design/planning-ui.md)、[规划入口](../roadmap/RoadmapGuide.md) |
+| 规划草稿、会话、审核与准入 / 拟议 | 未来规划领域；尚非完整实现模块 | 2.2先推导草稿/artifact/人工事项，2.3实际会话接入验证必要权限；成熟后按稳定成果拆分 | 草稿/正式文档权威、审核快照与授权、Git/SQLite 部分完成、规划写入 guard、任务创建端口及会话来源身份 | [规划架构](../product-design/planning-architecture.md)、[审核准入目标](../roadmap/drafts/phase2-draft-roadmap-admission.md)；新契约在实施前正式对齐 |
+| 本机 HTTP/SSE 与原生 UI / 拟议 | 后续产品传输、Windows 客户端及页面 | 近期#45执行传输→#44真实客户端；#49/#50等2.1最小原型，2.2/2.3模型与布局待定 | 同一客户端协议、共享导航/输入组件、消息/权限/回执语义及未具备的服务能力 | [拟议界面](../product-design/planning-ui.md)、[规划入口](../roadmap/RoadmapGuide.md) |
 
 保留的远端实现不成为当前本机开发链的硬前置。未来规划远端能力时需独立核对目标权限、身份、观察/恢复/停止与路径所有权，不能从本机成功推定支持。
 
@@ -92,7 +92,7 @@
 
 **安装/调试入口与界面改进。** 窗口排版、输入提示可以消费当前产品接口；exe/home 传递、console 启服、命令重执行和服务实例核验是共同集成面，需明确所有者。两份项目配置仍指向同一 run_dir 或仓库时，不能用独立 worktree 声称资源已经隔离。
 
-**多个原生页面。** 共享导航、输入组件与客户端协议先提供真实基础，再分别接领域页面；各页面保留自己的目标/版本/草稿。尚未存在的规划审核接口先做能力验证和契约固定，不能把演示页面视作前置能力交付。
+**多个原生页面。** 共享导航、输入组件与客户端协议先提供真实基础，再分别接领域页面；各页面保留自己的目标/版本/草稿。尚未存在的规划/人工事项/审核接口等2.2/2.3流程成熟后固定，必要权限验证纳入实际会话接入；不能把演示页面视作前置能力交付。
 
 ## 测试与独立性证据
 
@@ -103,7 +103,7 @@
 | 单 owner 规则 | [任务纯规则用例](../../internal/task/model/taskgraph_test.go)、[执行恢复隔离用例](../../internal/execution/candidate_resume_isolation_test.go)、[控制台交互用例](../../internal/console/interaction_test.go) | 定向选受影响规则；这些用例不证明所有同模块变更可以独立 |
 | 公共边界、端口、组装 | [依赖守卫](../../internal/testkit/boundary)、[真实 app/client 接线](../../tests/integration/candidate_console_test.go)、[L1 选择](../../cmd/test-feedback/scoped.go) | 接线或公共契约变化核对实际消费者，fixture 保持正式接口；源码闭包按已有平台守卫核验 |
 | 交付与恢复组合 | [登记场景](../../tests/e2e/suites.json)：delivery.basic、recovery.waiting-merge-restart（controlled）及对应 live 场景 | controlled 和 live 分别选择；delivery.basic 只证明 A 交付及 B 就绪，不证明 B 的后继执行 |
-| 双本机候选与原生资源 | 登记的 candidates.local 及[本机验收摘要](../acceptance/candidate-acceptance.md) | 按真实身份、目标和构建判断覆盖；当前 E2E runner 的串行/权限/清理约束保持，账号与终端不能默认当作可并行资源 |
+| 双本机候选与原生资源 | 登记的 candidates.local 及[本机验收摘要](../acceptance/archive/completed/candidate-acceptance.md) | 按真实身份、目标和构建判断覆盖；当前 E2E runner 的串行/权限/清理约束保持，账号与终端不能默认当作可并行资源 |
 
 已有[任务/执行/控制台独立 owner 探针的固定历史记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/three-line-10-independence-cleanup/independence.md)证明了当时几个明确规则可在所属边界被修改和检验；它们不是所有功能组合或当前任意接口变化的独立性证明。历史失败、未触发分支、原生未测范围和不同源码基线通过[验收摘要与历史快照](../acceptance/README.md)追溯，不能算作当前通过。后续新增证据链接到对应模块/边界的最小摘要，原始运行产物放临时目录，不要求规划者追读全部归档 Spec。
 

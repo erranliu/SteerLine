@@ -1,6 +1,6 @@
 # Spec：三窗主界面操作与控制台可读性优化
 
-目标：`CONSOLE-PRIMARY-WORKSPACE`。状态：实现及定向/终端验证完成，已交付 [PR #234](https://github.com/erranliu/SteerLine/pull/234)，未分配 Task ID；[实施 Plan](console-primary-workspace.plan.md)。固定 L1 超时不完整，缺失项定向补跑通过；范围和限制见[验证记录](../acceptance/console-primary-workspace.md)。依据：2026-10-07 用户确认的控制台体验建议，要求日常操作尽量在一级界面三个窗口完成，详细阅读才进入详情，并增强颜色、加粗和焦点表示。
+目标：`CONSOLE-PRIMARY-WORKSPACE`。状态：实现及定向/终端验证完成，已交付 [PR #234](https://github.com/erranliu/SteerLine/pull/234)，未分配 Task ID；[实施 Plan](console-primary-workspace.plan.md)。固定 L1 超时不完整，缺失项定向补跑通过；范围和限制见[验证记录](../acceptance/archive/completed/console-primary-workspace.md)。依据：2026-10-07 用户确认的控制台体验建议，要求日常操作尽量在一级界面三个窗口完成，详细阅读才进入详情，并增强颜色、加粗和焦点表示。
 
 参考源码基线：`172cea6c6530b6693b742324a9c1d4f9aeb17b6d`。功能前置：[精简候选控制台与会话阅读](product-simplification-01-console.spec.md)的三窗、最近活动、内嵌回答与最小持久化能力；实施 Plan 固定包含这些能力的实际基线。本任务不依赖产品精简第二、三批。
 
@@ -145,4 +145,4 @@ CPW-01–04优先复用现有 console fixture 和最小真实 app/可控后端�
 
 实施 Plan 必须有“测试计划”，按[测试指南](../testing.md)和 [E2E 约定](../../tests/e2e/README.md)列最小必要级别、组/场景 ID、环境、命令、执行时点、通过条件及证据位置；新增场景/环境能力同时规划。默认一次 L1、console/接线定向回归及上述一次 Windows 终端检查，不默认 Full、完整 L2 或 L3/live；未选交付/恢复组说明本任务未改变原生交付/恢复协议。实际修改这些边界时再补对应最小场景，不能以界面测试声称其已通过。
 
-原始实现证据按[测试指南](../testing.md)写系统临时目录，仓库只保留[最小验收摘要](../acceptance/console-primary-workspace.md)，具体测试名称和命令由实施 Plan 按实际新增/复用场景固定。文档静态检查与实现验收分别记录，Spec 本身不替代实现证据。
+原始实现证据按[测试指南](../testing.md)写系统临时目录，仓库只保留[最小验收摘要](../acceptance/archive/completed/console-primary-workspace.md)，具体测试名称和命令由实施 Plan 按实际新增/复用场景固定。文档静态检查与实现验收分别记录，Spec 本身不替代实现证据。

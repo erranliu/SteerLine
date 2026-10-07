@@ -1,48 +1,56 @@
 # 当前 Spec 与 Plan
 
-本目录保留候选 Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段只运行和验收本地 Codex 与本机 Orca。正式任务应有独立 Spec/Plan 和实现 PR，但文档存在不表示已入 DAG。日常执行只从[正式执行清单](../roadmap/execution-map.md)选择，下表目前属于[草稿候选](../roadmap/drafts/roadmap.md)。
+本目录保留独立Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段只运行和验收本地Codex与本机Orca。#83/#45/#44已纳入[正式执行规划](../roadmap/execution-map.md)，状态为待中心准入；其余材料见[草稿](../roadmap/drafts/roadmap.md)。日常派发只选择经工具核实有资格的已入DAG任务，文档或规划条目存在不表示已入图。
 
 Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具体自动/人工步骤与实时已验/待验结果统一维护于[acceptance](../acceptance/README.md)。草稿阶段就建立任务专属的一份或多份验收文档并链接，单份文档不覆盖多任务；Spec/Plan 后续细化并绑定场景 ID。execution-map 在准入或实际验收安排后同步验收汇总及未验文档。旧计划中的 docs/validation 路径只用于定位原证据，不作为新结果写入入口：新原始日志用 runner 默认临时目录或本次新建的空临时目录，长期记录只提交 acceptance 的最小摘要。人工为主活动不准入；少量人工项按允许范围后置。
 
-实现 Plan 的测试计划覆盖本任务全部自动验收项：按 ID 链接专属记录并映射场景/命令、环境、执行时点、通过条件和证据登记；能力缺口列入实施或明确前置。草稿规划入口明确标“待实现/登记”，实际验收前落实。纯文档静态计划不替代产品验收；已交付/延后 Plan 仅补映射和适用安排，不追认为新运行或重新启用。
+已执行的 Spec 与配套 Plan 见[已交付归档](../archive/spec/completed/README.md)；退役流程和远端试验见[历史资料](../archive/spec/retired/README.md)。归档中的旧状态文字和路径属于原交付时点，不能当作当前待办。任务 ID 身份记录保留；原始验证数据从[清理前固定 Git 快照](../acceptance/archive/completed/history.md#历史取证)读取。
 
-已执行的 Spec 与配套 Plan 见[已交付归档](../archive/spec/completed/README.md)；退役流程和远端试验见[历史资料](../archive/spec/retired/README.md)。归档中的旧状态文字和路径属于原交付时点，不能当作当前待办。任务 ID 身份记录保留；原始验证数据从[清理前固定 Git 快照](../acceptance/history.md#历史取证)读取。
+## 已交付产品精简与控制台
 
-## 产品精简（三批，待实施）
+三批产品精简已分别通过PR #231/#236/#238合入，控制台体验增量通过PR #234合入；验收仍绑定各自原构建/范围，不据此宣称当前重跑。这里保留导航，不进入近期执行任务。
 
-目标：`PRODUCT-SIMPLIFICATION`。依据 2026-10-07 用户接受的取舍及源码审计，完整保留多后端、远端执行路径、多候选、原会话反馈与唯一 PR 交付。下列新规格仅定义三批产品收敛，不改变当前一期验收范围，不宣称远端权限证据已补齐；未分配 Task ID；第一批已按三窗修订实现/验证，PR #231待评审并有实施Plan，第二/三批仍待实施。
+| 范围 | 规格 / 计划 | 历史验收 |
+| --- | --- | --- |
+| 三窗/近期活动/内嵌反馈 | [Spec](product-simplification-01-console.spec.md) · [Plan](product-simplification-01-console.plan.md) | [记录](../acceptance/archive/completed/product-console.md) |
+| 固定原生权限与审核配置、附加需求/认证收口 | [Spec](product-simplification-02-configuration.spec.md) · [Plan](product-simplification-02-configuration.plan.md) | [记录](../acceptance/archive/completed/product-simplification-02-configuration/README.md) |
+| Task丢弃后资源人工处置、CLI及高级图收口 | [Spec](product-simplification-03-resources-cli.spec.md) · [Plan](product-simplification-03-resources-cli.plan.md) | [记录](../acceptance/archive/completed/product-simplification-03-resources-cli/README.md) |
+| 控制台主界面与可读性 | [Spec](console-primary-workspace.spec.md) · [Plan](console-primary-workspace.plan.md) | [记录](../acceptance/archive/completed/console-primary-workspace.md) |
 
-每批后续一份实施 Plan、一个独立实现 PR，按顺序交付。共同边界及与历史规格的覆盖关系见第一批和各批正文。
+任务Plan逐项或按明确ID范围覆盖全部自动验收项，列场景/命令、环境、时点、通过条件与专属登记位置；缺驱动/场景/环境能力须在实施中补齐或明确前置。必要回归与产品自动验收分别标记，静态检查不代替业务/原生证据。
 
-| 批次 | 范围 | 剩余拟议前置 | Spec |
-| --- | --- | --- | --- |
-| 1 | 三窗概要/最近10条活动/右下内嵌反馈、退役过程阅读、只持久草稿及请求 | 无本系列未完成前置 | [精简候选控制台与会话阅读](product-simplification-01-console.spec.md) · [Plan](product-simplification-01-console.plan.md) |
-| 2 | 两种明确权限模式、移除附加执行需求与认证入口 | 第一批合入 | [收窄执行权限配置与移除附加需求](product-simplification-02-configuration.spec.md) |
-| 3 | Task 丢弃后资源人工处置、重复 CLI 与高级图查询/导出退役 | 第二批合入 | [保留资源人工处置与精简命令入口](product-simplification-03-resources-cli.spec.md) |
+## 已确认执行规划：待中心准入
 
-## 控制台体验优化
-
-目标：`CONSOLE-PRIMARY-WORKSPACE`。依据 2026-10-07 用户确认的三窗主界面操作与可读性方案；未分配 Task ID，实现及定向/终端验证完成，已有[实施 Plan](console-primary-workspace.plan.md)与 [PR #234](https://github.com/erranliu/SteerLine/pull/234)；固定 L1 超时，缺失项补跑通过，限制见[验证记录](../acceptance/console-primary-workspace.md)。以产品精简第一批的三窗实现为功能前置，不依赖第二/三批；后续一份实施 Plan、一个独立实现 PR。
-
-| 范围 | Spec |
-| --- | --- |
-| 主界面方案选择/确认/回答/核验与结果摘要、收窄详情入口、颜色/加粗和明确焦点 | [三窗主界面操作与控制台可读性优化](console-primary-workspace.spec.md) |
-
-## 当前草稿候选规格
+当前只选择#83/#45/#44；尚未入图，正式资格仍须中心核对。#44最终交付依赖#45真实联调。二期验收分[2.1/2.2/2.3](../acceptance/phase2.md)，流程/原型未定部分不提前冻结。
 
 | 任务 ID | 任务名称 | 剩余拟议前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |
 | 83 | 本机安装与调试路径隔离 | 无 | [Spec](local-runtime-isolation.spec.md) | [Plan](local-runtime-isolation.plan.md) |
-| 43 | Codex 规划主 agent 能力验证 | 无 | [Spec](phase2-agent-capabilities.spec.md) | [Plan](phase2-agent-capabilities.plan.md) |
-| 44 | WinUI 基座与原生输入 | 无 | [Spec](phase2-winui-foundation.spec.md) | [Plan](phase2-winui-foundation.plan.md) |
 | 45 | 本机客户端协议与历史查询 | 无 | [Spec](phase2-local-api.spec.md) | [Plan](phase2-local-api.plan.md) |
-| 46 | 规划提案与受控草稿 | `#45` | [Spec](phase2-planning-drafts.spec.md) | [Plan](phase2-planning-drafts.plan.md) |
-| 47 | Codex 规划会话服务 | `#43`、`#46` | [Spec](phase2-planning-sessions.spec.md) | [Plan](phase2-planning-sessions.plan.md) |
-| 48 | 正式文档发布与任务创建 | `#46` | [Spec](phase2-document-publish.spec.md) | [Plan](phase2-document-publish.plan.md) |
-| 49 | Roadmap 与 DAG 原生浏览 | `#44`、`#48` | [Spec](phase2-roadmap-ui.spec.md) | [Plan](phase2-roadmap-ui.plan.md) |
-| 50 | 执行与待处理原生界面 | `#44`、`#45` | [Spec](phase2-execution-ui.spec.md) | [Plan](phase2-execution-ui.plan.md) |
-| 51 | 规划对话原生界面 | `#44`、`#47` | [Spec](phase2-conversation-ui.spec.md) | [Plan](phase2-conversation-ui.plan.md) |
-| 52 | 文档审阅与确认原生界面 | `#44`、`#48` | [Spec](phase2-review-ui.spec.md) | [Plan](phase2-review-ui.plan.md) |
+| 44 | WinUI 基座与原生输入 | #45 | [Spec](phase2-winui-foundation.spec.md) | [Plan](phase2-winui-foundation.plan.md) |
+
+## 下一批2.1页面候选
+
+正式准入前确认2.1最小原型，补齐精确页面测试命令。#49移除对#48的草稿依赖，只交付DAG/任务浏览；不宣称外部边已更改。
+
+| 任务 ID | 任务名称 | 剩余拟议前置 | Spec | Plan |
+| --- | --- | --- | --- | --- |
+| 49 | DAG 与任务原生浏览 | #44、#45；2.1原型确认 | [Spec](phase2-roadmap-ui.spec.md) | [Plan](phase2-roadmap-ui.plan.md) |
+| 50 | 执行与待处理原生界面 | #44、#45；2.1原型确认 | [Spec](phase2-execution-ui.spec.md) | [Plan](phase2-execution-ui.plan.md) |
+
+## 2.2/2.3待重定参考
+
+下列旧正文不可直接准入；流程/模型/原型成熟后重新固定范围、依赖、实现测试计划和专属验收。新人工事项/artifact能力先推导，不强行套入旧发布任务。
+
+| 任务 ID | 任务名称 | 处理 | Spec | Plan |
+| --- | --- | --- | --- | --- |
+| 46 | 规划提案与受控草稿 | 2.2自由草稿/快照待重定 | [Spec](phase2-planning-drafts.spec.md) | [Plan](phase2-planning-drafts.plan.md) |
+| 48 | 正式文档发布与任务创建 | 2.2/2.3审核/授权准入待重定 | [Spec](phase2-document-publish.spec.md) | [Plan](phase2-document-publish.plan.md) |
+| 52 | 文档审阅与确认原生界面 | 旧发布页面待重定 | [Spec](phase2-review-ui.spec.md) | [Plan](phase2-review-ui.plan.md) |
+| 47 | Codex 规划会话服务 | 2.3接入及必要能力验证待重定 | [Spec](phase2-planning-sessions.spec.md) | [Plan](phase2-planning-sessions.plan.md) |
+| 51 | 规划对话原生界面 | 2.3会话/草稿交互待重定 | [Spec](phase2-conversation-ui.spec.md) | [Plan](phase2-conversation-ui.plan.md) |
+
+#43“Codex规划主agent能力验证”保留身份及[旧Spec](phase2-agent-capabilities.spec.md)/[旧Plan](phase2-agent-capabilities.plan.md)/[旧验收](../acceptance/archive/superseded/phase2-agent-capabilities.md)，不再安排独立完整探测；必要门槛纳入#47产品接入。不是对外部Task的取消操作。
 
 ## 延后版本草案
 

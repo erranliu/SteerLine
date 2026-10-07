@@ -1,4 +1,4 @@
-> 原验证目录清理记录：以下事实属于原 PR/源码与执行时点。本次只迁移并修复导航，当前流程由[验收入口](README.md)维护，不把历史结果重标为本次通过。
+> 原验证目录清理记录：以下事实属于原 PR/源码与执行时点。本次只迁移并修复导航，当前流程由[验收入口](../../README.md)维护，不把历史结果重标为本次通过。
 
 # 验收摘要
 
@@ -7,7 +7,7 @@
 | 内容 | 入口 |
 | --- | --- |
 | 最近全项目基线及逐次源码、命令、哈希 | [2026-10-07 基线](latest-baseline.md) · [结果索引](baseline-results.json) |
-| 尚未闭合的原生验收及已有通过边界 | [待补验收](pending-acceptance.md) |
+| 尚未闭合的原生验收及已有通过边界 | [待补验收](../../pending-acceptance.md) |
 | #39 本机多候选交付与恢复 | [本机候选验收](candidate-acceptance.md) |
 | #38 CC5 用户人工确认 | [人工确认原文](manual-acceptance.md) |
 | #231 三窗及内嵌反馈 | [控制台验收](product-console.md) |
@@ -26,7 +26,7 @@ git show 172cea6c6530b6693b742324a9c1d4f9aeb17b6d:docs/validation/candidate-nati
 
 ## 新证据
 
-所有 `cmd/test-feedback` 入口默认输出到系统临时目录 `steerline-test-feedback/<运行时间>`。显式 `-out` 仍可选择新的空目录；本目录的子目录被 Git 忽略，避免原始产物再次进入版本库。失败证据保留在该次运行目录，不覆盖；需要长期保留时只提交最小摘要，列明源码、命令、范围、结果及限制。必要测试样本放对应包的 `testdata`，测试方法维护在[测试指南](../testing.md)和[E2E 指南](../../tests/e2e/README.md)。
+所有 `cmd/test-feedback` 入口默认输出到系统临时目录 `steerline-test-feedback/<运行时间>`。显式 `-out` 仍可选择新的空目录；本目录的子目录被 Git 忽略，避免原始产物再次进入版本库。失败证据保留在该次运行目录，不覆盖；需要长期保留时只提交最小摘要，列明源码、命令、范围、结果及限制。必要测试样本放对应包的 `testdata`，测试方法维护在[测试指南](../../../testing.md)和[E2E 指南](../../../../tests/e2e/README.md)。
 
 ## 测试计划与本次结果
 

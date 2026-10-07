@@ -27,7 +27,7 @@
 
 ## 实际选择与结果
 
-实现版本为SQLite16/fixed profile8/graph及cursor v2；checkpoint19/Codex codecs2保持。删除与保留消费者、副作用分类、实际源文件位置和行数见[验收记录](../acceptance/product-simplification-03-resources-cli/README.md)。
+实现版本为SQLite16/fixed profile8/graph及cursor v2；checkpoint19/Codex codecs2保持。删除与保留消费者、副作用分类、实际源文件位置和行数见[验收记录](../acceptance/archive/completed/product-simplification-03-resources-cli/README.md)。
 
 资源实际定向采用TestPS3、MC6（弃候选/多合并/晚合并）、MC8（晚启动/晚反馈/未知停止）、三个TaskDiscard、ExecutionStopIntent、两条WorkerFlowDelivery、冻结provider重启/漂移及SQLite旧格式拒绝；28项27通过，1旧停止断言修正后只重跑该项及Orca停止/remote ack共6项，全部通过。精确原命令与结果在对应summary.json，原失败不改写。CLI/规则最终42项、console完整112项通过。UI发现并修复丢弃Task旧问题/合并提示错误；补验console全包、L1，不扩展live。
 
@@ -53,4 +53,4 @@
 
 审计结果：停止/原子专项10项、生命周期回归14项、console/CLI/规则130项、L1 12组（123.448秒）、MC6获胜/落选/多合并/迟到场景及同一L3 controlled重启交付通过。修复已注册非local支持被过滤、owned-only丢失、终态Attempt结算和非OS限制；完整绑定/原操作格式加强，物理停止与冻结业务历史分离。保留观察流排空及迟到输出，明确停止后不计活动槽；客户端最终提交拒绝已退出Task。原生adapter协议及生产资源保留不变，不跑Full/live。最后winner冻结状态限定由MC6定向复验，构建/vet再过，未追认L1/L3为最后提交全部重跑。
 
-同步main 2d0e811b的acceptance工作流，所有本任务验收方法、失败/通过记录和精选证据以[专属记录](../acceptance/product-simplification-03-resources-cli/README.md)为准；原始报告沿原实际输出路径留本地。当前行数1291生产净减/172测试净增，三批合计3919生产/960测试净减；其他main改动仅文档，不计收益。
+同步main 2d0e811b的acceptance工作流，所有本任务验收方法、失败/通过记录和精选证据以[专属记录](../acceptance/archive/completed/product-simplification-03-resources-cli/README.md)为准；原始报告沿原实际输出路径留本地。当前行数1291生产净减/172测试净增，三批合计3919生产/960测试净减；其他main改动仅文档，不计收益。

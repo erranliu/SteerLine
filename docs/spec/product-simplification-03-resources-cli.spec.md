@@ -68,4 +68,4 @@ PS3-01–04使用 provider/资源调用计数、可控双候选与远端协议�
 
 提交删除/保留消费者和副作用分类清单、三批同口径净行数汇总。候选退出原本保留资源、第一批共享阅读代码、第二批认证命令的收益不得重复计算。不实施依赖冻结、版本提升简化、规划/审核外移或新的原生 UI；这些不是本系列已采用取舍。
 
-实施、消费者分类、格式、失败说明与三批行数见[验收记录](../acceptance/product-simplification-03-resources-cli/README.md)。
+实施、消费者分类、格式、失败说明与三批行数见[验收记录](../acceptance/archive/completed/product-simplification-03-resources-cli/README.md)。

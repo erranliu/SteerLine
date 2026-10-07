@@ -12,13 +12,13 @@
 
 ## 测试计划（延后实施与自动验收）
 
-任务专属记录：[验收文档](../acceptance/versioned-runtime.md#自动验收)。覆盖 VR1-A、VR2-A、VR3-A、VR4-A、VR5-A，保留原范围等待重定，不启用本任务。原静态检查只用于规划修订，不证明这些自动项通过。
+任务专属记录：[验收文档](../acceptance/archive/superseded/versioned-runtime.md#自动验收)。覆盖 VR1-A、VR2-A、VR3-A、VR4-A、VR5-A，保留原范围等待重定，不启用本任务。原静态检查只用于规划修订，不证明这些自动项通过。
 
 重新启用时先固定实际范围、前置、构建/测试名称及环境，再在既有 driver/native/evidence/testenv 内补齐最小版本/维护驱动，登记 runtime 场景与精确验收项断言。以下入口为规划新增，尚未实现/登记；不得按表提前执行或占用生产目录。
 
 | 验收项 | 级别 / 组 / 场景 | 环境 / 命令 | 执行时点 | 通过条件 | 证据与登记 |
 | --- | --- | --- | --- | --- | --- |
-| [VR1-A、VR2-A、VR3-A、VR4-A、VR5-A](../acceptance/versioned-runtime.md) | L3 / runtime / runtime.versioned-entries（待新增） | Windows、两独立 clone/home、固定产物、当前格式、受控后端；`go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled '-scenario=runtime.versioned-entries' '-out=<本次空临时目录>'` | 重新规划准入、驱动/场景实现/登记及能力准备后 | 每项原身份、选择/恢复与拒绝断言通过；报告完整，清理成功；不以安装/调试隔离替代版本/提升证据 | 临时 summary.json、scenarios/runtime.versioned-entries/；本任务专属验收文档逐项结果 |
+| [VR1-A、VR2-A、VR3-A、VR4-A、VR5-A](../acceptance/archive/superseded/versioned-runtime.md) | L3 / runtime / runtime.versioned-entries（待新增） | Windows、两独立 clone/home、固定产物、当前格式、受控后端；`go run ./cmd/test-feedback -level=L3 -suite=runtime -env=controlled '-scenario=runtime.versioned-entries' '-out=<本次空临时目录>'` | 重新规划准入、驱动/场景实现/登记及能力准备后 | 每项原身份、选择/恢复与拒绝断言通过；报告完整，清理成功；不以安装/调试隔离替代版本/提升证据 | 临时 summary.json、scenarios/runtime.versioned-entries/；本任务专属验收文档逐项结果 |
 | 必要回归（非全部产品验收） | 实际受影响 owner + L1 | 重定时选择相关入口的精确定向命令；Go 接线变化时 `go run ./cmd/test-feedback -level=L1` | 改动完成后一次；新影响才补跑 | 实际命中、无受影响消费者回退 | 各自临时目录与本任务记录 |
 | 文档静态（非产品验收） | doc-links / task-identities / whitespace | Python/Git；`python scripts/check_doc_links.py`；`python scripts/roadmap_task_id.py check`；`git diff --check` | 当前草案交付前 | 导航/身份/格式一致，延后状态明确 | 本次静态输出 |
 

@@ -11,7 +11,7 @@
 | 三线与目录整理 #73–#82 | PR210、214、215、219、221、220、223、225、226、227；[最终清理证据](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/three-line-10-independence-cleanup/README.md) |
 | 主包解耦 #62–#72 | PR182、183、185、187、189、190、191、194、197、195、196；[边界验收](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/core-decoupling-06-boundary/README.md) |
 | 执行隔离 #54–#61 | PR164、169、168、170、171、172、173、174；[收口证据](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/execution-isolation-08-resolution/README.md)；未闭合远端证据仍是历史限制 |
-| worker 与候选 #36–#39 | PR121、206、208、216；[本机候选验收](../../../acceptance/candidate-acceptance.md)，[环境就绪](../../../acceptance/worker-readiness.md)（PR160） |
+| worker 与候选 #36–#39 | PR121、206、208、216；[本机候选验收](../../../acceptance/archive/completed/candidate-acceptance.md)，[环境就绪](../../../acceptance/archive/completed/worker-readiness.md)（PR160） |
 | worker 原子提交/协议审计 | PR147、152、157 |
 | 测试基础与流程简化 | [分级测试](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/tiered-e2e-testing/README.md)（PR180）、[依赖边界](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/e2e-dependency-boundaries/README.md)、[测试效率](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/test-execution-implementation/results.md)（PR100）、[流程简化](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/simplified-product-flow/README.md)（PR202） |
 

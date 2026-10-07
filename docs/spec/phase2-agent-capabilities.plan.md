@@ -1,5 +1,7 @@
 # Plan：Codex 规划主 agent 能力验证
 
+> 本轮规划状态：#43不再安排独立完整探测项目；身份和下文旧方案仅保留参考，非准入候选。必要权限/受控草稿工具/未知轮次验证纳入重定后的#47产品接入，不能放宽门槛。此变更不取消外部已有Task。见[二期推进边界](../roadmap/drafts/phase2-delivery.md)。
+
 任务 ID：43；任务名称：Codex 规划主 agent 能力验证；目标：`PHASE2`。唯一执行依据：[Spec](phase2-agent-capabilities.spec.md)。一个独立实现 PR 交付。
 
 硬前置：无。
@@ -13,7 +15,7 @@
 
 ## 自动验收实施与交接
 
-任务专属记录：[验收文档](../acceptance/phase2-agent-capabilities.md)。本 Plan 覆盖 AC1-A, AC2-A, AC3-A, AC4-A, AC5-A；人工部分另列，不以自动通过关闭人工项，实时结果维护在 acceptance。
+任务专属记录：[验收文档](../acceptance/archive/superseded/phase2-agent-capabilities.md)。本 Plan 覆盖 AC1-A, AC2-A, AC3-A, AC4-A, AC5-A；人工部分另列，不以自动通过关闭人工项，实时结果维护在 acceptance。
 
 1. 在既有 driver/native/共享 Codex codec 内接入专用受限规划探针，固定实际 CLI/schema、允许工具及只读哨兵；真实场景使用 local-codex 链标识，不能复用任务 worker 的宽工具权限。
 2. 按下表补齐最小场景，在 tests/e2e/suites.json 登记对应 level/suite/package/test/env，live 另登记 chain。受控与真实环境使用不同场景/包，补齐 driver/native/evidence/testenv 的实际缺口及清理，不改生产权限或削弱业务断言。先固定该场景的实际构建入口、测试名称、环境和证据字段；不能仅写“以后补验”。
@@ -26,8 +28,8 @@
 
 | 验收项 / 专属记录 | 级别 / 组 / 场景 | 环境 / 命令 | 执行时点 | 通过条件 | 证据与结果登记 |
 | --- | --- | --- | --- | --- | --- |
-| [AC2-A、AC3-A、AC4-A](../acceptance/phase2-agent-capabilities.md#自动验收) | L3 / planning / planning.capabilities-contract（待新增） | Windows 隔离规划探针/只读哨兵、实际 Codex/schema 和当前构建；无真实模型；Git/SQLite/必要原生进程及受控后端；`go run ./cmd/test-feedback -level=L3 -suite=planning -env=controlled '-scenario=planning.capabilities-contract' '-out=<本次空临时目录>'` | 场景/能力及本任务接线完成后、交付前 | 权限拒绝、工具封套、原请求故障；夹具不证明真实规划能力；每项真实断言通过、报告完整且资源清理成功 | 临时 summary.json、scenarios/planning.capabilities-contract/；逐项登记任务验收文档 |
-| [AC1-A、AC2-A、AC3-A、AC4-A、AC5-A](../acceptance/phase2-agent-capabilities.md#自动验收) | L3 / planning / planning.capabilities-local（待新增） | Windows 隔离规划探针/只读哨兵、实际 Codex/schema 和当前构建；真实 Codex、固定版本/权限与专用登录环境，消耗模型 token；`go run ./cmd/test-feedback -level=L3 -suite=planning -env=live '-scenario=planning.capabilities-local' '-out=<本次空临时目录>'` | 场景/能力及本任务接线完成后、交付前 | 真实 Windows/Codex 的新建/恢复/流式/权限正负矩阵与实际可恢复边界；每项真实断言通过、报告完整且资源清理成功 | 临时 summary.json、scenarios/planning.capabilities-local/；逐项登记任务验收文档 |
+| [AC2-A、AC3-A、AC4-A](../acceptance/archive/superseded/phase2-agent-capabilities.md#自动验收) | L3 / planning / planning.capabilities-contract（待新增） | Windows 隔离规划探针/只读哨兵、实际 Codex/schema 和当前构建；无真实模型；Git/SQLite/必要原生进程及受控后端；`go run ./cmd/test-feedback -level=L3 -suite=planning -env=controlled '-scenario=planning.capabilities-contract' '-out=<本次空临时目录>'` | 场景/能力及本任务接线完成后、交付前 | 权限拒绝、工具封套、原请求故障；夹具不证明真实规划能力；每项真实断言通过、报告完整且资源清理成功 | 临时 summary.json、scenarios/planning.capabilities-contract/；逐项登记任务验收文档 |
+| [AC1-A、AC2-A、AC3-A、AC4-A、AC5-A](../acceptance/archive/superseded/phase2-agent-capabilities.md#自动验收) | L3 / planning / planning.capabilities-local（待新增） | Windows 隔离规划探针/只读哨兵、实际 Codex/schema 和当前构建；真实 Codex、固定版本/权限与专用登录环境，消耗模型 token；`go run ./cmd/test-feedback -level=L3 -suite=planning -env=live '-scenario=planning.capabilities-local' '-out=<本次空临时目录>'` | 场景/能力及本任务接线完成后、交付前 | 真实 Windows/Codex 的新建/恢复/流式/权限正负矩阵与实际可恢复边界；每项真实断言通过、报告完整且资源清理成功 | 临时 summary.json、scenarios/planning.capabilities-local/；逐项登记任务验收文档 |
 | 必要回归（非全部产品验收） | L1 + 实际受影响 owner 定向 | Go 接线改动时 `go run ./cmd/test-feedback -level=L1`；执行前在本 Plan 固定受影响包/用例的精确定向命令；仅 UI 改动用已有原生构建及组件回归 | 自动场景接通后一次；新失败/接口变化才补跑 | 非零命中、原消费者不回退；L1 不代替上列原生/业务场景 | 各自新临时目录与本任务验收文档的回归备注 |
 | 文档静态（非产品验收） | doc-links / task-identities / whitespace | Windows、Python/Git；`python scripts/check_doc_links.py`；`python scripts/roadmap_task_id.py check`；`git diff --check` | 草稿修订交付前；实现时导航改变后 | 导航、身份与格式一致 | 本次静态输出；实现时在本任务验收文档登记，不冒充自动产品通过 |
 
@@ -38,3 +40,11 @@
 ## 人工安排
 
 现有范围未单列人工验收；产品中的人工命令/授权由自动场景通过公开接口模拟，不因此变为人工验收任务。需人准备权限/环境时提前约窗口；缺能力和自动失败不归类为允许后置人工补验。若范围细化产生人工项，补入任务专属文档并说明实际阻塞范围。
+
+## 本轮规划测试计划
+
+| 级别 / 场景 | 环境与命令 | 时点 | 通过条件 | 证据 |
+| --- | --- | --- | --- | --- |
+| 文档静态 / doc-links、task-identities、whitespace | Windows/Python/Git；python scripts/check_doc_links.py；python scripts/roadmap_task_id.py check；git diff --check | 本轮修订交付前 | 身份保留、参考状态和导航正确 | [规划文档验收](../acceptance/roadmap-planning.md)与临时输出 |
+
+不执行旧探测计划或产品L1/L2/L3/Full；没有实现变更。实际接入测试计划随#47成熟Spec固定。

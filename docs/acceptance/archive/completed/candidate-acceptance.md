@@ -6,4 +6,4 @@
 
 原 CN1–CN8 构建 `6c3e1735b7b71adba834f4fdbb2145a9881d8e12` 的 local-08 场景也已通过；此前失败、超时与 pending PR 修复保留为历史事实，不由最终通过覆盖。精确断言、测试 PR、身份、版本和清理见[原验收报告](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/candidate-native-acceptance/README.md)、[验收索引](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/candidate-native-acceptance/acceptance.json)及[协调结果](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/candidate-native-acceptance/coordinator-final.json)。
 
-当前重新执行方法及 manifest 维护在[E2E 指南](../../tests/e2e/README.md#本机候选-manifest)，每次使用实际 HEAD 和新的空输出目录，不直接重用旧 manifest。
+当前重新执行方法及 manifest 维护在[E2E 指南](../../../../tests/e2e/README.md#本机候选-manifest)，每次使用实际 HEAD 和新的空输出目录，不直接重用旧 manifest。

@@ -44,4 +44,4 @@ P1A1–P1A5 是场景组，自动（-A）和人工（-M）结果分别维护。�
 
 原计划中的固定安装产物选择、采样、恢复及组合驱动存在待交付脚本说明，不宣称已实现。先复用现有 E2E；确有自动化缺口时另立可自动交付的任务，本次不占新号或启动开发。人工活动本身不生成实施 PR 来冒充验收交付。
 
-每次执行记录实际构建、命令、人工步骤/确认、原身份与原始临时证据位置；逐项更新本页结果并在 execution-map 待验索引同步。此前已通过的本机候选范围见[candidate-acceptance](candidate-acceptance.md)，不自动关闭本活动。原 #42 Spec/Plan 见[历史说明](../archive/spec/retired/phase1-release-acceptance.spec.md)与[旧计划](../archive/spec/retired/phase1-release-acceptance.plan.md)，只用于追溯。
+每次执行记录实际构建、命令、人工步骤/确认、原身份与原始临时证据位置；逐项更新本页结果并在 execution-map 待验索引同步。此前已通过的本机候选范围见[candidate-acceptance](archive/completed/candidate-acceptance.md)，不自动关闭本活动。原 #42 Spec/Plan 见[历史说明](../archive/spec/retired/phase1-release-acceptance.spec.md)与[旧计划](../archive/spec/retired/phase1-release-acceptance.plan.md)，只用于追溯。

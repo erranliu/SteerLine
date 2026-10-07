@@ -36,7 +36,7 @@
 
 新fixture `TestPS2NativeDeveloperAndAutomaticReview` 使用 `windows && ps2native` 标签，默认L1没有native skip。命令为设置 `STEERLINE_PS2_HOST=local|orca`、`STEERLINE_PS2_CODEX=<已核对的0.159.2直接可执行文件>`、`STEERLINE_PS2_OUTPUT=<新证据目录>` 后，`go test -tags=ps2native ./internal/app -run '^TestPS2NativeDeveloperAndAutomaticReview$' -count=1 -json`。环境为独立Git/候选/Codex home，仅复制认证（退出删除），临时Git HTTP接收端；Orca经实际CLI创建/观察原worktree和terminal。任务普通脚本完成文件、项目测试、commit/push并捕获未经升级的兄弟写入拒绝，再发一次有界native自动审核请求；审核拒绝按事实记录，不重试或改权限。Orca从原serialized profile/resource恢复，重新通过production recovery port核验原live terminal。核验和CLI/目录信任夹具失败如实保留，不将其冒充通过。
 
-local71秒、Orca66秒通过，真实tool/context/review/最终事实在[验收记录](../acceptance/product-simplification-02-configuration/README.md)及selected native事件中；这不是完整业务PR/SQLite重启链验收，当前格式和控制回放由定向/L1覆盖。UAC“未观察”只限定本次输出与没有请求管理员初始化/提升启动。当前directed源码、native resource和remote回归通过；固定L1最终重跑单独记录。
+local71秒、Orca66秒通过，真实tool/context/review/最终事实在[验收记录](../acceptance/archive/completed/product-simplification-02-configuration/README.md)及selected native事件中；这不是完整业务PR/SQLite重启链验收，当前格式和控制回放由定向/L1覆盖。UAC“未观察”只限定本次输出与没有请求管理员初始化/提升启动。当前directed源码、native resource和remote回归通过；固定L1最终重跑单独记录。
 
 最终固定L1 `l1-release/summary.json` passed/complete均true，12组全过；原生、配置/资源/远端接线定向通过。未修改runner包期限、用例覆盖或用失败/旧日志冒充通过；初次远端夹具编译失败与第二次包期限失败保留。构建、受影响go vet、原生tag编译及文档链接检查通过。生产实现同口径净减1211行，测试净减1234行，退役与保留消费者见验收记录。
 
@@ -54,7 +54,7 @@ PR [#236](https://github.com/erranliu/SteerLine/pull/236) 集成主分支6c16b8d
 
 ## 自动验收覆盖与结果登记
 
-任务专属记录：[验收文档](../acceptance/product-simplification-02-configuration/README.md)。原测试计划已有环境/命令/时点/通过条件与证据，以下补齐验收项映射；原结果仅绑定原源码，不因改 Plan 重跑或重标通过。
+任务专属记录：[验收文档](../acceptance/archive/completed/product-simplification-02-configuration/README.md)。原测试计划已有环境/命令/时点/通过条件与证据，以下补齐验收项映射；原结果仅绑定原源码，不因改 Plan 重跑或重标通过。
 
 | 自动验收项 | 对应现有入口 / 覆盖要求 |
 | --- | --- |
