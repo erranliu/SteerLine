@@ -29,10 +29,14 @@ go test ./internal/steerline -count=1 -run '^(TestExecutionBackendCommonCapabili
 
 已将共同契约迁入 `execution` 并更新中心、控制台及适配器消费者，删除原定义和无人消费的 StartReceipt；原生问题路由与业务派生判断留在中心桥。原六项回归名称未改变，持久记录/能力 fixture 仍在主包；新增公共包纯测试与必要来源断言，没有重复执行搬迁矩阵。复用项目 `-quick` 并补两项原子绑定/停止接线、一项监督路径结算和一个控制台答案编辑用例，全部通过。
 
-最终命令、实际测试数量、类型所有者和 #55/#56/#57/#58 的剩余接线见[验证与交接记录](../../../validation/execution-isolation-01-contracts/README.md)。权限、发布责任、恢复和配置行为保持，未启动真实 agent、运行全量或修改中心 Task。
+最终命令、实际测试数量、类型所有者和 #55/#56/#57/#58 的剩余接线见[验证与交接记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/execution-isolation-01-contracts/README.md)。权限、发布责任、恢复和配置行为保持，未启动真实 agent、运行全量或修改中心 Task。
 
 交付前整合主干 PR160（`c2c9f95`），保留环境就绪字段及检查，公共选项同步 Receiver/Action；追加两项宿主等待/冻结资源接线和准备成功子用例均通过。最终摘要已更新为整合后的结果。
 
-质量审计修复 Codex wire 选项解释与 Orca 观察器清理边界，并整合 PR163/PR165（`a458ce7`）：共享持久记录直接使用唯一公共执行类型，保留最新 Query/SQLite 接线。相关包、事务内项目快照、控制台及更新后的最小入口验证通过；详情见[最终审计记录](../../../validation/execution-isolation-01-contracts/audit.md)。
+质量审计修复 Codex wire 选项解释与 Orca 观察器清理边界，并整合 PR163/PR165（`a458ce7`）：共享持久记录直接使用唯一公共执行类型，保留最新 Query/SQLite 接线。相关包、事务内项目快照、控制台及更新后的最小入口验证通过；详情见[最终审计记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/execution-isolation-01-contracts/audit.md)。
 
-后续整合 PR162（`930a4d6`），远端新后端引用唯一共有身份/目标/协议/错误分类，保留独立 Dispatch 生命周期及主干删除项。旧监督 exec journal 用例跟随删除，调用方句柄清理断言并入既有停止回执用例；最小回归与远端两轮/问题回执用例通过。详情见[冲突整合记录](../../../validation/execution-isolation-01-contracts/conflict-pr162.md)。
+后续整合 PR162（`930a4d6`），远端新后端引用唯一共有身份/目标/协议/错误分类，保留独立 Dispatch 生命周期及主干删除项。旧监督 exec journal 用例跟随删除，调用方句柄清理断言并入既有停止回执用例；最小回归与远端两轮/问题回执用例通过。详情见[冲突整合记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/execution-isolation-01-contracts/conflict-pr162.md)。
+
+## 测试计划（2026-10-07 导航维护）
+
+本次仅将已清理的证据导航改为固定 Git 快照，不改原实现契约或追认历史通过。最小范围为文档静态 `doc-links`、`task-identities`、`whitespace`：当前 Windows/Git/Python 3 环境，交付前执行 `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check`；通过条件为无缺失本地链接、任务身份一致及无空白错误。固定历史链接的目标另用 `git cat-file --batch-check` 核对存在；结果见[本次清理验证](../../../validation/README.md#测试计划与本次结果)。不选择 L1/L2/L3、Full 或原生模型组；导航变更不需要这些验证，不新增场景或环境能力。

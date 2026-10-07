@@ -47,7 +47,7 @@ Orca 本机 Codex 方案使用 `host=orca`、`agent=codex`，并在 `implementat
 
 控制台显示冻结权限、环境核验及阻断来源。宿主等待时，文字保留原目标而不注入菜单；中心选项可打开原 terminal 或重新检查。重新检查先对账原操作，不用新会话替换丢失会话，不延长旧准备期限。运行中的 Execution 不受配置文件编辑影响。其他 agent 缺少完整项目策略落实证据时不可领取。local 同样冻结策略、受理配置版本和精确资源；当前一期只启用两种本机路径；远端配置见[历史资料](../archive/guides/orca-remote-configuration.md)，不属于当前操作引导。
 
-实际能力按目标与版本核验；[验收记录](../validation/worker-environment-readiness/README.md)区分真实工具证据、受控故障回归及已通过的真机服务闭环。
+实际能力按目标与版本核验；[验收记录](../validation/worker-readiness.md)区分真实工具证据、受控故障回归及已通过的真机服务闭环。
 
 ## Windows 本地 Codex 沙箱
 
@@ -73,7 +73,7 @@ Windows 本机 local/Orca 的显式 host 写入加 network allow 映射为 dange
 
 领取时在 FixedExecutionProfile 中冻结策略、来源、受理配置版本、实现配置封套及完整摘要；资源阶段以 PolicyResources 保存通用 workspace/Git 根与 Codex codec 资源封套，沿用现有原子附件事务。准备、业务轮、反馈与恢复输入检查原快照/资源，不从运行中的仓库修改或新配置文件补造授权。重新加载由现有服务入口显式受理，对新 Execution 生效；已有执行保持原值。持久格式见[数据模型](data-model.md#当前格式来源)，旧格式拒绝且保留现场。
 
-控制台由同一 ProjectView 的 checkpoint/Domain 显示冻结要求、版本、来源、资源和核验范围。设置核验与实际工具核验分开；未观察的工具值显示未核验。服务与控制台配置摘要不同或读取部分错误时阻止新启动。新策略原生工具证据见[本轮验收](../validation/execution-isolation-06-policy/README.md)。
+控制台由同一 ProjectView 的 checkpoint/Domain 显示冻结要求、版本、来源、资源和核验范围。设置核验与实际工具核验分开；未观察的工具值显示未核验。服务与控制台配置摘要不同或读取部分错误时阻止新启动。新策略原生工具证据见[本轮验收](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/execution-isolation-06-policy/README.md)。
 
 
 ## 项目发布责任
@@ -112,6 +112,6 @@ worker 的执行策略和本身凭据必须允许 Git 推送及 PR 创建；中�
 
 冻结的 FixedExecutionProfile 在同一快照中保存需求、非秘密评估、独立证据摘要及 `builtin-execution-v2` 实现配置版本。完整配置摘要包含需求及原权限/发布/Profile 配置，实际资源继续单独核验。证据摘要也纳入完整 Profile 摘要。原 worktree 根从持久 WorkspaceIntent 恢复。领取事务重新读取已受理的项目和全局文件字节摘要；查验后改变配置必须重新加载并检查。重启使用原快照，当前工具/引用丢失只新增 Execution 的阻断事实，不改历史快照。控制台使用同一 ProjectView 展示领取时与当前检查的时间和来源。持久格式统一见[数据模型](data-model.md#当前格式来源)；旧 Profile 明确拒绝，不回填。
 
-历史验证范围见 [执行需求验收记录](../validation/execution-isolation-08-resolution/README.md)。远程两轮 Service 成功场景仍被前置权限缺证门槛拒绝，未把协议 mock 当作权限或双机认证。
+历史验证范围见 [执行需求验收记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/execution-isolation-08-resolution/README.md)。远程两轮 Service 成功场景仍被前置权限缺证门槛拒绝，未把协议 mock 当作权限或双机认证。
 
 固定发布元数据只保留 provider/query/close、Git/remote/base 和认证引用。中心 create 字段与命令展示已删除；v5 快照明确拒绝恢复，当前 v6 不迁移旧发布元数据。

@@ -1,3 +1,0 @@
-L3 E2E: passed=false; report C:\Users\lmas1\.codex\worktrees\e951\SteerLine\docs\validation\three-line-10-independence-cleanup\delivery-20261006-04\summary.json
-e2e-1: failed/incomplete/skipped tests
-exit status 1

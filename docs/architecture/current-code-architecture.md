@@ -90,9 +90,7 @@ The tagged scenario owners are `tests/e2e/smoke`, `tests/e2e/live`, and `tests/e
 | Test feedback executable | `cmd/test-feedback` selects L1, Full, scoped Go tests and registered controlled/live E2E scenarios; only its feedback/process imports are allowed outside tests. |
 | Diagnostic executable | `cmd/orca-probe` emits capability evidence and does not create product tasks, workers or messages. |
 
-The complete changed-symbol and assertion ownership ledgers for prior moves remain in [#75 source/test maps](../validation/three-line-03-task-usecases/ownership.md), [#76 moved symbols and test map](../validation/three-line-04-execution-usecases/moved-symbols.json), [#77 owner/test map](../validation/three-line-05-product-console/ownership.md), [#79 storage ownership](../validation/three-line-07-storage-ports/ownership.md), [#80 app/host ownership](../validation/three-line-08-app-host/ownership.md), and [#81 testkit/integration ownership](../validation/three-line-09-testkit-integration/ownership.md). The final deletion, independence and actual parent/subtest map is in [#82 validation](../validation/three-line-10-independence-cleanup/README.md).
-
-The #82 [`source-index.json`](../validation/three-line-10-independence-cleanup/source-index.json) records each Go file across all OS/build-tag variants, its imports and SHA-256, and every exported top-level declaration by package at the exact source commit. `_test.go` files are marked separately; their actual assertion owners and selected parents are mapped in `test-mapping.json`.
+Historical migration ledgers and source inventories are available from the [fixed Git snapshot](../validation/README.md#历史取证). Current ownership is defined by the source tables on this page and the boundary guards, not inventories at a prior commit.
 
 ## Build, install and launch sources
 
@@ -129,10 +127,6 @@ The boundary tests scan all OS/build-tag source files and the Windows/Linux prod
 
 Test-only support has one owner under [`internal/testkit`](../../internal/testkit): [`boundary`](../../internal/testkit/boundary/check.go) scans production ownership and architecture closures; [`boundary/e2e`](../../internal/testkit/boundary/e2e/boundary_test.go) checks test-tool consumers and E2E/import boundaries; [`feedback`](../../internal/testkit/feedback/summary.go) parses Go test events; [`process`](../../internal/testkit/process/process.go) owns test subprocess trees; and [`protocol`](../../internal/testkit/protocol) contains protocol fixtures. `cmd/test-feedback` is the only non-test source allowed to import `feedback` and `process`; the existing E2E setup/driver/native helpers may import `process`. No product source may import testkit or `tests`. Real app and cross-module tests stay in [`tests/integration`](../../tests/integration); they cannot import `tests/e2e/internal`.
 
-Task #80 ownership, moved test parents/subtests, selected groups and evidence paths are recorded in [`docs/validation/three-line-08-app-host/ownership.md`](../validation/three-line-08-app-host/ownership.md), [`test-mapping.json`](../validation/three-line-08-app-host/test-mapping.json) and [`README.md`](../validation/three-line-08-app-host/README.md).
-
-Task #81's source inventory, support-package parent/subtest mapping and commit-bound evidence are recorded in [`docs/validation/three-line-09-testkit-integration/ownership.md`](../validation/three-line-09-testkit-integration/ownership.md), [`test-mapping.json`](../validation/three-line-09-testkit-integration/test-mapping.json) and [`README.md`](../validation/three-line-09-testkit-integration/README.md). The #80 links above remain the source of history for the integration files already delivered in PR225; #81 does not replay or rewrite those moves.
-
 ## Key source entry points
 
 | Flow | Source |
@@ -145,4 +139,3 @@ Task #81's source inventory, support-package parent/subtest mapping and commit-b
 | Storage ports and SQLite | [`internal/storage/ports`](../../internal/storage/ports), [`internal/storage/sqlite`](../../internal/storage/sqlite) |
 | Test feedback and process support | [`internal/testkit/feedback`](../../internal/testkit/feedback), [`internal/testkit/process`](../../internal/testkit/process), [`internal/testkit/protocol`](../../internal/testkit/protocol) |
 | Boundary guards and integration tests | [`internal/testkit/boundary`](../../internal/testkit/boundary), [`internal/testkit/boundary/e2e`](../../internal/testkit/boundary/e2e), [`tests/integration`](../../tests/integration) |
-| Final cleanup evidence | [`deletion-inventory.md`](../validation/three-line-10-independence-cleanup/deletion-inventory.md), [`independence.md`](../validation/three-line-10-independence-cleanup/independence.md), [`ownership.md`](../validation/three-line-10-independence-cleanup/ownership.md), [`test-mapping.json`](../validation/three-line-10-independence-cleanup/test-mapping.json) |

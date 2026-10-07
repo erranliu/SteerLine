@@ -48,7 +48,7 @@ helper 完成当前准备/一次业务轮，真实修改/暂存并输出本机�
 
 ## 7. 测试计划
 
-以下入口已实现；实际执行与结果见[验证记录](../../../validation/tiered-e2e-testing/README.md)。
+以下入口已实现；实际执行与结果见[验证记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/tiered-e2e-testing/README.md)。
 
 | 级别/性质 | 选择与环境 | 命令 | 执行时点与通过条件 |
 | --- | --- | --- | --- |
@@ -65,7 +65,7 @@ helper 完成当前准备/一次业务轮，真实修改/暂存并输出本机�
 
 ## 8. 完成条件
 
-用户于 2026-10-01 明确要求补充完整基线，并先 rebase 最新主干。实际范围与版本见[补充基线记录](../../../validation/tiered-e2e-testing/baseline-2026-10-01/README.md)：完整 Go 回归及崩溃后缺失用例补跑失败，分级场景与环境检查在夹具换行修正后通过。该补充不改变其他任务默认按最小必要范围选测的约定。
+用户于 2026-10-01 明确要求补充完整基线，并先 rebase 最新主干。实际范围与版本见[补充基线记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/tiered-e2e-testing/baseline-2026-10-01/README.md)：完整 Go 回归及崩溃后缺失用例补跑失败，分级场景与环境检查在夹具换行修正后通过。该补充不改变其他任务默认按最小必要范围选测的约定。
 
 TT1–TT5 的代码、场景、证据及文档可审阅，新增两个级别能够独立选择且共用环境管理。PR 描述列出 package/入口边界、两个场景断言和实测结果，明确 controlled 不构成真机认证。
 

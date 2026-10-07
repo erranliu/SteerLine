@@ -1,6 +1,6 @@
 # Spec 执行需求与配置注册收口
 
-任务 ID：61；任务名称：执行需求与配置注册收口；目标：`EXECUTION-ISOLATION`。状态：已合入 PR #174，ER4 远程 Service 成功场景仍待权限证据；见[验收记录](../../../validation/execution-isolation-08-resolution/README.md)。配套 [Plan](execution-isolation-08-resolution.plan.md)。硬前置：[#59](execution-isolation-06-policy.spec.md)、[#60](execution-isolation-07-publish-policy.spec.md) 合入，一个实现 PR 交付。
+任务 ID：61；任务名称：执行需求与配置注册收口；目标：`EXECUTION-ISOLATION`。状态：已合入 PR #174，ER4 远程 Service 成功场景仍待权限证据；见[验收记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/execution-isolation-08-resolution/README.md)。配套 [Plan](execution-isolation-08-resolution.plan.md)。硬前置：[#59](execution-isolation-06-policy.spec.md)、[#60](execution-isolation-07-publish-policy.spec.md) 合入，一个实现 PR 交付。
 
 ## 目标与范围
 

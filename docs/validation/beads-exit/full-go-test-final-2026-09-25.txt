@@ -1,6 +1,0 @@
-?   	github.com/erranliu/SteerLine/cmd/orca-probe	[no test files]
-ok  	github.com/erranliu/SteerLine/cmd/steerline	15.129s
-ok  	github.com/erranliu/SteerLine/internal/steerline	1051.945s
-ok  	github.com/erranliu/SteerLine/internal/steerline/remoteprotocol	0.601s
-ok  	github.com/erranliu/SteerLine/internal/steerline/viewer	2.009s
-Exit code: 0

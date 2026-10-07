@@ -1,6 +1,0 @@
-{"Time":"2026-10-05T21:36:25.3393522+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/integration"}
-{"Time":"2026-10-05T21:36:25.5875307+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"build integration CLI once: exit status 1\n"}
-{"Time":"2026-10-05T21:36:25.5875307+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"go: go.mod file not found in current directory or any parent directory; see 'go help modules'\n"}
-{"Time":"2026-10-05T21:36:25.5875307+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"\n"}
-{"Time":"2026-10-05T21:36:25.5898561+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/integration","Output":"FAIL\tgithub.com/erranliu/SteerLine/tests/integration\t0.251s\n"}
-{"Time":"2026-10-05T21:36:25.5898561+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/tests/integration","Elapsed":0.251}

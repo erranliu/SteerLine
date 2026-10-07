@@ -1,6 +1,6 @@
 # Spec：任务图规则拆包与测试分层
 
-任务 ID：13；任务名称：任务图规则拆包与测试分层；目标：`REFACTOR`。状态：实现与验证完成，待 PR 评审。配套 [Plan](taskgraph-modules.plan.md) 与[验证记录](../../../validation/taskgraph-modules/README.md)。本任务由一个独立实现 PR 交付。
+任务 ID：13；任务名称：任务图规则拆包与测试分层；目标：`REFACTOR`。状态：实现与验证完成，待 PR 评审。配套 [Plan](taskgraph-modules.plan.md) 与[验证记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/taskgraph-modules/README.md)。本任务由一个独立实现 PR 交付。
 
 ## M1：目标与前置
 

@@ -13,4 +13,8 @@
 
 ## 验证与交接
 
-按 Spec NT12–NT17、NT21-EXIT、NT22-EXIT 使用隔离项目完成无 Beads 的 A → B 真实闭环，并验证 local/已支持 Orca、人工决策、重启恢复、丢弃清理和旧状态拒绝。针对性测试、`go test ./... -count=1 -timeout 20m`、`go vet ./...` 和 `git diff --check` 均通过；未运行的远端路径没有记为通过。向[任务关系视图](dag-view.spec.md)交接稳定的原生任务、阻塞与交付查询。真实平台和包级测试证据见[验收记录](../../../validation/beads-exit/README.md)。
+按 Spec NT12–NT17、NT21-EXIT、NT22-EXIT 使用隔离项目完成无 Beads 的 A → B 真实闭环，并验证 local/已支持 Orca、人工决策、重启恢复、丢弃清理和旧状态拒绝。针对性测试、`go test ./... -count=1 -timeout 20m`、`go vet ./...` 和 `git diff --check` 均通过；未运行的远端路径没有记为通过。向[任务关系视图](dag-view.spec.md)交接稳定的原生任务、阻塞与交付查询。真实平台和包级测试证据见[验收记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/beads-exit/README.md)。
+
+## 测试计划（2026-10-07 导航维护）
+
+本次仅将已清理的证据导航改为固定 Git 快照，不改原实现契约或追认历史通过。最小范围为文档静态 `doc-links`、`task-identities`、`whitespace`：当前 Windows/Git/Python 3 环境，交付前执行 `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check`；通过条件为无缺失本地链接、任务身份一致及无空白错误。固定历史链接的目标另用 `git cat-file --batch-check` 核对存在；结果见[本次清理验证](../../../validation/README.md#测试计划与本次结果)。不选择 L1/L2/L3、Full 或原生模型组；导航变更不需要这些验证，不新增场景或环境能力。

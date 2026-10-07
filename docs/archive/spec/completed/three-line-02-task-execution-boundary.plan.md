@@ -28,7 +28,7 @@
 
 不选 Full/L2/live：身份/事务责任变化由受控实际生产接线验；不重跑原生权限矩阵。L3 组合留 #82；若新发现恢复路径受影响则只追加 recovery.waiting-merge-restart。
 
-实施后的精确命令与父/子断言清单见 [test-mapping.json](../../../validation/three-line-02-task-execution-boundary/test-mapping.json)。首次领取原预留重放的版本前值语义保持原断言；规范结果的旧任务/图/集合版本及异内容重放拒绝分别由 TestTM02ResultCAS 验证。task 原测试按断言所有者迁到 `internal/task/work_test.go` 与 `internal/execution/task_boundary_test.go`，PR 拒绝与任务声明分开；原 merged-discard 断言迁入真实 SQLite/生产执行协调的 `TestTM02ResultCAS/merged_discard_rejected`，没有削弱该检查。
+实施后的精确命令与父/子断言清单见 [test-mapping.json](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/three-line-02-task-execution-boundary/test-mapping.json)。首次领取原预留重放的版本前值语义保持原断言；规范结果的旧任务/图/集合版本及异内容重放拒绝分别由 TestTM02ResultCAS 验证。task 原测试按断言所有者迁到 `internal/task/work_test.go` 与 `internal/execution/task_boundary_test.go`，PR 拒绝与任务声明分开；原 merged-discard 断言迁入真实 SQLite/生产执行协调的 `TestTM02ResultCAS/merged_discard_rejected`，没有削弱该检查。
 
 补充最小测试计划（实际构造与 schema 14 涉及重启重新注入及新结果持久关联，只加既有 waiting-merge controlled 场景）：
 

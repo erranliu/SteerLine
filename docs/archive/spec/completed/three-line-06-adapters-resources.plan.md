@@ -53,7 +53,7 @@
 
 边界类变更在本阶段同步既有守卫/负向注入及 L1 选择；扫描全 OS/build tag 源码，核对 Windows/Linux 生产直接及传递依赖。跨系统只做依赖图/编译不冒充运行行为。新增场景或环境能力须先登记包/测试/ID与命令，再执行；当前已注册 E2E 入口和环境约定见 [E2E README](../../../../tests/e2e/README.md)。
 
-未选择 Full/L2/L3/live：启动参数、权限、协议及资源能力无行为变更，复用 [#39 本机原生 wiring](../../../validation/candidate-native-acceptance/native-wiring-final/summary.json)、[候选现场](../../../validation/candidate-native-acceptance/local-08/summary.json) 与 [原 L1](../../../validation/candidate-native-acceptance/l1-final/summary.json)，本任务另跑一次当前分支 L1。若自查发现真实行为变化，先把具体受支持平台的原生命令与原身份回执证据补入 Plan 再执行；remote live 流程不属于一期，存量 remote 只做迁移/编译/协议或拒绝代表回归，不要求真实远端准入。
+未选择 Full/L2/L3/live：启动参数、权限、协议及资源能力无行为变更，复用 [#39 本机原生 wiring](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/candidate-native-acceptance/native-wiring-final/summary.json)、[候选现场](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/candidate-native-acceptance/local-08/summary.json) 与 [原 L1](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/candidate-native-acceptance/l1-final/summary.json)，本任务另跑一次当前分支 L1。若自查发现真实行为变化，先把具体受支持平台的原生命令与原身份回执证据补入 Plan 再执行；remote live 流程不属于一期，存量 remote 只做迁移/编译/协议或拒绝代表回归，不要求真实远端准入。
 
 ## 自查与交付
 

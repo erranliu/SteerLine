@@ -1,6 +1,0 @@
-{"ImportPath":"github.com/erranliu/SteerLine/internal/steerline [github.com/erranliu/SteerLine/internal/steerline.test]","Action":"build-output","Output":"# github.com/erranliu/SteerLine/internal/steerline [github.com/erranliu/SteerLine/internal/steerline.test]\n"}
-{"ImportPath":"github.com/erranliu/SteerLine/internal/steerline [github.com/erranliu/SteerLine/internal/steerline.test]","Action":"build-output","Output":"internal\\steerline\\task_graph_query_test.go:201:7: no new variables on left side of :=\n"}
-{"ImportPath":"github.com/erranliu/SteerLine/internal/steerline [github.com/erranliu/SteerLine/internal/steerline.test]","Action":"build-fail"}
-{"Time":"2026-09-26T14:07:12.5177457+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerline"}
-{"Time":"2026-09-26T14:07:12.5177457+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Output":"FAIL\tgithub.com/erranliu/SteerLine/internal/steerline [build failed]\n"}
-{"Time":"2026-09-26T14:07:12.5177457+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/internal/steerline","Elapsed":0,"FailedBuild":"github.com/erranliu/SteerLine/internal/steerline [github.com/erranliu/SteerLine/internal/steerline.test]"}

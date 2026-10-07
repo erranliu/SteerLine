@@ -1,7 +1,0 @@
-{"Time":"2026-09-28T17:30:08.3861104+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerline"}
-{"Time":"2026-09-28T17:30:08.5598175+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestNativeMinimalClosedLoopSmoke"}
-{"Time":"2026-09-28T17:30:08.5598175+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestNativeMinimalClosedLoopSmoke","Output":"=== RUN   TestNativeMinimalClosedLoopSmoke\n"}
-{"Time":"2026-09-28T17:30:35.3431808+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestNativeMinimalClosedLoopSmoke","Output":"--- PASS: TestNativeMinimalClosedLoopSmoke (26.78s)\n"}
-{"Time":"2026-09-28T17:30:35.3431808+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerline","Test":"TestNativeMinimalClosedLoopSmoke","Elapsed":26.78}
-{"Time":"2026-09-28T17:30:35.3436915+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerline","Output":"PASS\n"}
-{"Time":"2026-09-28T17:30:35.3511233+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerline","Elapsed":26.965}

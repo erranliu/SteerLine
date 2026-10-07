@@ -1,4 +1,0 @@
-test feedback: failed (1.407s wall); report docs/validation/three-line-10-independence-cleanup/independence/task-mutated-20261006-01/summary.json
-failed test: github.com/erranliu/SteerLine/internal/task/model TestStableTaskOrderUsesPriorityTimeAndNumericID
-failed package: github.com/erranliu/SteerLine/internal/task/model
-exit status 1

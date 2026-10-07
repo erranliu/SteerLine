@@ -1,6 +1,6 @@
 # Plan：worker 停服恢复与手动继续
 
-目标：`WORKER-SERVICE-RECOVERY`。唯一执行依据：[Spec](worker-service-recovery.spec.md)。状态：实现候选，结果及剩余证据见[验证记录](../validation/worker-service-recovery/README.md)。实现基线：`472d61e`；保留 #144 平台拆分、#148 root 清理及 #149 Orca Dispatch 提交修复。
+目标：`WORKER-SERVICE-RECOVERY`。唯一执行依据：[Spec](worker-service-recovery.spec.md)。状态：实现候选，结果及剩余证据见[验证记录](../validation/pending-acceptance.md#worker-停服恢复)。实现基线：`472d61e`；保留 #144 平台拆分、#148 root 清理及 #149 Orca Dispatch 提交修复。
 
 ## 1. 固定恢复边界与最小平台证据
 

@@ -1,16 +1,16 @@
 # Spec 01：Orca 远程能力验证与执行协议
 
-2026-09-28 结项：原中心 #4 的 unknown verify 经原 Dispatch 与终端精确对账后，按[既有合并 PR 与证据核验](../../../validation/phase1-task-closure-2026-09-28/README.md)写入 TaskDelivery 并关闭。原失败 Run 保留，未扩大受测版本和远程取消范围。
+2026-09-28 结项：原中心 #4 的 unknown verify 经原 Dispatch 与终端精确对账后，按[既有合并 PR 与证据核验](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/phase1-task-closure-2026-09-28/README.md)写入 TaskDelivery 并关闭。原失败 Run 保留，未扩大受测版本和远程取消范围。
 
 ## 当前最小交付的协议边界
 
-允许 [Spec 03 的有人值守 MVP](03-remote-execution-and-viewer.md#有人值守-mvp-交付边界) 使用台式机64g 已取证的六项受监管能力及 UAC 人工处置。8 KiB 发送前限制继续执行；不启用远程取消，不扩大版本族或主机范围。P13 剩余负向已由[当前目标 SteerlineTest 回执](../../../validation/spec01-p13-steerlinetest-2026-09-28/README.md)补齐，P01–P13 在已测 1.4 版本族和当前目标边界内验收通过；Spec 03 的受影响故障与显示门槛、#42 的长期无人值守门槛分别验收，不据此宣告生产无人值守就绪。
+允许 [Spec 03 的有人值守 MVP](03-remote-execution-and-viewer.md#有人值守-mvp-交付边界) 使用台式机64g 已取证的六项受监管能力及 UAC 人工处置。8 KiB 发送前限制继续执行；不启用远程取消，不扩大版本族或主机范围。P13 剩余负向已由[当前目标 SteerlineTest 回执](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec01-p13-steerlinetest-2026-09-28/README.md)补齐，P01–P13 在已测 1.4 版本族和当前目标边界内验收通过；Spec 03 的受影响故障与显示门槛、#42 的长期无人值守门槛分别验收，不据此宣告生产无人值守就绪。
 
 任务 ID：4；任务名称：Orca 远程协议验证。
 
 状态：当前支持范围的 P01–P13 协议验收通过，远程取消为明确的 unsupported。#4 无需新增一轮协议验证；后续新版本族、目标主机或已测调用路径变更时，只对受影响能力定向认证，不重跑未受影响的既有场景。中心 #4 Task 的关闭仍需按固定契约产生真实 Delivery，协议证据本身不会修改 Task 状态。配套 [Plan](01-orca-remote-protocol.plan.md)。下文 2026-09-24 至较早 2026-09-28 的开放结论保留原时间边界。
 
-2026-09-28 新远端 `台式机64g` 的 [P10 后续回执](../../../validation/spec03-desktop64g-2026-09-28.md)：初始 Smart App Control 阻断未签名 Orca CLI，原试次失败；用户批准关闭后消息/资源闭环和 SteerLine 原生五步通过。该机原有 `EnableLUA=0`，用户批准启用并重启后，受控 Git Bash 提权分别取得取消和人工批准/进程启动回执。Orca computer-use 不能读取 UAC 安全桌面，用户在第三次受控提示时拍下 `Git for Windows`、已验证发布者及“是/否”按钮原图，并选择“否”；当前主机 P10 的可见 UAC 与人工处置分支通过。旧主机早期设置提示本身没有当时画面，不回填历史。8 KiB 发送前拒绝的既有 home 证据按旧主机保留，未在新机重测。
+2026-09-28 新远端 `台式机64g` 的 [P10 后续回执](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/spec03-desktop64g-2026-09-28.md)：初始 Smart App Control 阻断未签名 Orca CLI，原试次失败；用户批准关闭后消息/资源闭环和 SteerLine 原生五步通过。该机原有 `EnableLUA=0`，用户批准启用并重启后，受控 Git Bash 提权分别取得取消和人工批准/进程启动回执。Orca computer-use 不能读取 UAC 安全桌面，用户在第三次受控提示时拍下 `Git for Windows`、已验证发布者及“是/否”按钮原图，并选择“否”；当前主机 P10 的可见 UAC 与人工处置分支通过。旧主机早期设置提示本身没有当时画面，不回填历史。8 KiB 发送前拒绝的既有 home 证据按旧主机保留，未在新机重测。
 
 依据：[执行架构共同约束](../../../spec/execution-architecture.spec.md)。后续：[Spec 02](02-execution-model-and-adapter.md)、[Spec 03](03-remote-execution-and-viewer.md)。
 

@@ -1,8 +1,0 @@
-{"Time":"2026-10-06T09:29:27.6933524+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/app"}
-{"Time":"2026-10-06T09:29:27.9170506+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestAppConfigProjectsOwnerInputsAndSelectedProfile"}
-{"Time":"2026-10-06T09:29:27.9175736+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestAppConfigProjectsOwnerInputsAndSelectedProfile","Output":"=== RUN   TestAppConfigProjectsOwnerInputsAndSelectedProfile\n"}
-{"Time":"2026-10-06T09:29:30.1838927+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestAppConfigProjectsOwnerInputsAndSelectedProfile","Output":"--- PASS: TestAppConfigProjectsOwnerInputsAndSelectedProfile (2.27s)\n"}
-{"Time":"2026-10-06T09:29:30.1844234+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestAppConfigProjectsOwnerInputsAndSelectedProfile","Elapsed":2.27}
-{"Time":"2026-10-06T09:29:30.1844234+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Output":"PASS\n"}
-{"Time":"2026-10-06T09:29:30.2094294+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/app\t2.515s\n"}
-{"Time":"2026-10-06T09:29:30.2094294+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/app","Elapsed":2.516}

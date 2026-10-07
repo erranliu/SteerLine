@@ -124,7 +124,7 @@ go test -tags=e2e ./tests/e2e/... -run '^$' -count=1
 
 ## 产物与判断
 
-L1、三 worker Full、L2/L3 默认将证据写到系统临时目录 `steerline-test-feedback/<运行时间>`。串行、定向和编译入口默认写到 `docs/validation/test-feedback/runs/<运行时间>`。可为每次运行显式指定新的 `-out`，已有目录中的产物不能覆盖。
+所有 `cmd/test-feedback` 入口（L1、Full、L2/L3、串行、定向、编译和日志汇总）默认将证据写到系统临时目录 `steerline-test-feedback/<运行时间>`。可为每次运行显式指定新的 `-out`，已有目录中的产物不能覆盖。
 
 ```powershell
 $runRoot = Join-Path $env:TEMP ('steerline-tests-' + (Get-Date -Format yyyyMMdd-HHmmssfff))
@@ -133,9 +133,9 @@ go run ./cmd/test-feedback -level=L1 ('-out=' + (Join-Path $runRoot 'l1'))
 
 查看退出码和 `summary.json`：确定性入口需要 `passed=true`、`complete=true`，并核对 scope、源码/工作树、命令、枚举与实际终态。E2E 需要选择范围、coverage、每个 scenario 的通过/清理和原生证据都符合要求；`gate-only` 不能当完整 L2。真实运行还需正数、同身份及同模型的 usage；recovery 不应增加模型回合。父子测试计数及时间会重叠，不能当成独立场景数量或累加为总耗时。
 
-失败、超时、证据/清理缺失、零匹配或报告不完整都不能算通过；runner 不自动重试。重新运行使用新目录和新现场，保留前次失败。归档优先 summary、scenario、必要的 usage 和诊断，避免提交认证、数据库、原始 prompt 或 dispatch capability。
+失败、超时、证据/清理缺失、零匹配或报告不完整都不能算通过；runner 不自动重试。重新运行使用新目录和新现场，保留前次失败。每次原始报告和失败诊断保留在本次输出目录；仓库只提交最小验收摘要和仍必要的结果索引，避免提交完整日志、认证、数据库、原始 prompt 或 dispatch capability。测试样本维护在对应包的 testdata。
 
-历史结果只证明报告中记录的候选版本。[#189 后基线修复验收](validation/e2e-dependency-boundaries/baseline-repair-189/README.md)保存近期 L1/Full、L2 和受影响 Orca L3 的结果，不能替代当前改动的验证。
+历史结果只证明报告中记录的候选版本。[最近保留的基线](validation/latest-baseline.md)注明逐次源码与 skip，不能替代当前改动的验证。更早原始报告从[固定 Git 快照](validation/README.md#历史取证)读取。
 
 ## 扩展与 Plan
 
@@ -145,4 +145,4 @@ go run ./cmd/test-feedback -level=L1 ('-out=' + (Join-Path $runRoot 'l1'))
 
 [分级体系 Spec](archive/spec/completed/tiered-e2e-testing.spec.md) · [真实模型接入 Spec](archive/spec/completed/live-tiered-e2e.spec.md) · [依赖边界 Spec](archive/spec/completed/e2e-dependency-boundaries.spec.md)
 
-#75 任务应用迁包的定向入口、旧/新测试父子名称和真实 app/CLI/SQLite 回滚证据见 [任务用例验证](validation/three-line-03-task-usecases/README.md)。固定 L1 已包含 task/model 与 task 应用测试；不默认启用 Full/L2/L3/live。
+固定 L1 已包含 task/model 与 task 应用测试；历史迁包映射从固定 Git 快照取证，不默认启用 Full/L2/L3/live。

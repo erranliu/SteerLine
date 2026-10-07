@@ -1,18 +1,18 @@
 # PR 5 Spec：人工决策与恢复闭环
 
-2026-09-28 结项：原中心 #3 已按[既有合并 PR 与证据核验](../../../validation/phase1-task-closure-2026-09-28/README.md)写入 TaskDelivery 并关闭。下文“仍须正常 Delivery”保留为成文时门槛，不表示当前仍开放；原失败 Run 继续保留。
+2026-09-28 结项：原中心 #3 已按[既有合并 PR 与证据核验](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/phase1-task-closure-2026-09-28/README.md)写入 TaskDelivery 并关闭。下文“仍须正常 Delivery”保留为成文时门槛，不表示当前仍开放；原失败 Run 继续保留。
 
-2026-09-28 后续：[SteerlineTest 原生 Task 104](../../../validation/pr05-ha16-steerlinetest-2026-09-28/README.md)已以真实本机 Codex 公共历史和可见 TTY 完成 H-A16 精确 turn/final 折叠、展开、再折叠及最终正文导航；下文较早“仍开放”字样保留当时状态。
+2026-09-28 后续：[SteerlineTest 原生 Task 104](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr05-ha16-steerlinetest-2026-09-28/README.md)已以真实本机 Codex 公共历史和可见 TTY 完成 H-A16 精确 turn/final 折叠、展开、再折叠及最终正文导航；下文较早“仍开放”字样保留当时状态。
 
-验收收口：H-A6 要求中心对观察到的同句柄新 incarnation 拒绝冒认、保留原 Attempt/占槽，并在同库重启后不重派；[活跃真实 Orca worker 的入口单字段故障注入](../../../validation/pr-05-h6-incarnation-2026-09-28.json)已验证该行为。Orca 平台本身自然产生同句柄换代的现场不作为 #3 关闭前置；当前版本没有可重复触发该现象的受支持操作。以后若平台实际出现此现象或更改相关观察字段，应在受影响版本上定向回归，未核实前保持 fail-closed。H-A1–H-A16 的既有自动化与真机回执按已测范围复用，#3 仍须经原中心任务的正常 Delivery 关闭，不能直接改状态。
+验收收口：H-A6 要求中心对观察到的同句柄新 incarnation 拒绝冒认、保留原 Attempt/占槽，并在同库重启后不重派；[活跃真实 Orca worker 的入口单字段故障注入](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-05-h6-incarnation-2026-09-28.json)已验证该行为。Orca 平台本身自然产生同句柄换代的现场不作为 #3 关闭前置；当前版本没有可重复触发该现象的受支持操作。以后若平台实际出现此现象或更改相关观察字段，应在受影响版本上定向回归，未核实前保持 fail-closed。H-A1–H-A16 的既有自动化与真机回执按已测范围复用，#3 仍须经原中心任务的正常 Delivery 关闭，不能直接改状态。
 
 任务 ID：3；任务名称：人工决策与恢复闭环。
 
-状态：已实现，自动化验证及限制见[验证记录](../../../validation/pr-05-intervention.md)。依赖：PR 2、4A、4B、4C。对应 [Plan](pr-05-intervention.plan.md)。
+状态：已实现，自动化验证及限制见[验证记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-05-intervention.md)。依赖：PR 2、4A、4B、4C。对应 [Plan](pr-05-intervention.plan.md)。
 
-2026-09-28 补充：[H-A15 本机 Orca 显式回执丢失](../../../validation/pr-05-h15-response-loss-2026-09-28.json)已证明原续跑 terminal 实际启动后中心保存 unknown Operation/Decision 与执行槽，同 SQLite 重启不重派。Orca 该 terminal-create 回执无 request ID，未把未知结果自动提升为已应用；H-A6 同 handle incarnation 替换和 H-A16 精确 TTY 折叠仍分别开放。
+2026-09-28 补充：[H-A15 本机 Orca 显式回执丢失](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-05-h15-response-loss-2026-09-28.json)已证明原续跑 terminal 实际启动后中心保存 unknown Operation/Decision 与执行槽，同 SQLite 重启不重派。Orca 该 terminal-create 回执无 request ID，未把未知结果自动提升为已应用；H-A6 同 handle incarnation 替换和 H-A16 精确 TTY 折叠仍分别开放。
 
-2026-09-28 后续：[合格本机恢复确认](../../../validation/pr-05-recovery-confirmation-2026-09-28.json)验证 `retry_run` 仅从已结算失败步骤、无旧终端、干净固定工作树及无占槽的预览进入，在同 Run/工作树创建新 Attempt。重试 worker 再次确定性失败属于业务步骤结果，不能使中心服务退出；命令须保存操作者提供的确认依据。H-A16 精确 TTY 折叠仍单独开放。
+2026-09-28 后续：[合格本机恢复确认](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-05-recovery-confirmation-2026-09-28.json)验证 `retry_run` 仅从已结算失败步骤、无旧终端、干净固定工作树及无占槽的预览进入，在同 Run/工作树创建新 Attempt。重试 worker 再次确定性失败属于业务步骤结果，不能使中心服务退出；命令须保存操作者提供的确认依据。H-A16 精确 TTY 折叠仍单独开放。
 
 后续状态更新：[#12 旧执行路径移除](beads-path-removal.spec.md)退役 whole-run `accept_result` 与旧的原 terminal reply continuation。下文对这些动作的字段、流程和历史验收描述记录 PR 5 当时的设计，不是当前可用接口；minimal-v1 答案经中心核验后在同一 workflow/execution 中创建固定步骤的新 attempt。
 

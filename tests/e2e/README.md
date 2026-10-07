@@ -34,7 +34,23 @@ go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delive
 | L3 live | `recovery.local-codex` / `recovery.orca-codex` | 真实执行后重启保持原身份，usage 不增加，再合并交付 |
 | L3 live | `candidates.local` | manifest 固定本地 Codex + 本机 Orca，两候选真实反馈/PR/唯一交付与后继；使用真实 SteerlineTest GitHub PR |
 
-候选唯一入口 `candidates.local` 使用 `STEERLINE_CANDIDATE_ACCEPTANCE_CONFIG`，格式和精确现场证据见 [#39](../../docs/validation/candidate-native-acceptance/README.md)。runner 在清除继承 STEERLINE 环境时将该输入的绝对路径保存在 Run 中；manifest 的源码 commit 必须匹配实际 HEAD，只选择本机 Orca 与本地 Codex 两套 profile。chain 字段用于 runner live 枚举，实际两份 profile 在 manifest/规范 SQLite snapshot 中逐一核验。
+候选唯一入口 `candidates.local` 使用 `STEERLINE_CANDIDATE_ACCEPTANCE_CONFIG`，格式见[本机候选 manifest](#本机候选-manifest)，历史现场结论见 [#39](../../docs/validation/candidate-acceptance.md)。runner 在清除继承 STEERLINE 环境时将该输入的绝对路径保存在 Run 中；manifest 的源码 commit 必须匹配实际 HEAD，只选择本机 Orca 与本地 Codex 两套 profile。chain 字段用于 runner live 枚举，实际两份 profile 在 manifest/规范 SQLite snapshot 中逐一核验。
+
+## 本机候选 manifest
+
+`STEERLINE_CANDIDATE_ACCEPTANCE_CONFIG` 指向本次 manifest 的绝对路径，`source_commit` 替换为实际 HEAD 的 40 位 commit；按本机 Orca、本地 Codex 顺序固定两套 profile。重跑创建新现场，不重用历史 manifest。
+
+```json
+{
+  "version": 1,
+  "source_commit": "<本次实际 HEAD 的 40 位 commit>",
+  "repository": "erranliu/SteerlineTest",
+  "profiles": [
+    {"id": "candidate-orca", "chain": "orca-codex"},
+    {"id": "candidate-local", "chain": "local-codex"}
+  ]
+}
+```
 
 ## 包与所有权
 

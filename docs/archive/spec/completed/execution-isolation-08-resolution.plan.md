@@ -1,6 +1,6 @@
 # Plan 执行需求与配置注册收口
 
-任务 ID：61；任务名称：执行需求与配置注册收口；目标：`EXECUTION-ISOLATION`。状态：已合入 PR #174，ER4 远程 Service 成功场景仍待权限证据；见[验收记录](../../../validation/execution-isolation-08-resolution/README.md)。唯一执行依据：[Spec](execution-isolation-08-resolution.spec.md)。硬前置：#59、#60 合入，一个实现 PR 交付。
+任务 ID：61；任务名称：执行需求与配置注册收口；目标：`EXECUTION-ISOLATION`。状态：已合入 PR #174，ER4 远程 Service 成功场景仍待权限证据；见[验收记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/execution-isolation-08-resolution/README.md)。唯一执行依据：[Spec](execution-isolation-08-resolution.spec.md)。硬前置：#59、#60 合入，一个实现 PR 交付。
 
 ## 实施步骤
 
@@ -29,10 +29,14 @@ PR 附最终配置归属、注册键、业务/平台/事务所有者和删除清
 
 ## 执行结果与验收限制
 
-实现与实际命令结果见 [#61 验收记录](../../../validation/execution-isolation-08-resolution/README.md)。原九项中心回归真实执行；local 两轮与 native 终端通过，远程两项在 #59 权限缺证门槛拒绝，未替换/删除原成功测试或将它们计为通过。补跑真实 Claim 权限拒绝及远程协议包验证现行边界，不代替原 ER4 三链路成功条件。该缺证门槛沿用 #60 已记录的限制，本轮遵守 Spec 不补前置权限 producer。
+实现与实际命令结果见 [#61 验收记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/execution-isolation-08-resolution/README.md)。原九项中心回归真实执行；local 两轮与 native 终端通过，远程两项在 #59 权限缺证门槛拒绝，未替换/删除原成功测试或将它们计为通过。补跑真实 Claim 权限拒绝及远程协议包验证现行边界，不代替原 ER4 三链路成功条件。该缺证门槛沿用 #60 已记录的限制，本轮遵守 Spec 不补前置权限 producer。
 
 补充定向验证包含 `TestExecutionRequirements.*`、`TestRequirementVersionParsers`、`TestEmptyExecutionRequirementsKeepMandatoryChecks`、`TestClaimRechecksAcceptedConfigFiles`、`TestExecutionRegistry.*`、`TestNativeClaimCompetitionCreatesOnlyOneWorkflowReservation` 及固定协议/事实断言。query/console fixture 保留同事务与部分错误断言；没有全量或真机重新认证。
 
 PR174 用户要求的修改质量审计已补完整目标核验、Profile 组装复制、原资源根恢复、证据完整摘要及事务不可变保护；需求阻断与原 worker 生命周期分离，观察/对账保留，新增副作用意图复核当前需求。认证报告 producer/consumer 使用同一注册协议 key。审计复现与验证见同一验收记录；转 ready 不代表远程缺证成功场景得到认证。
 
-远程原成功 fixture 已按当前准入契约拆为 Protocol 回归和真实 Claim 拒绝；上述命令不计作 ER4 远程 Service 成功，追加恢复修复见[清理记录](../../../validation/execution-isolation-cleanup/README.md)。
+远程原成功 fixture 已按当前准入契约拆为 Protocol 回归和真实 Claim 拒绝；上述命令不计作 ER4 远程 Service 成功，追加恢复修复见[清理记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/execution-isolation-cleanup/README.md)。
+
+## 测试计划（2026-10-07 导航维护）
+
+本次仅将已清理的证据导航改为固定 Git 快照，不改原实现契约或追认历史通过。最小范围为文档静态 `doc-links`、`task-identities`、`whitespace`：当前 Windows/Git/Python 3 环境，交付前执行 `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check`；通过条件为无缺失本地链接、任务身份一致及无空白错误。固定历史链接的目标另用 `git cat-file --batch-check` 核对存在；结果见[本次清理验证](../../../validation/README.md#测试计划与本次结果)。不选择 L1/L2/L3、Full 或原生模型组；导航变更不需要这些验证，不新增场景或环境能力。
