@@ -44,7 +44,17 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			m.answer.noteFocus = state.focus == 2
 			return m, nil
-		case "f2", "f8", "esc", "ctrl+c":
+		case "f2":
+			if !m.answer.details && compactLayout(m) && m.projects[m.selected].focus == 0 {
+				m.projects[m.selected].focus = 1
+				if m.answer.noteFocus {
+					m.projects[m.selected].focus = 2
+				}
+				m.status = "已返回原答案草稿；核对预览后按 F2 提交"
+				return m, nil
+			}
+			return m.handleDecisionAnswerKey(key)
+		case "f8", "esc", "ctrl+c":
 			return m.handleDecisionAnswerKey(key)
 		case "ctrl+e":
 			return m.createAction("recheck_environment", "")

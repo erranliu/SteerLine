@@ -28,6 +28,14 @@ func (m Model) refreshRecentActivity(index int) (Model, tea.Cmd) {
 	if row != nil && row.run != nil {
 		key = candidateIdentity(row.run) + "\x00" + row.run.AttemptID
 	}
+	feedbackKey := key
+	if row != nil && row.run != nil && row.run.Decision != nil {
+		feedbackKey += fmt.Sprintf("\x00%s\x00%s\x00%d", row.run.Decision.ID, row.run.Decision.Status, row.run.Decision.Version)
+	}
+	if feedbackKey != state.feedbackKey {
+		state.feedbackKey = feedbackKey
+		state.lowerScroll = 0
+	}
 	if key != state.activityKey {
 		state.activityKey = key
 		state.activityGeneration++

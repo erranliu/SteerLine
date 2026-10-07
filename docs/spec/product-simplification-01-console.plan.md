@@ -32,3 +32,17 @@ UI操作日志格式升为2；conversation查询游标格式升为2以绑定新�
 2026-10-07合并主分支`69c839be`的文档整理与测试修复，保留其产品设计目录、任务83及现有消费者改动；Spec引用已交付资料转为archive路径。业务源码新增准入检查沿用主分支，合并后补受影响app/产品/SQLite定向与输入接线，已完成L1记录原采样提交，不将其冒充合并后新源码证明。
 
 最终验证：L1 passed/complete均true；其余定向与Windows原生PTY证据见验收记录。终端fixture需`go test -c -tags=ps1terminal -o <binary> ./internal/console`，设置`STEERLINE_PS1_TERMINAL_CAPTURE`后在隔离终端执行`-test.run=^TestPS1WindowsTerminalInput$`；默认L1不含此fixture，没有skip伪通过。
+
+## 合并前质量审计与测试计划
+
+2026-10-07复查发现并修复：异步答案拒绝不能在只读详情/其他弹层后打开隐藏编辑器；窄屏列表焦点下F2先返回原草稿预览，不能直接提交不可见编辑内容；新问题/版本和答案提交重置右下滚动；右上优先展示所选候选、冻结配置、执行状态、阻断和PR。编辑时高度不足则使用整个右侧区域，保证问题、输入与提交提示可达。
+
+| 级别/组与场景 | 环境与命令 | 时点 | 通过条件 | 证据 |
+| --- | --- | --- | --- | --- |
+| 定向 PS1-01/03，`TestPS1Audit*` | Windows，`go run ./cmd/test-feedback -out=docs/validation/product-simplification-01-console/audit-before -- ./internal/console -run '^TestPS1Audit' -count=1` | 修复前 | 三项新增场景真实失败，固定复现 | `audit-before/summary.json` |
+| 定向 PS1-03/05窄屏复现 | Windows，`go run ./cmd/test-feedback -out=docs/validation/product-simplification-01-console/audit-narrow-before -- ./internal/console -run '^TestPS1Audit(Narrow|Blocked)' -count=1` | 窄屏F2修复前 | 窄屏列表F2真实失败；已修复布局的阻断输入场景通过 | `audit-narrow-before/summary.json` |
+| 定向 PS1-01–04，console/query/client全包 | Windows临时home，`go run ./cmd/test-feedback -out=docs/validation/product-simplification-01-console/audit-after-final -- ./internal/console ./internal/product/query ./internal/product/client -count=1` | 修复后 | 新场景及既有输入/身份/读取回归全部通过，passed/complete为true | `audit-after-final/summary.json` |
+| 定向 PS1-02 SQL | Windows临时SQLite，`go run ./cmd/test-feedback -out=docs/validation/product-simplification-01-console/audit-sql -- ./internal/storage/sqlite -run '^Test(PS1RecentActivity|TM05Activity|ConversationFinalFilter|ConversationReader)' -count=1` | 修复后 | 受影响读取与过滤边界保持 | `audit-sql/summary.json` |
+| 静态检查/构建 | `git diff --check`、`go vet ./internal/console`、`go build -o bin/steerline-console.exe ./cmd/steerline`、`python scripts/check_doc_links.py` | 推送前 | 格式、构建、文档链接通过 | 审计记录 |
+
+本轮只调整console焦点、显示顺序和滚动状态，不改变产品/SQL/执行接口；沿用已完成L1、受控接线与PTY证据，不重复全量/L2/L3/live或原生环境验收。

@@ -45,12 +45,15 @@ func rightPaneHeights(height int) (int, int) {
 	if height < 13 {
 		return 0, height
 	}
-	top := min(9, max(4, height/3))
+	top := min(9, max(5, height/3))
 	return top, height - top - 1
 }
 
 func renderRightPanes(m Model, state projectState, width, height int) []string {
 	topHeight, lowerHeight := rightPaneHeights(height)
+	if m.answer != nil && lowerHeight < 9 {
+		topHeight, lowerHeight = 0, height
+	}
 	row := m.selectedRow(m.selected)
 	var lines []string
 	if topHeight > 0 {
@@ -78,8 +81,7 @@ func candidateOverviewLines(m Model, state projectState, row *consoleRow, width 
 		return append(lines, renderControlAvailability(state, row, m.clock.Now())...)
 	}
 	run := row.run
-	overview := renderCandidateOverview(state, row)
-	lines = append(lines, overview[:min(2, len(overview))]...)
+	lines[0] += " · 当前 " + candidateLabel(state, run) + " · session " + shortSession(run.SessionID)
 	lines = append(lines, renderRunExecutionProfileSummary(state, run)...)
 	lines = append(lines, "任务 "+row.taskID+" · "+displayExecutionStatus(run)+" · "+candidateHumanStatus(state, run))
 	if run.EnvironmentBlocker != nil {
@@ -90,6 +92,7 @@ func candidateOverviewLines(m Model, state projectState, row *consoleRow, width 
 	} else {
 		lines = append(lines, "PR：尚未核验绑定")
 	}
+	lines = append(lines, renderCandidateOverview(state, row)[0])
 	if run.Error != nil {
 		lines = append(lines, "错误："+safeTerminalInlineText(*run.Error))
 	}

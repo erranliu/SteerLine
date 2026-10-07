@@ -1,0 +1,136 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./internal/console",
+    "-run",
+    "^TestPS1Audit",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-07T00:35:07.7738753Z",
+  "finished_at": "2026-10-07T00:35:09.5273712Z",
+  "wall_seconds": 1.7535466,
+  "environment": {
+    "source_commit": "9fe93db40863a9feeb7befdd286f4b503c976265",
+    "worktree_status": " M docs/spec/product-simplification-02-configuration.spec.md\n?? internal/console/console_audit_test.go",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled"
+  },
+  "process_error": "exit status 1",
+  "summary": {
+    "status": "failed",
+    "passed": false,
+    "complete": true,
+    "command_exit_code": 1,
+    "package_count": 1,
+    "passed_packages": 0,
+    "failed_packages": [
+      "github.com/erranliu/SteerLine/internal/console"
+    ],
+    "skipped_packages": [],
+    "test_count": 3,
+    "passed_tests": 0,
+    "failed_tests": 3,
+    "skipped_tests": 0,
+    "packages": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "status": "fail",
+        "elapsed_seconds": 0.628
+      }
+    ],
+    "tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1AuditOverviewKeepsBlockerAndPRVisible",
+        "status": "fail",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1AuditRejectedAnswerDoesNotHideEditorBehindReader",
+        "status": "fail",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1AuditNewQuestionResetsActivityScroll",
+        "status": "fail",
+        "elapsed_seconds": 0
+      }
+    ],
+    "slowest_tests": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1AuditOverviewKeepsBlockerAndPRVisible",
+        "status": "fail",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1AuditRejectedAnswerDoesNotHideEditorBehindReader",
+        "status": "fail",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1AuditNewQuestionResetsActivityScroll",
+        "status": "fail",
+        "elapsed_seconds": 0
+      }
+    ],
+    "failures": [
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1AuditOverviewKeepsBlockerAndPRVisible",
+        "status": "fail",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1AuditRejectedAnswerDoesNotHideEditorBehindReader",
+        "status": "fail",
+        "elapsed_seconds": 0.02
+      },
+      {
+        "package": "github.com/erranliu/SteerLine/internal/console",
+        "name": "TestPS1AuditNewQuestionResetsActivityScroll",
+        "status": "fail",
+        "elapsed_seconds": 0
+      }
+    ],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 0.6276508,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/product-simplification-01-console/audit-before/go-test.jsonl",
+  "stderr_log": "docs/validation/product-simplification-01-console/audit-before/go-test.stderr.txt"
+}

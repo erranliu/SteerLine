@@ -109,6 +109,7 @@ type projectState struct {
 	filter             int
 	focus              int // 0: task list, 1: lower pane/options, 2: answer text
 	lowerScroll        int
+	feedbackKey        string
 	activityKey        string
 	activityGeneration uint64
 	activityBusy       bool
@@ -483,6 +484,7 @@ func (m Model) answerSelectedDecision() (tea.Model, tea.Cmd) {
 		m.answer.optionIndex, m.answer.note, m.answer.cursor, m.answer.noteFocus = draft.OptionIndex, []rune(draft.Note), len([]rune(draft.Note)), true
 	}
 	state.focus = 1
+	state.lowerScroll = 0
 	if m.answer.noteFocus {
 		state.focus = 2
 	}
@@ -565,6 +567,7 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
 	}
 	m.answer = nil
 	state.focus = 1
+	state.lowerScroll = 0
 	m.detailExpanded = false
 	m.status = candidateLabel(*state, run) + " 反馈已提交；等待保存/送达回执"
 	return m, m.submitDecisionCommand(index, answer, "", requestID)
@@ -669,7 +672,7 @@ func decisionRequestFor(state projectState, runID, decisionID string) (api.Decis
 }
 
 func (m *Model) reopenDecisionDraft(index int, action *actionState) {
-	if index < 0 || index >= len(m.projects) || action == nil {
+	if index < 0 || index >= len(m.projects) || index != m.selected || action == nil || m.detailExpanded || m.help || m.confirm != nil || m.profileChoice != nil {
 		return
 	}
 	state := &m.projects[index]
@@ -696,6 +699,7 @@ func (m *Model) reopenDecisionDraft(index int, action *actionState) {
 	m.answer.request = request
 	m.answer.request.Options = append([]api.DecisionOption(nil), request.Options...)
 	state.focus = 2
+	state.lowerScroll = 0
 }
 
 func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {

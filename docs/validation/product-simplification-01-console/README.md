@@ -34,10 +34,21 @@
 
 删除 `conversation.go`、`conversation_anchor.go`、`view_conversation.go`、`model_update_conversation.go`的完整阅读/折叠/锚点逻辑；`model_navigation.go`仅剩简单滚动。阅读偏好/正文分页/历史attempt选择字段和旧UI入口删除。原输入、幂等、失败、身份及正文断言迁移或补测；[退役测试映射](retired-tests.json)保留历史名称，不将删除断言当成新实现通过。
 
-[同口径统计](line-summary.json)比较internal和cmd中的Go物理行数（含注释/空行，按_test.go区分，含未变更测试支持代码）；文档和tests/integration不计入该口径。当前实现净减1442行、console实现由6981至5523行；比较基线为主分支69c839be。保留三窗/摘要/内嵌输入的新增代码已计入，不重复计算共享退役代码，不以压缩排版计收益。
+[同口径统计](line-summary.json)比较internal和cmd中的Go物理行数（含注释/空行，按_test.go区分，含未变更测试支持代码）；文档和tests/integration不计入该口径。当前实现净减1417行、console实现由6981至5548行；比较基线为主分支69c839be。保留三窗/摘要/内嵌输入的新增代码已计入，不重复计算共享退役代码，不以压缩排版计收益。
 
 ## 主分支同步
 
 合并`69c839be`，两处冲突仅在移至product-design的活动/会话说明。保留main的新数据模型版本定位和目录整理，同时保留三窗、RecentActivity与内嵌反馈说明。当前Spec保持原文件名，已完成资料引用更新为archive路径；未恢复退役版本任务或旧格式兼容路径。
 
 合并后[受影响产品/SQLite回归](post-merge/summary.json)、[app准入/只读投影回归](post-merge-app/summary.json)、产品构建、go vet与全库文档链接检查通过。L1报告保留其原始采样提交及工作树；合并后的源码差异另由这些定向证据覆盖，不改写旧报告。汇总见[最终检查](final-checks.json)。
+
+## 合并前质量审计
+
+独立逐项复查修改代码与Spec后，复现并修复四处问题；新增五个定向场景同时覆盖阻断输入可见性：
+
+- 异步拒绝回执到达最终回复/只读详情或其他弹层时，不自动打开被遮住的编辑器；原草稿与回执保留，返回主界面按a可恢复。
+- 窄屏只有列表可见时，F2先返回原草稿预览，再次F2才能提交；防止提交不可见答案。
+- 新Decision/状态/问题版本出现及答案提交时重置右下滚动，避免新问题/回执继承旧活动阅读位置。
+- 右上将当前候选、冻结配置、执行状态、环境阻断和PR排在可见区；小高度编辑时优先使用右侧空间显示问题、输入、预览与提示。
+
+[初始失败复现](audit-before/summary.json)记录前三项真实失败，[窄屏失败复现](audit-narrow-before/summary.json)记录列表焦点F2问题。修复后[console/query/client全包回归](audit-after-final/summary.json)109项全部通过，无skip；[SQLite定向回归](audit-sql/summary.json)4项通过。go vet、产品构建、git diff --check及文档链接检查通过。此次修改只涉及console交互与布局，沿用既有L1/受控接线/PTY证据，没有将旧运行冒充当前新源码验证。第二批Spec的并行工作区修改未纳入审计修复提交。

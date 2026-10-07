@@ -100,5 +100,26 @@
         "complete": true
       }
     ]
+  },
+  "audit-after": {
+    "passed": true,
+    "complete": true,
+    "test_count": 109,
+    "passed_tests": 109,
+    "skipped_tests": 0
+  },
+  "audit-sql": {
+    "passed": true,
+    "complete": true,
+    "test_count": 4,
+    "passed_tests": 4,
+    "skipped_tests": 0
+  },
+  "audit-after-final": {
+    "passed": true,
+    "complete": true,
+    "test_count": 109,
+    "passed_tests": 109,
+    "skipped_tests": 0
   }
 }
