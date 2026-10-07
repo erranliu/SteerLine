@@ -56,7 +56,9 @@ func TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites(t *testing.T) {
 
 func TestRunConfiguredServiceClosesTransferredStoreOnReturn(t *testing.T) {
 	config := configuredLifecycleApp(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	// Construction performs multiple bounded Git/native probes before the host
+	// starts. This test checks store ownership across exit, not startup latency.
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
 	created := make(chan *execution.Service, 1)
 	done := make(chan error, 1)
