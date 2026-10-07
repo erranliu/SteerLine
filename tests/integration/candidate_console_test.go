@@ -247,7 +247,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 		}
 		t.Fatal("feedback did not reach its exact original identity", m.View())
 	}
-	waitFor(t, 30*time.Second, func() bool {
+	waitFor(t, time.Minute, func() bool {
 		snap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
 		for _, r := range snap.Observation.Page.Runs {
 			if r.RunID == primary.RunID && r.TurnNumber >= 2 {

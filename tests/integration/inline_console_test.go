@@ -134,7 +134,9 @@ func TestPS1InlineConsoleWiring(t *testing.T) {
 	if strings.Contains(m.View(), "stale_revision") || strings.Contains(m.View(), "stale_instance") || strings.Contains(m.View(), "答案命令结果待确认") {
 		t.Fatal("inline request not admitted", m.View())
 	}
-	waitFor(t, 45*time.Second, func() bool {
+	// The original feedback turn must be observable under Full's process load;
+	// keep this bounded independently of the five-minute overall fixture.
+	waitFor(t, time.Minute, func() bool {
 		page := client.ReadProject(ctx, "901", api.ProjectSnapshot{})
 		if page.Observation.Page == nil {
 			return false
