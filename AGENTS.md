@@ -10,6 +10,8 @@ SteerLine 目前尚未发布，目前任务是快速开发和跑通流程。
 
 每次设计或修改 roadmap，先读取 `docs/roadmap/RoadmapGuide.md` 及其必需文档，再明确选定或新建 `docs/roadmap/drafts/` 下的草稿。日常执行只从 `docs/roadmap/execution-map.md` 已核对中心 DAG 的正式任务选择，不依据草稿或已占编号启动任务。
 
+任务在草稿阶段即可分配全局唯一 Task ID；正式准入沿用该 ID，不重新编号。草稿编号只确立任务身份，纳入 execution-map 的受控准入才创建对应中心 Task 并进入 DAG；文件与 DAG 均确认后才取得执行资格。
+
 spec文档里，如果要设计验证需求，默认只做最小必要验证。
 
 尽量不要跑全量测试，已经提供了最小测试入口，实在要跑全量的话有并行测试入口
