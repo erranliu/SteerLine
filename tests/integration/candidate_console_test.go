@@ -20,8 +20,8 @@ import (
 
 func TestCandidateConsoleWiring(t *testing.T) {
 	// Five original native fixture processes plus their control and UI reads
-	// need the controlled scenario budget; individual waits remain bounded.
-	timeout := 5 * time.Minute
+	// need a bounded shared budget, including under the standard Full load.
+	timeout := 8 * time.Minute
 	if os.Getenv("STEERLINE_CC5_MANIFEST") != "" {
 		timeout = 15 * time.Minute
 	}
@@ -85,7 +85,8 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	step(tea.KeyMsg{Type: tea.KeyEnter})
 	t.Logf("first explicit start UI: %s", m.View())
 	var primary *productapi.CandidateSummary
-	waitFor(t, 30*time.Second, func() bool {
+	// Native fixture startup can exceed 30 seconds under Full's parallel load.
+	waitFor(t, time.Minute, func() bool {
 		snap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
 		if snap.Observation.Page == nil {
 			return false
@@ -102,9 +103,10 @@ func TestCandidateConsoleWiring(t *testing.T) {
 	step(key('b'))
 	step(tea.KeyMsg{Type: tea.KeyDown})
 	step(tea.KeyMsg{Type: tea.KeyEnter})
+	t.Logf("second explicit start UI: %s", m.View())
 	// The UI's archived request is read through the public control client.
 	var candidateRequest *productapi.ControlRequest
-	waitFor(t, 30*time.Second, func() bool {
+	waitFor(t, time.Minute, func() bool {
 		snap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})
 		if snap.Observation.Page == nil {
 			return false

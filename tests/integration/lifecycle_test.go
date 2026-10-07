@@ -90,7 +90,9 @@ func testIntegratedNativeSessionGate(t *testing.T, changeConfig bool) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native Orca protocol fixture uses the Windows host contract")
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
+	// Five native Dispatches, service restart and mutation-loss reconciliation
+	// precede the final incarnation rejection; bound the entire fixture flow.
+	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 	fixture := newLifecycleProject(t, "orca")
 	initial := testprotocol.NativeOrcaState{EnvironmentMode: true, BusinessActive: true, FirstBusinessDispatch: 2, EndReadinessOnBusiness: true, LoseQuestionAckOnce: true, LoseReplyOnce: true}

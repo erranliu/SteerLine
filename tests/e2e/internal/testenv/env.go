@@ -95,7 +95,7 @@ func newScenario(t *testing.T, id string, run Run) *Scenario {
 		timeout = 10 * time.Minute
 	}
 	if strings.HasPrefix(id, "candidates.") {
-		// Nine real business turns plus Orca readiness and automatic review
+		// Real business turns plus Orca readiness and automatic review
 		// share this deadline; keep each operation's own bound unchanged.
 		timeout = 30 * time.Minute
 	}
