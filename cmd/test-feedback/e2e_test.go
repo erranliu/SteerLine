@@ -19,7 +19,7 @@ func TestLevelSelectionsRejectAmbiguity(t *testing.T) {
 		}
 	}
 	opts, err := parseOptions([]string{"-level=L1", "--", "./internal/testkit/feedback", "-count=1"})
-	if err != nil || !opts.quick || opts.workers != 1 {
+	if err != nil || !opts.quick || opts.workers != 3 {
 		t.Fatalf("L1 alias: %+v %v", opts, err)
 	}
 	for _, level := range []string{"L2", "L3"} {

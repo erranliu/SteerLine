@@ -35,3 +35,9 @@
 审计终端 fixture SHA-256：`d9762ba39f7d7284460918e1e3ebc21be2d43e0aa2940d0bbf1eee2fd3a8ef96`。原始复现和终端字节记录留在上述临时目录，旧记录可从固定提交读取。
 
 PR #234 已取消草稿并核对为 `MERGEABLE` / `CLEAN`，主分支冲突已解决；平台未配置可见检查条目（statusCheckRollup 为空），不将其称为 CI 通过。
+
+## 再次同步主分支
+
+主分支推进到 `ee1ab5d6` 后，README、会话展示、Spec 索引和退役控制台约束出现文档冲突。保留主分支的集中维护结构：README 使用简短入口，交互规则由 `product-design/execution-console.md` 维护；会话文档仅维护读取/持久语义；Spec 索引保留本 PR，同时沿用草稿候选与正式 DAG 准入区分。删除主分支已退役的 `roadmap/console-constraints.md`，Spec 改引新设计文档。
+
+控制台/product/app 实现未改变。链接检查通过（229 个 Markdown、1396 条本地导航、0 错误）；任务身份静态检查通过（84 个身份文件、13 条草稿、0 条正式任务，不代表外部 DAG 查询）；差异格式和无未解决冲突检查通过。此轮只做文档静态验证，未重跑产品或模型测试。

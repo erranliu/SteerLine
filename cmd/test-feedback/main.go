@@ -244,7 +244,7 @@ func parseOptions(args []string) (options, error) {
 	flags.StringVar(&opts.summarizeLog, "summarize-log", "", "summarize an existing go test -json log without running tests")
 	flags.IntVar(&opts.exitCode, "exit-code", 0, "exit code from the command that produced -summarize-log")
 	flags.BoolVar(&opts.quick, "quick", false, "run the fixed minimal closed loop and pure rule packages")
-	flags.IntVar(&opts.workers, "workers", 1, "complete test suite processes: 1 or 3")
+	flags.IntVar(&opts.workers, "workers", 1, "suite processes: 1 or 3; L1/quick defaults to 3")
 	flags.StringVar(&opts.level, "level", "", "test level: L1, L2 or L3")
 	flags.StringVar(&opts.suite, "suite", "", "comma-separated L3 suites")
 	flags.StringVar(&opts.e2eEnv, "env", "", "E2E environment: controlled, live (L3), gated (L2 default)")
@@ -310,8 +310,11 @@ func parseOptions(args []string) (options, error) {
 	if opts.workers != 1 && opts.workers != 3 {
 		return opts, fmt.Errorf("-workers must be 1 or 3")
 	}
-	if opts.quick && (opts.workers != 1 || opts.buildOnly || opts.summarizeLog != "") {
-		return opts, fmt.Errorf("-quick cannot be combined with workers, build-only, or summarize-log")
+	if opts.quick && !seenOptions["workers"] {
+		opts.workers = 3
+	}
+	if opts.quick && (opts.buildOnly || opts.summarizeLog != "") {
+		return opts, fmt.Errorf("-quick cannot be combined with build-only or summarize-log")
 	}
 	if opts.quick && len(goArgs) > 0 {
 		for _, arg := range goArgs {
@@ -323,7 +326,7 @@ func parseOptions(args []string) (options, error) {
 			return opts, fmt.Errorf("-quick additional tests require -count=1")
 		}
 	}
-	if opts.workers == 3 && (opts.buildOnly || opts.summarizeLog != "" || len(goArgs) != 0) {
+	if !opts.quick && opts.workers == 3 && (opts.buildOnly || opts.summarizeLog != "" || len(goArgs) != 0) {
 		return opts, fmt.Errorf("-workers=3 only runs the complete deterministic suite")
 	}
 	if opts.out == "" {
