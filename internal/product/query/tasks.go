@@ -118,26 +118,6 @@ func (q Service) TaskGraph(ctx context.Context, cursor string, limit int) (api.G
 	return TaskGraphPage(page), nil
 }
 
-func (q Service) QueryTaskGraph(ctx context.Context, filter api.GraphFilter) (api.GraphPage, error) {
-	if q.Tasks == nil || q.Project == "" {
-		return api.GraphPage{}, errors.New("query service store and project identity are required")
-	}
-	rawFilter := taskview.Filter{ProjectID: filter.ProjectID, Status: filter.Status, CenterTaskID: filter.CenterTaskID, Direction: filter.Direction, Depth: filter.Depth, Limit: filter.Limit}
-	rawFilter, err := taskview.NormalizeFilter(q.Project, rawFilter)
-	if err != nil {
-		return api.GraphPage{}, err
-	}
-	snapshot, err := q.readTaskGraph(ctx)
-	if err != nil {
-		return api.GraphPage{}, err
-	}
-	page, err := taskview.Project(snapshot, rawFilter)
-	if err != nil {
-		return api.GraphPage{}, err
-	}
-	return TaskGraphPage(page), nil
-}
-
 func (q Service) ReadyNativeTaskSnapshot(ctx context.Context) (storageports.NativeReadyTaskSnapshot, error) {
 	if q.Tasks == nil || q.Project == "" {
 		return storageports.NativeReadyTaskSnapshot{}, errors.New("query service store and project identity are required")

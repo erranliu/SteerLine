@@ -62,6 +62,9 @@ func (s *Service) applyRetiredLifecycleReceipt(run *reconstructiontypes.RunView,
 			s.ownedProcesses[run.RunID] = owned
 		}
 	}
+	if fixed.workflow.Phase != "completed" && fixed.execution.ResourceStoppedAt != nil && fixed.execution.ResourceStopOperationID != "" {
+		fixed.execution.Status = "stopped"
+	}
 	s.refreshRun(run)
 	s.note(run, "steer", "worker", "late_receipt", "retired candidate retained the original resource/input receipt", request.Operation.ID, nil)
 	if err := s.commitWorker(run, request.Operation.ID); err != nil {
@@ -127,6 +130,9 @@ func (s *Service) recordRetiredWorkerEvent(run *reconstructiontypes.RunView, ev 
 		if ev.Summary != "" {
 			e.LastEvent = ptr(ev.Summary)
 		}
+	}
+	if w.Phase != "completed" && e.ResourceStoppedAt != nil && e.ResourceStopOperationID != "" {
+		e.Status = "stopped"
 	}
 	s.refreshRun(run)
 	if err := s.commitWorker(run, operations...); err != nil {
@@ -195,6 +201,9 @@ func (s *Service) finishRetiredCandidate(run *reconstructiontypes.RunView, lifec
 				e.LastTurnOutcome = "failed"
 			}
 		}
+	}
+	if fixed.workflow.Phase != "completed" && fixed.execution.ResourceStoppedAt != nil && fixed.execution.ResourceStopOperationID != "" {
+		fixed.execution.Status = "stopped"
 	}
 	s.refreshRun(run)
 	s.note(run, "steer", "worker", "retired_output", "retired candidate original turn observation retained", receipt.Diagnostic, map[string]any{"observation": receipt})

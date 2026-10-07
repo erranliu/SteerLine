@@ -208,7 +208,7 @@ func (s *Service) TickTask(ctx context.Context, cancel context.CancelFunc) error
 	if err := s.step(ctx, true, s.resumeConfiguredWork); err != nil {
 		return err
 	}
-	if len(s.workers) != 0 && s.State.Control.DispatchMode == "auto" {
+	if s.hasActiveWorkers() && s.State.Control.DispatchMode == "auto" {
 		return nil
 	}
 	return s.step(ctx, true, s.dispatch)

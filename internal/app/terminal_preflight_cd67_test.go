@@ -124,7 +124,7 @@ func TestOrcaPreflightRequiresConfiguredCodexPolicyMapping(t *testing.T) {
 	missing := filepath.Join(stateDir, "missing-worker.exe")
 	c.Host, c.Agent = "orca", "codex"
 	c.PublicationPolicy = executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}
-	c.PR.Query, c.PR.Close = executionbackend.Command{Executable: os.Args[0]}, executionbackend.Command{Executable: os.Args[0]}
+	c.PR.Query = executionbackend.Command{Executable: os.Args[0]}
 	terminal := &orcaworker.ProfileConfig{Executable: os.Args[0], Args: []string{"--terminal-fixture", stateDir}, Shell: "powershell.exe", WaitTimeout: "5s"}
 	applyProfile := func(worker codexworker.ProfileConfig) {
 		profile := testExecutionProfile(t, "terminal", "Terminal", "orca", "codex", worker, terminal)

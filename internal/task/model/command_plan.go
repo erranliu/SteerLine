@@ -66,6 +66,6 @@ func Discard(record TaskRecord, reason, requestedBy, requestID string, cleanup [
 	next.DiscardReason = reason
 	next.DiscardedBy = requestedBy
 	next.DiscardRequestID = requestID
-	next.CleanupPending = append([]string(nil), cleanup...)
+	next.StopPending = append([]string(nil), cleanup...)
 	return next, nil
 }

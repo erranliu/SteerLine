@@ -239,10 +239,6 @@ func (r *clientReader) TaskGraph(ctx context.Context, cursor string, limit int) 
 	page, err := r.Service.TaskGraph(ctx, cursor, limit)
 	return page, productReadError(err)
 }
-func (r *clientReader) QueryTaskGraph(ctx context.Context, filter productapi.GraphFilter) (productapi.GraphPage, error) {
-	page, err := r.Service.QueryTaskGraph(ctx, filter)
-	return page, productReadError(err)
-}
 func (r *clientReader) Conversation(ctx context.Context, filter productapi.ConversationFilter, cursor string, limit int) (productapi.ConversationPage, error) {
 	return r.ConversationService.ReadConversation(ctx, filter, cursor, limit)
 }

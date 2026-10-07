@@ -1,0 +1,41 @@
+{
+  "body_finished_at": "2026-10-07T10:16:51.1157072Z",
+  "cleanup_complete": true,
+  "cleanup_errors": null,
+  "components": {
+    "provider": "controlled",
+    "worker": "controlled"
+  },
+  "context_error": "\u003cnil\u003e",
+  "finished_at": "2026-10-07T10:16:56.9891376Z",
+  "id": "recovery.waiting-merge-restart",
+  "passed": true,
+  "real_pr": null,
+  "resources": [
+    {
+      "created_at": "2026-10-07T10:13:46.0712293Z",
+      "kind": "project",
+      "path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-4161454635\\recovery.waiting-merge-restart\\recovery",
+      "pid": 0
+    },
+    {
+      "created_at": "2026-10-07T10:13:48.8393332Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\.codex\\worktrees\\2230\\SteerLine\\docs\\validation\\product-simplification-03-resources-cli\\audit-controlled\\build\\controlled-helper.exe",
+      "pid": 31296
+    },
+    {
+      "created_at": "2026-10-07T10:14:27.6174289Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\.codex\\worktrees\\2230\\SteerLine\\docs\\validation\\product-simplification-03-resources-cli\\audit-controlled\\build\\steerline.exe",
+      "pid": 7304
+    },
+    {
+      "created_at": "2026-10-07T10:15:54.5062113Z",
+      "kind": "process",
+      "path": "C:\\Users\\lmas1\\.codex\\worktrees\\2230\\SteerLine\\docs\\validation\\product-simplification-03-resources-cli\\audit-controlled\\build\\steerline.exe",
+      "pid": 2512
+    }
+  ],
+  "usage_verified": false
+}

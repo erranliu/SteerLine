@@ -53,9 +53,9 @@ STEERLINE_HOME 的默认值和路径解析由 [app/config.go](../../internal/app
 | 格式 | 当前值 | 源码 |
 | --- | --- | --- |
 | 工作流协议 | worker-flow-v1 | [model/state.go](../../internal/execution/model/state.go) |
-| SQLite schema | 15 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
+| SQLite schema | 16 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
 | 服务 checkpoint / runtime | 19 | [ports/checkpoint.go](../../internal/storage/ports/checkpoint.go) |
-| FixedExecutionProfile | 7 | [execution_profiles.go](../../internal/execution/execution_profiles.go) |
+| FixedExecutionProfile | 8 | [execution_profiles.go](../../internal/execution/execution_profiles.go) |
 | ConversationEvent | 2 | [model/conversation.go](../../internal/execution/model/conversation.go) |
 | 全局执行配置 | 2 | [app/config.go](../../internal/app/config.go) |
 | Codex profile codec | 2 | [codex/profile_config.go](../../internal/execution/adapters/codex/profile_config.go) |
@@ -95,6 +95,8 @@ Execution 的 `environment` 保存领取时的 Profile digest、准备 turn/nonc
 
 ## 本地 Windows sandbox 配置冻结
 
-冻结的 FixedExecutionProfile 只保存通用策略、实现 key/version 和有界的实现配置封套；Codex codec 拥有 `windows_sandbox`（`elevated` / `unelevated`）并将有效配置纳入 Profile digest。Windows local 受限方案的有效默认值为 `elevated`，领取时随封套冻结。PolicyResources 保存通用 workspace/权限根及 Codex 资源封套；ExecutionRecord 的原生 thread、endpoint 与 process generation 位于 Codex binding envelope，Orca terminal、Dispatch、coordinator 和 cursor 位于 Orca execution-state envelope。恢复读取原冻结 Profile 与原绑定，不使用当前全局配置改写已开始的 Execution。格式版本统一见[当前格式来源](#当前格式来源)；格式变化拒绝旧数据，不迁移或回填。
+冻结的 FixedExecutionProfile 保存实施 key/version、有界配置封套以及原发布查询/Git/认证引用。Windows local 与 Orca/Codex 使用固定 workspace-write、unelevated、on-request、auto_review；用户输入不包含 sandbox 或审批覆盖。PolicyResources 保存精确 workspace/必要 Git 根及 adapter 生成参数；原生 thread、endpoint、process generation 和 Orca terminal/Dispatch/coordinator 位于各自 binding envelope。恢复读取原冻结 Profile 与绑定，不用当前全局配置改写已开始的 Execution。格式版本见[当前格式来源](#当前格式来源)；格式变化直接拒绝旧数据，无迁移或回填。
 
 Decision 的实现问题路由也复用同一 64 KiB 封套，以 answer purpose 固定原 WorkflowRun、Execution、Attempt、generation、turn 和 question；回答路由不能冒充配置或资源封套。
+
+Task 丢弃只保存 stop_pending 原执行停止待办。中心没有 PR 关闭、工作区/分支删除或资源清理进度/结算；停止回执沿固定身份原子更新 Task/Execution/Attempt，未知结果保留原请求。PR/工作区历史定位仍由原 WorkflowRun/Execution 保存。图分页协议为 native-task-graph/v2、cursor v2，仅按项目读取，不支持状态/邻域过滤和专用文件导出。

@@ -1,8 +1,8 @@
 # Spec：保留资源人工处置与精简命令入口
 
-目标：`PRODUCT-SIMPLIFICATION`；批次：3。状态：待实施，未分配 Task ID；本批一份实施 Plan、一个独立实现 PR。依据：2026-10-07 用户要求编写审计后的三批规格，覆盖修订后的取舍 3、8。
+目标：`PRODUCT-SIMPLIFICATION`；批次：3。状态：实现、质量审计及最小验证完成，交付见PR #238，未分配 Task ID；本批[实施 Plan](product-simplification-03-resources-cli.plan.md)、[独立实现 PR #238](https://github.com/erranliu/SteerLine/pull/238)。依据：2026-10-07 用户要求编写审计后的三批规格，覆盖修订后的取舍 3、8。
 
-参考源码基线：`75474dcece26d807367e106a89a992f01f53fafd`。硬前置：[第二批](product-simplification-02-configuration.spec.md)合入；实际实施基线记录前两批合入后的提交。遵守 [第一批](product-simplification-01-console.spec.md)“目标与共同边界”。
+参考源码基线：`75474dcece26d807367e106a89a992f01f53fafd`。硬前置：[第二批](product-simplification-02-configuration.spec.md)已通过[PR #236](https://github.com/erranliu/SteerLine/pull/236)合入；实际实施基线记录前两批合入后的提交。遵守 [第一批](product-simplification-01-console.spec.md)“目标与共同边界”。
 
 单候选退出后保留 PR/worktree 已是当前行为，本批不重复宣称交付此能力。实际新增取舍是：整个 Task 丢弃后也不自动关闭 PR、删除工作区或分支，由人处置；精简重复 CLI 和高级 DAG 查询/文件导出。
 
@@ -62,8 +62,10 @@
 
 PS3-01–04使用 provider/资源调用计数、可控双候选与远端协议、临时 SQLite、公开 CLI 和当前格式重启代表测试；复用已有未知停止、迟到回执和唯一交付断言，不穷举交错。PS3-05选 `delivery.basic` 或 `recovery.waiting-merge-restart` 中最贴合受影响路径的一项；仅当两种边界分别改动且无法由定向测试覆盖时才补第二项。
 
-实施 Plan 按 [测试指南](../testing.md)和 [E2E 约定](../../tests/e2e/README.md)列最小测试计划，包含级别、组/场景 ID、环境、命令、时点、通过条件及证据位置；一次 L1、最小定向回归及上述一个 L3 controlled 场景。无原生协议行为变化不默认 live；若实际修改 release/ack 等原生动作，补对应目标最小证据，不能以 fake 声称原生通过。不默认 Full 或完整 L2。证据根目录：`docs/validation/product-simplification-03-resources-cli/`。
+实施 Plan 按 [测试指南](../testing.md)和 [E2E 约定](../../tests/e2e/README.md)列最小测试计划，包含级别、组/场景 ID、环境、命令、时点、通过条件及证据位置；一次 L1、最小定向回归及上述一个 L3 controlled 场景。无原生协议行为变化不默认 live；若实际修改 release/ack 等原生动作，补对应目标最小证据，不能以 fake 声称原生通过。不默认 Full 或完整 L2。证据根目录：`docs/acceptance/product-simplification-03-resources-cli/`。
 
 ## 交付边界
 
 提交删除/保留消费者和副作用分类清单、三批同口径净行数汇总。候选退出原本保留资源、第一批共享阅读代码、第二批认证命令的收益不得重复计算。不实施依赖冻结、版本提升简化、规划/审核外移或新的原生 UI；这些不是本系列已采用取舍。
+
+实施、消费者分类、格式、失败说明与三批行数见[验收记录](../acceptance/product-simplification-03-resources-cli/README.md)。

@@ -41,7 +41,7 @@ func (s *Service) reconcile(ctx context.Context) error {
 	if err := s.refreshNativeSnapshot(ctx); err != nil {
 		return err
 	}
-	if err := s.reconcileNativeCleanup(ctx); err != nil {
+	if err := s.reconcileDiscardedExecutionStops(ctx); err != nil {
 		return err
 	}
 	return nil
@@ -74,7 +74,7 @@ func (s *Service) slotReason(ignoreRequestID string) string {
 }
 
 func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision bool) string {
-	if len(s.workers) != 0 {
+	if s.hasActiveWorkers() {
 		return "worker is running"
 	}
 	if operation := s.State.Control.Operation; operation != nil && operation.RequestID != ignoreRequestID {
@@ -98,7 +98,7 @@ func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision b
 		}
 	}
 	for _, run := range s.runs {
-		if run != nil && !resumingDecision && run.FinishTaskStatus == "waiting_decision" {
+		if run != nil && !s.candidateBusinessClosed(run) && !resumingDecision && run.FinishTaskStatus == "waiting_decision" {
 			return "waiting for a human decision"
 		}
 	}
@@ -110,7 +110,7 @@ func (s *Service) executionSlotReason(ignoreRequestID string, resumingDecision b
 
 func (s *Service) refreshSlotOccupancy() {
 	projectSlot(&s.State)
-	s.State.SlotOccupied = s.State.SlotOccupied || len(s.workers) != 0
+	s.State.SlotOccupied = s.State.SlotOccupied || s.hasActiveWorkers()
 }
 
 func (s *Service) refreshCandidates(ctx context.Context) error {
@@ -253,4 +253,19 @@ func (s *Service) recordHistoricalWorkerEvent(ev WorkerEvent) error {
 
 func (s *Service) finishWorkerInLoop(run *reconstructiontypes.RunView, worker *Worker, workerErr error) error {
 	return s.finishedForRun(run, worker, workerErr)
+}
+
+// A retired observer may still drain original output after physical stop.
+func (s *Service) hasActiveWorkers() bool {
+	for id := range s.workers {
+		run := s.find(id)
+		if run == nil {
+			return true
+		}
+		e := s.executionRecord(run)
+		if e == nil || e.ResourceStoppedAt == nil || e.ResourceStopOperationID == "" || (e.Status != "stopped" && !s.candidateBusinessClosed(run)) {
+			return true
+		}
+	}
+	return false
 }

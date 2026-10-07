@@ -9,7 +9,6 @@ import (
 	"testing"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	api "github.com/erranliu/SteerLine/internal/product/api"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
@@ -116,9 +115,6 @@ func TestTaskQueriesRejectReaderScopeAndCursorDrift(t *testing.T) {
 	}
 	if _, err := service.TaskGraph(context.Background(), "", 1); err == nil {
 		t.Fatal("graph page accepted another project")
-	}
-	if _, err := service.QueryTaskGraph(context.Background(), api.GraphFilter{ProjectID: "other", Limit: 10}); err == nil {
-		t.Fatal("graph projection accepted another project")
 	}
 }
 

@@ -22,12 +22,3 @@ func TestCLIExecutionProfileFlagRejectsUnrelatedActions(t *testing.T) {
 		})
 	}
 }
-
-func TestProjectsMenuCanOpenCurrentConsole(t *testing.T) {
-	for _, action := range []string{"console", "1"} {
-		got, err := pickAction(action)
-		if err != nil || got != "console" {
-			t.Fatalf("pickAction(%q) = %q, %v; want console", action, got, err)
-		}
-	}
-}

@@ -7,18 +7,16 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
-	productclient "github.com/erranliu/SteerLine/internal/product/client"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 func runNativeTaskCommand(args []string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: steerline task <validate|create|discard|add-predecessors|graph|export|show|list> -config config.json")
+		return fmt.Errorf("usage: steerline task <validate|create|discard|add-predecessors|graph|show|list> -config config.json")
 	}
 	subcommand := args[0]
 	fs := flag.NewFlagSet("task "+subcommand, flag.ContinueOnError)
@@ -26,13 +24,7 @@ func runNativeTaskCommand(args []string) error {
 	taskID := fs.String("task-id", "", "native task ID")
 	predecessors := fs.String("predecessors", "", "comma-separated native predecessor task IDs")
 	cursor := fs.String("cursor", "", "native task list cursor")
-	limit := fs.Int("limit", 100, "list page size (default 100); graph/export default to 500 nodes, maximum 500")
-	status := fs.String("status", "", "filter graph nodes by native task status")
-	direction := fs.String("direction", "", "task neighborhood: upstream, downstream or both")
-	depth := fs.Int("depth", 1, "task neighborhood depth (default 1, maximum 10)")
-	format := fs.String("format", "", "export format (json)")
-	output := fs.String("output", "", "task graph export path")
-	overwrite := fs.Bool("overwrite", false, "allow replacing an existing export file")
+	limit := fs.Int("limit", 100, "list/graph page size (default 100, maximum 500)")
 	file := fs.String("file", "", "task-batch/v1 JSON file")
 	requestID := fs.String("request-id", "", "stable idempotency key for this task command")
 	expectedAuthority := fs.Uint64("expected-authority-version", 0, "sampled native project authority version")
@@ -40,7 +32,7 @@ func runNativeTaskCommand(args []string) error {
 	expectedGraphRevision := fs.Uint64("expected-graph-revision", 0, "sampled native graph revision")
 	reason := fs.String("reason", "", "reason for discarding or changing the task")
 	by := fs.String("by", "", "task command requester")
-	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "discard" && subcommand != "add-predecessors" && subcommand != "graph" && subcommand != "export" {
+	if subcommand != "show" && subcommand != "list" && subcommand != "validate" && subcommand != "create" && subcommand != "discard" && subcommand != "add-predecessors" && subcommand != "graph" {
 		return fmt.Errorf("unsupported task command %q", subcommand)
 	}
 	if err := fs.Parse(args[1:]); err != nil {
@@ -53,20 +45,11 @@ func runNativeTaskCommand(args []string) error {
 		"create":           {"config": true, "file": true, "request-id": true, "expected-authority-version": true, "by": true},
 		"discard":          {"config": true, "task-id": true, "request-id": true, "expected-version": true, "reason": true, "by": true},
 		"add-predecessors": {"config": true, "task-id": true, "predecessors": true, "request-id": true, "expected-version": true, "expected-graph-revision": true, "reason": true, "by": true},
-		"graph":            {"config": true, "task-id": true, "cursor": true, "limit": true, "status": true, "direction": true, "depth": true},
-		"export":           {"config": true, "task-id": true, "status": true, "direction": true, "depth": true, "format": true, "output": true, "overwrite": true},
+		"graph":            {"config": true, "cursor": true, "limit": true},
 	}
 	var unexpectedFlag string
-	limitWasSet := false
-	cursorWasSet := false
 	graphRevisionWasSet := false
 	fs.Visit(func(f *flag.Flag) {
-		if f.Name == "limit" {
-			limitWasSet = true
-		}
-		if f.Name == "cursor" {
-			cursorWasSet = true
-		}
 		if f.Name == "expected-graph-revision" {
 			graphRevisionWasSet = true
 		}
@@ -76,10 +59,6 @@ func runNativeTaskCommand(args []string) error {
 	})
 	if unexpectedFlag != "" {
 		return fmt.Errorf("task %s does not accept -%s", subcommand, unexpectedFlag)
-	}
-	effectiveLimit := *limit
-	if (subcommand == "graph" || subcommand == "export") && !limitWasSet {
-		effectiveLimit = 500
 	}
 	if fs.NArg() != 0 {
 		return errors.New("unexpected positional arguments")
@@ -134,19 +113,7 @@ func runNativeTaskCommand(args []string) error {
 			return err
 		}
 	case "graph":
-		if *file != "" || *requestID != "" || *expectedAuthority != 0 || *expectedVersion != 0 || *reason != "" || *by != "" {
-			return errors.New("task graph does not accept task mutation flags")
-		}
-		if cursorWasSet && (*taskID != "" || *status != "" || *direction != "" || *depth != 1) {
-			return errors.New("task graph -cursor cannot be combined with status or neighborhood filters")
-		}
-	case "export":
-		if *format != "json" || strings.TrimSpace(*output) == "" {
-			return errors.New("task export requires -format json and -output <path>")
-		}
-		if *file != "" || *requestID != "" || *expectedAuthority != 0 || *expectedVersion != 0 || *reason != "" || *by != "" {
-			return errors.New("task export does not accept task mutation flags")
-		}
+
 	default:
 		return fmt.Errorf("unsupported task command %q", subcommand)
 	}
@@ -206,65 +173,14 @@ func runNativeTaskCommand(args []string) error {
 		}
 		return json.NewEncoder(os.Stdout).Encode(receipt)
 	case "graph":
-		if *taskID == "" && *status == "" && *direction == "" && *depth == 1 && (cursorWasSet || limitWasSet) {
-			graph, graphErr := product.TaskGraph(ctx, *cursor, *limit)
-			if graphErr != nil {
-				return graphErr
-			}
-			return json.NewEncoder(os.Stdout).Encode(graph)
-		}
-		graph, graphErr := product.QueryTaskGraph(ctx, productapi.GraphFilter{Status: *status, CenterTaskID: *taskID, Direction: *direction, Depth: *depth, Limit: effectiveLimit})
+		graph, graphErr := product.TaskGraph(ctx, *cursor, *limit)
 		if graphErr != nil {
 			return graphErr
 		}
 		return json.NewEncoder(os.Stdout).Encode(graph)
-	case "export":
-		graph, graphErr := product.QueryTaskGraph(ctx, productapi.GraphFilter{Status: *status, CenterTaskID: *taskID, Direction: *direction, Depth: *depth, Limit: effectiveLimit})
-		if graphErr != nil {
-			return graphErr
-		}
-		destination, pathErr := filepath.Abs(*output)
-		if pathErr != nil {
-			return pathErr
-		}
-		if taskExportTargetsNativeState(destination, product.Project().RunDir) {
-			return errors.New("task export output cannot replace native task state files")
-		}
-		receipt, exportErr := productclient.WriteTaskGraphExport(destination, graph, *overwrite)
-		if exportErr != nil {
-			return exportErr
-		}
-		return json.NewEncoder(os.Stdout).Encode(receipt)
 	}
 	if err != nil {
 		return err
 	}
 	return json.NewEncoder(os.Stdout).Encode(result)
-}
-
-func sameTaskExportPath(a, b string) bool {
-	if filepath.Clean(a) == filepath.Clean(b) {
-		return true
-	}
-	aInfo, aErr := os.Stat(a)
-	bInfo, bErr := os.Stat(b)
-	return aErr == nil && bErr == nil && os.SameFile(aInfo, bInfo)
-}
-
-func taskExportTargetsNativeState(destination, runDir string) bool {
-	stateDir, stateErr := filepath.EvalSymlinks(runDir)
-	outputDir, outputErr := filepath.EvalSymlinks(filepath.Dir(destination))
-	if stateErr == nil && outputErr == nil {
-		relative, err := filepath.Rel(stateDir, outputDir)
-		if err == nil && relative != ".." && !strings.HasPrefix(relative, ".."+string(filepath.Separator)) {
-			return true
-		}
-	}
-	database := filepath.Join(runDir, "steerline.db")
-	for _, suffix := range []string{"", "-wal", "-shm"} {
-		if sameTaskExportPath(destination, database+suffix) {
-			return true
-		}
-	}
-	return false
 }

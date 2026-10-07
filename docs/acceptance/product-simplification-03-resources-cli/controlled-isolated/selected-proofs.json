@@ -1,0 +1,268 @@
+{
+  "kind": "controlled fixture facts, not native/live evidence",
+  "source_reports": [
+    {
+      "file": "docs\\validation\\product-simplification-03-resources-cli\\controlled-isolated\\scenarios\\recovery.waiting-merge-restart\\recovery-before-restart.json",
+      "sha256": "fe8a88440008c3772156a1cba9babffdf9b8c6dd982a137b053ba8ff2ff9c467"
+    },
+    {
+      "file": "docs\\validation\\product-simplification-03-resources-cli\\controlled-isolated\\scenarios\\recovery.waiting-merge-restart\\recovery-after-restart.json",
+      "sha256": "befb11ff66463672fa423421a0969211dfd697908de4c6bc0cb7a707731ccef4"
+    },
+    {
+      "file": "docs\\validation\\product-simplification-03-resources-cli\\controlled-isolated\\scenarios\\recovery.waiting-merge-restart\\recovery-completed.json",
+      "sha256": "d469f270088e6cb39827e695b0a8fbea21439e9684fcc3032482f492a033b886"
+    },
+    {
+      "file": "docs\\validation\\product-simplification-03-resources-cli\\controlled-isolated\\scenarios\\recovery.waiting-merge-restart\\recovery-rechecked.json",
+      "sha256": "23ac6de53bd66af22c940d65dce86d42cf71d6329e07c4e683a1ca526a3bc0e8"
+    }
+  ],
+  "snapshots": {
+    "before-restart": {
+      "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+      "database_id": "ca5fb8031581f28c2d9cd00ab9189920",
+      "workflow_id": "6593fbe8605b067f30602819dc80d40f",
+      "execution_id": "86706b74c67690b9f629a9ee9d24b30c",
+      "session_id": "b280356e-b58d-4258-87ec-4d27799e3c58",
+      "workspace": {
+        "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\repo",
+        "worktree": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\6593fbe8605b067f30602819dc80d40f",
+        "branch": "codex/1-6593fbe8605b",
+        "base": "2f81357ea321dc566673e093fdcea7407c89bf3b",
+        "head": "2f81357ea321dc566673e093fdcea7407c89bf3b",
+        "verified_at": "2026-10-07T09:04:40.3233735Z"
+      },
+      "profile_version": 8,
+      "profile_digest": "f858ab3c64d3d80e3398c38e11a2c4631b21017f4de6ed337a5076123e24b378",
+      "provider": {
+        "kind": "command",
+        "base_url": "https://github.com",
+        "repository": "e2e/project",
+        "token_env": "",
+        "query": {
+          "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\2230\\SteerLine\\docs\\validation\\product-simplification-03-resources-cli\\controlled-isolated\\build\\controlled-helper.exe",
+          "args": [
+            "provider",
+            "--e2e-state",
+            "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\provider.json"
+          ]
+        }
+      },
+      "helper_sessions": 1,
+      "helper_dispatches": 1,
+      "phase": "waiting_pr_merge",
+      "tasks": [
+        {
+          "task_id": "1",
+          "status": "in_progress",
+          "dependency_ready": false,
+          "workflow_count": 1,
+          "delivery": null
+        },
+        {
+          "task_id": "2",
+          "status": "open",
+          "dependency_ready": false,
+          "workflow_count": 0,
+          "delivery": null
+        }
+      ]
+    },
+    "after-restart": {
+      "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+      "database_id": "ca5fb8031581f28c2d9cd00ab9189920",
+      "workflow_id": "6593fbe8605b067f30602819dc80d40f",
+      "execution_id": "86706b74c67690b9f629a9ee9d24b30c",
+      "session_id": "b280356e-b58d-4258-87ec-4d27799e3c58",
+      "workspace": {
+        "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\repo",
+        "worktree": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\6593fbe8605b067f30602819dc80d40f",
+        "branch": "codex/1-6593fbe8605b",
+        "base": "2f81357ea321dc566673e093fdcea7407c89bf3b",
+        "head": "2f81357ea321dc566673e093fdcea7407c89bf3b",
+        "verified_at": "2026-10-07T09:04:40.3233735Z"
+      },
+      "profile_version": 8,
+      "profile_digest": "f858ab3c64d3d80e3398c38e11a2c4631b21017f4de6ed337a5076123e24b378",
+      "provider": {
+        "kind": "command",
+        "base_url": "https://github.com",
+        "repository": "e2e/project",
+        "token_env": "",
+        "query": {
+          "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\2230\\SteerLine\\docs\\validation\\product-simplification-03-resources-cli\\controlled-isolated\\build\\controlled-helper.exe",
+          "args": [
+            "provider",
+            "--e2e-state",
+            "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\provider.json"
+          ]
+        }
+      },
+      "helper_sessions": 1,
+      "helper_dispatches": 1,
+      "phase": "waiting_pr_merge",
+      "tasks": [
+        {
+          "task_id": "1",
+          "status": "in_progress",
+          "dependency_ready": false,
+          "workflow_count": 1,
+          "delivery": null
+        },
+        {
+          "task_id": "2",
+          "status": "open",
+          "dependency_ready": false,
+          "workflow_count": 0,
+          "delivery": null
+        }
+      ]
+    },
+    "completed": {
+      "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+      "database_id": "ca5fb8031581f28c2d9cd00ab9189920",
+      "workflow_id": "6593fbe8605b067f30602819dc80d40f",
+      "execution_id": "86706b74c67690b9f629a9ee9d24b30c",
+      "session_id": "b280356e-b58d-4258-87ec-4d27799e3c58",
+      "workspace": {
+        "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\repo",
+        "worktree": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\6593fbe8605b067f30602819dc80d40f",
+        "branch": "codex/1-6593fbe8605b",
+        "base": "2f81357ea321dc566673e093fdcea7407c89bf3b",
+        "head": "2f81357ea321dc566673e093fdcea7407c89bf3b",
+        "verified_at": "2026-10-07T09:04:40.3233735Z"
+      },
+      "profile_version": 8,
+      "profile_digest": "f858ab3c64d3d80e3398c38e11a2c4631b21017f4de6ed337a5076123e24b378",
+      "provider": {
+        "kind": "command",
+        "base_url": "https://github.com",
+        "repository": "e2e/project",
+        "token_env": "",
+        "query": {
+          "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\2230\\SteerLine\\docs\\validation\\product-simplification-03-resources-cli\\controlled-isolated\\build\\controlled-helper.exe",
+          "args": [
+            "provider",
+            "--e2e-state",
+            "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\provider.json"
+          ]
+        }
+      },
+      "helper_sessions": 1,
+      "helper_dispatches": 1,
+      "phase": "completed",
+      "tasks": [
+        {
+          "task_id": "1",
+          "status": "closed",
+          "dependency_ready": false,
+          "workflow_count": 1,
+          "delivery": {
+            "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+            "task_id": "1",
+            "selected_workflow_run_id": "6593fbe8605b067f30602819dc80d40f",
+            "pr_instance": "https://github.com",
+            "pr_repository": "e2e/project",
+            "pr_number": 1,
+            "pr_url": "https://github.com/e2e/project/pull/1",
+            "merge_commit": "062bc4ee3d210ee60b1581b1406e9e92b4555ef6",
+            "merged_at": "2026-10-07T09:05:32.8545872Z",
+            "recorded_at": "2026-10-07T09:05:34.3574602Z",
+            "evidence": {
+              "pr_instance": "https://github.com",
+              "url": "https://github.com/e2e/project/pull/1",
+              "repository": "e2e/project",
+              "number": 1,
+              "base_branch": "main",
+              "state": "merged",
+              "merged": true,
+              "merged_at": "2026-10-07T09:05:32.8545872Z",
+              "merge_commit": "062bc4ee3d210ee60b1581b1406e9e92b4555ef6"
+            }
+          }
+        },
+        {
+          "task_id": "2",
+          "status": "open",
+          "dependency_ready": true,
+          "workflow_count": 0,
+          "delivery": null
+        }
+      ]
+    },
+    "rechecked": {
+      "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+      "database_id": "ca5fb8031581f28c2d9cd00ab9189920",
+      "workflow_id": "6593fbe8605b067f30602819dc80d40f",
+      "execution_id": "86706b74c67690b9f629a9ee9d24b30c",
+      "session_id": "b280356e-b58d-4258-87ec-4d27799e3c58",
+      "workspace": {
+        "repository": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\repo",
+        "worktree": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\home\\worktrees\\6593fbe8605b067f30602819dc80d40f",
+        "branch": "codex/1-6593fbe8605b",
+        "base": "2f81357ea321dc566673e093fdcea7407c89bf3b",
+        "head": "2f81357ea321dc566673e093fdcea7407c89bf3b",
+        "verified_at": "2026-10-07T09:04:40.3233735Z"
+      },
+      "profile_version": 8,
+      "profile_digest": "f858ab3c64d3d80e3398c38e11a2c4631b21017f4de6ed337a5076123e24b378",
+      "provider": {
+        "kind": "command",
+        "base_url": "https://github.com",
+        "repository": "e2e/project",
+        "token_env": "",
+        "query": {
+          "executable": "C:\\Users\\lmas1\\.codex\\worktrees\\2230\\SteerLine\\docs\\validation\\product-simplification-03-resources-cli\\controlled-isolated\\build\\controlled-helper.exe",
+          "args": [
+            "provider",
+            "--e2e-state",
+            "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\provider.json"
+          ]
+        }
+      },
+      "helper_sessions": 1,
+      "helper_dispatches": 1,
+      "phase": "completed",
+      "tasks": [
+        {
+          "task_id": "1",
+          "status": "closed",
+          "dependency_ready": false,
+          "workflow_count": 1,
+          "delivery": {
+            "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-e2e-1357877796\\recovery.waiting-merge-restart\\recovery\\repo\\.git",
+            "task_id": "1",
+            "selected_workflow_run_id": "6593fbe8605b067f30602819dc80d40f",
+            "pr_instance": "https://github.com",
+            "pr_repository": "e2e/project",
+            "pr_number": 1,
+            "pr_url": "https://github.com/e2e/project/pull/1",
+            "merge_commit": "062bc4ee3d210ee60b1581b1406e9e92b4555ef6",
+            "merged_at": "2026-10-07T09:05:32.8545872Z",
+            "recorded_at": "2026-10-07T09:05:34.3574602Z",
+            "evidence": {
+              "pr_instance": "https://github.com",
+              "url": "https://github.com/e2e/project/pull/1",
+              "repository": "e2e/project",
+              "number": 1,
+              "base_branch": "main",
+              "state": "merged",
+              "merged": true,
+              "merged_at": "2026-10-07T09:05:32.8545872Z",
+              "merge_commit": "062bc4ee3d210ee60b1581b1406e9e92b4555ef6"
+            }
+          }
+        },
+        {
+          "task_id": "2",
+          "status": "open",
+          "dependency_ready": true,
+          "workflow_count": 0,
+          "delivery": null
+        }
+      ]
+    }
+  },
+  "observation_limit": "workspace values are retained historic locators; fixture cleanup_complete confirms test-owned cleanup after body, not product resource deletion"
+}

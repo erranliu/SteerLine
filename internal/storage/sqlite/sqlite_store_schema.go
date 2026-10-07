@@ -132,7 +132,7 @@ func validateNativeTaskStructure(ctx context.Context, tx *sql.Tx) error {
 		OR (t.status='open' AND COALESCE(json_extract(t.payload,'$.claimant'),'')<>'')
 		OR (t.status IN ('in_progress','closed') AND COALESCE(json_extract(t.payload,'$.claimant'),'')='')
 		OR (t.status='discarded' AND (json_extract(t.payload,'$.discarded_at') IS NULL OR trim(COALESCE(json_extract(t.payload,'$.discard_reason'),''))='' OR trim(COALESCE(json_extract(t.payload,'$.discarded_by'),''))='' OR trim(COALESCE(json_extract(t.payload,'$.discard_request_id'),''))=''))
-		OR (t.status<>'discarded' AND (json_extract(t.payload,'$.discarded_at') IS NOT NULL OR COALESCE(json_extract(t.payload,'$.discard_reason'),'')<>'' OR COALESCE(json_extract(t.payload,'$.discarded_by'),'')<>'' OR COALESCE(json_extract(t.payload,'$.discard_request_id'),'')<>'' OR COALESCE(json_array_length(json_extract(t.payload,'$.cleanup_pending')),0)<>0))
+		OR (t.status<>'discarded' AND (json_extract(t.payload,'$.discarded_at') IS NOT NULL OR COALESCE(json_extract(t.payload,'$.discard_reason'),'')<>'' OR COALESCE(json_extract(t.payload,'$.discarded_by'),'')<>'' OR COALESCE(json_extract(t.payload,'$.discard_request_id'),'')<>'' OR COALESCE(json_array_length(json_extract(t.payload,'$.stop_pending')),0)<>0))
 		OR (t.status='closed' AND NOT EXISTS (SELECT 1 FROM task_deliveries d WHERE d.project_identity=t.project_identity AND d.task_id=t.task_id))
 		OR (t.status='discarded' AND EXISTS (SELECT 1 FROM task_deliveries d WHERE d.project_identity=t.project_identity AND d.task_id=t.task_id))`).Scan(&invalidTasks)
 	if err != nil {

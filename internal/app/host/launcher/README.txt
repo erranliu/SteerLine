@@ -31,3 +31,8 @@ Directory
   backup\              old configs and runtime snapshots
 
 Regenerate these launchers:  bin\steerline.exe launchers
+
+The former projects menu is retired. Use console.bat or steerline console
+(with an explicit -config when needed). Use task list and stop-service instead
+of the retired tasks/stop aliases. Retained PRs, worktrees and branches must
+be handled with the provider/target native tools; SteerLine does not delete them.

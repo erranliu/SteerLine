@@ -33,11 +33,11 @@ type TaskBatchReceipt struct {
 }
 
 type TaskDiscardReceipt struct {
-	RequestID      string   `json:"request_id"`
-	TaskID         string   `json:"task_id"`
-	Status         string   `json:"status"`
-	Code           string   `json:"code,omitempty"`
-	Message        string   `json:"message,omitempty"`
-	GraphRevision  uint64   `json:"graph_revision"`
-	CleanupPending []string `json:"cleanup_pending,omitempty"`
+	RequestID     string   `json:"request_id"`
+	TaskID        string   `json:"task_id"`
+	Status        string   `json:"status"`
+	Code          string   `json:"code,omitempty"`
+	Message       string   `json:"message,omitempty"`
+	GraphRevision uint64   `json:"graph_revision"`
+	StopPending   []string `json:"stop_pending,omitempty"`
 }

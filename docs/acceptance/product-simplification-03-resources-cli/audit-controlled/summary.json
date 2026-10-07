@@ -1,0 +1,107 @@
+{
+  "scope": "e2e",
+  "level": "L3",
+  "env": "controlled",
+  "environment": {
+    "source_commit": "acfbd3a003dbdaf7455b88622ca01245975a5b28",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "controlled worker/provider; no model requests",
+    "worktree_dirty_at_sampling": true,
+    "worktree_status_sha256": "676e84c7ef8364de6efaa4700bbf772c2f22c41ed8fe85c1aa63918fcec17fa7"
+  },
+  "selected_scenarios": [
+    {"id": "recovery.waiting-merge-restart", "level": "L3", "suite": "recovery", "package": "./tests/e2e/suites/recovery", "test": "TestWaitingMergeRestart", "env": "controlled"}
+  ],
+  "groups": [
+    {
+      "id": "e2e-1",
+      "command": [
+        "go",
+        "test",
+        "-tags=e2e",
+        "-json",
+        "-count=1",
+        "-p=1",
+        "-parallel=1",
+        "-timeout=6m",
+        "-run=^(TestWaitingMergeRestart)$",
+        "./tests/e2e/suites/recovery"
+      ],
+      "assigned_tests": [
+        "TestWaitingMergeRestart"
+      ],
+      "assigned_packages": [
+        "./tests/e2e/suites/recovery"
+      ],
+      "stdout_json_log": "C:\\Users\\lmas1\\.codex\\worktrees\\2230\\SteerLine\\docs\\validation\\product-simplification-03-resources-cli\\audit-controlled\\e2e-1.jsonl",
+      "stderr_log": "C:\\Users\\lmas1\\.codex\\worktrees\\2230\\SteerLine\\docs\\validation\\product-simplification-03-resources-cli\\audit-controlled\\e2e-1.stderr.txt",
+      "wall_seconds": 193.7300372,
+      "exit_code": 0,
+      "summary": {
+        "status": "passed",
+        "passed": true,
+        "complete": true,
+        "command_exit_code": 0,
+        "package_count": 1,
+        "passed_packages": 1,
+        "failed_packages": [],
+        "skipped_packages": [],
+        "test_count": 1,
+        "passed_tests": 1,
+        "failed_tests": 0,
+        "skipped_tests": 0,
+        "packages": [
+          {"package": "github.com/erranliu/SteerLine/tests/e2e/suites/recovery", "status": "pass", "elapsed_seconds": 191.772}
+        ],
+        "tests": [
+          {"package": "github.com/erranliu/SteerLine/tests/e2e/suites/recovery", "name": "TestWaitingMergeRestart", "status": "pass", "elapsed_seconds": 190.93}
+        ],
+        "failures": [],
+        "skipped": [],
+        "incomplete_reasons": [],
+        "test_event_wall_seconds": 191.7679911,
+        "has_test_event_wall": true
+      }
+    }
+  ],
+  "build_sha256": {
+    "C:\\Users\\lmas1\\.codex\\worktrees\\2230\\SteerLine\\docs\\validation\\product-simplification-03-resources-cli\\audit-controlled\\build\\controlled-helper.exe": "c65f897b75d061b5873027a719835e270934e7cf3d628ecbdda0c9e84cb6a769",
+    "C:\\Users\\lmas1\\.codex\\worktrees\\2230\\SteerLine\\docs\\validation\\product-simplification-03-resources-cli\\audit-controlled\\build\\steerline.exe": "f2664cceb43c2812422a3c7287b64352f1d294dc5c20226e66ab0f7c36f0a1c1"
+  },
+  "preparation_seconds": 6.0193271,
+  "execution_seconds": 193.7607169,
+  "passed": true,
+  "cleanup_complete": true,
+  "errors": null,
+  "started_at": "2026-10-07T10:13:36.2420497Z",
+  "finished_at": "2026-10-07T10:16:57.1049863Z",
+  "coverage": "selected-L3",
+  "evidence_selection": {
+    "kind": "selected original report",
+    "original_report_sha256": "2536f4911eb3d57011d6057f8d9dd5582ce548013d49d2904b6f0ed655a627d0",
+    "original_report_local": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-ps3-audit-original-reports\\audit-controlled.json",
+    "omitted": "full worktree status and duplicate slowest_tests; original source/environment/timestamps, commands, coverage and individual outcomes preserved"
+  }
+}

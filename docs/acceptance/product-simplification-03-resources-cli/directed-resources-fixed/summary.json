@@ -1,0 +1,114 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./internal/execution",
+    "./internal/storage/sqlite",
+    "-run",
+    "^(TestPS3.*|TestMC6|TestMC8|TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof|TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent|TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity|TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding|TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor|TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged|TestPublicationPolicyFrozenConfigurationAndCredentials|TestPublicationOriginalProviderAfterRestartAndRemoteDrift|TestPreflightRejectsUnknownSQLiteSchemaWithoutMutation)$",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-07T08:53:16.9115122Z",
+  "finished_at": "2026-10-07T09:00:08.4734464Z",
+  "wall_seconds": 411.5704724,
+  "environment": {
+    "source_commit": "8e46537fe8b4b86f117fddaa215fc633279b22a4",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled",
+    "worktree_dirty_at_sampling": true,
+    "worktree_status_sha256": "e28ae427feb7ac35d1817151dc8e38997bd2403bd20079c018254ccf8d6cd5b6"
+  },
+  "process_error": "exit status 1",
+  "summary": {
+    "status": "failed",
+    "passed": false,
+    "complete": true,
+    "command_exit_code": 1,
+    "package_count": 2,
+    "passed_packages": 1,
+    "failed_packages": [
+      "github.com/erranliu/SteerLine/internal/execution"
+    ],
+    "skipped_packages": [],
+    "test_count": 28,
+    "passed_tests": 27,
+    "failed_tests": 1,
+    "skipped_tests": 0,
+    "packages": [
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "status": "fail", "elapsed_seconds": 407.84},
+      {"package": "github.com/erranliu/SteerLine/internal/storage/sqlite", "status": "pass", "elapsed_seconds": 0.459}
+    ],
+    "tests": [
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestMC6", "status": "pass", "elapsed_seconds": 124.09},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestMC8", "status": "pass", "elapsed_seconds": 105.71},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3DiscardPreservesTwoCandidateResourcesAndPRs", "status": "pass", "elapsed_seconds": 47.6},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestMC6/multiple_merged", "status": "pass", "elapsed_seconds": 35.15},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestMC6/late_after_delivery", "status": "pass", "elapsed_seconds": 33.66},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestMC6/abandoned_merged", "status": "pass", "elapsed_seconds": 28.91},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestMC8/late_feedback", "status": "pass", "elapsed_seconds": 28.64},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3StopReceiptIsAtomicAndReplaysOriginalEvidence", "status": "pass", "elapsed_seconds": 26.83},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestMC6/unknown_sibling", "status": "pass", "elapsed_seconds": 26.37},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent", "status": "fail", "elapsed_seconds": 25.08},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestMC8/late_start", "status": "pass", "elapsed_seconds": 24.58},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestMC8/unknown_stop", "status": "pass", "elapsed_seconds": 19.51},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestMC8/inbox_under_project_effect", "status": "pass", "elapsed_seconds": 19.29},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPublicationOriginalProviderAfterRestartAndRemoteDrift", "status": "pass", "elapsed_seconds": 15.62},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPublicationPolicyFrozenConfigurationAndCredentials", "status": "pass", "elapsed_seconds": 15.52},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestMC8/merged_rejects_exit", "status": "pass", "elapsed_seconds": 13.68},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3StopReceiptIsAtomicAndReplaysOriginalEvidence/false", "status": "pass", "elapsed_seconds": 13.45},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestPS3StopReceiptIsAtomicAndReplaysOriginalEvidence/true", "status": "pass", "elapsed_seconds": 13.38},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor", "status": "pass", "elapsed_seconds": 13.2},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestExecutionStopIntentAndUnknownReceiptUseOriginalBinding", "status": "pass", "elapsed_seconds": 10.66},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof", "status": "pass", "elapsed_seconds": 9.25},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "status": "pass", "elapsed_seconds": 8.17},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity", "status": "pass", "elapsed_seconds": 5.89},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/closed_unmerged", "status": "pass", "elapsed_seconds": 0.39},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_repository", "status": "pass", "elapsed_seconds": 0.21},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_base", "status": "pass", "elapsed_seconds": 0.13},
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged/wrong_task_branch", "status": "pass", "elapsed_seconds": 0.13},
+      {"package": "github.com/erranliu/SteerLine/internal/storage/sqlite", "name": "TestPreflightRejectsUnknownSQLiteSchemaWithoutMutation", "status": "pass", "elapsed_seconds": 0.03}
+    ],
+    "failures": [
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent", "status": "fail", "elapsed_seconds": 25.08}
+    ],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 407.8305516,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/product-simplification-03-resources-cli/directed-resources-fixed/go-test.jsonl",
+  "stderr_log": "docs/validation/product-simplification-03-resources-cli/directed-resources-fixed/go-test.stderr.txt",
+  "evidence_selection": {
+    "kind": "selected original report",
+    "original_report_sha256": "7426fa63d599521e2df470fe71561942fb601d52006c94af75a878fbf36e54be",
+    "original_report_local": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-ps3-original-reports\\directed-resources-fixed.json",
+    "omitted": "full worktree status and duplicate slowest_tests; commands, original source/environment/timestamps, assigned coverage and all individual outcomes retained"
+  }
+}

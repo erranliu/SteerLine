@@ -16,7 +16,7 @@ func executionPublicationFixture() executionbackend.PublicationPolicy {
 }
 
 func hostPublicationProviderFixture() executionmodel.PRProviderConfig {
-	return executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: os.Args[0], Args: []string{"api", "repos/{repository}/pulls/{number}"}}, Close: executionbackend.Command{Executable: os.Args[0], Args: []string{"pr", "close", "{pr_url}"}}}
+	return executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: os.Args[0], Args: []string{"api", "repos/{repository}/pulls/{number}"}}}
 }
 
 func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
@@ -28,7 +28,6 @@ func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
 	current.PublicationPolicy.Publisher = "host_service"
 	current.PR.BaseURL, current.PR.Repository, current.PR.TokenEnv = "https://other.invalid", "other/repo", "OTHER_TOKEN"
 	current.PR.Query = executionbackend.Command{Executable: "must-not-be-called", Args: []string{"changed"}}
-	current.PR.Close = current.PR.Query
 	current.Remote, current.Branch, current.Git = "other", "other", executionbackend.Command{Executable: "must-not-be-called"}
 	f.s.Config, f.s.baseConfig = current, current
 	fixed, err := f.s.executionConfigForRun(f.run)
@@ -53,7 +52,7 @@ func TestPublicationPolicyFrozenConfigurationAndCredentials(t *testing.T) {
 	if neutralVerifyFixedExecutionProfile(copy) {
 		t.Fatal("changed auth reference accepted")
 	}
-	for _, version := range []int{5, 2} {
+	for _, version := range []int{7, 5, 2} {
 		copy = original
 		copy.Version = version
 		copy.Digest = fixedExecutionProfileDigest(copy)
@@ -73,13 +72,12 @@ func TestRetiredPublicationMetadataRejected(t *testing.T) {
 func TestPublicationOriginalProviderAfterRestartAndRemoteDrift(t *testing.T) {
 	f := newLocalWorkerPublicationFixture(t)
 	info := executionmodel.PRInfo{URL: "https://github.com/owner/repo/pull/1", Repository: "owner/repo", HeadRepository: "owner/repo", HeadBranch: f.run.WorkspaceIntent.Branch, HeadRevision: f.base, BaseBranch: "main", State: "open"}
-	// The worker supplied this external PR; the center can only query/close it.
+	// The worker supplied this external PR; the center can only query it.
 	require(t, os.WriteFile(os.Getenv("STEERLINE_TEST_HOST_GH_FILE"), mustJSON(info), 0600))
 	original := *f.s.domain.WorkflowRuns[0].ExecutionProfile
 	require(t, f.s.Close())
 	changed := f.c
 	changed.PR.Query = executionbackend.Command{Executable: "must-not-be-called", Args: []string{"changed"}}
-	changed.PR.Close = changed.PR.Query
 	changed.PR.TokenEnv = "CHANGED_AUTH_REF"
 	s, err := newTestService(changed)
 	require(t, err)
@@ -95,11 +93,6 @@ func TestPublicationOriginalProviderAfterRestartAndRemoteDrift(t *testing.T) {
 	if queried.URL != info.URL {
 		t.Fatal("original query lost exact PR")
 	}
-	closed, err := publicationClient(fixed, s.runtime.ProcessHost).Close(f.ctx, info.URL)
-	require(t, err)
-	if closed.State != "closed_unmerged" {
-		t.Fatal("original close did not verify closure")
-	}
 	// Use the real Git reader to prove a changed transport is rejected before
 	// any publish intent/action; no external push is made by this check.
 	reader := fixed
@@ -111,6 +104,6 @@ func TestPublicationOriginalProviderAfterRestartAndRemoteDrift(t *testing.T) {
 		t.Fatal("different physical remote accepted")
 	}
 	if _, err := os.Stat(os.Getenv("STEERLINE_TEST_HOST_GH_FILE") + ".creates"); !os.IsNotExist(err) {
-		t.Fatalf("center query/close/recovery attempted publication: %v", err)
+		t.Fatalf("center query/recovery attempted publication: %v", err)
 	}
 }

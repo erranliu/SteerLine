@@ -280,22 +280,6 @@ func ListProjects() ([]ProjectInfo, error) {
 	return projects, nil
 }
 
-func ResolveProject(projects []ProjectInfo, selected string) (ProjectInfo, error) {
-	selected = strings.TrimSpace(selected)
-	if selected == "" {
-		return ProjectInfo{}, errors.New("no project selected")
-	}
-	if index := atoiSafe(selected); index >= 1 && index <= len(projects) {
-		return projects[index-1], nil
-	}
-	for _, project := range projects {
-		if strings.EqualFold(project.Name, selected) {
-			return project, nil
-		}
-	}
-	return ProjectInfo{}, fmt.Errorf("project %q not found", selected)
-}
-
 func atoiSafe(value string) int {
 	number := 0
 	for _, digit := range value {

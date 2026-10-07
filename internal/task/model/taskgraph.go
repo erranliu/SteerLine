@@ -8,10 +8,9 @@ import (
 	"time"
 )
 
-// Node contains only the values used by ordering and graph projection rules.
+// Node contains only the values used by ordering rules.
 type Node struct {
 	ID        string
-	Status    string
 	Priority  int
 	CreatedAt time.Time
 }
@@ -20,35 +19,6 @@ type Node struct {
 type Edge struct {
 	Predecessor string
 	Successor   string
-}
-
-// Filter contains validated query values. Limit and MaxBoundaryEdges are
-// supplied by the caller so this package does not own protocol limits.
-type Filter struct {
-	Status           string
-	CenterID         string
-	Direction        string
-	Depth            int
-	Limit            int
-	MaxBoundaryEdges int
-}
-
-// BoundaryEdge describes an edge crossing the selected projection boundary.
-type BoundaryEdge struct {
-	Predecessor string
-	Successor   string
-	Reason      string
-}
-
-// Projection is a deterministic selection over one caller-provided snapshot.
-type Projection struct {
-	NodeIDs                  []string
-	Edges                    []Edge
-	BoundaryEdges            []BoundaryEdge
-	OmittedNodeCount         int
-	OmittedBoundaryEdgeCount int
-	Reasons                  []string
-	Truncated                bool
 }
 
 // Cycle returns the first cycle found by numeric task-ID order, including the
@@ -156,171 +126,6 @@ func StableTaskOrder(nodes []Node, edges []Edge) []string {
 		}
 	}
 	return order
-}
-
-// Project selects nodes and reports all omitted parts within the supplied
-// snapshot. It does not decide whether a node is ready or otherwise qualified.
-func Project(nodes []Node, edges []Edge, filter Filter) Projection {
-	result := Projection{
-		NodeIDs:       []string{},
-		Edges:         []Edge{},
-		BoundaryEdges: []BoundaryEdge{},
-		Reasons:       []string{},
-	}
-	byID := make(map[string]Node, len(nodes))
-	allIDs := make([]string, 0, len(nodes))
-	for _, node := range nodes {
-		byID[node.ID] = node
-		allIDs = append(allIDs, node.ID)
-	}
-	allIDs = sortedUniqueTaskIDs(allIDs)
-	if filter.CenterID != "" {
-		if _, ok := byID[filter.CenterID]; !ok {
-			return result
-		}
-	}
-
-	incoming := make(map[string][]string, len(nodes))
-	outgoing := make(map[string][]string, len(nodes))
-	sortedEdges := append([]Edge(nil), edges...)
-	sort.Slice(sortedEdges, func(i, j int) bool {
-		if sortedEdges[i].Predecessor != sortedEdges[j].Predecessor {
-			return taskIDLess(sortedEdges[i].Predecessor, sortedEdges[j].Predecessor)
-		}
-		return taskIDLess(sortedEdges[i].Successor, sortedEdges[j].Successor)
-	})
-	for _, edge := range sortedEdges {
-		incoming[edge.Successor] = append(incoming[edge.Successor], edge.Predecessor)
-		outgoing[edge.Predecessor] = append(outgoing[edge.Predecessor], edge.Successor)
-	}
-
-	depths := make(map[string]int)
-	depthFrontier := make(map[string]bool)
-	candidateOrder := make([]string, 0, len(nodes))
-	if filter.CenterID == "" {
-		candidateOrder = append(candidateOrder, allIDs...)
-	} else {
-		depths[filter.CenterID] = 0
-		reachable := []string{filter.CenterID}
-		for head := 0; head < len(reachable); head++ {
-			id := reachable[head]
-			for _, neighbor := range neighbors(id, filter.Direction, incoming, outgoing) {
-				if _, seen := depths[neighbor]; seen {
-					continue
-				}
-				depths[neighbor] = depths[id] + 1
-				reachable = append(reachable, neighbor)
-			}
-		}
-		for _, id := range reachable {
-			if depths[id] == filter.Depth+1 {
-				depthFrontier[id] = true
-			}
-			if depths[id] <= filter.Depth {
-				candidateOrder = append(candidateOrder, id)
-			}
-		}
-	}
-
-	candidate := make(map[string]bool, len(candidateOrder))
-	for _, id := range candidateOrder {
-		candidate[id] = true
-	}
-	selected := make(map[string]bool, min(filter.Limit, len(candidateOrder)))
-	for _, id := range candidateOrder {
-		if filter.Status != "" && byID[id].Status != filter.Status && id != filter.CenterID {
-			continue
-		}
-		if len(result.NodeIDs) == filter.Limit {
-			continue
-		}
-		result.NodeIDs = append(result.NodeIDs, id)
-		selected[id] = true
-	}
-
-	omittedIDs := make(map[string]bool)
-	reasons := make(map[string]bool)
-	for _, id := range candidateOrder {
-		if selected[id] {
-			continue
-		}
-		if filter.Status != "" && byID[id].Status != filter.Status && id != filter.CenterID {
-			omittedIDs[id] = true
-			reasons["status_filter"] = true
-		} else {
-			omittedIDs[id] = true
-			reasons["node_limit"] = true
-		}
-	}
-	for id, depth := range depths {
-		if depth > filter.Depth {
-			omittedIDs[id] = true
-			reasons["depth_limit"] = true
-		}
-	}
-	for _, edge := range sortedEdges {
-		inCandidate := candidate[edge.Predecessor] && candidate[edge.Successor]
-		frontierEdge := false
-		if filter.CenterID != "" {
-			if depthFrontier[edge.Predecessor] && depths[edge.Successor] == filter.Depth {
-				frontierEdge = filter.Direction == "upstream" || filter.Direction == "both"
-			}
-			if depthFrontier[edge.Successor] && depths[edge.Predecessor] == filter.Depth {
-				frontierEdge = frontierEdge || filter.Direction == "downstream" || filter.Direction == "both"
-			}
-		}
-		if !inCandidate && !frontierEdge {
-			continue
-		}
-		predSelected, succSelected := selected[edge.Predecessor], selected[edge.Successor]
-		if predSelected && succSelected {
-			result.Edges = append(result.Edges, edge)
-			continue
-		}
-		if !predSelected && !succSelected {
-			continue
-		}
-		omittedID := edge.Predecessor
-		if predSelected {
-			omittedID = edge.Successor
-		}
-		reason := "node_limit"
-		if frontierEdge || depthFrontier[omittedID] {
-			reason = "depth_limit"
-		} else if filter.Status != "" && candidate[omittedID] && byID[omittedID].Status != filter.Status && omittedID != filter.CenterID {
-			reason = "status_filter"
-		}
-		if len(result.BoundaryEdges) < filter.MaxBoundaryEdges {
-			result.BoundaryEdges = append(result.BoundaryEdges, BoundaryEdge{Predecessor: edge.Predecessor, Successor: edge.Successor, Reason: reason})
-		} else {
-			result.OmittedBoundaryEdgeCount++
-			reasons["boundary_edge_limit"] = true
-		}
-		reasons[reason] = true
-	}
-	for reason := range reasons {
-		result.Reasons = append(result.Reasons, reason)
-	}
-	sort.Strings(result.Reasons)
-	result.OmittedNodeCount = len(omittedIDs)
-	result.Truncated = len(omittedIDs) > 0 || len(result.BoundaryEdges) > 0
-	return result
-}
-
-func neighbors(id, direction string, incoming, outgoing map[string][]string) []string {
-	var result []string
-	switch direction {
-	case "upstream":
-		result = append(result, incoming[id]...)
-	case "downstream":
-		result = append(result, outgoing[id]...)
-	case "both":
-		result = append(result, incoming[id]...)
-		result = append(result, outgoing[id]...)
-		sortTaskIDs(result)
-		result = compactStrings(result)
-	}
-	return result
 }
 
 func sortedUniqueTaskIDs(ids []string) []string {

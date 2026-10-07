@@ -37,7 +37,6 @@ func TestProfileSelectionDigestMatchesServicePreflight(t *testing.T) {
 	require(t, err)
 	require(t, os.WriteFile(GlobalExecutionConfigPath(), global, 0600))
 	provider := hostPublicationProviderFixture()
-	provider.Close = executionbackend.Command{Executable: "gh", Args: []string{"pr", "close", "{pr_url}", "--repo", "{repository}"}}
 	project, err := json.Marshal(map[string]any{
 		"repository": repository, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion,
 		"git":                executionbackend.Command{Executable: "git"},

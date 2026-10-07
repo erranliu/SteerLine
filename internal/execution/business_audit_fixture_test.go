@@ -11,13 +11,29 @@ import (
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
-func neutralAuditService(t *testing.T) (*Service, *reconstructiontypes.RunView) {
+func neutralAuditService(t *testing.T, hosts ...string) (*Service, *reconstructiontypes.RunView) {
 	t.Helper()
 	c, commit, store := openDAGFixture(t)
 	c.WorkflowProtocol, c.Host, c.Agent = executionmodel.Version, "local", "fixture"
 
 	setNeutralProfile(t, &c, neutralSettings{Executable: os.Args[0]})
-	dependencies, _ := neutralFixtureRuntime(c)
+	dependencies, catalog := neutralFixtureRuntime(c)
+	if len(hosts) > 0 && hosts[0] != "local" {
+		host := hosts[0]
+		key := ExecutionRegistrationKey{Backend: executionbackend.BackendLocal, Protocol: neutralProtocol, Agent: "fixture"}
+		entry := dependencies.Directory.entries[key]
+		entry.Host = host
+		dependencies.Directory.entries[key] = entry
+		dependencies.Directory.routes[directoryRoute(host, "fixture")] = key
+		c.Host = host
+		catalog.Base = c
+		catalog.Profiles[0].Host = host
+		var resolveErr error
+		c, _, resolveErr = catalog.ResolveExecutionProfile(c.selectedProfileID, "")
+		require(t, resolveErr)
+		rememberNeutralCatalog(c, catalog)
+		dependencies, _ = neutralFixtureRuntime(c)
+	}
 	require(t, validateWorkflowConfig(c, dependencies.Directory))
 	require(t, c.PrepareWorktreeRoot())
 	ctx := context.Background()

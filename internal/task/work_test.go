@@ -57,13 +57,13 @@ func TestTM03Result(t *testing.T) {
 	if _, err := (Service{}).Declare(claimed, contract, resultInput, at); err == nil {
 		t.Fatal("delivery for another task was accepted")
 	}
-	cleanup := []string{"workspace_cleanup:one"}
+	cleanup := []string{"execution_stop_manual:one"}
 	discarded, err := taskmodel.Discard(claimed, "stopped", "operator", "request", cleanup, at.Add(3*time.Minute))
 	if err != nil || discarded.Status != "discarded" || discarded.Version != 3 || discarded.DiscardRequestID != "request" {
 		t.Fatalf("discard did not freeze its task identity: %+v, %v", discarded, err)
 	}
 	cleanup[0] = "changed"
-	if discarded.CleanupPending[0] != "workspace_cleanup:one" {
+	if discarded.StopPending[0] != "execution_stop_manual:one" {
 		t.Fatal("discard shares its cleanup list with the caller")
 	}
 	if _, err := taskmodel.Discard(discarded, "again", "operator", "second-request", nil, at.Add(4*time.Minute)); err == nil {

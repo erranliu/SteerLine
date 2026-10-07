@@ -50,7 +50,7 @@ func writeProjectConfig(t *testing.T, name string, c Config) {
 	}
 }
 
-func TestListAndResolveProjects(t *testing.T) {
+func TestListProjects(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	localGlobalExecutionFixture(t)
 	writeProjectConfig(t, "zeta", minimalConfig(projectRepo(t)))
@@ -70,17 +70,6 @@ func TestListAndResolveProjects(t *testing.T) {
 		t.Fatalf("config should load: %v", projects[0].Err)
 	}
 
-	byNumber, e := ResolveProject(projects, "2")
-	if e != nil || byNumber.Name != "zeta" {
-		t.Fatalf("resolve by number: %+v %v", byNumber, e)
-	}
-	byName, e := ResolveProject(projects, "ALPHA")
-	if e != nil || byName.Name != "alpha" {
-		t.Fatalf("resolve by name: %+v %v", byName, e)
-	}
-	if _, e := ResolveProject(projects, "nope"); e == nil {
-		t.Fatal("expected error for unknown project")
-	}
 }
 
 func TestInstallLaunchersWritesCRLF(t *testing.T) {

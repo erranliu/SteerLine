@@ -62,7 +62,7 @@ func ReadyTasks(graph Snapshot) []TaskRecord {
 	}
 	nodes := make([]Node, 0, len(ready))
 	for _, record := range ready {
-		nodes = append(nodes, Node{ID: record.TaskID, Status: record.Status, Priority: record.Priority, CreatedAt: record.CreatedAt})
+		nodes = append(nodes, Node{ID: record.TaskID, Priority: record.Priority, CreatedAt: record.CreatedAt})
 	}
 	edges := make([]Edge, 0, len(graph.Edges))
 	for _, edge := range graph.Edges {

@@ -20,7 +20,7 @@ func TaskSummary(t taskmodel.TaskRecord) api.TaskSummary {
 }
 
 func TaskDetail(t storageports.NativeTaskDetail) api.TaskDetail {
-	p := api.TaskDetail{TaskSummary: TaskSummary(t.TaskRecord), ProjectID: t.ProjectID, Priority: t.Priority, SpecPath: t.Contract.SpecRef.Path, Successors: append([]string(nil), t.Successors...), DependencyReady: t.DependencyReady, StartupBlockers: append([]string(nil), t.StartupBlockers...)}
+	p := api.TaskDetail{TaskSummary: TaskSummary(t.TaskRecord), StopPending: append([]string(nil), t.StopPending...), ProjectID: t.ProjectID, Priority: t.Priority, SpecPath: t.Contract.SpecRef.Path, Successors: append([]string(nil), t.Successors...), DependencyReady: t.DependencyReady, StartupBlockers: append([]string(nil), t.StartupBlockers...)}
 	for _, w := range t.WorkflowRuns {
 		p.WorkflowRuns = append(p.WorkflowRuns, workflowSummary(w))
 	}
@@ -59,7 +59,7 @@ func TaskDetailByID(p storageports.NativeTaskPage, id string) (*api.TaskDetail, 
 }
 
 func TaskGraphPage(p taskview.Page) api.GraphPage {
-	v := api.GraphPage{Protocol: p.Protocol, ProjectID: p.ProjectID, AuthorityVersion: p.AuthorityVersion, GraphRevision: p.GraphRevision, DatabaseRevision: p.DatabaseRevision, DatabaseID: p.DatabaseID, SampledAt: p.SampledAt, NextCursor: p.NextCursor, HasMore: p.HasMore, Filters: api.GraphFilter{ProjectID: p.Filters.ProjectID, Status: p.Filters.Status, CenterTaskID: p.Filters.CenterTaskID, Direction: p.Filters.Direction, Depth: p.Filters.Depth, Limit: p.Filters.Limit}, Boundary: api.GraphBoundary{Truncated: p.Boundary.Truncated, MaxDepth: p.Boundary.MaxDepth, MaxNodes: p.Boundary.MaxNodes, OmittedNodeCount: p.Boundary.OmittedNodeCount, OmittedBoundaryEdgeCount: p.Boundary.OmittedBoundaryEdgeCount, Reasons: append([]string(nil), p.Boundary.Reasons...)}, Nodes: []api.GraphNode{}, Edges: []api.GraphEdge{}}
+	v := api.GraphPage{Protocol: p.Protocol, ProjectID: p.ProjectID, AuthorityVersion: p.AuthorityVersion, GraphRevision: p.GraphRevision, DatabaseRevision: p.DatabaseRevision, DatabaseID: p.DatabaseID, SampledAt: p.SampledAt, NextCursor: p.NextCursor, HasMore: p.HasMore, Boundary: api.GraphBoundary{Truncated: p.Boundary.Truncated, MaxNodes: p.Boundary.MaxNodes, OmittedNodeCount: p.Boundary.OmittedNodeCount, OmittedBoundaryEdgeCount: p.Boundary.OmittedBoundaryEdgeCount, Reasons: append([]string(nil), p.Boundary.Reasons...)}, Nodes: []api.GraphNode{}, Edges: []api.GraphEdge{}}
 	for _, n := range p.Nodes {
 		node := api.GraphNode{TaskID: n.TaskID, Title: n.Title, Status: n.Status, Priority: n.Priority, DependencyReady: n.DependencyReady, StartupBlockers: append([]string(nil), n.StartupBlockers...)}
 		for _, b := range n.Blockers {
@@ -134,7 +134,7 @@ func Candidate(r *CandidateView) *api.CandidateSummary {
 	if r == nil {
 		return nil
 	}
-	p := &api.CandidateSummary{SessionID: r.SessionID, SessionGeneration: r.SessionGeneration, CurrentTurnID: r.CurrentTurnID, TurnNumber: r.TurnNumber, PRHistory: append([]string(nil), r.PRHistory...), CandidateCreatedAt: r.CandidateCreatedAt, CandidateEndedAt: copyValue(r.CandidateEndedAt), CandidateTiming: r.CandidateTiming, ResourceStatus: r.ResourceStatus, RecoveryRequired: r.RecoveryRequired, RecoveryState: r.RecoveryState, RecoveryVersion: r.RecoveryVersion, TaskID: r.TaskID, DomainTaskID: r.DomainTaskID, WorkflowVersion: r.WorkflowVersion, ExecutionID: r.ExecutionID, Title: r.Title, RunID: r.RunID, AttemptID: r.AttemptID, ControlRevision: r.ControlRevision, Claimant: r.Claimant, Host: r.Host, Backend: r.Backend, Protocol: r.Protocol, Agent: r.Agent, Target: api.TargetSummary{ID: r.Target.ID}, TaskStatus: r.TaskStatus, ExecutionStatus: r.ExecutionStatus, FinishTaskStatus: r.FinishTaskStatus, StartedAt: copyValue(r.StartedAt), EndedAt: copyValue(r.EndedAt), WorktreePath: copyValue(r.WorktreePath), WorktreeBranch: copyValue(r.WorktreeBranch), BaseCommit: copyValue(r.BaseCommit), LastEvent: copyValue(r.LastEvent), LogPath: copyValue(r.LogPath), ResultPath: copyValue(r.ResultPath), Summary: copyValue(r.Summary), Error: copyValue(r.Error), PR: api.PRSummary{URL: copyValue(r.PR.URL), HeadRevision: copyValue(r.PR.HeadRevision), MergeCommit: copyValue(r.PR.MergeCommit), QueryError: copyValue(r.PR.QueryError), State: r.PR.State, MergedAt: copyValue(r.PR.MergedAt), QueriedAt: copyValue(r.PR.QueriedAt)}}
+	p := &api.CandidateSummary{SessionID: r.SessionID, SessionGeneration: r.SessionGeneration, CurrentTurnID: r.CurrentTurnID, TurnNumber: r.TurnNumber, PRHistory: append([]string(nil), r.PRHistory...), CandidateCreatedAt: r.CandidateCreatedAt, CandidateEndedAt: copyValue(r.CandidateEndedAt), CandidateTiming: r.CandidateTiming, ResourceStatus: r.ResourceStatus, RecoveryRequired: r.RecoveryRequired, RecoveryState: r.RecoveryState, RecoveryVersion: r.RecoveryVersion, TaskID: r.TaskID, DomainTaskID: r.DomainTaskID, WorkflowVersion: r.WorkflowVersion, ExecutionID: r.ExecutionID, Title: r.Title, RunID: r.RunID, AttemptID: r.AttemptID, ControlRevision: r.ControlRevision, Claimant: r.Claimant, Host: r.Host, Backend: r.Backend, Protocol: r.Protocol, Agent: r.Agent, Target: api.TargetSummary{ID: r.Target.ID, WorktreeID: r.Target.WorktreeID, Branch: r.Target.Branch}, TaskStatus: r.TaskStatus, ExecutionStatus: r.ExecutionStatus, FinishTaskStatus: r.FinishTaskStatus, StartedAt: copyValue(r.StartedAt), EndedAt: copyValue(r.EndedAt), WorktreePath: copyValue(r.WorktreePath), WorktreeBranch: copyValue(r.WorktreeBranch), BaseCommit: copyValue(r.BaseCommit), LastEvent: copyValue(r.LastEvent), LogPath: copyValue(r.LogPath), ResultPath: copyValue(r.ResultPath), Summary: copyValue(r.Summary), Error: copyValue(r.Error), PR: api.PRSummary{URL: copyValue(r.PR.URL), HeadRevision: copyValue(r.PR.HeadRevision), MergeCommit: copyValue(r.PR.MergeCommit), QueryError: copyValue(r.PR.QueryError), State: r.PR.State, MergedAt: copyValue(r.PR.MergedAt), QueriedAt: copyValue(r.PR.QueriedAt)}}
 	if r.Process != nil {
 		p.Process = &api.WorkerLocation{Terminal: r.Process.Terminal}
 	}
@@ -235,11 +235,11 @@ func History(d storageports.ExecutionSnapshot) api.HistorySummary {
 
 func Profile(f model.FixedExecutionProfile) api.ExecutionProfileSummary {
 	p := api.ExecutionProfileSummary{ID: f.ID, Name: f.Name, Host: f.Host, Agent: f.Agent, Digest: f.Digest, AcceptedConfigVersion: f.AcceptedConfigVersion, ImplementationDisplay: append([]string(nil), f.ImplementationDisplay...)}
-	p.Details = []string{"发布责任：" + f.PublicationPolicy.Publisher, "冻结发布目标：" + f.Publication.Provider.Kind + " · " + f.Publication.Provider.BaseURL + "/" + f.Publication.Provider.Repository + " · base " + f.Publication.BaseBranch, "Git remote：" + f.Publication.Remote + " · " + f.Publication.RemoteURL, "发布工具：" + f.Publication.Git.Executable + " · query " + f.Publication.Provider.Query.Executable + " · close " + f.Publication.Provider.Close.Executable, "认证引用：" + strings.Join(f.Publication.AuthenticationRefs, ", ")}
+	p.Details = []string{"发布责任：" + f.PublicationPolicy.Publisher, "冻结发布目标：" + f.Publication.Provider.Kind + " · " + f.Publication.Provider.BaseURL + "/" + f.Publication.Provider.Repository + " · base " + f.Publication.BaseBranch, "Git remote：" + f.Publication.Remote + " · " + f.Publication.RemoteURL, "发布工具：" + f.Publication.Git.Executable + " · query " + f.Publication.Provider.Query.Executable, "认证引用：" + strings.Join(f.Publication.AuthenticationRefs, ", ")}
 	for _, tool := range []struct {
 		name    string
 		command backend.Command
-	}{{"Git", f.Publication.Git}, {"Query", f.Publication.Provider.Query}, {"Close", f.Publication.Provider.Close}} {
+	}{{"Git", f.Publication.Git}, {"Query", f.Publication.Provider.Query}} {
 		description := strings.TrimSpace(tool.command.Executable + " " + strings.Join(tool.command.Args, " "))
 		if tool.command.Executable == "" {
 			description = "无宿主命令"

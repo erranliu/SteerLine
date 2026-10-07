@@ -870,30 +870,8 @@ func TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	cleanupItem := "workspace_cleanup:" + workspacePath
-	if open.Status != "discarded" || !hasString(open.CleanupPending, "pull_request_close:"+server.URL+"/org/repo/pulls/90") || !hasString(open.CleanupPending, cleanupItem) {
-		t.Fatalf("open PR and workspace cleanup were hidden: %+v", open)
-	}
-	partialCleanup := NativeWorkspaceCleanupReceipt{WorkflowRunID: "wf-90", ExecutionID: "exec-90", Repository: c.Identity(), Worktree: workspacePath, Branch: "fixture/90", BaseCommit: commit, WorktreeGone: true, ObservedAt: time.Now().UTC()}
-	partialJSON, _ := json.Marshal(partialCleanup)
-	cleanupRequestID := digestValue(struct{ TaskID, Item string }{"90", cleanupItem})[:32]
-	cleanupPage, queryErr := (query.NewService(store, c.Identity())).ShowNativeTask(ctx, "90")
-	if queryErr != nil {
-		t.Fatal(queryErr)
-	}
-	if err = commands.RecordNativeWorkspaceCleanupProgress(ctx, "90", cleanupRequestID, cleanupPage.Tasks[0].Version, cleanupItem, "operator", partialJSON); err != nil {
-		t.Fatal(err)
-	}
-	var operationPayload []byte
-	if err = store.db.QueryRowContext(ctx, `SELECT payload FROM operations WHERE project_identity=? AND idempotency_key=?`, c.Identity(), "native-cleanup-progress:"+cleanupRequestID).Scan(&operationPayload); err != nil {
-		t.Fatal(err)
-	}
-	var partialOperation executionmodel.OperationRecord
-	if err = json.Unmarshal(operationPayload, &partialOperation); err != nil || partialOperation.Status != "outcome_unknown" || string(partialOperation.Receipt) != string(partialJSON) {
-		t.Fatalf("partial workspace cleanup facts were not retained: %+v err=%v", partialOperation, err)
-	}
-	if len(open.CleanupPending) == 0 || !hasString(open.CleanupPending, cleanupItem) {
-		t.Fatalf("partial cleanup incorrectly settled its pending task item: %+v", open.CleanupPending)
+	if open.Status != "discarded" || len(open.StopPending) != 1 || open.StopPending[0] != "execution_stop_manual:exec-90" {
+		t.Fatalf("discard scheduled destructive resource cleanup: %+v", open)
 	}
 	mergedAt := time.Now().UTC()
 	lateURL := server.URL + "/org/repo/pulls/90"
@@ -1028,7 +1006,7 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	if err != nil {
 		t.Fatal(err)
 	}
-	if receipt.Status != "pending_verification" || !hasString(receipt.CleanupPending, "execution_stop_manual:exec-72") || !hasString(receipt.CleanupPending, "workspace_cleanup:tree-72") {
+	if receipt.Status != "pending_verification" || !hasString(receipt.StopPending, "execution_stop_manual:exec-72") {
 		t.Fatalf("active execution identity or cleanup was lost: %+v", receipt)
 	}
 	page, err = (query.NewService(store, c.Identity())).ShowNativeTask(ctx, "72")

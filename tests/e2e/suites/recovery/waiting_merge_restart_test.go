@@ -16,14 +16,14 @@ func TestWaitingMergeRestart(t *testing.T) {
 	p.StartService()
 	p.Claim("a")
 	before := p.WaitPhase("waiting_pr_merge")
-	p.AssertFullAccess(before)
+	p.AssertFixedNativeLaunch(before)
 	p.Record("before-restart", before)
 	if before.Helper.Sessions != 1 || before.Helper.Dispatches != 1 || before.Helper.PR.State != "open" {
 		t.Fatal("business turn was not completed with open PR")
 	}
 	p.RestartService()
 	after := p.WaitPhase("waiting_pr_merge")
-	p.AssertFullAccess(after)
+	p.AssertFixedNativeLaunch(after)
 	p.Record("after-restart", after)
 	first, second := before.Domain.Executions[0], after.Domain.Executions[0]
 	firstSession, err := testenv.ExecutionSession(first)

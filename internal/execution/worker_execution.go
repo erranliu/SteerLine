@@ -64,7 +64,6 @@ func copyWorkerFlowConfig(c Config) Config {
 	c.ImplementationData = CloneImplementationData(c.ImplementationData)
 	c.ImplementationDisplay = append([]string(nil), c.ImplementationDisplay...)
 	c.PR.Query.Args = append([]string(nil), c.PR.Query.Args...)
-	c.PR.Close.Args = append([]string(nil), c.PR.Close.Args...)
 	return c
 }
 

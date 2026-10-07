@@ -54,7 +54,7 @@ func (c *Config) ResolveIdentity(ctx context.Context) error {
 		return err
 	}
 	if c.PR.Kind == "command" {
-		for _, command := range []*executionbackend.Command{&c.PR.Query, &c.PR.Close} {
+		for _, command := range []*executionbackend.Command{&c.PR.Query} {
 			if command.Executable != "" {
 				_ = execution.ResolveCommand(command)
 			}
@@ -212,7 +212,6 @@ func (c Config) profileCatalog() execution.ProfileCatalog {
 
 	base.Git.Args = append([]string(nil), base.Git.Args...)
 	base.PR.Query.Args = append([]string(nil), base.PR.Query.Args...)
-	base.PR.Close.Args = append([]string(nil), base.PR.Close.Args...)
 	return execution.ProfileCatalog{Base: base, Directory: c.ExecutionDirectory, Profiles: cloneExecutionProfiles(c.ExecutionProfiles), DefaultID: c.DefaultExecutionProfile, Global: c.globalExecution}
 }
 

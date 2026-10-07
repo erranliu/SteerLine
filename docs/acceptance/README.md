@@ -17,6 +17,7 @@
 | [主界面体验](console-primary-workspace.md) | PR #234 的定向/接线/终端检查 | 保留原已验及 L1 超时、补跑的明确边界 |
 | [L1 精简与并行](l1-optimization.md) · [结果索引](l1-optimization-results.json) | 固定 L1 自动验证 | 原 12 组已验；不改写覆盖及性能比较范围 |
 | [固定原生配置](product-simplification-02-configuration/README.md) | PR #236 配置、冻结及真实原生工具验证 | 保留精选原始结果、失败和环境限制，不冒充新的 live 运行 |
+| [资源保留与CLI收口](product-simplification-03-resources-cli/README.md) | PR #238 的配置/资源/控制台及受控重启验证 | 实现与合并前质量修复已复验，原始失败与采样范围分别记录 |
 | [准备工具](worker-readiness.md) | 原生能力与准备行为 | 保留原证据，不从版本查询推定权限或执行成功 |
 | [待补验收](pending-acceptance.md) | 按具体项判断自动/人工 | 仍待补的 race、Orca 等缺口，不因迁移算作通过 |
 | [规划文档检查](roadmap-planning.md) | 文档/脚本自动静态检查 | 原范围保留；不证明实际 DAG 同步 |

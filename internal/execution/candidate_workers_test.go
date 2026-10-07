@@ -34,7 +34,6 @@ func newMCFixture(t *testing.T) mcFixture {
 	c, commit, store := openDAGFixture(t)
 	provider := t.TempDir()
 	c.PR.Query = executionbackend.Command{Executable: os.Args[0], Args: []string{"mc-provider", provider, "{number}"}}
-	c.PR.Close = executionbackend.Command{}
 	setNeutralProfile(t, &c, neutralSettings{Executable: os.Args[0], Model: "candidate-a", ReasoningEffort: "medium"})
 	commands := newTestCommandService(store, c)
 	input := taskBatchFixture(t, c, commit, batchTasks(8, 9), []taskmodel.TaskBatchEdge{{Predecessor: taskmodel.TaskBatchReference{LocalKey: "k8"}, Successor: taskmodel.TaskBatchReference{LocalKey: "k9"}}})
@@ -589,7 +588,7 @@ func TestMC7(t *testing.T) {
 		f.proof(t, second, 82, "open")
 		accepted, err := f.commands.DiscardNativeTask(context.Background(), f.c, "8", newID(), 2, "all candidates", "operator")
 		require(t, err)
-		if accepted.Status != "discarded" || !contains(accepted.CleanupPending, "pull_request_close:https://github.com/owner/repo/pull/83") || !contains(accepted.CleanupPending, "pull_request_close:https://github.com/owner/repo/pull/82") || !contains(accepted.CleanupPending, "execution_stop_manual:"+f.first.ExecutionID) {
+		if accepted.Status != "discarded" || len(accepted.StopPending) != 2 || !contains(accepted.StopPending, "execution_stop_manual:"+f.first.ExecutionID) {
 			t.Fatal("discard lost exited/history PRs or live idle worker resources")
 		}
 		t.Logf("complete discard receipt: %s", mustJSON(accepted))

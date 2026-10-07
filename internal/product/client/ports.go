@@ -18,7 +18,6 @@ type Reader interface {
 	ShowTask(context.Context, string) (api.TaskPage, error)
 	ListTasks(context.Context, string, int) (api.TaskPage, error)
 	TaskGraph(context.Context, string, int) (api.GraphPage, error)
-	QueryTaskGraph(context.Context, api.GraphFilter) (api.GraphPage, error)
 	Conversation(context.Context, api.ConversationFilter, string, int) (api.ConversationPage, error)
 	Body(context.Context, api.ConversationBodyRef, int64, int) (api.ConversationBodyPage, error)
 	Command(context.Context, string) (api.CommandReceipt, error)

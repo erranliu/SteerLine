@@ -31,7 +31,7 @@ func (m *Model) syncAnswer() {
 		return
 	}
 	row := m.selectedRow(m.selected)
-	if row == nil || row.run == nil || candidateIdentity(row.run) != d.identity || row.run.Decision == nil || row.run.Decision.ID != d.decisionID || row.run.Decision.Status != "pending" || row.run.Abandonment != nil || row.run.TaskStatus == "closed" {
+	if row == nil || row.run == nil || candidateIdentity(row.run) != d.identity || row.run.Decision == nil || row.run.Decision.ID != d.decisionID || row.run.Decision.Status != "pending" || row.run.Abandonment != nil || row.run.TaskStatus == "closed" || row.run.TaskStatus == "discarded" {
 		m.leaveAnswer()
 		m.status = "原问题或候选已变化；原草稿保留，请按 a 打开当前问题"
 		return

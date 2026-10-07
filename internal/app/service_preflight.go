@@ -2,7 +2,6 @@ package app
 
 import (
 	"context"
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -83,12 +82,7 @@ func preflightNative(ctx context.Context, c *Config) error {
 		if err = execution.ResolveCommand(&c.PR.Query); err != nil {
 			return err
 		}
-		if c.PR.Close.Executable == "" {
-			return errors.New("native command PR provider requires a close command for discarded task cleanup")
-		}
-		if err = execution.ResolveCommand(&c.PR.Close); err != nil {
-			return err
-		}
+
 	}
 	if err = ensureRunDirOutsideRepository(ctx, *c); err != nil {
 		return err

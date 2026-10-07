@@ -28,7 +28,6 @@ func configuredLifecycleApp(t *testing.T) Config {
 	}
 	input := minimalConfig(repository)
 	input.PR.Query = executionbackend.Command{Executable: "git", Args: []string{"status"}}
-	input.PR.Close = input.PR.Query
 	configPath := filepath.Join(root, "project.json")
 	require(t, os.WriteFile(configPath, projectConfigJSON(t, input), 0600))
 	config, err := LoadConfig(configPath)

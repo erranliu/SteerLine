@@ -97,6 +97,9 @@ func candidateHumanStatus(state projectState, run *api.CandidateSummary) string 
 
 		return "已退出实验"
 	}
+	if run.TaskStatus == "discarded" {
+		return "Task 已丢弃"
+	}
 	if run.TaskStatus == "closed" {
 
 		return "实验已结束"
@@ -137,7 +140,7 @@ func candidateHeadline(state projectState, row *consoleRow) string {
 	}
 	participating, waiting, blocked := 0, 0, 0
 	for _, r := range runs {
-		if r.Abandonment == nil && r.TaskStatus != "closed" && r.FinishTaskStatus != "completed" {
+		if r.Abandonment == nil && r.TaskStatus != "closed" && r.TaskStatus != "discarded" && r.FinishTaskStatus != "completed" {
 			participating++
 		}
 		s := candidateHumanStatus(state, r)
@@ -168,7 +171,7 @@ func renderCandidateOverview(state projectState, row *consoleRow) []string {
 		chips = append(chips, label+" "+candidateHumanStatus(state, r))
 	}
 	controls := "F6/F7 切换并行 · Enter 详情 · d 完整详情"
-	if row.run.Decision != nil && row.run.Decision.Status == "pending" && row.run.Abandonment == nil && row.run.TaskStatus != "closed" && !feedbackInProgress(state, row.run) {
+	if row.run.Decision != nil && row.run.Decision.Status == "pending" && row.run.Abandonment == nil && row.run.TaskStatus != "closed" && row.run.TaskStatus != "discarded" && !feedbackInProgress(state, row.run) {
 		controls = "a/Enter 回复 · F6/F7 切换并行 · d 完整详情"
 	}
 	return []string{strings.Join(chips, " · "), "当前 " + candidateLabel(state, row.run) + " · session " + shortSession(row.run.SessionID), controls}

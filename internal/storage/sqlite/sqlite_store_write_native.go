@@ -291,7 +291,7 @@ func (t *sqliteTx) PutTask(v taskmodel.TaskRecord) error {
 			if v.DiscardedAt == nil || strings.TrimSpace(v.DiscardReason) == "" || strings.TrimSpace(v.DiscardedBy) == "" || !executionbackend.StableExecutionID(v.DiscardRequestID) {
 				return errors.New("discarded native task requires timestamp, reason, requester and request ID")
 			}
-		} else if v.DiscardedAt != nil || v.DiscardReason != "" || v.DiscardedBy != "" || v.DiscardRequestID != "" || len(v.CleanupPending) > 0 {
+		} else if v.DiscardedAt != nil || v.DiscardReason != "" || v.DiscardedBy != "" || v.DiscardRequestID != "" || len(v.StopPending) > 0 {
 			return errors.New("discard audit fields are valid only for discarded native tasks")
 		}
 		if v.Status == "closed" {
@@ -369,7 +369,7 @@ func (t *sqliteTx) UpdateNativeTaskCAS(v taskmodel.TaskRecord, expectedVersion u
 		if count != 0 {
 			return nativeErr("stale_version", "task with a delivery cannot be discarded")
 		}
-	} else if v.DiscardedAt != nil || v.DiscardReason != "" || v.DiscardedBy != "" || v.DiscardRequestID != "" || len(v.CleanupPending) > 0 {
+	} else if v.DiscardedAt != nil || v.DiscardReason != "" || v.DiscardedBy != "" || v.DiscardRequestID != "" || len(v.StopPending) > 0 {
 		return nativeErr("contract_mismatch", "discard audit fields are valid only for discarded tasks")
 	}
 	if v.Status == "closed" {
