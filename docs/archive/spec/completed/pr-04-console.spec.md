@@ -2,7 +2,7 @@
 
 任务 ID：2；任务名称：执行控制台与轮次折叠。
 
-状态：已实现并验收；[验证报告](../../../validation/pr-04c-console.md) 记录 U-A1–U-A15 的自动化、原生 Windows 服务窗口和 local/Orca 会话证据。验收范围为当前 Windows amd64 与 PR 4B 已测的本机 Codex/Orca 目标。依赖：PR 1–3、[4A](pr-04a-execution-backends.spec.md)、[4B](pr-04b-conversation-events.spec.md)。对应 [Plan](pr-04-console.plan.md)。保留原 PR4 文件路径；本文件现在对应交付阶段 4C。
+状态：已实现并验收；[验证报告](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-04c-console.md) 记录 U-A1–U-A15 的自动化、原生 Windows 服务窗口和 local/Orca 会话证据。验收范围为当前 Windows amd64 与 PR 4B 已测的本机 Codex/Orca 目标。依赖：PR 1–3、[4A](pr-04a-execution-backends.spec.md)、[4B](pr-04b-conversation-events.spec.md)。对应 [Plan](pr-04-console.plan.md)。保留原 PR4 文件路径；本文件现在对应交付阶段 4C。
 
 ## 目标
 

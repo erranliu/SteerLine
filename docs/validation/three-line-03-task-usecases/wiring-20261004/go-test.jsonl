@@ -1,9 +1,0 @@
-{"Time":"2026-10-04T20:56:12.1591487+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration"}
-{"Time":"2026-10-04T20:56:12.3642749+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM03TaskWiring"}
-{"Time":"2026-10-04T20:56:12.3647958+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM03TaskWiring","Output":"=== RUN   TestTM03TaskWiring\n"}
-{"Time":"2026-10-04T20:56:17.7882977+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM03TaskWiring","Output":"    task_wiring_test.go:50: injected fixed-document capability accepted bad bytes: contract_mismatch: acceptance_refs cannot add another task's Spec/Plan or another version of the fixed documents\n"}
-{"Time":"2026-10-04T20:56:17.7988617+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM03TaskWiring","Output":"--- FAIL: TestTM03TaskWiring (5.43s)\n"}
-{"Time":"2026-10-04T20:56:17.7988617+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM03TaskWiring","Elapsed":5.43}
-{"Time":"2026-10-04T20:56:17.7988617+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"FAIL\n"}
-{"Time":"2026-10-04T20:56:17.8059371+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"FAIL\tgithub.com/erranliu/SteerLine/internal/steerlineintegration\t5.647s\n"}
-{"Time":"2026-10-04T20:56:17.8059371+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Elapsed":5.647}

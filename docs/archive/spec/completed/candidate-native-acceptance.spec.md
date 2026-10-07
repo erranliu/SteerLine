@@ -4,7 +4,7 @@
 
 ## 范围与前置
 
-硬前置：#38 的实现合入（传递包含 #37/#36）；候选 TUI 使用当前源码和[操作/证据入口](../../../validation/candidate-console/README.md)。#38 CC5 已由用户人工确认通过，不豁免本任务的本机 CN1–CN8 条件。遵守[第一阶段共同约束](../../../spec/phase1-delivery-constraints.md)。复用已有单会话基础证据，交付本机多候选新增的真实竞争、反馈隔离、唯一交付与残留观察证明；不重建五步或 applied 验收矩阵。
+硬前置：#38 的实现合入（传递包含 #37/#36）；候选 TUI 使用当前源码和[操作/证据入口](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/candidate-console/README.md)。#38 CC5 已由用户人工确认通过，不豁免本任务的本机 CN1–CN8 条件。遵守[第一阶段共同约束](../../../spec/phase1-delivery-constraints.md)。复用已有单会话基础证据，交付本机多候选新增的真实竞争、反馈隔离、唯一交付与残留观察证明；不重建五步或 applied 验收矩阵。
 
 当前原生路径只接受worker发布：实际提交/推送/创建PR由原worker完成，中心仅查询/核验和交付。不同方案的权限、发布能力及原配置各自准入；不使用中心代发布fixture或下发中心凭据。场景只调用产品端口，采集/证据适配器核验原生身份，UI/产品结果从规范数据库读取，原始日志只用于诊断及原生证据。
 

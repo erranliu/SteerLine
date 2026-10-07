@@ -22,4 +22,5 @@ Windows 服务由用户从固定入口打开的可见服务窗口承载，窗口
 
 ## 人工候选实验
 
-每 Task 一条主行，主界面按稳定 WorkflowRun ID 选择当前及历史候选；正文、草稿、请求和本次临时阅读上下文隔离到 Task/WorkflowRun/Execution/session。不同方案冻结配置逐个新增，5个只做开始检查，无硬名额/预留/队列/自动补位。合并前不可撤销放弃仅退出实验，worker 停止独立核实；已知合并后禁止放弃。环境 blocker 与原业务 Decision 分别展示，解除后仍需人工重新提交草稿。获胜只依据唯一 TaskDelivery，历史 PR 和落选资源保留定位。当前键位为 F6/F7（或 `{` / `}`）选择、a/Enter 输入、F8 背景/身份、F2 提交、`b` 新增、`z` 放弃；#38 CC5 已由用户人工确认通过，见[人工确认记录](../validation/candidate-interaction-ux/manual-acceptance-20261004.md)。
+每 Task 一条主行，主界面按稳定 WorkflowRun ID 选择当前及历史候选；正文、草稿、请求和本次临时阅读上下文隔离到 Task/WorkflowRun/Execution/session。不同方案冻结配置逐个新增，5个只做开始检查，无硬名额/预留/队列/自动补位。合并前不可撤销放弃仅退出实验，worker 停止独立核实；已知合并后禁止放弃。环境 blocker 与原业务 Decision 分别展示，解除后仍需人工重新提交草稿。获胜只依据唯一 TaskDelivery，历史 PR 和落选资源保留定位。当前键位为 F6/F7（或 `{` / `}`）选择、a/Enter 输入、F8 背景/身份、F2 提交、`b` 新增、`z` 放弃；#38 CC5 已由用户人工确认通过，见[人工确认记录](../validation/manual-acceptance.md)。
+

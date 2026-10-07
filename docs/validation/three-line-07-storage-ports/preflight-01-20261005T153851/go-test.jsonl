@@ -1,8 +1,0 @@
-{"Time":"2026-10-05T15:38:54.1158022+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration"}
-{"Time":"2026-10-05T15:38:54.3127276+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07PersistedExecutionPreflight"}
-{"Time":"2026-10-05T15:38:54.3132528+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07PersistedExecutionPreflight","Output":"=== RUN   TestTM07PersistedExecutionPreflight\n"}
-{"Time":"2026-10-05T15:39:05.6478379+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07PersistedExecutionPreflight","Output":"--- PASS: TestTM07PersistedExecutionPreflight (11.33s)\n"}
-{"Time":"2026-10-05T15:39:05.6483787+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07PersistedExecutionPreflight","Elapsed":11.33}
-{"Time":"2026-10-05T15:39:05.6483787+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"PASS\n"}
-{"Time":"2026-10-05T15:39:05.6564016+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerlineintegration\t11.541s\n"}
-{"Time":"2026-10-05T15:39:05.6564016+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Elapsed":11.541}

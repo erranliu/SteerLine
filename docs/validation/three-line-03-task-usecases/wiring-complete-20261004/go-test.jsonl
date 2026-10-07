@@ -1,9 +1,0 @@
-{"Time":"2026-10-04T20:58:33.9212759+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration"}
-{"Time":"2026-10-04T20:58:34.0910282+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM03TaskWiring"}
-{"Time":"2026-10-04T20:58:34.0910282+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM03TaskWiring","Output":"=== RUN   TestTM03TaskWiring\n"}
-{"Time":"2026-10-04T20:58:59.3909049+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM03TaskWiring","Output":"    task_wiring_test.go:141: open C:\\Users\\lmas1\\AppData\\Local\\Temp\\TestTM03TaskWiring2290047917\\001\\repo\\docs\\spec\\linked.spec.md: The system cannot find the file specified.\n"}
-{"Time":"2026-10-04T20:58:59.4102994+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM03TaskWiring","Output":"--- FAIL: TestTM03TaskWiring (25.32s)\n"}
-{"Time":"2026-10-04T20:58:59.4102994+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM03TaskWiring","Elapsed":25.32}
-{"Time":"2026-10-04T20:58:59.4102994+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"FAIL\n"}
-{"Time":"2026-10-04T20:58:59.4176687+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"FAIL\tgithub.com/erranliu/SteerLine/internal/steerlineintegration\t25.496s\n"}
-{"Time":"2026-10-04T20:58:59.4176687+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Elapsed":25.496}

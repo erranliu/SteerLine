@@ -4,7 +4,7 @@
 
 依据：[Spec](pr-04b-conversation-events.spec.md)。依赖：PR 4A 审核合并。
 
-执行记录（更新于 2026-09-25）：步骤 2–4 已实现基础 DTO、SQLite 事务/正文引用、local JSONL 回放与 Orca terminal observation 降级，并补入公开 Codex app-server 历史采集。local 从原生 thread.started 绑定 session；本机 Orca 通过终端环境中的启动器预建并绑定 session，保留 Orca 的 CODEX_HOME。两条真实多轮来源已验证原生 phase、turn/item ID、结束字段与重放，E-A9 在该版本/目标范围内通过。步骤 5 的真实 Windows 窗口、viewer 与来源换代验收通过（E-A8）。补充的 SQLite 满盘、进程退出、缺失/损坏正文、多页 Unicode final 验收使 E-A5、E-A7 在本机目标范围内通过。新增真实本地 commentary/tool/final、双 session 同尝试换代和 Orca 历史淘汰探针，连同 cursor-zero 修复，使 E-A2、E-A3、E-A6 在测量范围内通过。E-A4 的真实取消、失败和 Orca 宿主等待样本已取得；生产采集器用受控故障注入验证迟到 final 与断连恢复，真实等待事件的持久化缺陷已修复。E-A1–E-A9 在已测本机 Windows/Codex 0.156.1/Orca 1.4.209 范围内通过，远端及其他 agent 的能力继续按报告标记，不外推验收。详见 [验证报告](../../../validation/pr-04b-conversation-events-2026-09-24.md)。
+执行记录（更新于 2026-09-25）：步骤 2–4 已实现基础 DTO、SQLite 事务/正文引用、local JSONL 回放与 Orca terminal observation 降级，并补入公开 Codex app-server 历史采集。local 从原生 thread.started 绑定 session；本机 Orca 通过终端环境中的启动器预建并绑定 session，保留 Orca 的 CODEX_HOME。两条真实多轮来源已验证原生 phase、turn/item ID、结束字段与重放，E-A9 在该版本/目标范围内通过。步骤 5 的真实 Windows 窗口、viewer 与来源换代验收通过（E-A8）。补充的 SQLite 满盘、进程退出、缺失/损坏正文、多页 Unicode final 验收使 E-A5、E-A7 在本机目标范围内通过。新增真实本地 commentary/tool/final、双 session 同尝试换代和 Orca 历史淘汰探针，连同 cursor-zero 修复，使 E-A2、E-A3、E-A6 在测量范围内通过。E-A4 的真实取消、失败和 Orca 宿主等待样本已取得；生产采集器用受控故障注入验证迟到 final 与断连恢复，真实等待事件的持久化缺陷已修复。E-A1–E-A9 在已测本机 Windows/Codex 0.156.1/Orca 1.4.209 范围内通过，远端及其他 agent 的能力继续按报告标记，不外推验收。详见 [验证报告](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-04b-conversation-events-2026-09-24.md)。
 
 ## 实施步骤
 
@@ -29,3 +29,7 @@
 每项验收有证据，精确双链路能力达到约定门槛才宣告目标完成；若只能完成基础输出，则 PR/报告明确列出阻塞与剩余依赖，协调任务不得擅自当作整阶段完成并启动下一阶段。上游补齐后复用同一接口与回放测试。
 
 当前格式的原始日志保留；不支持的旧客户端或状态格式明确拒绝。更换状态目录前须核实外部执行已停止，不能删除 checkpoint 后盲目重新执行。
+
+## 测试计划（2026-10-07 导航维护）
+
+本次仅将已清理的证据导航改为固定 Git 快照，不改原实现契约或追认历史通过。最小范围为文档静态 `doc-links`、`task-identities`、`whitespace`：当前 Windows/Git/Python 3 环境，交付前执行 `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check`；通过条件为无缺失本地链接、任务身份一致及无空白错误。固定历史链接的目标另用 `git cat-file --batch-check` 核对存在；结果见[本次清理验证](../../../validation/README.md#测试计划与本次结果)。不选择 L1/L2/L3、Full 或原生模型组；导航变更不需要这些验证，不新增场景或环境能力。

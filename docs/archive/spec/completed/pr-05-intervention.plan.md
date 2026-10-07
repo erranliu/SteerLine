@@ -4,9 +4,9 @@
 
 依据：[Spec](pr-05-intervention.spec.md)。依赖：PR 2、4A、4B、4C 审核合并；从最新 origin/main 实施，复用已落地的权威存储与接口。
 
-2026-09-28 验收补充：在独立本机 Orca 1.4.209 目标上，经过真实能力认证后只丢弃一次已接受的原续跑 `terminal create` 回执。[H-A15 回执](../../../validation/pr-05-h15-response-loss-2026-09-28.json)显示原 Operation/Attempt/Decision 与执行槽跨服务重启保留，工作树只有原 terminal 和单次标记，无重发或 PR；由于 Orca 回执未带平台 request ID，保持 unknown 待人工核实。后续[同一 SQLite 恢复预览](../../../validation/pr-05-h15-recovery-preview-2026-09-28.json)已证明缺失的当前格式答案可从原 accepted command 按精确身份恢复，但这次故障没有合格的 `retry_run`/`mark_stopped` 动作。该段记录当时的开放状态；后续 H-A6 单字段故障注入、H-A16 真机 TTY 和合格恢复确认均已另行归档，平台自然发生同句柄换代不再作为 #3 关闭条件。
+2026-09-28 验收补充：在独立本机 Orca 1.4.209 目标上，经过真实能力认证后只丢弃一次已接受的原续跑 `terminal create` 回执。[H-A15 回执](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-05-h15-response-loss-2026-09-28.json)显示原 Operation/Attempt/Decision 与执行槽跨服务重启保留，工作树只有原 terminal 和单次标记，无重发或 PR；由于 Orca 回执未带平台 request ID，保持 unknown 待人工核实。后续[同一 SQLite 恢复预览](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-05-h15-recovery-preview-2026-09-28.json)已证明缺失的当前格式答案可从原 accepted command 按精确身份恢复，但这次故障没有合格的 `retry_run`/`mark_stopped` 动作。该段记录当时的开放状态；后续 H-A6 单字段故障注入、H-A16 真机 TTY 和合格恢复确认均已另行归档，平台自然发生同句柄换代不再作为 #3 关闭条件。
 
-2026-09-28 后续：[独立合格恢复现场](../../../validation/pr-05-recovery-confirmation-2026-09-28.json)已完成只读预览、原终端停止核实、确认命令、同 Run/工作树的新 Attempt 和后续同库状态核对。对再次确定性失败的步骤，中心现在保留已结算 `failed/blocked` 并继续在线；CLI 将可选确认依据写入 accepted `retry_run` 命令。此补充更新上段当时尚未取得可执行恢复对象的结论，H-A16 精确 TTY 折叠仍未通过。
+2026-09-28 后续：[独立合格恢复现场](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-05-recovery-confirmation-2026-09-28.json)已完成只读预览、原终端停止核实、确认命令、同 Run/工作树的新 Attempt 和后续同库状态核对。对再次确定性失败的步骤，中心现在保留已结算 `failed/blocked` 并继续在线；CLI 将可选确认依据写入 accepted `retry_run` 命令。此补充更新上段当时尚未取得可执行恢复对象的结论，H-A16 精确 TTY 折叠仍未通过。
 
 ## 实施步骤
 
@@ -41,3 +41,7 @@
 ## 风险与回退
 
 主要风险是把停服维护代码搬入在线服务后清掉其他运行的全局状态，以及把答案保存误认作续跑完成。先建立核心方法与状态转换测试，再接 UI；旧答案路径和旧客户端协议不进入新状态权威。
+
+## 测试计划（2026-10-07 导航维护）
+
+本次仅将已清理的证据导航改为固定 Git 快照，不改原实现契约或追认历史通过。最小范围为文档静态 `doc-links`、`task-identities`、`whitespace`：当前 Windows/Git/Python 3 环境，交付前执行 `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check`；通过条件为无缺失本地链接、任务身份一致及无空白错误。固定历史链接的目标另用 `git cat-file --batch-check` 核对存在；结果见[本次清理验证](../../../validation/README.md#测试计划与本次结果)。不选择 L1/L2/L3、Full 或原生模型组；导航变更不需要这些验证，不新增场景或环境能力。

@@ -1,6 +1,6 @@
 # Plan：测试执行提速
 
-状态：已按 [Spec](test-execution-efficiency.spec.md) 独立实施并记录[验证结果](../../../validation/test-execution-implementation/results.md)；未分配 Task ID、创建中心任务或修改 DAG。本计划依据先期实测选定改法，不包含“先测量再确定优化方向”的实施阶段。
+状态：已按 [Spec](test-execution-efficiency.spec.md) 独立实施并记录[验证结果](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/test-execution-implementation/results.md)；未分配 Task ID、创建中心任务或修改 DAG。本计划依据先期实测选定改法，不包含“先测量再确定优化方向”的实施阶段。
 
 ## 实施清单
 
@@ -19,3 +19,7 @@
 - 生产业务 Go 代码、SQLite 设置、恢复/交付规则及构建策略保持；改动归属为测试工具、夹具、指定测试分层和验证脚本中的测试接线。
 - 一份可重复的测试执行报告：固定源码和环境、串行/三进程命令、分组清单、原始日志、全部终态对照、三次配对及隔离/失败路径结果。
 - #36 及后继任务可沿用同一完整覆盖入口；其原中心 TaskContract 不在本次实现中换绑。本实现没有中心任务或 DAG 边。
+
+## 测试计划（2026-10-07 导航维护）
+
+本次仅将已清理的证据导航改为固定 Git 快照，不改原实现契约或追认历史通过。最小范围为文档静态 `doc-links`、`task-identities`、`whitespace`：当前 Windows/Git/Python 3 环境，交付前执行 `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check`；通过条件为无缺失本地链接、任务身份一致及无空白错误。固定历史链接的目标另用 `git cat-file --batch-check` 核对存在；结果见[本次清理验证](../../../validation/README.md#测试计划与本次结果)。不选择 L1/L2/L3、Full 或原生模型组；导航变更不需要这些验证，不新增场景或环境能力。

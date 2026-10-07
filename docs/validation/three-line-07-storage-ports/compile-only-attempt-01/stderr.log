@@ -1,2 +1,0 @@
-# github.com/erranliu/SteerLine/internal/product/query
-internal\product\query\events.go:73:10: cannot use storageports.ExecutionSnapshot{} (value of struct type ports.ExecutionSnapshot) as ports.WorkflowSnapshot value in return statement

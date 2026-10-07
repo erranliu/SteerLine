@@ -1,8 +1,0 @@
-{"Time":"2026-10-05T17:22:00.3085346+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration"}
-{"Time":"2026-10-05T17:22:00.4975491+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07StorageWiring"}
-{"Time":"2026-10-05T17:22:00.4975491+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07StorageWiring","Output":"=== RUN   TestTM07StorageWiring\n"}
-{"Time":"2026-10-05T17:22:16.7794449+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07StorageWiring","Output":"--- PASS: TestTM07StorageWiring (16.28s)\n"}
-{"Time":"2026-10-05T17:22:16.7851862+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07StorageWiring","Elapsed":16.28}
-{"Time":"2026-10-05T17:22:16.7851862+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"PASS\n"}
-{"Time":"2026-10-05T17:22:16.7904876+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/steerlineintegration\t16.482s\n"}
-{"Time":"2026-10-05T17:22:16.7904876+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Elapsed":16.482}

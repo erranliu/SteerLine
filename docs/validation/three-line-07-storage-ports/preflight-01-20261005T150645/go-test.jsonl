@@ -1,9 +1,0 @@
-{"Time":"2026-10-05T15:06:49.695798+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration"}
-{"Time":"2026-10-05T15:06:49.9062061+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07PersistedExecutionPreflight"}
-{"Time":"2026-10-05T15:06:49.9062061+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07PersistedExecutionPreflight","Output":"=== RUN   TestTM07PersistedExecutionPreflight\n"}
-{"Time":"2026-10-05T15:07:01.0101583+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07PersistedExecutionPreflight","Output":"    storage_snapshot_regressions_test.go:34: fixture did not create a current execution with frozen preparation intent\n"}
-{"Time":"2026-10-05T15:07:01.0236998+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07PersistedExecutionPreflight","Output":"--- FAIL: TestTM07PersistedExecutionPreflight (11.12s)\n"}
-{"Time":"2026-10-05T15:07:01.024405+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Test":"TestTM07PersistedExecutionPreflight","Elapsed":11.12}
-{"Time":"2026-10-05T15:07:01.024405+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"FAIL\n"}
-{"Time":"2026-10-05T15:07:01.0329636+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Output":"FAIL\tgithub.com/erranliu/SteerLine/internal/steerlineintegration\t11.337s\n"}
-{"Time":"2026-10-05T15:07:01.0329636+08:00","Action":"fail","Package":"github.com/erranliu/SteerLine/internal/steerlineintegration","Elapsed":11.338}

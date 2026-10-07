@@ -1,7 +1,0 @@
-test feedback: failed (14.882s wall); report docs/validation/three-line-09-testkit-integration/runner/commit-bound-01/summary.json
-failed test: github.com/erranliu/SteerLine/internal/testkit/boundary TestTM04ExecutionBoundary
-failed test: github.com/erranliu/SteerLine/internal/testkit/boundary TestTM04ExecutionBoundary/repository_all_tags_windows_linux
-failed test: github.com/erranliu/SteerLine/internal/testkit/boundary TestTM08AppHostBoundary
-failed package: github.com/erranliu/SteerLine/internal/testkit/boundary
-failed package: github.com/erranliu/SteerLine/internal/testkit/boundary/e2e
-exit status 1

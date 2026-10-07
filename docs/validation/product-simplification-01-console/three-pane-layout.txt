@@ -1,5 +1,0 @@
---- FAIL: TestNarrowConsoleKeepsDetailAndSelectionEntryReachable (0.00s)
-    console_test.go:650: Tab did not focus candidate detail
-FAIL
-FAIL	github.com/erranliu/SteerLine/internal/console	1.174s
-FAIL

@@ -27,4 +27,8 @@ CX1 用传递依赖/调用审查；CX2 用两轮和答案/旧回执；CX3 用人
 
 ## 实施记录
 
-最终所有者、迁移测试路径、实际最小验证及基线剩余项见[验收记录](../../../validation/execution-isolation-04-codex/README.md)。
+最终所有者、迁移测试路径、实际最小验证及基线剩余项见[验收记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/execution-isolation-04-codex/README.md)。
+
+## 测试计划（2026-10-07 导航维护）
+
+本次仅将已清理的证据导航改为固定 Git 快照，不改原实现契约或追认历史通过。最小范围为文档静态 `doc-links`、`task-identities`、`whitespace`：当前 Windows/Git/Python 3 环境，交付前执行 `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check`；通过条件为无缺失本地链接、任务身份一致及无空白错误。固定历史链接的目标另用 `git cat-file --batch-check` 核对存在；结果见[本次清理验证](../../../validation/README.md#测试计划与本次结果)。不选择 L1/L2/L3、Full 或原生模型组；导航变更不需要这些验证，不新增场景或环境能力。

@@ -1,8 +1,0 @@
-{"Time":"2026-10-06T18:33:04.673106+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery"}
-{"Time":"2026-10-06T18:33:05.4016309+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery"}
-{"Time":"2026-10-06T18:33:05.4021574+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery","Output":"=== RUN   TestBasicDelivery\n"}
-{"Time":"2026-10-06T18:34:58.1958599+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery","Output":"--- PASS: TestBasicDelivery (112.80s)\n"}
-{"Time":"2026-10-06T18:34:58.1963687+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Test":"TestBasicDelivery","Elapsed":112.8}
-{"Time":"2026-10-06T18:34:58.1963687+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Output":"PASS\n"}
-{"Time":"2026-10-06T18:34:58.2037995+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Output":"ok  \tgithub.com/erranliu/SteerLine/tests/e2e/suites/delivery\t113.532s\n"}
-{"Time":"2026-10-06T18:34:58.2037995+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/tests/e2e/suites/delivery","Elapsed":113.532}

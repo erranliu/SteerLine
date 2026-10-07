@@ -44,8 +44,12 @@ PR 附本阶段消费者/所有者和删除清单、版本变化、旧到新测�
 
 ## 交接
 
-2026-10-02 实际验收：clean `755885d52f23c1bb98c4b8c4e7e9cdaf6b97454b` 在完全访问环境命中 core 6、rules 90、targeted 22，全部通过、无跳过。新增中心命名入口复用资源候选断言，并验证丢失准备记录及启动缺目录的写入前拒绝；未替换或豁免原组合。复审问题、失败诊断及最终报告见[验收记录](../../../validation/core-decoupling-05-composition/README.md)。
+2026-10-02 实际验收：clean `755885d52f23c1bb98c4b8c4e7e9cdaf6b97454b` 在完全访问环境命中 core 6、rules 90、targeted 22，全部通过、无跳过。新增中心命名入口复用资源候选断言，并验证丢失准备记录及启动缺目录的写入前拒绝；未替换或豁免原组合。复审问题、失败诊断及最终报告见[验收记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/core-decoupling-05-composition/README.md)。
 
 #67 获得生产清零及可独立构造应用的目录、工厂和通用端口，最终只验守卫与整理残留测试。
 
 格式改变明确更新版本并拒绝旧开发格式；不加迁移/双写/fallback。保留原请求、资源身份、深复制及单写者事务。PR 和验证记录使用实际行为与支持限制，不能把结构迁移算作 remote 权限证据补齐。
+
+## 测试计划（2026-10-07 导航维护）
+
+本次仅将已清理的证据导航改为固定 Git 快照，不改原实现契约或追认历史通过。最小范围为文档静态 `doc-links`、`task-identities`、`whitespace`：当前 Windows/Git/Python 3 环境，交付前执行 `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check`；通过条件为无缺失本地链接、任务身份一致及无空白错误。固定历史链接的目标另用 `git cat-file --batch-check` 核对存在；结果见[本次清理验证](../../../validation/README.md#测试计划与本次结果)。不选择 L1/L2/L3、Full 或原生模型组；导航变更不需要这些验证，不新增场景或环境能力。

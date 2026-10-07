@@ -34,7 +34,7 @@
 
 ## 自查与交付
 
-逐项对照 Spec 检查 API 字段、提交屏障、同快照、身份/版本和唯一结果；确认迁出路径与无消费者桥接删除。检查所有目标命令命中、回执和测试 summary 后，汇总 [验证证据](../../../validation/three-line-05-product-console/README.md)、提交并创建一个实现 PR。
+逐项对照 Spec 检查 API 字段、提交屏障、同快照、身份/版本和唯一结果；确认迁出路径与无消费者桥接删除。检查所有目标命令命中、回执和测试 summary 后，汇总 [验证证据](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/three-line-05-product-console/README.md)、提交并创建一个实现 PR。
 
 ## 协调复审集成与追加验证
 

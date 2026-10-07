@@ -4,3 +4,6 @@
 *.test.exe
 coverage.out
 __pycache__/
+
+# Raw validation runs belong in temporary directories; root summaries remain trackable.
+/docs/validation/*/

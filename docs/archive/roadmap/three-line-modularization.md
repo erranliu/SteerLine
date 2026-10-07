@@ -1,12 +1,12 @@
 # 任务执行控制台解耦与目录整理 Roadmap
 
-> 已完成规划归档：#73–#82 已全部合入，最终收口为 PR227。以下阶段安排与状态描述保留原规划时点；当前模块与所有权见[代码架构](../../architecture/current-code-architecture.md)，交付证据见[最终清理](../../validation/three-line-10-independence-cleanup/README.md)。
+> 已完成规划归档：#73–#82 已全部合入，最终收口为 PR227。以下阶段安排与状态描述保留原规划时点；当前模块与所有权见[代码架构](../../architecture/current-code-architecture.md)，交付证据见[最终清理](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/three-line-10-independence-cleanup/README.md)。
 
 目标标识：`TASK-EXECUTION-CONSOLE-DECOUPLING`。
 
 本目标把任务、执行、控制台划为三个可以独立开发的业务边界，并把包与目录整理纳入同一轮交付。任务线负责提供与挑选工作；执行线负责容量、派发、交付核验和结项，向任务线提交执行结果；控制台只通过产品契约查询与操作。三条线的日常功能改动应无需修改另外两条线的内部实现，共同业务语义变化通过明确契约协同。
 
-本文维护 #77、#79–#82 的剩余实现安排；#76 与 #78 已经交付。纯类型、任务选择/结果边界与 task 应用已具备；#76 的固定文档小端口及公共构造接线按需查[现行接口交接](../../validation/three-line-03-task-usecases/interface-handoff.md)。M04–M10 只定位剩余阶段；任务身份与活动规划遵循 [Roadmap 目录约定](../../roadmap/readme.md)，正式执行以固定 Spec/Plan 和中心 DAG 为准。
+本文维护 #77、#79–#82 的剩余实现安排；#76 与 #78 已经交付。纯类型、任务选择/结果边界与 task 应用已具备；#76 的固定文档小端口及公共构造接线按需查[现行接口交接](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/three-line-03-task-usecases/interface-handoff.md)。M04–M10 只定位剩余阶段；任务身份与活动规划遵循 [Roadmap 目录约定](../../roadmap/readme.md)，正式执行以固定 Spec/Plan 和中心 DAG 为准。
 
 本目标服务于 [产品愿景](../../roadmap/product-vision.md) 的两个近期交付节点：一阶段加强同任务分叉候选执行与唯一交付，二阶段增加受控规划主agent与原生UI。三条开发线是当前解耦边界，不把未来全部业务强行归入这三个包。
 

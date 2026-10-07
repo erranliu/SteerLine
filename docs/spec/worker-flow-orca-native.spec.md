@@ -39,7 +39,7 @@ Orca 版本匹配文档 `references/low-level-topology.md` 明确：`dispatch --
 
 ### 3.1 环境、资料和记录
 
-实验日期为 2026-09-29，环境为 Windows、本机 Orca 1.4.210、后续 Codex CLI 0.159.0，隔离仓库为 `C:/project/SteerlineTest`。完整汇总及各轮身份见 [实验记录 JSON](../validation/worker-flow/orca-local-dispatch-boundary-2026-09-29.json)。该文件为实验观察汇总，不是完整原始命令日志。
+实验日期为 2026-09-29，环境为 Windows、本机 Orca 1.4.210、后续 Codex CLI 0.159.0，隔离仓库为 `C:/project/SteerlineTest`。完整汇总及各轮身份见 [实验记录 JSON](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/worker-flow/orca-local-dispatch-boundary-2026-09-29.json)。该文件为实验观察汇总，不是完整原始命令日志。
 
 已读取安装版本自带的 `orca skills get orchestration` 及 `references/coordinator-loop.md`、`references/worker-contract.md`、`references/messaging-and-gates.md`、`references/recovery-and-cleanup.md`、`references/low-level-topology.md`，并对照 CLI help。公开定位资料为 [Orca orchestration guide](https://github.com/stablyai/orca/blob/main/skill-guides/orchestration.md) 和 [Orca #22825](https://github.com/stablyai/orca/issues/22825)。公开 main 与本机安装版本可能不同，接入命令以实际运行版本能力为准。
 
@@ -55,7 +55,7 @@ Orca 版本匹配文档 `references/low-level-topology.md` 明确：`dispatch --
 | 真实 Codex 原生问答 | 低层 dispatch 注入 preamble；Codex 发出 ask；协调端 reply 原 message ID；Codex 真实发送成功 worker_done，Task/Dispatch completed | 已证明当前活跃 Dispatch 的原生问答及结算 |
 | 真实 Codex 同会话续聊 | 同一 terminal handle、同一 incarnation 上新建 Task/Dispatch；第二轮未再次提供第一轮 token，Codex 仍复述 token 并再次发送成功 worker_done；旧 mailbox 拒绝发送 | 已证明低层路径的结算后上下文延续；没有证明 supervised 资源接管 |
 | Orca agent 启动器 | `worktree create --agent codex` 返回 agent handle；首次注入为 `inject_rejected/no_agent_detected`，观察后同一 terminal 注入成功；Codex 发出包含 `AGENT_FIRST_OK` 的真实 worker_done，无命令审批阻断 | 已证明可由 Orca 选择 Codex 启动方式；创建回执与屏幕提示符不等于 agent 已可注入 |
-| agent 启动器同 worker 双轮 | 原生启动 Codex；首轮注入未识别后在同一 terminal 重试成功，worker_done 结算；第二轮新 Task/Dispatch 不再提供私有 token，Codex 从原会话复述并再次 worker_done | [连续对话记录](../validation/worker-flow/orca-native-continuity-2026-09-29.json)证明所选 agent 启动路径可跨结算复用同一 terminal/incarnation；网络波动和首次未识别仍需处理 |
+| agent 启动器同 worker 双轮 | 原生启动 Codex；首轮注入未识别后在同一 terminal 重试成功，worker_done 结算；第二轮新 Task/Dispatch 不再提供私有 token，Codex 从原会话复述并再次 worker_done | [连续对话记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/worker-flow/orca-native-continuity-2026-09-29.json)证明所选 agent 启动路径可跨结算复用同一 terminal/incarnation；网络波动和首次未识别仍需处理 |
 | 清理回执 | unsupervised release 返回 `no_owned_resource`；显式关闭实验 terminal 成功。worktree rm 曾丢失响应，后续 Orca selector_not_found 且 Git 清单已移除 | 清理必须按实际资源事实对账，不能凭连接异常重做破坏性动作 |
 
 用户明确本机未安装可用 Claude 后，后续实验均只使用 Codex。早先尝试 Claude 的失败记录保留为历史，不属于第二 agent 验收。
@@ -81,7 +81,7 @@ Orca 版本匹配文档 `references/low-level-topology.md` 明确：`dispatch --
 
 ### 3.4 尚未验证
 
-SteerLine 中心已有隔离 SQLite／假 Orca 的 ask、重启 reply、worker_done、再建 Task/Dispatch 回归。随后[真实中心探针](../validation/worker-flow/orca-native-center-live-2026-09-29.json)在同一 Execution 中完成原生 ask、中心重启、原问题 reply、第一轮 worker_done 和第二轮记忆验证；探针通过 Service 内部答案路径，没有覆盖公共 UI/CLI。真实 PR 交付、消息与操作回执丢失后的恢复、第二种真实 agent、完整 transcript 可用性、Orca runtime 重启后原会话恢复仍未验证，也未证明首次 `input_accepted` 本身可推出 `turn_started`。这些差异必须出现在实施验收结果中。
+SteerLine 中心已有隔离 SQLite／假 Orca 的 ask、重启 reply、worker_done、再建 Task/Dispatch 回归。随后[真实中心探针](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/worker-flow/orca-native-center-live-2026-09-29.json)在同一 Execution 中完成原生 ask、中心重启、原问题 reply、第一轮 worker_done 和第二轮记忆验证；探针通过 Service 内部答案路径，没有覆盖公共 UI/CLI。真实 PR 交付、消息与操作回执丢失后的恢复、第二种真实 agent、完整 transcript 可用性、Orca runtime 重启后原会话恢复仍未验证，也未证明首次 `input_accepted` 本身可推出 `turn_started`。这些差异必须出现在实施验收结果中。
 
 ## 4. 配置、准备与身份
 

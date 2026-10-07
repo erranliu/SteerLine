@@ -1,3 +1,0 @@
-GOOS=linux; go test -c -o <unique TEMP binary> ./internal/steerline
-result: exit 0; compilation only, not Linux runtime evidence
-sha256: 83212F53723FE97E7399F30DA1350326EF5BEFB8AD2ECB2E2413D45CFEB519AD

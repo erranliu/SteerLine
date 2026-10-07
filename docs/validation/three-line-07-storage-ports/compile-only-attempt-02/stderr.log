@@ -1,4 +1,0 @@
-# github.com/erranliu/SteerLine/internal/storage/sqlite
-internal\storage\sqlite\activity_view.go:38:90: too many arguments in call to readEvents
-	have (context.Context, graphSnapshotQuery, string, string, string, string, int64, int, int)
-	want (context.Context, QueryContext, string, string, string, int64, int, int)

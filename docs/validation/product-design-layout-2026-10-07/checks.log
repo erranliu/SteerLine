@@ -1,7 +1,0 @@
-2026-10-07 Asia/Shanghai; source baseline 9b648c69
-Markdown: 364 files, 2349 local navigation links, 0 errors
-checked 84 identity files; next ID: 84
-git diff --check: pass
-format-sources: SQLite 14; checkpoint/runtime 18; FixedExecutionProfile 6; ConversationEvent 2; protocol worker-flow-v1; global config 2; matched source declarations
-evidence-integrity: 6802 original non-Markdown evidence/identity/prototype files byte-identical after path mapping
-layout: docs root README.md, architecture.md, testing.md; phase-2 removed; #40/#41 absent from roadmap; Go change limited to documentation comment

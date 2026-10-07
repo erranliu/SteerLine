@@ -1,6 +1,6 @@
 # Spec：分级测试与共享 E2E 环境的最小实现
 
-目标：`TIERED-E2E-TESTING`。状态：已实现并通过最小验证，待实现 PR 评审；未分配 Task ID、创建中心任务或绑定现有任务。日期：2026-10-01。配套 [Plan](tiered-e2e-testing.plan.md)。本期交付一个实现 PR，实现与证据见[验证记录](../../../validation/tiered-e2e-testing/README.md)。
+目标：`TIERED-E2E-TESTING`。状态：已实现并通过最小验证，待实现 PR 评审；未分配 Task ID、创建中心任务或绑定现有任务。日期：2026-10-01。配套 [Plan](tiered-e2e-testing.plan.md)。本期交付一个实现 PR，实现与证据见[验证记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/tiered-e2e-testing/README.md)。
 
 ## 1. 目标与首期范围
 

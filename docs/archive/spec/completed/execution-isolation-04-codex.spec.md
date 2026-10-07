@@ -53,4 +53,4 @@ Windows Orca 当前有/无 model 均受管，model/effort 可分别省略；保�
 
 ## 实施记录
 
-最终所有者、迁移测试路径、实际最小验证及基线剩余项见[验收记录](../../../validation/execution-isolation-04-codex/README.md)。
+最终所有者、迁移测试路径、实际最小验证及基线剩余项见[验收记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/execution-isolation-04-codex/README.md)。

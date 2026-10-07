@@ -1,6 +1,6 @@
 # Conversation events v2
 
-Status: the persisted read model now has verified native turn/phase/final/replay support for Windows local Codex and explicitly bound local Orca Codex sessions. Other targets retain their reported limits; see the [capability report](../validation/pr-04b-conversation-capabilities-2026-09-24.json) and [acceptance report](../validation/pr-04b-conversation-events-2026-09-24.md).
+Status: the persisted read model now has verified native turn/phase/final/replay support for Windows local Codex and explicitly bound local Orca Codex sessions. Other targets retain their reported limits; see the [capability report](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-04b-conversation-capabilities-2026-09-24.json) and [acceptance report](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-04b-conversation-events-2026-09-24.md).
 
 ## Model
 

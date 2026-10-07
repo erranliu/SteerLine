@@ -2,7 +2,7 @@
 
 目标：`WORKER-ENVIRONMENT-READINESS`。配套 [Plan](worker-environment-readiness.plan.md)。状态：原范围已交付，真实服务闭环及定向验收通过。日期：2026-09-30。原范围由 PR160 合入；后续项目策略移交由独立 [#59](execution-isolation-06-policy.spec.md) 交付，不是原范围的反向前置。
 
-原实现完成冻结权限、原会话探针及宿主恢复，证据见[验收记录](../../../validation/worker-environment-readiness/README.md)。当前准备/派发/观察归 `orca_worker_prepare.go`、`orca_worker_dispatch.go`、`orca_worker_observation.go` 和 `worker_environment.go`。#57/#58 迁移既有实现所有者，#59 将权限来源改为项目策略；原验收可供继承但不证明新项目策略接线已经完成。
+原实现完成冻结权限、原会话探针及宿主恢复，证据见[验收记录](../../../validation/worker-readiness.md)。当前准备/派发/观察归 `orca_worker_prepare.go`、`orca_worker_dispatch.go`、`orca_worker_observation.go` 和 `worker_environment.go`。#57/#58 迁移既有实现所有者，#59 将权限来源改为项目策略；原验收可供继承但不证明新项目策略接线已经完成。
 
 ## 1. 问题与目标
 

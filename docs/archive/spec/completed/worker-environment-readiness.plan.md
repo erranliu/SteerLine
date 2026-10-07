@@ -2,7 +2,7 @@
 
 目标：`WORKER-ENVIRONMENT-READINESS`。唯一执行依据：[Spec](worker-environment-readiness.spec.md)。状态：原范围已交付，真实服务闭环及定向验收通过。日期：2026-09-30。原实现 PR160 已合入；以下保留原实施/验证及后续迁移交接，项目策略接线由 [#59](execution-isolation-06-policy.spec.md) 独立交付。
 
-原范围完成冻结权限、原会话探针和宿主恢复，见[验收记录](../../../validation/worker-environment-readiness/README.md)。当前入口包括 worker_environment 与 Orca prepare/dispatch/observation。#57/#58 承接平台操作与中心准备规则，#59 改变授权来源，不把已交付能力重新排成等待 #59 的任务。
+原范围完成冻结权限、原会话探针和宿主恢复，见[验收记录](../../../validation/worker-readiness.md)。当前入口包括 worker_environment 与 Orca prepare/dispatch/observation。#57/#58 承接平台操作与中心准备规则，#59 改变授权来源，不把已交付能力重新排成等待 #59 的任务。
 
 ## 1. 核实接口并收敛证据
 
@@ -86,3 +86,7 @@ go run ./cmd/test-feedback -quick
 更新 [Spec 索引](../../../spec/README.md)、`docs/data-contract.md`、`docs/decisions.md`、相关运行配置示例及原生 Orca 实际支持说明。明确 Windows sandbox 必需配置、宿主操作入口、未知轮次不能盲目重派，以及不自动恢复已丢失会话。
 
 完成条件：ER1–ER4、一次真实闭环、相关快速回归及文档一致性可审阅；平台工具证据缺失或成功链路未验证时不能标记实施完成。纯 Spec/Plan 编写仅检查链接、格式和语义；本 Plan 不授权生产部署、生产数据库更改、现存任务 101 迁移或代用户合并 PR。
+
+## 测试计划（2026-10-07 导航维护）
+
+本次仅将已清理的证据导航改为固定 Git 快照，不改原实现契约或追认历史通过。最小范围为文档静态 `doc-links`、`task-identities`、`whitespace`：当前 Windows/Git/Python 3 环境，交付前执行 `python scripts/check_doc_links.py`、`python scripts/roadmap_task_id.py check`、`git diff --check`；通过条件为无缺失本地链接、任务身份一致及无空白错误。固定历史链接的目标另用 `git cat-file --batch-check` 核对存在；结果见[本次清理验证](../../../validation/README.md#测试计划与本次结果)。不选择 L1/L2/L3、Full 或原生模型组；导航变更不需要这些验证，不新增场景或环境能力。

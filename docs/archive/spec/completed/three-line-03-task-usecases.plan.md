@@ -38,6 +38,6 @@
 
 ## 实际构造与验证范围
 
-最小任务输入/文档端口、Commands 的任务事务投影、TaskService 固定文件核验能力及 #76 共同接线要求见 [interface-handoff](../../../validation/three-line-03-task-usecases/interface-handoff.md)。当前创建/追加依赖生产路径已经直接消费 task.Commands；已迁的 Ready/Fixed/Claim/Declare/Intent/Discard 唯一实现保持。领取仍保留主干实际核验消费者，#76 在迁消费方端口时按交接改为 VerifyContractFiles 并删旧函数；不保留已删函数调用、不用默认 no-op 核验，#75 不重写共同执行文件。
+最小任务输入/文档端口、Commands 的任务事务投影、TaskService 固定文件核验能力及 #76 共同接线要求见 [interface-handoff](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/three-line-03-task-usecases/interface-handoff.md)。当前创建/追加依赖生产路径已经直接消费 task.Commands；已迁的 Ready/Fixed/Claim/Declare/Intent/Discard 唯一实现保持。领取仍保留主干实际核验消费者，#76 在迁消费方端口时按交接改为 VerifyContractFiles 并删旧函数；不保留已删函数调用、不用默认 no-op 核验，#75 不重写共同执行文件。
 
 Task 单元环境使用窄端口以保持全 OS/tag 的 task 纯依赖守卫；实际 Git/SQLite/CLI 行为在外层事务与 wiring 测试验证。无新增 E2E 环境/场景能力。Windows/Linux 显式 `go list -deps -json ./internal/task` 和 `go build ./cmd/steerline ./internal/task` 检查直接/传递依赖与可构建性，产物在本目录 task-deps-{windows,linux}.json；跨系统仅为静态/编译证据。固定 L1 同时覆盖既有 source 负向注入和 Windows/Linux 生产图，不改 coreboundary 守卫或 scoped 公共选择。
