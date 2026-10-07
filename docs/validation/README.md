@@ -5,6 +5,7 @@
 | 内容 | 入口 |
 | --- | --- |
 | 最近全项目基线及逐次源码、命令、哈希 | [2026-10-07 基线](latest-baseline.md) · [结果索引](baseline-results.json) |
+| 精简固定 L1 与三个独立进程并行 | [L1 优化验证](l1-optimization.md) · [结果索引](l1-optimization-results.json) |
 | 尚未闭合的原生验收及已有通过边界 | [待补验收](pending-acceptance.md) |
 | #39 本机多候选交付与恢复 | [本机候选验收](candidate-acceptance.md) |
 | #38 CC5 用户人工确认 | [人工确认原文](manual-acceptance.md) |

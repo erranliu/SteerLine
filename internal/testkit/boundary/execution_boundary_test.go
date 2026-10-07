@@ -6,9 +6,30 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
+
+// The real repository is read-only for these guards. Temporary negative
+// fixtures still call Check/ScanSource separately, so they cannot reuse this.
+var repositoryBoundaryOnce sync.Once
+var repositoryBoundaryReport Report
+var repositoryBoundaryError error
+
+func checkRepositoryBoundary(t *testing.T) Report {
+	t.Helper()
+	repositoryBoundaryOnce.Do(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+		defer cancel()
+		_, file, _, _ := runtime.Caller(0)
+		repositoryBoundaryReport, repositoryBoundaryError = Check(ctx, filepath.Clean(filepath.Join(filepath.Dir(file), "../../..")))
+	})
+	if repositoryBoundaryError != nil {
+		t.Fatal(repositoryBoundaryError)
+	}
+	return repositoryBoundaryReport
+}
 
 func TestTM04ExecutionBoundary(t *testing.T) {
 	for _, fixture := range []struct{ name, path, source, helper string }{
@@ -48,14 +69,7 @@ func TestTM04ExecutionBoundary(t *testing.T) {
 		})
 	}
 	t.Run("repository_all_tags_windows_linux", func(t *testing.T) {
-		_, file, _, ok := runtime.Caller(0)
-		if !ok {
-			t.Fatal("source location unavailable")
-		}
-		report, err := Check(context.Background(), filepath.Clean(filepath.Join(filepath.Dir(file), "../../..")))
-		if err != nil {
-			t.Fatal(err)
-		}
+		report := checkRepositoryBoundary(t)
 		if report.ExecutionFiles == 0 || report.Dependencies["windows"] == 0 || report.Dependencies["linux"] == 0 {
 			t.Fatalf("empty execution boundary coverage: %+v", report)
 		}
@@ -85,14 +99,7 @@ func TestTM08AppHostBoundary(t *testing.T) {
 		}
 		t.Fatalf("host closure skipped its execution-to-workspace dependency: got %v, want %s", found, want)
 	})
-	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-	defer cancel()
-	_, file, _, _ := runtime.Caller(0)
-	root := filepath.Clean(filepath.Join(filepath.Dir(file), "../../.."))
-	report, err := Check(ctx, root)
-	if err != nil {
-		t.Fatal(err)
-	}
+	report := checkRepositoryBoundary(t)
 	for _, violation := range report.Violations {
 		if strings.Contains(violation, "app host forbidden dependency") {
 			t.Fatalf("host implementation crossed its injected boundary: %s", violation)
