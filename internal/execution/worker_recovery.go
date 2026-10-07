@@ -5,10 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	"os"
 	"strings"
 
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
@@ -43,17 +41,17 @@ func (s *Service) hasUnknownWorkerOperation(run *reconstructiontypes.RunView) bo
 // write. The prior process and session stay on the retired Attempt; its
 // process receipt and execution binding stay at their original paths.
 func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *reconstructiontypes.RunView, mode string) error {
-	if mode == "" {
-		mode = "continue"
-	}
-	if mode != "continue" && mode != "new_session" {
-		return errors.New("choose the original session or explicitly choose a new session")
+	if mode != "continue" {
+		return errors.New("recovery requires explicit continuation of the original session")
 	}
 	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {
 		return err
 	}
 	workflow, execution, old := fixed.workflow, fixed.execution, fixed.attempt
+	if execution.SessionID == "" {
+		return errors.New("the original session identity is unavailable; handle the original execution manually")
+	}
 	if !execution.RecoveryRequired ||
 		(execution.RecoveryState != "interrupted" && execution.RecoveryState != "completed") ||
 		execution.Process == nil || s.runtime.ProcessHost.InspectProcess(execution.Process) != "process absent" {
@@ -78,8 +76,8 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *reconstruc
 	if !recovery.ManagedProcess || !recovery.ProcessAbsent {
 		return errors.New("the original process tree is not proven to be service managed")
 	}
-	if mode == "continue" && (!recovery.SessionAvailable || execution.SessionID == "") {
-		return errors.New("the original session identity is unavailable; choose a new session")
+	if !recovery.SessionAvailable || execution.SessionID == "" {
+		return errors.New("the original session identity is unavailable; handle the original execution manually")
 	}
 	if owned := s.ownedProcesses[run.RunID]; owned != nil {
 		if owned.Identity() != *execution.Process {
@@ -121,29 +119,22 @@ func (s *Service) beginLocalRecoveryAttempt(ctx context.Context, run *reconstruc
 	execution.LogPath = nil
 	execution.Status, execution.LastTurnOutcome, execution.RecoveryState = "pending", "", "resuming"
 	execution.RecoveryRequired = false
-	if mode == "continue" {
-		execution.Generation = newID()
-		execution.SessionID = originalSession
-	} else {
-		execution.Generation = ""
-		execution.SessionID = ""
-	}
+	execution.Generation = newID()
+	execution.SessionID = originalSession
 	execution.UpdatedAt = created
 	s.refreshRun(run)
-	if mode == "continue" {
-		workflow, execution = s.workflowRecords(run)
-		attempt := s.workflowAttempt(run, run.AttemptID)
-		next, err := s.lifecycleSnapshot(run, workflow, execution, attempt, nil)
-		if err != nil {
-			return err
-		}
-		seed, err := lifecycle.BindRecovery(ctx, previous, next)
-		if err != nil {
-			return err
-		}
-		if err := putImplementationEnvelope(execution, seed); err != nil {
-			return err
-		}
+	workflow, execution = s.workflowRecords(run)
+	attempt := s.workflowAttempt(run, run.AttemptID)
+	next, err := s.lifecycleSnapshot(run, workflow, execution, attempt, nil)
+	if err != nil {
+		return err
+	}
+	seed, err := lifecycle.BindRecovery(ctx, previous, next)
+	if err != nil {
+		return err
+	}
+	if err := putImplementationEnvelope(execution, seed); err != nil {
+		return err
 	}
 	return s.commitWorker(run)
 }
@@ -205,101 +196,6 @@ func (s *Service) refreshSavedRecoveryDecision(run *reconstructiontypes.RunView,
 		record.RecoveryState = execution.RecoveryState
 	}
 	return s.commitWorker(run)
-}
-
-func (s *Service) startManuallyRecoveredInitialWorker(ctx context.Context, run *reconstructiontypes.RunView, answer executionmodel.DecisionAnswer, commandID string) error {
-	if answer.OptionID != "continue" || run.Decision == nil || run.Decision.Request.QuestionRoute != nil {
-		return errors.New("initial local execution requires an explicit continue decision")
-	}
-	fixed, err := s.workerFlowContext(run)
-	if err != nil {
-		return err
-	}
-	execution := fixed.execution
-	if !execution.RecoveryRequired || execution.Process != nil || execution.PendingCommandID != "" || execution.CurrentTurnID != "" ||
-		execution.TurnNumber != 0 && run.DomainAttemptNumber <= 1 || run.WorkspaceIntent == nil {
-		return errors.New("initial worker preparation changed during recovery")
-	}
-	if s.hasUnknownWorkerOperation(run) {
-		return s.waitWorkerFlow(run, "An earlier external operation has an unknown outcome; reconcile it before continuing")
-	}
-	task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
-	if task == nil {
-		return errors.New("fixed task is unavailable")
-	}
-	contract, err := s.commandStore.TaskContract(ctx, fixed.config.identity, *task)
-	if err != nil {
-		return err
-	}
-	prompt, err := Prompt(*task, contract, run.RunID, fixed.config.PublicationPolicy)
-	if err != nil {
-		return err
-	}
-	prompt += "\n\nThe service reopened before the first worker turn. Inspect the current worktree before acting.\n\n" + workerFeedbackText(answer, run.Decision.Request)
-	key := "worker-workspace:" + execution.ExecutionID
-	var preparation *executionmodel.OperationRecord
-	for i := range s.domain.Operations {
-		if s.domain.Operations[i].IdempotencyKey == key {
-			preparation = &s.domain.Operations[i]
-			break
-		}
-	}
-	if preparation != nil && preparation.Status != "confirmed" {
-		return s.waitWorkerFlow(run, "Original workspace preparation has an unknown outcome; reconcile it before continuing")
-	}
-	if execution.Workspace.Worktree == "" {
-		if preparation == nil {
-			opID, err := s.startWorkerOperation(run, "prepare_workspace", key, struct {
-				WorkflowRunID string                           `json:"workflow_run_id"`
-				ExecutionID   string                           `json:"execution_id"`
-				Workspace     executionbackend.WorkspaceIntent `json:"workspace"`
-			}{run.RunID, execution.ExecutionID, *run.WorkspaceIntent})
-			if err != nil {
-				return err
-			}
-			if _, err := os.Lstat(run.WorkspaceIntent.Path); os.IsNotExist(err) {
-				preparation, prepareErr := prepareWorktree(ctx, fixed.config, s.runtime.Directory, s.runtime.ProcessHost, run)
-				if prepareErr != nil {
-					status := string(preparation.Status)
-					if status != string(executionbackend.OperationRejected) {
-						status = "outcome_unknown"
-					}
-					_ = s.changeWorkerOperation(run, opID, status, "", mustJSON(preparation), prepareErr.Error())
-					return s.waitWorkerFlow(run, "Original workspace preparation needs reconciliation: "+prepareErr.Error())
-				}
-			} else if err != nil {
-				return err
-			}
-			workspace, err := s.inspectWorkflowWorkspace(ctx, run)
-			if err != nil {
-				_ = s.changeWorkerOperation(run, opID, "outcome_unknown", "", nil, err.Error())
-				return s.waitWorkerFlow(run, "Original workspace identity is unverified: "+err.Error())
-			}
-			applyWorkflowWorkspaceEvidence(run, execution, workspace)
-			if err := s.changeWorkerOperation(run, opID, "confirmed", "", mustJSON(workspace), ""); err != nil {
-				return err
-			}
-		} else {
-			workspace, err := s.inspectWorkflowWorkspace(ctx, run)
-			if err != nil {
-				return s.waitWorkerFlow(run, "Prepared workspace identity is unverified: "+err.Error())
-			}
-			applyWorkflowWorkspaceEvidence(run, execution, workspace)
-		}
-	}
-	workspace, err := s.inspectWorkflowWorkspace(ctx, run)
-	if err != nil {
-		return s.waitWorkerFlow(run, "Current worktree identity is unverified: "+err.Error())
-	}
-	applyWorkflowWorkspaceEvidence(run, execution, workspace)
-	s.setDecisionStatus(run, "applied")
-	s.setRunDecision(run, nil)
-	execution.RecoveryRequired = false
-	execution.RecoveryState = "resuming"
-	if err := s.commitWorker(run); err != nil {
-		return err
-	}
-	return s.startWorkerFlowTurn(ctx, run, prompt, commandID)
 }
 
 // Every service instance must revalidate unfinished executions before a saved

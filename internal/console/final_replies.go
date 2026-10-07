@@ -92,7 +92,7 @@ func (m Model) updateFinalReplies(msg finalRepliesMsg) (tea.Model, tea.Cmd) {
 			state.finalError = firstText(event.Diagnostic, "规范记录存在采集缺口")
 			continue
 		}
-		if event.Phase != api.MessagePhaseFinalAnswer || event.TurnID == "" || (event.TurnQuality != api.IdentityNative && event.TurnQuality != api.IdentityDerived) || (event.Type != api.ConversationMessageDelta && event.Type != api.ConversationMessageSnapshot && event.Type != api.ConversationMessageComplete) {
+		if event.Phase != api.MessagePhaseFinalAnswer || event.TurnID == "" || (event.TurnQuality != api.IdentityNative && event.TurnQuality != api.IdentityDerived) || event.Type != api.ConversationMessageComplete {
 			continue
 		}
 		key := conversationItemKey(event)

@@ -1,8 +1,8 @@
 package integration
 
 import (
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"context"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productdto "github.com/erranliu/SteerLine/internal/product/api"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"runtime"
@@ -16,7 +16,6 @@ import (
 func TestCD65HistoryAndPreparation(t *testing.T) {
 	t.Run("history_commits_without_advancing_business_gate", testCD65HistoryCommitsOnly)
 	t.Run("BindingCannotChangeAttempt", TestCodexHistoryBindingCannotChangeAttempt)
-	t.Run("CanonicalSourceKeepsRawReadable", TestCodexHistoryCanonicalSourceKeepsRawReadable)
 	t.Run("MissingTextDoesNotClaimFinalBody", TestCodexHistoryMissingTextDoesNotClaimFinalBody)
 	t.Run("NativeFixtures", TestCodexHistoryNativeFixtures)
 	t.Run("RealCancelledTurnFixture", TestCodexHistoryRealCancelledTurnFixture)

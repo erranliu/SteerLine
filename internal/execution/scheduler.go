@@ -31,24 +31,13 @@ func (s *Service) BeginActor(ctx context.Context) error {
 	if e := s.publishCheckpoint(); e != nil {
 		return e
 	}
-	s.conversationReplayRequests = make(chan []conversationJournalSource, 16)
-	s.conversationReplayErrors = make(chan error, 16)
-	replayDone := make(chan struct{})
-	s.replayDone = replayDone
-	replaySources := s.conversationJournalSources()
-	go func() {
-		defer close(replayDone)
-		s.runConversationReplayQueue(ctx, s.conversationReplayRequests, s.conversationReplayErrors)
-	}()
-	if len(replaySources) > 0 {
-		s.conversationReplayRequests <- replaySources
-	}
+	s.conversationHistoryErrors = make(chan error, 16)
 	s.historyRequests = make(chan []conversationtypes.ConversationHistorySource, 1)
 	historyDone := make(chan struct{})
 	s.historyDone = historyDone
 	go func() {
 		defer close(historyDone)
-		s.runConversationHistoryCollector(ctx, s.historyRequests, s.conversationReplayErrors)
+		s.runConversationHistoryCollector(ctx, s.historyRequests, s.conversationHistoryErrors)
 	}()
 	historySources, err := s.discoverConversationHistory(ctx)
 	if err != nil {
@@ -158,7 +147,7 @@ func (s *Service) RecoverAdmission() (bool, error) {
 func (s *Service) SetStartupMetadata(id string) { s.State.Service.StartupID = ptr(id) }
 func (s *Service) Heartbeat() error             { return s.store.Heartbeat() }
 func (s *Service) Signals() <-chan Signal       { return s.signalQueue }
-func (s *Service) ReplayErrors() <-chan error   { return s.conversationReplayErrors }
+func (s *Service) HistoryErrors() <-chan error  { return s.conversationHistoryErrors }
 func (s *Service) HandleSignal(message Signal) error {
 	err := s.handleWorkerMessage(message)
 	if errors.Is(err, executionmodel.ErrTurnStale) {
@@ -166,7 +155,7 @@ func (s *Service) HandleSignal(message Signal) error {
 	}
 	return err
 }
-func (s *Service) HandleReplayError(ctx context.Context, err error) error {
+func (s *Service) HandleHistoryError(ctx context.Context, err error) error {
 	if err == nil {
 		return nil
 	}
@@ -176,7 +165,7 @@ func (s *Service) PollHistory(ctx context.Context) {
 	sources, err := s.discoverConversationHistory(ctx)
 	if err != nil {
 		select {
-		case s.conversationReplayErrors <- err:
+		case s.conversationHistoryErrors <- err:
 		default:
 		}
 		return
@@ -251,24 +240,16 @@ func (s *Service) EndActor(stop *productapi.ControlRequest, acceptedAt *time.Tim
 		prior = err
 	}
 	prior = errors.Join(prior, s.finalizeStopControl())
-	if s.replayDone != nil {
-		<-s.replayDone
-	}
 	if s.historyDone != nil {
 		<-s.historyDone
 	}
-	s.conversationReplayRequests = nil
-	s.conversationReplayErrors = nil
+	s.conversationHistoryErrors = nil
 	return prior
 }
 func (s *Service) InstanceID() string { return s.State.Service.InstanceID }
 func (s *Service) WaitSources() {
-	if s.replayDone != nil {
-		<-s.replayDone
-	}
 	if s.historyDone != nil {
 		<-s.historyDone
 	}
-	s.conversationReplayRequests = nil
-	s.conversationReplayErrors = nil
+	s.conversationHistoryErrors = nil
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"fmt"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
@@ -143,9 +142,6 @@ func (s *Service) finishedForRun(run *reconstructiontypes.RunView, worker *Worke
 	}
 	if run == nil || run.WorkflowVersion != executionmodel.Version {
 		return nativeErr("unsupported_schema", "native service observed a run without the current worker workflow; preserve its execution identity")
-	}
-	if replayErr := s.reconcileConversationRun(run); replayErr != nil {
-		s.setError(fmt.Errorf("completed conversation source replay failed: %w", replayErr))
 	}
 	return s.finishWorkerFlowFor(run, err)
 }

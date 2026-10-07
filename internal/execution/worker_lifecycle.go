@@ -224,12 +224,16 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *taskmodel
 			execution.RecoveryState = "unverified"
 			return true, s.waitWorkerFlow(run, "Original worker identity cannot be verified: "+verifyErr.Error())
 		}
+		if !evidence.SessionAvailable || execution.SessionID == "" {
+			execution.RecoveryState = "unverified"
+			return true, s.waitWorkerFlow(run, "The original session is unavailable. Handle the original execution manually; recovery cannot create a replacement session.")
+		}
 		switch {
 		case evidence.ManagedProcess && !evidence.ProcessAbsent:
 			execution.RecoveryState = "live"
 		case evidence.ProcessAbsent && execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID:
 			execution.RecoveryState = "completed"
-		case evidence.ProcessAbsent || !evidence.SessionAvailable:
+		case evidence.ProcessAbsent:
 			execution.RecoveryState = "interrupted"
 		default:
 			execution.RecoveryState = "unverified"
@@ -254,7 +258,7 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *taskmodel
 					return true, err
 				}
 				s.setRunDecision(run, nil)
-				if err := s.waitWorkerFlow(run, "原 worker 已退出，原轮次已结束。核对当前成果后选择原 thread 或明确使用新会话继续。"); err != nil {
+				if err := s.waitWorkerFlow(run, "原 worker 已退出，原轮次已结束。核对当前成果后只可继续原 thread；原会话不可恢复时需人工处理。"); err != nil {
 					return true, err
 				}
 				if next := s.decisionRecord(run); next != nil {
@@ -263,9 +267,6 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *taskmodel
 					return true, s.commitWorker(run)
 				}
 			}
-		}
-		if execution.Process == nil && !evidence.SessionAvailable && execution.PendingCommandID == "" && execution.CurrentTurnID == "" {
-			return true, s.waitWorkerFlow(run, "服务重开后，原 worker 尚未开始执行。请核对工作区并手动继续。")
 		}
 		return true, nil
 	}

@@ -7,90 +7,10 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
-
-const ConversationSourceMarkerName = "conversation-source.v1.json"
-
-const ConversationJSONLSource = "codex-jsonl"
-
-func LocalProcessJournalSegment(identity string) string {
-	return JournalSegment(executionbackend.BackendLocal, executionbackend.ProtocolLocalProcess, identity)
-}
-
-func JournalSource(backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol) string {
-	if backend == executionbackend.BackendLocal && (protocol == executionbackend.ProtocolLocalProcess || protocol == executionbackend.ProtocolLocalCodexAppServer) ||
-		backend == executionbackend.BackendOrca && (protocol == executionbackend.ProtocolOrcaTerminalV2 || protocol == executionbackend.ProtocolOrcaSupervised) {
-		return ConversationJSONLSource
-	}
-	return ""
-}
-
-func JournalSegment(backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, identity string) string {
-	prefix := ""
-	if backend == executionbackend.BackendLocal && (protocol == executionbackend.ProtocolLocalProcess || protocol == executionbackend.ProtocolLocalCodexAppServer) {
-		prefix = "local-jsonl-v1:"
-	} else if backend == executionbackend.BackendOrca && (protocol == executionbackend.ProtocolOrcaTerminalV2 || protocol == executionbackend.ProtocolOrcaSupervised) {
-		prefix = "orca-jsonl-v1:"
-	}
-	if prefix == "" {
-		return ""
-	}
-	return prefix + identity
-}
-
-func JournalGeneration(fileIdentity, segment string) (uint64, error) {
-	prefix := JournalSegment(executionbackend.BackendLocal, executionbackend.ProtocolLocalProcess, fileIdentity)
-	if strings.HasPrefix(segment, JournalSegment(executionbackend.BackendOrca, executionbackend.ProtocolOrcaTerminalV2, fileIdentity)) {
-		prefix = JournalSegment(executionbackend.BackendOrca, executionbackend.ProtocolOrcaTerminalV2, fileIdentity)
-	}
-	if prefix == "" || segment == prefix {
-		if segment == prefix {
-			return 1, nil
-		}
-		return 0, errors.New("conversation source segment has an unsupported identity")
-	}
-	if !strings.HasPrefix(segment, prefix+":") {
-		return 0, errors.New("conversation source segment and file identity differ")
-	}
-	generation, err := strconv.ParseUint(strings.TrimPrefix(segment, prefix+":"), 10, 64)
-	if err != nil || generation < 1 {
-		return 0, errors.New("conversation source generation is invalid")
-	}
-	return generation, nil
-}
-
-type ConversationSourceMarker struct {
-	Version        int                                `json:"v"`
-	ProjectID      string                             `json:"project_id"`
-	WorkflowID     string                             `json:"workflow_id"`
-	ExecutionID    string                             `json:"execution_id"`
-	AttemptID      string                             `json:"attempt_id"`
-	Backend        executionbackend.BackendKind       `json:"backend"`
-	Protocol       executionbackend.ExecutionProtocol `json:"protocol"`
-	Agent          string                             `json:"agent"`
-	TargetID       string                             `json:"target_id"`
-	Source         string                             `json:"source"`
-	SourceSegment  string                             `json:"source_segment"`
-	SourceIdentity string                             `json:"source_identity"`
-	RecordName     string                             `json:"record_name"`
-	CreatedAt      time.Time                          `json:"created_at"`
-	ReaderCommand  executionbackend.Command           `json:"reader_command,omitempty"`
-	CodexHome      string                             `json:"codex_home,omitempty"`
-}
-
-func (m ConversationSourceMarker) Validate() error {
-	local := m.Backend == executionbackend.BackendLocal && m.Protocol == executionbackend.ProtocolLocalProcess && m.SourceSegment == JournalSegment(m.Backend, m.Protocol, m.SourceIdentity)
-	orca := m.Backend == executionbackend.BackendOrca && (m.Protocol == executionbackend.ProtocolOrcaTerminalV2 || m.Protocol == executionbackend.ProtocolOrcaSupervised) && m.SourceSegment == JournalSegment(m.Backend, m.Protocol, m.SourceIdentity)
-	if m.Version != 1 || m.ProjectID == "" || m.WorkflowID == "" || m.ExecutionID == "" || m.AttemptID == "" || !local && !orca || m.Agent == "" || m.TargetID == "" || m.Source != ConversationJSONLSource || m.SourceIdentity == "" || m.RecordName != "events.jsonl" || m.CreatedAt.IsZero() {
-		return errors.New("conversation source marker is incomplete or unsupported")
-	}
-	return nil
-}
 
 type HistoryBinding struct {
 	Version     int                                `json:"v"`

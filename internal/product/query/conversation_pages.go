@@ -13,9 +13,6 @@ func ConversationEvent(e executionmodel.ConversationEvent) (api.ConversationEven
 	if b := e.Body; b != nil {
 		p.Body = &api.ConversationBodyRef{ExecutionID: b.ExecutionID, AttemptID: b.AttemptID, ItemKey: b.ItemKey, Revision: b.Revision, SHA256: b.SHA256, Bytes: b.Bytes, Source: b.Source, Completeness: api.BodyCompleteness(b.Completeness)}
 	}
-	if r := e.Raw; r != nil {
-		p.Raw = &api.ConversationRawRef{ExecutionID: r.ExecutionID, AttemptID: r.AttemptID, ID: r.ID, SHA256: r.SHA256, Bytes: r.Bytes}
-	}
 	// Only the display end reason is public. Private native attributes and
 	// implementation payloads are never forwarded as an open JSON object.
 	if e.Attributes != nil {

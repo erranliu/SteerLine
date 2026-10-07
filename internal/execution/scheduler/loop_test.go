@@ -25,9 +25,9 @@ func (a *lifecycleActor) Initialize(context.Context, context.CancelFunc) error {
 func (*lifecycleActor) InstanceID() string                                    { return "fixture-instance" }
 func (a *lifecycleActor) WaitSources()                                        { a.waited = true }
 func (*lifecycleActor) Signals() <-chan struct{}                              { return make(chan struct{}) }
-func (*lifecycleActor) ReplayErrors() <-chan error                            { return make(chan error) }
+func (*lifecycleActor) HistoryErrors() <-chan error                           { return make(chan error) }
 func (*lifecycleActor) HandleSignal(struct{}) error                           { return nil }
-func (*lifecycleActor) HandleReplayError(context.Context, error) error        { return nil }
+func (*lifecycleActor) HandleHistoryError(context.Context, error) error       { return nil }
 func (*lifecycleActor) PollHistory(context.Context)                           {}
 func (*lifecycleActor) TickDecision(context.Context) error                    { return nil }
 func (*lifecycleActor) TickTask(context.Context, context.CancelFunc) error    { return nil }

@@ -17,9 +17,9 @@ type Scheduler[T any] interface {
 	InstanceID() string
 	WaitSources()
 	Signals() <-chan T
-	ReplayErrors() <-chan error
+	HistoryErrors() <-chan error
 	HandleSignal(T) error
-	HandleReplayError(context.Context, error) error
+	HandleHistoryError(context.Context, error) error
 	PollHistory(context.Context)
 	TickDecision(context.Context) error
 	TickTask(context.Context, context.CancelFunc) error
@@ -117,8 +117,8 @@ func Run[T any](ctx context.Context, actor Scheduler[T], c Schedule, mode string
 			return nil
 		case <-historyTick.C:
 			actor.PollHistory(ctx)
-		case err := <-actor.ReplayErrors():
-			if err = actor.HandleReplayError(ctx, err); err != nil {
+		case err := <-actor.HistoryErrors():
+			if err = actor.HandleHistoryError(ctx, err); err != nil {
 				return err
 			}
 		case message := <-actor.Signals():

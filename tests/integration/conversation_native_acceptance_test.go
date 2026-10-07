@@ -50,7 +50,7 @@ func TestCodexHistoryRealFailedAcceptance(t *testing.T) {
 	for _, event := range page.Events {
 		if event.Type == productdto.ConversationTurnFailed {
 			failures++
-			if event.Status != "failed" || event.FinalAvailability != productdto.FinalAbsent || event.Raw == nil {
+			if event.Status != "failed" || event.FinalAvailability != productdto.FinalAbsent || event.Diagnostic == "" {
 				t.Fatalf("real failed turn lost native status or error reference: %+v", event)
 			}
 		}
@@ -118,7 +118,7 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 					starts++
 				case productdto.ConversationTurnCompleted:
 					ends++
-				case productdto.ConversationToolCompleted:
+				case productdto.ConversationEventType("tool.completed"):
 					tools++
 				}
 				if e.Type == productdto.ConversationMessageComplete {
@@ -139,10 +139,10 @@ func TestCodexHistoryNativeAcceptance(t *testing.T) {
 					digests = append(digests, body.SHA256)
 				}
 			}
-			if starts != 2 || ends != 2 || commentary < 1 || finals != 2 {
+			if starts != 2 || ends != 2 || commentary != 0 || finals != 2 {
 				t.Fatalf("native exact facts missing: starts=%d ends=%d commentary=%d finals=%d", starts, ends, commentary, finals)
 			}
-			if binding.Backend == executionbackend.BackendOrca && tools < 2 {
+			if binding.Backend == executionbackend.BackendOrca && tools != 0 {
 				t.Fatal("Orca native tool history missing")
 			}
 			reports, reportErr := store.ConversationCapabilityReports(ctx, binding.Backend, binding.Protocol, binding.TargetID, 1)

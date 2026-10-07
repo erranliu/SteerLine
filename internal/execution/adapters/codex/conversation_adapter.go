@@ -101,127 +101,6 @@ func NewConversationAdapter() conversationtypes.ConversationSourcePort {
 	return &ConversationAdapter{}
 }
 
-func (a *ConversationAdapter) RestoreMapper(snapshot executionvalues.ConversationMapperSnapshot) conversationtypes.ConversationMapper {
-	return RestoreConversationMapper(snapshot)
-}
-
-func (a *ConversationAdapter) MapConversation(input executionvalues.ConversationInput) (executionvalues.ConversationMappedBatch, error) {
-	if input.Source != "" && input.Source != ConversationJSONLSource {
-		return executionvalues.ConversationMappedBatch{}, nil
-	}
-	batch, err := a.MapRealtime(input)
-	if err == nil {
-		batch.VerifySourcePosition = input.Event.Backend == executionbackend.BackendLocal
-	}
-	return batch, err
-}
-
-func (l *ExecutionLifecycle) MapConversation(input executionvalues.ConversationInput) (executionvalues.ConversationMappedBatch, error) {
-	return (&ConversationAdapter{}).MapConversation(input)
-}
-
-func (a *ConversationAdapter) JournalSources() []string { return []string{ConversationJSONLSource} }
-
-func (a *ConversationAdapter) JournalSource(backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol) string {
-	return JournalSource(backend, protocol)
-}
-
-func (a *ConversationAdapter) JournalSegment(backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, identity string) string {
-	return JournalSegment(backend, protocol, identity)
-}
-
-func (a *ConversationAdapter) JournalGeneration(fileIdentity, segment string) (uint64, error) {
-	return JournalGeneration(fileIdentity, segment)
-}
-
-func (a *ConversationAdapter) MapRealtime(input executionvalues.ConversationInput) (executionvalues.ConversationMappedBatch, error) {
-	if input.Event.ProjectID == "" || input.Event.ExecutionID == "" || input.Event.AttemptID == "" {
-		return executionvalues.ConversationMappedBatch{}, errors.New("conversation record has no fixed execution identity")
-	}
-	segment := input.Segment
-	if segment == "" {
-		segment = "local-jsonl-v1:" + input.Identity
-	}
-	identity := input.Identity
-	if identity == "" {
-		identity = "local-events:" + input.Event.WorkflowID + ":" + input.Event.AttemptID
-	}
-	cursor, err := json.Marshal(struct {
-		ByteOffset int64  `json:"byte_offset"`
-		ByteLength int64  `json:"byte_length"`
-		SourceSeq  uint64 `json:"source_seq"`
-	}{input.SourceOffset, input.SourceLength, input.SourceSeq})
-	if err != nil {
-		return executionvalues.ConversationMappedBatch{}, err
-	}
-	event := input.Event
-	event.Version, event.Source, event.SourceRole, event.SourceSegment, event.SourceIdentity = executionvalues.ConversationVersion, ConversationJSONLSource, executionvalues.ConversationSourceFallback, segment, identity
-	event.ExternalRef = conversationExternalRef(input.Process)
-	event.SourceCursor = string(cursor)
-	event.SessionQuality, event.TurnQuality, event.ItemQuality = executionvalues.IdentityUnknown, executionvalues.IdentityUnknown, executionvalues.IdentityUnknown
-	event.SourceEventQuality, event.SourceSeq, event.ReceivedAt = executionvalues.IdentityDerived, input.SourceSeq, time.Now().UTC()
-	event.SourceEventID = fmt.Sprintf("bytes:%d:%d", input.SourceOffset, input.SourceOffset+input.SourceLength)
-	event.Evidence = map[string]string{"source_record": "events.jsonl", "byte_start": fmt.Sprint(input.SourceOffset), "byte_end": fmt.Sprint(input.SourceOffset + input.SourceLength), "identity_rule": "source-file-byte-range-v1"}
-	if input.Diagnostic != "" {
-		event.Evidence["collector_diagnostic"] = input.Diagnostic
-	}
-	var write executionvalues.ConversationWrite
-	if input.Gap {
-		event.Type, event.Phase, event.Status, event.Diagnostic = executionvalues.ConversationGap, executionvalues.MessagePhaseUnknown, "gap", input.Diagnostic
-		write.Event = event
-	} else {
-		if input.Session != "" {
-			event.SessionID, event.SessionQuality = input.Session, executionvalues.IdentityNative
-		}
-		write = a.RestoreMapper(input.Mapper).MapRecord(event, input.Raw)
-	}
-	checkpoint := executionvalues.ConversationCheckpoint{ProjectID: event.ProjectID, ExecutionID: event.ExecutionID, AttemptID: event.AttemptID,
-		Source: event.Source, SourceSegment: segment, SourceIdentity: identity, Generation: identity, Cursor: string(cursor), LocalSeq: input.SourceSeq}
-	return executionvalues.ConversationMappedBatch{Writes: []executionvalues.ConversationWrite{write}, Checkpoint: checkpoint}, nil
-}
-
-func (a *ConversationAdapter) LiveJournalPath(ctx context.Context, request conversationtypes.ConversationJournalPathRequest) (string, error) {
-	if request.RunDirectory == "" || request.WorkflowID == "" || request.ExecutionID == "" || request.AttemptID == "" {
-		return "", errors.New("live conversation source has no fixed run identity")
-	}
-	if request.WorkerFlow {
-		root := filepath.Join(request.RunDirectory, "turns")
-		entries, err := os.ReadDir(root)
-		if err != nil {
-			return "", err
-		}
-		if len(entries) > 4096 {
-			return "", errors.New("worker flow has too many source directories")
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() || !validExecutionID(entry.Name()) {
-				continue
-			}
-			dir := filepath.Join(root, entry.Name())
-			markerData, readErr := readConversationSourceFile(filepath.Join(dir, ConversationSourceMarkerName))
-			if readErr != nil {
-				continue
-			}
-			var marker ConversationSourceMarker
-			if executionbackend.DecodeStrictJSON(markerData, &marker, "conversation source binding has trailing data") == nil && marker.Validate() == nil && marker.SourceIdentity == request.SourceIdentity &&
-				marker.WorkflowID == request.WorkflowID && marker.ExecutionID == request.ExecutionID && marker.AttemptID == request.AttemptID {
-				return filepath.Join(dir, "events.jsonl"), nil
-			}
-		}
-		return "", errors.New("worker flow source marker was not found for the fixed identity")
-	}
-	candidates := append([]string(nil), request.EventPaths...)
-	if request.LogPath != "" {
-		candidates = append(candidates, request.LogPath)
-	}
-	for _, candidate := range candidates {
-		if candidate != "" && filepath.Base(candidate) == "events.jsonl" && insidePath(request.RunDirectory, candidate) {
-			return filepath.Clean(candidate), nil
-		}
-	}
-	return "", errors.New("conversation source path is unavailable")
-}
-
 func (a *ConversationAdapter) DiscoverHistory(ctx context.Context, discovery conversationtypes.ConversationDiscovery) (conversationtypes.ConversationDiscoveryResult, error) {
 	if discovery.ProjectID == "" || discovery.RunDirectory == "" {
 		return conversationtypes.ConversationDiscoveryResult{}, errors.New("conversation source discovery lacks a project or run directory")
@@ -312,83 +191,6 @@ func (a *ConversationAdapter) DiscoverHistory(ctx context.Context, discovery con
 	return result, nil
 }
 
-func (a *ConversationAdapter) DiscoverJournals(ctx context.Context, discovery conversationtypes.ConversationDiscovery, identify func(string) (string, error)) ([]conversationtypes.ConversationJournalSource, error) {
-	if identify == nil {
-		return nil, errors.New("conversation journal identity reader is required")
-	}
-	sources := []conversationtypes.ConversationJournalSource{}
-	seen := map[string]bool{}
-	for _, run := range discovery.Runs {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if JournalSource(run.Base.Backend, run.Base.Protocol) == "" {
-			continue
-		}
-		candidates := append([]conversationtypes.ConversationAttemptSource(nil), run.Attempts...)
-		if run.WorkerFlow {
-			turnRoot := filepath.Join(run.RunDirectory, "turns")
-			if entries, err := os.ReadDir(turnRoot); err == nil && len(entries) <= 4096 {
-				attempt := run.Base.AttemptID
-				ended := false
-				for _, item := range run.Attempts {
-					if item.AttemptID == attempt {
-						ended = item.Ended
-						break
-					}
-				}
-				for _, entry := range entries {
-					if entry.IsDir() && validExecutionID(entry.Name()) {
-						candidates = append(candidates, conversationtypes.ConversationAttemptSource{AttemptID: attempt, EventPath: filepath.Join(turnRoot, entry.Name(), "events.jsonl"), Ended: ended})
-					}
-				}
-			}
-		}
-		root := run.RunDirectory
-		if root == "" {
-			root = filepath.Join(discovery.RunDirectory, "runs", run.Base.WorkflowID)
-		}
-		for _, candidate := range candidates {
-			path := filepath.Clean(candidate.EventPath)
-			if path == "" || filepath.Base(path) != "events.jsonl" || !insidePath(root, path) || seen[path] || !validExecutionID(candidate.AttemptID) {
-				continue
-			}
-			markerPath := filepath.Join(filepath.Dir(path), ConversationSourceMarkerName)
-			markerData, markerErr := readConversationSourceFile(markerPath)
-			if os.IsNotExist(markerErr) {
-				continue
-			}
-			fileID, fileErr := identify(path)
-			if fileErr != nil {
-				continue
-			}
-			seen[path] = true
-			source := conversationtypes.ConversationJournalSource{Path: path, AttemptID: candidate.AttemptID, FileID: fileID, Workspace: run.Workspace, Ended: candidate.Ended}
-			base := run.Base
-			base.AttemptID = candidate.AttemptID
-			base.ExternalRef = conversationExternalRef(run.Process)
-			source.Event = base
-			if markerErr != nil {
-				source.Diagnostic = fmt.Sprintf("source marker is unreadable: %v", markerErr)
-				sources = append(sources, source)
-				continue
-			}
-			var marker ConversationSourceMarker
-			if err := executionbackend.DecodeStrictJSON(markerData, &marker, "conversation source binding has trailing data"); err != nil {
-				source.Diagnostic = fmt.Sprintf("source marker is invalid: %v", err)
-			} else if err = marker.Validate(); err != nil {
-				source.Diagnostic = err.Error()
-			} else if marker.ProjectID != base.ProjectID || marker.WorkflowID != base.WorkflowID || marker.ExecutionID != base.ExecutionID || marker.AttemptID != candidate.AttemptID || marker.Backend != base.Backend || marker.Protocol != base.Protocol || marker.Agent != base.Agent || marker.TargetID != base.TargetID {
-				source.Diagnostic = "source marker identity does not match the fixed run and attempt"
-			} else {
-				source.ExpectedFileID = marker.SourceIdentity
-			}
-			sources = append(sources, source)
-		}
-	}
-	return sources, nil
-}
-
 func (a *ConversationAdapter) ReadHistory(ctx context.Context, request conversationtypes.ConversationHistoryReadRequest, start func(*exec.Cmd) (executionbackend.StopHandle, error)) (conversationtypes.ConversationHistoryBatch, error) {
 	binding, err := ReadHistoryBinding(request.Source.BindingPath)
 	event := request.Source.Event
@@ -441,12 +243,6 @@ func (a *ConversationAdapter) ReadHistory(ctx context.Context, request conversat
 	writes := []executionvalues.ConversationWrite{}
 	if cursor.Sequence == 0 && len(page.Data) > 0 {
 		event := base
-		event.Type, event.Status = executionvalues.ConversationGap, "source_changed"
-		event.SourceEventID = "native-source-selected"
-		event.Diagnostic = "Verified history is the canonical conversation source; raw source projections remain available through an explicit source filter"
-		event.Attributes = map[string]any{"supersedes_sources": []string{"codex-jsonl", "orca-terminal-v2", "orca-reply-receipt"}}
-		writes = append(writes, executionvalues.ConversationWrite{Event: event})
-		event = base
 		event.Type, event.SourceEventID = executionvalues.ConversationSession, "session:"+binding.SessionID
 		writes = append(writes, executionvalues.ConversationWrite{Event: event})
 	}
@@ -618,19 +414,6 @@ func directoryExists(path string) bool {
 	}
 	info, err := os.Stat(path)
 	return err == nil && info.IsDir()
-}
-
-func conversationExternalRef(identity *executionbackend.ProcessIdentity) string {
-	if identity == nil {
-		return ""
-	}
-	if identity.Kind == "orca" && identity.Terminal != "" {
-		return "terminal:" + identity.Terminal + "@" + identity.Incarnation
-	}
-	if identity.Kind == "os" && identity.PID > 0 {
-		return fmt.Sprintf("process:%d@%s", identity.PID, identity.Created)
-	}
-	return ""
 }
 
 func clip(s string, n int) string {

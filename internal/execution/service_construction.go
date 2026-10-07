@@ -115,9 +115,6 @@ func NewService(c Config, runtime RuntimeDependencies, settings RuntimeSettings,
 		return nil, fmt.Errorf("identify service process: %w", err)
 	}
 	s.State.Service.ProcessIdentity = identity
-	if err := stores.Conversations.ValidateConversationCheckpointFormat(context.Background(), c.identity, conversationSources.JournalSources()); err != nil {
-		return nil, err
-	}
 	return s, nil
 }
 

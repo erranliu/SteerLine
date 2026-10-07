@@ -237,123 +237,78 @@ func MapHistoryTurn(base executionvalues.ConversationEvent, turn HistoryTurn, se
 	if turn.ID == "" {
 		return nil, errors.New("Codex history turn omitted native identity")
 	}
-	base.Version = executionvalues.ConversationVersion
-	base.Source = "codex-app-server"
-	base.SourceRole = executionvalues.ConversationSourceCanonical
-	base.TurnID, base.TurnQuality = turn.ID, executionvalues.IdentityNative
-	base.SessionQuality = executionvalues.IdentityNative
-	base.ItemQuality = executionvalues.IdentityUnknown
-	base.SourceEventQuality = executionvalues.IdentityDerived
-	base.Phase = executionvalues.MessagePhaseUnknown
-	base.ReceivedAt = time.Now().UTC()
-	base.Evidence = map[string]string{"capture": "thread/turns/list", "items_view": "full", "identity_rule": "native-session-turn-item-and-snapshot-v1"}
+	base.Version, base.Source, base.SourceRole = executionvalues.ConversationVersion, "codex-app-server", executionvalues.ConversationSourceCanonical
+	base.TurnID, base.TurnQuality, base.SessionQuality = turn.ID, executionvalues.IdentityNative, executionvalues.IdentityNative
+	base.ItemQuality, base.SourceEventQuality = executionvalues.IdentityUnknown, executionvalues.IdentityDerived
+	base.Phase, base.ReceivedAt = executionvalues.MessagePhaseUnknown, time.Now().UTC()
+	base.Evidence = map[string]string{"capture": "thread/turns/list", "identity_rule": "native-session-turn-item-and-final-v1"}
 	start := base
-	start.Type, start.SourceEventID = executionvalues.ConversationTurnStarted, "turn:"+turn.ID+":started"
-	start.FinalAvailability = executionvalues.FinalUnknown
+	start.Type, start.SourceEventID, start.FinalAvailability = executionvalues.ConversationTurnStarted, "turn:"+turn.ID+":started", executionvalues.FinalUnknown
+	start.SourceSeq = sequence
 	writes := []executionvalues.ConversationWrite{{Event: start}}
 	terminal := turn.CompletedAt != nil && (turn.Status == "completed" || turn.Status == "failed" || turn.Status == "interrupted")
-	finalSeen := false
-	unknownPhase := false
-	missingFinalContent := false
+	if !terminal {
+		return writes, nil
+	}
+	finalSeen, unknownPhase, missingFinal := false, false, false
 	for _, raw := range turn.Items {
 		var item struct {
-			ID     string  `json:"id"`
-			Type   string  `json:"type"`
-			Text   *string `json:"text"`
-			Phase  string  `json:"phase"`
-			Status string  `json:"status"`
-			Output string  `json:"aggregatedOutput"`
+			ID    string  `json:"id"`
+			Type  string  `json:"type"`
+			Text  *string `json:"text"`
+			Phase string  `json:"phase"`
 		}
 		if err := json.Unmarshal(raw, &item); err != nil {
 			return nil, err
 		}
+		if item.Type != "agentMessage" {
+			continue
+		}
+		if item.Phase != string(executionvalues.MessagePhaseFinalAnswer) {
+			unknownPhase = unknownPhase || item.Phase != string(executionvalues.MessagePhaseCommentary)
+			continue
+		}
 		if item.ID == "" {
-			return nil, errors.New("Codex history item omitted native identity")
+			return nil, errors.New("Codex final omitted native item identity")
 		}
-		e := base
-		e.ItemID, e.ItemQuality = item.ID, executionvalues.IdentityNative
-		e.ItemKey = conversationItemKey(e, item.ID)
-		e.Attributes = map[string]any{"item_type": item.Type}
-		e.SourceEventID = "turn:" + turn.ID + ":item:" + item.ID + ":" + digestValue(struct {
-			Raw      json.RawMessage
-			Terminal bool
-		}{raw, terminal})
-		e.SourceRevision = int64(sequence)
-		write := executionvalues.ConversationWrite{Event: e, Raw: append([]byte(nil), raw...), BodySource: "codex-app-server"}
-		switch item.Type {
-		case "agentMessage":
-			e.Type = executionvalues.ConversationMessageSnapshot
-			if item.Text != nil {
-				write.Body, write.BodyMode = []byte(*item.Text), "snapshot"
-			}
-			if item.Phase == string(executionvalues.MessagePhaseCommentary) || item.Phase == string(executionvalues.MessagePhaseFinalAnswer) {
-				e.Phase = executionvalues.MessagePhase(item.Phase)
-			} else {
-				unknownPhase = true
-			}
-			if terminal {
-				e.Type = executionvalues.ConversationMessageComplete
-				if item.Text != nil {
-					write.BodyMode = "complete"
-				}
-			}
-			if e.Phase == executionvalues.MessagePhaseFinalAnswer {
-				if item.Text == nil {
-					missingFinalContent = true
-					e.FinalAvailability = executionvalues.FinalUnknown
-				} else {
-					finalSeen = true
-					if terminal {
-						e.FinalAvailability = executionvalues.FinalAvailable
-					} else {
-						e.FinalAvailability = executionvalues.FinalPending
-					}
-				}
-			}
-		case "commandExecution", "mcpToolCall", "dynamicToolCall", "fileChange", "webSearch":
-			e.Type, e.Status = executionvalues.ConversationToolCompleted, item.Status
-			if item.Status == "inProgress" {
-				e.Type = executionvalues.ConversationToolStarted
-			}
-			if item.Output != "" {
-				write.Body, write.BodyMode = []byte(item.Output), "snapshot"
-				if item.Status != "inProgress" {
-					write.BodyMode = "complete"
-				}
-			}
-		case "userMessage":
-			e.Type = executionvalues.ConversationObservation
-			e.Attributes["role"] = "user"
-		default:
-			e.Type = executionvalues.ConversationUnknown
+		if item.Text == nil {
+			missingFinal = true
+			continue
 		}
-		write.Event = e
-		writes = append(writes, write)
+		event := base
+		event.Type, event.Phase, event.FinalAvailability = executionvalues.ConversationMessageComplete, executionvalues.MessagePhaseFinalAnswer, executionvalues.FinalAvailable
+		event.ItemID, event.ItemQuality = item.ID, executionvalues.IdentityNative
+		event.ItemKey = conversationItemKey(event, item.ID)
+		event.SourceEventID = "turn:" + turn.ID + ":final:" + item.ID + ":" + digestValue(*item.Text)
+		writes = append(writes, executionvalues.ConversationWrite{Event: event, Body: []byte(*item.Text), BodyMode: "complete", BodySource: "codex-app-server"})
+		finalSeen = true
 	}
-	if terminal {
-		end := base
-		end.SourceEventID = "turn:" + turn.ID + ":status:" + turn.Status
-		end.Status = turn.Status
-		switch turn.Status {
-		case "completed":
-			end.Type = executionvalues.ConversationTurnCompleted
-		case "failed":
-			end.Type = executionvalues.ConversationTurnFailed
-		case "interrupted":
-			end.Type = executionvalues.ConversationTurnCancelled
-		}
-		end.FinalAvailability = executionvalues.FinalAbsent
-		if finalSeen {
-			end.FinalAvailability = executionvalues.FinalAvailable
-		} else if unknownPhase || missingFinalContent {
-			end.FinalAvailability = executionvalues.FinalUnknown
-		}
-		end.SourceEventID += ":final:" + string(end.FinalAvailability)
-		// Full persisted history is the evidence for absent, not a timeout or idle TUI.
-		end.Evidence = cloneStringMap(base.Evidence)
-		end.Evidence["final_reconciliation"] = "full-native-turn-snapshot"
-		raw, _ := json.Marshal(map[string]any{"id": turn.ID, "status": turn.Status, "error": turn.Error})
-		writes = append(writes, executionvalues.ConversationWrite{Event: end, Raw: raw})
+	end := base
+	end.Status, end.FinalAvailability = turn.Status, executionvalues.FinalAbsent
+	if len(turn.Error) > 0 && string(turn.Error) != "null" {
+		end.Diagnostic = clip(string(turn.Error), 2000)
+	}
+	switch turn.Status {
+	case "completed":
+		end.Type = executionvalues.ConversationTurnCompleted
+	case "failed":
+		end.Type = executionvalues.ConversationTurnFailed
+	case "interrupted":
+		end.Type = executionvalues.ConversationTurnCancelled
+	}
+	if finalSeen {
+		end.FinalAvailability = executionvalues.FinalAvailable
+	} else if unknownPhase || missingFinal {
+		end.FinalAvailability = executionvalues.FinalUnknown
+	}
+	end.SourceEventID = "turn:" + turn.ID + ":status:" + turn.Status + ":final:" + string(end.FinalAvailability)
+	writes = append(writes, executionvalues.ConversationWrite{Event: end})
+	if missingFinal || !finalSeen {
+		gap := base
+		gap.Type, gap.Status, gap.FinalAvailability = executionvalues.ConversationGap, "final_unavailable", end.FinalAvailability
+		gap.SourceEventID = "turn:" + turn.ID + ":final-unavailable:" + string(end.FinalAvailability)
+		gap.Diagnostic = "The native completed turn has no verifiable complete final reply; inspect its original session."
+		writes = append(writes, executionvalues.ConversationWrite{Event: gap})
 	}
 	for i := range writes {
 		writes[i].Event.SourceSeq = sequence + uint64(i)

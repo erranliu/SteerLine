@@ -13,8 +13,5 @@ type ConversationStore interface {
 	storageports.ConversationReader
 	CommitConversation(context.Context, []executionvalues.ConversationWrite, executionvalues.ConversationCheckpoint) ([]executionvalues.ConversationEvent, error)
 	ConversationCheckpoint(context.Context, string, string, string, string, string) (executionvalues.ConversationCheckpoint, error)
-	ConversationSourceCheckpoints(context.Context, string, string, string, string) ([]executionvalues.ConversationCheckpoint, error)
-	ConversationMapperSnapshot(context.Context, string, string, string, string, string) (executionvalues.ConversationMapperSnapshot, error)
-	ValidateConversationCheckpointFormat(context.Context, string, []string) error
 	SaveConversationCapabilityReport(context.Context, executionvalues.ConversationCapabilityReport) error
 }

@@ -53,10 +53,10 @@ STEERLINE_HOME 的默认值和路径解析由 [app/config.go](../../internal/app
 | 格式 | 当前值 | 源码 |
 | --- | --- | --- |
 | 工作流协议 | worker-flow-v1 | [model/state.go](../../internal/execution/model/state.go) |
-| SQLite schema | 16 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
+| SQLite schema | 17 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
 | 服务 checkpoint / runtime | 19 | [ports/checkpoint.go](../../internal/storage/ports/checkpoint.go) |
 | FixedExecutionProfile | 8 | [execution_profiles.go](../../internal/execution/execution_profiles.go) |
-| ConversationEvent | 2 | [model/conversation.go](../../internal/execution/model/conversation.go) |
+| ConversationEvent | 3 | [model/conversation.go](../../internal/execution/model/conversation.go) |
 | 全局执行配置 | 2 | [app/config.go](../../internal/app/config.go) |
 | Codex profile codec | 2 | [codex/profile_config.go](../../internal/execution/adapters/codex/profile_config.go) |
 | Codex resource codec | 2 | [codex/policy_resources.go](../../internal/execution/adapters/codex/policy_resources.go) |
@@ -68,7 +68,7 @@ STEERLINE_HOME 的默认值和路径解析由 [app/config.go](../../internal/app
 
 初始工作区在外部创建前保存固定意图。local 路径使用固定 Git worktree 和原生 Codex session；本机 Orca 路径由 Orca 创建 worktree 和 agent terminal，再以新 Task/Dispatch 延续同一 terminal。重启核对原身份，不能按同名标题或路径推断替代会话。工作开始后，中心不会因反馈、dirty 文件、项目检查结果或 PR 出现而 reset、清理或改写 worker 的提交。
 
-每次反馈有固定 Command ID 和 Operation。答案先在 SQLite 保存。local 运行中问题用仍有效的 app-server 工具请求 ID 回复，结束后反馈在原 thread 调用 `turn/start`；本机 Orca 运行中问题按原 message ID `reply`，活动补充向原 Dispatch `send`，结算后反馈在原 terminal 上创建新 Task/Dispatch。服务重开先核验旧执行和回执，旧的未送达输入不自动投递；用户须在统一 Decision 入口重新确认。已终止的 local worker 经核实后可用新受管进程和新 Attempt 恢复原 thread，明确选择后也可开新会话。平台接受回执不等于 agent 已处理。local 通知写入每轮 `appserver.jsonl`，完整正文由原生会话历史补读；Orca 输出按 worker-read 的 source、cursor 和 clipping 展示。回执不明时不更换 ID 重发。详见 [决策与反馈](decisions.md)和[停服恢复 Spec](../spec/worker-service-recovery.spec.md)。
+每次反馈有固定 Command ID 和 Operation。答案先在 SQLite 保存。local 运行中问题用仍有效的 app-server 工具请求 ID 回复，结束后反馈在原 thread 调用 `turn/start`；本机 Orca 运行中问题按原 message ID `reply`，活动补充向原 Dispatch `send`，结算后反馈在原 terminal 上创建新 Task/Dispatch。服务重开先核验旧执行和回执，旧的未送达输入不自动投递；用户须在统一 Decision 入口重新确认。已终止的 local worker 经核实后可用新受管进程和新 Attempt 恢复原 thread；原 thread 无法核实时需人工处理，不在原 Execution 内新建会话。平台接受回执不等于 agent 已处理。local 通知写入每轮 `appserver.jsonl`，完整正文由原生会话历史补读；Orca 的 wait/gap 只保存必要事实，终端正文在原工具阅读。回执不明时不更换 ID 重发。详见 [决策与反馈](decisions.md)和[停服恢复 Spec](../spec/worker-service-recovery.spec.md)。
 
 人工模式允许不同 Task 分别领取；自动模式仍一次占用一个活动执行。暂停派发只限制新领取，不中断当前 worker、待决策反馈或 PR 核验。
 

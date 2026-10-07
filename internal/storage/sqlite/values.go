@@ -19,8 +19,6 @@ type ConversationEvent = executionvalues.ConversationEvent
 
 type ConversationFilter = productdto.ConversationFilter
 
-type ConversationRawRef = executionvalues.ConversationRawRef
-
 type ConversationWrite = executionvalues.ConversationWrite
 
 type FinalAvailability = executionvalues.FinalAvailability

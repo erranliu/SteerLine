@@ -481,7 +481,7 @@ func TestFinalPhaseDoesNotPromoteNonMessageEvents(t *testing.T) {
 	m, _ := ccFixture(t, 1)
 	m, _ = m.refreshFinalReplies(0)
 	event := finalFixture(m, 1, "turn", "tool", "not a final")
-	event.Type = api.ConversationToolCompleted
+	event.Type = api.ConversationEventType("tool.completed")
 	next, _ := m.Update(finalRepliesMsg{projectKey: m.projects[0].ref.Key, identity: m.projects[0].ref.Identity, key: m.projects[0].finalKey, generation: m.projects[0].finalGeneration, page: api.ConversationPage{Events: []api.ConversationEvent{event}}})
 	if len(next.(Model).projects[0].finalEvents) != 0 {
 		t.Fatal("tool promoted to final")

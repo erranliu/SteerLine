@@ -40,8 +40,19 @@ func TestConversationFinalFilterExcludesPreparationAndProcess(t *testing.T) {
 			write.Event.TurnQuality = executionmodel.IdentityUnknown
 		}
 		_, err = store.CommitConversation(ctx, []ConversationWrite{write}, ConversationCheckpoint{})
+		if turn == "process" {
+			if err == nil {
+				t.Fatal("commentary was retained")
+			}
+			continue
+		}
 		require(t, err)
 	}
+	gap := conversationTestWrite("prepare-gap", 20, "", nil, nil)
+	gap.Event.Type, gap.Event.Phase, gap.Event.Status = executionmodel.ConversationGap, executionmodel.MessagePhaseUnknown, "final_unavailable"
+	gap.Event.TurnID = "prepare"
+	_, err = store.CommitConversation(ctx, []ConversationWrite{gap}, ConversationCheckpoint{})
+	require(t, err)
 	filter := api.ConversationFilter{WorkflowID: "workflow", ExecutionID: "execution", SessionID: "session", FinalsOnly: true}
 	page, err := conversationQueries(store, "project").ReadConversation(ctx, filter, "", 10)
 	require(t, err)

@@ -17,6 +17,15 @@ func (s *Service) waitWorkerFlow(run *reconstructiontypes.RunView, reason string
 	if s.candidateBusinessClosed(run) {
 		return nil
 	}
+	priorRecoveryDecision := ""
+	if execution.RecoveryRequired && (execution.RecoveryState == "unverified" || execution.SessionID == "") {
+		if record := s.decisionRecord(run); record != nil && record.Status == "pending" &&
+			(len(run.Decision.Request.Options) > 0 || record.RecoveryState != execution.RecoveryState || record.RecoveryVersion != execution.RecoveryVersion) {
+			priorRecoveryDecision = record.DecisionID
+			s.setDecisionStatus(run, "superseded")
+			s.setRunDecision(run, nil)
+		}
+	}
 	facts := workerWaitFacts{
 		PreserveActiveStatus:   execution.Status == "active" && execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID,
 		PreserveUnresolvedTurn: !execution.RecoveryRequired && (execution.PendingCommandID != "" || execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID),
@@ -24,10 +33,11 @@ func (s *Service) waitWorkerFlow(run *reconstructiontypes.RunView, reason string
 	if execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID {
 		facts.ContextPrefix = "The previous turn ended. Further input will use the same fixed execution session.\n\n"
 	}
-	if execution.RecoveryRequired && (execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed") && execution.Process != nil {
-		facts.Options = []executionbackend.DecisionOption{{ID: "continue", Label: "Continue the original session", Detail: "Verify and resume the original session identity"}, {ID: "new_session", Label: "Continue in a new session", Detail: "Use the existing workspace and saved history"}}
-	} else if execution.RecoveryRequired && execution.RecoveryState == "interrupted" {
-		facts.Options = []executionbackend.DecisionOption{{ID: "continue", Label: "Continue this execution", Detail: "Verify or prepare its original workspace first"}}
+	if execution.RecoveryRequired && (execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed") && execution.Process != nil && execution.SessionID != "" {
+		facts.Options = []executionbackend.DecisionOption{{ID: "continue", Label: "Continue the original session", Detail: "Verify and resume the original session identity"}}
+	} else if execution.RecoveryRequired && (execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed") {
+		facts.Options = []executionbackend.DecisionOption{}
+		facts.ContextPrefix = "The original session is unavailable. Handle this execution manually before starting another candidate.\n\n"
 	}
 	unresolvedNativeTurn := facts.PreserveUnresolvedTurn
 	if !unresolvedNativeTurn && (run.Decision == nil || run.Decision.Status != "pending" && run.Decision.Status != "answer_saved") {
@@ -51,6 +61,7 @@ func (s *Service) waitWorkerFlow(run *reconstructiontypes.RunView, reason string
 			if record := s.decisionRecord(run); record != nil {
 				record.RecoveryVersion = execution.RecoveryVersion
 				record.RecoveryState = execution.RecoveryState
+				record.RecoveryOfDecision = priorRecoveryDecision
 			}
 		}
 	}
@@ -146,8 +157,8 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 	}
 	if execution.RecoveryRequired {
 		if execution.RecoveryState == "interrupted" || execution.RecoveryState == "completed" {
-			if execution.Process == nil && execution.SessionID == "" && execution.TurnNumber == 0 {
-				return s.startManuallyRecoveredInitialWorker(ctx, run, answer, command.CommandID)
+			if execution.SessionID == "" {
+				return s.waitWorkerFlow(run, "The original session is unavailable; recovery cannot create a replacement worker")
 			}
 			prompt := "The previous worker process stopped. Inspect the current worktree, Git status, existing work, and persistent task history before continuing. Do not replay an earlier request blindly.\n\n" + workerFeedbackText(answer, run.Decision.Request)
 			if err := s.beginLocalRecoveryAttempt(ctx, run, answer.OptionID); err != nil {

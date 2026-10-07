@@ -15,10 +15,6 @@ type ConversationBodyReader interface {
 	ConversationBody(context.Context, string, api.ConversationBodyRef, int) (ConversationBodyRecord, error)
 }
 
-type ConversationRawReader interface {
-	ConversationRaw(context.Context, string, api.ConversationRawRef, int) (ConversationRawRecord, error)
-}
-
 type ConversationCapabilityReader interface {
 	ConversationCapabilityReports(context.Context, executionbackend.BackendKind, executionbackend.ExecutionProtocol, string, int) ([]api.ConversationCapabilityReport, error)
 }
@@ -26,7 +22,6 @@ type ConversationCapabilityReader interface {
 type ConversationReader interface {
 	ConversationEventReader
 	ConversationBodyReader
-	ConversationRawReader
 	ConversationCapabilityReader
 }
 
@@ -41,10 +36,4 @@ type ConversationBodyRecord struct {
 	TotalBytes   int64
 	SHA256       string
 	Completeness string
-}
-
-type ConversationRawRecord struct {
-	Data       []byte
-	TotalBytes int64
-	SHA256     string
 }
