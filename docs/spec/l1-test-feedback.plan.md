@@ -1,6 +1,6 @@
 # L1 固定范围精简与并行 Plan
 
-用户要求按现有耗时分析调整 L1，并重新执行 L1 验证。最近通过的基线为 `docs/validation/product-simplification-01-console/l1-release/summary.json`：准备 4.09 秒、执行 1147.33 秒，其中集成组 815.86 秒。
+用户要求按现有耗时分析调整 L1，并重新执行 L1 验证。最近通过的基线为固定历史 commit `172cea6c6530b6693b742324a9c1d4f9aeb17b6d` 的 `docs/validation/product-simplification-01-console/l1-release/summary.json`：准备 4.09 秒、执行 1147.33 秒，其中集成组 815.86 秒。
 
 ## 实现范围
 
@@ -14,6 +14,8 @@
 | 级别 / 组 | 场景 / 范围 | 环境 | 命令 | 时点 | 通过条件 | 证据位置 |
 | --- | --- | --- | --- | --- | --- | --- |
 | 定向 Go / runner | L1 默认/显式 worker 参数、并发上限/顺序、固定选择、缺失/重复/skip/截断/零匹配及 Full 覆盖守卫 | Windows，无模型 | `go test ./cmd/test-feedback -run 'Test(Quick\|Scoped\|LevelSelections\|FullCoverage)' -count=1` | 实现后 | 所选断言通过，Full 选择保持完整 | 本次临时产物目录 `runner.jsonl` / `runner.stderr.txt` |
+| 定向 Go / rebase-runner | 衔接 #233 的全入口临时输出，保留 L1 选择及仓库内/外产物过滤 | 同上 | `go test ./cmd/test-feedback -run 'Test(Quick\|Scoped\|LevelSelections\|FullCoverage\|FilterGeneratedRunOutput\|GeneratedRunOutput)' -count=1` | rebase 最新 main 后 | 参数与覆盖守卫通过；随后在新输出目录重跑固定 L1 | `runner-rebased.jsonl` / `runner-rebased.stderr.txt` 与 `l1-rebased/summary.json` |
+| 定向 Go / codex-fixtures | #233 删除历史证据后遗漏的双回合、取消及失败样本 | Windows，无模型 | `go test ./internal/execution/adapters/codex -run '^Test(ConversationMapperNativeTwoTurnFixture\|HistoryTerminalOutcomeFixturesKeepFailureAndCancellationDistinct)$' -count=1` | 将三个原样本迁入对应包 testdata 后 | 两个父测试通过；新文件字节等于固定历史 Git blob，随后完整重跑 L1 | `codex-fixtures.jsonl` / `codex-fixtures.stderr.txt`、`fixture-integrity.json` 与 `l1-final/summary.json` |
 | L1 固定 | quick-core、quick-rules、quick-execution、quick-execution-boundary、quick-owner-*、quick-boundary | Windows，独立 home 与临时目录，无模型 | `go run ./cmd/test-feedback -level=L1 -out=<本次新目录>` | 定向测试通过后 | 退出码 0，passed=true、complete=true，固定用例全部终态且无 skip，最多三个命令并发 | 本次临时目录 `l1/summary.json` 与各组日志；仓库保存摘要及产物路径 |
 | 文档静态 | 链接、差异格式 | 本地仓库 | `python scripts/check_doc_links.py`；`git diff --check` | 文档完成后 | 导航及格式无新增问题 | 本次验证摘要 |
 

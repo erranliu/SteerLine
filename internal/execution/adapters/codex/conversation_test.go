@@ -78,7 +78,7 @@ func TestConversationMapperPreservesMissingSnapshotAndExplicitEmptyFinal(t *test
 }
 
 func TestConversationMapperNativeTwoTurnFixture(t *testing.T) {
-	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "docs", "validation", "pr-04b-local-codex-native-2026-09-25.jsonl"))
+	raw, err := os.ReadFile(filepath.Join("testdata", "pr-04b-local-codex-native-2026-09-25.jsonl"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestConversationMapperNativeTwoTurnFixture(t *testing.T) {
 func TestHistoryTerminalOutcomeFixturesKeepFailureAndCancellationDistinct(t *testing.T) {
 	read := func(name string) HistoryThread {
 		t.Helper()
-		raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "docs", "validation", name))
+		raw, err := os.ReadFile(filepath.Join("testdata", name))
 		if err != nil {
 			t.Fatal(err)
 		}

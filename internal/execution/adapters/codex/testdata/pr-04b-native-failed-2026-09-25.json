@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "source": "public Codex app-server thread/read after a turn in an isolated unauthenticated Codex home",
+  "codex_version": "0.156.1",
+  "redactions": ["session, turn, item and request identifiers are pseudonymized", "workspace and network request IDs are omitted"],
+  "thread": {
+    "id": "local-failed-session",
+    "cwd": "C:/native-probe/local",
+    "turns": [
+      {
+        "id": "local-failed-turn-1",
+        "status": "failed",
+        "itemsView": "full",
+        "startedAt": 1790299506,
+        "completedAt": 1790299527,
+        "error": {"message": "401 Unauthorized: Missing bearer or basic authentication in header"},
+        "items": [
+          {"id": "local-failed-item-user", "type": "userMessage", "content": [{"type": "text", "text": "Reply with OK."}]}
+        ]
+      }
+    ]
+  }
+}
