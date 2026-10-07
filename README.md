@@ -18,4 +18,4 @@ SteerLine 是一款面向工程 AGI 的研究型软件开发工具。它以 road
 
 运行 `steerline console` 打开当前 TUI，默认枚举 `<STEERLINE_HOME>/etc/*.json` 项目并加载全局 execution.json；`-config <path>` 打开明确项目，`-run-id <run-id|task-id>` 定位已有运行。Windows console.bat 进入同一控制台；中心服务由用户从 service-window.bat 独立启动，退出控制台不会停止服务或 worker。
 
-当前控制台使用任务列表、候选摘要和运行/反馈三窗，支持候选切换、原地输入和完整最终回复的只读详情。目标选择、操作键位、草稿及重开语义统一见[执行控制台设计与操作](docs/product-design/execution-console.md)；配置和权限见[执行方案](docs/product-design/execution-profiles.md)，生命周期见[整体架构](docs/architecture.md)。完整过程时间线、工具正文与轮次折叠不属于当前 TUI。
+当前控制台使用任务列表、候选摘要和运行/反馈三窗，支持候选切换、原地输入和完整最终回复的只读详情。目标选择、操作键位、草稿及重开语义统一见[执行控制台设计与操作](docs/product-design/execution-console.md)；配置和权限见[执行方案](docs/product-design/execution-profiles.md)，生命周期见[整体架构](docs/architecture.md)。中心仅采集完整最终回复、问题及必要执行事实；完整过程在原生工具查看。恢复仅继续原会话，原会话不可核实时由人处理，详见[会话与恢复精简](docs/spec/product-simplification-04-conversation-recovery.spec.md)。

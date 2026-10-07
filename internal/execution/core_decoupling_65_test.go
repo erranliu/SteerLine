@@ -18,7 +18,7 @@ import (
 )
 
 func TestCD65SourceCommitAndHostGate(t *testing.T) {
-	t.Run("failed_live_source_does_not_advance_committed_mapper_or_cursor", TestConversationLiveSourceFailureKeepsGapAndMapperPosition)
+	t.Run("raw_is_not_collected_and_gap_is_idempotent", TestConversationFactsDoNotStoreRaw)
 	t.Run("host_fact_becomes_a_center_manual_gate", testCD65HostGateKeepsTrustedActionSeparate)
 	t.Run("active_and_historical_source_budgets_rotate", TestCD65HistoryBudgetRotatesSources)
 	t.Run("discovery_cannot_write_a_different_owner", testCD65DiscoveryRejectsForeignOwner)
@@ -64,7 +64,7 @@ func (p *testConversationHistoryPort) ReadHistory(_ context.Context, request con
 		sequence = value + 1
 	}
 	event := request.Source.Event
-	event.Type, event.SourceEventID, event.SourceEventQuality, event.SourceSeq = executionvalues.ConversationObservation, fmt.Sprintf("%s:%d", request.Source.Identity, sequence), executionvalues.IdentityDerived, sequence
+	event.Type, event.SourceEventID, event.SourceEventQuality, event.SourceSeq = executionvalues.ConversationGap, fmt.Sprintf("%s:%d", request.Source.Identity, sequence), executionvalues.IdentityDerived, sequence
 	event.ReceivedAt = now()
 	return conversationtypes.ConversationHistoryBatch{Writes: []executionvalues.ConversationWrite{{Event: event}}, Cursor: fmt.Sprintf("cursor:%d", sequence), Sequence: sequence}, nil
 }

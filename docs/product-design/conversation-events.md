@@ -1,64 +1,27 @@
-# Conversation events v2
+# 最终回复与必要会话事实
 
-Status: the persisted read model now has verified native turn/phase/final/replay support for Windows local Codex and explicitly bound local Orca Codex sessions. Other targets retain their reported limits; see the [capability report](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-04b-conversation-capabilities-2026-09-24.json) and [acceptance report](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/pr-04b-conversation-events-2026-09-24.md).
+中心保存完整最终回复、session/turn 状态、宿主等待及采集缺口。问题、背景、选项和答案由 Decision 保存，发送意图与回执由 Command/Operation 保存。完整工具过程、普通消息、增量、终端正文和未知原始事件留在原生工具，中心不维护其副本。此次收口见[Spec](../spec/product-simplification-04-conversation-recovery.spec.md)及[验收](../acceptance/product-simplification-04-conversation-recovery.md)。
 
-## Model
+## 原生采集
 
-`ConversationEvent` is the backend-neutral record for product conversation reads and console presentation. It carries project, workflow, execution, attempt, backend, protocol, agent, target, external reference, source segment and source cursor identity. Session, turn, item and source-event IDs each carry `native`, `derived` or `unknown` identity quality. Source byte ranges, sequence/revision, event time when present, receive time and evidence accompany the normalized type.
+本地 Codex 与绑定到本机 Orca 的 Codex 会话沿原 `codex-app-server` 历史读取接口工作。先核验原 session、workspace 和 Codex home，再以有界 turn 页读取必要状态与 final。只有明确 `agentMessage.phase=final_answer`、原生 turn 有非空 `completedAt` 且正文实际存在时，中心保存完整正文。显式空字符串是完整空回复；缺失 text、未知 phase、失败或取消且没有 final 均保留真实状态与明确缺口，不采用最后一条文字冒充 final。
 
-Each source carries a required `source_role`: `canonical` for verified conversation history and `fallback` for raw or terminal observations. Validation rejects missing or unsupported roles. The event version is 2. Readers reject version 1 events; there is no conversion path for earlier development data.
+正在运行的 turn 只保存原 turn 开始事实，不保存部分正文。结束但 final 尚未出现的原 turn 保留有界重访锚点；迟到的 final 仍属于原 turn，不新建会话。原生历史读取游标与最终正文在事务完成后推进；读取失败保存 gap，不推进游标。重复读取按原 source/session/turn/item 身份幂等。终态 final item 内容变化被拒绝，保留原正文并报告缺口。迟到的完整 final 在最终回复索引中解除该 turn 先前的缺正文提示；诊断查询仍可追溯该提示。
 
-Events represent `session`, `turn.started`, message delta/snapshot/completed, tool activity, input wait, turn completed/failed/cancelled, observation, gap, structured execution result and unknown source types. `message.completed` closes one message. It does not close its turn. A turn terminal does not identify a final answer. Phase comes from an explicit source field; an absent or unverified phase is `unknown`.
+采集独立于阅读窗口，活动来源优先、历史来源按有界轮转读取。准备轮最终回复不作为业务最终成果展示；原始后端、候选、Attempt 和源身份始终核对。其他 agent/远端保持原支持与缺证限制，不从终端文字推断 final。
 
-The message item key hashes project, execution, attempt, source segment, session, turn and item identity. A missing item ID stays missing. A turn with an explicit source boundary and no native turn ID uses that boundary's persisted source event ID and the `codex-jsonl-turn-boundary-v1` derivation rule. Output without a reliable turn boundary remains in its source segment.
+## 存储与阅读
 
-`FinalAvailability` distinguishes `available`, `final_pending`, `final_absent` and `final_unknown`. Current local and terminal fallback sources do not promote a process result or the last visible text to a final answer. A validated `final_answer` phase may mark content available. Unknown or incomplete source evidence stays unknown; a collected gap is explicit.
+SQLite 保存必要事件、不可变完整 final 正文和原生历史 checkpoint；删除 raw 表、增量 current-message 表、JSONL 会话 mapper 与独立日志重放队列。当前格式来源见[数据模型](data-model.md#当前格式来源)，旧开发数据库/事件/查询游标明确拒绝，不迁移或双写。
 
-## Source mapping
+产品读取只提供 `ReadConversation`、`ReadMessageBody` 与必要能力报告。事件页默认 200、上限 1000、总 envelope 1 MiB；正文上限 16 MiB，按需以最多 256 KiB 的 UTF-8 安全页读取，绑定原 execution/attempt/item、不可变正文摘要与 revision。正文缺失、损坏、超限和截断均不得报告完整。中心没有 raw 读取/导出器，也不从日志回填。
 
-`codex-app-server` is the exact conversation source. The collector uses the public `thread/read` metadata check and `thread/turns/list` with `itemsView=full` and a one-turn page limit. Session, turn and item IDs and `agentMessage.phase` are native fields. It stores full snapshots as immutable revisions and derives replay identities from the native item plus its snapshot. A terminal turn status is accepted only with a non-null native `completedAt`: standalone history reads can synthesize `interrupted` for a still-running turn whose completion was not persisted.
+控制台保持当前三窗及最近活动摘要；`f` 按需读取完整最终回复，[ / ] 查看已采集历史最终回复。预览仍最多 4096 字节、800 字符及六行；失败/缺口使旧预览失效，异步结果不能跨项目、候选、Attempt、turn 或正文身份。完整原生过程通过已有 session/terminal/日志定位到原工具查看。
 
-Current local `worker-flow-v1` workers bind a native thread from `thread/start`, a distinct turn from `turn/start`, the fixed worktree and the app-server process generation. Each turn journals WebSocket notifications in `appserver.jsonl`; the existing public history collector supplies complete message bodies and phases. A local Orca Codex launch uses the internal `codex-session-launch` helper in Orca's terminal environment. It creates a session with public app-server calls, persists a bootstrap user item, records the exact session and inherited `CODEX_HOME`, and runs `codex resume` for that ID. The parent binds this record to the verified Orca runtime/terminal/incarnation. The helper does not generate assistant messages or model phases. This route requires an available configured native Codex command (or `node.exe` with the Codex entry script), and a verified local Orca execution host. It neither adopts a supervised Dispatch nor reads a private database.
+## 操作与诊断边界
 
-The service collects bound histories independently of viewers. The source implementation discovers and reads native history, checks the returned session and workspace, and returns mapped writes with a candidate cursor. The service rotates bounded reads across active and historical sources, then publishes that cursor only after the conversation writes commit. It re-reads the last turn anchor to capture updates. A verified native session record is marked canonical; its `source_changed` event names the raw projections it supersedes, and incremental consumers replace those source projections. `ReadConversation` defaults to the canonical source for that attempt, while an explicit `Source` filter retains raw observations and their raw references. A source-read error adds a gap without advancing its cursor.
+`appserver.jsonl` 及原生操作日志仍供工具请求、原答案结果、停止与恢复对账使用；删除的是重复会话存储和独立重放，不删除这些协议证据。宿主 wait/gap 仅保存事实，不保存附带终端正文，也不直接创建业务 Decision。Activity、最终正文、Decision 和交付事实各有原所有者，不互相冒充。
 
-Native history polling prioritizes the active source and reads at most one ended source per pass. A completed turn without a verified final keeps an anchored revisit cursor, including when newer turns arrive. An unchanged native turn neither creates another event nor advances its source sequence. The implementation returns capability reports tied to the backend, protocol, target, execution, attempt, source identity and observed Codex user agent; host-backed reports include the host's reported version. Host waits remain unverified until a real wait object is observed.
+UI 操作 journal 继续保存草稿与原请求身份；未知只查原请求，不重新发送。不同窗口的原有隔离保持。本次未采用单窗口、文字问答格式或服务启动方式取舍。
 
-Each public turn cursor is limited to 4 KiB and the persisted history cursor and source binding to 64 KiB. The history client verifies the server-reported Codex home against the binding. If an Orca worktree has since been removed, a separate local directory can host the read-only app-server process; the returned session still has to name the original bound worktree.
-
-The previous local `codex exec --json` source is no longer used by `worker-flow-v1`. Its raw reader remains for other existing adapters. The app-server notification journal is bound to the Command ID, native turn ID and process generation; startup reads it to recover tool requests and matching reply results. Codex `item.updated` message text is stored as a revisioned snapshot; `item.completed` stores its complete item text when present. The mapper retains unknown source events verbatim. Source fields not observed in a real fixture remain unverified in the capability report.
-
-Orca terminal v2 output is read on a collector goroutine bound to the fixed runtime, terminal and incarnation. Terminal bytes are saved as `observation` bodies with their exact output cursor and source. The collector does not parse terminal text into messages or infer turns from words or screen output. A verified Orca reply receipt may create `turn.started` with a derived ID tied to its reply operation. A terminal wait is an `input.wait` event with `wait_origin=host`; it does not create or resolve a SteerLine Decision. Result JSON is `execution.result` with an `execution_summary` body when present, never a conversational final.
-
-## Persistence and reads
-
-Conversation events, immutable body revisions, current message bodies, raw event bytes and source cursors live in the current `steerline.db` SQLite authority. `CommitConversation` writes normalized events, raw bytes, body revisions, dedupe identity and the source checkpoint in one transaction. A source event replay is idempotent. An out-of-order or conflicting revision retains the last known body and adds a diagnostic. Local raw JSONL replay is batched and uses the source file identity to open a new segment after replacement.
-
-Current persisted formats are listed in the [data model](data-model.md#当前格式来源). Older databases and snapshots are inspected and rejected; no conversation-table or index upgrade runs on them. Initialize a new current-format database for operation.
-
-The current local checkpoint records an anchored byte position. Startup verifies this format before dispatch, then resumes after the committed byte offset and restores the turn mapper from persisted events. Mapper state is reconstructed from committed session/turn facts for each batch, so a failed commit cannot consume candidate state. It checks file identity, short byte anchors and same-size modification time. An unsupported older checkpoint blocks startup with its original state intact. A changed source opens a new segment with a visible gap; conflicting bytes under one event identity do not advance the cursor. Large raw records beyond 8 MiB produce an explicit gap. Worker output uses bounded backpressure so a full observation queue does not silently drop conversation events.
-
-`ConversationQueryService` exposes `ReadConversation`, `ReadMessageBody` and `ReadRaw`. It returns backend-neutral records and references; callers never supply a file path. Conversation cursors bind project and every query filter. Body reads bind project, execution, attempt, item key and immutable revision.
-
-- Conversation pages default to 200 events, cap at 1,000 and keep encoded event payloads within 1 MiB.
-- Message body pages default to 256 KiB and cap at 256 KiB. Page offsets and returned data preserve UTF-8 rune boundaries; every page names the same body revision and SHA-256.
-- Raw pages default to and cap at 1 MiB. They return bytes and a content digest under the PR 1 bounded-read contract.
-- The event page contains body/raw references for large content. Reading a page does not read arbitrary paths or write runtime/business state.
-
-Activity reads committed SQLite events as described by the [Activity contract](activity.md); there is no activity.jsonl mirror or file fallback. Conversation history and full result summaries have separate bodies and revisions; activity summaries do not replace those bodies.
-
-## Console presentation
-
-Current TUI layout, candidate selection, inline feedback and keys are maintained in the [execution console design](execution-console.md). This section owns conversation read semantics and the persisted operation journal. The current TUI does not render process timelines, tool bodies, turn folds or reading anchors; collection and diagnostic queries still retain their original evidence.
-
-`ConversationFilter.FinalsOnly` requires an exact workflow and execution. The SQLite reader selects explicit final messages and gap diagnostics, excludes current and historical preparation turns, and retains canonical-source selection. The UI validates candidate identity and known turn quality and reduces revisions of the same item. A generic CandidateSummary or last visible message is not final evidence; worker-reported test results are reported content, not independent validation. General diagnostic queries retain process and raw evidence.
-
-The main pane reads one bounded index page for the current attempt/known turn and at most one 4096-byte canonical body prefix, displaying no more than 800 characters and six lines. Index failures or gaps invalidate stale previews; a gap remains visible even alongside a valid final. Full final text and historical replies are read only on demand in bounded UTF-8 pages from an immutable body reference, then checked against the whole-body SHA-256. Partial/truncated/missing bodies and collection gaps are explicitly labeled. Late responses cannot cross project, candidate, attempt, turn, body revision or read generation. Conversation cursor format remains 2; event v2 and the business database format are unchanged.
-
-The UI-owned format-2 operation journal under `<STEERLINE_HOME>/ui/views/<window>/view.json` stores drafts and original request identities only. Two active windows retain separate locks. Reopening resets navigation and queries the original unknown request without sending again. Damaged journals and retired view.v1.json files are preserved and block new outgoing commands in that window; they are not reset or migrated. Reading layout is not business state.
-
-## Capability and evidence boundaries
-
-The historical E-A9 report covers the measured Windows local Codex 0.156.1 and local Orca 1.4.209 Codex targets. Both real two-turn histories passed the same mapper, body-hash and persisted-cursor replay checks; Orca history also contains real tool events. The internal Orca launcher was exercised with two real turns and retained Orca's own Codex environment. The raw `exec --json` and terminal streams retain their original limitations; the verified public history source supplies the missing fields. Remote Orca, other agents and actual host wait/failure/cancellation source samples remain untested. Other fault-injection gaps are listed in the acceptance report.
-
-The dated report describes its original sample, not a current version allowlist or automatic capability grant. Current targets must satisfy their bound implementation reports; remaining native verification is tracked in the [Spec index](../spec/README.md) and [roadmap](../roadmap/drafts/roadmap.md).
+原生样本的历史能力证据只证明原测试时点；当前采集/恢复收口的实际结果与未执行范围由本项验收记录维护，controlled 不作为 native/live 证明。

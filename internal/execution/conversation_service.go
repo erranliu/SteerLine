@@ -1,142 +1,55 @@
 package execution
 
 import (
-	"bytes"
 	"context"
 	"errors"
-	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	"path/filepath"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
+// Raw output stays in the native journal. Only waits and collection gaps enter
+// the center; questions and operation receipts have their own durable records.
 func (s *Service) recordConversationEvent(run *reconstructiontypes.RunView, source WorkerEvent) error {
-	if run == nil || len(source.Raw) == 0 && !source.SourceGap && !source.InputWait || s.conversationStore == nil {
+	if run == nil || (!source.SourceGap && !source.InputWait) || s.conversationStore == nil {
 		return nil
-	}
-	if !executionbackend.StableExecutionID(run.ExecutionID) {
-		return nativeErr("contract_mismatch", "conversation event has no fixed execution identity")
 	}
 	attemptID := source.AttemptID
 	if attemptID == "" {
 		attemptID = run.AttemptID
 	}
-	if !executionbackend.StableExecutionID(attemptID) {
-		return nativeErr("contract_mismatch", "conversation event has no fixed attempt identity")
+	if !executionbackend.StableExecutionID(run.ExecutionID) || !executionbackend.StableExecutionID(attemptID) {
+		return nativeErr("contract_mismatch", "conversation fact has no fixed execution identity")
 	}
-	base := executionmodel.ConversationEvent{Version: executionmodel.ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID,
+	event := executionmodel.ConversationEvent{Version: executionmodel.ConversationVersion, ProjectID: s.Config.identity, TaskID: run.DomainTaskID, WorkflowID: run.RunID,
 		ExecutionID: run.ExecutionID, AttemptID: attemptID, Backend: executionbackend.BackendKind(run.Backend), Protocol: executionbackend.ExecutionProtocol(run.Protocol),
-		Agent: run.Agent, TargetID: run.Target.ID, SourceEventID: source.SourceEventID, SessionQuality: executionmodel.IdentityUnknown, TurnQuality: executionmodel.IdentityUnknown, ItemQuality: executionmodel.IdentityUnknown}
-	input := executionmodel.ConversationInput{Event: base, Process: run.Process, Source: source.Source, Segment: source.SourceSegment, Identity: source.SourceIdentity,
-		Cursor: source.SourceCursor, Generation: processGeneration(run.Process), Session: source.Session, SourceSeq: source.SourceSeq,
-		SourceOffset: source.SourceOffset, SourceLength: source.SourceLength, Raw: append([]byte(nil), source.Raw...), Diagnostic: source.Diagnostic,
-		Gap: source.SourceGap, InputWait: source.InputWait, SourceChanged: source.SourceChanged}
-	if input.Process != nil {
-		process := *input.Process
-		input.Process = &process
+		Agent: run.Agent, TargetID: run.Target.ID, Source: source.Source, SourceRole: executionmodel.ConversationSourceFallback,
+		SourceSegment: source.SourceSegment, SourceIdentity: source.SourceIdentity, SourceEventID: source.SourceEventID,
+		SessionID: source.Session, SessionQuality: executionmodel.IdentityUnknown, TurnQuality: executionmodel.IdentityUnknown,
+		ItemQuality: executionmodel.IdentityUnknown, SourceEventQuality: executionmodel.IdentityDerived,
+		Phase: executionmodel.MessagePhaseUnknown, ReceivedAt: now(), Diagnostic: source.Diagnostic}
+	if event.Source == "" {
+		event.Source = "execution-observer"
 	}
-	if s.conversationSources == nil {
-		return errors.New("conversation source port is required")
+	if event.SourceSegment == "" {
+		event.SourceSegment = attemptID
 	}
-	journalSource := s.conversationSources.JournalSource(base.Backend, base.Protocol)
-	segment := source.SourceSegment
-	if segment == "" {
-		segment = s.conversationSources.JournalSegment(base.Backend, base.Protocol, source.SourceIdentity)
+	event.Type, event.Status = executionmodel.ConversationGap, "gap"
+	if !source.SourceGap {
+		event.Type, event.Status = executionmodel.ConversationInputWait, "waiting"
+		event.Attributes = map[string]any{"wait_origin": "host", "business_decision": false}
 	}
-	if journalSource != "" && segment != "" {
-		snapshot, snapshotErr := s.conversationStore.ConversationMapperSnapshot(context.Background(), s.Config.identity, run.ExecutionID, attemptID, journalSource, segment)
-		if snapshotErr != nil {
-			return snapshotErr
-		}
-		input.Mapper = snapshot
+	if event.SourceEventID == "" {
+		event.SourceEventID = recordFingerprint(struct {
+			Type       executionmodel.ConversationEventType
+			Generation string
+			Sequence   uint64
+			Diagnostic string
+		}{event.Type, processGeneration(run.Process), source.SourceSeq, source.Diagnostic})
 	}
-	var mapper conversationtypes.ConversationInputMapper = s.conversationSources
-	if lifecycle, _, lifecycleErr := s.lifecycleForRun(run); lifecycleErr == nil {
-		if implementationMapper, ok := lifecycle.(conversationtypes.ConversationInputMapper); ok {
-			mapper = implementationMapper
-		}
-	} else if run.WorkflowVersion == executionmodel.Version {
-		return lifecycleErr
-	}
-	batch, err := mapper.MapConversation(input)
-	if err != nil {
-		return err
-	}
-	if len(batch.Writes) == 0 {
-		return nil
-	}
-	if err = validateConversationSourceWrites(base, batch.Writes); err != nil {
-		return err
-	}
-	checkpoint := batch.Checkpoint
-	if checkpoint.ProjectID != base.ProjectID || checkpoint.ExecutionID != base.ExecutionID || checkpoint.AttemptID != base.AttemptID {
-		return errors.New("conversation mapper checkpoint changed the original execution identity")
-	}
-	if batch.VerifySourcePosition && source.SourceIdentity != "" {
-		paths := []string{}
-		for _, attempt := range s.domain.Attempts {
-			if attempt.AttemptID == attemptID && attempt.ExecutionID == run.ExecutionID && attempt.EventPath != "" {
-				paths = append(paths, attempt.EventPath)
-			}
-		}
-		path, pathErr := s.conversationSources.LiveJournalPath(context.Background(), conversationtypes.ConversationJournalPathRequest{
-			RunDirectory: filepath.Join(s.Config.RunDir, "runs", run.RunID), WorkflowID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: attemptID,
-			SourceIdentity: source.SourceIdentity, LogPath: deref(run.LogPath), EventPaths: paths, WorkerFlow: run.WorkflowVersion == executionmodel.Version})
-		if pathErr != nil {
-			return pathErr
-		}
-		event := batch.Writes[len(batch.Writes)-1].Event
-		generation, generationErr := s.conversationSources.JournalGeneration(source.SourceIdentity, event.SourceSegment)
-		if generationErr != nil {
-			return generationErr
-		}
-		position, positionErr := currentConversationJournalPosition(context.Background(), s.conversationStore, s.Config.identity, run.ExecutionID, attemptID, event.Source, event.SourceSegment, generation, path, source.SourceIdentity, source.SourceOffset+source.SourceLength, source.SourceSeq)
-		if positionErr == nil && !source.SourceGap && len(source.Raw) > 0 {
-			positionErr = verifyConversationSourceBytes(path, source.SourceIdentity, source.SourceOffset, source.SourceLength, source.Raw)
-		}
-		if positionErr != nil {
-			gap := event
-			gap.Type, gap.Phase, gap.Status = executionmodel.ConversationGap, executionmodel.MessagePhaseUnknown, "source_unavailable"
-			gap.SourceEventID = "source-unavailable:" + event.SourceEventID
-			gap.Diagnostic = positionErr.Error()
-			gap.SessionQuality, gap.TurnQuality, gap.ItemQuality = executionmodel.IdentityUnknown, executionmodel.IdentityUnknown, executionmodel.IdentityUnknown
-			if _, gapErr := s.conversationStore.CommitConversation(context.Background(), []executionmodel.ConversationWrite{{Event: gap, Raw: append([]byte(nil), source.Raw...)}}, executionmodel.ConversationCheckpoint{}); gapErr != nil {
-				return errors.Join(positionErr, gapErr)
-			}
-			return positionErr
-		}
-		checkpoint.Cursor, positionErr = marshalConversationJournalPosition(position)
-		if positionErr != nil {
-			return positionErr
-		}
-		checkpoint.SourceIdentity, checkpoint.Generation, checkpoint.LocalSeq, checkpoint.AllowReplay = source.SourceIdentity, source.SourceIdentity, source.SourceSeq, true
-	}
-	_, err = s.conversationStore.CommitConversation(context.Background(), batch.Writes, checkpoint)
+	_, err := s.conversationStore.CommitConversation(context.Background(), []executionmodel.ConversationWrite{{Event: event}}, executionmodel.ConversationCheckpoint{})
 	return err
-}
-
-func verifyConversationSourceBytes(path, expectedFileID string, offset, length int64, raw []byte) error {
-	if offset < 0 || length != int64(len(raw)) {
-		return errors.New("conversation source byte range is invalid")
-	}
-	f, fileID, err := openJournal(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-	if fileID != expectedFileID {
-		return errors.New("conversation source file changed before committing its record")
-	}
-	stored := make([]byte, len(raw))
-	if _, err = f.ReadAt(stored, offset); err != nil {
-		return err
-	}
-	if !bytes.Equal(stored, raw) {
-		return errors.New("conversation source bytes changed before committing their checkpoint")
-	}
-	return nil
 }
 
 func processGeneration(process *executionbackend.ProcessIdentity) string {

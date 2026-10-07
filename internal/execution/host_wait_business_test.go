@@ -12,18 +12,6 @@ import (
 
 type neutralHostWaitSource struct{ neutralConversationSources }
 
-func (neutralHostWaitSource) MapConversation(input executionvalues.ConversationInput) (executionvalues.ConversationMappedBatch, error) {
-	event := input.Event
-	event.ReceivedAt, event.Source, event.SourceRole = now(), input.Source, executionvalues.ConversationSourceFallback
-	event.SourceSegment, event.SourceIdentity, event.SourceSeq = input.Segment, input.Identity, input.SourceSeq
-	event.SourceEventQuality, event.Phase = executionvalues.IdentityDerived, executionvalues.MessagePhaseUnknown
-	event.Type, event.Status = executionvalues.ConversationInputWait, "waiting"
-	event.Attributes = map[string]any{"wait_origin": "host", "business_decision": false}
-	event.Evidence = map[string]string{"wait_source": "fixture.host-observation"}
-	return executionvalues.ConversationMappedBatch{Writes: []executionvalues.ConversationWrite{{Event: event}},
-		Checkpoint: executionvalues.ConversationCheckpoint{ProjectID: event.ProjectID, ExecutionID: event.ExecutionID, AttemptID: event.AttemptID, Source: event.Source, SourceSegment: event.SourceSegment, SourceIdentity: event.SourceIdentity, Generation: input.Generation, LocalSeq: input.SourceSeq}}, nil
-}
-
 func TestHostInputWaitPersistsWithoutBusinessDecision(t *testing.T) {
 	store, err := openSQLiteFixture(filepath.Join(t.TempDir(), "wait.db"))
 	require(t, err)
@@ -45,7 +33,7 @@ func TestHostInputWaitPersistsWithoutBusinessDecision(t *testing.T) {
 	}
 	var stored executionvalues.ConversationEvent
 	require(t, json.Unmarshal(record.Payload, &stored))
-	if stored.Attributes["wait_origin"] != "host" || stored.Attributes["business_decision"] != false || stored.Evidence["wait_source"] != "fixture.host-observation" {
+	if stored.Attributes["wait_origin"] != "host" || stored.Attributes["business_decision"] != false {
 		t.Fatalf("persisted host wait lost its internal source evidence: %+v", stored)
 	}
 	if run.Decision != nil || len(service.domain.Decisions) != 0 {

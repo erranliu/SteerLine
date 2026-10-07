@@ -30,12 +30,6 @@ func (f conversationBodies) ConversationBody(ctx context.Context, project string
 	return f(ctx, project, ref, limit)
 }
 
-type conversationRaw func(context.Context, string, api.ConversationRawRef, int) (storageports.ConversationRawRecord, error)
-
-func (f conversationRaw) ConversationRaw(ctx context.Context, project string, ref api.ConversationRawRef, limit int) (storageports.ConversationRawRecord, error) {
-	return f(ctx, project, ref, limit)
-}
-
 type conversationCapabilities func(context.Context, executionbackend.BackendKind, executionbackend.ExecutionProtocol, string, int) ([]api.ConversationCapabilityReport, error)
 
 func (f conversationCapabilities) ConversationCapabilityReports(ctx context.Context, backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, target string, limit int) ([]api.ConversationCapabilityReport, error) {
@@ -56,7 +50,7 @@ func TestConversationQueriesUseIndependentEventPortAndBoundCursor(t *testing.T) 
 		}
 		payload, _ := json.Marshal(executionvalues.ConversationEvent{Version: executionvalues.ConversationVersion, ProjectID: project, ExecutionID: filter.ExecutionID, AttemptID: filter.AttemptID,
 			Source: filter.Source, SourceRole: executionvalues.ConversationSourceFallback, SourceSegment: "segment", SourceEventID: fmt.Sprintf("event:%d", after+1), SessionQuality: executionvalues.IdentityUnknown, TurnQuality: executionvalues.IdentityUnknown,
-			ItemQuality: executionvalues.IdentityUnknown, SourceEventQuality: executionvalues.IdentityDerived, Type: executionvalues.ConversationObservation, Phase: executionvalues.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()})
+			ItemQuality: executionvalues.IdentityUnknown, SourceEventQuality: executionvalues.IdentityDerived, Type: executionvalues.ConversationGap, Phase: executionvalues.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()})
 		return &storageports.ConversationEventRecord{EventID: after + 1, PayloadBytes: len(payload), Payload: payload}, nil
 	})}
 	first, err := service.ReadConversation(ctx, filter, "", 1)
@@ -83,7 +77,7 @@ func TestConversationQueriesUseIndependentEventPortAndBoundCursor(t *testing.T) 
 func TestConversationPageBudgetDefersOverflowPayloadDecoding(t *testing.T) {
 	payload, _ := json.Marshal(executionvalues.ConversationEvent{Version: executionvalues.ConversationVersion, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt",
 		Source: "fixture", SourceRole: executionvalues.ConversationSourceFallback, SourceSegment: "segment", SourceEventID: "event:1", SessionQuality: executionvalues.IdentityUnknown, TurnQuality: executionvalues.IdentityUnknown,
-		ItemQuality: executionvalues.IdentityUnknown, SourceEventQuality: executionvalues.IdentityDerived, Type: executionvalues.ConversationObservation, Phase: executionvalues.MessagePhaseUnknown,
+		ItemQuality: executionvalues.IdentityUnknown, SourceEventQuality: executionvalues.IdentityDerived, Type: executionvalues.ConversationGap, Phase: executionvalues.MessagePhaseUnknown,
 		ReceivedAt: time.Now().UTC(), Diagnostic: strings.Repeat("x", MaxEventPageBytes-4096)})
 	if len(payload) >= MaxEventPageBytes {
 		t.Fatal("fixture must leave room for a budget boundary")
@@ -106,7 +100,7 @@ func TestConversationPageBudgetDefersOverflowPayloadDecoding(t *testing.T) {
 func TestConversationReaderRejectsPreviousEventFormat(t *testing.T) {
 	old, err := json.Marshal(executionvalues.ConversationEvent{Version: 1, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Source: "fixture",
 		SourceSegment: "segment", SourceEventID: "old-event", SessionQuality: executionvalues.IdentityUnknown, TurnQuality: executionvalues.IdentityUnknown, ItemQuality: executionvalues.IdentityUnknown,
-		SourceEventQuality: executionvalues.IdentityDerived, Type: executionvalues.ConversationObservation, Phase: executionvalues.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()})
+		SourceEventQuality: executionvalues.IdentityDerived, Type: executionvalues.ConversationGap, Phase: executionvalues.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +115,7 @@ func TestConversationReaderRejectsPreviousEventFormat(t *testing.T) {
 func TestConversationReaderRejectsMissingSourceRole(t *testing.T) {
 	payload, err := json.Marshal(executionvalues.ConversationEvent{Version: executionvalues.ConversationVersion, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt",
 		Source: "fixture", SourceSegment: "segment", SourceEventID: "event:1", SessionQuality: executionvalues.IdentityUnknown, TurnQuality: executionvalues.IdentityUnknown,
-		ItemQuality: executionvalues.IdentityUnknown, SourceEventQuality: executionvalues.IdentityDerived, Type: executionvalues.ConversationObservation, Phase: executionvalues.MessagePhaseUnknown,
+		ItemQuality: executionvalues.IdentityUnknown, SourceEventQuality: executionvalues.IdentityDerived, Type: executionvalues.ConversationGap, Phase: executionvalues.MessagePhaseUnknown,
 		ReceivedAt: time.Now().UTC()})
 	if err != nil {
 		t.Fatal(err)
@@ -134,7 +128,7 @@ func TestConversationReaderRejectsMissingSourceRole(t *testing.T) {
 	}
 }
 
-func TestConversationBodyAndRawQueriesUseSeparatePorts(t *testing.T) {
+func TestConversationBodyQueriesUseIndependentPort(t *testing.T) {
 	ctx := context.Background()
 	text := []byte("你好🙂tail")
 	sum := sha256.Sum256(text)
@@ -157,17 +151,6 @@ func TestConversationBodyAndRawQueriesUseSeparatePorts(t *testing.T) {
 	record.Body = []byte("tampered")
 	if _, err := service.ReadMessageBody(ctx, ref, 0, 7); err == nil {
 		t.Fatal("corrupt revision was accepted")
-	}
-	rawRef := api.ConversationRawRef{ExecutionID: "execution", AttemptID: "attempt", ID: "raw", SHA256: digest, Bytes: int64(len(text))}
-	service = ConversationService{Project: "project", Raw: conversationRaw(func(_ context.Context, project string, got api.ConversationRawRef, limit int) (storageports.ConversationRawRecord, error) {
-		if project != "project" || got != rawRef || limit != executionvalues.MaxConversationBodyBytes+1 {
-			t.Fatal("lost raw identity or bound")
-		}
-		return storageports.ConversationRawRecord{Data: text, TotalBytes: rawRef.Bytes, SHA256: digest}, nil
-	})}
-	raw, err := service.ReadRaw(ctx, rawRef, 3, 3)
-	if err != nil || string(raw.Data) != "好" || raw.NextOffset != 6 {
-		t.Fatalf("raw-only read failed: %+v %v", raw, err)
 	}
 }
 

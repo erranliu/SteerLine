@@ -16,7 +16,7 @@ func TestCandidateFinalCountKeepsDistinctItemsOnOneNativeTurn(t *testing.T) {
 	fallback := business
 	fallback.SourceRole = productapi.ConversationSourceFallback
 	snapshot := business
-	snapshot.Type = productapi.ConversationMessageSnapshot
+	snapshot.Type = productapi.ConversationEventType("message.snapshot")
 	count, err := CandidateFinalCount([]productapi.ConversationEvent{final, business, final, fallback, snapshot}, final.SessionID)
 	if err != nil || count != 2 {
 		t.Fatalf("distinct final items or replay filtering lost: count=%d err=%v", count, err)

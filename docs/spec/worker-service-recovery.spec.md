@@ -1,5 +1,7 @@
 # Spec：worker 停服恢复与手动继续
 
+当前恢复行为由[最终回复与原会话恢复精简](product-simplification-04-conversation-recovery.spec.md)收窄：只恢复原 session，取消 new_session 与无原会话的人工新建路径。本文其他原请求/身份/停止边界保留。
+
 目标：`WORKER-SERVICE-RECOVERY`。状态：实现候选；本机 local Codex 闭环与 Orca fake 定向验证已通过，Orca 新 agent 的安全重建仍缺真机能力证据。配套 [Plan](worker-service-recovery.plan.md)及[验证记录](../acceptance/worker-service-recovery.md)。日期：2026-09-30。实现基线：`origin/main` 的 `472d61e`（含 #144、#148、#149）；不创建或绑定生产 Task。
 
 ## 1. 目标与替代范围

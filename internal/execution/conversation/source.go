@@ -8,31 +8,9 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-type ConversationMapper interface {
-	MapRecord(executionmodel.ConversationEvent, []byte) executionmodel.ConversationWrite
-}
-
-type ConversationInputMapper interface {
-	MapConversation(executionmodel.ConversationInput) (executionmodel.ConversationMappedBatch, error)
-}
-
 type ConversationSourcePort interface {
-	ConversationInputMapper
-	RestoreMapper(executionmodel.ConversationMapperSnapshot) ConversationMapper
-	JournalSources() []string
-	JournalSource(executionbackend.BackendKind, executionbackend.ExecutionProtocol) string
-	JournalSegment(executionbackend.BackendKind, executionbackend.ExecutionProtocol, string) string
-	JournalGeneration(fileIdentity, segment string) (uint64, error)
-	LiveJournalPath(context.Context, ConversationJournalPathRequest) (string, error)
 	DiscoverHistory(context.Context, ConversationDiscovery) (ConversationDiscoveryResult, error)
-	DiscoverJournals(context.Context, ConversationDiscovery, func(string) (string, error)) ([]ConversationJournalSource, error)
 	ReadHistory(context.Context, ConversationHistoryReadRequest, func(*exec.Cmd) (executionbackend.StopHandle, error)) (ConversationHistoryBatch, error)
-}
-
-type ConversationJournalPathRequest struct {
-	RunDirectory, WorkflowID, ExecutionID, AttemptID, SourceIdentity, LogPath string
-	EventPaths                                                                []string
-	WorkerFlow                                                                bool
 }
 
 type ConversationDiscovery struct {
@@ -54,12 +32,6 @@ type ConversationAttemptSource struct {
 	EventPath string
 	FileID    string
 	Ended     bool
-}
-
-type ConversationJournalSource struct {
-	Path, AttemptID, FileID, ExpectedFileID, Diagnostic, Workspace string
-	Event                                                          executionmodel.ConversationEvent
-	Ended                                                          bool
 }
 
 type ConversationHistorySource struct {

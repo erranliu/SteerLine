@@ -6,11 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
-	productdto "github.com/erranliu/SteerLine/internal/product/api"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -75,7 +73,7 @@ func TestCodexHistoryNativeFixtures(t *testing.T) {
 					if e.FinalAvailability != executionvalues.FinalAvailable {
 						t.Fatal("native final evidence lost")
 					}
-				case executionvalues.ConversationToolCompleted:
+				case executionvalues.ConversationEventType("tool.completed"):
 					tools++
 				}
 				if e.Type == executionvalues.ConversationMessageComplete {
@@ -90,10 +88,10 @@ func TestCodexHistoryNativeFixtures(t *testing.T) {
 					}
 				}
 			}
-			if starts != 2 || ends != 2 || commentary < 1 || finals != 2 {
+			if starts != 2 || ends != 2 || commentary != 0 || finals != 2 {
 				t.Fatalf("native facts lost: starts=%d ends=%d commentary=%d finals=%d", starts, ends, commentary, finals)
 			}
-			if sample.Backend == executionbackend.BackendOrca && tools < 2 {
+			if sample.Backend == executionbackend.BackendOrca && tools != 0 {
 				t.Fatalf("Orca native tool events lost: %d", tools)
 			}
 		})
@@ -119,7 +117,7 @@ func TestCodexHistoryRealLocalToolInterleaveFixture(t *testing.T) {
 	require(t, err)
 	second, err := store.CommitConversation(context.Background(), writes, executionvalues.ConversationCheckpoint{})
 	require(t, err)
-	if len(first) != 6 || len(second) != len(first) {
+	if len(first) != 3 || len(second) != len(first) {
 		t.Fatalf("real interleaved turn was not preserved: %+v", first)
 	}
 	for i := range first {
@@ -127,8 +125,8 @@ func TestCodexHistoryRealLocalToolInterleaveFixture(t *testing.T) {
 			t.Fatalf("interleaved replay duplicated or reassigned event %d: %+v", i, first[i])
 		}
 	}
-	if first[0].Type != executionvalues.ConversationTurnStarted || first[2].Type != executionvalues.ConversationMessageComplete || first[2].Phase != executionvalues.MessagePhaseCommentary || first[3].Type != executionvalues.ConversationToolCompleted || first[3].Status != "completed" || first[4].Type != executionvalues.ConversationMessageComplete || first[4].Phase != executionvalues.MessagePhaseFinalAnswer || first[5].Type != executionvalues.ConversationTurnCompleted || first[5].FinalAvailability != executionvalues.FinalAvailable {
-		t.Fatalf("real commentary/tool/final order or turn completion was lost: %+v", first)
+	if first[0].Type != executionvalues.ConversationTurnStarted || first[1].Type != executionvalues.ConversationMessageComplete || first[1].Phase != executionvalues.MessagePhaseFinalAnswer || first[2].Type != executionvalues.ConversationTurnCompleted || first[2].FinalAvailability != executionvalues.FinalAvailable {
+		t.Fatalf("native final and turn facts lost: %+v", first)
 	}
 	query := productquery.NewConversationService(store, "project")
 	for _, tc := range []struct {
@@ -162,7 +160,7 @@ func TestCodexHistoryRealCancelledTurnFixture(t *testing.T) {
 	base := executionvalues.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
 	writes, err := codexworker.MapHistoryTurn(base, fixture.Thread.Turns[0], 1)
 	require(t, err)
-	if len(writes) != 2 || writes[0].Event.Type != executionvalues.ConversationTurnStarted || writes[1].Event.Type != executionvalues.ConversationTurnCancelled || writes[1].Event.Status != "interrupted" || writes[1].Event.FinalAvailability != executionvalues.FinalAbsent || writes[1].Event.TurnID != writes[0].Event.TurnID {
+	if len(writes) != 3 || writes[0].Event.Type != executionvalues.ConversationTurnStarted || writes[1].Event.Type != executionvalues.ConversationTurnCancelled || writes[1].Event.Status != "interrupted" || writes[1].Event.FinalAvailability != executionvalues.FinalAbsent || writes[1].Event.TurnID != writes[0].Event.TurnID {
 		t.Fatalf("real terminal cancellation or absent final was misrepresented: %+v", writes)
 	}
 }
@@ -179,7 +177,7 @@ func TestCodexHistoryRealFailedTurnFixture(t *testing.T) {
 	base := executionvalues.ConversationEvent{ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Agent: "codex", SourceSegment: "native", SourceIdentity: "native", SessionID: fixture.Thread.ID}
 	writes, err := codexworker.MapHistoryTurn(base, fixture.Thread.Turns[0], 1)
 	require(t, err)
-	if len(writes) != 3 || writes[0].Event.Type != executionvalues.ConversationTurnStarted || writes[1].Event.Type != executionvalues.ConversationObservation || writes[2].Event.Type != executionvalues.ConversationTurnFailed || writes[2].Event.Status != "failed" || writes[2].Event.FinalAvailability != executionvalues.FinalAbsent {
+	if len(writes) != 3 || writes[0].Event.Type != executionvalues.ConversationTurnStarted || writes[1].Event.Type != executionvalues.ConversationTurnFailed || writes[1].Event.Status != "failed" || writes[1].Event.FinalAvailability != executionvalues.FinalAbsent {
 		t.Fatalf("real native failure or missing final was misrepresented: %+v", writes)
 	}
 	store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "failure.db"))
@@ -187,15 +185,8 @@ func TestCodexHistoryRealFailedTurnFixture(t *testing.T) {
 	defer store.Close()
 	events, err := store.CommitConversation(context.Background(), writes, executionvalues.ConversationCheckpoint{})
 	require(t, err)
-	if events[2].Raw == nil {
-		t.Fatal("real failure lost its raw error evidence")
-	}
-	publicEvent, err := productquery.ConversationEvent(events[2])
-	require(t, err)
-	page, err := productquery.NewConversationService(store, "project").ReadRaw(context.Background(), *publicEvent.Raw, 0, 4096)
-	require(t, err)
-	if !page.Complete || !strings.Contains(string(page.Data), "401 Unauthorized") {
-		t.Fatalf("real failure error evidence changed: %+v", page)
+	if events[1].Diagnostic == "" {
+		t.Fatal("native failure lost its bounded diagnostic")
 	}
 }
 
@@ -257,54 +248,6 @@ func TestCodexHistoryMissingTextDoesNotClaimFinalBody(t *testing.T) {
 	}
 }
 
-func TestCodexHistoryCanonicalSourceKeepsRawReadable(t *testing.T) {
-	ctx := context.Background()
-	store, err := sqlite.OpenSQLiteStore(filepath.Join(t.TempDir(), "history.db"))
-	require(t, err)
-	defer store.Close()
-	raw := conversationTestWrite("bytes:0:4", 1, "complete", []byte("raw reply"), []byte("raw"))
-	_, err = store.CommitConversation(ctx, []executionvalues.ConversationWrite{raw}, executionvalues.ConversationCheckpoint{})
-	require(t, err)
-	native := raw.Event
-	native.SourceRole = executionvalues.ConversationSourceCanonical
-	native.Source, native.SourceSegment, native.SourceEventID = "codex-app-server", "native", "session"
-	native.Type, native.ItemKey = executionvalues.ConversationSession, ""
-	_, err = store.CommitConversation(ctx, []executionvalues.ConversationWrite{{Event: native}}, executionvalues.ConversationCheckpoint{})
-	require(t, err)
-	query := productquery.NewConversationService(store, "project")
-	page, err := query.ReadConversation(ctx, productdto.ConversationFilter{}, "", 100)
-	require(t, err)
-	if len(page.Events) != 1 || page.Events[0].Source != "codex-app-server" {
-		t.Fatal("raw and native message projections were both displayed")
-	}
-	rawPage, err := query.ReadConversation(ctx, productdto.ConversationFilter{Source: "codex-jsonl"}, "", 100)
-	require(t, err)
-	if len(rawPage.Events) != 1 || rawPage.Events[0].Raw == nil {
-		t.Fatal("raw source evidence became inaccessible")
-	}
-	other := raw
-	other.Event.AttemptID = "other-attempt"
-	other.Event.ItemKey = conversationItemKey(other.Event, other.Event.ItemID)
-	_, err = store.CommitConversation(ctx, []executionvalues.ConversationWrite{other}, executionvalues.ConversationCheckpoint{})
-	require(t, err)
-	page, err = query.ReadConversation(ctx, productdto.ConversationFilter{}, "", 100)
-	require(t, err)
-	if len(page.Events) != 2 {
-		t.Fatal("native source selection crossed attempt boundaries")
-	}
-	gap := raw.Event
-	gap.Type, gap.SourceEventID, gap.ItemKey = executionvalues.ConversationGap, "source-changed", ""
-	wait := gap
-	wait.Source, wait.Type, wait.SourceEventID = "orca-terminal-v2", executionvalues.ConversationInputWait, "host-wait"
-	_, err = store.CommitConversation(ctx, []executionvalues.ConversationWrite{{Event: gap}, {Event: wait}}, executionvalues.ConversationCheckpoint{})
-	require(t, err)
-	page, err = query.ReadConversation(ctx, productdto.ConversationFilter{}, "", 100)
-	require(t, err)
-	if len(page.Events) != 4 || page.Events[2].Type != productdto.ConversationGap || page.Events[3].Type != productdto.ConversationInputWait {
-		t.Fatal("native source selection hid a gap or host wait")
-	}
-}
-
 func TestCodexHistoryBindingCannotChangeAttempt(t *testing.T) {
 	b := codexworker.HistoryBinding{Version: 1, ProjectID: "p", WorkflowID: "w", ExecutionID: "e", AttemptID: "a", Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, TargetID: "local", Workspace: t.TempDir(), SessionID: "00000000-0000-0000-0000-000000000001", Command: executionbackend.Command{Executable: "codex"}}
 	path := filepath.Join(t.TempDir(), "codex-history.v1.json")
@@ -322,7 +265,7 @@ func conversationItemKey(event executionvalues.ConversationEvent, item string) s
 }
 
 func conversationTestWrite(sourceID string, sequence uint64, mode string, body, raw []byte) executionvalues.ConversationWrite {
-	event := executionvalues.ConversationEvent{Version: executionvalues.ConversationVersion, ProjectID: "project", TaskID: "task", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Agent: "codex", TargetID: "local-test", Source: "codex-jsonl", SourceRole: executionvalues.ConversationSourceFallback, SourceSegment: "segment-1", SessionID: "session", SessionQuality: executionvalues.IdentityNative, TurnID: "turn", TurnQuality: executionvalues.IdentityDerived, ItemID: "same-item", ItemQuality: executionvalues.IdentityNative, SourceEventID: sourceID, SourceEventQuality: executionvalues.IdentityDerived, SourceSeq: sequence, Type: executionvalues.ConversationMessageDelta, Phase: executionvalues.MessagePhaseUnknown, ReceivedAt: time.Now().UTC()}
+	event := executionvalues.ConversationEvent{Version: executionvalues.ConversationVersion, ProjectID: "project", TaskID: "task", WorkflowID: "workflow", ExecutionID: "execution", AttemptID: "attempt", Backend: executionbackend.BackendLocal, Protocol: executionbackend.ProtocolLocalProcess, Agent: "codex", TargetID: "local-test", Source: "codex-jsonl", SourceRole: executionvalues.ConversationSourceFallback, SourceSegment: "segment-1", SessionID: "session", SessionQuality: executionvalues.IdentityNative, TurnID: "turn", TurnQuality: executionvalues.IdentityDerived, ItemID: "same-item", ItemQuality: executionvalues.IdentityNative, SourceEventID: sourceID, SourceEventQuality: executionvalues.IdentityDerived, SourceSeq: sequence, Type: executionvalues.ConversationMessageComplete, Phase: executionvalues.MessagePhaseFinalAnswer, FinalAvailability: executionvalues.FinalAvailable, ReceivedAt: time.Now().UTC()}
 	event.ItemKey = conversationItemKey(event, event.ItemID)
-	return executionvalues.ConversationWrite{Event: event, Body: body, BodyMode: mode, Raw: raw, BodySource: "test-source"}
+	return executionvalues.ConversationWrite{Event: event, Body: body, BodyMode: mode, BodySource: "test-source"}
 }

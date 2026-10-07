@@ -13,7 +13,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
-	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
@@ -420,36 +419,8 @@ func (p *additionalPort) observer(snapshot executionbackend.LifecycleSnapshot, v
 // and event commit ports. It declares this limitation instead of inventing data.
 type additionalSources struct{}
 
-func (additionalSources) MapConversation(executionvalues.ConversationInput) (executionvalues.ConversationMappedBatch, error) {
-	return executionvalues.ConversationMappedBatch{}, nil
-}
-
-func (additionalSources) RestoreMapper(executionvalues.ConversationMapperSnapshot) conversationtypes.ConversationMapper {
-	return nil
-}
-
-func (additionalSources) JournalSources() []string { return nil }
-
-func (additionalSources) JournalSource(executionbackend.BackendKind, executionbackend.ExecutionProtocol) string {
-	return ""
-}
-
-func (additionalSources) JournalSegment(executionbackend.BackendKind, executionbackend.ExecutionProtocol, string) string {
-	return ""
-}
-
-func (additionalSources) JournalGeneration(string, string) (uint64, error) { return 0, nil }
-
-func (additionalSources) LiveJournalPath(context.Context, conversationtypes.ConversationJournalPathRequest) (string, error) {
-	return "", nil
-}
-
 func (additionalSources) DiscoverHistory(context.Context, conversationtypes.ConversationDiscovery) (conversationtypes.ConversationDiscoveryResult, error) {
 	return conversationtypes.ConversationDiscoveryResult{}, nil
-}
-
-func (additionalSources) DiscoverJournals(context.Context, conversationtypes.ConversationDiscovery, func(string) (string, error)) ([]conversationtypes.ConversationJournalSource, error) {
-	return nil, nil
 }
 
 func (additionalSources) ReadHistory(context.Context, conversationtypes.ConversationHistoryReadRequest, func(*exec.Cmd) (executionbackend.StopHandle, error)) (conversationtypes.ConversationHistoryBatch, error) {

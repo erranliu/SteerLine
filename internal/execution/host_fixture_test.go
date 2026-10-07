@@ -289,7 +289,7 @@ func runTestService(ctx context.Context, s *Service, mode string) error {
 var _ hostport.HostPort = fixtureHost{}
 
 func newFixtureConversationQuery(store storageports.ConversationReader, project string) query.ConversationService {
-	return query.ConversationService{Project: project, Events: store, Bodies: store, Raw: store, Capabilities: store}
+	return query.ConversationService{Project: project, Events: store, Bodies: store, Capabilities: store}
 }
 func taskDependencyState(record taskmodel.TaskRecord, graph storageports.TaskGraphSnapshot) (bool, []taskmodel.TaskDependencyStatus) {
 	return taskmodel.DependencyStateForTask(record, graph.TaskGraph())

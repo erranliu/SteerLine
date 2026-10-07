@@ -13,7 +13,7 @@ import (
 )
 
 // A committed canonical source hides fallback projections only within the same
-// project/execution/attempt. Explicit source queries retain the raw observations.
+// project/execution/attempt. Explicit source queries retain their necessary execution facts.
 func conversationSourcePredicate(filter api.ConversationFilter, args []any) (string, []any) {
 	if filter.Source != "" {
 		return ` AND source=?`, append(args, filter.Source)
@@ -48,7 +48,11 @@ func (s Reader) NextConversationEvent(ctx context.Context, project string, filte
 		args = append(args, filter.TurnID)
 	}
 	if filter.FinalsOnly {
-		statement += ` AND (event_type='gap' OR (phase='final_answer' AND event_type IN ('message.delta','message.snapshot','message.completed') AND turn_id<>'' AND NOT EXISTS (SELECT 1 FROM executions e WHERE e.project_identity=conversation_events.project_identity AND e.execution_id=conversation_events.execution_id AND (json_extract(e.payload,'$.environment.preparation.turn_id')=conversation_events.turn_id OR EXISTS (SELECT 1 FROM json_each(e.payload,'$.environment.history') h WHERE json_extract(h.value,'$.turn_id')=conversation_events.turn_id)))))`
+		// Missing-final diagnostics stop applying when the original turn has a
+		// complete final, or when it is a preparation turn. Other gaps remain.
+		businessTurn := `NOT EXISTS (SELECT 1 FROM executions e WHERE e.project_identity=conversation_events.project_identity AND e.execution_id=conversation_events.execution_id AND (json_extract(e.payload,'$.environment.preparation.turn_id')=conversation_events.turn_id OR EXISTS (SELECT 1 FROM json_each(e.payload,'$.environment.history') h WHERE json_extract(h.value,'$.turn_id')=conversation_events.turn_id)))`
+		unresolvedFinal := `NOT EXISTS (SELECT 1 FROM conversation_events resolved WHERE resolved.project_identity=conversation_events.project_identity AND resolved.execution_id=conversation_events.execution_id AND resolved.attempt_id=conversation_events.attempt_id AND resolved.source=conversation_events.source AND resolved.source_segment=conversation_events.source_segment AND resolved.session_id=conversation_events.session_id AND resolved.turn_id=conversation_events.turn_id AND resolved.event_type='message.completed' AND resolved.final_availability='available')`
+		statement += ` AND ((event_type='gap' AND (COALESCE(json_extract(payload,'$.status'),'')<>'final_unavailable' OR (` + businessTurn + ` AND ` + unresolvedFinal + `))) OR (phase='final_answer' AND event_type='message.completed' AND turn_id<>'' AND ` + businessTurn + `))`
 	}
 	statement += ` ORDER BY event_id LIMIT 1`
 	var record storageports.ConversationEventRecord
@@ -65,12 +69,6 @@ func (s Reader) NextConversationEvent(ctx context.Context, project string, filte
 func (s Reader) ConversationBody(ctx context.Context, project string, ref api.ConversationBodyRef, limit int) (storageports.ConversationBodyRecord, error) {
 	var record storageports.ConversationBodyRecord
 	err := s.db.QueryRowContext(ctx, `SELECT substr(body,1,?),byte_count,sha256,completeness FROM conversation_bodies WHERE project_identity=? AND execution_id=? AND attempt_id=? AND item_key=? AND revision=?`, limit, project, ref.ExecutionID, ref.AttemptID, ref.ItemKey, ref.Revision).Scan(&record.Body, &record.TotalBytes, &record.SHA256, &record.Completeness)
-	return record, err
-}
-
-func (s Reader) ConversationRaw(ctx context.Context, project string, ref api.ConversationRawRef, limit int) (storageports.ConversationRawRecord, error) {
-	var record storageports.ConversationRawRecord
-	err := s.db.QueryRowContext(ctx, `SELECT substr(payload,1,?),byte_count,sha256 FROM conversation_raw WHERE project_identity=? AND execution_id=? AND attempt_id=? AND raw_id=?`, limit, project, ref.ExecutionID, ref.AttemptID, ref.ID).Scan(&record.Data, &record.TotalBytes, &record.SHA256)
 	return record, err
 }
 

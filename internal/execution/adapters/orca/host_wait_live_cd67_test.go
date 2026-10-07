@@ -3,7 +3,6 @@ package orcaworker_test
 import (
 	"context"
 	"encoding/json"
-	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -67,13 +66,5 @@ func TestOrcaNativeHostWait(t *testing.T) {
 		t.Fatalf("real Orca wait lacks source/time: %+v", wait)
 	}
 
-	batch, err := orcaworker.MapTerminalConversation(executionvalues.ConversationInput{
-		Event:   executionvalues.ConversationEvent{ProjectID: "isolated-project", WorkflowID: "isolated-workflow", ExecutionID: "isolated-execution", AttemptID: "isolated-attempt", Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV2, Agent: term.AgentIdentity, TargetID: target.ID, SourceEventID: "host-wait:probe"},
-		Process: &identity, Source: "orca-terminal-v2", Segment: "orca-host-wait-v1:probe", Identity: "terminal:" + probe.Runtime + ":" + probe.Terminal + ":" + probe.Incarnation, SourceSeq: 1, Session: "terminal:" + probe.Terminal + ":" + probe.Incarnation, InputWait: true,
-	})
-	require(t, err)
-	if len(batch.Writes) != 1 || batch.Writes[0].Event.Type != executionvalues.ConversationInputWait || batch.Writes[0].Event.Status != "waiting" || batch.Writes[0].Event.Attributes["wait_origin"] != "host" || batch.Writes[0].Event.Attributes["business_decision"] != false || batch.Writes[0].Event.Evidence["wait_source"] != "host.terminal.agent-wait" {
-		t.Fatalf("real host wait was confused with business input: %+v", batch)
-	}
-	t.Logf("real Orca host wait: source=%s, reported_since=%d, conversation_event=%s", wait.Source, wait.Since, batch.Writes[0].Event.Type)
+	t.Logf("real Orca host wait: source=%s, reported_since=%d", wait.Source, wait.Since)
 }

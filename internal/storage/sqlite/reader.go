@@ -8,7 +8,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-const SchemaVersion = 16
+const SchemaVersion = 17
 
 type Reader struct {
 	db            *sql.DB

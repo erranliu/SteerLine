@@ -148,7 +148,7 @@ func (t *sqliteTx) PutExecution(v executionmodel.ExecutionRecord) error {
 			v.RecoveryVersion >= old.RecoveryVersion && v.RecoveryState == "resuming"
 		oldSession, _ := executionSessionFacts(&old)
 		newSession, _ := executionSessionFacts(&v)
-		if !newWorkerGeneration && oldSession != "" && oldSession != newSession || v.TurnNumber < old.TurnNumber ||
+		if oldSession != "" && oldSession != newSession || newWorkerGeneration && oldSession == "" || v.TurnNumber < old.TurnNumber ||
 			!newWorkerGeneration && v.TurnNumber == old.TurnNumber && old.CurrentTurnID != "" && old.CurrentTurnID != v.CurrentTurnID ||
 			!newWorkerGeneration && v.TurnNumber == old.TurnNumber && old.LastStoppedTurnID != "" && old.LastStoppedTurnID != v.LastStoppedTurnID && v.LastStoppedTurnID != v.CurrentTurnID {
 			return nativeErr("immutable_task", "worker session or observed turn identity cannot be replaced or rewound")

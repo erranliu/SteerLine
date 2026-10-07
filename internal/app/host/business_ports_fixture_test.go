@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
-	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -266,36 +265,8 @@ func (o *neutralObserver) Close(context.Context) error {
 
 type neutralConversationSources struct{}
 
-func (neutralConversationSources) MapConversation(executionvalues.ConversationInput) (executionvalues.ConversationMappedBatch, error) {
-	return executionvalues.ConversationMappedBatch{}, nil
-}
-
-func (neutralConversationSources) RestoreMapper(executionvalues.ConversationMapperSnapshot) conversationtypes.ConversationMapper {
-	return nil
-}
-
-func (neutralConversationSources) JournalSources() []string { return nil }
-
-func (neutralConversationSources) JournalSource(executionbackend.BackendKind, executionbackend.ExecutionProtocol) string {
-	return ""
-}
-
-func (neutralConversationSources) JournalSegment(executionbackend.BackendKind, executionbackend.ExecutionProtocol, string) string {
-	return ""
-}
-
-func (neutralConversationSources) JournalGeneration(string, string) (uint64, error) { return 0, nil }
-
-func (neutralConversationSources) LiveJournalPath(context.Context, conversationtypes.ConversationJournalPathRequest) (string, error) {
-	return "", nil
-}
-
 func (neutralConversationSources) DiscoverHistory(context.Context, conversationtypes.ConversationDiscovery) (conversationtypes.ConversationDiscoveryResult, error) {
 	return conversationtypes.ConversationDiscoveryResult{}, nil
-}
-
-func (neutralConversationSources) DiscoverJournals(context.Context, conversationtypes.ConversationDiscovery, func(string) (string, error)) ([]conversationtypes.ConversationJournalSource, error) {
-	return nil, nil
 }
 
 func (neutralConversationSources) ReadHistory(context.Context, conversationtypes.ConversationHistoryReadRequest, func(*exec.Cmd) (executionbackend.StopHandle, error)) (conversationtypes.ConversationHistoryBatch, error) {

@@ -89,6 +89,17 @@ func testIntegratedAppServerTwoTurns(t *testing.T) {
 func testIntegratedNativeOriginalSessionGate(t *testing.T) { testIntegratedNativeSessionGate(t, false) }
 
 func testIntegratedNativeSessionGate(t *testing.T, changeConfig bool) {
+	testIntegratedNativeSessionGateWithMutations(t, changeConfig, true)
+}
+
+// The narrow product regression stops after reconnecting the original terminal
+// and answering its original question. Existing mutation-loss tests keep their
+// full scope and unchanged deadlines.
+func TestOriginalTerminalReconnectAndFeedback(t *testing.T) {
+	testIntegratedNativeSessionGateWithMutations(t, true, false)
+}
+
+func testIntegratedNativeSessionGateWithMutations(t *testing.T, changeConfig, mutations bool) {
 	if runtime.GOOS != "windows" {
 		t.Skip("native Orca protocol fixture uses the Windows host contract")
 	}
@@ -182,6 +193,10 @@ func testIntegratedNativeSessionGate(t *testing.T, changeConfig bool) {
 	}
 	assertNoTaskDelivery(t, settled.runtime, settled.run)
 	assertQueriedTaskPhase(t, ctx, fixture.config, "902", "waiting_decision")
+	if !mutations {
+		secondService.stop(t)
+		return
+	}
 	// Preserve the original native producer regressions, using public answers
 	// rather than the removed private actor methods.
 	current := settled
@@ -521,11 +536,7 @@ func (r *integrationLifecycleResolver) ResolveLifecycle(setup executionbackend.L
 			if !ok {
 				return nil, fmt.Errorf("native fixture adapter lacks its host port")
 			}
-			mapper, ok := port.(conversationtypes.ConversationInputMapper)
-			if !ok {
-				return nil, fmt.Errorf("native fixture adapter lacks its conversation mapper")
-			}
-			return integrationFaultLifecycle{LifecyclePort: port, HostEnvironmentPort: host, ConversationInputMapper: mapper, before: r.beforeNativeExecute}, nil
+			return integrationFaultLifecycle{LifecyclePort: port, HostEnvironmentPort: host, before: r.beforeNativeExecute}, nil
 		}
 		return port, nil
 	default:
@@ -536,7 +547,6 @@ func (r *integrationLifecycleResolver) ResolveLifecycle(setup executionbackend.L
 type integrationFaultLifecycle struct {
 	executionbackend.LifecyclePort
 	executionbackend.HostEnvironmentPort
-	conversationtypes.ConversationInputMapper
 	before func(executionbackend.LifecycleRequest) error
 }
 

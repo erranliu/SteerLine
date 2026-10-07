@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-const ConversationVersion = 2
+const ConversationVersion = 3
 
 type ConversationEventType string
 
@@ -18,20 +18,12 @@ const (
 const (
 	ConversationSession         ConversationEventType = "session"
 	ConversationTurnStarted     ConversationEventType = "turn.started"
-	ConversationMessageDelta    ConversationEventType = "message.delta"
-	ConversationMessageSnapshot ConversationEventType = "message.snapshot"
 	ConversationMessageComplete ConversationEventType = "message.completed"
-	ConversationToolStarted     ConversationEventType = "tool.started"
-	ConversationToolDelta       ConversationEventType = "tool.delta"
-	ConversationToolCompleted   ConversationEventType = "tool.completed"
 	ConversationInputWait       ConversationEventType = "input.wait"
 	ConversationTurnCompleted   ConversationEventType = "turn.completed"
 	ConversationTurnFailed      ConversationEventType = "turn.failed"
 	ConversationTurnCancelled   ConversationEventType = "turn.cancelled"
-	ConversationObservation     ConversationEventType = "observation"
 	ConversationGap             ConversationEventType = "gap"
-	ConversationExecutionResult ConversationEventType = "execution.result"
-	ConversationUnknown         ConversationEventType = "unknown"
 )
 
 type IdentityQuality string
@@ -103,7 +95,6 @@ type ConversationEvent struct {
 	FinalAvailability  FinalAvailability      `json:"final_availability,omitempty"`
 	Status             string                 `json:"status,omitempty"`
 	Body               *ConversationBodyRef   `json:"body,omitempty"`
-	Raw                *ConversationRawRef    `json:"raw,omitempty"`
 	EndReason          string                 `json:"end_reason,omitempty"`
 	OccurredAt         *time.Time             `json:"occurred_at,omitempty"`
 	ReceivedAt         time.Time              `json:"received_at"`
@@ -119,14 +110,6 @@ type ConversationBodyRef struct {
 	Bytes        int64            `json:"bytes"`
 	Source       string           `json:"source"`
 	Completeness BodyCompleteness `json:"completeness"`
-}
-
-type ConversationRawRef struct {
-	ExecutionID string `json:"execution_id"`
-	AttemptID   string `json:"attempt_id"`
-	ID          string `json:"id"`
-	SHA256      string `json:"sha256"`
-	Bytes       int64  `json:"bytes"`
 }
 
 type ConversationCapability struct {
@@ -178,16 +161,6 @@ type ConversationBodyPage struct {
 	Completeness BodyCompleteness `json:"completeness"`
 	Complete     bool             `json:"complete"`
 	Data         []byte           `json:"data"`
-}
-
-type ConversationRawPage struct {
-	RawID      string `json:"raw_id"`
-	Offset     int64  `json:"offset"`
-	NextOffset int64  `json:"next_offset"`
-	TotalBytes int64  `json:"total_bytes"`
-	SHA256     string `json:"sha256"`
-	Complete   bool   `json:"complete"`
-	Data       []byte `json:"data"`
 }
 
 type ActivityEvent struct {

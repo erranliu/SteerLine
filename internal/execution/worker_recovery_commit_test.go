@@ -8,10 +8,12 @@ import (
 )
 
 func TestWorkerRecoveryAttemptCommitsAtomically(t *testing.T) {
-	for _, fail := range []bool{false, true} {
-		t.Run(map[bool]string{false: "committed", true: "checkpoint_failure"}[fail], func(t *testing.T) {
+	for _, outcome := range []string{"committed", "checkpoint_failure", "replacement_session"} {
+		t.Run(outcome, func(t *testing.T) {
+			fail := outcome != "committed"
 			service, run := waitingDecisionService(t)
 			execution := service.executionRecord(run)
+			execution.SessionID = "fixture-original-session"
 			execution.Process = &executionbackend.ProcessIdentity{Kind: "os", PID: 42, Created: "stopped-fixture-process"}
 			execution.RecoveryRequired, execution.RecoveryState = true, "interrupted"
 			require(t, service.commitWorker(run))
@@ -26,7 +28,10 @@ func TestWorkerRecoveryAttemptCommitsAtomically(t *testing.T) {
 			execution.RecoveryRequired, execution.RecoveryState = false, "resuming"
 			service.setRunDecision(run, nil)
 			service.refreshRun(run)
-			if fail {
+			if outcome == "replacement_session" {
+				execution.SessionID = "replacement-session"
+			}
+			if outcome == "checkpoint_failure" {
 				_, err := testSQLite(service).db.Exec("CREATE TRIGGER reject_recovery_checkpoint BEFORE UPDATE ON projection BEGIN SELECT RAISE(FAIL, 'recovery checkpoint failure'); END")
 				require(t, err)
 			}

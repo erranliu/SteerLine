@@ -15,7 +15,6 @@ import (
 )
 
 type Service struct {
-	replayDone           <-chan struct{}
 	historyDone          <-chan struct{}
 	historyRequests      chan []conversationtypes.ConversationHistorySource
 	host                 hostport.HostPort
@@ -44,18 +43,17 @@ type Service struct {
 	conversationStore    ConversationStore
 	closeStore           func() error
 	// workers owns live observers by authoritative workflow run ID.
-	workers                    map[string]*Worker
-	ownedProcesses             map[string]executionbackend.StopHandle
-	lifecycleEffects           map[string]pendingLifecycleEffect
-	lifecycleMessages          map[string][]Signal
-	appServerRecovering        map[string]bool
-	signalQueue                chan Signal
-	runContext                 context.Context
-	forwarders                 sync.WaitGroup
-	forwardMu                  sync.Mutex
-	forwardedDone              []Signal
-	conversationReplayRequests chan []conversationJournalSource
-	conversationReplayErrors   chan error
+	workers                   map[string]*Worker
+	ownedProcesses            map[string]executionbackend.StopHandle
+	lifecycleEffects          map[string]pendingLifecycleEffect
+	lifecycleMessages         map[string][]Signal
+	appServerRecovering       map[string]bool
+	signalQueue               chan Signal
+	runContext                context.Context
+	forwarders                sync.WaitGroup
+	forwardMu                 sync.Mutex
+	forwardedDone             []Signal
+	conversationHistoryErrors chan error
 	// Console selects service-side rendering: "", "off", "pretty", "summary" or "json".
 	controlSeen      map[string]string
 	stopControl      *productapi.ControlRequest

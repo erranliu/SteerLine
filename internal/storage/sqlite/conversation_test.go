@@ -24,8 +24,8 @@ func TestConversationReaderKeepsSourceScopeOnReadOnlyConnection(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer writer.Close()
-	event := executionvalues.ConversationEvent{Version: executionvalues.ConversationVersion, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Source: "fallback-demo", SourceRole: executionvalues.ConversationSourceFallback, SourceSegment: "segment", SourceEventID: "raw", ItemKey: "item", Type: executionvalues.ConversationMessageComplete, Phase: executionvalues.MessagePhaseFinalAnswer, SessionQuality: executionvalues.IdentityUnknown, TurnQuality: executionvalues.IdentityUnknown, ItemQuality: executionvalues.IdentityUnknown, SourceEventQuality: executionvalues.IdentityDerived, ReceivedAt: time.Now().UTC()}
-	committed, err := writer.CommitConversation(ctx, []executionvalues.ConversationWrite{{Event: event, Body: []byte("你好🙂"), BodyMode: "complete", Raw: []byte("raw bytes")}}, executionvalues.ConversationCheckpoint{})
+	event := executionvalues.ConversationEvent{Version: executionvalues.ConversationVersion, ProjectID: "project", ExecutionID: "execution", AttemptID: "attempt", Source: "fallback-demo", SourceRole: executionvalues.ConversationSourceFallback, SourceSegment: "segment", SourceEventID: "raw", ItemKey: "item", Type: executionvalues.ConversationMessageComplete, Phase: executionvalues.MessagePhaseFinalAnswer, FinalAvailability: executionvalues.FinalAvailable, SessionQuality: executionvalues.IdentityUnknown, TurnQuality: executionvalues.IdentityUnknown, ItemQuality: executionvalues.IdentityUnknown, SourceEventQuality: executionvalues.IdentityDerived, ReceivedAt: time.Now().UTC()}
+	committed, err := writer.CommitConversation(ctx, []executionvalues.ConversationWrite{{Event: event, Body: []byte("你好🙂"), BodyMode: "complete"}}, executionvalues.ConversationCheckpoint{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +51,7 @@ func TestConversationReaderKeepsSourceScopeOnReadOnlyConnection(t *testing.T) {
 	}
 	defer db.Close()
 	reader := readsqlite.NewReader(db, nil)
-	service := query.ConversationService{Project: "project", Events: reader, Bodies: reader, Raw: reader, Capabilities: reader}
+	service := query.ConversationService{Project: "project", Events: reader, Bodies: reader, Capabilities: reader}
 	filter := productdto.ConversationFilter{ExecutionID: event.ExecutionID, AttemptID: event.AttemptID}
 	page, err := service.ReadConversation(ctx, filter, "", 10)
 	if err != nil || len(page.Events) != 1 || page.Events[0].Source != "canonical-demo" {
@@ -65,10 +65,6 @@ func TestConversationReaderKeepsSourceScopeOnReadOnlyConnection(t *testing.T) {
 	body, err := service.ReadMessageBody(ctx, productdto.ConversationBodyRef{ExecutionID: committed[0].Body.ExecutionID, AttemptID: committed[0].Body.AttemptID, ItemKey: committed[0].Body.ItemKey, Revision: committed[0].Body.Revision, SHA256: committed[0].Body.SHA256, Bytes: committed[0].Body.Bytes, Source: committed[0].Body.Source, Completeness: productdto.BodyCompleteness(committed[0].Body.Completeness)}, 0, 4096)
 	if err != nil || string(body.Data) != "你好🙂" || !body.Complete {
 		t.Fatalf("read-only body query failed: %+v %v", body, err)
-	}
-	raw, err := service.ReadRaw(ctx, productdto.ConversationRawRef{ExecutionID: committed[0].Raw.ExecutionID, AttemptID: committed[0].Raw.AttemptID, ID: committed[0].Raw.ID, SHA256: committed[0].Raw.SHA256, Bytes: committed[0].Raw.Bytes}, 0, 4096)
-	if err != nil || string(raw.Data) != "raw bytes" || !raw.Complete {
-		t.Fatalf("read-only raw query failed: %+v %v", raw, err)
 	}
 	reports, err := service.ReadCapabilities(ctx, report.Backend, report.Protocol, report.Target.ID, 1)
 	if err != nil || len(reports) != 1 || reports[0].Capabilities[0].Evidence != "fixture" {

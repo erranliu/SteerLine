@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	ConversationVersion      = 2
+	ConversationVersion      = 3
 	MaxConversationBodyBytes = 16 << 20
 )
 
@@ -28,20 +28,12 @@ const (
 const (
 	ConversationSession         ConversationEventType = "session"
 	ConversationTurnStarted     ConversationEventType = "turn.started"
-	ConversationMessageDelta    ConversationEventType = "message.delta"
-	ConversationMessageSnapshot ConversationEventType = "message.snapshot"
 	ConversationMessageComplete ConversationEventType = "message.completed"
-	ConversationToolStarted     ConversationEventType = "tool.started"
-	ConversationToolDelta       ConversationEventType = "tool.delta"
-	ConversationToolCompleted   ConversationEventType = "tool.completed"
 	ConversationInputWait       ConversationEventType = "input.wait"
 	ConversationTurnCompleted   ConversationEventType = "turn.completed"
 	ConversationTurnFailed      ConversationEventType = "turn.failed"
 	ConversationTurnCancelled   ConversationEventType = "turn.cancelled"
-	ConversationObservation     ConversationEventType = "observation"
 	ConversationGap             ConversationEventType = "gap"
-	ConversationExecutionResult ConversationEventType = "execution.result"
-	ConversationUnknown         ConversationEventType = "unknown"
 )
 
 type IdentityQuality string
@@ -113,7 +105,6 @@ type ConversationEvent struct {
 	FinalAvailability  FinalAvailability                  `json:"final_availability,omitempty"`
 	Status             string                             `json:"status,omitempty"`
 	Body               *ConversationBodyRef               `json:"body,omitempty"`
-	Raw                *ConversationRawRef                `json:"raw,omitempty"`
 	Evidence           map[string]string                  `json:"evidence,omitempty"`
 	Attributes         map[string]any                     `json:"attributes,omitempty"`
 	OccurredAt         *time.Time                         `json:"occurred_at,omitempty"`
@@ -132,19 +123,10 @@ type ConversationBodyRef struct {
 	Completeness BodyCompleteness `json:"completeness"`
 }
 
-type ConversationRawRef struct {
-	ExecutionID string `json:"execution_id"`
-	AttemptID   string `json:"attempt_id"`
-	ID          string `json:"id"`
-	SHA256      string `json:"sha256"`
-	Bytes       int64  `json:"bytes"`
-}
-
 type ConversationWrite struct {
 	Event      ConversationEvent
 	Body       []byte
 	BodyMode   string
-	Raw        []byte
 	BodySource string
 }
 
@@ -160,38 +142,6 @@ type ConversationCheckpoint struct {
 	LocalSeq       uint64    `json:"local_seq"`
 	UpdatedAt      time.Time `json:"updated_at"`
 	AllowReplay    bool      `json:"-"`
-}
-
-type ConversationMapperSnapshot struct {
-	Session   *ConversationEvent `json:"session,omitempty"`
-	Turn      *ConversationEvent `json:"turn,omitempty"`
-	FinalSeen bool               `json:"final_seen,omitempty"`
-}
-
-type ConversationInput struct {
-	Event         ConversationEvent
-	Process       *executionbackend.ProcessIdentity
-	Source        string
-	Segment       string
-	Identity      string
-	Cursor        string
-	Generation    string
-	Session       string
-	SourceSeq     uint64
-	SourceOffset  int64
-	SourceLength  int64
-	Raw           []byte
-	Diagnostic    string
-	Gap           bool
-	InputWait     bool
-	SourceChanged bool
-	Mapper        ConversationMapperSnapshot
-}
-
-type ConversationMappedBatch struct {
-	Writes               []ConversationWrite
-	Checkpoint           ConversationCheckpoint
-	VerifySourcePosition bool
 }
 
 type ConversationCapability struct {
@@ -214,21 +164,6 @@ type ConversationCapabilityReport struct {
 	SourceIdentity  string                             `json:"source_identity,omitempty"`
 	CheckedAt       time.Time                          `json:"checked_at"`
 	Capabilities    []ConversationCapability           `json:"capabilities"`
-}
-
-type ConversationJournalPosition struct {
-	Version      int    `json:"v"`
-	ByteOffset   int64  `json:"byte_offset"`
-	SourceSeq    uint64 `json:"source_seq"`
-	Generation   uint64 `json:"generation"`
-	FileID       string `json:"file_id"`
-	FileSize     int64  `json:"file_size"`
-	ModifiedNS   int64  `json:"modified_ns"`
-	HeaderLength int    `json:"header_length,omitempty"`
-	HeaderHash   string `json:"header_hash,omitempty"`
-	AnchorOffset int64  `json:"anchor_offset,omitempty"`
-	AnchorLength int    `json:"anchor_length,omitempty"`
-	AnchorHash   string `json:"anchor_hash,omitempty"`
 }
 
 func (e *ConversationEvent) EventIDFallback(reason string) {
@@ -254,6 +189,15 @@ func (e ConversationEvent) Validate() error {
 	if e.SourceRole != ConversationSourceCanonical && e.SourceRole != ConversationSourceFallback {
 		return errors.New("conversation event has an unsupported source role")
 	}
+	switch e.Type {
+	case ConversationSession, ConversationTurnStarted, ConversationTurnCompleted, ConversationTurnFailed, ConversationTurnCancelled, ConversationInputWait, ConversationGap:
+	case ConversationMessageComplete:
+		if e.Phase != MessagePhaseFinalAnswer || e.FinalAvailability != FinalAvailable {
+			return errors.New("only a complete final reply may be stored as a message")
+		}
+	default:
+		return errors.New("process conversation content is not retained by the center")
+	}
 	if e.ReceivedAt.IsZero() {
 		return errors.New("conversation event is missing received_at")
 	}
@@ -274,18 +218,4 @@ func (e ConversationEvent) Validate() error {
 
 func validIdentityQuality(value IdentityQuality) bool {
 	return value == IdentityNative || value == IdentityDerived || value == IdentityUnknown
-}
-
-func DecodeConversationJournalPosition(checkpoint ConversationCheckpoint) (ConversationJournalPosition, error) {
-	var position ConversationJournalPosition
-	if err := json.Unmarshal([]byte(checkpoint.Cursor), &position); err != nil {
-		return position, err
-	}
-	if position.Version != 2 || position.ByteOffset < 0 || position.FileID == "" || position.FileID != checkpoint.SourceIdentity || position.Generation == 0 || position.SourceSeq != checkpoint.LocalSeq || position.HeaderLength < 0 || position.HeaderLength > 64 || position.AnchorLength < 0 || position.AnchorLength > 64 || position.AnchorOffset < 0 || position.FileSize < position.ByteOffset || position.ModifiedNS == 0 {
-		return position, errors.New("unsupported or invalid conversation source checkpoint; preserve source and database for manual recovery")
-	}
-	if position.ByteOffset > 0 && (position.AnchorLength == 0 || position.AnchorHash == "" || position.HeaderLength == 0 || position.HeaderHash == "") {
-		return position, errors.New("conversation checkpoint lacks durable source anchors")
-	}
-	return position, nil
 }

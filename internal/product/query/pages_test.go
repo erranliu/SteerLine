@@ -43,13 +43,13 @@ func TestTM05PageProjection(t *testing.T) {
 		}
 	})
 	t.Run("conversation_projects_exact_body_raw_and_source_without_checkpoint", func(t *testing.T) {
-		input := model.ConversationEvent{ProjectID: "project", WorkflowID: "workflow-b", ExecutionID: "execution-b", AttemptID: "attempt-b", SessionID: "session-b", Source: "canonical", SourceSegment: "segment", SourceCursor: "private-source-checkpoint", ExternalRef: "private-envelope", Body: &model.ConversationBodyRef{ExecutionID: "execution-b", AttemptID: "attempt-b", ItemKey: "item", Revision: 3, SHA256: "body-digest", Completeness: model.BodyComplete}, Raw: &model.ConversationRawRef{ExecutionID: "execution-b", AttemptID: "attempt-b", ID: "raw", SHA256: "raw-digest"}, Attributes: map[string]any{"reason": "中文😀", "private": "private-native-envelope"}}
+		input := model.ConversationEvent{ProjectID: "project", WorkflowID: "workflow-b", ExecutionID: "execution-b", AttemptID: "attempt-b", SessionID: "session-b", Source: "canonical", SourceSegment: "segment", SourceCursor: "private-source-checkpoint", ExternalRef: "private-envelope", Body: &model.ConversationBodyRef{ExecutionID: "execution-b", AttemptID: "attempt-b", ItemKey: "item", Revision: 3, SHA256: "body-digest", Completeness: model.BodyComplete}, Attributes: map[string]any{"reason": "中文😀", "private": "private-native-envelope"}}
 		page, err := ConversationEvent(input)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if page.Body.Revision != 3 || page.Raw.ID != "raw" || page.SessionID != input.SessionID || page.SourceSegment != input.SourceSegment {
-			t.Fatalf("lost exact source/body/raw target: %+v", page)
+		if page.Body.Revision != 3 || page.SessionID != input.SessionID || page.SourceSegment != input.SourceSegment {
+			t.Fatalf("lost exact source/body target: %+v", page)
 		}
 		page.Body.ItemKey = "changed"
 		page.EndReason = "changed"

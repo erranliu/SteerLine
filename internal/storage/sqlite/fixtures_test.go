@@ -20,10 +20,6 @@ func conversationBodyAPIRef(ref executionmodel.ConversationBodyRef) productapi.C
 	return productapi.ConversationBodyRef{ExecutionID: ref.ExecutionID, AttemptID: ref.AttemptID, ItemKey: ref.ItemKey, Revision: ref.Revision, SHA256: ref.SHA256, Bytes: ref.Bytes, Source: ref.Source, Completeness: productapi.BodyCompleteness(ref.Completeness)}
 }
 
-func conversationRawAPIRef(ref executionmodel.ConversationRawRef) productapi.ConversationRawRef {
-	return productapi.ConversationRawRef{ExecutionID: ref.ExecutionID, AttemptID: ref.AttemptID, ID: ref.ID, SHA256: ref.SHA256, Bytes: ref.Bytes}
-}
-
 func require(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
@@ -85,7 +81,7 @@ func nativeAuditStore(t *testing.T) (*SQLiteStore, string, []taskmodel.TaskRecor
 }
 
 func conversationQueries(s *SQLiteStore, p string) query.ConversationService {
-	return query.ConversationService{Project: p, Events: s, Bodies: s, Raw: s, Capabilities: s}
+	return query.ConversationService{Project: p, Events: s, Bodies: s, Capabilities: s}
 }
 
 func conversationItemKey(e ConversationEvent, id string) string {

@@ -399,7 +399,7 @@ func TestMC4(t *testing.T) {
 		t.Fatal("unmerged candidates delivered")
 	}
 	t.Run("worker_only_frozen_permissions", TestPublicationPolicyFrozenConfigurationAndCredentials)
-	t.Run("database_gap", TestConversationLiveSourceFailureKeepsGapAndMapperPosition)
+	t.Run("database_gap", TestConversationFactsDoNotStoreRaw)
 }
 
 func TestMC5(t *testing.T) {
