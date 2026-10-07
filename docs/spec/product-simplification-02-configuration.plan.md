@@ -51,3 +51,16 @@ PR [#236](https://github.com/erranliu/SteerLine/pull/236) 集成主分支6c16b8d
 最小补验计划：Windows、无模型，`go test ./cmd/test-feedback ./internal/console -count=1`（runner并行/覆盖守卫、三窗与输入交互）、`go run ./cmd/test-feedback -level=L1 -out=<新目录>`（当前12组passed/complete），`go vet ./internal/app ./internal/execution/... ./internal/product/query ./cmd/steerline`、产品构建、文档链接和diff检查；在合入主分支后执行，证据l1-main-sync/summary.json及验收摘要。不重复原生/长恢复定向：对应生产逻辑未因本次冲突解决改动，原通过记录保持其源码来源。行数按最新主分支6c16b8dc重新同口径对比，排除其他PR收益。
 
 最终补验全部通过：runner12.008秒、console1.285秒；最新L1 12组passed/complete=true，准备0.608秒/执行113.919秒。产品构建、受影响go vet、230篇文档1410条本地导航及diff检查通过。精选当前报告见l1-main-sync/summary.json；生产净减1211行、测试净减1234行（基线6c16b8dc），未计算主分支其他改动收益。
+
+## 自动验收覆盖与结果登记
+
+任务专属记录：[验收文档](../acceptance/product-simplification-02-configuration/README.md)。原测试计划已有环境/命令/时点/通过条件与证据，以下补齐验收项映射；原结果仅绑定原源码，不因改 Plan 重跑或重标通过。
+
+| 自动验收项 | 对应现有入口 / 覆盖要求 |
+| --- | --- |
+| PS2-01–04 | 现有配置/冻结/必要能力/远端拒绝定向与 L1，覆盖每项原身份和格式断言 |
+| PS2-05 | 现有 ps2native TestPS2NativeDeveloperAndAutomaticReview，分别核对 local/Orca 的实际工具、审核/恢复/资源与推送事实，不用参数断言替代 |
+
+执行安排沿本 Plan 的原测试表：实际变更触及对应验收项时运行其最小入口；未变范围先核对原证据，不默认重跑 Full/真实模型/PR 链。发现必要断言或能力缺口时先补最小场景再验收，零匹配/skip/编译不算通过。新原始报告写 runner 默认临时目录或新的空临时目录，具体命令/源码/摘要/日期、逐项结果与证据定位登记到上述任务专属记录并同步 execution-map，Plan 不作实时状态表。
+
+原文中的历史命令/目录保持取证含义；新执行不再写 docs/validation。自动范围无需额外人工验收门槛；原生场景需人准备环境时预约窗口，不把自动失败/缺权限归类为后置人工。不新增验证矩阵或改原通过条件，本次 Plan 修订只做文档静态检查。

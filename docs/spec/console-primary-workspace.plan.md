@@ -63,3 +63,16 @@
 追加最小诊断：Windows 受控环境，`go run ./cmd/test-feedback -out=docs/validation/console-primary-workspace/l1-integration-tail -- ./tests/integration -run '^Test(TM04ExecutionWiring|TM06ResourceWiring|TM08AppHostWiring)$' -count=1`；在 L1 超时后执行，要求这些原场景全部通过、passed/complete=true，证据保存在该新目录。原 L1 的 passed=false 保持，不将多个报告拼成一次成功的 L1。
 
 最终复审：四项复现已修复，138 项定向回归与当前固定 L1 passed/complete=true；原始范围/日志与静态结果见验收摘要。按用户明确指令，在检查当前头 SHA 与平台状态后合并 PR #234。
+
+## 自动验收覆盖与结果登记
+
+任务专属记录：[验收文档](../acceptance/console-primary-workspace.md)。原测试计划已有环境/命令/时点/通过条件与证据，以下补齐验收项映射；原结果仅绑定原源码，不因改 Plan 重跑或重标通过。
+
+| 自动验收项 | 对应现有入口 / 覆盖要求 |
+| --- | --- |
+| CPW-01–04 | 现有 console/query/client/受控 app 接线、具体 CPW 用例和 L1，各项布局/目标/草稿/回执/正文断言明确对应 |
+| CPW-05 | 现有 ps1terminal TestCPWWindowsTerminalInput 与 ConPTY 的实际按键/中文/宽窄布局；不证明物理 IME |
+
+执行安排沿本 Plan 的原测试表：实际变更触及对应验收项时运行其最小入口；未变范围先核对原证据，不默认重跑 Full/真实模型/PR 链。发现必要断言或能力缺口时先补最小场景再验收，零匹配/skip/编译不算通过。新原始报告写 runner 默认临时目录或新的空临时目录，具体命令/源码/摘要/日期、逐项结果与证据定位登记到上述任务专属记录并同步 execution-map，Plan 不作实时状态表。
+
+原文中的历史命令/目录保持取证含义；新执行不再写 docs/validation。自动范围无需额外人工验收门槛；原生场景需人准备环境时预约窗口，不把自动失败/缺权限归类为后置人工。不新增验证矩阵或改原通过条件，本次 Plan 修订只做文档静态检查。

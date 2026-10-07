@@ -81,7 +81,7 @@ go run ./cmd/test-feedback -quick
 
 完成条件：Spec §9 规定的实现 PR 门槛通过，人工合并链与第二 agent 能力认证的实际状态明确，无未说明的自动回退或历史状态迁移。提交实现 PR 前核对固定任务契约；本 Plan 不授权发布生产二进制、修改生产数据库或代用户合并测试 PR。
 
-## 测试计划（本次导航调整）
+## 测试计划（历史导航调整，非产品验收）
 
 本次只更新设计文档位置，不改变 ON 场景的实现、限制或待补验收状态。
 
@@ -91,3 +91,19 @@ go run ./cmd/test-feedback -quick
 | 文档静态 / task-identities、whitespace | 当前 Git 仓库 | python scripts/roadmap_task_id.py check；git diff --check | 文档交付前 | 当前身份、名称、入口一致，无差异格式错误 | 同上 |
 
 不选择 L1/L2/L3、Full 或原生 ON 实验：本次没有改变产品逻辑、协议、测试登记或后端接线，导航检查不能补齐原生验收缺口。无需新增产品测试场景或环境能力。
+
+## 测试计划（当前自动验收覆盖）
+
+任务专属记录：[Orca 编排验收](../acceptance/worker-flow-orca-native.md)。原 ON1–ON11 的实际要求/证据仍按 Spec 核对；下表覆盖当前待补自动项并明确其余项的复用/不适用边界，不能仅凭候选链通过关闭 ON 全部场景。
+
+| 验收项 | 级别 / 组 / 场景 | 环境 / 命令 | 执行时点 | 通过条件 | 证据与登记 |
+| --- | --- | --- | --- | --- | --- |
+| ON3-A | L3 / orca-native / orca-native.input（待新增） | Windows、真实本机 Orca/原问题和 Dispatch；`go run ./cmd/test-feedback -level=L3 -suite=orca-native -env=live '-scenario=orca-native.input' '-out=<本次空临时目录>'` | 原活动问题驱动/证据能力与登记齐备后 | 纯文字/选项＋备注原 message reply、重复提交/原 Dispatch 均符合 Spec；新反馈不能代替活动轮次回复 | 临时报告/原 ask/reply/tool 回执；专属记录 ON3-A |
+| ON5-A / ON7-A | L3 / orca-native / orca-native.faults（待新增，controlled） | 隔离状态/受控 Orca 协议及 owned 资源；`go run ./cmd/test-feedback -level=L3 -suite=orca-native -env=controlled '-scenario=orca-native.faults' '-out=<本次空临时目录>'` | 精确竞争/断联/迟到/身份/审批注入完成后 | 原目标与回执不串线、不重复注入、不误关闭资源；只证明已注入语义 | 临时场景断言/回执，专属记录 ON5-A/ON7-A |
+| ON5-A / ON7-A / ON8-A / ON9-A | L3 / orca-native / orca-native.observation（待新增，live） | Windows、真实原 terminal/Dispatch 与本次创建的资源；`go run ./cmd/test-feedback -level=L3 -suite=orca-native -env=live '-scenario=orca-native.observation' '-out=<本次空临时目录>'` | 原生观察/停观察/输出/故障最小驱动及登记后 | 实际可控故障、来源/gap/游标及输出边界可追溯；中心停观察不假定终端停止，本次 owned 资源处理真实核实；controlled 不能替代真机 | 临时原身份/原生日志/退出与清理事实；专属文档分项结果 |
+| ON1-A / ON2-A / ON4-A / ON6-A / ON10-A | 现有 owner/候选证据复用 | 核对 Spec 与固定历史原证据；实际变更后固定受影响 Orca/执行/SQLite/接线精确用例。candidates.local 仅复用已证实的对应部分，不自动重跑真实 PR 链 | 待补验前核对；有新影响时定向回归 | 每项范围与原源码/目标一致，未证明部分明确留待验，不拼成一次全通过 | 本任务记录中的原来源、复用范围与缺口 |
+| ON11-A | 跨 agent 契约 / 当前真机边界 | 现有契约用例核对不同 agent ID 原样传递；第二真实 agent 未可用时仍保留不在当前一期必需范围的未验证说明 | 实际 agent 支持范围改变才重新规划真机 | 不从 Codex 推定全 agent；不默认新增安装/环境能力 | 专属文档适用范围与原证据说明 |
+
+能力补齐写入实施：沿既有 driver/native/evidence/testenv 新增最小活动问题回复、精确竞争/故障、输出边界与原终端观察，分别登记 controlled/live 场景/包、live 的 orca-codex chain 和本次 owned 清理。尚未实现/登记的场景不能直接执行，真实能力不支持或结果未知保持原阻塞；不另建模型调度器或生产测试入口。
+
+执行并向专属文档登记实际源码/工具/身份、命令、逐项结果与临时证据，同步 execution-map 属于交付安排。人工测试 PR 合并若在受影响验证中确需安排，单列参与人/窗口和对应阻塞范围，不把它串入所有待补项；第二 agent 仍按当前一期范围另行规划。默认不选 Full、完整 L2/全部 live 或矩阵重跑；只修 Plan 不执行本表入口。

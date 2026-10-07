@@ -74,7 +74,7 @@ controlled 使用真实 SteerLine、Git、SQLite，helper 实现最小 app-serve
 
 L2/L3与controlled/live使用当前固定Windows Codex方案：workspace-write、unelevated、on-request、auto_review、network allow。真实执行仍固定gpt-6-luna/medium。隔离Codex home只复制认证并写入本次仓库信任，不复制sandbox账号或全局项目配置，不需要管理员初始化。受管命令由adapter生成，用户不配置raw args或权限覆盖；恢复核对原冻结配置、精确根和资源。worker不继承启动它的Codex App会话权限。
 
-真实执行使用已核对的codex-cli 0.159.2、Codex登录认证和本机Orca。特殊工具/缓存或Git维护的原生拒绝照实报告，不以切换完全访问或修复ACL使验收通过。最小自动审核验收见[第二批记录](../../docs/validation/product-simplification-02-configuration/README.md)。
+真实执行使用已核对的codex-cli 0.159.2、Codex登录认证和本机Orca。特殊工具/缓存或Git维护的原生拒绝照实报告，不以切换完全访问或修复ACL使验收通过。最小自动审核验收见[第二批记录](../../docs/acceptance/product-simplification-02-configuration/README.md)。
 
 以下 sandbox 工具供其他需要 elevated 的开发场景显式使用，不属于 L2/L3 前置条件。
 
@@ -120,6 +120,6 @@ summary.json 保存源码/工作树、构建 SHA-256、精确选择、命令、�
 1. 在对应包增加 e2e tag 顶层测试，用固定场景 ID 创建 Scenario；独立创建现场，业务断言保留在场景/共享断言中。
 2. 按需扩展小型任务材料和环境能力。所有外部资源记录精确 ID，清理只能操作本次资源。
 3. suites.json 登记 id/level/suite/package/test/env，live 增加 chain（local-codex 或 orca-codex）。同一个包不能混合环境，保证受控门槛不能提前执行 live。
-4. Plan 的测试计划列出级别、组/场景 ID、环境、命令、时点、通过条件及证据；未选相关组简述原因，不默认要求 full 或所有层级。
+4. Plan 的测试计划列出验收项 ID/任务专属文档链接、级别、组/场景 ID、环境、命令、时点、通过条件及证据/结果登记位置，覆盖本任务全部自动验收项；可以共用场景，必要回归另标。新增驱动/环境能力列入实施步骤或明确前置，实际验收前完成实现/登记，不把规划入口说成已存在；未选相关组简述原因，不默认要求 full 或所有层级。
 
 基础设施定向入口：`go test ./cmd/test-feedback ./tests/e2e/internal/... -count=1`。`go test -tags=e2e ./tests/e2e/internal/... -count=1` 按需验证双项目隔离/部分准备清理。直接运行场景包缺少运行配置会失败，统一入口负责构建、枚举登记测试和精确选择。
