@@ -39,3 +39,16 @@
 本次仍属于同一份规划指南修订：提前到草稿阶段规划验收并链接专属文档，任务与验收文档一对一或一对多；规划提示词鼓励独立活动，不强制执行路径。11 个草稿任务分别建立专属初稿，原共享待补项拆为三个任务记录，原文件只做导航。任务验收事实维护在各自文档，本页仅记录这次指南修订的静态检查。
 
 方法：自动；状态：已验收。交付前在 Windows/Python/Git 执行 python scripts/check_doc_links.py、python scripts/roadmap_task_id.py check、git diff --check，结果为 248 份 Markdown / 1,541 本地链接 / 0 错误，84 身份 / 11 草稿 / 0 正式有效，差异格式通过。原始输出位于上述临时目录的 draft-links.log、draft-ids.log、draft-diff.log。没有实现/技能脚本改动，不选产品、模型或 DAG 运行验证；新建的任务验收计划全部仍是待验收，没有将文档检查算作产品通过。
+
+## Plan 自动验收覆盖修订
+
+本节只记录同一份指南及 Plan 修订工作的静态验收，不存所涉及功能任务的产品验收状态。当前 docs/spec 的 20 份 Plan 均增加或细化自动验收映射/实施/登记安排；其中 13 份候选/延后 Plan 的 79 个源场景自动子项分别关联任务专属文档。待补原生项保留缺口，已交付结果保留原源码，#40/#41 仍延后；新场景均说明待实现/登记，不据此启动任务或重标通过。
+
+| 检查项 | 方法 / 状态 | 环境、命令与通过条件 | 结果 / 证据 |
+| --- | --- | --- | --- |
+| 导航 / doc-links | 自动 / 已验收 | Windows/Python；python scripts/check_doc_links.py；本地目标无缺失 | 250 份 Markdown、1,586 本地链接，0 错误；links.log |
+| 身份与正式边界 / task-identities | 自动 / 已验收 | Python/Git；python scripts/roadmap_task_id.py check；身份一致、正式表不混入草稿/活动 | 84 身份、11 草稿、0 正式有效；ids.log |
+| 差异 / whitespace | 自动 / 已验收 | Git；提交前 git diff --check，接入主线后 git diff origin/main --check；无格式错误 | 通过；diff.log |
+| Plan 映射核对 / plan-coverage | 自动 / 已验收 | 只读 Python/Git 核对当前全部 Plan、专属记录与源场景 ID；必须有测试计划/专属链接，自动子项在 Plan/记录中均有映射，身份与产品代码未变 | 20 份 Plan、13 份候选/延后 Plan 的 79 项对应完整；coverage.log；不证明场景已实现或实际验收通过 |
+
+执行时点：修订完成后、提交前；原 PR #237 合并后接入 main `2d0e811b`，再次核对最终导航/身份/差异和 Plan 映射。临时输出：`C:/Users/lmas1/AppData/Local/Temp/steerline-plan-acceptance-bc5cb2393746420380e0ef1c35f97e2b/`。本次没有产品、测试驱动、场景登记或技能代码改动，不选产品 L1/L2/L3/Full、原生模型或 DAG 运行；Plan 中的拟议执行命令没有在本次运行。

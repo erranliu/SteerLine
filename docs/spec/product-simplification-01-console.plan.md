@@ -46,3 +46,16 @@ UI操作日志格式升为2；conversation查询游标格式升为2以绑定新�
 | 静态检查/构建 | `git diff --check`、`go vet ./internal/console`、`go build -o bin/steerline-console.exe ./cmd/steerline`、`python scripts/check_doc_links.py` | 推送前 | 格式、构建、文档链接通过 | 审计记录 |
 
 本轮只调整console焦点、显示顺序和滚动状态，不改变产品/SQL/执行接口；沿用已完成L1、受控接线与PTY证据，不重复全量/L2/L3/live或原生环境验收。
+
+## 自动验收覆盖与结果登记
+
+任务专属记录：[验收文档](../acceptance/product-console.md)。原测试计划已有环境/命令/时点/通过条件与证据，以下补齐验收项映射；原结果仅绑定原源码，不因改 Plan 重跑或重标通过。
+
+| 自动验收项 | 对应现有入口 / 覆盖要求 |
+| --- | --- |
+| PS1-01–04 | 现有测试计划的 console/query/client、SQLite、受控 app 接线与 L1；明确各 ID 的断言对应，不以 L1 整组代替输入/正文结果 |
+| PS1-05 | 现有 ps1terminal fixture 的真实 Windows PTY/VT/Unicode 与按键检查；不扩大为物理 IME 人工验收 |
+
+执行安排沿本 Plan 的原测试表：实际变更触及对应验收项时运行其最小入口；未变范围先核对原证据，不默认重跑 Full/真实模型/PR 链。发现必要断言或能力缺口时先补最小场景再验收，零匹配/skip/编译不算通过。新原始报告写 runner 默认临时目录或新的空临时目录，具体命令/源码/摘要/日期、逐项结果与证据定位登记到上述任务专属记录并同步 execution-map，Plan 不作实时状态表。
+
+原文中的历史命令/目录保持取证含义；新执行不再写 docs/validation。自动范围无需额外人工验收门槛；原生场景需人准备环境时预约窗口，不把自动失败/缺权限归类为后置人工。不新增验证矩阵或改原通过条件，本次 Plan 修订只做文档静态检查。

@@ -66,12 +66,12 @@ SR1/SR2 尽量合并到现有 worker-flow、app-server、Orca fake、Command/Dec
 
 更新 [worker-flow](../archive/spec/completed/worker-flow.spec.md)、[本地 app-server](local-codex-app-server.spec.md)、[Orca native](worker-flow-orca-native.spec.md)的适用边界及配套 Plan，更新 [数据契约](../product-design/data-model.md)、[决策说明](../product-design/decisions.md)、相关运行说明与 [执行架构共同约束](execution-architecture.spec.md)。保留旧验收的原始事实，注明新语义由本 Spec 替代，不把新编写的文档视为验收通过。
 
-证据记录在 `docs/validation/worker-service-recovery/`：代码/CLI 版本、测试方式、原/新 Attempt 与进程或 terminal 身份、thread/turn 或 Dispatch、原问题、用户继续命令和是否产生外部发送。验证目录和测试进程按归属清理；不访问 `C:\SteerlineRuntime`、#101、现有 Orca 终端，也不领取真实任务。
+原始证据留本次新临时目录，最小结果在任务专属验收文档记录：代码/CLI 版本、测试方式、原/新 Attempt 与进程或 terminal 身份、thread/turn 或 Dispatch、原问题、用户继续命令和是否产生外部发送。验证目录和测试进程按归属清理；不访问 `C:\SteerlineRuntime`、#101、现有 Orca 终端，也不领取真实任务。
 
 实施期间只对隔离夹具和临时进程做定向验证；旧独立存活验收仍作为历史证据，不替代本机新语义的验收。
 
 
-## 测试计划（本次文档整理）
+## 测试计划（历史文档整理，非产品验收）
 
 本次只修正文档导航及重构后的源码定位，不改变原实现或待补验收要求；原验证结果和限制见上述验证目录。
 
@@ -81,3 +81,17 @@ SR1/SR2 尽量合并到现有 worker-flow、app-server、Orca fake、Command/Dec
 | 文档静态 / task-identities | 当前 Git 仓库、Python 3 | `python scripts/roadmap_task_id.py check`；`git diff --check` | 交付前 | 任务 ID、名称和 Spec/Plan 一致，无空白错误 | 同上 |
 
 不选择 L1/L2/L3、Full 或原生真机组：本次没有修改实现、测试场景、协议或平台接线，运行它们不能补齐文档导航证据；后续实际实现或补验仍按原 Spec 的范围选择。无需新增场景或测试环境能力。
+
+## 测试计划（自动验收与当前待补）
+
+任务专属记录：[停服恢复验收](../acceptance/worker-service-recovery.md)。SR1-A/SR2-A/SR3-A 映射原 Spec 的自动范围，历史已验只绑定原采样源码；另列 SR2-ORCA-A 的安全重建真机缺口。
+
+| 验收项 | 级别 / 组 / 场景 | 环境 / 命令 | 执行时点 | 通过条件 | 证据与登记 |
+| --- | --- | --- | --- | --- | --- |
+| SR1-A / SR2-A | 定向 Go / recovery owner | Windows、隔离模型/SQLite/受控 worker；`go run ./cmd/test-feedback -- ./internal/execution/model ./internal/execution -run '^Test(ClassifyRecovery|WorkerRecoveryAttemptCommitsAtomically|DeadWorkerRecoveryPreservesDecisionAndFreshAnswer|ServiceRecoveryGateRequiresTransactionalOwner|AppServerRecoveryDoesNotRaceInFlightLaunch|AppServerLateReplyCannotModifyTerminalTask)$' -count=1` | 恢复门槛/接线改变后；已有结果先核对覆盖 | 分类、原请求/新 Attempt、重复/迟到和事务门槛正确；逐项核对 Spec，必要未覆盖分支补最小表驱动用例，非零命中/无 skip | 默认新临时目录 summary.json；专属记录对应自动项 |
+| SR3-A | 原生 opt-in / 本地恢复 | Windows、实际 Codex/认证、隔离 Git/SQLite；独立验收会话设置 STEERLINE_WORKER_RECOVERY_LIVE=1，`go test ./tests/integration -run '^TestLocalCodexManualRecoveryLive$' -count=1 -timeout=15m` | 实际本地恢复行为改变且旧证据不足时；不默认重跑 | 真机宿主退出、原进程消失、重开不新 turn，公开人工继续命令后原 thread/新 turn 与交付事实正确 | 临时原生身份/通知/命令；本任务记录，不以 fake 代替真机 |
+| SR2-ORCA-A | L3 / recovery / recovery.orca-agent-rebuild（待新增） | Windows、真实本机 Orca/Codex、原工作区/owned 资源；`go run ./cmd/test-feedback -level=L3 -suite=recovery -env=live '-scenario=recovery.orca-agent-rebuild' '-out=<本次空临时目录>'` | 安全创建能力、最小驱动及场景登记完成后 | 排除旧写者后才依明确新会话继续命令创建新 agent/Attempt；原 workspace 保留，无第二未结算写者；无法核实则保持未知且操作禁用 | 临时场景报告/原 terminal/Dispatch/退出与创建回执；专属记录 SR2-ORCA-A |
+
+补齐安排：在原 native/driver/testenv 扩展最小 owned 资源停止/排除旧写者/创建与回执观察，先核对平台真实安全能力；新 live 场景登记 orca-codex chain、独立现场与清理，不用已有 recovery.orca-codex 重接证据冒充安全新建。能力缺失保持阻塞，不要求生产安装或自动提权。原生参数/环境覆盖执行后恢复，只清理本次精确资源。
+
+必需自动验收完成后逐项写入专属文档（源码/摘要、命令、日期、结果/证据）并同步 execution-map。产品“人工继续”命令可由自动驱动调用，不等于本任务主要由人工验收；现阶段不另加人工等待。默认不选 Full、完整 L2 或无关 live，构建/vet/L1 只按实际接线影响选择；纯 Plan 修订不启动产品入口。

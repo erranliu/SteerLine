@@ -12,10 +12,10 @@
 
 4. **接入统一决策。** 扩展现有 Decision 请求/答案 DTO 以保留原生多题和请求身份；查询与运行投影不得覆盖同时待答的请求。两类反馈共用 `answer_decision`，分别回复原请求或启动原 thread 的新 turn。更新控制台提示、送达进度和失效反馈处理；等待回答时保留 active turn。恢复采用有界逐执行核验，核验结束后允许其他合格任务继续。执行验收 A 的一条双任务真机闭环，其余输入和故障分支按 B 自动验证。
 
-5. **回归与交付。** A–C 三组验收按 Spec 记录证据；C 复用现有 PR/TaskDelivery 回归，未修改交付逻辑时不另设人工合并验收。实现审计已完成完整 Go 测试，主线同步及补验按当前 AGENTS.md 使用最小入口与定向测试，并运行 `go vet` 和 Windows/Linux 构建；仅在新改动或失败影响结论时补验。证据保存在 `docs/validation/local-codex-app-server/`，标明真实、模拟和未测范围。更新 [数据契约](../product-design/data-model.md)、[决策说明](../product-design/decisions.md)、[会话事件说明](../product-design/conversation-events.md)和受影响运行说明；执行 `git diff --check`。本次实现可合并并使用新本地路径；仅 race detector 的环境补验留在第一阶段残留。
+5. **回归与交付。** A–C 三组验收按 Spec 记录证据；C 复用现有 PR/TaskDelivery 回归，未修改交付逻辑时不另设人工合并验收。实现审计已完成完整 Go 测试，主线同步及补验按当前 AGENTS.md 使用最小入口与定向测试，并运行 `go vet` 和 Windows/Linux 构建；仅在新改动或失败影响结论时补验。原始证据保存在本次新临时目录，最小结果登记于任务专属验收文档，标明真实、模拟和未测范围。更新 [数据契约](../product-design/data-model.md)、[决策说明](../product-design/decisions.md)、[会话事件说明](../product-design/conversation-events.md)和受影响运行说明；执行 `git diff --check`。本次实现可合并并使用新本地路径；仅 race detector 的环境补验留在第一阶段残留。
 
 
-## 测试计划（本次文档整理）
+## 测试计划（历史文档整理，非产品验收）
 
 本次只修正文档导航及重构后的源码定位，不改变原实现或待补验收要求；原验证结果和限制见上述验证目录。
 
@@ -25,3 +25,14 @@
 | 文档静态 / task-identities | 当前 Git 仓库、Python 3 | `python scripts/roadmap_task_id.py check`；`git diff --check` | 交付前 | 任务 ID、名称和 Spec/Plan 一致，无空白错误 | 同上 |
 
 不选择 L1/L2/L3、Full 或原生真机组：本次没有修改实现、测试场景、协议或平台接线，运行它们不能补齐文档导航证据；后续实际实现或补验仍按原 Spec 的范围选择。无需新增场景或测试环境能力。
+
+## 测试计划（当前自动验收与补验）
+
+任务专属记录：[app-server 验收](../acceptance/local-codex-app-server.md)。A/B/C 已验结果保持原日期/版本，旧独立存活语义不重新作为当前自动验收要求；当前必须落实的是 AS-RACE-A，不能只引用文档整理的静态检查。
+
+| 验收项 | 级别 / 组 / 场景 | 环境 / 命令 | 执行时点 | 通过条件 | 证据与登记 |
+| --- | --- | --- | --- | --- | --- |
+| AS-RACE-A（并行/恢复/回复） | 定向 Go / app-server race | Windows、已可用 C/CGO 工具链，CGO_ENABLED=1；`go run ./cmd/test-feedback -- ./internal/execution ./internal/execution/adapters/codex -race -run '^Test(AppServer|CandidateResumeErrorDoesNotStarveSibling)' -count=1` | 工具链预检通过后补验；相关并发逻辑改变时定向重验 | 实际覆盖并行/恢复/回复断言，非零命中/无 skip、race 报告无竞争且运行完整；若必要分支未覆盖则先补最小用例 | 默认新临时目录 summary.json/日志；专属文档逐项记录实际源码/命令与 AS-RACE-A 状态 |
+| A/B/C 原通过范围 | 历史复用 / 有影响才重验 | 核对专属文档固定版本/原始证据及旧宿主语义；仅新实现影响相应范围时固定该组实际命令 | 并发补验前核对；不默认重跑模型/PR 链 | 证据与声称范围一致，未知/旧宿主不冒充当前通过 | 本任务记录中的原来源与复用说明 |
+
+准备步骤：在测试外确认 C/CGO 能力，不自动安装/提升；所需环境缺失就保持待验，不能归类为人工后置。用例范围不足时在原 owner 补最小场景，既有实际测试不能只编译后当作 race 通过。执行后恢复本次环境覆盖，在 acceptance 写结果并同步 execution-map；实时结果不写入 Plan。当前未单列人工验收，不默认 Full/L2/L3 或重复原生历史链。
