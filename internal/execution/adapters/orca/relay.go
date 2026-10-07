@@ -1,6 +1,7 @@
 package orcaworker
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -28,7 +29,7 @@ type DoneRequest struct {
 var ErrActiveDispatchIdentity = errors.New("Orca relay cannot verify the original active Dispatch")
 
 func RelayInstruction(runID, turnID string) string {
-	return fmt.Sprintf("\nWindows workspace-write delivery: Orca CLI cannot connect to its runtime pipe from this sandbox. For your final worker_done, write one UTF-8 JSON file atomically at .steerline-relay/%s/%s.json in this worktree. Use the Orca Task and Dispatch IDs and the --dispatch-capability value from the original injected Orca preamble. Fields: workflow_run_id=%q, turn_id=%q, orca_task_id, dispatch_id, dispatch_capability (the preamble's dcap_ value; never print it), outcome (succeeded or failed), subject, body. The center will forward this exact result through Orca from your bound terminal and verify settlement. Do not commit this relay file. Do not claim that delivery succeeded merely because the file was written.\n", runID, turnID, runID, turnID)
+	return fmt.Sprintf("\nWindows workspace-write delivery: Orca CLI cannot connect to its runtime pipe from this sandbox. For your final worker_done, write one UTF-8 JSON file atomically at .steerline-relay/%s/%s.json in this worktree. In PowerShell constrained language mode, use ConvertTo-Json and Set-Content -Encoding UTF8 to write a temporary file, then Move-Item to its final name; do not use restricted .NET file methods. A UTF-8 BOM is accepted. Use the Orca Task and Dispatch IDs and the --dispatch-capability value from the original injected Orca preamble. Fields: workflow_run_id=%q, turn_id=%q, orca_task_id, dispatch_id, dispatch_capability (the preamble's dcap_ value; never print it), outcome (succeeded or failed), subject, body. The center will forward this exact result through Orca from your bound terminal and verify settlement. Do not commit this relay file. Do not claim that delivery succeeded merely because the file was written.\n", runID, turnID, runID, turnID)
 }
 
 // EnsureRelayIgnored updates only the verified repository's local exclude file.
@@ -169,7 +170,9 @@ func ReadDoneRequest(path, worktree, runID, turnID, taskID, dispatchID string) (
 		return nil, errors.New("native Orca relay request grew beyond the bound")
 	}
 	var request DoneRequest
-	if err := json.Unmarshal(data, &request); err != nil {
+	// Windows PowerShell's UTF8 encoding emits a BOM, including in constrained
+	// language mode. Normalize that encoding marker before validating the relay.
+	if err := json.Unmarshal(bytes.TrimPrefix(data, []byte{0xef, 0xbb, 0xbf}), &request); err != nil {
 		return nil, err
 	}
 	if request.WorkflowRunID != runID || request.TurnID != turnID || request.TaskID != taskID || request.DispatchID != dispatchID || request.Outcome != "succeeded" && request.Outcome != "failed" ||
