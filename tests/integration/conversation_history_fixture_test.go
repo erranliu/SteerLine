@@ -8,7 +8,6 @@ import (
 	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	productdto "github.com/erranliu/SteerLine/internal/product/api"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
-	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
