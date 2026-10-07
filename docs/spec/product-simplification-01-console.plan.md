@@ -16,10 +16,10 @@
 
 | 级别/场景 | 环境、命令 | 时点 | 通过条件 | 证据 |
 | --- | --- | --- | --- | --- |
-| 定向 PS1-01–04 | Windows隔离临时home，`go run ./cmd/test-feedback -out=<新目录> -- ./internal/console ./internal/product/query ./internal/product/client -count=1` | 改动完成后 | 非零run/pass，候选/正文/草稿不串线，长final完整，未知请求只查、损坏日志不发、不保存偏好 | `three-pane-targeted/summary.json`及日志 |
+| 定向 PS1-01–04 | Windows隔离临时home，`go run ./cmd/test-feedback -out=<新目录> -- ./internal/console ./internal/product/query ./internal/product/client -count=1` | 改动完成后 | 非零run/pass，候选/正文/草稿不串线，长final完整，未知请求只查、损坏日志不发、不保存偏好 | `three-pane-release-no-skip/summary.json`及日志 |
 | 定向应用接线 PS1-01/03 | 临时SQLite/可控后端，`go run ./cmd/test-feedback -out=<新目录> -- ./tests/integration -run '^TestPS1InlineConsoleWiring$' -count=1` | 产品接口接通后 | 当前真实app客户端连接、精确候选命令/原请求/业务边界保持 | `inline-integration-refreshed/summary.json`及日志 |
 | 定向SQL PS1-02 | Windows临时SQLite，`go run ./cmd/test-feedback -out=<新目录> -- ./internal/storage/sqlite -run '^Test(PS1RecentActivity|TM05Activity|ConversationFinalFilter|ConversationReader)' -count=1` | 最终回复投影接通后 | 准备及历史准备轮不进入final；通用诊断查询仍有过程，正文/来源边界保持 | `three-pane-sqlite/summary.json`及日志 |
-| L1及边界 | Windows，`go run ./cmd/test-feedback -level=L1 -out=<新目录>` | 定向通过后 | passed/complete为true，无零匹配/缺失结果，生产依赖边界保持 | `l1-three-pane/summary.json`及日志 |
+| L1及边界 | Windows，`go run ./cmd/test-feedback -level=L1 -out=<新目录>` | 定向通过后 | passed/complete为true，无零匹配/缺失结果，生产依赖边界保持 | `l1-release/summary.json`及日志 |
 | PS1-05终端 | 隔离Windows终端/临时home，当前构建配可控数据，三窗右下中文多行输入、Tab/Enter/F2、F6/F7、窄屏与F8 | 构建与确定性回归通过后 | 实际VT/Unicode输入、焦点和预览正确，切换候选不串答案，窄屏输入及F8可达；问题版本变化用定向测试验证，退役快捷键无入口 | `terminal-three-pane/capture.json`及原始VT记录 |
 | 静态检查/构建 | `git diff --check`、`go build ./cmd/steerline`，必要时e2e tag编译 | PR前 | 无格式/编译错误，无退役入口或未更新消费者 | README/消费者清单 |
 
@@ -30,3 +30,5 @@
 UI操作日志格式升为2；conversation查询游标格式升为2以绑定新增FinalsOnly筛选；活动读取复用既有契约；必要业务记录/采集事件与数据库格式保持。若新增final查询属于产品契约，所有生产/测试消费者同次更新，不保留旧转发。最终正文保持现有字节上限和完整性/身份校验；UI旧格式不迁移，服务/数据库不因此清空。退役阅读测试删除，幂等、故障与输入断言保留并映射。
 
 2026-10-07合并主分支`69c839be`的文档整理与测试修复，保留其产品设计目录、任务83及现有消费者改动；Spec引用已交付资料转为archive路径。业务源码新增准入检查沿用主分支，合并后补受影响app/产品/SQLite定向与输入接线，已完成L1记录原采样提交，不将其冒充合并后新源码证明。
+
+最终验证：L1 passed/complete均true；其余定向与Windows原生PTY证据见验收记录。终端fixture需`go test -c -tags=ps1terminal -o <binary> ./internal/console`，设置`STEERLINE_PS1_TERMINAL_CAPTURE`后在隔离终端执行`-test.run=^TestPS1WindowsTerminalInput$`；默认L1不含此fixture，没有skip伪通过。

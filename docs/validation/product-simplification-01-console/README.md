@@ -18,7 +18,7 @@
 | 最新10条、同事务、来源/准备轮隔离 | [SQLite定向报告](three-pane-sqlite/summary.json)：通过 |
 | 当前真实app/SQLite/受控worker接线 | [内嵌反馈报告](inline-integration-refreshed/summary.json)：两方案/两候选、切换草稿隔离、同一候选续跑通过；用户动作在未提交前显式刷新/核对，不重发未知请求 |
 | PS1-05 Windows原生终端/PTY | [输入捕获](terminal-three-pane/capture.json) / [原始VT记录](terminal-three-pane/native-output.json)：80×24实际终端，中文两行、F8、P1→P2→P1及一次F2后仍绑定candidate-0/decision-0；完整最终回复末尾可滚动到达，测试进程退出PASS |
-| L1 | `l1-release/`最终完整报告另行记录；`l1-three-pane/`的功能/边界组通过但默认终端fixture skip使总报告不完整，随后改用显式测试标签；此前失败不能替代最终通过 |
+| L1 | [L1完整报告](l1-release/summary.json)：passed=true/complete=true；`l1-three-pane/`的功能/边界组通过但默认终端fixture skip使总报告不完整，随后改用显式测试标签；此前失败不能替代最终通过 |
 | 静态 | 受影响包go vet、当前产品构建及git diff --check通过 |
 
 终端fixture只注入公开product DTOs，不启动模型或发布PR。Windows PTY证明真实终端VT/UTF-8解析与实际程序渲染，不证明物理IME、桌面截图或远端后端原生能力。宽屏三窗、问题版本变化、焦点/窄屏尺寸由定向测试覆盖；没有把Go fake KeyMsg称为该PTY输入证据。
@@ -34,8 +34,10 @@
 
 删除 `conversation.go`、`conversation_anchor.go`、`view_conversation.go`、`model_update_conversation.go`的完整阅读/折叠/锚点逻辑；`model_navigation.go`仅剩简单滚动。阅读偏好/正文分页/历史attempt选择字段和旧UI入口删除。原输入、幂等、失败、身份及正文断言迁移或补测；[退役测试映射](retired-tests.json)保留历史名称，不将删除断言当成新实现通过。
 
-[同口径统计](line-summary.json)比较internal和cmd中的Go物理行数（含注释/空行，按_test.go区分，含未变更测试支持代码）；文档和tests/integration不计入该口径。当前实现净减约1,442行、console实现由6,981至约5,523行；最终提交前重算准确值。保留三窗/摘要/内嵌输入的新增代码已计入，不重复计算共享退役代码，不以压缩排版计收益。
+[同口径统计](line-summary.json)比较internal和cmd中的Go物理行数（含注释/空行，按_test.go区分，含未变更测试支持代码）；文档和tests/integration不计入该口径。当前实现净减1442行、console实现由6981至5523行；比较基线为主分支69c839be。保留三窗/摘要/内嵌输入的新增代码已计入，不重复计算共享退役代码，不以压缩排版计收益。
 
 ## 主分支同步
 
 合并`69c839be`，两处冲突仅在移至product-design的活动/会话说明。保留main的新数据模型版本定位和目录整理，同时保留三窗、RecentActivity与内嵌反馈说明。当前Spec保持原文件名，已完成资料引用更新为archive路径；未恢复退役版本任务或旧格式兼容路径。
+
+合并后[受影响产品/SQLite回归](post-merge/summary.json)、[app准入/只读投影回归](post-merge-app/summary.json)、产品构建、go vet与全库文档链接检查通过。L1报告保留其原始采样提交及工作树；合并后的源码差异另由这些定向证据覆盖，不改写旧报告。汇总见[最终检查](final-checks.json)。

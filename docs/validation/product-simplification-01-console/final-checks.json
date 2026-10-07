@@ -1,0 +1,104 @@
+{
+  "three-pane-release-no-skip": {
+    "passed": true,
+    "complete": true,
+    "test_count": 104,
+    "passed_tests": 104,
+    "skipped_tests": 0
+  },
+  "three-pane-sqlite": {
+    "passed": true,
+    "complete": true,
+    "test_count": 4,
+    "passed_tests": 4,
+    "skipped_tests": 0
+  },
+  "inline-integration-refreshed": {
+    "passed": true,
+    "complete": true,
+    "test_count": 1,
+    "passed_tests": 1,
+    "skipped_tests": 0
+  },
+  "post-merge": {
+    "passed": true,
+    "complete": true,
+    "test_count": 65,
+    "passed_tests": 65,
+    "skipped_tests": 0
+  },
+  "post-merge-app": {
+    "passed": true,
+    "complete": true,
+    "test_count": 6,
+    "passed_tests": 6,
+    "skipped_tests": 0
+  },
+  "l1-release": {
+    "passed": true,
+    "complete": true,
+    "source_commit": "75474dcece26d807367e106a89a992f01f53fafd",
+    "groups": [
+      {
+        "id": "quick-core",
+        "passed": true,
+        "complete": true
+      },
+      {
+        "id": "quick-rules",
+        "passed": true,
+        "complete": true
+      },
+      {
+        "id": "quick-execution",
+        "passed": true,
+        "complete": true
+      },
+      {
+        "id": "quick-execution-boundary",
+        "passed": true,
+        "complete": true
+      },
+      {
+        "id": "quick-owner-remote",
+        "passed": true,
+        "complete": true
+      },
+      {
+        "id": "quick-owner-codec",
+        "passed": true,
+        "complete": true
+      },
+      {
+        "id": "quick-owner-identity",
+        "passed": true,
+        "complete": true
+      },
+      {
+        "id": "quick-owner-codexapp",
+        "passed": true,
+        "complete": true
+      },
+      {
+        "id": "quick-owner-workspace",
+        "passed": true,
+        "complete": true
+      },
+      {
+        "id": "quick-owner-publication",
+        "passed": true,
+        "complete": true
+      },
+      {
+        "id": "quick-owner-app",
+        "passed": true,
+        "complete": true
+      },
+      {
+        "id": "quick-boundary",
+        "passed": true,
+        "complete": true
+      }
+    ]
+  }
+}
