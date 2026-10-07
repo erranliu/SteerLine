@@ -128,9 +128,6 @@ func StableTaskOrder(nodes []Node, edges []Edge) []string {
 	return order
 }
 
-// Project selects nodes and reports all omitted parts within the supplied
-// snapshot. It does not decide whether a node is ready or otherwise qualified.
-
 func sortedUniqueTaskIDs(ids []string) []string {
 	sortTaskIDs(ids)
 	return compactStrings(ids)

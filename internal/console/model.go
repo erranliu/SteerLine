@@ -525,7 +525,7 @@ func (m Model) submitDecisionAnswer() (tea.Model, tea.Cmd) {
 		dialog.error = "stale_revision：问题或运行身份已变化；草稿已保留，请刷新并核对原问题"
 		return m, nil
 	}
-	if dialog.identity != "" && candidateIdentity(run) != dialog.identity || run.Abandonment != nil {
+	if dialog.identity != "" && candidateIdentity(run) != dialog.identity || run.Abandonment != nil || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		dialog.error = "原候选身份已变化或已退出实验；草稿保留"
 		return m, nil
 	}

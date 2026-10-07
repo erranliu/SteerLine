@@ -36,3 +36,17 @@
 行数按8e46537f与最终internal+cmd（含空白/注释、分列测试，排除docs/日志/integration）比较：生产净减1317、测试净减13；三批各自差值生产合计3945、测试合计1145，不计其他PR或重复收益。完整原始证据留本地，仅精选摘要入库。最后局部变量/注释改名不变行为，历史PR显示由最终console全包覆盖，不重复原生或L3。
 
 独立实现已提交[PR #238](https://github.com/erranliu/SteerLine/pull/238)，待评审，未合并。
+
+## PR #238 合并前质量审计
+
+审计范围为丢弃后的原执行停止、终态 Attempt 与资源状态分离、精确回执绑定、客户端最后提交门和当前 CLI/图分页。发现直接修复，不扩大产品清理能力。
+
+| 级别 / 场景 ID | 环境 / 命令 | 时点 / 通过条件 | 证据 |
+| --- | --- | --- | --- |
+| 定向 PS3-AUD-01 | Windows，无服务外发；`go run ./cmd/test-feedback -out=<新目录> -- ./internal/console -run '^TestPS3Audit' -count=1` | 修复前应复现；修复后已丢弃Task即使保留旧问题/版本也不能外发、草稿保留 | audit-ui-before/after摘要 |
+| 定向 PS3-AUD-02/03 | Windows，临时SQLite、可控执行/原停止handle；`go run ./cmd/test-feedback -out=<新目录> -- ./internal/execution -run '^TestPS3Audit' -count=1` | 复现支持后端被host过滤、只有owned handle和终态Attempt不能结算；修复后原操作只发一次，停止/历史分开、全绑定校验、无资源删除 | audit-stop-before/after摘要 |
+| 回归 / 生命周期与停止接口 | 无模型；PS3原子回执、原停止未知重放、资源保留、Orca停止/远端ack定向和console全包 | 修复接线后；当前已有原绑定/未知/迟到/原子约束保持 | audit-regression摘要 |
+| L1 | Windows，`go run ./cmd/test-feedback -level=L1 -out=<新目录>` | 合并前；固定12组passed/complete，不更改期限/选择 | audit-l1摘要 |
+| 静态 | 产品构建、受影响go vet、文档链接、diff检查 | 合并前；全部通过，无新生产Close/Delete入口 | audit摘要 |
+
+不改变原生adapter stop/release/ack实现或增加远端取消，只按已有后端能力调用原精确停止/查询；控测不冒充native/live证明。既有L3等待合并重启已覆盖普通交付，若审计修复改到它的生产路径则重跑同一controlled场景；否则保留原采样说明，不再开live/Full。

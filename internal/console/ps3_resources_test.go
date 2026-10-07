@@ -73,3 +73,33 @@ func TestPS3DiscardedCandidateRejectsStaleQuestionAndMergeHints(t *testing.T) {
 		t.Fatal("business discard invented resource stop")
 	}
 }
+
+func TestPS3AuditFinalSubmitRejectsDiscardedTaskEvenWithUnchangedDecision(t *testing.T) {
+	now := time.Now().UTC()
+	ref := testProject("audit-submit")
+	snapshot := readySnapshot(ref, now)
+	run := &api.CandidateSummary{TaskID: "3", RunID: "run-3", TaskStatus: "in_progress", ExecutionStatus: "waiting_decision", FinishTaskStatus: "waiting_decision", ControlRevision: 7, Decision: &api.DecisionSummary{ID: "decision-3", Status: "pending", Version: 1, Request: api.DecisionRequest{Question: "original question"}}}
+	snapshot.Tasks = nil
+	snapshot.Observation.Page.Runs = []*api.CandidateSummary{run}
+	snapshot.Connection.Snapshot.Page = snapshot.Observation.Page
+	snapshot.DecisionReasons = map[string]string{run.RunID: "提交后发送原答案"}
+	snapshot.NativeTasks = &api.TaskPage{Tasks: []api.TaskDetail{{TaskSummary: api.TaskSummary{TaskID: "3", Status: "in_progress"}}}}
+	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
+	m.projects[0].selectedKey = "task:3"
+	m.width = 100
+	m.height = 30
+	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+	if m.answer == nil {
+		t.Fatal("original active question did not open")
+	}
+	m.answer.note = []rune("saved original draft")
+	m.projects[0].snapshot.Connection.Snapshot.Page.Runs[0].TaskStatus = "discarded"
+	next, cmd := m.submitDecisionAnswer()
+	m = next.(Model)
+	if cmd != nil || len(m.projects[0].actions) != 0 {
+		t.Fatal("known discarded task produced an answer command")
+	}
+	if m.answer == nil || string(m.answer.note) != "saved original draft" {
+		t.Fatal("blocked submit lost draft")
+	}
+}

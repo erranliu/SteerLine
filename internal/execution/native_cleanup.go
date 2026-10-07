@@ -137,8 +137,8 @@ func commitNativeExecutionStopReceipt(ctx context.Context, tx storageports.StopR
 		return nativeErr("contract_mismatch", "native stop receipt does not match the pending execution identity")
 	}
 	op := evidence.Operation
-	if op.Status != executionbackend.OperationConfirmed || op.Action != "stop" || op.RunID != evidence.WorkflowRunID || op.AttemptID != evidence.AttemptID || op.Ref == nil || op.Ref.RunID != op.RunID || op.Ref.AttemptID != op.AttemptID || op.Ref.External.Kind != "os" {
-		return nativeErr("contract_mismatch", "native stop receipt lacks a confirmed fixed local worker identity")
+	if executionbackend.ValidateExecutionOperation(op) != nil || op.Status != executionbackend.OperationConfirmed || op.Action != "stop" || op.RunID != evidence.WorkflowRunID || op.AttemptID != evidence.AttemptID || op.Ref == nil || op.Ref.RunID != op.RunID || op.Ref.AttemptID != op.AttemptID {
+		return nativeErr("contract_mismatch", "native stop receipt lacks a confirmed fixed worker identity")
 	}
 	if evidence.Observation.Liveness != "exited" || evidence.Observation.ObservedAt.IsZero() || evidence.Observation.Source == "" {
 		return nativeErr("contract_mismatch", "native stop receipt has no confirmed process-absent observation")
@@ -151,20 +151,20 @@ func commitNativeExecutionStopReceipt(ctx context.Context, tx storageports.StopR
 	if err != nil {
 		return nativeErr("contract_mismatch", "native stop receipt execution is not bound to the discarded workflow")
 	}
-	if workflow.TaskID != task.TaskID || execution.ExecutionID != evidence.ExecutionID || execution.WorkflowRunID != evidence.WorkflowRunID || execution.Process == nil || *execution.Process != op.Ref.External || execution.Target.ID != op.Ref.Target.ID || execution.Backend != string(op.Backend) || execution.Protocol != string(op.Protocol) {
+	if workflow.TaskID != task.TaskID || execution.ExecutionID != evidence.ExecutionID || execution.WorkflowRunID != evidence.WorkflowRunID || execution.Process == nil || *execution.Process != op.Ref.External || execution.Target != op.Ref.Target || execution.CurrentAttemptID != evidence.AttemptID || execution.Agent != op.Ref.Agent.Name || execution.SessionGeneration != op.Ref.Generation || execution.Workspace.Worktree != op.Ref.WorkspacePath || execution.Workspace.Branch != op.Ref.WorkspaceBranch || execution.Workspace.Base != op.Ref.BaseCommit || execution.Backend != string(op.Backend) || execution.Protocol != string(op.Protocol) {
 		return nativeErr("authority_mismatch", "native stop receipt does not match the center's fixed execution identity")
 	}
 	attempt, err := tx.Attempt(ctx, project, evidence.AttemptID, evidence.ExecutionID)
 	if err != nil {
 		return nativeErr("contract_mismatch", "native stop receipt attempt is not bound to the fixed execution")
 	}
-	if attempt.Status == "succeeded" || attempt.Status == "stopped" || attempt.Status == "failed" || attempt.Status == "rejected" {
-		return nativeErr("stale_version", "native stop receipt targets a non-active step attempt")
+	if attempt.Status != "succeeded" && attempt.Status != "stopped" && attempt.Status != "failed" && attempt.Status != "rejected" {
+		attempt.Status, attempt.UpdatedAt = "stopped", now()
+		if err := tx.PutStepAttempt(attempt); err != nil {
+			return err
+		}
 	}
-	attempt.Status, attempt.UpdatedAt = "stopped", now()
-	if err := tx.PutStepAttempt(attempt); err != nil {
-		return err
-	}
+	execution.ResourceStopOperationID, execution.ResourceStoppedAt = op.ID, ptr(evidence.Observation.ObservedAt)
 	execution.Status, execution.UpdatedAt = "stopped", now()
 	if err := tx.PutExecution(execution); err != nil {
 		return err

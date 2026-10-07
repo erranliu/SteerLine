@@ -3,13 +3,13 @@
   "comparison_base": "8e46537fe8b4b86f117fddaa215fc633279b22a4",
   "implementation": {
     "before": 65196,
-    "after": 63879,
-    "net_removed": 1317
+    "after": 63905,
+    "net_removed": 1291
   },
   "tests": {
     "before": 33237,
-    "after": 33224,
-    "net_removed": 13
+    "after": 33409,
+    "net_removed": -172
   },
   "batches": [
     {
@@ -29,13 +29,13 @@
     {
       "batch": 3,
       "comparison_base": "8e46537fe8b4b86f117fddaa215fc633279b22a4",
-      "implementation_net_removed": 1317,
-      "tests_net_removed": 13
+      "implementation_net_removed": 1291,
+      "tests_net_removed": -172
     }
   ],
   "sum_of_separately_scoped_batches": {
-    "implementation_net_removed": 3945,
-    "tests_net_removed": 1145
+    "implementation_net_removed": 3919,
+    "tests_net_removed": 960
   },
   "note": "sum compares each batch against its own actual implementation base, not a before/after comparison that credits unrelated main changes; includes new tests and moving scratch cleanup into test-only owner"
 }

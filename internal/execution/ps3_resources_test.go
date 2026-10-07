@@ -113,6 +113,9 @@ func TestPS3StopReceiptIsAtomicAndReplaysOriginalEvidence(t *testing.T) {
 			identity := executionbackend.ProcessIdentity{Kind: "os", PID: 999999, Incarnation: "ps3-fixture"}
 			execution.Process = &identity
 			execution.Status = "active"
+			execution.Workspace.Worktree = execution.WorkspaceIntent.Path
+			execution.Workspace.Branch = execution.WorkspaceIntent.Branch
+			execution.Workspace.Base = execution.WorkspaceIntent.BaseCommit
 			attempt := *service.workflowAttempt(run, run.AttemptID)
 			attempt.Status = "running"
 			attemptID := attempt.AttemptID
@@ -132,11 +135,25 @@ func TestPS3StopReceiptIsAtomicAndReplaysOriginalEvidence(t *testing.T) {
 			before, err := db.TaskGraphSnapshot(ctx, project)
 			require(t, err)
 			current := before.ByID[task.TaskID]
-			ref := executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, RunID: run.RunID, AttemptID: attemptID, Backend: executionbackend.BackendKind(execution.Backend), Protocol: executionbackend.ExecutionProtocol(execution.Protocol), Target: execution.Target, External: identity}
-			op := executionbackend.Operation{ID: newID(), RunID: run.RunID, AttemptID: attemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Status: executionbackend.OperationConfirmed, Action: "stop", Ref: &ref}
+			ref := executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, RunID: run.RunID, AttemptID: attemptID, Backend: executionbackend.BackendKind(execution.Backend), Protocol: executionbackend.ExecutionProtocol(execution.Protocol), Target: execution.Target, Agent: AgentFor(service.Config), WorkspacePath: execution.Workspace.Worktree, WorkspaceBranch: execution.Workspace.Branch, BaseCommit: execution.Workspace.Base, Generation: execution.SessionGeneration, External: identity}
+			op := executionbackend.Operation{Version: executionbackend.ExecutionRecordVersion, PayloadDigest: digestValue("controlled original stop"), ID: newID(), RunID: run.RunID, AttemptID: attemptID, Backend: ref.Backend, Protocol: ref.Protocol, Target: ref.Target, Status: executionbackend.OperationConfirmed, Action: "stop", Ref: &ref}
 			evidence := NativeExecutionStopReceipt{WorkflowRunID: run.RunID, ExecutionID: execution.ExecutionID, AttemptID: attemptID, Operation: op, Observation: executionbackend.Observation{Liveness: "exited", Source: "controlled original identity", ObservedAt: time.Now().UTC()}}
 			item := "execution_stop_manual:" + execution.ExecutionID
 			request := newID()
+			if !fail {
+				bad := evidence
+				altered := *op.Ref
+				altered.Target.Branch = "foreign-original-branch"
+				bad.Operation.Ref, bad.Operation.Target = &altered, altered.Target
+				if _, err := commands.RecordNativeStopReceipt(ctx, task.TaskID, newID(), current.Version, item, "operator", mustJSON(bad)); err == nil {
+					t.Fatal("same target ID with foreign branch accepted")
+				}
+				bad = evidence
+				bad.Operation.Version = 0
+				if _, err := commands.RecordNativeStopReceipt(ctx, task.TaskID, newID(), current.Version, item, "operator", mustJSON(bad)); err == nil {
+					t.Fatal("invalid original operation format accepted")
+				}
+			}
 			if fail {
 				_, err = db.db.Exec(`CREATE TRIGGER reject_ps3_stop_receipt BEFORE INSERT ON commands BEGIN SELECT RAISE(FAIL,'stop receipt failure'); END`)
 				require(t, err)

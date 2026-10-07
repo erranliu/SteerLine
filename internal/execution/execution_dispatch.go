@@ -9,7 +9,7 @@ import (
 )
 
 func (s *Service) dispatchNative(ctx context.Context) error {
-	if !s.explicitDispatch && len(s.workers) != 0 {
+	if !s.explicitDispatch && s.hasActiveWorkers() {
 		return nil
 	}
 	if err := s.refreshNativeSnapshot(ctx); err != nil {
