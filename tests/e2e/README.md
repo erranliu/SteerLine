@@ -115,6 +115,8 @@ summary.json 保存源码/工作树、构建 SHA-256、精确选择、命令、�
 
 `*-usage.json` 及筛选原生事件 JSONL 记录 input/cached/output/reasoning/total 和 session/turn/cwd。local 使用绑定 thread/turn 的 app-server 通知；Orca 使用本项目 home 的 session JSONL，核对 cwd 和每个 turn_context 的模型/effort。累计值取最后样本，不重复相加。缺失、零值、身份或模型不符均失败；重启和交付轮询不得增加 usage。数值是 CLI 使用报告，不换算价格或推断账单。
 
+Orca usage 只选择与工作区匹配的唯一原始 root 会话；`session_meta` 中有 `parent_thread_id` 或 `source.subagent` 的自动审核/子 agent 日志不作为业务会话证据。不能依据模型名筛掉 root 会话；业务会话的错误模型/effort 仍失败。
+
 成功/失败均保存诊断，停止本次资源，关闭句柄并删除 scratch；证据目录独立保留。native-logs 仅保存本项目原生日志，不复制凭据/私有 SQLite，认证值脱敏。失败、skip、零匹配、缺失/重复/非法/截断日志、超时、证据缺失、清理或报告写入失败均不能通过。断电后的跨运行回收不属当前最小范围。
 
 ## 扩展与 Plan
