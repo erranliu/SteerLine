@@ -11,14 +11,21 @@
 
 ## 测试计划
 
-全部原始产物放系统临时目录 `steerline-ps4-*`，最小摘要归专属验收文档。
+全部原始产物放系统临时目录 `steerline-ps4-*`，PS4-01–04 的方法、通过条件和证据逐项登记在[专属验收](../acceptance/product-simplification-04-conversation-recovery.md)；下表覆盖全部自动项，没有独立人工项或新增环境能力缺口。
 
 | 级别 / 场景 | 环境与命令 | 时点 / 通过条件 / 证据 |
 | --- | --- | --- |
-| 定向 / PS4-01–03 | Windows 临时 SQLite、可控原生协议；`go run ./cmd/test-feedback -- ./internal/execution/adapters/codex ./internal/execution/adapters/orca ./internal/storage/sqlite ./internal/product/query ./internal/console -count=1` | 修改后；完整 final、拒绝过程、分页/摘要/隔离、原会话限制通过；临时 directed/summary.json |
-| 定向 / PS4-03–04 | 原 execution/recovery 与 integration 最小关联用例，使用 test-feedback 的 `-run` 选择 | 接线后；同 thread、旧进程/未知动作屏障及原反馈通过；临时 recovery/summary.json |
-| L1 / 既有固定组 | `go run ./cmd/test-feedback -level=L1` | 接线完成后一次；passed/complete，所有固定组通过；临时 l1/summary.json |
-| L3 / recovery.waiting-merge-restart | controlled；`go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled '-scenario=recovery.waiting-merge-restart'` | 定向及 L1 通过后；原身份/唯一交付/后继与清理通过；临时 controlled/summary.json |
+| 定向 / PS4-01/02 | Windows 临时 SQLite、可控原生协议；`go run ./cmd/test-feedback -- ./internal/execution/adapters/codex ./internal/execution/adapters/orca ./internal/storage/sqlite ./internal/product/query ./internal/console -count=1` | 修改后；完整 final、拒绝过程、分页/摘要/隔离通过；临时 directed/summary.json |
+| 定向 / PS4-03/04 | Windows 可控 worker、临时 SQLite；使用下方恢复定向命令 | 接线后；新会话拒绝、无原 session 不新建、旧进程/未知动作屏障、同 session 提交与失败回滚通过；临时 recovery/summary.json |
+| 定向 / PS4-03 | Windows 原生协议 fixture；`go run ./cmd/test-feedback -- ./tests/integration -run '^TestOriginalTerminalReconnectAndFeedback$' -count=1` | 接线后；原 terminal/incarnation/session/workspace/冻结配置、原问题反馈与 ack 不重复；临时 original-terminal-core/summary.json |
+| L1 / PS4-04 / 既有固定组 | `go run ./cmd/test-feedback -level=L1` | 接线完成后一次；passed/complete，所有固定组通过；临时 l1/summary.json |
+| L3 / PS4-04 / recovery.waiting-merge-restart | controlled；`go run ./cmd/test-feedback -level=L3 -suite=recovery -env=controlled '-scenario=recovery.waiting-merge-restart'` | 定向及 L1 通过后；原身份/唯一交付/后继与清理通过；临时 controlled/summary.json |
 | 编译/静态 | `go test -tags=e2e ./tests/e2e/... -run '^$'`、`go build ./cmd/steerline`、文档链接、`git diff --check` | 最终；无编译/链接/格式错误，编译不充当运行证据 |
+
+恢复定向命令覆盖 PS4-03/04：
+
+```powershell
+go run ./cmd/test-feedback -- ./internal/execution -run '^Test(RecoveryCannotSelectReplacementSession|UnavailableOriginalSessionNeedsManualHandling|WorkerRecoveryAttemptCommitsAtomically|DeadWorkerRecoveryPreservesDecisionAndFreshAnswer)$' -count=1
+```
 
 不跑 Full/完整 L2：没有新增交付能力或平台环境。原生读取 final 的接口和原 thread 恢复协议保持；如实际改变原生请求协议，补最小 native 验证并记录，controlled 不作为 native 证明。

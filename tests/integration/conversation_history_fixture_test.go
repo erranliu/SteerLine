@@ -129,20 +129,15 @@ func TestCodexHistoryRealLocalToolInterleaveFixture(t *testing.T) {
 		t.Fatalf("native final and turn facts lost: %+v", first)
 	}
 	query := productquery.NewConversationService(store, "project")
-	for _, tc := range []struct {
-		index int
-		want  string
-	}{{2, "I’ll read `probe.txt` from the workspace and return its marker unchanged."}, {3, "PR04B_NATIVE_PROBE_ALPHA\r\n"}, {4, "PR04B_NATIVE_PROBE_ALPHA"}} {
-		if first[tc.index].Body == nil || first[tc.index].Body.Completeness != executionvalues.BodyComplete {
-			t.Fatalf("real item %d lacks complete body: %+v", tc.index, first[tc.index])
-		}
-		publicEvent, err := productquery.ConversationEvent(first[tc.index])
-		require(t, err)
-		body, err := query.ReadMessageBody(context.Background(), *publicEvent.Body, 0, 1024)
-		require(t, err)
-		if string(body.Data) != tc.want || !body.Complete {
-			t.Fatalf("real item %d changed body: %+v", tc.index, body)
-		}
+	if first[0].Body != nil || first[2].Body != nil || first[1].Body == nil || first[1].Body.Completeness != executionvalues.BodyComplete {
+		t.Fatalf("process body retained or complete final missing: %+v", first)
+	}
+	publicEvent, err := productquery.ConversationEvent(first[1])
+	require(t, err)
+	body, err := query.ReadMessageBody(context.Background(), *publicEvent.Body, 0, 1024)
+	require(t, err)
+	if string(body.Data) != "PR04B_NATIVE_PROBE_ALPHA" || !body.Complete {
+		t.Fatalf("real final changed body: %+v", body)
 	}
 }
 
