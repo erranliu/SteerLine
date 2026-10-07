@@ -14,9 +14,9 @@
 
 近期运行目标收敛为一个本机安装版本与独立源码调试路径共存，完整 stable/dev 双 channel 和受控提升延后。已有分级 E2E 降低回归成本；安装入口和长期运行仍须验证，不能用 runner 临时构建或短时 smoke 代替。
 
-| 任务 ID | 任务名称 | 交付范围 | 剩余拟议前置 | 执行规格 |
-| --- | --- | --- | --- | --- |
-| 83 | 本机安装与调试路径隔离 | 固定安装 exe、显式调试 exe/home、状态隔离与共存 | 无 | [Spec](../../spec/local-runtime-isolation.spec.md) · [Plan](../../spec/local-runtime-isolation.plan.md) |
+| 任务 ID | 任务名称 | 交付范围 | 剩余拟议前置 | 执行规格 | 验收规划 |
+| --- | --- | --- | --- | --- | --- |
+| 83 | 本机安装与调试路径隔离 | 固定安装 exe、显式调试 exe/home、状态隔离与共存 | 无 | [Spec](../../spec/local-runtime-isolation.spec.md) · [Plan](../../spec/local-runtime-isolation.plan.md) | [验收](../../acceptance/local-runtime-isolation.md) |
 
 ## 第一阶段剩余验证
 
@@ -37,18 +37,18 @@
 
 近期产品主线优先 #45 本机 API，再由 #44/#45 交付 #50 执行与待处理界面，复用已有阶段与反馈。#43 先验证规划 agent 的实际能力，#44 提供原生输入基座；两者可独立准备。不等待完整双版本管理或全面目录整理。草稿、审核、发布与准入范围在正式实施前对齐二期目标。
 
-| 任务 ID | 任务名称 | 交付范围 | 剩余拟议前置 | 执行规格 |
-| --- | --- | --- | --- | --- |
-| 43 | Codex 规划主 agent 能力验证 | 规划 agent 权限与受控工具能力证明 | 无 | [Spec](../../spec/phase2-agent-capabilities.spec.md) · [Plan](../../spec/phase2-agent-capabilities.plan.md) |
-| 44 | WinUI 基座与原生输入 | Windows 原生窗口、IME/多行输入和导航基座 | 无 | [Spec](../../spec/phase2-winui-foundation.spec.md) · [Plan](../../spec/phase2-winui-foundation.plan.md) |
-| 45 | 本机客户端协议与历史查询 | 五阶段/原会话反馈的本机 HTTP/SSE 与离线查询 | 无 | [Spec](../../spec/phase2-local-api.spec.md) · [Plan](../../spec/phase2-local-api.plan.md) |
-| 46 | 规划提案与受控草稿 | 规划工作区、提案/ID 预留、草稿与文档权威 | `#45` | [Spec](../../spec/phase2-planning-drafts.spec.md) · [Plan](../../spec/phase2-planning-drafts.plan.md) |
-| 47 | Codex 规划会话服务 | 受控规划会话、草稿工具和写入仲裁接线 | `#43`、`#46` | [Spec](../../spec/phase2-planning-sessions.spec.md) · [Plan](../../spec/phase2-planning-sessions.plan.md) |
-| 48 | 正式文档发布与任务创建 | 正式文档版本、目标分支集成与中心创建 | `#46` | [Spec](../../spec/phase2-document-publish.spec.md) · [Plan](../../spec/phase2-document-publish.plan.md) |
-| 49 | Roadmap 与 DAG 原生浏览 | Roadmap/DAG 原生浏览与精确关联 | `#44`、`#48` | [Spec](../../spec/phase2-roadmap-ui.spec.md) · [Plan](../../spec/phase2-roadmap-ui.plan.md) |
-| 50 | 执行与待处理原生界面 | 五阶段、完整会话与统一反馈原生页面 | `#44`、`#45` | [Spec](../../spec/phase2-execution-ui.spec.md) · [Plan](../../spec/phase2-execution-ui.plan.md) |
-| 51 | 规划对话原生界面 | 规划会话和受控草稿工具的原生对话 | `#44`、`#47` | [Spec](../../spec/phase2-conversation-ui.spec.md) · [Plan](../../spec/phase2-conversation-ui.plan.md) |
-| 52 | 文档审阅与确认原生界面 | 规划文档差异、固定版本确认与发布回执 | `#44`、`#48` | [Spec](../../spec/phase2-review-ui.spec.md) · [Plan](../../spec/phase2-review-ui.plan.md) |
+| 任务 ID | 任务名称 | 交付范围 | 剩余拟议前置 | 执行规格 | 验收规划 |
+| --- | --- | --- | --- | --- | --- |
+| 43 | Codex 规划主 agent 能力验证 | 规划 agent 权限与受控工具能力证明 | 无 | [Spec](../../spec/phase2-agent-capabilities.spec.md) · [Plan](../../spec/phase2-agent-capabilities.plan.md) | [验收](../../acceptance/phase2-agent-capabilities.md) |
+| 44 | WinUI 基座与原生输入 | Windows 原生窗口、IME/多行输入和导航基座 | 无 | [Spec](../../spec/phase2-winui-foundation.spec.md) · [Plan](../../spec/phase2-winui-foundation.plan.md) | [验收](../../acceptance/phase2-winui-foundation.md) |
+| 45 | 本机客户端协议与历史查询 | 五阶段/原会话反馈的本机 HTTP/SSE 与离线查询 | 无 | [Spec](../../spec/phase2-local-api.spec.md) · [Plan](../../spec/phase2-local-api.plan.md) | [验收](../../acceptance/phase2-local-api.md) |
+| 46 | 规划提案与受控草稿 | 规划工作区、提案/ID 预留、草稿与文档权威 | `#45` | [Spec](../../spec/phase2-planning-drafts.spec.md) · [Plan](../../spec/phase2-planning-drafts.plan.md) | [验收](../../acceptance/phase2-planning-drafts.md) |
+| 47 | Codex 规划会话服务 | 受控规划会话、草稿工具和写入仲裁接线 | `#43`、`#46` | [Spec](../../spec/phase2-planning-sessions.spec.md) · [Plan](../../spec/phase2-planning-sessions.plan.md) | [验收](../../acceptance/phase2-planning-sessions.md) |
+| 48 | 正式文档发布与任务创建 | 正式文档版本、目标分支集成与中心创建 | `#46` | [Spec](../../spec/phase2-document-publish.spec.md) · [Plan](../../spec/phase2-document-publish.plan.md) | [验收](../../acceptance/phase2-document-publish.md) |
+| 49 | Roadmap 与 DAG 原生浏览 | Roadmap/DAG 原生浏览与精确关联 | `#44`、`#48` | [Spec](../../spec/phase2-roadmap-ui.spec.md) · [Plan](../../spec/phase2-roadmap-ui.plan.md) | [验收](../../acceptance/phase2-roadmap-ui.md) |
+| 50 | 执行与待处理原生界面 | 五阶段、完整会话与统一反馈原生页面 | `#44`、`#45` | [Spec](../../spec/phase2-execution-ui.spec.md) · [Plan](../../spec/phase2-execution-ui.plan.md) | [验收](../../acceptance/phase2-execution-ui.md) |
+| 51 | 规划对话原生界面 | 规划会话和受控草稿工具的原生对话 | `#44`、`#47` | [Spec](../../spec/phase2-conversation-ui.spec.md) · [Plan](../../spec/phase2-conversation-ui.plan.md) | [验收](../../acceptance/phase2-conversation-ui.md) |
+| 52 | 文档审阅与确认原生界面 | 规划文档差异、固定版本确认与发布回执 | `#44`、`#48` | [Spec](../../spec/phase2-review-ui.spec.md) · [Plan](../../spec/phase2-review-ui.plan.md) | [验收](../../acceptance/phase2-review-ui.md) |
 
 ## 推进顺序
 
@@ -59,6 +59,17 @@
 本页修改只影响草稿。表格展示尚未满足的拟议前置，持续 worker 与本机候选等已交付能力作为基线摘要；现存 Spec/Plan 的完整原依赖及中心固定契约保留。实施前须完成受控准入并进入正式执行清单，不能凭草稿改边或已有编号推定 Ready。
 
 ## 规划约束
+
+草稿识别出任务时就链接其专属验收文档；上表已分别建立初步规划。任务与验收文档是一对一或一对多关系，不以共享记录覆盖多个任务。具体命令、环境与人工窗口可随范围成熟再固定，实时已验/待验结果留在 acceptance 和正式汇总。
+
+### 独立验收活动（非执行任务）
+
+| 活动 | 范围与安排建议 | 验收文档 |
+| --- | --- | --- |
+| 一期单安装版签收 | 共存、双本机链、同构建恢复及 24 小时；准备真实产物后集中约窗口 | [一期活动](../../acceptance/phase1.md) |
+| 二期完整产品链签收 | 真实 UI/规划/执行能力具备后组织操作与故障检查 | [二期活动](../../acceptance/phase2.md) |
+
+规划时鼓励识别此类独立活动与人参与策略，但不强制新增活动或把它们串成所有任务的执行路径；它们的文档可引用相关任务专属结果，不代替各任务验收文档，不自动占 Task ID 或进入 DAG。
 
 [架构约束](../architecture-constraints.md) · [执行控制台设计](../../product-design/execution-console.md) · [产品交付节点](../product-vision.md)
 

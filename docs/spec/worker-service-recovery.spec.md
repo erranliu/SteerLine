@@ -1,6 +1,6 @@
 # Spec：worker 停服恢复与手动继续
 
-目标：`WORKER-SERVICE-RECOVERY`。状态：实现候选；本机 local Codex 闭环与 Orca fake 定向验证已通过，Orca 新 agent 的安全重建仍缺真机能力证据。配套 [Plan](worker-service-recovery.plan.md)及[验证记录](../acceptance/pending-acceptance.md#worker-停服恢复)。日期：2026-09-30。实现基线：`origin/main` 的 `472d61e`（含 #144、#148、#149）；不创建或绑定生产 Task。
+目标：`WORKER-SERVICE-RECOVERY`。状态：实现候选；本机 local Codex 闭环与 Orca fake 定向验证已通过，Orca 新 agent 的安全重建仍缺真机能力证据。配套 [Plan](worker-service-recovery.plan.md)及[验证记录](../acceptance/worker-service-recovery.md)。日期：2026-09-30。实现基线：`origin/main` 的 `472d61e`（含 #144、#148、#149）；不创建或绑定生产 Task。
 
 ## 1. 目标与替代范围
 

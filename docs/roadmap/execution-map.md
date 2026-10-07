@@ -15,7 +15,9 @@
 | --- | --- | --- |
 | 一期单安装版签收 | 待验收 | [一期活动](../acceptance/phase1.md)：原 #42 人工组织范围已转出，不作为执行成员 |
 | 二期完整产品链签收 | 待验收，功能尚未齐备 | [二期活动](../acceptance/phase2.md)：原 #53 不作为执行成员 |
-| 既有原生/环境缺口 | 待补项保持原状态 | [待补验收](../acceptance/pending-acceptance.md)：按条目区分自动/人工并安排，不把未知或失败改作通过 |
+| 本机 Codex app-server | 定向 race 待验收 | [专属记录](../acceptance/local-codex-app-server.md)：待工具链和真实结果，不改称人工补验 |
+| 本机 Orca 原生编排 | 所列 ON 项待验收 | [专属记录](../acceptance/worker-flow-orca-native.md)：保留原生故障/输出/生命周期缺口 |
+| worker 停服恢复 | Orca 安全重建待验收 | [专属记录](../acceptance/worker-service-recovery.md)：无法核实仍保持未知并禁用替代 worker |
 
 正式 Task 执行完成或受控归档后若仍有允许后置的人工项，验收文档继续在此索引，不要求保留为活动 DAG 成员。全部相关项真正已验后再移除待验链接，记录留在 acceptance。
 
