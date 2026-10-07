@@ -20,7 +20,7 @@ git diff --check
 
 | 入口 | 用途 | 模型 token / 外部效果 |
 | --- | --- | --- |
-| L1 | 固定最小闭环、规则和依赖边界；可追加定向用例 | 默认无真实模型 |
+| L1 | 固定领取/事务/SQLite 接线、规则和依赖边界；默认三个独立进程并发，可追加定向用例 | 默认无真实模型 |
 | 定向 Go 回归 | 指定包或测试，定位受影响行为 | 普通用例无真实模型；显式原生验收另行配置 |
 | Full | 全部未启用 e2e tag 的确定性 Go 回归，包含受控进程、Git、SQLite 和接线测试 | 默认无真实模型；登记的原生 opt-in 用例会跳过 |
 | L2 controlled | 只检查 smoke 的无 token 门槛 | 本地隔离项目与 loopback Git/PR provider；不构成完整 L2 |
@@ -38,6 +38,9 @@ Full 将 `internal/execution` 和 `tests/integration` 两个业务包分别按�
 # 日常最小入口（-quick 是相同入口的旧命令名）
 go run ./cmd/test-feedback -level=L1
 
+# 同一固定范围串行执行，用于诊断并发或资源问题
+go run ./cmd/test-feedback -level=L1 -workers=1
+
 # L1 加本次改动的定向测试；Go 参数放在 -- 后
 go run ./cmd/test-feedback -level=L1 -- ./cmd/test-feedback -run '^TestLevelSelectionsRejectAmbiguity$' -count=1
 
@@ -52,6 +55,23 @@ go run ./cmd/test-feedback -workers=1
 ```
 
 L1 的固定选择以 [quickTests / quickPackages](../cmd/test-feedback/scoped.go) 与 [任务包选择](../cmd/test-feedback/task_scope.go) 为准；定向用例来自各包的 `*_test.go`。Full 会枚举并核对包/核心顶层用例，不能用部分通过替代完整覆盖。三 worker 入口拒绝已启用的原生验收开关；原生验收按下面的独立入口选择。
+
+L1/quick 默认 `-workers=3`，最多三个分组命令并发；各分组保持 `-p=1 -parallel=1`，使用独立 home、临时目录、日志和子进程所有权。显式 `-workers=1` 使用相同固定范围串行运行。Full 的 `-workers=3` 仍采用上面的完整分区策略。
+
+固定集成组保留 `TestCD67CoreBoundary`、`TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt` 与 `TestTM07StorageWiring`；Go 的分层 `-run` 精确排除长恢复及重复双回合流程。定向追加始终保留固定范围，包括追加 `tests/integration` 时。重启、回执丢失、多回合、候选调度、复杂远端协议、重服务查询按受影响实现选择；Full 保留全部测试。
+
+```powershell
+# 修改 Codex 会话/回执接线时，只追加一处双回合验证
+go run ./cmd/test-feedback -level=L1 -- ./tests/integration -run '^TestTM04ExecutionWiring$/^intent_binding_and_two_original_turns$' -count=1
+
+# 修改 Orca 恢复或冻结配置时，追加配置改变后的原身份恢复验证
+go run ./cmd/test-feedback -level=L1 -- ./tests/integration -run '^TestCD67AdditionalImplementation$/^supported_terminal_recovery_and_original_identity$' -count=1
+
+# 修改候选调度时，追加被影响的两个回归
+go run ./cmd/test-feedback -level=L1 -- ./internal/execution -run '^TestCandidate(OpenPRPollPreservesOriginalPendingInput|ResumeErrorDoesNotStarveSibling)$' -count=1
+```
+
+宿主控制/心跳/退出、原生项目初始化、身份/权限冻结、工作区及发布契约仍在固定 L1；定向回归不构成真实模型验收。此前完整 L1 的长流程耗时不能直接当作新版固定范围的性能基线，比较时同时核对选择范围。
 
 ## L2 与 L3
 
@@ -132,6 +152,8 @@ go run ./cmd/test-feedback -level=L1 ('-out=' + (Join-Path $runRoot 'l1'))
 ```
 
 查看退出码和 `summary.json`：确定性入口需要 `passed=true`、`complete=true`，并核对 scope、源码/工作树、命令、枚举与实际终态。E2E 需要选择范围、coverage、每个 scenario 的通过/清理和原生证据都符合要求；`gate-only` 不能当完整 L2。真实运行还需正数、同身份及同模型的 usage；recovery 不应增加模型回合。父子测试计数及时间会重叠，不能当成独立场景数量或累加为总耗时。
+
+L1 报告的 `workers`、各组 `started_at` / `finished_at` 和 `wall_seconds` 可核对实际并发；总耗时使用准备加执行时间，并行分组时间不能求和作为墙钟时间。
 
 失败、超时、证据/清理缺失、零匹配或报告不完整都不能算通过；runner 不自动重试。重新运行使用新目录和新现场，保留前次失败。每次原始报告和失败诊断保留在本次输出目录；仓库只提交最小验收摘要和仍必要的结果索引，避免提交完整日志、认证、数据库、原始 prompt 或 dispatch capability。测试样本维护在对应包的 testdata。
 
