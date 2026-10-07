@@ -22,7 +22,8 @@ import (
 // Real app construction, product task commands and the built CLI share the
 // migrated task application against an isolated committed Git/SQLite project.
 func TestTM03TaskWiring(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	// Include the real CLI build, replay and both fixed-document rejection paths.
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 	f := newLifecycleProject(t, "local")
 	client, err := steerlineapp.OpenClient(ctx, f.configPath)

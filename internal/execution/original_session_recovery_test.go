@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	backend "github.com/erranliu/SteerLine/internal/execution/backend"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 type unavailableSessionLifecycle struct{ recoveryOnlyLifecycle }
@@ -47,6 +48,11 @@ func TestUnavailableOriginalSessionNeedsManualHandling(t *testing.T) {
 	t.Cleanup(func() { _ = service.Close() })
 	service.lifecycleResolver = unavailableSessionResolver{}
 	execution := service.executionRecord(run)
+	execution.SessionID = "unavailable-original-session"
+	workflow := service.workflowRecord(run)
+	execution.Generation, execution.ConfigurationDigest = "resources", workflow.ExecutionProfile.Digest
+	execution.Workspace = executionmodel.WorkspaceEvidence{Repository: service.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
+	execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 	execution.RecoveryRequired = true
 	originalSession, attempts := execution.SessionID, len(service.domain.Attempts)
 	handled, err := service.resumeLifecycleWorkerFlow(context.Background(), nil, run)

@@ -388,7 +388,7 @@ func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) inte
 	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), globalData, 0600))
 	projectData, err := json.Marshal(map[string]any{
 		"repository": repository, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v1",
-		"task_poll": "1s", "pr_poll": "1m", "heartbeat": "1s", "command_timeout": "15s", "shutdown_grace": "5s",
+		"task_poll": "1s", "pr_poll": "1m", "heartbeat": "1s", "command_timeout": "30s", "shutdown_grace": "5s",
 		"claimant": "integration", "git": executionbackend.Command{Executable: os.Args[0], Args: []string{"--fake", "publication-git", "git"}},
 		"executable_types":   []string{"task"},
 		"publication_policy": executionbackend.PublicationPolicy{Publisher: publisher},

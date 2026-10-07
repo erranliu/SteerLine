@@ -57,6 +57,10 @@ func TestCD64ReviewReceiptAndRecoveryIsolation(t *testing.T) {
 		s.lifecycleResolver = recoveryOnlyResolver{}
 		execution, workflow := s.executionRecord(run), s.workflowRecord(run)
 		workflow.Phase, workflow.SelectedResult, workflow.PRURL, workflow.PRState = "waiting_pr_merge", execution.ExecutionID, "https://git.example/org/repo/pulls/8", "open"
+		execution.SessionID = "completed-original-session"
+		execution.Generation, execution.ConfigurationDigest = "resources", workflow.ExecutionProfile.Digest
+		execution.Workspace = executionmodel.WorkspaceEvidence{Repository: s.Config.identity, Worktree: run.WorkspaceIntent.Path, Branch: run.WorkspaceIntent.Branch, Base: run.WorkspaceIntent.BaseCommit}
+		execution.PolicyResources = neutralPolicyReceipt(workflow.ExecutionProfile.Digest, execution.Workspace.Worktree, execution)
 		execution.CurrentTurnID, execution.LastStoppedTurnID = "completed-turn", "completed-turn"
 		execution.PendingCommandID, execution.PendingTurnID = "", ""
 		execution.RecoveryRequired = true

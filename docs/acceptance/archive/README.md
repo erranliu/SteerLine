@@ -8,6 +8,7 @@
 
 | 范围 | 记录 |
 | --- | --- |
+| #243 后全项目回归与修复 | [结果](completed/all-tests-after-243-2026-10-08.md) · [索引](completed/all-tests-after-243-2026-10-08.json) |
 | 全项目历史基线 | [基线摘要](completed/latest-baseline.md) · [结果索引](completed/baseline-results.json) |
 | #39 双本机候选 | [验收摘要](completed/candidate-acceptance.md) |
 | #38 CC5人工确认 | [原确认](completed/manual-acceptance.md) |

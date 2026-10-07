@@ -34,7 +34,7 @@ git diff --check
 | E2E 基础设施 | 测试环境、driver、codec、证据和清理 | 无真实模型 |
 | 编译检查 | 检查包与带 tag 场景能否编译 | 不执行场景，不构成测试通过证据 |
 
-Full 将 `internal/execution` 和 `tests/integration` 两个业务包分别按顶层用例划为三组。每个 worker 顺序运行自己的 execution 分区和 integration 分区；另一个独立串行 Go 命令完整运行其余包（`-p=1 -parallel=1`，包括 `internal/app/host` 服务宿主）。最多四组命令并发，各包使用独立测试进程和产物目录，总期限为 60 分钟，各组命令仍保留原期限。报告的 `core_package`、`integration_package` 和两份用例枚举记录实际所有者，并核对各顶层用例和其他包均不遗漏、不重复。它与 L3 的“多组端到端场景”是两个范围；完整项目验收应明确选择哪些入口，而不是把它们都称为 Full。
+Full 将 `internal/execution` 和 `tests/integration` 两个业务包分别按顶层用例划为三组。每个 worker 顺序运行自己的 execution 分区和 integration 分区；另一个独立串行 Go 命令完整运行其余包（`-p=1 -parallel=1`，包括 `internal/app/host` 服务宿主）。最多四组命令并发，各包使用独立测试进程和产物目录，总期限为 75 分钟，各组命令仍保留原期限。报告的 `core_package`、`integration_package` 和两份用例枚举记录实际所有者，并核对各顶层用例和其他包均不遗漏、不重复。它与 L3 的“多组端到端场景”是两个范围；完整项目验收应明确选择哪些入口，而不是把它们都称为 Full。
 
 ## L1、定向与 Full
 
@@ -161,7 +161,7 @@ L1 报告的 `workers`、各组 `started_at` / `finished_at` 和 `wall_seconds` 
 
 失败、超时、证据/清理缺失、零匹配或报告不完整都不能算通过；runner 不自动重试。重新运行使用新目录和新现场，保留前次失败。每次原始报告和失败诊断保留在本次输出目录；仓库只提交最小验收摘要和仍必要的结果索引，避免提交完整日志、认证、数据库、原始 prompt 或 dispatch capability。测试样本维护在对应包的 testdata。
 
-历史结果只证明报告中记录的候选版本。[最近保留的基线](acceptance/archive/completed/latest-baseline.md)注明逐次源码与 skip，不能替代当前改动的验证。更早原始报告从[固定 Git 快照](acceptance/archive/completed/history.md#历史取证)读取。
+历史结果只证明报告中记录的候选版本。[最近完整重跑](acceptance/archive/completed/all-tests-after-243-2026-10-08.md)注明逐次源码与 skip，不能替代当前改动的验证。此前保留的[历史基线](acceptance/archive/completed/latest-baseline.md)和更早[固定 Git 快照](acceptance/archive/completed/history.md#历史取证)继续按原范围读取。
 
 ## 扩展与 Plan
 

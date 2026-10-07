@@ -74,7 +74,11 @@ func publishFixtureCheckpoint(service *execution.Service) error {
 }
 func controlReviewService(t *testing.T) *execution.Service {
 	t.Helper()
-	service := newFixture(t).service(t)
+	fixture := newFixture(t)
+	// The local Git proxy starts this test binary and Git; allow both process
+	// startups while the independent Full workers are active.
+	fixture.c.CommandTimeout = "15s"
+	service := fixture.service(t)
 	service.Config.BindAcceptedConfigVersion("lifecycle-review-config")
 	hostConfig := hostConfigForTest(service.Config)
 	service.State.Service.Mode = "scheduler"

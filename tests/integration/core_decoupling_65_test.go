@@ -54,7 +54,19 @@ func testCD65HistoryCommitsOnly(t *testing.T) {
 	})
 	waitFor(t, 30*time.Second, func() bool {
 		page, pageError = query.ReadConversation(ctx, filter, "", 50)
-		return pageError == nil && len(page.Events) >= 5
+		if pageError != nil {
+			return false
+		}
+		hasFinal, hasCompletion := false, false
+		for _, event := range page.Events {
+			if event.Type == productdto.ConversationMessageComplete && event.Phase == productdto.MessagePhaseFinalAnswer && event.Body != nil {
+				hasFinal = true
+			}
+			if event.Type == productdto.ConversationTurnCompleted {
+				hasCompletion = true
+			}
+		}
+		return hasFinal && hasCompletion
 	})
 	sessions, starts, finals, completed := 0, 0, 0, 0
 	var sourceSegment string
