@@ -77,9 +77,9 @@ go run ./cmd/test-feedback -level=L1 -- ./internal/execution -run '^TestCandidat
 
 ## L2 与 L3
 
-L2/L3 当前在 Windows 上串行运行。controlled 使用真实 SteerLine、Git、SQLite 和受控 worker/provider；live 使用真实 Codex/Orca。真实场景固定 `gpt-6-luna` / `medium`，完全访问映射为 `danger-full-access` / `approval_policy=never`。
+L2/L3 当前在 Windows 上串行运行。controlled 使用真实 SteerLine、Git、SQLite 和受控 worker/provider；live 使用真实 Codex/Orca。真实场景固定 `gpt-6-luna` / `medium`，采用当前 Windows 原生方案：`workspace-write`、`unelevated`、`on-request`、`auto_review` 和网络访问，核对冻结身份及精确写根。
 
-live 需要本机已登录的 `codex-cli 0.159.2`；Orca 链路另需本地 Orca。完整 L2 还需要 `gh` 对 [SteerlineTest](https://github.com/erranliu/SteerlineTest) 的写权限。场景使用独立 Codex home 和测试项目；完全访问测试不需要 elevated sandbox 初始化。具体环境准备、权限断言、usage 和资源所有权见 [E2E 环境指南](../tests/e2e/README.md)。
+live 需要本机已登录的 `codex-cli 0.159.2`；Orca 链路另需本地 Orca。完整 L2 还需要 `gh` 对 [SteerlineTest](https://github.com/erranliu/SteerlineTest) 的写权限。场景使用独立 Codex home 和测试项目，不需要 elevated sandbox 管理员初始化。具体环境准备、权限断言、usage 和资源所有权见 [E2E 环境指南](../tests/e2e/README.md)。
 
 ```powershell
 # 固定 L2：先 controlled，再两条真实链路；门槛失败不进入真实阶段
