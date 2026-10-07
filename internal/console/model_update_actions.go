@@ -28,10 +28,7 @@ func (m Model) updateActionSubmitted(msg actionSubmittedMsg) (tea.Model, tea.Cmd
 		if msg.command != nil && msg.command.CommandID != action.RequestID {
 			remapDecisionActionID(state, action, msg.requestID, msg.command.CommandID)
 		}
-		refreshNow, reopen := applyDecisionCommandResult(state, action, msg.command, msg.err)
-		if reopen && action.Action == "answer_decision" && index == m.selected {
-			m.reopenDecisionDraft(index, action)
-		}
+		refreshNow := applyDecisionCommandResult(state, action, msg.command, msg.err)
 		if action.Resolved {
 			delete(state.view.Outstanding, action.RequestID)
 		}
@@ -101,10 +98,7 @@ func (m Model) updateActionReceipt(msg actionReceiptMsg) (tea.Model, tea.Cmd) {
 	if action.Action == "answer_decision" {
 		action.InFlight = false
 		action.UpdatedAt = m.clock.Now()
-		refreshNow, reopen := applyDecisionCommandResult(state, action, msg.command, msg.err)
-		if reopen && action.Action == "answer_decision" && index == m.selected {
-			m.reopenDecisionDraft(index, action)
-		}
+		refreshNow := applyDecisionCommandResult(state, action, msg.command, msg.err)
 		if action.Resolved {
 			delete(state.view.Outstanding, action.RequestID)
 		}

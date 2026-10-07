@@ -133,6 +133,12 @@ type projectState struct {
 	bodyError            string
 	bodyBusy             bool
 	bodyGeneration       uint64
+	previewEvent         *api.ConversationEvent
+	previewText          string
+	previewError         string
+	previewGeneration    uint64
+	previewBusy          bool
+	previewReady         bool
 	detailScroll         int
 	candidates           map[string]string
 	recoveryRunID        string
@@ -141,32 +147,31 @@ type projectState struct {
 	recoveryBusy         bool
 	recoveryGeneration   uint64
 	recoveryBlockerIndex int
+	recoveryActive       bool
 }
 
 type confirmAction struct {
-	scroll       int
-	requireBasis bool
-	basisCursor  int
-	basisError   string
-	projectKey   string
-	instance     string
-	revision     uint64
-	action       string
-	taskID       string
-	requestID    string
-	runID        string
-	decisionID   string
-	payload      api.ControlPayload
-	basis        string
+	projectKey string
+	instance   string
+	revision   uint64
+	action     string
+	taskID     string
+	requestID  string
+	runID      string
+	payload    api.ControlPayload
+	basis      string
 }
 
 type executionProfileChoice struct {
-	action     string
-	projectKey string
-	taskID     string
-	instance   string
-	revision   uint64
-	index      int
+	action        string
+	projectKey    string
+	taskID        string
+	instance      string
+	revision      uint64
+	index         int
+	profiles      []api.ExecutionProfileSummary
+	taskVersion   uint64
+	graphRevision uint64
 }
 
 type Model struct {
@@ -192,6 +197,7 @@ type Model struct {
 	detailSection        string
 	detailExpanded       bool
 	expandedDetailScroll int
+	operationDetails     bool
 	status               string
 
 	runFocus string
@@ -465,6 +471,7 @@ func (m Model) answerSelectedDecision() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	decision := row.run.Decision
+	m.leaveRecovery()
 	optionIndex := 0
 	if len(decision.Request.Options) == 0 {
 		optionIndex = -1
@@ -599,23 +606,23 @@ func remapDecisionActionID(state *projectState, action *actionState, oldID, newI
 	state.view.Outstanding[newID] = "decision:" + action.RunID
 }
 
-func applyDecisionCommandResult(state *projectState, action *actionState, command *api.CommandReceipt, commandErr error) (refresh, reopen bool) {
+func applyDecisionCommandResult(state *projectState, action *actionState, command *api.CommandReceipt, commandErr error) bool {
 	if state == nil || action == nil {
-		return false, false
+		return false
 	}
 	if commandErr != nil {
 		diagnostic := commandErr.Error()
 		definite := strings.Contains(diagnostic, "stale_revision") || strings.Contains(diagnostic, "stale_instance") || strings.Contains(diagnostic, "answer_conflict") || strings.Contains(diagnostic, "unsupported") || strings.Contains(diagnostic, "exceeds") || strings.Contains(diagnostic, "requires") || strings.Contains(diagnostic, "not waiting")
 		if definite {
 			action.Status, action.Message, action.Resolved = "rejected", diagnostic, true
-			return true, true
+			return true
 		}
 		action.Status, action.Message, action.Resolved = "indeterminate", "答案命令结果待确认；继续核实原 command_id："+diagnostic, false
-		return false, false
+		return false
 	}
 	if command == nil || command.CommandID != action.RequestID || command.Kind != action.Action || command.TargetID != action.DecisionID || viewCanonical(command.ProjectIdentity) != viewCanonical(state.ref.Identity) {
 		action.Status, action.Message, action.Resolved = "indeterminate", "决策命令回执身份不匹配；保留原 command_id 并停止自动提交", true
-		return false, false
+		return false
 	}
 	action.Status = command.Status
 	switch command.Status {
@@ -624,7 +631,7 @@ func applyDecisionCommandResult(state *projectState, action *actionState, comman
 	case "accepted":
 		action.Message = "答案已保存；服务将单独核验原执行与续跑条件"
 		action.Resolved = true
-		return true, false
+		return true
 	case "rejected":
 		code, reason := "rejected", "服务拒绝了这次答案"
 		result := struct{ Code, Error string }{command.ResultCode, command.ResultError}
@@ -637,69 +644,11 @@ func applyDecisionCommandResult(state *projectState, action *actionState, comman
 			}
 		}
 		action.Message, action.Resolved = code+"："+reason, true
-		return true, true
+		return true
 	default:
 		action.Status, action.Message, action.Resolved = "indeterminate", "决策命令状态未知；保留原 command_id", false
 	}
-	return false, false
-}
-
-func decisionRequestFor(state projectState, runID, decisionID string) (api.DecisionRequest, bool) {
-	if runtimeState := state.snapshot.Connection.Snapshot.Page; runtimeState != nil {
-		for _, run := range runtimeState.Runs {
-			if run != nil && run.RunID == runID && run.Decision != nil && run.Decision.ID == decisionID {
-				return run.Decision.Request, true
-			}
-		}
-	}
-	if runtimeState := state.snapshot.Observation.Page; runtimeState != nil {
-		for _, run := range runtimeState.Runs {
-			if run != nil && run.RunID == runID && run.Decision != nil && run.Decision.ID == decisionID {
-				return run.Decision.Request, true
-			}
-		}
-	}
-	if state.snapshot.History != nil {
-		for _, record := range state.snapshot.History.Decisions {
-			if record.DecisionID == decisionID && record.WorkflowRunID == runID {
-				if record.Request != nil {
-					return *record.Request, true
-				}
-			}
-		}
-	}
-	return api.DecisionRequest{}, false
-}
-
-func (m *Model) reopenDecisionDraft(index int, action *actionState) {
-	if index < 0 || index >= len(m.projects) || index != m.selected || action == nil || m.detailExpanded || m.help || m.confirm != nil || m.profileChoice != nil {
-		return
-	}
-	state := &m.projects[index]
-	row := m.selectedRow(index)
-	if row == nil || row.run == nil || row.run.RunID != action.RunID || row.run.Decision == nil || row.run.Decision.ID != action.DecisionID || row.run.Decision.Status != "pending" || m.answer != nil {
-		return
-	}
-	request, ok := decisionRequestFor(*state, action.RunID, action.DecisionID)
-	optionIndex := 0
-	if !ok || len(request.Options) == 0 {
-		optionIndex = -1
-	} else if action.DecisionDraftOptionID == "" {
-		optionIndex = len(request.Options)
-	} else {
-		for i, option := range request.Options {
-			if option.ID == action.DecisionDraftOptionID {
-				optionIndex = i
-				break
-			}
-		}
-	}
-	note := []rune(action.DecisionDraftNote)
-	m.answer = &decisionAnswerDialog{identity: action.DecisionIdentity, projectKey: state.ref.Key, instance: action.TargetInstance, runID: action.RunID, decisionID: action.DecisionID, runRevision: action.DecisionRevision, decisionVersion: action.DecisionVersion, optionIndex: optionIndex, note: note, cursor: len(note), noteFocus: true, error: action.Message}
-	m.answer.request = request
-	m.answer.request.Options = append([]api.DecisionOption(nil), request.Options...)
-	state.focus = 2
-	state.lowerScroll = 0
+	return false
 }
 
 func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
@@ -718,6 +667,8 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateFinalReplies(msg)
 	case bodyMsg:
 		return m.updateBody(msg)
+	case finalPreviewMsg:
+		return m.updateFinalPreview(msg)
 	case actionSubmittedMsg:
 		return m.updateActionSubmitted(msg)
 	case actionReceiptMsg:
@@ -983,6 +934,9 @@ func (m Model) refreshFinalReplies(index int) (Model, tea.Cmd) {
 		state.finalEvents, state.finalError, state.finalSelected = nil, "", ""
 		state.finalPinned, state.finalBusy, state.bodyBusy = false, false, false
 		state.bodyRef, state.bodyText, state.bodyError = nil, "", ""
+		state.previewEvent, state.previewText, state.previewError = nil, "", ""
+		state.previewBusy, state.previewReady = false, false
+		state.previewGeneration++
 		state.detailScroll = 0
 		state.recoveryGeneration++
 		state.recoveryReport, state.recoveryError, state.recoveryBusy = nil, "", false
@@ -1074,7 +1028,10 @@ func (m Model) moveProject(delta int) (tea.Model, tea.Cmd) {
 	if next == m.selected {
 		return m, nil
 	}
-	m.leaveAnswer()
+	if !m.leaveAnswerSaved() {
+		return m, nil
+	}
+	m.cancelWorkspace()
 	m.selected = next
 	m.generation++
 	m.status = ""
@@ -1116,7 +1073,10 @@ func (m Model) moveSelection(delta int) (tea.Model, tea.Cmd) {
 	if rows[index].key == state.selectedKey {
 		return m, nil
 	}
-	m.leaveAnswer()
+	if !m.leaveAnswerSaved() {
+		return m, nil
+	}
+	m.cancelWorkspace()
 	state.selectedKey = rows[index].key
 	state.selectionHold = false
 	m.status = ""
@@ -1134,7 +1094,10 @@ func (m Model) changeFilter(filter int) (tea.Model, tea.Cmd) {
 	if state.filter == filter {
 		return m, nil
 	}
-	m.leaveAnswer()
+	if !m.leaveAnswerSaved() {
+		return m, nil
+	}
+	m.cancelWorkspace()
 	state.filter = filter
 	rows := m.rows(m.selected)
 	if !rowExists(rows, state.selectedKey) {

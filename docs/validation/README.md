@@ -9,6 +9,7 @@
 | 尚未闭合的原生验收及已有通过边界 | [待补验收](pending-acceptance.md) |
 | #39 本机多候选交付与恢复 | [本机候选验收](candidate-acceptance.md) |
 | #38 CC5 用户人工确认 | [人工确认原文](manual-acceptance.md) |
+| #234 三窗主界面体验及质量审计 | [主界面验收](console-primary-workspace.md) |
 | #231 三窗及内嵌反馈 | [控制台验收](product-console.md) |
 | 原生准备工具证据 | [准备验收](worker-readiness.md) |
 | RoadmapGuide、草稿/正式静态边界与执行技能 | [规划文档检查](roadmap-planning.md) |

@@ -139,6 +139,11 @@ func (m Model) updateRecoveryInspection(msg recoveryInspectionMsg) (tea.Model, t
 		}
 		return m, nil
 	}
+	if msg.report.RunID != msg.runID {
+		state.recoveryError = "核验响应不属于原候选"
+		state.recoveryReport = nil
+		return m, nil
+	}
 	state.recoveryError = ""
 	state.recoveryReport = &msg.report
 	if index == m.selected {

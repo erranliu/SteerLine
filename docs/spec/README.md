@@ -16,6 +16,14 @@
 | 2 | 两种明确权限模式、移除附加执行需求与认证入口 | 第一批合入 | [收窄执行权限配置与移除附加需求](product-simplification-02-configuration.spec.md) |
 | 3 | Task 丢弃后资源人工处置、重复 CLI 与高级图查询/导出退役 | 第二批合入 | [保留资源人工处置与精简命令入口](product-simplification-03-resources-cli.spec.md) |
 
+## 控制台体验优化
+
+目标：`CONSOLE-PRIMARY-WORKSPACE`。依据 2026-10-07 用户确认的三窗主界面操作与可读性方案；未分配 Task ID，实现及定向/终端验证完成，已有[实施 Plan](console-primary-workspace.plan.md)与 [PR #234](https://github.com/erranliu/SteerLine/pull/234)；固定 L1 超时，缺失项补跑通过，限制见[验证记录](../validation/console-primary-workspace.md)。以产品精简第一批的三窗实现为功能前置，不依赖第二/三批；后续一份实施 Plan、一个独立实现 PR。
+
+| 范围 | Spec |
+| --- | --- |
+| 主界面方案选择/确认/回答/核验与结果摘要、收窄详情入口、颜色/加粗和明确焦点 | [三窗主界面操作与控制台可读性优化](console-primary-workspace.spec.md) |
+
 ## 当前草稿候选规格
 
 | 任务 ID | 任务名称 | 剩余拟议前置 | Spec | Plan |
