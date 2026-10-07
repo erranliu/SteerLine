@@ -635,9 +635,18 @@ func decisionAnswerStatusLines(state projectState, row *consoleRow) []string {
 }
 
 func renderAnswerDetails(m Model, state projectState, height int) string {
+	if m.answer == nil {
+		return ""
+	}
+	height = max(1, height)
+	wrapped := wrapLines(answerDetailLines(m, state), max(1, m.width-2))
+	return strings.Join(fitLines(scrollLines(wrapped, m.answer.scroll, height), m.width, height), "\n")
+}
+
+func answerDetailLines(m Model, state projectState) []string {
 	dialog := m.answer
 	if dialog == nil {
-		return ""
+		return nil
 	}
 	request, ok := dialog.request, dialog.request.Question != ""
 	lines := []string{"完整问题背景 · 只读（F8 返回输入）", "项目：" + safeTerminalText(state.ref.Name), "task_id：" + safeTerminalText(displayDash(m.answerRunTask(state, dialog))), "run_id：" + safeTerminalText(dialog.runID), "decision_id：" + safeTerminalText(dialog.decisionID), fmt.Sprintf("运行版本：%d · 问题版本：%d · 目标服务：%s", dialog.runRevision, dialog.decisionVersion, safeTerminalText(dialog.instance))}
@@ -685,15 +694,7 @@ func renderAnswerDetails(m Model, state projectState, height int) string {
 	if dialog.error != "" {
 		lines = append(lines, styleAlert.Render(safeTerminalText(dialog.error)))
 	}
-	if dialog.scroll < 0 {
-		dialog.scroll = 0
-	}
-	wrapped := wrapLines(lines, m.width-2)
-	if height < 1 {
-		height = 1
-	}
-	visible := fitLines(scrollLines(wrapped, dialog.scroll, height), m.width, height)
-	return strings.Join(visible, "\n")
+	return lines
 }
 
 func (m Model) answerRunTask(state projectState, dialog *decisionAnswerDialog) string {

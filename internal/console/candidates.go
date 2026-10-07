@@ -175,7 +175,7 @@ func (m Model) prepareCandidateAbandon() (tea.Model, tea.Cmd) {
 	m.confirm = &confirmAction{projectKey: s.ref.Key, instance: rt.Service.InstanceID, revision: rt.Control.Revision, action: "abandon_candidate", taskID: row.taskID, runID: row.run.RunID, requestID: newRequestID(), payload: p, basis: candidateConfirmBasis(*s, row.run)}
 	s.focus = 1
 	s.lowerScroll = 0
-	s.recoveryActive = false
+	m.leaveRecovery()
 	return m, nil
 }
 

@@ -231,11 +231,7 @@ func renderAnswerDialog(m Model, state projectState, height int) string {
 			break
 		}
 	}
-	task := "未核实"
-	if ids := strings.Split(d.identity, "\x00"); len(ids) == 4 {
-		task = ids[0]
-	}
-	header := "运行与反馈 · Task " + safeTerminalInlineText(task) + " / " + candidateLabel(state, run)
+	header := answerHeader(state, d)
 	option, detail := "自由输入", "无固定选项，直接输入答复"
 	if d.optionIndex >= 0 && d.optionIndex < len(request.Options) {
 		option = request.Options[d.optionIndex].Label
@@ -286,4 +282,12 @@ func renderAnswerDialog(m Model, state projectState, height int) string {
 	}
 	lines = append(lines, "Tab 切换 · "+enter+" · F2 提交 · F8 背景 · Esc 保留")
 	return strings.Join(fitLines(lines, m.width, height), "\n")
+}
+
+func answerHeader(state projectState, d *decisionAnswerDialog) string {
+	task := "未核实"
+	if ids := strings.Split(d.identity, "\x00"); len(ids) == 4 {
+		task = ids[0]
+	}
+	return "运行与反馈 · Task " + safeTerminalInlineText(task) + " / " + candidateLabel(state, &api.CandidateSummary{TaskID: task, RunID: d.runID})
 }

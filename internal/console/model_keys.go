@@ -253,9 +253,9 @@ func (m Model) handleDecisionAnswerKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if dialog.details {
 		switch keyName {
 		case "pgup", "up":
-			dialog.scroll = max(0, dialog.scroll-8)
+			dialog.scroll = clampReadingScroll(dialog.scroll-8, len(wrapLines(answerDetailLines(m, m.projects[m.selected]), max(1, m.width-2))), consoleContentHeight(m))
 		case "pgdown", "down":
-			dialog.scroll += 8
+			dialog.scroll = clampReadingScroll(dialog.scroll+8, len(wrapLines(answerDetailLines(m, m.projects[m.selected]), max(1, m.width-2))), consoleContentHeight(m))
 		case "esc":
 			dialog.details = false
 		}

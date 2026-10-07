@@ -18,7 +18,7 @@
 
 ## 控制台体验优化
 
-目标：`CONSOLE-PRIMARY-WORKSPACE`。依据 2026-10-07 用户确认的三窗主界面操作与可读性方案；未分配 Task ID，实现及定向/终端验证完成，已有[实施 Plan](console-primary-workspace.plan.md)与草稿 [PR #234](https://github.com/erranliu/SteerLine/pull/234)；固定 L1 超时，缺失项补跑通过，限制见[验证记录](../validation/console-primary-workspace/README.md)。以产品精简第一批的三窗实现为功能前置，不依赖第二/三批；后续一份实施 Plan、一个独立实现 PR。
+目标：`CONSOLE-PRIMARY-WORKSPACE`。依据 2026-10-07 用户确认的三窗主界面操作与可读性方案；未分配 Task ID，实现及定向/终端验证完成，已有[实施 Plan](console-primary-workspace.plan.md)与草稿 [PR #234](https://github.com/erranliu/SteerLine/pull/234)；固定 L1 超时，缺失项补跑通过，限制见[验证记录](../validation/console-primary-workspace.md)。以产品精简第一批的三窗实现为功能前置，不依赖第二/三批；后续一份实施 Plan、一个独立实现 PR。
 
 | 范围 | Spec |
 | --- | --- |

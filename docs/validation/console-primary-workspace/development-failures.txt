@@ -1,7 +1,0 @@
---- FAIL: TestEmptyRunningFilterExplainsWhyNativeTasksAreHidden (0.00s)
-    console_test.go:690: the persistent footer and help omitted the filter shortcuts
---- FAIL: TestCompletedTaskShowsHistoricalExecutionInFourColumns (0.00s)
-    layout_test.go:122: list columns are out of order: "任务编号 状态   执行     任务名称"
-FAIL
-FAIL	github.com/erranliu/SteerLine/internal/console	1.417s
-FAIL

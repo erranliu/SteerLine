@@ -77,6 +77,7 @@ func (m Model) updateFinalReplies(msg finalRepliesMsg) (tea.Model, tea.Cmd) {
 	state.finalBusy = false
 	if msg.err != nil {
 		state.finalError = msg.err.Error()
+		invalidateFinalPreview(state, state.finalError)
 		return m, nil
 	}
 	state.finalError = ""
@@ -84,6 +85,7 @@ func (m Model) updateFinalReplies(msg finalRepliesMsg) (tea.Model, tea.Cmd) {
 	for _, event := range msg.page.Events {
 		if event.Version != api.ConversationVersion || event.ExecutionID != state.finalFilter.ExecutionID || event.WorkflowID != state.finalFilter.WorkflowID || event.ProjectID != state.ref.Identity || state.finalFilter.SessionID != "" && event.SessionID != state.finalFilter.SessionID {
 			state.finalError = "最终回复记录不属于原候选"
+			invalidateFinalPreview(state, state.finalError)
 			return m, nil
 		}
 		if event.Type == api.ConversationGap {
@@ -116,12 +118,12 @@ func (m Model) updateFinalReplies(msg finalRepliesMsg) (tea.Model, tea.Cmd) {
 	}
 	state.finalEvents = latest
 	if len(state.finalEvents) == 0 {
+		invalidateFinalPreview(state, firstText(state.finalError, "本轮 final 尚未采集"))
 		return m, nil
 	}
 	if !m.detailExpanded || m.detailSection != "final" {
 		if msg.page.HasMore {
-			state.previewText = ""
-			state.previewError = "final 索引尚未完整；f 按需读取完整记录"
+			invalidateFinalPreview(state, "final 索引尚未完整；f 按需读取完整记录")
 			return m, nil
 		}
 		return m, m.readFinalPreview(index, state.finalEvents[len(state.finalEvents)-1])

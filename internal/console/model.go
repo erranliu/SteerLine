@@ -137,6 +137,8 @@ type projectState struct {
 	previewText          string
 	previewError         string
 	previewGeneration    uint64
+	previewBusy          bool
+	previewReady         bool
 	detailScroll         int
 	candidates           map[string]string
 	recoveryRunID        string
@@ -469,6 +471,7 @@ func (m Model) answerSelectedDecision() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	decision := row.run.Decision
+	m.leaveRecovery()
 	optionIndex := 0
 	if len(decision.Request.Options) == 0 {
 		optionIndex = -1
@@ -932,6 +935,7 @@ func (m Model) refreshFinalReplies(index int) (Model, tea.Cmd) {
 		state.finalPinned, state.finalBusy, state.bodyBusy = false, false, false
 		state.bodyRef, state.bodyText, state.bodyError = nil, "", ""
 		state.previewEvent, state.previewText, state.previewError = nil, "", ""
+		state.previewBusy, state.previewReady = false, false
 		state.previewGeneration++
 		state.detailScroll = 0
 		state.recoveryGeneration++

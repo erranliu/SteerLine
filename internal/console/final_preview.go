@@ -32,12 +32,13 @@ func previewPrefix(text string) string {
 
 func (m Model) readFinalPreview(index int, event api.ConversationEvent) tea.Cmd {
 	s := &m.projects[index]
-	if s.previewEvent != nil && conversationItemKey(*s.previewEvent) == conversationItemKey(event) && s.previewEvent.SourceRevision == event.SourceRevision && s.previewEvent.Body != nil && event.Body != nil && *s.previewEvent.Body == *event.Body && s.previewError == "" {
+	if s.previewEvent != nil && conversationItemKey(*s.previewEvent) == conversationItemKey(event) && s.previewEvent.SourceRevision == event.SourceRevision && s.previewEvent.Body != nil && event.Body != nil && *s.previewEvent.Body == *event.Body && s.previewError == "" && (s.previewBusy || s.previewReady) {
 		return nil
 	}
 	s.previewGeneration++
 	s.previewText = ""
 	s.previewError = ""
+	s.previewBusy, s.previewReady = false, false
 	s.previewEvent = &event
 	body := event.Body
 	if body == nil || body.ExecutionID != event.ExecutionID || body.AttemptID != event.AttemptID || body.Bytes < 0 || body.Bytes > 16<<20 || body.Completeness != api.BodyComplete || event.Type != api.ConversationMessageComplete {
@@ -45,6 +46,7 @@ func (m Model) readFinalPreview(index int, event api.ConversationEvent) tea.Cmd 
 		return nil
 	}
 	generation, key, ref, client, ctx := s.previewGeneration, s.finalKey, s.ref, s.client, m.ctx
+	s.previewBusy = true
 	return func() tea.Msg {
 		page, err := client.Body(ctx, *body, 0, 4096)
 		if err == nil && (!validBodyPage(*body, 0, page) || len(page.Data) > 4096) {
@@ -70,10 +72,13 @@ func (m Model) updateFinalPreview(msg finalPreviewMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	row := m.selectedRow(i)
+	s.previewBusy = false
 	if row == nil || row.run == nil || candidateIdentity(row.run) != s.finalKey || row.run.AttemptID != msg.event.AttemptID {
+		invalidateFinalPreview(s, "final 预览目标/Attempt已变化")
 		return m, nil
 	}
 	if row.run.CurrentTurnID != "" && row.run.CurrentTurnID != msg.event.TurnID {
+		invalidateFinalPreview(s, "final 预览轮次已变化")
 		return m, nil
 	}
 	if msg.err != nil {
@@ -82,8 +87,17 @@ func (m Model) updateFinalPreview(msg finalPreviewMsg) (tea.Model, tea.Cmd) {
 	} else {
 		s.previewText = msg.text
 		s.previewError = ""
+		s.previewReady = true
 	}
 	return m, nil
+}
+
+func invalidateFinalPreview(s *projectState, reason string) {
+	s.previewGeneration++
+	s.previewEvent = nil
+	s.previewText = ""
+	s.previewError = reason
+	s.previewBusy, s.previewReady = false, false
 }
 
 func (m Model) readSelectedFinalFull() tea.Cmd {

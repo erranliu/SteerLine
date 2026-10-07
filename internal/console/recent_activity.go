@@ -149,6 +149,9 @@ func feedbackLines(m Model, state projectState, row *consoleRow) []string {
 		if state.previewError != "" {
 			lines = append(lines, "采集缺口："+safeTerminalText(state.previewError))
 		}
+		if state.finalError != "" && state.finalError != state.previewError {
+			lines = append(lines, "采集缺口："+safeTerminalText(state.finalError))
+		}
 		if run.PR.URL != nil {
 			lines = append(lines, "PR："+shortPR(*run.PR.URL)+" · "+safeTerminalInlineText(run.PR.State))
 		}

@@ -143,9 +143,18 @@ func (m Model) operationVisible() bool {
 	required := 0
 	switch {
 	case m.answer != nil:
+		// The frame adds a focus marker and spaces to its title. Counting rows
+		// alone permits submission after truncating the Task/candidate identity.
+		if lipgloss.Width(answerHeader(m.projects[m.selected], m.answer))+4 > width {
+			return false
+		}
 		required = answerMinimum(m)
 	case m.profileChoice != nil:
-		required = len(profileChoiceRequired(m, m.projects[m.selected])) + 2
+		lines := profileChoiceRequired(m, m.projects[m.selected])
+		if len(lines) > 0 && lipgloss.Width(lines[0]) > width {
+			return false
+		}
+		required = len(lines) + 2
 	case m.confirm != nil:
 		confirmLines := confirmRequired(m, m.projects[m.selected])
 		if len(confirmLines) > 1 && lipgloss.Width(confirmLines[1]) > width {
@@ -168,7 +177,19 @@ func (m *Model) beginProfileChoice(choice *executionProfileChoice) {
 	m.profileChoice = choice
 	s.focus = 1
 	s.lowerScroll = 0
+	m.leaveRecovery()
+}
+
+func (m *Model) leaveRecovery() {
+	if m.selected < 0 || m.selected >= len(m.projects) {
+		return
+	}
+	s := &m.projects[m.selected]
+	if s.recoveryActive || s.recoveryBusy {
+		s.recoveryGeneration++
+	}
 	s.recoveryActive = false
+	s.recoveryBusy = false
 }
 
 func choiceProfiles(m Model, s projectState) []api.ExecutionProfileSummary {
@@ -344,6 +365,9 @@ func receiptSummary(s projectState, row *consoleRow) []string {
 		}
 	}
 	sort.Slice(items, func(i, j int) bool {
+		if receiptPriority(items[i]) != receiptPriority(items[j]) {
+			return receiptPriority(items[i]) > receiptPriority(items[j])
+		}
 		if items[i].UpdatedAt.Equal(items[j].UpdatedAt) {
 			return items[i].RequestID < items[j].RequestID
 		}
@@ -358,11 +382,28 @@ func receiptSummary(s projectState, row *consoleRow) []string {
 			continue
 		}
 		lines = append(lines, "操作回执："+stateText(safeTerminalInlineText(actionStatusLabel(a.Status)+" · "+shortSummary(a.Message, 100))))
-		if a.Action == "answer_decision" && len(lines) < 2 {
+		if a.Action == "answer_decision" && len(lines) < 2 && !receiptNeedsAttention(a) && (len(items) == 1 || !receiptNeedsAttention(items[1])) {
 			lines = append(lines, "答案预览："+safeTerminalInlineText(shortSummary(a.DecisionDraftOptionID+" · "+a.DecisionDraftNote, 100)))
 		}
 	}
 	return lines
+}
+
+func receiptNeedsAttention(a *actionState) bool {
+	return receiptPriority(a) > 0
+}
+
+func receiptPriority(a *actionState) int {
+	if !a.Resolved {
+		return 3
+	}
+	if a.Status == "indeterminate" {
+		return 2
+	}
+	if a.Status == "failed" || a.Status == "rejected" {
+		return 1
+	}
+	return 0
 }
 
 func recoveryStale(s projectState, row *consoleRow) bool {
@@ -544,9 +585,9 @@ func (m Model) handleOperationDetails(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.operationDetails = false
 		m.expandedDetailScroll = 0
 	case "up", "pgup":
-		m.expandedDetailScroll = max(0, m.expandedDetailScroll-4)
+		m.expandedDetailScroll = clampReadingScroll(m.expandedDetailScroll-4, len(wrapLines(operationDetailLines(m, m.projects[m.selected]), m.width)), consoleContentHeight(m))
 	case "down", "pgdown":
-		m.expandedDetailScroll += 4
+		m.expandedDetailScroll = clampReadingScroll(m.expandedDetailScroll+4, len(wrapLines(operationDetailLines(m, m.projects[m.selected]), m.width)), consoleContentHeight(m))
 	}
 	return m, nil
 }
@@ -574,4 +615,8 @@ func operationDetailLines(m Model, s projectState) []string {
 		return renderRecoveryInspection(local, s, m.width, 1<<20)
 	}
 	return []string{fmt.Sprint("没有可阅读的操作详情")}
+}
+
+func clampReadingScroll(offset, lines, height int) int {
+	return min(max(0, offset), max(0, lines-height))
 }

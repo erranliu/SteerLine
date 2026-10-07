@@ -24,8 +24,21 @@
 
 不选 Full、L2、L3/live：本任务不改原生交付、恢复协议、provider 或资源清理；console 确定性回归、真实 app 受控接线及一次 ConPTY 足以验证本次边界。不新增 E2E 注册场景或生产测试能力；只新增 console fixture 的行为断言及显式 `ps1terminal` 终端用例，默认测试不含 opt-in skip。
 
-## 状态
+## PR #234 质量审计测试计划
 
-实现、124 项发布定向回归、原地反馈接线与当前构建 Windows ConPTY 已完成；固定 L1 原集成组累计超时，原报告不完整；缺失的 TM04/TM06/TM08 补跑已全部通过，登记场景覆盖核对无遗漏。交付草稿 [PR #234](https://github.com/erranliu/SteerLine/pull/234)，保留 L1 限制供评审。具体限制及证据见[验证记录](../validation/console-primary-workspace/README.md)，不以本计划替代验收证据。
+2026-10-07 同步 `origin/main` 的验证产物清理。审计实现基线 `6e920356`，同步后的提交 `d6e36a3d`。原始记录保留在本地临时目录，仓库只保留最小摘要；既有证据固定到 `6e920356`，不改写旧运行结果。
+
+| 级别/组与场景 | 环境、命令 | 时点 | 通过条件 | 证据 |
+| --- | --- | --- | --- | --- |
+| 定向 CPW-02/03/04，`TestCPWAudit*` | Windows 隔离 DTO/home；`go run ./cmd/test-feedback -out=<临时目录>/before -- ./internal/console -run '^TestCPWAudit' -count=1` | 修复前 | 实际复现模式残留、回执遮挡、预览失效及 F8 滚动；截断目标另以明确长 ID 验证 | 临时目录 before 原始报告；验收摘要记录失败名称 |
+| 定向 console/query/client | Windows；`go run ./cmd/test-feedback -out=<临时目录>/after -- ./internal/console ./internal/product/query ./internal/product/client -count=1` | 修复后 | 新断言及既有身份/输入/完整正文回归通过，passed/complete=true | 临时目录 after/summary.json |
+| CPW-05 当前构建 ConPTY | 编译显式 ps1terminal fixture，绑定临时 capture 路径，运行 `TestCPWWindowsTerminalInput` | 回归通过后 | F8 隐藏确认不发送、切候选保留中文原草稿、窄屏两次 F2、Tab/Shift+Tab 与焦点正确，PASS | 临时目录 terminal 捕获与 VT 输出 |
+| 静态及冲突 | `go vet ./internal/console`、产品构建、文档链接/任务身份/差异检查、GitHub PR 查询 | 推送前/改就绪后 | 编译/检查通过，目标头提交同步，非草稿、无冲突，必需检查无失败 | 最小审计摘要及 PR 状态 |
+
+不重跑 Full、L2/L3 或整个 L1：本轮只修控制台显示/模式/缓存及文档冲突，既有 L1 超时与补跑证据仍保留其真实限制；没有修改服务/worker、交付或测试 runner。
+
+## 实现状态与已有验证
+
+实现、124 项发布定向回归、原地反馈接线与当前构建 Windows ConPTY 已完成；固定 L1 原集成组累计超时，原报告不完整；缺失的 TM04/TM06/TM08 补跑已全部通过，登记场景覆盖核对无遗漏。交付草稿 [PR #234](https://github.com/erranliu/SteerLine/pull/234)，保留 L1 限制供评审。本轮审计新增有界 F8 翻页和 final/gap 缓存断言，最终 134 项回归及 ConPTY 通过。具体限制及证据见[验证记录](../validation/console-primary-workspace.md)，不以本计划替代验收证据。
 
 追加最小诊断：Windows 受控环境，`go run ./cmd/test-feedback -out=docs/validation/console-primary-workspace/l1-integration-tail -- ./tests/integration -run '^Test(TM04ExecutionWiring|TM06ResourceWiring|TM08AppHostWiring)$' -count=1`；在 L1 超时后执行，要求这些原场景全部通过、passed/complete=true，证据保存在该新目录。原 L1 的 passed=false 保持，不将多个报告拼成一次成功的 L1。

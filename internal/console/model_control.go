@@ -72,6 +72,7 @@ func (m Model) prepareStop() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.confirm = &confirmAction{projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, revision: runtimeState.Control.Revision, action: "stop_service", requestID: newRequestID()}
+	m.leaveRecovery()
 	state.focus = 1
 	return m, nil
 }
