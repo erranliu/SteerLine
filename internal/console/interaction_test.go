@@ -110,7 +110,7 @@ func TestUX2PreviewSubmitEndsCurrentHumanInteraction(t *testing.T) {
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyTab})
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("候选比较备注")})
 	view := m.View()
-	for _, want := range []string{"session session-0", "提交预览 → P1", "选择：选项 11", "内容：候选比较备注"} {
+	for _, want := range []string{"Task 38 / P1", "提交预览 → P1", "选择：选项 11", "内容：候选比较备注"} {
 		if !strings.Contains(view, want) {
 			t.Fatal(want, view)
 		}

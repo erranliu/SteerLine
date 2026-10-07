@@ -1,0 +1,10 @@
+{"type":"thread.started","thread_id":"native-session-redacted"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll read `probe.txt` with a read-only command.\n"}}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"I couldn’t read `probe.txt` because the read-only command was blocked by policy; no files were modified."}}
+{"type":"turn.completed","usage":{"input_tokens":30468,"cached_input_tokens":27392,"cache_write_input_tokens":0,"output_tokens":83,"reasoning_output_tokens":0}}
+{"type":"thread.started","thread_id":"native-session-redacted"}
+{"type":"item.completed","item":{"id":"item_0","type":"error","message":"This session was recorded with model `gpt-6-astra` but is resuming with `gpt-6-luna`. Consider switching back to `gpt-6-astra` as it may affect Codex performance."}}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"The second turn is complete."}}
+{"type":"turn.completed","usage":{"input_tokens":52554,"cached_input_tokens":35328,"cache_write_input_tokens":0,"output_tokens":93,"reasoning_output_tokens":0}}

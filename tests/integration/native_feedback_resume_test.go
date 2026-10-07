@@ -1,6 +1,7 @@
 package integration
 
 import (
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"context"
 	"encoding/json"
 	"os"
@@ -10,7 +11,6 @@ import (
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
 

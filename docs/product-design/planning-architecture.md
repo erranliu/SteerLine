@@ -1,10 +1,10 @@
 # 规划与原生客户端架构设计
 
-状态：产品与架构方案；已选范围的执行要求见[独立 Spec/Plan 索引](../spec/README.md)及[共同接口](../spec/phase2-constraints.md)。范围依据：[第二阶段产品愿景](../roadmap/product-vision.md)、[架构约束](../roadmap/architecture-constraints.md)、[控制台约束](../roadmap/console-constraints.md)。
+状态：产品与架构方案；已选范围的执行要求见[独立 Spec/Plan 索引](../spec/README.md)及[共同接口](../spec/phase2-constraints.md)。范围依据：[第二阶段产品愿景](../roadmap/product-vision.md)、[架构约束](../roadmap/architecture-constraints.md)、[当前执行控制台](execution-console.md)和[会话展示](conversation-events.md)。
 
 ## 目标与边界
 
-第二阶段让人在 SteerLine 原生 UI 中与 Codex 主 agent 讨论目标、审阅规划草稿和影响，明确确认任务创建与执行决策，并追溯目标、Spec/Plan、DAG、运行、PR 和交付证据。主agent仅支持Codex；后续[草稿审核目标](../roadmap/phase2-draft-roadmap-admission.md)增加由服务独立调度的固定审核角色，判断Spec内容与前置成熟度，不开放主agent调用子agent或通用多agent编排。以下协议/Publication细节是现有基础方案，受新准入流程影响的部分在正式实施前修订，并非已实现审核。当前任务执行沿用本地 Codex 与本机 Orca 两条后端，远端不在当前交付范围；主 agent 会话和任务 worker 的执行身份分开。
+第二阶段让人在 SteerLine 原生 UI 中与 Codex 主 agent 讨论目标、审阅规划草稿和影响，明确确认任务创建与执行决策，并追溯目标、Spec/Plan、DAG、运行、PR 和交付证据。主agent仅支持Codex；后续[草稿审核目标](../roadmap/drafts/phase2-draft-roadmap-admission.md)增加由服务独立调度的固定审核角色，判断Spec内容与前置成熟度，不开放主agent调用子agent或通用多agent编排。以下协议/Publication细节是现有基础方案，受新准入流程影响的部分在正式实施前修订，并非已实现审核。当前任务执行沿用本地 Codex 与本机 Orca 两条后端，远端不在当前交付范围；主 agent 会话和任务 worker 的执行身份分开。
 
 每个项目为主 agent 绑定一个持久的规划 worktree。新 session 使用同一目录的新 Codex thread，不继承旧 session 的消息、摘要或 fork 历史；worktree 中的文件状态保持原样。多个历史 session 可浏览，但同一规划 worktree 的写入轮次必须串行，避免两个 session 同时修改同一套文档。任务 worker 使用其执行身份绑定的工作区，不借用规划 worktree。
 
@@ -24,7 +24,7 @@ Windows UI 采用 WinUI 3，选型参考[微软文档](https://learn.microsoft.c
 
 输入区使用 WinUI 原生文本控件承载编辑、输入法、选区和撤销；Markdown、代码差异等只读内容可在 UI 设计时评估局部使用 WebView2，不因此把整个界面或业务逻辑改成网页。
 
-主 agent 可读整个仓库，但项目内写入只允许发生在 `docs/**`。由于正式 `docs/roadmap/` 和 `docs/spec/` 路径必须始终有效，建议 Codex 进程对 worktree 使用只读权限配置；它提交目标路径和候选正文给 Go 的受控文档写入口，服务仅将允许的 Markdown 草稿写到固定 worktree 的 `docs/.steerline-drafts/`。正式路径只由服务在完整校验和人工确认后发布。这样新 session 仍能读取前一 session 留下的目录状态，同时不能直接制造实现代码、测试或任意 artifact。默认 `workspace-write` 会把当前目录纳入可写工作区，不能用它实现这条限制。受控写入口可经 Codex app-server 客户端工具或本机 MCP 提供，具体协议以真实版本探测后固定。[OpenAI Docs：Permissions](https://learn.chatgpt.com/docs/permissions)。
+主 agent 可读整个仓库，但项目内写入只允许发生在 `docs/**`。由于正式 execution-map.md 及其固定 Spec/Plan 路径必须始终有效，drafts/ 内选定草稿 作为草稿不参与执行准入，建议 Codex 进程对 worktree 使用只读权限配置；它提交目标路径和候选正文给 Go 的受控文档写入口，服务仅将允许的 Markdown 草稿写到固定 worktree 的 `docs/.steerline-drafts/`。正式路径只由服务在完整校验和人工确认后发布。这样新 session 仍能读取前一 session 留下的目录状态，同时不能直接制造实现代码、测试或任意 artifact。默认 `workspace-write` 会把当前目录纳入可写工作区，不能用它实现这条限制。受控写入口可经 Codex app-server 客户端工具或本机 MCP 提供，具体协议以真实版本探测后固定。[OpenAI Docs：Permissions](https://learn.chatgpt.com/docs/permissions)。
 
 草稿目录由服务分配身份和目标路径，限制文件类型、大小及数量；不接受路径遍历、目录联接或指向工作区外的链接。服务不把草稿当作已发布的 roadmap、Spec 或 Plan。Codex 命令、工具和子进程的实际权限仍须在 Windows 原生沙箱中验证；仅靠提示词或检查最终 Git diff 不能证明越界写入没有发生。
 
@@ -43,7 +43,7 @@ flowchart LR
 
 ## 业务接口与数据流
 
-已有核心提供 SQLite 单写、产品 Query/Command 和规范会话/正文读取。当前边界和源码归属见[代码架构](../architecture/current-code-architecture.md)，会话契约见[会话设计](conversation-events.md)。本机原生待补范围按[当前 Spec 索引](../spec/README.md)维护；历史远端试验不成为二期前置。本机客户端协议只增加传输适配层，不让 C# 客户端重写业务校验，不把 control/requests 文件目录、SQLite 表或 Codex JSON-RPC 直接作为 UI 契约。
+已有核心提供 SQLite 单写、产品 Query/Command 和规范会话/正文读取。当前边界和源码归属见[代码架构](../architecture/current-code-architecture.md)，会话契约见[会话设计](conversation-events.md)。本机原生待补范围按[当前 Spec 索引](../spec/README.md)维护；历史远端试验不成为二期前置。本机客户端协议只增加传输适配层，正式任务映射只在核对中心 DAG 后同步，不从 drafts/ 内选定草稿 草稿直接派发；不让 C# 客户端重写业务校验，不把 control/requests 文件目录、SQLite 表或 Codex JSON-RPC 直接作为 UI 契约。
 
 客户端协议至少覆盖三类操作：
 
@@ -51,7 +51,7 @@ flowchart LR
 2. **命令**：保存或审阅草稿、确认创建任务批次、启动任务、提交决策等。请求携带精确目标、预期版本、幂等键和发起者；响应区分已提交、已接受、已执行、被拒绝和结果待核实。服务端再次核验资格，不能依赖按钮禁用。
 3. **事件**：SSE 提示客户端有新状态或会话输出。事件携带可恢复的服务查询游标；断线后先从持久查询补读，再继续订阅。SSE 只负责传递更新，不作为唯一持久记录或执行完成证据。
 
-例如，主 agent 提出三个任务时，UI 先展示拆分和依赖。人确认进入规格编写后，服务预留正式任务 ID 并建立受控草稿槽；主 agent 写候选 roadmap、Spec 和 Plan。人的“确认创建”绑定整套草稿版本与正式基线，服务发布文档并提交专用规划分支。规格尚未进入执行目标分支时，保留原 publication 并等待用户以保留规划 commit 的 merge/fast-forward 集成；服务不自动合并或推送。核验提交祖先和契约文件内容后才创建中心 DAG。同内容 squash/cherry-pick 不符合首版后续同步条件。创建尚未开始时人可受控结束等待；已发布文档和占号保留，提案回到 needs_review。Git 与数据库部分完成沿原身份对账；具体算法见[正式发布 Spec](../spec/phase2-document-publish.spec.md)。
+例如，主 agent 提出三个任务时，UI 先展示拆分和依赖。具体草稿任务可以提前取得唯一 Task ID；人确认进入规格编写时沿用该 ID，未编号者先分配，再建立受控草稿槽，由主 agent 写候选 roadmap、Spec 和 Plan。人的“确认创建”绑定整套草稿版本、原 Task ID 和正式基线，服务发布文档并提交专用规划分支。规格尚未进入执行目标分支时，保留原 publication 并等待用户以保留规划 commit 的 merge/fast-forward 集成，服务不自动合并或推送。核验祖先和契约内容后，按受控准入以原 ID 纳入 execution-map 并创建对应中心 Task/DAG，两边结果核对后才认定正式准入。同内容 squash/cherry-pick 不符合原基础方案的同步条件。创建尚未开始时人可受控结束等待，已发布文档和占号保留，提案回到 needs_review。Git/数据库部分完成和未知结果沿原 ID/请求核实，不重新编号或重复创建；放弃草稿不取消已创建 Task。原基础算法见[正式发布 Spec](../spec/phase2-document-publish.spec.md)，与新审核准入有关的范围仍须在实施前正式对齐。
 
 主 agent 不能修改 `.git` 或 Git 共享引用。正式任务 ID 的占用、`task-ids` 记录、规划文档的 Git 提交及中心 DAG 创建由 SteerLine 在相应的人工确认后按固定身份办理。提交前对整套候选文档执行路径、类型、身份、链接、依赖与 Spec/Plan 一一对应校验，并核对固定文件版本；`roadmap_task_id.py check` 是已有校验的一部分，不能当成全部语义质量检查。发布期间锁定该规划 worktree 的写入与正式文档读取；故障后先按 Git 与操作记录恢复或阻止新动作，不把部分写入的正式目录当作有效版本。任一步骤结果待核实时保留原身份与现场，不自动再占号或重派。
 

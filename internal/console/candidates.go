@@ -2,12 +2,12 @@ package console
 
 import (
 	"fmt"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	"sort"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 type CandidateDraft struct {
@@ -66,7 +66,13 @@ func (m Model) cycleCandidate(delta int) (tea.Model, tea.Cmd) {
 		}
 	}
 	i = (i + delta + len(runs)) % len(runs)
-	m.leaveAnswer()
+	if row.run != nil && runs[i].RunID == row.run.RunID {
+		return m, nil
+	}
+	if !m.leaveAnswerSaved() {
+		return m, nil
+	}
+	m.cancelWorkspace()
 	if s.candidates == nil {
 		s.candidates = map[string]string{}
 	}
@@ -87,6 +93,7 @@ func candidateStartReason(s projectState, row *consoleRow, now time.Time) string
 		return reason
 	}
 	if rt := s.snapshot.Connection.Snapshot.Page; rt == nil || rt.Control.DispatchPaused || rt.Control.DispatchMode != "manual" {
+
 		return "新增候选需要当前手动派发且未暂停"
 	}
 	if api.ExecutionConfigMismatch(s.ref, s.snapshot) {
@@ -123,18 +130,20 @@ func (m Model) startAdditionalCandidate() (tea.Model, tea.Cmd) {
 		m.status = "服务或配置未提供新增候选能力"
 		return m, nil
 	}
-	m.profileChoice = &executionProfileChoice{action: "start_candidate", projectKey: s.ref.Key, taskID: row.taskID, instance: rt.Service.InstanceID, revision: rt.Control.Revision}
+	m.beginProfileChoice(&executionProfileChoice{action: "start_candidate", projectKey: s.ref.Key, taskID: row.taskID, instance: rt.Service.InstanceID, revision: rt.Control.Revision})
 	return m, nil
 }
 
 func candidateAbandonReason(s projectState, row *consoleRow) string {
 	if row == nil || row.run == nil || row.native == nil {
+
 		return "缺少精确候选/Task版本"
 	}
 	if s.snapshot.NativeTaskError != "" || s.snapshot.HistoryError != "" {
 		return "当前候选/Task版本查询不可用；请刷新"
 	}
 	if row.run.Abandonment != nil {
+
 		return "候选已退出实验"
 	}
 	if row.run.TaskStatus != "in_progress" || row.run.FinishTaskStatus == "completed" {
@@ -163,7 +172,10 @@ func (m Model) prepareCandidateAbandon() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	p := api.ControlPayload{TaskID: row.taskID, WorkflowRunID: row.run.RunID, ExpectedTaskVersion: row.native.Version, ExpectedCandidateVersion: row.run.ControlRevision, Reason: "人工方案比较：不可撤销退出实验"}
-	m.confirm = &confirmAction{projectKey: s.ref.Key, instance: rt.Service.InstanceID, revision: rt.Control.Revision, action: "abandon_candidate", taskID: row.taskID, runID: row.run.RunID, requestID: newRequestID(), payload: p, basis: strings.Join(renderFixedRunExecutionProfile(*s, row.run), "\n")}
+	m.confirm = &confirmAction{projectKey: s.ref.Key, instance: rt.Service.InstanceID, revision: rt.Control.Revision, action: "abandon_candidate", taskID: row.taskID, runID: row.run.RunID, requestID: newRequestID(), payload: p, basis: candidateConfirmBasis(*s, row.run)}
+	s.focus = 1
+	s.lowerScroll = 0
+	m.leaveRecovery()
 	return m, nil
 }
 

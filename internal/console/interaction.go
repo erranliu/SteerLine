@@ -2,16 +2,16 @@ package console
 
 import (
 	"fmt"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	"sort"
 	"strings"
-
-	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 // Derive labels from the task's complete persisted workflow history, including
 // exited candidates. Display labels never replace the immutable control ID.
 func candidateLabel(state projectState, run *api.CandidateSummary) string {
 	if run == nil {
+
 		return "未选择"
 	}
 	var workflows []api.WorkflowSummary
@@ -45,11 +45,13 @@ func candidateLabel(state projectState, run *api.CandidateSummary) string {
 			return fmt.Sprintf("P%d", i+1)
 		}
 	}
+
 	return "未编号"
 }
 
 func shortSession(id string) string {
 	if id == "" {
+
 		return "尚未建立"
 	}
 	r := []rune(id)
@@ -92,9 +94,11 @@ func feedbackReceiptStatus(state projectState, a *actionState) string {
 
 func candidateHumanStatus(state projectState, run *api.CandidateSummary) string {
 	if run.Abandonment != nil {
+
 		return "已退出实验"
 	}
 	if run.TaskStatus == "closed" {
+
 		return "实验已结束"
 	}
 	if a := feedbackAction(state, run); a != nil {
@@ -114,6 +118,7 @@ func candidateHumanStatus(state projectState, run *api.CandidateSummary) string 
 	}
 	if run.Decision != nil && run.Decision.Status == "pending" {
 		if run.EnvironmentBlocker != nil {
+
 			return "交互受阻"
 		}
 
@@ -226,13 +231,24 @@ func renderAnswerDialog(m Model, state projectState, height int) string {
 			break
 		}
 	}
-	session := "尚未建立"
-	if ids := strings.Split(d.identity, "\x00"); len(ids) == 4 {
-		session = shortSession(ids[3])
+	header := answerHeader(state, d)
+	option, detail := "自由输入", "无固定选项，直接输入答复"
+	if d.optionIndex >= 0 && d.optionIndex < len(request.Options) {
+		option = request.Options[d.optionIndex].Label
+		detail = request.Options[d.optionIndex].Detail
 	}
-	header := "人工决策 · 显式提交 → " + candidateLabel(state, run) + " · session " + safeTerminalText(session)
+	optionLine := "[x] " + safeTerminalInlineText(option)
+	if state.focus == 1 {
+		optionLine = styleSelected.Render("▸ " + optionLine)
+	}
+	label := fmt.Sprintf("你的答复 · %d/4000", len(d.note))
+	if state.focus == 2 {
+		label = styleFocus.Render("▶ ┃ " + label)
+	} else {
+		label = "  │ " + label
+	}
 	note := append([]rune(nil), d.note...)
-	if d.noteFocus && state.focus != 0 && d.cursor >= 0 && d.cursor <= len(note) {
+	if state.focus == 2 && d.cursor >= 0 && d.cursor <= len(note) {
 		note = append(note, 0)
 		copy(note[d.cursor+1:], note[d.cursor:])
 		note[d.cursor] = '│'
@@ -245,54 +261,33 @@ func renderAnswerDialog(m Model, state projectState, height int) string {
 			break
 		}
 	}
-	noteRows := max(1, min(3, (height-7)/2))
-	start := max(0, cursorLine-noteRows+1)
-	focus := "[列表焦点]"
-	if state.focus == 1 {
-		focus = "[选项焦点]"
-	}
-	if state.focus == 2 {
-		focus = "[输入焦点]"
-	}
-	bottom := []string{fmt.Sprintf("%s 补充说明 / 你的答复 · %d/4000", focus, len(d.note))}
-	bottom = append(bottom, fitLines(noteLines[start:], m.width, noteRows)...)
+	rows := max(1, min(3, height-answerMinimum(m)+1))
+	start := max(0, cursorLine-rows+1)
+	lines := []string{header, styleHead.Render("问题：" + safeTerminalInlineText(request.Question)), optionLine, "说明：" + safeTerminalInlineText(shortSummary(detail, 160)), label}
+	lines = append(lines, fitLines(noteLines[start:], m.width, rows)...)
 	preview := feedbackPreview(state, d, request)
-	bottom = append(bottom, preview[0]+" · "+preview[1], preview[2])
+	lines = append(lines, preview[0]+" · "+preview[1], preview[2])
 	if d.error != "" {
-		bottom = append(bottom, "未提交："+safeTerminalText(d.error))
+		lines = append(lines, styleAlert.Render("未提交："+safeTerminalInlineText(d.error)))
 	}
 	if run != nil && run.EnvironmentBlocker != nil {
-		bottom = append(bottom, "环境受阻，草稿保留；解除后重新提交")
+		lines = append(lines, styleAlert.Render("环境受阻，草稿保留；解除后重新提交"))
 	}
-	available := max(0, height-len(bottom)-2)
-	upper := []string{"问题：" + safeTerminalInlineText(request.Question)}
-	count := len(request.Options)
-	if request.AllowFreeText && count > 0 {
-		count++
+	enter := "Enter 转输入"
+	if state.focus == 2 {
+		enter = "Enter 换行"
 	}
-	if count == 0 {
-		upper = append(upper, "无固定选项，直接输入答复")
-	} else {
-		rows := max(0, available-1)
-		begin := min(max(0, d.optionIndex-rows/2), max(0, count-rows))
-		for i := begin; i < min(count, begin+rows); i++ {
-			label := "自定义答复"
-			if i < len(request.Options) {
-				label = request.Options[i].Label
-			}
-			marker := "[ ] "
-			if i == d.optionIndex {
-				marker = "[x] "
-			}
-			upper = append(upper, fmt.Sprintf("%s%d. %s", marker, i+1, safeTerminalInlineText(label)))
-		}
+	if state.focus == 0 {
+		enter = "Enter 返回草稿"
 	}
-	lines := []string{truncate(header, m.width)}
-	lines = append(lines, fitLines(upper, m.width, available)...)
-	lines = append(lines, bottom...)
-	lines = append(lines, "Tab 焦点 · Enter 换行 · F2 提交 · F8 背景 · Esc 保留")
-	for i, line := range lines {
-		lines[i] = truncate(line, m.width)
-	}
+	lines = append(lines, "Tab 切换 · "+enter+" · F2 提交 · F8 背景 · Esc 保留")
 	return strings.Join(fitLines(lines, m.width, height), "\n")
+}
+
+func answerHeader(state projectState, d *decisionAnswerDialog) string {
+	task := "未核实"
+	if ids := strings.Split(d.identity, "\x00"); len(ids) == 4 {
+		task = ids[0]
+	}
+	return "运行与反馈 · Task " + safeTerminalInlineText(task) + " / " + candidateLabel(state, &api.CandidateSummary{TaskID: task, RunID: d.runID})
 }

@@ -5,12 +5,15 @@
 | 内容 | 入口 |
 | --- | --- |
 | 最近全项目基线及逐次源码、命令、哈希 | [2026-10-07 基线](latest-baseline.md) · [结果索引](baseline-results.json) |
+| 精简固定 L1 与三个独立进程并行 | [L1 优化验证](l1-optimization.md) · [结果索引](l1-optimization-results.json) |
 | 尚未闭合的原生验收及已有通过边界 | [待补验收](pending-acceptance.md) |
 | #39 本机多候选交付与恢复 | [本机候选验收](candidate-acceptance.md) |
 | #38 CC5 用户人工确认 | [人工确认原文](manual-acceptance.md) |
+| #234 三窗主界面体验及质量审计 | [主界面验收](console-primary-workspace.md) |
 | #231 三窗及内嵌反馈 | [控制台验收](product-console.md) |
 | 第二批固定原生配置与附加需求删除 | [配置精简验收](product-simplification-02-configuration/README.md) |
 | 原生准备工具证据 | [准备验收](worker-readiness.md) |
+| RoadmapGuide、草稿/正式静态边界与执行技能 | [规划文档检查](roadmap-planning.md) |
 
 ## 历史取证
 

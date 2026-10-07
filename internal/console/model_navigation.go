@@ -4,8 +4,12 @@ import tea "github.com/charmbracelet/bubbletea"
 
 func (m Model) scrollPanel(delta int) (tea.Model, tea.Cmd) {
 	state := &m.projects[m.selected]
-	_, height := rightPaneHeights(consoleContentHeight(m))
-	lines := wrapLines(feedbackLines(m, *state, m.selectedRow(m.selected)), detailPanelWidth(m))
+	_, height := m.lowerGeometry()
+	raw := feedbackLines(m, *state, m.selectedRow(m.selected))
+	if state.recoveryActive {
+		raw = recoverySummary(*state, m.selectedRow(m.selected))
+	}
+	lines := wrapLines(raw, max(1, detailPanelWidth(m)-2))
 	state.lowerScroll = min(max(0, state.lowerScroll+delta), max(0, len(lines)-height))
 	return m, nil
 }

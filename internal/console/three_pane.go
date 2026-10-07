@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 func (m Model) refreshSelected(index int) (Model, tea.Cmd) {
@@ -41,60 +42,86 @@ func (m *Model) syncAnswer() {
 	}
 }
 
-func rightPaneHeights(height int) (int, int) {
-	if height < 13 {
-		return 0, height
-	}
-	top := min(9, max(5, height/3))
-	return top, height - top - 1
-}
-
 func renderRightPanes(m Model, state projectState, width, height int) []string {
-	topHeight, lowerHeight := rightPaneHeights(height)
-	if m.answer != nil && lowerHeight < 9 {
-		topHeight, lowerHeight = 0, height
-	}
+	topHeight, lowerHeight := m.workspaceHeights(height)
 	row := m.selectedRow(m.selected)
 	var lines []string
 	if topHeight > 0 {
-		lines = fitLines(candidateOverviewLines(m, state, row, width), width, topHeight)
-		lines = append(lines, styleRule.Render(strings.Repeat("─", width)))
+		lines = paneFrame(candidateOverviewLines(m, state, row, width-2), width, topHeight, false)
 	}
 	local := m
-	local.width = width
-	if m.answer != nil && !m.answer.details {
-		lines = append(lines, strings.Split(renderAnswerDialog(local, state, lowerHeight), "\n")...)
-	} else {
-		lower := wrapLines(feedbackLines(m, state, row), width)
-		lines = append(lines, fitLines(scrollLines(lower, state.lowerScroll, lowerHeight), width, lowerHeight)...)
+	local.width = max(1, width-2)
+	var lower []string
+	switch {
+	case (m.answer != nil || m.profileChoice != nil || m.confirm != nil) && !m.operationVisible():
+		lower = windowTooSmall(m)
+	case m.answer != nil:
+		lower = strings.Split(renderAnswerDialog(local, state, lowerHeight-2), "\n")
+	case m.profileChoice != nil:
+		lower = strings.Split(renderExecutionProfileChoice(local, state, lowerHeight-2), "\n")
+	case m.confirm != nil:
+		lower = fitLines(confirmRequired(m, state), max(1, width-2), len(confirmRequired(m, state)))
+	case state.recoveryActive:
+		lower = recoverySummary(state, row)
+	default:
+		lower = feedbackLines(m, state, row)
 	}
+	if len(lower) > 0 {
+		header := lower[0]
+		body := wrapLines(lower[1:], max(1, width-2))
+		if m.answer == nil && m.profileChoice == nil && m.confirm == nil {
+			body = scrollLines(body, state.lowerScroll, max(0, lowerHeight-3))
+		}
+		lower = append([]string{header}, body...)
+	}
+	lines = append(lines, paneFrame(lower, width, lowerHeight, state.focus != 0)...)
 	return lines
 }
 
 func candidateOverviewLines(m Model, state projectState, row *consoleRow, width int) []string {
-	lines := []string{"候选与执行 · d 完整详情"}
+	lines := []string{"候选与执行"}
 	if row == nil {
 		return append(lines, renderEmptySelection(state)...)
 	}
 	if row.run == nil {
-		lines = append(lines, "任务 "+row.taskID+" · "+row.title)
-		return append(lines, renderControlAvailability(state, row, m.clock.Now())...)
+		lines = append(lines, "任务 "+safeTerminalInlineText(row.taskID+" · "+row.title))
+		if state.candidates[row.taskID] != "" {
+			lines = append(lines, "原候选暂不可读取/未核实")
+		} else {
+			lines = append(lines, "暂无候选")
+		}
+		lines = append(lines, safeTerminalInlineText("下一步："+nextAction(m, state, row)))
+		if row.native != nil {
+			lines = append(lines, renderNativeTaskRelations(state, *row.native)...)
+		}
+		return lines
 	}
 	run := row.run
-	lines[0] += " · 当前 " + candidateLabel(state, run) + " · session " + shortSession(run.SessionID)
-	lines = append(lines, renderRunExecutionProfileSummary(state, run)...)
-	lines = append(lines, "任务 "+row.taskID+" · "+displayExecutionStatus(run)+" · "+candidateHumanStatus(state, run))
+	if state.snapshot.Connection.State != api.ConnectionConnected || state.snapshot.Observation.State != api.SnapshotValid {
+		lines = append(lines, styleWaiting.Render("离线/缓存/未核实 · "+sampleTime(state.snapshot)))
+	}
+	lines = append(lines, "Task "+safeTerminalInlineText(row.taskID+" · "+row.title), "当前 "+candidateLabel(state, run)+" · "+candidateStrip(state, row, width))
+	lines = append(lines, "任务 "+rowTaskStatus(*row)+" · "+stateText(displayExecutionStatus(run))+" · "+stateText(candidateHumanStatus(state, run)))
 	if run.EnvironmentBlocker != nil {
 		lines = append(lines, "环境阻断："+safeTerminalInlineText(run.EnvironmentBlocker.Fact.Reason))
 	}
 	if run.PR.URL != nil {
-		lines = append(lines, "PR："+safeTerminalInlineText(*run.PR.URL)+" · "+safeTerminalInlineText(run.PR.State))
+		lines = append(lines, "PR："+shortPR(*run.PR.URL)+" · "+safeTerminalInlineText(run.PR.State))
 	} else {
 		lines = append(lines, "PR：尚未核验绑定")
 	}
-	lines = append(lines, renderCandidateOverview(state, row)[0])
 	if run.Error != nil {
 		lines = append(lines, "错误："+safeTerminalInlineText(*run.Error))
+	}
+	if run.PR.QueryError != nil {
+		lines = append(lines, "PR 查询失败："+safeTerminalInlineText(*run.PR.QueryError))
+	}
+	lines = append(lines, styleHead.Render(safeTerminalInlineText("下一步："+nextAction(m, state, row))))
+
+	if p := fixedRunExecutionProfile(state, run); p != nil {
+		lines = append(lines, profileProductLines(*p)...)
+	} else {
+		lines = append(lines, "冻结方案未核实")
 	}
 	elapsed := "未知"
 	if !run.CandidateCreatedAt.IsZero() {
@@ -106,7 +133,7 @@ func candidateOverviewLines(m Model, state projectState, row *consoleRow, width 
 	}
 	lines = append(lines, "耗时 "+elapsed+" · 资源 "+firstText(run.ResourceStatus, "未核实"), "采样 "+sampleTime(state.snapshot))
 	for i, line := range lines {
-		lines[i] = truncate(safeTerminalInlineText(line), width)
+		lines[i] = truncate(line, width)
 	}
 	return lines
 }

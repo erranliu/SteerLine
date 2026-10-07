@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +14,6 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 type testClock struct{ now time.Time }
@@ -54,6 +54,7 @@ func testProject(key string) ProjectRef {
 func readySnapshot(ref ProjectRef, now time.Time) ProjectSnapshot {
 	last := now.Add(-time.Second)
 	runtime := &api.ServicePage{
+
 		Repository: api.RepositorySummary{Identity: ref.Identity},
 		Service:    api.ServiceSummary{ConfigDigest: ref.Presentation.ConfigDigest, InstanceID: "instance-" + ref.Name, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}},
 		Control:    api.ControlSummary{DispatchMode: "manual", Revision: 7},
@@ -226,7 +227,7 @@ func TestConsoleOffersWorkerFlowDecisionWithoutRecoveryActions(t *testing.T) {
 
 func runeKey(value rune) tea.KeyMsg { return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{value}} }
 
-func TestEnterOnlyOpensDetailAndStartKeepsOneRequestID(t *testing.T) {
+func TestEnterFocusesWorkspaceAndStartKeepsOneRequestID(t *testing.T) {
 	now := time.Date(2026, 9, 25, 1, 0, 0, 0, time.UTC)
 	ref := testProject("alpha")
 	control := &testControlClient{}
@@ -235,8 +236,8 @@ func TestEnterOnlyOpensDetailAndStartKeepsOneRequestID(t *testing.T) {
 	m.profile = &viewProfile{dir: profileDir}
 	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	m = updated.(Model)
-	if control.calls != 0 || len(m.projects[0].actions) != 0 {
-		t.Fatal("Enter must only open details")
+	if control.calls != 0 || len(m.projects[0].actions) != 0 || m.detailExpanded || m.projects[0].focus != 1 {
+		t.Fatal("Enter must only focus the workspace")
 	}
 	updated, cmd := m.Update(runeKey('s'))
 	m = updated.(Model)

@@ -38,8 +38,16 @@
 
 local71秒、Orca66秒通过，真实tool/context/review/最终事实在[验收记录](../validation/product-simplification-02-configuration/README.md)及selected native事件中；这不是完整业务PR/SQLite重启链验收，当前格式和控制回放由定向/L1覆盖。UAC“未观察”只限定本次输出与没有请求管理员初始化/提升启动。当前directed源码、native resource和remote回归通过；固定L1最终重跑单独记录。
 
-最终固定L1 `l1-release/summary.json` passed/complete均true，12组全过；原生、配置/资源/远端接线定向通过。未修改runner包期限、用例覆盖或用失败/旧日志冒充通过；初次远端夹具编译失败与第二次包期限失败保留。构建、受影响go vet、原生tag编译及文档链接检查通过。生产实现同口径净减1242行，测试净减1237行，退役与保留消费者见验收记录。
+最终固定L1 `l1-release/summary.json` passed/complete均true，12组全过；原生、配置/资源/远端接线定向通过。未修改runner包期限、用例覆盖或用失败/旧日志冒充通过；初次远端夹具编译失败与第二次包期限失败保留。构建、受影响go vet、原生tag编译及文档链接检查通过。生产实现同口径净减1211行，测试净减1234行，退役与保留消费者见验收记录。
 
 ## 主分支同步及最小补验
 
 同步ae32f300验证资料布局和runner默认临时输出；Spec/行为边界保持。同步后定向检查使用固定历史快照验证旧格式拒绝、Orca当前testdata/runner输出选择，产品构建、go vet和文档链接。命令：`go test ./tests/integration -run '^TestProjectPolicyNativeReportsRetainOriginalSnapshotDigests$' -count=1`，`go run ./cmd/test-feedback -out=<新目录> -- ./internal/execution/adapters/orca ./cmd/test-feedback -run 'Test(Platform|NativeReadiness|Scoped|DefaultOutput|PS2|CandidateSession)' -count=1`；环境Windows、原生/模型不开启，时点同步后，通过条件非零pass/complete=true，证据post-sync/summary.json。不重跑L1/live：产品逻辑未因该同步变更，已有通过报告保留原采样来源。提交仅精选当前摘要和native公开事件，完整日志按主分支约定留本地；不新增全量产物目录。
+
+## 最终主分支集成
+
+PR [#236](https://github.com/erranliu/SteerLine/pull/236) 集成主分支6c16b8dc的控制台改进、文档归并与L1精简/并行实现。README沿主分支聚合入口，固定L1按其新范围保留，仅将退役权限/需求用例替换为PS2必要能力、原冻结身份/根与固定原生方案场景；不恢复已移出L1的长恢复/候选链。新控制台源代码及无关空白/import布局保持主分支原样。
+
+最小补验计划：Windows、无模型，`go test ./cmd/test-feedback ./internal/console -count=1`（runner并行/覆盖守卫、三窗与输入交互）、`go run ./cmd/test-feedback -level=L1 -out=<新目录>`（当前12组passed/complete），`go vet ./internal/app ./internal/execution/... ./internal/product/query ./cmd/steerline`、产品构建、文档链接和diff检查；在合入主分支后执行，证据l1-main-sync/summary.json及验收摘要。不重复原生/长恢复定向：对应生产逻辑未因本次冲突解决改动，原通过记录保持其源码来源。行数按最新主分支6c16b8dc重新同口径对比，排除其他PR收益。
+
+最终补验全部通过：runner12.008秒、console1.285秒；最新L1 12组passed/complete=true，准备0.608秒/执行113.919秒。产品构建、受影响go vet、230篇文档1410条本地导航及diff检查通过。精选当前报告见l1-main-sync/summary.json；生产净减1211行、测试净减1234行（基线6c16b8dc），未计算主分支其他改动收益。

@@ -6,7 +6,7 @@
 
 本目标把任务、执行、控制台划为三个可以独立开发的业务边界，并把包与目录整理纳入同一轮交付。任务线负责提供与挑选工作；执行线负责容量、派发、交付核验和结项，向任务线提交执行结果；控制台只通过产品契约查询与操作。三条线的日常功能改动应无需修改另外两条线的内部实现，共同业务语义变化通过明确契约协同。
 
-本文维护 #77、#79–#82 的剩余实现安排；#76 与 #78 已经交付。纯类型、任务选择/结果边界与 task 应用已具备；#76 的固定文档小端口及公共构造接线按需查[现行接口交接](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/three-line-03-task-usecases/interface-handoff.md)。M04–M10 只定位剩余阶段；任务身份与活动规划遵循 [Roadmap 目录约定](../../roadmap/readme.md)，正式执行以固定 Spec/Plan 和中心 DAG 为准。
+本文维护 #77、#79–#82 的剩余实现安排；#76 与 #78 已经交付。纯类型、任务选择/结果边界与 task 应用已具备；#76 的固定文档小端口及公共构造接线按需查[现行接口交接](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/three-line-03-task-usecases/interface-handoff.md)。M04–M10 只定位剩余阶段；任务身份与活动规划遵循 [Roadmap 目录约定](../../roadmap/RoadmapGuide.md)，正式执行以固定 Spec/Plan 和中心 DAG 为准。
 
 本目标服务于 [产品愿景](../../roadmap/product-vision.md) 的两个近期交付节点：一阶段加强同任务分叉候选执行与唯一交付，二阶段增加受控规划主agent与原生UI。三条开发线是当前解耦边界，不把未来全部业务强行归入这三个包。
 
@@ -67,7 +67,7 @@
 
 ### 二阶段主agent与规划领域
 
-二期采用[草稿与审核准入目标](../../roadmap/phase2-draft-roadmap-admission.md)：主agent维护草稿，独立审核agent检查Spec质量及是否基本不受前置变化影响。合格且可固定的内容才由SteerLine受控纳入正式roadmap；需要修改或等待前置的任务留草稿，按相关条件变化重新审核。当前 #46–#48是旧基础范围，尚未包含独立审核或成熟度门槛，实际实施前修订相应Spec/Plan并固定新任务，不能隐式把审核agent当worker加入一期。
+二期采用[草稿与审核准入目标](../../roadmap/drafts/phase2-draft-roadmap-admission.md)：主agent维护草稿，独立审核agent检查Spec质量及是否基本不受前置变化影响。合格且可固定的内容才由SteerLine受控纳入正式roadmap；需要修改或等待前置的任务留草稿，按相关条件变化重新审核。当前 #46–#48是旧基础范围，尚未包含独立审核或成熟度门槛，实际实施前修订相应Spec/Plan并固定新任务，不能隐式把审核agent当worker加入一期。
 
 依照 [第二阶段共同约束](../../spec/phase2-constraints.md)，规划是独立业务领域。未来由 #46–#48 建立 `internal/planning/`，拥有PlanningWorkspace、Proposal、DraftFile、PlanningSession/Turn、文档版本、统一写入guard和规划Publication。本轮只明确该归属与接入点，不创建空规划包、通用插件机制或尚无消费者的规划实现。
 
@@ -279,4 +279,4 @@ flowchart LR
 7. cmd、构建/安装/launcher、runner/suite及测试文档中的路径与最终结构一致；全OS源码索引、所有权图、实际入口和剩余原生限制记录在交付文档中。当前架构页只在实际实现后更新为新结构。
 8. 已交付分叉候选的Task/领取/Workflow/Execution关系和唯一交付不被收窄为单运行；公共操作不能按task_id猜候选。规划来源、受控主agent和WinUI传输有清晰归属，未交付能力不被伪装为可用，也不要求完成全部整理才能开始对应产品任务。
 
-按剩余 #77–#82 的独立 Spec/Plan 依赖实施，活动条目同步维护在 [主 roadmap](../../roadmap/roadmap.md) 与 [执行依赖](../../roadmap/execution-map.md)。若实际盘点确需进一步拆分，应为新增独立交付重新占用任务 ID、形成独立 Spec/Plan 并同步依赖；不能共用原身份或在实现中默改范围。
+按剩余 #77–#82 的独立 Spec/Plan 依赖实施，活动条目同步维护在 [主 roadmap](../../roadmap/drafts/roadmap.md) 与 [执行依赖](../../roadmap/execution-map.md)。若实际盘点确需进一步拆分，应为新增独立交付重新占用任务 ID、形成独立 Spec/Plan 并同步依赖；不能共用原身份或在实现中默改范围。

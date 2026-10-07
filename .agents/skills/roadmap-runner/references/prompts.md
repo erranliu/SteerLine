@@ -2,11 +2,13 @@
 
 替换下面的占位内容，使用已核对的绝对路径、任务映射及状态文件。不把整个旧聊天复制给执行 session。
 
+roadmap 占位值只绑定正式 execution-map.md。协调者须先核对当前正式成员、可信 DAG 资格和固定 Spec/Plan；空正式表或待同步时不发送下列执行/续跑提示。草稿讨论或已有编号不产生运行授权，旧 run 也不能据其保存的任务列表绕过当前正式清单。
+
 ## 新执行 session
 
 工具参数：`model: "gpt-6-luna"`、`thinking: "xhigh"`；项目托管 worktree，从默认主干创建。
 
-> 执行 roadmap `{roadmap}` 中的任务 `{task_id}`。先读工作区 AGENTS.md、共同约束 `{constraints}`、Spec `{spec}` 和 Plan `{plan}`，按其范围实现并运行最小必要验证。完成后自己复查实际 diff 与生产调用路径，修复确认的问题，提交推送并创建针对 `{default_branch}` 的 PR；PR 说明记录最终行为及实际验证，按工具要求关联 PR。不要合并 PR 或启动其他 roadmap 任务。仅余人工补验时在 roadmap 登记任务/验收项、原因、步骤和证据位置，保留未验事实并同步 Spec/Plan 的非阻塞状态，不仅因此保持 draft 或请求批准。真实验收失败、功能或前置能力缺失仍诊断并报告，不改称人工补验。最终报告 PR URL、分支、最终 commit、验证结果、人工清单及未解决问题，然后停止写入工作区，等待协调 session 调度独立 subagent 复审；后续冲突、共享主干集成或原需求遗漏优先由本执行 session 处理。
+> 执行正式 execution-map `{roadmap}` 中已核对 DAG 的任务 `{task_id}`。先读工作区 AGENTS.md、共同约束 `{constraints}`、Spec `{spec}` 和 Plan `{plan}`，按其范围实现并运行最小必要验证。完成后自己复查实际 diff 与生产调用路径，修复确认的问题，提交推送并创建针对 `{default_branch}` 的 PR；PR 说明记录最终行为及实际验证，按工具要求关联 PR。不要合并 PR 或启动其他 roadmap 任务。仅余人工补验时在正式条目的验收备注或 validation 登记任务/验收项、原因、步骤和证据位置，保留未验事实并同步 Spec/Plan 的非阻塞状态，不仅因此保持 draft 或请求批准。真实验收失败、功能或前置能力缺失仍诊断并报告，不改称人工补验。最终报告 PR URL、分支、最终 commit、验证结果、人工清单及未解决问题，然后停止写入工作区，等待协调 session 调度独立 subagent 复审；后续冲突、共享主干集成或原需求遗漏优先由本执行 session 处理。
 
 如果任务要求先产出 Plan 而非已有 Plan，按用户规定处理；不能把不存在的文件当作已读。
 

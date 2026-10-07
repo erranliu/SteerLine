@@ -2,20 +2,20 @@ package console
 
 import (
 	"fmt"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
-	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 var (
 	styleHead     = lipgloss.NewStyle().Bold(true)
 	styleDim      = lipgloss.NewStyle().Faint(true)
 	styleSelected = lipgloss.NewStyle().Bold(true).Reverse(true)
-	styleAlert    = lipgloss.NewStyle().Bold(true)
+	styleAlert    = lipgloss.NewStyle().Bold(true).Foreground(lipgloss.AdaptiveColor{Light: "124", Dark: "203"})
 	styleLabel    = lipgloss.NewStyle().Bold(true)
 	styleRule     = lipgloss.NewStyle().Faint(true)
 )
@@ -37,18 +37,16 @@ func render(m Model) string {
 	}
 	projects := renderProjectStrip(m)
 	status := renderStatusLine(m, *state)
-	footerLines := wrapLines(strings.Split(renderFooter(m, *state), "\n"), m.width)
+	footerLines := workspaceFooter(m, *state)
 	contentHeight := m.height - 3 - len(footerLines)
 	if contentHeight < 3 {
 		contentHeight = 3
 	}
 	var body string
-	if m.profileChoice != nil {
-		body = renderExecutionProfileChoice(m, *state, contentHeight)
+	if m.operationDetails {
+		body = strings.Join(fitLines(scrollLines(wrapLines(operationDetailLines(m, *state), m.width), m.expandedDetailScroll, contentHeight), m.width, contentHeight), "\n")
 	} else if m.help {
 		body = strings.Join(fitLines(renderHelp(*state), m.width, contentHeight), "\n")
-	} else if m.confirm != nil {
-		body = renderStopConfirmation(m, *state, contentHeight)
 	} else if m.answer != nil && m.answer.details {
 		body = renderAnswerDialog(m, *state, contentHeight)
 	} else if m.detailExpanded {
@@ -61,14 +59,14 @@ func render(m Model) string {
 	} else {
 		leftWidth := listPanelWidth(m)
 		rightWidth := detailPanelWidth(m)
-		left := fitLines(renderRows(m, *state, leftWidth, contentHeight), leftWidth, contentHeight)
+		left := paneFrame(renderRows(m, *state, leftWidth-2, contentHeight-2), leftWidth, contentHeight, state.focus == 0)
 		right := renderRightPanes(m, *state, rightWidth, contentHeight)
 
 		body = joinLines(left, right, leftWidth, contentHeight)
 	}
 	lines := []string{header, projects, status, body}
 	lines = append(lines, footerLines...)
-	return strings.Join(lines, "\n")
+	return strings.Join(fitLines(strings.Split(strings.Join(lines, "\n"), "\n"), m.width, m.height), "\n")
 }
 
 func renderEmptyProjects(configDirectory string) string {
@@ -133,7 +131,7 @@ func renderStatusLine(m Model, state projectState) string {
 	if candidateHeadline(state, m.selectedRow(m.selected)) != "" {
 		parts := []string{"服务 " + service, "派发 " + mode}
 		if m.status != "" {
-			parts = append([]string{safeTerminalInlineText(m.status)}, parts...)
+			parts = append(parts, safeTerminalInlineText(m.status))
 		}
 		if executionConfigMismatch(state.ref, state.snapshot) {
 			parts = append(parts, "执行配置待核对")
@@ -172,7 +170,7 @@ func renderStatusLine(m Model, state projectState) string {
 
 func renderNarrowPanel(m Model, state projectState, height int) []string {
 	if state.focus == 0 {
-		return append([]string{"任务列表 · d 完整详情 · Tab 运行与反馈"}, renderRows(m, state, m.width, height-1)...)
+		return paneFrame(renderRows(m, state, m.width-2, height-2), m.width, height, true)
 	}
 	return renderRightPanes(m, state, m.width, height)
 }
@@ -612,6 +610,7 @@ func decisionAnswerAvailability(state projectState, row *consoleRow) string {
 		return "候选已退出实验；不再反馈"
 	}
 	if row == nil || row.run == nil || row.run.Decision == nil || row.run.Decision.Status != "pending" {
+
 		return "当前没有待回答的问题"
 	}
 	reason, ok := state.snapshot.DecisionReasons[row.run.RunID]
@@ -635,30 +634,22 @@ func decisionAnswerStatusLines(state projectState, row *consoleRow) []string {
 	return []string{"a 不可用 · " + safeTerminalText(reason)}
 }
 
-func renderStopConfirmation(m Model, state projectState, height int) string {
-	if m.confirm == nil {
+func renderAnswerDetails(m Model, state projectState, height int) string {
+	if m.answer == nil {
 		return ""
 	}
-	grace := state.ref.Presentation.ShutdownGrace
-	if grace == "" {
-		grace = "配置的宽限时间"
-	}
-	lines := []string{"停止服务确认", "", "目标实例：" + safeTerminalText(m.confirm.instance), "这会停止新派发，并等待当前 worker 最长 " + grace + " 后按服务策略结束；工作现场会保留。", "request_id：" + m.confirm.requestID, "", "Enter/y 确认停止 · Esc/n 取消"}
-	if m.confirm.action == "abandon_candidate" {
-		lines = []string{"不可撤销放弃候选确认", "Task：" + m.confirm.taskID, "workflow_run_id：" + m.confirm.runID, safeTerminalText(m.confirm.basis), "退出实验立即生效且不可撤销；worker 可能仍运行，真实停止独立核实。", "不会丢弃 Task 或删除资源。已知 PR 合并后禁止放弃；服务提交时重检。", "待核实回执不代表已放弃成功。", "request_id：" + m.confirm.requestID, "Enter/y 确认退出实验 · Esc/n 取消"}
-	}
-	width := max(20, m.width-4)
-	visible := fitLines(scrollLines(wrapLines(lines, width), max(0, m.confirm.scroll), height), m.width, height)
-	return strings.Join(visible, "\n")
+	height = max(1, height)
+	wrapped := wrapLines(answerDetailLines(m, state), max(1, m.width-2))
+	return strings.Join(fitLines(scrollLines(wrapped, m.answer.scroll, height), m.width, height), "\n")
 }
 
-func renderAnswerDetails(m Model, state projectState, height int) string {
+func answerDetailLines(m Model, state projectState) []string {
 	dialog := m.answer
 	if dialog == nil {
-		return ""
+		return nil
 	}
 	request, ok := dialog.request, dialog.request.Question != ""
-	lines := []string{"人工决策 · 显式提交", "项目：" + safeTerminalText(state.ref.Name), "task_id：" + safeTerminalText(displayDash(m.answerRunTask(state, dialog))), "run_id：" + safeTerminalText(dialog.runID), "decision_id：" + safeTerminalText(dialog.decisionID), fmt.Sprintf("运行版本：%d · 问题版本：%d · 目标服务：%s", dialog.runRevision, dialog.decisionVersion, safeTerminalText(dialog.instance))}
+	lines := []string{"完整问题背景 · 只读（F8 返回输入）", "项目：" + safeTerminalText(state.ref.Name), "task_id：" + safeTerminalText(displayDash(m.answerRunTask(state, dialog))), "run_id：" + safeTerminalText(dialog.runID), "decision_id：" + safeTerminalText(dialog.decisionID), fmt.Sprintf("运行版本：%d · 问题版本：%d · 目标服务：%s", dialog.runRevision, dialog.decisionVersion, safeTerminalText(dialog.instance))}
 	if identity := strings.Split(dialog.identity, "\x00"); len(identity) == 4 {
 		lines = append(lines, "原 execution_id："+safeTerminalText(identity[2]), "原 session："+safeTerminalText(identity[3]))
 	}
@@ -687,13 +678,8 @@ func renderAnswerDetails(m Model, state projectState, height int) string {
 	}
 	lines = append(lines, "", "补充说明：")
 	note := append([]rune(nil), dialog.note...)
-	if dialog.noteFocus && dialog.cursor >= 0 && dialog.cursor <= len(note) {
-		note = append(note, 0)
-		copy(note[dialog.cursor+1:], note[dialog.cursor:])
-		note[dialog.cursor] = '│'
-	}
 	if len(note) == 0 {
-		lines = append(lines, "│")
+		lines = append(lines, "（未填写）")
 	} else {
 		for _, line := range strings.Split(string(note), "\n") {
 			lines = append(lines, safeTerminalText(line))
@@ -704,19 +690,11 @@ func renderAnswerDetails(m Model, state projectState, height int) string {
 	if length > 4000 {
 		lines = append(lines, styleAlert.Render("超过协议上限；未截断，需编辑至 4000 字符以内"))
 	}
-	lines = append(lines, "发送后可确认答案送达；应用状态仍须由原执行绑定证明。")
+	lines = append(lines, "答案保存、送达和原会话轮次开始分别核实，不推断已落实。")
 	if dialog.error != "" {
 		lines = append(lines, styleAlert.Render(safeTerminalText(dialog.error)))
 	}
-	if dialog.scroll < 0 {
-		dialog.scroll = 0
-	}
-	wrapped := wrapLines(lines, m.width-2)
-	if height < 1 {
-		height = 1
-	}
-	visible := fitLines(scrollLines(wrapped, dialog.scroll, height), m.width, height)
-	return strings.Join(visible, "\n")
+	return lines
 }
 
 func (m Model) answerRunTask(state projectState, dialog *decisionAnswerDialog) string {
@@ -734,61 +712,54 @@ func (m Model) answerRunTask(state projectState, dialog *decisionAnswerDialog) s
 }
 
 func renderFooter(m Model, state projectState) string {
-	if m.profileChoice != nil {
-		return "↑↓ 选择预设方案 · Enter 确认并开始 · Esc 取消"
+	if m.operationDetails {
+		return "↑↓/PgUp/PgDn 阅读 · F8/Esc 返回原操作"
+	}
+	if m.detailExpanded {
+		return "↑↓/PgUp/PgDn 阅读 · Esc/d/Enter 返回 · q 退出"
 	}
 	if m.help {
 		return "? / Esc 关闭帮助"
 	}
+	if m.answer != nil && m.answer.details {
+		return "↑↓/PgUp/PgDn 阅读 · F8/Esc 返回输入"
+	}
+	if m.profileChoice != nil {
+		return "Tab 列表/方案 · ↑↓ 选择 · Enter 确认 · F8 完整方案 · Esc 取消"
+	}
 	if m.confirm != nil {
-		return "↑↓/PgUp/PgDn 阅读完整确认内容 · Enter/y 确认 · Esc/n 取消"
+		return "Tab 列表/确认 · Enter 确认 · F8 详情 · Esc/n 取消"
 	}
 	if m.answer != nil {
-		if m.answer.details {
-			return "F8 返回输入 · PgUp/PgDn 完整背景/身份 · Esc 关闭"
+		enter := "Enter 转输入"
+		if state.focus == 2 {
+			enter = "Enter 换行"
 		}
-		return "Tab 列表/选项/输入 · Enter 换行 · F2 提交 · F6/F7 切候选 · F8 背景 · Esc 保留草稿"
+		if state.focus == 0 {
+			enter = "Enter 返回草稿"
+		}
+		return "Tab 列表/选项/输入 · " + enter + " · F2 提交 · F8 背景 · Esc 保留"
 	}
-	if m.detailExpanded {
-		return "↑↓/PgUp/PgDn 阅读完整详情 · d / Enter / Esc 返回 · q 退出"
-	}
-	parts := []string{"←→ 项目", "Tab 列表/反馈", "1–7 筛选", "↑↓ 选择/滚动", "d 详情"}
 	row := m.selectedRow(m.selected)
-	if row != nil && len(candidateRuns(state, row.taskID)) > 0 {
-		parts = append(parts, "F6/F7 并行")
-		if candidateStartReason(state, row, m.clock.Now()) == "" {
-			parts = append(parts, "b 新增")
-		}
-		if candidateAbandonReason(state, row) == "" {
-			parts = append(parts, "z 放弃")
-		}
+	action := "Enter 到右下"
+	if row != nil && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" {
+		action = "a/Enter 回复"
 	}
-	if row != nil && row.kind == rowReady && candidateActionReason(state, m.clock.Now()) == "" {
-		parts = append(parts, "s 选方案")
+	if row != nil && row.kind == rowReady {
+		action = "s 选方案"
 	}
-	if row != nil && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" && strings.HasPrefix(decisionAnswerAvailability(state, row), "提交后") {
-		if !feedbackInProgress(state, row.run) {
-			parts = append(parts, "a/Enter 回复")
-		}
+	if state.recoveryActive {
+		action = "u/r 核验 · F8 报告 · Esc 动态"
 	}
-	if row != nil && row.run != nil && row.run.Abandonment == nil && row.run.EnvironmentBlocker != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" {
-		parts = append(parts, "a 保留草稿")
+	move := "↑↓ 选任务"
+	if state.focus != 0 {
+		move = "↑↓ 滚动"
 	}
-	connection := state.snapshot.Connection
-	if rt := connection.Snapshot.Page; rt != nil && connection.State == api.ConnectionConnected && connection.CanControl {
-		if hasCapability(rt, "set_dispatch_mode") {
-			parts = append(parts, "m 模式")
-		}
-	}
-	if connection.CanStop {
-		parts = append(parts, "x 停服")
-	}
-	parts = append(parts, "? 帮助", "q 退出")
-	return strings.Join(parts, " · ")
+	return "Tab 列表/反馈 · " + move + " · " + action + " · d 完整详情\nF6/F7 候选 · 1–7 筛选 · f 完整回复 · ? 更多 · q 退出"
 }
 
 func renderHelp(state projectState) []string {
-	return []string{"快捷键", "←/→ 切换项目 · Tab 列表/选项/输入", "↑/↓ 或 PgUp/PgDn 选择/滚动", "Enter 只读详情或当前问题 · d 完整详情 · Esc 返回", "F6/F7（或 { / }）切换候选 · b 新增 · z 退出实验", "s 选择方案（Enter 明确确认开始）", "a 右下原地回复 · Enter 换行 · F2 明确提交 · F8 完整背景/身份", "f 最终回复 · [ / ] 历史业务轮次", "v 历史决策 · u 只读执行核验", "Ctrl+E 重新检查环境 · Ctrl+O 原终端（需能力）", "1 全部 · 2 Ready · 3 进行中 · 4 待决策 · 5 待合并 · 6 需处理 · 7 历史", "m 派发模式 · x 停止服务", "q 只退出控制台；服务继续运行"}
+	return []string{"快捷键", "←/→ 切换项目 · Tab 列表/选项/输入", "↑/↓ 或 PgUp/PgDn 选择/滚动", "Enter 到右下或当前问题 · d 完整详情 · Esc 返回", "F6/F7（或 { / }）切换候选 · b 新增 · z 退出实验", "s 选择方案（Enter 明确确认开始）", "a 右下原地回复 · Enter 换行 · F2 明确提交 · F8 完整背景/身份", "f 最终回复 · [ / ] 历史业务轮次", "v 历史决策 · u 右下只读核验（r 重读/F8 全文）", "Ctrl+E 重新检查环境 · Ctrl+O 原终端（需能力）", "1 全部 · 2 Ready · 3 进行中 · 4 待决策 · 5 待合并 · 6 需处理 · 7 历史", "m 派发模式 · x 停止服务", "q 只退出控制台；服务继续运行"}
 }
 
 func joinLines(left, right []string, leftWidth, height int) string {
@@ -810,19 +781,19 @@ func joinLines(left, right []string, leftWidth, height int) string {
 func consoleContentHeight(m Model) int {
 	height := m.height - 3
 	if m.selected >= 0 && m.selected < len(m.projects) {
-		height -= len(wrapLines(strings.Split(renderFooter(m, m.projects[m.selected]), "\n"), m.width))
+		height -= len(workspaceFooter(m, m.projects[m.selected]))
 	}
 	return max(3, height)
 }
 
 func compactLayout(m Model) bool {
-	return m.width < 100 || consoleContentHeight(m) < 17
+	return m.width < 100
 }
 
 func listPanelWidth(m Model) int {
-	left := m.width * 55 / 100
-	if left < 55 {
-		left = 55
+	left := m.width * 44 / 100
+	if left < 38 {
+		left = 38
 	}
 	if left > 90 {
 		left = 90
@@ -841,6 +812,7 @@ func ptrTime(value *time.Time) string {
 
 func sampleTime(snapshot ProjectSnapshot) string {
 	if snapshot.Observation.SampledAt.IsZero() {
+
 		return "未知"
 	}
 	suffix := ""
@@ -852,6 +824,7 @@ func sampleTime(snapshot ProjectSnapshot) string {
 
 func executionVerifiedAt(state projectState, run *api.CandidateSummary) string {
 	if run == nil || state.snapshot.History == nil || run.ExecutionID == "" {
+
 		return "未知"
 	}
 	for _, execution := range state.snapshot.History.Executions {
@@ -859,6 +832,7 @@ func executionVerifiedAt(state projectState, run *api.CandidateSummary) string {
 			return execution.VerifiedAt.Local().Format(timeLayout)
 		}
 	}
+
 	return "未知"
 }
 

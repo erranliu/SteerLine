@@ -21,7 +21,7 @@ class JournalTests(unittest.TestCase):
         self.config = {
             "run_id": "test-run", "repository": "example/repo",
             "repo_root": str(self.root / "repo"), "project_id": "project",
-            "coordinator_thread_id": "coordinator", "roadmap": str(self.root / "roadmap.md"),
+            "coordinator_thread_id": "coordinator", "roadmap": str(self.root / "execution-map.md"),
             "default_branch": "main", "authorization": {
                 "source": "user message", "create_sessions": True, "send_prompts": True,
                 "merge_prs": True, "comment_prs": True, "schedule": True},

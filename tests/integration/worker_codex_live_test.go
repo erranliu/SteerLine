@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	"github.com/erranliu/SteerLine/internal/execution/adapters/protocol/codexapp"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 )
 
 // Run explicitly with STEERLINE_CODEX_APP_SERVER_LIVE=1. It uses a temporary

@@ -1,16 +1,16 @@
 package integration
 
 import (
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"context"
+	productdto "github.com/erranliu/SteerLine/internal/product/api"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"runtime"
 	"testing"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	productdto "github.com/erranliu/SteerLine/internal/product/api"
-	productquery "github.com/erranliu/SteerLine/internal/product/query"
 )
 
 func TestCD65HistoryAndPreparation(t *testing.T) {

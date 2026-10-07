@@ -3,12 +3,12 @@ package execution
 import (
 	"context"
 	"errors"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"strings"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerErr error) error {
@@ -165,5 +165,6 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 	if err := s.stopVerifiedWorkerTurn(run, workflow, execution, evidence.TurnID, turnOutcome, question); err != nil {
 		return err
 	}
+
 	return s.resolveStoppedWorkerTurn(run, workflow, execution, stoppedWorkerResolution{TurnID: evidence.TurnID, LastMessage: evidence.LastMessage, Issue: issue, Question: question, RecordPRStop: true})
 }

@@ -6,12 +6,148 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
 )
+
+func TestQuickWorkersDefaultAndExplicitSelections(t *testing.T) {
+	for _, tc := range []struct {
+		args []string
+		want int
+	}{
+		{[]string{"-level=L1"}, 3},
+		{[]string{"-quick"}, 3},
+		{[]string{"-level=L1", "-workers=1"}, 1},
+		{[]string{"-quick", "-workers=3"}, 3},
+		{[]string{"-level=L1", "-workers=3", "--", "./tests/integration", "-run=^TestOne$"}, 3},
+		{nil, 1},
+	} {
+		opts, err := parseOptions(tc.args)
+		if err != nil || opts.workers != tc.want {
+			t.Fatalf("%v: workers=%d want=%d err=%v", tc.args, opts.workers, tc.want, err)
+		}
+	}
+}
+
+func TestQuickGroupsBoundConcurrencyAndPreserveReportOrder(t *testing.T) {
+	for _, workers := range []int{1, 3} {
+		t.Run(fmt.Sprint(workers), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			invocations := make([]scopedInvocation, 7)
+			for i := range invocations {
+				invocations[i].ID = fmt.Sprint(i)
+			}
+			entered := make(chan string, len(invocations))
+			release := make(chan struct{})
+			defer close(release)
+			var active, peak atomic.Int32
+			done := make(chan []scopedGroup, 1)
+			go func() {
+				done <- runQuickGroups(workers, invocations, func(inv scopedInvocation) scopedGroup {
+					count := active.Add(1)
+					defer active.Add(-1)
+					for old := peak.Load(); count > old; old = peak.Load() {
+						if peak.CompareAndSwap(old, count) {
+							break
+						}
+					}
+					entered <- inv.ID
+					select {
+					case <-release:
+					case <-ctx.Done():
+					}
+					return scopedGroup{ID: inv.ID}
+				})
+			}()
+			for i := 0; i < workers; i++ {
+				select {
+				case <-entered:
+				case <-ctx.Done():
+					t.Fatal("workers did not start concurrently")
+				}
+			}
+			// Release one job at a time; idle slots may take later jobs while
+			// earlier jobs remain blocked, exercising both reuse and ordering.
+			for i := range invocations {
+				select {
+				case release <- struct{}{}:
+				case <-ctx.Done():
+					t.Fatalf("job %d did not finish", i)
+				}
+			}
+			select {
+			case groups := <-done:
+				if peak.Load() != int32(workers) || len(groups) != len(invocations) {
+					t.Fatalf("peak=%d groups=%d", peak.Load(), len(groups))
+				}
+				for i, group := range groups {
+					if group.ID != invocations[i].ID {
+						t.Fatalf("report order changed: %v", groups)
+					}
+				}
+			case <-ctx.Done():
+				t.Fatal("scheduler did not collect all results")
+			}
+		})
+	}
+}
+
+func TestQuickIntegrationSelectionKeepsClaimAndGuardsWithoutLongFlows(t *testing.T) {
+	parts := strings.Split(quickBoundaryPattern(), "/")
+	top, sub := regexp.MustCompile(parts[0]), regexp.MustCompile(parts[1])
+	for _, name := range quickBoundaryAssigned {
+		levels := strings.Split(name, "/")
+		if !top.MatchString(levels[0]) || (len(levels) > 1 && !sub.MatchString(levels[1])) {
+			t.Fatalf("required coverage excluded: %s", name)
+		}
+	}
+	for _, name := range []string{"TestTM04ExecutionWiring/intent_binding_and_two_original_turns", "TestTM04ExecutionWiring/original_request_ack_and_manual_recovery", "TestCD67AdditionalImplementation/supported_app_server_receipt_barriers", "TestCD67AdditionalImplementation/supported_terminal_recovery_and_original_identity"} {
+		levels := strings.Split(name, "/")
+		if top.MatchString(levels[0]) && sub.MatchString(levels[1]) {
+			t.Fatalf("long flow still selected: %s", name)
+		}
+	}
+}
+
+func TestQuickTargetedIntegrationDoesNotReplaceFixedCoverage(t *testing.T) {
+	opts := options{goTestArgs: []string{"./tests/integration", "-run=^TestSomeRegression$"}}
+	invocations := quickInvocations(opts)
+	boundary, targeted := invocations[len(invocations)-2], invocations[len(invocations)-1]
+	if boundary.ID != "quick-boundary" || targeted.ID != "quick-targeted" || len(boundary.Assigned) != len(quickBoundaryAssigned) {
+		t.Fatal("directed regression replaced fixed coverage")
+	}
+	if flagValue(boundary.Command, "-run", "") != quickBoundaryPattern() || flagValue(targeted.Command, "-run", "") != "^TestSomeRegression$" {
+		t.Fatalf("selection lost: %v / %v", boundary.Command, targeted.Command)
+	}
+}
+
+func TestQuickTargetedCoverageRejectsZeroMatches(t *testing.T) {
+	for _, matched := range []bool{false, true} {
+		t.Run(fmt.Sprint(matched), func(t *testing.T) {
+			raw := packageEvent("start", boundaryPackage)
+			if matched {
+				raw += strings.ReplaceAll(event("run", "TestDirected")+event("pass", "TestDirected"), corePackage, boundaryPackage)
+			}
+			raw += packageEvent("pass", boundaryPackage)
+			path := filepath.Join(t.TempDir(), "targeted.jsonl")
+			if err := os.WriteFile(path, []byte(raw), 0600); err != nil {
+				t.Fatal(err)
+			}
+			group := scopedGroup{ID: "quick-targeted", StdoutLog: path, Summary: testfeedback.Parse([]byte(raw), 0)}
+			problems := checkScopedCoverage(scopedReport{Scope: "quick", Groups: []scopedGroup{group}})
+			rejected := containsSwitch(problems, "quick-targeted: no tests matched the explicit selection")
+			if rejected == matched {
+				t.Fatalf("matched=%t problems=%v", matched, problems)
+			}
+		})
+	}
+}
 
 func TestAssignTestsCoversNewNamesOnceAndBalancesLongCases(t *testing.T) {
 	names := []string{"TestTiny", "TestLongA", "TestNew", "TestLongB"}
@@ -156,7 +292,7 @@ func TestScopedCoverageRejectsMissingDuplicateAndTruncatedEvents(t *testing.T) {
 }
 
 func TestScopedOptionsAndNativeSwitchGate(t *testing.T) {
-	for _, args := range [][]string{{"-quick", "-workers=3"}, {"-workers=3", "--", "./internal/app/host"}, {"-workers=4"}, {"-quick", "--", "./..."}, {"-quick", "--", "./internal/app/host", "-count=2"}} {
+	for _, args := range [][]string{{"-workers=3", "--", "./internal/app/host"}, {"-workers=4"}, {"-quick", "--", "./..."}, {"-quick", "--", "./internal/app/host", "-count=2"}} {
 		if _, err := parseOptions(args); err == nil {
 			t.Fatalf("accepted invalid options %v", args)
 		}
@@ -209,13 +345,15 @@ func TestQuickBoundaryCoverageRequiresEachAssignedEntry(t *testing.T) {
 	for _, tc := range []struct {
 		name, omitted string
 		duplicate     bool
+		unexpected    bool
 		wantFailure   bool
 	}{
 		{name: "complete"},
 		{name: "missing_parent", omitted: "TestCD67CoreBoundary", wantFailure: true},
-		{name: "missing_recovery_gate", omitted: "TestCD67AdditionalImplementation/supported_terminal_recovery_and_original_identity", wantFailure: true},
-		{name: "missing_claim_rejection", omitted: "TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence", wantFailure: true},
+		{name: "missing_claim_transaction", omitted: "TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt", wantFailure: true},
+		{name: "missing_storage_wiring", omitted: "TestTM07StorageWiring", wantFailure: true},
 		{name: "duplicate", duplicate: true, wantFailure: true},
+		{name: "unexpected_recovery", unexpected: true, wantFailure: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			raw := packageEvent("start", boundaryPackage)
@@ -227,6 +365,10 @@ func TestQuickBoundaryCoverageRequiresEachAssignedEntry(t *testing.T) {
 			}
 			if tc.duplicate {
 				raw += strings.ReplaceAll(event("run", quickBoundaryTests[0])+event("pass", quickBoundaryTests[0]), corePackage, boundaryPackage)
+			}
+			if tc.unexpected {
+				name := "TestTM04ExecutionWiring/original_request_ack_and_manual_recovery"
+				raw += strings.ReplaceAll(event("run", name)+event("pass", name), corePackage, boundaryPackage)
 			}
 			raw += packageEvent("pass", boundaryPackage)
 			path := filepath.Join(t.TempDir(), "boundary.jsonl")

@@ -163,7 +163,7 @@ func TestCC4(t *testing.T) {
 	if m.confirm == nil {
 		t.Fatal(m.status)
 	}
-	text := renderStopConfirmation(m, m.projects[0], 100)
+	text := strings.Join(confirmRequired(m, m.projects[0]), "\n")
 	if !strings.Contains(text, "不可撤销") || !strings.Contains(text, "可能仍运行") {
 		t.Fatal(text)
 	}
@@ -195,6 +195,7 @@ func TestCC4(t *testing.T) {
 			t.Fatal(text)
 		}
 	}
+	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyEsc})
 	m, _ = ccKey(m, runeKey('z'))
 	if m.confirm != nil {
 		t.Fatal("abandoned feedback/exit remained available")

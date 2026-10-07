@@ -108,7 +108,7 @@ func TestPS1InlineConsoleWiring(t *testing.T) {
 	step(key('a'))
 	step(tea.KeyMsg{Type: tea.KeyTab})
 	step(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("原地中文\n第二行")})
-	if !strings.Contains(m.View(), "任务列表") || !strings.Contains(m.View(), "输入焦点") {
+	if !strings.Contains(m.View(), "任务列表") || !strings.Contains(m.View(), "▶ ┃ 你的答复") {
 		t.Fatal("editor replaced main view", m.View())
 	}
 	step(tea.KeyMsg{Type: tea.KeyF7})

@@ -10,6 +10,8 @@ SQLite 是 Task、固定 TaskContract、依赖、WorkflowRun、Execution、Attem
 
 服务与会话检查点也保存在 SQLite；检查点不复制 Task、WorkflowRun、Execution、Attempt、Decision 或 Operation 行。连接观察只读检查点，恢复和命令在同一只读事务中把检查点与领域表组合。当前配置不使用 `runtime_file`，服务不导出 `runtime.json`。
 
+工作区准备意图、轮次观察及当前决策绑定由 Execution 保存。回答事务校验 WorkflowRun 的持久控制版本；服务心跳和日志更新不改变该版本，不能把观察刷新当作业务反馈授权或新的请求身份。
+
 TaskContract 固定目标仓库、remote、base 分支以及 Spec、Plan 和其他引用的 commit/SHA-256。领取前再次核验 Task 版本、依赖就绪、项目 authority、目标仓库和前置合并已进入当前 base。领取事务预留一个 Task、WorkflowRun、Execution 与固定 `worker` attempt；不生成 implement／verify／review／publish_pr 链。
 
 | WorkflowRun 主阶段 | 条件 |
@@ -23,6 +25,12 @@ TaskContract 固定目标仓库、remote、base 分支以及 Spec、Plan 和其�
 Task 的 `discarded` 是独立终态，不伪装成 Decision 或完成。连接、进程、回执不明和清理待办保存在 Operation、Execution 与事件中，不增设第二套可写主阶段。
 
 Execution 绑定后端目标、工作区、分支、base、当前／待开始／已停下 turn ID、独立的 Command ID 及 turn 序号，还保存当前 Attempt 指针、服务实例归属、恢复门槛、版本和核验状态。local Codex 的附加身份为原生 thread ID 和 app-server 进程代次，协议为 `local_codex_app_server_v1`。本机 Orca 的附加身份为原生 agent terminal/incarnation、coordinator、Run 和每轮 Task/Dispatch，协议为 `orca_terminal_v2`；Windows Orca Codex 使用冻结权限的受管命令启动。普通反馈只推进 turn 和消息身份；确认旧 worker 终止后的人工继续可在同一 Execution 中建立下一 Attempt，旧 Attempt 保留原进程和会话身份。远端身份/反馈定义仅作保留协议资料，第一阶段不派发或验收该流程。
+
+## 人工候选实验
+
+同一 Task 默认一个候选，人可逐个增加不同冻结配置的候选。每个候选具有独立 WorkflowRun、Execution、会话、工作区、分支、PR 和反馈；开始时观察参与数已达五个就拒绝，接受竞态偶尔超出，不建设硬名额、预留、队列、自动补位或评分融合。
+
+PR 合并前可不可撤销地放弃候选，立即退出实验；外部 worker 停止和资源结算另按原身份核实。已知 PR 合并后禁止放弃。获胜由唯一 TaskDelivery 确定，迟到事实不覆盖原交付；其他候选的历史 PR、资源与未结算执行保持准确归属。界面选择及草稿隔离见[执行控制台](execution-console.md)。
 
 ## 独立状态与资源位置
 

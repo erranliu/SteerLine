@@ -29,11 +29,21 @@ const executionPackage = "github.com/erranliu/SteerLine/internal/execution"
 // Full partitions the execution business tests after their move out of the host facade.
 const fullCorePackage = executionPackage
 
-var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestPS2MandatoryLifecycleCapabilitiesKeepFixedIdentity", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput", "TestCandidateResumeErrorDoesNotStarveSibling", "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor", "TestClaimRechecksAcceptedConfigFiles", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestEveryRegisteredExecutionUsesTheLifecyclePort"}
+// Recovery, multi-turn and candidate orchestration belong to directed regression
+// or Full. L1 keeps one claim plus the immutable identity and delivery rules.
+var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestPS2MandatoryLifecycleCapabilitiesKeepFixedIdentity", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/tests/integration"
 
-var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImplementation", "TestTM04ExecutionWiring", "TestTM06ResourceWiring", "TestTM07StorageWiring", "TestTM08AppHostWiring", "TestPS2FixedConfigurationKeepsMandatoryChecks"}
+var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestTM04ExecutionWiring", "TestTM07StorageWiring"}
+
+var quickBoundarySubtests = []string{"pure_ownership_all_tags_production_and_tests", "negative_source_fixtures", "repository_all_tags_and_production_graphs", "console_negative_all_tags_production_and_tests", "claim_transaction_failure_and_original_receipt"}
+
+func quickBoundaryPattern() string {
+	// Go matches each slash-separated test level independently. Keep all static
+	// guards, but only the claim transaction subtest of the long wiring suite.
+	return exactPattern(quickBoundaryTests) + "/" + exactPattern(quickBoundarySubtests)
+}
 
 var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary",
@@ -61,22 +71,9 @@ var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary/repository_all_tags_and_production_graphs",
 	"TestCD67CoreBoundary/console_negative_all_tags_production_and_tests",
 	"TestCD67CoreBoundary/console_negative_all_tags_production_and_tests/transitive_test_helper",
-	"TestCD67AdditionalImplementation",
-	"TestCD67AdditionalImplementation/neutral_fixed_input_restart_and_fresh_manual_answer",
-	"TestCD67AdditionalImplementation/supported_app_server_receipt_barriers",
-	"TestCD67AdditionalImplementation/supported_terminal_recovery_and_original_identity",
-	"TestCD67AdditionalImplementation/remote_protocol_is_not_permission_authentication",
-	"TestCD67AdditionalImplementation/remote_model_and_cancellation_admission",
-	"TestCD67AdditionalImplementation/remote_claim_requires_permission_evidence",
-	"TestTM06ResourceWiring",
 	"TestTM07StorageWiring",
 	"TestTM04ExecutionWiring",
 	"TestTM04ExecutionWiring/claim_transaction_failure_and_original_receipt",
-	"TestTM04ExecutionWiring/intent_binding_and_two_original_turns",
-	"TestTM04ExecutionWiring/original_request_ack_and_manual_recovery",
-	"TestTM08AppHostWiring",
-	"TestTM08AppHostWiring/default_app_host_composition",
-	"TestPS2FixedConfigurationKeepsMandatoryChecks",
 }
 
 var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{
@@ -101,13 +98,13 @@ var quickOwnerCases = []struct {
 }{
 	{"quick-execution", executionPackage, quickExecutionTests},
 	{"quick-execution-boundary", "github.com/erranliu/SteerLine/internal/testkit/boundary", []string{"TestTM04ExecutionBoundary", "TestTM06AdapterBoundary", "TestTM06ContractValueClosure", "TestTM05ProductQueryBoundary", "TestTM07StorageBoundary", "TestTM08AppHostBoundary"}},
-	{"quick-owner-remote", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", []string{"TestCD63CodecIdentityAndVersion", "TestSupervisedOrcaPreflightPinsRemoteIdentityAndVersionFamily", "TestSupervisedOrcaPreflightRejectsVersionOrCapabilityDrift", "TestSupervisedOrcaClientPinsLaunchAndReadsExactDispatch", "TestSupervisedOrcaClientRejectsReturnedReplacementWorktree", "TestSupervisedRunCoordinatorsAreDistinctAndFenced", "TestSettledSupervisedDispatchRetainsExactBindingWithoutLiveTerminal", "TestSupervisedReplyRejectsEscapedOversizeBeforeOrcaCall", "TestRemoteContinuationRequiresOriginalPeerAndTerminal", "TestRemoteWorkspaceKeepsPeerPathAndRuntime", "TestRemoteReplyRejectsOversizeWithoutMutation", "TestLifecycleReconcilesUnknownQuestionAnswerWithoutSending", "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox", "TestLifecycleReconcilesReleasedDispatchWithDistinctTurnID", "TestLoadConfigRequiresExplicitRemoteCancellationFalse"}},
+	{"quick-owner-remote", "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", []string{"TestCD63CodecIdentityAndVersion", "TestLoadConfigRequiresExplicitRemoteCancellationFalse"}},
 	{"quick-owner-codec", "github.com/erranliu/SteerLine/internal/execution/adapters/codex", []string{"TestCD63CodecIdentityAndVersion", "TestConversationMapperNativeTwoTurnFixture", "TestHistoryAdapterRejectsOversizedNativeCursor", "TestAppServerLaunchPreservesConfiguredArgs", "TestAppServerPendingFeedbackRecoveryUsesNewTurnReceipt"}},
 	{"quick-owner-identity", "github.com/erranliu/SteerLine/internal/execution/adapters/orca", []string{"TestOriginalTerminalRequiresAgentDetectionBeforeQualifiedProcess", "TestFixedOrcaAgentTerminalRejectsReplacedIncarnation", "TestAgentBindPendingReceiptDoesNotQualifyOriginalHost", "TestReadinessEvidenceUsesActualPlatformToolBlocks", "TestReadinessReceiptRejectsStaleAndEscapingFiles", "TestActualSavedCommandWrapperProvidesProbeEvidence", "TestActualStringifiedCommandWrapperProvidesProbeEvidence"}},
 	{"quick-owner-codexapp", "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/codexapp", []string{"TestAskToolResponseUsesNativeAnswerEnvelope", "TestCodexAppCallCancellationInterruptsBlockedWrite", "TestCodexSocketHandshakeHonorsCancellationWithoutDeadline", "TestCodexSocketLoopbackHandshakeAndMaskedJSON"}},
 	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestLocalWorkspacePrepareInspectResourcesAndCleanup", "TestPrepareRejectsHeadChangedByCheckoutHook"}},
 	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPRRequiresExactIdentityAndMergeEvidence", "TestUnsupportedProviderDoesNoNetworkOperation"}},
-	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/app", []string{"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites", "TestRunConfiguredServiceClosesTransferredStoreOnReturn", "TestAppConfigProjectsOwnerInputsAndSelectedProfile", "TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestPS2TerminalFixedProfileKeepsReadinessAndFrozenAuthority", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestPS2FixedWindowsProfilesFreezeAndRestore", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile", "TestFileQuerySourceReadsCombinedProjectView"}},
+	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/app", []string{"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites", "TestAppConfigProjectsOwnerInputsAndSelectedProfile", "TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestPS2TerminalFixedProfileKeepsReadinessAndFrozenAuthority", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestPS2FixedWindowsProfilesFreezeAndRestore", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile"}},
 }
 
 var quickPackages = func() []string {
@@ -130,6 +127,8 @@ type scopedGroup struct {
 	StdoutLog   string               `json:"stdout_json_log"`
 	StderrLog   string               `json:"stderr_log"`
 	WallSeconds float64              `json:"wall_seconds"`
+	StartedAt   string               `json:"started_at,omitempty"`
+	FinishedAt  string               `json:"finished_at,omitempty"`
 	ExitCode    int                  `json:"exit_code"`
 	Error       string               `json:"error,omitempty"`
 	Summary     testfeedback.Summary `json:"summary"`
@@ -143,6 +142,7 @@ type scopedReport struct {
 	FinishedAt         string        `json:"finished_at"`
 	PreparationSecs    float64       `json:"preparation_seconds"`
 	ExecutionSecs      float64       `json:"execution_seconds"`
+	Workers            int           `json:"workers"`
 	Environment        environment   `json:"environment"`
 	CorePackage        string        `json:"core_package"`
 	CoreTests          []string      `json:"enumerated_core_tests,omitempty"`
@@ -159,12 +159,12 @@ type scopedReport struct {
 func runScoped(opts options) int {
 	if opts.workers == 3 {
 		if switches := activeRealSwitches(); len(switches) > 0 {
-			fmt.Fprintf(os.Stderr, "parallel full suite refuses native acceptance switches %s; use -workers=1\n", strings.Join(switches, ", "))
+			fmt.Fprintf(os.Stderr, "parallel suite refuses native acceptance switches %s; use -workers=1\n", strings.Join(switches, ", "))
 			return 2
 		}
 	}
 	started := time.Now()
-	report := scopedReport{SchemaVersion: 1, Phase: opts.phase, StartedAt: started.UTC().Format(time.RFC3339Nano), Complete: true, Errors: []string{}, Groups: []scopedGroup{}}
+	report := scopedReport{SchemaVersion: 1, Phase: opts.phase, Workers: opts.workers, StartedAt: started.UTC().Format(time.RFC3339Nano), Complete: true, Errors: []string{}, Groups: []scopedGroup{}}
 	if opts.quick {
 		report.Scope = "quick"
 		report.CorePackage = corePackage
@@ -176,17 +176,19 @@ func runScoped(opts options) int {
 	report.Environment = collectEnvironment(opts.cacheCondition, opts.nativeNote, opts.out, nil)
 	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Minute)
 	defer cancel()
-	packages, err := listPackages(ctx)
-	if err != nil {
-		return scopedSetupError(opts.out, &report, fmt.Errorf("list packages: %w", err))
-	}
+	var packages []string
+	var err error
 	if opts.quick {
 		report.AllPackages = append([]string(nil), quickPackages...)
 	} else {
+		packages, err = listPackages(ctx)
+		if err != nil {
+			return scopedSetupError(opts.out, &report, fmt.Errorf("list packages: %w", err))
+		}
 		report.AllPackages = packages
 	}
 	var binary, coreDir, integrationBinary, integrationDir string
-	if opts.workers == 3 {
+	if !opts.quick && opts.workers == 3 {
 		binary, coreDir, err = prepareCore(ctx, opts.out)
 		if err != nil {
 			return scopedSetupError(opts.out, &report, err)
@@ -209,38 +211,9 @@ func runScoped(opts options) int {
 	execution := time.Now()
 	if opts.quick {
 		report.CoreTests = append([]string(nil), quickTests...)
-		args := []string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1", "-run=" + exactPattern(quickTests), corePackage}
-		report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-core", "", args, quickTests, []string{corePackage}, true))
-		args = append([]string{"go", "test", "-json", "-count=1", "-timeout=45m", "-p", "1", "-parallel", "1"}, quickRulePackages...)
-		report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-rules", "", args, nil, quickRulePackages, true))
-		for _, owner := range quickOwnerCases {
-			args = []string{"go", "test", "-json", "-count=1", "-timeout=3m", "-p", "1", "-parallel", "1", "-run=" + exactPattern(owner.Tests), owner.Package}
-			report.Groups = append(report.Groups, runGroup(ctx, opts.out, owner.ID, "", args, owner.Tests, []string{owner.Package}, true))
-		}
-		boundarySelected := false
-		for _, arg := range opts.goTestArgs {
-			if arg == "./tests/integration" || arg == boundaryPackage {
-				boundarySelected = true
-			}
-		}
-		if !boundarySelected {
-			args = []string{"go", "test", "-json", "-count=1", "-timeout=15m", "-p", "1", "-parallel", "1", "-run=" + exactPattern(quickBoundaryTests), boundaryPackage}
-			report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-boundary", "", args, quickBoundaryAssigned, []string{boundaryPackage}, true))
-		}
-		if len(opts.goTestArgs) > 0 {
-			args = append([]string{"go", "test"}, opts.goTestArgs...)
-			if !hasJSONFlag(args) {
-				args = append(args, "-json")
-			}
-			if flagValue(args, "-count", "") == "" {
-				args = append(args, "-count=1")
-			}
-			if boundarySelected {
-				report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-boundary", "", args, quickBoundaryAssigned, []string{boundaryPackage}, true))
-			} else {
-				report.Groups = append(report.Groups, runGroup(ctx, opts.out, "quick-targeted", "", args, nil, nil, true))
-			}
-		}
+		report.Groups = runQuickGroups(opts.workers, quickInvocations(opts), func(inv scopedInvocation) scopedGroup {
+			return runGroup(ctx, opts.out, inv.ID, "", inv.Command, inv.Assigned, inv.Packages, true)
+		})
 	} else {
 		weights, e := loadWeights()
 		if e != nil {
@@ -287,6 +260,66 @@ func runScoped(opts options) int {
 		return 1
 	}
 	return 0
+}
+
+type scopedInvocation struct {
+	ID       string
+	Command  []string
+	Assigned []string
+	Packages []string
+}
+
+func quickInvocations(opts options) []scopedInvocation {
+	var invocations []scopedInvocation
+	add := func(id, pattern string, assigned, packages []string) {
+		args := []string{"go", "test", "-json", "-count=1", "-timeout=3m", "-p=1", "-parallel=1"}
+		if pattern != "" {
+			args = append(args, "-run="+pattern)
+		}
+		invocations = append(invocations, scopedInvocation{id, append(args, packages...), assigned, packages})
+	}
+	add("quick-core", exactPattern(quickTests), quickTests, []string{corePackage})
+	add("quick-rules", "", nil, quickRulePackages)
+	for _, owner := range quickOwnerCases {
+		add(owner.ID, exactPattern(owner.Tests), owner.Tests, []string{owner.Package})
+	}
+	add("quick-boundary", quickBoundaryPattern(), quickBoundaryAssigned, []string{boundaryPackage})
+	if len(opts.goTestArgs) > 0 {
+		args := append([]string{"go", "test"}, opts.goTestArgs...)
+		if !hasJSONFlag(args) {
+			args = append(args, "-json")
+		}
+		for _, flag := range []string{"-count", "-p", "-parallel"} {
+			if flagValue(args, flag, "") == "" {
+				args = append(args, flag+"=1")
+			}
+		}
+		// An explicit integration selection is additional regression, never a
+		// replacement for the fixed L1 package/test coverage.
+		invocations = append(invocations, scopedInvocation{ID: "quick-targeted", Command: args})
+	}
+	return invocations
+}
+
+func runQuickGroups(workers int, invocations []scopedInvocation, run func(scopedInvocation) scopedGroup) []scopedGroup {
+	groups := make([]scopedGroup, len(invocations))
+	jobs := make(chan int)
+	var wg sync.WaitGroup
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for index := range jobs {
+				groups[index] = run(invocations[index])
+			}
+		}()
+	}
+	for index := range invocations {
+		jobs <- index
+	}
+	close(jobs)
+	wg.Wait()
+	return groups
 }
 
 // The remaining packages have their own serial Go command. Starting it alongside
@@ -497,8 +530,11 @@ func runGroup(ctx context.Context, out, id, dir string, command, assigned, packa
 		cmd.Env = env
 	}
 	begin := time.Now()
+	group.StartedAt = begin.UTC().Format(time.RFC3339Nano)
 	err = runOwned(ctx, cmd)
-	group.WallSeconds = time.Since(begin).Seconds()
+	finished := time.Now()
+	group.FinishedAt = finished.UTC().Format(time.RFC3339Nano)
+	group.WallSeconds = finished.Sub(begin).Seconds()
 	group.ExitCode = 0
 	if err != nil {
 		group.Error = err.Error()
@@ -601,17 +637,18 @@ func checkScopedCoverage(report scopedReport) []string {
 					failures = append(failures, fmt.Sprintf("%s: missing assigned test %s", group.ID, name))
 				}
 			}
-			if strings.HasPrefix(group.ID, "core-") || strings.HasPrefix(group.ID, "integration-") || group.ID == "quick-core" {
+			if strings.HasPrefix(group.ID, "core-") || strings.HasPrefix(group.ID, "integration-") || group.ID == "quick-core" || group.ID == "quick-boundary" {
 				expectedPackage := corePackage
 				if strings.HasPrefix(group.ID, "core-") {
 					expectedPackage = fullCorePackage
 				}
-				if strings.HasPrefix(group.ID, "integration-") {
+				if strings.HasPrefix(group.ID, "integration-") || group.ID == "quick-boundary" {
 					expectedPackage = boundaryPackage
 				}
 				for key := range runs {
 					pkg, test, _ := strings.Cut(key, "\x00")
-					if pkg != expectedPackage || (!strings.Contains(test, "/") && !assigned[test]) {
+					checkName := !strings.Contains(test, "/") || (group.ID == "quick-boundary" && strings.Count(test, "/") == 1)
+					if pkg != expectedPackage || (checkName && !assigned[test]) {
 						failures = append(failures, group.ID+": unexpected test "+key)
 					}
 				}

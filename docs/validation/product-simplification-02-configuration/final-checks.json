@@ -84,5 +84,12 @@
     "group_count": 12,
     "passed_groups": 12,
     "execution_seconds": 1159.5207554
+  },
+  "l1-main-sync": {
+    "passed": true,
+    "complete": true,
+    "group_count": 12,
+    "passed_groups": 12,
+    "execution_seconds": 113.9189652
   }
 }

@@ -1,11 +1,11 @@
 package host
 
 import (
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"errors"
 	"fmt"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
-	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func (s *ServiceHost) PublishReady(instanceID string, processIdentity *executionbackend.ProcessIdentity, dispatchMode string) error {

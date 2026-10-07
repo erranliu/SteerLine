@@ -5,11 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"strings"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -99,6 +99,7 @@ func (s *Service) nextControlRequest() (*productapi.ControlRequest, string, erro
 			continue
 		}
 		if existing, e := s.host.ReadControlReceipt(id); e == nil {
+
 			s.controlSeen[id] = existing.RequestDigest
 			continue
 		} else if !os.IsNotExist(e) {
@@ -525,6 +526,7 @@ func (s *Service) recoverControlOperation() error {
 	requestID := op.RequestID
 	req, err := s.host.ReadControlRequest(requestID)
 	if err != nil || req.RequestID != op.RequestID || req.Action != op.Action || s.host.ControlRequestDigest(requestID) != op.RequestDigest {
+
 		req = productapi.ControlRequest{RequestID: op.RequestID, InstanceID: "unknown", Action: op.Action, RequestedBy: "unknown"}
 	}
 	hasRunEvidence := false
@@ -537,6 +539,7 @@ func (s *Service) recoverControlOperation() error {
 	if op.Action == "set_dispatch_mode" || op.Action == "pause_dispatch" || op.Action == "resume_dispatch" {
 		code, message, status = "failed", "service restarted before the control state transition was durably saved", "failed"
 	} else if _, receiptErr := s.host.ReadControlReceipt(op.RequestID); os.IsNotExist(receiptErr) && !hasRunEvidence {
+
 		code, message, status = "persistence_failed", "applying receipt was not published; action was not dispatched", "failed"
 	}
 	if op.Action == "start_task" {

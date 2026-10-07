@@ -19,7 +19,7 @@ native-local记录本机原生开发/审核初次运行：文件修改、项目�
 | 原生资源设置防篡改 | [资源codec回归](resources-fixed/summary.json)：沙箱/审批变更、缺失、重复参数拒绝；完整身份与历史意图断言保持 |
 | Windows local PS2-05 | [原生回执](native-local-http/receipt.json)、[原生事件](native-local-http/native-events.selected.jsonl)、[Go结果](native-local-http-run.jsonl)：文件修改、项目测试、commit/真实HTTP push、兄弟目录拒绝、一次有界自动审核通过 |
 | Windows Orca PS2-05 | [原生回执](native-orca-verified/receipt.json)、[原生事件](native-orca-verified/native-events.selected.jsonl)、[Go结果](native-orca-verified-run.jsonl)：相同开发与审核事实，原序列化profile/资源恢复及production recovery port核验同一live terminal成功；已看到原prompt的turn_started，未重发 |
-| L1 | [固定L1完整报告](l1-release/summary.json)：passed=true、complete=true，12个固定组全部通过，execution1159.5秒。前两次失败如实保留，不能当通过 |
+| L1 | [最终主分支集成报告](l1-main-sync/summary.json)：passed=true、complete=true，当前12组全过，execution113.9秒；[优化前固定L1](l1-release/summary.json)也完整通过1159.5秒，两者范围不同。前两次失败如实保留，不能当通过 |
 | 静态/构建 | 当前产品构建、受影响包go vet、原生tag编译、差异格式、全库文档链接检查通过 |
 
 原生审核是实际请求与决策，采用on-request/auto_review，未模拟人类菜单、修改ACL或使用elevated/full-access。UAC记录只覆盖本次native输出及未请求管理员初始化/提升启动，不声称全桌面/所有机器状态都不会出现UAC。其他agent和远端只做受影响路径回归，没有补建平台或新增权限认证，也未将本机日志当远端可用证明。PR创建/真实交付未改变，本批未执行完整真实PR链。
@@ -35,7 +35,7 @@ native-local记录本机原生开发/审核初次运行：文件修改、项目�
 
 仅为退役选择/附加声明/认证文件流程的测试删除；[退役映射](retired-tests.json)列历史用例。配置文件字节重查、冻结防篡改/不串候选、必要能力/发布拒绝、原资源重启/输入/结果/stop确认保留在当前路径。旧native探针专属测试由PS2-05替代，共享native codec/resource helper保留，测试未引入第二状态机或测试专用生产入口。
 
-[同口径行数](line-summary.json)仅统计internal+cmd的Go物理行（含空行和注释，按_test.go分开），不计文档、日志或tests/integration。当前生产实现65554→64307，净减1242行；测试33733→32495，净减1237行，已计入新增PS2安全、冻结及原生验证。收益来自删除自由组合与附加需求，不把共享原生预检计为删除收益，不以移动文件或压缩排版计收益。
+[同口径行数](line-summary.json)仅统计internal+cmd的Go物理行（含空行和注释，按_test.go分开），不计文档、日志或tests/integration。当前生产实现65554→64307，净减1211行；测试33733→32495，净减1234行，已计入新增PS2安全、冻结及原生验证。收益来自删除自由组合与附加需求，不把共享原生预检计为删除收益，不以移动文件或压缩排版计收益。
 
 ## 失败与范围限制
 
@@ -51,6 +51,8 @@ Orca初次后台TTY未形成模型轮次，保留input_accepted而不冒充送�
 
 同步ae32f300的验证资料清理；保留其临时输出默认值、历史固定Git链接与Orca testdata。旧格式拒绝测试从固定172cea6c快照读取两份历史JSON，仅用于确认旧格式不受理，产品没有旧版读取路径。同步后历史格式拒绝及runner/Orca样本定向通过，产品重新构建、go vet、tag编译与文档链接通过；不把先前L1报告改写为合并后运行。两处文档冲突采用第二批行为并接上主分支的新导航，没有还原已清理资料。
 
-提交范围只保留当前通过报告摘要、当前原生回执及selected事件、净行数与退役映射；raw、重复失败与完整日志仍保留本地（受主分支validation目录ignore控制），不重建历史产物目录。L1、原生及定向摘要保留原采样源码/工作树，源码与环境必须匹配方可复用。行数比较使用同步后main为基线，不将main默认输出入口减少的四行计为本批收益。
+提交范围只保留当前通过报告摘要、当前原生回执及selected事件、净行数与退役映射；raw、重复失败与完整日志仍保留本地（受主分支validation目录ignore控制），不重建历史产物目录。L1、原生及定向摘要保留原采样源码/工作树，源码与环境必须匹配方可复用。行数比较使用最终同步后的main 6c16b8dc为基线，不将其他PR的控制台/runner变化计为本批收益。
 
 当前提交的runner报告为精选原始摘要：保留实际源码/环境、命令、分配场景、逐测试结果与通过状态；只省略大段工作区状态及重复慢测试列表。原报告SHA256与本地留存位置记录在evidence_selection，未修改历史运行来源或结果。
+
+最终集成6c16b8dc：保留最新三窗交互、README聚合导航、测试并行与精简范围；退役固定测试按原位置替换为PS2必要能力、不可变资源根/冻结身份与固定原生方案场景。runner和console包级测试通过（12.008/1.285秒），当前L1全部12组通过（准备0.608秒、执行113.919秒）；产品构建/go vet/文档链接及diff通过。剔除与本批无关的空白/import变更，未改控制台产品交互。行数重新按6c16b8dc计算；原生和长链定向证据保持原采样来源，没有重标为本次集成后的live运行。

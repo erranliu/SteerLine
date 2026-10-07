@@ -7,8 +7,9 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
+
+	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
@@ -34,6 +35,7 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 			t.Fatal("failed recovery preflight wrote persistent state")
 		}
 	})
+
 }
 
 func TestCD66CandidateResourceIdentityAndCommitRollback(t *testing.T) {
