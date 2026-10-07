@@ -33,3 +33,5 @@
 本轮不重跑 Full、L2/L3 或整个 L1：没有改变服务/worker 协议、执行副作用、发布/恢复或数据库格式；新行为由有针对性的 console fixture 和一次当前 ConPTY 验证。原 L1 限制继续如实保留。
 
 审计终端 fixture SHA-256：`d9762ba39f7d7284460918e1e3ebc21be2d43e0aa2940d0bbf1eee2fd3a8ef96`。原始复现和终端字节记录留在上述临时目录，旧记录可从固定提交读取。
+
+PR #234 已取消草稿并核对为 `MERGEABLE` / `CLEAN`，主分支冲突已解决；平台未配置可见检查条目（statusCheckRollup 为空），不将其称为 CI 通过。
