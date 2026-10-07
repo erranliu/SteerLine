@@ -102,9 +102,9 @@
 | 单 owner 规则 | [任务纯规则用例](../../internal/task/model/taskgraph_test.go)、[执行恢复隔离用例](../../internal/execution/candidate_resume_isolation_test.go)、[控制台交互用例](../../internal/console/interaction_test.go) | 定向选受影响规则；这些用例不证明所有同模块变更可以独立 |
 | 公共边界、端口、组装 | [依赖守卫](../../internal/testkit/boundary/)、[真实 app/client 接线](../../tests/integration/candidate_console_test.go)、[L1 选择](../../cmd/test-feedback/scoped.go) | 接线或公共契约变化核对实际消费者，fixture 保持正式接口；源码闭包按已有平台守卫核验 |
 | 交付与恢复组合 | [登记场景](../../tests/e2e/suites.json)：delivery.basic、recovery.waiting-merge-restart（controlled）及对应 live 场景 | controlled 和 live 分别选择；delivery.basic 只证明 A 交付及 B 就绪，不证明 B 的后继执行 |
-| 双本机候选与原生资源 | 登记的 candidates.local 及[本机证据](../validation/candidate-native-acceptance/README.md) | 按真实身份、目标和构建判断覆盖；当前 E2E runner 的串行/权限/清理约束保持，账号与终端不能默认当作可并行资源 |
+| 双本机候选与原生资源 | 登记的 candidates.local 及[本机验收摘要](../validation/candidate-acceptance.md) | 按真实身份、目标和构建判断覆盖；当前 E2E runner 的串行/权限/清理约束保持，账号与终端不能默认当作可并行资源 |
 
-已有[任务/执行/控制台独立 owner 探针](../validation/three-line-10-independence-cleanup/independence.md)证明了当时几个明确规则可在所属边界被修改和检验；它们不是所有功能组合或当前任意接口变化的独立性证明。历史失败、未触发分支、原生未测范围和不同源码基线分别保留，不能算作通过。后续新增证据链接到对应模块/边界，不要求规划者追读全部归档 Spec。
+已有[任务/执行/控制台独立 owner 探针的固定历史记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/three-line-10-independence-cleanup/independence.md)证明了当时几个明确规则可在所属边界被修改和检验；它们不是所有功能组合或当前任意接口变化的独立性证明。历史失败、未触发分支、原生未测范围和不同源码基线通过[验收摘要与历史快照](../validation/README.md)追溯，不能算作当前通过。后续新增证据链接到对应模块/边界的最小摘要，原始运行产物放临时目录，不要求规划者追读全部归档 Spec。
 
 没有专门契约测试时，先使用受影响 owner 用例和真实组装入口；只有确有未覆盖边界才新增最小场景/环境能力，并在 Plan 说明。新增契约/测试说明形成后更新本页链接，保持正文由对应所有者维护。
 
