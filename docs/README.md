@@ -6,6 +6,7 @@ SteerLine 的整体职责、具体产品设计、后续规划、执行契约与�
 | --- | --- |
 | 系统整体职责与业务权威 | [架构总览](architecture.md) |
 | 当前代码、模块与接口归属 | [代码架构](architecture/current-code-architecture.md) |
+| 规划任务前判断并行与冲突 | [并行开发指南](architecture/parallel-development.md) |
 | 配置、数据、反馈、会话与 UI 设计 | [产品设计](product-design/README.md) |
 | 当前目标与剩余任务 | [Roadmap](roadmap/roadmap.md) · [执行依赖](roadmap/execution-map.md) · [产品愿景](roadmap/product-vision.md) |
 | 未交付规格与待补验收 | [Spec / Plan](spec/README.md) |
@@ -17,7 +18,7 @@ SteerLine 的整体职责、具体产品设计、后续规划、执行契约与�
 
 - docs 根目录只放对整个项目长期有效的整体文档：本入口、架构总览和测试指南。
 - product-design/ 放长期维护的具体产品设计；按功能命名，明确当前契约、拟议方案和验证限制，不按阶段编号积累目录。
-- architecture/ 放当前代码架构和源码索引，不重复维护产品规则。
+- architecture/ 放当前代码架构、源码索引与持续维护的并行开发指南；指南链接契约和测试，缺少独立说明时记录当前边界，不重复维护产品规则。
 - roadmap/ 放后续目标、剩余任务和依赖；task-ids/ 保留所有已分配身份，号码不复用。
 - spec/ 放独立任务 Spec/Plan、未闭合的定向验收和共同执行约束。产品设计不替代任务固定契约。
 - validation/ 只维护最小验收摘要、最近基线和未闭合事项；原始运行产物写系统临时目录，历史证据通过固定 Git 快照取证。
