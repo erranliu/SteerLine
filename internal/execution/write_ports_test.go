@@ -2,7 +2,6 @@ package execution
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"go/ast"
 	"go/parser"
@@ -10,11 +9,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
-	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 type commandPortProbe struct {
@@ -128,80 +125,6 @@ func TestCM69WorkerCommitRejectsSupersededAttempt(t *testing.T) {
 	require(t, err)
 	if string(after) != string(before) || nextRevision != revision {
 		t.Fatal("superseded Attempt advanced its checkpoint")
-	}
-}
-
-func TestCM69CleanupReceiptKeepsTaskAndReceiptAtomic(t *testing.T) {
-	for _, fail := range []bool{false, true} {
-		name := "commit"
-		if fail {
-			name = "receipt_failure"
-		}
-		t.Run(name, func(t *testing.T) {
-			service, run := neutralAuditService(t)
-			db := testSQLite(service)
-			ctx := context.Background()
-			project := service.Config.identity
-			workspace := filepath.Join(service.Config.RunDir, "worktrees", "absent-cleanup")
-			execution := *service.executionRecord(run)
-			execution.Status = "stopped"
-			execution.Target.ID, execution.Target.WorktreeID = project, workspace
-			execution.Target.Branch, execution.Target.BaseRevision = "fixture/cleanup", execution.Workspace.Base
-			execution.Workspace.Worktree = workspace
-			require(t, transactFixture(db.SQLiteStore, ctx, func(tx *fixtureTransaction) error { return tx.PutExecution(execution) }))
-			commands := newTestCommandService(db, Config{identity: project})
-			task := nativeTaskRecord(service.domain.Tasks, run.TaskID)
-			discarded, err := commands.DiscardNativeTask(ctx, service.Config, task.TaskID, newID(), task.Version, "cleanup fixture", "operator")
-			require(t, err)
-			if discarded.Status != "discarded" {
-				t.Fatal("task was not discarded")
-			}
-			before, err := db.TaskGraphSnapshot(ctx, project)
-			require(t, err)
-			current := before.ByID[task.TaskID]
-			item := "workspace_cleanup:" + workspace
-			evidence := NativeWorkspaceCleanupReceipt{WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, Repository: project, Worktree: workspace, Branch: execution.Target.Branch, BaseCommit: execution.Target.BaseRevision, WorktreeGone: true, BranchGone: true, ObservedAt: time.Now().UTC()}
-			request := newID()
-			if fail {
-				_, err = db.db.Exec(`CREATE TRIGGER reject_cleanup_receipt BEFORE INSERT ON commands BEGIN SELECT RAISE(FAIL,'cleanup receipt failure'); END`)
-				require(t, err)
-			}
-			receipt, err := commands.RecordNativeCleanupReceipt(ctx, task.TaskID, request, current.Version, item, "operator", mustJSON(evidence))
-			after, readErr := db.TaskGraphSnapshot(ctx, project)
-			require(t, readErr)
-			if fail {
-				if err == nil || after.Authority.GraphRevision != before.Authority.GraphRevision || recordFingerprint(after.ByID[task.TaskID]) != recordFingerprint(current) {
-					t.Fatal("failed cleanup receipt changed its task or graph")
-				}
-				if _, found, lookupErr := db.LookupCommand(ctx, project, request); lookupErr != nil || found {
-					t.Fatal("failed cleanup published a receipt")
-				}
-				snapshot, readErr := db.Query(ctx, project)
-				require(t, readErr)
-				for _, op := range snapshot.Operations {
-					if op.OperationID == request {
-						t.Fatal("failed cleanup retained its operation receipt")
-					}
-				}
-				return
-			}
-			require(t, err)
-			if receipt.Status != "discarded" || receipt.Version != current.Version+1 || hasString(receipt.CleanupPending, item) || after.Authority.GraphRevision != before.Authority.GraphRevision+1 {
-				t.Fatal("cleanup did not settle exactly its pending item with graph and task CAS")
-			}
-			command, err := db.Command(ctx, project, request)
-			require(t, err)
-			var saved taskmodel.TaskRecord
-			require(t, json.Unmarshal(command.Result, &saved))
-			if command.Status != "accepted" || recordFingerprint(saved) != recordFingerprint(receipt) {
-				t.Fatal("cleanup receipt differs from its committed task")
-			}
-			replay, err := commands.RecordNativeCleanupReceipt(ctx, task.TaskID, request, current.Version, item, "operator", mustJSON(evidence))
-			require(t, err)
-			if recordFingerprint(replay) != recordFingerprint(receipt) {
-				t.Fatal("cleanup replay did not preserve its original result")
-			}
-		})
 	}
 }
 

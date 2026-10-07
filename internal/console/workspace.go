@@ -278,9 +278,9 @@ func taskAttention(s projectState, id string) string {
 			text, p = "环境受阻", 3
 		case runNeedsAttention(r) && r.FinishTaskStatus != "waiting_decision":
 			text, p = "需核验", 3
-		case r.Decision != nil && r.Decision.Status == "pending" && r.Abandonment == nil && r.TaskStatus != "closed":
+		case r.Decision != nil && r.Decision.Status == "pending" && r.Abandonment == nil && r.TaskStatus != "closed" && r.TaskStatus != "discarded":
 			text, p = "待回答", 2
-		case r.FinishTaskStatus == "waiting_pr_merge" && r.TaskStatus != "closed":
+		case r.FinishTaskStatus == "waiting_pr_merge" && r.TaskStatus != "closed" && r.TaskStatus != "discarded":
 			text, p = "待合并", 1
 		}
 		if p > priority {
@@ -319,10 +319,13 @@ func nextAction(m Model, s projectState, row *consoleRow) string {
 		return "查看任务前置与阻塞原因（d）"
 	}
 	r := row.run
+	if r.TaskStatus == "discarded" || r.Abandonment != nil {
+		return taskNextAction(r)
+	}
 	if r.EnvironmentBlocker != nil {
 		return "Ctrl+E 重查环境 · Ctrl+O 原终端（按能力核验）"
 	}
-	if r.Decision != nil && r.Decision.Status == "pending" && r.Abandonment == nil && r.TaskStatus != "closed" {
+	if r.Decision != nil && r.Decision.Status == "pending" && r.Abandonment == nil && r.TaskStatus != "closed" && r.TaskStatus != "discarded" {
 		if feedbackInProgress(s, r) {
 			return "查询原答案请求回执；不重复提交"
 		}

@@ -41,7 +41,7 @@ func (s *Service) reconcile(ctx context.Context) error {
 	if err := s.refreshNativeSnapshot(ctx); err != nil {
 		return err
 	}
-	if err := s.reconcileNativeCleanup(ctx); err != nil {
+	if err := s.reconcileDiscardedExecutionStops(ctx); err != nil {
 		return err
 	}
 	return nil

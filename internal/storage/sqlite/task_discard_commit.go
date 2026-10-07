@@ -68,7 +68,7 @@ func (s *SQLiteStore) CommitTaskDiscard(ctx context.Context, commit storageports
 			return nativeErr("merge_state_unknown", "candidate publication or resource facts changed")
 		}
 		verified := map[string]bool{}
-		cleanup := append([]string(nil), facts.CleanupPending...)
+		stops := append([]string(nil), facts.StopPending...)
 		for _, pr := range commit.Known {
 			if verified[pr.URL] || !slices.Contains(facts.PRURLs, pr.URL) || pr.Info.URL != pr.URL {
 				return nativeErr("merge_state_unknown", "discard proof does not cover original PR set")
@@ -99,18 +99,15 @@ func (s *SQLiteStore) CommitTaskDiscard(ctx context.Context, commit storageports
 			if !bound {
 				return nativeErr("merge_state_unknown", "discard proof lost its fixed candidate identity")
 			}
-			if pr.Info.State == "open" {
-				cleanup = append(cleanup, "pull_request_close:"+pr.URL)
-			}
 		}
 		if len(verified) != len(facts.PRURLs) {
 			return nativeErr("merge_state_unknown", "discard requires every known PR proof")
 		}
-		cleanup = sortedCleanup(cleanup)
+		stops = sortedStops(stops)
 		if err := taskmodel.ValidateDiscardIntent(commit.Intent); err != nil {
 			return err
 		}
-		expected, err := taskmodel.Discard(current, commit.Intent.Reason, commit.Intent.RequestedBy, command.CommandID, cleanup, commit.After.UpdatedAt)
+		expected, err := taskmodel.Discard(current, commit.Intent.Reason, commit.Intent.RequestedBy, command.CommandID, stops, commit.After.UpdatedAt)
 		if err != nil {
 			return err
 		}
@@ -120,8 +117,8 @@ func (s *SQLiteStore) CommitTaskDiscard(ctx context.Context, commit storageports
 		if err := tx.UpdateNativeTaskCAS(commit.After, current.Version); err != nil {
 			return err
 		}
-		receipt = taskmodel.TaskDiscardReceipt{RequestID: command.CommandID, TaskID: id, Status: "discarded", GraphRevision: graph.Authority.GraphRevision + 1, CleanupPending: cleanup}
-		body, _ := json.Marshal(map[string]any{"task_id": id, "request_id": command.CommandID, "reason": commit.Intent.Reason, "discarded_by": commit.Intent.RequestedBy, "discarded_at": commit.After.DiscardedAt, "cleanup_pending": cleanup})
+		receipt = taskmodel.TaskDiscardReceipt{RequestID: command.CommandID, TaskID: id, Status: "discarded", GraphRevision: graph.Authority.GraphRevision + 1, StopPending: stops}
+		body, _ := json.Marshal(map[string]any{"task_id": id, "request_id": command.CommandID, "reason": commit.Intent.Reason, "discarded_by": commit.Intent.RequestedBy, "discarded_at": commit.After.DiscardedAt, "stop_pending": stops})
 		if _, err := tx.AppendEvent(storageports.DomainEvent{ProjectIdentity: project, TaskID: id, ExternalSource: "native-task-command", ExternalID: command.CommandID + ":discarded", Type: "task.discarded", ReceivedAt: commit.After.UpdatedAt, Payload: body}); err != nil {
 			return err
 		}
@@ -146,7 +143,7 @@ func (tx *sqliteTx) finishDiscardCommit(command storageports.CommandRecord, oper
 	return tx.UpdateOperation(operation)
 }
 
-func sortedCleanup(values []string) []string {
+func sortedStops(values []string) []string {
 	seen := map[string]bool{}
 	out := []string{}
 	for _, v := range values {

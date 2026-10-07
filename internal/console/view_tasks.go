@@ -333,6 +333,11 @@ func taskNextAction(run *api.CandidateSummary) string {
 	case run == nil:
 
 		return "无"
+	case run.TaskStatus == "discarded" || run.Abandonment != nil:
+		if run.PR.State == "merged" {
+			return "合并冲突，需人工处置"
+		}
+		return "保留资源，需人工处置；核实原执行停止"
 	case run.FinishTaskStatus == "waiting_decision" && run.TaskStatus != "closed":
 		return "回答当前问题（按 a）"
 	case runNeedsAttention(run):

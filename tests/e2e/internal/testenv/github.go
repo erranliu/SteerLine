@@ -64,14 +64,13 @@ func (p *Project) enableGitHub() {
 	s.Must(os.MkdirAll(filepath.Join(p.Repo, "docs", "spec"), 0700))
 	s.register("github-base-branch", p.BaseBranch, 0)
 	query := map[string]any{"executable": gh, "args": []string{"pr", "view", "{pr_url}", "--repo", "{repository}", "--json", githubFields, "--jq", githubInfoQuery}}
-	closeCommand := map[string]any{"executable": gh, "args": []string{"pr", "close", "{pr_url}", "--repo", "{repository}"}}
 	var config map[string]any
 	raw, err := os.ReadFile(p.Config)
 	s.Must(err)
 	s.Must(json.Unmarshal(raw, &config))
 	config["branch"] = p.BaseBranch
 	config["git"] = map[string]any{"executable": "git"}
-	config["pr"] = map[string]any{"kind": "command", "base_url": "https://github.com", "repository": githubRepository, "query": query, "close": closeCommand}
+	config["pr"] = map[string]any{"kind": "command", "base_url": "https://github.com", "repository": githubRepository, "query": query}
 	config["pr_poll"] = "1s"
 	s.Must(controlled.Write(p.Config, config))
 	s.Must(controlled.Write(p.Provider, controlled.State{GitURL: githubURL}))

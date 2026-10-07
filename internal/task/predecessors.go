@@ -89,7 +89,7 @@ func (c Commands) AddNativeTaskPredecessors(ctx context.Context, input taskmodel
 		}
 		if task.Status != "open" {
 			if task.Status == "in_progress" {
-				return taskError("cleanup_pending", "claimed successor requires its exact stopped workflow run and reset evidence")
+				return taskError("stop_pending", "claimed successor requires its exact stopped workflow run and reset evidence")
 			}
 			return taskError("immutable_task", "successor cannot acquire a predecessor in its current state")
 		}

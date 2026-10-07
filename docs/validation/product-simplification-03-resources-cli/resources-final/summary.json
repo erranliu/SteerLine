@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "scope": "targeted",
+  "phase": "run",
+  "mode": "tests",
+  "command": [
+    "go",
+    "test",
+    "./internal/execution",
+    "./internal/execution/adapters/orca",
+    "./internal/execution/adapters/orcaremote",
+    "-run",
+    "^(TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent|TestCleanupProgressRequiresConfirmedOriginalResource|TestOrcaStopExecutionConfirmsFixedTerminalExit|TestOrcaStopFailureDoesNotConfirmExit|TestSlowOrcaObservationDoesNotBlockOtherRefStop|TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox)$",
+    "-count=1",
+    "-json"
+  ],
+  "started_at": "2026-10-07T09:07:35.3706536Z",
+  "finished_at": "2026-10-07T09:08:11.4044199Z",
+  "wall_seconds": 36.0345086,
+  "environment": {
+    "source_commit": "8e46537fe8b4b86f117fddaa215fc633279b22a4",
+    "go_version": "go version go1.26.4 windows/amd64",
+    "go_env": {
+      "GOARCH": "amd64",
+      "GOCACHE": "C:\\Users\\lmas1\\AppData\\Local\\go-build",
+      "GOFLAGS": "",
+      "GOOS": "windows",
+      "GOTOOLCHAIN": "auto"
+    },
+    "os": "windows",
+    "architecture": "amd64",
+    "machine": {
+      "host_name": "liuming-asus",
+      "logical_cpu_count": 20,
+      "processor_identifier": "AMD64 Family 26 Model 36 Stepping 0, AuthenticAMD"
+    },
+    "concurrency": {
+      "GOMAXPROCS_environment": "unset",
+      "go_build_package_parallel": "Go default",
+      "go_test_parallel": "default 20",
+      "runtime_GOMAXPROCS": "20"
+    },
+    "build_cache_condition": "as found; no explicit cache clear",
+    "enabled_native_acceptance_switches": [],
+    "native_acceptance_note": "native acceptance not explicitly enabled",
+    "worktree_dirty_at_sampling": true,
+    "worktree_status_sha256": "c50a10163c543a9d7a934022a453c5fc39789c2a185537806cedffbf0707699c"
+  },
+  "summary": {
+    "status": "passed",
+    "passed": true,
+    "complete": true,
+    "command_exit_code": 0,
+    "package_count": 3,
+    "passed_packages": 3,
+    "failed_packages": [],
+    "skipped_packages": [],
+    "test_count": 6,
+    "passed_tests": 6,
+    "failed_tests": 0,
+    "skipped_tests": 0,
+    "packages": [
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "status": "pass", "elapsed_seconds": 33.122},
+      {"package": "github.com/erranliu/SteerLine/internal/execution/adapters/orca", "status": "pass", "elapsed_seconds": 1.637},
+      {"package": "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", "status": "pass", "elapsed_seconds": 0.935}
+    ],
+    "tests": [
+      {"package": "github.com/erranliu/SteerLine/internal/execution", "name": "TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent", "status": "pass", "elapsed_seconds": 32.82},
+      {"package": "github.com/erranliu/SteerLine/internal/execution/adapters/orca", "name": "TestOrcaStopExecutionConfirmsFixedTerminalExit", "status": "pass", "elapsed_seconds": 0.48},
+      {"package": "github.com/erranliu/SteerLine/internal/execution/adapters/orca", "name": "TestSlowOrcaObservationDoesNotBlockOtherRefStop", "status": "pass", "elapsed_seconds": 0.12},
+      {"package": "github.com/erranliu/SteerLine/internal/execution/adapters/orca", "name": "TestOrcaStopFailureDoesNotConfirmExit", "status": "pass", "elapsed_seconds": 0.09},
+      {"package": "github.com/erranliu/SteerLine/internal/execution/adapters/orca", "name": "TestCleanupProgressRequiresConfirmedOriginalResource", "status": "pass", "elapsed_seconds": 0},
+      {"package": "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote", "name": "TestLifecycleConfirmsOriginalDeliveryAckByReadOnlyInbox", "status": "pass", "elapsed_seconds": 0}
+    ],
+    "failures": [],
+    "skipped": [],
+    "incomplete_reasons": [],
+    "test_event_wall_seconds": 33.1211584,
+    "has_test_event_wall": true
+  },
+  "stdout_json_log": "docs/validation/product-simplification-03-resources-cli/resources-final/go-test.jsonl",
+  "stderr_log": "docs/validation/product-simplification-03-resources-cli/resources-final/go-test.stderr.txt",
+  "evidence_selection": {
+    "kind": "selected original report",
+    "original_report_sha256": "74988efd917705d805ddcc06e2a8b522b7d7aa93df5b50c8fe8ce8338357deba",
+    "original_report_local": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\sl-ps3-original-reports\\resources-final.json",
+    "omitted": "full worktree status and duplicate slowest_tests; commands, original source/environment/timestamps, assigned coverage and all individual outcomes retained"
+  }
+}

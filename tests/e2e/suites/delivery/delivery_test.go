@@ -15,7 +15,7 @@ func TestBasicDelivery(t *testing.T) {
 	p.StartService()
 	p.Claim("a")
 	open := p.WaitPhase("waiting_pr_merge")
-	p.AssertFullAccess(open)
+	p.AssertFixedNativeLaunch(open)
 	p.Record("open", open)
 	if open.Helper.Dispatches != 1 || open.Helper.Sessions != 1 {
 		t.Fatal("expected one original execution")

@@ -1,14 +1,12 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
-	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -30,7 +28,7 @@ func main() {
 
 func run() error {
 	if len(os.Args) < 2 {
-		return fmt.Errorf("usage: steerline <console|run|start-service|stop-service|check|control|tasks|task|stop|answer|home|install|launchers|projects> [-config config.json]")
+		return fmt.Errorf("usage: steerline <console|run|start-service|stop-service|check|control|task|answer|home|install|launchers> [-config config.json]")
 	}
 	if os.Args[1] == "task" {
 		return runNativeTaskCommand(os.Args[2:])
@@ -54,8 +52,7 @@ func run() error {
 	decisionID := fs.String("decision-id", "", "answer: pending decision id (defaults to the run's pending decision)")
 	note := fs.String("note", "", "answer: optional human note")
 	by := fs.String("by", "", "answer: who answered (defaults to the OS user)")
-	proj := fs.String("project", "", "projects: project name or number")
-	action := fs.String("action", "", "control action or projects: console|run|stop|home|list")
+	action := fs.String("action", "", "control action")
 	console := fs.String("console", "", "service console rendering: pretty|summary|json|off (default pretty on a terminal)")
 	serviceWindow := fs.Bool("service-window", false, "run inside a required visible Windows service window")
 	if e := fs.Parse(os.Args[2:]); e != nil {
@@ -73,7 +70,7 @@ func run() error {
 	if command == "codex-session-launch" {
 		return steerlineapp.RunSessionLauncher(context.Background(), *config, steerlineapp.NewProcessHost(30*time.Second))
 	}
-	if command != "run" && command != "start-service" && command != "stop-service" && command != "check" && command != "stop" && command != "control" && command != "tasks" && command != "answer" && command != "home" && command != "install" && command != "launchers" && command != "projects" {
+	if command != "run" && command != "start-service" && command != "stop-service" && command != "check" && command != "control" && command != "answer" && command != "home" && command != "install" && command != "launchers" {
 		return fmt.Errorf("unknown command %q", command)
 	}
 	if command == "run" && *dispatchMode != "manual" && *dispatchMode != "auto" {
@@ -104,16 +101,13 @@ func run() error {
 		printHome(*config)
 		return nil
 	}
-	if command == "projects" {
-		return runProjects(*proj, *action)
-	}
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer cancel()
 	var c steerlineapp.Config
 	var product *productclient.Client
 	var e error
 	switch command {
-	case "tasks", "control", "stop", "answer", "stop-service":
+	case "control", "answer", "stop-service":
 		product, e = steerlineapp.OpenClient(ctx, *config)
 		if e != nil {
 			return e
@@ -147,23 +141,6 @@ func run() error {
 		fmt.Println(string(b))
 		if result.Status != "stopped" {
 			return fmt.Errorf("service stop is %s: %s", result.Status, result.Diagnostic)
-		}
-		return nil
-	}
-	if command == "stop" {
-		id := productclient.NewRequestID()
-		request, err := product.SubmitControl(ctx, productapi.ControlInput{Action: productapi.StopService, RequestID: id, RequestedBy: *by})
-		if err != nil {
-			fmt.Println("request_id", id)
-			return err
-		}
-		fmt.Println("request_id", request.RequestID)
-		if *waitReceipt {
-			receipt, waitErr := product.WaitControl(ctx, request.RequestID, 100*time.Millisecond)
-			if waitErr != nil {
-				return waitErr
-			}
-			return json.NewEncoder(os.Stdout).Encode(receipt)
 		}
 		return nil
 	}
@@ -340,18 +317,6 @@ func run() error {
 		}
 		return nil
 	}
-	if command == "tasks" {
-		snapshot, err := product.TaskSnapshot(ctx)
-		if err != nil {
-			return err
-		}
-		b, err := json.Marshal(snapshot)
-		if err != nil {
-			return err
-		}
-		fmt.Println(string(b))
-		return nil
-	}
 	if command == "answer" {
 		if *requestID != "" {
 			if *runID != "" || *decisionID != "" || *option != "" || *note != "" {
@@ -429,121 +394,6 @@ func runConsoleCommand(args []string) error {
 	return steerlineapp.RunConsole(ctx, *config, *runID)
 }
 
-// runProjects picks a project under <STEERLINE_HOME>\etc and re-execs this
-// binary with the chosen action, so run reuses its normal code path
-// while several projects can be launched side by side.
-func runProjects(project, action string) error {
-	act, e := pickAction(action)
-	if e != nil {
-		return e
-	}
-	if act == "console" {
-		if project != "" {
-			projects, listErr := steerlineapp.ListProjects()
-			if listErr != nil {
-				return listErr
-			}
-			chosen, resolveErr := steerlineapp.ResolveProject(projects, project)
-			if resolveErr != nil {
-				return resolveErr
-			}
-			return runConsoleCommand([]string{"-config", chosen.ConfigPath})
-		}
-		return runConsoleCommand(nil)
-	}
-	projects, e := steerlineapp.ListProjects()
-	if e != nil {
-		return e
-	}
-	if len(projects) == 0 {
-		return fmt.Errorf("no project configs under %s", steerlineapp.EtcDir())
-	}
-	if strings.EqualFold(act, "list") {
-		printProjects(projects)
-		return nil
-	}
-	chosen, e := pickProject(projects, project)
-	if e != nil {
-		return e
-	}
-	if chosen.Err != nil {
-		return fmt.Errorf("config %s is invalid: %w", chosen.ConfigPath, chosen.Err)
-	}
-	exe, e := os.Executable()
-	if e != nil {
-		return e
-	}
-	args := []string{act, "-config", chosen.ConfigPath}
-	if act == "run" {
-		args = append(args, "-console", "pretty")
-	}
-	cmd := exec.Command(exe, args...)
-	cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
-	return cmd.Run()
-}
-
-func pickProject(projects []steerlineapp.ProjectInfo, sel string) (steerlineapp.ProjectInfo, error) {
-	if sel != "" {
-		return steerlineapp.ResolveProject(projects, sel)
-	}
-	if len(projects) == 1 {
-		return projects[0], nil
-	}
-	printProjects(projects)
-	if !stdinIsTTY() {
-		return steerlineapp.ProjectInfo{}, fmt.Errorf("multiple projects; pass -project <name|number>")
-	}
-	line, e := readLine("project (number or name): ")
-	if e != nil {
-		return steerlineapp.ProjectInfo{}, e
-	}
-	return steerlineapp.ResolveProject(projects, line)
-}
-
-func pickAction(action string) (string, error) {
-	switch action {
-	case "console", "1":
-		return "console", nil
-	case "run", "stop", "home", "list":
-		return action, nil
-	case "":
-	default:
-		return "", fmt.Errorf("unknown action %q (console|run|stop|home|list)", action)
-	}
-	if !stdinIsTTY() {
-		return "console", nil
-	}
-	fmt.Println("Actions:  1) console   2) run service   3) stop service   4) home   5) list")
-	line, e := readLine("action (1-5): ")
-	if e != nil {
-		return "", e
-	}
-	switch strings.TrimSpace(line) {
-	case "1", "console":
-		return "console", nil
-	case "2", "run":
-		return "run", nil
-	case "3", "stop":
-		return "stop", nil
-	case "4", "home":
-		return "home", nil
-	case "5", "list":
-		return "list", nil
-	}
-	return "", fmt.Errorf("invalid action %q", line)
-}
-
-func printProjects(projects []steerlineapp.ProjectInfo) {
-	fmt.Println("Projects:")
-	for i, p := range projects {
-		state := p.RunDir
-		if p.Err != nil {
-			state = "(invalid: " + p.Err.Error() + ")"
-		}
-		fmt.Printf("  %d) %-24s %s\n", i+1, p.Name, state)
-	}
-}
-
 func stdinIsTTY() bool {
 	info, e := os.Stdin.Stat()
 	return e == nil && info.Mode()&os.ModeCharDevice != 0
@@ -552,15 +402,6 @@ func stdinIsTTY() bool {
 func stdoutIsTTY() bool {
 	info, e := os.Stdout.Stat()
 	return e == nil && info.Mode()&os.ModeCharDevice != 0
-}
-
-func readLine(prompt string) (string, error) {
-	fmt.Print(prompt)
-	line, e := bufio.NewReader(os.Stdin).ReadString('\n')
-	if e != nil && line == "" {
-		return "", e
-	}
-	return strings.TrimSpace(line), nil
 }
 
 // printHome shows where this machine keeps the shared SteerLine binary, configs

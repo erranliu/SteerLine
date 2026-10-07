@@ -13,7 +13,7 @@ import (
 )
 
 const ProjectExecutionProfileID = "project-default"
-const fixedExecutionProfileVersion = 7
+const fixedExecutionProfileVersion = 8
 
 // ExecutionProfile is one app catalog entry. It contains serialized profile
 // inputs and derived values, but no directory, process host or profile catalog.

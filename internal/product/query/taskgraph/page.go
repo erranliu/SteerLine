@@ -43,7 +43,7 @@ func NormalizePage(project, encodedCursor string, limit int) (PageRequest, error
 	}
 	decoder := json.NewDecoder(bytes.NewReader(bytes.TrimPrefix(raw, []byte{0xef, 0xbb, 0xbf})))
 	decoder.DisallowUnknownFields()
-	if decoder.Decode(&request.expected) != nil || decoder.Decode(new(any)) != io.EOF || request.expected.Version != 1 || request.expected.ProjectID != project || request.expected.Offset < 0 || request.expected.DatabaseRevision == 0 || len(request.expected.DatabaseID) != 32 {
+	if decoder.Decode(&request.expected) != nil || decoder.Decode(new(any)) != io.EOF || request.expected.Version != 2 || request.expected.ProjectID != project || request.expected.Offset < 0 || request.expected.DatabaseRevision == 0 || len(request.expected.DatabaseID) != 32 {
 		return PageRequest{}, viewError("cursor_invalidated", "cursor identity or sampling revision is invalid")
 	}
 	return request, nil
@@ -60,8 +60,7 @@ func Paginate(snapshot storageports.TaskGraphSnapshot, request PageRequest) (Pag
 		AuthorityVersion: snapshot.Authority.AuthorityVersion, GraphRevision: snapshot.Authority.GraphRevision,
 		DatabaseRevision: snapshot.DatabaseRevision, DatabaseID: snapshot.DatabaseID, SampledAt: snapshot.SampledAt,
 		Nodes: []Node{}, Edges: []Edge{},
-		Filters:  Filter{ProjectID: request.project, Depth: 1, Limit: request.limit},
-		Boundary: Boundary{MaxDepth: 1, MaxNodes: request.limit, Reasons: []string{}, Edges: []BoundaryEdge{}},
+		Boundary: Boundary{MaxNodes: request.limit, Reasons: []string{}, Edges: []BoundaryEdge{}},
 	}
 	offset := expected.Offset
 	if offset > len(snapshot.Tasks) || offset == len(snapshot.Tasks) && offset > 0 {
@@ -99,7 +98,7 @@ func Paginate(snapshot storageports.TaskGraphSnapshot, request PageRequest) (Pag
 		page.Boundary.Reasons = append(page.Boundary.Reasons, "boundary_edge_limit")
 	}
 	if page.HasMore {
-		c := cursor{Version: 1, ProjectID: request.project, AuthorityVersion: page.AuthorityVersion, GraphRevision: page.GraphRevision, DatabaseRevision: page.DatabaseRevision, DatabaseID: page.DatabaseID, Offset: end}
+		c := cursor{Version: 2, ProjectID: request.project, AuthorityVersion: page.AuthorityVersion, GraphRevision: page.GraphRevision, DatabaseRevision: page.DatabaseRevision, DatabaseID: page.DatabaseID, Offset: end}
 		raw, _ := json.Marshal(c)
 		page.NextCursor = base64.RawURLEncoding.EncodeToString(raw)
 	}

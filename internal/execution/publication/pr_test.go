@@ -108,47 +108,6 @@ func TestGiteaQueryReadsPRHeadIdentity(t *testing.T) {
 	}
 }
 
-func TestPRCloseUsesExactGiteaIdentityAndReturnsClosedReceipt(t *testing.T) {
-	t.Setenv("STEERLINE_TEST_PR_TOKEN", "fixture-token")
-	var server *httptest.Server
-	var patched int
-	server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/api/v1/repos/owner/repo/pulls/7" || r.Header.Get("Authorization") != "token fixture-token" {
-			http.Error(w, "identity mismatch", http.StatusNotFound)
-			return
-		}
-		state := "open"
-		if r.Method == http.MethodPatch {
-			var body struct {
-				State string `json:"state"`
-			}
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil || body.State != "closed" {
-				http.Error(w, "expected closed state", http.StatusBadRequest)
-				return
-			}
-			patched++
-			state = "closed"
-		} else if r.Method != http.MethodGet {
-			http.Error(w, "method", http.StatusMethodNotAllowed)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"html_url": server.URL + "/owner/repo/pulls/7", "number": 7, "state": state, "merged": false,
-			"base": map[string]any{"ref": "main", "repo": map[string]string{"full_name": "owner/repo"}},
-			"head": map[string]string{"sha": strings.Repeat("a", 40)},
-		})
-	}))
-	defer server.Close()
-	client := Client{Config: Config{Kind: "gitea", BaseURL: server.URL, Repository: "owner/repo", TokenEnv: "STEERLINE_TEST_PR_TOKEN"}, Timeout: time.Second}
-	info, err := client.Close(context.Background(), server.URL+"/owner/repo/pulls/7")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.State != "closed_unmerged" || info.Merged || info.HeadRevision != strings.Repeat("a", 40) || patched != 1 {
-		t.Fatalf("Gitea close did not return the fixed unmerged PR receipt: %+v patches=%d", info, patched)
-	}
-}
-
 func require(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
@@ -185,7 +144,6 @@ func TestUnsupportedProviderDoesNoNetworkOperation(t *testing.T) {
 	url := server.URL + "/owner/repo/pulls/1"
 	for _, call := range []func() error{
 		func() error { _, err := client.Query(context.Background(), url); return err },
-		func() error { _, err := client.Close(context.Background(), url); return err },
 		func() error { return client.Check(context.Background()) },
 	} {
 		if err := call(); err == nil {

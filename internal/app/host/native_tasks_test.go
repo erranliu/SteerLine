@@ -370,7 +370,7 @@ func TestNativeDiscardCASKeepsAuditAndNeverReusesID(t *testing.T) {
 	reopened.DiscardReason = ""
 	reopened.DiscardedBy = ""
 	reopened.DiscardRequestID = ""
-	reopened.CleanupPending = nil
+	reopened.StopPending = nil
 	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.UpdateNativeTaskCAS(reopened, 2) }); err == nil || !strings.Contains(err.Error(), "stale_version") {
 		t.Fatalf("discarded task was reopened: %v", err)
 	}

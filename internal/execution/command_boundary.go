@@ -45,8 +45,7 @@ type CommandStore interface {
 	TransactDiscardIntent(context.Context, func(storageports.DiscardIntentTx) error) error
 	TransactDiscardPending(context.Context, func(storageports.DiscardPendingTx) error) error
 	TransactDeliveryAudit(context.Context, func(storageports.DeliveryAuditTx) error) error
-	TransactCleanupProgress(context.Context, func(storageports.CleanupProgressTx) error) error
-	TransactCleanup(context.Context, func(storageports.CleanupTx) error) error
+	TransactStopReceipt(context.Context, func(storageports.StopReceiptTx) error) error
 }
 
 type CommandService struct {

@@ -1,0 +1,61 @@
+{
+  "directed-resources-fixed": {
+    "passed": false,
+    "complete": true,
+    "test_count": 28,
+    "passed_tests": 27,
+    "failed_tests": 1,
+    "skipped_tests": 0
+  },
+  "resources-final": {
+    "passed": true,
+    "complete": true,
+    "test_count": 6,
+    "passed_tests": 6,
+    "failed_tests": 0,
+    "skipped_tests": 0
+  },
+  "cli-final": {
+    "passed": true,
+    "complete": true,
+    "test_count": 42,
+    "passed_tests": 42,
+    "failed_tests": 0,
+    "skipped_tests": 0
+  },
+  "console-final": {
+    "passed": true,
+    "complete": true,
+    "test_count": 112,
+    "passed_tests": 112,
+    "failed_tests": 0,
+    "skipped_tests": 0
+  },
+  "l1-final": {
+    "passed": true,
+    "execution_seconds": 110.0854628,
+    "group_count": 12,
+    "complete": true
+  },
+  "controlled-isolated": {
+    "passed": true,
+    "cleanup_complete": true,
+    "execution_seconds": 164.9338313,
+    "group_count": 1
+  },
+  "resolved_historical_failure": {
+    "original": "directed-resources-fixed",
+    "test": "TestTaskDiscardRequiresPreciseUnmergedPRAndRetainsUnknownIntent",
+    "reason": "old assertion treated the necessary execution_stop_manual item as destructive cleanup",
+    "correction": "requires exactly the original execution stop item; PR/worktree/branch deletion remains forbidden",
+    "replacement": "resources-final",
+    "replacement_passed": true,
+    "note": "original 28-test report remains failed; its 27 other passes are not rewritten as a fresh full rerun"
+  },
+  "static": {
+    "build": true,
+    "affected_go_vet": true,
+    "doc_links": true,
+    "diff_check": true
+  }
+}

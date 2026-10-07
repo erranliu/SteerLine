@@ -124,12 +124,7 @@ type DeliveryAuditTx interface {
 	AppendEvent(DomainEvent) (int64, error)
 }
 
-type CleanupProgressTx interface {
-	operationTx
-	Task(context.Context, string, string) (taskmodel.TaskRecord, error)
-}
-
-type CleanupTx interface {
+type StopReceiptTx interface {
 	Attempt(context.Context, string, string, string) (executionmodel.StepAttemptRecord, error)
 	commandInsertTx
 	operationTx
@@ -138,7 +133,6 @@ type CleanupTx interface {
 	NativeAuthority(context.Context, string) (executionmodel.ProjectTaskAuthority, error)
 	UpdateDiscardedTaskCAS(taskmodel.TaskRecord, uint64) error
 	AdvanceTaskGraphRevision(string, uint64, uint64) (uint64, error)
-	PutWorkflowRun(executionmodel.WorkflowRunRecord) error
 	PutExecution(executionmodel.ExecutionRecord) error
 	PutStepAttempt(executionmodel.StepAttemptRecord) error
 }

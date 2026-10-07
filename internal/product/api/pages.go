@@ -184,7 +184,9 @@ type CandidateSummary struct {
 	Decision           *DecisionSummary         `json:"decision"`
 }
 type TargetSummary struct {
-	ID string `json:"id"`
+	ID         string `json:"id"`
+	WorktreeID string `json:"worktree_id,omitempty"`
+	Branch     string `json:"branch,omitempty"`
 }
 type WorkerLocation struct {
 	Terminal string `json:"terminal"`
@@ -312,6 +314,7 @@ type DeliverySummary struct {
 }
 type TaskDetail struct {
 	TaskSummary
+	StopPending       []string            `json:"stop_pending,omitempty"`
 	ProjectID         string              `json:"project_id"`
 	Priority          int                 `json:"priority"`
 	SpecPath          string              `json:"spec_path"`

@@ -1,8 +1,8 @@
 # Spec：保留资源人工处置与精简命令入口
 
-目标：`PRODUCT-SIMPLIFICATION`；批次：3。状态：待实施，未分配 Task ID；本批一份实施 Plan、一个独立实现 PR。依据：2026-10-07 用户要求编写审计后的三批规格，覆盖修订后的取舍 3、8。
+目标：`PRODUCT-SIMPLIFICATION`；批次：3。状态：实现、最小验证及自查完成，待独立PR评审，未分配 Task ID；本批[实施 Plan](product-simplification-03-resources-cli.plan.md)、一个独立实现 PR。依据：2026-10-07 用户要求编写审计后的三批规格，覆盖修订后的取舍 3、8。
 
-参考源码基线：`75474dcece26d807367e106a89a992f01f53fafd`。硬前置：[第二批](product-simplification-02-configuration.spec.md)合入；实际实施基线记录前两批合入后的提交。遵守 [第一批](product-simplification-01-console.spec.md)“目标与共同边界”。
+参考源码基线：`75474dcece26d807367e106a89a992f01f53fafd`。硬前置：[第二批](product-simplification-02-configuration.spec.md)已通过[PR #236](https://github.com/erranliu/SteerLine/pull/236)合入；实际实施基线记录前两批合入后的提交。遵守 [第一批](product-simplification-01-console.spec.md)“目标与共同边界”。
 
 单候选退出后保留 PR/worktree 已是当前行为，本批不重复宣称交付此能力。实际新增取舍是：整个 Task 丢弃后也不自动关闭 PR、删除工作区或分支，由人处置；精简重复 CLI 和高级 DAG 查询/文件导出。
 
@@ -67,3 +67,5 @@ PS3-01–04使用 provider/资源调用计数、可控双候选与远端协议�
 ## 交付边界
 
 提交删除/保留消费者和副作用分类清单、三批同口径净行数汇总。候选退出原本保留资源、第一批共享阅读代码、第二批认证命令的收益不得重复计算。不实施依赖冻结、版本提升简化、规划/审核外移或新的原生 UI；这些不是本系列已采用取舍。
+
+实施、消费者分类、格式、失败说明与三批行数见[验收记录](../validation/product-simplification-03-resources-cli/README.md)。

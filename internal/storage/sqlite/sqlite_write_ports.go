@@ -150,30 +150,30 @@ func (tx *sqliteTx) Attempt(ctx context.Context, project, id, execution string) 
 
 func (tx *sqliteTx) UpdateDiscardedTaskCAS(v taskmodel.TaskRecord, expected uint64) error {
 	if v.Status != "discarded" || v.Source != "native" || expected == 0 || v.Version != expected+1 {
-		return nativeErr("contract_mismatch", "cleanup requires the next discarded task version")
+		return nativeErr("contract_mismatch", "stop requires the next discarded task version")
 	}
 	old, err := tx.Task(tx.ctx, v.ProjectIdentity, v.TaskID)
 	if err != nil {
 		return err
 	}
 	if old.Status != "discarded" || old.Version != expected {
-		return nativeErr("stale_version", "discarded task changed during cleanup receipt")
+		return nativeErr("stale_version", "discarded task changed during stop receipt")
 	}
-	beforeCleanup := append([]string(nil), old.CleanupPending...)
-	old.CleanupPending, old.Version, old.UpdatedAt = v.CleanupPending, v.Version, v.UpdatedAt
-	if !sameTaskRecord(old, v) || len(beforeCleanup) != len(v.CleanupPending)+1 {
-		return nativeErr("contract_mismatch", "cleanup may only settle one pending item")
+	beforeStops := append([]string(nil), old.StopPending...)
+	old.StopPending, old.Version, old.UpdatedAt = v.StopPending, v.Version, v.UpdatedAt
+	if !sameTaskRecord(old, v) || len(beforeStops) != len(v.StopPending)+1 {
+		return nativeErr("contract_mismatch", "stop may only settle one pending item")
 	}
 	removed := false
-	for i := range beforeCleanup {
-		candidate := append(append([]string(nil), beforeCleanup[:i]...), beforeCleanup[i+1:]...)
-		if slices.Equal(candidate, v.CleanupPending) {
+	for i := range beforeStops {
+		candidate := append(append([]string(nil), beforeStops[:i]...), beforeStops[i+1:]...)
+		if slices.Equal(candidate, v.StopPending) {
 			removed = true
 			break
 		}
 	}
 	if !removed {
-		return nativeErr("contract_mismatch", "cleanup cannot replace its pending resource identities")
+		return nativeErr("contract_mismatch", "stop cannot replace its pending resource identities")
 	}
 
 	payload, err := json.Marshal(v)
@@ -181,7 +181,7 @@ func (tx *sqliteTx) UpdateDiscardedTaskCAS(v taskmodel.TaskRecord, expected uint
 		return err
 	}
 	result, err := tx.tx.ExecContext(tx.ctx, `UPDATE tasks SET version=?,payload=? WHERE project_identity=? AND task_id=? AND status='discarded' AND version=?`, v.Version, payload, v.ProjectIdentity, v.TaskID, expected)
-	return requireIdentityWrite(result, err, "stale_version: discarded task changed during cleanup receipt")
+	return requireIdentityWrite(result, err, "stale_version: discarded task changed during stop receipt")
 }
 
 func (s *SQLiteStore) TransactTaskBatch(ctx context.Context, fn func(storageports.BatchTx) error) error {
@@ -233,14 +233,7 @@ func (s *SQLiteStore) TransactDeliveryAudit(ctx context.Context, fn func(storage
 	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return fn(tx) })
 }
 
-func (s *SQLiteStore) TransactCleanupProgress(ctx context.Context, fn func(storageports.CleanupProgressTx) error) error {
-	if fn == nil {
-		return errors.New("transaction callback is required")
-	}
-	return s.transactSQLite(ctx, func(tx *sqliteTx) error { return fn(tx) })
-}
-
-func (s *SQLiteStore) TransactCleanup(ctx context.Context, fn func(storageports.CleanupTx) error) error {
+func (s *SQLiteStore) TransactStopReceipt(ctx context.Context, fn func(storageports.StopReceiptTx) error) error {
 	if fn == nil {
 		return errors.New("transaction callback is required")
 	}

@@ -16,7 +16,6 @@ type PRProviderConfig struct {
 	Repository string                   `json:"repository"`
 	TokenEnv   string                   `json:"token_env"`
 	Query      executionbackend.Command `json:"query"`
-	Close      executionbackend.Command `json:"close,omitempty"`
 }
 
 type PublicationSettings struct {

@@ -9,7 +9,7 @@ type DiscardFacts struct {
 	PRURLs            []string
 	CandidateBindings string
 	UncertainPR       bool
-	CleanupPending    []string
+	StopPending       []string
 }
 
 func CandidateDiscardFacts(workflows []WorkflowRunRecord, executions []ExecutionRecord, taskID string) DiscardFacts {
@@ -25,7 +25,7 @@ func CandidateDiscardFacts(workflows []WorkflowRunRecord, executions []Execution
 			ownedExecutions[execution.ExecutionID] = execution
 		}
 	}
-	plan := DiscardFacts{CleanupPending: []string{}}
+	plan := DiscardFacts{StopPending: []string{}}
 	prs := map[string]bool{}
 	for _, run := range workflows {
 		if run.TaskID != taskID {
@@ -46,15 +46,9 @@ func CandidateDiscardFacts(workflows []WorkflowRunRecord, executions []Execution
 		}
 	}
 	for _, execution := range ownedExecutions {
-		if execution.Workspace.Worktree != "" || execution.Target.WorktreeID != "" {
-			id := execution.Target.WorktreeID
-			if id == "" {
-				id = execution.Workspace.Worktree
-			}
-			plan.CleanupPending = append(plan.CleanupPending, "workspace_cleanup:"+id)
-		}
+
 		if execution.Status == "active" || execution.Status == "waiting_decision" || execution.Status == "blocked" || execution.Status == "pending" || execution.Process != nil && execution.Status != "stopped" {
-			plan.CleanupPending = append(plan.CleanupPending, "execution_stop_manual:"+execution.ExecutionID)
+			plan.StopPending = append(plan.StopPending, "execution_stop_manual:"+execution.ExecutionID)
 		}
 	}
 	for url := range prs {
@@ -65,7 +59,7 @@ func CandidateDiscardFacts(workflows []WorkflowRunRecord, executions []Execution
 		plan.PRURL = plan.PRURLs[0]
 	}
 	plan.CandidateBindings = CandidateBindings(workflows, executions, taskID)
-	plan.CleanupPending = sortedDiscardValues(plan.CleanupPending)
+	plan.StopPending = sortedDiscardValues(plan.StopPending)
 	return plan
 }
 

@@ -54,7 +54,7 @@ func ValidateNonSecret(c Config, git executionbackend.Command) error {
 	if c.TokenEnv != "" && !envName.MatchString(c.TokenEnv) {
 		return errors.New("authentication reference must be an environment variable name [REDACTED]")
 	}
-	for _, command := range []executionbackend.Command{c.Query, c.Close, git} {
+	for _, command := range []executionbackend.Command{c.Query, git} {
 		for _, arg := range append([]string{command.Executable}, command.Args...) {
 			if strings.ContainsAny(arg, "\r\n\x00") || secretArgument.MatchString(arg) {
 				return errors.New("publication command must not embed authentication values; use references [REDACTED]")

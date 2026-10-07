@@ -372,7 +372,7 @@ func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) inte
 		"executable_types":   []string{"task"},
 		"publication_policy": executionbackend.PublicationPolicy{Publisher: publisher},
 		"pr": map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "owner/repo",
-			"query": executionbackend.Command{Executable: "git", Args: []string{"status"}}, "close": executionbackend.Command{Executable: "git", Args: []string{"status"}}},
+			"query": executionbackend.Command{Executable: "git", Args: []string{"status"}}},
 	})
 	require(t, err)
 	configPath := filepath.Join(root, "project.json")

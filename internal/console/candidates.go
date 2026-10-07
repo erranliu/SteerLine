@@ -231,6 +231,8 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 		loser := false
 		if r.Abandonment != nil {
 			outcome = "历史/已放弃"
+		} else if r.TaskStatus == "discarded" {
+			outcome = "Task 已丢弃/保留，需人工处置"
 		} else if r.TaskStatus == "closed" {
 			outcome = "交付定位缺失/保留资源"
 			switch r.DeliveryOutcome {
@@ -246,6 +248,8 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 		}
 		if r.PR.State == "merged" {
 			switch {
+			case r.TaskStatus == "discarded":
+				outcome += " · 冲突：已丢弃 Task 的 PR 已合并，需人工处置"
 			case r.Abandonment != nil:
 				outcome += " · 冲突：已放弃候选 PR 已合并，需人工核实"
 			case loser:

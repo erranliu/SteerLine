@@ -38,11 +38,11 @@ SteerLine不做管理员安装、系统账号/防火墙设置、全局配置改�
 
 ## 项目发布责任
 
-项目必须配置 `"publication_policy":{"publisher":"worker"}`。worker 统一负责 commit、push 和创建 PR；中心只查询、核验合并、提交唯一 TaskDelivery，以及按原身份关闭未合并 PR/清理资源。当前本地 Codex/本机 Orca 使用这个责任边界；保留远端设计沿用同一边界，但不纳入一期运行或验收。全局执行方案不再接受 publication_policy；host_service 和 execution_profile 均明确拒绝。
+项目必须配置 `"publication_policy":{"publisher":"worker"}`。worker 统一负责 commit、push 和创建 PR；中心只查询、核验合并、提交唯一 TaskDelivery，并保留 PR/worktree/分支，由人处置。当前本地 Codex/本机 Orca 使用这个责任边界；保留远端设计沿用同一边界，但不纳入一期运行或验收。全局执行方案不再接受 publication_policy；host_service 和 execution_profile 均明确拒绝。
 
-worker 的执行策略和本身凭据必须允许 Git 推送及 PR 创建；中心的 token_env 只用于查询/关闭，不自动下发给 worker。仅有 query 或成功创建会话不能证明发布能力。worker 的成功、URL 和 worker_done 均不代替 provider 的真实 merged 证据。
+worker 的执行策略和本身凭据必须允许 Git 推送及 PR 创建；中心的 token_env 只用于查询，不自动下发给 worker。仅有 query 或成功创建会话不能证明发布能力。worker 的成功、URL 和 worker_done 均不代替 provider 的真实 merged 证据。
 
-冻结快照保留 publisher、原 provider/查询与关闭命令、Git、单一 fetch/push URL、base 与认证引用。后续轮次、恢复、PR 查询/关闭/交付使用原快照；远程目标变化仍拒绝副作用。秘密值不入库或写入产物。当前持久格式明确拒绝旧开发数据，不迁移、回填或回退；版本见[数据模型](data-model.md#当前格式来源)。历史真机报告保留原始证据格式。
+冻结快照保留 publisher、原 provider/查询命令、Git、单一 fetch/push URL、base 与认证引用。后续轮次、恢复、PR 查询/交付使用原快照；远程目标变化仍拒绝副作用。秘密值不入库或写入产物。当前持久格式明确拒绝旧开发数据，不迁移、回填或回退；版本见[数据模型](data-model.md#当前格式来源)。历史真机报告保留原始证据格式。
 
 环境阻断是执行状态旁路，保留业务问题及本地草稿。阻断时新回答明确拒绝；未产生投递意图的已保存回答作废并保留审计，恢复后重新提交。已有未知投递只核对原回执。控制台 Ctrl+O 打开原终端，Ctrl+E 重新检查原环境；CLI 的 control -action open_terminal/recheck_environment -run-id <RunID> 使用同一精确 blocker/turn/attempt/version 目标。
 
@@ -53,3 +53,5 @@ worker 的执行策略和本身凭据必须允许 Git 推送及 PR 创建；中�
 execution_requirements、工具exact_version/credential site匹配、认证文件报告和certify-backend命令已退役。普通Go/Python等依赖和测试要求由任务Spec/Plan与worker负责，不建立替代检查语言或安装器。
 
 内建后端/agent/协议目录、必要原生CapabilityReport、会话能力事实、目标连接、readiness、执行/资源摘要及worker发布核验继续存在。删除的是附加声明与文件认证流程；版本探针和native lifecycle仍不能冒充真实工具成功。远端缺少原生执行落实证据时按原原因拒绝，不新增权限等价认证或远端平台门槛。
+
+PR provider 的 close 字段已删除，即使空值也由严格配置入口拒绝；中心只查询合并事实，不关闭业务 PR。测试环境只清理本次自有资源。

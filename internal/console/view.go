@@ -221,6 +221,11 @@ func candidateDetailLines(m Model, state projectState, row *consoleRow) []string
 	if run.PR.URL != nil {
 		lines = append(lines, "PR 地址："+safeTerminalText(*run.PR.URL))
 	}
+	for _, url := range run.PRHistory {
+		if run.PR.URL == nil || url != *run.PR.URL {
+			lines = append(lines, "历史 PR 地址："+safeTerminalText(url))
+		}
+	}
 	lines = append(lines, "PR 状态："+safeTerminalText(firstText(run.PR.State, "未核验")))
 	if run.PR.QueryError != nil {
 		lines = append(lines, "PR 查询失败："+safeTerminalText(*run.PR.QueryError))
@@ -248,10 +253,13 @@ func candidateDetailLines(m Model, state projectState, row *consoleRow) []string
 	} else if run.FinishTaskStatus == "waiting_decision" {
 		lines = append(lines, "当前问题尚未同步，不能提交答案。")
 	}
+	if run.Abandonment != nil || run.TaskStatus == "discarded" || run.TaskStatus == "closed" {
+		lines = append(lines, "资源：保留，需人工处置（未确认当前存在）")
+	}
 	lines = append(lines, "采样于 "+sampleTime(state.snapshot))
 	if m.detailExpanded {
 		lines = append(lines, "run_id："+safeTerminalText(run.RunID), "execution/session："+safeTerminalText(run.ExecutionID+" / "+run.SessionID), "attempt_id："+safeTerminalText(run.AttemptID), "执行："+safeTerminalText(run.ExecutionStatus)+" · 交付："+safeTerminalText(run.FinishTaskStatus))
-		lines = append(lines, "工作目录："+safeTerminalText(stringValue(run.WorktreePath)), "分支："+safeTerminalText(stringValue(run.WorktreeBranch)), "原生定位："+safeTerminalText(run.Backend+" / "+run.Protocol+" / "+run.Target.ID))
+		lines = append(lines, "工作目录："+safeTerminalText(firstText(stringValue(run.WorktreePath), run.Target.WorktreeID)), "分支："+safeTerminalText(firstText(stringValue(run.WorktreeBranch), run.Target.Branch)), "原生定位："+safeTerminalText(run.Backend+" / "+run.Protocol+" / "+run.Target.ID))
 		if run.Process != nil {
 			lines = append(lines, "宿主终端标识："+safeTerminalText(run.Process.Terminal))
 		}
@@ -284,6 +292,9 @@ func renderNativeTaskDetail(state projectState, task api.TaskDetail) []string {
 
 func renderNativeTaskRelations(state projectState, task api.TaskDetail) []string {
 	var lines []string
+	if len(task.StopPending) > 0 {
+		lines = append(lines, "待核实原执行停止："+safeTerminalText(strings.Join(task.StopPending, "、")))
+	}
 	if state.snapshot.Connection.State == api.ConnectionOffline || state.snapshot.Connection.State == api.ConnectionNoRecord {
 		lines = append(lines, "离线只读快照 · 采样于 "+sampleTime(state.snapshot))
 	}
@@ -606,6 +617,9 @@ func renderDecisionIdentity(state projectState, run *api.CandidateSummary, now t
 }
 
 func decisionAnswerAvailability(state projectState, row *consoleRow) string {
+	if row != nil && row.run != nil && row.run.TaskStatus == "discarded" {
+		return "Task 已丢弃；不再反馈"
+	}
 	if row != nil && row.run != nil && row.run.Abandonment != nil {
 		return "候选已退出实验；不再反馈"
 	}
@@ -622,7 +636,7 @@ func decisionAnswerAvailability(state projectState, row *consoleRow) string {
 
 func decisionAnswerStatusLines(state projectState, row *consoleRow) []string {
 	reason := decisionAnswerAvailability(state, row)
-	if row != nil && row.run != nil && row.run.Abandonment == nil && row.run.EnvironmentBlocker != nil {
+	if row != nil && row.run != nil && row.run.Abandonment == nil && row.run.TaskStatus != "discarded" && row.run.EnvironmentBlocker != nil {
 		return []string{"a 编辑本地草稿 · 发送被环境阻断：" + safeTerminalText(reason), "解除阻断后仍需人重新提交；没有自动补投队列。"}
 	}
 	if strings.HasPrefix(reason, "提交后") {

@@ -129,7 +129,7 @@ func (s Reader) NativeTaskPageTx(ctx context.Context, tx *sql.Tx, project, taskI
 			rows.Close()
 			return page, nativeErr("contract_mismatch", "native task record has invalid status, type, priority or version")
 		}
-		if record.Status == "discarded" && (record.DiscardedAt == nil || strings.TrimSpace(record.DiscardReason) == "" || strings.TrimSpace(record.DiscardedBy) == "" || !requestIDPattern.MatchString(record.DiscardRequestID)) || record.Status != "discarded" && (record.DiscardedAt != nil || record.DiscardReason != "" || record.DiscardedBy != "" || record.DiscardRequestID != "" || len(record.CleanupPending) > 0) {
+		if record.Status == "discarded" && (record.DiscardedAt == nil || strings.TrimSpace(record.DiscardReason) == "" || strings.TrimSpace(record.DiscardedBy) == "" || !requestIDPattern.MatchString(record.DiscardRequestID)) || record.Status != "discarded" && (record.DiscardedAt != nil || record.DiscardReason != "" || record.DiscardedBy != "" || record.DiscardRequestID != "" || len(record.StopPending) > 0) {
 			rows.Close()
 			return page, nativeErr("contract_mismatch", "native discard identity and cleanup fields do not match task status")
 		}

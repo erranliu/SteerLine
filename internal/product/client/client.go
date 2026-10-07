@@ -149,14 +149,6 @@ func (c *Client) TaskGraph(ctx context.Context, cursor string, limit int) (api.G
 	return read(ctx, c, func(r Reader) (api.GraphPage, error) { return r.TaskGraph(ctx, cursor, limit) })
 }
 
-func (c *Client) QueryTaskGraph(ctx context.Context, filter api.GraphFilter) (api.GraphPage, error) {
-	if filter.ProjectID != "" && filter.ProjectID != c.Project().Identity {
-		return api.GraphPage{}, &api.Error{Kind: api.IdentityConflict, Message: "task graph belongs to another project"}
-	}
-	filter.ProjectID = c.Project().Identity
-	return read(ctx, c, func(r Reader) (api.GraphPage, error) { return r.QueryTaskGraph(ctx, filter) })
-}
-
 func (c *Client) ValidateTaskBatch(ctx context.Context, payload []byte) (api.TaskBatchValidation, error) {
 	return command(ctx, c, false, func(r TaskCommands) (api.TaskBatchValidation, error) { return r.Validate(ctx, payload) })
 }

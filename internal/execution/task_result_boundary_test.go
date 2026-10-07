@@ -187,7 +187,7 @@ func TestTM02ResultCAS(t *testing.T) {
 			facts := executionmodel.CandidateDiscardFacts(snapshot.WorkflowRuns, snapshot.Executions, "8")
 			unmerged := f.proof(t, f.first, 81, "open")
 			intent := taskmodel.DiscardIntent{TaskID: "8", ExpectedVersion: graph.ByID["8"].Version, Reason: "stop comparing", RequestedBy: "operator"}
-			cleanup := uniqueSorted(append(facts.CleanupPending, "pull_request_close:"+unmerged.URL))
+			cleanup := uniqueSorted(facts.StopPending)
 			after, err := f.commands.taskResults.Discard(graph.ByID["8"], intent, requestID, cleanup, now())
 			require(t, err)
 			discard := storageports.DiscardCommit{Before: graph.ByID["8"], After: after, Intent: intent, AuthorityVersion: graph.Authority.AuthorityVersion, GraphRevision: graph.Authority.GraphRevision, Facts: facts, Known: []executionmodel.VerifiedCandidatePR{{WorkflowID: f.first.RunID, URL: unmerged.URL, Info: unmerged}}, Operation: operation}

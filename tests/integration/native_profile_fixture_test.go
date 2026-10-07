@@ -127,7 +127,7 @@ func executionPublicationFixture() executionbackend.PublicationPolicy {
 }
 
 func hostPublicationProviderFixture() executionmodel.PRProviderConfig {
-	return executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: "git", Args: []string{"status"}}, Close: executionbackend.Command{Executable: "git", Args: []string{"status"}}}
+	return executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: "git", Args: []string{"status"}}}
 }
 
 func setNativeImplementationProfiles(t *testing.T, c *steerlineapp.Config, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remotes ...*remote.ProfileConfig) {

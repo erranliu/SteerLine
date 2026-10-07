@@ -35,7 +35,7 @@ func codexSettings(domain reconstruction.Snapshot) (codexworker.ProfileConfig, e
 	return codexworker.ProfileConfig{}, errors.New("missing Codex profile envelope")
 }
 
-// FullAccess checks frozen authority and the identity-bound launch receipt.
+// FixedNativeLaunch checks frozen authority and the identity-bound launch receipt.
 func FixedNativeLaunch(domain reconstruction.Snapshot) error {
 	if len(domain.WorkflowRuns) != 1 || len(domain.Executions) != 1 {
 		return errors.New("native launch evidence needs one bound workflow/execution")

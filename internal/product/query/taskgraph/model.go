@@ -12,9 +12,8 @@ import (
 )
 
 const (
-	Protocol         = "native-task-graph/v1"
+	Protocol         = "native-task-graph/v2"
 	MaxNodes         = 500
-	MaxDepth         = 10
 	MaxBoundaryEdges = 500
 )
 
@@ -34,17 +33,6 @@ type Edge struct {
 	Successor   string `json:"successor"`
 }
 
-type Filter struct {
-	ProjectID    string `json:"project_id"`
-	Status       string `json:"status,omitempty"`
-	CenterTaskID string `json:"center_task_id,omitempty"`
-	Direction    string `json:"direction,omitempty"`
-	Depth        int    `json:"depth"`
-	Limit        int    `json:"limit"`
-}
-
-func (f Filter) Filtered() bool { return f.Status != "" || f.CenterTaskID != "" }
-
 type BoundaryEdge struct {
 	Predecessor string `json:"predecessor"`
 	Successor   string `json:"successor"`
@@ -53,7 +41,6 @@ type BoundaryEdge struct {
 
 type Boundary struct {
 	Truncated                bool           `json:"truncated"`
-	MaxDepth                 int            `json:"max_depth"`
 	MaxNodes                 int            `json:"max_nodes"`
 	OmittedNodeCount         int            `json:"omitted_node_count"`
 	OmittedBoundaryEdgeCount int            `json:"omitted_boundary_edge_count"`
@@ -73,7 +60,6 @@ type Page struct {
 	Edges            []Edge    `json:"edges"`
 	NextCursor       string    `json:"next_cursor,omitempty"`
 	HasMore          bool      `json:"has_more,omitempty"`
-	Filters          Filter    `json:"filters"`
 	Boundary         Boundary  `json:"boundary"`
 }
 

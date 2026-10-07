@@ -4,7 +4,7 @@
 
 ## 打开与连接
 
-运行 `steerline console` 默认枚举 `<STEERLINE_HOME>/etc/*.json` 项目，并加载该 home 的 execution.json。`steerline console -config <path>` 打开明确项目，`-run-id <run-id|task-id>` 定位已有运行。Windows console.bat 和 `steerline projects` 菜单进入同一客户端；服务窗口由用户独立启动，生命周期及停服确认见[整体架构](../architecture.md#生命周期反馈与恢复)。
+运行 `steerline console` 默认枚举 `<STEERLINE_HOME>/etc/*.json` 项目，并加载该 home 的 execution.json。`steerline console -config <path>` 打开明确项目，`-run-id <run-id|task-id>` 定位已有运行。Windows console.bat 进入同一客户端；服务窗口由用户独立启动，生命周期及停服确认见[整体架构](../architecture.md#生命周期反馈与恢复)。
 
 界面显示所连接的项目、服务实例、所选 Task/WorkflowRun/Execution/Attempt、冻结方案和实际能力。离线读取标明采样时间，Ready 缓存不成为领取许可。配置版本不同、实例未知或目标资格不满足时，写操作显示具体原因并拒绝；界面禁用按钮不代替服务校验。已提交、平台接受、服务操作执行和业务交付分别展示。
 
@@ -50,6 +50,8 @@
 
 窗口操作记录仅保存项目绑定、候选/Decision 草稿和原请求身份；重开重置阅读布局，查询未知请求而不重发。损坏或不支持记录保留现场并阻止该窗口新外发，允许只读核实；多窗口独立锁定自己的记录。持久字段与格式由[会话设计](conversation-events.md#console-presentation)维护，不恢复已退役的阅读锚点或折叠状态。
 
-任务详情展示阻塞原因、Spec 和交付定位；完整固定引用保留在中心契约。关系查询使用 `steerline task graph -config <path> -task-id <id> -direction upstream -depth 3`，导出使用 `steerline task export -config <path> -format json -output <path>`；覆盖已有导出需显式 `-overwrite`。详情、PR 与资源位置是定位线索，完成仍由中心核验真实 TaskDelivery。
+任务详情展示阻塞原因、Spec 和交付定位；完整固定引用保留在中心契约。关系查询使用 `steerline task graph -config <path> -cursor <cursor> -limit 100`；首屏省略 cursor。每屏保留同一采样的节点、内部边与截断边界，不能将分页当完整图。基本 JSON 可由调用者重定向保存。详情、PR 与资源位置是定位线索，完成仍由中心核验真实 TaskDelivery。
 
 配置与冻结权限见[执行方案](execution-profiles.md)，服务/数据库和工作区事实见[数据模型](data-model.md)。本页不维护 PR 变更或人工验收日志；验收结论保持在 validation，原生未测能力不能从文档或兄弟候选成功推定。
+
+候选放弃、Task 丢弃和获胜/落选后，PR、工作区和分支保留，需人工在提供方/目标原生工具处置。详情保留历史路径或原生 ID、分支、PR 及采样时间；保留策略不证明资源现在存在。原执行停止/未知状态单独显示，资源人工处置不构成业务阻塞。Task 丢弃不提交 Delivery、不解锁后继；迟到合并只记录冲突，不覆盖原唯一交付。

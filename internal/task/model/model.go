@@ -29,7 +29,7 @@ type TaskRecord struct {
 	DiscardReason     string     `json:"discard_reason,omitempty"`
 	DiscardedBy       string     `json:"discarded_by,omitempty"`
 	DiscardRequestID  string     `json:"discard_request_id,omitempty"`
-	CleanupPending    []string   `json:"cleanup_pending,omitempty"`
+	StopPending       []string   `json:"stop_pending,omitempty"`
 }
 
 // FileReference pins a contract document to an immutable commit and the
