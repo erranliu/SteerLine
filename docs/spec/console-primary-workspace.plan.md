@@ -39,6 +39,19 @@
 
 ## 实现状态与已有验证
 
+## 合并前最终复审测试计划
+
+本轮从 `cb97ce4e` 复审。只核对当前 PR 的 UI 模式、草稿和读取边界，不启动新的 roadmap/DAG 任务。
+
+| 级别/场景 | 环境及命令 | 时点/通过条件 | 证据 |
+| --- | --- | --- | --- |
+| 定向 CPW-01/02/03，`TestCPWFinal*` | Windows、隔离 DTO/home；`go run ./cmd/test-feedback -out=<临时根>/before -- ./internal/console -run '^TestCPWFinal' -count=1` | 修复前真实复现退出核验、无实际候选变化、保存失败及组合文字分派问题 | 临时 before 原始报告 |
+| 定向 console/query/client | `go run ./cmd/test-feedback -out=<临时根>/after -- ./internal/console ./internal/product/query ./internal/product/client -count=1` | 修复后全部通过，passed/complete=true，无 skip | 临时 after 报告 |
+| 当前固定 L1 | `go run ./cmd/test-feedback -level=L1 -out=<临时根>/l1`，使用主分支当前固定范围/并行入口 | 定向通过后；passed/complete=true，保留原超时历史，不声称两版范围相同 | 临时 l1 报告 |
+| 静态/合并 | go vet、构建、文档链接/任务身份/差异检查、PR 状态与精确头 SHA 合并 | 推送前/合并后；无错误、无冲突，实际 MERGED | 最小验收摘要及 GitHub 结果 |
+
+本次不选择 Full 或 L2/L3/live；输入/提交实现没有换协议，已有 ConPTY 保留原采样证据，新增边界以定向测试验证。原始报告继续留在临时目录，仓库只记录最小摘要。
+
 ## 主分支文档整合冲突验证
 
 本轮合并 `origin/main` 的 `ee1ab5d6`。冲突仅在 README、会话展示说明、Spec 索引及退役的控制台约束文档；控制台/product/app 实现没有冲突或改动。保留主分支的 README 精简、控制台规则集中维护和草稿/正式准入区分，将本 PR 已实现规则吸收到 `docs/product-design/execution-console.md`，删除已退役文件并更新 Spec 引用。
@@ -48,3 +61,5 @@
 实现、124 项发布定向回归、原地反馈接线与当前构建 Windows ConPTY 已完成；固定 L1 原集成组累计超时，原报告不完整；缺失的 TM04/TM06/TM08 补跑已全部通过，登记场景覆盖核对无遗漏。交付 [PR #234](https://github.com/erranliu/SteerLine/pull/234)，保留 L1 限制供评审。本轮审计新增有界 F8 翻页和 final/gap 缓存断言，最终 134 项回归及 ConPTY 通过。具体限制及证据见[验证记录](../validation/console-primary-workspace.md)，不以本计划替代验收证据。
 
 追加最小诊断：Windows 受控环境，`go run ./cmd/test-feedback -out=docs/validation/console-primary-workspace/l1-integration-tail -- ./tests/integration -run '^Test(TM04ExecutionWiring|TM06ResourceWiring|TM08AppHostWiring)$' -count=1`；在 L1 超时后执行，要求这些原场景全部通过、passed/complete=true，证据保存在该新目录。原 L1 的 passed=false 保持，不将多个报告拼成一次成功的 L1。
+
+最终复审：四项复现已修复，138 项定向回归与当前固定 L1 passed/complete=true；原始范围/日志与静态结果见验收摘要。按用户明确指令，在检查当前头 SHA 与平台状态后合并 PR #234。

@@ -41,3 +41,9 @@ PR #234 已取消草稿并核对为 `MERGEABLE` / `CLEAN`，主分支冲突已�
 主分支推进到 `ee1ab5d6` 后，README、会话展示、Spec 索引和退役控制台约束出现文档冲突。保留主分支的集中维护结构：README 使用简短入口，交互规则由 `product-design/execution-console.md` 维护；会话文档仅维护读取/持久语义；Spec 索引保留本 PR，同时沿用草稿候选与正式 DAG 准入区分。删除主分支已退役的 `roadmap/console-constraints.md`，Spec 改引新设计文档。
 
 控制台/product/app 实现未改变。链接检查通过（229 个 Markdown、1396 条本地导航、0 错误）；任务身份静态检查通过（84 个身份文件、13 条草稿、0 条正式任务，不代表外部 DAG 查询）；差异格式和无未解决冲突检查通过。此轮只做文档静态验证，未重跑产品或模型测试。
+
+## 合并前最终复审
+
+从 `cb97ce4e` 再次检查当前差异，新增四个 `TestCPWFinal*` 场景，修复前全部真实失败：退出核验未取消读取代次；单候选 F6/F7 在没有实际目标变化时关闭编辑器；帮助入口忽略草稿保存失败；组合文字因子串匹配被当作模式键。修复后精确分派模式键、按实际候选变化保存/退出、帮助保存失败保留原编辑器、Esc 取消原核验读取。
+
+本次原始根目录：`C:/Users/lmas1/AppData/Local/Temp/steerline-console-merge-234-1tj4sfgj/`，失败 `before/`、回归 `after/`、当前 L1 `l1/` 均保留。console/query/client 138 项通过，passed/complete=true；主分支优化后的当前固定 L1 passed/complete=true，耗时 95.27 秒。该 L1 使用当前固定选择和并行入口，不将旧版超时报告重标为通过，也不声称两版范围相同。go vet、构建、文档链接、静态任务身份和差异检查通过；不运行 Full、L2/L3/live，不宣称验证了外部 DAG。既有 ConPTY 保留其真实构建采样，本轮新增键盘状态边界由定向测试覆盖。

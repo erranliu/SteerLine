@@ -32,9 +32,6 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.answer != nil {
 		switch key.String() {
 		case "f6", "f7":
-			if !m.leaveAnswerSaved() {
-				return m, nil
-			}
 			delta := 1
 			if key.String() == "f6" {
 				delta = -1
@@ -83,9 +80,12 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if m.projects[m.selected].focus == 0 && strings.Contains(" s b z u x ", " "+key.String()+" ") {
-			if !m.leaveAnswerSaved() {
-				return m, nil
+		if m.projects[m.selected].focus == 0 {
+			switch key.String() {
+			case "s", "b", "z", "u", "x":
+				if !m.leaveAnswerSaved() {
+					return m, nil
+				}
 			}
 		}
 		if m.answer != nil && (m.answer.details || m.projects[m.selected].focus != 0) {
@@ -101,7 +101,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	state := &m.projects[m.selected]
 	switch key.String() {
 	case "esc":
-		state.recoveryActive = false
+		m.leaveRecovery()
 		state.lowerScroll = 0
 		state.focus = 0
 		return m, nil
@@ -233,7 +233,9 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "7":
 		return m.changeFilter(6)
 	case "?":
-		m.leaveAnswer()
+		if !m.leaveAnswerSaved() {
+			return m, nil
+		}
 		m.help = true
 	}
 	return m, nil
