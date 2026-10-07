@@ -1,6 +1,6 @@
 # 当前 Spec 与 Plan
 
-本目录保留尚未交付的执行规格、未闭合的定向验收和仍适用的共同约束。第一阶段只运行和验收本地 Codex 与本机 Orca。每个活动任务对应一份独立 Spec、Plan 和实现 PR。
+本目录保留候选 Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段只运行和验收本地 Codex 与本机 Orca。正式任务应有独立 Spec/Plan 和实现 PR，但文档存在不表示已入 DAG。日常执行只从[正式执行清单](../roadmap/execution-map.md)选择，下表目前属于[草稿候选](../roadmap/drafts/roadmap.md)。
 
 已执行的 Spec 与配套 Plan 见[已交付归档](../archive/spec/completed/README.md)；退役流程和远端试验见[历史资料](../archive/spec/retired/README.md)。归档中的旧状态文字和路径属于原交付时点，不能当作当前待办。任务 ID 身份记录保留；原始验证数据从[清理前固定 Git 快照](../validation/README.md#历史取证)读取。
 
@@ -10,21 +10,21 @@
 
 每批后续一份实施 Plan、一个独立实现 PR，按顺序交付。共同边界及与历史规格的覆盖关系见第一批和各批正文。
 
-| 批次 | 范围 | 硬前置 | Spec |
+| 批次 | 范围 | 剩余拟议前置 | Spec |
 | --- | --- | --- | --- |
 | 1 | 三窗概要/最近10条活动/右下内嵌反馈、退役过程阅读、只持久草稿及请求 | 无本系列未完成前置 | [精简候选控制台与会话阅读](product-simplification-01-console.spec.md) · [Plan](product-simplification-01-console.plan.md) |
 | 2 | 两种明确权限模式、移除附加执行需求与认证入口 | 第一批合入 | [收窄执行权限配置与移除附加需求](product-simplification-02-configuration.spec.md) |
 | 3 | Task 丢弃后资源人工处置、重复 CLI 与高级图查询/导出退役 | 第二批合入 | [保留资源人工处置与精简命令入口](product-simplification-03-resources-cli.spec.md) |
 
-## 当前执行规格
+## 当前草稿候选规格
 
-| 任务 ID | 任务名称 | 硬前置 | Spec | Plan |
+| 任务 ID | 任务名称 | 剩余拟议前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |
 | 83 | 本机安装与调试路径隔离 | 无 | [Spec](local-runtime-isolation.spec.md) | [Plan](local-runtime-isolation.plan.md) |
-| 42 | 第一阶段集成验收 | `#39`、`#83` | [Spec](phase1-release-acceptance.spec.md) | [Plan](phase1-release-acceptance.plan.md) |
+| 42 | 第一阶段集成验收 | `#83` | [Spec](phase1-release-acceptance.spec.md) | [Plan](phase1-release-acceptance.plan.md) |
 | 43 | Codex 规划主 agent 能力验证 | 无 | [Spec](phase2-agent-capabilities.spec.md) | [Plan](phase2-agent-capabilities.plan.md) |
 | 44 | WinUI 基座与原生输入 | 无 | [Spec](phase2-winui-foundation.spec.md) | [Plan](phase2-winui-foundation.plan.md) |
-| 45 | 本机客户端协议与历史查询 | `#36` | [Spec](phase2-local-api.spec.md) | [Plan](phase2-local-api.plan.md) |
+| 45 | 本机客户端协议与历史查询 | 无 | [Spec](phase2-local-api.spec.md) | [Plan](phase2-local-api.plan.md) |
 | 46 | 规划提案与受控草稿 | `#45` | [Spec](phase2-planning-drafts.spec.md) | [Plan](phase2-planning-drafts.plan.md) |
 | 47 | Codex 规划会话服务 | `#43`、`#46` | [Spec](phase2-planning-sessions.spec.md) | [Plan](phase2-planning-sessions.plan.md) |
 | 48 | 正式文档发布与任务创建 | `#46` | [Spec](phase2-document-publish.spec.md) | [Plan](phase2-document-publish.plan.md) |

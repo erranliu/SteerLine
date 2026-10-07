@@ -35,6 +35,8 @@ local 路径使用受服务管理的 Codex app-server 和固定 thread；服务�
 
 `retry_run`、`mark_stopped`、`resolve_command` 不属于当前用户反馈入口。当前格式重启保留原 Decision、Command、Operation 和外部身份；无法自动核实的副作用保持待决策及诊断事实。
 
+错误、部分提交和连接未知以原操作的原因信息展示，不各自派生重派或恢复按钮。服务操作、明确丢弃和宿主登录/授权保留各自语义；本地 Codex 与本机 Orca 的恢复能力分别核验，不能通过隐式重启或跨后端替换补造同等能力。当前界面的目标选择、草稿和提交方式见[执行控制台](execution-console.md)。
+
 Execution 的恢复门槛和版本每次换服务实例重新建立；第一次接管新领取任务只登记所属实例。先前已保存但未送达的答案保留为历史 Decision，新确认创建关联 Decision，不改写原 first-wins 答案。状态未核实、旧 reply/send 的结果不明或旧进程树仍可能写入时，答复入口不可执行。普通反馈复用仍存活的 worker；重建进程会创建新 Attempt，原 Attempt 的进程、会话和回执保持可查。
 
 ## 宿主阻断的中心动作

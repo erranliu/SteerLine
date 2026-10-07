@@ -19,7 +19,7 @@
   "repo_root": "C:/Project/Example",
   "project_id": "verified-project-id",
   "coordinator_thread_id": "current-thread-id",
-  "roadmap": "C:/Project/Example/docs/roadmap/roadmap.md",
+  "roadmap": "C:/Project/Example/docs/roadmap/execution-map.md",
   "default_branch": "main",
   "authorization": {
     "source": "本聊天用户指令或可核对的原始消息引用",
@@ -39,7 +39,7 @@
 }
 ```
 
-授权字段只记录真实授权，不照抄示意中的 `true`。不存在的 Plan 可设为 `null`，同时在执行提示中明确按用户流程产出 Plan。当前 run 的任务身份/顺序初始化后固定；修改范围需明确用户授权并另建 run，不扩写原运行。
+授权字段只记录真实授权，不照抄示意中的 `true`。roadmap 字段必须绑定正式 execution-map.md，初始化前由协调者核对实际 DAG 的可信查询/准入回执和完整固定 Spec/Plan；助手不读取正式文件或验证 DAG。正式表为空或待核对时不创建执行 run。缺少固定 Plan 的旧记录不能作为正式任务执行来源。当前 run 的任务身份/顺序初始化后固定；修改范围需明确用户授权并另建 run，不扩写原运行。
 
 ```text
 python <skill>/scripts/state.py init --state <absolute-state-path> --input <input-json>
@@ -61,7 +61,7 @@ python <skill>/scripts/state.py apply --state <absolute-state-path> --expect <re
 }
 ```
 
-task 的一级字段按键替换（嵌套对象须提供完整对象）。run 可更新 `phase`、`automation`、`blocker`、`decisions`、`finished_at`；身份字段不可改。用户后来明确补充或撤销授权时可更新完整 `authorization` 对象及新用户来源，助手会保留授权历史。原先 `plan: null` 的任务允许绑定一次后来按原范围产出的 Plan 路径，已有映射不可换。可记录下列证据：
+task 的一级字段按键替换（嵌套对象须提供完整对象）。run 可更新 `phase`、`automation`、`blocker`、`decisions`、`finished_at`；身份字段不可改。用户后来明确补充或撤销授权时可更新完整 `authorization` 对象及新用户来源，助手会保留授权历史。助手仍可保存并补全待核验的 plan:null 记录，但启动正式任务前必须核对 DAG 固定 Plan，已有映射不可换。可记录下列证据：
 
 - `session`：thread/client ID、host、worktree、branch、base_commit、model、thinking、cursor。未解析真实 ID 时保持 `creating`；获取真实 ID 后 `running`。不能把 client ID 填进 thread ID。
 - `pr`：url、number、head、base_branch、base_commit；head 更新时助手会使旧 review/validation/merge_gate 失效，并保留历史。
@@ -71,7 +71,7 @@ task 的一级字段按键替换（嵌套对象须提供完整对象）。run �
 - `merge`：head、commit、merged_at；只有平台已确认真实合并后记录。`observed_merge` 可单独记未复审就被外部合并的事实，保留待决。
 - `blocker`、`decisions`：实际失败及待用户决定内容、原始用户批准记录。不得以记录例外替代取得批准。
 
-仅余人工补验时，无需逐项申请 `accepted_exception`。先实际把待验内容写入 roadmap，保留原验收条件、操作步骤及取证位置，并核对记录；然后填写：
+仅余人工补验时，无需逐项申请 `accepted_exception`。先实际把待验内容写入正式条目的验收备注或 validation（不改变中心状态），保留原验收条件、操作步骤及取证位置，并核对记录；然后填写：
 
 ```json
 {
@@ -83,7 +83,7 @@ task 的一级字段按键替换（嵌套对象须提供完整对象）。run �
     {
       "check_id": "manual-check-id",
       "reason": "implemented feature awaits human interaction",
-      "roadmap_path": "/absolute/project/docs/roadmap/roadmap.md#manual-validation"
+      "roadmap_path": "/absolute/project/docs/roadmap/execution-map.md#manual-validation"
     }
   ]
 }
@@ -91,7 +91,7 @@ task 的一级字段按键替换（嵌套对象须提供完整对象）。run �
 
 `non_manual_status` 包括实现复审、必需自动验证及其他非人工前置，必须真实通过；不能把失败、unsupported 或缺能力填成通过。`manual_pending` 是已登记人工项的定位，不是通过证据。状态助手检查元数据完整性，不代替读取清单或实际验证。PR 评论列同一清单，正常合入并推进；run 完成时保留清单及未验事实，不等待人工结果才暂停 heartbeat。用户要求先完成人工验收、或人工验收已出现真实失败时，继续使用原阻塞规则。
 
-已合入 task 的原审核、验证和合并证据仍不可修改；补验结果另写 roadmap/验收记录，也可保存在 run.decisions。原 `manual_pending` 保留的是合入时尚未人工验证的事实。
+已合入 task 的原审核、验证和合并证据仍不可修改；补验结果另写正式条目验收备注或 validation，也可保存在 run.decisions。原 `manual_pending` 保留的是合入时尚未人工验证的事实；这些外部流程记录不改变中心 Task/DAG 状态。
 
 task phase：`pending → creating → running → pr_ready → reviewing → ready_to_merge → merged`；停顿用 `blocked` 或 `needs_user_decision`。run phase：`active / paused / needs_user_decision / complete`。每次读取/写入都校验基本证据；助手不自动推断 Git 或 session 状态。
 
