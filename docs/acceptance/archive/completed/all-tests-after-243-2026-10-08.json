@@ -1,0 +1,523 @@
+{
+  "schema_version": 1,
+  "rebased_main": "634bc72380d02710e4585d493be23b472c460a77",
+  "verified_fix": "9112027eacb06669650dd4887ea974a8e4f780bf",
+  "source_note": "All final accepted reports use the same clean fix commit after rebase onto PR 243. Prior reports, including passing L1/L2/infrastructure on the older main, are diagnostics only and do not contribute to final registry coverage.",
+  "raw_root": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816",
+  "runs": [
+    {
+      "run": "infra-final",
+      "scope": "targeted",
+      "source_commit": "9112027eacb06669650dd4887ea974a8e4f780bf",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "passed": true,
+      "complete": true,
+      "test_records": 173,
+      "failed_tests": 0,
+      "skipped_tests": 1,
+      "skipped": [
+        {
+          "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+          "name": "TestSandboxReadinessExistingAccounts",
+          "status": "skip",
+          "elapsed_seconds": 0
+        }
+      ],
+      "started_at": "2026-10-07T16:53:59.1104618Z",
+      "finished_at": "2026-10-07T16:58:00.0414659Z",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\infra-final\\summary.json",
+      "sha256": "5c714aa6ca2def8abb69319549307b61623ffb7d220f6a1e8e26f497b5aef66b"
+    },
+    {
+      "run": "l1-final",
+      "scope": "quick",
+      "source_commit": "9112027eacb06669650dd4887ea974a8e4f780bf",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "passed": true,
+      "complete": true,
+      "test_records": 425,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "skipped": [],
+      "started_at": "2026-10-07T16:51:57.7592653Z",
+      "finished_at": "2026-10-07T16:53:57.3580025Z",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l1-final\\summary.json",
+      "sha256": "0d59b4627abab02d2528562891fb95f0cf3dade4c174d9da6be6acb8768a4379"
+    },
+    {
+      "run": "full-final",
+      "scope": "full",
+      "source_commit": "9112027eacb06669650dd4887ea974a8e4f780bf",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "passed": true,
+      "complete": true,
+      "test_records": 1221,
+      "failed_tests": 0,
+      "skipped_tests": 15,
+      "skipped": [
+        {
+          "package": "github.com/erranliu/SteerLine/internal/app/host",
+          "name": "TestRealIsolatedRecoveryPreview",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/execution/adapters/orca",
+          "name": "TestOrcaNativeHostWait",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote",
+          "name": "TestSupervisedOrcaRealP10ReplyGate",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/e2e/internal/native",
+          "name": "TestSandboxReadinessExistingAccounts",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestWorkerEnvironmentNativeReadinessLive",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestAppServerHostExitHelper",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestAppServerServiceParallelRecoveryLive",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestCodexHistoryNativeAcceptance",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestCodexHistoryRealFailedAcceptance",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestCodexHistoryRealSourceReplacement",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestLocalCodexManualRecoveryLive",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestStartServiceReportsPreflightFailureAndPendingHandshake",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestStartServiceSerializesSameConfig",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestAppServerHostExitRecoveryLive",
+          "status": "skip",
+          "elapsed_seconds": 0
+        },
+        {
+          "package": "github.com/erranliu/SteerLine/tests/integration",
+          "name": "TestCodexAppServerNativeQuestionLive",
+          "status": "skip",
+          "elapsed_seconds": 0
+        }
+      ],
+      "started_at": "2026-10-07T16:58:00.4711741Z",
+      "finished_at": "2026-10-07T17:56:13.6038389Z",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\full-final\\summary.json",
+      "sha256": "4b4095fa4060e64d292ed3b4f81b2c0e24e2deee71991f99dbdcf3ddabd8f851"
+    },
+    {
+      "run": "l2-final",
+      "scope": "e2e",
+      "source_commit": "9112027eacb06669650dd4887ea974a8e4f780bf",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "passed": true,
+      "complete": true,
+      "test_records": 3,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "skipped": [],
+      "started_at": "2026-10-07T17:56:14.386623Z",
+      "finished_at": "2026-10-07T18:08:44.7641145Z",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l2-final\\summary.json",
+      "sha256": "49050ad84bea53b3c591b7a033a091056569298b7b024fef86ef4e61fbb26d2b"
+    },
+    {
+      "run": "l3-controlled-final",
+      "scope": "e2e",
+      "source_commit": "9112027eacb06669650dd4887ea974a8e4f780bf",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "passed": true,
+      "complete": true,
+      "test_records": 2,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "skipped": [],
+      "started_at": "2026-10-07T18:08:48.5852124Z",
+      "finished_at": "2026-10-07T18:14:43.8528173Z",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l3-controlled-final\\summary.json",
+      "sha256": "a3f95609d3faa79308df3e1a85318e0b4074e4915d0a9b02804c94100bf2c2d4"
+    },
+    {
+      "run": "l3-live-final",
+      "scope": "e2e",
+      "source_commit": "9112027eacb06669650dd4887ea974a8e4f780bf",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "passed": true,
+      "complete": true,
+      "test_records": 4,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "skipped": [],
+      "started_at": "2026-10-07T18:14:44.3259328Z",
+      "finished_at": "2026-10-07T18:35:45.2342929Z",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l3-live-final\\summary.json",
+      "sha256": "709eef8adecb5aa06ed11e85f3f3868481691de0c550cd9d05ef422d049310ba"
+    },
+    {
+      "run": "l3-candidates-final",
+      "scope": "e2e",
+      "source_commit": "9112027eacb06669650dd4887ea974a8e4f780bf",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "passed": true,
+      "complete": true,
+      "test_records": 1,
+      "failed_tests": 0,
+      "skipped_tests": 0,
+      "skipped": [],
+      "started_at": "2026-10-07T18:35:50.180588Z",
+      "finished_at": "2026-10-07T19:01:14.1693226Z",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l3-candidates-final\\summary.json",
+      "sha256": "08903cdbeef2019ba9cc4dd4caf7409ca6f3d4146b1a8838c7d5c37e49ccf6cf"
+    }
+  ],
+  "scenarios": [
+    {
+      "id": "smoke.delivery",
+      "env": "controlled",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": false,
+      "real_pr": null,
+      "proof": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l2-final\\scenarios\\smoke.delivery\\scenario.json",
+      "sha256": "e235a3a2ab9b8e3381536de057d115cc2b3905448f40d8da639d7daac45fd64b"
+    },
+    {
+      "id": "smoke.local-codex",
+      "env": "live",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "real_pr": {
+        "url": "https://github.com/erranliu/SteerlineTest/pull/150",
+        "repository": "erranliu/SteerlineTest",
+        "base_branch": "codex/e2e/b432a92200f54700ad33649abbe8f95c/smoke.local-codex/base",
+        "head_repository": "erranliu/SteerlineTest",
+        "head_branch": "codex/1-03ea7ee38ae7",
+        "head_revision": "5c6f6f3f3be4d07eb9d63155979e0247184af3d6",
+        "state": "merged",
+        "merged": true,
+        "merged_at": "2026-10-07T18:02:02Z",
+        "merge_commit": "172c142ed74c4bde378bdaeb3c2d4c0927f6d995"
+      },
+      "proof": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l2-final\\scenarios\\smoke.local-codex\\scenario.json",
+      "sha256": "3413622e81ac370511fadcb8bec811af84699c9f7384f0d8ca886581771ebb54"
+    },
+    {
+      "id": "smoke.orca-codex",
+      "env": "live",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "real_pr": {
+        "url": "https://github.com/erranliu/SteerlineTest/pull/151",
+        "repository": "erranliu/SteerlineTest",
+        "base_branch": "codex/e2e/01cef84a821248cab0584d7efe2ddb9e/smoke.orca-codex/base",
+        "head_repository": "erranliu/SteerlineTest",
+        "head_branch": "erranliu/sl-1-883d3b43fe12079b668c0c06a29e42cb",
+        "head_revision": "9eedecf9b0835736e6d3799f84091a826e24f727",
+        "state": "merged",
+        "merged": true,
+        "merged_at": "2026-10-07T18:08:11Z",
+        "merge_commit": "26c747ce2b9ac839b468d1f399de89a427ec3a6c"
+      },
+      "proof": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l2-final\\scenarios\\smoke.orca-codex\\scenario.json",
+      "sha256": "2f406854c05fd9cb0c0ed0868b13515e147b27879db46740a007e012ad49bcec"
+    },
+    {
+      "id": "delivery.basic",
+      "env": "controlled",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": false,
+      "real_pr": null,
+      "proof": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l3-controlled-final\\scenarios\\delivery.basic\\scenario.json",
+      "sha256": "aebf7a84e04c15cbe9a08527f25e1e9dbd4533e7611a5dc52d3e8baf5310cc24"
+    },
+    {
+      "id": "recovery.waiting-merge-restart",
+      "env": "controlled",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": false,
+      "real_pr": null,
+      "proof": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l3-controlled-final\\scenarios\\recovery.waiting-merge-restart\\scenario.json",
+      "sha256": "54cc0205d77ee9216f4eb7d30707a88687006864b0c0cc8cae86ebc81f605fdb"
+    },
+    {
+      "id": "delivery.local-codex",
+      "env": "live",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "real_pr": null,
+      "proof": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l3-live-final\\scenarios\\delivery.local-codex\\scenario.json",
+      "sha256": "276b6a9a0918c1ffeaf031423bf4de635da6c663d6684fb64e15613c834e4d3e"
+    },
+    {
+      "id": "delivery.orca-codex",
+      "env": "live",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "real_pr": null,
+      "proof": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l3-live-final\\scenarios\\delivery.orca-codex\\scenario.json",
+      "sha256": "49454ea752622bd05714db827b254932920badc1ae03917395b1c44db6066927"
+    },
+    {
+      "id": "recovery.local-codex",
+      "env": "live",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "real_pr": null,
+      "proof": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l3-live-final\\scenarios\\recovery.local-codex\\scenario.json",
+      "sha256": "8f48bc980faac0bb6b1ad596b6ab1b262ded3d9a779a47186b60c8ce20c20813"
+    },
+    {
+      "id": "recovery.orca-codex",
+      "env": "live",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "real_pr": null,
+      "proof": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l3-live-final\\scenarios\\recovery.orca-codex\\scenario.json",
+      "sha256": "66197db99613372ef1c0b3a707849b460d78529d4acdac7fc771971c4cf3e0b7"
+    },
+    {
+      "id": "candidates.local",
+      "env": "live",
+      "passed": true,
+      "cleanup_complete": true,
+      "usage_verified": true,
+      "real_pr": {
+        "url": "https://github.com/erranliu/SteerlineTest/pull/153",
+        "repository": "erranliu/SteerlineTest",
+        "base_branch": "codex/e2e/333d296fe32143f39f43d2b1e044e3c0/candidates.local/base",
+        "head_repository": "erranliu/SteerlineTest",
+        "head_branch": "erranliu/sl-1-6adabb1a6c5aa17af05d51b99396a02e",
+        "head_revision": "c594ee93a2d3d43f08cfd2b35d17d03370a24c3a",
+        "state": "merged",
+        "merged": true,
+        "merged_at": "2026-10-07T18:55:57Z",
+        "merge_commit": "6eab9f5b1a21d75aaea0db1792c8aa34c0388b08"
+      },
+      "proof": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l3-candidates-final\\scenarios\\candidates.local\\scenario.json",
+      "sha256": "cb9102edeac8ab0bd322caccdd38016b5f0265a83ba435e0a9447cc452928e91"
+    }
+  ],
+  "diagnostics": [
+    {
+      "run": "infra",
+      "passed": false,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\infra\\summary.json",
+      "sha256": "83422f804cd8cb827ffc0234ec863014a81dac2e16e83bdce1eb8c9a8faf23bd",
+      "reason": "Command or service readiness timeout while heavy runners overlapped; unchanged product and test assertions pass isolated rerun."
+    },
+    {
+      "run": "infra-serial",
+      "passed": false,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\infra-serial\\summary.json",
+      "sha256": "ecff789c7e8456990d32f948173d1f546c746511c484aa3c1d214dff26ca0621",
+      "reason": "Command or service readiness timeout while heavy runners overlapped; unchanged product and test assertions pass isolated rerun."
+    },
+    {
+      "run": "l3-controlled",
+      "passed": false,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\l3-controlled\\summary.json",
+      "sha256": "8131535a8d88f8c9991835dcd12a7f64793115930bdf01e046a85a0430311ad5",
+      "reason": "Command or service readiness timeout while heavy runners overlapped; unchanged product and test assertions pass isolated rerun."
+    },
+    {
+      "run": "full-isolated",
+      "passed": false,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\full-isolated\\summary.json",
+      "sha256": "0fe15553873974d2be043e01e3999b8db588c941a4f8082fbc8639df6e1a8f84",
+      "reason": "No assertion failure, but the 60-minute outer Full deadline left five top-level integration tests without a terminal event; retained as incomplete evidence."
+    },
+    {
+      "run": "full",
+      "passed": false,
+      "complete": false,
+      "reason": "Interrupted after three execution helper timeouts; original logs retained."
+    },
+    {
+      "run": "l3-live",
+      "passed": false,
+      "complete": false,
+      "reason": "Interrupted in delivery.local-codex to separate heavy runners; original logs retained. Processes stopped; scratch directory retained after cleanup command was rejected by policy."
+    },
+    {
+      "run": "infra-invalid-invocation",
+      "passed": false,
+      "complete": true,
+      "report": "C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261007T134624.603120100Z/summary.json",
+      "reason": "Runner -out argument accidentally passed after --; no tests executed. Corrected invocation retained separately."
+    },
+    {
+      "run": "full-budget-fixed",
+      "passed": false,
+      "complete": false,
+      "reason": "Interrupted after main advanced to PR 243 with product changes; logs retained, not final evidence."
+    },
+    {
+      "run": "full-243",
+      "passed": false,
+      "source_commit": "72f97f39ef70045bd6493ccfa5b6b32644c3945d",
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\full-243\\summary.json",
+      "sha256": "3bb679a705b84ddbef0a6eba1f82163c983e07e9d2dbd294cf0eba88bb8b8e12",
+      "failed_tests": 13,
+      "reason": "Full on PR 243 identified obsolete recovery bindings, retired source-file inventory, a removed partial-message event count and bounded fixture command/overall timeouts. These failures and their parent records are retained; corrected final Full is separate."
+    },
+    {
+      "run": "runner-budget-regression",
+      "passed": true,
+      "complete": true,
+      "source_commit": "5d69bfbc6de72a872a0ff5e7d3966ec3b5ce9187",
+      "worktree_status": " M cmd/test-feedback/scoped.go\n M docs/testing.md",
+      "test_records": 56,
+      "failed_tests": 0,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\runner-budget-regression\\summary.json",
+      "sha256": "2b54b022030102ad17a5cb191fa98e58bcd2cc0774bdcd77b8462cb2237e66ce",
+      "reason": "Targeted diagnosis or repair validation; final coverage uses only the clean final reports."
+    },
+    {
+      "run": "recovery-fixture-fixed",
+      "passed": false,
+      "complete": true,
+      "source_commit": "72f97f39ef70045bd6493ccfa5b6b32644c3945d",
+      "worktree_status": " M internal/execution/core_decoupling_64_review_test.go\n M internal/execution/original_session_recovery_test.go",
+      "test_records": 10,
+      "failed_tests": 3,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\recovery-fixture-fixed\\summary.json",
+      "sha256": "360731353a410d6cc0f4cf5d0e768c1f5780f54e606b61f5a518f7204882f2ff",
+      "reason": "Targeted diagnosis or repair validation; final coverage uses only the clean final reports."
+    },
+    {
+      "run": "recovery-fixture-bound",
+      "passed": true,
+      "complete": true,
+      "source_commit": "72f97f39ef70045bd6493ccfa5b6b32644c3945d",
+      "worktree_status": " M internal/execution/core_decoupling_64_review_test.go\n M internal/execution/original_session_recovery_test.go",
+      "test_records": 10,
+      "failed_tests": 0,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\recovery-fixture-bound\\summary.json",
+      "sha256": "7ef245389dc28985719d9b06ca675aa0a8fd590796683d52248f63c491bfd6d7",
+      "reason": "Targeted diagnosis or repair validation; final coverage uses only the clean final reports."
+    },
+    {
+      "run": "host-fixture-budget-fixed",
+      "passed": true,
+      "complete": true,
+      "source_commit": "72f97f39ef70045bd6493ccfa5b6b32644c3945d",
+      "worktree_status": " M internal/app/host/host_fixture_support_test.go\n M internal/execution/core_decoupling_64_review_test.go\n M internal/execution/original_session_recovery_test.go",
+      "test_records": 12,
+      "failed_tests": 0,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\host-fixture-budget-fixed\\summary.json",
+      "sha256": "30c317a27acf279f20e56d8b8b5ff28cff819dbb61321b5b6663d0dd7de43230",
+      "reason": "Targeted diagnosis or repair validation; final coverage uses only the clean final reports."
+    },
+    {
+      "run": "write-boundary-fixed",
+      "passed": true,
+      "complete": true,
+      "source_commit": "72f97f39ef70045bd6493ccfa5b6b32644c3945d",
+      "worktree_status": " M internal/app/host/host_fixture_support_test.go\n M internal/execution/core_decoupling_64_review_test.go\n M internal/execution/original_session_recovery_test.go\n M internal/execution/write_ports_test.go",
+      "test_records": 1,
+      "failed_tests": 0,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\write-boundary-fixed\\summary.json",
+      "sha256": "ce104cdf20638fb793a038bc7482737615e86fa89d5e7a96b1abee5177c023b2",
+      "reason": "Targeted diagnosis or repair validation; final coverage uses only the clean final reports."
+    },
+    {
+      "run": "final-history-guard-fixed",
+      "passed": true,
+      "complete": true,
+      "source_commit": "e391e1c264f11e2242fb9ad14427a6f5b545e2d4",
+      "worktree_status": " M tests/integration/core_decoupling_65_test.go",
+      "test_records": 2,
+      "failed_tests": 0,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\final-history-guard-fixed\\summary.json",
+      "sha256": "f3b290f43e25c46cd1bb226982a47fe0c4af3e84300fb129c23812c1ecba94a9",
+      "reason": "Targeted diagnosis or repair validation; final coverage uses only the clean final reports."
+    },
+    {
+      "run": "native-fixture-command-budget-fixed",
+      "passed": true,
+      "complete": true,
+      "source_commit": "e391e1c264f11e2242fb9ad14427a6f5b545e2d4",
+      "worktree_status": " M tests/integration/core_decoupling_65_test.go\n M tests/integration/lifecycle_test.go",
+      "test_records": 2,
+      "failed_tests": 0,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\native-fixture-command-budget-fixed\\summary.json",
+      "sha256": "1f2303938869a608d342e32ee3ae8323a2a160d71a14a2ae6af21b16fdbf6a7f",
+      "reason": "Targeted diagnosis or repair validation; final coverage uses only the clean final reports."
+    },
+    {
+      "run": "task-wiring-budget-fixed",
+      "passed": true,
+      "complete": true,
+      "source_commit": "9112027eacb06669650dd4887ea974a8e4f780bf",
+      "worktree_status": "clean (this run's logs and summary excluded)",
+      "test_records": 1,
+      "failed_tests": 0,
+      "report": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-all-tests-20261007-214015816\\task-wiring-budget-fixed\\summary.json",
+      "sha256": "247337b631590fcd0488cb35fa7cb9e0fac5e0ede566e3258e20653b18d46254",
+      "reason": "Targeted diagnosis or repair validation; final coverage uses only the clean final reports."
+    }
+  ],
+  "static_checks": {
+    "python_tests": {
+      "roadmap_runner": 18,
+      "task_id_script": 10,
+      "failed": 0
+    },
+    "tracked_and_shared_document_identity": "passed: 84 identity files, 10 draft and 3 formal rows; live DAG membership is outside this static check",
+    "prior_shared_ref_identity": "Task 49 conflict on the initial source was resolved by rebasing the tracked planning documents; the shared ref was not overwritten"
+  }
+}
