@@ -27,6 +27,8 @@ func finalResult(m Model, events ...api.ConversationEvent) finalRepliesMsg {
 
 func TestPS1CompleteFinalAndHistoryAreCandidateBound(t *testing.T) {
 	m, _ := ccFixture(t, 2)
+	m.detailExpanded = true
+	m.detailSection = "final"
 	m, _ = m.refreshFinalReplies(0)
 	text := strings.Repeat("中文完整正文🧭\n", 9000) + "回复末尾"
 	query := m.projects[0].client.(*testClient).query
@@ -50,6 +52,7 @@ func TestPS1CompleteFinalAndHistoryAreCandidateBound(t *testing.T) {
 	if m.projects[0].bodyText != "历史回复" {
 		t.Fatal("history selection lost exact body")
 	}
+	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyEsc})
 	m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyF7})
 	next, _ = m.Update(late)
 	m = next.(Model)
@@ -67,6 +70,8 @@ func TestPS1CompleteFinalAndHistoryAreCandidateBound(t *testing.T) {
 
 func TestPS1FinalRejectsUnknownPhaseAndBadBody(t *testing.T) {
 	m, _ := ccFixture(t, 1)
+	m.detailExpanded = true
+	m.detailSection = "final"
 	m, _ = m.refreshFinalReplies(0)
 	process := finalFixture(m, 1, "turn", "process", "过程")
 	process.Phase = api.MessagePhaseCommentary
@@ -188,6 +193,8 @@ func TestPS1DamagedOrOldJournalKeepsFileAndBlocksExternalInput(t *testing.T) {
 
 func TestPS1BackgroundProjectBodyStaysWithOriginalProject(t *testing.T) {
 	m, _ := ccFixture(t, 1)
+	m.detailExpanded = true
+	m.detailSection = "final"
 	m, _ = m.refreshFinalReplies(0)
 	event := finalFixture(m, 1, "turn", "body", "原项目正文")
 	next, cmd := m.Update(finalResult(m, event))

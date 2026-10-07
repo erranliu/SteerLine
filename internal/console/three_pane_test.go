@@ -126,7 +126,7 @@ func TestPS1InlineEditorFitsNarrowMainSurface(t *testing.T) {
 		m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyTab})
 		m, _ = ccKey(m, tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("中文第一行\n第二行")})
 		view := m.View()
-		for _, want := range []string{"输入焦点", "提交预览", "F2", "中文"} {
+		for _, want := range []string{"▶ ┃ 你的答复", "提交预览", "F2", "中文"} {
 			if !strings.Contains(view, want) {
 				t.Fatalf("%dx%d lost %s: %s", size[0], size[1], want, view)
 			}

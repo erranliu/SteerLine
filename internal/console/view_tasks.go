@@ -41,11 +41,7 @@ func projectCounts(state projectState, now time.Time) (ready, cached, running, d
 
 func renderRows(m Model, state projectState, width, height int) []string {
 	rows := m.rows(m.selected)
-	focus := ""
-	if state.focus == 0 {
-		focus = " [焦点]"
-	}
-	out := []string{styleLabel.Render(fmt.Sprintf("任务列表%s · %d 项 · %d %s", focus, len(rows), state.filter+1, filterDisplayName(state.filter)))}
+	out := []string{styleLabel.Render(fmt.Sprintf("任务列表 · %d 项 · %d %s", len(rows), state.filter+1, filterDisplayName(state.filter)))}
 	if height >= 6 {
 		out = append(out, styleDim.Render("筛选 1全部  2Ready  3进行中  4待决策"), styleDim.Render("     5待合并  6需处理  7历史"))
 	}
@@ -95,7 +91,7 @@ func renderRows(m Model, state projectState, width, height int) []string {
 		if width-2 < 48 {
 			taskHeader, executionHeader = "状态", "执行"
 		}
-		out = append(out, renderTaskListRow("任务编号", "任务名称", taskHeader, executionHeader, max(1, width-2)))
+		out = append(out, renderWorkspaceRow("编号", "任务名称", taskHeader, executionHeader, "待处理", max(1, width-2)))
 	}
 	visible := contentWindow(rows, state.selectedKey, max(1, height-len(out)))
 	for _, row := range visible {
@@ -107,9 +103,13 @@ func renderRows(m Model, state projectState, width, height int) []string {
 				taskStatus = "缓存"
 			}
 		}
-		line := renderTaskListRow(row.taskID, row.title, taskStatus, rowExecutionStatus(row), max(1, width-2))
+		line := renderWorkspaceRow(row.taskID, row.title, taskStatus, rowExecutionStatus(row), taskAttention(state, row.taskID), max(1, width-2))
 		if row.key == state.selectedKey {
-			line = styleSelected.Render("▸ " + line)
+			if state.focus == 0 {
+				line = styleSelected.Render("▸ " + line)
+			} else {
+				line = styleHead.Render("▸ " + line)
+			}
 		} else if row.kind == rowReady && taskStatus == "缓存" {
 			line = "  " + styleDim.Render(line)
 		} else {
@@ -133,6 +133,38 @@ func renderTaskListRow(id, title, taskStatus, executionStatus string, width int)
 	execution := padDisplay(truncate(safeTerminalInlineText(executionStatus), executionWidth), executionWidth)
 	titleWidth := max(1, width-idWidth-taskWidth-executionWidth-3)
 	return truncate(identity+" "+task+" "+execution+" "+truncate(safeTerminalInlineText(title), titleWidth), width)
+}
+
+func renderWorkspaceRow(id, title, task, execution, attention string, width int) string {
+	columns := []int{8, 8, 14, 10}
+	if width < 60 {
+		columns = []int{6, 6, 8, 6}
+		if execution == "失败（历史）" {
+			execution = "历史失败"
+		}
+		if fields := strings.Fields(attention); len(fields) > 0 {
+			attention = fields[0]
+		}
+	}
+	parts := []string{id, task, execution, attention}
+	var prefix string
+	for i, part := range parts {
+		cell := padDisplay(truncate(safeTerminalInlineText(part), columns[i]), columns[i])
+		if i > 0 && part != "任务状态" && part != "执行状态" && part != "状态" && part != "执行" && part != "待处理" {
+			switch {
+			case strings.Contains(part, "失败") || strings.Contains(part, "受阻") || strings.Contains(part, "阻塞"):
+				cell = styleAlert.Render(cell)
+			case strings.Contains(part, "待") || strings.Contains(part, "核验") || strings.Contains(part, "缓存"):
+				cell = styleWaiting.Render(cell)
+			case strings.Contains(part, "进行中") || strings.Contains(part, "执行中"):
+				cell = styleRunning.Render(cell)
+			case strings.Contains(part, "成功") || strings.Contains(part, "已完成"):
+				cell = styleSuccess.Render(cell)
+			}
+		}
+		prefix += cell + " "
+	}
+	return truncate(prefix+safeTerminalInlineText(title), width)
 }
 
 func rowTaskStatus(row consoleRow) string {

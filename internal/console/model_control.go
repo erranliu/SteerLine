@@ -33,7 +33,7 @@ func (m Model) startSelected() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	}
-	m.profileChoice = &executionProfileChoice{projectKey: state.ref.Key, taskID: row.taskID, instance: runtimeState.Service.InstanceID, revision: runtimeState.Control.Revision}
+	m.beginProfileChoice(&executionProfileChoice{projectKey: state.ref.Key, taskID: row.taskID, instance: runtimeState.Service.InstanceID, revision: runtimeState.Control.Revision})
 	return m, nil
 }
 
@@ -72,6 +72,7 @@ func (m Model) prepareStop() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.confirm = &confirmAction{projectKey: state.ref.Key, instance: runtimeState.Service.InstanceID, revision: runtimeState.Control.Revision, action: "stop_service", requestID: newRequestID()}
+	state.focus = 1
 	return m, nil
 }
 
@@ -85,8 +86,8 @@ func (m Model) inspectSelectedRecovery() (tea.Model, tea.Cmd) {
 		m.status = "请选择一个 run 后查看恢复核验报告"
 		return m, nil
 	}
-	m.detailExpanded = true
-	m.expandedDetailScroll = 0
+	state.recoveryActive = true
+	state.lowerScroll = 0
 	state.focus = 1
 	state.recoveryRunID = row.run.RunID
 	state.recoveryReport = nil

@@ -37,6 +37,13 @@ func (m Model) readFinalReplies(index int) tea.Cmd {
 	state.finalReadAt = m.clock.Now()
 	generation, key, filter := state.finalGeneration, state.finalKey, state.finalFilter
 	ref, query, ctx := state.ref, state.client, m.ctx
+	full := m.detailExpanded && m.detailSection == "final"
+	if !full {
+		if row := m.selectedRow(index); row != nil && row.run != nil {
+			filter.AttemptID = row.run.AttemptID
+			filter.TurnID = row.run.CurrentTurnID
+		}
+	}
 	return func() tea.Msg {
 		var all api.ConversationPage
 		cursor := ""
@@ -46,7 +53,8 @@ func (m Model) readFinalReplies(index int) tea.Cmd {
 				return finalRepliesMsg{ref.Key, ref.Identity, key, generation, api.ConversationPage{}, err}
 			}
 			all.Events = append(all.Events, page.Events...)
-			if !page.HasMore {
+			if !page.HasMore || !full {
+				all.HasMore = page.HasMore
 				return finalRepliesMsg{ref.Key, ref.Identity, key, generation, all, nil}
 			}
 			if page.NextCursor == "" || page.NextCursor == cursor {
@@ -109,6 +117,14 @@ func (m Model) updateFinalReplies(msg finalRepliesMsg) (tea.Model, tea.Cmd) {
 	state.finalEvents = latest
 	if len(state.finalEvents) == 0 {
 		return m, nil
+	}
+	if !m.detailExpanded || m.detailSection != "final" {
+		if msg.page.HasMore {
+			state.previewText = ""
+			state.previewError = "final 索引尚未完整；f 按需读取完整记录"
+			return m, nil
+		}
+		return m, m.readFinalPreview(index, state.finalEvents[len(state.finalEvents)-1])
 	}
 	selected := len(state.finalEvents) - 1
 	if state.finalPinned {

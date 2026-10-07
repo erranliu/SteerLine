@@ -66,7 +66,13 @@ func (m Model) cycleCandidate(delta int) (tea.Model, tea.Cmd) {
 		}
 	}
 	i = (i + delta + len(runs)) % len(runs)
-	m.leaveAnswer()
+	if row.run != nil && runs[i].RunID == row.run.RunID {
+		return m, nil
+	}
+	if !m.leaveAnswerSaved() {
+		return m, nil
+	}
+	m.cancelWorkspace()
 	if s.candidates == nil {
 		s.candidates = map[string]string{}
 	}
@@ -124,7 +130,7 @@ func (m Model) startAdditionalCandidate() (tea.Model, tea.Cmd) {
 		m.status = "服务或配置未提供新增候选能力"
 		return m, nil
 	}
-	m.profileChoice = &executionProfileChoice{action: "start_candidate", projectKey: s.ref.Key, taskID: row.taskID, instance: rt.Service.InstanceID, revision: rt.Control.Revision}
+	m.beginProfileChoice(&executionProfileChoice{action: "start_candidate", projectKey: s.ref.Key, taskID: row.taskID, instance: rt.Service.InstanceID, revision: rt.Control.Revision})
 	return m, nil
 }
 
@@ -166,7 +172,10 @@ func (m Model) prepareCandidateAbandon() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	p := api.ControlPayload{TaskID: row.taskID, WorkflowRunID: row.run.RunID, ExpectedTaskVersion: row.native.Version, ExpectedCandidateVersion: row.run.ControlRevision, Reason: "人工方案比较：不可撤销退出实验"}
-	m.confirm = &confirmAction{projectKey: s.ref.Key, instance: rt.Service.InstanceID, revision: rt.Control.Revision, action: "abandon_candidate", taskID: row.taskID, runID: row.run.RunID, requestID: newRequestID(), payload: p, basis: strings.Join(renderFixedRunExecutionProfile(*s, row.run), "\n")}
+	m.confirm = &confirmAction{projectKey: s.ref.Key, instance: rt.Service.InstanceID, revision: rt.Control.Revision, action: "abandon_candidate", taskID: row.taskID, runID: row.run.RunID, requestID: newRequestID(), payload: p, basis: candidateConfirmBasis(*s, row.run)}
+	s.focus = 1
+	s.lowerScroll = 0
+	s.recoveryActive = false
 	return m, nil
 }
 

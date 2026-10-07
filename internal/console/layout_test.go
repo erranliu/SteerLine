@@ -19,7 +19,7 @@ func TestTaskSelectionAndTwoFocusRegions(t *testing.T) {
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{snapshot}, &testControlClient{}, now)
 	m.width, m.height = 120, 40
 	view := m.View()
-	for _, want := range []string{"任务列表 [焦点]", "▸", "详情", "运行与反馈"} {
+	for _, want := range []string{"任务列表", "▸", "详情", "运行与反馈"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("stacked layout lost %q:\n%s", want, view)
 		}
@@ -106,19 +106,19 @@ func TestCompletedTaskShowsHistoricalExecutionInFourColumns(t *testing.T) {
 		t.Fatalf("closed task columns: %+v", rows)
 	}
 	list := strings.Join(renderRows(m, m.projects[0], listPanelWidth(m), 12), "\n")
-	for _, want := range []string{"任务编号", "任务状态", "执行状态", "任务名称", "已完成", "失败（历史）", run.Title} {
+	for _, want := range []string{"编号", "状态", "执行", "任务名称", "已完成", "失败", "人工"} {
 		if !strings.Contains(list, want) {
 			t.Fatalf("four-column list lost %q:\n%s", want, list)
 		}
 	}
 	header := ""
 	for _, line := range strings.Split(list, "\n") {
-		if strings.Contains(line, "任务编号") {
+		if strings.Contains(line, "编号") {
 			header = line
 			break
 		}
 	}
-	if !(strings.Index(header, "任务编号") < strings.Index(header, "任务状态") && strings.Index(header, "任务状态") < strings.Index(header, "执行状态") && strings.Index(header, "执行状态") < strings.Index(header, "任务名称")) {
+	if !(strings.Index(header, "编号") < strings.Index(header, "状态") && strings.Index(header, "状态") < strings.Index(header, "执行") && strings.Index(header, "执行") < strings.Index(header, "任务名称")) {
 		t.Fatalf("list columns are out of order: %q", header)
 	}
 	detail := strings.Join(renderDetail(m, m.projects[0], &rows[0], 80, 80), "\n")
@@ -127,7 +127,7 @@ func TestCompletedTaskShowsHistoricalExecutionInFourColumns(t *testing.T) {
 			t.Fatalf("completed task detail lost %q:\n%s", want, detail)
 		}
 	}
-	if listPanelWidth(m) < 55 || detailPanelWidth(m) < 40 {
+	if listPanelWidth(m) < 38 || detailPanelWidth(m) < 40 {
 		t.Fatalf("panel widths do not fit four columns: list=%d detail=%d", listPanelWidth(m), detailPanelWidth(m))
 	}
 	_, _, _, _, _, attention := projectCounts(m.projects[0], now)

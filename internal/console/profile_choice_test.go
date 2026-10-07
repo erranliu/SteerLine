@@ -75,6 +75,7 @@ func TestLongExecutionProfileListKeepsSelectionVisible(t *testing.T) {
 	m := modelForTest([]ProjectRef{ref}, []ProjectSnapshot{readySnapshot(ref, time.Now().UTC())}, &testControlClient{}, time.Now().UTC())
 	m.width, m.height = 80, 24
 	m.profileChoice = &executionProfileChoice{projectKey: ref.Key, taskID: "task-B", index: 28}
+	m.projects[0].focus = 1
 	view := m.View()
 	if !strings.Contains(view, "profile-27") || !strings.Contains(view, "model-27") || len(strings.Split(view, "\n")) != 24 {
 		t.Fatalf("selected profile fell outside the narrow viewport: %s", view)
