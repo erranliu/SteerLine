@@ -53,7 +53,7 @@ SteerLine 打开后首先是**规划工作台**：对话和输入占主要空间
 
 ## 文档草稿与正式发布
 
-UI 与服务查询展示的正式 `docs/roadmap/` 和 `docs/spec/` 内容始终来自一套完整、已校验的 Git 文档版本。发布期间的原始 worktree 不承诺外部无锁读取的多文件原子性；服务禁止新 agent 轮次读到逐文件更新中的目录。主 agent 对全仓只读，通过受控文档写入口将候选 Markdown 保存到同一固定 worktree 的 `docs/.steerline-drafts/`；服务预先登记每份草稿对应的正式目标路径，拒绝任意文件名、脚本、测试、二进制和目录外目标。草稿保留在 worktree 中，供新 session 继续修改，但不参与任务执行或 DAG 查询。
+UI 与服务查询展示的正式 execution-map.md 及其 Task 固定 Spec/Plan 来自已校验的版本；roadmap.md 继续承载可修改草稿，不冒充已入 DAG 清单。发布期间的原始 worktree 不承诺外部无锁读取的多文件原子性；服务禁止新 agent 轮次读到逐文件更新中的正式内容。原基础方案通过受控写入口保存候选 Markdown 和目标映射，草稿/送审/发布的具体目录及权限在新准入 Spec 中对齐；不能从临时文件、文档校验或草稿按钮直接启动任务。草稿保留供新 session 修改，正式执行只消费实际 DAG 及其固定契约。
 
 界面把文档流程表达为四个明确阶段：
 
@@ -76,7 +76,7 @@ UI 与服务查询展示的正式 `docs/roadmap/` 和 `docs/spec/` 内容始终�
 
 放弃草稿不删除已经预留的任务 ID 记录，也不修改已创建任务。正式文档发布途中若服务中断，审阅页保留待核实状态和原请求身份；恢复前不能展示“创建成功”。
 
-只修改产品方向而不创建任务时仍走草稿、差异、校验和人工确认，但没有 ID 预留或 DAG 创建。`docs/roadmap/` 的活动任务必须遵守[roadmap 文档规则](../roadmap/readme.md)；`docs/spec/` 的执行文档必须是任务独立 Spec + Plan。现有 `roadmap_task_id.py check`、链接和身份校验属于自动门槛，依赖是否合理、验收是否可执行仍需要用户审阅。嗅探器、测试和实现需求在此阶段只能形成待执行任务的 Spec/Plan，由 SteerLine worker 执行。
+只修改产品方向而不创建任务时仍走草稿、差异、校验和人工确认，但没有 ID 预留或 DAG 创建。roadmap.md 的草稿与 execution-map.md 的已入 DAG 正式任务分别遵守[roadmap 文档规则](../roadmap/readme.md)；`docs/spec/` 的执行文档必须是任务独立 Spec + Plan。现有 `roadmap_task_id.py check`、链接和身份校验属于自动门槛，依赖是否合理、验收是否可执行仍需要用户审阅。嗅探器、测试和实现需求在此阶段只能形成待执行任务的 Spec/Plan，由 SteerLine worker 执行。
 
 ## Roadmap、DAG 与约束查看
 
@@ -84,7 +84,7 @@ Roadmap 页以目标和文档为主线，保留原 Markdown 的可读全文，�
 
 DAG 页默认同时给出可搜索的任务列表和所选任务一层上下游；需要时扩展深度。节点标注状态、阻塞原因和交付证据；被丢弃的前置及其后继阻塞仍可查看。大型图按现有产品查询接口分页或标明截断，接口归属见[代码架构](../architecture/current-code-architecture.md)，不把不完整图显示成全图，也不提供直接拖边修改依赖。任务详情通往 Spec、Plan、运行、决策、PR 和合并核验。
 
-拟规划任务可以在文档审阅页预览依赖变化，但只有中心已创建任务进入正式 DAG 图。Roadmap 和 DAG 均标明各自的文档版本或中心快照版本；不能用虚线草稿节点混入正式任务而不说明来源。
+拟规划任务可以在文档审阅页预览依赖变化，但只有中心已创建任务进入正式 DAG 图并同步 execution-map.md；roadmap.md 继续承载可修改草稿。Roadmap 和 DAG 均标明各自的文档版本或中心快照版本；不能用虚线草稿节点混入正式任务而不说明来源。
 
 ## 替代第一阶段 viewer
 

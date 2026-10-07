@@ -1,4 +1,4 @@
 interface:
   display_name: "Roadmap Runner"
   short_description: "执行 session 负责实现与冲突，独立 subagent 复审修复后合并 PR"
-  default_prompt: "用 $roadmap-runner 按顺序执行指定 roadmap，每 20 分钟检查，执行 session 固定 Luna xhigh，冲突与需求遗漏交回原 session，自查提 PR 后由独立 subagent 复审修复，协调 session 核对并合并。"
+  default_prompt: "用 $roadmap-runner 按顺序执行 execution-map.md 中已核对 DAG 的正式任务，每 20 分钟检查，执行 session 固定 Luna xhigh，独立复审修复后合并；正式表为空或未同步时不派发，不执行 roadmap.md 草稿。"

@@ -126,7 +126,7 @@ def rename_task(root: Path, records: dict[int, str], task_id: int, name: str) ->
     raise RuntimeError("could not rename task after concurrent ref updates")
 
 
-def document_tasks(path: Path) -> dict[int, tuple[str, str, str]]:
+def document_tasks(path: Path, *, require_contract: bool = True) -> dict[int, tuple[str, str | None, str | None]]:
     found = {}
     for line in path.read_text(encoding="utf-8").splitlines():
         match = ROW.match(line)
@@ -139,32 +139,37 @@ def document_tasks(path: Path) -> dict[int, tuple[str, str, str]]:
             raise ValueError(f"duplicate task ID {task_id} in {path}")
         spec = SPEC_LINK.search(line)
         plan = PLAN_LINK.search(line)
-        if spec is None or plan is None:
+        if require_contract and (spec is None or plan is None):
             raise ValueError(f"task {task_id} in {path} requires its own Spec and Plan links")
-        for target in (spec.group(1), plan.group(1)):
+        targets = (spec.group(1) if spec else None, plan.group(1) if plan else None)
+        for target in targets:
+            if target is None:
+                continue
             if not (path.parent / target).is_file():
                 raise ValueError(f"task {task_id} in {path} links to missing file {target}")
-        found[task_id] = (name, spec.group(1), plan.group(1))
+        found[task_id] = (name, *targets)
     return found
 
 
-def check_documents(root: Path, records: dict[int, str]) -> None:
-    roadmap = document_tasks(root / "docs" / "roadmap" / "roadmap.md")
+def check_documents(root: Path, records: dict[int, str]) -> tuple[int, int]:
+    roadmap = document_tasks(root / "docs" / "roadmap" / "roadmap.md", require_contract=False)
     execution_map = document_tasks(root / "docs" / "roadmap" / "execution-map.md")
-    if roadmap != execution_map:
-        raise ValueError("roadmap.md and execution-map.md have different active IDs, names, or Spec/Plan links")
-    specs = [spec for _, spec, _ in roadmap.values()]
-    plans = [plan for _, _, plan in roadmap.values()]
+    specs = [spec for _, spec, _ in execution_map.values()]
+    plans = [plan for _, _, plan in execution_map.values()]
     if len(specs) != len(set(specs)) or len(plans) != len(set(plans)):
-        raise ValueError("multiple active tasks share the same Spec or Plan")
-    for task_id, (name, spec, plan) in roadmap.items():
-        if records.get(task_id) != name:
-            raise ValueError(f"active task {task_id} differs from task-ids/{task_id}.json")
-        for target in (spec, plan):
-            file = root / "docs" / "roadmap" / target
-            header = TASK_HEADER.search(file.read_text(encoding="utf-8")[:2000])
-            if header is None or int(header.group(1)) != task_id or header.group(2) != name:
-                raise ValueError(f"task {task_id} identity differs from {file}")
+        raise ValueError("multiple formal tasks share the same Spec or Plan")
+    for kind, tasks in (("draft", roadmap), ("formal", execution_map)):
+        for task_id, (name, spec, plan) in tasks.items():
+            if records.get(task_id) != name:
+                raise ValueError(f"{kind} task {task_id} differs from task-ids/{task_id}.json")
+            for target in (spec, plan):
+                if target is None:
+                    continue
+                file = root / "docs" / "roadmap" / target
+                header = TASK_HEADER.search(file.read_text(encoding="utf-8")[:2000])
+                if header is None or int(header.group(1)) != task_id or header.group(2) != name:
+                    raise ValueError(f"task {task_id} identity differs from {file}")
+    return len(roadmap), len(execution_map)
 
 
 def main() -> None:
@@ -176,7 +181,7 @@ def main() -> None:
     rename = commands.add_parser("rename", help="change a task name while keeping its ID")
     rename.add_argument("id", type=int)
     rename.add_argument("name")
-    commands.add_parser("check", help="check ref, identity files, and active roadmap rows")
+    commands.add_parser("check", help="check ref and draft/formal identities independently; does not verify live DAG")
     args = parser.parse_args()
     root = repository_root()
     records = registry(root)
@@ -205,8 +210,9 @@ def main() -> None:
         if ref_oid(root) is None:
             raise ValueError("shared Git ref is absent; run init first")
         state = load_state(root, ref_oid(root), records)
-        check_documents(root, records)
-        print(f"checked {len(records)} identity files; next ID: {state['next_id']}")
+        drafts, formal = check_documents(root, records)
+        print(f"checked {len(records)} identity files; {drafts} draft, {formal} formal rows; next ID: {state['next_id']}")
+        print("static document checks only; live DAG membership and receipts are not verified")
 
 
 if __name__ == "__main__":

@@ -24,7 +24,7 @@ Windows UI 采用 WinUI 3，选型参考[微软文档](https://learn.microsoft.c
 
 输入区使用 WinUI 原生文本控件承载编辑、输入法、选区和撤销；Markdown、代码差异等只读内容可在 UI 设计时评估局部使用 WebView2，不因此把整个界面或业务逻辑改成网页。
 
-主 agent 可读整个仓库，但项目内写入只允许发生在 `docs/**`。由于正式 `docs/roadmap/` 和 `docs/spec/` 路径必须始终有效，建议 Codex 进程对 worktree 使用只读权限配置；它提交目标路径和候选正文给 Go 的受控文档写入口，服务仅将允许的 Markdown 草稿写到固定 worktree 的 `docs/.steerline-drafts/`。正式路径只由服务在完整校验和人工确认后发布。这样新 session 仍能读取前一 session 留下的目录状态，同时不能直接制造实现代码、测试或任意 artifact。默认 `workspace-write` 会把当前目录纳入可写工作区，不能用它实现这条限制。受控写入口可经 Codex app-server 客户端工具或本机 MCP 提供，具体协议以真实版本探测后固定。[OpenAI Docs：Permissions](https://learn.chatgpt.com/docs/permissions)。
+主 agent 可读整个仓库，但项目内写入只允许发生在 `docs/**`。由于正式 execution-map.md 及其固定 Spec/Plan 路径必须始终有效，roadmap.md 作为草稿不参与执行准入，建议 Codex 进程对 worktree 使用只读权限配置；它提交目标路径和候选正文给 Go 的受控文档写入口，服务仅将允许的 Markdown 草稿写到固定 worktree 的 `docs/.steerline-drafts/`。正式路径只由服务在完整校验和人工确认后发布。这样新 session 仍能读取前一 session 留下的目录状态，同时不能直接制造实现代码、测试或任意 artifact。默认 `workspace-write` 会把当前目录纳入可写工作区，不能用它实现这条限制。受控写入口可经 Codex app-server 客户端工具或本机 MCP 提供，具体协议以真实版本探测后固定。[OpenAI Docs：Permissions](https://learn.chatgpt.com/docs/permissions)。
 
 草稿目录由服务分配身份和目标路径，限制文件类型、大小及数量；不接受路径遍历、目录联接或指向工作区外的链接。服务不把草稿当作已发布的 roadmap、Spec 或 Plan。Codex 命令、工具和子进程的实际权限仍须在 Windows 原生沙箱中验证；仅靠提示词或检查最终 Git diff 不能证明越界写入没有发生。
 
@@ -43,7 +43,7 @@ flowchart LR
 
 ## 业务接口与数据流
 
-已有核心提供 SQLite 单写、产品 Query/Command 和规范会话/正文读取。当前边界和源码归属见[代码架构](../architecture/current-code-architecture.md)，会话契约见[会话设计](conversation-events.md)。本机原生待补范围按[当前 Spec 索引](../spec/README.md)维护；历史远端试验不成为二期前置。本机客户端协议只增加传输适配层，不让 C# 客户端重写业务校验，不把 control/requests 文件目录、SQLite 表或 Codex JSON-RPC 直接作为 UI 契约。
+已有核心提供 SQLite 单写、产品 Query/Command 和规范会话/正文读取。当前边界和源码归属见[代码架构](../architecture/current-code-architecture.md)，会话契约见[会话设计](conversation-events.md)。本机原生待补范围按[当前 Spec 索引](../spec/README.md)维护；历史远端试验不成为二期前置。本机客户端协议只增加传输适配层，正式任务映射只在核对中心 DAG 后同步，不从 roadmap.md 草稿直接派发；不让 C# 客户端重写业务校验，不把 control/requests 文件目录、SQLite 表或 Codex JSON-RPC 直接作为 UI 契约。
 
 客户端协议至少覆盖三类操作：
 
