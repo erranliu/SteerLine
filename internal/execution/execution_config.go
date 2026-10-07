@@ -18,9 +18,7 @@ func validateWorkflowConfig(c Config, directory *ExecutionDirectory) error {
 	if err != nil {
 		return err
 	}
-	if err := c.ExecutionRequirements.Validate(); err != nil {
-		return err
-	}
+
 	if err := entry.ValidatePublicationPolicy(c.PublicationPolicy, publication.Config(c.PR)); err != nil {
 		return err
 	}

@@ -86,12 +86,7 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 	if config.WorkflowProtocol != executionmodel.Version {
 		return config, errors.New("workflow_protocol must be worker-flow-v1; older configurations are unsupported and their state is preserved")
 	}
-	if err := config.ExecutionPolicy.Validate(); err != nil {
-		return config, err
-	}
-	if err := config.ExecutionRequirements.Validate(); err != nil {
-		return config, err
-	}
+
 	if err := config.PublicationPolicy.Validate(); err != nil {
 		return config, err
 	}

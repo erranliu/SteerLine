@@ -2,13 +2,13 @@ package console
 
 import (
 	"fmt"
-	api "github.com/erranliu/SteerLine/internal/product/api"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 var (
@@ -612,7 +612,6 @@ func decisionAnswerAvailability(state projectState, row *consoleRow) string {
 		return "候选已退出实验；不再反馈"
 	}
 	if row == nil || row.run == nil || row.run.Decision == nil || row.run.Decision.Status != "pending" {
-
 		return "当前没有待回答的问题"
 	}
 	reason, ok := state.snapshot.DecisionReasons[row.run.RunID]
@@ -842,7 +841,6 @@ func ptrTime(value *time.Time) string {
 
 func sampleTime(snapshot ProjectSnapshot) string {
 	if snapshot.Observation.SampledAt.IsZero() {
-
 		return "未知"
 	}
 	suffix := ""
@@ -854,7 +852,6 @@ func sampleTime(snapshot ProjectSnapshot) string {
 
 func executionVerifiedAt(state projectState, run *api.CandidateSummary) string {
 	if run == nil || state.snapshot.History == nil || run.ExecutionID == "" {
-
 		return "未知"
 	}
 	for _, execution := range state.snapshot.History.Executions {
@@ -862,7 +859,6 @@ func executionVerifiedAt(state projectState, run *api.CandidateSummary) string {
 			return execution.VerifiedAt.Local().Format(timeLayout)
 		}
 	}
-
 	return "未知"
 }
 

@@ -17,21 +17,21 @@ type ManagedCommandOptions struct {
 	ReasoningEffort  string
 	Executable       string
 	Args             []string
-	Policy           executionbackend.ExecutionPolicy
-	Sandbox          string
-	WindowsSandbox   string
+
+	Sandbox        string
+	WindowsSandbox string
 }
 
 func ManagedCommand(options ManagedCommandOptions) (executionbackend.LaunchCommand, error) {
 	if options.Host != "orca" || options.Agent != "codex" || options.Executable == "" {
 		return executionbackend.LaunchCommand{}, errors.New("managed Orca launch requires Codex and an executable")
 	}
-	permissions, err := CompilePolicy(options.Policy, runtime.GOOS, options.Host, options.Agent, options.WindowsSandbox, "", options.Args)
+	permissions, err := NativePermissions(runtime.GOOS, options.Host, options.Agent)
 	if err != nil {
 		return executionbackend.LaunchCommand{}, err
 	}
-	if options.Sandbox != permissions.Sandbox || (permissions.Sandbox == "danger-full-access" && len(options.WriteRoots) != 0) {
-		return executionbackend.LaunchCommand{}, errors.New("managed Orca settings differ from the explicit execution_policy")
+	if options.Sandbox != permissions.Sandbox || options.WindowsSandbox != permissions.WindowsSandbox {
+		return executionbackend.LaunchCommand{}, errors.New("managed Orca settings differ from the fixed native launch")
 	}
 	options.Sandbox, options.WindowsSandbox = permissions.Sandbox, permissions.WindowsSandbox
 	args := append([]string(nil), options.Args...)
@@ -44,7 +44,7 @@ func ManagedCommand(options ManagedCommandOptions) (executionbackend.LaunchComma
 	if options.ReasoningEffort != "" {
 		args = append(args, "--config", "model_reasoning_effort="+options.ReasoningEffort)
 	}
-	args = append(args, "--strict-config")
+	args = append(args, "--no-daemon", "--strict-config")
 	args = append(args, permissions.Args()...)
 	for _, root := range options.WriteRoots {
 		args = append(args, "--add-dir", root)

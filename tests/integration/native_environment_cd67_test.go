@@ -1,7 +1,6 @@
 package integration
 
 import (
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"context"
 	"encoding/json"
 	"os"
@@ -13,11 +12,12 @@ import (
 	"time"
 
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-	"github.com/erranliu/SteerLine/internal/testkit/protocol"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	testprotocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
 
 func integratedEnvironmentState(t *testing.T, e *executionmodel.ExecutionRecord) orcaworker.NativeExecutionState {
@@ -173,7 +173,7 @@ func TestNativeSourceReplacementRetainsOutputEvidence(t *testing.T) {
 	config := f.config.ApplyFixedExecutionProfile(profile)
 	e := original.execution
 	snapshot := executionbackend.LifecycleSnapshot{Ref: executionbackend.ExecutionRef{Version: executionbackend.ExecutionRecordVersion, Backend: executionbackend.BackendKind(e.Backend), Protocol: executionbackend.ExecutionProtocol(e.Protocol), Target: e.Target, Agent: executionbackend.AgentSpec{Name: e.Agent}, RunID: original.run.RunID, AttemptID: original.run.AttemptID, WorkspacePath: e.Workspace.Worktree, WorkspaceBranch: e.Workspace.Branch, BaseCommit: e.Workspace.Base, Generation: e.Generation, External: *e.Process}, Session: executionbackend.SessionContext{ProjectID: e.ProjectIdentity, TaskID: original.run.TaskID, WorkflowRunID: original.run.RunID, ExecutionID: e.ExecutionID, AttemptID: e.CurrentAttemptID, Target: e.Target, Agent: executionbackend.AgentSpec{Name: e.Agent}, SessionID: e.SessionID, Generation: e.SessionGeneration, CurrentTurnID: e.CurrentTurnID, CurrentCommandID: e.CurrentCommandID, LastStoppedTurnID: e.LastStoppedTurnID}, ConfigurationDigest: e.ConfigurationDigest, ResourceGeneration: e.Generation, Implementation: e.ImplementationData, Workspace: executionbackend.WorkspaceIntent{Path: e.Workspace.Worktree, Branch: e.Workspace.Branch, BaseCommit: e.Workspace.Base}}
-	port, err := config.ExecutionDirectory.ResolveLifecycle(executionbackend.LifecycleSetup{Snapshot: snapshot, ProfileData: profile.ImplementationData, ProfileID: profile.ID, AcceptedConfigVersion: profile.AcceptedConfigVersion, Policy: profile.ExecutionPolicy, ProcessHost: config.ProcessHost, RepositoryPath: config.Repository, RunDirectory: config.RunDir, CommandTimeout: 15 * time.Second, GitExecutable: config.Git.Executable, GitArgs: config.Git.Args})
+	port, err := config.ExecutionDirectory.ResolveLifecycle(executionbackend.LifecycleSetup{Snapshot: snapshot, ProfileData: profile.ImplementationData, ProfileID: profile.ID, AcceptedConfigVersion: profile.AcceptedConfigVersion, ProcessHost: config.ProcessHost, RepositoryPath: config.Repository, RunDirectory: config.RunDir, CommandTimeout: 15 * time.Second, GitExecutable: config.Git.Executable, GitArgs: config.Git.Args})
 	require(t, err)
 	host, ok := port.(executionbackend.HostEnvironmentPort)
 	if !ok {

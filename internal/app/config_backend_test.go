@@ -31,12 +31,11 @@ func TestConfigKeepsOrcaCodexNativeByDefault(t *testing.T) {
 		codex := codexworker.ProfileConfig{Executable: "codex"}
 		orca := &orcaworker.ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "15m"}
 		if host == "orca" {
-			codex.WindowsSandbox = "unelevated"
 			orca.Shell = "powershell.exe"
 		}
 		profile := testExecutionProfile(t, "selected", "Selected", host, "codex", codex, orca)
 		writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "selected")
-		data, err := json.Marshal(map[string]any{"publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion})
+		data, err := json.Marshal(map[string]any{"publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(), "repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -78,7 +77,7 @@ func TestConfigRejectsRemovedOrcaFallback(t *testing.T) {
 
 func TestConfigRequiresAnExplicitTaskAuthority(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
-	data, err := json.Marshal(map[string]any{"publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(), "execution_policy": workspacePolicyFixture(), "repository": t.TempDir(), "run_dir": t.TempDir(), "branch": "main"})
+	data, err := json.Marshal(map[string]any{"publication_policy": executionPublicationFixture(), "pr": hostPublicationProviderFixture(), "repository": t.TempDir(), "run_dir": t.TempDir(), "branch": "main"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -108,17 +107,15 @@ func TestConfigRejectsRetiredBeadsExecutionFields(t *testing.T) {
 	}
 }
 
-func TestTerminalFullAccessProfileKeepsReadinessAndFrozenAuthority(t *testing.T) {
+func TestPS2TerminalFixedProfileKeepsReadinessAndFrozenAuthority(t *testing.T) {
 	t.Setenv("STEERLINE_HOME", t.TempDir())
 	profile := testExecutionProfile(t, "orca", "Orca", "orca", "codex", codexworker.ProfileConfig{Executable: "codex"}, &orcaworker.ProfileConfig{Executable: "orca", Shell: "powershell.exe", WaitTimeout: "1m"})
 	payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "medium"})
 	require(t, err)
 	profile.ImplementationConfigs[0].Payload = payload
 	writeGlobalExecutionFixture(t, []ExecutionProfile{profile}, "orca")
-	policy := workspacePolicyFixture()
-	policy.Filesystem.WriteScope, policy.Filesystem.GitMetadataWrite = "host", false
 	path := filepath.Join(t.TempDir(), "project.json")
-	data, err := json.Marshal(map[string]any{"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "execution_policy": policy, "publication_policy": map[string]string{"publisher": "worker"}, "pr": hostPublicationProviderFixture()})
+	data, err := json.Marshal(map[string]any{"repository": configTestRepository(t), "branch": "main", "task_authority": "native", "workflow_protocol": WorkerFlowVersion, "publication_policy": map[string]string{"publisher": "worker"}, "pr": hostPublicationProviderFixture()})
 	require(t, err)
 	require(t, os.WriteFile(path, data, 0600))
 	config, err := LoadConfig(path)
@@ -127,10 +124,10 @@ func TestTerminalFullAccessProfileKeepsReadinessAndFrozenAuthority(t *testing.T)
 	selected, accepted, err := config.ResolveExecutionProfile("orca", "")
 	require(t, err)
 	if err := validateTerminalConfig(context.Background(), selected, config.ExecutionDirectory); err != nil || terminalReadinessRequired(selected, config.ExecutionDirectory) != (runtime.GOOS == "windows") {
-		t.Fatalf("full access lost admission or readiness: %v", err)
+		t.Fatalf("fixed native launch lost admission or readiness: %v", err)
 	}
 	fixed := accepted.Freeze(config.ExecutionDirectory, config.Identity())
-	if accepted.Digest(config.ExecutionDirectory) != fixed.Digest || config.CheckFixedProfile(fixed) != nil || fixed.ExecutionPolicy.Filesystem.WriteScope != "host" || codexProfileSettings(selected, config.ExecutionDirectory).WindowsSandbox != "" {
-		t.Fatal("full access changed while selecting and freezing the profile")
+	if accepted.Digest(config.ExecutionDirectory) != fixed.Digest || config.CheckFixedProfile(fixed) != nil {
+		t.Fatal("fixed native launch changed while selecting and freezing the profile")
 	}
 }

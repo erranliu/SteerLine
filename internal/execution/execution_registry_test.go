@@ -7,7 +7,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
@@ -53,8 +52,8 @@ func TestWorkerFlowRejectsConfigDriftBeforePreparationOrTurnIntent(t *testing.T)
 	if err != nil {
 		t.Fatal(err)
 	}
-	service.baseConfig.ExecutionPolicy.Network = "deny"
-	if fixed, err := service.executionConfigForRun(run); err != nil || fixed.ExecutionPolicy.Network != "allow" {
+	setNeutralProfile(t, &service.baseConfig, neutralSettings{Executable: "changed"})
+	if fixed, err := service.executionConfigForRun(run); err != nil || neutralProfileSettings(fixed).Executable == "changed" {
 		t.Fatalf("current config changed original policy: %v", err)
 	}
 	service.workflowRecord(run).ExecutionProfile.Host = "unregistered"

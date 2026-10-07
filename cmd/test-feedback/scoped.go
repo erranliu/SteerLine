@@ -29,11 +29,11 @@ const executionPackage = "github.com/erranliu/SteerLine/internal/execution"
 // Full partitions the execution business tests after their move out of the host facade.
 const fullCorePackage = executionPackage
 
-var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestCapabilityReportRoundTripKeepsUnsupportedStopAndOptionalVersion", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput", "TestCandidateResumeErrorDoesNotStarveSibling", "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor", "TestExecutionRequirementsClaimAndRestartBlockWithoutChangingSnapshot", "TestExecutionRequirementsSnapshotCopiesAndRestoresOriginal", "TestExecutionRequirementsDoNotUpgradeProbeToVerified"}
+var quickExecutionTests = []string{"TestWorkerFlowClaimNeedsNoProjectSteps", "TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged", "TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt", "TestPS2MandatoryLifecycleCapabilitiesKeepFixedIdentity", "TestRestartPreflightRetainsOriginalPolicyRoots", "TestTaskStatusAndDeliveryEvidence", "TestDeliveryGateRequiresSelectedWorker", "TestCandidateOpenPRPollPreservesOriginalPendingInput", "TestCandidateResumeErrorDoesNotStarveSibling", "TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor", "TestClaimRechecksAcceptedConfigFiles", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestEveryRegisteredExecutionUsesTheLifecyclePort"}
 
 const boundaryPackage = "github.com/erranliu/SteerLine/tests/integration"
 
-var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImplementation", "TestTM04ExecutionWiring", "TestTM06ResourceWiring", "TestTM07StorageWiring", "TestTM08AppHostWiring", "TestAppRequirementsClaimFreezesEvaluatedProfile"}
+var quickBoundaryTests = []string{"TestCD67CoreBoundary", "TestCD67AdditionalImplementation", "TestTM04ExecutionWiring", "TestTM06ResourceWiring", "TestTM07StorageWiring", "TestTM08AppHostWiring", "TestPS2FixedConfigurationKeepsMandatoryChecks"}
 
 var quickBoundaryAssigned = []string{
 	"TestCD67CoreBoundary",
@@ -76,9 +76,7 @@ var quickBoundaryAssigned = []string{
 	"TestTM04ExecutionWiring/original_request_ack_and_manual_recovery",
 	"TestTM08AppHostWiring",
 	"TestTM08AppHostWiring/default_app_host_composition",
-	"TestAppRequirementsClaimFreezesEvaluatedProfile",
-	"TestAppRequirementsClaimFreezesEvaluatedProfile/default_profile",
-	"TestAppRequirementsClaimFreezesEvaluatedProfile/explicit_selected_profile",
+	"TestPS2FixedConfigurationKeepsMandatoryChecks",
 }
 
 var quickRulePackages = append(append([]string{}, taskRulePackages...), []string{
@@ -109,7 +107,7 @@ var quickOwnerCases = []struct {
 	{"quick-owner-codexapp", "github.com/erranliu/SteerLine/internal/execution/adapters/protocol/codexapp", []string{"TestAskToolResponseUsesNativeAnswerEnvelope", "TestCodexAppCallCancellationInterruptsBlockedWrite", "TestCodexSocketHandshakeHonorsCancellationWithoutDeadline", "TestCodexSocketLoopbackHandshakeAndMaskedJSON"}},
 	{"quick-owner-workspace", "github.com/erranliu/SteerLine/internal/execution/workspace", []string{"TestLocalWorkspacePrepareInspectResourcesAndCleanup", "TestPrepareRejectsHeadChangedByCheckoutHook"}},
 	{"quick-owner-publication", "github.com/erranliu/SteerLine/internal/execution/publication", []string{"TestPublicationPolicyValidatesProviderValues", "TestPRRequiresExactIdentityAndMergeEvidence", "TestUnsupportedProviderDoesNoNetworkOperation"}},
-	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/app", []string{"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites", "TestRunConfiguredServiceClosesTransferredStoreOnReturn", "TestAppConfigProjectsOwnerInputsAndSelectedProfile", "TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestFullAccessProfileFreezeSurvivesClaimValidation", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestLocalWindowsSandboxProfileFreezesAndRestores", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile", "TestFileQuerySourceReadsCombinedProjectView"}},
+	{"quick-owner-app", "github.com/erranliu/SteerLine/internal/app", []string{"TestNativeProjectInitializesOnceAndRejectsMismatchedBinding", "TestProjectConfigDecoderPreservesStrictSingleJSONValueAndBOM", "TestRunConfiguredServiceRejectsBeadsBeforeStartupWrites", "TestRunConfiguredServiceClosesTransferredStoreOnReturn", "TestAppConfigProjectsOwnerInputsAndSelectedProfile", "TestCM71ProductDependencyBoundary", "TestReadinessNativeLaunchKeepsDefaultModelAndPermissions", "TestPS2TerminalFixedProfileKeepsReadinessAndFrozenAuthority", "TestOrcaPreflightRequiresConfiguredCodexPolicyMapping", "TestPS2FixedWindowsProfilesFreezeAndRestore", "TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority", "TestNativeOrcaAgentSelectionUsesFrozenProfile", "TestFileQuerySourceReadsCombinedProjectView"}},
 }
 
 var quickPackages = func() []string {

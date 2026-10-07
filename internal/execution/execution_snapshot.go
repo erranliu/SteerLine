@@ -42,9 +42,6 @@ func verifyPolicyResources(c Config, directory *ExecutionDirectory, p *execution
 	if err := entry.VerifyPolicyResource(p.ImplementationData, identity); err != nil {
 		return fmt.Errorf("execution policy resource codec rejected its binding: %w", err)
 	}
-	if c.ExecutionPolicy.Filesystem.WriteScope == "host" && len(p.WriteRoots) != 0 {
-		return errors.New("full access policy must not claim bounded writable roots")
-	}
 	return nil
 }
 
@@ -80,7 +77,7 @@ func bindPolicyResources(ctx context.Context, c Config, directory *ExecutionDire
 		ProcessHost: processHost,
 		ProfileData: CloneImplementationData(c.ImplementationData), ProjectID: ConfigurationProjectIdentity(c),
 		ProfileID: c.selectedProfileID, AcceptedConfigVersion: c.acceptedConfigVersion, Resource: identity,
-		Policy: c.ExecutionPolicy, Host: c.hostName(), Agent: c.agentName(), Workspace: workspace,
+		Host: c.hostName(), Agent: c.agentName(), Workspace: workspace,
 		LinkedWorktreeArgs: append([]string(nil), linkedArgs...), RepositoryPath: c.Repository,
 		CommandTimeout: duration(c.CommandTimeout),
 	})

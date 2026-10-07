@@ -1,0 +1,167 @@
+{
+  "candidate": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-local-1728782467\\candidate",
+  "complete": true,
+  "development": {
+    "nonce": "acaca041766013c66c913b68b57633f0",
+    "sibling_denied": true,
+    "project_test": true,
+    "commit": "bd10f295801a76e316d3c17fed4b4c4593211e9c",
+    "pushed": "bd10f295801a76e316d3c17fed4b4c4593211e9c"
+  },
+  "execution": {
+    "policy_resources": {
+      "version": 3,
+      "digest": "dd5e5e4a2fc8cdad263e5598012d763242a5c957585edd28434a29ee0f46999c",
+      "profile_digest": "d64c6db3f18a8bfbcdaef6e571b108599322f83ada26eaec59ddb3412052f936",
+      "workspace": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-local-1728782467\\candidate",
+      "write_roots": [
+        "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-local-1728782467\\candidate",
+        "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-local-1728782467\\repo\\.git\\objects",
+        "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-local-1728782467\\repo\\.git\\refs",
+        "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-local-1728782467\\repo\\.git\\logs",
+        "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-local-1728782467\\repo\\.git\\worktrees\\candidate"
+      ],
+      "temporary_roots": [],
+      "implementation_data": {
+        "version": 1,
+        "codec_version": 2,
+        "purpose": "execution-resources",
+        "implementation_key": "codex.policy-resources",
+        "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-ps2-local-1728782467\\repo\\.git",
+        "execution_id": "0bc9c285f70e27cb937549f2d012f5c7",
+        "attempt_id": "d216cedb8e128298fdfded01bad86c07",
+        "generation": "22692e8cc882f5e731d046a266ab3877",
+        "config_digest": "d64c6db3f18a8bfbcdaef6e571b108599322f83ada26eaec59ddb3412052f936",
+        "digest": "d25226a2386fed141b70df4b92cc8dc9dc129b2d69bea0db9174b7c3f24a74a9",
+        "payload": {
+          "native_version": "codex-cli 0.159.2",
+          "contract": "codex-policy-v2:0.159.2:unelevated:explicit-roots:no-temp:auto_review",
+          "settings": {
+            "Executable": "C:\\Users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe",
+            "Args": [
+              "--config",
+              "sandbox_mode=workspace-write",
+              "--config",
+              "windows.sandbox=unelevated",
+              "--config",
+              "approval_policy=on-request",
+              "--config",
+              "approvals_reviewer=auto_review",
+              "--config",
+              "sandbox_workspace_write.writable_roots=[]",
+              "--config",
+              "sandbox_workspace_write.exclude_tmpdir_env_var=true",
+              "--config",
+              "sandbox_workspace_write.exclude_slash_tmp=true",
+              "--config",
+              "sandbox_workspace_write.network_access=true"
+            ],
+            "WorkingDirectory": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-local-1728782467\\candidate",
+            "EnvironmentRefs": null
+          }
+        }
+      }
+    },
+    "generation": "22692e8cc882f5e731d046a266ab3877",
+    "configuration_digest": "d64c6db3f18a8bfbcdaef6e571b108599322f83ada26eaec59ddb3412052f936",
+    "project_identity": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-ps2-local-1728782467\\repo\\.git",
+    "execution_id": "0bc9c285f70e27cb937549f2d012f5c7",
+    "current_attempt_id": "d216cedb8e128298fdfded01bad86c07",
+    "workflow_run_id": "568ea2b035c66cde7934b342ef55191f",
+    "process": {
+      "kind": "os",
+      "pid": 30836,
+      "created": "01dd55f8f67b4d71",
+      "executable": "c:\\users\\lmas1\\.local\\bin\\node_modules\\@openai\\codex\\node_modules\\@openai\\codex-win32-x64\\vendor\\x86_64-pc-windows-msvc\\bin\\codex.exe"
+    },
+    "target": {
+      "id": "local:windows:liuming-asus"
+    },
+    "workspace": {
+      "repository": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-ps2-local-1728782467\\repo\\.git",
+      "worktree": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-local-1728782467\\candidate",
+      "branch": "ps2-candidate",
+      "verified_at": "0001-01-01T00:00:00Z"
+    },
+    "status": "",
+    "created_at": "0001-01-01T00:00:00Z",
+    "updated_at": "0001-01-01T00:00:00Z"
+  },
+  "host": "local",
+  "native_journal": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-local-1728782467\\state\\runs\\568ea2b035c66cde7934b342ef55191f\\turns\\6b37342a10b7b41b9209d26fb53cffce\\appserver.jsonl",
+  "profile": {
+    "implementation_version": "builtin-execution-v3",
+    "implementation_key": "local/local_codex_app_server_v1/codex",
+    "implementation_data": [
+      {
+        "version": 1,
+        "codec_version": 2,
+        "purpose": "profile-config",
+        "implementation_key": "codex.worker-profile",
+        "project_id": "c:\\users\\lmas1\\appdata\\local\\temp\\steerline-ps2-local-1728782467\\repo\\.git",
+        "profile_id": "project-default",
+        "accepted_config_version": "fixture-accepted-v1",
+        "digest": "ea07ea3e383c45b35a231f27697e01d2204fa9ca466810ca5b46750a684c2d91",
+        "payload": {
+          "executable": "C:/Users/lmas1/.local/bin/node_modules/@openai/codex/node_modules/@openai/codex-win32-x64/vendor/x86_64-pc-windows-msvc/bin/codex.exe",
+          "model": "gpt-6-luna",
+          "reasoning_effort": "medium"
+        }
+      }
+    ],
+    "implementation_display": [
+      "权限：workspace-write",
+      "Windows 权限：unelevated",
+      "审批：on-request · auto_review",
+      "Model：gpt-6-luna",
+      "Reasoning effort：medium"
+    ],
+    "publication_policy": {
+      "publisher": "worker"
+    },
+    "publication": {
+      "provider": {
+        "kind": "command",
+        "base_url": "https://github.com",
+        "repository": "owner/repo",
+        "token_env": "",
+        "query": {
+          "executable": "C:\\Program Files\\GitHub CLI\\gh.exe",
+          "args": null
+        },
+        "close": {
+          "executable": "",
+          "args": null
+        }
+      },
+      "git": {
+        "executable": "C:\\Program Files\\Git\\cmd\\git.exe",
+        "args": null
+      },
+      "remote": "",
+      "remote_url": "",
+      "base_branch": "main",
+      "authentication_refs": [
+        "SSH_AUTH_SOCK",
+        "GIT_CONFIG_GLOBAL",
+        "GIT_SSH_COMMAND",
+        "GH_TOKEN",
+        "GITHUB_TOKEN",
+        "GH_CONFIG_DIR"
+      ]
+    },
+    "version": 7,
+    "accepted_config_version": "fixture-accepted-v1",
+    "id": "project-default",
+    "name": "Project default",
+    "digest": "d64c6db3f18a8bfbcdaef6e571b108599322f83ada26eaec59ddb3412052f936",
+    "host": "local",
+    "agent": "codex"
+  },
+  "review_marker_written": true,
+  "review_path": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-local-1728782467\\approved-review-marker.txt",
+  "root": "C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-local-1728782467",
+  "turn_id": "01a113eb-9e06-7361-bfa3-0ca1080e8912",
+  "uac_observation": "no administrator initialization or launch requested; capture records native output",
+  "uac_observed": false
+}

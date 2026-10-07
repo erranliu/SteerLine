@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -24,6 +23,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
@@ -287,7 +287,6 @@ func testIntegratedNativeSessionGate(t *testing.T, changeConfig bool) {
 		t.Fatalf("native cleanup repeated close or chose other resources: %+v", state)
 	}
 	assertNoTaskDelivery(t, rejected.runtime, rejected.run)
-
 }
 
 func sameNativePhysicalProcess(a, b executionbackend.ProcessIdentity) bool {
@@ -341,19 +340,16 @@ func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) inte
 	t.Setenv("STEERLINE_TEST_REMOTE_URL", remoteURL)
 	t.Setenv("STEERLINE_FAKE_GIT_FETCH_REMOTE", bare)
 
-	policy := executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "none"}, Network: "deny", Escalation: "deny"}
 	publisher := executionbackend.PublisherWorker
 	if host == "orca" {
-		policy.Filesystem.WriteScope, policy.Filesystem.GitMetadataWrite, policy.Network = "workspace", true, "allow"
 		publisher = executionbackend.PublisherWorker
 	}
 	codexProfile := codexworker.ProfileConfig{Executable: os.Args[0]}
 	if runtime.GOOS == "windows" && (host == "local" || host == "orca") {
-		codexProfile.WindowsSandbox = "unelevated"
 	}
 	codexPayload, err := codexworker.EncodeProfileConfig(codexProfile)
 	require(t, err)
-	implementationConfigs := []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: codexPayload}}
+	implementationConfigs := []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: codexPayload}}
 	stateDir := filepath.Join(root, "native-protocol")
 	if host == "orca" {
 		orcaPayload, encodeErr := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{
@@ -373,7 +369,7 @@ func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) inte
 		"repository": repository, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v1",
 		"task_poll": "1s", "pr_poll": "1m", "heartbeat": "1s", "command_timeout": "15s", "shutdown_grace": "5s",
 		"claimant": "integration", "git": executionbackend.Command{Executable: os.Args[0], Args: []string{"--fake", "publication-git", "git"}},
-		"executable_types": []string{"task"}, "execution_policy": policy,
+		"executable_types":   []string{"task"},
 		"publication_policy": executionbackend.PublicationPolicy{Publisher: publisher},
 		"pr": map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "owner/repo",
 			"query": executionbackend.Command{Executable: "git", Args: []string{"status"}}, "close": executionbackend.Command{Executable: "git", Args: []string{"status"}}},

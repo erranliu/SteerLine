@@ -41,7 +41,7 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 	if err != nil {
 		return nil, err
 	}
-	permissions, err := CompilePolicy(setup.Policy, runtime.GOOS, "local", "codex", profile.WindowsSandbox, profile.Profile, profile.Args)
+	permissions, err := NativePermissions(runtime.GOOS, "local", "codex")
 	if err != nil {
 		return nil, err
 	}
@@ -54,8 +54,8 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 	}
 	backend := Backend{
 		Config: Config{
-			Policy: setup.Policy, Executable: profile.Executable, Args: append([]string(nil), profile.Args...),
-			Profile: profile.Profile, Sandbox: permissions.Sandbox, WindowsSandbox: permissions.WindowsSandbox,
+			Executable: profile.Executable, Args: []string(nil),
+			Profile: "", Sandbox: permissions.Sandbox, WindowsSandbox: permissions.WindowsSandbox,
 			Model: profile.Model, ReasoningEffort: profile.ReasoningEffort, Workspace: snapshot.Ref.WorkspacePath,
 			RunDir: setup.RunDirectory, RunID: snapshot.Session.WorkflowRunID, ServerDir: serverDir,
 			Environment: processEnv,
@@ -68,7 +68,7 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 	if err := backend.Config.Validate(runtime.GOOS); err != nil {
 		return nil, err
 	}
-	history := ReaderCommand(executionbackend.Command{Executable: profile.Executable, Args: append([]string(nil), profile.Args...)}, profile.Profile)
+	history := ReaderCommand(executionbackend.Command{Executable: profile.Executable, Args: []string(nil)}, "")
 	return &ExecutionLifecycle{setup: setup, Backend: backend, HistoryCommand: history, ProbeLifecycle: func(ctx context.Context, probeSetup executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error) {
 		probeSetup.ProcessHost = setup.ProcessHost
 		return probeLifecycleCapabilities(ctx, backend, history, probeSetup)

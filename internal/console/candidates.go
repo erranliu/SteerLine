@@ -2,12 +2,12 @@ package console
 
 import (
 	"fmt"
-	api "github.com/erranliu/SteerLine/internal/product/api"
 	"sort"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 type CandidateDraft struct {
@@ -87,7 +87,6 @@ func candidateStartReason(s projectState, row *consoleRow, now time.Time) string
 		return reason
 	}
 	if rt := s.snapshot.Connection.Snapshot.Page; rt == nil || rt.Control.DispatchPaused || rt.Control.DispatchMode != "manual" {
-
 		return "新增候选需要当前手动派发且未暂停"
 	}
 	if api.ExecutionConfigMismatch(s.ref, s.snapshot) {
@@ -130,14 +129,12 @@ func (m Model) startAdditionalCandidate() (tea.Model, tea.Cmd) {
 
 func candidateAbandonReason(s projectState, row *consoleRow) string {
 	if row == nil || row.run == nil || row.native == nil {
-
 		return "缺少精确候选/Task版本"
 	}
 	if s.snapshot.NativeTaskError != "" || s.snapshot.HistoryError != "" {
 		return "当前候选/Task版本查询不可用；请刷新"
 	}
 	if row.run.Abandonment != nil {
-
 		return "候选已退出实验"
 	}
 	if row.run.TaskStatus != "in_progress" || row.run.FinishTaskStatus == "completed" {

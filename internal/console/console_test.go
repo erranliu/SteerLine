@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	api "github.com/erranliu/SteerLine/internal/product/api"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +13,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 type testClock struct{ now time.Time }
@@ -54,7 +54,6 @@ func testProject(key string) ProjectRef {
 func readySnapshot(ref ProjectRef, now time.Time) ProjectSnapshot {
 	last := now.Add(-time.Second)
 	runtime := &api.ServicePage{
-
 		Repository: api.RepositorySummary{Identity: ref.Identity},
 		Service:    api.ServiceSummary{ConfigDigest: ref.Presentation.ConfigDigest, InstanceID: "instance-" + ref.Name, Capabilities: []string{"start_task", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service"}},
 		Control:    api.ControlSummary{DispatchMode: "manual", Revision: 7},

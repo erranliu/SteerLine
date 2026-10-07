@@ -3,14 +3,13 @@ package integration
 import (
 	"context"
 	"encoding/json"
-	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	"github.com/erranliu/SteerLine/internal/execution"
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
@@ -21,15 +20,14 @@ func TestProjectPolicyClaimRejectsStaticConflictsBeforeNativeQuery(t *testing.T)
 	codex.Executable = filepath.Join(t.TempDir(), "must-never-be-called.exe")
 	setNativeProfile(t, &c, codex)
 	for _, mutate := range []func(*steerlineapp.Config){
-		func(c *steerlineapp.Config) { c.ExecutionPolicy = executionbackend.ExecutionPolicy{} },
 		func(c *steerlineapp.Config) {
 			settings := nativeProfileSettings(*c)
-			settings.Args = []string{"--add-dir=C:/"}
+			settings.Model = " invalid "
 			setNativeProfile(t, c, settings)
 		},
 		func(c *steerlineapp.Config) {
 			settings := nativeProfileSettings(*c)
-			settings.Args = []string{"-c", "approval_policy=on-request"}
+			settings.ReasoningEffort = "invalid"
 			setNativeProfile(t, c, settings)
 		},
 		func(c *steerlineapp.Config) {
@@ -39,7 +37,7 @@ func TestProjectPolicyClaimRejectsStaticConflictsBeforeNativeQuery(t *testing.T)
 		},
 		func(c *steerlineapp.Config) {
 			settings := nativeProfileSettings(*c)
-			settings.Profile = "native-profile"
+			settings.Model = "invalid\nmodel"
 			setNativeProfile(t, c, settings)
 		},
 		func(c *steerlineapp.Config) { c.Host = "orca_supervised" },
@@ -55,7 +53,7 @@ func TestProjectPolicyClaimRejectsStaticConflictsBeforeNativeQuery(t *testing.T)
 
 func TestProjectPolicyNativeReportsRetainOriginalSnapshotDigests(t *testing.T) {
 	for _, name := range []string{"local-native.json", "orca-native.json"} {
-		raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "validation", "execution-isolation-06-policy", name))
+		raw, err := exec.Command("git", "show", "172cea6c6530b6693b742324a9c1d4f9aeb17b6d:docs/validation/execution-isolation-06-policy/"+name).Output()
 		require(t, err)
 		var report struct {
 			Profile   executionmodel.FixedExecutionProfile `json:"profile"`

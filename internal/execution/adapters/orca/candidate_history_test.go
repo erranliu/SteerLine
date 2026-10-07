@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 )
@@ -14,16 +14,19 @@ import (
 func TestCandidateSessionLaunchKeepsOriginalHistoryIntentAndPolicy(t *testing.T) {
 	root := t.TempDir()
 	workspace := filepath.Join(root, "workspace")
-	policy := executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "host"}, Network: "allow", Escalation: "deny"}
 	snapshot := executionbackend.LifecycleSnapshot{Session: executionbackend.SessionContext{ProjectID: "project", TaskID: "1", WorkflowRunID: stableIDValue(1), ExecutionID: stableIDValue(2), AttemptID: stableIDValue(3)}, Ref: executionbackend.ExecutionRef{Backend: executionbackend.BackendOrca, Protocol: executionbackend.ProtocolOrcaTerminalV2, Target: executionbackend.ExecutionTarget{ID: "native-target", WorktreeID: "native-worktree"}}, ResourceGeneration: "generation", ConfigurationDigest: "config"}
 	identity := codexworker.PolicyResourceIdentity{ProjectID: snapshot.Session.ProjectID, ExecutionID: snapshot.Session.ExecutionID, AttemptID: snapshot.Session.AttemptID, Generation: snapshot.ResourceGeneration, ConfigDigest: snapshot.ConfigurationDigest}
-	settings := executionbackend.LaunchCommand{Executable: "native-codex", WorkingDirectory: workspace, Args: []string{"--model", "gpt-6-luna", "--config", "sandbox_mode=danger-full-access", "--config", "approval_policy=never"}}
-	resource, err := codexworker.NewPolicyResourceEnvelope(identity, codexworker.PolicyResourcePayload{NativeVersion: codexworker.PolicyCodexVersion, Contract: codexworker.FullAccessPolicyContract, Settings: settings})
+	permissions, err := codexworker.NativePermissions("windows", "orca", "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	settings := executionbackend.LaunchCommand{Executable: "native-codex", WorkingDirectory: workspace, Args: append([]string{"--model", "gpt-6-luna"}, permissions.Args()...)}
+	resource, err := codexworker.NewPolicyResourceEnvelope(identity, codexworker.PolicyResourcePayload{NativeVersion: codexworker.PolicyCodexVersion, Contract: codexworker.PolicyContract, Settings: settings})
 	if err != nil {
 		t.Fatal(err)
 	}
 	snapshot.PolicyResources = &resource
-	l := ExecutionLifecycle{setup: executionbackend.LifecycleSetup{RunDirectory: root, Policy: policy, ProcessHost: resourceprocess.Host{}}, codex: codexworker.ProfileConfig{Model: "gpt-6-luna"}}
+	l := ExecutionLifecycle{setup: executionbackend.LifecycleSetup{RunDirectory: root, ProcessHost: resourceprocess.Host{}}, codex: codexworker.ProfileConfig{Model: "gpt-6-luna"}}
 	command, err := l.agentLaunchCommand(snapshot, workspace)
 	if err != nil {
 		t.Fatal(err)
@@ -39,7 +42,7 @@ func TestCandidateSessionLaunchKeepsOriginalHistoryIntentAndPolicy(t *testing.T)
 	if err := json.Unmarshal(raw, &launch); err != nil {
 		t.Fatal(err)
 	}
-	if launch.Binding.ExecutionID != snapshot.Session.ExecutionID || launch.Binding.AttemptID != snapshot.Session.AttemptID || launch.Binding.ExternalRef != "native-worktree" || launch.Binding.TargetID != "native-target" || launch.Binding.Command.Executable != "native-codex" || launch.Binding.SessionID != "" || launch.Prompt != "" || launch.Sandbox != "danger-full-access" || len(launch.Args) != len(settings.Args) {
+	if launch.Binding.ExecutionID != snapshot.Session.ExecutionID || launch.Binding.AttemptID != snapshot.Session.AttemptID || launch.Binding.ExternalRef != "native-worktree" || launch.Binding.TargetID != "native-target" || launch.Binding.Command.Executable != "native-codex" || launch.Binding.SessionID != "" || launch.Prompt != "" || launch.Sandbox != "workspace-write" || len(launch.Args) != len(settings.Args) {
 		t.Fatalf("history launch lost native identity/policy: %+v", launch)
 	}
 	if _, err := l.agentLaunchCommand(snapshot, workspace); err != nil {

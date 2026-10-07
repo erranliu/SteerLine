@@ -8,7 +8,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
-const WorkerFlowRuntimeSchema = 18
+const WorkerFlowRuntimeSchema = 19
 
 type CheckpointRepository struct {
 	Path     string `json:"path"`
@@ -18,8 +18,6 @@ type CheckpointRepository struct {
 }
 
 type CheckpointServiceState struct {
-	ExecutionPolicy     executionbackend.ExecutionPolicy  `json:"execution_policy"`
-	PolicySource        string                            `json:"policy_source"`
 	Mode                string                            `json:"mode"`
 	InstanceID          string                            `json:"instance_id"`
 	PID                 int                               `json:"pid"`

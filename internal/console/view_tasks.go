@@ -2,9 +2,10 @@ package console
 
 import (
 	"fmt"
-	api "github.com/erranliu/SteerLine/internal/product/api"
 	"strings"
 	"time"
+
+	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 func projectCounts(state projectState, now time.Time) (ready, cached, running, decision, merge, attention int) {
@@ -143,10 +144,8 @@ func rowTaskStatus(row consoleRow) string {
 		return displayTaskStatus(row.native.Status)
 	}
 	if row.kind == rowReady {
-
 		return "可开始"
 	}
-
 	return "未知"
 }
 
@@ -225,7 +224,6 @@ func displayTaskStatus(status string) string {
 		return "已完成"
 	default:
 		if strings.HasPrefix(status, "需处理") {
-
 			return "需处理"
 		}
 		return status
@@ -262,11 +260,9 @@ func contentWindow(rows []consoleRow, selected string, size int) []consoleRow {
 
 func runStatus(run *api.CandidateSummary) string {
 	if run == nil {
-
 		return "unknown"
 	}
 	if run.FinishTaskStatus == "waiting_decision" {
-
 		return "待决策"
 	}
 	if run.ExecutionStatus == "unknown" || run.ExecutionStatus == "failed" || run.ExecutionStatus == "blocked" || run.FinishTaskStatus == "blocked" {
@@ -287,7 +283,6 @@ func runStatus(run *api.CandidateSummary) string {
 		return "completed"
 	}
 	if run.TaskStatus == "in_progress" && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running") {
-
 		return "进行中"
 	}
 	if run.FinishTaskStatus != "" {

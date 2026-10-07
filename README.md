@@ -44,4 +44,4 @@ UI 操作记录采用格式 2，存于 `<STEERLINE_HOME>/ui/views/<window>/view.
 
 [会话事件与完整正文](docs/product-design/conversation-events.md) · [Activity 读取契约](docs/product-design/activity.md)
 
-Windows Orca Codex 受管方案还要求在 `codex.worker-profile` 配置载荷中显式设置 `windows_sandbox`，先在原会话核验 readiness 探针与原生结算，再派发业务。宿主等待通过中心待决策显示来源及可信程度，提供打开原 terminal、重新检查动作。此实现已通过审计定向回归及隔离真机闭环，详见[环境验收记录](docs/validation/worker-readiness.md)。
+Windows local 与 Orca/Codex 固定使用 workspace-write、unelevated、on-request 与 auto_review；项目不配置 execution_policy/execution_requirements，全局 Codex 输入只包含 executable/model/reasoning_effort。Orca 先在原会话核验既有 readiness 探针与原生结算，再派发业务。宿主等待通过中心待决策显示来源及可信程度，提供打开原 terminal、重新检查动作。此实现已通过审计定向回归及隔离真机闭环，详见[环境验收记录](docs/validation/worker-readiness.md)。

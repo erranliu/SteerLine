@@ -1,0 +1,199 @@
+[
+  {
+    "id": "38f19f3e-02d3-48c7-89b0-c809463d2bee::C:/Users/lmas1/orca/workspaces/repo/ps2-5d8eacf3f61b",
+    "stage": "removed",
+    "exit": 0,
+    "close": {
+      "id": "b16ff9e2-7e84-421c-ac24-6286a055dc26",
+      "ok": true,
+      "result": {
+        "closed": 0,
+        "stopped": 0,
+        "retiredSurfaces": true
+      },
+      "_meta": {
+        "runtimeId": "f2df0f50-5dfa-4828-9766-4123851ab5a5"
+      }
+    },
+    "result": {
+      "id": "e6a867a1-1948-4999-bde3-a8af4fcbd8b6",
+      "ok": true,
+      "result": {
+        "removed": true
+      },
+      "_meta": {
+        "runtimeId": "f2df0f50-5dfa-4828-9766-4123851ab5a5"
+      }
+    }
+  },
+  {
+    "id": "1d323c46-a2b8-4b9c-a95d-2ea097b61052::C:/Users/lmas1/orca/workspaces/repo/ps2-9c4bc017cfa9",
+    "stage": "removed",
+    "exit": 0,
+    "close": {
+      "id": "ee10ced1-e87b-4fac-9863-07775b2c86db",
+      "ok": true,
+      "result": {
+        "closed": 1,
+        "stopped": 1,
+        "retiredSurfaces": true
+      },
+      "_meta": {
+        "runtimeId": "f2df0f50-5dfa-4828-9766-4123851ab5a5"
+      }
+    },
+    "result": {
+      "id": "7b2e9ae4-ca24-4c4f-8451-b1402823ec8b",
+      "ok": true,
+      "result": {
+        "removed": true,
+        "preservedBranch": {
+          "branchName": "ps2-9c4bc017cfa9",
+          "head": "d924ad140b1d6786ac34b15f5dad594335cd3afe"
+        }
+      },
+      "_meta": {
+        "runtimeId": "f2df0f50-5dfa-4828-9766-4123851ab5a5"
+      }
+    }
+  },
+  {
+    "id": "aaa30545-3c49-4c23-a035-96c34af4edfe::C:/Users/lmas1/orca/workspaces/repo/ps2-12ec8b5b8812",
+    "stage": "removed",
+    "exit": 0,
+    "close": {
+      "id": "930a80de-0495-4a1a-8277-389a9fb0d44b",
+      "ok": true,
+      "result": {
+        "closed": 1,
+        "stopped": 1,
+        "retiredSurfaces": true
+      },
+      "_meta": {
+        "runtimeId": "f2df0f50-5dfa-4828-9766-4123851ab5a5"
+      }
+    },
+    "result": {
+      "id": "d5bec54f-7c90-4104-86b1-bd8450db772f",
+      "ok": true,
+      "result": {
+        "removed": true
+      },
+      "_meta": {
+        "runtimeId": "f2df0f50-5dfa-4828-9766-4123851ab5a5"
+      }
+    }
+  },
+  {
+    "id": "e0748205-f47a-4e07-bda6-c102324d6d23::C:/Users/lmas1/orca/workspaces/repo/ps2-b1f9eb4d0c19",
+    "stage": "removed",
+    "exit": 0,
+    "close": {
+      "id": "29f47dae-3b60-43fa-816e-a7496f520ef7",
+      "ok": true,
+      "result": {
+        "closed": 1,
+        "stopped": 1,
+        "retiredSurfaces": true
+      },
+      "_meta": {
+        "runtimeId": "f2df0f50-5dfa-4828-9766-4123851ab5a5"
+      }
+    },
+    "result": {
+      "id": "5fd52d28-97b8-4023-9835-f277342c67c1",
+      "ok": true,
+      "result": {
+        "removed": true,
+        "preservedBranch": {
+          "branchName": "ps2-b1f9eb4d0c19",
+          "head": "9eb77caba16dd444fe5c6bac404c9f7de4ba2c43"
+        }
+      },
+      "_meta": {
+        "runtimeId": "f2df0f50-5dfa-4828-9766-4123851ab5a5"
+      }
+    }
+  },
+  {
+    "id": "ccdcc226-e719-4815-840c-a318fe9b2352::C:/Users/lmas1/orca/workspaces/repo/ps2-c6e90edb5175",
+    "stage": "removed",
+    "exit": 0,
+    "close": {
+      "id": "02597c12-fc4f-4492-abc2-83684bfcf2d8",
+      "ok": true,
+      "result": {
+        "closed": 1,
+        "stopped": 1,
+        "retiredSurfaces": true
+      },
+      "_meta": {
+        "runtimeId": "f2df0f50-5dfa-4828-9766-4123851ab5a5"
+      }
+    },
+    "result": {
+      "id": "2f376f71-7b5d-4812-acf6-f46999eaf90c",
+      "ok": true,
+      "result": {
+        "removed": true
+      },
+      "_meta": {
+        "runtimeId": "f2df0f50-5dfa-4828-9766-4123851ab5a5"
+      }
+    }
+  },
+  {
+    "id": "db74f664-f07e-4c84-a670-ae360b095a1a::C:/Users/lmas1/orca/workspaces/repo/ps2-21f253f2aa92",
+    "stage": "removed",
+    "exit": 0,
+    "close": {
+      "id": "ce93c74a-4fa3-426b-a601-c86401b1f312",
+      "ok": true,
+      "result": {
+        "closed": 1,
+        "stopped": 1,
+        "retiredSurfaces": true
+      },
+      "_meta": {
+        "runtimeId": "f2df0f50-5dfa-4828-9766-4123851ab5a5"
+      }
+    },
+    "result": {
+      "id": "e67ae30a-94ff-4da9-aac3-2fb7e8a28748",
+      "ok": true,
+      "result": {
+        "removed": true
+      },
+      "_meta": {
+        "runtimeId": "f2df0f50-5dfa-4828-9766-4123851ab5a5"
+      }
+    }
+  },
+  {
+    "id": "3ab15a15-5ae5-4a19-9ad3-50828568958c::C:/Users/lmas1/orca/workspaces/repo/ps2-435cd8813522",
+    "stage": "removed",
+    "exit": 0,
+    "close": {
+      "id": "e0d73ee6-3045-4789-ab02-a18aa8f44df8",
+      "ok": true,
+      "result": {
+        "closed": 1,
+        "stopped": 1,
+        "retiredSurfaces": true
+      },
+      "_meta": {
+        "runtimeId": "f2df0f50-5dfa-4828-9766-4123851ab5a5"
+      }
+    },
+    "result": {
+      "id": "00d83796-87fe-4554-9764-9e60132a0d00",
+      "ok": true,
+      "result": {
+        "removed": true
+      },
+      "_meta": {
+        "runtimeId": "f2df0f50-5dfa-4828-9766-4123851ab5a5"
+      }
+    }
+  }
+]

@@ -45,11 +45,14 @@ STEERLINE_HOME 的默认值和路径解析由 [app/config.go](../../internal/app
 | 格式 | 当前值 | 源码 |
 | --- | --- | --- |
 | 工作流协议 | worker-flow-v1 | [model/state.go](../../internal/execution/model/state.go) |
-| SQLite schema | 14 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
-| 服务 checkpoint / runtime | 18 | [ports/checkpoint.go](../../internal/storage/ports/checkpoint.go) |
-| FixedExecutionProfile | 6 | [execution_profiles.go](../../internal/execution/execution_profiles.go) |
+| SQLite schema | 15 | [sqlite/reader.go](../../internal/storage/sqlite/reader.go) |
+| 服务 checkpoint / runtime | 19 | [ports/checkpoint.go](../../internal/storage/ports/checkpoint.go) |
+| FixedExecutionProfile | 7 | [execution_profiles.go](../../internal/execution/execution_profiles.go) |
 | ConversationEvent | 2 | [model/conversation.go](../../internal/execution/model/conversation.go) |
 | 全局执行配置 | 2 | [app/config.go](../../internal/app/config.go) |
+| Codex profile codec | 2 | [codex/profile_config.go](../../internal/execution/adapters/codex/profile_config.go) |
+| Codex resource codec | 2 | [codex/policy_resources.go](../../internal/execution/adapters/codex/policy_resources.go) |
+| 内建执行目录 | builtin-execution-v3 | [app/directory.go](../../internal/app/directory.go) |
 
 身份版本、配置格式和某次验收的工具版本不是同一事实。历史报告保留其原版本，不能拿历史格式作为当前入口要求。
 

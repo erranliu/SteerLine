@@ -81,7 +81,7 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*sqlite.SQLiteStore,
 	} else if !os.IsNotExist(err) {
 		return nil, err
 	}
-	if err := steerline.EnsureNativeStateClean(c.RunDir, c.Repository, applicationCapabilityValidation{}); err != nil {
+	if err := steerline.EnsureNativeStateClean(c.RunDir, c.Repository); err != nil {
 		return nil, err
 	}
 	target, err := c.TaskRepositoryTarget(ctx)
@@ -128,7 +128,7 @@ func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*sqlite.SQLiteS
 		return nil, taskError("unsupported_profile", "execution directory is required")
 	}
 	for _, profile := range c.AvailableExecutionProfiles() {
-		if _, _, err := c.ExecutionDirectory.NormalizeProfileInputs(profile.ImplementationConfigs, profile.ExecutionPolicy, profile.Host, profile.Agent, execution.ConfigurationProjectIdentity(c.executionBase()), profile.ID, profile.AcceptedConfigVersion); err != nil {
+		if _, _, err := c.ExecutionDirectory.NormalizeProfileInputs(profile.ImplementationConfigs, profile.Host, profile.Agent, execution.ConfigurationProjectIdentity(c.executionBase()), profile.ID, profile.AcceptedConfigVersion); err != nil {
 			return nil, err
 		}
 	}

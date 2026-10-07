@@ -6,13 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"slices"
 	"strings"
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -67,7 +67,7 @@ func lifecycleSetupForRun(run *reconstructiontypes.RunView, fixed workerFlowCont
 	return executionbackend.LifecycleSetup{
 		Snapshot: snapshot.Clone(), ProfileData: CloneImplementationData(fixed.config.ImplementationData),
 		ProfileID: fixed.config.selectedProfileID, AcceptedConfigVersion: fixed.config.acceptedConfigVersion,
-		Policy: fixed.config.ExecutionPolicy, ProcessHost: processHost, RepositoryPath: fixed.config.Repository,
+		ProcessHost: processHost, RepositoryPath: fixed.config.Repository,
 		RunDirectory: fixed.config.RunDir, CommandTimeout: duration(fixed.config.CommandTimeout),
 		AttemptNumber: run.DomainAttemptNumber, BlockedEnvironment: blocked,
 		GitExecutable: fixed.config.Git.Executable, GitArgs: append([]string(nil), fixed.config.Git.Args...),
@@ -97,7 +97,7 @@ func lifecycleSetupForConfig(c Config, entry ExecutionRegistration, processHost 
 	return executionbackend.LifecycleSetup{
 		Snapshot: snapshot, ProfileData: CloneImplementationData(c.ImplementationData),
 		ProfileID: c.selectedProfileID, AcceptedConfigVersion: c.acceptedConfigVersion,
-		Policy: c.ExecutionPolicy, ProcessHost: processHost,
+		ProcessHost:    processHost,
 		RepositoryPath: c.Repository, RunDirectory: c.RunDir, CommandTimeout: duration(c.CommandTimeout),
 		AttemptNumber: 1, BlockedEnvironment: blocked, GitExecutable: c.Git.Executable,
 		GitArgs: append([]string(nil), c.Git.Args...), RemoteName: c.Remote, TargetBranch: c.Branch,
@@ -987,11 +987,9 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *reconstructiont
 	if candidate.Action == executionbackend.LifecycleCreateResource &&
 		lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots && fixed.execution.PolicyResources == nil {
 		var linkedArgs []string
-		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace" {
-			linkedArgs, err = linkedWorktreeWriteArgs(ctx, fixed.config, s.runtime.Directory, fixed.execution.Workspace.Worktree)
-			if err != nil {
-				return err
-			}
+		linkedArgs, err = linkedWorktreeWriteArgs(ctx, fixed.config, s.runtime.Directory, fixed.execution.Workspace.Worktree)
+		if err != nil {
+			return err
 		}
 		if err = bindPolicyResources(ctx, fixed.config, s.runtime.Directory, s.runtime.ProcessHost, fixed.execution, fixed.execution.Workspace.Worktree, linkedArgs); err != nil {
 			return err
@@ -1072,11 +1070,9 @@ func (s *Service) applyLifecycleStepReceipt(run *reconstructiontypes.RunView, re
 	}
 	if receipt.Process != nil && fixed.execution.PolicyResources == nil && lifecycle.PolicyCapabilities().LinkedWorkspaceWriteRoots {
 		var linkedArgs []string
-		if fixed.config.ExecutionPolicy.Filesystem.WriteScope == "workspace" {
-			linkedArgs, err = linkedWorktreeWriteArgs(ctx, fixed.config, s.runtime.Directory, fixed.execution.Workspace.Worktree)
-			if err != nil {
-				return err
-			}
+		linkedArgs, err = linkedWorktreeWriteArgs(ctx, fixed.config, s.runtime.Directory, fixed.execution.Workspace.Worktree)
+		if err != nil {
+			return err
 		}
 		if err = bindPolicyResources(ctx, fixed.config, s.runtime.Directory, s.runtime.ProcessHost, fixed.execution, fixed.execution.Workspace.Worktree, linkedArgs); err != nil {
 			return err

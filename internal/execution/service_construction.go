@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	"os"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -105,11 +105,11 @@ func NewService(c Config, runtime RuntimeDependencies, settings RuntimeSettings,
 	if c.selectedProfileID != "" {
 		selectedProfile = c.selectedProfileID
 	}
-	_, selectedFixed, err := runtime.Profiles.ResolveExecutionProfile(selectedProfile, c.fixedProfileDigest)
+	_, _, err := runtime.Profiles.ResolveExecutionProfile(selectedProfile, c.fixedProfileDigest)
 	if err != nil {
 		return nil, fmt.Errorf("resolve initial execution profile: %w", err)
 	}
-	s.State.Service = reconstruction.ServiceState{ExecutionPolicy: c.ExecutionPolicy, PolicySource: selectedFixed.PolicySource, InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: settings.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: capabilities, ConfigDigest: c.acceptedConfigVersion, HeartbeatIntervalMS: settings.Heartbeat.Milliseconds()}
+	s.State.Service = reconstruction.ServiceState{InstanceID: newID(), PID: os.Getpid(), Status: "running", Claimant: settings.Claimant, Mode: "maintenance", Ready: false, ControlProtocol: ControlProtocolVersion, Capabilities: capabilities, ConfigDigest: c.acceptedConfigVersion, HeartbeatIntervalMS: settings.Heartbeat.Milliseconds()}
 	identity, err := host.CurrentProcessIdentity()
 	if err != nil {
 		return nil, fmt.Errorf("identify service process: %w", err)

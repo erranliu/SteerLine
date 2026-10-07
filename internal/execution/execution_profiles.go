@@ -13,38 +13,36 @@ import (
 )
 
 const ProjectExecutionProfileID = "project-default"
-const fixedExecutionProfileVersion = 6
+const fixedExecutionProfileVersion = 7
 
 // ExecutionProfile is one app catalog entry. It contains serialized profile
 // inputs and derived values, but no directory, process host or profile catalog.
 type ExecutionProfile struct {
-	directory              *ExecutionDirectory
-	ExecutionRequirements  executionbackend.ExecutionRequirements        `json:"-"`
-	RequirementsEvaluation *executionbackend.RequirementsEvaluation      `json:"-"`
-	PublicationPolicy      executionbackend.PublicationPolicy            `json:"-"`
-	Publication            executionmodel.PublicationSettings            `json:"-"`
-	ExecutionPolicy        executionbackend.ExecutionPolicy              `json:"-"`
-	ImplementationConfigs  []executionbackend.ImplementationConfigInput  `json:"implementation_configs"`
-	ImplementationData     []executionbackend.ImplementationDataEnvelope `json:"-"`
-	ImplementationDisplay  []string                                      `json:"-"`
-	AcceptedConfigVersion  string                                        `json:"-"`
-	PolicySource           string                                        `json:"-"`
-	ID                     string                                        `json:"id"`
-	Name                   string                                        `json:"name"`
-	Host                   string                                        `json:"host"`
-	Agent                  string                                        `json:"agent"`
-	projectIdentity        string
+	directory *ExecutionDirectory
+
+	PublicationPolicy executionbackend.PublicationPolicy `json:"-"`
+	Publication       executionmodel.PublicationSettings `json:"-"`
+
+	ImplementationConfigs []executionbackend.ImplementationConfigInput  `json:"implementation_configs"`
+	ImplementationData    []executionbackend.ImplementationDataEnvelope `json:"-"`
+	ImplementationDisplay []string                                      `json:"-"`
+	AcceptedConfigVersion string                                        `json:"-"`
+
+	ID              string `json:"id"`
+	Name            string `json:"name"`
+	Host            string `json:"host"`
+	Agent           string `json:"agent"`
+	projectIdentity string
 }
 
 // ProfileCatalog is a short-lived app-side projection used to validate and
 // select one entry. It is never retained by an execution service.
 type ProfileCatalog struct {
-	Base         Config
-	Directory    *ExecutionDirectory
-	Profiles     []ExecutionProfile
-	DefaultID    string
-	Global       bool
-	PolicySource string
+	Base      Config
+	Directory *ExecutionDirectory
+	Profiles  []ExecutionProfile
+	DefaultID string
+	Global    bool
 }
 
 func (catalog ProfileCatalog) CheckFixedProfile(profile executionmodel.FixedExecutionProfile) error {
@@ -78,21 +76,17 @@ func (p ExecutionProfile) Freeze(args ...any) executionmodel.FixedExecutionProfi
 	if accepted == "" {
 		accepted = "unaccepted-profile-input"
 	}
-	data, display, _ := directory.NormalizeProfile(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, accepted)
-	p.ExecutionRequirements = p.ExecutionRequirements.Clone()
-	if p.RequirementsEvaluation != nil {
-		evaluation := p.RequirementsEvaluation.Clone()
-		p.RequirementsEvaluation = &evaluation
-	}
+	data, display, _ := directory.NormalizeProfile(p.ImplementationConfigs, p.Host, p.Agent, projectID, p.ID, accepted)
+
 	p.Publication = clonePublicationSettings(p.Publication)
 	fixed := executionmodel.FixedExecutionProfile{
 		Version: fixedExecutionProfileVersion, ImplementationVersion: directory.Version(),
 		ImplementationKey: profileImplementationKey(directory, p.Host, p.Agent), ImplementationData: CloneImplementationData(data),
-		ImplementationDisplay: slices.Clone(display), ExecutionRequirements: p.ExecutionRequirements,
-		RequirementsEvaluation: p.RequirementsEvaluation, RequirementsEvidenceDigest: requirementsEvidenceDigest(p.RequirementsEvaluation),
-		PublicationPolicy: p.PublicationPolicy, Publication: p.Publication, ExecutionPolicy: p.ExecutionPolicy,
-		PolicyDigest: digestValue(p.ExecutionPolicy), AcceptedConfigVersion: accepted, PolicySource: p.PolicySource,
-		ID: p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent,
+		ImplementationDisplay: slices.Clone(display),
+
+		PublicationPolicy: p.PublicationPolicy, Publication: p.Publication,
+		AcceptedConfigVersion: accepted,
+		ID:                    p.ID, Name: p.Name, Host: p.Host, Agent: p.Agent,
 	}
 	fixed.Digest = fixedExecutionProfileDigest(fixed)
 	return fixed
@@ -103,33 +97,11 @@ func fixedExecutionProfileDigest(p executionmodel.FixedExecutionProfile) string 
 	return digestValue(p)
 }
 
-func cloneRequirementsEvaluation(value *executionbackend.RequirementsEvaluation) *executionbackend.RequirementsEvaluation {
-	if value == nil {
-		return nil
-	}
-	copy := value.Clone()
-	return &copy
-}
-
 func VerifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile, directory *ExecutionDirectory) bool {
-	return verifyFixedExecutionProfile(p, directory, false)
-}
-
-// verifyPreEvaluationExecutionProfile validates the selected profile identity
-// before claim-time requirements are evaluated. A missing evaluation is
-// allowed only at this boundary; the persisted claim profile is verified by
-// VerifyFixedExecutionProfile after its evaluation has been frozen.
-func verifyPreEvaluationExecutionProfile(p executionmodel.FixedExecutionProfile, directory *ExecutionDirectory) bool {
-	return verifyFixedExecutionProfile(p, directory, true)
-}
-
-func verifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile, directory *ExecutionDirectory, allowPendingRequirements bool) bool {
 	if directory == nil || p.Version != fixedExecutionProfileVersion || p.ImplementationVersion != directory.Version() ||
 		p.ImplementationKey == "" || p.ID == "" || p.Name == "" || p.AcceptedConfigVersion == "" ||
-		p.PolicySource == "" || p.Digest == "" || p.Digest != fixedExecutionProfileDigest(p) ||
-		!verifyRequirementsSnapshot(p, directory, allowPendingRequirements) ||
-		publication.ValidateSettings(p.Publication) != nil || p.ExecutionPolicy.Validate() != nil ||
-		p.PolicyDigest != digestValue(p.ExecutionPolicy) {
+		p.Digest == "" || p.Digest != fixedExecutionProfileDigest(p) ||
+		publication.ValidateSettings(p.Publication) != nil {
 		return false
 	}
 	entry, err := directory.Resolve(Config{Host: p.Host, Agent: p.Agent})
@@ -147,7 +119,7 @@ func verifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile, directo
 		}
 		inputs = append(inputs, executionbackend.ImplementationConfigInput{ImplementationKey: envelope.ImplementationKey, CodecVersion: envelope.CodecVersion, Payload: append([]byte(nil), envelope.Payload...)})
 	}
-	data, display, err := directory.NormalizeProfile(inputs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, p.AcceptedConfigVersion)
+	data, display, err := directory.NormalizeProfile(inputs, p.Host, p.Agent, projectID, p.ID, p.AcceptedConfigVersion)
 	if err != nil || digestValue(data) != digestValue(p.ImplementationData) || digestValue(display) != digestValue(p.ImplementationDisplay) {
 		return false
 	}
@@ -156,8 +128,7 @@ func verifyFixedExecutionProfile(p executionmodel.FixedExecutionProfile, directo
 
 func (c Config) ApplyFixedExecutionProfile(p executionmodel.FixedExecutionProfile, directory *ExecutionDirectory) Config {
 	c.frozenExecutionConfig = true
-	c.ExecutionRequirements = p.ExecutionRequirements.Clone()
-	c.requirementsEvaluation = cloneRequirementsEvaluation(p.RequirementsEvaluation)
+
 	c.PublicationPolicy = p.PublicationPolicy
 	c.PR, c.Git, c.Remote, c.publicationRemoteURL, c.Branch = p.Publication.Provider, p.Publication.Git, p.Publication.Remote, p.Publication.RemoteURL, p.Publication.BaseBranch
 	c.Host, c.Agent = p.Host, p.Agent
@@ -171,7 +142,6 @@ func (c Config) ApplyFixedExecutionProfile(p executionmodel.FixedExecutionProfil
 	c.selectedProfileID = p.ID
 	c.fixedProfileDigest = p.Digest
 	c.acceptedConfigVersion = p.AcceptedConfigVersion
-	c.ExecutionPolicy = p.ExecutionPolicy
 	return copyWorkerFlowConfig(c)
 }
 
@@ -200,7 +170,7 @@ func (p ExecutionProfile) DigestFor(args ...any) string {
 	if accepted == "" {
 		accepted = "unaccepted-profile-input"
 	}
-	if _, _, err := directory.NormalizeProfile(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, accepted); err != nil {
+	if _, _, err := directory.NormalizeProfile(p.ImplementationConfigs, p.Host, p.Agent, projectID, p.ID, accepted); err != nil {
 		return ""
 	}
 	return p.Freeze(directory, projectID).Digest
@@ -214,9 +184,7 @@ func (p ExecutionProfile) StaticUnavailableReason(directories ...*ExecutionDirec
 	if directory == nil {
 		return "execution directory is required"
 	}
-	if err := p.ExecutionRequirements.Validate(); err != nil {
-		return err.Error()
-	}
+
 	entry, err := directory.Resolve(Config{Host: p.Host, Agent: p.Agent})
 	if err != nil {
 		return err.Error()
@@ -235,29 +203,26 @@ func (p ExecutionProfile) StaticUnavailableReason(directories ...*ExecutionDirec
 	if accepted == "" {
 		accepted = "unaccepted-profile-input"
 	}
-	if _, _, err := directory.NormalizeProfile(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, projectID, p.ID, accepted); err != nil {
+	if _, _, err := directory.NormalizeProfile(p.ImplementationConfigs, p.Host, p.Agent, projectID, p.ID, accepted); err != nil {
 		return err.Error()
 	}
 	return ""
 }
 
-func (c ProfileCatalog) bindProjectPolicy(p ExecutionProfile) ExecutionProfile {
+func (c ProfileCatalog) bindProjectConfiguration(p ExecutionProfile) ExecutionProfile {
 	p.directory = c.Directory
 	p.ImplementationConfigs = cloneImplementationInputs(p.ImplementationConfigs)
-	p.ExecutionRequirements = c.Base.ExecutionRequirements.Clone()
-	p.RequirementsEvaluation = cloneRequirementsEvaluation(c.Base.requirementsEvaluation)
+
 	p.PublicationPolicy = c.Base.PublicationPolicy
 	p.Publication = clonePublicationSettings(c.Base.publicationSettings())
-	p.ExecutionPolicy, p.AcceptedConfigVersion, p.PolicySource = c.Base.ExecutionPolicy, c.Base.acceptedConfigVersion, c.PolicySource
+	p.AcceptedConfigVersion = c.Base.acceptedConfigVersion
 	if p.AcceptedConfigVersion == "" {
 		p.AcceptedConfigVersion = "unaccepted-profile-input"
 	}
-	if p.PolicySource == "" {
-		p.PolicySource = "service:explicit-config"
-	}
+
 	p.projectIdentity = ConfigurationProjectIdentity(c.Base)
 	if c.Directory != nil {
-		data, display, err := c.Directory.NormalizeProfileInputs(p.ImplementationConfigs, p.ExecutionPolicy, p.Host, p.Agent, p.projectIdentity, p.ID, p.AcceptedConfigVersion)
+		data, display, err := c.Directory.NormalizeProfileInputs(p.ImplementationConfigs, p.Host, p.Agent, p.projectIdentity, p.ID, p.AcceptedConfigVersion)
 		if err == nil {
 			p.ImplementationData, p.ImplementationDisplay = data, display
 		}
@@ -268,21 +233,21 @@ func (c ProfileCatalog) bindProjectPolicy(p ExecutionProfile) ExecutionProfile {
 func (c ProfileCatalog) projectExecutionProfile() ExecutionProfile {
 	inputs := implementationInputsFromData(c.Base.ImplementationData)
 	p := ExecutionProfile{ID: ProjectExecutionProfileID, Name: "项目默认", Host: c.Base.hostName(), Agent: c.Base.agentName(), ImplementationConfigs: inputs}
-	return c.bindProjectPolicy(p)
+	return c.bindProjectConfiguration(p)
 }
 
 func (c ProfileCatalog) AvailableExecutionProfiles() []ExecutionProfile {
 	if c.Global {
 		out := make([]ExecutionProfile, 0, len(c.Profiles))
 		for _, profile := range c.Profiles {
-			out = append(out, c.bindProjectPolicy(profile))
+			out = append(out, c.bindProjectConfiguration(profile))
 		}
 		return out
 	}
 	out := make([]ExecutionProfile, 0, len(c.Profiles)+1)
 	out = append(out, c.projectExecutionProfile())
 	for _, profile := range c.Profiles {
-		out = append(out, c.bindProjectPolicy(profile))
+		out = append(out, c.bindProjectConfiguration(profile))
 	}
 	return out
 }
@@ -330,9 +295,7 @@ func (c ProfileCatalog) SelectExecutionProfile(id string) (Config, ExecutionProf
 		}
 		selected := c.Base
 		selected.PublicationPolicy = profile.PublicationPolicy
-		selected.ExecutionRequirements = profile.ExecutionRequirements.Clone()
-		selected.requirementsEvaluation = cloneRequirementsEvaluation(profile.RequirementsEvaluation)
-		selected.ExecutionPolicy = profile.ExecutionPolicy
+
 		selected.PR, selected.Git = profile.Publication.Provider, profile.Publication.Git
 		selected.Remote, selected.Branch, selected.publicationRemoteURL = profile.Publication.Remote, profile.Publication.BaseBranch, profile.Publication.RemoteURL
 		selected.Host, selected.Agent = profile.Host, profile.Agent
@@ -355,18 +318,14 @@ func (c ProfileCatalog) Validate() error {
 	if c.Directory == nil {
 		return errors.New("execution directory is required")
 	}
-	if err := c.Base.ExecutionRequirements.Validate(); err != nil {
-		return err
-	}
+
 	if err := c.Base.PublicationPolicy.Validate(); err != nil {
 		return err
 	}
 	if err := publication.ValidateNonSecret(publication.Config(c.Base.PR), c.Base.Git); err != nil {
 		return err
 	}
-	if err := c.Base.ExecutionPolicy.Validate(); err != nil {
-		return err
-	}
+
 	ids := map[string]bool{}
 	if !c.Global {
 		ids[ProjectExecutionProfileID] = true
@@ -377,7 +336,7 @@ func (c ProfileCatalog) Validate() error {
 			return fmt.Errorf("execution profile ID or name is invalid: %q", profile.ID)
 		}
 		ids[profile.ID] = true
-		bound := c.bindProjectPolicy(profile)
+		bound := c.bindProjectConfiguration(profile)
 		if reason := bound.StaticUnavailableReason(c.Directory); reason != "" {
 			return fmt.Errorf("execution profile %s: %s", profile.ID, reason)
 		}

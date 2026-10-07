@@ -1,0 +1,9 @@
+{"Time":"2026-10-07T09:12:25.1804131+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/app"}
+{"Time":"2026-10-07T09:12:25.4996952+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestPS2NativeDeveloperAndAutomaticReview"}
+{"Time":"2026-10-07T09:12:25.4996952+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestPS2NativeDeveloperAndAutomaticReview","Output":"=== RUN   TestPS2NativeDeveloperAndAutomaticReview\n"}
+{"Time":"2026-10-07T09:12:46.5595558+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestPS2NativeDeveloperAndAutomaticReview","Output":"    ps2_native_windows_test.go:155: native fixture C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-local-1728782467 C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-local-1728782467\\candidate\n"}
+{"Time":"2026-10-07T09:13:36.3712243+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestPS2NativeDeveloperAndAutomaticReview","Output":"--- PASS: TestPS2NativeDeveloperAndAutomaticReview (70.87s)\n"}
+{"Time":"2026-10-07T09:13:36.3712243+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestPS2NativeDeveloperAndAutomaticReview","Elapsed":70.87}
+{"Time":"2026-10-07T09:13:36.3712243+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Output":"PASS\n"}
+{"Time":"2026-10-07T09:13:36.3849998+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/app\t71.206s\n"}
+{"Time":"2026-10-07T09:13:36.3849998+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/app","Elapsed":71.206}

@@ -35,7 +35,7 @@ func TestTurnStartParamsKeepApprovalAndWritableRoots(t *testing.T) {
 		t.Fatal(err)
 	}
 	policy, ok := params["sandboxPolicy"].(map[string]any)
-	if !ok || policy["type"] != "workspaceWrite" || params["approvalPolicy"] != "never" || params["effort"] != "high" {
+	if !ok || policy["type"] != "workspaceWrite" || params["approvalPolicy"] != "on-request" || params["approvalsReviewer"] != "auto_review" || params["effort"] != "high" {
 		t.Fatalf("native turn policy changed: %+v", params)
 	}
 	writable, ok := policy["writableRoots"].([]string)

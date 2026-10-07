@@ -479,7 +479,7 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 		t.Fatalf("native claim initialized workspace repository with a non-identity path: %+v", snapshot.Executions)
 	}
 	alteredWorkflow := page.Tasks[0].WorkflowRuns[0]
-	alteredWorkflow.ExecutionProfile.ExecutionPolicy.Network = "deny"
+	alteredWorkflow.ExecutionProfile.Name = "altered"
 	if err = store.transactRecords(ctx, func(tx *fixtureTransaction) error { return tx.PutWorkflowRun(alteredWorkflow) }); err == nil || !strings.Contains(err.Error(), "immutable_task") {
 		t.Fatalf("claim workflow gates were edited after reservation: %v", err)
 	}

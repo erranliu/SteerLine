@@ -7,7 +7,6 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
-
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
@@ -48,7 +47,7 @@ func TestWorkerFlowContextsDoNotExchangeExecutionProfiles(t *testing.T) {
 		neutralProfile(t, "second", "Second", neutralSettings{Executable: "fixture-b", Model: "model-b", Args: []string{"--no-alt-screen"}}),
 	}
 	dependencies, _ := neutralFixtureRuntime(base)
-	catalog := ProfileCatalog{Base: base, Directory: dependencies.Directory, Profiles: routes, DefaultID: "first", Global: true, PolicySource: "fixture:config"}
+	catalog := ProfileCatalog{Base: base, Directory: dependencies.Directory, Profiles: routes, DefaultID: "first", Global: true}
 	service := Service{Config: base, baseConfig: base, runtime: dependencies}
 	for _, route := range routes {
 		id := route.ID
@@ -81,6 +80,6 @@ func TestWorkerFlowContextsDoNotExchangeExecutionProfiles(t *testing.T) {
 }
 
 func workerContextConfigFixture() Config {
-	config := Config{Repository: "repo", Branch: "main", Remote: "origin", publicationRemoteURL: "https://github.com/owner/repo.git", Host: "local", Agent: "fixture", WorkflowProtocol: executionmodel.Version, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Git: executionbackend.Command{Executable: "git"}}
+	config := Config{Repository: "repo", Branch: "main", Remote: "origin", publicationRemoteURL: "https://github.com/owner/repo.git", Host: "local", Agent: "fixture", WorkflowProtocol: executionmodel.Version, PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Git: executionbackend.Command{Executable: "git"}}
 	return withNeutralProfile(config, neutralSettings{Executable: os.Args[0]})
 }

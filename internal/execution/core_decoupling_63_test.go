@@ -17,7 +17,6 @@ func TestCD63FrozenConfigAndBinding(t *testing.T) {
 		{"question_route_identity", TestCD62NativeFactsAndQuestionRoute},
 		{"question_route_receipt_barrier", TestCD62QuestionReceiptBarrier},
 		{"profile_copy_isolation", TestWorkerFlowContextsDoNotExchangeExecutionProfiles},
-		{"requirements_block_new_intents", TestResolutionAuditRequirementsBlockOnlyNewWorkerIntents},
 	} {
 		t.Run(test.name, test.run)
 	}

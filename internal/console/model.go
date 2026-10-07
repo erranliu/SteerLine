@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	api "github.com/erranliu/SteerLine/internal/product/api"
 	"runtime"
 	"sort"
 	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 type Clock interface {
@@ -933,7 +933,6 @@ func filterName(index int) string {
 
 		return "history"
 	}
-
 	return "all"
 }
 
@@ -1170,23 +1169,18 @@ func terminalCapabilities() string {
 
 func projectStatus(ref ProjectRef, snapshot ProjectSnapshot) string {
 	if ref.Error != "" {
-
 		return "配置错误"
 	}
 	if ref.Conflict != "" {
-
 		return "关联冲突"
 	}
 	if snapshot.Connection.State == api.ConnectionConnected {
-
 		return "已连接"
 	}
 	if snapshot.Connection.State == api.ConnectionOffline || snapshot.Connection.State == api.ConnectionNoRecord {
-
 		return "离线"
 	}
 	if snapshot.Connection.State == "" {
-
 		return "读取中"
 	}
 	return string(snapshot.Connection.State)

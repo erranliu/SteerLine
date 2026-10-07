@@ -27,7 +27,7 @@ func TestPrepareSessionRetainsPartialProcessReceiptOnWriteFailure(t *testing.T) 
 	root := t.TempDir()
 	sentinel := errors.New("receipt persistence failed")
 	process := &capturedProcess{identity: executionbackend.ProcessIdentity{PID: 123, Created: "456", Executable: os.Args[0]}}
-	backend := Backend{Config: Config{Policy: policyFixture(), Executable: os.Args[0], Workspace: root, RunDir: root, RunID: strings.Repeat("a", 32), ServerDir: filepath.Join(root, "server"), Sandbox: "workspace-write", WindowsSandbox: "elevated", Environment: func(env []string) []string { return env }}, Process: ProcessPort{Start: func(*exec.Cmd) (executionbackend.StopHandle, error) { return process, nil }, NewGeneration: func() string { return "new-generation" }, WriteAtomic: func(path string, raw []byte) error {
+	backend := Backend{Config: Config{Executable: os.Args[0], Workspace: root, RunDir: root, RunID: strings.Repeat("a", 32), ServerDir: filepath.Join(root, "server"), Sandbox: "workspace-write", WindowsSandbox: "unelevated", Environment: func(env []string) []string { return env }}, Process: ProcessPort{Start: func(*exec.Cmd) (executionbackend.StopHandle, error) { return process, nil }, NewGeneration: func() string { return "new-generation" }, WriteAtomic: func(path string, raw []byte) error {
 		if filepath.Base(path) == "process.json" {
 			return sentinel
 		}
@@ -42,7 +42,7 @@ func TestPrepareSessionRetainsPartialProcessReceiptOnWriteFailure(t *testing.T) 
 func TestPrepareSessionRejectsInvalidSettingsBeforeAnySideEffect(t *testing.T) {
 	root := t.TempDir()
 	called := false
-	backend := Backend{Config: Config{Policy: policyFixture(), Executable: os.Args[0], Workspace: root, RunDir: root, RunID: strings.Repeat("a", 32), ServerDir: filepath.Join(root, "server"), Sandbox: "invalid"}, Process: ProcessPort{Start: func(*exec.Cmd) (executionbackend.StopHandle, error) { called = true; return nil, nil }, WriteAtomic: func(string, []byte) error { called = true; return nil }}}
+	backend := Backend{Config: Config{Executable: os.Args[0], Workspace: root, RunDir: root, RunID: strings.Repeat("a", 32), ServerDir: filepath.Join(root, "server"), Sandbox: "invalid"}, Process: ProcessPort{Start: func(*exec.Cmd) (executionbackend.StopHandle, error) { called = true; return nil, nil }, WriteAtomic: func(string, []byte) error { called = true; return nil }}}
 	_, _, err := backend.PrepareSession(context.Background(), Binding{}, executionbackend.TurnInput{CommandID: strings.Repeat("b", 32), Prompt: "fixed input"})
 	if err == nil || called {
 		t.Fatal("invalid settings reached side effects")

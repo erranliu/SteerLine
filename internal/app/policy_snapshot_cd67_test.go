@@ -8,22 +8,21 @@ import (
 )
 
 func TestProjectPolicyFrozenSnapshotRejectsDamageAndPreservesAuthority(t *testing.T) {
-	c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), ExecutionPolicy: workspacePolicyFixture(), Repository: "repository", Branch: "main", Host: "local", Agent: "codex"}
+	c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture(), Repository: "repository", Branch: "main", Host: "local", Agent: "codex"}
 	setTestCodexProfile(t, &c, codexworker.ProfileConfig{Executable: "codex"})
 	original := unitProjectProfile(c).Freeze()
 	if !testVerifyFixedExecutionProfile(original) {
 		t.Fatalf("valid snapshot rejected: %+v", original)
 	}
-	c.ExecutionPolicy.Network = "deny"
 	codex := codexProfileSettings(c.executionConfig())
-	codex.WindowsSandbox = "unelevated"
+	codex.Model = "changed-model"
 	setTestCodexProfile(t, &c, codex)
 	restored := c.ApplyFixedExecutionProfile(original)
-	if restored.ExecutionPolicy.Network != "allow" || codexProfileSettings(restored.executionConfig()).WindowsSandbox != "elevated" {
+	if codexProfileSettings(restored.executionConfig()).Model == "changed-model" {
 		t.Fatal("current config rewrote existing authority")
 	}
 	for _, mutate := range []func(*executionmodel.FixedExecutionProfile){
-		func(p *executionmodel.FixedExecutionProfile) { p.Version = 1 }, func(p *executionmodel.FixedExecutionProfile) { p.ExecutionPolicy.Network = "deny" }, func(p *executionmodel.FixedExecutionProfile) { p.ImplementationData[0].Payload[0] = '[' }, func(p *executionmodel.FixedExecutionProfile) { p.AcceptedConfigVersion = "edited" }, func(p *executionmodel.FixedExecutionProfile) { p.PolicyDigest = "edited" },
+		func(p *executionmodel.FixedExecutionProfile) { p.Version = 1 }, func(p *executionmodel.FixedExecutionProfile) { p.ImplementationVersion = "edited" }, func(p *executionmodel.FixedExecutionProfile) { p.ImplementationData[0].Payload[0] = '[' }, func(p *executionmodel.FixedExecutionProfile) { p.AcceptedConfigVersion = "edited" }, func(p *executionmodel.FixedExecutionProfile) { p.Digest = "edited" },
 	} {
 		copy := original
 		copy.ImplementationData = append(copy.ImplementationData[:0:0], original.ImplementationData...)

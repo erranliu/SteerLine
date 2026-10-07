@@ -2,8 +2,6 @@ package host
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -325,40 +323,4 @@ func fixtureGit(t *testing.T, dir string, args ...string) string {
 		t.Fatalf("git %v: %v: %s", args, err, output)
 	}
 	return strings.TrimSpace(string(output))
-}
-
-func seedFakeCapabilities(t *testing.T, c execution.Config) {
-	t.Helper()
-	if err := os.MkdirAll(c.RunDir, 0700); err != nil {
-		t.Fatal(err)
-	}
-	data := []byte("fake platform fixture: " + t.Name())
-	sum := sha256.Sum256(data)
-	path := filepath.Join(c.RunDir, "execution", "v1", "evidence", hex.EncodeToString(sum[:])+".json")
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		t.Fatal(err)
-	}
-	if err := AtomicWrite(path, data); err != nil {
-		t.Fatal(err)
-	}
-	evidence := path + "#sha256=" + hex.EncodeToString(sum[:])
-	dependencies := hostFixtureRuntime(c)
-	backend, protocol := execution.BackendFor(c, dependencies.Directory).Identity()
-	version := "fixture-version-1"
-	report := capabilityReport(backend, protocol, execution.TargetFor(c, dependencies.Directory), execution.AgentFor(c), version)
-	for i := range report.Capabilities {
-		name := report.Capabilities[i].Name
-		if name == "output_turns" || name == "output_final_answer" {
-			continue
-		}
-		if name == "resource_settlement" {
-			report.Capabilities[i].Status = executionbackend.CapabilityUnsupported
-			continue
-		}
-		report.Capabilities[i].Status = executionbackend.CapabilityVerified
-		report.Capabilities[i].Evidence = evidence
-	}
-	if err := execution.SaveExecutionCapabilityReport(c, testExecutionResources{}, report); err != nil {
-		t.Fatal(err)
-	}
 }

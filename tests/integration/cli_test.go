@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,6 +15,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 )
 
@@ -87,15 +87,15 @@ func TestTaskCLIProcessUsesNativeAuthorityWithoutInitializingMissingRead(t *test
 	if err := os.MkdirAll(home, 0700); err != nil {
 		t.Fatal(err)
 	}
-	profilePayload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "elevated"})
-	writeConfig(t, steerlineapp.GlobalExecutionConfigPath(), map[string]any{"version": 2, "execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "implementation_configs": []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: profilePayload}}}}})
+	profilePayload, _ := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex"})
+	writeConfig(t, steerlineapp.GlobalExecutionConfigPath(), map[string]any{"version": 2, "execution_profiles": []map[string]any{{"id": "local", "name": "Local Codex", "host": "local", "agent": "codex", "implementation_configs": []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: profilePayload}}}}})
 	writeConfig(t, configPath, map[string]any{
-		"repository":         repo,
-		"remote":             "origin",
-		"branch":             "main",
-		"task_authority":     "native",
-		"workflow_protocol":  executionmodel.Version,
-		"execution_policy":   executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"},
+		"repository":        repo,
+		"remote":            "origin",
+		"branch":            "main",
+		"task_authority":    "native",
+		"workflow_protocol": executionmodel.Version,
+
 		"publication_policy": executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker},
 		"pr":                 map[string]any{"kind": "command", "base_url": "https://github.com", "repository": "owner/repo", "query": map[string]any{"executable": "gh"}},
 	})

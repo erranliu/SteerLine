@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -24,10 +24,6 @@ const WorkerFlowVersion = executionmodel.Version
 
 const ProjectExecutionProfileID = execution.ProjectExecutionProfileID
 
-func workspacePolicyFixture() executionbackend.ExecutionPolicy {
-	return executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
-}
-
 func executionPublicationFixture() executionbackend.PublicationPolicy {
 	return executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker}
 }
@@ -38,16 +34,9 @@ func hostPublicationProviderFixture() executionmodel.PRProviderConfig {
 
 func testExecutionProfile(t *testing.T, id, name, host, agent string, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remoteConfig ...*remote.ProfileConfig) ExecutionProfile {
 	t.Helper()
-	if worker.WindowsSandbox == "" {
-		if host == "local" {
-			worker.WindowsSandbox = "elevated"
-		} else if host == "orca" {
-			worker.WindowsSandbox = "unelevated"
-		}
-	}
 	payload, err := codexworker.EncodeProfileConfig(worker)
 	require(t, err)
-	p := ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent, ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload}}}
+	p := ExecutionProfile{ID: id, Name: name, Host: host, Agent: agent, ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload}}}
 	if host != "local" {
 		if terminal == nil {
 			t.Fatal("terminal profile settings missing")
@@ -151,7 +140,7 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 	fixtureGit(t, repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.invalid", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture")
 	fixtureGit(t, repo, "remote", "add", "origin", "https://github.com/owner/repo.git")
 	localGlobalExecutionFixture(t)
-	c := Config{Repository: repo, Remote: "origin", Branch: "main", Git: executionbackend.Command{Executable: "git"}, CommandTimeout: "5s", TaskPoll: "1s", PRPoll: "1s", Heartbeat: "1s", ShutdownGrace: "1s", TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
+	c := Config{Repository: repo, Remote: "origin", Branch: "main", Git: executionbackend.Command{Executable: "git"}, CommandTimeout: "5s", TaskPoll: "1s", PRPoll: "1s", Heartbeat: "1s", ShutdownGrace: "1s", TaskAuthority: "native", WorkflowProtocol: WorkerFlowVersion, PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
 	c.ExecutableTypes = []string{"task"}
 	path := filepath.Join(t.TempDir(), "project.json")
 	require(t, os.WriteFile(path, projectConfigJSON(t, c), 0600))
@@ -163,9 +152,6 @@ func nativeTaskFixture(t *testing.T) (Config, string) {
 
 func bindUnitDirectory(t *testing.T, c Config) Config {
 	t.Helper()
-	if c.ExecutionPolicy.Filesystem.ReadScope == "" {
-		c.ExecutionPolicy = workspacePolicyFixture()
-	}
 	if c.PublicationPolicy.Publisher == "" {
 		c.PublicationPolicy = executionPublicationFixture()
 	}

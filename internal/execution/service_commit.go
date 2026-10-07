@@ -1,7 +1,6 @@
 package execution
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 
@@ -302,31 +301,7 @@ func (s *Service) startWorkerOperation(run *reconstruction.RunView, kind, key st
 	if err != nil {
 		return "", err
 	}
-	workflow := s.workflowRecord(run)
-	if workerOperationRequiresRequirements(kind) && workflow != nil && workflow.ExecutionProfile != nil && !workflow.ExecutionProfile.ExecutionRequirements.Empty() {
-		fixed, err := s.workerFlowContext(run)
-		if err != nil {
-			return "", err
-		}
-		// Existing outcomes remain read-only reconcileable; a pending intent has
-		// not been sent and still needs current requirements before transmission.
-		needsCheck := true
-		for _, op := range s.domain.Operations {
-			if op.IdempotencyKey == key && op.Status != "pending" {
-				needsCheck = false
-				break
-			}
-		}
-		if needsCheck {
-			ctx := s.runContext
-			if ctx == nil {
-				ctx = context.Background()
-			}
-			if err = s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
-				return "", err
-			}
-		}
-	}
+
 	for _, existing := range s.domain.Operations {
 		if existing.IdempotencyKey != key {
 			continue
@@ -367,13 +342,4 @@ func (s *Service) startWorkerOperation(run *reconstruction.RunView, kind, key st
 func lifecycleOperationKind(kind string) bool {
 	return knownLifecycleAction(executionbackend.LifecycleAction(kind)) || kind == "worker_input_value" || kind == "prepare_worker_session" ||
 		kind == "start_worker_turn" || kind == "submit_worker_input" || kind == "reply_execution_question" || kind == "stop_worker_observation"
-}
-
-func workerOperationRequiresRequirements(kind string) bool {
-	switch kind {
-	case "stop_worker_observation", "cleanup_resources", "acknowledge_delivery":
-		return false
-	default:
-		return true
-	}
 }

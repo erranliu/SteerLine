@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
-	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +12,8 @@ import (
 	"time"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
+	executionvalues "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
@@ -105,9 +105,6 @@ func (p *additionalPort) InspectWorkspace(ctx context.Context, ref executionback
 }
 
 func (p *additionalPort) PreflightLifecycle(_ context.Context, setup executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error) {
-	if setup.Policy.Filesystem.WriteScope != "none" || setup.Policy.Network != "deny" {
-		return executionbackend.CapabilityReport{}, errors.New("fixture supports only read-only, offline policy")
-	}
 	return additionalReport(setup.Snapshot.Ref), nil
 }
 

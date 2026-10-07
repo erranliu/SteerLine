@@ -3,10 +3,10 @@ package execution
 import (
 	"context"
 	"errors"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -25,9 +25,7 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskReco
 		return errors.New("existing worker execution requires a fresh manual recovery decision")
 	}
 	c := fixed.config
-	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
-		return err
-	}
+
 	if err := c.BindPublicationTarget(ctx, s.runtime.ProcessHost); err != nil {
 		return err
 	}
@@ -206,9 +204,7 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructionty
 	if err := verifyPublicationTargetForRun(ctx, c, s.runtime.Directory, s.runtime.ProcessHost, run); err != nil {
 		return err
 	}
-	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
-		return err
-	}
+
 	prompt += publicationTargetInstruction(c)
 	execution.PendingTurnID, execution.PendingCommandID = "", turnID
 	lifecycle, fixed, err := s.lifecycleForRun(run)

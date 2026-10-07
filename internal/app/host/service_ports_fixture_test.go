@@ -67,7 +67,7 @@ func hostConfigForTest(c execution.Config) Config {
 		Claimant: "operator", ConfigDigest: c.AcceptedConfigVersion(), TaskAuthority: "native",
 		WorkflowProtocol: c.WorkflowProtocol, TaskPoll: "10s", PRPoll: "30s", Heartbeat: "5s",
 		CommandTimeout: c.CommandTimeout, ShutdownGrace: "10s", ProcessFacts: resourceprocess.NewServiceFacts(),
-		CapabilityValidation: fixtureCapabilityValidation{}, ControlValidation: fixtureControlValidation{},
+		ControlValidation: fixtureControlValidation{},
 	}
 	h.RuntimeReader = func(ctx context.Context, input Config) (*reconstruction.Runtime, error) {
 		if err := input.RequireNativeTaskAuthority(); err != nil {
@@ -112,15 +112,6 @@ func executionConfigForHostTest(base execution.Config, input Config) (execution.
 		return base, errors.New("host test identity differs from execution fixture")
 	}
 	return base, nil
-}
-
-type fixtureCapabilityValidation struct{}
-
-func (fixtureCapabilityValidation) Key(report executionbackend.CapabilityReport) string {
-	return execution.CapabilityReportKey(report)
-}
-func (fixtureCapabilityValidation) Verify(root string, report executionbackend.CapabilityReport) error {
-	return execution.VerifyStoredCapabilityReport(root, report)
 }
 
 type fixtureControlValidation struct{}
@@ -246,30 +237,29 @@ func validateNativeStateLocation(c execution.Config) error {
 
 func loadFixtureConfig(path string) (execution.Config, error) {
 	type projectInput struct {
-		PublicationPolicy       executionbackend.PublicationPolicy     `json:"publication_policy"`
-		ExecutionPolicy         executionbackend.ExecutionPolicy       `json:"execution_policy"`
-		ExecutionRequirements   executionbackend.ExecutionRequirements `json:"execution_requirements,omitempty"`
-		Repository              string                                 `json:"repository"`
-		TaskAuthority           string                                 `json:"task_authority,omitempty"`
-		Remote                  string                                 `json:"remote"`
-		Branch                  string                                 `json:"branch"`
-		RunDir                  string                                 `json:"run_dir"`
-		WorktreeRoot            string                                 `json:"worktree_root"`
-		Claimant                string                                 `json:"claimant"`
-		Git                     executionbackend.Command               `json:"git"`
-		WorkflowProtocol        string                                 `json:"workflow_protocol,omitempty"`
-		ExecutableTypes         []string                               `json:"executable_types"`
-		TaskPoll                string                                 `json:"task_poll"`
-		PRPoll                  string                                 `json:"pr_poll"`
-		Heartbeat               string                                 `json:"heartbeat"`
-		CommandTimeout          string                                 `json:"command_timeout"`
-		ShutdownGrace           string                                 `json:"shutdown_grace"`
-		Host                    string                                 `json:"host"`
-		Agent                   string                                 `json:"agent"`
-		ExecutionProfiles       []execution.ExecutionProfile           `json:"execution_profiles,omitempty"`
-		DefaultExecutionProfile string                                 `json:"default_execution_profile,omitempty"`
-		StallTimeout            string                                 `json:"stall_timeout"`
-		PR                      executionmodel.PRProviderConfig        `json:"pr"`
+		PublicationPolicy executionbackend.PublicationPolicy `json:"publication_policy"`
+
+		Repository              string                          `json:"repository"`
+		TaskAuthority           string                          `json:"task_authority,omitempty"`
+		Remote                  string                          `json:"remote"`
+		Branch                  string                          `json:"branch"`
+		RunDir                  string                          `json:"run_dir"`
+		WorktreeRoot            string                          `json:"worktree_root"`
+		Claimant                string                          `json:"claimant"`
+		Git                     executionbackend.Command        `json:"git"`
+		WorkflowProtocol        string                          `json:"workflow_protocol,omitempty"`
+		ExecutableTypes         []string                        `json:"executable_types"`
+		TaskPoll                string                          `json:"task_poll"`
+		PRPoll                  string                          `json:"pr_poll"`
+		Heartbeat               string                          `json:"heartbeat"`
+		CommandTimeout          string                          `json:"command_timeout"`
+		ShutdownGrace           string                          `json:"shutdown_grace"`
+		Host                    string                          `json:"host"`
+		Agent                   string                          `json:"agent"`
+		ExecutionProfiles       []execution.ExecutionProfile    `json:"execution_profiles,omitempty"`
+		DefaultExecutionProfile string                          `json:"default_execution_profile,omitempty"`
+		StallTimeout            string                          `json:"stall_timeout"`
+		PR                      executionmodel.PRProviderConfig `json:"pr"`
 	}
 	c := execution.Config{}
 	projectPath, err := filepath.Abs(path)
@@ -290,12 +280,7 @@ func loadFixtureConfig(path string) (execution.Config, error) {
 	if input.WorkflowProtocol != executionmodel.Version {
 		return c, errors.New("workflow_protocol must be worker-flow-v1")
 	}
-	if err := input.ExecutionPolicy.Validate(); err != nil {
-		return c, err
-	}
-	if err := input.ExecutionRequirements.Validate(); err != nil {
-		return c, err
-	}
+
 	if err := publication.ValidateNonSecret(publication.Config(input.PR), input.Git); err != nil {
 		return c, err
 	}
@@ -331,7 +316,7 @@ func loadFixtureConfig(path string) (execution.Config, error) {
 	if input.CommandTimeout == "" {
 		input.CommandTimeout = "30s"
 	}
-	c = execution.Config{PublicationPolicy: input.PublicationPolicy, ExecutionPolicy: input.ExecutionPolicy, ExecutionRequirements: input.ExecutionRequirements,
+	c = execution.Config{PublicationPolicy: input.PublicationPolicy,
 		Repository: input.Repository, Remote: input.Remote, Branch: input.Branch, RunDir: input.RunDir, WorktreeRoot: input.WorktreeRoot,
 		Git: input.Git, WorkflowProtocol: input.WorkflowProtocol, CommandTimeout: input.CommandTimeout, PR: input.PR}
 	c.BindAcceptedConfigVersion(operationDigest(append(append([]byte(nil), projectBytes...), globalBytes...)))
@@ -360,7 +345,7 @@ func loadFixtureConfig(path string) (execution.Config, error) {
 	} else if !filepath.IsAbs(c.WorktreeRoot) {
 		c.WorktreeRoot = filepath.Join(base, c.WorktreeRoot)
 	}
-	catalog := execution.ProfileCatalog{Base: c, Directory: directory, Profiles: global.ExecutionProfiles, DefaultID: global.DefaultProfile, Global: true, PolicySource: projectPath}
+	catalog := execution.ProfileCatalog{Base: c, Directory: directory, Profiles: global.ExecutionProfiles, DefaultID: global.DefaultProfile, Global: true}
 	if err := catalog.Validate(); err != nil {
 		return c, err
 	}

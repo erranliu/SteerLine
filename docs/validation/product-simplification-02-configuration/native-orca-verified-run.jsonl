@@ -1,0 +1,10 @@
+{"Time":"2026-10-07T09:54:28.7697164+08:00","Action":"start","Package":"github.com/erranliu/SteerLine/internal/app"}
+{"Time":"2026-10-07T09:54:28.9700115+08:00","Action":"run","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestPS2NativeDeveloperAndAutomaticReview"}
+{"Time":"2026-10-07T09:54:28.970547+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestPS2NativeDeveloperAndAutomaticReview","Output":"=== RUN   TestPS2NativeDeveloperAndAutomaticReview\n"}
+{"Time":"2026-10-07T09:54:40.389612+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestPS2NativeDeveloperAndAutomaticReview","Output":"    ps2_native_windows_test.go:102: owned Orca worktree e0748205-f47a-4e07-bda6-c102324d6d23::C:/Users/lmas1/orca/workspaces/repo/ps2-b1f9eb4d0c19 C:\\Users\\lmas1\\orca\\workspaces\\repo\\ps2-b1f9eb4d0c19\n"}
+{"Time":"2026-10-07T09:54:43.0219385+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestPS2NativeDeveloperAndAutomaticReview","Output":"    ps2_native_windows_test.go:191: native fixture C:\\Users\\lmas1\\AppData\\Local\\Temp\\steerline-ps2-orca-3398420067 C:\\Users\\lmas1\\orca\\workspaces\\repo\\ps2-b1f9eb4d0c19\n"}
+{"Time":"2026-10-07T09:55:35.1886869+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestPS2NativeDeveloperAndAutomaticReview","Output":"--- PASS: TestPS2NativeDeveloperAndAutomaticReview (66.22s)\n"}
+{"Time":"2026-10-07T09:55:35.1886869+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/app","Test":"TestPS2NativeDeveloperAndAutomaticReview","Elapsed":66.22}
+{"Time":"2026-10-07T09:55:35.1886869+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Output":"PASS\n"}
+{"Time":"2026-10-07T09:55:35.2020129+08:00","Action":"output","Package":"github.com/erranliu/SteerLine/internal/app","Output":"ok  \tgithub.com/erranliu/SteerLine/internal/app\t66.433s\n"}
+{"Time":"2026-10-07T09:55:35.2025431+08:00","Action":"pass","Package":"github.com/erranliu/SteerLine/internal/app","Elapsed":66.434}

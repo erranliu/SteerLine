@@ -191,5 +191,5 @@ func stableIDValue(last byte) string {
 }
 
 func codexProfileForTest() codexworker.ProfileConfig {
-	return codexworker.ProfileConfig{Executable: "codex", WindowsSandbox: "unelevated"}
+	return codexworker.ProfileConfig{Executable: "codex"}
 }

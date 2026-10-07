@@ -5,8 +5,8 @@ package evidence
 import (
 	"errors"
 
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
@@ -36,21 +36,21 @@ func codexSettings(domain reconstruction.Snapshot) (codexworker.ProfileConfig, e
 }
 
 // FullAccess checks frozen authority and the identity-bound launch receipt.
-func FullAccess(domain reconstruction.Snapshot) error {
+func FixedNativeLaunch(domain reconstruction.Snapshot) error {
 	if len(domain.WorkflowRuns) != 1 || len(domain.Executions) != 1 {
-		return errors.New("full-access evidence needs one bound workflow/execution")
+		return errors.New("native launch evidence needs one bound workflow/execution")
 	}
 	profile := domain.WorkflowRuns[0].ExecutionProfile
 	e := domain.Executions[0]
 	resources := e.PolicyResources
-	if profile == nil || profile.ExecutionPolicy.Filesystem.WriteScope != "host" || profile.ExecutionPolicy.Network != "allow" || resources == nil || len(resources.WriteRoots) != 0 {
-		return errors.New("execution did not bind explicit full-access policy")
+	if profile == nil || resources == nil || len(resources.WriteRoots) == 0 {
+		return errors.New("execution did not bind fixed native launch roots")
 	}
-	settings, err := codexSettings(domain)
+	_, err := codexSettings(domain)
 	if err != nil {
 		return err
 	}
-	compiled, err := codexworker.CompilePolicy(profile.ExecutionPolicy, "windows", profile.Host, profile.Agent, settings.WindowsSandbox, settings.Profile, settings.Args)
+	compiled, err := codexworker.NativePermissions("windows", profile.Host, profile.Agent)
 	if err != nil {
 		return err
 	}
@@ -58,8 +58,8 @@ func FullAccess(domain reconstruction.Snapshot) error {
 	if err != nil {
 		return err
 	}
-	if compiled.Sandbox != "danger-full-access" || compiled.ApprovalPolicy != "never" || compiled.WindowsSandbox != "" || bound.Contract != codexworker.FullAccessPolicyContract {
-		return errors.New("native codec did not bind full-access settings")
+	if compiled.Sandbox != "workspace-write" || compiled.ApprovalPolicy != "on-request" || compiled.ApprovalsReviewer != "auto_review" || compiled.WindowsSandbox != "unelevated" || bound.Contract != codexworker.PolicyContract {
+		return errors.New("native codec did not bind fixed native settings")
 	}
 	return nil
 }

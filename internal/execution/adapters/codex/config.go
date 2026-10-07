@@ -2,14 +2,11 @@ package codexworker
 
 import (
 	"fmt"
-
-	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
 // Config is the native implementation input assembled from frozen records.
 // It is never embedded in contracts or read from mutable project state.
 type Config struct {
-	Policy          executionbackend.ExecutionPolicy
 	Executable      string
 	Args            []string
 	Profile         string
@@ -32,17 +29,6 @@ func ValidReasoningEffort(value string) bool {
 	return false
 }
 
-func ValidSandbox(value string) bool {
-	return value == "read-only" || value == "workspace-write" || value == "danger-full-access"
-}
-
-func LocalWindowsSandboxDefault(goos, sandbox, mode string) string {
-	if goos == "windows" && sandbox != "danger-full-access" && mode == "" {
-		return "elevated"
-	}
-	return mode
-}
-
 func LocalReasoningEffortDefault(effort string) string {
 	if effort == "" {
 		return "high"
@@ -51,21 +37,18 @@ func LocalReasoningEffortDefault(effort string) string {
 }
 
 func (c Config) Validate(goos string) error {
-	permissions, err := CompilePolicy(c.Policy, goos, "local", "codex", c.WindowsSandbox, c.Profile, c.Args)
+	if c.Profile != "" {
+		return fmt.Errorf("native profile overrides are unsupported")
+	}
+	permissions, err := NativePermissions(goos, "local", "codex")
 	if err != nil {
 		return err
 	}
 	if c.Sandbox != permissions.Sandbox || c.WindowsSandbox != permissions.WindowsSandbox {
-		return fmt.Errorf("native Codex settings differ from execution_policy")
-	}
-	if !ValidSandbox(c.Sandbox) {
-		return fmt.Errorf("unsupported Codex sandbox %q", c.Sandbox)
+		return fmt.Errorf("native Codex settings differ from the fixed native launch")
 	}
 	if c.ReasoningEffort != "" && !ValidReasoningEffort(c.ReasoningEffort) {
 		return fmt.Errorf("invalid reasoning_effort %q", c.ReasoningEffort)
 	}
-	_, err = LocalSandboxArgs(goos, c.Sandbox, c.WindowsSandbox, c.Args)
-	return err
+	return ValidateManagedArgs(c.Args)
 }
-
-func ValidWindowsSandbox(mode string) bool { return mode == "elevated" || mode == "unelevated" }

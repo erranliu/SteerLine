@@ -11,12 +11,8 @@ import (
 	resourceprocess "github.com/erranliu/SteerLine/internal/execution/process"
 )
 
-func workspacePolicyFixture() executionbackend.ExecutionPolicy {
-	return executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
-}
-
 func TestProjectPolicyMissingBoundResourcesAreNotReconstructed(t *testing.T) {
-	c := Config{ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
+	c := Config{PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}
 	e := executionmodel.ExecutionRecord{Generation: "original-generation", Process: &executionbackend.ProcessIdentity{Kind: "local"}}
 	c = withNeutralProfile(c, neutralSettings{Executable: "fixture"})
 	dependencies, _ := neutralFixtureRuntime(c)

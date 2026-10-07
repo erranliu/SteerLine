@@ -7,7 +7,7 @@ import (
 )
 
 func TestManagedOrcaLaunchFreezesPermissionsAndRejectsArgs(t *testing.T) {
-	base := ManagedCommandOptions{Policy: policyFixture(), Host: "orca", Agent: "codex", Executable: "codex.exe", Sandbox: "workspace-write", WindowsSandbox: "unelevated"}
+	base := ManagedCommandOptions{Host: "orca", Agent: "codex", Executable: "codex.exe", Sandbox: "workspace-write", WindowsSandbox: "unelevated"}
 	for _, model := range []string{"", "chosen-model"} {
 		options := base
 		options.Model = model
@@ -15,7 +15,7 @@ func TestManagedOrcaLaunchFreezesPermissionsAndRejectsArgs(t *testing.T) {
 			options.ReasoningEffort = "high"
 		}
 		command, err := ManagedCommand(options)
-		if err != nil || !strings.Contains(strings.Join(command.Args, " "), "never") || !strings.Contains(strings.Join(command.Args, " "), "windows.sandbox=unelevated") {
+		if err != nil || !strings.Contains(strings.Join(command.Args, " "), "auto_review") || !strings.Contains(strings.Join(command.Args, " "), "windows.sandbox=unelevated") {
 			t.Fatalf("permissions not frozen: %v / %v", command, err)
 		}
 		if model == "" && strings.Contains(strings.Join(command.Args, " "), "--model") {
@@ -39,13 +39,13 @@ func TestManagedOrcaLaunchFreezesPermissionsAndRejectsArgs(t *testing.T) {
 }
 
 func TestManagedCommandIndependentEffortAndOrderedPermissionArgs(t *testing.T) {
-	options := ManagedCommandOptions{Policy: policyFixture(), Host: "orca", Agent: "codex", Executable: "codex.exe", Args: []string{"--no-alt-screen", "--search"}, ReasoningEffort: "high", Sandbox: "workspace-write", WindowsSandbox: "elevated", WorkingDirectory: "C:/worker's checkout", WriteRoots: []string{"C:/repo/.git/objects"}}
+	options := ManagedCommandOptions{Host: "orca", Agent: "codex", Executable: "codex.exe", Args: []string{"--no-alt-screen", "--search"}, ReasoningEffort: "high", Sandbox: "workspace-write", WindowsSandbox: "unelevated", WorkingDirectory: "C:/worker's checkout", WriteRoots: []string{"C:/repo/.git/objects"}}
 	command, err := ManagedCommand(options)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []string{"--no-alt-screen", "--search", "--config", "model_reasoning_effort=high", "--strict-config"}
-	permissions, err := CompilePolicy(options.Policy, "windows", "orca", "codex", "elevated", "", options.Args)
+	want := []string{"--no-alt-screen", "--search", "--config", "model_reasoning_effort=high", "--no-daemon", "--strict-config"}
+	permissions, err := NativePermissions("windows", "orca", "codex")
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -7,7 +7,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,21 +16,15 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
 )
 
-const executionDirectoryVersion = "builtin-execution-v2"
-
-var requirementToolPatterns = map[string]*regexp.Regexp{
-	"git":    regexp.MustCompile(`^git version ([0-9][a-zA-Z0-9.+_-]*)$`),
-	"go":     regexp.MustCompile(`^go version go([0-9][a-zA-Z0-9.+_-]*) [a-zA-Z0-9]+/[a-zA-Z0-9]+$`),
-	"python": regexp.MustCompile(`^Python ([0-9][a-zA-Z0-9.+_-]*)$`),
-}
+const executionDirectoryVersion = "builtin-execution-v3"
 
 // NewBuiltinDirectory constructs this application's fixed implementation
 // catalog. Every returned directory is independent and immutable.
@@ -41,13 +34,13 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 	}
 	var directory *execution.ExecutionDirectory
 	codecs := []execution.ImplementationProfileCodec{
-		{Key: codexworker.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, policy executionbackend.ExecutionPolicy, host, agent string) ([]byte, []string, error) {
-			return codexworker.NormalizeProfilePayload(payload, policy, runtime.GOOS, host, agent)
+		{Key: codexworker.ProfileCodecKey, Version: codexworker.ProfileCodecVersion, Normalize: func(payload []byte, host, agent string) ([]byte, []string, error) {
+			return codexworker.NormalizeProfilePayload(payload, runtime.GOOS, host, agent)
 		}},
-		{Key: orcaworker.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, _ executionbackend.ExecutionPolicy, host, _ string) ([]byte, []string, error) {
+		{Key: orcaworker.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, host, _ string) ([]byte, []string, error) {
 			return orcaworker.NormalizeProfilePayload(payload, host)
 		}},
-		{Key: remote.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, _ executionbackend.ExecutionPolicy, _, _ string) ([]byte, []string, error) {
+		{Key: remote.ProfileCodecKey, Version: 1, Normalize: func(payload []byte, _, _ string) ([]byte, []string, error) {
 			return remote.NormalizeProfilePayload(payload)
 		}},
 	}
@@ -62,13 +55,7 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 				return localExecutionBackend{config: c, target: localTarget(), host: processHost, directory: directory}
 			},
 			Target: func(execution.Config) executionbackend.ExecutionTarget { return localTarget() },
-			ProbeRequirements: func(ctx context.Context, c execution.Config) (executionbackend.CapabilityReport, error) {
-				version, err := policyToolVersion(ctx, c, directory, processHost)
-				return capabilityReport(localKey.Backend, localKey.Protocol, localTarget(), agentFor(c), version), err
-			},
-			QueryTool: func(ctx context.Context, c execution.Config, id string) executionbackend.RequirementEvidence {
-				return queryHostRequirementTool(ctx, c, id, directory, processHost)
-			},
+
 			Lifecycle: func(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
 				setup.ProcessHost = processHost
 				return codexworker.NewExecutionLifecycle(setup)
@@ -100,13 +87,7 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 			Target: func(c execution.Config) executionbackend.ExecutionTarget {
 				return terminalTarget(c, terminalKey, directory)
 			},
-			ProbeRequirements: func(ctx context.Context, c execution.Config) (executionbackend.CapabilityReport, error) {
-				target := terminalTarget(c, terminalKey, directory)
-				return orcaworker.NewBackend(nativeTerminalConfig(c, target, processHost, directory)).Probe(ctx, target, agentFor(c))
-			},
-			QueryTool: func(ctx context.Context, c execution.Config, id string) executionbackend.RequirementEvidence {
-				return queryTerminalRequirementTool(ctx, c, id, directory, processHost)
-			},
+
 			Lifecycle:                orcaworker.NewExecutionLifecycle,
 			ValidateProfileSelection: validateTerminalProfileSelection,
 			ValidateConfig:           func(ctx context.Context, c execution.Config) error { return validateTerminalConfig(ctx, c, directory) },
@@ -136,13 +117,7 @@ func NewBuiltinDirectory(processHost executionbackend.ManagedProcessHost) (*exec
 			Target: func(c execution.Config) executionbackend.ExecutionTarget {
 				return supervisedTarget(c, supervisedKey, directory)
 			},
-			ProbeRequirements: func(ctx context.Context, c execution.Config) (executionbackend.CapabilityReport, error) {
-				target := supervisedTarget(c, supervisedKey, directory)
-				return remote.NewBackend(remoteWorkerConfig(c, processHost, directory)).Probe(ctx, target, agentFor(c))
-			},
-			QueryTool: func(ctx context.Context, c execution.Config, id string) executionbackend.RequirementEvidence {
-				return queryRemoteRequirementTool(ctx, c, id, directory)
-			},
+
 			Lifecycle:                remote.NewExecutionLifecycle,
 			ValidateProfileSelection: validateSupervisedProfileSelection,
 			ValidateConfig: func(ctx context.Context, c execution.Config) error {
@@ -223,12 +198,12 @@ func remoteSettings(c execution.Config, directories ...*execution.ExecutionDirec
 	return remote.DecodeProfileConfig(payload)
 }
 
-func validateTerminalProfileSelection(policy executionbackend.ExecutionPolicy, agent string, payloads map[string][]byte) error {
-	return orcaworker.ValidateProfileSelection(policy, agent, payloads[codexworker.ProfileCodecKey], payloads[orcaworker.ProfileCodecKey])
+func validateTerminalProfileSelection(agent string, payloads map[string][]byte) error {
+	return orcaworker.ValidateProfileSelection(agent, payloads[codexworker.ProfileCodecKey], payloads[orcaworker.ProfileCodecKey])
 }
 
-func validateSupervisedProfileSelection(policy executionbackend.ExecutionPolicy, agent string, payloads map[string][]byte) error {
-	return remote.ValidateProfileSelection(policy, agent, payloads[codexworker.ProfileCodecKey], payloads[orcaworker.ProfileCodecKey], payloads[remote.ProfileCodecKey])
+func validateSupervisedProfileSelection(agent string, payloads map[string][]byte) error {
+	return remote.ValidateProfileSelection(agent, payloads[codexworker.ProfileCodecKey], payloads[orcaworker.ProfileCodecKey], payloads[remote.ProfileCodecKey])
 }
 
 func validateLocalConfig(_ context.Context, c execution.Config, directory *execution.ExecutionDirectory) error {
@@ -236,11 +211,11 @@ func validateLocalConfig(_ context.Context, c execution.Config, directory *execu
 	if err != nil {
 		return err
 	}
-	permissions, err := codexworker.CompilePolicy(c.ExecutionPolicy, runtime.GOOS, c.Host, c.Agent, settings.WindowsSandbox, settings.Profile, settings.Args)
+	permissions, err := codexworker.NativePermissions(runtime.GOOS, c.Host, c.Agent)
 	if err != nil {
 		return err
 	}
-	return (codexworker.Config{Policy: c.ExecutionPolicy, Args: settings.Args, Sandbox: permissions.Sandbox, WindowsSandbox: permissions.WindowsSandbox, ReasoningEffort: settings.ReasoningEffort}).Validate(runtime.GOOS)
+	return (codexworker.Config{Args: nil, Sandbox: permissions.Sandbox, WindowsSandbox: permissions.WindowsSandbox, ReasoningEffort: settings.ReasoningEffort}).Validate(runtime.GOOS)
 }
 
 func validateTerminalConfig(_ context.Context, c execution.Config, directories ...*execution.ExecutionDirectory) error {
@@ -248,12 +223,9 @@ func validateTerminalConfig(_ context.Context, c execution.Config, directories .
 	if len(directories) > 0 {
 		directory = directories[0]
 	}
-	settings, err := codexSettings(c, directory)
+	_, err := codexSettings(c, directory)
 	if err != nil {
 		return err
-	}
-	if settings.Profile != "" || (c.ExecutionPolicy.Filesystem.WriteScope != "workspace" && c.ExecutionPolicy.Filesystem.WriteScope != "host") {
-		return &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "terminal host requires workspace or host write scope and an empty agent profile"}
 	}
 	return nil
 }
@@ -290,14 +262,14 @@ func preflightLocalConfig(ctx context.Context, c execution.Config, directory *ex
 	if err != nil {
 		return err
 	}
-	command := executionbackend.Command{Executable: executable, Args: append([]string(nil), settings.Args...)}
+	command := executionbackend.Command{Executable: executable, Args: []string(nil)}
 	runner := execution.Runner{Dir: c.Repository, ProcessHost: processHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}
-	return codexworker.ProbeCapabilities(ctx, codexworker.ProbeConfig{Executable: executable, Args: settings.Args, Repository: c.Repository, RunDir: c.RunDir}, codexworker.ProbePort{
+	return codexworker.ProbeCapabilities(ctx, codexworker.ProbeConfig{Executable: executable, Args: nil, Repository: c.Repository, RunDir: c.RunDir}, codexworker.ProbePort{
 		Output: func(ctx context.Context, executable string, args []string) ([]byte, error) {
 			return runner.Output(ctx, executionbackend.Command{Executable: executable, Args: args})
 		},
 		CheckHistory: func(ctx context.Context) error {
-			historyCommand := codexworker.ReaderCommand(command, settings.Profile)
+			historyCommand := codexworker.ReaderCommand(command, "")
 			return codexworker.CheckHistory(ctx, historyCommand, c.Repository, processHost.StartManaged)
 		},
 		StartManaged: func(command *exec.Cmd) (func(), error) {
@@ -369,8 +341,8 @@ func terminalReadinessRequired(c execution.Config, directories ...*execution.Exe
 	if len(directories) > 0 {
 		directory = directories[0]
 	}
-	settings, err := codexSettings(c, directory)
-	return err == nil && runtime.GOOS == "windows" && (settings.WindowsSandbox != "" || c.ExecutionPolicy.Filesystem.WriteScope == "host")
+	_, err := codexSettings(c, directory)
+	return err == nil && runtime.GOOS == "windows" && c.Agent == "codex"
 }
 
 func prepareSupervisedClaim(ctx context.Context, c execution.Config, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost) (execution.ClaimPreparation, error) {
@@ -413,23 +385,20 @@ func managedTerminalCommand(c execution.Config, path string, roots []string, dir
 	if err != nil {
 		return "", err
 	}
-	permissions, err := codexworker.CompilePolicy(c.ExecutionPolicy, runtime.GOOS, c.Host, c.Agent, worker.WindowsSandbox, worker.Profile, worker.Args)
+	permissions, err := codexworker.NativePermissions(runtime.GOOS, c.Host, c.Agent)
 	if err != nil {
 		return "", err
 	}
 	if path != "" {
-		if err := codexworker.ValidateManagedArgs(worker.Args); err != nil {
-			return "", err
-		}
 		native, err := codexworker.NativeExecutable(worker.Executable)
 		if err != nil {
 			return "", err
 		}
 		worker.Executable = native
 	}
-	command, err := codexworker.ManagedCommand(codexworker.ManagedCommandOptions{Policy: c.ExecutionPolicy,
+	command, err := codexworker.ManagedCommand(codexworker.ManagedCommandOptions{
 		WorkingDirectory: path, WriteRoots: roots, Host: c.Host, Agent: c.Agent, Model: worker.Model,
-		ReasoningEffort: worker.ReasoningEffort, Executable: worker.Executable, Args: worker.Args,
+		ReasoningEffort: worker.ReasoningEffort, Executable: worker.Executable, Args: nil,
 		Sandbox: permissions.Sandbox, WindowsSandbox: permissions.WindowsSandbox})
 	if err != nil {
 		return "", err
@@ -446,9 +415,9 @@ func nativeTerminalConfig(c execution.Config, target executionbackend.ExecutionT
 		}, InspectWorkspace: func(ctx context.Context, ref executionbackend.ExecutionRef) (executionbackend.WorkspaceInspection, error) {
 			return inspectBoundWorkspace(ctx, c, ref, processHost)
 		}}
-	if runtime.GOOS == "windows" && worker.WindowsSandbox != "" || worker.Model != "" || worker.ReasoningEffort != "" || worker.Profile != "" {
+	if runtime.GOOS == "windows" || worker.Model != "" || worker.ReasoningEffort != "" {
 		config.AgentVersion = func(ctx context.Context) (string, error) {
-			out, err := (execution.Runner{Dir: c.Repository, ProcessHost: processHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: worker.Executable, Args: worker.Args}, "--version")
+			out, err := (execution.Runner{Dir: c.Repository, ProcessHost: processHost, Timeout: positiveDuration(c.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: worker.Executable, Args: nil}, "--version")
 			return string(out), err
 		}
 	}
@@ -476,7 +445,7 @@ func buildPolicyResource(ctx context.Context, request execution.PolicyResourceBu
 	bound, err := codexworker.BuildPolicyResourceEnvelope(ctx, codexworker.PolicyResourceBuildRequest{
 		ProfileData: request.ProfileData, ProfileIdentity: codexworker.ProfileConfigIdentity{ProjectID: request.ProjectID,
 			ProfileID: request.ProfileID, AcceptedConfigVersion: request.AcceptedConfigVersion},
-		ResourceIdentity: identity, Policy: request.Policy, Host: request.Host, Agent: request.Agent,
+		ResourceIdentity: identity, Host: request.Host, Agent: request.Agent,
 		GOOS: runtime.GOOS, Workspace: request.Workspace, LinkedWriteArgs: request.LinkedWorktreeArgs,
 	}, func(ctx context.Context, executable string) (string, error) {
 		timeout := request.CommandTimeout
@@ -499,9 +468,6 @@ func verifyPolicyResource(envelope executionbackend.ImplementationDataEnvelope, 
 }
 
 func linkedWorktreeWriteArgs(ctx context.Context, c execution.Config, worktreePath string, processHost executionbackend.ManagedProcessHost) ([]string, error) {
-	if c.ExecutionPolicy.Filesystem.WriteScope != "workspace" || !c.ExecutionPolicy.Filesystem.GitMetadataWrite {
-		return nil, nil
-	}
 	if c.Host != "local" && c.Host != "orca" {
 		return nil, executionbackend.UnsupportedAdapterOperation("PrepareWorkspace", "this implementation does not expose local linked-worktree metadata")
 	}
@@ -515,94 +481,12 @@ func linkedWorktreeWriteArgs(ctx context.Context, c execution.Config, worktreePa
 	return codexworker.LinkedWorktreeWriteArgs(resources.Objects, resources.Refs, resources.Logs, resources.Admin)
 }
 
-func queryHostRequirementTool(ctx context.Context, c execution.Config, id string, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost) executionbackend.RequirementEvidence {
-	target := targetForConfig(c, directory)
-	evidence := executionbackend.RequirementEvidence{ID: id, Site: "target", Target: target, Status: executionbackend.RequirementUnknown, Source: "target:inherited-path/version-query", CheckedAt: time.Now().UTC()}
-	command := executionbackend.Command{Executable: id}
-	args := []string{"--version"}
-	if id == "git" {
-		command = c.Git
-		evidence.Source = "target:frozen-git/version-query"
-	}
-	if id == "go" {
-		args = []string{"version"}
-	}
-	parser := requirementToolPatterns[id]
-	if parser == nil {
-		return evidence
-	}
-	var environment []string
-	if id != "git" {
-		environment = execution.WorkerProcessEnvironment(c, &reconstructiontypes.RunView{}, os.Environ())
-	}
-	executable, err := requirementExecutable(command.Executable, environment)
-	if err != nil {
-		evidence.Status = executionbackend.RequirementMissing
-		return evidence
-	}
-	command.Executable = executable
-	runner := execution.Runner{Dir: c.Repository, ProcessHost: processHost, Timeout: min(positiveDuration(c.CommandTimeout, 10*time.Second), 10*time.Second), Environment: environment}
-	if id == "go" {
-		runner.Env = map[string]string{"GOTOOLCHAIN": "local"}
-		evidence.Source = "target:inherited-path/local-go-toolchain-version-query"
-	}
-	out, err := runner.Output(ctx, command, args...)
-	if err != nil {
-		return evidence
-	}
-	match := parser.FindStringSubmatch(strings.TrimSpace(string(out)))
-	if len(match) == 2 {
-		evidence.Status, evidence.Version = executionbackend.RequirementPresent, match[1]
-	}
-	return evidence
-}
-
-func queryTerminalRequirementTool(ctx context.Context, c execution.Config, id string, directory *execution.ExecutionDirectory, processHost executionbackend.ManagedProcessHost) executionbackend.RequirementEvidence {
-	if id == "git" {
-		return queryHostRequirementTool(ctx, c, id, directory, processHost)
-	}
-	return executionbackend.RequirementEvidence{ID: id, Site: "target", Target: targetForConfig(c, directory), Status: executionbackend.RequirementUnknown,
-		Source: "terminal:path-query-unavailable", CheckedAt: time.Now().UTC()}
-}
-
-func queryRemoteRequirementTool(_ context.Context, c execution.Config, id string, directory *execution.ExecutionDirectory) executionbackend.RequirementEvidence {
-	return executionbackend.RequirementEvidence{ID: id, Site: "target", Target: targetForConfig(c, directory), Status: executionbackend.RequirementUnknown,
-		Source: "remote:fixed-read-only-tool-query-unavailable", CheckedAt: time.Now().UTC()}
-}
-
 func targetForConfig(c execution.Config, directory *execution.ExecutionDirectory) executionbackend.ExecutionTarget {
 	entry, err := directory.Resolve(c)
 	if err != nil {
 		return executionbackend.ExecutionTarget{}
 	}
 	return entry.Target(c)
-}
-
-func requirementExecutable(name string, environment []string) (string, error) {
-	if environment == nil || strings.ContainsAny(name, `/\`) {
-		return exec.LookPath(name)
-	}
-	path := ""
-	for _, entry := range environment {
-		key, value, _ := strings.Cut(entry, "=")
-		if key == "PATH" || runtime.GOOS == "windows" && strings.EqualFold(key, "PATH") {
-			path = value
-			break
-		}
-	}
-	if runtime.GOOS == "windows" && filepath.Ext(name) == "" {
-		name += ".exe"
-	}
-	for _, dir := range filepath.SplitList(path) {
-		if !filepath.IsAbs(dir) {
-			continue
-		}
-		candidate, err := exec.LookPath(filepath.Join(dir, name))
-		if err == nil {
-			return candidate, nil
-		}
-	}
-	return "", exec.ErrNotFound
 }
 
 func capabilityReport(backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec, version string) executionbackend.CapabilityReport {
@@ -629,7 +513,7 @@ func (backend localExecutionBackend) Probe(ctx context.Context, target execution
 	if err != nil {
 		return executionbackend.CapabilityReport{}, err
 	}
-	out, err := (execution.Runner{Dir: backend.config.Repository, ProcessHost: backend.host, Timeout: positiveDuration(backend.config.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: settings.Executable, Args: settings.Args}, "--version")
+	out, err := (execution.Runner{Dir: backend.config.Repository, ProcessHost: backend.host, Timeout: positiveDuration(backend.config.CommandTimeout, 30*time.Second)}).Output(ctx, executionbackend.Command{Executable: settings.Executable, Args: nil}, "--version")
 	if err != nil {
 		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendUnreachable, Diagnostic: "configured execution version probe failed", Cause: err}
 	}

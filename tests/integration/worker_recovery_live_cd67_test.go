@@ -4,8 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,6 +16,8 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
@@ -42,16 +42,15 @@ func newNativeLiveRecoveryProject(t *testing.T) integrationFixture {
 	raw, err := os.ReadFile(steerlineapp.GlobalExecutionConfigPath())
 	require(t, err)
 	require(t, json.Unmarshal(raw, &global))
-	payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "low", WindowsSandbox: "elevated"})
+	payload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", Model: "gpt-6-luna", ReasoningEffort: "low"})
 	require(t, err)
-	global["execution_profiles"] = mustJSON([]map[string]any{{"id": "fixture", "name": "Native recovery", "host": "local", "agent": "codex", "implementation_configs": []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload}}}})
+	global["execution_profiles"] = mustJSON([]map[string]any{{"id": "fixture", "name": "Native recovery", "host": "local", "agent": "codex", "implementation_configs": []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload}}}})
 	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), mustJSON(global), 0600))
 	projectRaw, err := os.ReadFile(f.configPath)
 	require(t, err)
 	var project map[string]json.RawMessage
 	require(t, json.Unmarshal(projectRaw, &project))
 	project["command_timeout"] = mustJSON("45s")
-	project["execution_policy"] = mustJSON(workspacePolicyFixture())
 	require(t, os.WriteFile(f.configPath, mustJSON(project), 0600))
 	f.config, err = steerlineapp.LoadConfig(f.configPath)
 	require(t, err)

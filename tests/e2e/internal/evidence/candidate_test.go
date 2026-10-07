@@ -1,8 +1,9 @@
 package evidence
 
 import (
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"testing"
+
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 )
 
 func TestCandidateEvidenceDoesNotFollowListOrderOrSibling(t *testing.T) {
@@ -17,7 +18,7 @@ func TestCandidateEvidenceDoesNotFollowListOrderOrSibling(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := FullAccess(selected); err != nil {
+	if err := FixedNativeLaunch(selected); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := Candidate(d, "run-a", "sibling"); err == nil {

@@ -19,14 +19,7 @@
     "repository": "owner/repository",
     "token_env": "GITEA_TOKEN"
   },
-  "publication_policy": { "publisher": "worker" },
-  "execution_policy": {
-    "filesystem": {
-      "read_scope": "host",
-      "write_scope": "workspace",
-      "git_metadata_write": true
-    },
-    "network": "allow",
-    "escalation": "deny"
+  "publication_policy": {
+    "publisher": "worker"
   }
 }

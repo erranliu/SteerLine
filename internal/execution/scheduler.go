@@ -5,9 +5,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	"time"
 
+	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
@@ -55,7 +55,6 @@ func (s *Service) BeginActor(ctx context.Context) error {
 		return err
 	}
 	s.historyRequests <- historySources
-
 	return nil
 }
 func (s *Service) step(ctx context.Context, onlyWhenChanged bool, fn func(context.Context) error) error {
@@ -140,7 +139,6 @@ func (s *Service) Initialize(ctx context.Context, cancel context.CancelFunc) err
 			return e
 		}
 	}
-
 	return nil
 }
 

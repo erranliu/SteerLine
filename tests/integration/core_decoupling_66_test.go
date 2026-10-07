@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
-	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"os"
 	"strings"
 	"testing"
@@ -16,6 +14,8 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 )
 
@@ -132,8 +132,6 @@ func TestCD66ExplicitCatalogAndEntrypoints(t *testing.T) {
 			t.Fatal("offline reads or rejection changed database revision")
 		}
 	})
-	t.Run("capability_evidence_keeps_original_target_and_versions", TestNativeEvidenceCertificationRequiresFixedTargetAndVersion)
-	t.Run("terminal_evidence_keeps_agent_and_resource_proofs", TestOrcaCertificationRequiresAgentAndTerminalEvidence)
 	t.Run("service_entries_reject_missing_catalog_before_target", func(t *testing.T) {
 		state := t.TempDir() + "/absent"
 		config := steerlineapp.Config{TaskAuthority: "native", WorkflowProtocol: executionmodel.Version, Repository: "must-not-be-read", RunDir: state, Git: executionbackend.Command{Executable: "must-not-be-called"}}

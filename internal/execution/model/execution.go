@@ -5,25 +5,21 @@ import (
 )
 
 type FixedExecutionProfile struct {
-	ExecutionRequirements      executionbackend.ExecutionRequirements        `json:"execution_requirements"`
-	RequirementsEvaluation     *executionbackend.RequirementsEvaluation      `json:"requirements_evaluation,omitempty"`
-	RequirementsEvidenceDigest string                                        `json:"requirements_evidence_digest,omitempty"`
-	ImplementationVersion      string                                        `json:"implementation_version"`
-	ImplementationKey          string                                        `json:"implementation_key"`
-	ImplementationData         []executionbackend.ImplementationDataEnvelope `json:"implementation_data"`
-	ImplementationDisplay      []string                                      `json:"implementation_display,omitempty"`
-	PublicationPolicy          executionbackend.PublicationPolicy            `json:"publication_policy"`
-	Publication                PublicationSettings                           `json:"publication"`
-	Version                    int                                           `json:"version"`
-	ExecutionPolicy            executionbackend.ExecutionPolicy              `json:"execution_policy"`
-	PolicyDigest               string                                        `json:"policy_digest"`
-	AcceptedConfigVersion      string                                        `json:"accepted_config_version"`
-	PolicySource               string                                        `json:"policy_source"`
-	ID                         string                                        `json:"id"`
-	Name                       string                                        `json:"name"`
-	Digest                     string                                        `json:"digest"`
-	Host                       string                                        `json:"host"`
-	Agent                      string                                        `json:"agent"`
+	ImplementationVersion string                                        `json:"implementation_version"`
+	ImplementationKey     string                                        `json:"implementation_key"`
+	ImplementationData    []executionbackend.ImplementationDataEnvelope `json:"implementation_data"`
+	ImplementationDisplay []string                                      `json:"implementation_display,omitempty"`
+	PublicationPolicy     executionbackend.PublicationPolicy            `json:"publication_policy"`
+	Publication           PublicationSettings                           `json:"publication"`
+	Version               int                                           `json:"version"`
+
+	AcceptedConfigVersion string `json:"accepted_config_version"`
+
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Digest string `json:"digest"`
+	Host   string `json:"host"`
+	Agent  string `json:"agent"`
 }
 
 // PolicyResources is the resource stage of the same execution snapshot.

@@ -2,16 +2,16 @@ package console
 
 import (
 	"fmt"
-	api "github.com/erranliu/SteerLine/internal/product/api"
 	"sort"
 	"strings"
+
+	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 // Derive labels from the task's complete persisted workflow history, including
 // exited candidates. Display labels never replace the immutable control ID.
 func candidateLabel(state projectState, run *api.CandidateSummary) string {
 	if run == nil {
-
 		return "未选择"
 	}
 	var workflows []api.WorkflowSummary
@@ -45,13 +45,11 @@ func candidateLabel(state projectState, run *api.CandidateSummary) string {
 			return fmt.Sprintf("P%d", i+1)
 		}
 	}
-
 	return "未编号"
 }
 
 func shortSession(id string) string {
 	if id == "" {
-
 		return "尚未建立"
 	}
 	r := []rune(id)
@@ -94,11 +92,9 @@ func feedbackReceiptStatus(state projectState, a *actionState) string {
 
 func candidateHumanStatus(state projectState, run *api.CandidateSummary) string {
 	if run.Abandonment != nil {
-
 		return "已退出实验"
 	}
 	if run.TaskStatus == "closed" {
-
 		return "实验已结束"
 	}
 	if a := feedbackAction(state, run); a != nil {
@@ -118,7 +114,6 @@ func candidateHumanStatus(state projectState, run *api.CandidateSummary) string 
 	}
 	if run.Decision != nil && run.Decision.Status == "pending" {
 		if run.EnvironmentBlocker != nil {
-
 			return "交互受阻"
 		}
 

@@ -9,6 +9,7 @@
 | #39 本机多候选交付与恢复 | [本机候选验收](candidate-acceptance.md) |
 | #38 CC5 用户人工确认 | [人工确认原文](manual-acceptance.md) |
 | #231 三窗及内嵌反馈 | [控制台验收](product-console.md) |
+| 第二批固定原生配置与附加需求删除 | [配置精简验收](product-simplification-02-configuration/README.md) |
 | 原生准备工具证据 | [准备验收](worker-readiness.md) |
 
 ## 历史取证

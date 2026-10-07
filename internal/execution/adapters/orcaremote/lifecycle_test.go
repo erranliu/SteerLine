@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 )
 
@@ -34,7 +34,6 @@ func (lifecycleTestHost) OutputCommand(context.Context, executionbackend.LaunchC
 func remoteLifecycleSetup(t *testing.T) (executionbackend.LifecycleSetup, executionbackend.LifecycleSnapshot) {
 	t.Helper()
 	const accepted = "accepted-profile-v1"
-	policy := executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace"}, Network: "allow", Escalation: "deny"}
 	codexPayload, err := codexworker.EncodeProfileConfig(codexworker.ProfileConfig{Executable: "codex", Model: "pinned-model", ReasoningEffort: "high"})
 	if err != nil {
 		t.Fatal(err)
@@ -52,8 +51,12 @@ func remoteLifecycleSetup(t *testing.T) (executionbackend.LifecycleSetup, execut
 		key     string
 		payload []byte
 	}{{codexworker.ProfileCodecKey, codexPayload}, {orcaworker.ProfileCodecKey, orcaPayload}, {ProfileCodecKey, remotePayload}} {
+		version := 1
+		if item.key == codexworker.ProfileCodecKey {
+			version = codexworker.ProfileCodecVersion
+		}
 		envelope, err := executionbackend.NewImplementationDataEnvelope(executionbackend.ImplementationDataEnvelope{
-			CodecVersion: 1, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: item.key,
+			CodecVersion: version, Purpose: executionbackend.ImplementationConfigPurpose, ImplementationKey: item.key,
 			ProjectID: "project", ProfileID: "remote", AcceptedConfigVersion: accepted,
 		}, item.payload)
 		if err != nil {
@@ -70,7 +73,7 @@ func remoteLifecycleSetup(t *testing.T) (executionbackend.LifecycleSetup, execut
 	snapshot := executionbackend.LifecycleSnapshot{Ref: ref, Session: session, ConfigurationDigest: "profile-digest", ResourceGeneration: "resource-generation",
 		WorkspacePlan: executionbackend.WorkspaceIntent{Path: `C:\worktrees\planned`, Branch: "codex/901", BaseCommit: ref.BaseCommit}}
 	setup := executionbackend.LifecycleSetup{Snapshot: snapshot, ProfileData: data, ProfileID: "remote", AcceptedConfigVersion: accepted,
-		Policy: policy, ProcessHost: lifecycleTestHost{}, RepositoryPath: `C:\repo`, RunDirectory: `C:\state`, TargetBranch: "main", RemoteName: "origin"}
+		ProcessHost: lifecycleTestHost{}, RepositoryPath: `C:\repo`, RunDirectory: `C:\state`, TargetBranch: "main", RemoteName: "origin"}
 	return setup, snapshot
 }
 

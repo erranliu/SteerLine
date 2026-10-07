@@ -3,10 +3,10 @@ package execution
 import (
 	"context"
 	"errors"
-	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 )
 
 func (s *Service) waitWorkerFlow(run *reconstructiontypes.RunView, reason string, operationIDs ...string) error {
@@ -106,9 +106,7 @@ func (s *Service) applyWorkerFlowDecision(ctx context.Context, run *reconstructi
 	if err != nil || command.Kind != "answer_decision" || command.TargetID != answer.DecisionID || command.Status != "accepted" || !executionbackend.StableExecutionID(command.CommandID) {
 		return errors.Join(err, errors.New("saved worker feedback has no fixed accepted command identity"))
 	}
-	if err := s.checkCurrentExecutionRequirements(ctx, fixed); err != nil {
-		return err
-	}
+
 	if execution.Environment != nil && execution.Environment.Blocker != nil {
 		return nil
 	}

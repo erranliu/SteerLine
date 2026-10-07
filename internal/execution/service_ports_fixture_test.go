@@ -121,23 +121,22 @@ func fixtureRepositoryStateKey(c Config) (string, error) {
 
 func loadFixtureConfig(path string) (Config, error) {
 	type projectInput struct {
-		PublicationPolicy     executionbackend.PublicationPolicy     `json:"publication_policy"`
-		ExecutionPolicy       executionbackend.ExecutionPolicy       `json:"execution_policy"`
-		ExecutionRequirements executionbackend.ExecutionRequirements `json:"execution_requirements,omitempty"`
-		Repository            string                                 `json:"repository"`
-		TaskAuthority         string                                 `json:"task_authority,omitempty"`
-		Remote                string                                 `json:"remote"`
-		Branch                string                                 `json:"branch"`
-		RunDir                string                                 `json:"run_dir"`
-		WorktreeRoot          string                                 `json:"worktree_root"`
-		Git                   executionbackend.Command               `json:"git"`
-		WorkflowProtocol      string                                 `json:"workflow_protocol,omitempty"`
-		CommandTimeout        string                                 `json:"command_timeout"`
-		Host                  string                                 `json:"host"`
-		Agent                 string                                 `json:"agent"`
-		ExecutionProfiles     []ExecutionProfile                     `json:"execution_profiles,omitempty"`
-		DefaultProfile        string                                 `json:"default_execution_profile,omitempty"`
-		PR                    executionmodel.PRProviderConfig        `json:"pr"`
+		PublicationPolicy executionbackend.PublicationPolicy `json:"publication_policy"`
+
+		Repository        string                          `json:"repository"`
+		TaskAuthority     string                          `json:"task_authority,omitempty"`
+		Remote            string                          `json:"remote"`
+		Branch            string                          `json:"branch"`
+		RunDir            string                          `json:"run_dir"`
+		WorktreeRoot      string                          `json:"worktree_root"`
+		Git               executionbackend.Command        `json:"git"`
+		WorkflowProtocol  string                          `json:"workflow_protocol,omitempty"`
+		CommandTimeout    string                          `json:"command_timeout"`
+		Host              string                          `json:"host"`
+		Agent             string                          `json:"agent"`
+		ExecutionProfiles []ExecutionProfile              `json:"execution_profiles,omitempty"`
+		DefaultProfile    string                          `json:"default_execution_profile,omitempty"`
+		PR                executionmodel.PRProviderConfig `json:"pr"`
 	}
 	c := Config{}
 	projectPath, err := filepath.Abs(path)
@@ -167,12 +166,7 @@ func loadFixtureConfig(path string) (Config, error) {
 	if input.WorkflowProtocol != executionmodel.Version {
 		return c, errors.New("workflow_protocol must be worker-flow-v1")
 	}
-	if err := input.ExecutionPolicy.Validate(); err != nil {
-		return c, err
-	}
-	if err := input.ExecutionRequirements.Validate(); err != nil {
-		return c, err
-	}
+
 	if err := publication.ValidateNonSecret(publication.Config(input.PR), input.Git); err != nil {
 		return c, err
 	}
@@ -199,7 +193,7 @@ func loadFixtureConfig(path string) (Config, error) {
 	if err != nil {
 		return c, err
 	}
-	c = Config{PublicationPolicy: input.PublicationPolicy, ExecutionPolicy: input.ExecutionPolicy, ExecutionRequirements: input.ExecutionRequirements,
+	c = Config{PublicationPolicy: input.PublicationPolicy,
 		Repository: input.Repository, Remote: input.Remote, Branch: input.Branch, RunDir: input.RunDir, WorktreeRoot: input.WorktreeRoot,
 		Git: input.Git, WorkflowProtocol: input.WorkflowProtocol, CommandTimeout: input.CommandTimeout, PR: input.PR}
 	c.BindAcceptedConfigVersion(digestValue([]string{string(projectBytes), string(globalBytes)}))
@@ -228,7 +222,7 @@ func loadFixtureConfig(path string) (Config, error) {
 	} else if !filepath.IsAbs(c.WorktreeRoot) {
 		c.WorktreeRoot = filepath.Join(base, c.WorktreeRoot)
 	}
-	catalog := ProfileCatalog{Base: c, Directory: directory, Profiles: global.ExecutionProfiles, DefaultID: global.DefaultProfile, Global: true, PolicySource: projectPath}
+	catalog := ProfileCatalog{Base: c, Directory: directory, Profiles: global.ExecutionProfiles, DefaultID: global.DefaultProfile, Global: true}
 	if err := catalog.Validate(); err != nil {
 		return c, err
 	}

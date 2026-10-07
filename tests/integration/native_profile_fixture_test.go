@@ -13,8 +13,8 @@ import (
 
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	"github.com/erranliu/SteerLine/internal/execution"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -59,7 +59,7 @@ func builtinFixtureConfig(t *testing.T, c steerlineapp.Config, worker codexworke
 	profile := execution.ExecutionProfile{ID: execution.ProjectExecutionProfileID, Name: "Native fixture", Host: c.Host, Agent: c.Agent}
 	payload, err := codexworker.EncodeProfileConfig(worker)
 	require(t, err)
-	profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 1, Payload: payload})
+	profile.ImplementationConfigs = append(profile.ImplementationConfigs, executionbackend.ImplementationConfigInput{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: payload})
 	if terminal != nil {
 		payload, err = orcaworker.EncodeProfileConfig(*terminal)
 		require(t, err)
@@ -79,8 +79,8 @@ func builtinFixtureConfig(t *testing.T, c steerlineapp.Config, worker codexworke
 		"repository": c.Repository, "remote": nonEmpty(c.Remote, "origin"), "branch": nonEmpty(c.Branch, "main"),
 		"run_dir": c.RunDir, "worktree_root": c.WorktreeRoot, "task_authority": "native", "workflow_protocol": executionmodel.Version,
 		"claimant": "integration", "task_poll": "1s", "pr_poll": "30s", "heartbeat": "1s", "command_timeout": nonEmpty(c.CommandTimeout, "15s"), "shutdown_grace": "5s",
-		"executable_types": []string{"task"}, "git": c.Git, "execution_policy": c.ExecutionPolicy,
-		"publication_policy": c.PublicationPolicy, "execution_requirements": c.ExecutionRequirements, "pr": c.PR,
+		"executable_types": []string{"task"}, "git": c.Git,
+		"publication_policy": c.PublicationPolicy, "pr": c.PR,
 	}
 	if c.Git.Executable == "" {
 		project["git"] = executionbackend.Command{Executable: "git"}
@@ -120,10 +120,6 @@ func fixtureBoundProfile(c steerlineapp.Config) execution.ExecutionProfile {
 		}
 	}
 	panic("fixture profile was not projected")
-}
-
-func workspacePolicyFixture() executionbackend.ExecutionPolicy {
-	return executionbackend.ExecutionPolicy{Filesystem: executionbackend.FilesystemPolicy{ReadScope: "host", WriteScope: "workspace", GitMetadataWrite: true}, Network: "allow", Escalation: "deny"}
 }
 
 func executionPublicationFixture() executionbackend.PublicationPolicy {
@@ -193,7 +189,7 @@ func digestValue(value any) string { return string(mustJSON(value)) }
 
 func nativeRequirementConfig(t *testing.T) steerlineapp.Config {
 	t.Helper()
-	return builtinFixtureConfig(t, steerlineapp.Config{Host: "local", Agent: "codex", WorkflowProtocol: executionmodel.Version, TaskAuthority: "native", ExecutionPolicy: workspacePolicyFixture(), PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}, codexworker.ProfileConfig{Executable: os.Args[0]}, nil)
+	return builtinFixtureConfig(t, steerlineapp.Config{Host: "local", Agent: "codex", WorkflowProtocol: executionmodel.Version, TaskAuthority: "native", PublicationPolicy: executionPublicationFixture(), PR: hostPublicationProviderFixture()}, codexworker.ProfileConfig{Executable: os.Args[0]}, nil)
 }
 
 func nativeTarget(c steerlineapp.Config) executionbackend.ExecutionTarget {

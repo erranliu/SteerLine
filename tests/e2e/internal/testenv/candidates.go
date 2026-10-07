@@ -4,12 +4,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/driver"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
@@ -265,7 +265,7 @@ func (p *Project) CandidateUsage(c Candidate, label string) native.Usage {
 	})
 	// Usage, frozen permission and canonical body checks share the same exact
 	// original candidate sample; no business mutation occurs between them.
-	p.Scenario.Must(evidence.FullAccess(snap.Domain))
+	p.Scenario.Must(evidence.FixedNativeLaunch(snap.Domain))
 	canonicalDeadline := time.Now().Add(45 * time.Second)
 	p.Scenario.Wait("canonical original candidate final/body", func() (bool, error) {
 		conversation, err := driver.ReadCandidateConversation(p.Scenario.Context, p.Database, snap.Page.ProjectID, c.RunID, c.ExecutionID)

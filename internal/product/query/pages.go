@@ -4,7 +4,6 @@ package query
 
 import (
 	"encoding/json"
-	"fmt"
 	"strings"
 	"time"
 
@@ -247,41 +246,12 @@ func Profile(f model.FixedExecutionProfile) api.ExecutionProfileSummary {
 		}
 		p.Details = append(p.Details, "冻结 "+tool.name+"："+description)
 	}
-	p.Details = append(p.Details, fmt.Sprintf("项目要求：读取 %s · 写入 %s · Git %t · 网络 %s · 越权 %s", f.ExecutionPolicy.Filesystem.ReadScope, f.ExecutionPolicy.Filesystem.WriteScope, f.ExecutionPolicy.Filesystem.GitMetadataWrite, f.ExecutionPolicy.Network, f.ExecutionPolicy.Escalation), "受理版本："+f.AcceptedConfigVersion+" · 来源："+f.PolicySource, "附加能力："+strings.Join(f.ExecutionRequirements.Capabilities, ", "))
-	for _, tool := range f.ExecutionRequirements.Tools {
-		version := tool.ExactVersion
-		if version == "" {
-			version = "存在即可"
-		}
-		p.Details = append(p.Details, "必需工具："+tool.ID+" · "+version)
-	}
-	p.Details = append(p.Details, requirementsDetails(f.RequirementsEvaluation, "领取时需求检查")...)
+	p.Details = append(p.Details, "受理版本："+f.AcceptedConfigVersion)
 	return p
 }
 
-func requirementsDetails(e *backend.RequirementsEvaluation, label string) []string {
-	if e == nil {
-		return nil
-	}
-	lines := []string{label + "：" + e.CheckedAt.Format("2006-01-02 15:04:05Z07:00") + " · " + e.Target.ID + "（工具/引用存在性，不证明沙箱权限或远端授权）"}
-	if e.Capabilities != nil {
-		for _, cap := range e.Capabilities.Capabilities {
-			lines = append(lines, "能力："+cap.Name+" · "+string(cap.Status)+" · 版本 "+e.Capabilities.PlatformVersion)
-		}
-	}
-	for _, values := range [][]backend.RequirementEvidence{e.Tools, e.Credentials} {
-		for _, item := range values {
-			lines = append(lines, "需求证据："+item.Site+"/"+item.ID+" · "+string(item.Status)+" · "+item.Version+" · "+item.Source)
-		}
-	}
-	return lines
-}
-
 func executionDetails(e model.ExecutionRecord) []string {
-	lines := requirementsDetails(e.CurrentRequirementsEvaluation, "当前需求检查")
-	if e.CurrentRequirementsError != nil {
-		lines = append(lines, "需求阻断："+*e.CurrentRequirementsError)
-	}
+	lines := []string{}
 	status := "资源与工具未核验"
 	if e.PolicyResources != nil {
 		status = "原生设置已核验；工具未核验"

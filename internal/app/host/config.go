@@ -31,7 +31,6 @@ type Config struct {
 	RuntimeReader           func(context.Context, Config) (*reconstruction.Runtime, error)
 	ValidateNativeStore     func(context.Context, Config) error
 	EnsureRunDirOutsideRepo func(context.Context, Config) error
-	CapabilityValidation    CapabilityValidationPort
 	ControlValidation       ControlValidationPort
 }
 
@@ -67,11 +66,4 @@ type ControlValidationPort interface {
 	ValidateRequest(productapi.ControlRequest, string, string, uint64, time.Time) (string, error)
 	RequestDigest(productapi.ControlRequest) string
 	TerminalStatus(string) bool
-}
-
-// CapabilityValidationPort binds persisted report names and evidence without
-// importing execution application helpers into the host.
-type CapabilityValidationPort interface {
-	Key(executionbackend.CapabilityReport) string
-	Verify(string, executionbackend.CapabilityReport) error
 }

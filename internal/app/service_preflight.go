@@ -99,7 +99,7 @@ func preflightNative(ctx context.Context, c *Config) error {
 		}
 	} else if !os.IsNotExist(err) {
 		return err
-	} else if err = steerline.EnsureNativeStateClean(c.RunDir, c.Repository, applicationCapabilityValidation{}); err != nil {
+	} else if err = steerline.EnsureNativeStateClean(c.RunDir, c.Repository); err != nil {
 		return err
 	}
 	if c.PR.Kind == "gitea" {
