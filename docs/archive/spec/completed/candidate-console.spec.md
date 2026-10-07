@@ -1,6 +1,6 @@
 # Spec：候选观察界面
 
-任务 ID：38；任务名称：候选观察界面；目标：`PHASE1-CANDIDATES`。配套 [Plan](candidate-console.plan.md)。状态：实现已完成独立复审；此前按用户授权先合入；CC5 与交互流程增量现已由用户于 2026-10-04 人工确认通过，见[人工确认记录](../../../validation/manual-acceptance.md)。证据及授权见[验收记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/candidate-console/README.md)。
+任务 ID：38；任务名称：候选观察界面；目标：`PHASE1-CANDIDATES`。配套 [Plan](candidate-console.plan.md)。状态：实现已完成独立复审；此前按用户授权先合入；CC5 与交互流程增量现已由用户于 2026-10-04 人工确认通过，见[人工确认记录](../../../acceptance/manual-acceptance.md)。证据及授权见[验收记录](https://github.com/erranliu/SteerLine/blob/172cea6c6530b6693b742324a9c1d4f9aeb17b6d/docs/validation/candidate-console/README.md)。
 
 ## 范围与前置
 

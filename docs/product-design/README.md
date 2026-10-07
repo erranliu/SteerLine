@@ -17,7 +17,7 @@
 
 规划与 UI 的新增方向是自由草稿、独立审核和受控正式准入，见[目标](../roadmap/drafts/phase2-draft-roadmap-admission.md)。现有 Publication/ID 预留细节仍是待对齐的基础方案，不宣称已实现审核协议。选定实施前与独立 Spec/Plan 一并固定；推进顺序见[二期交付边界](../roadmap/drafts/phase2-delivery.md)。
 
-整体职责见[架构总览](../architecture.md)，代码与接口归属见[源码索引](../architecture/current-code-architecture.md)，执行要求见[Spec 索引](../spec/README.md)，测试入口见[测试指南](../testing.md)。历史配置与试验只在[归档](../archive/README.md)或[验证证据](../validation/)中承接。
+整体职责见[架构总览](../architecture.md)，代码与接口归属见[源码索引](../architecture/current-code-architecture.md)，执行要求见[Spec 索引](../spec/README.md)，测试入口见[测试指南](../testing.md)。历史配置与试验只在[归档](../archive/README.md)或[验证证据](../validation)中承接。
 
 ## 维护规则
 

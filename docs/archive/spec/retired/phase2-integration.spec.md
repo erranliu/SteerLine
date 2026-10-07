@@ -1,3 +1,5 @@
+> 退役执行草案：原任务 #53 为人工组织验收活动，不作为当前执行入口。编号保留历史且不复用；现行行为、状态和安排由[验收文档](../../../acceptance/phase2.md)维护。本文件保留原契约/计划供追溯，不修改外部既有 Task/DAG，也不执行下列旧计划。
+
 # Spec：第二阶段完整闭环验收
 
 任务 ID：53；任务名称：第二阶段完整闭环验收；目标：`PHASE2`。状态：规格已编写，尚未实现或验收。配套 [Plan](phase2-integration.plan.md)。本任务由一个独立实现 PR 交付。
@@ -5,7 +7,7 @@
 ## 范围与前置
 
 硬前置：#49、#50、#51、#52、#42，传递包含 #36。
-依赖 [Roadmap/DAG UI](phase2-roadmap-ui.spec.md)、[执行 UI](phase2-execution-ui.spec.md)、[规划对话 UI](phase2-conversation-ui.spec.md)、[审阅 UI](phase2-review-ui.spec.md)，复用已具备持续 worker 基础，并消费[第一阶段单安装版组合验收](phase1-release-acceptance.spec.md)。传递包含 #83 安装/调试路径隔离，不包含延后的 #40/#41；不要求双 channel、版本选择、提升或跨构建状态接管。这些任务完整交付后才执行本任务，不以条件分支跳过某本机后端。遵守[共同约束](phase2-constraints.md)。
+依赖 [Roadmap/DAG UI](../../../spec/phase2-roadmap-ui.spec.md)、[执行 UI](../../../spec/phase2-execution-ui.spec.md)、[规划对话 UI](../../../spec/phase2-conversation-ui.spec.md)、[审阅 UI](../../../spec/phase2-review-ui.spec.md)，复用已具备持续 worker 基础，并消费[第一阶段单安装版组合验收](phase1-release-acceptance.spec.md)。传递包含 #83 安装/调试路径隔离，不包含延后的 #40/#41；不要求双 channel、版本选择、提升或跨构建状态接管。这些任务完整交付后才执行本任务，不以条件分支跳过某本机后端。遵守[共同约束](../../../spec/phase2-constraints.md)。
 
 实施前核对中心的固定 Task commit/摘要/依赖，仓库修订不覆盖旧契约；已创建不同范围时须先受控替换并同步消费者身份。草稿/审核/正式准入的新机制尚需在实施前与相关上游规格一并固定；本次只调整运行基线和本机范围，不宣称已包含新审核协议。
 
