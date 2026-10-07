@@ -30,4 +30,4 @@ Old runtime or database versions, legacy task-source fields, retired whole-run r
 
 ## Acceptance evidence
 
-`internal/steerline/native_tasks_test.go` covers local and Orca fixed-step flows, task claim/delivery and successor release, decision application, retry, and restart reconciliation. These isolated integration tests do not establish live Orca or Codex acceptance. Remaining live checks are tracked separately in the [roadmap](../../../roadmap/roadmap.md) and the corresponding validation reports.
+`internal/steerline/native_tasks_test.go` covers local and Orca fixed-step flows, task claim/delivery and successor release, decision application, retry, and restart reconciliation. These isolated integration tests do not establish live Orca or Codex acceptance. Remaining live checks are tracked separately in the [roadmap](../../../roadmap/drafts/roadmap.md) and the corresponding validation reports.

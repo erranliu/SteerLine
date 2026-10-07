@@ -6,7 +6,7 @@
 
 ## 草稿与审核的新交互边界
 
-后续按[草稿审核目标](../roadmap/phase2-draft-roadmap-admission.md)增加固定版本送审和三个结论：可固定、需修改、等待前置。等待不是内容错误，页面显示影响前置/未稳定点和复审触发条件。正式任务集合、草稿和外部资源状态分别展示；主agent与审核agent不能从对话直接修改正式任务。下文是原基础交互，发布/确认页面在实施前同步新准入Spec，当前原型不宣称已支持审核。
+后续按[草稿审核目标](../roadmap/drafts/phase2-draft-roadmap-admission.md)增加固定版本送审和三个结论：可固定、需修改、等待前置。等待不是内容错误，页面显示影响前置/未稳定点和复审触发条件。正式任务集合、草稿和外部资源状态分别展示；主agent与审核agent不能从对话直接修改正式任务。下文是原基础交互，发布/确认页面在实施前同步新准入Spec，当前原型不宣称已支持审核。
 
 ## 核心体验
 
@@ -53,7 +53,7 @@ SteerLine 打开后首先是**规划工作台**：对话和输入占主要空间
 
 ## 文档草稿与正式发布
 
-UI 与服务查询展示的正式 execution-map.md 及其 Task 固定 Spec/Plan 来自已校验的版本；roadmap.md 继续承载可修改草稿，不冒充已入 DAG 清单。发布期间的原始 worktree 不承诺外部无锁读取的多文件原子性；服务禁止新 agent 轮次读到逐文件更新中的正式内容。原基础方案通过受控写入口保存候选 Markdown 和目标映射，草稿/送审/发布的具体目录及权限在新准入 Spec 中对齐；不能从临时文件、文档校验或草稿按钮直接启动任务。草稿保留供新 session 修改，正式执行只消费实际 DAG 及其固定契约。
+UI 与服务查询展示的正式 execution-map.md 及其 Task 固定 Spec/Plan 来自已校验的版本；drafts/ 内选定草稿 继续承载可修改草稿，不冒充已入 DAG 清单。发布期间的原始 worktree 不承诺外部无锁读取的多文件原子性；服务禁止新 agent 轮次读到逐文件更新中的正式内容。原基础方案通过受控写入口保存候选 Markdown 和目标映射，草稿/送审/发布的具体目录及权限在新准入 Spec 中对齐；不能从临时文件、文档校验或草稿按钮直接启动任务。草稿保留供新 session 修改，正式执行只消费实际 DAG 及其固定契约。
 
 界面把文档流程表达为四个明确阶段：
 
@@ -76,15 +76,15 @@ UI 与服务查询展示的正式 execution-map.md 及其 Task 固定 Spec/Plan 
 
 放弃草稿不删除已经预留的任务 ID 记录，也不修改已创建任务。正式文档发布途中若服务中断，审阅页保留待核实状态和原请求身份；恢复前不能展示“创建成功”。
 
-只修改产品方向而不创建任务时仍走草稿、差异、校验和人工确认，但没有 ID 预留或 DAG 创建。roadmap.md 的草稿与 execution-map.md 的已入 DAG 正式任务分别遵守[roadmap 文档规则](../roadmap/readme.md)；`docs/spec/` 的执行文档必须是任务独立 Spec + Plan。现有 `roadmap_task_id.py check`、链接和身份校验属于自动门槛，依赖是否合理、验收是否可执行仍需要用户审阅。嗅探器、测试和实现需求在此阶段只能形成待执行任务的 Spec/Plan，由 SteerLine worker 执行。
+只修改产品方向而不创建任务时仍走草稿、差异、校验和人工确认，但没有 ID 预留或 DAG 创建。drafts/ 内选定草稿 的草稿与 execution-map.md 的已入 DAG 正式任务分别遵守[roadmap 文档规则](../roadmap/RoadmapGuide.md)；`docs/spec/` 的执行文档必须是任务独立 Spec + Plan。现有 `roadmap_task_id.py check`、链接和身份校验属于自动门槛，依赖是否合理、验收是否可执行仍需要用户审阅。嗅探器、测试和实现需求在此阶段只能形成待执行任务的 Spec/Plan，由 SteerLine worker 执行。
 
 ## Roadmap、DAG 与约束查看
 
-Roadmap 页以目标和文档为主线，保留原 Markdown 的可读全文，也提供目标摘要、关联 Spec/Plan、版本和未确认差异。点击目标可以在右侧打开相关约束：项目 `AGENTS.md`、[roadmap 规则](../roadmap/readme.md)、[Spec 索引与规则](../spec/README.md)、架构及控制台约束。约束面板引用原文件与位置，不能维护一份会过期的复制文本。
+Roadmap 页以目标和文档为主线，保留原 Markdown 的可读全文，也提供目标摘要、关联 Spec/Plan、版本和未确认差异。点击目标可以在右侧打开相关约束：项目 `AGENTS.md`、[roadmap 规则](../roadmap/RoadmapGuide.md)、[Spec 索引与规则](../spec/README.md)、架构及控制台约束。约束面板引用原文件与位置，不能维护一份会过期的复制文本。
 
 DAG 页默认同时给出可搜索的任务列表和所选任务一层上下游；需要时扩展深度。节点标注状态、阻塞原因和交付证据；被丢弃的前置及其后继阻塞仍可查看。大型图按现有产品查询接口分页或标明截断，接口归属见[代码架构](../architecture/current-code-architecture.md)，不把不完整图显示成全图，也不提供直接拖边修改依赖。任务详情通往 Spec、Plan、运行、决策、PR 和合并核验。
 
-拟规划任务可以在文档审阅页预览依赖变化，但只有中心已创建任务进入正式 DAG 图并同步 execution-map.md；roadmap.md 继续承载可修改草稿。Roadmap 和 DAG 均标明各自的文档版本或中心快照版本；不能用虚线草稿节点混入正式任务而不说明来源。
+拟规划任务可以在文档审阅页预览依赖变化，但只有中心已创建任务进入正式 DAG 图并同步 execution-map.md；drafts/ 内选定草稿 继续承载可修改草稿。Roadmap 和 DAG 均标明各自的文档版本或中心快照版本；不能用虚线草稿节点混入正式任务而不说明来源。
 
 ## 替代第一阶段 viewer
 

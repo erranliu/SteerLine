@@ -152,24 +152,29 @@ def document_tasks(path: Path, *, require_contract: bool = True) -> dict[int, tu
 
 
 def check_documents(root: Path, records: dict[int, str]) -> tuple[int, int]:
-    roadmap = document_tasks(root / "docs" / "roadmap" / "roadmap.md", require_contract=False)
-    execution_map = document_tasks(root / "docs" / "roadmap" / "execution-map.md")
+    directory = root / "docs" / "roadmap"
+    drafts = [(path, document_tasks(path, require_contract=False))
+              for path in sorted((directory / "drafts").rglob("*.md"))]
+    formal_path = directory / "execution-map.md"
+    execution_map = document_tasks(formal_path)
     specs = [spec for _, spec, _ in execution_map.values()]
     plans = [plan for _, _, plan in execution_map.values()]
     if len(specs) != len(set(specs)) or len(plans) != len(set(plans)):
         raise ValueError("multiple formal tasks share the same Spec or Plan")
-    for kind, tasks in (("draft", roadmap), ("formal", execution_map)):
+    documents = [("draft", path, tasks) for path, tasks in drafts]
+    documents.append(("formal", formal_path, execution_map))
+    for kind, path, tasks in documents:
         for task_id, (name, spec, plan) in tasks.items():
             if records.get(task_id) != name:
                 raise ValueError(f"{kind} task {task_id} differs from task-ids/{task_id}.json")
             for target in (spec, plan):
                 if target is None:
                     continue
-                file = root / "docs" / "roadmap" / target
+                file = path.parent / target
                 header = TASK_HEADER.search(file.read_text(encoding="utf-8")[:2000])
                 if header is None or int(header.group(1)) != task_id or header.group(2) != name:
                     raise ValueError(f"task {task_id} identity differs from {file}")
-    return len(roadmap), len(execution_map)
+    return sum(len(tasks) for _, tasks in drafts), len(execution_map)
 
 
 def main() -> None:

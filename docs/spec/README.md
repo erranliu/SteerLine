@@ -1,6 +1,6 @@
 # 当前 Spec 与 Plan
 
-本目录保留候选 Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段只运行和验收本地 Codex 与本机 Orca。正式任务应有独立 Spec/Plan 和实现 PR，但文档存在不表示已入 DAG。日常执行只从[正式执行清单](../roadmap/execution-map.md)选择，下表目前属于[草稿候选](../roadmap/roadmap.md)。
+本目录保留候选 Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段只运行和验收本地 Codex 与本机 Orca。正式任务应有独立 Spec/Plan 和实现 PR，但文档存在不表示已入 DAG。日常执行只从[正式执行清单](../roadmap/execution-map.md)选择，下表目前属于[草稿候选](../roadmap/drafts/roadmap.md)。
 
 已执行的 Spec 与配套 Plan 见[已交付归档](../archive/spec/completed/README.md)；退役流程和远端试验见[历史资料](../archive/spec/retired/README.md)。归档中的旧状态文字和路径属于原交付时点，不能当作当前待办。任务 ID 身份记录保留；原始验证数据从[清理前固定 Git 快照](../validation/README.md#历史取证)读取。
 

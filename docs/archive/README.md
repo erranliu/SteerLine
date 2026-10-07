@@ -12,4 +12,4 @@
 
 当前验收摘要及历史证据取证入口见 [validation/](../validation/README.md)，任务身份仍在 [task-ids/](../roadmap/task-ids/)。导航链接已适配新位置；历史命令、Canonical Spec 路径、SHA 和 JSON 回执不批量重写。固定契约仍读取其原 commit 的原路径。
 
-[当前文档](../README.md) · [剩余规划](../roadmap/roadmap.md) · [当前规格](../spec/README.md)
+[当前文档](../README.md) · [剩余规划](../roadmap/drafts/roadmap.md) · [当前规格](../spec/README.md)

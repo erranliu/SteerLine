@@ -1,11 +1,11 @@
 ---
 name: roadmap-runner
-description: 在 Codex 桌面端按 execution-map.md 的已入 DAG 正式清单创建独立 session 和 worktree，自查提 PR、独立复审修复并合并，支持 heartbeat 续跑。不执行 roadmap.md 草稿；讨论或编辑技能本身不会启动任务。
+description: 在 Codex 桌面端按 execution-map.md 的已入 DAG 正式清单创建独立 session 和 worktree，自查提 PR、独立复审修复并合并，支持 heartbeat 续跑。先读 RoadmapGuide，不执行 drafts/ 草稿；讨论或编辑技能本身不会启动任务。
 ---
 
 # Roadmap Runner
 
-把用户选定的正式 execution-map.md 范围执行到真实合并。roadmap.md 是讨论草稿，不能作为选任务来源。每个新任务使用独立 Codex session + 托管 worktree；上一个任务完成复审修复并真实合并后，才启动下一个，且仍须核对中心 DAG 资格。协调 session 负责分流问题、调度独立复审/修复 subagent、核对证据、记录和合并；冲突与需求遗漏优先交回原执行 session。
+把用户选定的正式 execution-map.md 范围执行到真实合并。先读项目 RoadmapGuide；drafts/ 内任意文件都是讨论草稿，不能作为选任务来源。每个新任务使用独立 Codex session + 托管 worktree；上一个任务完成复审修复并真实合并后，才启动下一个，且仍须核对中心 DAG 资格。协调 session 负责分流问题、调度独立复审/修复 subagent、核对证据、记录和合并；冲突与需求遗漏优先交回原执行 session。
 
 ## 固定约束
 
@@ -27,7 +27,7 @@ description: 在 Codex 桌面端按 execution-map.md 的已入 DAG 正式清单�
 
 ## 启动与恢复
 
-1. 读项目 AGENTS、正式 execution-map.md、共同约束及首个正式任务的固定 Spec/Plan。核对实际 DAG 的可信查询/准入回执、项目、Task 版本、完整/剩余依赖和固定 commit/摘要，再识别默认目标分支、Git 远端和测试入口。正式表为空就报告无可选任务，不创建 run、session/worktree 或 heartbeat；不同步时先核实，不能回退草稿。用户指定 roadmap.md 时按草稿讨论处理，执行须另经真实准入。
+1. 读项目 AGENTS、docs/roadmap/RoadmapGuide.md、正式 execution-map.md、共同约束及首个正式任务的固定 Spec/Plan。核对实际 DAG 的可信查询/准入回执、项目、Task 版本、完整/剩余依赖和固定 commit/摘要，再识别默认目标分支、Git 远端和测试入口。正式表为空就报告无可选任务，不创建 run、session/worktree 或 heartbeat；不同步时先核实，不能回退草稿。用户指定 drafts/ 内文件时按草稿讨论处理，执行须另经真实准入。
 2. 用 `list_projects` 确认匹配的 Git 项目。发现当前工具的 schema，确认固定执行模型及必要能力；PR 平台用现有 connector 或已认证 CLI。缺失能力记录阻塞，不另造服务或安装产品依赖。
 3. 启动或恢复前读 [状态与工具规程](references/coordination.md)。使用其中的 `scripts/state.py` 保存每个 run 的独立状态；运行记录放在用户的 Codex task-state 目录，**不放入任何执行 worktree 或版本库**。持久化用户授权来源、任务顺序、Spec/Plan、项目/远端/分支身份和协调 session 身份。
 4. 对照状态、session 历史和真实 PR 状态进行恢复。未确认的外部动作先核实，不能直接重试。只恢复当前 run，不将以前完成的项目流程再次启动。

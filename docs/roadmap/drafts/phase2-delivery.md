@@ -1,6 +1,8 @@
 # 第二阶段推进边界
 
-第二阶段交付原生 UI 与受控规划，拟议范围和依赖见[草稿 roadmap](roadmap.md)，只有受控准入并同步到[正式执行清单](execution-map.md)的 Task 才可执行。每项执行以中心固定的 Spec/Plan 为准，草稿讨论不产生 Ready 资格。
+本文件是可修改的阶段草稿，编辑前先读[RoadmapGuide](../RoadmapGuide.md)。它不参与正式任务派发，也不因包含已有编号而自动进入 DAG。
+
+第二阶段交付原生 UI 与受控规划，拟议范围和依赖见[草稿 roadmap](roadmap.md)，只有受控准入并同步到[正式执行清单](../execution-map.md)的 Task 才可执行。每项执行以中心固定的 Spec/Plan 为准，草稿讨论不产生 Ready 资格。
 
 新增产品方向以[草稿roadmap与审核准入](phase2-draft-roadmap-admission.md)为准：审核agent评估Spec及前置成熟度，适合固定才准入；未成熟内容留草稿。下表描述既有 #43–#53 草稿候选的基础交接，不表示已入 DAG。新增审核范围尚未固定为执行任务，相关 Spec 在正式准入前对齐，不从候选图推断已具备审核能力。
 

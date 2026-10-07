@@ -2,7 +2,7 @@
 
 本文持续维护 SteerLine 的功能划分、模块所有权、可并行条件和冲突触发点，是设计或调整 roadmap 前的阅读与检查入口。目标是提高 AI 开发的有效吞吐：让更多任务能够独立理解、实现、验证和交付，降低共享修改、等待、返工与集成成本。业务正确性、权限、原请求恢复和唯一交付是必须保持的边界，详见[整体架构](../architecture.md)。
 
-规划时先读本页的判断规则，再按影响展开对应模块、契约和测试。实际源码位置由[代码架构](current-code-architecture.md)维护；本页维护并行决策，拟议任务关系由[草稿 roadmap](../roadmap/roadmap.md)维护；已入 DAG 任务及实际依赖由[正式执行清单](../roadmap/execution-map.md)同步。采用的职责、接口、前置和验证要求须落实到独立 Spec/Plan；本页不分配任务 ID、不改变中心 DAG 或已冻结契约，也不是绕过硬前置的执行许可。
+规划时先读[RoadmapGuide](../roadmap/RoadmapGuide.md)，再读本页的判断规则，再按影响展开对应模块、契约和测试。实际源码位置由[代码架构](current-code-architecture.md)维护；本页维护并行决策，拟议任务关系由本轮选定的 drafts/ 草稿维护；已入 DAG 任务及实际依赖由[正式执行清单](../roadmap/execution-map.md)同步。采用的职责、接口、前置和验证要求须落实到独立 Spec/Plan；本页不分配任务 ID、不改变中心 DAG 或已冻结契约，也不是绕过硬前置的执行许可。
 
 ## 并行开发的判断
 
@@ -33,8 +33,8 @@
 | 持久化与原子提交 / 已有 | storage/ports、sqlite | 已明确语义下的读取或提交实现；消费者仍经窄端口 | schema、唯一约束、CAS/版本、同事务快照、checkpoint 与领域记录提交边界改变 | [数据模型与格式来源](../product-design/data-model.md)、[提交契约](../../internal/storage/ports/transactions.go)、[快照端口](../../internal/storage/ports/application_snapshot.go) |
 | 配置、应用组装与服务宿主 / 已有 | app、app/host | 稳定宿主/产品端口下的配置加载、进程控制和入口能力 | 公共构造、目录注册、配置摘要、exe/home 传递、实例/锁、启动与停服规则改变 | [整体生命周期](../architecture.md#生命周期反馈与恢复)、[组装/宿主源码](current-code-architecture.md#build-install-and-launch-sources) |
 | 测试支持与环境 / 已有 | testkit、tests/integration、tests/e2e | 独立 owner 用例和场景，复用正式 driver/codec | 共享 fixture、driver/native/evidence、runner 登记/期限/清理、进程环境变量、账号/终端/仓库资源竞争 | [测试指南](../testing.md)、[E2E 环境](../../tests/e2e/README.md)、[测试边界源码](../../internal/testkit/boundary/) |
-| 规划草稿、会话、审核与准入 / 拟议 | 未来规划领域；尚非完整实现模块 | 先验证能力和固定领域/权限边界，再按稳定契约拆领域用例 | 草稿/正式文档权威、审核快照与授权、Git/SQLite 部分完成、规划写入 guard、任务创建端口及会话来源身份 | [规划架构](../product-design/planning-architecture.md)、[审核准入目标](../roadmap/phase2-draft-roadmap-admission.md)；新契约在实施前正式对齐 |
-| 本机 HTTP/SSE 与原生 UI / 拟议 | 后续产品传输、Windows 客户端及页面 | 已交付协议/组件基础上的独立页面和领域消费；能力验证与界面原型可分别准备 | 同一客户端协议、共享导航/输入组件、消息/权限/回执语义及未具备的服务能力 | [拟议界面](../product-design/planning-ui.md)、[草稿候选及拟议前置](../roadmap/roadmap.md) |
+| 规划草稿、会话、审核与准入 / 拟议 | 未来规划领域；尚非完整实现模块 | 先验证能力和固定领域/权限边界，再按稳定契约拆领域用例 | 草稿/正式文档权威、审核快照与授权、Git/SQLite 部分完成、规划写入 guard、任务创建端口及会话来源身份 | [规划架构](../product-design/planning-architecture.md)、[审核准入目标](../roadmap/drafts/phase2-draft-roadmap-admission.md)；新契约在实施前正式对齐 |
+| 本机 HTTP/SSE 与原生 UI / 拟议 | 后续产品传输、Windows 客户端及页面 | 已交付协议/组件基础上的独立页面和领域消费；能力验证与界面原型可分别准备 | 同一客户端协议、共享导航/输入组件、消息/权限/回执语义及未具备的服务能力 | [拟议界面](../product-design/planning-ui.md)、[规划入口](../roadmap/RoadmapGuide.md) |
 
 保留的远端实现不成为当前本机开发链的硬前置。未来规划远端能力时需独立核对目标权限、身份、观察/恢复/停止与路径所有权，不能从本机成功推定支持。
 
@@ -65,7 +65,7 @@
 
 共享 SQLite 或唯一 actor 不要求所有研发串行；稳定契约下的纯规则、查询、adapter 和 UI 可分别开发。共同状态/事务不变量变化时集中协调。文件重叠也不自动变成业务硬前置：先判断是语义依赖、接口依赖、合入顺序，还是仅资源排期，分别记录。
 
-中心 Task DAG 表达正式交付依赖。拟议共享修改和资源排期写入 roadmap.md；正式条目说明在 execution-map 中与已确认范围对应，实际任务 Spec/Plan 落实范围与条件；它们不自动新增中心边或旁路领取状态。
+中心 Task DAG 表达正式交付依赖。拟议共享修改和资源排期写入本轮 drafts/ 草稿；正式条目说明在 execution-map 中与已确认范围对应，实际任务 Spec/Plan 落实范围与条件；它们不自动新增中心边或旁路领取状态。
 
 ## 用于 roadmap 的步骤
 
@@ -110,7 +110,7 @@
 
 ## 持续维护
 
-模块职责、公开接口/持久格式、共同构造、测试 owner、资源归属或支持范围发生变化时，随对应实现 PR 更新本页受影响条目和链接；草稿前置及合入建议更新 roadmap.md；正式映射随实际 DAG 及已确认范围更新 execution-map，不把完成任务表积累在此。仅内容未改变的核对不新增维护记录或任务。
+模块职责、公开接口/持久格式、共同构造、测试 owner、资源归属或支持范围发生变化时，随对应实现 PR 更新本页受影响条目和链接；草稿前置及合入建议更新本轮 drafts/ 草稿；正式映射随实际 DAG 及已确认范围更新 execution-map，不把完成任务表积累在此。仅内容未改变的核对不新增维护记录或任务。
 
 每次更新确认：当前与拟议状态准确、共享冲突及所有者明确、契约/源码/测试入口存在、证据未越过其覆盖范围。形成独立文档后把本页中的详细说明收敛为摘要与链接，废弃规则删除或按独有追溯价值归档。常见冲突可反向推动小端口和领域边界改进；反复跨多个模块修改时先复核任务拆分与契约归属，再决定是否需要结构调整。
 
