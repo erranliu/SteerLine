@@ -83,6 +83,7 @@ func TestCandidateConsoleWiring(t *testing.T) {
 		t.Fatal("selected ready task did not open its execution profile choice", m.View())
 	}
 	step(tea.KeyMsg{Type: tea.KeyEnter})
+	t.Logf("first explicit start UI: %s", m.View())
 	var primary *productapi.CandidateSummary
 	waitFor(t, 30*time.Second, func() bool {
 		snap := client.ReadProject(ctx, "901", productapi.ProjectSnapshot{})

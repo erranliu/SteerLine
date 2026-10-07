@@ -277,8 +277,8 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		}
 		u, usageEvidence, err = native.AppServerTurnUsage(raw, session, e.CurrentTurnID)
 	} else {
-		// Only this project's home is scanned. Exactly one native session must match
-		// the bound workspace; user/global sessions cannot become usage evidence.
+		// Only this project's home is scanned. Exactly one root native session must
+		// match; guardian/subagent logs sharing its cwd are separate executions.
 		matches := 0
 		err = filepath.WalkDir(filepath.Join(p.Home, "codex", "sessions"), func(path string, d os.DirEntry, walkErr error) error {
 			if walkErr != nil {
@@ -291,13 +291,11 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 			if readErr != nil {
 				return readErr
 			}
-			var first struct {
-				Payload struct {
-					Cwd string `json:"cwd"`
-				} `json:"payload"`
+			matched, matchErr := native.BusinessRolloutMatches(raw, e.Workspace.Worktree)
+			if matchErr != nil {
+				return matchErr
 			}
-			line, _, _ := strings.Cut(string(raw), "\n")
-			if json.Unmarshal([]byte(line), &first) != nil || !sameLocalPath(first.Payload.Cwd, e.Workspace.Worktree) {
+			if !matched {
 				return nil
 			}
 			matches++
