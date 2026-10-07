@@ -58,4 +58,4 @@ SteerLine 管理任务、原 worker 会话、用户反馈和真实 PR 交付。w
 
 ## 规划约束
 
-[架构约束](architecture-constraints.md) · [控制台约束](console-constraints.md) · [第一阶段交付](phase-1-delivery.md)
+[架构约束](architecture-constraints.md) · [执行控制台设计](../product-design/execution-console.md) · [产品交付节点](product-vision.md)

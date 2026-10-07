@@ -1,0 +1,6 @@
+2026-10-07 Asia/Shanghai; source baseline 172cea6c
+Markdown: 369 files, 2400 local navigation links, 0 errors
+checked 84 identity files; next ID: 84
+git diff --check: pass
+source-keys: model_keys.go/view.go and service_client.go verified; current inline feedback, explicit F2, contextual Enter, candidate/detail actions and stop receipt/process/locks
+scope: documentation and check output only; current product and Spec/Plan acceptance unchanged

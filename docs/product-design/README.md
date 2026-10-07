@@ -10,6 +10,7 @@
 | [决策与反馈](decisions.md) | 问题、答案、投递事实、宿主阻断与人工恢复 |
 | [会话事件](conversation-events.md) | 来源、规范事件、完整正文、分页、采集与展示 |
 | [Activity](activity.md) | 数据库活动摘要、读取游标与服务控制台输出 |
+| [执行控制台](execution-console.md) | 当前 TUI 的任务/候选布局、原地反馈、能力展示与操作速查 |
 | [规划与原生客户端架构](planning-architecture.md) | 拟议的 Go 服务、WinUI 客户端及 Codex 规划会话边界 |
 | [规划与原生界面交互](planning-ui.md) | 拟议的规划对话、草稿审阅、DAG、执行与待处理页面 |
 | [规划界面原型](prototypes/planning-ui/README.md) | 单文件交互演示；不连接真实服务、不代表已实现产品 |

@@ -1,6 +1,6 @@
 # 规划与原生客户端架构设计
 
-状态：产品与架构方案；已选范围的执行要求见[独立 Spec/Plan 索引](../spec/README.md)及[共同接口](../spec/phase2-constraints.md)。范围依据：[第二阶段产品愿景](../roadmap/product-vision.md)、[架构约束](../roadmap/architecture-constraints.md)、[控制台约束](../roadmap/console-constraints.md)。
+状态：产品与架构方案；已选范围的执行要求见[独立 Spec/Plan 索引](../spec/README.md)及[共同接口](../spec/phase2-constraints.md)。范围依据：[第二阶段产品愿景](../roadmap/product-vision.md)、[架构约束](../roadmap/architecture-constraints.md)、[当前执行控制台](execution-console.md)和[会话展示](conversation-events.md)。
 
 ## 目标与边界
 

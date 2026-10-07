@@ -100,5 +100,5 @@ python scripts/roadmap_task_id.py check
 ## 约束文档
 
 - [架构约束](architecture-constraints.md)：双执行路径、业务权威、执行身份、远端边界与后续扩展。
-- [控制台约束](console-constraints.md)：生命周期、会话展示、人工决策和能力差异。
+- [执行控制台设计](../product-design/execution-console.md)：当前 TUI 的布局、目标选择、反馈与能力展示；通用生命周期、会话和决策规则分别链接产品设计，不在 roadmap 重复维护。
 - 当前代码边界：业务用例不依赖具体执行实现/SQL，存储不反向导入业务用例，UI只消费注入的产品契约；提交身份、版本、恢复授权与原子边界保持。源码归属按需查[当前架构](../architecture/current-code-architecture.md)。
