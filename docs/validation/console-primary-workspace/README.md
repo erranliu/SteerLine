@@ -17,7 +17,7 @@
 | CPW-01–04 与读取/请求回归 | [发布定向报告](targeted-delivery/summary.json)：console/query/client 共 124 项通过，passed/complete=true，无 skip；包括新 `TestCPW*`，覆盖过期方案、模式取消、隐藏操作、草稿保存失败、结果来源、核验过期、宽窄/ANSI/单色/ASCII 及长确认 |
 | 真实 app/SQLite/受控 worker 接线 | [接线报告](integration-02/summary.json)：`TestPS1InlineConsoleWiring` 通过；两个候选、中文原地反馈、切换草稿隔离及同一候选新轮次成立，无真实模型调用 |
 | CPW-05 当前终端构建 | [捕获](terminal/delivery-capture.json) / [发布 VT 记录](terminal/delivery-native-output.json)：实际 Windows ConPTY，80×24；Tab/Shift+Tab、Enter、F2、Esc、F6/F7、F8、中文两行，阅读中 F2/Enter 不产生控制请求；窄屏第一 F2 返回预览，第二 F2 只提交一次到 candidate-0/decision-0，测试 PASS |
-| 固定 L1 | [原始报告](l1-01/summary.json)：passed=false，quick-boundary 集成组累计 15 分钟超时；其余 12 组通过。未完成的 TM04/TM06/TM08 按原场景单独补跑中，不将原报告改写为通过 |
+| 固定 L1 | [原始报告](l1-01/summary.json)：passed=false，quick-boundary 集成组累计 15 分钟超时；其余 12 组通过。[TM04/TM06/TM08 补跑报告](l1-integration-tail/summary.json) passed/complete=true；[覆盖核对](l1-followup-coverage.json)确认原组登记场景均有通过证据，原 L1 仍不完整 |
 | 静态 | go vet、产品构建、Markdown 链接、任务身份与差异格式检查通过；构建与源文件摘要见[最终检查记录](final-checks.json) |
 
 终端 fixture 只使用公开 DTO 与隔离临时 home，固定 fixture 时钟避免人工键入耗时让固定快照过期；不会冻结生产时钟、修改服务准备期限或模拟终端按键。键盘由 ConPTY 实际输入，Bubble Tea 记录实际 KeyMsg 与完整渲染帧。ANSI 检查只为该子进程设置 TERM/CLICOLOR_FORCE 并清空 NO_COLOR；单色和 dumb 降级由定向测试覆盖，不修改用户系统环境或配置。
@@ -26,7 +26,7 @@ PTY 不证明物理 IME、桌面窗口截图、所有终端字体或远端能力
 
 ## 初次失败与修正
 
-固定 L1 未完整通过：原集成组在 `TestTM04ExecutionWiring/original_request_ack_and_manual_recovery` 累计超时，TM06/TM08 尚未执行；没有该组已完成用例的断言失败。保留 panic/原日志，追加 `l1-integration-tail/` 定向运行，不更改 runner、选定用例或超时来制造 L1 通过。
+固定 L1 未完整通过：原集成组在 `TestTM04ExecutionWiring/original_request_ack_and_manual_recovery` 累计超时，TM06/TM08 尚未执行；没有该组已完成用例的断言失败。保留 panic/原日志，追加 `l1-integration-tail/` 定向运行已通过（417.407 秒）；原场景/默认测试期限保持，未更改 runner、选定用例或超时来制造 L1 通过。
 
 - `development-failures.txt`、`targeted-01/`、`targeted-02/` 保留开发失败。旧断言要求“输入焦点”文字、主界面 session、55% 列表与自动完整 final；按新 Spec 更新了展示断言，保留原身份、草稿、请求和完整正文校验。新增待处理列后，列头/历史状态采用适合列宽的显示，修复对应断言；没有删除失败用例或放宽业务门槛。
 - `integration-01/` 的失败是仍在匹配已退役的“输入焦点”文字；改为检查明确输入标记后，`integration-02/` 通过。

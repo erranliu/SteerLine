@@ -61,6 +61,7 @@
   },
   "terminal_command": "cpw-console-terminal.test.exe '-test.run=^TestCPWWindowsTerminalInput$' '-test.v'",
   "terminal_fixture_clock": "controlled; production clock unchanged",
-  "fixed_l1": "incomplete: cumulative integration group 15m timeout; missing cases rerunning separately",
-  "terminal_evidence": "terminal/delivery-capture.json + terminal/delivery-native-output.json"
+  "fixed_l1": "incomplete: cumulative 15m timeout; targeted followup passed/complete=true, assigned boundary coverage complete",
+  "terminal_evidence": "terminal/delivery-capture.json + terminal/delivery-native-output.json",
+  "validation_coverage": "l1-followup-coverage.json"
 }

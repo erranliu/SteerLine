@@ -1,6 +1,6 @@
 # Spec：三窗主界面操作与控制台可读性优化
 
-目标：`CONSOLE-PRIMARY-WORKSPACE`。状态：实施及验证中，未分配 Task ID；[实施 Plan](console-primary-workspace.plan.md)。依据：2026-10-07 用户确认的控制台体验建议，要求日常操作尽量在一级界面三个窗口完成，详细阅读才进入详情，并增强颜色、加粗和焦点表示。
+目标：`CONSOLE-PRIMARY-WORKSPACE`。状态：实现及定向/终端验证完成，草稿交付 [PR #234](https://github.com/erranliu/SteerLine/pull/234)，未分配 Task ID；[实施 Plan](console-primary-workspace.plan.md)。固定 L1 超时不完整，缺失项定向补跑通过；范围和限制见[验证记录](../validation/console-primary-workspace/README.md)。依据：2026-10-07 用户确认的控制台体验建议，要求日常操作尽量在一级界面三个窗口完成，详细阅读才进入详情，并增强颜色、加粗和焦点表示。
 
 参考源码基线：`172cea6c6530b6693b742324a9c1d4f9aeb17b6d`。功能前置：[精简候选控制台与会话阅读](product-simplification-01-console.spec.md)的三窗、最近活动、内嵌回答与最小持久化能力；实施 Plan 固定包含这些能力的实际基线。本任务不依赖产品精简第二、三批。
 

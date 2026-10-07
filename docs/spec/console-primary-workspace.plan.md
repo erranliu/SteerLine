@@ -26,6 +26,6 @@
 
 ## 状态
 
-实现、124 项发布定向回归、原地反馈接线与当前构建 Windows ConPTY 已完成；固定 L1 原集成组累计超时，报告不完整，补跑缺失项。具体限制及证据见[验证记录](../validation/console-primary-workspace/README.md)，不以本计划替代验收证据。
+实现、124 项发布定向回归、原地反馈接线与当前构建 Windows ConPTY 已完成；固定 L1 原集成组累计超时，原报告不完整；缺失的 TM04/TM06/TM08 补跑已全部通过，登记场景覆盖核对无遗漏。交付草稿 [PR #234](https://github.com/erranliu/SteerLine/pull/234)，保留 L1 限制供评审。具体限制及证据见[验证记录](../validation/console-primary-workspace/README.md)，不以本计划替代验收证据。
 
 追加最小诊断：Windows 受控环境，`go run ./cmd/test-feedback -out=docs/validation/console-primary-workspace/l1-integration-tail -- ./tests/integration -run '^Test(TM04ExecutionWiring|TM06ResourceWiring|TM08AppHostWiring)$' -count=1`；在 L1 超时后执行，要求这些原场景全部通过、passed/complete=true，证据保存在该新目录。原 L1 的 passed=false 保持，不将多个报告拼成一次成功的 L1。
