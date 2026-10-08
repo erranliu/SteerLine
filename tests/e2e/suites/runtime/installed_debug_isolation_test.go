@@ -7,9 +7,11 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"sort"
 	"strings"
 	"testing"
@@ -128,6 +130,8 @@ func TestInstalledDebugIsolation(t *testing.T) {
 	debugEvidence["start_service_window_required"] = requested
 
 	debug.CreateTasks()
+	assertSharedSQLiteRejected(t, s, debug, installed, powershell, debugScript, debugEvidence)
+	writeRuntimeEvidence(t, s.Output, evidence)
 	serviceCommand := debug.Command(powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", debugScript,
 		"-DebugHome", debug.Home, "-InstalledHome", installed.Home, "-Config", debug.Config, "-Operation", "service")
 	debug.StartServiceViaVisibleConsole(serviceCommand, "debug-operation-service-window-1")
@@ -316,6 +320,120 @@ func TestInstalledDebugIsolation(t *testing.T) {
 	assertDirectBuildOutputIsolation(t, s, debug, installed, powershell, evidence)
 	assertMissingSourceExecutableRejected(t, s, debug, powershell, debugScript, installed.Home)
 
+}
+
+func assertSharedSQLiteRejected(t *testing.T, s *testenv.Scenario, project, installed *testenv.Project, powershell, script string, evidence map[string]any) {
+	t.Helper()
+	invalidBatch := filepath.Join(s.Root, "invalid-shared-sqlite-batch.json")
+	s.Must(os.WriteFile(invalidBatch, []byte("{}\n"), 0600))
+	installedDBBefore := fileSHA256(t, installed.Database)
+	results := []map[string]any{}
+	evidence["sqlite_shared_hardlinks"] = results
+	quote := func(value string) string { return "'" + strings.ReplaceAll(value, "'", "''") + "'" }
+	for _, suffix := range []string{"", "-wal", "-shm"} {
+		name := "database" + suffix
+		func() {
+			path := project.Database + suffix
+			backup := filepath.Join(s.Root, "original-"+name)
+			hadOriginal := false
+			if _, err := os.Stat(path); err == nil {
+				s.Must(os.Rename(path, backup))
+				hadOriginal = true
+			} else if !os.IsNotExist(err) {
+				t.Fatal(err)
+			}
+			linked := false
+			defer func() {
+				if linked {
+					if err := os.Remove(path); err != nil {
+						t.Errorf("remove owned %s hard link: %v", name, err)
+					}
+				}
+				if hadOriginal {
+					if err := os.Rename(backup, path); err != nil {
+						t.Errorf("restore owned %s: %v", name, err)
+					}
+				}
+			}()
+			// The main DB is a copy of the actual initialized native database.
+			// Empty WAL/SHM installed sentinels reproduce SQLite's writable
+			// sidecars without synthesizing any task or authority state.
+			var content []byte
+			if suffix == "" {
+				var err error
+				content, err = os.ReadFile(backup)
+				s.Must(err)
+			}
+			sentinel := filepath.Join(installed.Home, "temp", "task83-shared-"+name)
+			s.Must(os.WriteFile(sentinel, content, 0600))
+			s.Must(os.Link(sentinel, path))
+			linked = true
+			before := sqliteFileSnapshot(t, project.Database)
+			sentinelHash := fileSHA256(t, sentinel)
+			sentinelInfo, err := os.Stat(sentinel)
+			s.Must(err)
+			result := map[string]any{"file": path, "installed_sentinel": sentinel, "sentinel_size_before": sentinelInfo.Size(), "sentinel_sha256_before": sentinelHash, "sqlite_before": before}
+			results = append(results, result)
+			evidence["sqlite_shared_hardlinks"] = results
+			checkRefusal := func(entry string, command *exec.Cmd) {
+				output, commandErr := s.RunCommand(command, "sqlite-shared-"+name+"-"+entry)
+				after := sqliteFileSnapshot(t, project.Database)
+				info, statErr := os.Stat(sentinel)
+				s.Must(statErr)
+				hash := fileSHA256(t, sentinel)
+				result[entry] = map[string]any{"output": string(output), "error": fmt.Sprint(commandErr), "sentinel_size_after": info.Size(), "sentinel_sha256_after": hash, "sqlite_after": after}
+				writeSQLiteEvidence(t, s.Output, results)
+				if commandErr == nil || !strings.Contains(strings.ToLower(string(output)), "sqlite state file must not be a hard link") {
+					t.Fatalf("%s accepted shared SQLite %s before open: err=%v output=%s", entry, name, commandErr, output)
+				}
+				if info.Size() != sentinelInfo.Size() || hash != sentinelHash || !reflect.DeepEqual(before, after) {
+					t.Fatalf("%s changed shared %s or native SQLite before refusal: sentinel=%d/%s before=%v after=%v", entry, name, info.Size(), hash, before, after)
+				}
+			}
+			checkRefusal("product_cli", project.Command(project.Executable, "task", "validate", "-config", project.Config, "-file", invalidBatch))
+			wrapper := "& " + quote(script) + " -DebugHome " + quote(project.Home) + " -InstalledHome " + quote(installed.Home) + " -Config " + quote(project.Config) + " -Operation cli -Arguments @('task','validate','-file'," + quote(invalidBatch) + "); exit $LASTEXITCODE"
+			checkRefusal("debug_wrapper", project.Command(powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", wrapper))
+		}()
+	}
+	if fileSHA256(t, installed.Database) != installedDBBefore {
+		t.Fatal("SQLite hardlink negatives changed the installed project's actual database")
+	}
+	// Restore every original SQLite file before exercising the ordinary reader.
+	// The malformed batch must now reach the real business validation error.
+	output, err := s.RunCommand(project.Command(project.Executable, "task", "validate", "-config", project.Config, "-file", invalidBatch), "sqlite-single-link-normal-validation")
+	if err == nil || !strings.Contains(strings.ToLower(string(output)), "invalid_batch") {
+		t.Fatalf("normal native SQLite did not remain usable: err=%v output=%s", err, output)
+	}
+	evidence["sqlite_single_link_validation"] = string(output)
+}
+
+func sqliteFileSnapshot(t *testing.T, database string) map[string]any {
+	t.Helper()
+	result := map[string]any{}
+	for _, suffix := range []string{"", "-wal", "-shm", "-journal"} {
+		path := database + suffix
+		info, err := os.Stat(path)
+		if os.IsNotExist(err) {
+			result[path] = "missing"
+			continue
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		result[path] = map[string]any{"size": info.Size(), "sha256": fileSHA256(t, path)}
+	}
+	return result
+}
+
+func writeSQLiteEvidence(t *testing.T, output string, value any) {
+	t.Helper()
+	raw, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(output, "sqlite-shared-hardlinks.json"), raw, 0600); err != nil {
+		t.Fatal(err)
+	}
 }
 
 func assertHomeJunctionRejected(t *testing.T, s *testenv.Scenario, project *testenv.Project, powershell, script string, installed *testenv.Project) {

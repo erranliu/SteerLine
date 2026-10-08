@@ -10,6 +10,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/pathguard"
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
@@ -88,6 +89,9 @@ func OpenNativeTaskProject(ctx context.Context, c *Config) (*sqlite.SQLiteStore,
 	if err != nil {
 		return nil, err
 	}
+	if err := pathguard.RejectSharedSQLiteFiles(path); err != nil {
+		return nil, err
+	}
 	writer, err := sqlite.OpenSQLiteStore(path)
 	if err != nil {
 		return nil, err
@@ -147,6 +151,9 @@ func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*sqlite.SQLiteS
 		return nil, err
 	}
 	_ = reader.Close()
+	if err := pathguard.RejectSharedSQLiteFiles(path); err != nil {
+		return nil, err
+	}
 	writer, err := sqlite.OpenSQLiteStore(path)
 	if err != nil {
 		return nil, err
@@ -159,6 +166,9 @@ func OpenNativeTaskCommandStore(ctx context.Context, c *Config) (*sqlite.SQLiteS
 }
 
 func openBoundNativeReader(ctx context.Context, c Config, path string) (_ *sqlite.SQLiteStore, retErr error) {
+	if err := validateRuntimeHomePaths(c); err != nil {
+		return nil, err
+	}
 	reader, err := sqlite.OpenSQLiteReader(path)
 	if err != nil {
 		return nil, err

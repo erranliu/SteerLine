@@ -2,7 +2,7 @@
 
 唯一任务归属：#83。来源：[Spec](../spec/local-runtime-isolation.spec.md) / [Plan](../spec/local-runtime-isolation.plan.md)。本文件是该任务专属验收文档，不覆盖其他任务；验收流程见[入口](README.md)。
 
-状态：round 3 独立复审否定此前汇总的 LI2-A direct build 保护及 LI3-A 请求计数证据。原执行者已补齐 canonical containment、正式 request 文件观察和正常发布正向断言；最终候选 `f838dcf587efb2cb22992e6354640f530e0df8b7` 的 LI1-A–LI4-A、P1、L1、`delivery.basic` 与 Linux/amd64 编译均通过。PR #247 仍打开、未合并；任务保持执行中并等待新独立复审，不释放后继，也不宣称流程实现完成。无本任务人工验收项。固定 Spec/Plan commit 为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。实现 PR：[PR #247](https://github.com/erranliu/SteerLine/pull/247)。本文件保留旧证据、失败复验及范围事实。
+状态：round 4 独立复审确认 SQLite SHM 共享硬链接造成安装侧真实写入，LI3-A 整体失败、待局部修复与精确候选复验。round 3 `f838dcf587efb2cb22992e6354640f530e0df8b7` 的原有通过结果仅保留其实际覆盖范围，未覆盖 SQLite 共享硬链接。PR #247 仍打开、未合并；任务保持执行中，不释放后继，也不宣称流程实现完成。无本任务人工验收项。固定 Spec/Plan commit 为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。实现 PR：[PR #247](https://github.com/erranliu/SteerLine/pull/247)。本文件保留旧证据、失败复验及范围事实。
 
 ## 自动验收
 
@@ -12,10 +12,16 @@
 | --- | --- | --- | --- |
 | LI1-A | 自动 | 两个独立测试 clone、不同 home 的安装版与调试版同时运行；配置、状态、日志、服务发现和写命令不串线 | **已验收**：最终 L3 两侧项目和数据库身份独立；Task/Delivery 写入、快照及服务实例未串线，场景清理完成 |
 | LI2-A | 自动 | 调试 build、停启及入口重复生成不改安装 exe 摘要、原服务实例或任务事实；调试服务/控制台/CLI 及子进程使用实际调试 exe/home | **已验收**：最终 L3 直接 `build.ps1` 对源码 `bin` junction 与输出硬链接均在写入前拒绝；普通首次构建及再次重建成功；安装 exe、SQLite、bin 内容、任务事实与服务实例均保持；真实 service-window、console/ConPTY 和 CLI identity 通过 |
-| LI3-A | 自动 | 缺少调试路径、home 重叠、显式状态/工作区越出调试 home 拒绝；同仓库跨 home 第二写者被原锁拒绝；误连实例的写命令仍被拒绝 | **已验收**：最终 L3 的 stale instance 与 changed config 两条拒绝均正式 request 计数 0→0；正常产品领取发布 `resume_dispatch` 与 `start_task` 两条有效请求，计数 0→2；state/UI alias、越界和跨 home 写锁均拒绝 |
+| LI3-A | 自动 | 缺少调试路径、home 重叠、显式状态/工作区越出调试 home 拒绝；同仓库跨 home 第二写者被原锁拒绝；误连实例的写命令仍被拒绝 | **失败 / 待复验**：round 4 真实 product CLI 与 debug wrapper 在 SQLite SHM 共享硬链接时先写安装侧文件；原有最终 L3 的 stale instance 与 changed config 两条拒绝均正式 request 计数 0→0；正常产品领取发布 `resume_dispatch` 与 `start_task` 两条有效请求，计数 0→2；state/UI alias、越界和跨 home 写锁均拒绝 |
 | LI4-A | 自动 | Windows 中文/空格路径及无关 cwd 可启动并显示准确身份；维护说明区分中心停服、外部执行结算、同构建重启和人工更新 | **已验收**：最终 L3 使用中文/空格路径及无关 cwd，CLI、ConPTY console、两个 service-window 入口报告精确 exe/home/config/commit/dirty；维护步骤见[本机安装与源码调试](../runtime-install-debug.md) |
 
 环境：Windows/amd64 controlled；两个独立 Git clone/home、真实 SteerLine 进程、SQLite、Git 和受控 worker/provider；不发模型请求。每次输出目录独立，服务和临时资源由场景登记并清理。
+
+## 2026-10-09 round 4 独立复审：SQLite 共享硬链接失败
+
+受审 HEAD `054decfcc42f93dab7e8bc95c0f007e60e268708`，实现候选 `f838dcf587efb2cb22992e6354640f530e0df8b7`。独立临时 debug 当前格式数据库初始化后，`steerline.db-shm` 硬链接到另一临时 installed home 空哨兵；实际产品 `task validate -config ... -file <{}>` 与真实 `debug-runtime.ps1 -Operation cli` 均先将哨兵写成 32768 字节，再以 `invalid_batch` 退出 1。哨兵 SHA-256 从 `E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855` 变为 `FD4C9FDA9CD3F9AE7C962B0DDF37232294D55580E1AA165AA06129B8549389EB`。目录 canonical containment 不识别共享硬链接，LI3-A 整体失败；已有 state/UI alias、锁及 request 证据保留原范围。
+
+原始证据：`C:/Users/lmas1/AppData/Local/Temp/sl83-r4-bbf4c68be4f247a8993a01b99c990883/{result.json,wrapper-result.json,wrapper-hardlink-shm.log}`；仅独立临时 Git/home/假认证，原链接已解除。本轮修复及精确候选复验待完成；固定 Spec/Plan 不变。
 
 ## 2026-10-09 round 3 原执行者修复与最终候选复验
 

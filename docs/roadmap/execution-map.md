@@ -6,7 +6,7 @@
 
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
-| 83 | 本机安装与调试路径隔离 | 无 | 执行中 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | PR [#247](https://github.com/erranliu/SteerLine/pull/247)；最终候选 `f838dcf587efb2cb22992e6354640f530e0df8b7` 的 LI1-A–LI4-A、direct build P1、L1、`delivery.basic`、Linux/amd64 编译通过；等待新独立复审，PR 未合并，不释放后继；[记录](../acceptance/local-runtime-isolation.md) |
+| 83 | 本机安装与调试路径隔离 | 无 | 执行中 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | PR [#247](https://github.com/erranliu/SteerLine/pull/247)；round 4 独立复审确认 SQLite SHM 共享硬链接在产品 CLI 与 debug wrapper 写入安装侧，LI3-A 整体失败、待局部修复/精确复验；此前 `f838dcf` 的通过证据保留原覆盖范围；等待新独立复审，PR 未合并，不释放后继；[记录](../acceptance/local-runtime-isolation.md) |
 | 45 | 本机客户端协议与历史查询 | 无 | 待执行 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | 未验；[记录](../acceptance/phase2-local-api.md) |
 | 44 | WinUI 基座与原生输入 | #45 | 等待 #45 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 未验；[记录](../acceptance/phase2-winui-foundation.md)，人工项最迟2.1签收 |
 
@@ -40,3 +40,5 @@
 2026-10-09，原执行者候选 `f838dcf587efb2cb22992e6354640f530e0df8b7`（tree `deb3ae0f1dbc3b2a9402e0ecc0681a2a5beb4682`，Windows/amd64 clean tree）修复 LI2-A direct `build.ps1` canonical containment 和 LI3-A 正式 request 计数断言；同一受控 L3 runtime 通过，1 test/0 skip/清理完成，P1 10 项、L1（3 workers/12 groups/426 tests/0 skip）、`delivery.basic` 与 Linux/amd64 编译通过。LI3-A stale instance/config 两条拒绝均 0→0，正常产品领取正式 request 0→2。LI2-A 源码 bin junction 与输出 hardlink 均拒绝，普通构建/重建成功，安装 exe/DB/task facts/bin/service instance 保持。前序失败运行的 Windows scratch 路径、Git line-ending 环境和 CLI dirty 字段断言原因、产物定位见[验收记录](../acceptance/local-runtime-isolation.md)。PR #247 仍 OPEN、未合并；#83 保持执行中并等待新的独立复审，不释放后继。
 
 流程规则见[RoadmapGuide](RoadmapGuide.md)；[二期节点验收](../acceptance/phase2.md)目前仅规划。
+
+2026-10-09，round 4 受审 HEAD `054decf` 的 SQLite SHM 共享硬链接真实负例失败，LI3-A 整体已验汇总撤销；临时 installed 哨兵变为 32768 字节，产品 CLI/wrapper 最终 invalid_batch 不构成副作用前拒绝。局部修复与精确候选复验待完成；[明细](../acceptance/local-runtime-isolation.md#2026-10-09-round-4-独立复审sqlite-共享硬链接失败)。PR #247 未合并、不释放后继。

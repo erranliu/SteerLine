@@ -28,8 +28,9 @@ func preflightNativeStatePath(c Config) error {
 	for _, entry := range []struct{ name, path string }{
 		{"run directory", c.RunDir},
 		{"database", path},
-		{"database journal", path + "-wal"},
+		{"database WAL", path + "-wal"},
 		{"database shared memory", path + "-shm"},
+		{"database journal", path + "-journal"},
 		{"control root", filepath.Join(c.RunDir, "control")},
 		{"control requests", filepath.Join(c.RunDir, "control", "requests")},
 		{"control receipts", filepath.Join(c.RunDir, "control", "receipts")},
@@ -46,6 +47,9 @@ func preflightNativeStatePath(c Config) error {
 				return err
 			}
 		}
+	}
+	if err := pathguard.RejectSharedSQLiteFiles(path); err != nil {
+		return nativeErr("authority_mismatch", err.Error())
 	}
 	if _, err := os.Stat(path); err == nil {
 		if err := ensureNativeStateFilesAllowed(c.RunDir); err != nil {

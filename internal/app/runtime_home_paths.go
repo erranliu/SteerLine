@@ -19,8 +19,9 @@ func validateRuntimeHomePaths(config Config) error {
 		{"state root", StateRoot()},
 		{"run_dir", config.RunDir},
 		{"database", filepath.Join(config.RunDir, "steerline.db")},
-		{"database journal", filepath.Join(config.RunDir, "steerline.db-wal")},
+		{"database WAL", filepath.Join(config.RunDir, "steerline.db-wal")},
 		{"database shared memory", filepath.Join(config.RunDir, "steerline.db-shm")},
+		{"database journal", filepath.Join(config.RunDir, "steerline.db-journal")},
 		{"control state", filepath.Join(config.RunDir, "control")},
 		{"control requests", filepath.Join(config.RunDir, "control", "requests")},
 		{"control receipts", filepath.Join(config.RunDir, "control", "receipts")},
@@ -42,5 +43,5 @@ func validateRuntimeHomePaths(config Config) error {
 			return fmt.Errorf("%s must resolve inside STEERLINE_HOME (%s)", entry.name, home)
 		}
 	}
-	return nil
+	return pathguard.RejectSharedSQLiteFiles(filepath.Join(config.RunDir, "steerline.db"))
 }
