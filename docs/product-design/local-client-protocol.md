@@ -36,7 +36,7 @@ Go consumers can use `app.OpenHTTPClient(ctx, configPath)`; this only connects t
 
 ## 查询路由
 
-所有项目查询以 `/v1/projects/{project_id}` 为根。任务/图的版本和游标沿用现有 DTO；cursor 绑定原快照/筛选条件，失效时客户端刷新整页，不拼接不同 revision。活动查询必须绑定原 WorkflowRun、Execution、Attempt。会话 final 查询返回正式正文引用；body 按原 revision、SHA-256、UTF-8 offset 有界读取。
+所有项目查询以 `/v1/projects/{project_id}` 为根。任务/图的版本和游标沿用现有 DTO；cursor 绑定原快照/筛选条件，失效时客户端刷新整页，不拼接不同 revision。活动查询必须绑定原 WorkflowRun、Execution、Attempt。会话 final 查询返回正式正文引用；body 按原 revision、SHA-256、UTF-8 offset 有界读取。客户端用 `presentation` 查询现有 `ProjectPresentation`，展示 `DefaultProfileID`、profile 摘要及 `UnavailableReason`；命令只发送用户选择的 profile ID，服务仍通过原 `StartTaskPayload` 取得并核验配置 digest。
 
 | 方法与路径 | DTO / 用途 |
 | --- | --- |
@@ -46,6 +46,7 @@ Go consumers can use `app.OpenHTTPClient(ctx, configPath)`; this only connects t
 | `GET /v1/projects/{project_id}/tasks/{task_id}` | `api.TaskPage`：任务详情、直接依赖、交付和阻断 |
 | `GET /v1/projects/{project_id}/graph?cursor=&limit=` | `api.GraphPage`：有界基本 DAG |
 | `GET /v1/projects/{project_id}/candidates` | `api.TaskCandidates`：当前可领取任务候选 |
+| `GET /v1/projects/{project_id}/presentation` | `ProjectPresentation`：现有安全执行方案摘要、DefaultProfileID、配置 digest 和不可用原因，供客户端选择 start_task/start_candidate 的 profile ID |
 | `GET /v1/projects/{project_id}/runs/{run_id}` | 精确 run 的 `api.CandidateSummary`，含候选、Decision、PR 与交付状态 |
 | `GET /v1/projects/{project_id}/runs/{run_id}/activity?execution_id=&attempt_id=&cursor=` | `ActivityPage`，只读规范数据库活动，不回退私有日志 |
 | `GET /v1/projects/{project_id}/runs/{run_id}/conversation?execution_id=&attempt_id=&turn_id=&finals_only=&cursor=&limit=` | 有界会话事件页和原正文引用 |

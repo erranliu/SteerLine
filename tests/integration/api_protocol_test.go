@@ -1,15 +1,21 @@
 package integration
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -197,11 +203,189 @@ func TestAPIIdentityAndAuthentication(t *testing.T) {
 	service := startIntegrationService(t, ctx, fixture.config, &integrationLifecycleResolver{})
 	defer service.stop(t)
 	endpoint, client, product := startIntegrationHTTPAPI(t, ctx, fixture, service)
-	defer endpoint.Close(context.Background())
+	defer func() {
+		if endpoint != nil {
+			_ = endpoint.Close(context.Background())
+		}
+	}()
 	defer product.Close()
 	if client.Identity().Protocol != httpapi.Protocol || client.Identity().ProjectID != httpapi.ProjectID(fixture.config.Identity()) ||
 		client.Identity().InstanceID != service.instanceID || !client.Identity().Ready || client.Identity().Process.PID != os.Getpid() {
 		t.Fatalf("HTTP identity did not match the real service process: %+v", client.Identity())
+	}
+	initialRevision, initialPaused := integrationControlState(t, ctx, client)
+	discovery, token := integrationDiscoveryCredential(t, fixture.config.RunDir)
+	valid := integrationDispatchEnvelope(t, client, initialRevision, initialPaused)
+	wrongProjectRoute := httpapi.ProjectID(fixture.config.Identity() + "/different-project")
+	wrongProjectEnvelope := valid
+	wrongProjectEnvelope.RequestID = randomRequestID(t)
+	wrongProjectEnvelope.ProjectID += "-wrong"
+	wrongInstance := valid
+	wrongInstance.RequestID = randomRequestID(t)
+	wrongInstance.InstanceID += "-wrong"
+	for _, attempt := range []struct {
+		name, token, host, origin, route string
+		envelope                         httpapi.CommandEnvelope
+		wantCode                         string
+	}{
+		{name: "missing credential", envelope: valid, route: client.Identity().ProjectID, wantCode: "unauthorized"},
+		{name: "wrong credential", token: strings.Repeat("0", 64), envelope: valid, route: client.Identity().ProjectID, wantCode: "unauthorized"},
+		{name: "wrong Host", token: token, host: "localhost:1", envelope: valid, route: client.Identity().ProjectID, wantCode: "host_rejected"},
+		{name: "browser Origin", token: token, origin: "https://untrusted.example", envelope: valid, route: client.Identity().ProjectID, wantCode: "origin_rejected"},
+		{name: "wrong project route", token: token, envelope: valid, route: wrongProjectRoute, wantCode: "project_mismatch"},
+		{name: "wrong project envelope", token: token, envelope: wrongProjectEnvelope, route: client.Identity().ProjectID, wantCode: "request_invalid"},
+		{name: "wrong instance envelope", token: token, envelope: wrongInstance, route: client.Identity().ProjectID, wantCode: "request_invalid"},
+	} {
+		if attempt.envelope.RequestID == valid.RequestID {
+			attempt.envelope.RequestID = randomRequestID(t)
+		}
+		status, response, requestErr := postIntegrationCommand(ctx, discovery.Address, attempt.route, attempt.token, attempt.host, attempt.origin, attempt.envelope)
+		if requestErr != nil || response.Code != attempt.wantCode {
+			t.Fatalf("%s was not rejected at the real listener: status=%d response=%+v err=%v", attempt.name, status, response, requestErr)
+		}
+		assertNoIntegrationCommandEffect(t, ctx, fixture, product, attempt.envelope.RequestID)
+	}
+	if afterRevision, afterPaused := integrationControlState(t, ctx, client); afterRevision != initialRevision || afterPaused != initialPaused {
+		t.Fatalf("unauthorized/misbound requests changed control facts: revision %d->%d paused %t->%t", initialRevision, afterRevision, initialPaused, afterPaused)
+	}
+	if err := endpoint.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	_ = client.Close()
+	rotatedEndpoint, rotatedClient, err := newIntegrationHTTPAPI(ctx, fixture, service, product)
+	require(t, err)
+	endpoint, client = rotatedEndpoint, rotatedClient
+	newDiscovery, newToken := integrationDiscoveryCredential(t, fixture.config.RunDir)
+	if newDiscovery.LeaseID == discovery.LeaseID || newToken == token || client.Identity().InstanceID != service.instanceID {
+		t.Fatalf("service reconnection did not rotate credentials while preserving instance identity: old=%+v new=%+v", discovery, newDiscovery)
+	}
+	rotatedRevision, rotatedPaused := integrationControlState(t, ctx, client)
+	oldCredentialAttempt := integrationDispatchEnvelope(t, client, rotatedRevision, rotatedPaused)
+	oldCredentialAttempt.RequestID = randomRequestID(t)
+	status, response, requestErr := postIntegrationCommand(ctx, newDiscovery.Address, client.Identity().ProjectID, token, "", "", oldCredentialAttempt)
+	if requestErr != nil || response.Code != "unauthorized" {
+		t.Fatalf("retired instance credential was accepted after rotation: status=%d response=%+v err=%v", status, response, requestErr)
+	}
+	assertNoIntegrationCommandEffect(t, ctx, fixture, product, oldCredentialAttempt.RequestID)
+	if afterRevision, afterPaused := integrationControlState(t, ctx, client); afterRevision != rotatedRevision || afterPaused != rotatedPaused {
+		t.Fatalf("retired credential changed control facts: revision %d->%d paused %t->%t", rotatedRevision, afterRevision, rotatedPaused, afterPaused)
+	}
+	positive := integrationDispatchEnvelope(t, client, rotatedRevision, rotatedPaused)
+	positiveResponse, err := client.SubmitCommand(ctx, positive)
+	require(t, err)
+	if positiveResponse.ControlRequest == nil {
+		t.Fatalf("authorized positive-control request was not published: %+v", positiveResponse)
+	}
+	waitIntegrationControlApplied(t, ctx, client, positive.RequestID)
+	finalRevision, finalPaused := integrationControlState(t, ctx, client)
+	if finalRevision != rotatedRevision+1 || finalPaused == rotatedPaused {
+		t.Fatalf("authorized positive control did not produce one observable state change: revision %d->%d paused %t->%t", rotatedRevision, finalRevision, rotatedPaused, finalPaused)
+	}
+}
+
+func integrationDiscoveryCredential(t *testing.T, runDir string) (httpapi.Discovery, string) {
+	t.Helper()
+	path := filepath.Join(runDir, "local-api", "discovery.json")
+	data, err := os.ReadFile(path)
+	require(t, err)
+	var discovery httpapi.Discovery
+	require(t, json.Unmarshal(data, &discovery))
+	token, err := os.ReadFile(discovery.CredentialPath)
+	require(t, err)
+	return discovery, string(token)
+}
+
+func postIntegrationCommand(ctx context.Context, address, routeProject, token, host, origin string, envelope httpapi.CommandEnvelope) (int, httpapi.ErrorResponse, error) {
+	body, err := json.Marshal(envelope)
+	if err != nil {
+		return 0, httpapi.ErrorResponse{}, err
+	}
+	url := "http://" + address + "/v1/projects/" + routeProject + "/commands"
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+	if err != nil {
+		return 0, httpapi.ErrorResponse{}, err
+	}
+	request.Header.Set("Content-Type", "application/json")
+	if token != "" {
+		request.Header.Set("Authorization", "Bearer "+token)
+	}
+	if host != "" {
+		request.Host = host
+	}
+	if origin != "" {
+		request.Header.Set("Origin", origin)
+	}
+	transport := &http.Transport{Proxy: nil}
+	client := &http.Client{Transport: transport, Timeout: 10 * time.Second}
+	response, err := client.Do(request)
+	if err != nil {
+		transport.CloseIdleConnections()
+		return 0, httpapi.ErrorResponse{}, err
+	}
+	defer response.Body.Close()
+	defer transport.CloseIdleConnections()
+	data, err := io.ReadAll(io.LimitReader(response.Body, 64<<10))
+	if err != nil {
+		return response.StatusCode, httpapi.ErrorResponse{}, err
+	}
+	var decoded httpapi.ErrorResponse
+	if err = json.Unmarshal(data, &decoded); err != nil {
+		return response.StatusCode, decoded, fmt.Errorf("decode command response: %w: %s", err, data)
+	}
+	return response.StatusCode, decoded, nil
+}
+
+func integrationDispatchEnvelope(t *testing.T, client *httpapi.Client, revision uint64, paused bool) httpapi.CommandEnvelope {
+	t.Helper()
+	action := "pause_dispatch"
+	if paused {
+		action = "resume_dispatch"
+	}
+	identity := client.Identity()
+	return httpapi.CommandEnvelope{RequestID: randomRequestID(t), ProjectID: identity.ProjectID, InstanceID: identity.InstanceID,
+		Action: action, TargetID: "dispatch", ExpectedVersion: revision, ExpectedControlRevision: revision, Payload: []byte(`{}`)}
+}
+
+func integrationControlState(t *testing.T, ctx context.Context, client *httpapi.Client) (uint64, bool) {
+	t.Helper()
+	snapshot, err := client.Snapshot(ctx, "")
+	require(t, err)
+	if snapshot.Connection.Snapshot.Page == nil {
+		t.Fatal("real project snapshot omitted control state")
+	}
+	control := snapshot.Connection.Snapshot.Page.Control
+	return control.Revision, control.DispatchPaused
+}
+
+func assertNoIntegrationCommandEffect(t *testing.T, ctx context.Context, fixture integrationFixture, product *productclient.Client, requestID string) {
+	t.Helper()
+	for _, path := range []string{
+		filepath.Join(fixture.config.RunDir, "local-api", "commands", requestID+".json"),
+		filepath.Join(fixture.config.RunDir, "control", "requests", requestID, "request.json"),
+		filepath.Join(fixture.config.RunDir, "control", "receipts", requestID+".json"),
+	} {
+		if _, err := os.Lstat(path); !os.IsNotExist(err) {
+			t.Fatalf("rejected request left an original transport/control record at %s: %v", path, err)
+		}
+	}
+	if _, err := product.Command(ctx, requestID); !errors.Is(err, api.ErrRecordNotFound) {
+		t.Fatalf("rejected request left a SQLite command fact or a read error: %v", err)
+	}
+}
+
+func waitIntegrationControlApplied(t *testing.T, ctx context.Context, client *httpapi.Client, requestID string) httpapi.CommandResponse {
+	t.Helper()
+	deadline, cancel := context.WithTimeout(ctx, 12*time.Second)
+	defer cancel()
+	for {
+		response, err := client.Command(deadline, requestID)
+		if err == nil && response.ControlReceipt != nil && response.ControlReceipt.Status == "applied" {
+			return response
+		}
+		if deadline.Err() != nil {
+			t.Fatalf("real control request did not apply: response=%+v err=%v", response, err)
+		}
+		time.Sleep(25 * time.Millisecond)
 	}
 }
 
@@ -236,6 +420,22 @@ func TestAPIQueryParity(t *testing.T) {
 	require(t, err)
 	if candidates.RepositoryIdentity != fixture.config.Identity() || candidates.InstanceID != service.instanceID {
 		t.Fatalf("HTTP candidates were not bound to this project/service: %+v", candidates)
+	}
+	presentation, err := client.ProjectPresentation(ctx)
+	require(t, err)
+	profileID := presentation.Presentation.DefaultProfileID
+	if presentation.ProjectID != httpapi.ProjectID(fixture.config.Identity()) || profileID == "" {
+		t.Fatalf("HTTP presentation omitted project identity or configured default profile: %+v", presentation)
+	}
+	var selectedProfile *api.ExecutionProfileSummary
+	for i := range presentation.Presentation.Profiles {
+		if presentation.Presentation.Profiles[i].ID == profileID {
+			selectedProfile = &presentation.Presentation.Profiles[i]
+			break
+		}
+	}
+	if selectedProfile == nil || selectedProfile.UnavailableReason != "" || selectedProfile.Digest == "" || selectedProfile.Name == "" {
+		t.Fatalf("HTTP presentation did not expose the usable selected profile summary: %+v", presentation.Presentation)
 	}
 
 	claimIntegrationTask(t, ctx, fixture, 901, service.instanceID)
@@ -274,7 +474,7 @@ func TestAPIQueryParity(t *testing.T) {
 	startCandidate := httpapi.CommandEnvelope{RequestID: randomRequestID(t), ProjectID: httpapi.ProjectID(fixture.config.Identity()),
 		InstanceID: service.instanceID, Action: "start_candidate", TargetID: "901", ExpectedVersion: current.SelectedNative.Version,
 		ExpectedControlRevision: current.Connection.Snapshot.Page.Control.Revision, ExpectedGraphRevision: current.NativeTasks.GraphRevision,
-		Payload: []byte(`{"execution_profile_id":"fixture"}`)}
+		Payload: mustJSON(map[string]string{"execution_profile_id": profileID})}
 	started, err := client.SubmitCommand(ctx, startCandidate)
 	require(t, err)
 	if started.ControlRequest == nil {
@@ -423,6 +623,82 @@ func newIntegrationHTTPAPI(ctx context.Context, fixture integrationFixture, serv
 		return nil, nil, err
 	}
 	return server, client, nil
+}
+
+type integrationInboxPublisher func(context.Context, api.ControlInput) (api.ControlRequest, error)
+type integrationInboxHook func(context.Context, api.ControlInput, integrationInboxPublisher) (api.ControlRequest, error)
+
+type integrationInboxInterceptor struct {
+	productclient.ControlPort
+	inbox     productclient.ControlInboxPort
+	mu        sync.Mutex
+	hook      integrationInboxHook
+	forwarded map[string]int
+}
+
+func (c *integrationInboxInterceptor) SetHook(hook integrationInboxHook) {
+	c.mu.Lock()
+	c.hook = hook
+	c.mu.Unlock()
+}
+
+func (c *integrationInboxInterceptor) SubmitInbox(ctx context.Context, input api.ControlInput) (api.ControlRequest, error) {
+	c.mu.Lock()
+	hook := c.hook
+	c.mu.Unlock()
+	if hook != nil {
+		return hook(ctx, input, c.publish)
+	}
+	return c.publish(ctx, input)
+}
+
+func (c *integrationInboxInterceptor) publish(ctx context.Context, input api.ControlInput) (api.ControlRequest, error) {
+	c.mu.Lock()
+	if c.forwarded == nil {
+		c.forwarded = make(map[string]int)
+	}
+	c.forwarded[input.RequestID]++
+	c.mu.Unlock()
+	return c.inbox.SubmitInbox(ctx, input)
+}
+
+func (c *integrationInboxInterceptor) PublishAsFormalConsumer(ctx context.Context, input api.ControlInput) (api.ControlRequest, error) {
+	return c.publish(ctx, input)
+}
+
+func (c *integrationInboxInterceptor) Forwarded(requestID string) int {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.forwarded[requestID]
+}
+
+func startIntegrationHTTPAPIWithInboxInterceptor(t *testing.T, ctx context.Context, fixture integrationFixture, service *runningIntegrationService) (*httpapi.Server, *httpapi.Client, *productclient.Client, *integrationInboxInterceptor) {
+	t.Helper()
+	var interceptor *integrationInboxInterceptor
+	product, err := productclient.Open(ctx, api.ProjectRef{ConfigPath: fixture.configPath}, func(ctx context.Context, ref api.ProjectRef) (productclient.Resources, error) {
+		resources, err := steerlineapp.ClientResources(ctx, ref)
+		if err != nil {
+			return productclient.Resources{}, err
+		}
+		inbox, ok := resources.Control.(productclient.ControlInboxPort)
+		if !ok {
+			return productclient.Resources{}, fmt.Errorf("real app control port does not implement the request inbox")
+		}
+		interceptor = &integrationInboxInterceptor{ControlPort: resources.Control, inbox: inbox}
+		resources.Control = interceptor
+		return resources, nil
+	})
+	require(t, err)
+	server, client, err := newIntegrationHTTPAPI(ctx, fixture, service, product)
+	require(t, err)
+	t.Cleanup(func() {
+		closeCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = server.Close(closeCtx)
+		_ = client.Close()
+		_ = product.Close()
+	})
+	return server, client, product, interceptor
 }
 
 func randomRequestID(t *testing.T) string {

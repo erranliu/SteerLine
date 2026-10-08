@@ -112,6 +112,14 @@ type ConversationPage struct {
 	Page      api.ConversationPage `json:"page"`
 }
 
+// ProjectPresentation exposes the existing, non-secret profile summaries the
+// native client needs to select a configured execution profile.
+type ProjectPresentation struct {
+	ProjectID    string                  `json:"project_id"`
+	SampledAt    time.Time               `json:"sampled_at"`
+	Presentation api.ProjectPresentation `json:"presentation"`
+}
+
 type FinalReply struct {
 	ProjectID   string               `json:"project_id"`
 	WorkflowID  string               `json:"workflow_id"`

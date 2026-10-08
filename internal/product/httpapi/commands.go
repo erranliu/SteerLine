@@ -262,6 +262,9 @@ func protocolErrorStatus(err error) (int, string) {
 		}
 	}
 	message := strings.ToLower(err.Error())
+	if strings.Contains(message, "request id conflict") || strings.Contains(message, "immutable request with different content") {
+		return http.StatusConflict, "identity_conflict"
+	}
 	if strings.Contains(message, "stale_version") || strings.Contains(message, "stale_revision") || strings.Contains(message, "stale_instance") ||
 		strings.Contains(message, "stale_recovery") || strings.Contains(message, "stale_profile") || strings.Contains(message, "stale_target") ||
 		strings.Contains(message, "answer_conflict") || strings.Contains(message, "idempotency_conflict") {

@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"testing"
@@ -201,7 +202,11 @@ func newAPIFixture(t *testing.T) (*Server, *productclient.Client, *apiReader, *a
 		Observation: api.ObservationSnapshot{Page: servicePage, State: api.SnapshotValid, SampledAt: now}}
 	control := &apiControl{requests: map[string]api.ControlRequest{}, receipts: map[string]*api.ControlReceipt{}}
 	decision := &apiDecision{reader: reader}
-	ref := api.ProjectRef{ConfigPath: filepath.Join(runDir, "project.json"), Identity: "C:/repo", RunDir: runDir}
+	ref := api.ProjectRef{ConfigPath: filepath.Join(runDir, "project.json"), Identity: "C:/repo", RunDir: runDir,
+		Presentation: api.ProjectPresentation{ServiceInstruction: "service-window.bat", NativeWorkflow: true, ConfigDigest: strings.Repeat("a", 64),
+			TaskAuthority: "native", WorkflowProtocol: "worker-flow-v1", ShutdownGrace: "5s", DefaultProfileID: "fixture",
+			Profiles: []api.ExecutionProfileSummary{{ID: "fixture", Name: "Fixture", Host: "local", Agent: "codex", Digest: strings.Repeat("b", 64),
+				AcceptedConfigVersion: "accepted-v1", ImplementationDisplay: []string{"Codex app-server"}, Details: []string{"Local fixture"}}}}}
 	client, err := productclient.Open(ctx, ref, func(context.Context, api.ProjectRef) (productclient.Resources, error) {
 		return productclient.Resources{Project: ref, OpenReader: func(context.Context) (productclient.Reader, error) { return reader, nil },
 			OpenCommands: func(context.Context, bool) (productclient.TaskCommands, error) { return apiCommands{}, nil },
@@ -281,7 +286,7 @@ func TestAPIIdentityAndAuthentication(t *testing.T) {
 }
 
 func TestAPIQueryParity(t *testing.T) {
-	server, _, reader, _ := newAPIFixture(t)
+	server, product, reader, _ := newAPIFixture(t)
 	client, err := Open(context.Background(), server.options.RunDir, server.options.ProjectIdentity)
 	if err != nil {
 		t.Fatal(err)
@@ -296,6 +301,11 @@ func TestAPIQueryParity(t *testing.T) {
 	graph, err := client.Graph(context.Background(), "", 40)
 	if err != nil || graph.DatabaseID != "db-a" || graph.GraphRevision != 4 {
 		t.Fatalf("graph did not preserve the source snapshot: %+v %v", graph, err)
+	}
+	presentation, err := client.ProjectPresentation(context.Background())
+	if err != nil || presentation.ProjectID != ProjectID(product.Project().Identity) || presentation.SampledAt.IsZero() ||
+		!reflect.DeepEqual(presentation.Presentation, product.Project().Presentation) {
+		t.Fatalf("profile presentation did not preserve the configured public DTO: %+v %v", presentation, err)
 	}
 	if _, err := client.ListTasks(context.Background(), "", 501); err == nil {
 		t.Fatal("oversized task page limit was accepted")
@@ -434,6 +444,13 @@ func TestAPIReconnectAndUnsupported(t *testing.T) {
 	control.failRead = errors.New("control receipt reader is unavailable")
 	if _, err = client.Command(context.Background(), strings.Repeat("5", 32)); err == nil || strings.Contains(err.Error(), "command_not_found") {
 		t.Fatalf("control read failure was disguised as command_not_found: %v", err)
+	}
+}
+
+func TestAPIFormalControlContentCollisionIsIdentityConflict(t *testing.T) {
+	status, code := protocolErrorStatus(errors.New("request ID conflict: an immutable request with different content already exists"))
+	if status != http.StatusConflict || code != "identity_conflict" {
+		t.Fatalf("formal control content collision lost its identity diagnosis: status=%d code=%s", status, code)
 	}
 }
 

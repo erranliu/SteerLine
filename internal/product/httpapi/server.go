@@ -170,6 +170,9 @@ func (s *Server) serveRead(w http.ResponseWriter, r *http.Request, identity Iden
 	case len(path) == 1 && path[0] == "candidates":
 		candidates, err := s.product.TaskSnapshot(ctx)
 		writeResult(w, candidates, err)
+	case len(path) == 1 && path[0] == "presentation":
+		project := s.product.Project()
+		writeJSON(w, http.StatusOK, ProjectPresentation{ProjectID: identity.ProjectID, SampledAt: time.Now().UTC(), Presentation: project.Presentation})
 	case len(path) == 2 && path[0] == "runs":
 		candidate, err := s.candidate(ctx, path[1])
 		writeResult(w, candidate, err)

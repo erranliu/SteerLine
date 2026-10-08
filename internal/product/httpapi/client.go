@@ -207,6 +207,12 @@ func (c *Client) Candidates(ctx context.Context) (api.TaskCandidates, error) {
 	return candidates, err
 }
 
+func (c *Client) ProjectPresentation(ctx context.Context) (ProjectPresentation, error) {
+	var presentation ProjectPresentation
+	err := c.Get(ctx, "/presentation", &presentation)
+	return presentation, err
+}
+
 func (c *Client) Run(ctx context.Context, runID string) (api.CandidateSummary, error) {
 	var candidate api.CandidateSummary
 	err := c.Get(ctx, "/runs/"+url.PathEscape(runID), &candidate)
