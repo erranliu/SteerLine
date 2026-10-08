@@ -67,17 +67,17 @@ func TestInstalledDebugIsolation(t *testing.T) {
 	if _, err := runDebugScript(s, debug, powershell, debugScript, installed.Home, "build"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := runDebugScript(s, debug, powershell, debugScript, installed.Home, "install"); err != nil {
-		t.Fatal(err)
-	}
 	if _, err := runDebugScript(s, debug, powershell, debugScript, installed.Home, "launchers"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := runDebugScript(s, debug, powershell, debugScript, installed.Home, "launchers"); err != nil {
 		t.Fatal(err)
 	}
-	debugExe := filepath.Join(debug.Home, "bin", "steerline.exe")
+	debugExe := filepath.Join(s.Run.Root, "bin", "steerline.exe")
 	debug.Executable, debug.Driver.Binary = debugExe, debugExe
+	if _, err := os.Stat(filepath.Join(debug.Home, "bin", "steerline.exe")); !os.IsNotExist(err) {
+		t.Fatalf("debug runtime unexpectedly copied the source exe into its home: %v", err)
+	}
 	if fileSHA256(t, installedExe) != installedHash {
 		t.Fatal("debug build or launcher generation changed the installed executable")
 	}
@@ -105,7 +105,7 @@ func TestInstalledDebugIsolation(t *testing.T) {
 	assertContains(t, string(productCLI), s.Run.SourceDirty)
 	assertContains(t, string(productCLI), debug.Config)
 	assertRuntimePathsInsideHome(t, debug)
-	assertGeneratedLaunchers(t, debug.Home)
+	assertGeneratedLaunchers(t, debug.Home, debugExe)
 	debugEvidence := evidence["debug"].(map[string]any)
 	debugEvidence["executable"] = debugExe
 	debugEvidence["cli_home_output"] = map[string]string{"home": debug.Home, "executable": debugExe, "config": debug.Config, "source_commit": s.Run.SourceCommit, "source_dirty": s.Run.SourceDirty}
@@ -128,6 +128,17 @@ func TestInstalledDebugIsolation(t *testing.T) {
 	debug.StartService()
 	debugIdentity := assertServiceIdentity(t, debug, debugExe, s.Run.SourceCommit, s.Run.SourceDirty)
 	debugEvidence["startup_diagnostics"] = debugIdentity
+	consoleCommand := debug.Command(powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", debugScript,
+		"-DebugHome", debug.Home, "-InstalledHome", installed.Home, "-Config", debug.Config, "-Operation", "console")
+	consoleOutput, consoleErr := s.RunPseudoConsole(consoleCommand, "debug-runtime-console", s.Run.SourceCommit)
+	if consoleErr != nil {
+		t.Fatalf("run actual debug console under ConPTY: %v\n%s", consoleErr, consoleOutput)
+	}
+	for _, expected := range []string{debugExe, debug.Home, debug.Config, s.Run.SourceCommit, "dirty=true"} {
+		assertContains(t, string(consoleOutput), expected)
+	}
+	debugEvidence["console_runtime_identity"] = map[string]string{"entry": "debug-runtime.ps1 -Operation console via Windows ConPTY", "executable": debugExe, "home": debug.Home, "config": debug.Config, "source_commit": s.Run.SourceCommit, "source_dirty": s.Run.SourceDirty, "transcript": filepath.Join(s.Output, "debug-runtime-console.log")}
+	writeRuntimeEvidence(t, s.Output, evidence)
 	debugHashBeforeRunningBuild := fileSHA256(t, debugExe)
 	buildOutput, buildErr := runDebugScript(s, debug, powershell, debugScript, installed.Home, "build")
 	if buildErr == nil || !strings.Contains(strings.ToLower(string(buildOutput)), "debug executable is still running") {
@@ -203,9 +214,6 @@ func TestInstalledDebugIsolation(t *testing.T) {
 	debug.StopService()
 
 	if _, err := runDebugScript(s, debug, powershell, debugScript, installed.Home, "build"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := runDebugScript(s, debug, powershell, debugScript, installed.Home, "install"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := runDebugScript(s, debug, powershell, debugScript, installed.Home, "launchers"); err != nil {
@@ -437,7 +445,7 @@ func latestServiceLog(t *testing.T, project *testenv.Project) []byte {
 	return raw
 }
 
-func assertGeneratedLaunchers(t *testing.T, home string) {
+func assertGeneratedLaunchers(t *testing.T, home, executable string) {
 	t.Helper()
 	console, err := os.ReadFile(filepath.Join(home, "console.bat"))
 	if err != nil {
@@ -453,13 +461,18 @@ func assertGeneratedLaunchers(t *testing.T, home string) {
 	}{
 		{console, `set "STEERLINE_HOME=%SHOME%"`},
 		{console, `set "CODEX_HOME=%SHOME%\codex"`},
-		{console, `%SHOME%\bin\steerline.exe`},
+		{console, `set "BIN=` + executable + `"`},
 		{service, `set "STEERLINE_HOME=%SHOME%"`},
 		{service, `set "CODEX_HOME=%SHOME%\codex"`},
-		{service, `%SHOME%\bin\steerline.exe`},
+		{service, `set "BIN=` + executable + `"`},
 	} {
 		if !strings.Contains(string(value.data), value.want) {
 			t.Fatalf("launcher did not bind to its own home: missing %q", value.want)
+		}
+	}
+	for _, data := range [][]byte{console, service} {
+		if strings.Contains(string(data), `set "BIN=%SHOME%\bin\steerline.exe"`) {
+			t.Fatal("debug launcher retained a home-bin fallback")
 		}
 	}
 }

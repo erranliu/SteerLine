@@ -477,6 +477,7 @@ func runtimeIdentityLines(ref ProjectRef) []string {
 	return []string{
 		"运行 exe：" + safeTerminalText(firstText(ref.ExecutablePath, "未知")),
 		"运行 home：" + safeTerminalText(firstText(ref.ApplicationHome, "未知")),
+		"项目配置：" + safeTerminalText(firstText(ref.ConfigPath, "未知")),
 		"构建源码：" + safeTerminalText(firstText(ref.SourceCommit, "未知")) + " · dirty=" + safeTerminalText(firstText(ref.SourceDirty, "未知")),
 	}
 }

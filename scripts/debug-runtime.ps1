@@ -10,7 +10,7 @@ param(
     [string]$Config,
 
     [Parameter(Mandatory = $true)]
-    [ValidateSet('build', 'install', 'launchers', 'console', 'service', 'cli')]
+    [ValidateSet('build', 'launchers', 'console', 'service', 'cli')]
     [string]$Operation,
 
     [string[]]$Arguments = @()
@@ -93,28 +93,9 @@ function Invoke-Product([string]$Executable, [string[]]$ProductArguments) {
     }
 }
 
-function Get-FileSHA256([string]$Path) {
-    $algorithm = [Security.Cryptography.SHA256]::Create()
-    $stream = [IO.File]::OpenRead($Path)
-    try {
-        return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')
-    } finally {
-        $stream.Dispose()
-        $algorithm.Dispose()
-    }
-}
-
-function Assert-CurrentDebugExecutable([string]$BuildExe, [string]$DebugExe) {
+function Assert-SourceExecutable([string]$BuildExe) {
     if (-not (Test-Path -LiteralPath $BuildExe -PathType Leaf)) {
         throw "Missing source build executable '$BuildExe'; run this script with -Operation build first."
-    }
-    if (-not (Test-Path -LiteralPath $DebugExe -PathType Leaf)) {
-        throw "Missing debug executable '$DebugExe'; run this script with -Operation install first."
-    }
-    $buildHash = Get-FileSHA256 $BuildExe
-    $debugHash = Get-FileSHA256 $DebugExe
-    if ($buildHash -ne $debugHash) {
-        throw "Debug executable is stale: '$DebugExe' does not match '$BuildExe'; run -Operation install."
     }
 }
 
@@ -154,18 +135,60 @@ function Set-DebugCodexHome {
     $env:CODEX_HOME = Resolve-CanonicalPath $codexHome
 }
 
-function Add-DebugCodexHomeToLauncher([string]$Path) {
+function Set-DebugRuntimeOnLauncher([string]$Path, [string]$Executable) {
+    if ($Executable.Contains('%') -or $Executable.Contains('"') -or $Executable.Contains("`r") -or $Executable.Contains("`n")) {
+        throw "The source executable path cannot be represented safely in a Windows launcher: '$Executable'"
+    }
     $encoding = New-Object System.Text.UTF8Encoding -ArgumentList $false
     $content = [IO.File]::ReadAllText($Path, $encoding)
     $codexAssignment = 'set "CODEX_HOME=%SHOME%\codex"'
-    if ($content.Contains($codexAssignment)) {
+    $binTemplate = 'set "BIN=%SHOME%\bin\steerline.exe"'
+    $executableAssignment = 'set "BIN=' + $Executable + '"'
+    if ($content.Contains($codexAssignment) -and $content.Contains($executableAssignment)) {
         return
     }
     $homeAssignment = 'set "STEERLINE_HOME=%SHOME%"'
-    if (-not $content.Contains($homeAssignment)) {
+    if (-not $content.Contains($homeAssignment) -or -not $content.Contains($binTemplate)) {
         throw "Launcher does not set its own home: '$Path'"
     }
-    $content = $content.Replace($homeAssignment, $homeAssignment + "`r`n" + $codexAssignment)
+    $content = [regex]::Replace($content, '(?m)^set "CODEX_HOME=.*"\r?\n?', '')
+    $content = [regex]::Replace($content, '(?m)^set "BIN=.*"\r?\n?', '')
+    $assignments = $homeAssignment + "`r`n" + $executableAssignment + "`r`n" + $codexAssignment
+    $content = $content.Replace($homeAssignment, $assignments)
+    [IO.File]::WriteAllText($Path, $content, $encoding)
+}
+
+function Assert-DebugLauncherExecutable([string]$Path, [string]$Executable) {
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Debug launcher is missing: '$Path'; run -Operation launchers first."
+    }
+    $content = [IO.File]::ReadAllText($Path, [Text.Encoding]::UTF8)
+    $expected = 'set "BIN=' + $Executable + '"'
+    if (-not $content.Contains($expected)) {
+        throw "Debug launcher is not bound to the current source executable '$Executable'; run -Operation launchers."
+    }
+}
+
+function Write-DebugReadme([string]$Path, [string]$Executable, [string]$ProjectConfig) {
+    $encoding = New-Object System.Text.UTF8Encoding -ArgumentList $false
+    $content = @"
+SteerLine source debug home
+==========================
+
+STEERLINE_HOME: $debugHomePath
+CODEX_HOME: $debugHomePath\codex
+Project config: $ProjectConfig
+Source executable: $Executable
+
+console.bat and service-window.bat run the source executable above. This home
+owns its configuration, SQLite state, logs, service files, worktrees, Codex
+sessions, and copied authentication file. No executable copy is installed in
+this home's bin directory.
+
+Stop the debug service before rebuilding the source executable. Run
+scripts\debug-runtime.ps1 with -Operation build and -Operation launchers to
+rebuild and bind the launchers to the current source executable.
+"@
     [IO.File]::WriteAllText($Path, $content, $encoding)
 }
 
@@ -221,22 +244,25 @@ try {
     }
 
     $buildExe = Join-Path $repoPath 'bin\steerline.exe'
-    $debugExe = Join-Path $debugHomePath 'bin\steerline.exe'
     $launcher = Join-Path $debugHomePath 'service-window.bat'
     # Preflight every script/product output before the first side effect. A
-    # disjoint home root does not imply its existing children are disjoint.
+    # disjoint home root does not imply its existing output targets are disjoint.
     foreach ($relative in @('bin', 'bin\steerline.exe', 'codex', 'codex\auth.json', 'console.bat', 'service-window.bat', 'README.txt')) {
         Assert-WritablePathWithin $debugHomePath (Join-Path $debugHomePath $relative)
     }
     Assert-WritablePathWithin $repoPath (Join-Path $repoPath 'bin')
     Assert-WritablePathWithin $repoPath $buildExe
+    $homeExecutable = Get-Item -LiteralPath (Join-Path $debugHomePath 'bin\steerline.exe') -Force -ErrorAction SilentlyContinue
+    if ($null -ne $homeExecutable) {
+        throw "Debug home contains an executable copy at '$($homeExecutable.FullName)'; use a clean debug home. Debug launchers use the source executable '$buildExe'."
+    }
     $oldHome = $env:STEERLINE_HOME
     $oldCodexHome = $env:CODEX_HOME
     $env:STEERLINE_HOME = $debugHomePath
     try {
         switch ($Operation) {
             'build' {
-                Assert-DebugExecutableStopped $debugExe
+                Assert-DebugExecutableStopped $buildExe
                 Push-Location $repoPath
                 try {
                     & (Join-Path $repoPath 'build.ps1')
@@ -251,41 +277,28 @@ try {
                 }
                 Write-Output "Built debug source executable $buildExe"
             }
-            'install' {
-                Assert-DebugExecutableStopped $debugExe
-                if (-not (Test-Path -LiteralPath $buildExe -PathType Leaf)) {
-                    throw "Missing source build executable '$buildExe'; run -Operation build first."
-                }
-                Invoke-Product $buildExe @('install')
-                $installedExe = Join-Path $debugHomePath 'bin\steerline.exe'
-                if (-not (Test-Path -LiteralPath $installedExe -PathType Leaf)) {
-                    throw "Debug install did not create '$installedExe'"
-                }
-                Write-Output "Installed debug executable $installedExe"
-            }
             'launchers' {
-                if (-not (Test-Path -LiteralPath $buildExe -PathType Leaf)) {
-                    throw "Missing source build executable '$buildExe'; run -Operation build first."
-                }
+                Assert-SourceExecutable $buildExe
                 Invoke-Product $buildExe @('launchers')
-                Add-DebugCodexHomeToLauncher (Join-Path $debugHomePath 'console.bat')
-                Add-DebugCodexHomeToLauncher $launcher
+                Set-DebugRuntimeOnLauncher (Join-Path $debugHomePath 'console.bat') $buildExe
+                Set-DebugRuntimeOnLauncher $launcher $buildExe
                 Set-DebugCodexHome
+                Write-DebugReadme (Join-Path $debugHomePath 'README.txt') $buildExe $configPath
             }
             'console' {
-                Assert-CurrentDebugExecutable $buildExe $debugExe
+                Assert-SourceExecutable $buildExe
                 if (-not (Test-Path -LiteralPath (Join-Path $debugHomePath 'console.bat') -PathType Leaf) -or
                     -not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
                     throw "Debug launchers are missing under '$debugHomePath'; run -Operation launchers first."
                 }
+                Assert-DebugLauncherExecutable (Join-Path $debugHomePath 'console.bat') $buildExe
+                Assert-DebugLauncherExecutable $launcher $buildExe
                 Set-DebugCodexHome
-                Invoke-Product $debugExe @('console', '-config', $configPath)
+                Invoke-Product $buildExe @('console', '-config', $configPath)
             }
             'service' {
-                Assert-CurrentDebugExecutable $buildExe $debugExe
-                if (-not (Test-Path -LiteralPath $launcher -PathType Leaf)) {
-                    throw "Debug service launcher is missing: '$launcher'; run -Operation launchers first."
-                }
+                Assert-SourceExecutable $buildExe
+                Assert-DebugLauncherExecutable $launcher $buildExe
                 Set-DebugCodexHome
                 & $launcher $configPath
                 if ($LASTEXITCODE -ne 0) {
@@ -293,9 +306,12 @@ try {
                 }
             }
             'cli' {
-                Assert-CurrentDebugExecutable $buildExe $debugExe
+                Assert-SourceExecutable $buildExe
                 if ($Arguments.Count -eq 0) {
                     throw 'CLI requires a SteerLine command in -Arguments.'
+                }
+                if ($Arguments[0] -in @('install', 'launchers', 'console')) {
+                    throw "Use the dedicated debug runtime operation for '$($Arguments[0])'."
                 }
                 foreach ($argument in $Arguments) {
                     if ($argument -eq '-config' -or $argument.StartsWith('-config=')) {
@@ -303,7 +319,7 @@ try {
                     }
                 }
                 Set-DebugCodexHome
-                Invoke-Product $debugExe (@($Arguments) + @('-config', $configPath))
+                Invoke-Product $buildExe (@($Arguments) + @('-config', $configPath))
             }
         }
     } finally {

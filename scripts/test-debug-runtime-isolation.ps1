@@ -25,6 +25,17 @@ function Write-Fixture([string]$Path, [string]$Content) {
     [IO.File]::WriteAllText($Path, $Content, $utf8)
 }
 
+function File-SHA256([string]$Path) {
+    $algorithm = [Security.Cryptography.SHA256]::Create()
+    $stream = [IO.File]::OpenRead($Path)
+    try {
+        return [BitConverter]::ToString($algorithm.ComputeHash($stream)).Replace('-', '')
+    } finally {
+        $stream.Dispose()
+        $algorithm.Dispose()
+    }
+}
+
 function Snapshot-Files([string]$Root) {
     $snapshot = [ordered]@{}
     foreach ($item in @(Get-ChildItem -LiteralPath $Root -Recurse -Force | Sort-Object FullName)) {
@@ -33,7 +44,7 @@ function Snapshot-Files([string]$Root) {
         } elseif ($item.PSIsContainer) {
             'directory'
         } else {
-            (Get-FileHash -LiteralPath $item.FullName -Algorithm SHA256).Hash
+            (File-SHA256 $item.FullName)
         }
         $snapshot[$item.FullName.Substring($Root.Length)] = $value
     }
@@ -74,9 +85,9 @@ function New-Fixture([string]$Name, [bool]$MissingAuth = $false) {
 # Run the real script, not extracted path helpers. Missing leaves exercise
 # canonical resolution through an existing aliased parent.
 $cases = @(
-    @{ name = 'bin-junction'; operation = 'install'; path = 'bin'; target = 'bin'; type = 'Junction' },
+    @{ name = 'bin-junction'; operation = 'launchers'; path = 'bin'; target = 'bin'; type = 'Junction' },
     @{ name = 'codex-junction-missing-auth'; operation = 'launchers'; path = 'codex'; target = 'codex'; type = 'Junction'; missingAuth = $true },
-    @{ name = 'exe-hard-link'; operation = 'install'; path = 'bin\steerline.exe'; target = 'bin\steerline.exe'; type = 'HardLink' },
+    @{ name = 'exe-hard-link'; operation = 'launchers'; path = 'bin\steerline.exe'; target = 'bin\steerline.exe'; type = 'HardLink' },
     @{ name = 'auth-hard-link'; operation = 'launchers'; path = 'codex\auth.json'; target = 'codex\auth.json'; type = 'HardLink' },
     @{ name = 'console-hard-link'; operation = 'launchers'; path = 'console.bat'; target = 'console.bat'; type = 'HardLink' },
     @{ name = 'service-hard-link'; operation = 'launchers'; path = 'service-window.bat'; target = 'service-window.bat'; type = 'HardLink' },
@@ -84,7 +95,7 @@ $cases = @(
 )
 if ($IncludeSymbolicLinks) {
     $cases += @(
-        @{ name = 'exe-file-alias'; operation = 'install'; path = 'bin\steerline.exe'; target = 'bin\steerline.exe'; type = 'SymbolicLink' },
+        @{ name = 'exe-file-alias'; operation = 'launchers'; path = 'bin\steerline.exe'; target = 'bin\steerline.exe'; type = 'SymbolicLink' },
         @{ name = 'auth-file-alias'; operation = 'launchers'; path = 'codex\auth.json'; target = 'codex\auth.json'; type = 'SymbolicLink' },
         @{ name = 'auth-dangling-file-alias'; operation = 'launchers'; path = 'codex\auth.json'; target = 'codex\auth.json'; type = 'SymbolicLink'; missingAuth = $true },
         @{ name = 'console-file-alias'; operation = 'launchers'; path = 'console.bat'; target = 'console.bat'; type = 'SymbolicLink' },
@@ -114,31 +125,33 @@ foreach ($case in $cases) {
 
 $positive = New-Fixture 'ordinary-paths'
 $installedBefore = Snapshot-Files (Join-Path $positive 'installed')
-foreach ($operation in @('install', 'launchers', 'launchers')) {
+foreach ($operation in @('launchers', 'launchers')) {
     $result = Invoke-Debug $positive $operation
     if ($result.code -ne 0) {
         throw "Ordinary $operation failed: $($result.output)"
     }
 }
 $debug = Join-Path $positive 'debug'
-if ((Get-FileHash -LiteralPath (Join-Path $debug 'bin\steerline.exe')).Hash -ne (Get-FileHash -LiteralPath $buildExe).Hash -or
+if ((Test-Path -LiteralPath (Join-Path $debug 'bin\steerline.exe')) -or
     [IO.File]::ReadAllText((Join-Path $debug 'codex\auth.json')) -ne '{"synthetic":"debug-auth-source"}' -or
     (Snapshot-Files (Join-Path $positive 'installed')) -ne $installedBefore) {
-    throw 'Ordinary install/launcher/auth generation did not preserve isolated outputs.'
+    throw 'Ordinary launcher/auth generation changed installed files or copied the source exe into the debug home.'
 }
+$expectedExecutable = 'set "BIN=' + $buildExe + '"'
 foreach ($launcher in @('console.bat', 'service-window.bat')) {
-    if (-not [IO.File]::ReadAllText((Join-Path $debug $launcher)).Contains('set "CODEX_HOME=%SHOME%\codex"')) {
-        throw "Missing debug CODEX_HOME in '$launcher'"
+    $contents = [IO.File]::ReadAllText((Join-Path $debug $launcher))
+    if (-not $contents.Contains('set "CODEX_HOME=%SHOME%\codex"') -or -not $contents.Contains($expectedExecutable)) {
+        throw "Missing selected exe/CODEX_HOME binding in '$launcher'"
     }
 }
-$results += @{ name = 'ordinary-paths'; operations = @('install', 'launchers', 'launchers'); passed = $true; installed_unchanged = $true }
+$results += @{ name = 'ordinary-paths'; operations = @('launchers', 'launchers'); passed = $true; installed_unchanged = $true; debug_executable_not_copied = $true }
 $summary = @{
     passed = $true
     test = 'debug-runtime writable-path preflight'
     candidate_head = (& git -C (Split-Path -Parent $PSScriptRoot) rev-parse HEAD)
-    script_sha256 = (Get-FileHash -LiteralPath $script).Hash
+    script_sha256 = (File-SHA256 $script)
     build_exe = $buildExe
-    build_sha256 = (Get-FileHash -LiteralPath $buildExe).Hash
+    build_sha256 = (File-SHA256 $buildExe)
     fixture_facts = 'synthetic file sentinels; no running service/task database assertion'
     symbolic_links_selected = [bool]$IncludeSymbolicLinks
     cases = $results

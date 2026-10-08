@@ -13,14 +13,13 @@ $installedHome = 'C:\SteerlineRuntime'
 $config = Join-Path $debugHome 'etc\SteerLine.json'
 
 & (Join-Path $repo 'scripts\debug-runtime.ps1') -DebugHome $debugHome -InstalledHome $installedHome -Config $config -Operation build
-& (Join-Path $repo 'scripts\debug-runtime.ps1') -DebugHome $debugHome -InstalledHome $installedHome -Config $config -Operation install
 & (Join-Path $repo 'scripts\debug-runtime.ps1') -DebugHome $debugHome -InstalledHome $installedHome -Config $config -Operation launchers
 & (Join-Path $repo 'scripts\debug-runtime.ps1') -DebugHome $debugHome -InstalledHome $installedHome -Config $config -Operation console
 ```
 
-`build` 编译仓库产物；`install` 将该产物复制到调试 home；`launchers` 在同一 home 生成入口。`console`、`service` 和 `cli` 只运行该调试副本，并绑定传入的调试 home 与配置。调试入口把 `CODEX_HOME` 设为调试 home 下的 `codex` 目录；若该目录没有 `auth.json`，会从指定的 `CodexAuthHome`（默认当前 `CODEX_HOME`，否则用户 `.codex`）复制认证文件，不复制会话或其他可写状态。重复运行 `launchers` 可重新生成入口。调试 home 下的 console 会显示实际 exe、home、配置、源码 commit 和 dirty 状态；未知构建信息明确显示为未知。
+`build` 编译仓库产物；`launchers` 在调试 home 生成入口，并把两个 launcher 绑定到该仓库的 `bin\steerline.exe`。`console`、`service` 和 `cli` 直接运行同一个源码 exe，并绑定传入的调试 home 与配置。生成的 batch 将绝对源码 exe 写入 `BIN`，缺少该 exe 时直接失败；项目控制台启服也使用当前 console exe。调试 exe 不复制到 home 的 `bin`；若该 home 已有 exe 副本，helper 拒绝使用它并要求指定干净 home。home 内仍保存配置、状态、日志和工作区。若调试 home 的 `codex` 目录没有 `auth.json`，入口会从指定的 `CodexAuthHome`（默认当前 `CODEX_HOME`，否则用户 `.codex`）复制认证文件，不复制会话或其他可写状态。重复运行 `launchers` 可重新生成入口。调试 home 下的 console 会显示实际 exe、home、配置、源码 commit 和 dirty 状态；未知构建信息明确显示为未知。
 
-更新源码后先停止使用该调试 exe 的服务，再运行 `build` 和 `install`；安装副本正在运行时，Windows 会拒绝替换。可在此期间继续使用日常安装 home。调试入口的目录边界保护同时覆盖显式状态和工作区路径。
+更新源码后先停止使用该调试 exe 的服务，再运行 `build` 和 `launchers`。helper 会拒绝在源码 exe 正运行时重建，并拒绝把当前 exe 路径绑定到已过期 launcher。可在此期间继续使用日常安装 home。调试入口的目录边界保护同时覆盖显式状态和工作区路径。
 
 ## 重启与人工更新
 

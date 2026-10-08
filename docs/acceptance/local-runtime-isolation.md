@@ -2,7 +2,7 @@
 
 唯一任务归属：#83。来源：[Spec](../spec/local-runtime-isolation.spec.md) / [Plan](../spec/local-runtime-isolation.plan.md)。本文件是该任务专属验收文档，不覆盖其他任务；验收流程见[入口](README.md)。
 
-状态：保留原受控场景通过证据；独立复审发现 LI2-A/LI3-A 的可写子路径隔离失败，局部修复已完成定向验证，最终候选仍待复验。实际源码 exe 及 console/service/生成 batch 子进程传递的原需求遗漏待原执行者补齐；不能将历史通过报告视为全部验收完成。无本任务人工验收项。执行依据仍为固定 Spec/Plan commit `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。实现 PR：[PR #247](https://github.com/erranliu/SteerLine/pull/247)。以下保留实际命令、构建身份、结果与临时证据。
+状态：独立复审 round 1 发现 P1 可写目标隔离失败及 P2 实际源码 exe/console/service/batch 调用路径遗漏；P1 局部修复已提交 `74ea6413214d980bd0bb1052c8b3ed5d8811669d` 并定向验证，P2 正在补齐。旧 base+dirty 报告不关闭最终候选的 LI1-A–LI4-A。当前四项均待最终候选复验；无本任务人工验收项。固定 Spec/Plan commit 为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。实现 PR：[PR #247](https://github.com/erranliu/SteerLine/pull/247)。本文件保留旧证据、复审发现及局部修复事实。
 
 ## 自动验收
 
@@ -10,10 +10,10 @@
 
 | 验收项 | 方法 | 规划行为与通过条件 | 状态 / 结果 |
 | --- | --- | --- | --- |
-| LI1-A | 自动 | 两个独立测试 clone、不同 home 的安装版与调试版同时运行；配置、状态、日志、服务发现和写命令不串线 | 已验收；两项目分别交付，project/database ID、任务、服务身份及目录均隔离；见最终场景记录 |
-| LI2-A | 自动 | 调试 build、停启及入口重复生成不改安装 exe 摘要、原服务实例或任务事实；调试服务/控制台/CLI 及子进程使用实际调试 exe/home | 待复验；历史场景安装 exe SHA-256 `be1d08dfc38e6c5b0bb1858653cb2b21da72fa745528135e2f56566b7e711047`、服务实例 `68c664c8097e45a1af85f3895be49ea4` 和任务事实不变，但独立复审真实 bin junction 操作覆盖了临时安装 exe；实际源码 exe/真实 console/service/batch 子进程未获该场景证明 |
-| LI3-A | 自动 | 缺少调试路径、home 重叠、显式状态/工作区越出调试 home 拒绝；同仓库跨 home 第二写者被原锁拒绝；误连实例的写命令仍被拒绝 | 待复验；历史场景缺 exe、普通及整个 home junction 重叠、状态/工作区越界、运行中 build、过期实例/配置和仓库锁拒绝有效；未覆盖可写子路径，独立复审 codex junction 操作错误成功向临时安装状态复制假认证，局部修复定向结果见下文 |
-| LI4-A | 自动 | Windows 中文/空格路径及无关 cwd 可启动并显示准确身份；维护说明区分中心停服、外部执行结算、同构建重启和人工更新 | 已验收；准确显示 exe/home/config、源码 commit `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c` 与 `dirty=true`；维护步骤见[本机安装与源码调试](../runtime-install-debug.md) |
+| LI1-A | 自动 | 两个独立测试 clone、不同 home 的安装版与调试版同时运行；配置、状态、日志、服务发现和写命令不串线 | 待最终候选复验；旧报告绑定 base+dirty 源码，不能作为当前候选通过结论 |
+| LI2-A | 自动 | 调试 build、停启及入口重复生成不改安装 exe 摘要、原服务实例或任务事实；调试服务/控制台/CLI 及子进程使用实际调试 exe/home | 待最终候选复验；旧报告实际运行了 debug home/bin 的 exe 副本，没有验证固定 Spec 要求的源码 exe 传递 |
+| LI3-A | 自动 | 缺少调试路径、home 重叠、显式状态/工作区越出调试 home 拒绝；同仓库跨 home 第二写者被原锁拒绝；误连实例的写命令仍被拒绝 | P1 局部隔离脚本定向已验；完整 LI3-A 待最终候选复验，须保留 stale-instance/write、实际路径及清理断言 |
+| LI4-A | 自动 | Windows 中文/空格路径及无关 cwd 可启动并显示准确身份；维护说明区分中心停服、外部执行结算、同构建重启和人工更新 | 待最终候选复验；维护步骤见[本机安装与源码调试](../runtime-install-debug.md) |
 
 环境：Windows/amd64 controlled；两个独立 Git clone/home、真实 SteerLine 进程、SQLite、Git 和受控 worker/provider；不发模型请求。每次输出目录独立，服务和临时资源由场景登记并清理。
 

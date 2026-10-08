@@ -59,8 +59,9 @@ type StartupRecord struct {
 }
 
 type StartServiceOptions struct {
-	// Executable must be explicitly set by development and tests. Production
-	// callers leave it empty and use the stable installed binary.
+	// Executable selects the exact binary that the visible Windows launcher must
+	// run. App callers bind it to their current executable; direct host callers
+	// may omit it to use ApplicationBin's installed binary.
 	Executable      string
 	ApplicationHome string
 	ApplicationBin  string
@@ -633,22 +634,32 @@ func windowsServiceWindowStart(ctx context.Context, c Config, absoluteConfig str
 		ConfigPath:   absoluteConfig,
 		Connection:   connection,
 	}
-	for _, candidate := range []struct {
-		path    string
-		install string
-	}{
-		{result.LauncherPath, "steerline launchers"},
-		{filepath.Join(opts.ApplicationBin, "steerline.exe"), "steerline install"},
-	} {
-		info, statErr := os.Stat(candidate.path)
-		if statErr != nil || info.IsDir() {
-			if statErr == nil {
-				statErr = errors.New("path is a directory")
-			}
-			result.Status = "failed"
-			result.Error = fmt.Sprintf("service window installation is unavailable at %s: %v; run %s", candidate.path, statErr, candidate.install)
-			return result, nil
+	launcherInfo, statErr := os.Stat(result.LauncherPath)
+	if statErr != nil || launcherInfo.IsDir() {
+		if statErr == nil {
+			statErr = errors.New("path is a directory")
 		}
+		result.Status = "failed"
+		result.Error = fmt.Sprintf("service window launcher is unavailable at %s: %v; run steerline launchers", result.LauncherPath, statErr)
+		return result, nil
+	}
+	executable := opts.Executable
+	if executable == "" {
+		executable = filepath.Join(opts.ApplicationBin, "steerline.exe")
+	}
+	if !filepath.IsAbs(executable) {
+		executable, statErr = filepath.Abs(executable)
+		if statErr != nil {
+			return ServiceStartResult{}, statErr
+		}
+	}
+	if info, err := os.Stat(executable); err != nil || info.IsDir() {
+		if err == nil {
+			err = errors.New("path is a directory")
+		}
+		result.Status = "failed"
+		result.Error = fmt.Sprintf("selected service executable is unavailable at %s: %v", executable, err)
+		return result, nil
 	}
 	return result, nil
 }

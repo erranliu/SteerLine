@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"errors"
+	"runtime"
 	"time"
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
@@ -44,6 +45,12 @@ func StartConfiguredService(ctx context.Context, config Config, configPath strin
 	}
 	if options.ApplicationBin == "" {
 		options.ApplicationBin = BinDir()
+	}
+	if runtime.GOOS == "windows" && options.Executable == "" {
+		options.Executable = CurrentRuntimeIdentity(config.ConfigPath).Executable
+		if options.Executable == "unknown" {
+			return steerline.ServiceStartResult{}, errors.New("cannot resolve the selected Windows service executable")
+		}
 	}
 	return steerline.StartService(ctx, hostConfig, configPath, options)
 }

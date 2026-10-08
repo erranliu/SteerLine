@@ -184,13 +184,12 @@ func TestWindowsStartServiceRequiresVisibleWindow(t *testing.T) {
 	home := fixtureHome()
 	_, err = InstallLaunchers(fixtureHome())
 	require(t, err)
-	result, err := testStartService(context.Background(), configPath, StartServiceOptions{Executable: testExe})
+	missingExe := filepath.Join(t.TempDir(), "missing-debug.exe")
+	result, err := testStartService(context.Background(), configPath, StartServiceOptions{Executable: missingExe})
 	require(t, err)
-	if result.Status != "failed" || !strings.Contains(result.Error, "steerline install") {
-		t.Fatalf("missing installed binary was not explained: %+v", result)
+	if result.Status != "failed" || !strings.Contains(result.Error, "selected service executable is unavailable") {
+		t.Fatalf("missing selected executable was not rejected: %+v", result)
 	}
-	require(t, os.MkdirAll(filepath.Join(home, "bin"), 0700))
-	require(t, os.WriteFile(filepath.Join(home, "bin", "steerline.exe"), []byte("test-only installed path"), 0600))
 	result, err = testStartService(context.Background(), configPath, StartServiceOptions{Executable: testExe})
 	require(t, err)
 	configAbsolute, err := filepath.Abs(configPath)
