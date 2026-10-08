@@ -130,8 +130,6 @@ func TestInstalledDebugIsolation(t *testing.T) {
 	debugEvidence["start_service_window_required"] = requested
 
 	debug.CreateTasks()
-	assertSharedSQLiteRejected(t, s, debug, installed, powershell, debugScript, debugEvidence)
-	writeRuntimeEvidence(t, s.Output, evidence)
 	serviceCommand := debug.Command(powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", debugScript,
 		"-DebugHome", debug.Home, "-InstalledHome", installed.Home, "-Config", debug.Config, "-Operation", "service")
 	debug.StartServiceViaVisibleConsole(serviceCommand, "debug-operation-service-window-1")
@@ -317,6 +315,10 @@ func TestInstalledDebugIsolation(t *testing.T) {
 	assertServiceStopReceipt(t, debug.ServiceStopOutput)
 	debugEvidence["generated_service_window_batch_stop"] = map[string]any{"launcher_pid": debug.ServiceWindowPID, "owned_console_stopped": debug.ServiceWindowStopped, "receipt": string(debug.ServiceStopOutput)}
 	writeRuntimeEvidence(t, s.Output, evidence)
+	// Compare actual DB bytes only after their legitimate service writers have
+	// exited and released their locks; heartbeats persist while services run.
+	assertSharedSQLiteRejected(t, s, debug, installed, powershell, debugScript, debugEvidence)
+	writeRuntimeEvidence(t, s.Output, evidence)
 	assertDirectBuildOutputIsolation(t, s, debug, installed, powershell, evidence)
 	assertMissingSourceExecutableRejected(t, s, debug, powershell, debugScript, installed.Home)
 
@@ -398,6 +400,8 @@ func assertSharedSQLiteRejected(t *testing.T, s *testenv.Scenario, project, inst
 	if fileSHA256(t, installed.Database) != installedDBBefore {
 		t.Fatal("SQLite hardlink negatives changed the installed project's actual database")
 	}
+	evidence["sqlite_installed_database_sha256_before"] = installedDBBefore
+	evidence["sqlite_installed_database_sha256_after"] = fileSHA256(t, installed.Database)
 	// Restore every original SQLite file before exercising the ordinary reader.
 	// The malformed batch must now reach the real business validation error.
 	output, err := s.RunCommand(project.Command(project.Executable, "task", "validate", "-config", project.Config, "-file", invalidBatch), "sqlite-single-link-normal-validation")
