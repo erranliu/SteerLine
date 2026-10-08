@@ -74,7 +74,7 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 	if err := orca.Validate(); err != nil {
 		return nil, err
 	}
-	if ref.Target.ID != nativeTargetID(orca) {
+	if ref.Target.ID != NativeTargetID(orca) {
 		return nil, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "native Orca profile differs from the fixed target"}
 	}
 	timeout := setup.CommandTimeout
@@ -102,13 +102,6 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 		}
 	}
 	return &ExecutionLifecycle{setup: setup, config: config, client: New(config), codex: codex, orca: orca}, nil
-}
-
-func nativeTargetID(config ProfileConfig) string {
-	return "orca:" + digestValue(struct {
-		Executable string
-		Args       []string
-	}{config.Executable, append([]string(nil), config.Args...)})[:24]
 }
 
 func profileVersion(key string) int {
@@ -368,7 +361,7 @@ func (l *ExecutionLifecycle) Reconcile(ctx context.Context, request executionbac
 
 func (l *ExecutionLifecycle) validateSnapshot(snapshot executionbackend.LifecycleSnapshot) error {
 	if snapshot.Ref.Backend != executionbackend.BackendOrca || snapshot.Ref.Protocol != executionbackend.ProtocolOrcaTerminalV2 ||
-		snapshot.Ref.Agent.Name != "codex" || snapshot.Ref.Target.ID != nativeTargetID(l.orca) ||
+		snapshot.Ref.Agent.Name != "codex" || snapshot.Ref.Target.ID != NativeTargetID(l.orca) ||
 		snapshot.ConfigurationDigest == "" || snapshot.ResourceGeneration == "" ||
 		snapshot.Session.ProjectID == "" || snapshot.Session.ExecutionID == "" || snapshot.Session.WorkflowRunID == "" ||
 		snapshot.Session.AttemptID == "" || snapshot.Session.TaskID == "" {

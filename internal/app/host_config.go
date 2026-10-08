@@ -8,6 +8,7 @@ import (
 
 	"github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution"
+	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
 	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	"github.com/erranliu/SteerLine/internal/pathguard"
@@ -55,7 +56,8 @@ func hostRuntimeConfig(ctx context.Context, config Config) (host.Config, error) 
 		Claimant: config.Claimant, ConfigDigest: config.LoadedConfigDigest(),
 		TaskAuthority: config.TaskAuthority, WorkflowProtocol: config.WorkflowProtocol,
 		TaskPoll: config.TaskPoll, PRPoll: config.PRPoll, Heartbeat: config.Heartbeat, CommandTimeout: config.CommandTimeout, ShutdownGrace: config.ShutdownGrace,
-		ProcessFacts: executionprocess.NewServiceFacts(),
+		ProcessFacts:                executionprocess.NewServiceFacts(),
+		WorktreeMetadataDirectories: []string{orcaworker.WorktreeTrashDirectory},
 		RuntimeReader: func(ctx context.Context, input host.Config) (*reconstruction.Runtime, error) {
 			resolved := config
 			if err := syncExecutionHostFacts(&resolved, input); err != nil {

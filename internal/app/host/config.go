@@ -32,6 +32,8 @@ type Config struct {
 	CommandTimeout     string
 	ShutdownGrace      string
 	ProcessFacts       executionbackend.ProcessFactsPort
+	// Application-declared administrative names, never active execution IDs.
+	WorktreeMetadataDirectories []string
 
 	RuntimeReader           func(context.Context, Config) (*reconstruction.Runtime, error)
 	ValidateNativeStore     func(context.Context, Config) error
