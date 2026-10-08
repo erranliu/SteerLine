@@ -8,7 +8,7 @@
 | --- | --- | --- | --- | --- | --- |
 | 83 | 本机安装与调试路径隔离 | 无 | 实现完成 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | [PR #247](https://github.com/erranliu/SteerLine/pull/247) 已真实合并，merge `f7c6f1d0`；第五轮独立复审无新问题；LI1-A–LI4-A 自动验收通过，无本任务人工项；[记录及验证范围](../acceptance/local-runtime-isolation.md) |
 | 84 | Worker 分步执行与结构化状态推进 | 无；复用已合入 #83 的隔离基线 | 待执行 | [Spec](../spec/worker-staged-flow.spec.md) · [Plan](../spec/worker-staged-flow.plan.md) | 产品自动 WFS-A1–A4 未验；WFS-M1 可后置至一期组合验收；[专属计划与记录](../acceptance/worker-staged-flow.md) |
-| 45 | 本机客户端协议与历史查询 | 无 | 执行中 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | [PR #249](https://github.com/erranliu/SteerLine/pull/249) OPEN，生产 head `ac3c6411`；round 1 API1 临时 ACL/preflight、API3 异内容 matcher 已局部修复并通过 14 HTTP/3 app/2 query 定向（0 skip）及 vet；API2 profiles 与真实 API1 mutation/API3 fault coverage 待原执行者补齐，整体通过尚未恢复。旧服务集成 6 项/0 skip、L1 12 组/427 项/0 skip 保留原范围；SHM AccessDenied 根因未闭合，不能环境豁免；[记录与证据](../acceptance/phase2-local-api.md) |
+| 45 | 本机客户端协议与历史查询 | 无 | 待复审/合并 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | [PR #249](https://github.com/erranliu/SteerLine/pull/249) OPEN；当前源码 `99c98e2b`（tree `d8b7fad5`）。API1/API3/API4/API5 自动项通过；真实 Windows 集成 7 项/0 skip，QueryParity 另重复 3 次通过；L1 12 组/428 项/0 skip。API2 保留旧 `-shm` AccessDenied 失败，根因未能精确复现/归因；bounded sidecar recheck 与持续 ACL/真实 SQLite lifecycle 回归通过，但 API2 仍标验收失败、待独立 reviewer 裁定；[记录与证据](../acceptance/phase2-local-api.md) |
 | 44 | WinUI 基座与原生输入 | #45 | 等待 #45 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 未验；[记录](../acceptance/phase2-winui-foundation.md)，人工项最迟2.1签收 |
 
 ## 推进顺序
@@ -57,3 +57,5 @@
 
 
 2026-10-09，#45 round 1 局部修复生产候选 `ac3c6411398da955b535cbc87df9fcfff4b8c9a8`（tree `2fff55b07d57707bb46b8688841ad3ec2b190e82`）已在精确干净提交通过 14 HTTP、3 app、2 query 定向（0 skip）及 vet。matcher 绑定首次注册时的实际语义，正式同 ID 消费者竞争同内容可对账、异内容明确 identity_conflict；Windows 两个 writer 在 temp 仍打开时的真实 preflight 正向通过，继承/Everyone ACL 负向仍拒绝。后续 docs-only 提交与该受验生产/测试源码一致。原执行者需继续 profiles、真实 API1/API3 覆盖和 SHM 根因未闭合项，之后新独立复审；PR #249 未合并，#45 执行中，#44 仍等待。[局部证据与剩余项](../acceptance/phase2-local-api.md#round-1-局部修复与精确复验)。
+
+2026-10-09，#45 round 2 当前候选 `99c98e2bd02b3c0f75fbdea4919ce54e59927745`（tree `d8b7fad5eff3db07cdb7b5f544c0b68c2509a36c`）补齐 profile/presentation 消费、真实 API1 mutation/credential rotation 和 API3 control inbox 取消/丢回执/迟到竞争驱动；独立 SQLite sidecar bounded retry 仅对短暂 `ERROR_ACCESS_DENIED`，持续 ACL refusal 与 hardlink 拒绝保留。候选 L1 12组/428 tests/0 skip、真实 API1–API5 场景组7项/0 skip、QueryParity 独立 count=3、pathguard真实 sidecar/ACL regression 与 vet 通过。旧 QueryParity `-shm Access is denied` 日志真实保留，但精确 OS syscall 阶段与根因未能在现场复现；API2 仍标验收失败，不宣称全部自动项通过，等待新独立 reviewer 判定本轮证据能否闭合。PR #249 未合并；本表仅待复审/合并，不记实现完成；#44 继续等待 #45，不释放后继。详见[round 2 证据与 SHM 未决项](../acceptance/phase2-local-api.md#round-2-真实消费与故障窗口)。
