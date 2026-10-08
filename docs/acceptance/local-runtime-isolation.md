@@ -2,7 +2,7 @@
 
 唯一任务归属：#83。来源：[Spec](../spec/local-runtime-isolation.spec.md) / [Plan](../spec/local-runtime-isolation.plan.md)。本文件是该任务专属验收文档，不覆盖其他任务；验收流程见[入口](README.md)。
 
-状态：round 2 独立复审重开两项验收：LI3-A 因缺省 state/UI junction 实际写入安装侧失败；LI2-A 的生成 batch/service 入口尚未实际执行。LI1-A、LI4-A 及既有 source exe/alias 断言在候选 `066a5985677cccb4fdb4650bf669ddf15050de90` 的原范围内通过，但不构成 LI1-A–LI4-A 全部通过。PR #247 保持打开且未合并；任务仍为执行中。无本任务人工验收项。固定 Spec/Plan commit 为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。实现 PR：[PR #247](https://github.com/erranliu/SteerLine/pull/247)。本文件保留旧证据、复审发现及局部修复事实。
+状态：round 2 发现的缺省 state/UI junction 写越界已修复并由真实产品入口负例复验；debug `Operation service`、生成的 `service-window.bat` 和 `console.bat` 也已实际运行。最终实现候选 `ad22d476f87e019a9ad5d0118758b253dd091094` 在 Windows/amd64 clean tree 上通过 LI1-A–LI4-A 自动验收，见最终记录。PR #247 保持打开且未合并，等待新一轮独立复审；任务仍为执行中，不释放后继。无本任务人工验收项。固定 Spec/Plan commit 为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。实现 PR：[PR #247](https://github.com/erranliu/SteerLine/pull/247)。本文件保留旧证据、复审发现及局部修复事实。
 
 ## 自动验收
 
@@ -10,10 +10,10 @@
 
 | 验收项 | 方法 | 规划行为与通过条件 | 状态 / 结果 |
 | --- | --- | --- | --- |
-| LI1-A | 自动 | 两个独立测试 clone、不同 home 的安装版与调试版同时运行；配置、状态、日志、服务发现和写命令不串线 | 原场景通过：独立项目/数据库身份、分别等待合并和完成，未发现正常路径串线；round 2 的 alias 写越界另列 LI3-A 失败 |
-| LI2-A | 自动 | 调试 build、停启及入口重复生成不改安装 exe 摘要、原服务实例或任务事实；调试服务/控制台/CLI 及子进程使用实际调试 exe/home | 部分通过、待验：CLI 与直接 ConPTY console 使用源码 exe；场景的 `StartService` 直接执行 exe，未实际运行 `Operation service`、生成的 `service-window.bat` 或 `console.bat` |
-| LI3-A | 自动 | 缺少调试路径、home 重叠、显式状态/工作区越出调试 home 拒绝；同仓库跨 home 第二写者被原锁拒绝；误连实例的写命令仍被拒绝 | 验收失败：round 2 实际复现缺省 `state` junction 和 `ui` junction 写入安装侧；已有 8 项 junction/hardlink/正常路径及显式路径拒绝断言未覆盖该派生路径 |
-| LI4-A | 自动 | Windows 中文/空格路径及无关 cwd 可启动并显示准确身份；维护说明区分中心停服、外部执行结算、同构建重启和人工更新 | 原场景范围内通过：正常路径中文/空格与无关 cwd 显示实际身份；维护步骤见[本机安装与源码调试](../runtime-install-debug.md) |
+| LI1-A | 自动 | 两个独立测试 clone、不同 home 的安装版与调试版同时运行；配置、状态、日志、服务发现和写命令不串线 | 已验收：final L3 场景两侧分别等待合并和完成，项目/数据库身份独立，Task/Delivery 写入与快照未串线；清理完成 |
+| LI2-A | 自动 | 调试 build、停启及入口重复生成不改安装 exe 摘要、原服务实例或任务事实；调试服务/控制台/CLI 及子进程使用实际调试 exe/home | 已验收：CLI、`Operation service` 调用的 `service-window.bat`、直接生成 batch 和 `console.bat` ConPTY 路径均核对实际 exe/home/config/commit；两次停服回执 `applied`、`process_exited=true`、`locks_released=true`。安装 exe SHA-256 `40e53741c02136e8bcf1269634915bf0cfec186b6629908846c1058f3b3b50d7` 及安装 instance `926f5f25ca799e0f403288ec461f8454` 保持；调试 exe SHA-256 `36b15b59d172be3858ea8c79a0214ca409d8e26538f071bb92b1163e825bcb8f` rebuild 前后相同；调试重启任务事实保持 |
+| LI3-A | 自动 | 缺少调试路径、home 重叠、显式状态/工作区越出调试 home 拒绝；同仓库跨 home 第二写者被原锁拒绝；误连实例的写命令仍被拒绝 | 已验收：state/UI junction 的脚本入口与真实 native task/console 入口均在安装侧目录、数据库或 sentinel 改变前拒绝；P1 alias/hardlink/正常路径 10 项、显式越界、stale instance/config 和跨 home 锁断言均通过 |
+| LI4-A | 自动 | Windows 中文/空格路径及无关 cwd 可启动并显示准确身份；维护说明区分中心停服、外部执行结算、同构建重启和人工更新 | 已验收：final L3 使用中文/空格路径和无关 cwd；实际 console/service/CLI identity 与维护步骤见[本机安装与源码调试](../runtime-install-debug.md) |
 
 环境：Windows/amd64 controlled；两个独立 Git clone/home、真实 SteerLine 进程、SQLite、Git 和受控 worker/provider；不发模型请求。每次输出目录独立，服务和临时资源由场景登记并清理。
 
@@ -85,13 +85,53 @@ round 2 复审已证明本节报告不能关闭全部自动验收：实际 debug
 
 仅临时复现目录：`C:\Users\lmas1\AppData\Local\Temp\steerline-task83-review2-ui-c8b39b97ef7540218925bd7f5a9352b3`，使用隔离 clone/home、假认证和本次受控进程；未操作用户日常安装或其他服务。
 
-| 失败 / 待验项 | 实际复现 | 当前验收状态 |
+| 失败 / 待验项 | 实际复现 | round 2 当时状态 |
 | --- | --- | --- |
-| LI3-A：缺省 `state` 可写路径 | `debug/state` junction 指向 `installed/state`；配置省略 `run_dir`；真实 `debug-runtime.ps1 -Operation cli -Arguments task validate -file <含 {} 的批次>` 最终因 `invalid_batch` 退出 1，但此前已在安装侧创建真实 SQLite：`state/repository-fa682b098eac/steerline.db` 311,296 字节，SHA-256 `7a1c1badaab56cf83bd44138feaf7bd5573b802277da37551312cbbde1f9fe70`，并出现 32,768 字节 SHM。 | **失败**。不能用最终业务命令失败代替首个副作用前拒绝。 |
-| LI3-A：缺省 UI 可写路径 | `debug/ui` junction 指向 `installed/ui`；真实 `-Operation console` 在失败前于安装侧创建 `ui/views`。调用顺序中 `preferences.go` 的 `MkdirAll` 早于现有 canonical 检查。 | **失败**。需在目录/文件副作用前拒绝整个派生树。 |
-| LI2-A：真实生成入口 | 旧场景 `debug.StartService()` 由 `testenv/env.go` 直接运行 source exe `run -console off`；`start-service` 只断言 `window-required` JSON。`Operation console` 的 ConPTY transcript 是真实 exe，但没有实际运行 `console.bat`、`service-window.bat` 或 `Operation service`。 | **待验**。旧 acceptance 中“service-window batch 子进程已运行”为错误陈述，已更正。 |
+| LI3-A：缺省 `state` 可写路径 | `debug/state` junction 指向 `installed/state`；配置省略 `run_dir`；真实 `debug-runtime.ps1 -Operation cli -Arguments task validate -file <含 {} 的批次>` 最终因 `invalid_batch` 退出 1，但此前已在安装侧创建真实 SQLite：`state/repository-fa682b098eac/steerline.db` 311,296 字节，SHA-256 `7a1c1badaab56cf83bd44138feaf7bd5573b802277da37551312cbbde1f9fe70`，并出现 32,768 字节 SHM。 | **当时失败**。最终候选改为在首次初始化前拒绝，并以目录不存在及 sentinel 未变复验，见最终记录。 |
+| LI3-A：缺省 UI 可写路径 | `debug/ui` junction 指向 `installed/ui`；真实 `-Operation console` 在失败前于安装侧创建 `ui/views`。调用顺序中 `preferences.go` 的 `MkdirAll` 早于现有 canonical 检查。 | **当时失败**。最终候选的实际 ConPTY console 在建 views 前拒绝，安装侧目录/sentinel 未变，见最终记录。 |
+| LI2-A：真实生成入口 | 旧场景 `debug.StartService()` 由 `testenv/env.go` 直接运行 source exe `run -console off`；`start-service` 只断言 `window-required` JSON。`Operation console` 的 ConPTY transcript 是真实 exe，但没有实际运行 `console.bat`、`service-window.bat` 或 `Operation service`。 | **当时待验**。最终候选执行了 `Operation service`、直接生成的 `service-window.bat` 和 `console.bat`，见最终记录。 |
 
-后续修复需在真实 Windows 入口的首个副作用前解析/校验所有本任务相关可写目标，包括缺省和显式 `run_dir`、`worktree_root`、home config/profile、state/SQLite/log/discovery/control、UI views/lock/journal 及其派生子目录/文件。Windows junction 的实际目标解析必须在此环境可用；只检查 Go `EvalSymlinks` 或一个 root 字符串不够。另需真实驱动 `Operation service`、生成的 `service-window.bat` 和 `console.bat`，留下实际 PID/executable/home/config/service instance、持久任务事实和清理证据。当前均属于本任务未完成的自动工作，不转为人工后验收。
+上述 round 2 失败和待验范围已由候选 `ad22d476f87e019a9ad5d0118758b253dd091094` 修复并复验，逐项命令与证据见下方最终记录。round 1/round 2 原始报告保留各自实际范围；可选文件符号链接负例仍未执行，不计为已验。
+
+## 2026-10-08 最终候选复验（round 2 修复后）
+
+受验实现/测试候选：commit `ad22d476f87e019a9ad5d0118758b253dd091094`，tree `e2470c18a0d29979006aa5e12a440f2035bf5fa0`，Windows/amd64，分级 runner 记录 clean source；base/main `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。round 1 和 round 2 的失败发现未被擦除，以下是该修复候选的新证据。
+
+| 范围 | 实际命令 / 结果 | 证据 |
+| --- | --- | --- |
+| LI1-A–LI4-A、round 2 state/UI 修复及真实入口 | 构建 runner：`go build -o C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round2-final-20261008-02\test-feedback.exe ./cmd/test-feedback`；执行 `& 'C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round2-final-20261008-02\test-feedback.exe' '-level=L3' '-suite=runtime' '-env=controlled' '-scenario=runtime.installed-debug-isolation' '-out=C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round2-final-20261008-02\runtime'`。`passed=true`、`cleanup_complete=true`、零 skip，231.8 秒。源码 commit 为本节候选、`source_dirty=false`。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round2-final-20261008-02\runtime\summary.json`、`e2e-1.jsonl`、`scenarios\runtime.installed-debug-isolation\scenario.json`、`runtime-identities.json`、`resources.json`、`debug-runtime-console.log`、两个 service-window 日志、两侧快照和命令日志 |
+| LI3-A 缺省 state alias | `debug/state` junction → 安装侧 `state`，省略 `run_dir`/`worktree_root`。真实脚本 CLI 和源码 exe `task validate -config <config> -file <{} 批次>` 均在初始化前拒绝；目标 `state\repo-17fb9e3ec52e` 未创建，安装 state sentinel SHA-256 `e1dea4ec803dcef52c6778c7bdd85200c8e2fbbf3ebb335dc61999c3d35d41cf` 保持。 | runtime `scenarios\runtime.installed-debug-isolation\runtime-identities.json` 的 `default_state_alias_rejected`；`default-state-script-alias.log`、`default-state-native-alias.log` |
+| LI3-A 缺省 UI alias | `debug/ui` junction → 安装侧 `ui`。脚本 console 操作和源码 exe 的真实 ConPTY `console` 入口均在 `ui/views` 创建前拒绝；安装侧 views 目录未创建，UI sentinel SHA-256 `2b332af136fa78809e9ca0d395681822db20c276d2839f5e4a66921b2944b307` 保持。 | 同上 `default_ui_alias_rejected`；`default-ui-native-console-alias.log` |
+| LI2-A 真实 `Operation service` 与 launcher | `debug-runtime.ps1 -Operation service` 实际调用生成的 `service-window.bat`：launcher PID `39844`，service PID `39284`，source exe 为 worktree `bin\steerline.exe`，配置/home 为本次 debug 项目，service instance `1ba870992b72269eb007062f959e9bbc`。随后直接执行 `cmd.exe /c call <debug-home>\service-window.bat <config>`：launcher PID `36640`，service PID `39856`，同一实际 exe/home/config，新的 instance `53005c4469696095beb8ace36d380858`。两次停服回执均为 `applied` 且 `process_exited=true`、`locks_released=true`；各自 owned visible-console Job 已关闭。两个周期任务与 Delivery 保持。 | runtime `runtime-identities.json` 的 `service_window_entry`、`generated_service_window_batch`、两个 stop 字段；`debug-operation-service-window-1.log`、`debug-generated-service-window-batch-2.log`、service startup logs、completed/final 快照和 `resources.json` |
+| LI2-A 真实 `console.bat` | 通过 Windows ConPTY 执行 `cmd.exe /c call <debug-home>\console.bat --steerline-console-child <config>`；transcript 含实际 exe、home、config、source commit `ad22d476f87e019a9ad5d0118758b253dd091094`、`source_dirty=false`。 | runtime `debug-runtime-console.log` 与 `runtime-identities.json` 的 `console_runtime_identity` |
+| P1 alias 子集与 ConPTY helper | `.\scripts\test-debug-runtime-isolation.ps1 -Out C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round2-final-20261008-02\p1-alias`；10 项通过（新增 state/ui junction）。`go test -tags=e2e ./tests/e2e/internal/testenv -run '^TestPseudoConsoleCapturesInteractiveChild$' -count=1 -v` 通过。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round2-final-20261008-02\p1-alias\summary.json` 及 case logs；terminal result |
+| L1 与共享 delivery | runner `-level=L1 -out=C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round2-final-20261008-02\l1`：`passed=true`、`complete=true`、3 workers/12 groups，60.9 秒。runner `-level=L3 -suite=delivery -env=controlled -scenario=delivery.basic -out=C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round2-final-20261008-02\delivery-basic`：`passed=true`、清理完成，65.8 秒。 | `...\l1\summary.json`、`...\delivery-basic\summary.json` |
+| 受影响 owner / architecture | `internal/pathguard` junction resolver、app、host、完整 console、`cmd/steerline`、Windows ConPTY smoke、E2E helper/suite compile、`internal/testkit/boundary` 与 `tests/integration` 的 TM04/CD67 boundary tests 均通过；L1 也通过。 | 本轮终端输出、L1 组日志 |
+| Linux 编译 | PowerShell 临时设置 `GOOS=linux`、`GOARCH=amd64`，运行 `go build -o C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round2-final-20261008-02\steerline-linux ./cmd/steerline`，后恢复原变量；通过，23,012,753 字节。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round2-final-20261008-02\steerline-linux` |
+
+精确分级 runner 调用（工作目录为仓库根）：
+
+```powershell
+$runner = 'C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round2-final-20261008-02\test-feedback.exe'
+& $runner '-level=L1' '-out=C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round2-final-20261008-02\l1'
+& $runner '-level=L3' '-suite=runtime' '-env=controlled' '-scenario=runtime.installed-debug-isolation' '-out=C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round2-final-20261008-02\runtime'
+& $runner '-level=L3' '-suite=delivery' '-env=controlled' '-scenario=delivery.basic' '-out=C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round2-final-20261008-02\delivery-basic'
+```
+
+受影响 owner/边界命令均在候选 `ad22d476f87e019a9ad5d0118758b253dd091094` 上通过：
+
+```powershell
+go test ./internal/pathguard -count=1
+go test ./internal/app -run 'Test(SteerlineHomeAndDirs|DerivedRunDirIsStableAcrossWorktrees|NativeConfigRejects(ASecondRunDir|WorktreeOutsideHome))$' -count=1
+go test ./internal/console -count=1
+go test ./internal/app/host -run 'Test(WindowsStartServiceRequiresVisibleWindow|StartupIDAndOutputPathValidation)$' -count=1
+go test ./internal/testkit/boundary ./tests/integration -run '^(TestTM04ExecutionBoundary|TestCD67CoreBoundary)$' -count=1
+go test ./cmd/steerline -count=1
+go test -tags=e2e ./tests/e2e/internal/testenv -run '^TestPseudoConsoleCapturesInteractiveChild$' -count=1 -v
+go test -tags=e2e ./tests/e2e/internal/testenv ./tests/e2e/suites/runtime -run '^$' -count=1
+```
+
+最终候选将 Windows 真实路径解析集中在 app/host 使用的 `internal/pathguard`，console 在自身 owner 内使用等价的 junction 解析，保持既有 console/product dependency boundary。home/state/SQLite journal/control/service/worktree 路径在 app 与 host 副作用前检查；UI root/profile/lock/journal 在 console 建目录或打开文件前检查。可选 `-IncludeSymbolicLinks` 文件符号链接负例仍未运行；其它上述最终自动验收通过。
 
 临时证据目录在用户主机保留供协调聊天复审；仓库只登记上述最小身份、摘要与结果。
 
