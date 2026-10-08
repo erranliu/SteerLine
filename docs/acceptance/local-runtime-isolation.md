@@ -2,7 +2,7 @@
 
 唯一任务归属：#83。来源：[Spec](../spec/local-runtime-isolation.spec.md) / [Plan](../spec/local-runtime-isolation.plan.md)。本文件是该任务专属验收文档，不覆盖其他任务；验收流程见[入口](README.md)。
 
-状态：round 4 独立复审确认 SQLite SHM 共享硬链接造成安装侧真实写入，LI3-A 整体失败、待局部修复与精确候选复验。round 3 `f838dcf587efb2cb22992e6354640f530e0df8b7` 的原有通过结果仅保留其实际覆盖范围，未覆盖 SQLite 共享硬链接。PR #247 仍打开、未合并；任务保持执行中，不释放后继，也不宣称流程实现完成。无本任务人工验收项。固定 Spec/Plan commit 为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。实现 PR：[PR #247](https://github.com/erranliu/SteerLine/pull/247)。本文件保留旧证据、失败复验及范围事实。
+状态：round 4 独立复审确认的 SQLite 共享硬链接 P1 已局部修复；干净候选 `92eaf9b8163f71be0554265ddba85ee0708855ee` 的完整 LI1-A–LI4-A runtime 场景及新增六条 DB/WAL/SHM 真实入口负例通过并清理完成。生产实现 commit `9aeed603d46bf7d566b2daf183855dc3c8316fc4` 的定向回归、L1 和 Linux/amd64 编译通过，之后仅调整 runtime 负例的执行时点；精确映射见下文。PR #247 仍打开、未合并；任务保持执行中、等待新独立复审，不释放后继，也不宣称流程实现完成。无本任务人工验收项。固定 Spec/Plan commit 为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。实现 PR：[PR #247](https://github.com/erranliu/SteerLine/pull/247)。本文件保留旧证据、失败复验及范围事实。
 
 ## 自动验收
 
@@ -12,16 +12,50 @@
 | --- | --- | --- | --- |
 | LI1-A | 自动 | 两个独立测试 clone、不同 home 的安装版与调试版同时运行；配置、状态、日志、服务发现和写命令不串线 | **已验收**：最终 L3 两侧项目和数据库身份独立；Task/Delivery 写入、快照及服务实例未串线，场景清理完成 |
 | LI2-A | 自动 | 调试 build、停启及入口重复生成不改安装 exe 摘要、原服务实例或任务事实；调试服务/控制台/CLI 及子进程使用实际调试 exe/home | **已验收**：最终 L3 直接 `build.ps1` 对源码 `bin` junction 与输出硬链接均在写入前拒绝；普通首次构建及再次重建成功；安装 exe、SQLite、bin 内容、任务事实与服务实例均保持；真实 service-window、console/ConPTY 和 CLI identity 通过 |
-| LI3-A | 自动 | 缺少调试路径、home 重叠、显式状态/工作区越出调试 home 拒绝；同仓库跨 home 第二写者被原锁拒绝；误连实例的写命令仍被拒绝 | **失败 / 待复验**：round 4 真实 product CLI 与 debug wrapper 在 SQLite SHM 共享硬链接时先写安装侧文件；原有最终 L3 的 stale instance 与 changed config 两条拒绝均正式 request 计数 0→0；正常产品领取发布 `resume_dispatch` 与 `start_task` 两条有效请求，计数 0→2；state/UI alias、越界和跨 home 写锁均拒绝 |
+| LI3-A | 自动 | 缺少调试路径、home 重叠、显式状态/工作区越出调试 home 拒绝；同仓库跨 home 第二写者被原锁拒绝；误连实例的写命令仍被拒绝 | **已验收**：round 4 最终 runtime 在 SQLite DB/WAL/SHM 共享硬链接时，产品 CLI 与真实 debug wrapper 六次均在 SQLite 副作用前明确拒绝，哨兵 size/hash 及全部 SQLite 文件快照保持；普通单链接仍到达业务校验；原有最终 L3 的 stale instance 与 changed config 两条拒绝均正式 request 计数 0→0；正常产品领取发布 `resume_dispatch` 与 `start_task` 两条有效请求，计数 0→2；state/UI alias、越界和跨 home 写锁均拒绝 |
 | LI4-A | 自动 | Windows 中文/空格路径及无关 cwd 可启动并显示准确身份；维护说明区分中心停服、外部执行结算、同构建重启和人工更新 | **已验收**：最终 L3 使用中文/空格路径及无关 cwd，CLI、ConPTY console、两个 service-window 入口报告精确 exe/home/config/commit/dirty；维护步骤见[本机安装与源码调试](../runtime-install-debug.md) |
 
 环境：Windows/amd64 controlled；两个独立 Git clone/home、真实 SteerLine 进程、SQLite、Git 和受控 worker/provider；不发模型请求。每次输出目录独立，服务和临时资源由场景登记并清理。
+
+## 2026-10-09 round 4 局部修复与精确候选复验
+
+生产实现 commit `9aeed603d46bf7d566b2daf183855dc3c8316fc4`，tree `25ca5decd8e1c918b099303f96595f22c1c2cd7e`。复用 `internal/pathguard`，Windows 用 `GetFileInformationByHandle.NumberOfLinks`、Unix 用原生 `Nlink`，检查 `steerline.db`、`-wal`、`-shm`、`-journal`；已有文件 link count > 1 明确拒绝，缺失及普通单链接按原流程使用。app 配置/home 预检、host 调用 `ValidateNativeStore` 前预检及 app 既有 reader/writer 打开前均接入，保留目录 canonical containment；未改 schema、业务状态机、固定 Spec/Plan 或共享 testenv/driver。
+
+最终受验候选 `92eaf9b8163f71be0554265ddba85ee0708855ee`，tree `28f8395f90b71d3f8a7d0dc139c43d17dbbd2345`，Windows/amd64 clean source，dirty=false。该提交只把新增负例移到两侧真实停服、进程退出及锁释放之后，生产 Go 文件与 `9aeed603` 完全相同。先提交实现/场景，再从各自精确 commit 构建和运行；后续验收文档提交不改变受验代码。
+
+最终 L3 `runtime.installed-debug-isolation` 通过：1 test、0 skip、262.63 秒，`passed=true`、场景 `passed=true`、`cleanup_complete=true`。当前格式 debug 数据库由真实 task validate/create 初始化并经过原有运行/重启；DB 负例的 installed 哨兵复制该真实数据库（376832 字节，SHA-256 `e8f8ead6ea107fec1f5075b8e35911055be6d0033915f2d076422ebd6948f869`），WAL/SHM 哨兵为空。逐文件建立 debug SQLite 路径到临时 installed home 哨兵的硬链接后，实际产品 `task validate -config ... -file <{}>` 和实际 `debug-runtime.ps1 -Operation cli -Arguments @('task','validate','-file',...)` 六次均退出 1，明确报告 `SQLite state file must not be a hard link (2 links)`。每次调用都核对哨兵 size/hash 和 DB/WAL/SHM/journal 的存在性、size/hash 全部保持，没有 SQLite 文件创建/改写；空 WAL/SHM 保持 0 字节与 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`。两侧均为本场景独立 clone/home/假认证，不触及日常安装。
+
+解除链接并恢复原 SQLite 文件后，普通单链接实际 task validate 正常到达 `invalid_batch: schema_version, project_id and tasks are required`。临时 installed 项目真实 DB 在整组负例前后均为 `a23a7b37fad5f4c7532ef68f59a9d34c61a510c5ec3d7c57ab741c3839f83a3e`。原有源码 exe/home、直接 build/rebuild/输出硬链接与 junction 拒绝、state/UI alias、generated service/console batch、原进程退出/锁释放、任务与 Delivery/同构建重启断言全部保留并通过；stale instance/config 正式 request 均 0→0，正常产品领取 0→2。安装 exe SHA-256 `5c31d749dac2b6ddd00d5e3255925a840882213247aa74cbbb7e1f8a65690af7`，实际源码调试 exe `f51df1f7462d3f7850b0f63f65e949ff6aedb514865743ae9365e6d672a8a047`；完整摘要在最终 runtime 证据。
+
+最小回归精确映射：`9aeed603` 上 pathguard 四种文件后缀、app reader 拒绝及 host validator 前拒绝等 9 个顶层定向测试通过；L1 3 workers/12 groups/426 tests/0 skip，`passed=true`、`complete=true`，70.55 秒；Linux/amd64 编译通过，产物 23017964 字节、SHA-256 `D1F912C489A698AC2F33B5F78D69D557A4AF41E1B041916144E75686493D4919`。`92eaf9b8` 之后没有生产 Go 变化，以上必要回归按该生产代码映射复用，不重复全套。`delivery.basic` 保留 `f838dcf587efb2cb22992e6354640f530e0df8b7` 的原通过范围；本轮未改共享 testenv/driver 或业务交付逻辑，当前 runtime/L1 覆盖新增 preflight 风险，未重跑 delivery、P1 脚本、Full/L2/live，不将其旧证据算作当前源码重跑。
+
+精确命令（仓库根目录；每次 runner 输出均新空目录）：
+
+```powershell
+$evidence01 = 'C:/Users/lmas1/AppData/Local/Temp/steerline-task83-round4-final-20261009-01'
+$evidence02 = 'C:/Users/lmas1/AppData/Local/Temp/steerline-task83-round4-final-20261009-02'
+# 9aeed603：生产回归
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./build.ps1
+go build -o "$evidence01/test-feedback.exe" ./cmd/test-feedback
+go test -v ./internal/pathguard ./internal/app ./internal/app/host -run 'Test(RejectSharedSQLiteFiles|NativeReaderRejectsSharedSQLiteBeforeOpen|NativePreflightRejectsSharedSQLiteBeforeValidator|NativePreflightAllowsItsEmptyRunLockFile|NativeProjectInitializesOnceAndRejectsMismatchedBinding|SteerlineHomeAndDirs|DerivedRunDirIsStableAcrossWorktrees|NativeConfigRejectsASecondRunDir|NativeConfigRejectsWorktreeOutsideHome)$' -count=1
+& "$evidence01/test-feedback.exe" '-level=L1' "-out=$evidence01/l1"
+$env:GOOS='linux'; $env:GOARCH='amd64'; go build -o "$evidence01/linux/steerline" ./cmd/steerline
+Remove-Item Env:GOOS; Remove-Item Env:GOARCH
+# 92eaf9b8：最终完整 runtime
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./build.ps1
+go build -o "$evidence02/test-feedback.exe" ./cmd/test-feedback
+& "$evidence02/test-feedback.exe" '-level=L3' '-suite=runtime' '-env=controlled' '-scenario=runtime.installed-debug-isolation' "-out=$evidence02/runtime"
+```
+
+证据01=`C:/Users/lmas1/AppData/Local/Temp/steerline-task83-round4-final-20261009-01`：`targeted-go.log`、`l1/summary.json`、`linux/{build-linux.log,steerline}`。该目录另保留首轮失败 runtime（源码 `9aeed603`，115.44 秒、清理完成）：六条 SQLite 拒绝及哨兵/SQLite 快照已全部通过，但新增 installed DB 摘要断言在安装服务仍运行时取样，正常持久化使字节比较不稳定；不能作整场景通过。修正时点后新现场复验，不覆盖失败产物。
+
+证据02=`C:/Users/lmas1/AppData/Local/Temp/steerline-task83-round4-final-20261009-02`：`build-windows.log`、`runtime/{summary.json,e2e-1.jsonl}`、`runtime/scenarios/runtime.installed-debug-isolation/{scenario.json,resources.json,runtime-identities.json,sqlite-shared-hardlinks.json,sqlite-shared-*-product_cli.log,sqlite-shared-*-debug_wrapper.log,sqlite-single-link-normal-validation.log}`。两轮 scratch `steerline-e2e-3237167511` / `steerline-e2e-2996633080` 已删除，链接在场景内精确解除、原文件恢复，清理无错误。PR #247 未合并；#83 仍执行中，等待新的独立复审，不释放后继。
 
 ## 2026-10-09 round 4 独立复审：SQLite 共享硬链接失败
 
 受审 HEAD `054decfcc42f93dab7e8bc95c0f007e60e268708`，实现候选 `f838dcf587efb2cb22992e6354640f530e0df8b7`。独立临时 debug 当前格式数据库初始化后，`steerline.db-shm` 硬链接到另一临时 installed home 空哨兵；实际产品 `task validate -config ... -file <{}>` 与真实 `debug-runtime.ps1 -Operation cli` 均先将哨兵写成 32768 字节，再以 `invalid_batch` 退出 1。哨兵 SHA-256 从 `E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855` 变为 `FD4C9FDA9CD3F9AE7C962B0DDF37232294D55580E1AA165AA06129B8549389EB`。目录 canonical containment 不识别共享硬链接，LI3-A 整体失败；已有 state/UI alias、锁及 request 证据保留原范围。
 
-原始证据：`C:/Users/lmas1/AppData/Local/Temp/sl83-r4-bbf4c68be4f247a8993a01b99c990883/{result.json,wrapper-result.json,wrapper-hardlink-shm.log}`；仅独立临时 Git/home/假认证，原链接已解除。本轮修复及精确候选复验待完成；固定 Spec/Plan 不变。
+原始证据：`C:/Users/lmas1/AppData/Local/Temp/sl83-r4-bbf4c68be4f247a8993a01b99c990883/{result.json,wrapper-result.json,wrapper-hardlink-shm.log}`；仅独立临时 Git/home/假认证，原链接已解除。该复审时局部修复及精确候选复验尚未完成；其后结果见上文，固定 Spec/Plan 不变。
 
 ## 2026-10-09 round 3 原执行者修复与最终候选复验
 
