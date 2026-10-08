@@ -2,7 +2,7 @@
 
 唯一任务归属：#83。来源：[Spec](../spec/local-runtime-isolation.spec.md) / [Plan](../spec/local-runtime-isolation.plan.md)。本文件是该任务专属验收文档，不覆盖其他任务；验收流程见[入口](README.md)。
 
-状态：round 3 独立复审否定此前“全部自动验收通过”的汇总：直接 `build.ps1` 经源码 bin junction 覆盖安装 exe（LI2-A 失败，待原执行者修复）；stale instance/config 拒绝的请求计数使用错误目录，历史“不增长”断言未有效验证（LI3-A 该子项现已局部复验，最终候选仍待复验）。round 2 的 state/UI 与真实 batch/console/service 证据保留其实际范围。本轮限修 LI3-A 请求观察，PR #247 保持打开且未合并；任务仍为执行中，不释放后继，不宣称最终实现全部通过。无本任务人工验收项。固定 Spec/Plan commit 为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。实现 PR：[PR #247](https://github.com/erranliu/SteerLine/pull/247)。本文件保留旧证据、复审发现及局部修复事实。
+状态：round 3 独立复审否定此前汇总的 LI2-A direct build 保护及 LI3-A 请求计数证据。原执行者已补齐 canonical containment、正式 request 文件观察和正常发布正向断言；最终候选 `f838dcf587efb2cb22992e6354640f530e0df8b7` 的 LI1-A–LI4-A、P1、L1、`delivery.basic` 与 Linux/amd64 编译均通过。PR #247 仍打开、未合并；任务保持执行中并等待新独立复审，不释放后继，也不宣称流程实现完成。无本任务人工验收项。固定 Spec/Plan commit 为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。实现 PR：[PR #247](https://github.com/erranliu/SteerLine/pull/247)。本文件保留旧证据、失败复验及范围事实。
 
 ## 自动验收
 
@@ -10,12 +10,40 @@
 
 | 验收项 | 方法 | 规划行为与通过条件 | 状态 / 结果 |
 | --- | --- | --- | --- |
-| LI1-A | 自动 | 两个独立测试 clone、不同 home 的安装版与调试版同时运行；配置、状态、日志、服务发现和写命令不串线 | 已验收：final L3 场景两侧分别等待合并和完成，项目/数据库身份独立，Task/Delivery 写入与快照未串线；清理完成 |
-| LI2-A | 自动 | 调试 build、停启及入口重复生成不改安装 exe 摘要、原服务实例或任务事实；调试服务/控制台/CLI 及子进程使用实际调试 exe/home | **验收失败**：round 3 直接 build.ps1 的 bin junction 可覆盖安装 exe，待原执行者修复；以下 round 2 正常场景证据保留：CLI、`Operation service` 调用的 `service-window.bat`、直接生成 batch 和 `console.bat` ConPTY 路径均核对实际 exe/home/config/commit；两次停服回执 `applied`、`process_exited=true`、`locks_released=true`。安装 exe SHA-256 `40e53741c02136e8bcf1269634915bf0cfec186b6629908846c1058f3b3b50d7` 及安装 instance `926f5f25ca799e0f403288ec461f8454` 保持；调试 exe SHA-256 `36b15b59d172be3858ea8c79a0214ca409d8e26538f071bb92b1163e825bcb8f` rebuild 前后相同；调试重启任务事实保持 |
-| LI3-A | 自动 | 缺少调试路径、home 重叠、显式状态/工作区越出调试 home 拒绝；同仓库跨 home 第二写者被原锁拒绝；误连实例的写命令仍被拒绝 | **待验收**：round 3 证明旧请求计数断言无效；本轮已局部复验正式请求计数，两条拒绝均 0→0，正常产品领取 0→2；最终候选仍待复验；其他既有证据保留：state/UI junction 的脚本入口与真实 native task/console 入口均在安装侧目录、数据库或 sentinel 改变前拒绝；P1 alias/hardlink/正常路径 10 项、显式越界和跨 home 锁断言通过；stale instance/config 的错误返回已观察，但旧“不发布请求”断言不能作为证据 |
-| LI4-A | 自动 | Windows 中文/空格路径及无关 cwd 可启动并显示准确身份；维护说明区分中心停服、外部执行结算、同构建重启和人工更新 | 已验收：final L3 使用中文/空格路径和无关 cwd；实际 console/service/CLI identity 与维护步骤见[本机安装与源码调试](../runtime-install-debug.md) |
+| LI1-A | 自动 | 两个独立测试 clone、不同 home 的安装版与调试版同时运行；配置、状态、日志、服务发现和写命令不串线 | **已验收**：最终 L3 两侧项目和数据库身份独立；Task/Delivery 写入、快照及服务实例未串线，场景清理完成 |
+| LI2-A | 自动 | 调试 build、停启及入口重复生成不改安装 exe 摘要、原服务实例或任务事实；调试服务/控制台/CLI 及子进程使用实际调试 exe/home | **已验收**：最终 L3 直接 `build.ps1` 对源码 `bin` junction 与输出硬链接均在写入前拒绝；普通首次构建及再次重建成功；安装 exe、SQLite、bin 内容、任务事实与服务实例均保持；真实 service-window、console/ConPTY 和 CLI identity 通过 |
+| LI3-A | 自动 | 缺少调试路径、home 重叠、显式状态/工作区越出调试 home 拒绝；同仓库跨 home 第二写者被原锁拒绝；误连实例的写命令仍被拒绝 | **已验收**：最终 L3 的 stale instance 与 changed config 两条拒绝均正式 request 计数 0→0；正常产品领取发布 `resume_dispatch` 与 `start_task` 两条有效请求，计数 0→2；state/UI alias、越界和跨 home 写锁均拒绝 |
+| LI4-A | 自动 | Windows 中文/空格路径及无关 cwd 可启动并显示准确身份；维护说明区分中心停服、外部执行结算、同构建重启和人工更新 | **已验收**：最终 L3 使用中文/空格路径及无关 cwd，CLI、ConPTY console、两个 service-window 入口报告精确 exe/home/config/commit/dirty；维护步骤见[本机安装与源码调试](../runtime-install-debug.md) |
 
 环境：Windows/amd64 controlled；两个独立 Git clone/home、真实 SteerLine 进程、SQLite、Git 和受控 worker/provider；不发模型请求。每次输出目录独立，服务和临时资源由场景登记并清理。
+
+## 2026-10-09 round 3 原执行者修复与最终候选复验
+
+最终受验源码 commit `f838dcf587efb2cb22992e6354640f530e0df8b7`，tree `deb3ae0f1dbc3b2a9402e0ecc0681a2a5beb4682`；Windows/amd64 clean tree。固定 Spec/Plan 仍为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。本次只补齐 round 3 已发现的 P1 与 request 观察断言，并修正测试夹具的 Windows clone 路径、Git line-ending 环境和 `home` dirty 字段解析；产品实现未扩大到旧格式兼容或迁移。
+
+最终 L3 `runtime.installed-debug-isolation` 通过：1 test、0 skip、266.06 秒、`complete=true`、`cleanup_complete=true`。LI2-A 的直接 `build.ps1` 保护在安装侧现场实测：源码 `bin` junction 指向隔离 installed/bin 时拒绝；`bin\steerline.exe` 是 installed exe 硬链接时拒绝；普通源码 clone 的首次构建和再次构建均成功。两条拒绝发生在写入前。source clone 在 clone 后、拒绝样例后、构建及重建后 `git status --porcelain` 均为空；运行 `home` 显示源码 commit 与 `source dirty=false`。installed exe SHA-256 `1ca523c0b0540c2dcc6eaaf772c9a77aa1b07bbf09dd74afddda81ef037cc4e9`、SQLite SHA-256 `56632d64828005f0e1553f698e97b447145c7e5ddb7fb577e242db88a46bb737`、service instance `f93f99159fabfe252065c9c33ee2edea`、installed/bin 内容及任务事实前后相同。新正常构建源码 exe SHA-256 `52fe1f7afca1bdab64af44b476aa7f267606b2728590f606abb68c45d7f78f7f`。
+
+LI3-A 正式 request 观察：stale instance 写请求 `0→0`，changed config 写请求 `0→0`；正常 `debug.Claim("a")` 发布计数 `0→2`。两份真实文件分别为 `control/requests/1d09c17c0b0dfd439a5a700bb235b1d6/request.json`（`resume_dispatch`，SHA-256 `377b61f8197ec8db004beb946402c658f6aee1fe848571f47c561127969fdd76`）与 `control/requests/301b4bc4ed49a3281f29ee8c95bdab3c/request.json`（`start_task`，task `1`，SHA-256 `ac206b0c8b1ff97cbc5e4159b6d2d0776a62e1a8400aaec1a839e8662c4c2ff`）；二者均绑定 instance `6ae5ba8feae58dc854ef73274d15078a` 及本次 debug clone `.git` identity。
+
+同一候选的其他最小回归：P1 `test-debug-runtime-isolation.ps1` 10 项通过；L1 `passed=true`、`complete=true`、3 workers/12 groups、426 tests、0 skip、61.9 秒；L3 `delivery.basic` 1 test、0 skip、66.6 秒且清理完成。Linux/amd64 `go build ./cmd/steerline` 通过，产物 23,012,753 字节，SHA-256 `955654B42D0F69689D8E4356D66539C58B8D4CE19A6D0F9085540760179DCEAB`。此前在 Windows component resolver 候选上通过的 owner/boundary 定向组无后续生产 Go 代码变化；最终 L1 亦重跑该固定回归。
+
+精确命令（仓库根目录，所有 runner 输出使用本次新目录）：
+
+```powershell
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
+.\scripts\test-debug-runtime-isolation.ps1 -Out 'C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round3-final-20261009-08\p1'
+go build -o 'C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round3-final-20261009-08\test-feedback.exe' ./cmd/test-feedback
+$runner = 'C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round3-final-20261009-08\test-feedback.exe'
+& $runner '-level=L3' '-suite=runtime' '-env=controlled' '-scenario=runtime.installed-debug-isolation' '-out=C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round3-final-20261009-08\runtime'
+& $runner '-level=L1' '-out=C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round3-final-20261009-08\l1'
+& $runner '-level=L3' '-suite=delivery' '-env=controlled' '-scenario=delivery.basic' '-out=C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round3-final-20261009-08\delivery-basic'
+```
+
+最终证据根为 `C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round3-final-20261009-08`：`direct-build.json`、`p1\summary.json`、`runtime\summary.json`、`runtime\e2e-1.jsonl`、`runtime\scenarios\runtime.installed-debug-isolation\{scenario.json,resources.json,runtime-identities.json}`、`l1\summary.json`、`delivery-basic\summary.json`、`linux\steerline`。临时原始产物留在该机器目录，不提交仓库。
+
+前序失败复验均保留并限定为测试夹具问题：`steerline-task83-round3-final-20261008-04\runtime` 的源 clone 路径触发 Windows 长路径；`...-05\runtime` 与 `...-06\runtime` 的 clone checkout 使用系统 `core.autocrlf=true`，而构建进程禁用系统/全局 Git 配置，导致 dirty probe 报告大量 CRLF 文件；`...-07\runtime` 已显示 clean/dirty=false，但旧断言误找字面量 `dirty=false`，未按 `home` 实际格式读取 `source dirty   false`。这些场景均 `cleanup_complete=true`；当前代码通过将 clone 与构建置于相同 Git 环境、使用短 scratch 路径并解析字段值完成修复。
+
+PR #247 当前保持 OPEN、未合并；任务 #83 继续执行中，等待新的独立复审。此记录不构成合并、实现完成或后继释放。
 
 ## 2026-10-08 round 1 候选验证（范围有限）
 
