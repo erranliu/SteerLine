@@ -12,7 +12,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 	"unicode/utf16"
 	"unsafe"
@@ -57,30 +56,31 @@ func (s *Scenario) RunPseudoConsole(command *exec.Cmd, name, readyMarker string)
 			windows.ClosePseudoConsole(pseudoConsole)
 		}
 	}()
-	_ = closeWindowsHandle(&inputRead)
-	_ = closeWindowsHandle(&outputWrite)
 
 	attributes, err := windows.NewProcThreadAttributeList(1)
 	if err != nil {
 		return nil, fmt.Errorf("allocate ConPTY process attributes: %w", err)
 	}
 	defer attributes.Delete()
-	if err := attributes.Update(windows.PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, unsafe.Pointer(&pseudoConsole), unsafe.Sizeof(pseudoConsole)); err != nil {
+	// The pseudoconsole attribute value is the HPCON handle itself, represented
+	// as an unsafe.Pointer without converting directly from uintptr.
+	pseudoConsoleValue := *(*unsafe.Pointer)(unsafe.Pointer(&pseudoConsole))
+	if err := attributes.Update(windows.PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, pseudoConsoleValue, unsafe.Sizeof(pseudoConsole)); err != nil {
 		return nil, fmt.Errorf("bind pseudo console to process: %w", err)
 	}
 	startup := windows.StartupInfoEx{
-		StartupInfo:             windows.StartupInfo{Cb: uint32(unsafe.Sizeof(windows.StartupInfoEx{}))},
+		StartupInfo: windows.StartupInfo{
+			Cb: uint32(unsafe.Sizeof(windows.StartupInfoEx{})),
+			// Null standard handles keep console output on the ConPTY channels.
+			Flags: windows.STARTF_USESTDHANDLES,
+		},
 		ProcThreadAttributeList: attributes.List(),
 	}
 	applicationName, err := windows.UTF16PtrFromString(command.Path)
 	if err != nil {
 		return nil, err
 	}
-	arguments := make([]string, len(command.Args))
-	for i, argument := range command.Args {
-		arguments[i] = syscall.EscapeArg(argument)
-	}
-	commandLine, err := windows.UTF16PtrFromString(strings.Join(arguments, " "))
+	commandLine, err := windows.UTF16PtrFromString(windows.ComposeCommandLine(command.Args))
 	if err != nil {
 		return nil, err
 	}
@@ -134,6 +134,8 @@ func (s *Scenario) RunPseudoConsole(command *exec.Cmd, name, readyMarker string)
 	if err := windows.CreateProcess(applicationName, commandLine, nil, nil, false, flags, &environmentBlock[0], workingDirectoryPtr, &startup.StartupInfo, &processInfo); err != nil {
 		return nil, fmt.Errorf("start interactive console: %w", err)
 	}
+	_ = closeWindowsHandle(&inputRead)
+	_ = closeWindowsHandle(&outputWrite)
 	if err := windows.AssignProcessToJobObject(job, processInfo.Process); err != nil {
 		return nil, fmt.Errorf("assign interactive console job: %w", err)
 	}
@@ -219,6 +221,9 @@ func (s *Scenario) RunPseudoConsole(command *exec.Cmd, name, readyMarker string)
 		}
 	}
 	transcript = currentTranscript(&outputMu, &output)
+	if !strings.Contains(string(transcript), readyMarker) {
+		return transcript, fmt.Errorf("interactive console transcript omitted %q", readyMarker)
+	}
 	if err := logFile.Sync(); err != nil {
 		return transcript, err
 	}
