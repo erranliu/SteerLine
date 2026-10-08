@@ -12,7 +12,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/erranliu/SteerLine/internal/pathguard"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -71,27 +70,27 @@ func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
 	if strings.TrimSpace(home) == "" {
 		return nil, ViewFile{}, "", errors.New("application home directory is required")
 	}
-	resolvedHome, err := pathguard.ResolveProspective(home)
+	resolvedHome, err := resolveConsolePath(home)
 	if err != nil {
 		return nil, ViewFile{}, "", fmt.Errorf("resolve application home: %w", err)
 	}
 	root := filepath.Join(resolvedHome, "ui", "views")
-	resolvedRoot, err := pathguard.ResolveProspective(root)
+	resolvedRoot, err := resolveConsolePath(root)
 	if err != nil {
 		return nil, ViewFile{}, "", fmt.Errorf("resolve UI views directory: %w", err)
 	}
-	if !pathguard.Within(resolvedHome, resolvedRoot) {
+	if !consolePathWithin(resolvedHome, resolvedRoot) {
 		return nil, ViewFile{}, "", errors.New("UI views directory resolves outside application home")
 	}
 	root = resolvedRoot
 	if err := os.MkdirAll(root, 0700); err != nil {
 		return nil, ViewFile{}, "", err
 	}
-	resolvedRoot, err = pathguard.ResolveProspective(root)
+	resolvedRoot, err = resolveConsolePath(root)
 	if err != nil {
 		return nil, ViewFile{}, "", fmt.Errorf("resolve created UI views directory: %w", err)
 	}
-	if !pathguard.Within(resolvedHome, resolvedRoot) {
+	if !consolePathWithin(resolvedHome, resolvedRoot) {
 		return nil, ViewFile{}, "", errors.New("UI views directory changed to a path outside application home")
 	}
 	root = resolvedRoot
@@ -111,16 +110,16 @@ func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
 			continue
 		}
 		dir := filepath.Join(root, entry.Name())
-		resolvedDir, resolveErr := pathguard.ResolveProspective(dir)
+		resolvedDir, resolveErr := resolveConsolePath(dir)
 		if resolveErr != nil {
 			return nil, ViewFile{}, "", fmt.Errorf("resolve UI profile directory: %w", resolveErr)
 		}
-		if !pathguard.Within(root, resolvedDir) {
+		if !consolePathWithin(root, resolvedDir) {
 			return nil, ViewFile{}, "", errors.New("UI profile directory resolves outside its managed root")
 		}
 		dir = resolvedDir
 		viewPath := filepath.Join(dir, "view.json")
-		if !pathguard.Within(root, viewPath) {
+		if !consolePathWithin(root, viewPath) {
 			return nil, ViewFile{}, "", errors.New("UI journal resolves outside its managed root")
 		}
 		lock, lockErr := acquireViewLock(root, dir)
@@ -149,14 +148,14 @@ func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
 	if len(available) == 0 {
 		id := newRequestID()
 		dir := filepath.Join(root, id)
-		if !pathguard.Within(root, dir) {
+		if !consolePathWithin(root, dir) {
 			return nil, ViewFile{}, "", errors.New("new UI profile path escapes its managed root")
 		}
 		if err = os.MkdirAll(dir, 0700); err != nil {
 			return nil, ViewFile{}, "", err
 		}
-		resolvedDir, resolveErr := pathguard.ResolveProspective(dir)
-		if resolveErr != nil || !pathguard.Within(root, resolvedDir) {
+		resolvedDir, resolveErr := resolveConsolePath(dir)
+		if resolveErr != nil || !consolePathWithin(root, resolvedDir) {
 			return nil, ViewFile{}, "", errors.New("view profile directory resolves outside its managed root")
 		}
 		dir = resolvedDir
@@ -184,13 +183,13 @@ func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
 
 func acquireViewLock(root, dir string) (*viewLock, error) {
 	lockPath := filepath.Join(dir, "steerline.lock")
-	if !pathguard.Within(root, dir) || !pathguard.Within(root, lockPath) {
+	if !consolePathWithin(root, dir) || !consolePathWithin(root, lockPath) {
 		return nil, errors.New("UI lock resolves outside its managed root")
 	}
 	return lockView(dir)
 }
 
-func insideViewRoot(root, target string) bool { return pathguard.Within(root, target) }
+func insideViewRoot(root, target string) bool { return consolePathWithin(root, target) }
 
 func (p *viewProfile) close() {
 	if p != nil && p.lock != nil {
@@ -208,7 +207,11 @@ func (p *viewProfile) path() string {
 
 func (p *viewProfile) write(view ViewFile) error {
 	path := p.path()
-	if !pathguard.Within(p.root, p.dir) || !pathguard.Within(p.root, path) {
+	root := p.root
+	if root == "" {
+		root = p.dir // Legacy in-package fixtures construct a profile without the production root.
+	}
+	if !consolePathWithin(root, p.dir) || !consolePathWithin(root, path) {
 		return errors.New("UI journal resolves outside its managed root")
 	}
 	return writeViewFile(path, view)
