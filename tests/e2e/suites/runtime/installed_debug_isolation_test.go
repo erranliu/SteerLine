@@ -544,6 +544,10 @@ func assertDirectBuildOutputIsolation(t *testing.T, s *testenv.Scenario, project
 		t.Fatalf("ordinary direct source build failed: %v: %s", positiveErr, positiveOutput)
 	}
 	cloneExe := filepath.Join(cloneBin, "steerline.exe")
+	rebuildOutput, rebuildErr := runBuild("direct-build-ordinary-source-rebuild")
+	if rebuildErr != nil {
+		t.Fatalf("ordinary direct source rebuild failed: %v: %s", rebuildErr, rebuildOutput)
+	}
 	cloneSHA := fileSHA256(t, cloneExe)
 	identityCommand := project.Command(cloneExe, "home", "-config", project.Config)
 	identityOutput, identityErr := s.RunCommand(identityCommand, "direct-build-source-home-identity")
@@ -557,7 +561,8 @@ func assertDirectBuildOutputIsolation(t *testing.T, s *testenv.Scenario, project
 	evidence["direct_source_build"] = map[string]any{
 		"source_clone": sourceRoot, "source_commit": strings.TrimSpace(string(headOutput)),
 		"source_bin_junction_rejected": string(junctionOutput), "output_hardlink_rejected": string(hardLinkOutput),
-		"ordinary_build_output": string(positiveOutput), "source_executable": cloneExe,
+		"ordinary_build_output": string(positiveOutput), "ordinary_rebuild_output": string(rebuildOutput),
+		"source_executable": cloneExe, "source_bin_entries_after_rebuild": directoryFileSnapshot(t, cloneBin),
 		"source_executable_sha256": cloneSHA, "source_home_identity": string(identityOutput),
 		"installed_executable_sha256_before_after": installedExeSHA, "installed_database_sha256_before_after": installedDBSHA,
 		"installed_service_instance_id_before_after": serviceInstance(installedBefore),
