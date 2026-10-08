@@ -978,7 +978,7 @@ func (m *Model) saveProjectView(index int) error {
 		}
 	}
 	m.prefs.Projects[state.ref.Key] = state.view
-	if err := writeViewFile(m.profile.path(), m.prefs); err != nil {
+	if err := m.profile.write(m.prefs); err != nil {
 		return fmt.Errorf("保存操作记录失败：%w", err)
 	}
 	return nil

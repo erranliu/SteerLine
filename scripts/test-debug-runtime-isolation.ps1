@@ -75,6 +75,8 @@ function New-Fixture([string]$Name, [bool]$MissingAuth = $false) {
     Write-Fixture (Join-Path $installed 'console.bat') 'synthetic installed console sentinel'
     Write-Fixture (Join-Path $installed 'service-window.bat') 'synthetic installed service sentinel'
     Write-Fixture (Join-Path $installed 'README.txt') 'synthetic installed readme sentinel'
+    Write-Fixture (Join-Path $installed 'state\state-sentinel.txt') 'synthetic installed state sentinel'
+    Write-Fixture (Join-Path $installed 'ui\views\ui-sentinel.txt') 'synthetic installed UI sentinel'
     if (-not $MissingAuth) {
         Write-Fixture (Join-Path $installed 'codex\auth.json') '{"synthetic":"installed-auth-sentinel"}'
     }
@@ -86,6 +88,8 @@ function New-Fixture([string]$Name, [bool]$MissingAuth = $false) {
 # canonical resolution through an existing aliased parent.
 $cases = @(
     @{ name = 'bin-junction'; operation = 'launchers'; path = 'bin'; target = 'bin'; type = 'Junction' },
+    @{ name = 'state-junction'; operation = 'launchers'; path = 'state'; target = 'state'; type = 'Junction' },
+    @{ name = 'ui-junction'; operation = 'launchers'; path = 'ui'; target = 'ui'; type = 'Junction' },
     @{ name = 'codex-junction-missing-auth'; operation = 'launchers'; path = 'codex'; target = 'codex'; type = 'Junction'; missingAuth = $true },
     @{ name = 'exe-hard-link'; operation = 'launchers'; path = 'bin\steerline.exe'; target = 'bin\steerline.exe'; type = 'HardLink' },
     @{ name = 'auth-hard-link'; operation = 'launchers'; path = 'codex\auth.json'; target = 'codex\auth.json'; type = 'HardLink' },

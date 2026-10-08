@@ -2,8 +2,9 @@ package app
 
 import (
 	"os"
-	"path/filepath"
 	"runtime/debug"
+
+	"github.com/erranliu/SteerLine/internal/pathguard"
 )
 
 var buildSourceCommit = "unknown"
@@ -64,28 +65,5 @@ func resolvedRuntimePath(path string) string {
 }
 
 func resolveAbsolutePath(path string) (string, error) {
-	absolute, err := filepath.Abs(path)
-	if err != nil {
-		return "", err
-	}
-	var tail []string
-	cursor := filepath.Clean(absolute)
-	for {
-		resolved, resolveErr := filepath.EvalSymlinks(cursor)
-		if resolveErr == nil {
-			for i := len(tail) - 1; i >= 0; i-- {
-				resolved = filepath.Join(resolved, tail[i])
-			}
-			return filepath.Clean(resolved), nil
-		}
-		if !os.IsNotExist(resolveErr) {
-			return "", resolveErr
-		}
-		parent := filepath.Dir(cursor)
-		if parent == cursor {
-			return "", resolveErr
-		}
-		tail = append(tail, filepath.Base(cursor))
-		cursor = parent
-	}
+	return pathguard.ResolveProspective(path)
 }

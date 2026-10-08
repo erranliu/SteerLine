@@ -24,3 +24,5 @@ func Start(cmd *exec.Cmd) (*Process, error) {
 	}()
 	return p, nil
 }
+
+func StartVisibleConsole(cmd *exec.Cmd) (*Process, error) { return Start(cmd) }

@@ -247,7 +247,7 @@ try {
     $launcher = Join-Path $debugHomePath 'service-window.bat'
     # Preflight every script/product output before the first side effect. A
     # disjoint home root does not imply its existing output targets are disjoint.
-    foreach ($relative in @('bin', 'bin\steerline.exe', 'codex', 'codex\auth.json', 'console.bat', 'service-window.bat', 'README.txt')) {
+    foreach ($relative in @('bin', 'bin\steerline.exe', 'etc', 'execution.json', 'state', 'ui', 'ui\views', 'codex', 'codex\auth.json', 'console.bat', 'service-window.bat', 'README.txt')) {
         Assert-WritablePathWithin $debugHomePath (Join-Path $debugHomePath $relative)
     }
     Assert-WritablePathWithin $repoPath (Join-Path $repoPath 'bin')

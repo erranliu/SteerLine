@@ -3,8 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,6 +10,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/pathguard"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -120,7 +119,7 @@ func ensureRunDirOutsideRepository(ctx context.Context, config Config) error {
 	if err != nil {
 		return err
 	}
-	repository, err := filepath.EvalSymlinks(config.Repository)
+	repository, err := pathguard.ResolveProspective(config.Repository)
 	if err != nil {
 		return err
 	}
@@ -141,32 +140,9 @@ func ensureRunDirOutsideRepository(ctx context.Context, config Config) error {
 }
 
 func resolveProspectiveApplicationPath(input string) (string, error) {
-	path, err := filepath.Abs(input)
-	if err != nil {
-		return "", err
-	}
-	var tail []string
-	for {
-		resolved, resolveErr := filepath.EvalSymlinks(path)
-		if resolveErr == nil {
-			for i := len(tail) - 1; i >= 0; i-- {
-				resolved = filepath.Join(resolved, tail[i])
-			}
-			return canonicalPath(resolved), nil
-		}
-		if !os.IsNotExist(resolveErr) {
-			return "", resolveErr
-		}
-		parent := filepath.Dir(path)
-		if parent == path {
-			return "", resolveErr
-		}
-		tail = append(tail, filepath.Base(path))
-		path = parent
-	}
+	return pathguard.ResolveProspective(input)
 }
 
 func applicationPathInside(root, path string) bool {
-	rel, err := filepath.Rel(canonicalPath(root), canonicalPath(path))
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+	return pathguard.Within(root, path)
 }

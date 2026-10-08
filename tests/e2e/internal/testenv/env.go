@@ -50,6 +50,10 @@ type Project struct {
 	ProjectID, DatabaseID                                                             string
 	Driver                                                                            driver.Client
 	Service                                                                           *testprocess.Process
+	ServiceWindow                                                                     *testprocess.Process
+	ServiceWindowPID                                                                  int
+	ServiceWindowStopped                                                              bool
+	ServiceStopOutput                                                                 []byte
 	GitServer                                                                         *testprocess.Process
 	serviceGeneration                                                                 int
 	Tasks                                                                             map[string]Task
@@ -147,6 +151,21 @@ func (s *Scenario) start(cmd *exec.Cmd, name string) *testprocess.Process {
 	s.Must(err)
 	s.processes = append(s.processes, p)
 	s.register("process", cmd.Path, p.Cmd.Process.Pid)
+	return p
+}
+
+// StartVisibleConsole owns a child with a separate visible Windows console.
+// The runtime suite uses it only for the service-window launcher contract.
+func (s *Scenario) StartVisibleConsole(cmd *exec.Cmd, name string) *testprocess.Process {
+	s.t.Helper()
+	f, err := os.Create(filepath.Join(s.Output, name+".log"))
+	s.Must(err)
+	s.files = append(s.files, f)
+	cmd.Stdout, cmd.Stderr = f, f
+	p, err := testprocess.StartVisibleConsole(cmd)
+	s.Must(err)
+	s.processes = append(s.processes, p)
+	s.register("visible-console-process", cmd.Path, p.Cmd.Process.Pid)
 	return p
 }
 
@@ -449,15 +468,57 @@ func (p *Project) StartService() {
 	})
 }
 
+func (p *Project) StartServiceViaVisibleConsole(cmd *exec.Cmd, name string) {
+	s := p.Scenario
+	s.t.Helper()
+	if p.ServiceWindow != nil {
+		s.t.Fatal("service-window process is already running")
+	}
+	p.serviceGeneration++
+	p.ServiceWindowPID = 0
+	p.ServiceWindowStopped = false
+	p.ServiceStopOutput = nil
+	p.ServiceWindow = s.StartVisibleConsole(cmd, name)
+	s.Wait("visible service-window readiness", func() (bool, error) {
+		select {
+		case <-p.ServiceWindow.Done:
+			s.t.Fatalf("service-window launcher exited before service readiness; see %s", filepath.Join(s.Output, name+".log"))
+		default:
+		}
+		snapshot, err := p.Snapshot()
+		if err != nil {
+			return false, err
+		}
+		return snapshot.Runtime != nil && snapshot.Runtime.Service.Ready, nil
+	})
+}
+
 func (p *Project) StopService() {
 	p.Scenario.t.Helper()
+	if p.ServiceWindow != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		output, err := p.Driver.Run(ctx, "stop-service", "-config", p.Config, "-by", "e2e")
+		p.Scenario.Must(err)
+		p.ServiceStopOutput = append([]byte(nil), output...)
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer stopCancel()
+		// The batch waits at its post-service pause. The service has already
+		// accepted stop and exited, so close only this owned console Job.
+		p.ServiceWindowPID = p.ServiceWindow.Cmd.Process.Pid
+		p.Scenario.Must(p.ServiceWindow.Stop(stopCtx))
+		p.ServiceWindowStopped = true
+		p.ServiceWindow = nil
+		return
+	}
 	if p.Service == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_, err := p.Driver.Run(ctx, "stop-service", "-config", p.Config, "-by", "e2e")
+	output, err := p.Driver.Run(ctx, "stop-service", "-config", p.Config, "-by", "e2e")
 	p.Scenario.Must(err)
+	p.ServiceStopOutput = append([]byte(nil), output...)
 	p.Scenario.Must(p.Service.Wait(ctx))
 	p.Service = nil
 }

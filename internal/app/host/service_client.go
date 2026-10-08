@@ -16,6 +16,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/pathguard"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -169,29 +170,7 @@ func expectedRunDir(c Config) (string, error) {
 }
 
 func resolveProspectivePath(input string) (string, error) {
-	path, err := filepath.Abs(input)
-	if err != nil {
-		return "", err
-	}
-	var tail []string
-	for {
-		resolved, e := filepath.EvalSymlinks(path)
-		if e == nil {
-			for i := len(tail) - 1; i >= 0; i-- {
-				resolved = filepath.Join(resolved, tail[i])
-			}
-			return canonical(resolved), nil
-		}
-		if !os.IsNotExist(e) {
-			return "", e
-		}
-		parent := filepath.Dir(path)
-		if parent == path {
-			return "", e
-		}
-		tail = append(tail, filepath.Base(path))
-		path = parent
-	}
+	return pathguard.ResolveProspective(input)
 }
 
 func readStartupRecord(c Config, id string) (*StartupRecord, error) {

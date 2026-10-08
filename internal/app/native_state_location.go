@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+
+	"github.com/erranliu/SteerLine/internal/pathguard"
 )
 
 func ValidateNativeStateLocation(config Config) error {
@@ -17,7 +19,9 @@ func validateNativeStateLocation(config Config) error {
 	}
 	key := RepositoryStateKey(config.Identity())
 	expected := filepath.Join(StateRoot(), key)
-	if canonicalPath(config.RunDir) != canonicalPath(expected) {
+	actualPath, actualErr := pathguard.ResolveProspective(config.RunDir)
+	expectedPath, expectedErr := pathguard.ResolveProspective(expected)
+	if actualErr != nil || expectedErr != nil || canonicalPath(actualPath) != canonicalPath(expectedPath) {
 		return taskError("authority_mismatch", "native tasks require the repository's stable shared state directory; remove the custom run_dir setting")
 	}
 	return nil

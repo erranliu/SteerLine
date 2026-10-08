@@ -20,6 +20,17 @@ var isProcessInJob = windows.NewLazySystemDLL("kernel32.dll").NewProc("IsProcess
 // runOwned places the suspended child in a kill-on-close Job before it runs.
 // Done is published only after the Job has no remaining descendants.
 func Start(cmd *exec.Cmd) (*Process, error) {
+	return startOwned(cmd, false)
+}
+
+// StartVisibleConsole gives an owned Windows child its own visible console.
+// It is reserved for tests of product entry points that require a real
+// service-window console.
+func StartVisibleConsole(cmd *exec.Cmd) (*Process, error) {
+	return startOwned(cmd, true)
+}
+
+func startOwned(cmd *exec.Cmd, visibleConsole bool) (*Process, error) {
 	job, err := windows.CreateJobObject(nil, nil)
 	if err != nil {
 		return nil, err
@@ -36,7 +47,11 @@ func Start(cmd *exec.Cmd) (*Process, error) {
 	if err != nil {
 		return nil, err
 	}
-	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: windows.CREATE_SUSPENDED | windows.CREATE_NEW_PROCESS_GROUP, HideWindow: true}
+	creationFlags := uint32(windows.CREATE_SUSPENDED | windows.CREATE_NEW_PROCESS_GROUP)
+	if visibleConsole {
+		creationFlags |= windows.CREATE_NEW_CONSOLE
+	}
+	cmd.SysProcAttr = &syscall.SysProcAttr{CreationFlags: creationFlags, HideWindow: !visibleConsole}
 	if err = cmd.Start(); err != nil {
 		return nil, err
 	}

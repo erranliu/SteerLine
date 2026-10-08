@@ -20,6 +20,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
+	"github.com/erranliu/SteerLine/internal/pathguard"
 )
 
 type ProjectInfo struct {
@@ -317,10 +318,16 @@ func InstallExecutable(source string) (string, error) {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
+	if !pathguard.Within(HomeDir(), BinDir()) {
+		return "", errors.New("application binary directory must resolve inside STEERLINE_HOME")
+	}
+	destination := filepath.Join(BinDir(), name)
+	if !pathguard.Within(HomeDir(), destination) {
+		return "", errors.New("installed executable must resolve inside STEERLINE_HOME")
+	}
 	if err := os.MkdirAll(BinDir(), 0700); err != nil {
 		return "", err
 	}
-	destination := filepath.Join(BinDir(), name)
 	if canonicalPath(source) == canonicalPath(destination) {
 		return destination, nil
 	}
