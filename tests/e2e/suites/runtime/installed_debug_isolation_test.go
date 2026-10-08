@@ -134,7 +134,7 @@ func TestInstalledDebugIsolation(t *testing.T) {
 	if consoleErr != nil {
 		t.Fatalf("run actual debug console under ConPTY: %v\n%s", consoleErr, consoleOutput)
 	}
-	for _, expected := range []string{debugExe, debug.Home, debug.Config, s.Run.SourceCommit, "dirty=true"} {
+	for _, expected := range []string{debugExe, debug.Home, debug.Config, s.Run.SourceCommit, s.Run.SourceDirty} {
 		assertContains(t, string(consoleOutput), expected)
 	}
 	debugEvidence["console_runtime_identity"] = map[string]string{"entry": "debug-runtime.ps1 -Operation console via Windows ConPTY", "executable": debugExe, "home": debug.Home, "config": debug.Config, "source_commit": s.Run.SourceCommit, "source_dirty": s.Run.SourceDirty, "transcript": filepath.Join(s.Output, "debug-runtime-console.log")}
