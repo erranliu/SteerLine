@@ -19,6 +19,7 @@ import (
 )
 
 type apiReader struct {
+	onResolveStart  func(string, string)
 	snapshot        api.ProjectSnapshot
 	page            api.TaskPage
 	graph           api.GraphPage
@@ -96,16 +97,20 @@ func (apiCommands) AddPredecessors(context.Context, api.TaskPredecessorAddInput)
 }
 
 type apiControl struct {
-	formalConfig *host.Config
-	requests     map[string]api.ControlRequest
-	receipts     map[string]*api.ControlReceipt
-	submits      int
-	failRead     error
-	submitErr    error
+	formalConfig       *host.Config
+	beforeFormalSubmit func(api.ControlInput)
+	requests           map[string]api.ControlRequest
+	receipts           map[string]*api.ControlReceipt
+	submits            int
+	failRead           error
+	submitErr          error
 }
 
 func (c *apiControl) Submit(_ context.Context, input api.ControlInput) (api.ControlRequest, error) {
 	if c.formalConfig != nil {
+		if c.beforeFormalSubmit != nil {
+			c.beforeFormalSubmit(input)
+		}
 		c.submits++
 		return host.SubmitControlInbox(*c.formalConfig, input)
 	}
@@ -202,6 +207,9 @@ func newAPIFixture(t *testing.T) (*Server, *productclient.Client, *apiReader, *a
 			OpenCommands: func(context.Context, bool) (productclient.TaskCommands, error) { return apiCommands{}, nil },
 			Control:      control, Decision: decision, DefaultRequestedBy: "tester",
 			ResolveStartTask: func(_ context.Context, taskID, profileID string) (api.ControlPayload, error) {
+				if reader.onResolveStart != nil {
+					reader.onResolveStart(taskID, profileID)
+				}
 				return api.ControlPayload{TaskID: taskID, ExecutionProfileID: profileID, ExecutionProfileDigest: strings.Repeat("a", 64)}, nil
 			}}, nil
 	})

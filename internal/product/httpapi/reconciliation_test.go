@@ -335,3 +335,80 @@ func TestAPIPrivateWritersConcurrentPreflight(t *testing.T) {
 		})
 	}
 }
+
+func TestAPIFirstRegistrationBindsMappedControlIntent(t *testing.T) {
+	server, _, reader, _ := newAPIFixture(t)
+	envelope := CommandEnvelope{RequestID: strings.Repeat("d", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: "start_task", TargetID: "8", ExpectedVersion: 3, ExpectedControlRevision: 7, Payload: json.RawMessage(`{"execution_profile_id":"fixture"}`)}
+	path := filepath.Join(server.commandsDir, envelope.RequestID+".json")
+	resolutions := 0
+	reader.onResolveStart = func(task, profile string) {
+		resolutions++
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("first arbitration record was visible before its original mapped content: %v", err)
+		}
+	}
+	client, err := Open(context.Background(), server.options.RunDir, server.options.ProjectIdentity)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.SubmitCommand(context.Background(), envelope); err != nil {
+		t.Fatal(err)
+	}
+	record, err := readRequestRecord(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resolutions != 1 || record.Control == nil || record.Control.Payload.ExecutionProfileDigest != strings.Repeat("a", 64) {
+		t.Fatalf("original mapping was not bound exactly once: resolutions=%d record=%+v", resolutions, record)
+	}
+	reader.onResolveStart = func(string, string) { t.Error("reconciliation re-resolved the original profile") }
+	if _, err := client.Command(context.Background(), envelope.RequestID); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := client.SubmitCommand(context.Background(), envelope); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestAPIFormalConsumerWinsRegistrationWindow(t *testing.T) {
+	for _, different := range []bool{false, true} {
+		t.Run(fmt.Sprint(different), func(t *testing.T) {
+			server, _, _, control := newAPIFixture(t)
+			config := host.Config{Repository: "C:/repo", RepositoryIdentity: "C:/repo", Remote: "origin", Branch: "main", RunDir: server.options.RunDir, TaskAuthority: "native", ControlValidation: formalControlValidation{}}
+			control.formalConfig = &config
+			envelope := CommandEnvelope{RequestID: strings.Repeat("c", 32), ProjectID: ProjectID("C:/repo"), InstanceID: "instance-a", Action: "start_task", TargetID: "8", ExpectedVersion: 3, ExpectedControlRevision: 7, Payload: json.RawMessage(`{"execution_profile_id":"fixture"}`)}
+			control.beforeFormalSubmit = func(input api.ControlInput) {
+				record, err := readRequestRecord(filepath.Join(server.commandsDir, envelope.RequestID+".json"))
+				if err != nil || record.Control == nil {
+					t.Errorf("formal consumer observed incomplete registration: %v", err)
+				}
+				if different {
+					input.Payload.TaskID = "9"
+					input.Payload.ExpectedTaskVersion = 55
+					revision := uint64(99)
+					input.ExpectedRevision = &revision
+				}
+				if _, err := host.SubmitControlInbox(config, input); err != nil {
+					t.Errorf("formal consumer publication: %v", err)
+				}
+			}
+			client, err := Open(context.Background(), server.options.RunDir, server.options.ProjectIdentity)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, postErr := client.SubmitCommand(context.Background(), envelope)
+			_, getErr := client.Command(context.Background(), envelope.RequestID)
+			_, repeatErr := client.SubmitCommand(context.Background(), envelope)
+			if different {
+				if postErr == nil || getErr == nil || repeatErr == nil || !strings.Contains(postErr.Error(), "identity_conflict") || !strings.Contains(getErr.Error(), "identity_conflict") || !strings.Contains(repeatErr.Error(), "identity_conflict") {
+					t.Fatalf("different formal winner was reused: post=%v get=%v repeat=%v", postErr, getErr, repeatErr)
+				}
+			} else if postErr != nil || getErr != nil || repeatErr != nil {
+				t.Fatalf("same formal winner did not reconcile: post=%v get=%v repeat=%v", postErr, getErr, repeatErr)
+			}
+			if control.submits != 1 {
+				t.Fatalf("registered request repeated backend submit: %d", control.submits)
+			}
+		})
+	}
+}

@@ -156,6 +156,13 @@ func (s *Server) submitCommand(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		record := requestRecord{Version: 1, Digest: digest, Envelope: envelope, CreatedAt: time.Now().UTC()}
+		// Bind derived content in the first unique record, before another formal
+		// consumer can win the request ID between transport registration and submit.
+		var mappingErr error
+		if validateActionEnvelope(envelope) == nil && (s.discoveryIdentity().Ready || envelope.Action == "stop_service") &&
+			(!isControlAction(envelope.Action) && envelope.Action != "answer_decision" || contains(s.options.Capabilities, envelope.Action)) {
+			mappingErr = s.mapIntent(r.Context(), envelope, &record)
+		}
 		data, marshalErr := json.Marshal(record)
 		if marshalErr != nil {
 			writeError(w, http.StatusInternalServerError, "request_record_failed", marshalErr.Error(), envelope.RequestID)
@@ -163,6 +170,15 @@ func (s *Server) submitCommand(w http.ResponseWriter, r *http.Request) {
 		}
 		if err = writePrivateExclusive(s.commandsDir, path, append(data, '\n')); err != nil {
 			writeError(w, http.StatusServiceUnavailable, "request_arbitration_failed", err.Error(), envelope.RequestID)
+			return
+		}
+		if mappingErr != nil {
+			if definitiveCommandRejection(mappingErr) {
+				status, code := protocolErrorStatus(mappingErr)
+				s.rejectRegisteredEnvelope(w, path, record, envelope, status, code, mappingErr.Error())
+			} else {
+				writeProtocolError(w, mappingErr, envelope.RequestID)
+			}
 			return
 		}
 	}
@@ -185,6 +201,19 @@ func (s *Server) submitCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	response, err := s.dispatch(r.Context(), envelope, &record, path)
+	if err != nil {
+		// A formal consumer may have published between unique HTTP registration and
+		// the original submit. Reconcile only; the authority determines same/conflict.
+		reconciled, reconcileErr := s.lookupAuthoritative(r.Context(), envelope.RequestID, &envelope, &record)
+		if reconcileErr == nil {
+			response, err = reconciled, nil
+		} else {
+			var identityErr *api.Error
+			if errors.As(reconcileErr, &identityErr) && identityErr.Kind == api.IdentityConflict {
+				err = reconcileErr
+			}
+		}
+	}
 	if err != nil {
 		if definitiveCommandRejection(err) {
 			status, code := protocolErrorStatus(err)
@@ -306,6 +335,39 @@ func validateActionEnvelope(envelope CommandEnvelope) error {
 		return &protocolError{status: http.StatusNotImplemented, code: "unsupported", reason: "action is outside the current local client protocol"}
 	default:
 		return &protocolError{status: http.StatusNotImplemented, code: "unsupported", reason: "action is unsupported by this service"}
+	}
+	return nil
+}
+
+func (s *Server) mapIntent(ctx context.Context, envelope CommandEnvelope, record *requestRecord) error {
+	actor := currentActor()
+	switch envelope.Action {
+	case "discard_task":
+		var payload reasonPayload
+		if err := decodeStrict(envelope.Payload, &payload); err != nil {
+			return err
+		}
+		record.Discard = &api.DiscardInput{TaskID: envelope.TargetID, RequestID: envelope.RequestID, Reason: strings.TrimSpace(payload.Reason), RequestedBy: actor, ExpectedVersion: envelope.ExpectedVersion}
+	case "answer_decision":
+		var payload answerPayload
+		if err := decodeStrict(envelope.Payload, &payload); err != nil {
+			return err
+		}
+		input := api.DecisionInput{CommandID: envelope.RequestID, RequestedBy: actor, Answer: api.DecisionAnswer{
+			RunID: payload.RunID, DecisionID: payload.DecisionID, OptionID: payload.OptionID, Note: payload.Note, Answers: payload.Answers, AnsweredBy: actor,
+			ExpectedDecisionVersion: envelope.ExpectedVersion, ExpectedRunRevision: payload.ExpectedRunRevision, SourceAttemptID: payload.SourceAttemptID,
+			ExpectedRecoveryVersion: *payload.ExpectedRecoveryVersion, ServiceInstanceID: envelope.InstanceID}}
+		mapped, err := s.product.NormalizeDecision(ctx, input)
+		if err != nil {
+			return err
+		}
+		record.Decision = &mapped
+	default:
+		control, err := s.controlInput(ctx, envelope, actor)
+		if err != nil {
+			return err
+		}
+		record.Control = &control
 	}
 	return nil
 }
