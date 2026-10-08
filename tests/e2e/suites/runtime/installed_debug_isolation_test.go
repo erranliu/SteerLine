@@ -313,6 +313,7 @@ func TestInstalledDebugIsolation(t *testing.T) {
 	assertServiceStopReceipt(t, debug.ServiceStopOutput)
 	debugEvidence["generated_service_window_batch_stop"] = map[string]any{"launcher_pid": debug.ServiceWindowPID, "owned_console_stopped": debug.ServiceWindowStopped, "receipt": string(debug.ServiceStopOutput)}
 	writeRuntimeEvidence(t, s.Output, evidence)
+	assertDirectBuildOutputIsolation(t, s, debug, installed, powershell, evidence)
 	assertMissingSourceExecutableRejected(t, s, debug, powershell, debugScript, installed.Home)
 
 }
@@ -453,6 +454,135 @@ func withJunction(t *testing.T, s *testenv.Scenario, project *testenv.Project, p
 		}
 	}()
 	body()
+}
+
+func assertDirectBuildOutputIsolation(t *testing.T, s *testenv.Scenario, project, installed *testenv.Project, powershell string, evidence map[string]any) {
+	t.Helper()
+	sourceRoot := filepath.Join(s.Root, "direct-build-source")
+	if _, err := os.Stat(sourceRoot); !os.IsNotExist(err) {
+		t.Fatalf("direct build source clone already exists: %s", sourceRoot)
+	}
+	cloneCommand := exec.Command("git", "clone", "--local", "--no-hardlinks", s.Run.Root, sourceRoot)
+	cloneCommand.Dir = s.Root
+	cloneOutput, err := s.RunCommand(cloneCommand, "clone-source-for-direct-build")
+	if err != nil {
+		t.Fatalf("clone source for direct build tests: %v: %s", err, cloneOutput)
+	}
+	s.RecordResource("source-build-clone", sourceRoot, 0)
+	headCommand := exec.Command("git", "-C", sourceRoot, "rev-parse", "HEAD")
+	headOutput, err := s.RunCommand(headCommand, "direct-build-source-head")
+	if err != nil || strings.TrimSpace(string(headOutput)) != s.Run.SourceCommit {
+		t.Fatalf("source build clone HEAD mismatch: head=%s want=%s err=%v", strings.TrimSpace(string(headOutput)), s.Run.SourceCommit, err)
+	}
+
+	installedExe := filepath.Join(installed.Home, "bin", "steerline.exe")
+	installedBin := filepath.Join(installed.Home, "bin")
+	installedExeSHA := fileSHA256(t, installedExe)
+	installedDBSHA := fileSHA256(t, installed.Database)
+	installedBinBefore := directoryFileSnapshot(t, installedBin)
+	installedBefore := mustSnapshot(t, installed)
+	assertInstallUnchanged := func(label string) {
+		t.Helper()
+		if current := fileSHA256(t, installedExe); current != installedExeSHA {
+			t.Fatalf("%s changed installed executable SHA-256: before=%s after=%s", label, installedExeSHA, current)
+		}
+		if current := fileSHA256(t, installed.Database); current != installedDBSHA {
+			t.Fatalf("%s changed installed SQLite SHA-256: before=%s after=%s", label, installedDBSHA, current)
+		}
+		if current := directoryFileSnapshot(t, installedBin); strings.Join(current, "\n") != strings.Join(installedBinBefore, "\n") {
+			t.Fatalf("%s changed installed bin directory contents: before=%v after=%v", label, installedBinBefore, current)
+		}
+		after := mustSnapshot(t, installed)
+		assertProjectFactsEqual(t, installedBefore, after, label+" changed installed task facts")
+		assertSameServiceInstance(t, installedBefore, after)
+	}
+	buildScript := filepath.Join(sourceRoot, "build.ps1")
+	runBuild := func(name string) ([]byte, error) {
+		cmd := project.Command(powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", buildScript)
+		return s.RunCommand(cmd, name)
+	}
+	cloneBin := filepath.Join(sourceRoot, "bin")
+	if _, err := os.Stat(cloneBin); !os.IsNotExist(err) {
+		t.Fatalf("fresh source clone unexpectedly contains bin output: %s: %v", cloneBin, err)
+	}
+	var junctionOutput []byte
+	withJunction(t, s, project, powershell, cloneBin, installedBin, "direct-build-bin-junction", func() {
+		var buildErr error
+		junctionOutput, buildErr = runBuild("direct-build-bin-junction")
+		if buildErr == nil || !strings.Contains(strings.ToLower(string(junctionOutput)), "build output directory must resolve inside source tree") {
+			t.Fatalf("direct build accepted source/bin junction into installed/bin: err=%v output=%s", buildErr, junctionOutput)
+		}
+		assertInstallUnchanged("rejected direct build through bin junction")
+	})
+	if _, err := os.Stat(cloneBin); !os.IsNotExist(err) {
+		t.Fatalf("source/bin junction was not removed after test: %s: %v", cloneBin, err)
+	}
+
+	if err := os.MkdirAll(cloneBin, 0700); err != nil {
+		t.Fatal(err)
+	}
+	hardLink := filepath.Join(cloneBin, "steerline.exe")
+	encode := func(value string) string { return base64.StdEncoding.EncodeToString([]byte(value)) }
+	linkScript := "$link=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encode(hardLink) + "')); $target=[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('" + encode(installedExe) + "')); New-Item -ItemType HardLink -Path $link -Target $target | Out-Null"
+	if _, err := s.RunCommand(project.Command(powershell, "-NoProfile", "-Command", linkScript), "create-direct-build-output-hardlink"); err != nil {
+		t.Fatalf("create output hard link: %v", err)
+	}
+	hardLinkOutput, hardLinkErr := runBuild("direct-build-output-hardlink")
+	if hardLinkErr == nil || !strings.Contains(strings.ToLower(string(hardLinkOutput)), "build output file must not be a hard link") {
+		t.Fatalf("direct build accepted a hard-linked output exe: err=%v output=%s", hardLinkErr, hardLinkOutput)
+	}
+	assertInstallUnchanged("rejected direct build through output hard link")
+	if err := os.Remove(hardLink); err != nil {
+		t.Fatalf("remove direct build output hard link: %v", err)
+	}
+	if err := os.Remove(cloneBin); err != nil {
+		t.Fatalf("remove empty source bin directory: %v", err)
+	}
+
+	positiveOutput, positiveErr := runBuild("direct-build-ordinary-source-output")
+	if positiveErr != nil {
+		t.Fatalf("ordinary direct source build failed: %v: %s", positiveErr, positiveOutput)
+	}
+	cloneExe := filepath.Join(cloneBin, "steerline.exe")
+	cloneSHA := fileSHA256(t, cloneExe)
+	identityCommand := project.Command(cloneExe, "home", "-config", project.Config)
+	identityOutput, identityErr := s.RunCommand(identityCommand, "direct-build-source-home-identity")
+	if identityErr != nil {
+		t.Fatalf("read direct build source identity: %v: %s", identityErr, identityOutput)
+	}
+	for _, expected := range []string{cloneExe, s.Run.SourceCommit, "dirty=false"} {
+		assertContains(t, string(identityOutput), expected)
+	}
+	assertInstallUnchanged("ordinary direct source build")
+	evidence["direct_source_build"] = map[string]any{
+		"source_clone": sourceRoot, "source_commit": strings.TrimSpace(string(headOutput)),
+		"source_bin_junction_rejected": string(junctionOutput), "output_hardlink_rejected": string(hardLinkOutput),
+		"ordinary_build_output": string(positiveOutput), "source_executable": cloneExe,
+		"source_executable_sha256": cloneSHA, "source_home_identity": string(identityOutput),
+		"installed_executable_sha256_before_after": installedExeSHA, "installed_database_sha256_before_after": installedDBSHA,
+		"installed_service_instance_id_before_after": serviceInstance(installedBefore),
+		"installed_bin_entries_unchanged":            true, "installed_task_facts_unchanged": true,
+	}
+	writeRuntimeEvidence(t, s.Output, evidence)
+}
+
+func directoryFileSnapshot(t *testing.T, directory string) []string {
+	t.Helper()
+	entries, err := os.ReadDir(directory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		path := filepath.Join(directory, entry.Name())
+		if entry.IsDir() {
+			snapshot = append(snapshot, entry.Name()+"=directory")
+			continue
+		}
+		snapshot = append(snapshot, entry.Name()+"="+fileSHA256(t, path))
+	}
+	sort.Strings(snapshot)
+	return snapshot
 }
 
 func powershellExecutable(t *testing.T) string {

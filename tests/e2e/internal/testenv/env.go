@@ -141,6 +141,8 @@ func (s *Scenario) register(kind, path string, pid int) {
 	s.Must(controlled.Write(filepath.Join(s.Output, "resources.json"), s.resources))
 }
 
+func (s *Scenario) RecordResource(kind, path string, pid int) { s.register(kind, path, pid) }
+
 func (s *Scenario) start(cmd *exec.Cmd, name string) *testprocess.Process {
 	s.t.Helper()
 	f, err := os.Create(filepath.Join(s.Output, name+".log"))
