@@ -1,6 +1,6 @@
 # 任务 #45 验收记录：本机客户端协议与历史查询
 
-唯一归属 #45；固定范围依据 Spec/Plan `f628161b5a60cefeb75922c15a63b1df9ef9c21b` 的 `docs/spec/phase2-local-api.spec.md` 与 `docs/spec/phase2-local-api.plan.md`，未改 Spec。Plan 的实现期补充只细化 API1–API5 的真实集成场景、命令与证据位置，不扩大通过条件。当前源码候选 `99c98e2bd02b3c0f75fbdea4919ce54e59927745`，tree `d8b7fad5eff3db07cdb7b5f544c0b68c2509a36c`；环境：Windows/amd64、Go 1.26.4；受控临时 Git/SQLite 和 Codex app-server，无 live 模型。记录日期：2026-10-09（Asia/Shanghai）。
+唯一归属 #45；固定范围依据 Spec/Plan `f628161b5a60cefeb75922c15a63b1df9ef9c21b` 的 `docs/spec/phase2-local-api.spec.md` 与 `docs/spec/phase2-local-api.plan.md`，未改 Spec。Plan 的实现期补充只细化 API1–API5 的真实集成场景、命令与证据位置，不扩大通过条件。当前整合候选 `08341fbc90e975ed512e47740860f2d2e25edb1d`，tree `ba3e2837dd616ebc8789bbc2a56771e281a2216d`；其 API/HTTP 源码与验收 commit `99c98e2bd02b3c0f75fbdea4919ce54e59927745` 相同，额外合入 main `04c62ee5ddb10637a68745baa4fc4f811123ffa9` 的两份 console 文件。环境：Windows/amd64、Go 1.26.4；受控临时 Git/SQLite 和 Codex app-server，无 live 模型。记录日期：2026-10-09（Asia/Shanghai）。
 
 ## 自动验收
 
@@ -84,3 +84,15 @@ round 0 的最终正文读取曾由 `pathguard.RejectSharedSQLiteFiles` 返回 `
 round 2 首次 `TestAPIControlRequestFaultRecovery` 曾因测试只允许 late consumer 竞争返回 `identity_conflict` 而失败；真实 same-intent consumer 在竞态中也可能直接返回匹配的原 request。测试现同时核验两种合法返回，并要求后续 GET 按原 envelope 对账、业务 revision 仅增 1；修正后的单项与完整集成组通过。原失败日志位于上表单项 evidence，未删除或改写。
 
 当前 API1/API3/API4/API5 自动项通过；API2 的历史 SHM 故障仍失败/待独立裁定。没有人工后置项，也没有 Full/L2/L3/live-model 验收。PR #249 仍 OPEN、未合并；#44 继续等待 #45。
+
+## 最新 main 合入后的组合核验
+
+main 更新为 `04c62ee5ddb10637a68745baa4fc4f811123ffa9` 后，保留本分支原提交，并以 merge commit `08341fbc90e975ed512e47740860f2d2e25edb1d`（tree `ba3e2837dd616ebc8789bbc2a56771e281a2216d`）整合。`08341fbc^1` 是本 PR 原 head `4bb0c8704339dcf3db87d0c6ad2f7843ba21212b`，`08341fbc^2` 是上述最新 main。合入差异仅 `internal/console/model_control.go` 和 `internal/console/start_request_test.go`：restored request deduplication 只阻塞同 task 的未结算 `start_task`/`start_candidate`；pending decision/environment request 不阻止 profile picker，已完成的 start 也不阻止重选。API/host/SQLite/HTTP 生产文件无差异，因此 round 2 API1–API5 证据仍精确映射到上节的 `99c98e2b` 源码候选。
+
+| 范围 | 命令/结果 | 原始证据 |
+| --- | --- | --- |
+| 受 main 影响的 console start/profile 消费者 | `go test ./internal/console -run '^(TestStartSelectedRestoredRequestDeduplication\|TestEnterFocusesWorkspaceAndStartKeepsOneRequestID\|TestStartIsNotPublishedWhenRequestIdentityCannotBePersisted\|TestStartDisablesStaleCandidatesAndAllowsManualParallel\|TestReadyStartChoosesConfiguredProfileAndBindsRequest)$' -count=1 -v`：5 个顶层测试及恢复状态子场景通过。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-merge-console-f00084d4478e48439d695e3b2f6629d7\console-start-request.log` |
+| Go 静态 | `go vet ./internal/console`：通过，无诊断。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-merge-vet-4d0dca3c40924911a32b0a6246ffa648\console-vet.log` |
+| 最新 main 组合 L1 | 精确 merge commit `08341fbc`：`complete=true`, `passed=true`，12 组/441 项、0 skip、0 fail。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-l1-merged-49811ead77e24acab51b2893dc1c0b6c\l1.log`；summary `C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261008T221034.224737800Z\summary.json` |
+
+最新 main 组合核验不更改 API2 判定：历史 `-shm Access is denied` 现场的 syscall 阶段未知，API2 仍为验收失败，等待新 reviewer 审查有界重查与回归证据。PR #249 head 会记录 docs-only evidence commit；未合并，#44 仍等待 #45。
