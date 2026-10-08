@@ -6,7 +6,7 @@
 
 | 任务 ID | 任务名称 | 前置 | 状态 | Spec / Plan | 验收 |
 | --- | --- | --- | --- | --- | --- |
-| 83 | 本机安装与调试路径隔离 | 无 | 执行中 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | PR [#247](https://github.com/erranliu/SteerLine/pull/247)；独立复审 round 1 后补 P2，LI1-A–LI4-A 待最终候选复验；[记录](../acceptance/local-runtime-isolation.md) |
+| 83 | 本机安装与调试路径隔离 | 无 | 执行中 | [Spec](../spec/local-runtime-isolation.spec.md) · [Plan](../spec/local-runtime-isolation.plan.md) | PR [#247](https://github.com/erranliu/SteerLine/pull/247)；候选 `066a5985` 的 LI1-A–LI4-A 自动验收已通过，PR 未合并；[记录](../acceptance/local-runtime-isolation.md) |
 | 45 | 本机客户端协议与历史查询 | 无 | 待执行 | [Spec](../spec/phase2-local-api.spec.md) · [Plan](../spec/phase2-local-api.plan.md) | 未验；[记录](../acceptance/phase2-local-api.md) |
 | 44 | WinUI 基座与原生输入 | #45 | 等待 #45 | [Spec](../spec/phase2-winui-foundation.spec.md) · [Plan](../spec/phase2-winui-foundation.plan.md) | 未验；[记录](../acceptance/phase2-winui-foundation.md)，人工项最迟2.1签收 |
 
@@ -30,5 +30,7 @@
 2026-10-08，用户确认采用 Codex 直接开发流程；#83/#45待执行，#44等待#45，当前未启动、未验。外部中心配置问题不作为本流程前置；具体产品测试的环境要求仍按 Spec/Plan 核对。历史查询与本次流程调整见[记录](../acceptance/roadmap-admission.md)。
 
 2026-10-08，独立复审 round 1 在 [PR #247](https://github.com/erranliu/SteerLine/pull/247#issuecomment-6058531009) 发现 P1/P2；P1 局部修复提交 `74ea6413214d980bd0bb1052c8b3ed5d8811669d`，原执行者继续补 P2，最终复验待做。详见[验收记录](../acceptance/local-runtime-isolation.md)。
+
+2026-10-08，候选 `066a5985677cccb4fdb4650bf669ddf15050de90`（tree `98856831907b85a37ba8b5f3364726b0659de358`，Windows/amd64 clean tree）通过 LI1-A–LI4-A：L3 `runtime.installed-debug-isolation` 通过且清理完成，P1 junction/hardlink 8 项、ConPTY smoke、L1、L3 `delivery.basic` 及 Linux/amd64 编译通过。详细结果与临时证据路径见[任务验收记录](../acceptance/local-runtime-isolation.md#2026-10-08-最终候选自动验收)。PR #247 仍未合并；#83 保持执行中，依赖后继尚未释放。
 
 流程规则见[RoadmapGuide](RoadmapGuide.md)；[二期节点验收](../acceptance/phase2.md)目前仅规划。
