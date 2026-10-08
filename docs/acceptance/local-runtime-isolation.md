@@ -2,7 +2,15 @@
 
 唯一任务归属：#83。来源：[Spec](../spec/local-runtime-isolation.spec.md) / [Plan](../spec/local-runtime-isolation.plan.md)。本文件是该任务专属验收文档，不覆盖其他任务；验收流程见[入口](README.md)。
 
-状态：round 4 独立复审确认的 SQLite 共享硬链接 P1 已局部修复；干净候选 `92eaf9b8163f71be0554265ddba85ee0708855ee` 的完整 LI1-A–LI4-A runtime 场景及新增六条 DB/WAL/SHM 真实入口负例通过并清理完成。生产实现 commit `9aeed603d46bf7d566b2daf183855dc3c8316fc4` 的定向回归、L1 和 Linux/amd64 编译通过，之后仅调整 runtime 负例的执行时点；精确映射见下文。PR #247 仍打开、未合并；任务保持执行中、等待新独立复审，不释放后继，也不宣称流程实现完成。无本任务人工验收项。固定 Spec/Plan commit 为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。实现 PR：[PR #247](https://github.com/erranliu/SteerLine/pull/247)。本文件保留旧证据、失败复验及范围事实。
+状态：#83 实现完成；[PR #247](https://github.com/erranliu/SteerLine/pull/247) 经第五轮独立复审和必要验证后真实合并，merge commit `f7c6f1d05c78172fe8133f7c1763718df0165fe1`。LI1-A–LI4-A 自动验收通过，无本任务人工项；精确受验源码/结果映射及原失败证据保留如下。一期组合/24小时/同构建恢复是独立待签收活动，不由此任务结算宣布通过。固定 Spec/Plan commit 为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。
+
+## 2026-10-09 交付结算与独立复审
+
+第五轮独立 reviewer `/root/review83_round5` 检查完整候选 diff、固定 Spec/Plan、实际生产消费者和 LI1-A–LI4-A 原始证据，未发现新的产品问题或需求遗漏。协调核对报告及源码映射，在 [PR 复审记录](https://github.com/erranliu/SteerLine/pull/247#issuecomment-6065781425)登记各轮 reviewer/fixer、问题、修复提交和实际验证。最终审核 head `2ce81db45d7bff32a1ffb6134210995529f01b84`，base `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`；平台确认合并时间为北京时间 2026-10-09 01:50:18，merge commit 如上。合并前核实 main 无 branch protection rule 或包含父级的 rulesets、无必需 checks，PR CLEAN/MERGEABLE，并使用预期 head 合并。
+
+自动验收仍绑定 clean `92eaf9b8` runtime 和 clean `9aeed603` 定向/L1/Linux，后续生产 Go 未变化、runtime 候选至审核 head 仅结果文档变化；不是在 merge commit 上重跑。六条共享 SQLite 真实负例、正常单链接、实际 source exe/生成 batch/进程身份/停服/锁释放、安装摘要/实例及正式请求 0→0/0→2 均由独立复审核实。本任务无人工待验或验收豁免；可选文件 symbolic-link 原生负例未运行，不计为通过。旧 delivery 仅保留原受验范围。
+
+复审另做的 8.3 short-path 与嵌套 DebugHome 临时探针，在生成输出前正确拒绝重叠。其目录 `C:/Users/lmas1/AppData/Local/Temp/sl83-r5-alias-20261009-01` 的精确递归及逐文件非递归清理被自动审批拒绝，原因仅 `blocked by policy`，目前保留三个合成文件，无进程、链接或真实认证；未将此探针标记清理完成。产品验收 runtime 的进程、链接和 scratch 清理已完成，该复审探针残留另行保留为操作限制。报告在仓库外 run 的 `review83-round5.md`，详细执行结果按下方既有证据定位。
 
 ## 自动验收
 
