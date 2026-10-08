@@ -6,9 +6,9 @@
 
 | 项目 | 结果 | 已覆盖行为与证据 |
 | --- | --- | --- |
-| API1 | 验收失败 | round 1 已确认合法临时文件 ACL/preflight 竞态；真实未授权 mutation/副作用观察尚缺。旧通过仅覆盖下列已执行场景： 真实 Windows 用户 ACL、发现/凭证、身份与未授权请求拒绝通过。定向 `TestAPIIdentityAndAuthentication`；真实服务集成同名场景通过。 |
+| API1 | 验收失败 | round 1 临时文件 ACL/preflight 已局部修复并定向复验；真实未授权 mutation/副作用观察尚缺，未恢复整体通过。旧通过仅覆盖下列已执行场景： 真实 Windows 用户 ACL、发现/凭证、身份与未授权请求拒绝通过。定向 `TestAPIIdentityAndAuthentication`；真实服务集成同名场景通过。 |
 | API2 | 待验收 | round 1 发现现有消费者所需 profiles/presentation 查询遗漏，待原执行者补齐。旧通过覆盖： 任务、图、项目快照、候选、历史、run/execution/attempt 活动和最终回复正文映射通过；受控执行服务上的双候选读取与 `start_candidate` 请求通过。定向和真实服务 `TestAPIQueryParity` 均通过。 |
-| API3 | 验收失败 | round 1 同 ID 异内容正式权威请求被错误复用；真实故障窗口驱动覆盖尚缺。旧通过覆盖： 原始请求信封、迟到控制回执、相同 ID 重试/并发、不同内容冲突、未登记请求恢复以及读/权限错误不伪装为 `command_not_found` 通过。单项、定向套件和真实服务 `TestAPIOriginalCommandReceipt` 通过；最多一次控制提交。 |
+| API3 | 验收失败 | round 1 同 ID 异内容权威误匹配已局部修复并定向复验；真实故障窗口驱动覆盖尚缺，未恢复整体通过。旧通过覆盖： 原始请求信封、迟到控制回执、相同 ID 重试/并发、不同内容冲突、未登记请求恢复以及读/权限错误不伪装为 `command_not_found` 通过。单项、定向套件和真实服务 `TestAPIOriginalCommandReceipt` 通过；最多一次控制提交。 |
 | API4 | 已验收 | 重连回到同一服务实例；unsupported 保留为 rejected 回执；未知、SQLite 读取错误和 control 回执读取错误保持不同事实。定向和真实服务 `TestAPIReconnectAndUnsupported` 通过。 |
 | API5 | 已验收 | 真实应用服务恢复后发布发现/ready 身份、正常关闭与端口冲突诊断通过；配置服务路径不启动替代实例。定向 `TestAPIServiceLifecycle` 与真实服务 `TestAPIServiceLifecycle`、`TestAPIConfiguredServicePublishesDiscovery` 通过。 |
 
@@ -39,3 +39,20 @@
 - 未运行 Full、完整 L2/L3、live 模型或完整离线进程；它们不属于本任务的最小验证要求。
 
 PR 与合并核验待登记；本记录只覆盖候选实现和上述自动验收，不宣称任务已合并或已实现完成。
+
+
+## round 1 局部修复与精确复验
+
+局部实现提交 `18442c4e233c745d42a1de32b286cb23a963b19a`，补齐首次注册窗口提交 `ac3c6411398da955b535cbc87df9fcfff4b8c9a8`（tree `2fff55b07d57707bb46b8688841ad3ec2b190e82`）。下面验证全部针对后者 Windows/amd64、Go 1.26.4 干净工作区；后续仅验收/执行图文档提交复用同一生产与测试源码。原始证据根：`C:/Users/lmas1/AppData/Local/Temp/steerline-api45-localfix-1a11d56aa02/ac3c6411`，`source.json` 与各命令的 `*.result.json` 固定 commit/命令/退出码。
+
+- API3 局部 matcher：既有 transport requestRecord 首次持久唯一注册携带实际映射的 control/decision/discard intent；Decision 规范化通过现有 app/领域函数，无独立规则。回读校验 project/request/instance/action、目标/版本/control revision、profile/digest/graph、候选及完整环境 target、原 Decision/Attempt/recovery 和 choices/text/remarks。缺少可证明映射的权威不按 kind 推定相同；不同内容保持 identity_conflict。提交碰撞后只查询原权威，同内容返回已有请求，异内容拒绝，不重投。
+- API1 局部 ACL：Windows CreateFile 的 SecurityAttributes 在创建时设置 current-user owner 和 protected 单用户 full-access DACL；atomic/exclusive 同一真实写入核心保持 write/sync/close/发布及最终严格核验。没有跳过未知/不安全文件，也没有放宽 DACL。
+- `go test ./internal/product/httpapi -run '^TestAPI' -count=1 -v`：14 顶层测试通过、0 skip，3.512 秒；`httpapi.log`。正式 host immutable publisher 在 HTTP 已登记、原 submit 前由另一个消费者赢得同 ID：同内容 POST/GET/repeat 成功；合法同实例异 target=9/version=55/control_revision=99 三次都 identity_conflict，原 submit 调用数保持 1。另有 profile/digest/graph/instance 单字段冲突及动作 payload 绑定检查。SQLite answer/discard 通过真实 commands 表读取和正式 DTO mapper 验证同/异内容；answer 使用受控持久回执 fixture，未声明真实服务 fault 驱动完成。
+- `TestAPIPrivateWritersConcurrentPreflight` 在两个 writer 分支的真实 temp 创建后、write/sync/close 前用阻塞 reader 保持文件打开，同时调用真实 `ValidateStateDirectory`：均成功，最终文件也通过。Windows `TestAPIPrivateTemporaryACLRejectsUnsafeEntry` 保留继承 DACL、Everyone 额外读取两种拒绝，正向创建时 ACL 通过。
+- `go test ./internal/app -run '^Test(LocalAPIDecisionNormalizationUsesOriginalQuestions|BoundAnswerRejectsAttemptOrRecoveryRetarget|DecisionSubmissionRequiresNativeAuthorityBeforeStateAccess)$' -count=1 -v`：3 项通过、0 skip；`app.log`。覆盖正式 mapper 复用原 native question 规范 choice/text/remarks、trim 与原 Attempt/recovery。
+- `go test ./internal/product/query -run '^TestCommandReceiptProjectsTyped(RequestIdentity|DiscardResult)$' -count=1 -v`：2 项通过、0 skip；`query.log`。typed 原请求/丢弃回执完整投影且错误 JSON 不伪造可核验内容。
+- `go vet ./internal/product/httpapi ./internal/product/client ./internal/product/query ./internal/app`：通过、无诊断；`vet.log`。本轮不重复 L1/Full/L2/L3/live，也未改共享测试驱动；旧 L1 仅证明旧候选的实际范围。临时 fixture 和 listener 随 Go 测试清理，原始证据保留。
+
+文档检查：`python scripts/check_doc_links.py` 266 Markdown/1679 local links/0 errors；`python scripts/roadmap_task_id.py check` 84 identities/通过；`git diff --check` 通过，原始结果见同证据根 `links.log`、`identities.log`、`diff.log`。
+
+局部缺陷已修复且上述复验通过；#45 尚未整体验收或实现完成。原执行者仍需 profiles/presentation 查询、真实 API1 unauthorized mutation/正向基线、API3 要求的全部真实故障窗口、SHM AccessDenied 根因诊断或真实未闭合记录，以及最终必要验证；之后须新的独立复审与真实合并核验。固定 Spec/Plan 未改。
