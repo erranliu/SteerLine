@@ -132,7 +132,7 @@ func feedbackLines(m Model, state projectState, row *consoleRow) []string {
 	if run.PR.QueryError != nil {
 		lines = append(lines, styleAlert.Render("PR 查询失败："+safeTerminalText(*run.PR.QueryError)))
 	}
-	if run.Decision != nil && run.Decision.Status == "pending" && run.Abandonment == nil && run.TaskStatus != "closed" {
+	if pendingDecision(run) && waitingForDecision(run) {
 		lines = append(lines, styleHead.Render("问题："+safeTerminalText(run.Decision.Request.Question)))
 		for i, option := range run.Decision.Request.Options {
 			lines = append(lines, fmt.Sprintf("%d. %s", i+1, safeTerminalInlineText(option.Label)))

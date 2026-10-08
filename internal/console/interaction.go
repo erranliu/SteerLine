@@ -92,6 +92,24 @@ func feedbackReceiptStatus(state projectState, a *actionState) string {
 	return candidateLabel(state, &api.CandidateSummary{TaskID: a.TaskID, RunID: a.RunID}) + " · " + a.Message
 }
 
+func candidateBusinessOpen(run *api.CandidateSummary) bool {
+	return run != nil && run.Abandonment == nil && run.TaskStatus != "closed" && run.TaskStatus != "completed" && run.TaskStatus != "discarded" && run.FinishTaskStatus != "completed"
+}
+
+func waitingForMerge(run *api.CandidateSummary) bool {
+	return candidateBusinessOpen(run) && run.FinishTaskStatus == "waiting_pr_merge"
+}
+
+func pendingDecision(run *api.CandidateSummary) bool {
+	return candidateBusinessOpen(run) && run.Decision != nil && run.Decision.Status == "pending"
+}
+
+// The workflow phase determines whether input is required. A merge-waiting
+// worker may offer another feedback turn without blocking PR delivery.
+func waitingForDecision(run *api.CandidateSummary) bool {
+	return candidateBusinessOpen(run) && (run.FinishTaskStatus == "waiting_decision" || pendingDecision(run) && !waitingForMerge(run))
+}
+
 func candidateHumanStatus(state projectState, run *api.CandidateSummary) string {
 	if run.Abandonment != nil {
 
@@ -103,6 +121,18 @@ func candidateHumanStatus(state projectState, run *api.CandidateSummary) string 
 	if run.TaskStatus == "closed" {
 
 		return "实验已结束"
+	}
+	if run.EnvironmentBlocker != nil {
+		if waitingForDecision(run) {
+			return "交互受阻"
+		}
+		return "环境受阻"
+	}
+	if runNeedsAttention(run) && !waitingForDecision(run) {
+		return runStatus(run)
+	}
+	if waitingForMerge(run) {
+		return "待合并"
 	}
 	if a := feedbackAction(state, run); a != nil {
 		switch a.Status {
@@ -119,12 +149,7 @@ func candidateHumanStatus(state projectState, run *api.CandidateSummary) string 
 			return "提交结果待核实"
 		}
 	}
-	if run.Decision != nil && run.Decision.Status == "pending" {
-		if run.EnvironmentBlocker != nil {
-
-			return "交互受阻"
-		}
-
+	if pendingDecision(run) {
 		return "待交互"
 	}
 	return runStatus(run)
@@ -138,9 +163,9 @@ func candidateHeadline(state projectState, row *consoleRow) string {
 	if len(runs) == 0 {
 		return ""
 	}
-	participating, waiting, blocked := 0, 0, 0
+	participating, waiting, blocked, merging := 0, 0, 0, 0
 	for _, r := range runs {
-		if r.Abandonment == nil && r.TaskStatus != "closed" && r.TaskStatus != "discarded" && r.FinishTaskStatus != "completed" {
+		if candidateBusinessOpen(r) {
 			participating++
 		}
 		s := candidateHumanStatus(state, r)
@@ -150,8 +175,15 @@ func candidateHeadline(state projectState, row *consoleRow) string {
 		if s == "交互受阻" {
 			blocked++
 		}
+		if waitingForMerge(r) {
+			merging++
+		}
 	}
-	line := fmt.Sprintf("并行 %d · 待交互 %d · 当前 %s", participating, waiting, candidateLabel(state, row.run))
+	line := fmt.Sprintf("并行 %d · 待交互 %d", participating, waiting)
+	if merging > 0 {
+		line += fmt.Sprintf(" · 待合并 %d", merging)
+	}
+	line += " · 当前 " + candidateLabel(state, row.run)
 	if blocked > 0 {
 		line += fmt.Sprintf(" · 受阻 %d", blocked)
 	}
@@ -171,8 +203,12 @@ func renderCandidateOverview(state projectState, row *consoleRow) []string {
 		chips = append(chips, label+" "+candidateHumanStatus(state, r))
 	}
 	controls := "F6/F7 切换并行 · Enter 详情 · d 完整详情"
-	if row.run.Decision != nil && row.run.Decision.Status == "pending" && row.run.Abandonment == nil && row.run.TaskStatus != "closed" && row.run.TaskStatus != "discarded" && !feedbackInProgress(state, row.run) {
-		controls = "a/Enter 回复 · F6/F7 切换并行 · d 完整详情"
+	if pendingDecision(row.run) && !feedbackInProgress(state, row.run) {
+		if waitingForMerge(row.run) {
+			controls = "a 可选反馈 · F6/F7 切换并行 · Enter 详情 · d 完整详情"
+		} else {
+			controls = "a/Enter 回复 · F6/F7 切换并行 · d 完整详情"
+		}
 	}
 	return []string{strings.Join(chips, " · "), "当前 " + candidateLabel(state, row.run) + " · session " + shortSession(row.run.SessionID), controls}
 }
@@ -266,7 +302,11 @@ func renderAnswerDialog(m Model, state projectState, height int) string {
 	}
 	rows := max(1, min(3, height-answerMinimum(m)+1))
 	start := max(0, cursorLine-rows+1)
-	lines := []string{header, styleHead.Render("问题：" + safeTerminalInlineText(request.Question)), optionLine, "说明：" + safeTerminalInlineText(shortSummary(detail, 160)), label}
+	question := "问题：" + safeTerminalInlineText(request.Question)
+	if waitingForMerge(run) {
+		question = "可选反馈：希望原 worker 继续处理什么？"
+	}
+	lines := []string{header, styleHead.Render(question), optionLine, "说明：" + safeTerminalInlineText(shortSummary(detail, 160)), label}
 	lines = append(lines, fitLines(noteLines[start:], m.width, rows)...)
 	preview := feedbackPreview(state, d, request)
 	lines = append(lines, preview[0]+" · "+preview[1], preview[2])
