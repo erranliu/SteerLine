@@ -1,6 +1,6 @@
 # Plan：本机客户端协议与历史查询
 
-任务 ID：45；任务名称：本机客户端协议与历史查询；目标：`PHASE2.1`。执行范围见 [Spec](phase2-local-api.spec.md)，结果记录于[专属验收](../acceptance/phase2-local-api.md)。无未完成硬前置，一个实现 PR。正式实施仍需中心准入和固定契约核对。
+任务 ID：45；任务名称：本机客户端协议与历史查询；目标：`PHASE2.1`。执行范围见 [Spec](phase2-local-api.spec.md)，结果记录于[专属验收](../acceptance/phase2-local-api.md)。无未完成硬前置，一个实现 PR。正式实施由 roadmap-runner 核对 execution-map 的范围与前置，启动时固定实际 Spec/Plan commit 和路径。
 
 ## 实施与所有权
 

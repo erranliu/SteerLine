@@ -1,8 +1,8 @@
 # SteerLine 草稿 Roadmap
 
-本页为本轮选定草稿，用于一期收尾及二期三节点规划。编号/文档不产生执行资格。用户已确认的#83/#45/#44列入[execution-map](../execution-map.md)，状态为待中心准入；中心同步待核对，不推定实际DAG为空。派发仍须工具回执及资格核验。
+本页为本轮选定草稿，用于一期收尾及二期三节点规划。编号/文档不产生执行授权。用户已确认的#83/#45/#44列入[execution-map](../execution-map.md)，由 roadmap-runner 直接调度 Codex，启动前核对当前状态、依赖与固定 Spec/Plan。
 
-规划按[RoadmapGuide](../RoadmapGuide.md)和[并行开发指南](../../architecture/parallel-development.md)。本次只修订仓库草稿；若外部已冻结旧任务，须先核对并受控处置，不能把本轮依赖/名称变化写成工具变更。每个执行任务保持独立 Spec/Plan、一个实现 PR及专属 acceptance。
+规划按[RoadmapGuide](../RoadmapGuide.md)和[并行开发指南](../../architecture/parallel-development.md)。开发执行范围与依赖由用户确认后维护于 execution-map；本文不改变外部产品 Task/DAG。每个执行任务保持独立 Spec/Plan、一个实现 PR及专属 acceptance。
 
 ## 一期收尾
 
@@ -12,9 +12,9 @@
 
 定向待补仍见[app-server race](../../acceptance/local-codex-app-server.md)、[Orca活动输入/故障/生命周期](../../acceptance/worker-flow-orca-native.md)、[停服恢复](../../acceptance/worker-service-recovery.md)。按当前支持及产品精简核对适用范围；完整transcript阅读不再作为新界面交付要求，未验证的执行/恢复风险不能因此略过。
 
-## 近期准入候选：只固定确定会使用的能力
+## 已确认近期任务：只固定确定会使用的能力
 
-本批已按用户确认纳入正式执行规划，待固定材料与中心准入，不代表当前可执行。草稿保留用于范围讨论，准入状态以execution-map为准；共同宿主接线指定单一修改所有者并串行合入。
+本批已按用户确认纳入 Codex 执行规划，状态以execution-map为准；草稿保留用于范围讨论，不维护实时状态。共同宿主接线指定单一修改所有者并串行合入。
 
 | 任务 ID | 任务名称 | 交付范围 / 所有者 | 剩余拟议前置 | 执行规格 | 专属验收 |
 | --- | --- | --- | --- | --- | --- |
@@ -38,12 +38,12 @@
 
 ## 下一批：2.1最小原型确认后
 
-按用户最新要求，#49/#50已移出execution-map的本批准入准备范围，继续保留在本草稿；原型确认并补齐固定材料后再办理正式准入。原Task ID、Spec/Plan及专属验收链接保留。
+按用户最新要求，#49/#50已移出execution-map的本批执行范围，继续保留在本草稿；原型确认并补齐 Spec/Plan 与验收安排后，经用户确认纳入执行。原Task ID、Spec/Plan及专属验收链接保留。
 
 | 任务 ID | 任务名称 | 交付范围 | 剩余拟议前置 | 执行规格 | 专属验收 |
 | --- | --- | --- | --- | --- | --- |
-| 49 | DAG 与任务原生浏览 | 真实任务/直接前置后继、阻塞、基本图分页、Spec/Plan及交付定位 | #44、#45；准入前确认2.1原型 | [Spec](../../spec/phase2-roadmap-ui.spec.md) · [Plan](../../spec/phase2-roadmap-ui.plan.md) | [验收](../../acceptance/phase2-roadmap-ui.md) |
-| 50 | 执行与待处理原生界面 | 当前控制台日常操作、双本机多候选、原问题反馈、有界活动/final/PR与原请求对账 | #44、#45；准入前确认2.1原型 | [Spec](../../spec/phase2-execution-ui.spec.md) · [Plan](../../spec/phase2-execution-ui.plan.md) | [验收](../../acceptance/phase2-execution-ui.md) |
+| 49 | DAG 与任务原生浏览 | 真实任务/直接前置后继、阻塞、基本图分页、Spec/Plan及交付定位 | #44、#45；纳入执行前确认2.1原型 | [Spec](../../spec/phase2-roadmap-ui.spec.md) · [Plan](../../spec/phase2-roadmap-ui.plan.md) | [验收](../../acceptance/phase2-roadmap-ui.md) |
+| 50 | 执行与待处理原生界面 | 当前控制台日常操作、双本机多候选、原问题反馈、有界活动/final/PR与原请求对账 | #44、#45；纳入执行前确认2.1原型 | [Spec](../../spec/phase2-execution-ui.spec.md) · [Plan](../../spec/phase2-execution-ui.plan.md) | [验收](../../acceptance/phase2-execution-ui.md) |
 
 #49不再等待#48，也不在本任务实现完整roadmap/草稿浏览。#49/#50可分开实现，共用客户端/输入和最小导航；先合入的页面拥有共享导航接线，后合入者复核。原型未确认前不提前铺大量页面/视图模型。2.1真实验收后再决定控制台退役范围。
 
@@ -65,4 +65,4 @@
 
 近期 #83 与 #45 先落实，#45 → #44 → 原型确认后的 #49/#50。同期继续2.1原型和2.2/2.3流程讨论；一期24小时不作传递硬前置。人工后验收、必要前置与artifact交互先用代表流程推导，见[2.2验收规划](../../acceptance/phase2-planning.md)，不立通用事项/审批/提醒引擎。
 
-允许后置人工项登记参与人/窗口或待安排、截止节点及阻塞范围；真实失败/关键能力缺口不得后置。执行资格必须核对实际DAG与固定契约。#40/#41完整版本管理继续延期；#42/#53人工活动旧编号不复用。
+允许后置人工项登记参与人/窗口或待安排、截止节点及阻塞范围；真实失败/关键能力缺口不得后置。启动前核对 execution-map 的依赖交付与固定 Spec/Plan。#40/#41完整版本管理继续延期；#42/#53人工活动旧编号不复用。
