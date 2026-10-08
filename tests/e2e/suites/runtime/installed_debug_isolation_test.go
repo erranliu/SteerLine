@@ -251,9 +251,9 @@ func TestInstalledDebugIsolation(t *testing.T) {
 	assertHomeJunctionRejected(t, s, debug, powershell, debugScript, installed)
 	assertEscapedPathRejected(t, s, debug, powershell, debugScript, installed.Home, "run_dir", "run-dir-escape")
 	assertEscapedPathRejected(t, s, debug, powershell, debugScript, installed.Home, "worktree_root", "worktree-root-escape")
-	assertMissingDebugExecutableRejected(t, s, debug, powershell, debugScript, installed.Home)
 	debug.StopService()
 	installed.StopService()
+	assertMissingSourceExecutableRejected(t, s, debug, powershell, debugScript, installed.Home)
 
 }
 
@@ -324,20 +324,37 @@ func runDebugScriptWithConfig(s *testenv.Scenario, project *testenv.Project, pow
 	return s.RunCommand(cmd, name)
 }
 
-func assertMissingDebugExecutableRejected(t *testing.T, s *testenv.Scenario, project *testenv.Project, powershell, script, installedHome string) {
+func assertMissingSourceExecutableRejected(t *testing.T, s *testenv.Scenario, project *testenv.Project, powershell, script, installedHome string) {
 	t.Helper()
-	missingHome := filepath.Join(s.Root, "missing debug executable")
-	if err := os.MkdirAll(filepath.Join(missingHome, "etc"), 0700); err != nil {
-		t.Fatal(err)
+	sourceExecutable := filepath.Join(s.Run.Root, "bin", "steerline.exe")
+	missingExecutable := sourceExecutable + ".task83-missing"
+	if _, err := os.Stat(missingExecutable); !os.IsNotExist(err) {
+		t.Fatalf("source executable backup path already exists: %s", missingExecutable)
 	}
-	config := writeConfigVariantAt(t, project.Config, filepath.Join(missingHome, "etc", "SteerLine.json"), func(value map[string]any) {
-		value["worktree_root"] = filepath.Join(missingHome, "worktrees")
-	})
+	before := fileSHA256(t, sourceExecutable)
+	if err := os.Rename(sourceExecutable, missingExecutable); err != nil {
+		t.Fatalf("hide stopped source executable for fail-closed check: %v", err)
+	}
+	restored := false
+	defer func() {
+		if !restored {
+			if err := os.Rename(missingExecutable, sourceExecutable); err != nil {
+				t.Errorf("restore source executable after fail-closed check: %v", err)
+			}
+		}
+	}()
 	cmd := project.Command(powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", script,
-		"-DebugHome", missingHome, "-InstalledHome", installedHome, "-Config", config, "-Operation", "cli", "-Arguments", "home")
-	output, err := s.RunCommand(cmd, "missing-debug-executable")
-	if err == nil || !strings.Contains(strings.ToLower(string(output)), "missing debug executable") {
-		t.Fatalf("debug runtime silently fell back when its executable was missing: err=%v output=%s", err, output)
+		"-DebugHome", project.Home, "-InstalledHome", installedHome, "-Config", project.Config, "-Operation", "cli", "-Arguments", "home")
+	output, err := s.RunCommand(cmd, "missing-source-executable")
+	if err == nil || !strings.Contains(strings.ToLower(string(output)), "missing source build executable") {
+		t.Fatalf("debug runtime did not reject a missing source executable: err=%v output=%s", err, output)
+	}
+	if err := os.Rename(missingExecutable, sourceExecutable); err != nil {
+		t.Fatalf("restore source executable after fail-closed check: %v", err)
+	}
+	restored = true
+	if actual := fileSHA256(t, sourceExecutable); actual != before {
+		t.Fatalf("source executable changed during fail-closed check: before=%s after=%s", before, actual)
 	}
 }
 
