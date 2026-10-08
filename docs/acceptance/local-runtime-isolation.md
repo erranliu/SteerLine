@@ -2,7 +2,7 @@
 
 唯一任务归属：#83。来源：[Spec](../spec/local-runtime-isolation.spec.md) / [Plan](../spec/local-runtime-isolation.plan.md)。本文件是该任务专属验收文档，不覆盖其他任务；验收流程见[入口](README.md)。
 
-状态：LI1-A–LI4-A 已通过自动验收；无本任务人工验收项。执行依据仍为固定 Spec/Plan commit `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。以下记录本次实际命令、构建身份、结果与临时证据。
+状态：LI1-A–LI4-A 已通过自动验收；无本任务人工验收项。执行依据仍为固定 Spec/Plan commit `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。实现 PR：[PR #247](https://github.com/erranliu/SteerLine/pull/247)。以下记录本次实际命令、构建身份、结果与临时证据。
 
 ## 自动验收
 
