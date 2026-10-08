@@ -101,8 +101,8 @@ func LoadConsoleProjects(configPath string) ([]api.ProjectRef, error) {
 		if loadErr != nil {
 			return []api.ProjectRef{invalidConsoleProjectRef(name, absolute, loadErr)}, nil
 		}
-		home, bin, _ := consoleApplicationPaths()
-		refs = append(refs, makeConsoleProjectRef(name, absolute, config, home, bin))
+		_, bin, _ := consoleApplicationPaths()
+		refs = append(refs, makeConsoleProjectRef(name, absolute, config, bin))
 	} else {
 		projects, err := consoleConfigFiles()
 		if err != nil {
@@ -119,8 +119,8 @@ func LoadConsoleProjects(configPath string) ([]api.ProjectRef, error) {
 				refs = append(refs, invalidConsoleProjectRef(project.Name, path, loadErr))
 				continue
 			}
-			home, bin, _ := consoleApplicationPaths()
-			refs = append(refs, makeConsoleProjectRef(project.Name, path, config, home, bin))
+			_, bin, _ := consoleApplicationPaths()
+			refs = append(refs, makeConsoleProjectRef(project.Name, path, config, bin))
 		}
 	}
 	identityNames := map[string][]string{}
@@ -147,16 +147,18 @@ func invalidConsoleProjectRef(name, path string, configErr error) api.ProjectRef
 	return api.ProjectRef{Key: key, Name: name, ConfigPath: path, Error: configErr.Error(), Presentation: api.ProjectPresentation{ServiceInstruction: "steerline start-service -config " + path}}
 }
 
-func makeConsoleProjectRef(name, path string, config Config, home, bin string) api.ProjectRef {
+func makeConsoleProjectRef(name, path string, config Config, bin string) api.ProjectRef {
 	absoluteRunDir, _ := filepath.Abs(config.RunDir)
 	configPath, _ := filepath.Abs(path)
+	runtimeInfo := CurrentRuntimeIdentity(configPath)
 	key, _ := consoleViewKey(configPath, absoluteRunDir)
 	identity := ""
 	if err := config.ResolveIdentity(context.Background()); err != nil {
 		return api.ProjectRef{Key: key, Name: name, ConfigPath: configPath, Presentation: projectPresentation(config), RunDir: absoluteRunDir, Error: "resolve repository identity: " + err.Error()}
 	}
 	identity = config.Identity()
-	ref := api.ProjectRef{Key: key, Name: name, ConfigPath: configPath, Presentation: projectPresentation(config), ApplicationHome: home, ApplicationBin: bin, Identity: identity, RunDir: absoluteRunDir}
+	ref := api.ProjectRef{Key: key, Name: name, ConfigPath: configPath, Presentation: projectPresentation(config), ApplicationHome: runtimeInfo.Home, ApplicationBin: bin,
+		ExecutablePath: runtimeInfo.Executable, SourceCommit: runtimeInfo.SourceCommit, SourceDirty: runtimeInfo.SourceDirty, Identity: identity, RunDir: absoluteRunDir}
 	ref.Presentation.ServiceInstruction = clientServiceInstruction(ref)
 	return ref
 }

@@ -28,7 +28,7 @@ import (
 	"github.com/google/uuid"
 )
 
-type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level, CandidateConfig string }
+type Run struct{ Root, Binary, Helper, Output, Scratch, AuthHome, Level, CandidateConfig, SourceCommit, SourceDirty string }
 type Scenario struct {
 	bodyFinishedAt   time.Time
 	bodyContextErr   error
@@ -45,18 +45,18 @@ type Scenario struct {
 }
 
 type Project struct {
-	Scenario                                                              *Scenario
-	Name, Root, Home, Repo, Remote, RemoteURL, Config, Database, Provider string
-	ProjectID, DatabaseID                                                 string
-	Driver                                                                driver.Client
-	Service                                                               *testprocess.Process
-	GitServer                                                             *testprocess.Process
-	serviceGeneration                                                     int
-	Tasks                                                                 map[string]Task
-	Chain, OrcaExecutable, OrcaRepoID, OrcaSetupID                        string
-	RealPR                                                                bool
-	BaseBranch, DefaultBranch                                             string
-	RealPRProof                                                           *executionmodel.PRInfo
+	Scenario                                                                          *Scenario
+	Name, Root, Home, Repo, Remote, RemoteURL, Config, Database, Provider, Executable string
+	ProjectID, DatabaseID                                                             string
+	Driver                                                                            driver.Client
+	Service                                                                           *testprocess.Process
+	GitServer                                                                         *testprocess.Process
+	serviceGeneration                                                                 int
+	Tasks                                                                             map[string]Task
+	Chain, OrcaExecutable, OrcaRepoID, OrcaSetupID                                    string
+	RealPR                                                                            bool
+	BaseBranch, DefaultBranch                                                         string
+	RealPRProof                                                                       *executionmodel.PRInfo
 }
 
 type Task struct {
@@ -150,18 +150,58 @@ func (s *Scenario) start(cmd *exec.Cmd, name string) *testprocess.Process {
 	return p
 }
 
+// RunCommand owns a short helper/process command in the scenario job and keeps
+// its output in the scenario evidence directory, including expected failures.
+func (s *Scenario) RunCommand(cmd *exec.Cmd, name string) ([]byte, error) {
+	return s.RunCommandFor(cmd, name, 4*time.Minute)
+}
+
+func (s *Scenario) RunCommandFor(cmd *exec.Cmd, name string, timeout time.Duration) ([]byte, error) {
+	s.t.Helper()
+	process := s.start(cmd, name)
+	ctx, cancel := context.WithTimeout(s.Context, timeout)
+	defer cancel()
+	err := process.Wait(ctx)
+	if ctx.Err() != nil {
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err = errors.Join(err, process.Stop(stopCtx))
+		stopCancel()
+	}
+	output, readErr := os.ReadFile(filepath.Join(s.Output, name+".log"))
+	if readErr != nil {
+		return output, errors.Join(err, readErr)
+	}
+	return output, err
+}
+
 func (s *Scenario) NewProject(name string) *Project {
+	return s.NewProjectAt(name, "", s.Run.Binary)
+}
+
+// NewProjectAt creates an isolated target clone/home at a caller-selected
+// relative path and binds every product process to the requested executable.
+func (s *Scenario) NewProjectAt(name, relativeRoot, executable string) *Project {
 	s.t.Helper()
 	if name == "" || filepath.Base(name) != name || name == "." || name == ".." {
 		s.t.Fatal("invalid project name")
+	}
+	if relativeRoot != "" {
+		clean := filepath.Clean(relativeRoot)
+		if filepath.IsAbs(clean) || clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+			s.t.Fatal("project path must stay inside scenario scratch")
+		}
+		relativeRoot = clean
+	}
+	if executable == "" {
+		executable = s.Run.Binary
 	}
 	for _, p := range s.projects {
 		if p.Name == name {
 			s.t.Fatal("duplicate project")
 		}
 	}
-	root := filepath.Join(s.Root, name)
-	p := &Project{Scenario: s, Name: name, Root: root, Home: filepath.Join(root, "home"), Repo: filepath.Join(root, "repo"), Remote: filepath.Join(root, "remotes", "e2e", "project.git"), Config: filepath.Join(root, "project.json"), Database: filepath.Join(root, "home", "state", "steerline.db"), Provider: filepath.Join(root, "provider.json"), Tasks: map[string]Task{}}
+	root := filepath.Join(s.Root, relativeRoot, name)
+	p := &Project{Scenario: s, Name: name, Root: root, Home: filepath.Join(root, "home"), Repo: filepath.Join(root, "repo"), Remote: filepath.Join(root, "remotes", "e2e", "project.git"), Config: filepath.Join(root, "home", "etc", "SteerLine.json"), Database: filepath.Join(root, "home", "state", "steerline.db"), Provider: filepath.Join(root, "provider.json"), Executable: executable, Tasks: map[string]Task{}}
 	p.BaseBranch = "main"
 	s.projects = append(s.projects, p)
 	s.register("project", root, 0)
@@ -224,7 +264,7 @@ func (s *Scenario) NewProject(name string) *Project {
 	s.Must(controlled.Write(filepath.Join(p.Home, "execution.json"), map[string]any{"version": 2, "execution_profiles": []any{map[string]any{"id": "controlled", "name": "Controlled E2E", "host": "local", "agent": "codex", "implementation_configs": []any{map[string]any{"implementation_key": "codex.worker-profile", "codec_version": 2, "payload": map[string]any{"executable": s.Run.Helper}}}}}, "default_execution_profile": "controlled"}))
 	commandLogs := filepath.Join(s.Output, name+"-commands")
 	s.Must(os.MkdirAll(commandLogs, 0700))
-	p.Driver = driver.Client{Binary: s.Run.Binary, Config: p.Config, Home: p.Home, StatePath: p.Provider, LogDir: commandLogs}
+	p.Driver = driver.Client{Binary: p.Executable, Config: p.Config, Home: p.Home, StatePath: p.Provider, LogDir: commandLogs}
 	rawHome, err := p.Driver.Run(s.Context, "home", "-config", p.Config)
 	s.Must(err)
 	p.Database = ""
@@ -239,6 +279,62 @@ func (s *Scenario) NewProject(name string) *Project {
 	return p
 }
 
+// NewHomeForProject binds the same Git clone to another independent home.
+// It is used to verify that the repository's existing cross-home lock remains
+// the authority when no per-home service record exists yet.
+func (s *Scenario) NewHomeForProject(source *Project, name, executable string) *Project {
+	s.t.Helper()
+	if source == nil || name == "" || filepath.Base(name) != name || name == "." || name == ".." {
+		s.t.Fatal("invalid same-repository home")
+	}
+	if executable == "" {
+		executable = s.Run.Binary
+	}
+	root := filepath.Join(s.Root, "same-repository", name)
+	p := &Project{Scenario: s, Name: name, Root: root, Home: filepath.Join(root, "home"), Repo: source.Repo,
+		Remote: source.Remote, RemoteURL: source.RemoteURL, Config: filepath.Join(root, "home", "etc", "SteerLine.json"),
+		Database: filepath.Join(root, "home", "state", "steerline.db"), Provider: filepath.Join(root, "provider.json"),
+		Executable: executable, Tasks: map[string]Task{}}
+	s.register("project-same-repository", root, 0)
+	for _, dir := range []string{root, filepath.Join(p.Home, "temp"), filepath.Join(p.Home, "codex"), filepath.Join(p.Home, "bin"), filepath.Join(p.Home, "etc")} {
+		s.Must(os.MkdirAll(dir, 0700))
+	}
+	configRaw, err := os.ReadFile(source.Config)
+	s.Must(err)
+	var config map[string]any
+	s.Must(json.Unmarshal(configRaw, &config))
+	delete(config, "run_dir")
+	config["worktree_root"] = filepath.Join(p.Home, "worktrees")
+	if pr, ok := config["pr"].(map[string]any); ok {
+		if query, ok := pr["query"].(map[string]any); ok {
+			if args, ok := query["args"].([]any); ok && len(args) >= 3 {
+				args[2] = p.Provider
+			}
+		}
+	}
+	s.Must(controlled.Write(p.Config, config))
+	executionConfig, err := os.ReadFile(filepath.Join(source.Home, "execution.json"))
+	s.Must(err)
+	s.Must(os.WriteFile(filepath.Join(p.Home, "execution.json"), executionConfig, 0600))
+	provider, err := controlled.Read(source.Provider)
+	s.Must(err)
+	s.Must(controlled.Write(p.Provider, provider))
+	commandLogs := filepath.Join(s.Output, name+"-commands")
+	s.Must(os.MkdirAll(commandLogs, 0700))
+	p.Driver = driver.Client{Binary: p.Executable, Config: p.Config, Home: p.Home, StatePath: p.Provider, LogDir: commandLogs}
+	rawHome, err := p.Driver.Run(s.Context, "home", "-config", p.Config)
+	s.Must(err)
+	for _, line := range strings.Split(string(rawHome), "\n") {
+		if strings.HasPrefix(line, "run_dir ") {
+			p.Database = filepath.Join(strings.TrimSpace(strings.TrimPrefix(line, "run_dir")), "steerline.db")
+		}
+	}
+	if !filepath.IsAbs(p.Database) {
+		s.t.Fatalf("same-repository home did not expose project state: %s", rawHome)
+	}
+	return p
+}
+
 func (p *Project) git(dir string, args ...string) string {
 	p.Scenario.t.Helper()
 	ctx, cancel := context.WithTimeout(p.Scenario.Context, 30*time.Second)
@@ -246,6 +342,13 @@ func (p *Project) git(dir string, args ...string) string {
 	out, err := controlled.Git(ctx, dir, args...)
 	p.Scenario.Must(err)
 	return out
+}
+
+func (p *Project) Command(executable string, args ...string) *exec.Cmd {
+	cmd := exec.Command(executable, args...)
+	cmd.Env = driver.Environment(os.Environ(), p.Home, p.Provider)
+	cmd.Dir = p.Driver.WorkingDirectory
+	return cmd
 }
 
 func (s *Scenario) Wait(label string, condition func() (bool, error)) {
@@ -329,7 +432,7 @@ func (p *Project) StartService() {
 	s.t.Helper()
 	p.serviceGeneration++
 	// Context cancellation is handled by the owning Scenario's cleanup, not exec's root-only Kill.
-	cmd := exec.Command(s.Run.Binary, "run", "-config", p.Config, "-dispatch", "manual", "-console", "off")
+	cmd := exec.Command(p.Executable, "run", "-config", p.Config, "-dispatch", "manual", "-console", "off")
 	cmd.Env = driver.Environment(os.Environ(), p.Home, p.Provider)
 	p.Service = s.start(cmd, fmt.Sprintf("%s-service-%d", p.Name, p.serviceGeneration))
 	s.Wait("service readiness", func() (bool, error) {

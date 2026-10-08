@@ -56,7 +56,9 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 	ref.Identity = c.Identity()
 	ref.RunDir = c.RunDir
 	ref.Presentation = projectPresentation(c)
-	ref.ApplicationHome, ref.ApplicationBin = HomeDir(), BinDir()
+	runtimeInfo := CurrentRuntimeIdentity(ref.ConfigPath)
+	ref.ApplicationHome, ref.ApplicationBin = runtimeInfo.Home, BinDir()
+	ref.ExecutablePath, ref.SourceCommit, ref.SourceDirty = runtimeInfo.Executable, runtimeInfo.SourceCommit, runtimeInfo.SourceDirty
 	ref.Presentation.ServiceInstruction = clientServiceInstruction(ref)
 	if ref.Key == "" {
 		ref.Key = ref.ConfigPath + "\x00" + ref.RunDir

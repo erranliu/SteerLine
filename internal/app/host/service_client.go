@@ -1142,6 +1142,11 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 	}
 	defer logFile.Close()
 	fmt.Fprintf(logFile, "startup_id=%s dispatch=%s pid=%d console_window=0x%x\n", startupID, mode, os.Getpid(), serviceConsoleWindow())
+	fmt.Fprintf(logFile, "runtime executable=%s\n", diagnosticValue(c.RuntimeExecutable))
+	fmt.Fprintf(logFile, "runtime home=%s\n", diagnosticValue(c.RuntimeHome))
+	fmt.Fprintf(logFile, "runtime config=%s\n", diagnosticValue(c.RuntimeConfig))
+	fmt.Fprintf(logFile, "runtime source_commit=%s source_dirty=%s\n", diagnosticValue(c.SourceCommit), diagnosticValue(c.SourceDirty))
+	fmt.Fprintf(logFile, "runtime repository=%s repository_identity=%s run_dir=%s\n", c.Repository, c.Identity(), c.RunDir)
 	if console != "off" && console != "json" && (console != "" || ConsoleDefault() != "") {
 		fmt.Fprintf(os.Stdout, "SteerLine starting · dispatch %s · startup %s\n", mode, startupID)
 	}
@@ -1218,4 +1223,11 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 		retErr = errors.Join(retErr, writeStartupRecord(c, *rec))
 	}
 	return retErr
+}
+
+func diagnosticValue(value string) string {
+	if value == "" {
+		return "unknown"
+	}
+	return value
 }

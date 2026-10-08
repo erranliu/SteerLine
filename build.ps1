@@ -10,6 +10,22 @@ $root = $PSScriptRoot
 $output = [IO.Path]::GetFullPath((Join-Path $root 'bin\steerline.exe'))
 $binDir = Split-Path -Parent $output
 $temp = Join-Path $binDir ('.steerline-build-' + [guid]::NewGuid().ToString('N') + '.exe')
+$sourceCommit = 'unknown'
+$sourceDirty = 'unknown'
+try {
+    $git = (Get-Command git -CommandType Application -ErrorAction Stop | Select-Object -First 1).Source
+    $commitOutput = & $git -C $root rev-parse HEAD
+    if ($LASTEXITCODE -eq 0 -and $commitOutput -match '^(?:[0-9a-f]{40}|[0-9a-f]{64})$') {
+        $sourceCommit = $commitOutput.Trim()
+        $statusOutput = & $git -C $root status --porcelain
+        if ($LASTEXITCODE -eq 0) {
+            $sourceDirty = if ([string]::IsNullOrWhiteSpace(($statusOutput -join "`n"))) { 'false' } else { 'true' }
+        }
+    }
+} catch {
+    $sourceCommit = 'unknown'
+    $sourceDirty = 'unknown'
+}
 
 function Assert-OutputNotRunning {
     $running = Get-Process -Name steerline -ErrorAction SilentlyContinue |
@@ -25,7 +41,8 @@ New-Item -ItemType Directory -Path $binDir -Force | Out-Null
 try {
     Push-Location $root
     try {
-        & go build -trimpath -o $temp ./cmd/steerline
+        $ldflags = "-X github.com/erranliu/SteerLine/internal/app.buildSourceCommit=$sourceCommit -X github.com/erranliu/SteerLine/internal/app.buildSourceDirty=$sourceDirty"
+        & go build -trimpath -ldflags $ldflags -o $temp ./cmd/steerline
         if ($LASTEXITCODE -ne 0) {
             throw "go build failed with exit code $LASTEXITCODE"
         }

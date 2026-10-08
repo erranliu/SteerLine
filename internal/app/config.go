@@ -32,6 +32,13 @@ type ProjectInfo struct {
 
 func HomeDir() string {
 	if value := strings.TrimSpace(os.Getenv("STEERLINE_HOME")); value != "" {
+		if resolved, err := resolveAbsolutePath(value); err == nil {
+			return resolved
+		}
+		path, err := filepath.Abs(filepath.Clean(value))
+		if err == nil {
+			return path
+		}
 		return filepath.Clean(value)
 	}
 	if runtime.GOOS == "windows" {
@@ -80,6 +87,7 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 		return config, err
 	}
 	config = configFromProjectInput(input)
+	config.ConfigPath = projectPath
 	if config.TaskAuthority != "native" {
 		return config, errors.New("task_authority must be explicitly set to native; Beads is not supported")
 	}
@@ -196,6 +204,9 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 		if err := config.ValidateProfiles(); err != nil {
 			return config, err
 		}
+	}
+	if err := validateRuntimeHomePaths(config); err != nil {
+		return config, err
 	}
 	if err := ValidateApplicationPaths(config); err != nil {
 		return config, err

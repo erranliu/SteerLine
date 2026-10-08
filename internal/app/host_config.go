@@ -48,9 +48,12 @@ func hostRuntimeConfig(ctx context.Context, config Config) (host.Config, error) 
 	if config.ProcessHost == nil {
 		return host.Config{}, errors.New("managed execution process host is required")
 	}
+	runtimeInfo := CurrentRuntimeIdentity(config.ConfigPath)
 	return host.Config{
 		Repository: config.Repository, RepositoryIdentity: config.Identity(), Remote: config.Remote, Branch: config.Branch,
-		RunDir: config.RunDir, Claimant: config.Claimant, ConfigDigest: config.LoadedConfigDigest(),
+		RunDir: config.RunDir, RuntimeExecutable: runtimeInfo.Executable, RuntimeHome: runtimeInfo.Home,
+		RuntimeConfig: runtimeInfo.Config, SourceCommit: runtimeInfo.SourceCommit, SourceDirty: runtimeInfo.SourceDirty,
+		Claimant: config.Claimant, ConfigDigest: config.LoadedConfigDigest(),
 		TaskAuthority: config.TaskAuthority, WorkflowProtocol: config.WorkflowProtocol,
 		TaskPoll: config.TaskPoll, PRPoll: config.PRPoll, Heartbeat: config.Heartbeat, CommandTimeout: config.CommandTimeout, ShutdownGrace: config.ShutdownGrace,
 		ProcessFacts: executionprocess.NewServiceFacts(),

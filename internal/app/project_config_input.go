@@ -39,6 +39,8 @@ type ProjectConfigInput struct {
 // decode through ProjectConfigInput; catalog, directory, process host and file
 // identity are added by app composition.
 type Config struct {
+	ConfigPath string `json:"-"`
+
 	PublicationPolicy executionbackend.PublicationPolicy `json:"publication_policy"`
 
 	Repository              string                              `json:"repository"`

@@ -12,6 +12,9 @@ type ProjectRef struct {
 	RunDir          string              `json:"run_dir"`
 	ApplicationHome string              `json:"application_home"`
 	ApplicationBin  string              `json:"application_bin"`
+	ExecutablePath  string              `json:"executable_path"`
+	SourceCommit    string              `json:"source_commit"`
+	SourceDirty     string              `json:"source_dirty"`
 	Error           string              `json:"error"`
 	Conflict        string              `json:"conflict"`
 	Presentation    ProjectPresentation `json:"presentation"`

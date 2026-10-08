@@ -72,6 +72,30 @@ func TestListProjects(t *testing.T) {
 
 }
 
+func TestConsoleProjectRefExposesCurrentRuntimeIdentity(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("STEERLINE_HOME", home)
+	localGlobalExecutionFixture(t)
+	writeProjectConfig(t, "runtime", minimalConfig(projectRepo(t)))
+
+	refs, err := LoadConsoleProjects("")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(refs) != 1 {
+		t.Fatalf("console loaded %d project refs", len(refs))
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref := refs[0]
+	configPath := filepath.Join(home, "etc", "runtime.json")
+	if ref.ApplicationHome != home || ref.ExecutablePath != executable || ref.ConfigPath != configPath || ref.SourceCommit == "" || ref.SourceDirty == "" {
+		t.Fatalf("console runtime identity is incomplete or misbound: %+v", ref)
+	}
+}
+
 func TestInstallLaunchersWritesCRLF(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("STEERLINE_HOME", home)
