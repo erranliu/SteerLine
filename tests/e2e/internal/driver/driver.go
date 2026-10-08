@@ -20,12 +20,13 @@ import (
 	storageports "github.com/erranliu/SteerLine/internal/storage/ports"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
+	"github.com/google/uuid"
 )
 
 type Client struct {
-	Binary, Config, Home, StatePath, LogDir string
-	Profile                                 string
-	sequence                                int
+	Binary, Config, Home, StatePath, LogDir, WorkingDirectory string
+	Profile                                                   string
+	sequence                                                  int
 }
 
 // Environment replaces project-owned configuration and disables inherited test switches.
@@ -49,6 +50,7 @@ func Environment(base []string, home, state string) []string {
 func (c *Client) Command(ctx context.Context, args ...string) *exec.Cmd {
 	cmd := exec.CommandContext(ctx, c.Binary, args...)
 	cmd.Env = Environment(os.Environ(), c.Home, c.StatePath)
+	cmd.Dir = c.WorkingDirectory
 	return cmd
 }
 
@@ -65,6 +67,7 @@ func (c *Client) runWithTimeout(ctx context.Context, timeout time.Duration, bina
 	defer cancel()
 	cmd := exec.Command(binary, args...)
 	cmd.Env = Environment(os.Environ(), c.Home, c.StatePath)
+	cmd.Dir = c.WorkingDirectory
 	var out, stderr strings.Builder
 	cmd.Stdout = &out
 	cmd.Stderr = &stderr
@@ -98,6 +101,16 @@ func (c *Client) Control(ctx context.Context, helper, action, taskID string) err
 	return err
 }
 
+func (c *Client) ControlTargeted(ctx context.Context, helper, action, taskID, expectedInstance string) error {
+	profile := c.Profile
+	if profile == "" {
+		profile = "controlled"
+	}
+	_, err := c.runWithTimeout(ctx, 150*time.Second, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID,
+		"-profile", profile, "-expected-instance", expectedInstance)
+	return err
+}
+
 // MainControl invokes the same exported control client used by the console.
 // An isolated helper process scopes LoadConfig's process environment.
 func MainControl(args []string) error {
@@ -106,6 +119,7 @@ func MainControl(args []string) error {
 	action := fs.String("action", "", "control action")
 	taskID := fs.String("task-id", "", "task ID")
 	profileID := fs.String("profile", "controlled", "execution profile ID")
+	expectedInstance := fs.String("expected-instance", "", "displayed service instance ID; rejects stale targets")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -134,7 +148,13 @@ func MainControl(args []string) error {
 		}
 		payload = productapi.ControlPayload{TaskID: *taskID, ExecutionProfileID: profile.ID, ExecutionProfileDigest: profile.Digest()}
 	}
-	request, err := steerline.SubmitControl(hostConfig, *action, payload, "e2e")
+	var request productapi.ControlRequest
+	if *expectedInstance == "" {
+		request, err = steerline.SubmitControl(hostConfig, *action, payload, "e2e")
+	} else {
+		requestID := strings.ReplaceAll(uuid.NewString(), "-", "")
+		request, err = steerline.SubmitControlTargeted(hostConfig, *action, payload, "e2e", requestID, *expectedInstance, nil)
+	}
 	if err != nil {
 		return err
 	}

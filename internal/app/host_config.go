@@ -3,8 +3,6 @@ package app
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,6 +10,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution"
 	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
 	"github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/pathguard"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -48,9 +47,12 @@ func hostRuntimeConfig(ctx context.Context, config Config) (host.Config, error) 
 	if config.ProcessHost == nil {
 		return host.Config{}, errors.New("managed execution process host is required")
 	}
+	runtimeInfo := CurrentRuntimeIdentity(config.ConfigPath)
 	return host.Config{
 		Repository: config.Repository, RepositoryIdentity: config.Identity(), Remote: config.Remote, Branch: config.Branch,
-		RunDir: config.RunDir, Claimant: config.Claimant, ConfigDigest: config.LoadedConfigDigest(),
+		RunDir: config.RunDir, RuntimeExecutable: runtimeInfo.Executable, RuntimeHome: runtimeInfo.Home,
+		RuntimeConfig: runtimeInfo.Config, SourceCommit: runtimeInfo.SourceCommit, SourceDirty: runtimeInfo.SourceDirty,
+		Claimant: config.Claimant, ConfigDigest: config.LoadedConfigDigest(),
 		TaskAuthority: config.TaskAuthority, WorkflowProtocol: config.WorkflowProtocol,
 		TaskPoll: config.TaskPoll, PRPoll: config.PRPoll, Heartbeat: config.Heartbeat, CommandTimeout: config.CommandTimeout, ShutdownGrace: config.ShutdownGrace,
 		ProcessFacts: executionprocess.NewServiceFacts(),
@@ -117,7 +119,7 @@ func ensureRunDirOutsideRepository(ctx context.Context, config Config) error {
 	if err != nil {
 		return err
 	}
-	repository, err := filepath.EvalSymlinks(config.Repository)
+	repository, err := pathguard.ResolveProspective(config.Repository)
 	if err != nil {
 		return err
 	}
@@ -138,32 +140,9 @@ func ensureRunDirOutsideRepository(ctx context.Context, config Config) error {
 }
 
 func resolveProspectiveApplicationPath(input string) (string, error) {
-	path, err := filepath.Abs(input)
-	if err != nil {
-		return "", err
-	}
-	var tail []string
-	for {
-		resolved, resolveErr := filepath.EvalSymlinks(path)
-		if resolveErr == nil {
-			for i := len(tail) - 1; i >= 0; i-- {
-				resolved = filepath.Join(resolved, tail[i])
-			}
-			return canonicalPath(resolved), nil
-		}
-		if !os.IsNotExist(resolveErr) {
-			return "", resolveErr
-		}
-		parent := filepath.Dir(path)
-		if parent == path {
-			return "", resolveErr
-		}
-		tail = append(tail, filepath.Base(path))
-		path = parent
-	}
+	return pathguard.ResolveProspective(input)
 }
 
 func applicationPathInside(root, path string) bool {
-	rel, err := filepath.Rel(canonicalPath(root), canonicalPath(path))
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+	return pathguard.Within(root, path)
 }

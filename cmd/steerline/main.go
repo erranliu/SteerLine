@@ -407,7 +407,11 @@ func stdoutIsTTY() bool {
 // printHome shows where this machine keeps the shared SteerLine binary, configs
 // and per-repo state, resolved independently of the current source worktree.
 func printHome(configPath string) {
-	fmt.Println("STEERLINE_HOME", steerlineapp.HomeDir())
+	runtimeInfo := steerlineapp.CurrentRuntimeIdentity(configPath)
+	fmt.Println("STEERLINE_HOME", runtimeInfo.Home)
+	fmt.Println("executable    ", runtimeInfo.Executable)
+	fmt.Println("source commit ", runtimeInfo.SourceCommit)
+	fmt.Println("source dirty  ", runtimeInfo.SourceDirty)
 	fmt.Println("bin           ", steerlineapp.BinDir())
 	fmt.Println("etc           ", steerlineapp.EtcDir())
 	fmt.Println("state root    ", steerlineapp.StateRoot())

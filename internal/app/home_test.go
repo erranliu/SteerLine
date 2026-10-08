@@ -107,10 +107,25 @@ func TestNativeConfigRejectsASecondRunDir(t *testing.T) {
 	if e := os.WriteFile(p, b, 0600); e != nil {
 		t.Fatal(e)
 	}
-	if _, e := LoadConfig(p); e == nil || !strings.Contains(e.Error(), "stable shared state directory") {
+	if _, e := LoadConfig(p); e == nil || !strings.Contains(e.Error(), "STEERLINE_HOME") && !strings.Contains(e.Error(), "stable shared state directory") {
 		t.Fatalf("native config accepted a second run directory: %v", e)
 	}
 	if _, err := os.Stat(c.RunDir); !os.IsNotExist(err) {
 		t.Fatalf("rejected alternate state path was created: %v", err)
+	}
+}
+
+func TestNativeConfigRejectsWorktreeOutsideHome(t *testing.T) {
+	t.Setenv("STEERLINE_HOME", t.TempDir())
+	c, _ := nativeTaskFixture(t)
+	localGlobalExecutionFixture(t)
+	c.WorkflowProtocol = WorkerFlowVersion
+	c.WorktreeRoot = filepath.Join(t.TempDir(), "external-worktrees")
+	p := filepath.Join(t.TempDir(), "config.json")
+	if err := os.WriteFile(p, projectConfigJSON(t, c), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := LoadConfig(p); err == nil || !strings.Contains(err.Error(), "worktree_root must resolve inside STEERLINE_HOME") {
+		t.Fatalf("worktree root outside home was accepted: %v", err)
 	}
 }

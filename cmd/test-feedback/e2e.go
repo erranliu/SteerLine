@@ -241,10 +241,28 @@ func runE2E(opts options) (code int) {
 	if err := os.MkdirAll(buildDir, 0700); err != nil {
 		return fail(err)
 	}
+	sourceCommit, err := e2eCommandOutput(root, "git", "rev-parse", "HEAD")
+	if err != nil {
+		return fail(fmt.Errorf("read E2E source commit: %w", err))
+	}
+	status, err := e2eCommandOutput(root, "git", "status", "--porcelain")
+	if err != nil {
+		return fail(fmt.Errorf("read E2E source status: %w", err))
+	}
+	sourceDirty := "false"
+	if strings.TrimSpace(status) != "" {
+		sourceDirty = "true"
+	}
 	binary, helper := filepath.Join(buildDir, "steerline.exe"), filepath.Join(buildDir, "controlled-helper.exe")
 	for _, build := range []struct{ path, pkg string }{{binary, "./cmd/steerline"}, {helper, "./tests/e2e/testdata/controlled-helper"}} {
 		buildCtx, stop := context.WithTimeout(ctx, 3*time.Minute)
-		cmd := exec.Command("go", "build", "-o", build.path, build.pkg)
+		args := []string{"build"}
+		if build.pkg == "./cmd/steerline" {
+			ldflags := "-X github.com/erranliu/SteerLine/internal/app.buildSourceCommit=" + sourceCommit + " -X github.com/erranliu/SteerLine/internal/app.buildSourceDirty=" + sourceDirty
+			args = append(args, "-ldflags", ldflags)
+		}
+		args = append(args, "-o", build.path, build.pkg)
+		cmd := exec.Command("go", args...)
 		cmd.Dir = root
 		cmd.Env = e2eEnvironment(os.Environ(), "")
 		var logs strings.Builder
@@ -283,7 +301,7 @@ func runE2E(opts options) (code int) {
 			return fail(err)
 		}
 	}
-	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "CandidateConfig": candidateConfig})
+	config, err := json.Marshal(map[string]string{"Root": root, "Binary": binary, "Helper": helper, "Output": out, "Scratch": scratch, "AuthHome": authHome, "Level": opts.level, "CandidateConfig": candidateConfig, "SourceCommit": strings.TrimSpace(sourceCommit), "SourceDirty": sourceDirty})
 	if err != nil {
 		return fail(err)
 	}
@@ -392,6 +410,16 @@ func runE2E(opts options) (code int) {
 		report.Errors = append(report.Errors, "not all selected packages completed")
 	}
 	return 0
+}
+
+func e2eCommandOutput(dir, executable string, args ...string) (string, error) {
+	cmd := exec.Command(executable, args...)
+	cmd.Dir = dir
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("%s %v: %w: %s", executable, args, err, strings.TrimSpace(string(output)))
+	}
+	return strings.TrimSpace(string(output)), nil
 }
 
 func checkE2EGroup(g scopedGroup, entries []e2eScenario, out string) error {

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
+	"github.com/erranliu/SteerLine/internal/pathguard"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -24,6 +25,32 @@ func preflightNativeStatePath(c Config) error {
 		return err
 	}
 	path := filepath.Join(c.RunDir, "steerline.db")
+	for _, entry := range []struct{ name, path string }{
+		{"run directory", c.RunDir},
+		{"database", path},
+		{"database WAL", path + "-wal"},
+		{"database shared memory", path + "-shm"},
+		{"database journal", path + "-journal"},
+		{"control root", filepath.Join(c.RunDir, "control")},
+		{"control requests", filepath.Join(c.RunDir, "control", "requests")},
+		{"control receipts", filepath.Join(c.RunDir, "control", "receipts")},
+		{"service root", filepath.Join(c.RunDir, "service")},
+		{"service startups", filepath.Join(c.RunDir, "service", "startups")},
+		{"run directories", filepath.Join(c.RunDir, "runs")},
+		{"worktrees", filepath.Join(c.RunDir, "worktrees")},
+	} {
+		if err := ensureNativePathWithin(c.RunDir, entry.path, entry.name); err != nil {
+			return err
+		}
+		if c.RuntimeHome != "" {
+			if err := ensureNativePathWithin(c.RuntimeHome, entry.path, entry.name+" application home"); err != nil {
+				return err
+			}
+		}
+	}
+	if err := pathguard.RejectSharedSQLiteFiles(path); err != nil {
+		return nativeErr("authority_mismatch", err.Error())
+	}
 	if _, err := os.Stat(path); err == nil {
 		if err := ensureNativeStateFilesAllowed(c.RunDir); err != nil {
 			return err
@@ -36,6 +63,13 @@ func preflightNativeStatePath(c Config) error {
 		return err
 	}
 	return ensureNativeStateClean(c.RunDir, c.Repository)
+}
+
+func ensureNativePathWithin(root, path, description string) error {
+	if !pathguard.Within(root, path) {
+		return nativeErr("authority_mismatch", description+" resolves outside its managed root")
+	}
+	return nil
 }
 
 func PreflightNativeStatePath(c Config) error { return preflightNativeStatePath(c) }
@@ -95,6 +129,10 @@ func ensureNativeStateClean(runDir, repository string) error {
 		return err
 	}
 	for _, entry := range entries {
+		entryPath := filepath.Join(runDir, entry.Name())
+		if err := ensureNativePathWithin(runDir, entryPath, "native state entry"); err != nil {
+			return err
+		}
 		if nativeAtomicTemp(entry.Name()) {
 			continue
 		}
@@ -120,8 +158,12 @@ func ensureNativeStateFilesAllowed(runDir string) error {
 		return err
 	}
 	for _, entry := range entries {
+		entryPath := filepath.Join(runDir, entry.Name())
+		if err := ensureNativePathWithin(runDir, entryPath, "native state entry"); err != nil {
+			return err
+		}
 		if nativeAtomicTemp(entry.Name()) {
-			info, statErr := os.Lstat(filepath.Join(runDir, entry.Name()))
+			info, statErr := os.Lstat(entryPath)
 			if statErr != nil || !info.Mode().IsRegular() || info.Mode()&os.ModeSymlink != 0 {
 				return nativeErr("authority_mismatch", "native atomic projection temp is not a regular file")
 			}
@@ -169,6 +211,9 @@ func nativeAtomicTemp(name string) bool {
 
 func validateNativeControlTree(runDir string) error {
 	root := filepath.Join(runDir, "control")
+	if err := ensureNativePathWithin(runDir, root, "native control root"); err != nil {
+		return err
+	}
 	info, err := os.Lstat(root)
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 		return nativeErr("authority_mismatch", "native control protocol root must be a real directory")
@@ -182,6 +227,9 @@ func validateNativeControlTree(runDir string) error {
 			return nativeErr("authority_mismatch", "native control directory contains unsupported data")
 		}
 		sectionPath := filepath.Join(root, section.Name())
+		if err := ensureNativePathWithin(root, sectionPath, "native control section"); err != nil {
+			return err
+		}
 		sectionInfo, statErr := os.Lstat(sectionPath)
 		if statErr != nil || !sectionInfo.IsDir() || sectionInfo.Mode()&os.ModeSymlink != 0 {
 			return nativeErr("authority_mismatch", "native control section must be a real directory")
@@ -199,6 +247,9 @@ func validateNativeControlTree(runDir string) error {
 					return nativeErr("authority_mismatch", "native control request has an invalid identity")
 				}
 				dir := filepath.Join(sectionPath, entry.Name())
+				if err := ensureNativePathWithin(sectionPath, dir, "native control request"); err != nil {
+					return err
+				}
 				children, childErr := os.ReadDir(dir)
 				if childErr != nil || len(children) > 1 {
 					return nativeErr("authority_mismatch", "native control request contains unsupported files")
@@ -211,6 +262,9 @@ func validateNativeControlTree(runDir string) error {
 						return nativeErr("authority_mismatch", "native control request contains unsupported files")
 					}
 					path := filepath.Join(dir, child.Name())
+					if err := ensureNativePathWithin(dir, path, "native control request file"); err != nil {
+						return err
+					}
 					request, parseErr := readControlRequest(path)
 					if parseErr != nil || request.RequestID != entry.Name() {
 						return nativeErr("authority_mismatch", "native control request is invalid or mismatched")
@@ -221,7 +275,11 @@ func validateNativeControlTree(runDir string) error {
 			if !strings.HasSuffix(entry.Name(), ".json") || !executionbackend.StableExecutionID(strings.TrimSuffix(entry.Name(), ".json")) || entry.IsDir() {
 				return nativeErr("authority_mismatch", "native control receipt has an invalid identity")
 			}
-			data, readErr := readBoundedFile(filepath.Join(sectionPath, entry.Name()), maxControlRequestBytes)
+			path := filepath.Join(sectionPath, entry.Name())
+			if err := ensureNativePathWithin(sectionPath, path, "native control receipt"); err != nil {
+				return err
+			}
+			data, readErr := readBoundedFile(path, maxControlRequestBytes)
 			var receipt productapi.ControlReceipt
 			if readErr != nil || decode(data, &receipt) != nil || receipt.RequestID != strings.TrimSuffix(entry.Name(), ".json") || receipt.Version != ControlProtocolVersion {
 				return nativeErr("authority_mismatch", "native control receipt is invalid or mismatched")
@@ -232,6 +290,9 @@ func validateNativeControlTree(runDir string) error {
 }
 
 func validateNativeRunDirectories(root string) error {
+	if err := ensureNativePathWithin(filepath.Dir(root), root, "native run/worktree root"); err != nil {
+		return err
+	}
 	info, err := os.Lstat(root)
 	if err != nil {
 		return err
@@ -244,10 +305,14 @@ func validateNativeRunDirectories(root string) error {
 		return err
 	}
 	for _, entry := range entries {
+		childPath := filepath.Join(root, entry.Name())
+		if err := ensureNativePathWithin(root, childPath, "native run/worktree directory"); err != nil {
+			return err
+		}
 		if !executionbackend.StableExecutionID(entry.Name()) || !entry.IsDir() {
 			return nativeErr("authority_mismatch", "native run/worktree state contains an unknown identity: "+entry.Name())
 		}
-		childInfo, statErr := os.Lstat(filepath.Join(root, entry.Name()))
+		childInfo, statErr := os.Lstat(childPath)
 		if statErr != nil || !childInfo.IsDir() || childInfo.Mode()&os.ModeSymlink != 0 {
 			return nativeErr("authority_mismatch", "native run/worktree identity is not a real directory: "+entry.Name())
 		}
@@ -257,6 +322,9 @@ func validateNativeRunDirectories(root string) error {
 
 func validateNativeServiceTree(runDir, repository string) error {
 	root := filepath.Join(runDir, "service")
+	if err := ensureNativePathWithin(runDir, root, "native service root"); err != nil {
+		return err
+	}
 	info, err := os.Lstat(root)
 	if err != nil {
 		return err
@@ -275,6 +343,9 @@ func validateNativeServiceTree(runDir, repository string) error {
 		return nativeErr("authority_mismatch", "native service state contains unsupported control or legacy data")
 	}
 	startupRoot := filepath.Join(root, "startups")
+	if err := ensureNativePathWithin(root, startupRoot, "native startup root"); err != nil {
+		return err
+	}
 	startupInfo, err := os.Lstat(startupRoot)
 	if err != nil || !startupInfo.IsDir() || startupInfo.Mode()&os.ModeSymlink != 0 {
 		return nativeErr("authority_mismatch", "native startup records must be kept in a real startup directory")
@@ -288,6 +359,9 @@ func validateNativeServiceTree(runDir, repository string) error {
 			return nativeErr("authority_mismatch", "native startup directory contains an unknown identity: "+startup.Name())
 		}
 		dir := filepath.Join(startupRoot, startup.Name())
+		if err := ensureNativePathWithin(startupRoot, dir, "native startup directory"); err != nil {
+			return err
+		}
 		children, readErr := os.ReadDir(dir)
 		if readErr != nil {
 			return nativeErr("authority_mismatch", "native startup record has an unsupported file set")
@@ -304,6 +378,9 @@ func validateNativeServiceTree(runDir, repository string) error {
 		seenRecord, seenLog, seenProcess := false, false, false
 		for _, child := range stableChildren {
 			childPath := filepath.Join(dir, child.Name())
+			if err := ensureNativePathWithin(dir, childPath, "native startup file"); err != nil {
+				return err
+			}
 			childInfo, statErr := os.Lstat(childPath)
 			if statErr != nil || !childInfo.Mode().IsRegular() || childInfo.Mode()&os.ModeSymlink != 0 {
 				return nativeErr("authority_mismatch", "native startup record contains a non-regular file")

@@ -3,7 +3,7 @@ package console
 import (
 	"encoding/json"
 	"errors"
-	api "github.com/erranliu/SteerLine/internal/product/api"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -11,6 +11,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	api "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 const viewFileVersion = 2
@@ -59,6 +61,7 @@ func emptyViewFile() ViewFile {
 // gets its own directory; once that window exits, a later launch reuses its
 // most recently used operation journal and restores only drafts and requests.
 type viewProfile struct {
+	root string
 	dir  string
 	lock *viewLock
 }
@@ -67,15 +70,31 @@ func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
 	if strings.TrimSpace(home) == "" {
 		return nil, ViewFile{}, "", errors.New("application home directory is required")
 	}
-	root := filepath.Join(home, "ui", "views")
+	resolvedHome, err := resolveConsolePath(home)
+	if err != nil {
+		return nil, ViewFile{}, "", fmt.Errorf("resolve application home: %w", err)
+	}
+	root := filepath.Join(resolvedHome, "ui", "views")
+	resolvedRoot, err := resolveConsolePath(root)
+	if err != nil {
+		return nil, ViewFile{}, "", fmt.Errorf("resolve UI views directory: %w", err)
+	}
+	if !consolePathWithin(resolvedHome, resolvedRoot) {
+		return nil, ViewFile{}, "", errors.New("UI views directory resolves outside application home")
+	}
+	root = resolvedRoot
 	if err := os.MkdirAll(root, 0700); err != nil {
 		return nil, ViewFile{}, "", err
 	}
-	entries, err := os.ReadDir(root)
+	resolvedRoot, err = resolveConsolePath(root)
 	if err != nil {
-		return nil, ViewFile{}, "", err
+		return nil, ViewFile{}, "", fmt.Errorf("resolve created UI views directory: %w", err)
 	}
-	resolvedRoot, err := filepath.EvalSymlinks(root)
+	if !consolePathWithin(resolvedHome, resolvedRoot) {
+		return nil, ViewFile{}, "", errors.New("UI views directory changed to a path outside application home")
+	}
+	root = resolvedRoot
+	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, ViewFile{}, "", err
 	}
@@ -91,15 +110,23 @@ func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
 			continue
 		}
 		dir := filepath.Join(root, entry.Name())
-		resolvedDir, resolveErr := filepath.EvalSymlinks(dir)
-		if resolveErr != nil || !insideViewRoot(resolvedRoot, resolvedDir) {
-			continue
+		resolvedDir, resolveErr := resolveConsolePath(dir)
+		if resolveErr != nil {
+			return nil, ViewFile{}, "", fmt.Errorf("resolve UI profile directory: %w", resolveErr)
 		}
-		lock, lockErr := lockView(dir)
+		if !consolePathWithin(root, resolvedDir) {
+			return nil, ViewFile{}, "", errors.New("UI profile directory resolves outside its managed root")
+		}
+		dir = resolvedDir
+		viewPath := filepath.Join(dir, "view.json")
+		if !consolePathWithin(root, viewPath) {
+			return nil, ViewFile{}, "", errors.New("UI journal resolves outside its managed root")
+		}
+		lock, lockErr := acquireViewLock(root, dir)
 		if lockErr != nil {
 			continue
 		}
-		view, readErr := readViewFile(filepath.Join(dir, "view.json"))
+		view, readErr := readViewFile(viewPath)
 		if _, legacyErr := os.Lstat(filepath.Join(dir, "view.v1.json")); legacyErr == nil {
 			readErr = errors.New("retired UI journal exists; preserve it for manual reconciliation")
 			view = ViewFile{}
@@ -116,23 +143,27 @@ func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
 				stamp = info.ModTime()
 			}
 		}
-		available = append(available, candidate{profile: &viewProfile{dir: dir, lock: lock}, view: view, stamp: stamp, diagnostic: diagnostic})
+		available = append(available, candidate{profile: &viewProfile{root: root, dir: dir, lock: lock}, view: view, stamp: stamp, diagnostic: diagnostic})
 	}
 	if len(available) == 0 {
 		id := newRequestID()
 		dir := filepath.Join(root, id)
+		if !consolePathWithin(root, dir) {
+			return nil, ViewFile{}, "", errors.New("new UI profile path escapes its managed root")
+		}
 		if err = os.MkdirAll(dir, 0700); err != nil {
 			return nil, ViewFile{}, "", err
 		}
-		resolvedDir, resolveErr := filepath.EvalSymlinks(dir)
-		if resolveErr != nil || !insideViewRoot(resolvedRoot, resolvedDir) {
+		resolvedDir, resolveErr := resolveConsolePath(dir)
+		if resolveErr != nil || !consolePathWithin(root, resolvedDir) {
 			return nil, ViewFile{}, "", errors.New("view profile directory resolves outside its managed root")
 		}
-		lock, lockErr := lockView(dir)
+		dir = resolvedDir
+		lock, lockErr := acquireViewLock(root, dir)
 		if lockErr != nil {
 			return nil, ViewFile{}, "", lockErr
 		}
-		return &viewProfile{dir: dir, lock: lock}, emptyViewFile(), "", nil
+		return &viewProfile{root: root, dir: dir, lock: lock}, emptyViewFile(), "", nil
 	}
 	sort.SliceStable(available, func(i, j int) bool { return available[i].stamp.After(available[j].stamp) })
 	selected := available[0]
@@ -150,13 +181,15 @@ func acquireViewProfile(home string) (*viewProfile, ViewFile, string, error) {
 	return selected.profile, selected.view, diagnostic, nil
 }
 
-func insideViewRoot(root, target string) bool {
-	rel, err := filepath.Rel(root, target)
-	if err != nil {
-		return false
+func acquireViewLock(root, dir string) (*viewLock, error) {
+	lockPath := filepath.Join(dir, "steerline.lock")
+	if !consolePathWithin(root, dir) || !consolePathWithin(root, lockPath) {
+		return nil, errors.New("UI lock resolves outside its managed root")
 	}
-	return rel == "." || rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	return lockView(dir)
 }
+
+func insideViewRoot(root, target string) bool { return consolePathWithin(root, target) }
 
 func (p *viewProfile) close() {
 	if p != nil && p.lock != nil {
@@ -170,6 +203,18 @@ func (p *viewProfile) path() string {
 		return ""
 	}
 	return filepath.Join(p.dir, "view.json")
+}
+
+func (p *viewProfile) write(view ViewFile) error {
+	path := p.path()
+	root := p.root
+	if root == "" {
+		root = p.dir // Legacy in-package fixtures construct a profile without the production root.
+	}
+	if !consolePathWithin(root, p.dir) || !consolePathWithin(root, path) {
+		return errors.New("UI journal resolves outside its managed root")
+	}
+	return writeViewFile(path, view)
 }
 
 func readViewFile(path string) (ViewFile, error) {

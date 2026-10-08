@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
@@ -56,7 +57,9 @@ func clientResources(ctx context.Context, c Config, ref productapi.ProjectRef) (
 	ref.Identity = c.Identity()
 	ref.RunDir = c.RunDir
 	ref.Presentation = projectPresentation(c)
-	ref.ApplicationHome, ref.ApplicationBin = HomeDir(), BinDir()
+	runtimeInfo := CurrentRuntimeIdentity(ref.ConfigPath)
+	ref.ApplicationHome, ref.ApplicationBin = runtimeInfo.Home, BinDir()
+	ref.ExecutablePath, ref.SourceCommit, ref.SourceDirty = runtimeInfo.Executable, runtimeInfo.SourceCommit, runtimeInfo.SourceDirty
 	ref.Presentation.ServiceInstruction = clientServiceInstruction(ref)
 	if ref.Key == "" {
 		ref.Key = ref.ConfigPath + "\x00" + ref.RunDir
@@ -491,9 +494,12 @@ func clientServiceInstruction(ref productapi.ProjectRef) string {
 		return "steerline start-service -config " + ref.ConfigPath
 	}
 	launcher := filepath.Join(ref.ApplicationHome, "service-window.bat")
-	binary := filepath.Join(ref.ApplicationBin, "steerline.exe")
+	binary := ref.ExecutablePath
+	if strings.TrimSpace(binary) == "" {
+		binary = filepath.Join(ref.ApplicationBin, "steerline.exe")
+	}
 	if _, err := os.Stat(binary); err != nil {
-		return fmt.Sprintf("服务窗口不可用：缺少 %s；运行 steerline install", binary)
+		return fmt.Sprintf("服务窗口不可用：所选 SteerLine exe 不可用：%s", binary)
 	}
 	if _, err := os.Stat(launcher); err != nil {
 		return fmt.Sprintf("服务窗口不可用：缺少 %s；运行 steerline launchers", launcher)

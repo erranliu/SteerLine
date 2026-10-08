@@ -30,6 +30,7 @@ go run ./cmd/test-feedback -level=L3 -suite=delivery -env=live '-scenario=delive
 | L2 live | `smoke.local-codex` / `smoke.orca-codex` | 真实模型、真实 SteerlineTest GitHub PR、合并交付、依赖解锁和正数 usage |
 | L3 controlled | `delivery.basic` | 验证 A 唯一 Delivery 解锁 B；B dependency-ready 且未创建 WorkflowRun |
 | L3 controlled | `recovery.waiting-merge-restart` | 等待合并后重启，原任务/数据库/工作流/执行/工作区保持，不重派，再正常交付 |
+| L3 controlled | `runtime.installed-debug-isolation` | 两个独立 Git clone/home 同时运行安装版与源码调试版；调试重建/停启、console/CLI 路径、越界与过期实例写拒绝、跨 home 仓库锁和状态隔离 |
 | L3 live | `delivery.local-codex` / `delivery.orca-codex` | 真实模型配 loopback provider，分别独立交付 |
 | L3 live | `recovery.local-codex` / `recovery.orca-codex` | 真实执行后重启保持原身份，usage 不增加，再合并交付 |
 | L3 live | `candidates.local` | manifest 固定本地 Codex + 本机 Orca，两候选真实反馈/PR/唯一交付与后继；使用真实 SteerlineTest GitHub PR |

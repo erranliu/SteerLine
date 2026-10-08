@@ -17,6 +17,11 @@ type Config struct {
 	Remote             string
 	Branch             string
 	RunDir             string
+	RuntimeExecutable  string
+	RuntimeHome        string
+	RuntimeConfig      string
+	SourceCommit       string
+	SourceDirty        string
 	Claimant           string
 	ConfigDigest       string
 	TaskAuthority      string

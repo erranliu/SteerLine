@@ -20,6 +20,7 @@ import (
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	"github.com/erranliu/SteerLine/internal/execution/publication"
 	"github.com/erranliu/SteerLine/internal/execution/workspace"
+	"github.com/erranliu/SteerLine/internal/pathguard"
 )
 
 type ProjectInfo struct {
@@ -32,6 +33,13 @@ type ProjectInfo struct {
 
 func HomeDir() string {
 	if value := strings.TrimSpace(os.Getenv("STEERLINE_HOME")); value != "" {
+		if resolved, err := resolveAbsolutePath(value); err == nil {
+			return resolved
+		}
+		path, err := filepath.Abs(filepath.Clean(value))
+		if err == nil {
+			return path
+		}
 		return filepath.Clean(value)
 	}
 	if runtime.GOOS == "windows" {
@@ -80,6 +88,7 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 		return config, err
 	}
 	config = configFromProjectInput(input)
+	config.ConfigPath = projectPath
 	if config.TaskAuthority != "native" {
 		return config, errors.New("task_authority must be explicitly set to native; Beads is not supported")
 	}
@@ -197,6 +206,9 @@ func loadConfig(path string, directory *execution.ExecutionDirectory, processHos
 			return config, err
 		}
 	}
+	if err := validateRuntimeHomePaths(config); err != nil {
+		return config, err
+	}
 	if err := ValidateApplicationPaths(config); err != nil {
 		return config, err
 	}
@@ -306,10 +318,16 @@ func InstallExecutable(source string) (string, error) {
 	if runtime.GOOS == "windows" {
 		name += ".exe"
 	}
+	if !pathguard.Within(HomeDir(), BinDir()) {
+		return "", errors.New("application binary directory must resolve inside STEERLINE_HOME")
+	}
+	destination := filepath.Join(BinDir(), name)
+	if !pathguard.Within(HomeDir(), destination) {
+		return "", errors.New("installed executable must resolve inside STEERLINE_HOME")
+	}
 	if err := os.MkdirAll(BinDir(), 0700); err != nil {
 		return "", err
 	}
-	destination := filepath.Join(BinDir(), name)
 	if canonicalPath(source) == canonicalPath(destination) {
 		return destination, nil
 	}

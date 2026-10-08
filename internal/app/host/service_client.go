@@ -16,6 +16,7 @@ import (
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	"github.com/erranliu/SteerLine/internal/pathguard"
 	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
@@ -59,8 +60,9 @@ type StartupRecord struct {
 }
 
 type StartServiceOptions struct {
-	// Executable must be explicitly set by development and tests. Production
-	// callers leave it empty and use the stable installed binary.
+	// Executable selects the exact binary that the visible Windows launcher must
+	// run. App callers bind it to their current executable; direct host callers
+	// may omit it to use ApplicationBin's installed binary.
 	Executable      string
 	ApplicationHome string
 	ApplicationBin  string
@@ -168,29 +170,7 @@ func expectedRunDir(c Config) (string, error) {
 }
 
 func resolveProspectivePath(input string) (string, error) {
-	path, err := filepath.Abs(input)
-	if err != nil {
-		return "", err
-	}
-	var tail []string
-	for {
-		resolved, e := filepath.EvalSymlinks(path)
-		if e == nil {
-			for i := len(tail) - 1; i >= 0; i-- {
-				resolved = filepath.Join(resolved, tail[i])
-			}
-			return canonical(resolved), nil
-		}
-		if !os.IsNotExist(e) {
-			return "", e
-		}
-		parent := filepath.Dir(path)
-		if parent == path {
-			return "", e
-		}
-		tail = append(tail, filepath.Base(path))
-		path = parent
-	}
+	return pathguard.ResolveProspective(input)
 }
 
 func readStartupRecord(c Config, id string) (*StartupRecord, error) {
@@ -633,22 +613,32 @@ func windowsServiceWindowStart(ctx context.Context, c Config, absoluteConfig str
 		ConfigPath:   absoluteConfig,
 		Connection:   connection,
 	}
-	for _, candidate := range []struct {
-		path    string
-		install string
-	}{
-		{result.LauncherPath, "steerline launchers"},
-		{filepath.Join(opts.ApplicationBin, "steerline.exe"), "steerline install"},
-	} {
-		info, statErr := os.Stat(candidate.path)
-		if statErr != nil || info.IsDir() {
-			if statErr == nil {
-				statErr = errors.New("path is a directory")
-			}
-			result.Status = "failed"
-			result.Error = fmt.Sprintf("service window installation is unavailable at %s: %v; run %s", candidate.path, statErr, candidate.install)
-			return result, nil
+	launcherInfo, statErr := os.Stat(result.LauncherPath)
+	if statErr != nil || launcherInfo.IsDir() {
+		if statErr == nil {
+			statErr = errors.New("path is a directory")
 		}
+		result.Status = "failed"
+		result.Error = fmt.Sprintf("service window launcher is unavailable at %s: %v; run steerline launchers", result.LauncherPath, statErr)
+		return result, nil
+	}
+	executable := opts.Executable
+	if executable == "" {
+		executable = filepath.Join(opts.ApplicationBin, "steerline.exe")
+	}
+	if !filepath.IsAbs(executable) {
+		executable, statErr = filepath.Abs(executable)
+		if statErr != nil {
+			return ServiceStartResult{}, statErr
+		}
+	}
+	if info, err := os.Stat(executable); err != nil || info.IsDir() {
+		if err == nil {
+			err = errors.New("path is a directory")
+		}
+		result.Status = "failed"
+		result.Error = fmt.Sprintf("selected service executable is unavailable at %s: %v", executable, err)
+		return result, nil
 	}
 	return result, nil
 }
@@ -1142,6 +1132,11 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 	}
 	defer logFile.Close()
 	fmt.Fprintf(logFile, "startup_id=%s dispatch=%s pid=%d console_window=0x%x\n", startupID, mode, os.Getpid(), serviceConsoleWindow())
+	fmt.Fprintf(logFile, "runtime executable=%s\n", diagnosticValue(c.RuntimeExecutable))
+	fmt.Fprintf(logFile, "runtime home=%s\n", diagnosticValue(c.RuntimeHome))
+	fmt.Fprintf(logFile, "runtime config=%s\n", diagnosticValue(c.RuntimeConfig))
+	fmt.Fprintf(logFile, "runtime source_commit=%s source_dirty=%s\n", diagnosticValue(c.SourceCommit), diagnosticValue(c.SourceDirty))
+	fmt.Fprintf(logFile, "runtime repository=%s repository_identity=%s run_dir=%s\n", c.Repository, c.Identity(), c.RunDir)
 	if console != "off" && console != "json" && (console != "" || ConsoleDefault() != "") {
 		fmt.Fprintf(os.Stdout, "SteerLine starting · dispatch %s · startup %s\n", mode, startupID)
 	}
@@ -1218,4 +1213,11 @@ func RunConfiguredService(ctx context.Context, c Config, mode, startupID, consol
 		retErr = errors.Join(retErr, writeStartupRecord(c, *rec))
 	}
 	return retErr
+}
+
+func diagnosticValue(value string) string {
+	if value == "" {
+		return "unknown"
+	}
+	return value
 }

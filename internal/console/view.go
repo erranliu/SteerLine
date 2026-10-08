@@ -194,6 +194,7 @@ func candidateDetailLines(m Model, state projectState, row *consoleRow) []string
 	if row == nil {
 		return append(lines, renderEmptySelection(state)...)
 	}
+	lines = append(lines, runtimeIdentityLines(state.ref)...)
 	lines = append(lines, "Task："+safeTerminalInlineText(row.taskID)+" · "+safeTerminalInlineText(row.title))
 	if row.native != nil {
 		lines = append(lines, "任务关系")
@@ -459,12 +460,26 @@ const timeLayout = "2006-01-02 15:04:05"
 
 func renderEmptySelection(state projectState) []string {
 	if state.snapshot.Connection.State == api.ConnectionOffline || state.snapshot.Connection.State == api.ConnectionNoRecord {
-		return []string{"服务离线 · 可以查看已有 runs 与日志", "服务入口：" + safeTerminalText(serviceWindowInstruction(state.ref)), "配置路径：" + safeTerminalText(state.ref.ConfigPath), terminalCapabilities()}
+		lines := []string{"服务离线 · 可以查看已有 runs 与日志", "服务入口：" + safeTerminalText(serviceWindowInstruction(state.ref)), "配置路径：" + safeTerminalText(state.ref.ConfigPath), terminalCapabilities()}
+		return append(lines, runtimeIdentityLines(state.ref)...)
 	}
 	if state.snapshot.Connection.Diagnostic != "" {
-		return []string{"服务状态：" + safeTerminalText(string(state.snapshot.Connection.State)), "连接诊断：" + safeTerminalText(state.snapshot.Connection.Diagnostic), "配置路径：" + safeTerminalText(state.ref.ConfigPath)}
+		lines := []string{"服务状态：" + safeTerminalText(string(state.snapshot.Connection.State)), "连接诊断：" + safeTerminalText(state.snapshot.Connection.Diagnostic), "配置路径：" + safeTerminalText(state.ref.ConfigPath)}
+		return append(lines, runtimeIdentityLines(state.ref)...)
 	}
-	return []string{"(没有选中对象)", "Enter 仅打开详情；开始任务请按 s。"}
+	return append([]string{"(没有选中对象)", "Enter 仅打开详情；开始任务请按 s。"}, runtimeIdentityLines(state.ref)...)
+}
+
+func runtimeIdentityLines(ref ProjectRef) []string {
+	if ref.ExecutablePath == "" && ref.ApplicationHome == "" && ref.SourceCommit == "" && ref.SourceDirty == "" {
+		return nil
+	}
+	return []string{
+		"运行 exe：" + safeTerminalText(firstText(ref.ExecutablePath, "未知")),
+		"运行 home：" + safeTerminalText(firstText(ref.ApplicationHome, "未知")),
+		"项目配置：" + safeTerminalText(firstText(ref.ConfigPath, "未知")),
+		"构建源码：" + safeTerminalText(firstText(ref.SourceCommit, "未知")) + " · dirty=" + safeTerminalText(firstText(ref.SourceDirty, "未知")),
+	}
 }
 
 func decisionStatusLabel(status string) string {

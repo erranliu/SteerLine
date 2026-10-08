@@ -2,9 +2,9 @@ package host
 
 import (
 	"encoding/json"
-	"path/filepath"
-	"strings"
 	"time"
+
+	"github.com/erranliu/SteerLine/internal/pathguard"
 )
 
 func ptr[T any](value T) *T { return &value }
@@ -13,8 +13,7 @@ func now() time.Time { return time.Now().UTC() }
 
 func duration(s string) time.Duration { value, _ := time.ParseDuration(s); return value }
 func inside(root, path string) bool {
-	rel, err := filepath.Rel(root, path)
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel)
+	return pathguard.Within(root, path)
 }
 func contains(values []string, value string) bool {
 	for _, candidate := range values {
