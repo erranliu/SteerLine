@@ -24,10 +24,10 @@ func projectCounts(state projectState, now time.Time) (ready, cached, running, d
 			if run.TaskStatus == "in_progress" && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running") {
 				runningTasks[run.TaskID] = true
 			}
-			if run.FinishTaskStatus == "waiting_decision" && run.TaskStatus != "closed" {
+			if waitingForDecision(run) {
 				decisionTasks[run.TaskID] = true
 			}
-			if run.FinishTaskStatus == "waiting_pr_merge" && run.TaskStatus != "closed" {
+			if waitingForMerge(run) {
 				mergeTasks[run.TaskID] = true
 			}
 			if runNeedsAttention(run) {
@@ -297,9 +297,15 @@ func runStatus(run *api.CandidateSummary) string {
 
 		return "unknown"
 	}
-	if run.FinishTaskStatus == "waiting_decision" {
+	if waitingForDecision(run) {
 
 		return "待决策"
+	}
+	if run.EnvironmentBlocker != nil {
+		return "需处理 · 环境受阻"
+	}
+	if recoveryNeedsAttention(run) {
+		return "需处理 · 恢复待核实"
 	}
 	if run.ExecutionStatus == "unknown" || run.ExecutionStatus == "failed" || run.ExecutionStatus == "blocked" || run.FinishTaskStatus == "blocked" {
 		return "需处理 · " + firstText(run.ExecutionStatus, run.FinishTaskStatus)
@@ -310,12 +316,10 @@ func runStatus(run *api.CandidateSummary) string {
 	if run.PR.QueryError != nil && strings.TrimSpace(*run.PR.QueryError) != "" {
 		return "需处理 · PR query error"
 	}
-	switch run.FinishTaskStatus {
-	case "waiting_pr_merge":
-
+	if waitingForMerge(run) {
 		return "待合并"
-	case "completed":
-
+	}
+	if run.FinishTaskStatus == "completed" {
 		return "completed"
 	}
 	if run.TaskStatus == "in_progress" && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running") {
@@ -338,11 +342,11 @@ func taskNextAction(run *api.CandidateSummary) string {
 			return "合并冲突，需人工处置"
 		}
 		return "保留资源，需人工处置；核实原执行停止"
-	case run.FinishTaskStatus == "waiting_decision" && run.TaskStatus != "closed":
+	case waitingForDecision(run):
 		return "回答当前问题（按 a）"
 	case runNeedsAttention(run):
 		return "查看错误与恢复核验（按 u）"
-	case run.FinishTaskStatus == "waiting_pr_merge":
+	case waitingForMerge(run):
 		return "审阅并人工合并 PR"
 	default:
 
@@ -360,7 +364,11 @@ func runNeedsAttention(run *api.CandidateSummary) bool {
 	if run.TaskStatus == "closed" && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running") {
 		return true
 	}
-	return run.FinishTaskStatus == "waiting_decision" || run.ExecutionStatus == "unknown" || run.ExecutionStatus == "failed" || run.ExecutionStatus == "blocked" || run.FinishTaskStatus == "blocked" || (run.Error != nil && strings.TrimSpace(*run.Error) != "") || (run.PR.QueryError != nil && strings.TrimSpace(*run.PR.QueryError) != "")
+	return waitingForDecision(run) || run.EnvironmentBlocker != nil || recoveryNeedsAttention(run) || run.ExecutionStatus == "unknown" || run.ExecutionStatus == "failed" || run.ExecutionStatus == "blocked" || run.FinishTaskStatus == "blocked" || (run.Error != nil && strings.TrimSpace(*run.Error) != "") || (run.PR.QueryError != nil && strings.TrimSpace(*run.PR.QueryError) != "")
+}
+
+func recoveryNeedsAttention(run *api.CandidateSummary) bool {
+	return run != nil && run.RecoveryRequired && (run.RecoveryState == "" || run.RecoveryState == "unverified" || run.RecoveryState == "interrupted")
 }
 
 func historicalFailedRun(run *api.CandidateSummary) bool {

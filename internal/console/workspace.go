@@ -276,11 +276,11 @@ func taskAttention(s projectState, id string) string {
 		switch {
 		case r.EnvironmentBlocker != nil:
 			text, p = "环境受阻", 3
-		case runNeedsAttention(r) && r.FinishTaskStatus != "waiting_decision":
+		case runNeedsAttention(r) && !waitingForDecision(r):
 			text, p = "需核验", 3
-		case r.Decision != nil && r.Decision.Status == "pending" && r.Abandonment == nil && r.TaskStatus != "closed" && r.TaskStatus != "discarded":
+		case pendingDecision(r) && waitingForDecision(r):
 			text, p = "待回答", 2
-		case r.FinishTaskStatus == "waiting_pr_merge" && r.TaskStatus != "closed" && r.TaskStatus != "discarded":
+		case waitingForMerge(r):
 			text, p = "待合并", 1
 		}
 		if p > priority {
@@ -322,10 +322,21 @@ func nextAction(m Model, s projectState, row *consoleRow) string {
 	if r.TaskStatus == "discarded" || r.Abandonment != nil {
 		return taskNextAction(r)
 	}
+	if waitingForMerge(r) && !runNeedsAttention(r) {
+		action := "审阅并人工合并 PR · f 完整回复"
+		if pendingDecision(r) {
+			if feedbackInProgress(s, r) {
+				action += " · 查询原反馈请求回执"
+			} else if strings.HasPrefix(decisionAnswerAvailability(s, row), "提交后") {
+				action += " · a 可选反馈（继续工作）"
+			}
+		}
+		return action
+	}
 	if r.EnvironmentBlocker != nil {
 		return "Ctrl+E 重查环境 · Ctrl+O 原终端（按能力核验）"
 	}
-	if r.Decision != nil && r.Decision.Status == "pending" && r.Abandonment == nil && r.TaskStatus != "closed" && r.TaskStatus != "discarded" {
+	if pendingDecision(r) && waitingForDecision(r) {
 		if feedbackInProgress(s, r) {
 			return "查询原答案请求回执；不重复提交"
 		}
@@ -337,9 +348,6 @@ func nextAction(m Model, s projectState, row *consoleRow) string {
 	}
 	if runNeedsAttention(r) {
 		return "u 只读核验 · d 完整诊断"
-	}
-	if r.FinishTaskStatus == "waiting_pr_merge" {
-		return "在 PR 提供方审阅并人工合并 · f 完整回复"
 	}
 	return "当前无需操作 · 可查看最近动态"
 }

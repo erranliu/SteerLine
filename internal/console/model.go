@@ -834,9 +834,9 @@ func filterAllows(filter int, kind rowKind, run *api.CandidateSummary) bool {
 	case 2:
 		return run != nil && run.TaskStatus == "in_progress" && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running")
 	case 3:
-		return run != nil && run.FinishTaskStatus == "waiting_decision"
+		return waitingForDecision(run)
 	case 4:
-		return run != nil && run.FinishTaskStatus == "waiting_pr_merge"
+		return waitingForMerge(run)
 	case 5:
 		return runNeedsAttention(run)
 	case 6:

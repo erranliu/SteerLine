@@ -101,7 +101,7 @@ func renderStatusLine(m Model, state projectState) string {
 		if runtimeState.SlotOccupied {
 			active := 0
 			for _, run := range runtimeState.Runs {
-				if run != nil && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || run.FinishTaskStatus == "waiting_decision") {
+				if candidateBusinessOpen(run) && (run.ExecutionStatus == "pending" || run.ExecutionStatus == "running" || run.ExecutionStatus == "unknown" || waitingForDecision(run)) {
 					active++
 				}
 			}
@@ -241,7 +241,14 @@ func candidateDetailLines(m Model, state projectState, row *consoleRow) []string
 		lines = append(lines, "摘要："+safeTerminalText(*run.Summary))
 	}
 	if run.Decision != nil {
-		lines = append(lines, "问题："+safeTerminalText(run.Decision.Request.Question))
+		if waitingForMerge(run) {
+			lines = append(lines, "可选反馈：按 a 请求原 worker 继续工作；无需反馈也可审阅合并 PR")
+			if m.detailExpanded {
+				lines = append(lines, "原问题："+safeTerminalText(run.Decision.Request.Question))
+			}
+		} else {
+			lines = append(lines, "问题："+safeTerminalText(run.Decision.Request.Question))
+		}
 		if m.detailExpanded {
 			lines = append(lines, renderDecisionIdentity(state, run, m.clock.Now())...)
 			lines = append(lines, "上下文："+safeTerminalText(run.Decision.Request.Context))
@@ -433,12 +440,16 @@ func renderControlAvailability(state projectState, row *consoleRow, now time.Tim
 			lines = append(lines, "开始不可用："+displayActionReason(reason))
 		}
 	}
-	if row != nil && row.kind == rowRun && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" {
+	if row != nil && row.kind == rowRun && pendingDecision(row.run) {
 		reason := decisionAnswerAvailability(state, row)
+		label := "回答当前决策"
+		if waitingForMerge(row.run) {
+			label = "可选反馈（请求继续工作）"
+		}
 		if strings.HasPrefix(reason, "提交后") {
-			lines = append(lines, "操作：a 回答当前决策")
+			lines = append(lines, "操作：a "+label)
 		} else {
-			lines = append(lines, "回答不可用："+safeTerminalText(reason))
+			lines = append(lines, label+"不可用："+safeTerminalText(reason))
 		}
 	}
 	return lines
@@ -771,8 +782,12 @@ func renderFooter(m Model, state projectState) string {
 	}
 	row := m.selectedRow(m.selected)
 	action := "Enter 到右下"
-	if row != nil && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" {
-		action = "a/Enter 回复"
+	if row != nil && pendingDecision(row.run) && !feedbackInProgress(state, row.run) {
+		if waitingForMerge(row.run) {
+			action = "a 可选反馈 · Enter 到右下"
+		} else {
+			action = "a/Enter 回复"
+		}
 	}
 	if row != nil && row.kind == rowReady {
 		action = "s 选方案"

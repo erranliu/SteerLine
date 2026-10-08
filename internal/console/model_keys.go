@@ -168,7 +168,7 @@ func (m Model) handleKey(key tea.KeyMsg) (tea.Model, tea.Cmd) {
 		state.finalReadAt = time.Time{}
 		return m, m.readProject(m.selected)
 	case "enter":
-		if row := m.selectedRow(m.selected); row != nil && row.run != nil && row.run.Decision != nil && row.run.Decision.Status == "pending" && row.run.Abandonment == nil && row.run.TaskStatus != "closed" && !feedbackInProgress(*state, row.run) {
+		if row := m.selectedRow(m.selected); row != nil && pendingDecision(row.run) && waitingForDecision(row.run) && !feedbackInProgress(*state, row.run) {
 			return m.answerSelectedDecision()
 		}
 		state.focus = 1
