@@ -12,6 +12,7 @@ import (
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	"github.com/erranliu/SteerLine/internal/execution/hostport"
 	executionprocess "github.com/erranliu/SteerLine/internal/execution/process"
+	productapi "github.com/erranliu/SteerLine/internal/product/api"
 )
 
 func NewProcessHost(timeout time.Duration) executionbackend.ManagedProcessHost {
@@ -78,15 +79,21 @@ func runConfiguredService(ctx context.Context, config Config, mode, startupID, c
 		if err := admission.syncHostFacts(input); err != nil {
 			return nil, err
 		}
-		service, err := newConfiguredServiceWithHost(config, hostPort)
+		product, err := openProjectClient(context.Background(), productapi.ProjectRef{ConfigPath: config.ConfigPath})
 		if err != nil {
 			return nil, err
 		}
+		localAPI := &serviceLocalAPI{product: product, runDir: input.RunDir, projectID: input.RepositoryIdentity}
+		service, err := newConfiguredServiceWithHost(config, serviceHTTPHost{HostPort: hostPort, localAPI: localAPI})
+		if err != nil {
+			return nil, errors.Join(err, product.Close())
+		}
+		localAPI.capabilities = append([]string(nil), service.State.Service.Capabilities...)
 		if onConstruct != nil {
 			onConstruct(service)
 		}
 		service.SetStartupMetadata(id)
-		return executionServiceLifetime{service: service, config: input, mode: mode}, nil
+		return executionServiceLifetime{service: service, config: input, mode: mode, product: product, localAPI: localAPI}, nil
 	}
 	return steerline.RunConfiguredService(ctx, hostConfig, mode, startupID, console, factory, admission, consoleActivityFormatter{})
 }

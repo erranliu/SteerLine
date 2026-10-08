@@ -1,0 +1,88 @@
+# 本机客户端协议 v1
+
+本协议由 #45 的 `internal/product/httpapi` 提供，供原生客户端按需消费。服务继续拥有 Task、WorkflowRun、Execution、Attempt、Decision、Command、Operation 和唯一交付状态；HTTP 只映射现有 `product/api` DTO 与命令入口。
+
+## 发现、连接和身份
+
+服务先取得现有仓库/运行目录锁并完成恢复，再绑定 `127.0.0.1` 的随机 TCP 端口并开始提供 HTTP。服务不随 UI 窗口退出。实例发现文件位于 `<run_dir>/local-api/discovery.json`，凭证文件位于同目录的 `credentials/` 子目录；文件内容不进入 URL 或日志。Windows 目录和凭证 DACL 仅授予当前 Windows SID，客户端连接前重新核验 DACL。每个服务实例创建新凭证；发现文件包含 `protocol`, `project_id`, `repository_identity`, `instance_id`, `process`, `address`, `credential_path`, `ready` 与诊断，不包含凭证值。端口冲突也会写受限 `ready=false` 发现记录，保留原生绑定错误供客户端显示。
+
+`project_id` 是仓库身份 UTF-8 字节 SHA-256 的小写十六进制路由键；完整仓库身份只通过认证的 identity DTO 返回。客户端不得通过 PATH、超时或旧发现文件启动另一服务。`ready=false` 返回原实例的启动诊断；此时只开放身份/回执读取及针对该实例的停服命令。
+
+每个请求必须携带 `Authorization: Bearer <credential>`，使用精确发现的 `Host`，来源为 IPv4 loopback，且不包含浏览器 `Origin`。服务不启用 CORS。服务身份以 `/v1/identity` 响应中的协议、项目、实例、进程、能力和实时就绪状态为准。`ready=false` 时只提供诊断及只读查询，并允许停掉发现的原实例；业务变更被拒绝并以原 ID 保留 rejection。进程/实例不一致时客户端刷新并停止提交旧目标。
+
+### Windows 连接样例
+
+Windows 客户端从现有项目配置取得 `run_dir`，读取发现文件和凭证。以下 PowerShell 样例保持凭证在当前进程内存中；不要将它打印到日志、URL 或进程参数：
+
+```powershell
+$discoveryPath = Join-Path $runDir 'local-api\discovery.json'
+$discovery = Get-Content -Raw $discoveryPath | ConvertFrom-Json
+$token = [IO.File]::ReadAllText($discovery.credential_path)
+$handler = [Net.Http.HttpClientHandler]::new()
+$handler.UseProxy = $false
+$client = [Net.Http.HttpClient]::new($handler)
+$request = [Net.Http.HttpRequestMessage]::new([Net.Http.HttpMethod]::Get, "http://$($discovery.address)/v1/identity")
+$request.Headers.Authorization = [Net.Http.Headers.AuthenticationHeaderValue]::new('Bearer', $token)
+$request.Headers.Host = $discovery.address
+$response = $client.Send($request)
+$identity = $response.Content.ReadAsStringAsync().GetAwaiter().GetResult() | ConvertFrom-Json
+if ($identity.protocol -ne 'steerline-client/v1' -or $identity.project_id -ne $discovery.project_id -or
+    $identity.instance_id -ne $discovery.instance_id -or -not $identity.ready) {
+    throw "The discovered service is not the ready instance: $($identity.diagnostic)"
+}
+```
+
+Go consumers can use `app.OpenHTTPClient(ctx, configPath)`; this only connects to the discovered instance and never starts one.
+
+## 查询路由
+
+所有项目查询以 `/v1/projects/{project_id}` 为根。任务/图的版本和游标沿用现有 DTO；cursor 绑定原快照/筛选条件，失效时客户端刷新整页，不拼接不同 revision。活动查询必须绑定原 WorkflowRun、Execution、Attempt。会话 final 查询返回正式正文引用；body 按原 revision、SHA-256、UTF-8 offset 有界读取。
+
+| 方法与路径 | DTO / 用途 |
+| --- | --- |
+| `GET /v1/identity` | `Identity`：协议、项目、实例、进程、能力、`ready` 与诊断 |
+| `GET /v1/projects/{project_id}/snapshot?task_id=` | `api.ProjectSnapshot`：连接、服务运行、决策/历史和选中任务 |
+| `GET /v1/projects/{project_id}/tasks?cursor=&limit=` | `api.TaskPage`：有界任务列表 |
+| `GET /v1/projects/{project_id}/tasks/{task_id}` | `api.TaskPage`：任务详情、直接依赖、交付和阻断 |
+| `GET /v1/projects/{project_id}/graph?cursor=&limit=` | `api.GraphPage`：有界基本 DAG |
+| `GET /v1/projects/{project_id}/candidates` | `api.TaskCandidates`：当前可领取任务候选 |
+| `GET /v1/projects/{project_id}/runs/{run_id}` | 精确 run 的 `api.CandidateSummary`，含候选、Decision、PR 与交付状态 |
+| `GET /v1/projects/{project_id}/runs/{run_id}/activity?execution_id=&attempt_id=&cursor=` | `ActivityPage`，只读规范数据库活动，不回退私有日志 |
+| `GET /v1/projects/{project_id}/runs/{run_id}/conversation?execution_id=&attempt_id=&turn_id=&finals_only=&cursor=&limit=` | 有界会话事件页和原正文引用 |
+| `GET /v1/projects/{project_id}/runs/{run_id}/final` | `FinalReply`，返回 final 事件及不超过 4 MiB 的完整正文；更大的正文使用 body 路由分段读取 |
+| `GET /v1/projects/{project_id}/runs/{run_id}/body?ref=<hex-json>&offset=&limit=` | `api.ConversationBodyPage`，原消息 revision/SHA 校验，单页不超过 256 KiB |
+| `GET /v1/projects/{project_id}/commands/{request_id}` | 查询原 command/control 回执；没有权威记录才返回 `command_not_found` |
+
+`TaskPage`, `GraphPage`, conversation event/body 和活动 cursor 保留各自实际身份、版本、采样/事件时间。PR、交付和历史 Decision 从现有查询投影返回，不使用 UI 缓存补写。
+
+## 命令映射
+
+所有 POST 使用唯一的 32 位小写十六进制 `request_id`、当前 `project_id`/`instance_id`、精确 `target_id`、显示时的 `expected_version`，并按动作携带控制或图 revision。请求信封在发送前由调用方持久保存。服务将完整原信封先原子登记，再写入现有宿主 immutable control inbox 或调用 SQLite CommandService；同 ID 不同信封返回 `request_id_conflict`。服务端从当前 OS 用户取得 `requested_by`，忽略客户端不能证明的身份。控制请求绑定原实例/显示 revision，由运行服务再次核对实例、control/graph/task/decision 版本和领域资格；过期目标保留原 request 并拒绝，不转向当前最新对象。
+
+| `action` | `target_id` / 版本 | `payload` | 现有入口 |
+| --- | --- | --- | --- |
+| `start_task` | task ID / task version + `expected_control_revision` | `{"execution_profile_id":"..."}` | `StartTaskPayload` → 原 `start_task` control；服务再次核对 task version、资格、实例与 revision |
+| `start_candidate` | task ID / task version + graph/control revision | `{"execution_profile_id":"..."}` | 原 `start_candidate` control 与原 candidate command |
+| `answer_decision` | decision ID / decision version；payload 绑定 run revision/attempt/recovery | `{"run_id":"...","decision_id":"...","option_id":"...","note":"...","answers":{},"expected_run_revision":7,"source_attempt_id":"...","expected_recovery_version":2}` | 原 `DecisionPort.Submit` 与 SQLite `CommandService` |
+| `abandon_candidate` | run ID / candidate revision + control revision | `{"task_id":"...","expected_task_version":3,"reason":"..."}` | 原 `abandon_candidate` control |
+| `discard_task` | task ID / task version | `{"reason":"..."}` | 原 `TaskCommands.Discard` 与持久 discard command/receipt |
+| `set_dispatch_mode` | `dispatch` / control revision | `{"mode":"manual"}` 或 `{"mode":"auto"}` | 原控制命令与 authority CAS |
+| `pause_dispatch`, `resume_dispatch` | `dispatch` / control revision | `{}` | 原控制命令与 authority CAS |
+| `open_terminal`, `recheck_environment` | run ID / blocker version + control revision | `{"target":{"run_id":"...","execution_id":"...","attempt_id":"...","turn_id":"...","blocker_id":"...","version":2}}` | 原宿主 environment control |
+| `stop_service` | 当前 `instance_id` / expected version 0 | `{}` | 原服务停服 control request；返回提交回执，不另启动服务 |
+
+`create_task`, `add_predecessors`, planning、人工验收和自定义前置操作目前返回 `unsupported`。服务把有效 request ID 的 unsupported 拒绝保存在原 envelope 记录中；之后 GET 仍返回 `unsupported` rejection，不会伪装成 `command_not_found`。
+
+命令外层 `status` 为 `submitted`, `accepted`, `applied`, `rejected`, `outcome_unknown` 之一。服务端原 control/command receipt 原样附带，内部 `applying` 表示 `accepted`，不表示 agent 已处理。`indeterminate` 或 `pending_verification` 映射为 `outcome_unknown`，客户端只查询原 request ID，不生成新 ID。
+
+### 回执与故障恢复
+
+`GET /commands/{request_id}` 对 HTTP control envelope 先读同项目原 control request/receipt（例如 dispatch control 同时会产生 SQLite `set_dispatch_state` 命令记录），再查项目 SQLite command authority；answer/discard 先查 SQLite，再查 control inbox。数据库缺失、权限、格式、身份或读取错误均返回诊断错误，不映射成不存在。HTTP 已登记但尚未派发的 envelope，只有底层两种权威都明确无记录且没有持久拒绝回执时才返回：
+
+```json
+{"code":"command_not_found","reason":"the project database and control request authority contain no record for this request_id","request_id":"0123456789abcdef0123456789abcdef"}
+```
+
+发送前客户端保存 `CommandEnvelope`。重连先 GET 原 ID：有回执则按原 target/revision 继续；`outcome_unknown` 则只对账，不重复调用 worker/backend；权威 `command_not_found` 才能按原完整 envelope、原 ID、原 payload 和原版本补交。已登记的 stale/permission/unsupported rejection 也有持久回执，重连不会把它误当成未发送。服务的 `local-api/commands/{request_id}.json` 是跨 HTTP 动作的持久唯一仲裁，底层 control inbox 与 SQLite command/discard ID 再各自做并发/事务唯一约束。连接失败、SQL 读取失败、旧实例和权限不足都保持各自错误码。
+
+本协议不提供 SSE、离线查询进程、完整原始过程阅读器、规划 handler 或通用 artifact DTO。

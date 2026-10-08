@@ -63,6 +63,9 @@ func (s *Service) dispatchNative(ctx context.Context) error {
 		if s.targetTask != "" && s.targetTask != task.TaskID {
 			continue
 		}
+		if s.explicitDispatch && s.targetTaskVersion != 0 && task.TaskID == s.targetTask && task.Version != s.targetTaskVersion {
+			return nativeErr("stale_version", fmt.Sprintf("expected task version %d, found %d", s.targetTaskVersion, task.Version))
+		}
 		authority, authErr := s.domainStore.NativeAuthority(ctx, c.identity)
 		if authErr != nil {
 			return authErr

@@ -203,10 +203,12 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 		if s.State.Control.DispatchPaused {
 			return s.rejectControl(*req, digest, "dispatch_paused", errors.New("dispatch is paused"))
 		}
-		if err = s.validateReadyTarget(ctx, payload.TaskID); err != nil {
+		if err = s.validateReadyTargetVersion(ctx, payload.TaskID, payload.ExpectedTaskVersion); err != nil {
 			code := "task_not_ready"
 			if errors.Is(err, errAlreadyManaged) {
 				code = "already_managed"
+			} else if rejected, ok := controlRejectionCode(err); ok {
+				code = rejected
 			}
 			return s.rejectControl(*req, digest, code, err)
 		}
@@ -273,6 +275,8 @@ func (s *Service) processNextControl(ctx context.Context, cancel context.CancelF
 			result.Status, result.Code, result.Message = "rejected", "already_managed", err.Error()
 		} else if errors.Is(err, errTaskNotReady) {
 			result.Status, result.Code, result.Message = "rejected", "task_not_ready", err.Error()
+		} else if code, rejected := controlRejectionCode(err); rejected {
+			result.Status, result.Code, result.Message = "rejected", code, err.Error()
 		} else {
 			result.Status, result.Code, result.Message = "failed", controlFailureCode(err), err.Error()
 		}
@@ -365,15 +369,27 @@ func controlFailureCode(err error) string {
 	if errors.Is(err, context.Canceled) {
 		return "failed"
 	}
+	if code, ok := controlRejectionCode(err); ok {
+		return code
+	}
 	if strings.Contains(err.Error(), "critical runtime persistence") || strings.Contains(err.Error(), "receipt") {
 		return "persistence_failed"
 	}
 	return "failed"
 }
 
+func controlRejectionCode(err error) (string, bool) {
+	for _, code := range []string{"stale_version", "stale_revision", "stale_instance", "stale_profile", "task_not_ready", "dispatch_paused", "wrong_mode", "slot_busy", "task_discarded", "candidate_limit_reached", "idempotency_conflict", "merge_state_unknown"} {
+		if isNativeErrorCode(err, code) {
+			return code, true
+		}
+	}
+	return "", false
+}
+
 var errAlreadyManaged = errors.New("task is already managed by a local run")
 
-func (s *Service) validateReadyTarget(ctx context.Context, taskID string) error {
+func (s *Service) validateReadyTargetVersion(ctx context.Context, taskID string, expectedVersion uint64) error {
 	if s.find(taskID) != nil {
 		return errAlreadyManaged
 	}
@@ -383,6 +399,9 @@ func (s *Service) validateReadyTarget(ctx context.Context, taskID string) error 
 	}
 	for _, task := range ready {
 		if task.TaskID == taskID && s.taskWork.CanExecuteType(task.Type) {
+			if expectedVersion != 0 && task.Version != expectedVersion {
+				return nativeErr("stale_version", fmt.Sprintf("expected task version %d, found %d", expectedVersion, task.Version))
+			}
 			return nil
 		}
 	}
@@ -480,11 +499,11 @@ func (s *Service) applyControlAction(ctx context.Context, req productapi.Control
 		if err := s.selectDispatchProfile(profileID, payload.ExecutionProfileDigest); err != nil {
 			return err
 		}
-		if err := s.validateReadyTarget(ctx, payload.TaskID); err != nil {
+		if err := s.validateReadyTargetVersion(ctx, payload.TaskID, payload.ExpectedTaskVersion); err != nil {
 			return err
 		}
-		s.targetTask, s.lastDispatched, s.explicitDispatch, s.reservedRunID = payload.TaskID, "", true, op.RunID
-		defer func() { s.targetTask = ""; s.explicitDispatch = false; s.reservedRunID = "" }()
+		s.targetTask, s.targetTaskVersion, s.lastDispatched, s.explicitDispatch, s.reservedRunID = payload.TaskID, payload.ExpectedTaskVersion, "", true, op.RunID
+		defer func() { s.targetTask = ""; s.targetTaskVersion = 0; s.explicitDispatch = false; s.reservedRunID = "" }()
 		if err := s.dispatch(ctx); err != nil {
 			return err
 		}

@@ -100,6 +100,23 @@ func TestTM05PageProjection(t *testing.T) {
 	})
 }
 
+func TestCommandReceiptProjectsTypedDiscardResult(t *testing.T) {
+	discard := api.TaskDiscardReceipt{RequestID: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", TaskID: "8", Status: "discarded", GraphRevision: 12}
+	result, err := json.Marshal(discard)
+	if err != nil {
+		t.Fatal(err)
+	}
+	command := CommandReceipt(storageports.CommandRecord{ProjectIdentity: "project", CommandID: discard.RequestID, Kind: "discard_task",
+		TargetID: discard.TaskID, ExpectedVersion: 4, RequestedBy: "operator", Status: "accepted", Result: result})
+	if command.Discard == nil || command.Discard.RequestID != discard.RequestID || command.Discard.GraphRevision != 12 || command.ResultCode != "" {
+		t.Fatalf("discard command lost its typed receipt: %+v", command)
+	}
+	other := CommandReceipt(storageports.CommandRecord{ProjectIdentity: "project", CommandID: discard.RequestID, Kind: "answer_decision", Result: result})
+	if other.Discard != nil {
+		t.Fatalf("non-discard command exposed an unrelated result: %+v", other)
+	}
+}
+
 // This original client assertion follows the unique ready-candidate projector.
 func TestNativeCandidateSnapshotKeepsDispatchOrderBeyondDetailPage(t *testing.T) {
 	at := time.Now().UTC()

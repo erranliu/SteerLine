@@ -351,17 +351,18 @@ type TaskPage struct {
 // CommandReceipt keeps the original request and target with the actual outcome.
 // It has no persisted request payload, idempotency storage key or write access.
 type CommandReceipt struct {
-	ProjectIdentity string    `json:"project_identity"`
-	CommandID       string    `json:"command_id"`
-	Kind            string    `json:"kind"`
-	TargetID        string    `json:"target_id"`
-	ExpectedVersion uint64    `json:"expected_version"`
-	RequestedBy     string    `json:"requested_by"`
-	Status          string    `json:"status"`
-	ResultCode      string    `json:"result_code,omitempty"`
-	ResultError     string    `json:"result_error,omitempty"`
-	CreatedAt       time.Time `json:"created_at"`
-	UpdatedAt       time.Time `json:"updated_at"`
+	ProjectIdentity string              `json:"project_identity"`
+	CommandID       string              `json:"command_id"`
+	Kind            string              `json:"kind"`
+	TargetID        string              `json:"target_id"`
+	ExpectedVersion uint64              `json:"expected_version"`
+	RequestedBy     string              `json:"requested_by"`
+	Status          string              `json:"status"`
+	ResultCode      string              `json:"result_code,omitempty"`
+	ResultError     string              `json:"result_error,omitempty"`
+	Discard         *TaskDiscardReceipt `json:"discard,omitempty"`
+	CreatedAt       time.Time           `json:"created_at"`
+	UpdatedAt       time.Time           `json:"updated_at"`
 }
 
 type LogBatch struct {

@@ -1,0 +1,442 @@
+package integration
+
+import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
+	"fmt"
+	"net"
+	"os"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+	"time"
+
+	steerlineapp "github.com/erranliu/SteerLine/internal/app"
+	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
+	api "github.com/erranliu/SteerLine/internal/product/api"
+	productclient "github.com/erranliu/SteerLine/internal/product/client"
+	"github.com/erranliu/SteerLine/internal/product/httpapi"
+)
+
+// These tests use a temporary Git project, the real app service and SQLite
+// stores, and the controlled app-server/Git fixtures owned by this package.
+// They never start a live model or touch the user's configured project.
+func TestAPIServiceLifecycle(t *testing.T) {
+	requireWindowsAPI(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	fixture := newLifecycleProject(t, "local")
+	service := startIntegrationService(t, ctx, fixture.config, &integrationLifecycleResolver{})
+	defer service.stop(t)
+	product, err := steerlineapp.OpenClient(ctx, fixture.configPath)
+	require(t, err)
+	defer product.Close()
+	identity := service.service.State.Service.ProcessIdentity
+	if identity == nil {
+		t.Fatal("controlled service did not publish its real process identity")
+	}
+	process := httpapi.ProcessIdentity{Kind: identity.Kind, PID: identity.PID, Created: identity.Created, Executable: identity.Executable}
+	endpoint, err := httpapi.Prepare(ctx, product, httpapi.Options{RunDir: fixture.config.RunDir, ProjectIdentity: fixture.config.Identity(),
+		InstanceID: service.instanceID, Process: process, Capabilities: append([]string(nil), service.service.State.Service.Capabilities...)})
+	require(t, err)
+	if err = endpoint.SetReady(service.instanceID, false, "test service not ready"); err != nil {
+		t.Fatal(err)
+	}
+	if err = endpoint.Start(); err != nil {
+		t.Fatal(err)
+	}
+	client, err := httpapi.Open(ctx, fixture.config.RunDir, fixture.config.Identity())
+	require(t, err)
+	if client.Identity().Ready || client.Identity().Diagnostic != "test service not ready" {
+		t.Fatalf("service startup diagnostic was lost: %+v", client.Identity())
+	}
+	if _, err = client.ListTasks(ctx, "", 10); err != nil {
+		t.Fatalf("read-only query was blocked while preserving the startup diagnosis: %v", err)
+	}
+	snapshot, err := client.Snapshot(ctx, "")
+	require(t, err)
+	if snapshot.Connection.Snapshot.Page == nil {
+		t.Fatal("read-only project snapshot omitted the existing service record")
+	}
+	revision := snapshot.Connection.Snapshot.Page.Control.Revision
+	blocked := httpapi.CommandEnvelope{RequestID: randomRequestID(t), ProjectID: httpapi.ProjectID(fixture.config.Identity()),
+		InstanceID: service.instanceID, Action: "pause_dispatch", TargetID: "dispatch", ExpectedVersion: revision,
+		ExpectedControlRevision: revision, Payload: []byte(`{}`)}
+	if _, err = client.SubmitCommand(ctx, blocked); err == nil || !strings.Contains(err.Error(), "service_not_ready") {
+		t.Fatalf("not-ready service accepted a business control action: %v", err)
+	}
+	rejected, err := client.Command(ctx, blocked.RequestID)
+	if err != nil || rejected.Status != "rejected" || rejected.Code != "service_not_ready" {
+		t.Fatalf("not-ready request did not retain its original rejection: %+v %v", rejected, err)
+	}
+	endpointCloseCtx, endpointCancel := context.WithTimeout(context.Background(), time.Second)
+	if err = endpoint.SetReady(service.instanceID, true, ""); err != nil {
+		endpointCancel()
+		t.Fatal(err)
+	}
+	if err = endpoint.Close(endpointCloseCtx); err != nil {
+		endpointCancel()
+		t.Fatal(err)
+	}
+	endpointCancel()
+
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	require(t, err)
+	defer listener.Close()
+	_, err = httpapi.Prepare(ctx, product, httpapi.Options{RunDir: fixture.config.RunDir, ProjectIdentity: fixture.config.Identity(),
+		InstanceID: service.instanceID, Address: listener.Addr().String()})
+	if err == nil || !strings.Contains(err.Error(), "bind local API") {
+		t.Fatalf("existing port conflict did not stop endpoint startup: %v", err)
+	}
+	if _, err = steerlineapp.OpenHTTPClient(ctx, fixture.configPath); err == nil || !strings.Contains(err.Error(), "bind local API loopback listener") {
+		t.Fatalf("client did not get the real port conflict diagnosis or tried to replace the service: %v", err)
+	}
+}
+
+func TestAPIConfiguredServicePublishesDiscovery(t *testing.T) {
+	requireWindowsAPI(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	fixture := newLifecycleProject(t, "local")
+	serviceCtx, stopService := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() { done <- steerlineapp.RunConfiguredService(serviceCtx, fixture.config, "manual", "", "off") }()
+	var client *httpapi.Client
+	var lastOpenErr error
+	deadline := time.Now().Add(30 * time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case serviceErr := <-done:
+			runtimeState, runtimeErr := steerlineapp.LoadDatabaseRuntime(fixture.config)
+			startupText := integrationStartupText(fixture.config.RunDir)
+			t.Fatalf("RunConfiguredService exited before discovery: service=%v runtime_error=%v runtime=%+v startup=%s", serviceErr, runtimeErr, runtimeState, startupText)
+		default:
+		}
+		if client != nil {
+			_ = client.Close()
+			client = nil
+		}
+		connected, openErr := steerlineapp.OpenHTTPClient(serviceCtx, fixture.configPath)
+		if openErr != nil {
+			lastOpenErr = openErr
+			time.Sleep(50 * time.Millisecond)
+			continue
+		}
+		if !connected.Identity().Ready {
+			lastOpenErr = fmt.Errorf("discovered service not ready: %s", connected.Identity().Diagnostic)
+			_ = connected.Close()
+			time.Sleep(50 * time.Millisecond)
+			continue
+		}
+		client = connected
+		break
+	}
+	if client == nil {
+		stopService()
+		select {
+		case <-done:
+		case <-time.After(5 * time.Second):
+		}
+		runtimeState, runtimeErr := steerlineapp.LoadDatabaseRuntime(fixture.config)
+		t.Fatalf("RunConfiguredService did not publish a ready local HTTP discovery: last_open=%v runtime_error=%v runtime=%+v startup=%s", lastOpenErr, runtimeErr, runtimeState, integrationStartupText(fixture.config.RunDir))
+	}
+	identity := client.Identity()
+	if identity.Protocol != httpapi.Protocol || identity.ProjectID != httpapi.ProjectID(fixture.config.Identity()) || identity.Process.PID != os.Getpid() {
+		_ = client.Close()
+		stopService()
+		t.Fatalf("app service HTTP discovery has a different identity: %+v", identity)
+	}
+	if _, err := client.Snapshot(ctx, ""); err != nil {
+		_ = client.Close()
+		stopService()
+		t.Fatalf("RunConfiguredService did not serve the product snapshot: %v", err)
+	}
+	if err := client.Close(); err != nil {
+		t.Error(err)
+	}
+	stopService()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("RunConfiguredService shutdown: %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("RunConfiguredService did not stop its local API listener")
+	}
+	if _, err := os.Stat(filepath.Join(fixture.config.RunDir, "local-api", "discovery.json")); !os.IsNotExist(err) {
+		t.Fatalf("service close left its discovery record behind: %v", err)
+	}
+}
+
+func integrationStartupText(runDir string) string {
+	root := filepath.Join(runDir, "service", "startups")
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		return err.Error()
+	}
+	var values []string
+	for _, entry := range entries {
+		data, readErr := os.ReadFile(filepath.Join(root, entry.Name()))
+		if readErr != nil {
+			values = append(values, entry.Name()+": "+readErr.Error())
+		} else {
+			values = append(values, entry.Name()+": "+string(data))
+		}
+	}
+	return strings.Join(values, "\n")
+}
+
+func TestAPIIdentityAndAuthentication(t *testing.T) {
+	requireWindowsAPI(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	fixture := newLifecycleProject(t, "local")
+	service := startIntegrationService(t, ctx, fixture.config, &integrationLifecycleResolver{})
+	defer service.stop(t)
+	endpoint, client, product := startIntegrationHTTPAPI(t, ctx, fixture, service)
+	defer endpoint.Close(context.Background())
+	defer product.Close()
+	if client.Identity().Protocol != httpapi.Protocol || client.Identity().ProjectID != httpapi.ProjectID(fixture.config.Identity()) ||
+		client.Identity().InstanceID != service.instanceID || !client.Identity().Ready || client.Identity().Process.PID != os.Getpid() {
+		t.Fatalf("HTTP identity did not match the real service process: %+v", client.Identity())
+	}
+}
+
+func TestAPIQueryParity(t *testing.T) {
+	requireWindowsAPI(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	fixture := newLifecycleProject(t, "local")
+	createIntegrationTask(t, ctx, fixture, 901)
+	service := startIntegrationService(t, ctx, fixture.config, &integrationLifecycleResolver{})
+	defer service.stop(t)
+	endpoint, client, product := startIntegrationHTTPAPI(t, ctx, fixture, service)
+	defer endpoint.Close(context.Background())
+	defer product.Close()
+
+	page, err := client.ListTasks(ctx, "", 25)
+	require(t, err)
+	if len(page.Tasks) != 1 || page.Tasks[0].TaskID != "901" || page.DatabaseID == "" || page.GraphRevision == 0 {
+		t.Fatalf("HTTP task page dropped product query identity/version: %+v", page)
+	}
+	graph, err := client.Graph(ctx, "", 20)
+	require(t, err)
+	if graph.DatabaseID != page.DatabaseID || graph.GraphRevision != page.GraphRevision || len(graph.Nodes) != 1 || graph.Nodes[0].TaskID != "901" {
+		t.Fatalf("HTTP graph mixed or lost the native query snapshot: %+v", graph)
+	}
+	snapshot, err := client.Snapshot(ctx, "901")
+	require(t, err)
+	if snapshot.SelectedNative == nil || snapshot.SelectedNative.TaskID != "901" || snapshot.Connection.Snapshot.Page == nil || snapshot.Connection.Snapshot.Page.Service.InstanceID != service.instanceID {
+		t.Fatalf("HTTP project snapshot lost selected task or service identity: %+v", snapshot)
+	}
+	candidates, err := client.Candidates(ctx)
+	require(t, err)
+	if candidates.RepositoryIdentity != fixture.config.Identity() || candidates.InstanceID != service.instanceID {
+		t.Fatalf("HTTP candidates were not bound to this project/service: %+v", candidates)
+	}
+
+	claimIntegrationTask(t, ctx, fixture, 901, service.instanceID)
+	run := waitIntegrationRun(t, ctx, service, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
+		return run.TaskID == "901" && run.Decision != nil && run.Decision.Status == "pending" && execution.CurrentTurnID == execution.LastStoppedTurnID
+	})
+	projectSnapshot, err := client.Snapshot(ctx, "901")
+	require(t, err)
+	if projectSnapshot.History == nil || len(projectSnapshot.History.Decisions) == 0 {
+		t.Fatal("HTTP history query omitted the real controlled decision")
+	}
+	candidate, err := client.Run(ctx, run.run.RunID)
+	require(t, err)
+	if candidate.ExecutionID != run.execution.ExecutionID || candidate.AttemptID != run.run.AttemptID || candidate.Decision == nil {
+		t.Fatalf("run query collapsed or changed execution identity: %+v", candidate)
+	}
+	activity, err := client.Activity(ctx, candidate.RunID, candidate.ExecutionID, candidate.AttemptID, api.ActivityCursor{})
+	require(t, err)
+	if activity.Page.Cursor.RunID != candidate.RunID || activity.Page.Cursor.ExecutionID != candidate.ExecutionID || activity.Page.Cursor.AttemptID != candidate.AttemptID {
+		t.Fatalf("activity page cursor lost its source identity: %+v", activity.Page.Cursor)
+	}
+	final, err := client.FinalReply(ctx, candidate.RunID)
+	require(t, err)
+	if final.ExecutionID != candidate.ExecutionID || len(final.Page.Events) == 0 || len(final.Bodies) == 0 || !final.Bodies[0].Complete || !strings.Contains(final.Bodies[0].Text, "completed") {
+		t.Fatalf("final reply was not read from the real controlled conversation store: %+v", final)
+	}
+	if len(activity.Page.Activity) == 0 {
+		t.Fatal("recent activity query did not return the real controlled service events")
+	}
+
+	current, err := client.Snapshot(ctx, "901")
+	require(t, err)
+	if current.SelectedNative == nil || current.NativeTasks == nil || current.Connection.Snapshot.Page == nil {
+		t.Fatal("selected task snapshot lacks task, graph or service control identity")
+	}
+	startCandidate := httpapi.CommandEnvelope{RequestID: randomRequestID(t), ProjectID: httpapi.ProjectID(fixture.config.Identity()),
+		InstanceID: service.instanceID, Action: "start_candidate", TargetID: "901", ExpectedVersion: current.SelectedNative.Version,
+		ExpectedControlRevision: current.Connection.Snapshot.Page.Control.Revision, ExpectedGraphRevision: current.NativeTasks.GraphRevision,
+		Payload: []byte(`{"execution_profile_id":"fixture"}`)}
+	started, err := client.SubmitCommand(ctx, startCandidate)
+	require(t, err)
+	if started.ControlRequest == nil {
+		t.Fatalf("second native candidate did not publish its original control request: %+v", started)
+	}
+	var candidateRuns []api.CandidateSummary
+	waitFor(t, 30*time.Second, func() bool {
+		fresh, readErr := client.Snapshot(ctx, "901")
+		if readErr != nil || fresh.Connection.Snapshot.Page == nil {
+			return false
+		}
+		candidateRuns = nil
+		for _, run := range fresh.Connection.Snapshot.Page.Runs {
+			if run != nil && run.TaskID == "901" {
+				candidateRuns = append(candidateRuns, *run)
+			}
+		}
+		return len(candidateRuns) >= 2
+	})
+	if len(candidateRuns) != 2 || candidateRuns[0].RunID == candidateRuns[1].RunID || candidateRuns[0].ExecutionID == candidateRuns[1].ExecutionID || candidateRuns[0].AttemptID == candidateRuns[1].AttemptID {
+		t.Fatalf("HTTP query merged the two local candidates or their identities: %+v", candidateRuns)
+	}
+}
+
+func TestAPIOriginalCommandReceipt(t *testing.T) {
+	requireWindowsAPI(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	fixture := newLifecycleProject(t, "local")
+	createIntegrationTask(t, ctx, fixture, 902)
+	service := startIntegrationService(t, ctx, fixture.config, &integrationLifecycleResolver{})
+	defer service.stop(t)
+	endpoint, client, product := startIntegrationHTTPAPI(t, ctx, fixture, service)
+	defer endpoint.Close(context.Background())
+	defer product.Close()
+	page, err := client.Snapshot(ctx, "902")
+	require(t, err)
+	if page.Connection.Snapshot.Page == nil {
+		t.Fatal("controlled service query lacked a control revision")
+	}
+	revision := page.Connection.Snapshot.Page.Control.Revision
+	requestID := randomRequestID(t)
+	envelope := httpapi.CommandEnvelope{RequestID: requestID, ProjectID: httpapi.ProjectID(fixture.config.Identity()), InstanceID: service.instanceID,
+		Action: "pause_dispatch", TargetID: "dispatch", ExpectedVersion: revision, ExpectedControlRevision: revision, Payload: []byte(`{}`)}
+	first, err := client.SubmitCommand(ctx, envelope)
+	require(t, err)
+	if first.ControlRequest == nil || first.Status != "submitted" {
+		t.Fatalf("HTTP command did not return its original request identity: %+v", first)
+	}
+	deadline, stop := context.WithTimeout(ctx, 10*time.Second)
+	defer stop()
+	var receipt httpapi.CommandResponse
+	for {
+		receipt, err = client.Command(deadline, requestID)
+		if err == nil && receipt.ControlReceipt != nil && receipt.ControlReceipt.Status == "applied" {
+			break
+		}
+		if deadline.Err() != nil {
+			requestBytes, _ := os.ReadFile(filepath.Join(fixture.config.RunDir, "control", "requests", requestID, "request.json"))
+			receiptBytes, _ := os.ReadFile(filepath.Join(fixture.config.RunDir, "control", "receipts", requestID+".json"))
+			runtimeState, runtimeErr := steerlineapp.LoadDatabaseRuntime(fixture.config)
+			t.Fatalf("original control receipt did not settle: %+v / %v request=%s receipt=%s runtime=%+v runtime_error=%v",
+				receipt, err, requestBytes, receiptBytes, runtimeState, runtimeErr)
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if receipt.Original == nil || receipt.Original.RequestID != requestID || receipt.ControlReceipt.RequestID != requestID || receipt.Status != "applied" {
+		t.Fatalf("GET /commands did not return the original control receipt: %+v", receipt)
+	}
+	duplicate, err := client.SubmitCommand(ctx, envelope)
+	require(t, err)
+	if duplicate.RequestID != requestID || duplicate.ControlRequest == nil {
+		t.Fatalf("retry changed the original control request: %+v", duplicate)
+	}
+	unsupported := envelope
+	unsupported.RequestID = randomRequestID(t)
+	unsupported.Action = "planning_publish"
+	if _, err = client.SubmitCommand(ctx, unsupported); err == nil || !strings.Contains(err.Error(), "unsupported") {
+		t.Fatalf("unknown action did not return unsupported: %v", err)
+	}
+	unsupportedReceipt, err := client.Command(ctx, unsupported.RequestID)
+	if err != nil || unsupportedReceipt.Status != "rejected" || unsupportedReceipt.Code != "unsupported" {
+		t.Fatalf("unsupported action did not retain its protocol rejection: %+v %v", unsupportedReceipt, err)
+	}
+}
+
+func TestAPIReconnectAndUnsupported(t *testing.T) {
+	requireWindowsAPI(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+	fixture := newLifecycleProject(t, "local")
+	service := startIntegrationService(t, ctx, fixture.config, &integrationLifecycleResolver{})
+	defer service.stop(t)
+	first, client, product := startIntegrationHTTPAPI(t, ctx, fixture, service)
+	if client.Identity().InstanceID != service.instanceID {
+		t.Fatal("initial client did not bind to the live service")
+	}
+	if err := first.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	second, secondClient, err := reconnectIntegrationHTTPAPI(ctx, fixture, service, product)
+	require(t, err)
+	defer second.Close(context.Background())
+	defer product.Close()
+	if secondClient.Identity().InstanceID != service.instanceID || !secondClient.Identity().Ready {
+		t.Fatalf("reconnected client did not query the same live instance: %+v", secondClient.Identity())
+	}
+	if _, err = httpapi.Open(ctx, fixture.config.RunDir, fixture.config.Identity()+"/wrong-project"); err == nil || !strings.Contains(err.Error(), "different project") {
+		t.Fatalf("wrong project was accepted by discovery: %v", err)
+	}
+}
+
+func startIntegrationHTTPAPI(t *testing.T, ctx context.Context, fixture integrationFixture, service *runningIntegrationService) (*httpapi.Server, *httpapi.Client, *productclient.Client) {
+	t.Helper()
+	product, err := steerlineapp.OpenClient(ctx, fixture.configPath)
+	require(t, err)
+	server, client, err := newIntegrationHTTPAPI(ctx, fixture, service, product)
+	require(t, err)
+	return server, client, product
+}
+
+func reconnectIntegrationHTTPAPI(ctx context.Context, fixture integrationFixture, service *runningIntegrationService, product *productclient.Client) (*httpapi.Server, *httpapi.Client, error) {
+	server, client, err := newIntegrationHTTPAPI(ctx, fixture, service, product)
+	return server, client, err
+}
+
+func newIntegrationHTTPAPI(ctx context.Context, fixture integrationFixture, service *runningIntegrationService, product *productclient.Client) (*httpapi.Server, *httpapi.Client, error) {
+	identity := service.service.State.Service.ProcessIdentity
+	if identity == nil {
+		return nil, nil, fmt.Errorf("controlled service omitted process identity")
+	}
+	server, err := httpapi.Prepare(ctx, product, httpapi.Options{RunDir: fixture.config.RunDir, ProjectIdentity: fixture.config.Identity(),
+		InstanceID: service.instanceID, Process: httpapi.ProcessIdentity{Kind: identity.Kind, PID: identity.PID, Created: identity.Created, Executable: identity.Executable},
+		Capabilities: append([]string(nil), service.service.State.Service.Capabilities...)})
+	if err != nil {
+		return nil, nil, err
+	}
+	if err = server.SetReady(service.instanceID, true, ""); err != nil {
+		return nil, nil, err
+	}
+	if err = server.Start(); err != nil {
+		return nil, nil, err
+	}
+	client, err := httpapi.Open(ctx, fixture.config.RunDir, fixture.config.Identity())
+	if err != nil {
+		return nil, nil, err
+	}
+	return server, client, nil
+}
+
+func randomRequestID(t *testing.T) string {
+	t.Helper()
+	var raw [16]byte
+	if _, err := rand.Read(raw[:]); err != nil {
+		t.Fatal(err)
+	}
+	return hex.EncodeToString(raw[:])
+}
+
+func requireWindowsAPI(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS != "windows" {
+		t.Skip("local client protocol acceptance requires real Windows service identity and ACLs")
+	}
+}

@@ -18,6 +18,7 @@ func validateRuntimeHomePaths(config Config) error {
 		{"execution profile", GlobalExecutionConfigPath()},
 		{"state root", StateRoot()},
 		{"run_dir", config.RunDir},
+		{"local API state", filepath.Join(config.RunDir, "local-api")},
 		{"database", filepath.Join(config.RunDir, "steerline.db")},
 		{"database WAL", filepath.Join(config.RunDir, "steerline.db-wal")},
 		{"database shared memory", filepath.Join(config.RunDir, "steerline.db-shm")},

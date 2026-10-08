@@ -168,8 +168,12 @@ func (c *Client) AddPredecessors(ctx context.Context, in api.TaskPredecessorAddI
 }
 
 func (c *Client) Conversation(ctx context.Context, filter api.ConversationFilter, cursor string) (api.ConversationPage, error) {
+	return c.ConversationPage(ctx, filter, cursor, 1000)
+}
+
+func (c *Client) ConversationPage(ctx context.Context, filter api.ConversationFilter, cursor string, limit int) (api.ConversationPage, error) {
 	return read(ctx, c, func(r Reader) (api.ConversationPage, error) {
-		return r.Conversation(ctx, filter, cursor, 1000)
+		return r.Conversation(ctx, filter, cursor, limit)
 	})
 }
 
@@ -247,6 +251,37 @@ func (c *Client) SubmitControl(ctx context.Context, in api.ControlInput) (api.Co
 		return api.ControlRequest{}, err
 	}
 	return c.resources.Control.Submit(ctx, in)
+}
+
+func (c *Client) SubmitControlInbox(ctx context.Context, in api.ControlInput) (api.ControlRequest, error) {
+	if err := c.begin(ctx); err != nil {
+		return api.ControlRequest{}, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.Control == nil {
+		return api.ControlRequest{}, unsupported("control")
+	}
+	port, ok := c.resources.Control.(ControlInboxPort)
+	if !ok {
+		return api.ControlRequest{}, unsupported("control request inbox")
+	}
+	if in.RequestID == "" {
+		return api.ControlRequest{}, errors.New("control requires a stable request ID before submission")
+	}
+	if in.RequestedBy == "" {
+		in.RequestedBy = c.resources.DefaultRequestedBy
+	}
+	if in.Payload.Environment != nil {
+		target := *in.Payload.Environment
+		in.Payload.Environment = &target
+	}
+	if in.InstanceID == "" {
+		return api.ControlRequest{}, &api.Error{Kind: api.IdentityConflict, Message: "control request requires the discovered instance identity"}
+	}
+	if in.Action != api.StopService && in.ExpectedRevision == nil {
+		return api.ControlRequest{}, &api.Error{Kind: api.IdentityConflict, Message: "control request requires its displayed revision"}
+	}
+	return port.SubmitInbox(ctx, in)
 }
 
 func (c *Client) Receipt(ctx context.Context, id string) (*api.ControlReceipt, error) {
@@ -402,6 +437,10 @@ func (c *Client) ReadProject(ctx context.Context, selected string, previous api.
 
 func (c *Client) RecentActivity(ctx context.Context, run, execution, attempt string) (api.LogBatch, error) {
 	return read(ctx, c, func(r Reader) (api.LogBatch, error) { return r.RecentActivity(ctx, run, execution, attempt) })
+}
+
+func (c *Client) Activity(ctx context.Context, run, execution, attempt string, cursor api.ActivityCursor) (api.LogBatch, error) {
+	return read(ctx, c, func(r Reader) (api.LogBatch, error) { return r.Activity(ctx, run, execution, attempt, cursor) })
 }
 
 func (c *Client) InspectRecovery(ctx context.Context, id string) (api.RecoveryInspection, error) {

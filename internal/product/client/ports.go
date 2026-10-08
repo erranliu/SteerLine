@@ -15,6 +15,7 @@ type Reader interface {
 	Close() error
 	ReadProject(context.Context, string, api.ProjectSnapshot) api.ProjectSnapshot
 	RecentActivity(context.Context, string, string, string) (api.LogBatch, error)
+	Activity(context.Context, string, string, string, api.ActivityCursor) (api.LogBatch, error)
 	ShowTask(context.Context, string) (api.TaskPage, error)
 	ListTasks(context.Context, string, int) (api.TaskPage, error)
 	TaskGraph(context.Context, string, int) (api.GraphPage, error)
@@ -36,6 +37,12 @@ type ControlPort interface {
 	Receipt(context.Context, string) (*api.ControlReceipt, error)
 	Request(context.Context, string) (*api.ControlRequest, error)
 	Stop(context.Context, string, time.Duration) (api.ServiceStopResult, error)
+}
+
+// ControlInboxPort publishes an immutable request bound to the client's
+// displayed instance/revision. The running service rechecks qualification.
+type ControlInboxPort interface {
+	SubmitInbox(context.Context, api.ControlInput) (api.ControlRequest, error)
 }
 
 type DecisionPort interface {

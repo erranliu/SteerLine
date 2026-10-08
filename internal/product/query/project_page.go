@@ -87,6 +87,12 @@ func CommandReceipt(r storageports.CommandRecord) api.CommandReceipt {
 		if err := json.Unmarshal(r.Result, &result); err == nil {
 			p.ResultCode, p.ResultError = result.Code, result.Error
 		}
+		if r.Kind == "discard_task" {
+			var discard api.TaskDiscardReceipt
+			if err := json.Unmarshal(r.Result, &discard); err == nil && discard.RequestID == r.CommandID {
+				p.Discard = &discard
+			}
+		}
 	}
 	return p
 }

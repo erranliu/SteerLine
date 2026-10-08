@@ -18,6 +18,7 @@
 | --- | --- | --- | --- | --- |
 | 定向 Go / API1、API2、API4、API5 | Windows、真实临时服务/Git/SQLite、受控后端；下方 API 查询/身份定向命令 | 路由接线完成后 | 非零命中；ACL/实例/查询一致及诊断断言通过 | 本次临时目录 api-targeted.log；摘要写专属 acceptance |
 | 定向接线 / API3 | 同上；go test ./internal/product/httpapi -run '^TestAPIOriginalCommandReceipt$' -count=1 | 命令接线后 | 注入未登记、丢回执及迟到提交，原 ID 仲裁至多一个副作用 | 临时目录 api-command.log 与身份/回执摘要 |
+| 定向真实接线 / API1–API5 | Windows 临时 Git/SQLite 项目、真实 app host/service actor、受控 Codex app-server/Git；`go test ./tests/integration -run '^TestAPI(IdentityAndAuthentication|QueryParity|OriginalCommandReceipt|ReconnectAndUnsupported|ServiceLifecycle|ConfiguredServicePublishesDiscovery)$' -count=1` | httpapi 命令/查询组装后及提交前 | 六个测试全通过且零 skip；真实身份/ACL、双候选查询、final 正文、唯一回执及应用服务 lifecycle/discovery 通过；不启动 live 模型 | 临时目录 `api-integration.log`；逐项摘要写本 acceptance |
 | L1 固定组 | Windows；go run ./cmd/test-feedback -level=L1 | 定向通过、合入前一次 | passed/complete=true；共享 Query/Command 与宿主边界保持 | runner 默认临时目录，acceptance 记录实际位置 |
 | Go 静态 | Windows；go vet ./internal/product/httpapi ./internal/app/... | 实现完成后 | 无新增诊断 | 临时目录 api-vet.log |
 | 文档静态 | Python/Git；python scripts/check_doc_links.py；python scripts/roadmap_task_id.py check；git diff --check | 本次规划修订及实现交付前 | 导航、身份及格式通过 | 规划修订见 roadmap-planning；实现见专属 acceptance |

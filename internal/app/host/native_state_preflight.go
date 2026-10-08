@@ -28,6 +28,7 @@ func preflightNativeStatePath(c Config) error {
 	path := filepath.Join(c.RunDir, "steerline.db")
 	for _, entry := range []struct{ name, path string }{
 		{"run directory", c.RunDir},
+		{"local API state", filepath.Join(c.RunDir, "local-api")},
 		{"database", path},
 		{"database WAL", path + "-wal"},
 		{"database shared memory", path + "-shm"},
@@ -179,6 +180,11 @@ func ensureNativeStateFilesAllowed(runDir string, worktreeMetadata []string) err
 		case "service":
 			if err := validateNativeServiceTree(runDir, ""); err != nil {
 				return err
+			}
+		case "local-api":
+			info, statErr := os.Lstat(entryPath)
+			if statErr != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+				return nativeErr("authority_mismatch", "local API state must be an existing directory inside native run_dir")
 			}
 		case "control":
 			if err := validateNativeControlTree(runDir); err != nil {

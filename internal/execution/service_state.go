@@ -55,13 +55,14 @@ type Service struct {
 	forwardedDone             []Signal
 	conversationHistoryErrors chan error
 	// Console selects service-side rendering: "", "off", "pretty", "summary" or "json".
-	controlSeen      map[string]string
-	stopControl      *productapi.ControlRequest
-	stopAcceptedAt   *time.Time
-	targetTask       string
-	lastDispatched   string
-	reservedRunID    string
-	explicitDispatch bool
-	controlFault     func(string)
-	startupID        string
+	controlSeen       map[string]string
+	stopControl       *productapi.ControlRequest
+	stopAcceptedAt    *time.Time
+	targetTask        string
+	targetTaskVersion uint64
+	lastDispatched    string
+	reservedRunID     string
+	explicitDispatch  bool
+	controlFault      func(string)
+	startupID         string
 }

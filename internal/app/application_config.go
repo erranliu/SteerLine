@@ -2,7 +2,9 @@ package app
 
 import (
 	"context"
+	"fmt"
 	"github.com/erranliu/SteerLine/internal/app/host"
+	"github.com/erranliu/SteerLine/internal/product/httpapi"
 )
 
 func ValidateApplicationPaths(c Config) error {
@@ -17,5 +19,11 @@ func PreflightNativeStatePath(c Config) error {
 	if err != nil {
 		return err
 	}
-	return host.PreflightNativeStatePath(hostConfig)
+	if err := host.PreflightNativeStatePath(hostConfig); err != nil {
+		return err
+	}
+	if err := httpapi.ValidateStateDirectory(c.RunDir, c.Identity()); err != nil {
+		return fmt.Errorf("local API state: %w", err)
+	}
+	return nil
 }
