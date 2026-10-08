@@ -2,7 +2,7 @@
 
 唯一任务归属：#83。来源：[Spec](../spec/local-runtime-isolation.spec.md) / [Plan](../spec/local-runtime-isolation.plan.md)。本文件是该任务专属验收文档，不覆盖其他任务；验收流程见[入口](README.md)。
 
-状态：round 2 发现的缺省 state/UI junction 写越界已修复并由真实产品入口负例复验；debug `Operation service`、生成的 `service-window.bat` 和 `console.bat` 也已实际运行。最终实现候选 `ad22d476f87e019a9ad5d0118758b253dd091094` 在 Windows/amd64 clean tree 上通过 LI1-A–LI4-A 自动验收，见最终记录。PR #247 保持打开且未合并，等待新一轮独立复审；任务仍为执行中，不释放后继。无本任务人工验收项。固定 Spec/Plan commit 为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。实现 PR：[PR #247](https://github.com/erranliu/SteerLine/pull/247)。本文件保留旧证据、复审发现及局部修复事实。
+状态：round 3 独立复审否定此前“全部自动验收通过”的汇总：直接 `build.ps1` 经源码 bin junction 覆盖安装 exe（LI2-A 失败，待原执行者修复）；stale instance/config 拒绝的请求计数使用错误目录，历史“不增长”断言未有效验证（LI3-A 该子项现已局部复验，最终候选仍待复验）。round 2 的 state/UI 与真实 batch/console/service 证据保留其实际范围。本轮限修 LI3-A 请求观察，PR #247 保持打开且未合并；任务仍为执行中，不释放后继，不宣称最终实现全部通过。无本任务人工验收项。固定 Spec/Plan commit 为 `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。实现 PR：[PR #247](https://github.com/erranliu/SteerLine/pull/247)。本文件保留旧证据、复审发现及局部修复事实。
 
 ## 自动验收
 
@@ -11,8 +11,8 @@
 | 验收项 | 方法 | 规划行为与通过条件 | 状态 / 结果 |
 | --- | --- | --- | --- |
 | LI1-A | 自动 | 两个独立测试 clone、不同 home 的安装版与调试版同时运行；配置、状态、日志、服务发现和写命令不串线 | 已验收：final L3 场景两侧分别等待合并和完成，项目/数据库身份独立，Task/Delivery 写入与快照未串线；清理完成 |
-| LI2-A | 自动 | 调试 build、停启及入口重复生成不改安装 exe 摘要、原服务实例或任务事实；调试服务/控制台/CLI 及子进程使用实际调试 exe/home | 已验收：CLI、`Operation service` 调用的 `service-window.bat`、直接生成 batch 和 `console.bat` ConPTY 路径均核对实际 exe/home/config/commit；两次停服回执 `applied`、`process_exited=true`、`locks_released=true`。安装 exe SHA-256 `40e53741c02136e8bcf1269634915bf0cfec186b6629908846c1058f3b3b50d7` 及安装 instance `926f5f25ca799e0f403288ec461f8454` 保持；调试 exe SHA-256 `36b15b59d172be3858ea8c79a0214ca409d8e26538f071bb92b1163e825bcb8f` rebuild 前后相同；调试重启任务事实保持 |
-| LI3-A | 自动 | 缺少调试路径、home 重叠、显式状态/工作区越出调试 home 拒绝；同仓库跨 home 第二写者被原锁拒绝；误连实例的写命令仍被拒绝 | 已验收：state/UI junction 的脚本入口与真实 native task/console 入口均在安装侧目录、数据库或 sentinel 改变前拒绝；P1 alias/hardlink/正常路径 10 项、显式越界、stale instance/config 和跨 home 锁断言均通过 |
+| LI2-A | 自动 | 调试 build、停启及入口重复生成不改安装 exe 摘要、原服务实例或任务事实；调试服务/控制台/CLI 及子进程使用实际调试 exe/home | **验收失败**：round 3 直接 build.ps1 的 bin junction 可覆盖安装 exe，待原执行者修复；以下 round 2 正常场景证据保留：CLI、`Operation service` 调用的 `service-window.bat`、直接生成 batch 和 `console.bat` ConPTY 路径均核对实际 exe/home/config/commit；两次停服回执 `applied`、`process_exited=true`、`locks_released=true`。安装 exe SHA-256 `40e53741c02136e8bcf1269634915bf0cfec186b6629908846c1058f3b3b50d7` 及安装 instance `926f5f25ca799e0f403288ec461f8454` 保持；调试 exe SHA-256 `36b15b59d172be3858ea8c79a0214ca409d8e26538f071bb92b1163e825bcb8f` rebuild 前后相同；调试重启任务事实保持 |
+| LI3-A | 自动 | 缺少调试路径、home 重叠、显式状态/工作区越出调试 home 拒绝；同仓库跨 home 第二写者被原锁拒绝；误连实例的写命令仍被拒绝 | **待验收**：round 3 证明旧请求计数断言无效；本轮已局部复验正式请求计数，两条拒绝均 0→0，正常产品领取 0→2；最终候选仍待复验；其他既有证据保留：state/UI junction 的脚本入口与真实 native task/console 入口均在安装侧目录、数据库或 sentinel 改变前拒绝；P1 alias/hardlink/正常路径 10 项、显式越界和跨 home 锁断言通过；stale instance/config 的错误返回已观察，但旧“不发布请求”断言不能作为证据 |
 | LI4-A | 自动 | Windows 中文/空格路径及无关 cwd 可启动并显示准确身份；维护说明区分中心停服、外部执行结算、同构建重启和人工更新 | 已验收：final L3 使用中文/空格路径和无关 cwd；实际 console/service/CLI identity 与维护步骤见[本机安装与源码调试](../runtime-install-debug.md) |
 
 环境：Windows/amd64 controlled；两个独立 Git clone/home、真实 SteerLine 进程、SQLite、Git 和受控 worker/provider；不发模型请求。每次输出目录独立，服务和临时资源由场景登记并清理。
@@ -95,7 +95,7 @@ round 2 复审已证明本节报告不能关闭全部自动验收：实际 debug
 
 ## 2026-10-08 最终候选复验（round 2 修复后）
 
-受验实现/测试候选：commit `ad22d476f87e019a9ad5d0118758b253dd091094`，tree `e2470c18a0d29979006aa5e12a440f2035bf5fa0`，Windows/amd64，分级 runner 记录 clean source；base/main `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。round 1 和 round 2 的失败发现未被擦除，以下是该修复候选的新证据。
+受验实现/测试候选：commit `ad22d476f87e019a9ad5d0118758b253dd091094`，tree `e2470c18a0d29979006aa5e12a440f2035bf5fa0`，Windows/amd64，分级 runner 记录 clean source；base/main `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`。round 1 和 round 2 的失败发现未被擦除，以下是该修复候选当时的新证据。round 3 后，此节的整体验收通过结论已撤销：direct build.ps1 失败未覆盖，stale instance/config 的请求计数断言无效；其余证据仅保留原实际范围。
 
 | 范围 | 实际命令 / 结果 | 证据 |
 | --- | --- | --- |
@@ -134,6 +134,27 @@ go test -tags=e2e ./tests/e2e/internal/testenv ./tests/e2e/suites/runtime -run '
 最终候选将 Windows 真实路径解析集中在 app/host 使用的 `internal/pathguard`，console 在自身 owner 内使用等价的 junction 解析，保持既有 console/product dependency boundary。home/state/SQLite journal/control/service/worktree 路径在 app 与 host 副作用前检查；UI root/profile/lock/journal 在 console 建目录或打开文件前检查。可选 `-IncludeSymbolicLinks` 文件符号链接负例仍未运行；其它上述最终自动验收通过。
 
 临时证据目录在用户主机保留供协调聊天复审；仓库只登记上述最小身份、摘要与结果。
+
+## 2026-10-08 独立复审 round 3：请求观察局部修复
+
+复审候选 `f5c729f985f56f1a59c7506a6bc07dfc6e9ab402`，base/main `8dfa4c5b4df106e878a9abc7b4f518bf2559d67c`；报告 `C:\Users\lmas1\.codex\task-state\roadmap-runner\roadmap-steerline-20261008-01a11a74\review83-round3.md`。此前 round 1/round 2 场景的请求计数 glob 为 `control/requests/*.json`，生产正式协议实际使用 `control/requests/<request ID>/request.json`，因此历史 stale instance/config 拒绝前后计数恒零，“未发布请求”未有效验证；原错误返回、身份和任务事实证据仍保留其范围。
+
+本轮仅修改 runtime 场景：观察正式 request 文件；保留 stale instance/config 拒绝及计数不增长断言；利用已有正常 `debug.Claim("a")` 经产品客户端发布 `resume_dispatch` 和 `start_task` 两条请求，要求计数增加 2，核验原 request ID 与目录名、repository/instance、目标 task，并在 `runtime-identities.json` 保存正式路径、文件摘要与身份。没有手工伪造正向请求、生产入口或生产代码改动。
+
+本轮局部复验通过：Windows/amd64 controlled，仅执行一次 `runtime.installed-debug-isolation`，退出 0、`passed=true`、`complete=true`、`cleanup_complete=true`、1 个测试、零 skip；runner execution 238.367 秒。没有 L1、Full、L2、live 或其他产品场景重跑。本轮没有初次失败或自动重试，历史失败目录保持。
+
+精确命令（工作树 `C:\Users\lmas1\.codex\worktrees\52f5\SteerLine`）：
+
+```powershell
+go build -o C:/Users/lmas1/AppData/Local/Temp/steerline-task83-round3-p2-20261008-01/test-feedback.exe ./cmd/test-feedback
+& 'C:/Users/lmas1/AppData/Local/Temp/steerline-task83-round3-p2-20261008-01/test-feedback.exe' '-level=L3' '-suite=runtime' '-env=controlled' '-scenario=runtime.installed-debug-isolation' '-out=C:/Users/lmas1/AppData/Local/Temp/steerline-task83-round3-p2-20261008-01/runtime'
+```
+
+受验源码身份为 HEAD `f5c729f985f56f1a59c7506a6bc07dfc6e9ab402` 加本轮 runtime 测试与两份结果文档修改，`source_dirty=true`，不能称为 clean HEAD 验证；生产源码未修改。受验测试 Git blob `072258ca49b848521debb5336c1b97c5b204649a`，SHA-256 `4b49dbdbf6ae58e216a61c22f8a87054f3f2d3e23785c406cdcefb9a3b4a526e`（测试之后未再改动）；runner 构建的产品 exe SHA-256 `d520de8d717eb577927f48e4ae97f911e75d40b8c9fb42250420f0f28a96195b`，helper `1075e9b17f9f5f4655745aa4820845d0abf5c3f9ef99823f8fa9f4d27689ee29`。
+
+证据根 `C:\Users\lmas1\AppData\Local\Temp\steerline-task83-round3-p2-20261008-01\runtime`，包括 `summary.json`、`e2e-1.jsonl`、`scenarios\runtime.installed-debug-isolation\scenario.json`、`resources.json`、`runtime-identities.json` 及原产品命令回执。`debug.stale_instance_request_counts` 与 `debug.changed_config_request_counts` 均为 before=0/after=0；`debug.normal_control_publication` 为 before=0/after=2，正式 `resume_dispatch` 请求 ID `04eafec8b5b29349f05b7a0895d13226`、`start_task` ID `76458df0fdfe561476f74a240777fe9c`，两者 instance=`b31e36254605c40292ceff67980ab64e`、repository identity 为本次 debug clone 的 `.git`；正式文件路径和 SHA-256 保留在同一证据中。场景自身停止 batch/service/helper 资源；scratch `C:\Users\lmas1\AppData\Local\Temp\steerline-e2e-3769137333` 已删除。
+
+此次范围不关闭 LI2-A 的 direct build.ps1 失败，不替代原执行者完成 P1 后的最终验证或新独立复审；PR 未合并，不宣称最终实现全部通过。
 
 ## 人工验收
 

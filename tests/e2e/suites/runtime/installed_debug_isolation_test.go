@@ -186,10 +186,12 @@ func TestInstalledDebugIsolation(t *testing.T) {
 	if staleTargetErr == nil || !strings.Contains(staleTargetErr.Error(), "stale_instance") {
 		t.Fatalf("write targeting a stale service instance was not refused: %v", staleTargetErr)
 	}
-	if count := controlRequestCount(t, debug); count != requestsBeforeStaleTarget {
+	requestsAfterStaleTarget := controlRequestCount(t, debug)
+	if count := requestsAfterStaleTarget; count != requestsBeforeStaleTarget {
 		t.Fatalf("stale-instance rejection published a control request: before=%d after=%d", requestsBeforeStaleTarget, count)
 	}
 	debugEvidence["stale_instance_write_rejected"] = staleTargetErr.Error()
+	debugEvidence["stale_instance_request_counts"] = map[string]int{"before": requestsBeforeStaleTarget, "after": requestsAfterStaleTarget}
 	writeRuntimeEvidence(t, s.Output, evidence)
 
 	staleConfig := writeConfigVariant(t, debug, "Stale.json", func(config map[string]any) {
@@ -203,9 +205,11 @@ func TestInstalledDebugIsolation(t *testing.T) {
 		t.Fatal("a write command using a changed configuration reached the running service")
 	}
 	debugEvidence["changed_config_write_rejected"] = staleWriteErr.Error()
-	if count := controlRequestCount(t, debug); count != requestsBeforeStaleConfig {
+	requestsAfterStaleConfig := controlRequestCount(t, debug)
+	if count := requestsAfterStaleConfig; count != requestsBeforeStaleConfig {
 		t.Fatalf("changed-config rejection published a control request: before=%d after=%d", requestsBeforeStaleConfig, count)
 	}
+	debugEvidence["changed_config_request_counts"] = map[string]int{"before": requestsBeforeStaleConfig, "after": requestsAfterStaleConfig}
 	writeRuntimeEvidence(t, s.Output, evidence)
 	debugAfterRejectedWrite := mustSnapshot(t, debug)
 	if len(debugAfterRejectedWrite.Domain.WorkflowRuns) != 0 {
@@ -224,7 +228,10 @@ func TestInstalledDebugIsolation(t *testing.T) {
 	installed.Claim("a")
 	installedOpen := installed.WaitPhase("waiting_pr_merge")
 	installed.Record("waiting-pr-merge", installedOpen)
+	requestsBeforeClaim := controlRequestFiles(t, debug)
 	debug.Claim("a")
+	debugEvidence["normal_control_publication"] = assertControlPublication(t, debug, requestsBeforeClaim, debugBefore)
+	writeRuntimeEvidence(t, s.Output, evidence)
 	debugOpen := debug.WaitPhase("waiting_pr_merge")
 	debug.Record("waiting-pr-merge", debugOpen)
 	if installedOpen.Helper.Dispatches != 1 || debugOpen.Helper.Dispatches != 1 || installedOpen.Page.ProjectID == debugOpen.Page.ProjectID {
@@ -601,11 +608,65 @@ func assertServiceStopReceipt(t *testing.T, output []byte) {
 
 func controlRequestCount(t *testing.T, project *testenv.Project) int {
 	t.Helper()
-	files, err := filepath.Glob(filepath.Join(filepath.Dir(project.Database), "control", "requests", "*.json"))
+	return len(controlRequestFiles(t, project))
+}
+
+func controlRequestFiles(t *testing.T, project *testenv.Project) []string {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(filepath.Dir(project.Database), "control", "requests", "*", "request.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	return len(files)
+	return files
+}
+
+func assertControlPublication(t *testing.T, project *testenv.Project, before []string, snapshot testenv.Snapshot) map[string]any {
+	t.Helper()
+	after := controlRequestFiles(t, project)
+	// Claim uses the normal product client for resume_dispatch and start_task.
+	// Observing both immutable requests proves the rejection counter is live.
+	if len(after) != len(before)+2 {
+		t.Fatalf("normal claim did not publish two observable control requests: before=%d after=%d", len(before), len(after))
+	}
+	existing := make(map[string]bool, len(before))
+	for _, path := range before {
+		existing[path] = true
+	}
+	observed := make([]map[string]any, 0, 2)
+	actions := make(map[string]bool)
+	for _, path := range after {
+		if existing[path] {
+			continue
+		}
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var request struct {
+			RequestID          string `json:"request_id"`
+			RepositoryIdentity string `json:"repository_identity"`
+			InstanceID         string `json:"instance_id"`
+			Action             string `json:"action"`
+			Payload            struct {
+				TaskID string `json:"task_id"`
+			} `json:"payload"`
+		}
+		if err := json.Unmarshal(raw, &request); err != nil {
+			t.Fatalf("decode published control request %s: %v", path, err)
+		}
+		id, idErr := hex.DecodeString(request.RequestID)
+		if idErr != nil || len(id) != 16 || request.RequestID != filepath.Base(filepath.Dir(path)) ||
+			request.InstanceID != serviceInstance(snapshot) || request.RepositoryIdentity != snapshot.Runtime.Repository.Identity {
+			t.Fatalf("published request has wrong file or runtime identity: path=%s request=%+v", path, request)
+		}
+		if (request.Action != "resume_dispatch" && request.Action != "start_task") || actions[request.Action] ||
+			(request.Action == "start_task" && request.Payload.TaskID != project.Tasks["a"].ID) {
+			t.Fatalf("normal claim published an unexpected request: %+v", request)
+		}
+		actions[request.Action] = true
+		observed = append(observed, map[string]any{"path": path, "sha256": fileSHA256(t, path), "request": request})
+	}
+	return map[string]any{"before": len(before), "after": len(after), "requests": observed}
 }
 
 func assertSameServiceInstance(t *testing.T, before, after testenv.Snapshot) {
