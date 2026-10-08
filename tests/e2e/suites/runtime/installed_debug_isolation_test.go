@@ -575,8 +575,17 @@ func assertDirectBuildOutputIsolation(t *testing.T, s *testenv.Scenario, project
 	if identityErr != nil {
 		t.Fatalf("read direct build source identity: %v: %s", identityErr, identityOutput)
 	}
-	for _, expected := range []string{cloneExe, s.Run.SourceCommit, "dirty=false"} {
+	for _, expected := range []string{cloneExe, s.Run.SourceCommit} {
 		assertContains(t, string(identityOutput), expected)
+	}
+	sourceDirty := ""
+	for _, line := range strings.Split(string(identityOutput), "\n") {
+		if strings.HasPrefix(line, "source dirty") {
+			sourceDirty = strings.TrimSpace(strings.TrimPrefix(line, "source dirty"))
+		}
+	}
+	if sourceDirty != "false" {
+		t.Fatalf("direct source build identity reports dirty=%q, want false:\n%s", sourceDirty, identityOutput)
 	}
 	if strings.TrimSpace(statusAfterBuild) != "" || strings.TrimSpace(statusAfterRebuild) != "" {
 		t.Fatalf("ordinary direct source build changed source status: after_build=%s after_rebuild=%s", statusAfterBuild, statusAfterRebuild)
