@@ -464,7 +464,9 @@ func assertDirectBuildOutputIsolation(t *testing.T, s *testenv.Scenario, project
 	if _, err := os.Stat(sourceRoot); !os.IsNotExist(err) {
 		t.Fatalf("direct build source clone already exists: %s", sourceRoot)
 	}
-	cloneCommand := exec.Command("git", "clone", "--local", "--no-hardlinks", s.Run.Root, sourceRoot)
+	// Use the same isolated Git configuration as the direct build command, so
+	// checkout line endings and the later source-dirty probe agree.
+	cloneCommand := project.Command("git", "clone", "--local", "--no-hardlinks", s.Run.Root, sourceRoot)
 	cloneCommand.Dir = s.Root
 	cloneOutput, err := s.RunCommand(cloneCommand, "clone-source-for-direct-build")
 	if err != nil {
