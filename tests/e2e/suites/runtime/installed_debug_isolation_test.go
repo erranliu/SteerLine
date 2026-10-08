@@ -476,6 +476,17 @@ func assertDirectBuildOutputIsolation(t *testing.T, s *testenv.Scenario, project
 	if err != nil || strings.TrimSpace(string(headOutput)) != s.Run.SourceCommit {
 		t.Fatalf("source build clone HEAD mismatch: head=%s want=%s err=%v", strings.TrimSpace(string(headOutput)), s.Run.SourceCommit, err)
 	}
+	sourceStatus := func(name string) string {
+		output, statusErr := s.RunCommand(project.Command("git", "-C", sourceRoot, "status", "--porcelain"), "direct-build-source-status-"+name)
+		if statusErr != nil {
+			t.Fatalf("read direct build source status %s: %v: %s", name, statusErr, output)
+		}
+		return string(output)
+	}
+	statusAfterClone := sourceStatus("after-clone")
+	if strings.TrimSpace(statusAfterClone) != "" {
+		t.Fatalf("fresh direct build source clone is unexpectedly dirty: %s", statusAfterClone)
+	}
 
 	installedExe := filepath.Join(installed.Home, "bin", "steerline.exe")
 	installedBin := filepath.Join(installed.Home, "bin")
@@ -540,16 +551,22 @@ func assertDirectBuildOutputIsolation(t *testing.T, s *testenv.Scenario, project
 	if err := os.Remove(cloneBin); err != nil {
 		t.Fatalf("remove empty source bin directory: %v", err)
 	}
+	statusBeforeBuild := sourceStatus("before-positive-build")
+	if strings.TrimSpace(statusBeforeBuild) != "" {
+		t.Fatalf("direct build refusal checks changed the source clone: %s", statusBeforeBuild)
+	}
 
 	positiveOutput, positiveErr := runBuild("direct-build-ordinary-source-output")
 	if positiveErr != nil {
 		t.Fatalf("ordinary direct source build failed: %v: %s", positiveErr, positiveOutput)
 	}
+	statusAfterBuild := sourceStatus("after-positive-build")
 	cloneExe := filepath.Join(cloneBin, "steerline.exe")
 	rebuildOutput, rebuildErr := runBuild("direct-build-ordinary-source-rebuild")
 	if rebuildErr != nil {
 		t.Fatalf("ordinary direct source rebuild failed: %v: %s", rebuildErr, rebuildOutput)
 	}
+	statusAfterRebuild := sourceStatus("after-positive-rebuild")
 	cloneSHA := fileSHA256(t, cloneExe)
 	identityCommand := project.Command(cloneExe, "home", "-config", project.Config)
 	identityOutput, identityErr := s.RunCommand(identityCommand, "direct-build-source-home-identity")
@@ -559,9 +576,14 @@ func assertDirectBuildOutputIsolation(t *testing.T, s *testenv.Scenario, project
 	for _, expected := range []string{cloneExe, s.Run.SourceCommit, "dirty=false"} {
 		assertContains(t, string(identityOutput), expected)
 	}
+	if strings.TrimSpace(statusAfterBuild) != "" || strings.TrimSpace(statusAfterRebuild) != "" {
+		t.Fatalf("ordinary direct source build changed source status: after_build=%s after_rebuild=%s", statusAfterBuild, statusAfterRebuild)
+	}
 	assertInstallUnchanged("ordinary direct source build")
 	evidence["direct_source_build"] = map[string]any{
 		"source_clone": sourceRoot, "source_commit": strings.TrimSpace(string(headOutput)),
+		"git_status_after_clone": statusAfterClone, "git_status_before_positive_build": statusBeforeBuild,
+		"git_status_after_positive_build": statusAfterBuild, "git_status_after_positive_rebuild": statusAfterRebuild,
 		"source_bin_junction_rejected": string(junctionOutput), "output_hardlink_rejected": string(hardLinkOutput),
 		"ordinary_build_output": string(positiveOutput), "ordinary_rebuild_output": string(rebuildOutput),
 		"source_executable": cloneExe, "source_bin_entries_after_rebuild": directoryFileSnapshot(t, cloneBin),
