@@ -1,6 +1,6 @@
 # 任务 #44 验收规划：WinUI 基座与原生输入
 
-唯一归属#44；[Spec](../spec/phase2-winui-foundation.spec.md)/[Plan](../spec/phase2-winui-foundation.plan.md)。已纳入执行规划，最终交付依赖#45真实联调；未准入/未执行，全部待验收。
+唯一归属#44；[Spec](../spec/phase2-winui-foundation.spec.md)/[Plan](../spec/phase2-winui-foundation.plan.md)。已纳入执行规划，最终交付依赖#45真实联调；等待#45、未执行，全部待验收。
 
 | 项目 | 方法 | 最小行为/通过条件 | 状态与安排 |
 | --- | --- | --- | --- |
@@ -14,4 +14,4 @@
 
 环境为Windows/.NET/WinUI与临时项目/SQLite/受控后端，不发模型请求。具体工程/测试命令见Plan；实际SDK/构建、exe、现场操作和临时目录执行前记录。不要求最终规划导航/session/上下文或复杂偏好验收。
 
-人工项可在自动与必需检查后集中后置，保留链接；已知误发、串线和不可操作需修复，不能继续标待安排。按[入口](README.md)分项记结果和证据，准入后execution-map汇总；2.1活动引用本页，不代替本任务结果。
+人工项可在自动与必需检查后集中后置，保留链接；已知误发、串线和不可操作需修复，不能继续标待安排。按[入口](README.md)分项记结果和证据，执行时execution-map汇总；2.1活动引用本页，不代替本任务结果。

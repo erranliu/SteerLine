@@ -2,6 +2,8 @@
 
 SteerLine 以 roadmap 组织任务 DAG，连接 worker 的原会话、人工反馈和真实 PR 交付。当前运行与验收范围是本地 Codex 和本机 Orca；保留的远端适配和历史试验不表示当前支持。后续目标见[产品愿景](roadmap/product-vision.md)，源码归属见[代码架构](architecture/current-code-architecture.md)。
 
+本文描述 SteerLine 产品运行的业务权威。仓库开发由 roadmap-runner 直接调度 Codex，以[execution-map](roadmap/execution-map.md)管理任务与依赖；开发流程见[RoadmapGuide](roadmap/RoadmapGuide.md)，不要求外部中心准入。
+
 ## 职责与权威
 
 | 所有者 | 职责 |
@@ -40,4 +42,4 @@ Windows 中心由用户从安装入口打开的可见服务窗口承载，可最
 
 技术架构的主要工程目标是提高 AI 开发的有效并行吞吐，使功能能按明确契约独立理解、实现、验证和交付，减少共享修改、等待与返工。上述业务权威、权限、恢复和唯一交付边界保持。每次规划先读[RoadmapGuide](roadmap/RoadmapGuide.md)，再用[并行开发指南](architecture/parallel-development.md)核对功能所有者、共享冲突及开工/集成条件；模块多或任务多本身不代表有效并行。
 
-本文维护项目整体职责和原则。具体配置、数据、反馈、会话和 UI 设计归[产品设计](product-design/README.md)；代码文件、当前模块与接口归[源码索引](architecture/current-code-architecture.md)。任务执行要求以独立 Spec/Plan 和中心固定契约为准，产品说明不直接改变派发资格。测试方法见[测试指南](testing.md)。
+本文维护项目整体职责和原则。具体配置、数据、反馈、会话和 UI 设计归[产品设计](product-design/README.md)；代码文件、当前模块与接口归[源码索引](architecture/current-code-architecture.md)。产品管理的任务执行要求以独立 Spec/Plan 和中心固定契约为准，产品说明不直接改变派发资格。测试方法见[测试指南](testing.md)。

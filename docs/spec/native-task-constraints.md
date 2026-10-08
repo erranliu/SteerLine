@@ -2,6 +2,8 @@
 
 本文是可被独立任务 Spec 引用的共同约束，不是一份执行 Spec，不承担任务、实现计划或多个 PR 的验收清单。每个任务必须有自己的独立 Spec、独立 Plan 和一个独立实现 PR。
 
+下文约束 SteerLine 产品管理的原生 Task、中心 DAG 与业务交付。仓库开发由 roadmap-runner 直接调度 Codex，执行资格按 RoadmapGuide 与 execution-map 核对；引用本页要求保持产品语义，不要求将开发任务登记到外部中心。
+
 ## 业务边界
 
 - 草稿只作为创建命令的输入；任务创建与加入 DAG 是同一个中心事务，没有先创建任务、再单独发布到 DAG 的业务阶段。创建后固定范围、规格、验收和优先级。已建任务的硬前置只可按[追加前置 Spec](../archive/spec/completed/native-task-add-predecessors.spec.md)受控增加；不编辑任务契约或删除既有边。

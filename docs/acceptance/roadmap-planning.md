@@ -1,6 +1,6 @@
 # 当前规划文档检查
 
-本页记录当前文档维护的静态检查；历史PR和前序规划检查见[归档](archive/completed/roadmap-planning.md)。产品/任务验收仍在各自专属记录，静态检查不证明中心DAG同步或执行资格。
+本页记录当前文档维护的静态检查；历史PR和前序规划检查见[归档](archive/completed/roadmap-planning.md)。产品/任务验收仍在各自专属记录，静态检查不证明实际依赖交付或产品验收通过。
 
 ## 2026-10-07 acceptance归档
 
@@ -24,3 +24,19 @@
 同步origin/main 5d69bfbc，保留主线全部自动验收项的Plan映射规则及原产品/测试实现。新增#238后完整回归、第三批资源/CLI证据归入completed，#40/#41验收草案归入延期参考；原状态与JSON/JSONL不重标。初次归档统计/检查是同步前结果，最终范围交付前再核对。证据完整性记录：C:/Users/lmas1/AppData/Local/Temp/steerline-roadmap-pr-sync-zoqmwfit/evidence-integrity.json。
 
 主分支同步后最终静态检查：259份Markdown、1642条本地链接、0错误；84身份、10草稿、3正式规划行；git diff origin/main --check通过。40份JSON/JSONL的工作树字节摘要保持，PR差异仅docs/。这些结果不计为产品验收或中心准入。
+
+## 2026-10-08 Codex 开发流程简化
+
+范围：项目规则、RoadmapGuide、roadmap-runner 技能/提示及相关导航统一为 Codex 直接开发。用户确认的 execution-map 管理任务与依赖，启动固定文档版本；保留独立复审、必要验证、真实合并、验收同步及防重复恢复。#83/#45待执行，#44等待#45，#49/#50留草稿。SteerLine 产品中心契约与业务实现不变，历史失败和所有未验项保留。
+
+| 检查项 | 命令 | 实际结果 |
+| --- | --- | --- |
+| 文档导航 | python scripts/check_doc_links.py | 259份Markdown，1647条本地导航，0错误 |
+| 身份/清单 | python scripts/roadmap_task_id.py check | 84身份、10草稿、3正式行，next ID 84；通过 |
+| 技能元数据 | python -X utf8 C:/Users/lmas1/.codex/skills/.system/skill-creator/scripts/quick_validate.py .agents/skills/roadmap-runner | Skill is valid；默认GBK读取失败后以UTF-8入口复核通过 |
+| 离线状态助手 | python .agents/skills/roadmap-runner/scripts/test_state.py -v | 18/18通过；串行、审核失效、人工后置、防重复与完成停用约束保持 |
+| 差异格式 | git diff --check | 通过 |
+
+检查输出见本聊天工具记录；只验证文档/技能和离线日志助手，不计为#83/#45/#44产品验收。本轮未创建执行聊天、worktree、heartbeat或PR，未运行产品L1/L2/L3/Full及模型/原生验收。
+
+随后用户要求提PR：同步 origin/main 17229133，解决 Spec 索引冲突并保留主干新增的会话恢复文档。复核结果：264份Markdown、1666条本地导航、0错误；84身份、10草稿、3正式行；技能元数据、18项离线状态测试及 git diff origin/main --check 全部通过。仅发布本次流程修改PR，开发任务仍未启动。

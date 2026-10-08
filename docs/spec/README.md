@@ -1,8 +1,8 @@
 # 当前 Spec 与 Plan
 
-本目录保留独立Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段只运行和验收本地Codex与本机Orca。#83/#45/#44已纳入[正式执行规划](../roadmap/execution-map.md)，状态为待中心准入；其余材料见[草稿](../roadmap/drafts/roadmap.md)。日常派发只选择经工具核实有资格的已入DAG任务，文档或规划条目存在不表示已入图。
+本目录保留独立Spec/Plan、未闭合的定向验收和仍适用的共同约束。第一阶段只运行和验收本地Codex与本机Orca。#83/#45/#44已纳入[正式执行规划](../roadmap/execution-map.md)，由 roadmap-runner 直接调度 Codex；#83/#45待执行、#44等待#45，其余材料见[草稿](../roadmap/drafts/roadmap.md)。日常派发核对用户确认范围、状态、依赖和固定文档版本，草稿或编号不作为执行来源。
 
-Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具体自动/人工步骤与实时已验/待验结果统一维护于[acceptance](../acceptance/README.md)。草稿阶段就建立任务专属的一份或多份验收文档并链接，单份文档不覆盖多任务；Spec/Plan 后续细化并绑定场景 ID。execution-map 在准入或实际验收安排后同步验收汇总及未验文档。旧计划中的 docs/validation 路径只用于定位原证据，不作为新结果写入入口：新原始日志用 runner 默认临时目录或本次新建的空临时目录，长期记录只提交 acceptance 的最小摘要。人工为主活动不准入；少量人工项按允许范围后置。
+Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具体自动/人工步骤与实时已验/待验结果统一维护于[acceptance](../acceptance/README.md)。草稿阶段就建立任务专属的一份或多份验收文档并链接，单份文档不覆盖多任务；Spec/Plan 后续细化并绑定场景 ID。execution-map 在纳入执行或实际验收安排后同步验收汇总及未验文档。旧计划中的 docs/validation 路径只用于定位原证据，不作为新结果写入入口：新原始日志用 runner 默认临时目录或本次新建的空临时目录，长期记录只提交 acceptance 的最小摘要。人工为主活动不作为执行任务；少量人工项按允许范围后置。
 
 已执行的 Spec 与配套 Plan 见[已交付归档](../archive/spec/completed/README.md)；退役流程和远端试验见[历史资料](../archive/spec/retired/README.md)。归档中的旧状态文字和路径属于原交付时点，不能当作当前待办。任务 ID 身份记录保留；原始验证数据从[清理前固定 Git 快照](../acceptance/archive/completed/history.md#历史取证)读取。
 
@@ -25,9 +25,9 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 [Spec](product-simplification-04-conversation-recovery.spec.md) · [Plan](product-simplification-04-conversation-recovery.plan.md) · [验收](../acceptance/product-simplification-04-conversation-recovery.md)
 
-## 已确认执行规划：待中心准入
+## 已确认 Codex 执行规划
 
-当前只选择#83/#45/#44；尚未入图，正式资格仍须中心核对。#44最终交付依赖#45真实联调。二期验收分[2.1/2.2/2.3](../acceptance/phase2.md)，流程/原型未定部分不提前冻结。
+当前只选择#83/#45/#44；启动时核对本地执行前置及实际 Spec/Plan commit。#44最终交付依赖#45真实联调。二期验收分[2.1/2.2/2.3](../acceptance/phase2.md)，流程/原型未定部分不提前冻结。
 
 | 任务 ID | 任务名称 | 剩余拟议前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |
@@ -37,7 +37,7 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 ## 下一批2.1页面候选
 
-正式准入前确认2.1最小原型，补齐精确页面测试命令。#49移除对#48的草稿依赖，只交付DAG/任务浏览；不宣称外部边已更改。
+纳入执行前确认2.1最小原型，补齐精确页面测试命令。#49移除对#48的草稿依赖，只交付DAG/任务浏览；不宣称外部边已更改。
 
 | 任务 ID | 任务名称 | 剩余拟议前置 | Spec | Plan |
 | --- | --- | --- | --- | --- |

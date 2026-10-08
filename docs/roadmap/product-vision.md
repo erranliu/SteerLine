@@ -4,9 +4,9 @@
 
 SteerLine 是一款带有研究性质的开发工具，长期远景是通往**工程 AGI**：让 AI 最终能够自主开发复杂软件项目，包括普通人需要长期借助 AI 协助才能完成的项目。下面四个交付节点是通往这一目标的阶段；第四版仍只实现有限自主推进。
 
-当前产品方向以 roadmap 为中心：把选定的目标转为有依赖的任务，连接本机 Codex 或 Orca worker，围绕原会话传递用户反馈并记录真实 PR 交付。worker 负责实现、提交和创建 PR，测试、修复、审查要求由任务 Spec/Plan 约定。人决定产品取舍、处理待决策事项并合并 PR；SteerLine 核验实际合并后才认定交付完成。草稿任务可以提前取得唯一 Task ID，正式准入沿用该身份；受控纳入 execution-map 时创建对应中心 Task 并进入 DAG，规格和依赖随之固定。草稿编号本身不入图或启动执行。PR 合并前可受控丢弃正式任务，后续规划不能暗中改写已创建的任务。持续会话与简化主流程由 #36 交付，产品方向不代表已实现。
+当前产品方向以 roadmap 为中心：把选定的目标转为有依赖的任务，连接本机 Codex 或 Orca worker，围绕原会话传递用户反馈并记录真实 PR 交付。worker 负责实现、提交和创建 PR，测试、修复、审查要求由任务 Spec/Plan 约定。人决定产品取舍、处理待决策事项并合并 PR；SteerLine 核验实际合并后才认定交付完成。草稿任务可以提前取得唯一 Task ID，正式准入沿用该身份；在产品中受控纳入正式任务时创建对应中心 Task 并进入 DAG，规格和依赖随之固定。草稿编号本身不入图或启动执行。PR 合并前可受控丢弃正式任务，后续规划不能暗中改写已创建的任务。持续会话与简化主流程由 #36 交付，产品方向不代表已实现。
 
-具体底层能力与实施顺序见[草稿 roadmap](drafts/roadmap.md)。本文件只定义四个产品交付节点；已入 DAG 的任务以[正式执行清单](execution-map.md)为日常入口。
+具体底层能力与实施顺序见[草稿 roadmap](drafts/roadmap.md)。本文件定义产品交付节点；仓库开发由 roadmap-runner 直接使用 Codex，以[正式执行清单](execution-map.md)管理用户确认的任务与依赖，流程见[RoadmapGuide](RoadmapGuide.md)。
 
 ## 交付节点
 
@@ -32,7 +32,7 @@ SteerLine 是一款带有研究性质的开发工具，长期远景是通往**�
 
 节点验收见[三节点导航](../acceptance/phase2.md)。2.2/2.3流程和原型仍迭代；近期只固定#83/#45/#44确定会使用的能力，#49/#50等待2.1最小原型。人工后验收结果、TaskDelivery与启动资格分别表达；允许后置者不阻塞无关任务，必要前置不能靠UI勾选绕过。下述主agent完整闭环是2.3及二期最终目标，不作为2.1前置。
 
-Roadmap规划进入SteerLine，采用[草稿规划与审核准入](drafts/phase2-draft-roadmap-admission.md)。主agent相对自由地维护草稿roadmap与Spec/Plan；独立审核agent检查内容质量和前置是否稳定到适合固定。合格且可固定的任务经人的授权，由SteerLine受控纳入正式roadmap；需修改或需等待前置的任务留在草稿，相关条件变化后再审。execution-map.md 所表达的正式roadmap与实际中心 DAG 同步，是日常执行面对的任务集合，加入、丢弃及完成归档均走SteerLine流程。主agent仅支持Codex；审核是服务调度的固定角色，不开放主agent调用子agent或通用多agent编排。这不改变任务worker的本机Codex/Orca后端。Roadmap UI 稳定查看和管理目标、Spec/Plan、任务 DAG、运行、决策、PR 与交付证据，保留版本和关联。输入交互以 Codex App 为参照；已发送输入的编辑并重跑，只有在会话历史和文件状态的实际行为均与 Codex App 一致且可实现时才提供，否则第二阶段不提供该入口。主 agent 提建议、生成草稿并解释影响；没有人的确认，不自行推进新的规划或创建任务。
+Roadmap规划进入SteerLine，采用[草稿规划与审核准入](drafts/phase2-draft-roadmap-admission.md)。主agent相对自由地维护草稿roadmap与Spec/Plan；独立审核agent检查内容质量和前置是否稳定到适合固定。合格且可固定的任务经人的授权，由SteerLine受控纳入正式roadmap；需修改或需等待前置的任务留在草稿，相关条件变化后再审。产品中的正式roadmap与实际中心 DAG 同步，加入、丢弃及完成归档均走SteerLine流程；这是产品目标，仓库当前的 Codex 开发清单采用 RoadmapGuide 的直接执行流程。主agent仅支持Codex；审核是服务调度的固定角色，不开放主agent调用子agent或通用多agent编排。这不改变任务worker的本机Codex/Orca后端。Roadmap UI 稳定查看和管理目标、Spec/Plan、任务 DAG、运行、决策、PR 与交付证据，保留版本和关联。输入交互以 Codex App 为参照；已发送输入的编辑并重跑，只有在会话历史和文件状态的实际行为均与 Codex App 一致且可实现时才提供，否则第二阶段不提供该入口。主 agent 提建议、生成草稿并解释影响；没有人的确认，不自行推进新的规划或创建任务。
 
 **交付判定：**人能在UI完成目标讨论、草稿、固定版本审核与成熟度判断、受控正式准入、DAG执行及人工合并PR的闭环；未成熟任务保持草稿，交付事实返回规划，正式加入/移出和关联artifact可追溯。机制在二期分步交付，不进入一期前置。
 
