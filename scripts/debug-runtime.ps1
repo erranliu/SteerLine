@@ -36,8 +36,10 @@ function Resolve-ReparsePath([string]$Path, [int]$Depth) {
     $current = $root
     foreach ($part in $parts) {
         $candidate = [IO.Path]::GetFullPath((Join-Path $current $part))
-        if (Test-Path -LiteralPath $candidate) {
-            $item = Get-Item -LiteralPath $candidate -Force
+        # Get-Item also exposes dangling links, whose missing target must still
+        # be resolved before a later write creates it.
+        $item = Get-Item -LiteralPath $candidate -Force -ErrorAction SilentlyContinue
+        if ($null -ne $item) {
             if (($item.Attributes -band [IO.FileAttributes]::ReparsePoint) -ne 0) {
                 $target = [string]$item.Target
                 if ([string]::IsNullOrWhiteSpace($target)) {
@@ -70,6 +72,17 @@ function Test-PathWithin([string]$Root, [string]$Path) {
 function Assert-Disjoint([string]$First, [string]$Second, [string]$Description) {
     if ((Test-PathWithin $First $Second) -or (Test-PathWithin $Second $First)) {
         throw "$Description paths overlap after resolving aliases: '$First' and '$Second'"
+    }
+}
+
+function Assert-WritablePathWithin([string]$Root, [string]$Path) {
+    $resolved = Resolve-CanonicalPath $Path
+    if (-not (Test-PathWithin $Root $resolved)) {
+        throw "Writable path must resolve inside its home: '$Path' resolves to '$resolved' outside '$Root'"
+    }
+    $item = Get-Item -LiteralPath $Path -Force -ErrorAction SilentlyContinue
+    if ($null -ne $item -and $item.LinkType -eq 'HardLink') {
+        throw "Writable file must not be a hard link: '$Path'"
     }
 }
 
@@ -210,6 +223,13 @@ try {
     $buildExe = Join-Path $repoPath 'bin\steerline.exe'
     $debugExe = Join-Path $debugHomePath 'bin\steerline.exe'
     $launcher = Join-Path $debugHomePath 'service-window.bat'
+    # Preflight every script/product output before the first side effect. A
+    # disjoint home root does not imply its existing children are disjoint.
+    foreach ($relative in @('bin', 'bin\steerline.exe', 'codex', 'codex\auth.json', 'console.bat', 'service-window.bat', 'README.txt')) {
+        Assert-WritablePathWithin $debugHomePath (Join-Path $debugHomePath $relative)
+    }
+    Assert-WritablePathWithin $repoPath (Join-Path $repoPath 'bin')
+    Assert-WritablePathWithin $repoPath $buildExe
     $oldHome = $env:STEERLINE_HOME
     $oldCodexHome = $env:CODEX_HOME
     $env:STEERLINE_HOME = $debugHomePath
