@@ -28,6 +28,9 @@ func (m Model) startSelected() (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	for _, action := range state.actions {
+		if action.Action != "start_task" && action.Action != "start_candidate" {
+			continue
+		}
 		if action.TaskID == row.taskID && action.Status != "applied" && action.Status != "rejected" && action.Status != "failed" {
 			m.status = "此视图已有该任务请求 · task " + row.taskID + " · request " + action.RequestID
 			return m, nil
