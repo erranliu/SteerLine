@@ -458,7 +458,9 @@ func withJunction(t *testing.T, s *testenv.Scenario, project *testenv.Project, p
 
 func assertDirectBuildOutputIsolation(t *testing.T, s *testenv.Scenario, project, installed *testenv.Project, powershell string, evidence map[string]any) {
 	t.Helper()
-	sourceRoot := filepath.Join(s.Root, "direct-build-source")
+	// Keep the temporary clone path short enough that git status can inspect
+	// every tracked file on Windows, including deeply nested acceptance fixtures.
+	sourceRoot := filepath.Join(s.Root, "source-build")
 	if _, err := os.Stat(sourceRoot); !os.IsNotExist(err) {
 		t.Fatalf("direct build source clone already exists: %s", sourceRoot)
 	}
