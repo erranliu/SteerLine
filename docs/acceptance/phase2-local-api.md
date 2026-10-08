@@ -1,6 +1,6 @@
 # 任务 #45 验收记录：本机客户端协议与历史查询
 
-唯一归属 #45；固定范围依据 Spec/Plan `f628161b5a60cefeb75922c15a63b1df9ef9c21b` 的 `docs/spec/phase2-local-api.spec.md` 与 `docs/spec/phase2-local-api.plan.md`，未改 Spec。Plan 的实现期补充只细化 API1–API5 的真实集成场景、命令与证据位置，不扩大通过条件。当前整合候选 `08341fbc90e975ed512e47740860f2d2e25edb1d`，tree `ba3e2837dd616ebc8789bbc2a56771e281a2216d`；其 API/HTTP 源码与验收 commit `99c98e2bd02b3c0f75fbdea4919ce54e59927745` 相同，额外合入 main `04c62ee5ddb10637a68745baa4fc4f811123ffa9` 的两份 console 文件。环境：Windows/amd64、Go 1.26.4；受控临时 Git/SQLite 和 Codex app-server，无 live 模型。记录日期：2026-10-09（Asia/Shanghai）。
+唯一归属 #45；固定范围依据 Spec/Plan `f628161b5a60cefeb75922c15a63b1df9ef9c21b` 的 `docs/spec/phase2-local-api.spec.md` 与 `docs/spec/phase2-local-api.plan.md`，未改 Spec。Plan 的实现期补充只细化 API1–API5 的真实集成场景、命令与证据位置，不扩大通过条件。当前整合候选 `c70414718ec3593b00d1c911ea1894b76614e1a2`，tree `55d50d0b2f0bdea44a80901cd772903560742aac`；API/HTTP 源码候选 `99c98e2bd02b3c0f75fbdea4919ce54e59927745`，tree `d8b7fad5eff3db07cdb7b5f544c0b68c2509a36c`。依次合入 main `04c62ee5ddb10637a68745baa4fc4f811123ffa9` 与 `7ffc6a39197366b1177e104eb75cbc453ccee78a` 的 console 状态/反馈显示改动，API/host/SQLite/HTTP 生产文件未变。环境：Windows/amd64、Go 1.26.4；受控临时 Git/SQLite 和 Codex app-server，无 live 模型。记录日期：2026-10-09（Asia/Shanghai）。
 
 ## 自动验收
 
@@ -96,3 +96,15 @@ main 更新为 `04c62ee5ddb10637a68745baa4fc4f811123ffa9` 后，保留本分支�
 | 最新 main 组合 L1 | 精确 merge commit `08341fbc`：`complete=true`, `passed=true`，12 组/441 项、0 skip、0 fail。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-l1-merged-49811ead77e24acab51b2893dc1c0b6c\l1.log`；summary `C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261008T221034.224737800Z\summary.json` |
 
 最新 main 组合核验不更改 API2 判定：历史 `-shm Access is denied` 现场的 syscall 阶段未知，API2 仍为验收失败，等待新 reviewer 审查有界重查与回归证据。PR #249 head 会记录 docs-only evidence commit；未合并，#44 仍等待 #45。
+
+## 后续 main 状态/反馈组合核验
+
+main 更新到 `7ffc6a39197366b1177e104eb75cbc453ccee78a` 后，以 merge commit `c70414718ec3593b00d1c911ea1894b76614e1a2`（tree `55d50d0b2f0bdea44a80901cd772903560742aac`）整合；其 parent 1 为 `898183701e76f0ae59b17e3241a48c38982f6c55`，parent 2 为最新 main。相对前一整合 `08341fbc`，差异仅 8 个 `internal/console` 状态/反馈投影文件，不改 API/host/SQLite/HTTP 生产源码。因此 API1–API5 的真实服务集成、profile 与 fault-driver 证据仍映射到 `99c98e2b`；当前整合关系和受影响消费者回归映射到 `c7041471`。
+
+| 范围 | 命令/结果 | 原始证据 |
+| --- | --- | --- |
+| merge-wait/optional feedback 状态消费者 | `go test ./internal/console -run '^(TestWaitingPRMerge.*\|TestStartSelectedRestoredRequestDeduplication)$' -count=1 -v`：6 个 merge-feedback 顶层场景及 restored-start 去重通过；覆盖可选/必需问题、同任务兄弟候选、真实环境/恢复/PR 阻断和终止候选。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-latest-main-console-47cf64b8baf347ec929678aedf57561b\console-merge-feedback.log` |
+| console vet | `go vet ./internal/console`：通过，无诊断。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-latest-main-vet-f77b847d2cc846818b704324d8cbcebd\console-vet.log` |
+| 最新 main 最终组合 L1 | 精确 merge commit `c7041471`：`complete=true`, `passed=true`，12 组/458 项、0 skip、0 fail。 | `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-l1-latest-main-a8fd3ce8676a435183b5afe5f18f4d84\l1.log`；summary `C:\Users\lmas1\AppData\Local\Temp\steerline-test-feedback\20261008T222937.820093500Z\summary.json` |
+
+API2 仍保留 `验收失败`；本次 main 合并未改变其诊断结论或授权任何环境豁免。PR #249 未合并，#44 继续等待 #45。
