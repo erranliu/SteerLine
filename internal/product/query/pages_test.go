@@ -129,3 +129,26 @@ func TestNativeCandidateSnapshotKeepsDispatchOrderBeyondDetailPage(t *testing.T)
 		t.Fatalf("ready candidates were truncated or reordered by task ID: %d", len(snapshot.Tasks))
 	}
 }
+
+func TestCommandReceiptProjectsTypedRequestIdentity(t *testing.T) {
+	answer := api.DecisionAnswer{RunID: "original-run", DecisionID: "original-decision", OptionID: "yes", Note: "original text", Answers: map[string][]string{"q": {"choice", "remarks"}}, ExpectedDecisionVersion: 3, ExpectedRunRevision: 7, SourceAttemptID: "original-attempt", ExpectedRecoveryVersion: 2, ServiceInstanceID: "original-instance", AnsweredBy: "operator"}
+	body, _ := json.Marshal(answer)
+	receipt := CommandReceipt(storageports.CommandRecord{ProjectIdentity: "project", CommandID: "command", Kind: "answer_decision", TargetID: answer.DecisionID, ExpectedVersion: 3, Payload: body})
+	if receipt.DecisionAnswer == nil || receipt.DecisionAnswer.ServiceInstanceID != answer.ServiceInstanceID || receipt.DecisionAnswer.SourceAttemptID != answer.SourceAttemptID || receipt.DecisionAnswer.ExpectedRecoveryVersion != 2 || receipt.DecisionAnswer.Answers["q"][1] != "remarks" {
+		t.Fatalf("lost original answer identities/content: %+v", receipt)
+	}
+	receipt.DecisionAnswer.Answers["q"][1] = "changed"
+	if string(body) == "changed" || answer.Answers["q"][1] != "remarks" {
+		t.Fatal("receipt mutation changed authority input")
+	}
+	discard := api.DiscardInput{TaskID: "8", Reason: "original reason", RequestedBy: "operator", ExpectedVersion: 4}
+	body, _ = json.Marshal(discard)
+	receipt = CommandReceipt(storageports.CommandRecord{ProjectIdentity: "project", CommandID: "command", Kind: "discard_task", TargetID: "8", ExpectedVersion: 4, Payload: body})
+	if receipt.DiscardRequest == nil || receipt.DiscardRequest.RequestID != "command" || receipt.DiscardRequest.Reason != discard.Reason || receipt.DiscardRequest.ExpectedVersion != 4 {
+		t.Fatalf("lost discard request: %+v", receipt)
+	}
+	receipt = CommandReceipt(storageports.CommandRecord{Kind: "answer_decision", Payload: []byte("invalid")})
+	if receipt.DecisionAnswer != nil {
+		t.Fatal("malformed request was treated as verified content")
+	}
+}

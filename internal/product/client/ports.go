@@ -46,6 +46,7 @@ type ControlInboxPort interface {
 }
 
 type DecisionPort interface {
+	Normalize(context.Context, api.DecisionInput) (api.DecisionInput, error)
 	Eligibility(context.Context, *api.CandidateSummary) error
 	Submit(context.Context, api.DecisionInput) (api.CommandReceipt, bool, error)
 	Answer(context.Context, api.AnswerInput) (api.CommandReceipt, bool, error)

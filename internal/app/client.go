@@ -2,6 +2,7 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -346,6 +347,47 @@ type clientDecision struct{ config Config }
 
 func (r clientDecision) Eligibility(ctx context.Context, run *productapi.CandidateSummary) error {
 	return execution.DecisionReplyEligibility(ctx, r.config.executionConfig(), runtimeDecisionFacts(run))
+}
+
+func (r clientDecision) Normalize(ctx context.Context, in productapi.DecisionInput) (productapi.DecisionInput, error) {
+	snapshot, err := readConfiguredRuntime(ctx, r.config)
+	if err != nil {
+		return in, err
+	}
+	if snapshot == nil {
+		return in, errors.New("no runtime snapshot")
+	}
+	run := runtimeRunByID(snapshot, in.Answer.RunID)
+	if run == nil || run.Decision == nil || run.Decision.ID != in.Answer.DecisionID {
+		return in, errors.New("decision is missing from its original run")
+	}
+	return normalizeDecisionInput(in, &run.Decision.Request)
+}
+
+func normalizeDecisionInput(in productapi.DecisionInput, request *executionmodel.DecisionRequest) (productapi.DecisionInput, error) {
+	body, err := json.Marshal(in.Answer)
+	if err != nil {
+		return in, err
+	}
+	var answer executionmodel.DecisionAnswer
+	if err = json.Unmarshal(body, &answer); err != nil {
+		return in, err
+	}
+	answer.OptionID = strings.TrimSpace(answer.OptionID)
+	if len(executionmodel.DecisionQuestions(request)) > 0 {
+		if err = execution.NormalizeNativeDecisionAnswer(request, &answer); err != nil {
+			return in, err
+		}
+	}
+	if err = executionmodel.ValidateDecisionAnswer(request, &answer); err != nil {
+		return in, err
+	}
+	body, err = json.Marshal(answer)
+	if err != nil {
+		return in, err
+	}
+	err = json.Unmarshal(body, &in.Answer)
+	return in, err
 }
 
 func (r clientDecision) Submit(ctx context.Context, in productapi.DecisionInput) (productapi.CommandReceipt, bool, error) {

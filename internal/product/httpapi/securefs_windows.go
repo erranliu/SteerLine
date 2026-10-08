@@ -3,9 +3,11 @@
 package httpapi
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"unsafe"
 
@@ -13,6 +15,43 @@ import (
 )
 
 const fileAllAccess = windows.ACCESS_MASK(0x1F01FF)
+
+// createPrivateTemp attaches the protected, current-user-only DACL to the
+// creation itself: preflight can inspect the file immediately after CreateFile.
+func createPrivateTemp(dir, prefix string) (*os.File, error) {
+	sid, err := currentUserSID()
+	if err != nil {
+		return nil, err
+	}
+	sd, err := windows.SecurityDescriptorFromString("O:" + sid.String() + "D:P(A;;FA;;;" + sid.String() + ")")
+	if err != nil {
+		return nil, err
+	}
+	sa := windows.SecurityAttributes{Length: uint32(unsafe.Sizeof(windows.SecurityAttributes{})), SecurityDescriptor: sd}
+	for attempts := 0; attempts < 100; attempts++ {
+		suffix, err := randomHex(16)
+		if err != nil {
+			return nil, err
+		}
+		name := filepath.Join(dir, prefix+suffix+".tmp")
+		path, err := windows.UTF16PtrFromString(name)
+		if err != nil {
+			return nil, err
+		}
+		handle, err := windows.CreateFile(path, windows.GENERIC_READ|windows.GENERIC_WRITE,
+			windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE|windows.FILE_SHARE_DELETE, &sa,
+			windows.CREATE_NEW, windows.FILE_ATTRIBUTE_NORMAL, 0)
+		runtime.KeepAlive(sd)
+		if err == windows.ERROR_FILE_EXISTS || err == windows.ERROR_ALREADY_EXISTS {
+			continue
+		}
+		if err != nil {
+			return nil, &os.PathError{Op: "create", Path: name, Err: err}
+		}
+		return os.NewFile(uintptr(handle), name), nil
+	}
+	return nil, errors.New("unable to allocate a private local API temporary file")
+}
 
 func currentUserSID() (*windows.SID, error) {
 	token := windows.GetCurrentProcessToken()

@@ -360,6 +360,19 @@ func (c *Client) DecisionEligibility(ctx context.Context, run *api.CandidateSumm
 	return c.resources.Decision.Eligibility(ctx, run)
 }
 
+// NormalizeDecision maps the original answer through the existing domain adapter
+// before HTTP records its immutable submission. It performs no mutation.
+func (c *Client) NormalizeDecision(ctx context.Context, in api.DecisionInput) (api.DecisionInput, error) {
+	if err := c.begin(ctx); err != nil {
+		return in, err
+	}
+	defer c.mu.RUnlock()
+	if c.resources.Decision == nil {
+		return in, unsupported("decision commands")
+	}
+	return c.resources.Decision.Normalize(ctx, in)
+}
+
 func (c *Client) SubmitDecision(ctx context.Context, in api.DecisionInput) (api.CommandReceipt, bool, error) {
 	if err := c.begin(ctx); err != nil {
 		return api.CommandReceipt{}, false, err

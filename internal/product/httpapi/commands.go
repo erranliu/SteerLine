@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -19,11 +20,14 @@ import (
 )
 
 type requestRecord struct {
-	Version   int              `json:"version"`
-	Digest    string           `json:"digest"`
-	Envelope  CommandEnvelope  `json:"envelope"`
-	Response  *CommandResponse `json:"response,omitempty"`
-	CreatedAt time.Time        `json:"created_at"`
+	Version   int                `json:"version"`
+	Digest    string             `json:"digest"`
+	Envelope  CommandEnvelope    `json:"envelope"`
+	Control   *api.ControlInput  `json:"control,omitempty"`
+	Discard   *api.DiscardInput  `json:"discard,omitempty"`
+	Decision  *api.DecisionInput `json:"decision,omitempty"`
+	Response  *CommandResponse   `json:"response,omitempty"`
+	CreatedAt time.Time          `json:"created_at"`
 }
 
 type answerPayload struct {
@@ -118,7 +122,7 @@ func (s *Server) submitCommand(w http.ResponseWriter, r *http.Request) {
 			writeError(w, http.StatusConflict, "request_id_conflict", "request_id is already bound to a different immutable envelope", envelope.RequestID)
 			return
 		}
-		previous, lookupErr := s.lookupAuthoritative(r.Context(), envelope.RequestID, &envelope)
+		previous, lookupErr := s.lookupAuthoritative(r.Context(), envelope.RequestID, &envelope, &old)
 		if lookupErr == nil {
 			writeJSON(w, responseHTTPStatus(previous.Status), previous)
 			return
@@ -141,7 +145,7 @@ func (s *Server) submitCommand(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusServiceUnavailable, "request_record_unreadable", readErr.Error(), envelope.RequestID)
 		return
 	} else {
-		_, lookupErr := s.lookupAuthoritative(r.Context(), envelope.RequestID, nil)
+		_, lookupErr := s.lookupAuthoritative(r.Context(), envelope.RequestID, nil, nil)
 		if lookupErr == nil {
 			writeError(w, http.StatusConflict, "request_id_conflict", "request_id already exists in a product receipt outside this transport", envelope.RequestID)
 			return
@@ -180,7 +184,7 @@ func (s *Server) submitCommand(w http.ResponseWriter, r *http.Request) {
 		s.rejectRegisteredEnvelope(w, path, record, envelope, http.StatusServiceUnavailable, "service_not_ready", diagnosticOrStatus(identity.Diagnostic, identity.Status))
 		return
 	}
-	response, err := s.dispatch(r.Context(), envelope)
+	response, err := s.dispatch(r.Context(), envelope, &record, path)
 	if err != nil {
 		if definitiveCommandRejection(err) {
 			status, code := protocolErrorStatus(err)
@@ -306,7 +310,7 @@ func validateActionEnvelope(envelope CommandEnvelope) error {
 	return nil
 }
 
-func (s *Server) dispatch(ctx context.Context, envelope CommandEnvelope) (CommandResponse, error) {
+func (s *Server) dispatch(ctx context.Context, envelope CommandEnvelope, record *requestRecord, path string) (CommandResponse, error) {
 	requestedBy := currentActor()
 	response := CommandResponse{RequestID: envelope.RequestID, ProjectID: envelope.ProjectID, InstanceID: envelope.InstanceID,
 		Action: envelope.Action, TargetID: envelope.TargetID, ExpectedVersion: envelope.ExpectedVersion,
@@ -330,9 +334,22 @@ func (s *Server) dispatch(ctx context.Context, envelope CommandEnvelope) (Comman
 			ExpectedRunRevision: payload.ExpectedRunRevision, SourceAttemptID: payload.SourceAttemptID,
 			ExpectedRecoveryVersion: *payload.ExpectedRecoveryVersion, ServiceInstanceID: envelope.InstanceID,
 		}}
-		receipt, _, err := s.product.SubmitDecision(ctx, input)
+		if record.Decision == nil {
+			mapped, mapErr := s.product.NormalizeDecision(ctx, input)
+			if mapErr != nil {
+				return response, mapErr
+			}
+			record.Decision = &mapped
+			if err := writeRequestRecord(s.commandsDir, path, *record); err != nil {
+				return response, err
+			}
+		}
+		receipt, _, err := s.product.SubmitDecision(ctx, *record.Decision)
 		if err != nil {
 			return response, err
+		}
+		if !matchesCommand(envelope, record, receipt) {
+			return response, &api.Error{Kind: api.IdentityConflict, Message: "submitted command receipt does not match its original mapped intent"}
 		}
 		response.Command, response.Status = &receipt, normalizedCommandStatus(envelope.Action, receipt.Status)
 		return response, nil
@@ -342,8 +359,14 @@ func (s *Server) dispatch(ctx context.Context, envelope CommandEnvelope) (Comman
 		if err := decodeStrict(envelope.Payload, &payload); err != nil {
 			return response, invalidCommand(err.Error())
 		}
-		receipt, err := s.product.DiscardTask(ctx, api.DiscardInput{TaskID: envelope.TargetID, RequestID: envelope.RequestID,
-			Reason: payload.Reason, RequestedBy: requestedBy, ExpectedVersion: envelope.ExpectedVersion})
+		if record.Discard == nil {
+			record.Discard = &api.DiscardInput{TaskID: envelope.TargetID, RequestID: envelope.RequestID,
+				Reason: strings.TrimSpace(payload.Reason), RequestedBy: requestedBy, ExpectedVersion: envelope.ExpectedVersion}
+			if err := writeRequestRecord(s.commandsDir, path, *record); err != nil {
+				return response, err
+			}
+		}
+		receipt, err := s.product.DiscardTask(ctx, *record.Discard)
 		if err != nil {
 			return response, err
 		}
@@ -353,18 +376,30 @@ func (s *Server) dispatch(ctx context.Context, envelope CommandEnvelope) (Comman
 			return response, commandErr
 		}
 		if commandErr == nil {
+			if !matchesCommand(envelope, record, command) {
+				return response, &api.Error{Kind: api.IdentityConflict, Message: "discard receipt does not match its original mapped intent"}
+			}
 			response.Command = &command
 		}
 		response.Status = discardStatus(receipt.Status)
 		return response, nil
 	}
-	control, err := s.controlInput(ctx, envelope, requestedBy)
+	if record.Control == nil {
+		control, err := s.controlInput(ctx, envelope, requestedBy)
+		if err != nil {
+			return response, err
+		}
+		record.Control = &control
+		if err := writeRequestRecord(s.commandsDir, path, *record); err != nil {
+			return response, err
+		}
+	}
+	req, err := s.product.SubmitControlInbox(ctx, *record.Control)
 	if err != nil {
 		return response, err
 	}
-	req, err := s.product.SubmitControlInbox(ctx, control)
-	if err != nil {
-		return response, err
+	if !matchesControl(envelope, record, req) {
+		return response, &api.Error{Kind: api.IdentityConflict, Message: "submitted control request does not match its original mapped intent"}
 	}
 	response.ControlRequest = &req
 	response.Status = "submitted"
@@ -438,14 +473,16 @@ func (s *Server) readCommand(w http.ResponseWriter, r *http.Request, requestID s
 	}
 	var original *CommandEnvelope
 	var storedResponse *CommandResponse
+	var originalRecord *requestRecord
 	if record, err := readRequestRecord(filepath.Join(s.commandsDir, requestID+".json")); err == nil {
 		original = envelopePtr(record.Envelope)
+		originalRecord = &record
 		storedResponse = record.Response
 	} else if !os.IsNotExist(err) {
 		writeError(w, http.StatusServiceUnavailable, "request_record_unreadable", err.Error(), requestID)
 		return
 	}
-	response, err := s.lookupAuthoritative(r.Context(), requestID, original)
+	response, err := s.lookupAuthoritative(r.Context(), requestID, original, originalRecord)
 	if err != nil {
 		var missing *protocolError
 		if storedResponse != nil && errors.As(err, &missing) && missing.code == "command_not_found" {
@@ -463,12 +500,12 @@ func (s *Server) readCommand(w http.ResponseWriter, r *http.Request, requestID s
 	writeJSON(w, http.StatusOK, response)
 }
 
-func (s *Server) lookupAuthoritative(ctx context.Context, requestID string, original *CommandEnvelope) (CommandResponse, error) {
+func (s *Server) lookupAuthoritative(ctx context.Context, requestID string, original *CommandEnvelope, record *requestRecord) (CommandResponse, error) {
 	response := CommandResponse{RequestID: requestID, ProjectID: ProjectID(s.options.ProjectIdentity), InstanceID: s.options.InstanceID,
 		Original: original, SampledAt: time.Now().UTC()}
 	controlChecked := false
 	if original != nil && isControlAction(original.Action) {
-		controlResponse, found, controlErr := s.lookupControlAuthority(ctx, requestID, original)
+		controlResponse, found, controlErr := s.lookupControlAuthority(ctx, requestID, original, record)
 		if controlErr != nil {
 			return response, controlErr
 		}
@@ -479,10 +516,10 @@ func (s *Server) lookupAuthoritative(ctx context.Context, requestID string, orig
 	}
 	command, err := s.product.Command(ctx, requestID)
 	if err == nil {
-		if command.ProjectIdentity != s.options.ProjectIdentity {
+		if command.ProjectIdentity != s.options.ProjectIdentity || command.CommandID != requestID {
 			return response, &api.Error{Kind: api.IdentityConflict, Message: "command receipt belongs to another project"}
 		}
-		if original != nil && !compatibleCommandKind(original.Action, command.Kind) {
+		if original != nil && !matchesCommand(*original, record, command) {
 			return response, &api.Error{Kind: api.IdentityConflict, Message: "command receipt does not match its original transport envelope"}
 		}
 		if original != nil {
@@ -503,7 +540,7 @@ func (s *Server) lookupAuthoritative(ctx context.Context, requestID string, orig
 		return response, err
 	}
 	if !controlChecked {
-		controlResponse, found, controlErr := s.lookupControlAuthority(ctx, requestID, original)
+		controlResponse, found, controlErr := s.lookupControlAuthority(ctx, requestID, original, record)
 		if controlErr != nil {
 			return response, controlErr
 		}
@@ -514,7 +551,7 @@ func (s *Server) lookupAuthoritative(ctx context.Context, requestID string, orig
 	return response, &protocolError{status: http.StatusNotFound, code: "command_not_found", reason: "the project database and control request authority contain no record for this request_id"}
 }
 
-func (s *Server) lookupControlAuthority(ctx context.Context, requestID string, original *CommandEnvelope) (CommandResponse, bool, error) {
+func (s *Server) lookupControlAuthority(ctx context.Context, requestID string, original *CommandEnvelope, record *requestRecord) (CommandResponse, bool, error) {
 	response := CommandResponse{RequestID: requestID, ProjectID: ProjectID(s.options.ProjectIdentity), InstanceID: s.options.InstanceID,
 		Original: original, SampledAt: time.Now().UTC()}
 	request, requestErr := s.product.Request(ctx, requestID)
@@ -527,7 +564,7 @@ func (s *Server) lookupControlAuthority(ctx context.Context, requestID string, o
 	if request == nil || request.RequestID != requestID || request.RepositoryIdentity != s.options.ProjectIdentity {
 		return response, false, &api.Error{Kind: api.IdentityConflict, Message: "control request identity does not match this project"}
 	}
-	if original != nil && original.Action != request.Action {
+	if original != nil && !matchesControl(*original, record, *request) {
 		return response, false, &api.Error{Kind: api.IdentityConflict, Message: "control receipt does not match its original transport envelope"}
 	}
 	response.Action, response.TargetID = request.Action, controlTarget(*request)
@@ -549,6 +586,109 @@ func (s *Server) lookupControlAuthority(ctx context.Context, requestID string, o
 	return response, true, nil
 }
 
+// A receipt can only stand in for a registered HTTP envelope when the exact
+// original mapped intent agrees. Missing mapped intent is not evidence of a match.
+func matchesControl(original CommandEnvelope, record *requestRecord, request api.ControlRequest) bool {
+	if original.ProjectID != ProjectID(request.RepositoryIdentity) || original.RequestID != request.RequestID ||
+		original.InstanceID != request.InstanceID || original.Action != request.Action ||
+		original.ExpectedControlRevision != request.ExpectedControlRevision || record == nil || record.Control == nil {
+		return false
+	}
+	input := record.Control
+	if !mappedControlMatchesEnvelope(original, *input) || request.ProtocolVersion != 1 || request.RunID != "" || request.DecisionID != "" || request.ExpectedRunRevision != 0 {
+		return false
+	}
+	revision := uint64(0)
+	if input.ExpectedRevision != nil {
+		revision = *input.ExpectedRevision
+	}
+	if revision != request.ExpectedControlRevision || input.RequestedBy != request.RequestedBy {
+		return false
+	}
+	var payload api.ControlPayload
+	if len(request.Payload) != 0 && decodeStrict(request.Payload, &payload) != nil {
+		return false
+	}
+	return reflect.DeepEqual(input.Payload, payload)
+}
+
+func mappedControlMatchesEnvelope(original CommandEnvelope, input api.ControlInput) bool {
+	if input.RequestID != original.RequestID || input.InstanceID != original.InstanceID || string(input.Action) != original.Action || validateActionEnvelope(original) != nil {
+		return false
+	}
+	payload := input.Payload
+	switch original.Action {
+	case "start_task", "start_candidate":
+		var profile profilePayload
+		if decodeStrict(original.Payload, &profile) != nil {
+			return false
+		}
+		graph := uint64(0)
+		if original.Action == "start_candidate" {
+			graph = original.ExpectedGraphRevision
+		}
+		return payload.TaskID == original.TargetID && payload.ExpectedTaskVersion == original.ExpectedVersion &&
+			payload.ExpectedGraphRevision == graph && payload.ExecutionProfileID == profile.ExecutionProfileID && payload.ExecutionProfileDigest != ""
+	case "abandon_candidate":
+		var abandon abandonPayload
+		if decodeStrict(original.Payload, &abandon) != nil {
+			return false
+		}
+		return payload.WorkflowRunID == original.TargetID && payload.ExpectedCandidateVersion == original.ExpectedVersion &&
+			payload.TaskID == abandon.TaskID && payload.ExpectedTaskVersion == abandon.ExpectedTaskVersion && payload.Reason == abandon.Reason
+	case "open_terminal", "recheck_environment":
+		var environment environmentPayload
+		return decodeStrict(original.Payload, &environment) == nil && reflect.DeepEqual(payload.Environment, &environment.Target)
+	case "set_dispatch_mode", "pause_dispatch", "resume_dispatch":
+		if original.TargetID != "dispatch" && original.TargetID != original.ProjectID || original.ExpectedVersion != original.ExpectedControlRevision {
+			return false
+		}
+		if original.Action == "set_dispatch_mode" {
+			var mode modePayload
+			return decodeStrict(original.Payload, &mode) == nil && payload.Mode == mode.Mode
+		}
+		return payload == (api.ControlPayload{})
+	case "stop_service":
+		return original.TargetID == original.InstanceID && payload == (api.ControlPayload{})
+	}
+	return false
+}
+
+func matchesCommand(original CommandEnvelope, record *requestRecord, command api.CommandReceipt) bool {
+	if original.ProjectID != ProjectID(command.ProjectIdentity) || original.RequestID != command.CommandID ||
+		original.Action != command.Kind || original.TargetID != command.TargetID || original.ExpectedVersion != command.ExpectedVersion {
+		return false
+	}
+	switch original.Action {
+	case "answer_decision":
+		if record == nil || record.Decision == nil || command.DecisionAnswer == nil {
+			return false
+		}
+		wanted, actual := record.Decision.Answer, *command.DecisionAnswer
+		if wanted.ServiceInstanceID != original.InstanceID || record.Decision.CommandID != original.RequestID ||
+			wanted.DecisionID != original.TargetID || wanted.ExpectedDecisionVersion != original.ExpectedVersion ||
+			record.Decision.RequestedBy != command.RequestedBy {
+			return false
+		}
+		// Submission time is authority metadata, not client content.
+		wanted.AnsweredAt, actual.AnsweredAt = time.Time{}, time.Time{}
+		return reflect.DeepEqual(wanted, actual)
+	case "discard_task":
+		var payload reasonPayload
+		if decodeStrict(original.Payload, &payload) != nil || command.DiscardRequest == nil || record == nil || record.Discard == nil {
+			return false
+		}
+		request := command.DiscardRequest
+		return reflect.DeepEqual(*record.Discard, *request) && request.RequestID == original.RequestID && request.TaskID == original.TargetID &&
+			request.ExpectedVersion == original.ExpectedVersion && request.RequestedBy == command.RequestedBy &&
+			request.Reason == strings.TrimSpace(payload.Reason)
+	default:
+		// Control commands require the formal ControlRequest's instance and revision;
+		// the domain SQLite command alone does not contain those transport identities.
+		return false
+	}
+}
+
 func isControlAction(action string) bool {
 	switch action {
 	case "start_task", "start_candidate", "abandon_candidate", "set_dispatch_mode", "pause_dispatch", "resume_dispatch", "stop_service", "open_terminal", "recheck_environment":
@@ -565,13 +705,6 @@ func contains(values []string, wanted string) bool {
 		}
 	}
 	return false
-}
-
-func compatibleCommandKind(action, kind string) bool {
-	if action == kind {
-		return true
-	}
-	return (action == "set_dispatch_mode" || action == "pause_dispatch" || action == "resume_dispatch") && kind == "set_dispatch_state"
 }
 
 func readRequestRecord(path string) (requestRecord, error) {
@@ -705,6 +838,9 @@ func normalizedControlStatus(status string) string {
 func controlTarget(request api.ControlRequest) string {
 	var payload api.ControlPayload
 	if len(request.Payload) != 0 && json.Unmarshal(request.Payload, &payload) == nil {
+		if request.Action == "abandon_candidate" && payload.WorkflowRunID != "" {
+			return payload.WorkflowRunID
+		}
 		if payload.TaskID != "" {
 			return payload.TaskID
 		}

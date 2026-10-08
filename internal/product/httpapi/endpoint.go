@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -239,41 +240,25 @@ func randomHex(bytes int) (string, error) {
 }
 
 func writePrivateExclusive(dir, path string, body []byte) error {
-	tmp, err := os.CreateTemp(dir, ".credential-*.tmp")
-	if err != nil {
-		return err
-	}
-	tmpName := tmp.Name()
-	defer os.Remove(tmpName)
-	if _, err = tmp.Write(body); err == nil {
-		err = tmp.Sync()
-	}
-	if closeErr := tmp.Close(); err == nil {
-		err = closeErr
-	}
-	if err != nil {
-		return err
-	}
-	if err = securePrivateFile(tmpName); err != nil {
-		return err
-	}
-	if err = os.Link(tmpName, path); err != nil {
-		return err
-	}
-	if err = os.Remove(tmpName); err != nil {
-		return err
-	}
-	return securePrivateFile(path)
+	return writePrivateContents(dir, path, bytes.NewReader(body), true)
 }
 
 func writePrivateAtomic(dir, path string, body []byte) error {
-	tmp, err := os.CreateTemp(dir, ".discovery-*.tmp")
+	return writePrivateContents(dir, path, bytes.NewReader(body), false)
+}
+
+func writePrivateContents(dir, path string, body io.Reader, exclusive bool) error {
+	prefix := ".discovery-"
+	if exclusive {
+		prefix = ".credential-"
+	}
+	tmp, err := createPrivateTemp(dir, prefix)
 	if err != nil {
 		return err
 	}
 	tmpName := tmp.Name()
 	defer os.Remove(tmpName)
-	if _, err = tmp.Write(body); err == nil {
+	if _, err = io.Copy(tmp, body); err == nil {
 		err = tmp.Sync()
 	}
 	if closeErr := tmp.Close(); err == nil {
@@ -282,13 +267,20 @@ func writePrivateAtomic(dir, path string, body []byte) error {
 	if err != nil {
 		return err
 	}
-	if err = securePrivateFile(tmpName); err != nil {
+	if err = verifyPrivateFile(tmpName); err != nil {
 		return err
 	}
-	if err = os.Rename(tmpName, path); err != nil {
+	if exclusive {
+		if err = os.Link(tmpName, path); err != nil {
+			return err
+		}
+		if err = os.Remove(tmpName); err != nil {
+			return err
+		}
+	} else if err = os.Rename(tmpName, path); err != nil {
 		return err
 	}
-	return securePrivateFile(path)
+	return verifyPrivateFile(path)
 }
 
 func removeStaleCredentials(dir string) error {

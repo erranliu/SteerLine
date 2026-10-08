@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	host "github.com/erranliu/SteerLine/internal/app/host"
 	api "github.com/erranliu/SteerLine/internal/product/api"
 	productclient "github.com/erranliu/SteerLine/internal/product/client"
 )
@@ -95,14 +96,19 @@ func (apiCommands) AddPredecessors(context.Context, api.TaskPredecessorAddInput)
 }
 
 type apiControl struct {
-	requests  map[string]api.ControlRequest
-	receipts  map[string]*api.ControlReceipt
-	submits   int
-	failRead  error
-	submitErr error
+	formalConfig *host.Config
+	requests     map[string]api.ControlRequest
+	receipts     map[string]*api.ControlReceipt
+	submits      int
+	failRead     error
+	submitErr    error
 }
 
 func (c *apiControl) Submit(_ context.Context, input api.ControlInput) (api.ControlRequest, error) {
+	if c.formalConfig != nil {
+		c.submits++
+		return host.SubmitControlInbox(*c.formalConfig, input)
+	}
 	if c.submitErr != nil {
 		return api.ControlRequest{}, c.submitErr
 	}
@@ -125,6 +131,9 @@ func (c *apiControl) SubmitInbox(ctx context.Context, input api.ControlInput) (a
 	return c.Submit(ctx, input)
 }
 func (c *apiControl) Request(_ context.Context, id string) (*api.ControlRequest, error) {
+	if c.formalConfig != nil {
+		return host.ReadControlRequest(*c.formalConfig, id)
+	}
 	if c.failRead != nil {
 		return nil, c.failRead
 	}
@@ -150,6 +159,11 @@ type apiDecision struct {
 	submits int
 }
 
+func (apiDecision) Normalize(_ context.Context, in api.DecisionInput) (api.DecisionInput, error) {
+	in.Answer.OptionID = strings.TrimSpace(in.Answer.OptionID)
+	return in, nil
+}
+
 func (apiDecision) Eligibility(context.Context, *api.CandidateSummary) error { return nil }
 func (d *apiDecision) Submit(_ context.Context, input api.DecisionInput) (api.CommandReceipt, bool, error) {
 	d.submits++
@@ -157,7 +171,7 @@ func (d *apiDecision) Submit(_ context.Context, input api.DecisionInput) (api.Co
 	now := time.Now().UTC()
 	receipt := api.CommandReceipt{ProjectIdentity: "C:/repo", CommandID: input.CommandID, Kind: "answer_decision",
 		TargetID: input.Answer.DecisionID, ExpectedVersion: input.Answer.ExpectedDecisionVersion, RequestedBy: input.RequestedBy,
-		Status: "accepted", CreatedAt: now, UpdatedAt: now}
+		Status: "accepted", DecisionAnswer: &input.Answer, CreatedAt: now, UpdatedAt: now}
 	d.reader.commands[input.CommandID] = receipt
 	return receipt, true, nil
 }

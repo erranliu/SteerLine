@@ -349,8 +349,11 @@ type TaskPage struct {
 }
 
 // CommandReceipt keeps the original request and target with the actual outcome.
-// It has no persisted request payload, idempotency storage key or write access.
+// Typed request projections allow consumers to verify identity and content;
+// private storage envelopes and idempotency keys remain with the authority.
 type CommandReceipt struct {
+	DecisionAnswer  *DecisionAnswer     `json:"decision_answer,omitempty"`
+	DiscardRequest  *DiscardInput       `json:"discard_request,omitempty"`
 	ProjectIdentity string              `json:"project_identity"`
 	CommandID       string              `json:"command_id"`
 	Kind            string              `json:"kind"`

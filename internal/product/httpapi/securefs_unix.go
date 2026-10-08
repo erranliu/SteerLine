@@ -10,6 +10,10 @@ import (
 	"syscall"
 )
 
+func createPrivateTemp(dir, prefix string) (*os.File, error) {
+	return os.CreateTemp(dir, prefix+"*.tmp")
+}
+
 func ensurePrivateDirectory(path string) error {
 	if err := os.MkdirAll(path, 0700); err != nil {
 		return err
