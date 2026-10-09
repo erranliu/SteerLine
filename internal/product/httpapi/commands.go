@@ -15,6 +15,7 @@ import (
 	"reflect"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	api "github.com/erranliu/SteerLine/internal/product/api"
 )
@@ -26,8 +27,47 @@ type requestRecord struct {
 	Control   *api.ControlInput  `json:"control,omitempty"`
 	Discard   *api.DiscardInput  `json:"discard,omitempty"`
 	Decision  *api.DecisionInput `json:"decision,omitempty"`
-	Response  *CommandResponse   `json:"response,omitempty"`
+	Response  *requestOutcome    `json:"response,omitempty"`
 	CreatedAt time.Time          `json:"created_at"`
+}
+
+// Authority DTOs and Original are reconstructed on read, never duplicated in
+// transport storage. Reserve a bounded outcome before registering any intent.
+const (
+	maxRequestRecordBytes  = maxCommandBytes + (32 << 10)
+	maxRequestOutcomeBytes = 16 << 10
+	maxOutcomeTextBytes    = 1024
+)
+
+type requestOutcome struct {
+	Status     string    `json:"status"`
+	Code       string    `json:"code,omitempty"`
+	Diagnostic string    `json:"diagnostic,omitempty"`
+	SampledAt  time.Time `json:"sampled_at"`
+}
+
+func outcomeOf(response CommandResponse) *requestOutcome {
+	return &requestOutcome{Status: response.Status, Code: boundedOutcomeText(response.Code),
+		Diagnostic: boundedOutcomeText(response.Diagnostic), SampledAt: response.SampledAt}
+}
+
+func boundedOutcomeText(value string) string {
+	if len(value) <= maxOutcomeTextBytes {
+		return value
+	}
+	end := maxOutcomeTextBytes - len(" [truncated]")
+	for end > 0 && !utf8.RuneStart(value[end]) {
+		end--
+	}
+	return value[:end] + " [truncated]"
+}
+
+func (record requestRecord) response() CommandResponse {
+	envelope := record.Envelope
+	return CommandResponse{RequestID: envelope.RequestID, ProjectID: envelope.ProjectID, InstanceID: envelope.InstanceID,
+		Action: envelope.Action, TargetID: envelope.TargetID, ExpectedVersion: envelope.ExpectedVersion,
+		Original: envelopePtr(envelope), Status: record.Response.Status, Code: record.Response.Code,
+		Diagnostic: record.Response.Diagnostic, SampledAt: record.Response.SampledAt}
 }
 
 type answerPayload struct {
@@ -133,7 +173,7 @@ func (s *Server) submitCommand(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if old.Response != nil {
-			response := *old.Response
+			response := old.response()
 			if response.Status != "rejected" && response.Status != "outcome_unknown" {
 				response.Status = "outcome_unknown"
 				response.Diagnostic = "the original transport accepted this envelope but the product authority no longer has its receipt; do not replay it"
@@ -163,12 +203,12 @@ func (s *Server) submitCommand(w http.ResponseWriter, r *http.Request) {
 			(!isControlAction(envelope.Action) && envelope.Action != "answer_decision" || contains(s.options.Capabilities, envelope.Action)) {
 			mappingErr = s.mapIntent(r.Context(), envelope, &record)
 		}
-		data, marshalErr := json.Marshal(record)
+		data, marshalErr := marshalRequestRecord(record)
 		if marshalErr != nil {
-			writeError(w, http.StatusInternalServerError, "request_record_failed", marshalErr.Error(), envelope.RequestID)
+			writeProtocolError(w, marshalErr, envelope.RequestID)
 			return
 		}
-		if err = writePrivateExclusive(s.commandsDir, path, append(data, '\n')); err != nil {
+		if err = writePrivateExclusive(s.commandsDir, path, data); err != nil {
 			writeError(w, http.StatusServiceUnavailable, "request_arbitration_failed", err.Error(), envelope.RequestID)
 			return
 		}
@@ -223,7 +263,7 @@ func (s *Server) submitCommand(w http.ResponseWriter, r *http.Request) {
 		writeProtocolError(w, err, envelope.RequestID)
 		return
 	}
-	record.Response = &response
+	record.Response = outcomeOf(response)
 	if persistErr := writeRequestRecord(s.commandsDir, path, record); persistErr != nil {
 		writeError(w, http.StatusServiceUnavailable, "request_receipt_persist_failed", persistErr.Error(), envelope.RequestID)
 		return
@@ -235,7 +275,7 @@ func (s *Server) rejectRegisteredEnvelope(w http.ResponseWriter, path string, re
 	rejected := CommandResponse{RequestID: envelope.RequestID, ProjectID: envelope.ProjectID, InstanceID: envelope.InstanceID,
 		Action: envelope.Action, TargetID: envelope.TargetID, ExpectedVersion: envelope.ExpectedVersion,
 		Original: envelopePtr(envelope), Status: "rejected", Code: code, Diagnostic: reason, SampledAt: time.Now().UTC()}
-	record.Response = &rejected
+	record.Response = outcomeOf(rejected)
 	if err := writeRequestRecord(s.commandsDir, path, record); err != nil {
 		writeError(w, http.StatusServiceUnavailable, "request_receipt_persist_failed", err.Error(), envelope.RequestID)
 		return
@@ -542,7 +582,10 @@ func (s *Server) readCommand(w http.ResponseWriter, r *http.Request, requestID s
 	if record, err := readRequestRecord(filepath.Join(s.commandsDir, requestID+".json")); err == nil {
 		original = envelopePtr(record.Envelope)
 		originalRecord = &record
-		storedResponse = record.Response
+		if record.Response != nil {
+			response := record.response()
+			storedResponse = &response
+		}
 	} else if !os.IsNotExist(err) {
 		writeError(w, http.StatusServiceUnavailable, "request_record_unreadable", err.Error(), requestID)
 		return
@@ -781,7 +824,7 @@ func readRequestRecord(path string) (requestRecord, error) {
 	if err != nil {
 		return record, err
 	}
-	if len(data) == 0 || len(data) > maxCommandBytes+(32<<10) {
+	if len(data) == 0 || len(data) > maxRequestRecordBytes {
 		return record, errors.New("request arbitration record is empty or too large")
 	}
 	if err = decodeStrict(data, &record); err != nil {
@@ -794,18 +837,56 @@ func readRequestRecord(path string) (requestRecord, error) {
 	if err != nil || digestBytes(canonical) != record.Digest {
 		return requestRecord{}, errors.New("request arbitration record digest does not match its immutable envelope")
 	}
-	if record.Response != nil && (record.Response.RequestID != record.Envelope.RequestID || record.Response.ProjectID != record.Envelope.ProjectID || record.Response.Action != record.Envelope.Action) {
-		return requestRecord{}, errors.New("request arbitration receipt does not match its immutable envelope")
+	if _, err := marshalRequestRecord(record); err != nil {
+		return requestRecord{}, err
 	}
 	return record, nil
 }
 
 func writeRequestRecord(dir, path string, record requestRecord) error {
-	data, err := json.Marshal(record)
+	data, err := marshalRequestRecord(record)
 	if err != nil {
 		return err
 	}
-	return writePrivateAtomic(dir, path, append(data, '\n'))
+	return writePrivateAtomic(dir, path, data)
+}
+
+func marshalRequestRecord(record requestRecord) ([]byte, error) {
+	base := record
+	base.Response = nil
+	data, err := json.Marshal(base)
+	if err != nil {
+		return nil, err
+	}
+	// Include newline and the response field framing in the reservation. The
+	// complete mapped intent must pass here before any authority submit occurs.
+	if len(data)+1 > maxRequestRecordBytes-maxRequestOutcomeBytes {
+		return nil, &protocolError{status: http.StatusRequestEntityTooLarge, code: "request_record_too_large",
+			reason: "encoded envelope and mapped intent exceed the 1064960-byte request record admission budget"}
+	}
+	if record.Response != nil {
+		switch record.Response.Status {
+		case "submitted", "accepted", "applied", "rejected", "outcome_unknown":
+		default:
+			return nil, errors.New("request arbitration outcome status is invalid")
+		}
+		outcome, err := json.Marshal(record.Response)
+		if err != nil {
+			return nil, err
+		}
+		if len(outcome)+len(`,"response":`) > maxRequestOutcomeBytes {
+			return nil, errors.New("request arbitration outcome exceeds its reserved budget")
+		}
+		data, err = json.Marshal(record)
+		if err != nil {
+			return nil, err
+		}
+	}
+	data = append(data, '\n')
+	if len(data) > maxRequestRecordBytes {
+		return nil, errors.New("request arbitration record exceeds its read budget")
+	}
+	return data, nil
 }
 
 func definitiveCommandRejection(err error) bool {

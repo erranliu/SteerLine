@@ -60,6 +60,10 @@ Go consumers can use `app.OpenHTTPClient(ctx, configPath)`; this only connects t
 
 所有 POST 使用唯一的 32 位小写十六进制 `request_id`、当前 `project_id`/`instance_id`、精确 `target_id`、显示时的 `expected_version`，并按动作携带控制或图 revision。请求信封在发送前由调用方持久保存。服务将完整原信封先原子登记，再写入现有宿主 immutable control inbox 或调用 SQLite CommandService；同 ID 不同信封返回 `request_id_conflict`。服务端从当前 OS 用户取得 `requested_by`，忽略客户端不能证明的身份。控制请求绑定原实例/显示 revision，由运行服务再次核对实例、control/graph/task/decision 版本和领域资格；过期目标保留原 request 并拒绝，不转向当前最新对象。
 
+POST JSON 正文上限为 1,048,576 bytes（1 MiB），超出返回 HTTP 413 / `request_body_too_large`。登记前还核对完整原信封、实际规范化映射意图、digest、创建时间及 JSON framing/newline 的聚合编码大小：不含结果摘要的记录上限 1,064,960 bytes，为有界结果预留 16 KiB；超出返回 HTTP 413 / `request_record_too_large`，该新 ID 不登记，不提交 control/SQLite 或触发业务副作用。各动作的既有字段/领域限制仍适用，正文在 1 MiB 内不代表映射后一定可准入。持久文件写入与正式读取共用 1,081,344-byte（1 MiB + 32 KiB）硬上限。
+
+仲裁文件只保存一份完整原信封和完整原映射意图；结果摘要只保存 status、code、diagnostic 和采样时间，不重复保存 `original` 或 typed authority DTO。GET/同 ID 重交从原信封恢复身份与 `original`，并从正式 authority 查询完整 typed receipt；后续回执大小不扩张仲裁文件。authority 明确丢失时保留原信封并返回 `outcome_unknown`，不重放；原 rejection 保持 `rejected`。只有持久摘要的 code/diagnostic 限为各 1,024 UTF-8 bytes，超长文本保留前缀及 ` [truncated]`；正常 authority 查询输出仍保留完整回执。当前开发格式不迁移旧记录，不双读或回退。
+
 | `action` | `target_id` / 版本 | `payload` | 现有入口 |
 | --- | --- | --- | --- |
 | `start_task` | task ID / task version + `expected_control_revision` | `{"execution_profile_id":"..."}` | `StartTaskPayload` → 原 `start_task` control；服务再次核对 task version、资格、实例与 revision |

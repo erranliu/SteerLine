@@ -20,16 +20,17 @@ import (
 )
 
 type apiReader struct {
-	onResolveStart  func(string, string)
-	snapshot        api.ProjectSnapshot
-	page            api.TaskPage
-	graph           api.GraphPage
-	activity        api.LogBatch
-	commands        map[string]api.CommandReceipt
-	commandErr      error
-	listCursor      string
-	listLimit       int
-	decisionSubmits int
+	onResolveStart      func(string, string)
+	onNormalizeDecision func(api.DecisionInput) (api.DecisionInput, error)
+	snapshot            api.ProjectSnapshot
+	page                api.TaskPage
+	graph               api.GraphPage
+	activity            api.LogBatch
+	commands            map[string]api.CommandReceipt
+	commandErr          error
+	listCursor          string
+	listLimit           int
+	decisionSubmits     int
 }
 
 func (r *apiReader) Close() error { return nil }
@@ -165,7 +166,10 @@ type apiDecision struct {
 	submits int
 }
 
-func (apiDecision) Normalize(_ context.Context, in api.DecisionInput) (api.DecisionInput, error) {
+func (d apiDecision) Normalize(_ context.Context, in api.DecisionInput) (api.DecisionInput, error) {
+	if d.reader.onNormalizeDecision != nil {
+		return d.reader.onNormalizeDecision(in)
+	}
 	in.Answer.OptionID = strings.TrimSpace(in.Answer.OptionID)
 	return in, nil
 }
