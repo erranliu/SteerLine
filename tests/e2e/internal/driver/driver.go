@@ -94,10 +94,9 @@ func (c *Client) Control(ctx context.Context, helper, action, taskID string) err
 	if profile == "" {
 		profile = "controlled"
 	}
-	// ResolveIdentity is bounded at 25s; the product control request has a 2m
-	// lifetime. Native preparation must get that same receipt window, without
-	// submitting another request when a terminal is still starting.
-	_, err := c.runWithTimeout(ctx, 150*time.Second, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID, "-profile", profile)
+	// Admission expires on the original product request. An admitted claim can
+	// still be applying native preparation; await that same receipt without resend.
+	_, err := c.runWithTimeout(ctx, 390*time.Second, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID, "-profile", profile)
 	return err
 }
 
@@ -106,7 +105,7 @@ func (c *Client) ControlTargeted(ctx context.Context, helper, action, taskID, ex
 	if profile == "" {
 		profile = "controlled"
 	}
-	_, err := c.runWithTimeout(ctx, 150*time.Second, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID,
+	_, err := c.runWithTimeout(ctx, 390*time.Second, helper, "control", "-config", c.Config, "-action", action, "-task-id", taskID,
 		"-profile", profile, "-expected-instance", expectedInstance)
 	return err
 }
@@ -158,7 +157,9 @@ func MainControl(args []string) error {
 	if err != nil {
 		return err
 	}
-	ctx, cancel := context.WithDeadline(context.Background(), request.ExpiresAt)
+	// Request expiration guards admission in the product. A verified applying
+	// reservation is already durable; completion can arrive after that deadline.
+	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 	receipt, err := steerline.WaitControlReceipt(ctx, hostConfig, request.RequestID, 100*time.Millisecond)
 	if err != nil {
