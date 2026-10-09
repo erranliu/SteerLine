@@ -321,6 +321,9 @@ func newLifecycleProject(t *testing.T, host string) integrationFixture {
 // Some catalog fixtures bind their final provider before opening authority.
 func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) integrationFixture {
 	t.Helper()
+	if host == "orca" {
+		t.Skip("retained legacy local Orca integration: product registration is disconnected; supervised local coverage is in its adapter/app tests")
+	}
 	root := t.TempDir()
 	t.Setenv("STEERLINE_INTEGRATION_HISTORY_FILE", filepath.Join(root, "app-server-history.json"))
 	home := filepath.Join(root, "home")

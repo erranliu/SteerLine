@@ -26,6 +26,9 @@ import (
 // frozen profile through Config.ExecutionConfig().
 func builtinFixtureConfig(t *testing.T, c steerlineapp.Config, worker codexworker.ProfileConfig, terminal *orcaworker.ProfileConfig, remoteSettings ...*remote.ProfileConfig) steerlineapp.Config {
 	t.Helper()
+	if c.Host == "orca" {
+		t.Skip("retained legacy local Orca integration: product registration is disconnected; adapter unit tests remain available")
+	}
 	if c.Repository == "" {
 		c.Repository = filepath.Join(t.TempDir(), "repository")
 		require(t, os.MkdirAll(c.Repository, 0700))

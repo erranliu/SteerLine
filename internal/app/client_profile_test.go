@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/erranliu/SteerLine/internal/execution"
-	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	remote "github.com/erranliu/SteerLine/internal/execution/adapters/orcaremote"
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
 	api "github.com/erranliu/SteerLine/internal/product/api"
@@ -26,13 +26,13 @@ func TestCLIExecutionProfileIsBoundIntoStartTaskRequest(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hostPayload, _ := orcaworker.EncodeProfileConfig(orcaworker.ProfileConfig{Executable: "fixture-host", Shell: "cmd.exe", WaitTimeout: "1m"})
+	hostPayload, _ := remote.EncodeProfileConfig(remote.ProfileConfig{Target: "local", PollInterval: "1s", CapabilityReportVersion: 1, Executable: "fixture-host", Shell: "cmd.exe", WaitTimeout: "1m"})
 	config := Config{
 		Repository: repository, Git: executionbackend.Command{Executable: "git"},
 
 		PublicationPolicy: executionbackend.PublicationPolicy{Publisher: executionbackend.PublisherWorker},
 		PR:                executionmodel.PRProviderConfig{Kind: "command", BaseURL: "https://github.com", Repository: "owner/repo", Query: executionbackend.Command{Executable: os.Args[0]}},
-		ExecutionProfiles: []execution.ExecutionProfile{{ID: "orca", Name: "Orca", Host: "orca", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: orcaworker.ProfileCodecKey, CodecVersion: 1, Payload: hostPayload}}}},
+		ExecutionProfiles: []execution.ExecutionProfile{{ID: "orca", Name: "Orca", Host: "orca_supervised", Agent: "codex", ImplementationConfigs: []executionbackend.ImplementationConfigInput{{ImplementationKey: remote.ProfileCodecKey, CodecVersion: remote.ProfileCodecVersion, Payload: hostPayload}}}},
 	}
 	config.ProcessHost = host
 	config.ExecutionDirectory = directory

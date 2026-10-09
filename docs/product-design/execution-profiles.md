@@ -28,13 +28,29 @@ Windows local Codex采用唯一原生方案：workspace-write、windows.sandbox=
 
 SteerLine不做管理员安装、系统账号/防火墙设置、全局配置改写、ACL修复或通用缓存发现。依据[原生自动审核](https://learn.chatgpt.com/docs/sandboxing/auto-review)与[Windows沙箱](https://learn.chatgpt.com/docs/windows/windows-sandbox)；本机验收见[第二批记录](../acceptance/archive/completed/product-simplification-02-configuration/README.md)。其他agent、非Windows和远端不套用不适用的参数，沿原adapter支持范围及目标/回执检查。
 
-## 本机 Orca 原生权限
+## Orca supervised 本机与远端目标
 
-本机 `host: orca` 的 `agent` 是 Orca 原生 launcher 选择值；SteerLine 不包含按该值分支的特定模型引擎代码。仅接受 `orca.worker-profile` 格式1，payload 包含 Orca executable、超时及通用 model / reasoning_effort 偏好，不接受 local Codex codec 或权限字段。后续新增受 Orca 支持的 agent 时复用同一原生流程；实际可用能力以 Orca 回执为准。
+Orca 当前仅注册 `host: orca_supervised`，使用 `orca.supervised-profile` 格式2，`agent` 是 Orca launcher 配置值。payload 的 `target: local` 使用本机 Orca 和项目仓库；`target: environment` 使用保存的 environment/connection/repository_selector，现有远端配置省略 target 仍表示 environment。两目标共用现有 supervised 生命周期；实际能力以 Orca 回执为准，不按 agent 编写特定模型引擎。
 
-权限统一由 Orca 的 Agent Permissions 设置管理。当前跑通阶段在 Orca 中选择 Terminal 模式和 YOLO；SteerLine 不覆盖 native launcher 参数、不创建自己的审批层。首次 `worker-start` 传 agent/model/effort，续轮只传原 terminal，停止和释放均使用原 Dispatch。组合启动失败时保留已有副作用并按原生身份回收，未知回执只对账原请求。
+权限与 Terminal 启动方式由 Orca 原生设置管理。首次 worker-start 传 agent/model/effort，后续复用原 terminal；远端增加 on，workspace 查询显式 environment，Run/inbox/coordinator 留在中心。本机不携带这些远端路由字段，控制和执行 runtime 相同。失联或错误身份不改投其他目标，未知启动按原 Task/Dispatch 对账。
 
-规范正文采用 [Orca通用输出材料协议](../spec/orca-native-worker.spec.md)，同时要求原 Dispatch 真实结算；完整材料冻结在应用运行目录，原生释放之后查询仍可用。实际启动与权限的 [live 验证记录](../acceptance/orca-native-worker.md) 独立登记，失败不能视为已跑通。
+两目标均保持原远端功能：完成凭据使用 worker_done 正文与原 Dispatch 结算；取消不支持；交付后保留会话/工作区，中心停服只解除观察。没有增加原本机路径的完整结果文件冻结或自动释放能力。原 `host: orca`、`orca.worker-profile` 和 `orca_terminal_v2` 已切断产品注册/历史读取接线，adapter 源码及其独立测试保留；不自动转换原配置或原执行。当前实现与验证见[双目标 Plan](../spec/orca-supervised-targets.plan.md)和[验收记录](../acceptance/orca-supervised-targets.md)。
+
+本机 payload 示例（implementation_key 为 `orca.supervised-profile`、codec_version 为 2）：
+
+```json
+{
+  "target": "local",
+  "executable": "orca.exe",
+  "shell": "powershell.exe",
+  "wait_timeout": "2m",
+  "poll_interval": "1s",
+  "capability_report_version": 1,
+  "remote_cancel_available": false
+}
+```
+
+远端将 target 改为 environment 并填写 `environment_id`、`connection_id`、`repository_selector`；本机不接受这三个字段。model/reasoning_effort 可选且由 Orca 解释。structured 方案已推迟，与当前链路无关。
 
 ## 项目策略与配置受理
 

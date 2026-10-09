@@ -95,13 +95,16 @@ func NewExecutionLifecycle(setup executionbackend.LifecycleSetup) (executionback
 		Repository: setup.RepositoryPath, ProjectID: snapshot.Session.ProjectID, Agent: snapshot.Ref.Agent.Name,
 		Model: profile.Model, ReasoningEffort: profile.ReasoningEffort, CommandTimeout: commandTimeout.String(),
 		ExpectedRemoteRuntime: snapshot.Ref.External.RuntimeID,
-		Settings: Settings{ConnectionID: profile.ConnectionID, EnvironmentID: profile.EnvironmentID,
+		Settings: Settings{Target: profile.Target, ConnectionID: profile.ConnectionID, EnvironmentID: profile.EnvironmentID,
 			RepositorySelector: profile.RepositorySelector, CoordinatorTerminal: profile.CoordinatorTerminal,
 			PollInterval: profile.PollInterval},
 		Call: call, Origin: origin, CoordinatorShell: profile.Shell,
 	}
 	if err := config.Validate(); err != nil {
 		return nil, err
+	}
+	if !SameBaseTarget(snapshot.Ref.Target, config.Target()) {
+		return nil, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "supervised profile differs from frozen target"}
 	}
 	return &ExecutionLifecycle{setup: setup, config: config, client: New(config), remotePayload: remotePayload}, nil
 }

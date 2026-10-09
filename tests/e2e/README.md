@@ -1,12 +1,12 @@
 # 分级测试与 E2E 环境
 
-第一阶段包含本地 Codex、本机 Orca 与远端路径交付。`orca-codex` 是本机后端；`delivery.orca-remote-codex` 是远端交付场景。
+当前产品入口为本地 Codex 和 Orca supervised（local/environment）；原本机 `host=orca` 已停用，源码保留。`delivery.orca-remote-codex` 保持原远端交付场景，新的 supervised 本机目标当前使用[定向验收](../../docs/acceptance/orca-supervised-targets.md)。
 
-远端交付通过 L3 场景 `delivery.orca-remote-codex` 执行；L2 默认选择仍为本机双链路。当前契约与支持边界见[远端 Spec](../../docs/spec/orca-remote-l3.spec.md)，结果见[专属验收](../../docs/acceptance/orca-remote-l3.md)。
+远端交付通过 L3 场景 `delivery.orca-remote-codex` 执行；旧 `orca-codex` 三项 live、四项 `recovery.orca-startup.*` 与 `candidates.local` 已移出 suites.json，驱动留档，不计当前验收。当前契约与支持边界见[远端 Spec](../../docs/spec/orca-remote-l3.spec.md)，结果见[专属验收](../../docs/acceptance/orca-remote-l3.md)。
 
 全项目测试范围、L1/Full/定向入口、独立原生验收和产物导航见[测试总入口](../../docs/testing.md)。本文维护 E2E 环境、场景和扩展的具体约定。
 
-L1 是精简固定 quick 加按改动选择的定向回归，默认最多三个独立进程并发；`-workers=1` 可串行诊断。固定集成保留架构边界、领取事务回滚/幂等与 SQLite 接线，复杂恢复、多回合和候选调度按改动定向执行，具体命令见[测试总入口](../../docs/testing.md)。L2 是无 token 门槛加双真实交付 smoke；Orca 链路显式使用 `args=[]`，核验冻结配置及真实启动交付。L3 按业务组、环境和场景选择，每个测试可以独立运行。Plan 按最小必要范围选择，不自动串跑所有级别。
+L1 是精简固定 quick 加按改动选择的定向回归，默认最多三个独立进程并发；`-workers=1` 可串行诊断。固定集成保留架构边界、领取事务回滚/幂等与 SQLite 接线，复杂恢复、多回合和候选调度按改动定向执行，具体命令见[测试总入口](../../docs/testing.md)。L2 当前登记无 token 门槛与本地 Codex smoke；旧 Orca smoke 不再选择。L3 按业务组、环境和场景选择，每个测试可以独立运行。Plan 按最小必要范围选择，不自动串跑所有级别。
 
 ```powershell
 go run ./cmd/test-feedback -level=L1
@@ -33,18 +33,16 @@ go run ./cmd/test-feedback -level=L3 -suite=workspace -env=native '-scenario=wor
 | 级别/环境 | 场景 ID | 验证 |
 | --- | --- | --- |
 | L2 controlled | `smoke.delivery` | 正式创建/领取 A、发布 PR、合并前 B 阻塞，合并后原 A 交付且 B 就绪但未启动 |
-| L2 live | `smoke.local-codex` / `smoke.orca-codex` | 真实模型、真实 SteerlineTest GitHub PR、合并交付、依赖解锁和正数 usage |
+| L2 live | `smoke.local-codex` | 真实模型、真实 SteerlineTest GitHub PR、合并交付、依赖解锁和正数 usage |
 | L3 controlled | `delivery.basic` | 验证 A 唯一 Delivery 解锁 B；B dependency-ready 且未创建 WorkflowRun |
 | L3 controlled | `recovery.waiting-merge-restart` | 等待合并后重启，原任务/数据库/工作流/执行/工作区保持，不重派，再正常交付 |
-| L3 controlled | `recovery.orca-startup.slow` / `.unobserved` / `.lost` / `.failed` | 四个独立外部 Orca CLI fixture 场景：慢启动、已接受但开始未确认、回执丢失和确定失败；核验原输入保留、精确释放、终态收敛及重启不重派 |
 | L3 controlled | `runtime.installed-debug-isolation` | 两个独立 Git clone/home 同时运行安装版与源码调试版；调试重建/停启、console/CLI 路径、越界与过期实例写拒绝、跨 home 仓库锁和状态隔离 |
 | L3 native | `workspace.orca-removal-restart` | 真实 Orca CLI 在默认 state/worktrees 布局创建、删除无 agent 工作区；核实真实 trash、CLI/控制台查询、重启及无关任务启动 |
-| L3 live | `delivery.local-codex` / `delivery.orca-codex` | 真实模型配 loopback provider，分别独立交付 |
+| L3 live | `delivery.local-codex` | 真实模型配 loopback provider，分别独立交付 |
 | L3 live | `delivery.orca-remote-codex` | 真实配对 Windows Orca，正式领取与双轮反馈、同会话/工作区、真实 GitHub PR 合并与唯一交付、Orca 精确公开输出和 owned 清理 |
-| L3 live | `recovery.local-codex` / `recovery.orca-codex` | local 在等待合并后重启保持原身份；Orca 增加活动停服重接及原轮次离线完成，保持原 Attempt/Dispatch/terminal，再核验已完成后重启不增 usage 与唯一交付 |
-| L3 live | `candidates.local` | manifest 固定本地 Codex + 本机 Orca，两候选真实反馈/PR/唯一交付与后继；使用真实 SteerlineTest GitHub PR |
+| L3 live | `recovery.local-codex` | 等待合并后重启保持原身份，再核验已完成后重启与唯一交付 |
 
-候选唯一入口 `candidates.local` 使用 `STEERLINE_CANDIDATE_ACCEPTANCE_CONFIG`，格式见[本机候选 manifest](#本机候选-manifest)，历史现场结论见 [#39](../../docs/validation/candidate-acceptance.md)。runner 在清除继承 STEERLINE 环境时将该输入的绝对路径保存在 Run 中；manifest 的源码 commit 必须匹配实际 HEAD，只选择本机 Orca 与本地 Codex 两套 profile。chain 字段用于 runner live 枚举，实际两份 profile 在 manifest/规范 SQLite snapshot 中逐一核验。
+原候选入口 `candidates.local` 已随旧本机 Orca 路径移出当前登记。下面的 manifest 与驱动说明保留历史参考，不能用它声明当前本机 supervised 已完成真实候选验收。
 
 ## 本机候选 manifest
 

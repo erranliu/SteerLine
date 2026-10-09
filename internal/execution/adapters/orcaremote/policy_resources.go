@@ -12,6 +12,7 @@ const PolicyResourcesCodecKey = "orca.remote-native-resources"
 
 type PolicyResourceIdentity struct{ ProjectID, ExecutionID, AttemptID, Generation, ConfigDigest string }
 type NativeResourcePayload struct {
+	Target             string `json:"target,omitempty"`
 	EnvironmentID      string `json:"environment_id"`
 	ConnectionID       string `json:"connection_id"`
 	RepositorySelector string `json:"repository_selector"`
@@ -46,7 +47,10 @@ func BuildNativeResource(identity PolicyResourceIdentity, profileID, accepted, w
 	if err := ValidateProfileSelection(agent, remotePayload); err != nil {
 		return executionbackend.ImplementationDataEnvelope{}, err
 	}
-	payload := NativeResourcePayload{EnvironmentID: peer.EnvironmentID, ConnectionID: peer.ConnectionID, RepositorySelector: peer.RepositorySelector, Workspace: workspace, Agent: agent, Model: peer.Model, Effort: peer.ReasoningEffort, LaunchSource: "remote-orca-native"}
+	payload := NativeResourcePayload{Target: peer.Target, EnvironmentID: peer.EnvironmentID, ConnectionID: peer.ConnectionID, RepositorySelector: peer.RepositorySelector, Workspace: workspace, Agent: agent, Model: peer.Model, Effort: peer.ReasoningEffort, LaunchSource: "remote-orca-native"}
+	if peer.Target == "local" {
+		payload.LaunchSource = "local-orca-native"
+	}
 	if err := payload.Validate(); err != nil {
 		return executionbackend.ImplementationDataEnvelope{}, err
 	}
@@ -58,7 +62,14 @@ func BuildNativeResource(identity PolicyResourceIdentity, profileID, accepted, w
 }
 
 func (p NativeResourcePayload) Validate() error {
-	if p.EnvironmentID == "" || p.ConnectionID == "" || p.RepositorySelector == "" || p.Workspace == "" || strings.TrimSpace(p.Agent) == "" || (p.Effort != "" && p.Model == "") || p.LaunchSource != "remote-orca-native" {
+	if err := (Settings{Target: p.Target, EnvironmentID: p.EnvironmentID, ConnectionID: p.ConnectionID, RepositorySelector: p.RepositorySelector}).validateTarget(); err != nil {
+		return err
+	}
+	source := "remote-orca-native"
+	if p.Target == "local" {
+		source = "local-orca-native"
+	}
+	if p.Workspace == "" || strings.TrimSpace(p.Agent) == "" || (p.Effort != "" && p.Model == "") || p.LaunchSource != source {
 		return errors.New("remote native resource authority is incomplete")
 	}
 	return nil

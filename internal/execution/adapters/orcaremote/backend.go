@@ -82,6 +82,9 @@ func (b Backend) InspectWorkspace(ctx context.Context, ref executionbackend.Exec
 func NewBackend(c Config) Backend { return Backend{config: c} }
 
 func (c Config) Target() executionbackend.ExecutionTarget {
+	if c.local() {
+		return executionbackend.ExecutionTarget{ID: "orca-supervised-local"}
+	}
 	return executionbackend.ExecutionTarget{ID: "orca-supervised:" + c.Settings.ConnectionID, ConnectionID: c.Settings.ConnectionID, ExternalRuntime: c.Settings.EnvironmentID}
 }
 

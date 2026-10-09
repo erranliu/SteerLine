@@ -15,6 +15,7 @@ import (
 
 func TestOrcaSelectedTargetMatchesRestoredLifecycle(t *testing.T) {
 	var emptyTarget string
+	var emptyDigest string
 	for _, tc := range []struct {
 		name string
 		args []string
@@ -26,7 +27,7 @@ func TestOrcaSelectedTargetMatchesRestoredLifecycle(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			c, commit := nativeTaskFixture(t)
 			terminal := &orcaworker.ProfileConfig{Executable: "orca.exe", Args: tc.args, Shell: "powershell.exe", WaitTimeout: "15m"}
-			profile := boundProfile(c, testExecutionProfile(t, "orca", "Orca", "orca", "codex", codexworker.ProfileConfig{Executable: "codex.exe"}, terminal))
+			profile := boundProfile(c, testExecutionProfile(t, "orca", "Orca", "orca_supervised", "codex", codexworker.ProfileConfig{Executable: "codex.exe"}, terminal))
 			selected := c.ApplyExecutionProfile(profile)
 			config := selected.executionConfig()
 			entry, err := selected.ExecutionDirectory.Resolve(config)
@@ -34,10 +35,11 @@ func TestOrcaSelectedTargetMatchesRestoredLifecycle(t *testing.T) {
 			target := entry.Target(config)
 			if tc.args == nil {
 				emptyTarget = target.ID
+				emptyDigest = profile.Digest()
 			} else if len(tc.args) == 0 && target.ID != emptyTarget {
 				t.Fatalf("empty args changed target: %q != %q", target.ID, emptyTarget)
-			} else if len(tc.args) > 0 && target.ID == emptyTarget {
-				t.Fatal("native arguments were omitted from target identity")
+			} else if len(tc.args) > 0 && profile.Digest() == emptyDigest {
+				t.Fatal("native arguments lost frozen configuration digest")
 			}
 			// Reopen the persisted profile carrier before lifecycle construction.
 			raw, err := json.Marshal(config.ImplementationData)

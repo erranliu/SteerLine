@@ -27,8 +27,9 @@ func (b Client) Show(ctx context.Context, expected StartReceipt) (WorkerObservat
 			Status string `json:"status"`
 		} `json:"dispatch"`
 		Worker struct {
-			DispatchID string `json:"dispatchId"`
-			WorktreeID string `json:"worktreeId"`
+			DispatchID   string `json:"dispatchId"`
+			WorktreeID   string `json:"worktreeId"`
+			RuntimeEpoch string `json:"runtimeEpoch"`
 		} `json:"worker"`
 		Projection struct {
 			Liveness struct {
@@ -58,7 +59,14 @@ func (b Client) Show(ctx context.Context, expected StartReceipt) (WorkerObservat
 	if err := json.Unmarshal(env.Result, &result); err != nil {
 		return WorkerObservation{}, &Error{Code: executionbackend.BackendProtocolInvalid, Diagnostic: "supervised worker-show response is malformed", Cause: err}
 	}
-	if env.Meta.RuntimeID != expected.CenterRuntimeID || result.Dispatch.ID != expected.DispatchID || result.Dispatch.RunID != expected.RunID || result.Dispatch.TaskID != expected.TaskID || result.Worker.DispatchID != expected.DispatchID || result.Worker.WorktreeID != expected.WorktreeID || result.Terminal.WorktreeID != expected.WorktreeID || result.Server.EnvironmentID != b.config.Settings.EnvironmentID || result.Projection.Host.ID != b.config.Settings.EnvironmentID || result.RemoteRuntimeEpoch == "" || (b.config.ExpectedRemoteRuntime != "" && result.RemoteRuntimeEpoch != b.config.ExpectedRemoteRuntime) || !result.Observation.ExactWorker {
+	if b.config.local() {
+		if result.Server.EnvironmentID != "" || result.RemoteRuntimeEpoch != "" || result.Worker.RuntimeEpoch != env.Meta.RuntimeID || result.Projection.Host.ID != "local" {
+			return WorkerObservation{}, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "local worker observation contains foreign host/runtime evidence"}
+		}
+		result.Server.EnvironmentID = "local"
+		result.RemoteRuntimeEpoch = result.Worker.RuntimeEpoch
+	}
+	if env.Meta.RuntimeID != expected.CenterRuntimeID || result.Dispatch.ID != expected.DispatchID || result.Dispatch.RunID != expected.RunID || result.Dispatch.TaskID != expected.TaskID || result.Worker.DispatchID != expected.DispatchID || result.Worker.WorktreeID != expected.WorktreeID || result.Terminal.WorktreeID != expected.WorktreeID || result.Server.EnvironmentID != b.config.executionHost() || result.Projection.Host.ID != b.config.executionHost() || result.RemoteRuntimeEpoch == "" || (b.config.ExpectedRemoteRuntime != "" && result.RemoteRuntimeEpoch != b.config.ExpectedRemoteRuntime) || !result.Observation.ExactWorker {
 		return WorkerObservation{}, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "worker-show does not match the fixed Run/Task/Dispatch/host/worktree identity"}
 	}
 	if result.Terminal.Handle == "" || result.Terminal.IncarnationID == "" || result.Terminal.WorktreePath == "" || result.Terminal.Branch == "" {
@@ -94,6 +102,7 @@ func (b Client) Settlement(ctx context.Context, ref Ref, outcome string) (string
 		} `json:"dispatch"`
 		Worker struct {
 			DispatchID, WorktreeID, AgentTerminalHandle, State string
+			RuntimeEpoch                                       string
 		} `json:"worker"`
 		Projection struct {
 			Host struct {
@@ -107,6 +116,13 @@ func (b Client) Settlement(ctx context.Context, ref Ref, outcome string) (string
 	}
 	if err := json.Unmarshal(env.Result, &result); err != nil {
 		return "", &Error{Code: executionbackend.BackendProtocolInvalid, Diagnostic: "settled supervised worker-show response is malformed", Cause: err}
+	}
+	if b.config.local() {
+		if result.Server.EnvironmentID != "" || result.RemoteRuntimeEpoch != "" || result.Worker.RuntimeEpoch != env.Meta.RuntimeID || result.Projection.Host.ID != "local" {
+			return "", &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "local settlement contains foreign host/runtime evidence"}
+		}
+		result.Server.EnvironmentID = "local"
+		result.RemoteRuntimeEpoch = result.Worker.RuntimeEpoch
 	}
 	if env.Meta.RuntimeID != ref.External.CoordinatorRuntimeID || result.Dispatch.ID != ref.External.Dispatch || result.Dispatch.RunID != ref.External.OrchestrationRun || result.Dispatch.TaskID != ref.External.Task || result.Worker.DispatchID != ref.External.Dispatch || result.Worker.WorktreeID != ref.External.WorktreeID || result.Worker.AgentTerminalHandle != ref.External.Terminal || result.Server.EnvironmentID != ref.External.ExecutionHost || result.Projection.Host.ID != ref.External.ExecutionHost || result.RemoteRuntimeEpoch != ref.External.RuntimeID {
 		return "", &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "settled Dispatch differs from the original Run, worker, host, or terminal binding"}
@@ -130,7 +146,11 @@ func (b Client) InspectWorktree(ctx context.Context, pair PreflightResult, workt
 	if worktreeID == "" || !strings.HasPrefix(worktreeID, pair.RepositoryID+"::") || base == "" {
 		return Workspace{}, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "remote workspace inspection lacks exact worktree/repository/base identity"}
 	}
-	out, callErr := b.config.Call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), "worktree", "show", "--environment", pair.EnvironmentID, "--worktree", "id:"+worktreeID, "--json")
+	args := []string{"worktree", "show", "--worktree", "id:" + worktreeID, "--json"}
+	if !b.config.local() {
+		args = append(args, "--environment", pair.EnvironmentID)
+	}
+	out, callErr := b.config.Call(ctx, positiveDuration(b.config.CommandTimeout, 30*time.Second), args...)
 	env, parseErr := parseEnvelope(out)
 	if callErr != nil || parseErr != nil {
 		return Workspace{}, &Error{Code: executionbackend.BackendUnreachable, Diagnostic: "remote worktree metadata could not be inspected", Cause: errors.Join(callErr, parseErr)}

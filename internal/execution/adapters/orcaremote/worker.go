@@ -85,10 +85,12 @@ func SessionID(identity executionbackend.ProcessIdentity) string {
 // Remote filesystem metadata is never normalized using the center's OS.
 func (b Client) workspaceCall(pair PreflightResult) orcaworker.Call {
 	return func(ctx context.Context, args ...string) (json.RawMessage, error) {
-		if pair.EnvironmentID != b.config.Settings.EnvironmentID || pair.RemoteRuntime == "" || (b.config.ExpectedRemoteRuntime != "" && pair.RemoteRuntime != b.config.ExpectedRemoteRuntime) {
+		if pair.EnvironmentID != b.config.executionHost() || pair.RemoteRuntime == "" || (b.config.ExpectedRemoteRuntime != "" && pair.RemoteRuntime != b.config.ExpectedRemoteRuntime) {
 			return nil, &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "workspace target differs from fixed peer"}
 		}
-		args = append(args, "--environment", pair.EnvironmentID)
+		if !b.config.local() {
+			args = append(args, "--environment", pair.EnvironmentID)
+		}
 		env, err := b.CenterCall(ctx, args...)
 		if err == nil && env.RuntimeID != pair.RemoteRuntime {
 			err = &Error{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "remote workspace runtime changed"}
