@@ -100,7 +100,8 @@ func (s *Service) dispatchLifecycleEffect(ctx context.Context, run *reconstructi
 	request = request.Clone()
 	// Isolated initialization/tests await the identical background-result path;
 	// the running actor always returns immediately and consumes signalQueue.
-	if s.signalQueue == nil {
+	messages, jobCtx := s.signalTransport()
+	if messages == nil {
 		result := make(chan lifecycleEffectResult, 1)
 		go func() { result <- invokeLifecycleEffect(ctx, port, request, reconcile) }()
 		received := <-result
@@ -117,8 +118,7 @@ func (s *Service) dispatchLifecycleEffect(ctx context.Context, run *reconstructi
 		pending.release = owner.ReleasePreparation
 	}
 	s.lifecycleEffects[request.Operation.ID] = pending
-	messages, runID := s.signalQueue, run.RunID
-	jobCtx := s.runContext
+	runID := run.RunID
 	if jobCtx == nil {
 		jobCtx = ctx
 	}

@@ -15,7 +15,8 @@ func (s *Service) shutdown() {
 			delete(s.ownedProcesses, runID)
 		}
 	}()
-	if s.runContext != nil && s.runContext.Err() != nil {
+	_, actorContext := s.signalTransport()
+	if actorContext != nil && actorContext.Err() != nil {
 		s.forwarders.Wait()
 		s.drainWorkerMessages()
 	}
@@ -28,7 +29,8 @@ func (s *Service) shutdown() {
 	}
 	s.lifecycleMessages, s.lifecycleEffects = nil, nil
 
-	s.signalQueue = nil
+	queue := s.clearSignalTransport()
+	s.drainSignalQueue(queue)
 	for len(s.workers) != 0 {
 		var runID string
 		for id := range s.workers {

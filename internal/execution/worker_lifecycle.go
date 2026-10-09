@@ -1031,7 +1031,7 @@ func (s *Service) executeLifecycleStep(ctx context.Context, run *reconstructiont
 }
 
 func (s *Service) applyLifecycleStepReceipt(run *reconstructiontypes.RunView, request executionbackend.LifecycleRequest, result lifecycleEffectResult) error {
-	ctx := s.runContext
+	_, ctx := s.signalTransport()
 	if ctx == nil {
 		ctx = context.Background()
 	}

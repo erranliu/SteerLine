@@ -75,7 +75,7 @@ func (s *Service) deliverResumableWorkerFeedback(ctx context.Context, run *recon
 		return s.commitWorker(run)
 	}
 	if run.Decision.Request.QuestionRoute != nil {
-		if s.signalQueue != nil && s.workers[run.RunID] == nil {
+		if s.signalChannel() != nil && s.workers[run.RunID] == nil {
 			return nil // Recovery must attach the original observer before replying.
 		}
 		return s.deliverLifecycleQuestionAnswer(ctx, run, execution, answer)

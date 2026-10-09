@@ -65,6 +65,7 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 		}
 	}()
 	count := 0
+	signalQueue, serviceContext := s.signalTransport()
 	for _, run := range s.runs {
 		if run == nil || run.WorkflowVersion != executionmodel.Version || s.workers[run.RunID] != nil || s.lifecycleEffectPending(run.RunID) || s.appServerRecovering[run.RunID] {
 			continue
@@ -90,7 +91,7 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 		}
 		runID, executionCopy := run.RunID, *execution
 		executionCopy.PendingQuestions = clonePendingQuestions(execution.PendingQuestions)
-		if s.State.Service.Ready && s.signalQueue != nil {
+		if s.State.Service.Ready && signalQueue != nil {
 			if s.appServerRecovering == nil {
 				s.appServerRecovering = make(map[string]bool)
 			}
@@ -98,10 +99,10 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 			s.forwarders.Add(1)
 			go func() {
 				defer s.forwarders.Done()
-				result := recoverAppServerExecution(s.runContext, lifecycle, request, executionCopy)
+				result := recoverAppServerExecution(serviceContext, lifecycle, request, executionCopy)
 				select {
-				case s.signalQueue <- Signal{runID: runID, recovery: &result}:
-				case <-s.runContext.Done():
+				case signalQueue <- Signal{runID: runID, recovery: &result}:
+				case <-serviceContext.Done():
 					if result.worker != nil {
 						_ = result.worker.detachLocalObservation(context.Background())
 					}
@@ -120,7 +121,7 @@ func (s *Service) resumeAppServerWorkers(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case message := <-s.signalQueue:
+		case message := <-signalQueue:
 			if err := s.handleWorkerMessage(message); err != nil {
 				return err
 			}

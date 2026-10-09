@@ -7,11 +7,13 @@ import (
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
+	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
 )
 
 // Signal is delivered to the single service state machine. Worker
 // observers may run concurrently, but only that state machine changes runs.
 type Signal struct {
+	discard  *taskDiscardSignal
 	effect   *lifecycleEffectResult
 	runID    string
 	worker   *Worker
@@ -35,12 +37,17 @@ func (s *Service) registerWorker(run *reconstructiontypes.RunView, worker *Worke
 		}
 		s.ownedProcesses[run.RunID] = owned
 	}
-	if s.signalQueue != nil {
-		s.forwardWorker(s.runContext, run.RunID, worker)
+	queue, actorContext := s.signalTransport()
+	if queue != nil && actorContext != nil {
+		s.forwardWorker(actorContext, run.RunID, worker)
 	}
 }
 
 func (s *Service) forwardWorker(ctx context.Context, runID string, worker *Worker) {
+	queue := s.signalChannel()
+	if queue == nil {
+		return
+	}
 	s.forwarders.Add(1)
 	go func() {
 		defer s.forwarders.Done()
@@ -60,7 +67,7 @@ func (s *Service) forwardWorker(ctx context.Context, runID string, worker *Worke
 				return
 			}
 			select {
-			case s.signalQueue <- Signal{runID: runID, worker: worker, event: &value}:
+			case queue <- Signal{runID: runID, worker: worker, event: &value}:
 			case <-ctx.Done():
 				rejectUndeliveredWorkerEvent(value, ctx.Err())
 				return
@@ -78,10 +85,10 @@ func (s *Service) forwardWorker(ctx context.Context, runID string, worker *Worke
 		}
 		message := Signal{runID: runID, worker: worker, done: true, err: err}
 		select {
-		case s.signalQueue <- message:
+		case queue <- message:
 		case <-ctx.Done():
 			select {
-			case s.signalQueue <- message:
+			case queue <- message:
 			default:
 				s.forwardMu.Lock()
 				s.forwardedDone = append(s.forwardedDone, message)
@@ -103,9 +110,17 @@ func rejectUndeliveredWorkerEvent(event WorkerEvent, err error) {
 }
 
 func (s *Service) drainWorkerMessages() {
-	for s.signalQueue != nil {
+	s.drainSignalQueue(s.signalChannel())
+}
+
+func (s *Service) drainSignalQueue(queue chan Signal) {
+	for queue != nil {
 		select {
-		case message := <-s.signalQueue:
+		case message := <-queue:
+			if message.discard != nil {
+				completeDiscardTask(message.discard, taskmodel.TaskDiscardReceipt{}, nativeErr("service_not_ready", "service stopped before the queued discard began"))
+				continue
+			}
 			if err := s.handleWorkerMessage(message); err != nil {
 				s.setError(err)
 			}

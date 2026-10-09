@@ -158,6 +158,13 @@ func (c *Client) CreateTaskBatch(ctx context.Context, in api.CreateInput) (api.T
 }
 
 func (c *Client) DiscardTask(ctx context.Context, in api.DiscardInput) (api.TaskDiscardReceipt, error) {
+	if c.resources.Discard != nil {
+		if err := c.begin(ctx); err != nil {
+			return api.TaskDiscardReceipt{}, err
+		}
+		defer c.mu.RUnlock()
+		return c.resources.Discard.Discard(ctx, in)
+	}
 	return command(ctx, c, true, func(r TaskCommands) (api.TaskDiscardReceipt, error) { return r.Discard(ctx, in) })
 }
 

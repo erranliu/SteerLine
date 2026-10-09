@@ -36,6 +36,30 @@ func openProjectClient(ctx context.Context, ref productapi.ProjectRef) (*product
 	return productclient.Open(ctx, ref, ClientResources)
 }
 
+// openServiceProjectClient binds the configured service's own task-discard
+// command port into its local HTTP product client. Other clients retain the
+// ordinary repository-locking TaskCommands writer.
+func openServiceProjectClient(ctx context.Context, config Config, service *execution.Service) (*productclient.Client, error) {
+	absolute, err := filepath.Abs(config.ConfigPath)
+	if err != nil {
+		return nil, err
+	}
+	ref := productapi.ProjectRef{ConfigPath: absolute}
+	return productclient.Open(ctx, ref, func(ctx context.Context, ref productapi.ProjectRef) (productclient.Resources, error) {
+		bound := config
+		bound.ConfigPath = absolute
+		if err := bound.ResolveIdentity(ctx); err != nil {
+			return productclient.Resources{}, err
+		}
+		resources, err := clientResources(ctx, bound, ref)
+		if err != nil {
+			return productclient.Resources{}, err
+		}
+		resources.Discard = &clientDiscardCommands{service: service, config: bound}
+		return resources, nil
+	})
+}
+
 // ClientResources is the application construction seam. It binds one immutable
 // config/directory to pure ports; all product orchestration lives in the adapter.
 func ClientResources(ctx context.Context, ref productapi.ProjectRef) (productclient.Resources, error) {

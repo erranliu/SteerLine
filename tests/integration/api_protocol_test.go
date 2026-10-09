@@ -20,6 +20,7 @@ import (
 	"time"
 
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
+	steerlinehost "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution"
 	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -178,6 +179,192 @@ func TestAPIConfiguredServicePublishesDiscovery(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(fixture.config.RunDir, "local-api", "discovery.json")); !os.IsNotExist(err) {
 		t.Fatalf("service close left its discovery record behind: %v", err)
 	}
+}
+
+func TestAPIConfiguredServiceDiscardsTaskThroughOwnedWriter(t *testing.T) {
+	requireWindowsAPI(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+	fixture := newLifecycleProject(t, "local")
+	createIntegrationTask(t, ctx, fixture, 909)
+
+	serviceCtx, stopService := context.WithCancel(ctx)
+	done := make(chan error, 1)
+	go func() { done <- steerlineapp.RunConfiguredService(serviceCtx, fixture.config, "manual", "", "off") }()
+	stopped := false
+	stop := func() {
+		if stopped {
+			return
+		}
+		stopped = true
+		stopService()
+		select {
+		case err := <-done:
+			if err != nil {
+				t.Errorf("RunConfiguredService shutdown: %v", err)
+			}
+		case <-time.After(20 * time.Second):
+			t.Error("RunConfiguredService did not stop after cancellation")
+		}
+	}
+	t.Cleanup(stop)
+
+	var client *httpapi.Client
+	var lastOpenErr error
+	deadline := time.Now().Add(45 * time.Second)
+	for time.Now().Before(deadline) {
+		select {
+		case serviceErr := <-done:
+			stopped = true
+			t.Fatalf("RunConfiguredService exited before ready: %v", serviceErr)
+		default:
+		}
+		connected, openErr := steerlineapp.OpenHTTPClient(serviceCtx, fixture.configPath)
+		if openErr != nil {
+			lastOpenErr = openErr
+			time.Sleep(50 * time.Millisecond)
+			continue
+		}
+		if !connected.Identity().Ready {
+			lastOpenErr = fmt.Errorf("discovered service is not ready: %s", connected.Identity().Diagnostic)
+			_ = connected.Close()
+			time.Sleep(50 * time.Millisecond)
+			continue
+		}
+		client = connected
+		break
+	}
+	if client == nil {
+		t.Fatalf("RunConfiguredService did not publish ready HTTP discovery: %v", lastOpenErr)
+	}
+	t.Cleanup(func() {
+		if client != nil {
+			_ = client.Close()
+		}
+	})
+	identity := client.Identity()
+	if identity.ProjectID != httpapi.ProjectID(fixture.config.Identity()) || identity.InstanceID == "" || !identity.Ready {
+		t.Fatalf("configured service identity is incomplete: %+v", identity)
+	}
+	assertRepositoryLocked := func(phase string) {
+		t.Helper()
+		lock, err := steerlinehost.LockRepository(fixture.config.Identity())
+		if err == nil {
+			lock.Close()
+			t.Fatalf("configured service released its repository lock %s", phase)
+		}
+		if !strings.Contains(err.Error(), "repository already locked") {
+			t.Fatalf("repository lock check failed for an unrelated reason %s: %v", phase, err)
+		}
+	}
+	assertRepositoryLocked("after readiness")
+
+	beforeTask, err := client.ShowTask(ctx, "909")
+	require(t, err)
+	if len(beforeTask.Tasks) != 1 || beforeTask.Tasks[0].Status != "open" || beforeTask.Tasks[0].Version == 0 {
+		t.Fatalf("configured-service fixture task was not open: %+v", beforeTask.Tasks)
+	}
+	beforeGraph, err := client.Graph(ctx, "", 20)
+	require(t, err)
+	if beforeGraph.GraphRevision != beforeTask.GraphRevision {
+		t.Fatalf("task and graph queries came from different native snapshots: task=%+v graph=%+v", beforeTask, beforeGraph)
+	}
+	envelope := httpapi.CommandEnvelope{RequestID: randomRequestID(t), ProjectID: identity.ProjectID, InstanceID: identity.InstanceID,
+		Action: "discard_task", TargetID: "909", ExpectedVersion: beforeTask.Tasks[0].Version,
+		Payload: mustJSON(map[string]string{"reason": "configured service owns the discard writer"})}
+	first, err := client.SubmitCommand(ctx, envelope)
+	require(t, err)
+	if first.Status != "applied" || first.Discard == nil || first.Discard.RequestID != envelope.RequestID ||
+		first.Discard.TaskID != "909" || first.Discard.Status != "discarded" || first.Command == nil ||
+		first.Command.CommandID != envelope.RequestID || first.Command.Kind != "discard_task" || first.Command.TargetID != "909" ||
+		first.Command.DiscardRequest == nil || first.Command.DiscardRequest.Reason != "configured service owns the discard writer" {
+		t.Fatalf("configured service did not return the typed original discard receipt: %+v", first)
+	}
+	if first.Original == nil || first.Original.RequestID != envelope.RequestID || first.Original.Action != envelope.Action ||
+		first.Original.TargetID != envelope.TargetID || string(first.Original.Payload) != string(envelope.Payload) {
+		t.Fatalf("discard receipt lost its original immutable HTTP envelope: %+v", first.Original)
+	}
+	afterTask, err := client.ShowTask(ctx, "909")
+	require(t, err)
+	afterGraph, err := client.Graph(ctx, "", 20)
+	require(t, err)
+	if len(afterTask.Tasks) != 1 || afterTask.Tasks[0].Status != "discarded" || afterTask.Tasks[0].Version <= beforeTask.Tasks[0].Version ||
+		afterGraph.GraphRevision <= beforeGraph.GraphRevision || afterTask.GraphRevision != afterGraph.GraphRevision {
+		t.Fatalf("discard did not change the task and graph exactly through native authority: before=%+v after=%+v graph_before=%+v graph_after=%+v",
+			beforeTask.Tasks[0], afterTask.Tasks[0], beforeGraph, afterGraph)
+	}
+	stableAuthority, stableGraph, stableVersion := afterTask.AuthorityVersion, afterTask.GraphRevision, afterTask.Tasks[0].Version
+
+	if err = client.Close(); err != nil {
+		t.Fatal(err)
+	}
+	client, err = steerlineapp.OpenHTTPClient(ctx, fixture.configPath)
+	require(t, err)
+	if client.Identity().InstanceID != identity.InstanceID || !client.Identity().Ready {
+		t.Fatalf("reconnected client observed another or unready service instance: %+v", client.Identity())
+	}
+	reconnectedReceipt, err := client.Command(ctx, envelope.RequestID)
+	require(t, err)
+	if reconnectedReceipt.Status != "applied" || reconnectedReceipt.Discard == nil || reconnectedReceipt.Command == nil ||
+		reconnectedReceipt.Discard.RequestID != first.Discard.RequestID || reconnectedReceipt.Command.CommandID != first.Command.CommandID {
+		t.Fatalf("reconnected command lookup did not recover the original typed receipt: %+v", reconnectedReceipt)
+	}
+	duplicate, err := client.SubmitCommand(ctx, envelope)
+	require(t, err)
+	if duplicate.Status != "applied" || duplicate.Discard == nil || duplicate.Discard.RequestID != first.Discard.RequestID ||
+		duplicate.Discard.GraphRevision != first.Discard.GraphRevision {
+		t.Fatalf("same-envelope retry did not reconcile to the original discard outcome: first=%+v duplicate=%+v", first.Discard, duplicate.Discard)
+	}
+	changed := envelope
+	changed.Payload = mustJSON(map[string]string{"reason": "conflicting use of the same request ID"})
+	if _, err = client.SubmitCommand(ctx, changed); err == nil {
+		t.Fatal("same request ID with different content was accepted")
+	} else {
+		var clientErr *httpapi.ClientError
+		if !errors.As(err, &clientErr) || clientErr.Status != 409 || clientErr.Code != "request_id_conflict" {
+			t.Fatalf("same-ID content conflict returned the wrong result: %v", err)
+		}
+	}
+	finalReceipt, err := client.Command(ctx, envelope.RequestID)
+	require(t, err)
+	finalTask, err := client.ShowTask(ctx, "909")
+	require(t, err)
+	finalGraph, err := client.Graph(ctx, "", 20)
+	require(t, err)
+	if finalReceipt.Discard == nil || finalReceipt.Discard.GraphRevision != first.Discard.GraphRevision || len(finalTask.Tasks) != 1 ||
+		finalTask.Tasks[0].Status != "discarded" || finalTask.Tasks[0].Version != stableVersion ||
+		finalTask.AuthorityVersion != stableAuthority || finalTask.GraphRevision != stableGraph || finalGraph.GraphRevision != stableGraph {
+		t.Fatalf("duplicate or conflicting request changed authoritative task state: receipt=%+v task=%+v graph=%+v", finalReceipt, finalTask, finalGraph)
+	}
+	assertRepositoryLocked("after duplicate and conflicting retries")
+	refreshed, err := client.RefreshIdentity(ctx)
+	require(t, err)
+	if !refreshed.Ready || refreshed.InstanceID != identity.InstanceID {
+		t.Fatalf("service stopped being ready after task discard: %+v", refreshed)
+	}
+	revision, paused := integrationControlState(t, ctx, client)
+	control := integrationDispatchEnvelope(t, client, revision, paused)
+	if _, err = client.SubmitCommand(ctx, control); err != nil {
+		t.Fatalf("configured service stopped processing normal control after discard: %v", err)
+	}
+	_ = waitIntegrationControlApplied(t, ctx, client, control.RequestID)
+	refreshed, err = client.RefreshIdentity(ctx)
+	require(t, err)
+	if !refreshed.Ready {
+		t.Fatal("configured service was not ready after a subsequent control receipt")
+	}
+	assertRepositoryLocked("after subsequent service control")
+
+	if err = client.Close(); err != nil {
+		t.Fatal(err)
+	}
+	stop()
+	if _, err = os.Stat(filepath.Join(fixture.config.RunDir, "local-api", "discovery.json")); !os.IsNotExist(err) {
+		t.Fatalf("configured service shutdown left discovery behind: %v", err)
+	}
+	lock, err := steerlinehost.LockRepository(fixture.config.Identity())
+	require(t, err)
+	lock.Close()
 }
 
 func integrationStartupText(runDir string) string {

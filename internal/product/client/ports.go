@@ -45,6 +45,13 @@ type ControlInboxPort interface {
 	SubmitInbox(context.Context, api.ControlInput) (api.ControlRequest, error)
 }
 
+// TaskDiscardPort lets the configured service consume a discard through its
+// existing command owner while it holds the repository lock. Standalone
+// clients continue to use TaskCommands when no service-owned port is present.
+type TaskDiscardPort interface {
+	Discard(context.Context, api.DiscardInput) (api.TaskDiscardReceipt, error)
+}
+
 type DecisionPort interface {
 	Normalize(context.Context, api.DecisionInput) (api.DecisionInput, error)
 	Eligibility(context.Context, *api.CandidateSummary) error
@@ -60,6 +67,7 @@ type Resources struct {
 	OpenReader                          func(context.Context) (Reader, error)
 	ReadFailure                         func(context.Context, string, error) api.ProjectSnapshot
 	OpenCommands                        func(context.Context, bool) (TaskCommands, error)
+	Discard                             TaskDiscardPort
 	Control                             ControlPort
 	Decision                            DecisionPort
 	TaskSnapshot                        func(context.Context) (*api.TaskCandidates, error)
