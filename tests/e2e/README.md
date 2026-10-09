@@ -117,6 +117,8 @@ L2 使用用户授权的 [SteerlineTest](https://github.com/erranliu/SteerlineTe
 
 L3 live 使用 loopback Git/PR provider，两条链路均执行真实模型；与无 token 环境分别选择。Orca 使用真实 CLI 创建、绑定、结算、清理资源。测试 CLI 适配器为新建终端注入隔离环境；当前版本长文本注入若明确停在 Pasted Content 输入框，则完成该原终端的一次 Enter，不重发文本。readiness 探针、业务命令和结算都需要真实模型及原生证据，不合成权限或成功回执。
 
+L3 delivery/recovery 的本机 Orca usage 按 [#84 明确调整的验收条件](../../docs/acceptance/worker-staged-flow.md) 登记：公开接口不提供 token usage，场景必须记录 `usage_verified=false`、`orca_usage_status=not_exposed_by_orca`，逐轮仍绑定原 Command/Dispatch/final source；真实业务与清理必须通过。该能力记录不代表 token 验证通过，不替代 local、完整 L2、其他 suite 或远端各自的门槛。
+
 长提示提交前先等待原终端的粘贴草稿稳定至少一秒，并记录提交后状态；accepted/bytesWritten 不代表 agent 已启动。readiness 的 JavaScript exec wrapper 必须保留完整原生工具结果 JSON，不能只打印 stdout 或手写 exit 文本。原输入目标短暂未就绪时，场景可通过正式 recheck_environment 一次检查原环境，保持原 Task/terminal/Dispatch，不能重发旧业务输入。
 
 L3 Orca 发布脚本使用 origin 的正式仓库身份，仅对单次 push 以 Git `url.insteadOf` 路由到本项目 loopback 服务；不改仓库级配置，以免影响正式 remote 校验。工作分支为 PR head，main 为 PR base，脚本禁止直接向 main 推送。
@@ -161,3 +163,7 @@ Orca usage 只选择与工作区匹配的唯一原始 root 会话；`session_met
 4. Plan 的测试计划列出验收项 ID/任务专属文档链接、级别、组/场景 ID、环境、命令、时点、通过条件及证据/结果登记位置，覆盖本任务全部自动验收项；可以共用场景，必要回归另标。新增驱动/环境能力列入实施步骤或明确前置，实际验收前完成实现/登记，不把规划入口说成已存在；未选相关组简述原因，不默认要求 full 或所有层级。
 
 基础设施定向入口：`go test ./cmd/test-feedback ./tests/e2e/internal/... -count=1`。`go test -tags=e2e ./tests/e2e/internal/... -count=1` 按需验证双项目隔离/部分准备清理。直接运行场景包缺少运行配置会失败，统一入口负责构建、枚举登记测试和精确选择。
+
+## Worker 分步交付断言
+
+delivery.local-codex / delivery.orca-codex 的最小材料将 implement.ps1 的本地候选提交与 publish.ps1 的推送/PR 分开。两场景核对三次业务轮次、同会话/Attempt、Command/输入版本/规范 final 来源、每步骤正数原生 usage、报告前后工作区/绑定 PR 事实，以及 PR head 等于冻结候选。readiness 独立计入原生现场，不冒充业务轮次。缺逐轮工具限制的现有后端记录 fact_comparison_only，不能将提示词算作强只读权限保证。

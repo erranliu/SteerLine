@@ -15,7 +15,7 @@ func TestPS1RecentActivityReadsLatestTenFromExactAttempt(t *testing.T) {
 	ctx := context.Background()
 	store, project, tasks := nativeAuditStore(t)
 	require(t, store.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if err := tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "run", TaskID: tasks[0].TaskID, WorkflowVersion: "minimal-v1", Phase: "executing"}); err != nil {
+		if err := tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "run", TaskID: tasks[0].TaskID, WorkflowVersion: "minimal-v1", Status: "running"}); err != nil {
 			return err
 		}
 		if err := tx.PutExecution(executionmodel.ExecutionRecord{ProjectIdentity: project, WorkflowRunID: "run", ExecutionID: "execution", Status: "active"}); err != nil {

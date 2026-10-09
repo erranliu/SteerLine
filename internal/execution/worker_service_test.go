@@ -337,9 +337,9 @@ func TestRestartDoesNotSendPreviouslyAcceptedFeedback(t *testing.T) {
 		t.Fatal("restart sent the prior-service answer without fresh authorization")
 	}
 	workflow := service.workflowRecord(run)
-	workflow.Phase = "waiting_pr_merge"
+	workflow.Status = "waiting_external"
 	service.refreshRun(run)
-	if err := service.applyDecisions(context.Background()); err != nil || workflow.Phase != "waiting_pr_merge" {
-		t.Fatalf("prior-service answer advanced PR feedback phase: %v, phase=%s", err, workflow.Phase)
+	if err := service.applyDecisions(context.Background()); err != nil || workflow.Status != "waiting_external" {
+		t.Fatalf("prior-service answer advanced PR feedback phase: %v, phase=%s", err, workflow.Status)
 	}
 }

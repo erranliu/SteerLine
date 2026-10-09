@@ -9,4 +9,4 @@ func fixturePresentation() api.ProjectPresentation {
 	return api.ProjectPresentation{NativeWorkflow: true, TaskAuthority: "native", WorkflowProtocol: fixtureWorkflowVersion, ConfigDigest: "fixture-digest", ShutdownGrace: "10s", DefaultProfileID: "project", Profiles: []api.ExecutionProfileSummary{consoleFixtureProfile("project", "Fixture", "local", "codex", []string{"Model：未在全局配置固定", "Reasoning effort：high", "Sandbox：workspace-write"})}}
 }
 
-const fixtureWorkflowVersion = "worker-flow-v1"
+const fixtureWorkflowVersion = "worker-flow-v2"

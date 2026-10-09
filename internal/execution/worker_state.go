@@ -18,7 +18,7 @@ func workerFlowState(workflow *executionmodel.WorkflowRunRecord, execution *exec
 	}
 	return executionmodel.State{
 		WorkflowRunID: workflow.WorkflowRunID, TaskID: workflow.TaskID, WorkflowVersion: workflow.WorkflowVersion,
-		Phase: workflow.Phase, PRURL: workflow.PRURL, PRState: workflow.PRState,
+		Status: workflow.Status, PRURL: workflow.PRURL, PRState: workflow.PRState,
 		WorkflowUpdatedAt: workflow.UpdatedAt, ExecutionID: execution.ExecutionID,
 		ExecutionWorkflowRunID: execution.WorkflowRunID, SessionID: sessionID,
 		PendingTurnID: execution.PendingTurnID, CurrentTurnID: execution.CurrentTurnID,
@@ -28,8 +28,8 @@ func workerFlowState(workflow *executionmodel.WorkflowRunRecord, execution *exec
 }
 
 func applyWorkerFlowState(workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, state executionmodel.State) {
-	workflow.Phase, workflow.PRURL, workflow.PRState, workflow.UpdatedAt =
-		state.Phase, state.PRURL, state.PRState, state.WorkflowUpdatedAt
+	workflow.Status, workflow.PRURL, workflow.PRState, workflow.UpdatedAt =
+		state.Status, state.PRURL, state.PRState, state.WorkflowUpdatedAt
 	execution.SessionID = state.SessionID
 	execution.PendingTurnID, execution.CurrentTurnID = state.PendingTurnID, state.CurrentTurnID
 	execution.LastStoppedTurnID, execution.Status, execution.TurnNumber, execution.UpdatedAt =
@@ -83,7 +83,7 @@ func BeginWorkerFeedbackDelivery(workflow *executionmodel.WorkflowRunRecord, exe
 	if err := workerFlowBinding(workflow, &execution); err != nil {
 		return err
 	}
-	if workflow.Phase != "waiting_pr_merge" || workflow.SelectedResult != execution.ExecutionID ||
+	if workflow.Status != "waiting_external" || workflow.SelectedResult != execution.ExecutionID ||
 		workflow.ProjectIdentity != execution.ProjectIdentity || workflow.ProjectIdentity != decision.ProjectIdentity ||
 		execution.DecisionID == "" || execution.DecisionID != decision.DecisionID ||
 		decision.Scope != "execution" || decision.WorkflowRunID != workflow.WorkflowRunID ||
@@ -91,7 +91,7 @@ func BeginWorkerFeedbackDelivery(workflow *executionmodel.WorkflowRunRecord, exe
 		decision.Status != "answer_saved" || decision.Version == 0 || at.IsZero() {
 		return errors.New("saved worker feedback no longer belongs to the fixed PR execution")
 	}
-	workflow.Phase, workflow.UpdatedAt = "waiting_decision", at
+	workflow.Status, workflow.UpdatedAt = "waiting_input", at
 	return nil
 }
 
@@ -152,7 +152,7 @@ type stoppedWorkerResolution struct {
 }
 
 func (s *Service) resolveStoppedWorkerTurn(run *reconstructiontypes.RunView, workflow *executionmodel.WorkflowRunRecord, execution *executionmodel.ExecutionRecord, resolution stoppedWorkerResolution) error {
-	if workflow.Phase == "waiting_pr_merge" {
+	if workflow.Status == "waiting_external" {
 		if err := s.offerWorkerPRFeedback(run, workflow.PRURL); err != nil {
 			return err
 		}

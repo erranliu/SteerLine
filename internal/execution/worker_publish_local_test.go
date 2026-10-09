@@ -117,7 +117,7 @@ func newLocalWorkerPublicationFixture(t *testing.T) localWorkerPublicationFixtur
 	git(worktree, "add", "publish.txt")
 	s.Config, s.baseConfig = c, c
 	workflow, execution := s.workflowRecords(run)
-	workflow.Phase = "waiting_decision"
+	workflow.Status = "waiting_input"
 	execution.Status, execution.CurrentTurnID, execution.LastStoppedTurnID = "idle", turnID, turnID
 	execution.Workspace = executionmodel.WorkspaceEvidence{Worktree: worktree, Branch: branch, Base: base}
 	execution.Target.WorktreeID, execution.Target.Branch = worktree, branch

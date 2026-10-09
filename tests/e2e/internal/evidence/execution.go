@@ -25,6 +25,22 @@ func ModelSelection(domain reconstruction.Snapshot) (ModelSettings, error) {
 	return ModelSettings{Model: settings.Model, Effort: settings.ReasoningEffort}, err
 }
 
+func orcaSettings(domain reconstruction.Snapshot) (orcaworker.ProfileConfig, error) {
+	if len(domain.WorkflowRuns) != 1 || len(domain.Executions) != 1 || domain.WorkflowRuns[0].ExecutionProfile == nil {
+		return orcaworker.ProfileConfig{}, errors.New("missing fixed Orca execution profile")
+	}
+	profile := domain.WorkflowRuns[0].ExecutionProfile
+	for _, data := range profile.ImplementationData {
+		if data.ImplementationKey == orcaworker.ProfileCodecKey {
+			if err := data.ValidateProfileIdentity(domain.Executions[0].ProjectIdentity, profile.ID, profile.AcceptedConfigVersion); err != nil {
+				return orcaworker.ProfileConfig{}, err
+			}
+			return orcaworker.DecodeProfileConfig(data.Payload)
+		}
+	}
+	return orcaworker.ProfileConfig{}, errors.New("missing native Orca profile envelope")
+}
+
 func codexSettings(domain reconstruction.Snapshot) (codexworker.ProfileConfig, error) {
 	if len(domain.WorkflowRuns) != 1 || len(domain.Executions) != 1 || domain.WorkflowRuns[0].ExecutionProfile == nil {
 		return codexworker.ProfileConfig{}, errors.New("missing fixed execution profile")
@@ -49,7 +65,42 @@ func FixedNativeLaunch(domain reconstruction.Snapshot) error {
 	profile := domain.WorkflowRuns[0].ExecutionProfile
 	e := domain.Executions[0]
 	if e.Protocol == string(executionbackend.ProtocolOrcaTerminalV2) {
-		return OrcaNativeLaunch(domain)
+		settings, err := orcaSettings(domain)
+		if err != nil {
+			return err
+		}
+		state, err := orcaState(e)
+		if err != nil || e.Process == nil || e.Process.Terminal == "" || e.Process.Incarnation == "" || len(state.Turns) == 0 {
+			return errors.New("native Orca original launch identity missing")
+		}
+		for _, op := range domain.Operations {
+			if op.Kind != "start_worker_turn" || (op.Status != "confirmed" && op.Status != "accepted") || op.LifecycleIdentity == nil || op.LifecycleIdentity.ProjectID != e.ProjectIdentity || op.LifecycleIdentity.ExecutionID != e.ExecutionID || op.LifecycleIdentity.ConfigurationDigest != e.ConfigurationDigest || op.LifecycleIdentity.ResourceGeneration != e.Generation || op.LifecycleIdentity.Ref.AttemptID != e.CurrentAttemptID {
+				continue
+			}
+			var accepted executionbackend.LifecycleReceipt
+			if json.Unmarshal(op.Receipt, &accepted) != nil || accepted.Process == nil || !accepted.State.InputAccepted || accepted.State.TurnID != state.Turns[0].TurnID {
+				continue
+			}
+			original := *accepted.Process
+			if original.Kind != "orca" || original.Terminal != e.Process.Terminal || original.RuntimeID != e.Process.RuntimeID || original.Incarnation != e.Process.Incarnation || original.WorktreeID != e.Process.WorktreeID || original.Task != state.Turns[0].TaskID || original.Dispatch != state.Turns[0].DispatchID {
+				continue
+			}
+			var receipt struct {
+				TaskID     string `json:"taskId"`
+				DispatchID string `json:"dispatchId"`
+				Launch     struct {
+					Effective struct {
+						Agent  string `json:"agent"`
+						Model  string `json:"model"`
+						Effort string `json:"effort"`
+					} `json:"effective"`
+				} `json:"launch"`
+			}
+			if json.Unmarshal(accepted.Operation.Receipt, &receipt) == nil && receipt.TaskID == state.Turns[0].TaskID && receipt.DispatchID == state.Turns[0].DispatchID && receipt.Launch.Effective.Agent == profile.Agent && receipt.Launch.Effective.Model == settings.Model && receipt.Launch.Effective.Effort == settings.ReasoningEffort {
+				return nil
+			}
+		}
+		return errors.New("native Orca first input lacks actual frozen agent/model/effort launch receipt")
 	}
 	resources := e.PolicyResources
 	if profile == nil || resources == nil || len(resources.WriteRoots) == 0 {
@@ -104,59 +155,22 @@ func OrcaNativeBusiness(e executionmodel.ExecutionRecord) error {
 	return nil
 }
 
-func orcaSettings(domain reconstruction.Snapshot) (orcaworker.ProfileConfig, error) {
-	if len(domain.WorkflowRuns) != 1 || len(domain.Executions) != 1 || domain.WorkflowRuns[0].ExecutionProfile == nil {
-		return orcaworker.ProfileConfig{}, errors.New("missing original native profile")
+func OrcaStagedContinuity(domain reconstruction.Snapshot) error {
+	if len(domain.Executions) != 1 || len(domain.WorkflowRuns) != 1 {
+		return errors.New("native Orca staged continuity lacks one original execution")
 	}
-	profile, e := domain.WorkflowRuns[0].ExecutionProfile, domain.Executions[0]
-	for _, data := range profile.ImplementationData {
-		if data.ImplementationKey == orcaworker.ProfileCodecKey {
-			if err := data.ValidateProfileIdentity(e.ProjectIdentity, profile.ID, profile.AcceptedConfigVersion); err != nil {
-				return orcaworker.ProfileConfig{}, err
-			}
-			return orcaworker.DecodeProfileConfig(data.Payload)
+	e, w := domain.Executions[0], domain.WorkflowRuns[0]
+	state, err := orcaState(e)
+	if err != nil || len(state.Turns) != 3 || len(w.StageResults) != 3 {
+		return errors.New("native Orca did not settle exactly three original inputs")
+	}
+	for i, turn := range state.Turns {
+		result := w.StageResults[i]
+		if !turn.Started || !turn.Settled || turn.Outcome != "succeeded" || turn.Purpose != "business" || turn.TurnID != result.CommandID || turn.DispatchID != result.FinalNativeTurnID || result.FinalSource != "orca-output-material" || turn.TaskID == "" || result.SessionID != e.SessionID {
+			return errors.New("native Orca original Task/Dispatch/final continuity changed")
 		}
 	}
-	return orcaworker.ProfileConfig{}, errors.New("missing Orca native profile")
-}
-
-// Host-managed permissions are declared by the native worker; its launch proof
-// is the original accepted request, rather than a client Codex sandbox receipt.
-func OrcaNativeLaunch(domain reconstruction.Snapshot) error {
-	settings, err := orcaSettings(domain)
-	if err != nil {
-		return err
-	}
-	e, profile := domain.Executions[0], domain.WorkflowRuns[0].ExecutionProfile
-	if e.Process == nil || e.Process.Kind != "orca" || e.Process.RuntimeID == "" || e.Process.Terminal == "" || e.Process.Incarnation == "" || e.Process.WorktreeID == "" || profile.Host != "orca" || profile.Agent != e.Agent || e.PolicyResources != nil {
-		return errors.New("native Orca launch binding or host-owned permission scope differs")
-	}
-	for _, op := range domain.Operations {
-		identity := op.LifecycleIdentity
-		if op.Kind != "start_worker_turn" || (op.Status != "confirmed" && op.Status != "accepted") || identity == nil || identity.ProjectID != e.ProjectIdentity || identity.ExecutionID != e.ExecutionID || identity.ConfigurationDigest != e.ConfigurationDigest || identity.ResourceGeneration != e.Generation || identity.Ref.AttemptID != e.CurrentAttemptID {
-			continue
-		}
-		var receipt executionbackend.LifecycleReceipt
-		if json.Unmarshal(op.Receipt, &receipt) != nil || receipt.Process == nil || *receipt.Process != *e.Process || !receipt.State.InputAccepted || receipt.State.TurnID != e.CurrentTurnID {
-			continue
-		}
-		var launch struct {
-			RunID      string `json:"runId"`
-			TaskID     string `json:"taskId"`
-			DispatchID string `json:"dispatchId"`
-			Mode       struct {
-				Mode string `json:"mode"`
-			} `json:"mode"`
-			Launch struct {
-				Effective struct{ Agent, Model, Effort string } `json:"effective"`
-			} `json:"launch"`
-		}
-		if json.Unmarshal(receipt.Operation.Receipt, &launch) != nil || launch.RunID != e.Process.OrchestrationRun || launch.TaskID != e.Process.Task || launch.DispatchID != e.Process.Dispatch || launch.Mode.Mode != "terminal" || launch.Launch.Effective.Agent != profile.Agent || launch.Launch.Effective.Model != settings.Model || launch.Launch.Effective.Effort != settings.ReasoningEffort {
-			continue
-		}
-		return nil
-	}
-	return errors.New("missing original accepted native launch receipt")
+	return nil
 }
 
 func OrcaExplicitEmptyArgs(domain reconstruction.Snapshot) error {

@@ -468,7 +468,7 @@ func TestNativeClaimAllowsManualParallelButKeepsAutoSlot(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if page.Tasks[0].Status != "in_progress" || len(page.Tasks[0].WorkflowRuns) != 1 || page.Tasks[0].WorkflowRuns[0].Phase != "queued" {
+	if page.Tasks[0].Status != "in_progress" || len(page.Tasks[0].WorkflowRuns) != 1 || page.Tasks[0].WorkflowRuns[0].Status != "queued" {
 		t.Fatalf("claim identities were not persisted together: %+v", page.Tasks[0])
 	}
 	snapshot, err := store.Query(ctx, c.Identity())
@@ -560,7 +560,7 @@ func TestNativeClaimBlocksWhenFetchedBaseMissesPredecessorMerge(t *testing.T) {
 	}
 	task := page.Tasks[0].TaskRecord
 	created := time.Now().UTC()
-	run := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-120", TaskID: "120", WorkflowVersion: executionmodel.Version, Phase: "waiting_pr_merge", SelectedResult: "exec-120", PRURL: "https://forge.invalid/org/repo/pulls/120", PRState: "merged", CreatedAt: created, UpdatedAt: created}
+	run := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-120", TaskID: "120", WorkflowVersion: executionmodel.Version, Status: "waiting_external", SelectedResult: "exec-120", PRURL: "https://forge.invalid/org/repo/pulls/120", PRState: "merged", CreatedAt: created, UpdatedAt: created}
 	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-120", CurrentAttemptID: "attempt-120", WorkflowRunID: "wf-120", Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "succeeded", CurrentStep: "worker", Workspace: executionmodel.WorkspaceEvidence{Branch: "fixture/task-120"}, CreatedAt: created, UpdatedAt: created}
 	setNeutralBinding(t, &execution, "ws://127.0.0.1:12345", "native-generation", workerFlowMockSession)
 	mergeCommit := strings.Repeat("f", 40)
@@ -732,7 +732,7 @@ func TestTaskDiscardRequestPersistsUnknownAndThenDiscardsOnlyAfterUnmergedProof(
 	task := page.Tasks[0].TaskRecord
 	createdAt := time.Now().UTC()
 	frozen := publicationSnapshotFixture(t, c)
-	workflow := executionmodel.WorkflowRunRecord{Repository: c.Repository, Branch: c.Branch, ExecutionProfile: &frozen, ConfigDigest: frozen.AcceptedConfigVersion, ProjectIdentity: c.Identity(), WorkflowRunID: "wf-71", TaskID: "71", WorkflowVersion: executionmodel.Version, Phase: "executing", SelectedResult: "exec-71", CreatedAt: createdAt, UpdatedAt: createdAt}
+	workflow := executionmodel.WorkflowRunRecord{Repository: c.Repository, Branch: c.Branch, ExecutionProfile: &frozen, ConfigDigest: frozen.AcceptedConfigVersion, ProjectIdentity: c.Identity(), WorkflowRunID: "wf-71", TaskID: "71", WorkflowVersion: executionmodel.Version, Status: "running", SelectedResult: "exec-71", CreatedAt: createdAt, UpdatedAt: createdAt}
 	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: "exec-71", WorkflowRunID: "wf-71", Status: "blocked", CurrentStep: "worker", CreatedAt: createdAt, UpdatedAt: createdAt}
 	task.Status = "in_progress"
 	task.Claimant = "worker"
@@ -975,7 +975,7 @@ func TestTaskDiscardDuringActiveExecutionKeepsSlotAndCleanupIdentity(t *testing.
 	contract := page.Tasks[0].Contract
 	created := time.Now().UTC()
 	workspace := executionmodel.WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-72", Branch: "fixture/72", Base: commit, Head: commit, VerifiedAt: created}
-	run := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-72", TaskID: "72", WorkflowVersion: executionmodel.Version, Phase: "executing", SelectedResult: "exec-72", CreatedAt: created, UpdatedAt: created}
+	run := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "wf-72", TaskID: "72", WorkflowVersion: executionmodel.Version, Status: "running", SelectedResult: "exec-72", CreatedAt: created, UpdatedAt: created}
 	dependencies, _ := neutralFixtureRuntime(c)
 	require(t, c.BindPublicationTarget(ctx, dependencies.ProcessHost))
 	fixed := testProjectExecutionProfile(c).Freeze(dependencies.Directory, c.Identity())
@@ -1044,7 +1044,7 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c Config, store 
 	runID := "wf-" + taskID
 	executionID := "exec-" + taskID
 	workspace := executionmodel.WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-" + taskID, Branch: "fixture/" + taskID, Base: commit, Head: commit, VerifiedAt: created}
-	run := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: runID, TaskID: taskID, WorkflowVersion: executionmodel.Version, Phase: "waiting_pr_merge", SelectedResult: executionID, PRURL: prURL, PRState: "open", CreatedAt: created, UpdatedAt: created}
+	run := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: runID, TaskID: taskID, WorkflowVersion: executionmodel.Version, Status: "waiting_external", SelectedResult: executionID, PRURL: prURL, PRState: "open", CreatedAt: created, UpdatedAt: created}
 	run.ExecutionProfile, run.ConfigDigest, run.Repository, run.Branch = &fixed, fixed.AcceptedConfigVersion, c.Repository, c.Branch
 	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: executionID, CurrentAttemptID: "attempt-" + taskID, WorkflowRunID: runID, Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "idle", CurrentStep: "worker", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
 	execution.ConfigurationDigest = fixed.Digest

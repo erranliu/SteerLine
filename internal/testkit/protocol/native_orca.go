@@ -20,6 +20,8 @@ import (
 func sha256Hex(data []byte) string { sum := sha256.Sum256(data); return hex.EncodeToString(sum[:]) }
 
 type NativeOrcaState struct {
+	StageProvider                                                    string
+	StageRemote                                                      string
 	StartDelay                                                       time.Duration
 	StartOutcome                                                     string
 	CompletionPRURL                                                  string
@@ -337,6 +339,9 @@ func FakeNativeOrca(stateDir string, args []string) int {
 			return nativeOrcaOK(map[string]any{"runId": "run-fake", "tasks": rows, "count": len(rows)})
 		case "request-show":
 			id := nativeArg(args, "--request")
+			if state.StageProvider != "" && state.LoseDispatchAt == state.Dispatches {
+				return nativeOrcaOK(map[string]any{"requestId": id, "state": "pending", "method": "orchestration.workerStart"})
+			}
 			if prior := state.NativeRequests[id]; len(prior) > 0 {
 				return nativeOrcaOK(map[string]any{"requestId": id, "state": "completed", "method": "orchestration.workerStart", "receipt": json.RawMessage(prior)})
 			}
@@ -347,6 +352,9 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				state.NativeRequests = map[string]json.RawMessage{}
 			}
 			if prior := state.NativeRequests[request]; len(prior) > 0 {
+				if state.StageProvider != "" && state.LoseDispatchAt == state.Dispatches {
+					return nativeOrcaErr("runtime_unavailable", "original worker-start response remains unavailable")
+				}
 				var result map[string]any
 				_ = json.Unmarshal(prior, &result)
 				return nativeOrcaOK(result)
@@ -381,6 +389,13 @@ func FakeNativeOrca(stateDir string, args []string) int {
 			}
 			outputPath := filepath.Join(state.Path, ".steerline-output", match[1], match[2]+".json")
 			body := fmt.Sprintf("DONE %d", n)
+			if state.StageProvider != "" {
+				var err error
+				body, err = StagedBusiness(state.Path, state.Tasks[len(state.Tasks)-1], state.StageProvider, state.StageRemote)
+				if err != nil {
+					return nativeOrcaErr("stage_failure", err.Error())
+				}
+			}
 			if state.CompletionPRURL != "" {
 				body += " " + state.CompletionPRURL
 			}

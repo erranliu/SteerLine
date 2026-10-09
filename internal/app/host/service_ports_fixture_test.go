@@ -278,7 +278,7 @@ func loadFixtureConfig(path string) (execution.Config, error) {
 		return c, errors.New("task_authority must be explicitly set to native; Beads is not supported")
 	}
 	if input.WorkflowProtocol != executionmodel.Version {
-		return c, errors.New("workflow_protocol must be worker-flow-v1")
+		return c, errors.New("workflow_protocol must be worker-flow-v2")
 	}
 
 	if err := publication.ValidateNonSecret(publication.Config(input.PR), input.Git); err != nil {

@@ -20,7 +20,9 @@ type failedStartPort struct {
 }
 
 func (p failedStartPort) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
-	return executionbackend.LifecyclePolicyCapabilities{SeparateTurnStart: true, ResumeActiveObservation: true}
+	capabilities := p.LifecyclePort.PolicyCapabilities()
+	capabilities.SeparateTurnStart, capabilities.ResumeActiveObservation = true, true
+	return capabilities
 }
 
 func (p failedStartPort) Execute(_ context.Context, r executionbackend.LifecycleRequest) (executionbackend.LifecycleReceipt, executionbackend.LifecycleObserver, error) {

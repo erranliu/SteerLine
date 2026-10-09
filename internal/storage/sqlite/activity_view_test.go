@@ -31,7 +31,7 @@ func TestTM05ActivitySharesTransactionAcrossWriterCommit(t *testing.T) {
 	writer, project, tasks := nativeAuditStore(t)
 	initial := executionmodel.ExecutionRecord{ProjectIdentity: project, WorkflowRunID: "run", ExecutionID: "execution", Status: "active", CurrentStep: "implement"}
 	require(t, writer.transactSQLite(ctx, func(tx *sqliteTx) error {
-		if err := tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "run", TaskID: tasks[0].TaskID, WorkflowVersion: "minimal-v1", Phase: "executing"}); err != nil {
+		if err := tx.PutWorkflowRun(executionmodel.WorkflowRunRecord{ProjectIdentity: project, WorkflowRunID: "run", TaskID: tasks[0].TaskID, WorkflowVersion: "minimal-v1", Status: "running"}); err != nil {
 			return err
 		}
 		if err := tx.PutExecution(initial); err != nil {

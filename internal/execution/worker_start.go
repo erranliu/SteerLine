@@ -32,6 +32,9 @@ func (s *Service) prepareWorkerFlow(ctx context.Context, task taskmodel.TaskReco
 	if err != nil {
 		return err
 	}
+	if !lifecycle.PolicyCapabilities().StructuredFinalEvidence {
+		return &executionbackend.BackendError{Code: executionbackend.BackendUnsupported, Diagnostic: "fixed development flow requires original bound final provenance before preparing or sending input"}
+	}
 	setup := lifecycleSetupForRun(run, fixed, s.runtime.ProcessHost, snapshot).Clone()
 	if s.signalQueue != nil {
 		return s.scheduleWorkerStartCheck(ctx, run, fixed.config, lifecycle, setup)
@@ -149,7 +152,7 @@ func (s *Service) prepareWorkerWorkspace(ctx context.Context, task taskmodel.Tas
 	if fixed.execution.Environment != nil {
 		return nil
 	}
-	if run.Decision != nil || fixed.workflow.Phase != "queued" {
+	if run.Decision != nil || fixed.workflow.Status != "queued" {
 		return nil
 	}
 	return s.startInitialWorkerFlowTurn(ctx, task, run)
@@ -212,11 +215,28 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructionty
 		return err
 	}
 
-	workspaceInstruction, err := workerWorkspaceInstruction(execution.Workspace)
-	if err != nil {
-		return err
+	frozen := stageInput(workflow, turnID)
+	if !readinessTurn && frozen != nil {
+		if frozen.Prompt != prompt || frozen.StepID != workflow.StepID || frozen.Version != workflow.InputVersion {
+			return errors.New("native input differs from the frozen stage prompt")
+		}
+	} else {
+		workspaceInstruction, err := workerWorkspaceInstruction(execution.Workspace)
+		if err != nil {
+			return err
+		}
+		prompt += workspaceInstruction + publicationTargetInstruction(c)
 	}
-	prompt += workspaceInstruction + publicationTargetInstruction(c)
+	if !readinessTurn {
+		if workflow.FlowRef != executionmodel.DevelopmentFlow || !executionmodel.ModelStep(workflow.StepID) {
+			return errors.New("unknown fixed flow or model step")
+		}
+		if stageInput(workflow, turnID) == nil {
+			workflow.InputVersion++
+			workflow.StageInputs = append(workflow.StageInputs, executionmodel.StageInput{CommandID: turnID, AttemptID: attempt.AttemptID, StepID: workflow.StepID, Version: workflow.InputVersion, Prompt: prompt, CandidateSHA: workflow.CandidateSHA})
+		}
+		workflow.Status = "queued"
+	}
 	execution.PendingTurnID, execution.PendingCommandID = "", turnID
 	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {

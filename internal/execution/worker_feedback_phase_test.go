@@ -14,7 +14,7 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	t.Cleanup(func() { _ = service.Close() })
 	ctx := context.Background()
 	workflow, execution := service.workflowRecords(run)
-	workflow.Phase, workflow.PRURL, workflow.PRState = "waiting_pr_merge", "https://git.example/org/repo/pulls/8", "open"
+	workflow.Status, workflow.PRURL, workflow.PRState = "waiting_external", "https://git.example/org/repo/pulls/8", "open"
 	require(t, service.commitWorker(run))
 	decision := service.decisionRecord(run)
 	answer := executionmodel.DecisionAnswer{DecisionID: decision.DecisionID, RunID: run.RunID, Note: "continue", AnsweredBy: "operator", AnsweredAt: now(), ExpectedDecisionVersion: decision.Version, ExpectedRunRevision: run.ControlRevision, ServiceInstanceID: service.State.Service.InstanceID}
@@ -42,7 +42,7 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	}
 	_, rejectedRevision, err := service.domainStore.DatabaseVersion(ctx)
 	require(t, err)
-	if rejectedRevision != beforeRevision || workflow.Phase != "waiting_pr_merge" || len(service.domain.Operations) != beforeOperations {
+	if rejectedRevision != beforeRevision || workflow.Status != "waiting_external" || len(service.domain.Operations) != beforeOperations {
 		t.Fatal("configuration drift changed the workflow or created an operation")
 	}
 
@@ -55,12 +55,12 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	committed := nextWorkflow
 	committed.ControlRevision = result.ControlRevision
 	require(t, err)
-	if committed.Phase != "waiting_decision" || committed.ControlRevision != expectedWorkflow.ControlRevision+1 {
+	if committed.Status != "waiting_input" || committed.ControlRevision != expectedWorkflow.ControlRevision+1 {
 		t.Fatalf("feedback phase was not committed once: %+v", committed)
 	}
 	loaded, err := loadFixtureRuntime(service.Config)
 	require(t, err)
-	if len(loaded.WorkflowRuns) != 1 || loaded.WorkflowRuns[0].Phase != "waiting_decision" || loaded.Runs[0].Decision.Status != "answer_saved" {
+	if len(loaded.WorkflowRuns) != 1 || loaded.WorkflowRuns[0].Status != "waiting_input" || loaded.Runs[0].Decision.Status != "answer_saved" {
 		t.Fatalf("coherent read missed the committed feedback phase: %+v", loaded.Runs)
 	}
 	afterCheckpoint, _, err := testSQLite(service).LoadProjection(ctx, service.Config.Identity())
@@ -81,7 +81,7 @@ func TestWorkerFeedbackPhaseCommitIsDurableAndRejectsStaleActor(t *testing.T) {
 	if err = service.applyWorkerFlowDecision(ctx, run); !isNativeErrorCode(err, "stale_revision") {
 		t.Fatalf("stale actor reached feedback delivery: %v", err)
 	}
-	if len(service.domain.Operations) != beforeOperations || service.workflowRecord(run).Phase != "waiting_pr_merge" {
+	if len(service.domain.Operations) != beforeOperations || service.workflowRecord(run).Status != "waiting_external" {
 		t.Fatal("stale feedback transition changed actor state or started an operation")
 	}
 	_, afterRevision, err := service.domainStore.DatabaseVersion(ctx)
@@ -95,18 +95,18 @@ func TestWaitingPRFeedbackIsOptionalAndDoesNotRepeatTurns(t *testing.T) {
 	service, run := waitingDecisionService(t)
 	t.Cleanup(func() { _ = service.Close() })
 	workflow, execution := service.workflowRecords(run)
-	workflow.Phase, workflow.PRURL, workflow.PRState = "waiting_pr_merge", "https://git.example/org/repo/pulls/8", "open"
+	workflow.Status, workflow.PRURL, workflow.PRState = "waiting_external", "https://git.example/org/repo/pulls/8", "open"
 	service.setDecisionStatus(run, "superseded")
 	beforeOperations, beforeTurn := len(service.domain.Operations), execution.TurnNumber
 	require(t, service.resolveStoppedWorkerTurn(run, workflow, execution, stoppedWorkerResolution{}))
 	decisionID := run.Decision.ID
-	if run.Decision.Request.Question != workerPRFeedbackQuestion || len(run.Decision.Request.Options) != 0 || !run.Decision.Request.AllowFreeText || !workerContinuationPrompt(run.Decision.Request) {
+	if run.Decision.Request.Question != workerPRFeedbackQuestion || len(run.Decision.Request.Options) != 2 || !run.Decision.Request.AllowFreeText || !workerContinuationPrompt(run.Decision.Request) {
 		t.Fatal("waiting PR retained a default continuation choice", run.Decision.Request)
 	}
 	for i := 0; i < 3; i++ {
 		require(t, service.resolveStoppedWorkerTurn(run, workflow, execution, stoppedWorkerResolution{}))
 	}
-	if workflow.Phase != "waiting_pr_merge" || run.Decision.ID != decisionID || len(service.domain.Operations) != beforeOperations || execution.TurnNumber != beforeTurn {
+	if workflow.Status != "waiting_external" || run.Decision.ID != decisionID || len(service.domain.Operations) != beforeOperations || execution.TurnNumber != beforeTurn {
 		t.Fatal("observing a waiting PR created a new decision or execution turn")
 	}
 }

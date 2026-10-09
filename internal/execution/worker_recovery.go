@@ -201,7 +201,7 @@ func (s *Service) markServiceRecoveryGateForPriorOwner() error {
 			continue
 		}
 		workflow, execution := s.workflowRecords(run)
-		if workflow == nil || execution == nil || workflow.Phase == "completed" || workflow.Phase == "abandoned" {
+		if workflow == nil || execution == nil || workflow.Status == "completed" || workflow.Status == "abandoned" {
 			continue
 		}
 		if execution.OwnerServiceInstanceID != s.State.Service.InstanceID {
@@ -234,7 +234,7 @@ func (s *Service) markOneServiceRecoveryGate(run *reconstructiontypes.RunView) {
 	}
 	task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
 	workflow, execution := s.workflowRecords(run)
-	if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Phase == "completed" || workflow.Phase == "abandoned" {
+	if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Status == "completed" || workflow.Status == "abandoned" {
 		return
 	}
 	if s.pristineTaskStartReservation(run) {
@@ -253,7 +253,7 @@ func (s *Service) markOneServiceRecoveryGate(run *reconstructiontypes.RunView) {
 func (s *Service) pristineTaskStartReservation(run *reconstructiontypes.RunView) bool {
 	w, e := s.workflowRecords(run)
 	a := s.workflowAttempt(run, run.AttemptID)
-	if w == nil || e == nil || a == nil || w.Phase != "queued" || e.Status != "pending" || a.Status != "planned" || e.Process != nil || e.SessionID != "" || e.TurnNumber != 0 || e.PendingCommandID != "" || e.Workspace.Worktree != "" || e.RecoveryRequired {
+	if w == nil || e == nil || a == nil || w.Status != "queued" || e.Status != "pending" || a.Status != "planned" || e.Process != nil || e.SessionID != "" || e.TurnNumber != 0 || e.PendingCommandID != "" || e.Workspace.Worktree != "" || e.RecoveryRequired {
 		return false
 	}
 	reserved := false
@@ -287,7 +287,7 @@ func (s *Service) resumeConfiguredWork(ctx context.Context) error {
 			continue
 		}
 		workflow, execution := s.workflowRecords(run)
-		if workflow == nil || execution == nil || workflow.Phase != "completed" {
+		if workflow == nil || execution == nil || workflow.Status != "completed" {
 			continue
 		}
 		var cleanupErr error
@@ -338,7 +338,7 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 		}
 		task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)
 		workflow, execution := s.workflowRecords(run)
-		if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Phase == "completed" {
+		if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Status == "completed" {
 			continue
 		}
 		adapter, err := s.workerFlowRegistration(run)

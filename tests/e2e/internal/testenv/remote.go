@@ -172,7 +172,7 @@ func RemoteDelivery(s *Scenario) {
 		if e.PendingCommandID != "" || e.CurrentCommandID != request.RequestID || e.LastStoppedTurnID != e.CurrentTurnID {
 			return false, nil
 		}
-		if len(snap.Domain.WorkflowRuns) != 1 || snap.Domain.WorkflowRuns[0].Phase != "waiting_pr_merge" {
+		if len(snap.Domain.WorkflowRuns) != 1 || snap.Domain.WorkflowRuns[0].Status != "waiting_external" {
 			return false, nil
 		}
 		second = snap

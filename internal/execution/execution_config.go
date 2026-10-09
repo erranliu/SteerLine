@@ -26,7 +26,7 @@ func validateWorkflowConfig(c Config, directory *ExecutionDirectory) error {
 		return err
 	}
 	if c.WorkflowProtocol != executionmodel.Version {
-		return errors.New("only worker-flow-v1 is supported")
+		return errors.New("only worker-flow-v2 is supported")
 	}
 	return validateImplementationProfileData(c, directory)
 }

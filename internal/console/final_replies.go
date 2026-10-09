@@ -42,6 +42,14 @@ func (m Model) readFinalReplies(index int) tea.Cmd {
 		if row := m.selectedRow(index); row != nil && row.run != nil {
 			filter.AttemptID = row.run.AttemptID
 			filter.TurnID = row.run.CurrentTurnID
+			if row.run.StepID == "implement.report" {
+				for i := len(row.run.StageResults) - 1; i >= 0; i-- {
+					if row.run.StageResults[i].StepID == "implement.execute" {
+						filter.TurnID = row.run.StageResults[i].TurnID
+						break
+					}
+				}
+			}
 		}
 	}
 	return func() tea.Msg {

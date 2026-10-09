@@ -86,6 +86,13 @@ type ControlBlocker struct {
 
 // Run is a view rebuilt from the selected immutable execution records.
 type RunView struct {
+	FlowRef          string                       `json:"flow_ref"`
+	StepID           string                       `json:"step_id"`
+	BusinessStatus   string                       `json:"status"`
+	StageDiagnostic  string                       `json:"stage_diagnostic,omitempty"`
+	StageResults     []executionmodel.StageResult `json:"stage_results,omitempty"`
+	ReportToolPolicy string                       `json:"report_tool_policy,omitempty"`
+
 	SessionID            string                                 `json:"session_id,omitempty"`
 	SessionGeneration    string                                 `json:"session_generation,omitempty"`
 	TurnNumber           uint64                                 `json:"turn_number"`

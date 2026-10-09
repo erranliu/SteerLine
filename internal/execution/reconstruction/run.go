@@ -29,7 +29,7 @@ func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, e
 			return RunView{}, errors.New("worker flow has no worker attempt identity")
 		}
 	}
-	run := RunView{TaskID: task.TaskID, DomainTaskID: task.TaskID, Title: task.Title, TaskStatus: task.Status,
+	run := RunView{FlowRef: workflow.FlowRef, StepID: workflow.StepID, BusinessStatus: workflow.Status, StageDiagnostic: workflow.StageDiagnostic, StageResults: executionmodel.CloneStageResults(workflow.StageResults), TaskID: task.TaskID, DomainTaskID: task.TaskID, Title: task.Title, TaskStatus: task.Status,
 		CandidateTiming: "wall_since_reservation",
 		ResourceStatus:  execution.Status,
 		SessionID:       execution.SessionID, SessionGeneration: execution.SessionGeneration, TurnNumber: execution.TurnNumber, CurrentTurnID: execution.CurrentTurnID,
@@ -61,6 +61,11 @@ func Run(task taskmodel.TaskRecord, workflow executionmodel.WorkflowRunRecord, e
 		run.EnvironmentBlocker = &blocker
 	}
 
+	for _, input := range workflow.StageInputs {
+		if input.StepID == executionmodel.StepReport {
+			run.ReportToolPolicy = input.ReportToolPolicy
+		}
+	}
 	run = Execution(run, execution)
 	if workflow.PRURL != "" {
 		run.PR.URL = ptr(workflow.PRURL)

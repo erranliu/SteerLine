@@ -54,7 +54,7 @@ func TestCD62NativeFactsAndQuestionRoute(t *testing.T) {
 		}
 		event.Fact = executionbackend.EventFact{Kind: executionbackend.EventGap, Gap: true}
 		require(t, s.eventWorkerFlowFor(run, event))
-		if s.executionRecord(run).LastStoppedTurnID != "" || s.workflowRecord(run).Phase != workflow.Phase {
+		if s.executionRecord(run).LastStoppedTurnID != "" || s.workflowRecord(run).Status != workflow.Status {
 			t.Fatal("observation gap was treated as a stopped worker")
 		}
 	})

@@ -380,7 +380,7 @@ func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) inte
 	require(t, os.MkdirAll(filepath.Dir(steerlineapp.GlobalExecutionConfigPath()), 0700))
 	require(t, os.WriteFile(steerlineapp.GlobalExecutionConfigPath(), globalData, 0600))
 	projectData, err := json.Marshal(map[string]any{
-		"repository": repository, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v1",
+		"repository": repository, "remote": "origin", "branch": "main", "task_authority": "native", "workflow_protocol": "worker-flow-v2",
 		"task_poll": "1s", "pr_poll": "1m", "heartbeat": "1s", "command_timeout": "30s", "shutdown_grace": "5s",
 		"claimant": "integration", "git": executionbackend.Command{Executable: os.Args[0], Args: []string{"--fake", "publication-git", "git"}},
 		"executable_types":   []string{"task"},
@@ -640,7 +640,7 @@ type integrationRunSnapshot struct {
 }
 
 func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningIntegrationService, config steerlineapp.Config,
-	predicate func(*reconstructiontypes.RunView, *executionmodel.ExecutionRecord) bool) integrationRunSnapshot {
+	predicate func(*reconstructiontypes.RunView, *executionmodel.ExecutionRecord) bool, budgets ...time.Duration) integrationRunSnapshot {
 	t.Helper()
 	var result integrationRunSnapshot
 	t.Cleanup(func() {
@@ -650,7 +650,11 @@ func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningInteg
 			t.Logf("service: %+v; operation count: %d", result.runtime.Service, len(result.runtime.Operations))
 		}
 	})
-	waitFor(t, 2*time.Minute, func() bool {
+	budget := 2 * time.Minute
+	if len(budgets) > 0 {
+		budget = budgets[0]
+	}
+	waitFor(t, budget, func() bool {
 		select {
 		case err := <-service.done:
 			service.stopped = true
@@ -813,7 +817,7 @@ func assertQueriedTaskPhase(t *testing.T, ctx context.Context, config steerlinea
 	defer reader.Close()
 	page, err := productquery.NewService(reader, config.Identity()).ShowNativeTask(ctx, taskID)
 	require(t, err)
-	if len(page.Tasks) != 1 || len(page.Tasks[0].WorkflowRuns) != 1 || page.Tasks[0].WorkflowRuns[0].Phase != phase {
+	if len(page.Tasks) != 1 || len(page.Tasks[0].WorkflowRuns) != 1 || page.Tasks[0].WorkflowRuns[0].Status != phase {
 		t.Fatalf("public task query phase=%+v, want %s", page.Tasks, phase)
 	}
 }

@@ -223,9 +223,9 @@ func (t *sqliteTx) PutTaskDelivery(v executionmodel.TaskDeliveryRecord) error {
 		return err
 	}
 	if evidence.ExistingAcceptance != nil || run.WorkflowVersion != executionmodel.Version {
-		return nativeErr("unsupported_schema", "delivery requires a worker-flow-v1 run")
+		return nativeErr("unsupported_schema", "delivery requires a worker-flow-v2 run")
 	}
-	if run.Abandonment != nil || run.SelectedResult == "" || run.PRURL != v.PRURL || run.Phase != "executing" && run.Phase != "waiting_decision" && run.Phase != "waiting_pr_merge" {
+	if run.Abandonment != nil || run.SelectedResult == "" || run.PRURL != v.PRURL || run.Status != "waiting_external" || run.StepID != executionmodel.StepAwaitMerge {
 		return nativeErr("stale_version", "delivery requires the selected worker flow and its bound PR")
 	}
 	var executionPayload []byte
@@ -445,7 +445,7 @@ func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error 
 		delivery := executionmodel.TaskDeliveryRecord{TaskID: taskID, SelectedWorkflowRunID: runID, PRURL: proof.URL, MergeCommit: proof.MergeCommit, MergedAt: proof.MergedAt}
 		state := executionmodel.State{
 			WorkflowRunID: run.WorkflowRunID, TaskID: run.TaskID, WorkflowVersion: run.WorkflowVersion,
-			Phase: run.Phase, PRURL: run.PRURL, PRState: run.PRState, WorkflowUpdatedAt: run.UpdatedAt,
+			Status: run.Status, PRURL: run.PRURL, PRState: run.PRState, WorkflowUpdatedAt: run.UpdatedAt,
 		}
 		next, completeErr := executionmodel.Complete(state, taskID, "closed", executionmodel.Delivery{
 			TaskID: delivery.TaskID, WorkflowRunID: delivery.SelectedWorkflowRunID, PRURL: delivery.PRURL,
@@ -454,8 +454,9 @@ func (t *sqliteTx) completeNativeDeliveryWorkflow(project, taskID string) error 
 		if completeErr != nil {
 			return completeErr
 		}
-		run.Phase, run.PRState, run.UpdatedAt = next.Phase, next.PRState, next.WorkflowUpdatedAt
+		run.Status, run.PRState, run.UpdatedAt = next.Status, next.PRState, next.WorkflowUpdatedAt
+		run.StepID = executionmodel.StepDelivered
 		return t.PutWorkflowRun(run)
 	}
-	return nativeErr("unsupported_schema", "delivery completion requires worker-flow-v1")
+	return nativeErr("unsupported_schema", "delivery completion requires worker-flow-v2")
 }

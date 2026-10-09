@@ -1046,7 +1046,7 @@ func assertProjectFactsEqual(t *testing.T, before, after testenv.Snapshot, messa
 	}
 	for i := range before.Domain.WorkflowRuns {
 		left, right := before.Domain.WorkflowRuns[i], after.Domain.WorkflowRuns[i]
-		if left.WorkflowRunID != right.WorkflowRunID || left.TaskID != right.TaskID || left.Phase != right.Phase {
+		if left.WorkflowRunID != right.WorkflowRunID || left.TaskID != right.TaskID || left.Status != right.Status {
 			t.Fatal(message)
 		}
 	}

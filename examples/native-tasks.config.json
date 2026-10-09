@@ -6,7 +6,7 @@
   "git": {
     "executable": "git"
   },
-  "workflow_protocol": "worker-flow-v1",
+  "workflow_protocol": "worker-flow-v2",
   "executable_types": [
     "task",
     "bug",

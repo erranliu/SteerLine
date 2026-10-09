@@ -121,7 +121,7 @@ func seedPublishedForDiscard(t *testing.T, ctx context.Context, c execution.Conf
 	runID := "wf-" + taskID
 	executionID := "exec-" + taskID
 	workspace := executionmodel.WorkspaceEvidence{Repository: c.Repository, Worktree: "tree-" + taskID, Branch: "fixture/" + taskID, Base: commit, Head: commit, VerifiedAt: created}
-	run := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: runID, TaskID: taskID, WorkflowVersion: executionmodel.Version, Phase: "waiting_pr_merge", SelectedResult: executionID, PRURL: prURL, PRState: "open", CreatedAt: created, UpdatedAt: created}
+	run := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: runID, TaskID: taskID, WorkflowVersion: executionmodel.Version, Status: "waiting_external", SelectedResult: executionID, PRURL: prURL, PRState: "open", CreatedAt: created, UpdatedAt: created}
 	run.ExecutionProfile, run.ConfigDigest, run.Repository, run.Branch = &fixed, fixed.AcceptedConfigVersion, c.Repository, c.Branch
 	execution := executionmodel.ExecutionRecord{ProjectIdentity: c.Identity(), ExecutionID: executionID, CurrentAttemptID: "attempt-" + taskID, WorkflowRunID: runID, Backend: string(executionbackend.BackendLocal), Protocol: string(neutralProtocol), Agent: "fixture", Status: "idle", CurrentStep: "worker", Workspace: workspace, CreatedAt: created, UpdatedAt: created}
 	execution.ConfigurationDigest = fixed.Digest

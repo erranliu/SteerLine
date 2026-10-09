@@ -92,7 +92,7 @@ func TestTM05PageProjection(t *testing.T) {
 		}
 	})
 	t.Run("history_retains_complete_candidate_numbering_without_private_records", func(t *testing.T) {
-		input := storageports.ExecutionSnapshot{WorkflowRuns: []model.WorkflowRunRecord{{WorkflowRunID: "exited", TaskID: "77", Phase: "abandoned"}, {WorkflowRunID: "active", TaskID: "77", Phase: "running"}}, Attempts: []model.StepAttemptRecord{{ExecutionID: "execution-b", AttemptID: "attempt-b", AttemptNumber: 2}}, Decisions: []model.DecisionRecord{{DecisionID: "decision-b", WorkflowRunID: "active", Request: []byte(`{"question":"继续？","options":[]}`)}, {DecisionID: "bad-original", Request: []byte("invalid")}}}
+		input := storageports.ExecutionSnapshot{WorkflowRuns: []model.WorkflowRunRecord{{WorkflowRunID: "exited", TaskID: "77", Status: "abandoned"}, {WorkflowRunID: "active", TaskID: "77", Status: "running"}}, Attempts: []model.StepAttemptRecord{{ExecutionID: "execution-b", AttemptID: "attempt-b", AttemptNumber: 2}}, Decisions: []model.DecisionRecord{{DecisionID: "decision-b", WorkflowRunID: "active", Request: []byte(`{"question":"继续？","options":[]}`)}, {DecisionID: "bad-original", Request: []byte("invalid")}}}
 		page := History(input)
 		if len(page.WorkflowRuns) != 2 || page.WorkflowRuns[0].WorkflowRunID != "exited" || page.Attempts[0].AttemptNumber != 2 || page.Decisions[0].Request.Question != "继续？" || page.Decisions[1].Diagnostic == "" {
 			t.Fatalf("history guessed or lost canonical facts: %+v", page)

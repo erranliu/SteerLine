@@ -182,7 +182,7 @@ func TestWorkerEnvironmentER1ProbeAndSettlementGate(t *testing.T) {
 					t.Fatal("failed readiness dispatched business")
 				}
 				if mode == "tool_failure" || mode == "failed_settlement" {
-					if workflow.Phase != "waiting_decision" || e.Environment.Blocker == nil {
+					if workflow.Status != "waiting_input" || e.Environment.Blocker == nil {
 						t.Fatal("confirmed readiness failure lost its center decision")
 					}
 				}

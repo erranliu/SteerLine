@@ -240,6 +240,7 @@ func candidateDetailLines(m Model, state projectState, row *consoleRow) []string
 	if run.Error != nil {
 		lines = append(lines, "错误："+safeTerminalText(*run.Error))
 	}
+	lines = append(lines, workerStagePresentation(run)...)
 	if run.Summary != nil {
 		lines = append(lines, "摘要："+safeTerminalText(*run.Summary))
 	}

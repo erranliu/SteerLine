@@ -1,9 +1,9 @@
 package execution
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -24,17 +24,16 @@ func Prompt(task taskmodel.TaskRecord, contract taskmodel.TaskContract, workflow
 	if err := policy.Validate(); err != nil {
 		return "", err
 	}
-	var prompt strings.Builder
-	fmt.Fprintf(&prompt, "SteerLine task %s: %s\nFixed SteerLine workflow_run_id: %s\n", task.TaskID, task.Title, workflowRunID)
-	prompt.WriteString("\n")
-	fmt.Fprintf(&prompt, "Follow the fixed task contract and the project's instructions. Read each reference from its listed Git commit and check its SHA-256. Implement the task, commit and push the code, create a PR targeting %s, and report its URL. Keep working in this same session when the user sends feedback.\n\n", contract.Branch)
-	fmt.Fprintf(&prompt, "Spec: %s at %s (SHA-256 %s)\n", contract.SpecRef.Path, contract.SpecRef.Commit, contract.SpecRef.SHA256)
-	fmt.Fprintf(&prompt, "Plan: %s at %s (SHA-256 %s)\n", contract.PlanRef.Path, contract.PlanRef.Commit, contract.PlanRef.SHA256)
-	for _, ref := range contract.CommonRefs {
-		fmt.Fprintf(&prompt, "Common instruction: %s at %s (SHA-256 %s)\n", ref.Path, ref.Commit, ref.SHA256)
+	facts, err := json.Marshal(struct {
+		TaskID     string                    `json:"task_id"`
+		Title      string                    `json:"title"`
+		Spec       taskmodel.FileReference   `json:"spec"`
+		Plan       taskmodel.FileReference   `json:"plan"`
+		Common     []taskmodel.FileReference `json:"common_refs,omitempty"`
+		Acceptance []taskmodel.FileReference `json:"acceptance_refs,omitempty"`
+	}{task.TaskID, task.Title, contract.SpecRef, contract.PlanRef, contract.CommonRefs, contract.AcceptanceRefs})
+	if err != nil {
+		return "", err
 	}
-	for _, ref := range contract.AcceptanceRefs {
-		fmt.Fprintf(&prompt, "Acceptance reference: %s at %s (SHA-256 %s)\n", ref.Path, ref.Commit, ref.SHA256)
-	}
-	return prompt.String(), nil
+	return "Current step: implement.execute. Follow the bound Spec/Plan and project instructions. Read references from their listed Git commits and check SHA-256. Complete implementation, required tests, self-review and a local candidate commit. Do not publish in this step. End with a normal explanation of work, checks and unresolved issues; no JSON is required.\nFixed facts:\n" + string(facts), nil
 }

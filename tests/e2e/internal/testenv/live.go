@@ -1,18 +1,17 @@
 package testenv
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
@@ -36,6 +35,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	publisher, host := "worker", "local"
 	var orcaConfig map[string]any
 	if chain == "orca-codex" {
+		s.orcaUsageUnavailable = true
 		host, publisher = "orca", "worker"
 		command := os.Getenv("ORCA_CLI_COMMAND")
 		if command == "" {
@@ -43,41 +43,16 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 		}
 		p.OrcaExecutable, err = exec.LookPath(command)
 		s.Must(err)
-		status, err := p.orca(s.Context, "agent", "hooks", "status", "--json")
-		s.Must(err)
-		var hooks struct {
-			Enabled  bool `json:"enabled"`
-			Statuses []struct {
-				Agent, ConfigPath   string
-				ManagedHooksPresent bool
-			} `json:"statuses"`
-		}
-		s.Must(json.Unmarshal(status, &hooks))
-		hookPath := ""
-		for _, h := range hooks.Statuses {
-			if h.Agent == "codex" && h.ManagedHooksPresent {
-				hookPath = h.ConfigPath
-			}
-		}
-		if !hooks.Enabled || hookPath == "" {
-			s.t.Fatal("native Orca tests require its installed Codex transcript hooks")
-		}
-		s.Must(native.SeedOrcaHooks(hookPath, filepath.Join(p.Home, "codex")))
-		// The product still checks native Orca identities and real Codex permissions.
+		// The existing native fixture forwards the original public start receipt
+		// unchanged. For its verified, stable paste preview it completes only
+		// that same input's UI submission; it never injects another prompt.
 		shim := filepath.Join(p.Home, "bin", "orca-env.exe")
-		raw, err := os.ReadFile(s.Run.Helper)
-		s.Must(err)
-		s.Must(os.WriteFile(shim, raw, 0700))
+		binary, readErr := os.ReadFile(s.Run.Helper)
+		s.Must(readErr)
+		s.Must(os.WriteFile(shim, binary, 0700))
 		logDir := filepath.Join(s.Output, name+"-orca")
 		s.Must(os.MkdirAll(logDir, 0700))
-		pwsh, err := exec.LookPath("pwsh")
-		s.Must(err)
-		if strings.Contains(strings.ToLower(pwsh), "windowsapps") {
-			s.t.Fatal("live Orca requires a standalone PowerShell executable for reproducible shell execution")
-		}
-		s.Must(controlled.Write(filepath.Join(p.Home, "orca-env.json"), native.OrcaEnvironment{Executable: p.OrcaExecutable, Home: p.Home, LogDir: logDir, PowerShellDir: filepath.Dir(pwsh)}))
-		// This deadline covers native terminal creation, metadata binding, model
-		// readiness tools and settlement, not one CLI call (bounded separately).
+		s.Must(controlled.Write(filepath.Join(p.Home, "orca-env.json"), native.OrcaEnvironment{Executable: p.OrcaExecutable, Home: p.Home, LogDir: logDir}))
 		orcaConfig = native.OrcaWorkerProfile(shim, "4m")
 	}
 	var config map[string]any
@@ -99,9 +74,6 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 		script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
 if ((Get-Content -LiteralPath 'result.txt' -Raw).Trim() -cne 'real model delivery') { throw 'result differs' }
 $env:GH_TOKEN = (Get-Content -LiteralPath '%s' -Raw).Trim()
-git add -- result.txt
-git -c user.name=E2E -c user.email=e2e@example.invalid -c commit.gpgsign=false commit -m 'SteerLine real E2E delivery'
-if ($LASTEXITCODE -ne 0) { throw 'commit failed' }
 $branch = git symbolic-ref --short HEAD
 # The shell credential helper cannot run in the unelevated Windows sandbox.
 # Keep the test token out of argv/config/logs and scope its header to this remote.
@@ -118,17 +90,13 @@ gh pr create --repo '%s' --base '%s' --head $branch --draft --title 'SteerLine E
 if ($LASTEXITCODE -ne 0) { throw 'PR create failed' }
 `, filepath.Join(p.Home, "github-token"), githubRepository, p.BaseBranch, s.ID)
 		s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(script), 0600))
-		spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. It commits, pushes to the real test repository and creates a real GitHub draft PR. Copy its returned URL verbatim into your final reply and completion relay body, including the repository owner. The URL must have the form https://github.com/erranliu/SteerlineTest/pull/<number>; do not shorten or reconstruct it.\n"
+		spec += "You own publication. Only in the publish step, after the local candidate is committed, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. It pushes to the real test repository and creates a real GitHub draft PR. Copy its returned URL verbatim into your final reply and completion relay body, including the repository owner. The URL must have the form https://github.com/erranliu/SteerlineTest/pull/<number>; do not shorten or reconstruct it.\n"
 	} else {
 		state, err := controlled.Read(p.Provider)
 		s.Must(err)
 		base := strings.TrimSuffix(state.GitURL, "/e2e/project.git")
 		script := fmt.Sprintf(`$ErrorActionPreference = 'Stop'
 if ((Get-Content -LiteralPath 'result.txt' -Raw).Trim() -cne 'real model delivery') { throw 'result differs' }
-git add -- result.txt
-if ($LASTEXITCODE -ne 0) { throw 'stage failed' }
-git -c user.name=E2E -c user.email=e2e@example.invalid -c commit.gpgsign=false commit -m 'Real model delivery'
-if ($LASTEXITCODE -ne 0) { throw 'commit failed' }
 $branch = git symbolic-ref --short HEAD
 if ($branch -ceq 'main') { throw 'publication must push the assigned PR head, not the base branch' }
 $head = git rev-parse HEAD
@@ -139,15 +107,26 @@ $receipt = Invoke-RestMethod -Method Post -Uri '%s/__e2e/pull' -ContentType 'app
 Write-Output $receipt.url
 `, state.GitURL, base)
 		s.Must(os.WriteFile(filepath.Join(p.Repo, "publish.ps1"), []byte(script), 0600))
-		spec += "You own publication. After writing result.txt, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. The assigned working branch is the PR HEAD; main in the dispatch is the PR BASE, never a request to push to main. The origin URL remains the dispatch's https://github.com/e2e/project.git identity; only the script's single push command uses url.insteadOf to route its transport to the loopback server. This does not change repository config or the remote identity seen by task validation. The explicitly authorized loopback PR endpoint represents that same fixture provider. The script commits, pushes origin's assigned head and creates the fixture PR. Report its returned URL in your final reply. Do not call gh or real GitHub.\n"
+		spec += "You own publication. Only in the publish step, after the local candidate is committed, execute `powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./publish.ps1` once. The assigned working branch is the PR HEAD; main in the dispatch is the PR BASE, never a request to push to main. The origin URL remains the dispatch's https://github.com/e2e/project.git identity; only the script's single push command uses url.insteadOf to route its transport to the loopback server. This does not change repository config or the remote identity seen by task validation. The explicitly authorized loopback PR endpoint represents that same fixture provider. The script pushes origin's assigned head and creates the fixture PR. Report its returned URL in your final reply. Do not call gh or real GitHub.\n"
 	}
+	implement := `$ErrorActionPreference = 'Stop'
+[IO.File]::WriteAllText((Join-Path (Get-Location) 'result.txt'), "real model delivery" + [char]10, [Text.UTF8Encoding]::new($false))
+if ((Get-Content -LiteralPath 'result.txt' -Raw).Trim() -cne 'real model delivery') { throw 'result differs' }
+git add -- result.txt
+if ($LASTEXITCODE -ne 0) { throw 'stage failed' }
+git -c user.name=E2E -c user.email=e2e@example.invalid -c commit.gpgsign=false commit -m 'Real model candidate'
+if ($LASTEXITCODE -ne 0) { throw 'commit failed' }
+git rev-parse HEAD
+`
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "implement.ps1"), []byte(implement), 0600))
+	spec += "In implement.execute, run powershell.exe -NoProfile -ExecutionPolicy Bypass -File ./implement.ps1 exactly once to write, verify and commit the candidate locally. Do not push or invoke publish.ps1 in implement.execute or implement.report. implement.report only summarizes its supplied source facts. publish.ps1 is reserved for the single publish step, which must return the JSON result contract in its native final reply.\n"
 
 	if s.ID == "recovery.orca-codex" {
 		spec += "\n## Original-execution recovery window\n\nBefore writing the recovery marker, send one native `status` message to the original Run mailbox using `orca orchestration send --from <injected-worker-handle> --to run:<injected-run-id> --type status --subject recovery-window --body original-execution-started --task-id <injected-task-id> --dispatch-id <injected-dispatch-id>`. Use the exact IDs from the Orca preamble. This is actual progress in this same original round; a platform heartbeat alone need not be delivered as ordinary coordinator mail. Before writing result.txt or publishing, run one shell command that writes `.e2e-recovery-started.txt` in this assigned worktree, waits until `.e2e-recovery-release.txt` exists, then removes both files. Use `Set-Content -LiteralPath .e2e-recovery-started.txt -Value waiting; while (-not (Test-Path -LiteralPath .e2e-recovery-release.txt)) { Start-Sleep -Milliseconds 250 }; Remove-Item -LiteralPath .e2e-recovery-started.txt,.e2e-recovery-release.txt`. The test driver releases the existing command; it does not send another prompt. These two files are temporary fixture controls: do not stage or commit them. After release, finish the original task and its publication in this same original round.\n"
 	}
 	spec += "\n## Acceptance\n\nThe committed result.txt equals the specified content and is delivered after the fixture PR merges.\n"
 	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.spec.md"), []byte(spec), 0600))
-	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.plan.md"), []byte("# Live fixture plan\n\nRead the bound Spec. Write and verify result.txt, then publish according to its instructions.\n\n## Test plan\n\nVerify result.txt locally; the E2E harness checks native usage, real Git delivery and dependency state.\n"), 0600))
+	s.Must(os.WriteFile(filepath.Join(p.Repo, "docs", "spec", "task.plan.md"), []byte("# Live fixture plan\n\nRead the bound Spec. In implement.execute run implement.ps1 to write, verify and commit the local candidate. In implement.report summarize only existing supplied evidence. In publish run publish.ps1 to push the frozen candidate and create the PR; return strict result JSON in the same native final. Do not combine the steps.\n\n## Test plan\n\nVerify result.txt locally; the E2E harness checks native usage, real Git delivery and dependency state.\n"), 0600))
 	p.git(p.Repo, "add", ".")
 	p.git(p.Repo, "commit", "--quiet", "-m", "Pin live task contract")
 	state, err := controlled.Read(p.Provider)
@@ -269,6 +248,9 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		return u, errors.New("usage needs one bound execution")
 	}
 	e := snap.Domain.Executions[0]
+	if e.Protocol == string(executionbackend.ProtocolOrcaTerminalV2) {
+		return u, errors.New("token usage is not exposed by the Orca public interface")
+	}
 	profile, profileErr := evidence.ModelSelection(snap.Domain)
 	if profileErr != nil || profile.Model != native.Model || profile.Effort != native.Effort {
 		return u, errors.New("frozen native model/effort mismatch")
@@ -287,54 +269,7 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		}
 		u, usageEvidence, err = native.AppServerTurnUsage(raw, session, e.CurrentTurnID)
 	} else {
-		// Orca owns its agent home. Read only metadata until a root session
-		// matches this exact owned worktree; never read unrelated session bodies.
-		hostHome, homeErr := os.UserHomeDir()
-		if homeErr != nil {
-			return u, homeErr
-		}
-		sessionRoot := filepath.Join(hostHome, ".codex", "sessions")
-		matches := 0
-		err = filepath.WalkDir(sessionRoot, func(path string, d os.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if d.IsDir() || filepath.Ext(path) != ".jsonl" {
-				return nil
-			}
-			file, openErr := os.Open(path)
-			if openErr != nil {
-				return openErr
-			}
-			header, readErr := bufio.NewReader(file).ReadBytes('\n')
-			closeErr := file.Close()
-			if readErr != nil && readErr != io.EOF {
-				return readErr
-			}
-			if closeErr != nil {
-				return closeErr
-			}
-			matched, matchErr := native.BusinessRolloutMatches(header, e.Workspace.Worktree)
-			if matchErr != nil {
-				// An empty/in-progress unrelated metadata header proves no
-				// ownership. Never read that session's body or fail our fixture.
-				return nil
-			}
-			if !matched {
-				return nil
-			}
-			matches++
-			raw, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return readErr
-			}
-			var parseErr error
-			u, usageEvidence, parseErr = native.RolloutUsage(raw, e.Workspace.Worktree)
-			return parseErr
-		})
-		if err == nil && matches != 1 {
-			err = fmt.Errorf("native rollout matched %d sessions; expected one", matches)
-		}
+		return u, errors.New("selected backend has no bound public usage source")
 	}
 	if err != nil {
 		return u, err
@@ -364,13 +299,14 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 		s.t.Fatal("native worker did not publish fixture PR")
 	}
 	e := before.Domain.Executions[0]
+	p.AssertStagedFlow(before)
 	p.AssertFixedNativeLaunch(before)
-	if e.Process == nil || e.Workspace.Worktree == "" || e.TurnNumber != 1 {
+	if e.Process == nil || e.Workspace.Worktree == "" || e.TurnNumber != 3 {
 		s.t.Fatal("native execution identity/turn missing")
 	}
 	if chain == "orca-codex" {
 		s.Must(evidence.OrcaExplicitEmptyArgs(before.Domain))
-		s.Must(evidence.OrcaNativeBusiness(e))
+		s.Must(evidence.OrcaStagedContinuity(before.Domain))
 	}
 	for _, task := range before.Page.Tasks {
 		if task.TaskID == p.Tasks["b"].ID && (task.DependencyReady || len(task.WorkflowRuns) > 0) {
@@ -388,20 +324,22 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	}
 	var usage native.Usage
 	baselineTurn := ""
-	s.Wait("completed native usage baseline", func() (bool, error) {
-		current, err := p.NativeUsage(before, "before")
-		if baselineTurn != "" && current.Turn != baselineTurn {
-			return false, errors.New("native turn changed while awaiting usage completion")
-		}
-		if current.Turn != "" {
-			baselineTurn = current.Turn
-		}
-		if errors.Is(err, native.ErrNativeTurnPending) {
-			return false, nil
-		}
-		usage = current
-		return err == nil, err
-	})
+	if chain == "local-codex" {
+		s.Wait("completed native usage baseline", func() (bool, error) {
+			current, err := p.NativeUsage(before, "before")
+			if baselineTurn != "" && current.Turn != baselineTurn {
+				return false, errors.New("native turn changed while awaiting usage completion")
+			}
+			if current.Turn != "" {
+				baselineTurn = current.Turn
+			}
+			if errors.Is(err, native.ErrNativeTurnPending) {
+				return false, nil
+			}
+			usage = current
+			return err == nil, err
+		})
+	}
 	if restart {
 		p.RestartService()
 		after := p.WaitPhase("waiting_pr_merge")
@@ -415,10 +353,12 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 		if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || e.ExecutionID != a.ExecutionID || e.WorkflowRunID != a.WorkflowRunID || originalSession != afterSession || e.Workspace.Worktree != a.Workspace.Worktree || e.CurrentTurnID != a.CurrentTurnID || e.TurnNumber != a.TurnNumber || len(before.Domain.Attempts) != len(after.Domain.Attempts) {
 			s.t.Fatal("restart replaced execution identity or repeated turn")
 		}
-		afterUsage, err := p.NativeUsage(after, "after-restart")
-		s.Must(err)
-		if usage != afterUsage {
-			s.t.Fatal("restart consumed additional model tokens or replaced session")
+		if chain == "local-codex" {
+			afterUsage, err := p.NativeUsage(after, "after-restart")
+			s.Must(err)
+			if usage != afterUsage {
+				s.t.Fatal("restart consumed additional model tokens or replaced session")
+			}
 		}
 	}
 	p.Merge()
@@ -433,10 +373,12 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 			s.t.Fatal("successor not ready and unstarted")
 		}
 	}
-	finalUsage, err := p.NativeUsage(done, "final")
-	s.Must(err)
-	if usage != finalUsage {
-		s.t.Fatal("delivery polling consumed additional tokens")
+	if chain == "local-codex" {
+		finalUsage, err := p.NativeUsage(done, "final")
+		s.Must(err)
+		if usage != finalUsage {
+			s.t.Fatal("delivery polling consumed additional tokens")
+		}
 	}
 	if p.RealPR {
 		if !done.Helper.PR.Merged || done.Helper.PR.State != "merged" {
@@ -445,7 +387,8 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 		proof := done.Helper.PR
 		p.RealPRProof = &proof
 	}
-	s.usageVerified = true
+	s.usageVerified = chain == "local-codex"
+	s.orcaUsageUnavailable = chain == "orca-codex"
 	s.Must(s.finishBody())
 	p.StopService()
 }

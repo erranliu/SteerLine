@@ -12,9 +12,16 @@ import (
 )
 
 func neutralAuditService(t *testing.T, hosts ...string) (*Service, *reconstructiontypes.RunView) {
+	return neutralAuditServiceWithConfig(t, nil, hosts...)
+}
+
+func neutralAuditServiceWithConfig(t *testing.T, configure func(*Config), hosts ...string) (*Service, *reconstructiontypes.RunView) {
 	t.Helper()
 	c, commit, store := openDAGFixture(t)
 	c.WorkflowProtocol, c.Host, c.Agent = executionmodel.Version, "local", "fixture"
+	if configure != nil {
+		configure(&c)
+	}
 
 	setNeutralProfile(t, &c, neutralSettings{Executable: os.Args[0]})
 	dependencies, catalog := neutralFixtureRuntime(c)

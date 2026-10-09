@@ -3,7 +3,7 @@
   "remote": "origin",
   "branch": "main",
   "task_authority": "native",
-  "workflow_protocol": "worker-flow-v1",
+  "workflow_protocol": "worker-flow-v2",
   "git": {
     "executable": "git.exe",
     "args": []

@@ -76,7 +76,7 @@ type neutralCompletionReceipt struct {
 }
 
 func (p *Lifecycle) PolicyCapabilities() executionbackend.LifecyclePolicyCapabilities {
-	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: executionbackend.StopExecutionOnServiceStop, LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
+	return executionbackend.LifecyclePolicyCapabilities{ServiceStopBehavior: executionbackend.StopExecutionOnServiceStop, StructuredFinalEvidence: true, LinkedWorkspaceWriteRoots: true, ResumeActiveObservation: true, ActiveTurnFeedback: true}
 }
 
 func (p *Lifecycle) PreflightLifecycle(_ context.Context, setup executionbackend.LifecycleSetup) (executionbackend.CapabilityReport, error) {

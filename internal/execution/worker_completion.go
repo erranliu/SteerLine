@@ -147,37 +147,8 @@ func (s *Service) finishWorkerFlowFor(run *reconstructiontypes.RunView, workerEr
 			return s.commitWorker(run)
 		}
 	}
-	issue := ""
 	if workerErr != nil {
-		issue = workerErr.Error()
+		evidence.Failure = strings.TrimSpace(evidence.Failure + "; " + workerErr.Error())
 	}
-	if evidence.Failure != "" {
-		issue = strings.TrimSpace(issue + "; " + evidence.Failure)
-	}
-	if len(evidence.PRCandidates) == 1 {
-		candidate := evidence.PRCandidates[0]
-		workflow.PRCandidateURL = candidate
-		info, queryErr := publicationClient(fixed.config, s.runtime.ProcessHost).Query(context.Background(), candidate)
-		if queryErr == nil {
-			queryErr = BindWorkerPR(workflow, execution, info, candidate, fixed.config.PR.Repository, false)
-		}
-		if queryErr != nil {
-			issue = strings.TrimSpace(issue + "; PR link is not verified: " + queryErr.Error())
-		}
-	} else if len(evidence.PRCandidates) > 1 {
-		issue = strings.TrimSpace(issue + "; several PR links were reported: " + strings.Join(evidence.PRCandidates, ", "))
-	}
-	question := len(evidence.PRCandidates) > 1
-	if run.Decision != nil && run.Decision.Status == "pending" && !workerContinuationPrompt(run.Decision.Request) {
-		question = true
-	}
-	turnOutcome := "failed"
-	if evidence.Succeeded {
-		turnOutcome = "succeeded"
-	}
-	if err := s.stopVerifiedWorkerTurn(run, workflow, execution, evidence.TurnID, turnOutcome, question); err != nil {
-		return err
-	}
-
-	return s.resolveStoppedWorkerTurn(run, workflow, execution, stoppedWorkerResolution{TurnID: evidence.TurnID, LastMessage: evidence.LastMessage, Issue: issue, Question: question, RecordPRStop: true})
+	return s.acceptStageTurn(ctx, run, lifecycle, fixed, evidence.TurnEvidence)
 }

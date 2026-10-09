@@ -368,7 +368,7 @@ func loadNativePageRelations(ctx context.Context, tx *sql.Tx, project, targetBra
 			if err = json.Unmarshal(body, &run); err != nil {
 				break
 			}
-			if run.ProjectIdentity != project || run.TaskID != taskID || run.WorkflowRunID != runID || run.Phase != phase {
+			if run.ProjectIdentity != project || run.TaskID != taskID || run.WorkflowRunID != runID || run.Status != phase {
 				err = nativeErr("contract_mismatch", "workflow payload differs from its stored task binding")
 				break
 			}

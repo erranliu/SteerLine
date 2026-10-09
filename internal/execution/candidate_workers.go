@@ -18,7 +18,7 @@ import (
 func participatingCandidates(workflows []executionmodel.WorkflowRunRecord, taskID string) int {
 	count := 0
 	for _, w := range workflows {
-		if w.TaskID == taskID && w.Abandonment == nil && w.Phase != "completed" && w.Phase != "abandoned" {
+		if w.TaskID == taskID && w.Abandonment == nil && w.Status != "completed" && w.Status != "abandoned" {
 			count++
 		}
 	}
@@ -75,7 +75,7 @@ func verifyKnownCandidatePRs(ctx context.Context, config Config, directory *Exec
 				if selectedID == "" {
 					return results, nativeErr("already_merged", "a known task PR is merged; verify task delivery")
 				}
-				if w.Abandonment != nil || w.Phase == "abandoned" || w.WorkflowRunID != selectedID || url != w.PRURL {
+				if w.Abandonment != nil || w.Status == "abandoned" || w.WorkflowRunID != selectedID || url != w.PRURL {
 					return results, nativeErr("inconsistent_delivery", "abandoned, historical or competing candidate PR merged; manual reconciliation is required")
 				}
 			}
@@ -155,7 +155,7 @@ func (c CommandService) AbandonNativeCandidate(ctx context.Context, config Confi
 	if task.Status == "closed" {
 		return CandidateAbandonReceipt{}, nativeErr("already_merged", "delivered task cannot abandon candidates")
 	}
-	if task.Status != "in_progress" || workflow.Abandonment != nil || workflow.Phase == "completed" {
+	if task.Status != "in_progress" || workflow.Abandonment != nil || workflow.Status == "completed" {
 		return CandidateAbandonReceipt{}, nativeErr("immutable_task", "candidate cannot exit this experiment")
 	}
 	if saved.CommandID == "" {
@@ -244,7 +244,7 @@ func (s *Service) candidateBusinessClosed(run *reconstructiontypes.RunView) bool
 		return true
 	}
 	w := s.workflowRecord(run)
-	return w == nil || w.Abandonment != nil || w.Phase == "abandoned" || w.Phase == "completed" || run.TaskStatus == "closed" || run.TaskStatus == "discarded"
+	return w == nil || w.Abandonment != nil || w.Status == "abandoned" || w.Status == "completed" || run.TaskStatus == "closed" || run.TaskStatus == "discarded"
 }
 
 func (c CommandService) recordCandidateMergeConflict(ctx context.Context, snapshot storageports.TaskCandidateSnapshot, taskID, workflowID, reason string, proofs ...executionmodel.VerifiedCandidatePR) error {

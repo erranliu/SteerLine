@@ -138,7 +138,27 @@ type TaskCandidate struct{ TaskID, Title, Type, Summary string }
 
 // CandidateSummary is the selected worker's page, not an execution record.
 // Session identity and revisions are explicit so commands cannot guess a run.
+type StageResultSummary struct {
+	StepID        string `json:"step_id"`
+	CommandID     string `json:"command_id"`
+	TurnID        string `json:"turn_id"`
+	InputVersion  uint64 `json:"input_version"`
+	Succeeded     bool   `json:"succeeded"`
+	FinalVerified bool   `json:"final_verified"`
+	Final         string `json:"final,omitempty"`
+	FinalSource   string `json:"final_source,omitempty"`
+	Failure       string `json:"failure,omitempty"`
+	Outcome       string `json:"outcome,omitempty"`
+}
+
 type CandidateSummary struct {
+	FlowRef          string               `json:"flow_ref"`
+	StepID           string               `json:"step_id"`
+	BusinessStatus   string               `json:"status"`
+	StageDiagnostic  string               `json:"stage_diagnostic,omitempty"`
+	StageResults     []StageResultSummary `json:"stage_results,omitempty"`
+	ReportToolPolicy string               `json:"report_tool_policy,omitempty"`
+
 	DeliveryOutcome    string                   `json:"delivery_outcome"`
 	SessionID          string                   `json:"session_id"`
 	SessionGeneration  string                   `json:"session_generation"`
@@ -265,6 +285,9 @@ type HistorySummary struct {
 	Executions   []ExecutionSummary `json:"executions"`
 }
 type WorkflowSummary struct {
+	FlowRef          string                   `json:"flow_ref"`
+	StepID           string                   `json:"step_id"`
+	Status           string                   `json:"status"`
 	WorkflowRunID    string                   `json:"workflow_run_id"`
 	TaskID           string                   `json:"task_id"`
 	CreatedAt        time.Time                `json:"created_at"`

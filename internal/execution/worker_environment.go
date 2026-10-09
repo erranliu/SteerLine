@@ -28,7 +28,7 @@ func (s *Service) blockWorkerEnvironment(run *reconstructiontypes.RunView, fact 
 		return nil
 	}
 	workflow, execution := s.workflowRecords(run)
-	if execution == nil || execution.Environment == nil || workflow.Phase == "completed" || workflow.Phase == "abandoned" || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
+	if execution == nil || execution.Environment == nil || workflow.Status == "completed" || workflow.Status == "abandoned" || run.TaskStatus == "closed" || run.TaskStatus == "discarded" {
 		return nil
 	}
 	env := execution.Environment
@@ -49,8 +49,8 @@ func (s *Service) blockWorkerEnvironment(run *reconstructiontypes.RunView, fact 
 		env.Blocker.Fact, env.Blocker.ObservedAt = fact, now()
 		env.Blocker.Version++
 	}
-	if workflow.Phase != "waiting_pr_merge" {
-		workflow.Phase, workflow.UpdatedAt = "waiting_decision", now()
+	if workflow.Status != "waiting_external" {
+		workflow.Status, workflow.UpdatedAt = "waiting_input", now()
 	}
 	execution.Error = ptr("Worker environment blocked: " + fact.Reason + ": " + fact.Detail)
 	s.refreshRun(run)
@@ -112,7 +112,7 @@ func (s *Service) rejectUnsentBlockedAnswer(run *reconstructiontypes.RunView) er
 
 func (s *Service) observeWorkerEnvironment(ctx context.Context, run *reconstructiontypes.RunView) error {
 	wf, execution := s.workflowRecords(run)
-	if execution == nil || execution.Environment == nil || ctx.Err() != nil || wf.Phase == "completed" || wf.Phase == "abandoned" {
+	if execution == nil || execution.Environment == nil || ctx.Err() != nil || wf.Status == "completed" || wf.Status == "abandoned" {
 		return nil
 	}
 	config, err := s.executionConfigForRun(run)
@@ -141,8 +141,8 @@ func (s *Service) observeWorkerEnvironment(ctx context.Context, run *reconstruct
 		}
 	}
 	env := execution.Environment
-	if env.Blocker != nil && wf.Phase != "waiting_pr_merge" && wf.Phase != "waiting_decision" {
-		wf.Phase = "waiting_decision"
+	if env.Blocker != nil && wf.Status != "waiting_external" && wf.Status != "waiting_input" {
+		wf.Status = "waiting_input"
 		if err := s.commitWorker(run); err != nil {
 			return err
 		}
@@ -189,7 +189,7 @@ func (s *Service) advanceWorkerPreparation(ctx context.Context, run *reconstruct
 	}
 	if env.Preparation.Verified && !env.Preparation.Invalidated {
 		env.Ready = true
-		if execution.TurnNumber > 0 && execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID && execution.PendingCommandID == "" && execution.PendingTurnID == "" && fixed.workflow.Phase != "waiting_pr_merge" &&
+		if execution.TurnNumber > 0 && execution.CurrentTurnID != "" && execution.CurrentTurnID == execution.LastStoppedTurnID && execution.PendingCommandID == "" && execution.PendingTurnID == "" && fixed.workflow.Status != "waiting_external" &&
 			(run.Decision == nil || run.Decision.Status == "reply_accepted" || run.Decision.Status == "applied") {
 			// A turn may complete while a host gate hides its consumed answer.
 			// Successful manual recheck restores a fresh choice, never new input.
@@ -539,10 +539,10 @@ func (s *Service) applyEnvironmentAction(ctx context.Context, run *reconstructio
 	}
 	env.Blocker = nil
 	execution.RecoveryRequired = false
-	if fixed.workflow.Phase == "waiting_decision" && execution.DecisionID == "" {
-		fixed.workflow.Phase = "queued"
+	if fixed.workflow.Status == "waiting_input" && execution.DecisionID == "" {
+		fixed.workflow.Status = "queued"
 		if execution.CurrentTurnID != "" && execution.CurrentTurnID != execution.LastStoppedTurnID {
-			fixed.workflow.Phase = "executing"
+			fixed.workflow.Status = "running"
 		}
 	}
 	if err := s.changeWorkerOperation(run, op.OperationID, "confirmed", commandID, mustJSON(map[string]string{"blocker_id": blocker.ID}), ""); err != nil {

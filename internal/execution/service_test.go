@@ -25,7 +25,7 @@ type fakeDB = fixtures.PRState
 
 func TestProjectRuntimeOmitsSettledDiscardedRuns(t *testing.T) {
 	state := reconstructiontypes.Runtime{Tasks: []taskmodel.TaskRecord{{TaskID: "14", Status: "discarded"}, {TaskID: "17", Status: "in_progress"}, {TaskID: "18", Status: "discarded"}},
-		WorkflowRuns: []executionmodel.WorkflowRunRecord{{TaskID: "14", WorkflowRunID: "old", Phase: "abandoned"}, {TaskID: "17", WorkflowRunID: "active", Phase: "executing"}, {TaskID: "18", WorkflowRunID: "pending-stop", Phase: "blocked"}},
+		WorkflowRuns: []executionmodel.WorkflowRunRecord{{TaskID: "14", WorkflowRunID: "old", Status: "abandoned"}, {TaskID: "17", WorkflowRunID: "active", Status: "running"}, {TaskID: "18", WorkflowRunID: "pending-stop", Status: "blocked"}},
 		Executions:   []executionmodel.ExecutionRecord{{WorkflowRunID: "active", ExecutionID: "active-execution", Status: "active"}, {WorkflowRunID: "pending-stop", ExecutionID: "stopping-execution", Status: "blocked"}},
 		SlotOccupied: true, CurrentTask: ptr("14")}
 	require(t, projectRuntime(&state))

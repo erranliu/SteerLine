@@ -12,13 +12,13 @@ local Codex 与 Orca 均长期正式支持。backend、agent、execution target 
 
 ## 业务权威与执行边界
 
-SteerLine 负责任务领取、工作区与 worker 关联、五个主阶段、完整反馈送达、原会话重接、PR 关联和真实合并结项。worker 负责实现、提交、创建 PR；测试、修复、审查由任务 Spec/Plan 约定。中心不再维护项目五步编排、检查清单、修复轮次或脏目录门槛。UI/CLI 使用同一 Query/Command，复用唯一业务写者。
+SteerLine 负责任务领取、工作区与 worker 关联、固定流程/步骤与统一 status、完整反馈送达、原会话重接、PR 关联和真实合并结项。worker 负责实现、提交、创建 PR；测试、修复、审查由任务 Spec/Plan 约定。开发流程以普通代码管理 implement.execute/report、publish、await_merge 和 delivered；不固定增加项目验证/审查循环。候选和报告前后事实核验按 [#84 契约](../spec/worker-staged-flow.spec.md)执行。UI/CLI 使用同一 Query/Command，复用唯一业务写者。
 
 中心停止监督与取消执行分开；本机路径的生命周期策略明确表达。
 
 ## 身份与扩展
 
-Task、WorkflowRun、Execution、会话/轮次、用户消息和外部平台身份分别保留归属。任务领取与结项属于任务级；agent、工作区、输出和反馈属于具体会话。业务步骤不构成worker分派状态机。每个WorkflowRun 只有一条持续 worker 会话；同 Task 的本机多候选已使用多个独立 WorkflowRun，不为同一候选的反馈重建 worker，中心仍只记录一个 TaskDelivery。
+Task、WorkflowRun、Execution、会话/轮次、用户消息和外部平台身份分别保留归属。任务领取与结项属于任务级；agent、工作区、输出和反馈属于具体会话。业务流程在 worker 内控制下一输入，adapter 不管理业务步骤或决定下一阶段。每个WorkflowRun 只有一条持续 worker 会话；同 Task 的本机多候选已使用多个独立 WorkflowRun，不为同一候选的反馈重建 worker，中心仍只记录一个 TaskDelivery。
 
 历史操作固定到派发时的目标及代次，配置变化和迟到消息不能重定向原执行。完成由中心按选用结果和真实交付核验。
 

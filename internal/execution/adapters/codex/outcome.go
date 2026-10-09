@@ -10,14 +10,17 @@ import (
 )
 
 type Outcome struct {
-	SessionID    string
-	NativeStatus string
-	Started      bool
-	Completed    bool
-	Succeeded    bool
-	LastMessage  string
-	Failure      string
-	PRCandidates []string
+	FinalSource   string
+	FinalItemID   string
+	FinalVerified bool
+	SessionID     string
+	NativeStatus  string
+	Started       bool
+	Completed     bool
+	Succeeded     bool
+	LastMessage   string
+	Failure       string
+	PRCandidates  []string
 }
 
 func ReadAppServerOutcome(path, threadID, turnID string) (Outcome, error) {
@@ -48,6 +51,7 @@ func ReadAppServerOutcome(path, threadID, turnID string) (Outcome, error) {
 				ThreadID string `json:"threadId"`
 				TurnID   string `json:"turnId"`
 				Item     struct {
+					ID    string `json:"id"`
 					Type  string `json:"type"`
 					Text  string `json:"text"`
 					Phase string `json:"phase"`
@@ -60,6 +64,7 @@ func ReadAppServerOutcome(path, threadID, turnID string) (Outcome, error) {
 				addPR(p.Item.Text)
 				if p.Item.Phase == "final_answer" {
 					outcome.LastMessage = p.Item.Text
+					outcome.FinalSource, outcome.FinalItemID, outcome.FinalVerified = "codex.agentMessage.final_answer", p.Item.ID, p.Item.ID != ""
 				}
 			}
 		case "turn/started":
@@ -82,6 +87,7 @@ func ReadAppServerOutcome(path, threadID, turnID string) (Outcome, error) {
 					Status string          `json:"status"`
 					Error  json.RawMessage `json:"error"`
 					Items  []struct {
+						ID    string `json:"id"`
 						Type  string `json:"type"`
 						Text  string `json:"text"`
 						Phase string `json:"phase"`
@@ -103,6 +109,7 @@ func ReadAppServerOutcome(path, threadID, turnID string) (Outcome, error) {
 					addPR(item.Text)
 					if item.Phase == "final_answer" {
 						outcome.LastMessage = item.Text
+						outcome.FinalSource, outcome.FinalItemID, outcome.FinalVerified = "codex.agentMessage.final_answer", item.ID, item.ID != ""
 					}
 				}
 			}

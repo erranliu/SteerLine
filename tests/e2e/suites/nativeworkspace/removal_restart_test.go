@@ -96,7 +96,7 @@ func TestOrcaRemovalRestart(t *testing.T) {
 				continue
 			}
 			for _, workflow := range snapshot.Domain.WorkflowRuns {
-				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.TaskID == p.Tasks["c"].ID && workflow.Phase == "waiting_pr_merge" {
+				if workflow.WorkflowRunID == execution.WorkflowRunID && workflow.TaskID == p.Tasks["c"].ID && workflow.Status == "waiting_external" {
 					_, err := os.Stat(execution.Workspace.Worktree)
 					if err == nil {
 						p.Record("unrelated-task-started", snapshot)

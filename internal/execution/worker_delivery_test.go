@@ -38,7 +38,7 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 	}
 	created := time.Now().UTC()
 	url := "https://git.example/o/r/pulls/8"
-	wf := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: created, UpdatedAt: created}
+	wf := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: task.TaskID, WorkflowVersion: executionmodel.Version, Status: "waiting_external", FlowRef: executionmodel.DevelopmentFlow, StepID: executionmodel.StepAwaitMerge, CandidateSHA: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: created, UpdatedAt: created}
 	dependencies, _ := neutralFixtureRuntime(c)
 	fixed := testProjectExecutionProfile(c).Freeze(dependencies.Directory, c.Identity())
 	wf.ExecutionProfile, wf.ConfigDigest = &fixed, fixed.AcceptedConfigVersion
@@ -83,7 +83,7 @@ func TestWorkerFlowDeliveryCommitsWithoutStepGatesAndUnlocksSuccessor(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	if latest := latestNativeWorkflow(snapshot.WorkflowRuns, "8"); latest == nil || latest.Phase != "completed" {
+	if latest := latestNativeWorkflow(snapshot.WorkflowRuns, "8"); latest == nil || latest.Status != "completed" {
 		t.Fatalf("workflow did not complete with delivery: %+v", latest)
 	}
 	ready, err := (query.NewService(store, c.Identity())).ReadyNativeTasks(ctx)
@@ -128,7 +128,7 @@ func TestWorkerFlowProviderDeliveryRejectsWrongPRAndClosedUnmerged(t *testing.T)
 	task := graph.ByID["8"]
 	at := time.Now().UTC()
 	url := "https://forge.invalid/org/repo/pulls/8"
-	wf := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: "8", WorkflowVersion: executionmodel.Version, Phase: "waiting_pr_merge", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: at, UpdatedAt: at}
+	wf := executionmodel.WorkflowRunRecord{ProjectIdentity: c.Identity(), WorkflowRunID: "worker-flow-wf-8", TaskID: "8", WorkflowVersion: executionmodel.Version, Status: "waiting_external", FlowRef: executionmodel.DevelopmentFlow, StepID: executionmodel.StepAwaitMerge, CandidateSHA: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", Repository: c.Repository, Branch: "main", SelectedResult: "worker-flow-exec-8", PRURL: url, PRState: "open", CreatedAt: at, UpdatedAt: at}
 	dependencies, _ := neutralFixtureRuntime(c)
 	require(t, c.BindPublicationTarget(ctx, dependencies.ProcessHost))
 	fixed := testProjectExecutionProfile(c).Freeze(dependencies.Directory, c.Identity())
@@ -232,7 +232,7 @@ func TestWorkerFlowClaimNeedsNoProjectSteps(t *testing.T) {
 		t.Fatal(err)
 	}
 	wf := latestNativeWorkflow(snapshot.WorkflowRuns, "8")
-	if wf == nil || wf.WorkflowVersion != executionmodel.Version || wf.Phase != "queued" || wf.SelectedResult != receipt.ExecutionID || len(snapshot.Attempts) != 1 || snapshot.Attempts[0].StepID != "worker" {
+	if wf == nil || wf.WorkflowVersion != executionmodel.Version || wf.Status != "queued" || wf.SelectedResult != receipt.ExecutionID || len(snapshot.Attempts) != 1 || snapshot.Attempts[0].StepID != "worker" {
 		t.Fatalf("claim did not reserve one worker identity: workflow=%+v attempts=%+v", wf, snapshot.Attempts)
 	}
 }

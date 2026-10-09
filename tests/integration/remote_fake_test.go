@@ -33,6 +33,13 @@ func fakeIntegrationCommand(args []string) int {
 			return 2
 		}
 		return testprotocol.FakeNativeOrca(args[1], args[2:])
+	case "staged-pr":
+		raw, err := os.ReadFile(os.Getenv("STEERLINE_STAGE_PROVIDER"))
+		if err != nil {
+			return 2
+		}
+		fmt.Print(string(raw))
+		return 0
 	case "publication-git":
 		return fakePublicationGit(args[1:])
 	case "codex":
@@ -332,6 +339,15 @@ func integrationAppServerConnection(connection net.Conn, state *integrationAppSe
 			text := "completed integration turn"
 			if len(params.Input) != 0 {
 				text = "completed: " + params.Input[0].Text
+			}
+			if os.Getenv("STEERLINE_STAGE_PROVIDER") != "" && len(params.Input) != 0 {
+				cwd, _ := os.Getwd()
+				staged, err := testprotocol.StagedBusiness(cwd, params.Input[0].Text, os.Getenv("STEERLINE_STAGE_PROVIDER"), os.Getenv("STEERLINE_FAKE_GIT_FETCH_REMOTE"))
+				if err != nil {
+					state.mu.Unlock()
+					return
+				}
+				text = staged
 			}
 			item := map[string]any{"type": "agentMessage", "id": "message-" + turnID, "phase": "final_answer", "text": text}
 			turn := map[string]any{"id": turnID, "status": "completed", "completedAt": len(state.turns) + 1, "items": []any{item}}

@@ -204,7 +204,7 @@ func (s *Service) applyDecisions(ctx context.Context) error {
 		return err
 	}
 	for _, run := range s.runs {
-		if run == nil || run.FinishTaskStatus != "waiting_decision" && run.FinishTaskStatus != "waiting_pr_merge" || run.Decision == nil || run.Decision.Status != "answer_saved" {
+		if run == nil || run.FinishTaskStatus != "waiting_decision" && run.FinishTaskStatus != "waiting_pr_merge" && run.BusinessStatus != "blocked" || run.Decision == nil || run.Decision.Status != "answer_saved" {
 			continue
 		}
 		blocked := false
