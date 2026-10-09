@@ -27,6 +27,8 @@ Spec 中的验收表定义要求，Plan 定义实施及最小测试安排；具�
 
 ## 已确认 Codex 执行规划
 
+本轮新增 #86 [本机 Orca 原生通用 worker Spec](orca-native-worker.spec.md) / [Plan](orca-native-worker.plan.md)，采用 Orca 自己的宽松启动设置、agent 配置透传和原生生命周期；[专属验收](../acceptance/orca-native-worker.md)。与 #45 共享接线先集成 #86；本轮授权不启动其他任务。#84 已在当前源码合入，但原验收/清单结算另核对。
+
 当前剩余按 #84→#45→#44 推进；#83 已合入，保留完成记录导航。启动时核对本地执行前置及实际 Spec/Plan commit。#84 先交付一期新流程与状态字段，#44最终交付依赖#45真实联调。二期验收分[2.1/2.2/2.3](../acceptance/phase2.md)，流程/原型未定部分不提前冻结。
 
 | 任务 ID | 任务名称 | 剩余拟议前置 | Spec | Plan |
