@@ -173,6 +173,16 @@ func (o *nativeLifecycleObserver) observe(ctx context.Context) {
 			return
 		}
 		turn := nativeTurn(&o.state, o.turn.TurnID)
+		if turn != nil && !turn.Started && !o.started() && turn.DoneMessageID == "" {
+			started, err := ObserveWorkerStarted(ctx, o.lifecycle.client.MetaCall, nativeDispatchIdentity(o.snapshot, *turn), turn.IntentAt)
+			if err != nil {
+				o.done <- err
+				return
+			}
+			if started && !o.ensureStarted(ctx) {
+				return
+			}
+		}
 		if turn != nil && turn.DoneMessageID != "" {
 			outcome, err := Settlement(ctx, o.lifecycle.client.MetaCall, nativeDispatchIdentity(o.snapshot, *turn), turn.Outcome)
 			if err == nil {
@@ -285,9 +295,21 @@ func (o *nativeLifecycleObserver) ensureStarted(ctx context.Context) bool {
 	if o.started() {
 		return true
 	}
+	turn := nativeTurn(&o.state, o.turn.TurnID)
+	if turn == nil {
+		o.done <- errors.New("native Orca turn start lost its original turn")
+		return false
+	}
+	turn.Started = true
+	envelopes, err := o.lifecycle.targetEnvelope(o.snapshot, o.snapshot.Ref.Target, o.snapshot.Ref.External, o.state)
+	if err != nil {
+		o.done <- err
+		return false
+	}
 	event := executionbackend.LifecycleEvent{Fact: executionbackend.EventFact{Kind: executionbackend.EventStarted,
 		StartedTurnID: o.turn.TurnID, SessionID: SessionID(o.snapshot.Ref.External)},
-		Summary: "native Orca turn start observed", Kind: "execution", Status: "started", Title: "Worker turn started",
+		Implementation: envelopes,
+		Summary:        "native Orca turn start observed", Kind: "execution", Status: "started", Title: "Worker turn started",
 		Persisted: make(chan error, 1), Processed: make(chan error, 1)}
 	if !o.sendAndWait(ctx, event) {
 		return false
