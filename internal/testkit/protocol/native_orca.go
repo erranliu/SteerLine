@@ -509,7 +509,7 @@ func FakeNativeOrca(stateDir string, args []string) int {
 					status = "failed"
 				}
 			}
-			return nativeOrcaOK(map[string]any{"dispatch": map[string]any{"id": fmt.Sprintf("ctx-%d", n), "runId": "run-fake", "taskId": fmt.Sprintf("task-%d", n), "status": status}, "worker": map[string]any{"dispatchId": fmt.Sprintf("ctx-%d", n), "state": "unsupervised", "stage": "injected", "agentTerminalHandle": "term-agent"}, "terminal": terminal("term-agent")})
+			return nativeOrcaOK(map[string]any{"dispatch": map[string]any{"id": fmt.Sprintf("ctx-%d", n), "runId": "run-fake", "taskId": fmt.Sprintf("task-%d", n), "status": status}, "worker": map[string]any{"dispatchId": fmt.Sprintf("ctx-%d", n), "state": "unsupervised", "stage": "context_only", "agentTerminalHandle": "term-agent"}, "terminal": terminal("term-agent"), "observation": map[string]any{"exactWorker": true}})
 		}
 	}
 	return nativeOrcaErr("invalid_argument", "unhandled native Orca fixture command: "+strings.Join(args, " "))
