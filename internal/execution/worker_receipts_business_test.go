@@ -1,6 +1,7 @@
 package execution
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"strings"
@@ -29,6 +30,9 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	service.domain.Attempts = []executionmodel.StepAttemptRecord{{ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, StepID: "worker", AttemptNumber: 1}}
 	service.domain.WorkflowRuns, service.domain.Executions = []executionmodel.WorkflowRunRecord{*workflow}, []executionmodel.ExecutionRecord{*execution}
 	workflow, execution = &service.domain.WorkflowRuns[0], &service.domain.Executions[0]
+	originalReceipt := mustJSON(executionbackend.LifecycleReceipt{Operation: executionbackend.Operation{Receipt: []byte(`{"launch":{"effective":{"agent":"original-agent"}}}`)}, State: executionbackend.LifecycleStateFacts{InputAccepted: true, SessionID: workerFlowMockSession, TurnID: second}})
+	service.domain.Operations[0].Receipt = append([]byte(nil), originalReceipt...)
+	service.domain.Operations[0].PlatformRequestID = "original-native-request"
 	run.Decision.ID, run.Decision.Version = newID(), 1
 	run.Decision.AttemptID = run.AttemptID
 	service.setRunDecision(run, run.Decision)
@@ -37,6 +41,9 @@ func TestAppServerStartReplayPreservesNativeSavedAnswer(t *testing.T) {
 	}
 	if execution.CurrentCommandID != commandID || execution.CurrentTurnID != second || execution.PendingCommandID != "" || execution.TurnNumber != 2 || run.Decision.Status != "reply_accepted" || service.domain.Operations[0].Status != "confirmed" {
 		t.Fatalf("second turn receipt was not applied: execution=%+v decision=%+v", execution, run.Decision)
+	}
+	if !bytes.Equal(service.domain.Operations[0].Receipt, originalReceipt) || service.domain.Operations[0].PlatformRequestID != "original-native-request" {
+		t.Fatal("started confirmation replaced the original accepted/native receipt")
 	}
 	fixed := executionbackend.SessionContext{ProjectID: execution.ProjectIdentity, WorkflowRunID: run.RunID, ExecutionID: run.ExecutionID, AttemptID: run.AttemptID, SessionID: workerFlowMockSession, Generation: execution.SessionGeneration, CurrentTurnID: second}
 	request := neutralDecisionFixture(t, fixed, "pending", []executionbackend.Question{{ID: "choice", Question: "Continue?", AllowFreeText: true}})

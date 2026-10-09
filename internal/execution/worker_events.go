@@ -56,7 +56,16 @@ func (s *Service) recordWorkerTurnStarted(run *reconstructiontypes.RunView, work
 	if operation.Status == "confirmed" {
 		return operation.OperationID, nil
 	}
-	return operation.OperationID, TransitionOperation(operation, "confirmed", turnID, mustJSON(map[string]string{"session_id": sessionID, "turn_id": turnID}), "")
+	// A started event confirms the original input; it does not replace the
+	// accepted native receipt or its request identity with a synthetic summary.
+	receipt, requestID := operation.Receipt, operation.PlatformRequestID
+	if len(receipt) == 0 {
+		receipt = mustJSON(map[string]string{"session_id": sessionID, "turn_id": turnID})
+	}
+	if requestID == "" {
+		requestID = turnID
+	}
+	return operation.OperationID, TransitionOperation(operation, "confirmed", requestID, receipt, "")
 }
 
 func (s *Service) eventWorkerFlowFor(run *reconstructiontypes.RunView, ev WorkerEvent) (resultErr error) {
