@@ -12,6 +12,17 @@ import (
 	testfeedback "github.com/erranliu/SteerLine/internal/testkit/feedback"
 )
 
+func TestE2EGoDeadlineIncludesHeavyScenarioAndIndependentCleanup(t *testing.T) {
+	ordinary := e2eScenario{ID: "delivery.basic", Env: "controlled"}
+	heavy := e2eScenario{ID: "runtime.installed-debug-isolation", Env: "controlled"}
+	if e2ePackageGoTimeout([]e2eScenario{ordinary}) != "6m" || e2ePackageGoTimeout([]e2eScenario{heavy}) != "11m" || e2ePackageGoTimeout([]e2eScenario{ordinary, heavy}) != "17m" {
+		t.Fatal("Go parent deadline clips a selected business scene or its cleanup")
+	}
+	if e2ePackageGoTimeout([]e2eScenario{{Env: "live"}}) != "35m" {
+		t.Fatal("live package deadline changed")
+	}
+}
+
 func TestLevelSelectionsRejectAmbiguity(t *testing.T) {
 	for _, args := range [][]string{{"-level=L4"}, {"-env=controlled"}, {"-level=L1", "-quick"}, {"-level=L1", "-suite=recovery"}, {"-level=L2", "-suite=smoke"}, {"-level=L3"}, {"-level=L2", "-workers=1"}, {"-level=L2", "-build-only=false"}, {"-level=L2", "-env=native"}, {"-level=L2", "--", "./..."}, {"-level=L2", "-level=L3"}} {
 		if _, err := parseOptions(args); err == nil {
