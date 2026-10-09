@@ -54,3 +54,14 @@ git diff --check
 用户明确一期包含远端路径交付；本轮删除现行 README、产品/架构说明、一期共同约束、测试指南及既有 `docs/roadmap/drafts/roadmap.md` 中将远端延后的描述，链接远端独立 Spec 与已登记验收。未改变后端实际能力、场景选择、历史证据或任务/DAG 状态。此范围说明不执行新增产品或模型验收。
 
 静态检查通过：275 个 Markdown 文件、1,751 个本地导航链接，0 错误；身份检查为 86 个身份文件、10 条草稿及 4 条正式行；差异格式检查通过。结果属于文档一致性检查。
+
+## 2026-10-09 提 PR 前主干同步与复验
+
+分支无冲突同步到主干 `90e4ca96`（含 PR #256 远端 Dispatch 绑定修复），复验源码 commit 为 `3c2e77c1`。此前报告保持原基准；本段是新的复验范围。
+
+- `go run ./cmd/test-feedback -level=L1 -- ./internal/execution -run '^(TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace|TestRemoteWorker.*)$' -count=1`：L1 与同会话反馈定向追加通过，passed/complete 均为 true，无 skip；报告 `20261009T054738.886917600Z/summary.json`。命中的追加场景为 `TestWorkerFlowServiceFirstFeedbackKeepsSessionAndWorkspace`。
+- 远端相关定向追加：`go run ./cmd/test-feedback -- ./internal/execution ./internal/execution/adapters/orcaremote ./tests/e2e/internal/native -run '^(TestWorkerWorkspaceInstructionUsesPreparedRemoteIdentity|TestWorkerFlowPromptIncludesFixedWorkflowRunID|TestRemoteEmptyInboxDetectsLostDispatchWithoutRelaunch|TestRemoteInventoryDistinguishesWorkerShellAndResumedDuplicate)$' -count=1`：通过，passed/complete 均为 true，无 skip；报告 `20261009T054815.919101400Z/summary.json`。
+- 文档检查：278 个 Markdown 文件、1,757 个本地链接，0 错误；身份检查仍为 86 个身份文件、10 条草稿/4 条正式行；差异格式通过。
+- 对最新主干再次核对 Go diff：新增 780 行、删除 1,301 行，净减少 521 行；测试文件新增 131 行、删除 1,298 行，净减少 1,167 行。Markdown 修订另计。
+
+本轮未新增真实模型运行，远端产品验收事实继续引用远端专属记录。
