@@ -339,6 +339,9 @@ func FakeNativeOrca(stateDir string, args []string) int {
 			return nativeOrcaOK(map[string]any{"runId": "run-fake", "tasks": rows, "count": len(rows)})
 		case "request-show":
 			id := nativeArg(args, "--request")
+			if state.StageProvider != "" && state.LoseDispatchAt == state.Dispatches {
+				return nativeOrcaOK(map[string]any{"requestId": id, "state": "pending", "method": "orchestration.workerStart"})
+			}
 			if prior := state.NativeRequests[id]; len(prior) > 0 {
 				return nativeOrcaOK(map[string]any{"requestId": id, "state": "completed", "method": "orchestration.workerStart", "receipt": json.RawMessage(prior)})
 			}
