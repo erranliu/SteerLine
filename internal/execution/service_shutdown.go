@@ -16,9 +16,14 @@ type workerServiceOwner struct {
 // drains durable messages and closes its observation; it never interrupts a
 // native turn or guesses whether an external execution survives.
 func (s *Service) shutdown() error {
+	// Final persistence/ack is drained by the actor, not a canceled run queue.
 	if s.runContext != nil && s.runContext.Err() != nil {
 		s.forwarders.Wait()
-		s.drainWorkerMessages()
+		pendingQueue := s.signalQueue
+		s.signalQueue = nil
+		s.drainWorkerMessagesFrom(pendingQueue)
+	} else {
+		s.signalQueue = nil
 	}
 	for _, messages := range s.lifecycleMessages {
 		for _, message := range messages {

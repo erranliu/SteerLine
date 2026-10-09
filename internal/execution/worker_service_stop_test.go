@@ -2,6 +2,7 @@ package execution
 
 import (
 	"context"
+	"errors"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -195,11 +196,18 @@ func TestWorkerLateReplyReleasesOnlyItsOriginalUncertainty(t *testing.T) {
 				require(t, err)
 			}
 			e.RecoveryRequired, e.RecoveryState = true, "unverified"
+			fail := true
+			s.lifecycleResolver = transientQualificationResolver{fail: &fail}
 			require(t, s.commitWorker(run))
 			beforeAttempts := len(s.domain.Attempts)
 			success := true
 			event := WorkerEvent{Fact: executionbackend.EventFact{ToolReply: &executionbackend.ToolReplyFact{CallID: request.QuestionRoute.QuestionID, ThreadID: e.SessionID, TurnID: e.CurrentTurnID, Status: "completed", Success: &success, Answers: []map[string][]string{answer.Answers}}}}
 			require(t, s.eventWorkerFlowFor(run, event))
+			if e.RecoveryState != "unverified" {
+				t.Fatal("failed worker qualification was bypassed")
+			}
+			s.workers[run.RunID] = &Worker{}
+			require(t, s.resumeWorkerFlow(context.Background()))
 			expected := "running"
 			if remainingPublication {
 				expected = "unverified"
@@ -208,5 +216,67 @@ func TestWorkerLateReplyReleasesOnlyItsOriginalUncertainty(t *testing.T) {
 				t.Fatalf("late original reply qualification: state=%s want=%s", e.RecoveryState, expected)
 			}
 		})
+	}
+}
+
+type transientQualificationLifecycle struct {
+	*neutralLifecycle
+	fail *bool
+}
+
+func (p transientQualificationLifecycle) VerifyManualRecovery(ctx context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleRecoveryEvidence, error) {
+	if *p.fail {
+		*p.fail = false
+		return executionbackend.LifecycleRecoveryEvidence{}, errors.New("temporary observation failure")
+	}
+	return p.neutralLifecycle.VerifyManualRecovery(ctx, snapshot)
+}
+
+type transientQualificationResolver struct{ fail *bool }
+
+func (r transientQualificationResolver) ResolveLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
+	return transientQualificationLifecycle{neutralLifecycle: &neutralLifecycle{setup: setup}, fail: r.fail}, nil
+}
+
+type unavailableOwnerResolver struct{}
+
+func (unavailableOwnerResolver) ResolveLifecycle(executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
+	return nil, errors.New("later resolver failure")
+}
+func TestWorkerPreparationStopDoesNotJournalUnsentBusinessTurn(t *testing.T) {
+	s, run := neutralAuditService(t)
+	t.Cleanup(func() { _ = s.Close() })
+	_, e := s.workflowRecords(run)
+	e.PolicyResources = neutralPolicyReceipt(s.workflowRecord(run).ExecutionProfile.Digest, e.Workspace.Worktree, e)
+	cmd := exec.Command(os.Args[0], "--fake", "sleep")
+	owned, err := resourceprocess.StartManaged(cmd)
+	require(t, err)
+	defer cmd.Wait()
+	defer owned.Close()
+	input := &executionbackend.TurnInput{CommandID: newID(), Prompt: "original input not yet dispatched", Purpose: "business"}
+	e.PendingCommandID = input.CommandID
+	_, err = s.startWorkerOperation(run, "prepare_worker_session", "worker-session:"+e.ExecutionID+":"+input.CommandID, input)
+	require(t, err)
+	fixed, err := s.workerFlowContext(run)
+	require(t, err)
+	request, err := s.originalLifecycleRequest(run, fixed)
+	require(t, err)
+	// Cache the legitimate preparation owner before its actual process receipt.
+	_, _, err = s.lifecycleForRun(run)
+	require(t, err)
+	identity := owned.Identity()
+	receipt := executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationConfirmed, Process: &identity, Handle: owned, State: executionbackend.LifecycleStateFacts{SessionID: workerFlowMockSession, SessionGeneration: "original-session-generation"}}
+	s.State.Service.Status = "stopping"
+	_, proceed, err := s.applyAppServerSessionReceipt(run, request, receipt, nil)
+	require(t, err)
+	if proceed || s.operationByKey("worker-turn:"+e.ExecutionID+":"+input.CommandID) != nil {
+		t.Fatal("stopping preparation created an unsent in-flight business turn")
+	}
+	s.lifecycleResolver = unavailableOwnerResolver{}
+	if err := s.shutdown(); err == nil {
+		t.Fatal("resolver failure was not reported")
+	}
+	if resourceprocess.InspectProcess(&identity) != "process absent" && !owned.WritersAbsent() {
+		t.Fatal("accepted preparation owner was lost after resolver failure")
 	}
 }

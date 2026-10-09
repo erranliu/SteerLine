@@ -278,6 +278,9 @@ func (s *Service) resumeConfiguredWork(ctx context.Context) error {
 }
 
 func (s *Service) resumeWorkerFlow(ctx context.Context) error {
+	if ctx.Err() != nil {
+		return nil
+	}
 	if err := s.resumeWorkerObservers(ctx); err != nil {
 		return err
 	}
@@ -295,6 +298,11 @@ func (s *Service) resumeWorkerFlow(ctx context.Context) error {
 			continue
 		}
 		if s.workers[run.RunID] != nil {
+			if e := s.executionRecord(run); e != nil && e.RecoveryRequired && e.RecoveryState == "unverified" {
+				if err := s.recheckWorkerQualification(ctx, run); err != nil {
+					resumeErr = errors.Join(resumeErr, err)
+				}
+			}
 			continue
 		}
 		task := nativeTaskRecord(s.domain.Tasks, run.DomainTaskID)

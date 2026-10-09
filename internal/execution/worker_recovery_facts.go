@@ -20,3 +20,15 @@ func (s *Service) setWorkerRecoveryFacts(run *reconstructiontypes.RunView, facts
 func settledOriginalWorkerTurn(e *executionmodel.ExecutionRecord) bool {
 	return e.CurrentTurnID != "" && e.CurrentTurnID == e.LastStoppedTurnID && e.PendingCommandID == "" && e.PendingTurnID == ""
 }
+
+func (s *Service) stampPendingRecoveryQuestion(run *reconstructiontypes.RunView) {
+	if run.Decision == nil || run.Decision.Status != "pending" || run.Decision.Request.QuestionRoute == nil {
+		return
+	}
+	e, record := s.executionRecord(run), s.decisionRecord(run)
+	if record != nil && (record.RecoveryVersion != e.RecoveryVersion || record.RecoveryState != e.RecoveryState) {
+		record.RecoveryVersion, record.RecoveryState = e.RecoveryVersion, e.RecoveryState
+		record.Version++
+		s.markWorkerDecisionWrite(record.DecisionID)
+	}
+}

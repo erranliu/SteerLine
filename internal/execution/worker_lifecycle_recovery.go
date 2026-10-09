@@ -145,6 +145,10 @@ func (s *Service) applyWorkerRecovery(result workerRecoveryResult) error {
 			_ = result.worker.detachLocalObservation(context.Background())
 		}
 	}()
+	if result.err != nil && s.runContext != nil && s.runContext.Err() != nil {
+		return nil
+	}
+
 	var run *reconstructiontypes.RunView
 	for _, candidate := range s.runs {
 		if candidate != nil && candidate.RunID == result.runID {

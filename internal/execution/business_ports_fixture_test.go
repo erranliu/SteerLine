@@ -276,7 +276,7 @@ var _ = time.Second
 
 func (p *neutralLifecycle) ShutdownLifecycle(_ context.Context, s executionbackend.LifecycleSnapshot, h executionbackend.StopHandle) (executionbackend.LifecycleStateFacts, error) {
 	if h != nil {
-		if h.Identity() != s.Ref.External {
+		if s.Ref.External.Kind != "" && h.Identity() != s.Ref.External {
 			return executionbackend.LifecycleStateFacts{}, errors.New("owned worker identity differs")
 		}
 		h.Close()

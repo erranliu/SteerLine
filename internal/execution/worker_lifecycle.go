@@ -238,6 +238,9 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *taskmodel
 		}
 		evidence, verifyErr := lifecycle.VerifyManualRecovery(ctx, snapshot)
 		if verifyErr != nil {
+			if ctx.Err() != nil {
+				return true, nil
+			}
 			execution.RecoveryState = "unverified"
 			return true, s.waitWorkerFlow(run, "Original worker identity cannot be verified: "+verifyErr.Error())
 		}
@@ -259,6 +262,9 @@ func (s *Service) resumeLifecycleWorkerFlow(ctx context.Context, task *taskmodel
 		}
 		if run.Decision != nil && run.Decision.Status == "answer_saved" {
 			return true, s.refreshSavedRecoveryDecision(run, false, "服务重开后请确认旧答案；原轮次不会自动继续。")
+		}
+		if completed && fixed.workflow.PRURL != "" && !s.hasUnknownWorkerOperation(run) {
+			return true, s.pollWorkerFlowPR(ctx, run, task, fixed.workflow)
 		}
 		// An optional feedback decision cannot replace a verified PR's merge gate
 		// merely because the completed worker process disappeared during restart.
@@ -299,6 +305,9 @@ func (s *Service) resumeLifecycleObservation(ctx context.Context, run *reconstru
 	}
 	receipt, observer, observeErr := lifecycle.ObserveLifecycle(ctx, snapshot)
 	if observeErr != nil {
+		if ctx.Err() != nil {
+			return nil
+		}
 		return s.waitWorkerFlow(run, "Original worker observation needs reconciliation: "+observeErr.Error())
 	}
 	if observer != nil {
@@ -1364,7 +1373,7 @@ func (s *Service) applyAppServerSessionReceipt(run *reconstructiontypes.RunView,
 	if err := s.commitWorkerAttached(run, attachment, request.Operation.ID); err != nil {
 		return executionbackend.LifecycleRequest{}, false, err
 	}
-	if !proceed {
+	if !proceed || s.State.Service.Status == "stopping" {
 		return executionbackend.LifecycleRequest{}, false, nil
 	}
 	turn := *request.Input.Turn
@@ -1572,6 +1581,12 @@ func (s *Service) dispatchWorkerTurnEffect(ctx context.Context, run *reconstruct
 					owner.ReleasePreparation()
 				}
 				return err
+			}
+			if s.State.Service.Status == "stopping" {
+				if owner, ok := lifecycle.(executionbackend.LifecyclePreparationOwner); ok {
+					owner.ReleasePreparation()
+				}
+				return nil
 			}
 			return s.dispatchWorkerTurnEffect(ctx, run, lifecycle, next, false)
 		}
