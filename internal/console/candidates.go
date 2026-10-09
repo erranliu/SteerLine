@@ -281,7 +281,7 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 			lines = append(lines, safeTerminalText("  冻结："+strings.Join(r.ExecutionProfile.ImplementationDisplay, " · ")))
 		}
 		if r.PR.URL != nil {
-			lines = append(lines, "  PR："+safeTerminalText(*r.PR.URL)+" · "+safeTerminalText(r.PR.State))
+			lines = append(lines, "  PR："+prLink(*r.PR.URL, *r.PR.URL)+" · "+safeTerminalText(r.PR.State))
 		}
 		if r.Summary != nil {
 			lines = append(lines, "  最终回复摘要："+safeTerminalText(*r.Summary)+"（完整正文在候选详情查看；[ / ] 选择历史回复）")
@@ -309,7 +309,7 @@ func renderCandidates(m Model, s projectState, row *consoleRow) []string {
 			lines = append(lines, "不可撤销退出实验；worker 停止独立核实，不再反馈。")
 		}
 		for _, url := range r.PRHistory {
-			lines = append(lines, "历史 PR："+safeTerminalText(url))
+			lines = append(lines, "历史 PR："+prLink(url, url))
 		}
 		lines = append(lines, "差异定位："+safeTerminalText(stringValue(r.WorktreePath)+" · "+stringValue(r.BaseCommit)+".."+stringValue(r.WorktreeBranch)))
 	}
