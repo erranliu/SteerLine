@@ -74,7 +74,15 @@ func FixedNativeLaunch(domain reconstruction.Snapshot) error {
 			return errors.New("native Orca original launch identity missing")
 		}
 		for _, op := range domain.Operations {
-			if op.Kind != "start_worker_turn" || op.LifecycleIdentity == nil || op.LifecycleIdentity.ExecutionID != e.ExecutionID || op.LifecycleIdentity.Ref.AttemptID != e.CurrentAttemptID {
+			if op.Kind != "start_worker_turn" || (op.Status != "confirmed" && op.Status != "accepted") || op.LifecycleIdentity == nil || op.LifecycleIdentity.ProjectID != e.ProjectIdentity || op.LifecycleIdentity.ExecutionID != e.ExecutionID || op.LifecycleIdentity.ConfigurationDigest != e.ConfigurationDigest || op.LifecycleIdentity.ResourceGeneration != e.Generation || op.LifecycleIdentity.Ref.AttemptID != e.CurrentAttemptID {
+				continue
+			}
+			var accepted executionbackend.LifecycleReceipt
+			if json.Unmarshal(op.Receipt, &accepted) != nil || accepted.Process == nil || !accepted.State.InputAccepted || accepted.State.TurnID != state.Turns[0].TurnID {
+				continue
+			}
+			original := *accepted.Process
+			if original.Kind != "orca" || original.Terminal != e.Process.Terminal || original.RuntimeID != e.Process.RuntimeID || original.Incarnation != e.Process.Incarnation || original.WorktreeID != e.Process.WorktreeID || original.Task != state.Turns[0].TaskID || original.Dispatch != state.Turns[0].DispatchID {
 				continue
 			}
 			var receipt struct {
@@ -88,7 +96,7 @@ func FixedNativeLaunch(domain reconstruction.Snapshot) error {
 					} `json:"effective"`
 				} `json:"launch"`
 			}
-			if json.Unmarshal(op.Receipt, &receipt) == nil && receipt.TaskID == state.Turns[0].TaskID && receipt.DispatchID == state.Turns[0].DispatchID && receipt.Launch.Effective.Agent == profile.Agent && receipt.Launch.Effective.Model == settings.Model && receipt.Launch.Effective.Effort == settings.ReasoningEffort {
+			if json.Unmarshal(accepted.Operation.Receipt, &receipt) == nil && receipt.TaskID == state.Turns[0].TaskID && receipt.DispatchID == state.Turns[0].DispatchID && receipt.Launch.Effective.Agent == profile.Agent && receipt.Launch.Effective.Model == settings.Model && receipt.Launch.Effective.Effort == settings.ReasoningEffort {
 				return nil
 			}
 		}
