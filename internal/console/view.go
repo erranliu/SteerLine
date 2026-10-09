@@ -404,6 +404,8 @@ func actionStatusLabel(status string) string {
 	case "submitting":
 
 		return "提交中"
+	case "submitted":
+		return "已提交，待受理"
 	case "pending", "in_flight", "applying":
 
 		return "处理中"

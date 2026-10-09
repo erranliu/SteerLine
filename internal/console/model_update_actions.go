@@ -36,11 +36,7 @@ func (m Model) updateActionSubmitted(msg actionSubmittedMsg) (tea.Model, tea.Cmd
 			m.status = feedbackReceiptStatus(*state, action)
 		}
 		m.saveProjectView(index)
-		if refreshNow {
-			state.lastRefresh = time.Time{}
-			return m, m.readProject(index)
-		}
-		return m, nil
+		return m, m.actionFollowup(index, action, refreshNow)
 	}
 	responseMismatch := msg.instance != action.TargetInstance
 	if responseMismatch {
@@ -75,11 +71,23 @@ func (m Model) updateActionSubmitted(msg actionSubmittedMsg) (tea.Model, tea.Cmd
 		}
 	}
 	m.saveProjectView(index)
-	if refreshNow {
-		state.lastRefresh = time.Time{}
-		return m, m.readProject(index)
+	return m, m.actionFollowup(index, action, refreshNow)
+}
+
+// Read the original request immediately after submission, without resubmitting
+// it or waiting for the next project refresh.
+func (m Model) actionFollowup(index int, action *actionState, refresh bool) tea.Cmd {
+	var cmds []tea.Cmd
+	if refresh {
+		m.projects[index].lastRefresh = time.Time{}
+		cmds = append(cmds, m.readProject(index))
 	}
-	return m, nil
+	if !action.Resolved && !action.InFlight {
+		m.projects[index].actionPollUntil = m.clock.Now().Add(5 * time.Second)
+		action.InFlight = true
+		cmds = append(cmds, m.pollAction(index, action))
+	}
+	return tea.Batch(cmds...)
 }
 
 func (m Model) updateActionReceipt(msg actionReceiptMsg) (tea.Model, tea.Cmd) {
@@ -116,6 +124,7 @@ func (m Model) updateActionReceipt(msg actionReceiptMsg) (tea.Model, tea.Cmd) {
 	action.UpdatedAt = m.clock.Now()
 	refreshNow := false
 	if msg.receipt != nil {
+		previousStatus, previousRun := action.Status, action.RunID
 		expectedRun := ""
 		if action.Action == "start_candidate" {
 			expectedRun = action.RequestID
@@ -134,7 +143,7 @@ func (m Model) updateActionReceipt(msg actionReceiptMsg) (tea.Model, tea.Cmd) {
 		}
 		action.Status, action.Message, action.RunID = msg.receipt.Status, msg.receipt.Message, msg.receipt.RunID
 		action.Resolved = msg.receipt.Status == "applied" || msg.receipt.Status == "rejected" || msg.receipt.Status == "failed" || msg.receipt.Status == "indeterminate"
-		if msg.receipt.Status == "applied" {
+		if action.Resolved || msg.receipt.Status == "applying" && (previousStatus != "applying" || previousRun != action.RunID) {
 			refreshNow = true
 		}
 		if msg.receipt.InstanceID != action.TargetInstance {
@@ -167,7 +176,7 @@ func (m Model) updateActionReceipt(msg actionReceiptMsg) (tea.Model, tea.Cmd) {
 		delete(state.view.Outstanding, msg.requestID)
 	}
 	if index == m.selected {
-		m.status = fmt.Sprintf("%s · task %s · request %s · %s", action.Status, displayDash(action.TaskID), action.RequestID, action.Message)
+		m.status = fmt.Sprintf("%s · task %s · request %s · %s", actionStatusLabel(action.Status), displayDash(action.TaskID), action.RequestID, action.Message)
 	}
 	m.saveProjectView(index)
 	if refreshNow {
