@@ -68,6 +68,13 @@ func (l *ExecutionLifecycle) startNativeWorker(ctx context.Context, snapshot exe
 		timeout = max(timeout, wait+30*time.Second)
 	}
 	result, callErr := l.client.metaCallTimeout(ctx, timeout, args...)
+	return l.bindNativeWorkerStart(ctx, snapshot, state, turn, result, callErr)
+}
+
+// Binding and observation consume one original native start receipt.
+func (l *ExecutionLifecycle) bindNativeWorkerStart(ctx context.Context, snapshot executionbackend.LifecycleSnapshot, state NativeExecutionState, turn NativeTurnState, result Result, callErr error) (Result, workerStartReceipt, executionbackend.ProcessIdentity, error) {
+	previous := snapshot.Ref.External
+	first := previous.Terminal == ""
 	var started workerStartReceipt
 	parseErr := json.Unmarshal(result.Payload, &started)
 	if callErr != nil || parseErr != nil {
@@ -118,4 +125,24 @@ func (l *ExecutionLifecycle) startNativeWorker(ctx context.Context, snapshot exe
 		return result, started, process, errors.New("continuation replaced the original worker session")
 	}
 	return result, started, process, nil
+}
+
+// Read-only reconciliation never invokes the composite creation/retry entry point.
+func (l *ExecutionLifecycle) reconcileNativeWorkerStart(ctx context.Context, snapshot executionbackend.LifecycleSnapshot, state NativeExecutionState, turn NativeTurnState, operationID string) (Result, workerStartReceipt, executionbackend.ProcessIdentity, error) {
+	requestID := nativeRequestID(operationID)
+	observed, err := l.client.MetaCall(ctx, "orchestration", "request-show", "--request", requestID, "--json")
+	if err != nil {
+		return observed, workerStartReceipt{}, snapshot.Ref.External, err
+	}
+	var saved struct {
+		RequestID string          `json:"requestId"`
+		State     string          `json:"state"`
+		Method    string          `json:"method"`
+		Receipt   json.RawMessage `json:"receipt"`
+	}
+	if json.Unmarshal(observed.Payload, &saved) != nil || observed.RuntimeID != state.Coordinator.RuntimeID || saved.RequestID != requestID || saved.State != "completed" || saved.Method != "orchestration.workerStart" || len(saved.Receipt) == 0 {
+		return observed, workerStartReceipt{}, snapshot.Ref.External, errors.New("original native worker-start receipt is unverified; no execution input was sent")
+	}
+	original := Result{RuntimeID: observed.RuntimeID, Payload: saved.Receipt}
+	return l.bindNativeWorkerStart(ctx, snapshot, state, turn, original, nil)
 }

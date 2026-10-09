@@ -73,11 +73,11 @@ func (l *ExecutionLifecycle) reconcileStart(ctx context.Context, request executi
 	if request.Operation.Ref != nil {
 		original.Ref = *request.Operation.Ref
 	}
-	result, started, process, err := l.startNativeWorker(ctx, original, state, *turn, request.Operation.ID)
+	result, started, process, err := l.reconcileNativeWorkerStart(ctx, original, state, *turn, request.Operation.ID)
 	receipt.Operation.Receipt = append([]byte(nil), result.Payload...)
 	receipt.RequestID = nativeRequestID(request.Operation.ID)
 	if err != nil {
-		recovered, recoverErr := l.recoverFailedStart(ctx, request, state, started, result, err)
+		recovered, recoverErr := l.reconcileFailedStart(ctx, request, state, started, result, err)
 		return recovered, nil, recoverErr
 	}
 	id, run := started.DispatchID, started.RunID

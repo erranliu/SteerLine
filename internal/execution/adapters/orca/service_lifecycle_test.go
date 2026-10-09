@@ -20,7 +20,7 @@ func observationFixture(t *testing.T, output func(context.Context, time.Duration
 		ConfigurationDigest: "config", ResourceGeneration: "resources", Workspace: executionbackend.WorkspaceIntent{Path: t.TempDir()}}
 	state := NativeExecutionState{Coordinator: executionbackend.ProcessIdentity{Terminal: "coordinator", RuntimeID: "runtime"},
 		Turns: []NativeTurnState{{TurnID: snapshot.Session.CurrentTurnID, TaskID: "task", DispatchID: "dispatch", Purpose: "business"}}}
-	l := &ExecutionLifecycle{orca: profile, client: New(Config{Output: output})}
+	l := &ExecutionLifecycle{setup: executionbackend.LifecycleSetup{Snapshot: snapshot.Clone()}, orca: profile, client: New(Config{Output: output})}
 	envelopes, err := l.targetEnvelope(snapshot, target, identity, state)
 	if err != nil {
 		t.Fatal(err)
@@ -97,4 +97,62 @@ func TestServiceStopWorkerFacts(t *testing.T) {
 			t.Fatalf("offline done replayed or fabricated: done=%v reads=%d mutations=%d", seenDone, inboxReads, mutations)
 		}
 	})
+}
+
+func TestServiceRecoveryNativeStartUsesOnlyOriginalReceipt(t *testing.T) {
+	for _, stateName := range []string{"absent", "pending", "completed"} {
+		t.Run(stateName, func(t *testing.T) {
+			snapshot, state := nativeTestSnapshot(t, "agent")
+			native := ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m", Model: "opaque-model", ReasoningEffort: "medium"}
+			calls := []string{}
+			port := ExecutionLifecycle{orca: native}
+			requestID := nativeRequestID("original-operation")
+			port.client = New(Config{Output: func(_ context.Context, _ time.Duration, args ...string) ([]byte, error) {
+				calls = append(calls, args[1])
+				switch args[1] {
+				case "request-show":
+					if flagValue(args, "--request") != requestID {
+						t.Fatal("changed original request")
+					}
+					receipt := map[string]any{"runId": "run", "taskId": "task", "dispatchId": "dispatch", "state": "ready", "stage": "input_accepted", "turnStart": "observed", "mode": map[string]string{"mode": "terminal"}, "launch": map[string]any{"effective": map[string]string{"agent": "agent", "model": "opaque-model", "effort": "medium"}}}
+					return nativeTestEnvelope(t, map[string]any{"requestId": requestID, "state": stateName, "method": "orchestration.workerStart", "receipt": receipt}), nil
+				case "worker-show":
+					terminal := Terminal{Handle: "terminal", IncarnationID: "inc", WorktreeID: "workspace", WorktreePath: snapshot.Workspace.Path, Branch: "branch", AgentIdentity: "agent", Connected: true, Status: "running"}
+					return nativeTestEnvelope(t, map[string]any{"dispatch": map[string]string{"id": "dispatch", "runId": "run", "taskId": "task"}, "worker": map[string]string{"dispatchId": "dispatch", "agentTerminalHandle": "terminal"}, "terminal": terminal}), nil
+				default:
+					t.Fatalf("recovery created input or resources: %v", args)
+					return nil, errors.New("unexpected mutation")
+				}
+			}})
+			_, started, process, err := port.reconcileNativeWorkerStart(context.Background(), snapshot, state, NativeTurnState{TaskID: "task"}, "original-operation")
+			if stateName != "completed" {
+				if err == nil || started.DispatchID != "" || process.Terminal != "" || len(calls) != 1 {
+					t.Fatal("unknown request became an execution")
+				}
+			} else if err != nil || started.DispatchID != "dispatch" || process.Terminal != "terminal" || len(calls) != 2 {
+				t.Fatalf("original receipt was not bound: %+v/%v", process, err)
+			}
+		})
+	}
+	// An intent journaled locally but never received by Orca stays unknown.
+	snapshot, state := nativeTestSnapshot(t, "agent")
+	turn := NativeTurnState{TurnID: stableIDValue(4), TaskID: "task", Purpose: "business"}
+	state.Turns = []NativeTurnState{turn}
+	port := ExecutionLifecycle{orca: ProfileConfig{Executable: "orca", Shell: "cmd.exe", WaitTimeout: "1m", Model: "opaque-model", ReasoningEffort: "medium"}}
+	envelopes, err := port.targetEnvelope(snapshot, snapshot.Ref.Target, snapshot.Ref.External, state)
+	if err != nil {
+		t.Fatal(err)
+	}
+	snapshot.Implementation = envelopes
+	port.client = New(Config{Output: func(_ context.Context, _ time.Duration, args ...string) ([]byte, error) {
+		if args[1] != "request-show" {
+			t.Fatalf("unsent original input was dispatched during recovery: %v", args)
+		}
+		return nativeTestEnvelope(t, map[string]string{"requestId": nativeRequestID("original-operation"), "state": "absent"}), nil
+	}})
+	request := executionbackend.LifecycleRequest{Snapshot: snapshot, Operation: executionbackend.Operation{ID: "original-operation"}, Input: executionbackend.LifecycleInput{Turn: &executionbackend.TurnInput{CommandID: turn.TurnID, Prompt: "never sent"}}}
+	receipt, observer, err := port.reconcileStart(context.Background(), request)
+	if err == nil || observer != nil || receipt.Disposition != executionbackend.OperationUnknown || receipt.State.InputAccepted || receipt.State.TurnStarted {
+		t.Fatal("locally persisted unsent intent became a worker")
+	}
 }

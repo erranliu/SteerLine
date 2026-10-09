@@ -333,6 +333,12 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				rows = append(rows, map[string]any{"id": fmt.Sprintf("task-%d", i+1), "run_id": "run-fake", "spec": spec, "created_by_terminal_handle": "term-coordinator"})
 			}
 			return nativeOrcaOK(map[string]any{"runId": "run-fake", "tasks": rows, "count": len(rows)})
+		case "request-show":
+			id := nativeArg(args, "--request")
+			if prior := state.NativeRequests[id]; len(prior) > 0 {
+				return nativeOrcaOK(map[string]any{"requestId": id, "state": "completed", "method": "orchestration.workerStart", "receipt": json.RawMessage(prior)})
+			}
+			return nativeOrcaOK(map[string]any{"requestId": id, "state": "absent"})
 		case "worker-start":
 			request := nativeArg(args, "--retry-request")
 			if state.NativeRequests == nil {
