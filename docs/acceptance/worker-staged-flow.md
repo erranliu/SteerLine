@@ -64,3 +64,16 @@
 WFS-A4 首轮目录 `C:/Users/lmas1/AppData/Local/Temp/steerline-worker84-evidence-a214d3a014c74100a2ad8d2b933199cb/live-e74/`：local-codex 真实三轮、唯一交付、原生 usage 与清理通过（163.52 秒）；orca-codex 失败，汇总 passed=false。两场景 scenario.json 均 cleanup_complete=true。Orca 后续 Dispatch 的精确 worker-read 返回 session_not_reported，原生 rollout 实际含正确 Task 头、final_answer 与完成；旧接线未保存准备时的根 transcript，故拒绝结果并耗尽一次报告重试。这是自动验收失败，不归人工后置。原始记录、规范快照、保存的 rollout 和 archived-read 诊断保留；local 结果不覆盖 Orca 失败。usage 文件是各绑定轮次的原生累计快照，不相加计费。
 
 协调通知 PR #254 已进入 main `d8d66d6c5696f41d7df1ed3ff50d4b3ae77b9da3`。原 worker 在 live 已退出且清理核实后，用 merge commit `bf64c1429782903a0eceae4831e26571950b889d` 集成，保留 e74 测试来源；console 操作进度/原回执修复与步骤投影均保留，无冲突。固定 Spec/Plan 仍在 c4bcbec。后续候选将修复原来源冻结、复验 affected console / controlled / 双 live，未将本段失败写成通过。
+
+### 新主干原生 Orca 接线与明确验收调整
+
+历史 clean 候选 `a204a8ce9831c96eb0f42c0720958f3e27e64e01` 的 L1+A1 478 tests / 0 skip、console 21 tests / 0 skip、Orca controlled 2 tests / 0 skip 通过。双 live `live-a204/summary.json` passed=false：local 209.01 秒通过，Orca 420.62 秒失败，根因是实际 native msg ID 不能当 transcript 文件路径；两场景 cleanup_complete=true。旧失败不由后续受控通过覆盖。证据根沿用本页前述 worker84-evidence 目录。
+
+旧受管 launcher 的 public-history 修复已保存于 `e04c3786`；该来源的受控正常三轮通过，但未在该候选补跑 live。随后集成主干 `ade7042bef9d858ae7cc4cdcaae957704c407b8f`（含 PR #255–#261），merge `38653b5c944dcab15403cb0f885eb01c70bcb7a3`、tree `515464ba20c77c40908eb25a75933b4eb541cd0b`。主干已删除旧 Orca launcher/readiness/relay，当前消费者改用主干原生 output material + original Dispatch settlement。旧 history/launcher 证据只证明旧 source；未恢复已删除框架。新三轮 live 仍待执行并登记。
+
+2026-10-09 本聊天向用户明确说明：固定 Plan 要求 Orca 逐轮原生 usage，而新原生 opaque agent 的公开接口不提供 usage。用户回复“调整 Orca usage 验收，保留真实闭环要求”。此授权仅改变 WFS-A4 的 Orca usage 条件：登记 not_exposed_by_orca 及每步原 Command/Dispatch/final source，不能声称 token 核验通过；仍须真实三轮、原身份、候选/PR head、唯一交付及精确清理。Local Codex 的逐轮原生 usage 及无额外调用检查保持。固定 Spec/Plan 的 commit/path 未修改，原文与本段授权分别可追溯。
+
+当前保留原生 Orca opaque identity、原生权限/资源/恢复/停止/清理和远端目录注册。worker-flow-v2 要求规范 final 能力；远端 Orca 当前未声明此能力，因此在准备工作区/模型输入前显式 unsupported。本任务不新增远端流程或 live，也不借本机证明远端支持。console 原生 PR 链接与步骤/status 同快照并存。
+新版最小验证：clean `38653b5c` 的 L1+A1 490 tests / 0 skip / 13 groups（20261009T064532.351292900Z）；console 步骤/等待PR/操作进度回执/PR链接 23 tests / 0 skip（20261009T064502.288447500Z）；规范输出及模型选择定向 21 tests / 0 skip（20261009T064502.915077600Z）。报告均在 `C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/`。新版 controlled 的 local 和 Orca 正常三轮分别通过；同轮 unknown 用例的原先一次性丢回执被原生缓存立即对账，旧等待断言失败，未把失败记通过。
+
+将 unknown 故障保持至原服务退出后，真正揭示 BeginTurn 拒收 reconciling 下原输入开始事实的缺口。规则修复仅允许匹配原已接受 pending turn 的开始观察，不授予新发送资格。定向规则 1 test / 0 skip（20261009T065323.802469800Z）及实际 Orca 丢回执/重开场景 1 test / 0 skip（20261009T065326.171509600Z，64.979 秒）通过：原服务未发布，恢复原两轮结果、一个 Attempt、三个冻结输入，publish 保持 waiting_input，native Dispatch 仍恰好两次。原失败记录 20261009T065106.138101900Z 保留。新 native launch 证据断言 6 tests / 0 skip（20261009T064831.408077100Z）核验实际保存的首轮原 Task/Dispatch/agent/model/effort，任一身份/选择变化拒绝。这些增量测试在 `38653b5c` 加对应明确修改的工作区执行；下一 clean 源码/构建及 live 报告另行登记，不能把本段称为该后续完整矩阵。

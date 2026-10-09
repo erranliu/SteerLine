@@ -54,21 +54,30 @@ func testWorkerStageRun(t *testing.T, host string, unknown bool) {
 	claimIntegrationTask(t, ctx, f, 901, service.instanceID)
 	if unknown {
 		stopped := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
-			return run.StepID == executionmodel.StepPublish && run.BusinessStatus == "waiting_input" && e.CurrentTurnID == e.LastStoppedTurnID
+			return run.StepID == executionmodel.StepReport && (run.BusinessStatus == "reconciling" || run.BusinessStatus == "waiting_input") && e.PendingCommandID != ""
 		})
 		w := stopped.runtime.WorkflowRuns[0]
-		if stopped.execution.TurnNumber != 2 || len(w.StageResults) != 2 || len(w.StageInputs) != 3 || w.StageInputs[2].StepID != executionmodel.StepPublish {
+		if len(w.StageResults) != 1 || len(w.StageInputs) != 2 || w.StageInputs[1].StepID != executionmodel.StepReport {
 			t.Fatal("unknown report skipped facts or automatically published")
 		}
 		service.stop(t)
+		native, err := testprotocol.ReadNativeOrcaState(f.nativeStateDir)
+		require(t, err)
+		if native.Dispatches != 2 {
+			t.Fatal("unknown original report was reinjected")
+		}
+		// The original receipt becomes queryable only after the old service exits.
+		// Its same request UUID returns the original worker, never another input.
+		native.LoseDispatchAt = 0
+		require(t, testprotocol.WriteNativeOrcaState(f.nativeStateDir, native))
 		service = startIntegrationService(t, ctx, f.config, resolver)
 		defer service.stop(t)
 		recovered := waitIntegrationRun(t, ctx, service, f.config, func(run *reconstructiontypes.RunView, e *executionmodel.ExecutionRecord) bool {
 			return e.RecoveryRequired && run.StepID == executionmodel.StepPublish
 		})
-		native, err := testprotocol.ReadNativeOrcaState(f.nativeStateDir)
+		native, err = testprotocol.ReadNativeOrcaState(f.nativeStateDir)
 		require(t, err)
-		if native.Dispatches != 2 || recovered.execution.TurnNumber != 2 || len(recovered.runtime.Attempts) != 1 {
+		if native.Dispatches != 2 || recovered.execution.TurnNumber != 2 || len(recovered.runtime.Attempts) != 1 || len(recovered.runtime.WorkflowRuns[0].StageResults) != 2 || len(recovered.runtime.WorkflowRuns[0].StageInputs) != 3 || recovered.run.BusinessStatus != "waiting_input" {
 			t.Fatal("reopen blindly reinjected an unknown or queued input")
 		}
 		return

@@ -60,6 +60,12 @@ func BeginTurn(s State, sessionID, turnID string, at time.Time) (State, error) {
 	}
 	switch s.Status {
 	case "queued", "waiting_input", "waiting_external":
+	case "reconciling":
+		// This is an observation of the original accepted input, not permission
+		// to dispatch another input while its outcome is still unknown.
+		if s.PendingTurnID != turnID {
+			return s, errors.New("reconciling start has no matching original accepted input")
+		}
 	default:
 		return s, fmt.Errorf("worker turn cannot start from %s", s.Status)
 	}

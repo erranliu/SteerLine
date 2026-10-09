@@ -74,7 +74,7 @@ func FixedNativeLaunch(domain reconstruction.Snapshot) error {
 			return errors.New("native Orca original launch identity missing")
 		}
 		for _, op := range domain.Operations {
-			if op.Kind != string(executionbackend.LifecycleStartTurn) || op.LifecycleIdentity == nil || op.LifecycleIdentity.ExecutionID != e.ExecutionID || op.LifecycleIdentity.Ref.AttemptID != e.CurrentAttemptID {
+			if op.Kind != "start_worker_turn" || op.LifecycleIdentity == nil || op.LifecycleIdentity.ExecutionID != e.ExecutionID || op.LifecycleIdentity.Ref.AttemptID != e.CurrentAttemptID {
 				continue
 			}
 			var receipt struct {

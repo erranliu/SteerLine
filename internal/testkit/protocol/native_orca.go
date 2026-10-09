@@ -342,6 +342,9 @@ func FakeNativeOrca(stateDir string, args []string) int {
 				state.NativeRequests = map[string]json.RawMessage{}
 			}
 			if prior := state.NativeRequests[request]; len(prior) > 0 {
+				if state.StageProvider != "" && state.LoseDispatchAt == state.Dispatches {
+					return nativeOrcaErr("runtime_unavailable", "original worker-start response remains unavailable")
+				}
 				var result map[string]any
 				_ = json.Unmarshal(prior, &result)
 				return nativeOrcaOK(result)

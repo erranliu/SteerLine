@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	testprocess "github.com/erranliu/SteerLine/internal/testkit/process"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/controlled"
 	"github.com/erranliu/SteerLine/tests/e2e/internal/evidence"
@@ -234,7 +235,7 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		return u, errors.New("usage needs one bound execution")
 	}
 	e := snap.Domain.Executions[0]
-	if e.Protocol == "orca-terminal-v2" {
+	if e.Protocol == string(executionbackend.ProtocolOrcaTerminalV2) {
 		return u, errors.New("token usage is not exposed by the Orca public interface")
 	}
 	profile, profileErr := evidence.ModelSelection(snap.Domain)
