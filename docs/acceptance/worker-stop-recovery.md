@@ -101,7 +101,7 @@ A8 驱动增量 `932919e3`：同一正式 control 请求的原产品准入期限
 
 `dabae8f3` owner最小回归 `20261009T073242.807876000Z/summary.json` PASS，68.55s。独立reviewer另确认真实started会把原accepted receipt覆盖为只有session/turn的摘要，导致native launch证据丢失；`9c984748` 在通用确认中保留原receipt与原PlatformRequestID，空时才生成摘要；原started/重复started/保存答案真实transition回归通过。E2E model/launch/业务证据与#86原生路径一致，真实usage先只匹配host-owned home下根session metadata的唯一自有worktree，再读匹配session正文，不读取其他session正文，不把缺usage当通过。
 
-当前 PR #260 仍为草稿；新的完整真实 A8 在 `9c984748` 执行中，未登记通过或实现完成。无 installed101 修复、安装替换或长期组合签收结论。
+当时 PR #260 仍为草稿；完整真实 A8 在 `9c984748` 执行中，当时未登记通过或实现完成。无 installed101 修复、安装替换或长期组合签收结论。
 
 ## 最终自动验收闭环（2026-10-09）
 
@@ -109,8 +109,8 @@ A8 驱动增量 `932919e3`：同一正式 control 请求的原产品准入期限
 
 | 范围 / 精确验证 | 结果及证据 |
 | --- | --- |
-| WSR-A1–A5 / owner最终增量 | `20261009T080938.368260600Z/summary.json` PASS，133.73s；包括原stop对账、树退出不能消除未知输入/发布、同poll幂等、晚答核实重试、停机准备owner、有界原ack、Started/重复Started保留原回执和原请求ID。此前完整owner/兄弟隔离结果按原范围共同覆盖 |
-| WSR-A2/A3/A5 / native adapter及证据driver | `20261009T080706.940823000Z/summary.json` PASS，7.964s；原消息/接回、请求只读、unobserved接受正负例、完整原model/launch与业务结算、UI原稳定输入提交和模型计数。未运行opt-in adapter smoke；该包内部subprocess fixture skip不作为原生A8 |
+| WSR-A1–A5 / owner最终增量 | `20261009T080938.368260600Z/summary.json` PASS，14 tests/0 skip，133.73s；包括原stop对账、树退出不能消除未知输入/发布、同poll幂等、晚答核实重试、停机准备owner、有界原ack、Started/重复Started保留原回执和原请求ID。此前完整owner/兄弟隔离结果按原范围共同覆盖 |
+| WSR-A2/A3/A5 / native adapter及证据driver | `20261009T080706.940823000Z/summary.json` PASS，7.964s；来源 `241288c0` 加两处测试修改（随后完整提交于399），159 tests/4 skip。原消息/接回、请求只读、unobserved接受正负例、完整原model/launch与业务结算、UI原稳定输入提交和模型计数通过。四个skip为两个CLI subprocess helper、TestOrcaNativeHostWait、TestSandboxReadinessExistingAccounts，不作为产品原生通过；显式不选择opt-in adapter smoke，A8由后续真实完整场景证明 |
 | WSR-A6 / 双受控产品分支 | `f6fcd757` 的 `20261009T063140.957081500Z` 全部四个产品子项 PASS（总报告包含旧adapter fixture失败）；明确同主干native worker路径、local fresh Continue同session新Attempt、Orca active/offline/第二次完成重开及live next round、原问题/丢reply/ack。在 `41897854` 只读原startup结果增量后的 native mutation/原session回归 `20261009T064944.872519500Z` PASS，126.25s。之后更严格unobserved接受与原回执保留由定向正负例和真机A7/A8覆盖，不宣称再次跑了完整A6 |
 | WSR-A7 / 真 local正常停服 | `399c4485` 的 `steerline-87-local-delivery-final-20261009.jsonl` PASS，220.83s subtest/0 skip；旧PID33620退出，正式continue后新PID50688；同thread `01a11fc2-d417-7a83-baaa-d7036cdb71c2`，原Attempt `ce5a159b4ff257a4dff00215738e9aad` → 新 `c775918cae20bf705caf9efd32c5cfd8`，原turn `01a11fc2-dec5-7f41-89fe-c0e6d7e4ac38` → 新真实完成turn `01a11fc4-b368-7b60-bdef-54ed731491d3`；同工作区，重开不自动新输入，正式continue只换代一次，测试清理完成。host-exit原分支的原已测基线保留，不把被用户中断的复验算通过 |
 | WSR-A8 / 真 Orca活动停服与离线完成 | `399c4485` 的 `20261009T080915.402600000Z/summary.json` PASS，1 test/0 skip，447.36s；`scenario.json` passed=true/usage_verified=true/cleanup_complete=true/cleanup_errors=null。必须真实started、原运行、原产物与原Dispatch结算，不注入假worker_done |
@@ -124,3 +124,5 @@ A8 精确原身份：execution `1b4864482da1d46d8e98761d95da91bc`、Attempt `39c
 此前 `20261009T075238.678968200Z`（9c984748，613.46s）已走通活动/离线完成/原launch全部行为，但usage元数据发现遇到他人的空/写入中header而失败，cleanup_complete=true。`399c4485` 只在不能证明自有归属时跳过该header，绝不读取其正文；匹配自有session后仍须完整合法JSON、唯一root、完整原turn、正tokens与实际model/effort，不能用原失败局部成功代替新的PASS。主干新增soft-gap fixture缺mutation/inc/effect的失败 `20261009T080225.905483300Z` 亦保留；已按真实native样本补fixture，生产门槛不降。
 
 WSR-A1–A8自动项通过，无新增人工项；未运行Full或扩大为完整L2/L3。历史101未知停止/跨构建失败未修改，安装版及现有用户Orca终端未处理。#84后续新分步流程、一期单安装/24小时组合签收仍是独立未验范围。本任务只包含用户明确批准的0.162.0更新提示偏好，未升级Codex/Orca、未变更Agent Permissions。PR #260 合并与仓库状态汇总另记真实回执。
+
+最终证据复审：reviewer对final summary/scenario、原五快照、三份native usage和local日志逐项只读核对；确认生产399 clean、A8 1 test/0 skip及完整清理、A7 220.83s、owner14 tests/0 skip、L1精确141.673s。四包定向的241加测试dirty与四个skip已明确，历史“当时在跑”不作为当前未验状态。没有新增产品问题，所有自动项按上述真实证据闭合。
