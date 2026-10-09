@@ -43,9 +43,13 @@ func (host Host) OutputCommand(ctx context.Context, command executionbackend.Lau
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	if host.Timeout > 0 {
+	timeout := command.Timeout
+	if timeout <= 0 {
+		timeout = host.Timeout
+	}
+	if timeout > 0 {
 		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, host.Timeout)
+		ctx, cancel = context.WithTimeout(ctx, timeout)
 		defer cancel()
 	}
 	cmd := exec.Command(command.Executable, command.Args...)

@@ -52,7 +52,8 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	s.Must(err)
 	s.Must(json.Unmarshal(raw, &config))
 	config["publication_policy"] = map[string]string{"publisher": publisher}
-	config["command_timeout"] = "60s"
+	// Exercise the production default; startup owns its separate readiness budget.
+	delete(config, "command_timeout")
 	s.Must(controlled.Write(p.Config, config))
 	implementations := native.WorkerImplementationConfigs(codex, orcaConfig)
 	profile := map[string]any{"id": chain, "name": "Real E2E " + chain, "host": host, "agent": "codex", "implementation_configs": implementations}

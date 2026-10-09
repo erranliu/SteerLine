@@ -545,9 +545,13 @@ func (p *Project) StopService() {
 func (p *Project) RestartService() { p.StopService(); p.StartService() }
 
 func (p *Project) Claim(key string) {
+	p.ClaimExpectedStatus(key, "applied")
+}
+
+func (p *Project) ClaimExpectedStatus(key, status string) {
 	p.Scenario.t.Helper()
 	p.Scenario.Must(p.Driver.Control(p.Scenario.Context, p.Scenario.Run.Helper, "resume_dispatch", ""))
-	p.Scenario.Must(p.Driver.Control(p.Scenario.Context, p.Scenario.Run.Helper, "start_task", p.Tasks[key].ID))
+	p.Scenario.Must(p.Driver.ControlExpectedStatus(p.Scenario.Context, p.Scenario.Run.Helper, "start_task", p.Tasks[key].ID, status))
 }
 
 func (p *Project) Snapshot() (Snapshot, error) {

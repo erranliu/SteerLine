@@ -43,6 +43,7 @@ func (l *ExecutionLifecycle) recoverFailedStart(ctx context.Context, request exe
 		state.PartialWorker = nil
 		state.FailedStartReleased = true
 		receipt.State.Stopped, receipt.State.WorkerAbsent, receipt.State.WritersAbsent = true, true, true
+		receipt.Disposition = executionbackend.OperationRejected
 		receipt.Operation.Receipt, _ = json.Marshal(map[string]json.RawMessage{"start": result.Payload, "release_observation": proof})
 		receipt.Diagnostic += "; original partial worker release proven by persistent Orca resource"
 		receipt.Implementation, observeErr = l.targetEnvelope(request.Snapshot, target, request.Snapshot.Ref.External, state)
@@ -50,6 +51,13 @@ func (l *ExecutionLifecycle) recoverFailedStart(ctx context.Context, request exe
 	}
 	effects := map[string]json.RawMessage{"start": result.Payload, "resource_observation": proof}
 	stopped := shown.Worker.State == "stopped"
+	if (started.State == "outcome_unknown" || result.CallUncertain) && !stopped {
+		// Unobserved input is not positive evidence of process exit. Preserve
+		// this exact resource for observation rather than closing its terminal.
+		receipt.Operation.Receipt, _ = json.Marshal(effects)
+		receipt.Implementation, observeErr = l.targetEnvelope(request.Snapshot, target, request.Snapshot.Ref.External, state)
+		return receipt, errors.Join(reason, observeErr)
+	}
 	if !stopped {
 		stop, stopProof, stopErr := workerResourceAction(ctx, l.client.MetaCall, identity, "worker-stop", request.Operation.ID+":failed-start-stop")
 		effects["stop"] = stop.Payload
@@ -67,6 +75,7 @@ func (l *ExecutionLifecycle) recoverFailedStart(ctx context.Context, request exe
 			state.PartialWorker = nil
 			state.FailedStartReleased = true
 			receipt.State.Stopped, receipt.State.WorkerAbsent, receipt.State.WritersAbsent = true, true, true
+			receipt.Disposition = executionbackend.OperationRejected
 			receipt.Diagnostic += "; original partial worker stopped and released; first-turn effects remain recorded"
 		} else {
 			receipt.Diagnostic += "; original partial worker release is unverified"
