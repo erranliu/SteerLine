@@ -1067,6 +1067,15 @@ func (o *remoteLifecycleObserver) observe(ctx context.Context) {
 			return
 		}
 		if len(delivery.Messages) == 0 {
+			// An empty coordinator inbox cannot prove that the original worker is
+			// still attached. A lost Dispatch binding prevents both questions and
+			// worker_done from reaching this inbox, even while the PTY stays live.
+			if err := o.client.VerifyWorker(ctx, ref); err != nil {
+				if ctx.Err() == nil {
+					o.done <- backendError(err)
+				}
+				return
+			}
 			if delivery.TimedOut {
 				continue
 			}

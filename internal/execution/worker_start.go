@@ -205,7 +205,11 @@ func (s *Service) startWorkerFlowTurn(ctx context.Context, run *reconstructionty
 		return err
 	}
 
-	prompt += publicationTargetInstruction(c)
+	workspaceInstruction, err := workerWorkspaceInstruction(execution.Workspace)
+	if err != nil {
+		return err
+	}
+	prompt += workspaceInstruction + publicationTargetInstruction(c)
 	execution.PendingTurnID, execution.PendingCommandID = "", turnID
 	lifecycle, fixed, err := s.lifecycleForRun(run)
 	if err != nil {

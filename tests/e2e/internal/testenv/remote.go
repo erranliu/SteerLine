@@ -100,6 +100,9 @@ func (p *Project) remoteOutput(ctx context.Context, snap Snapshot, label string)
 	if e.Process == nil || e.Process.ExecutionHost != p.RemoteOrca.Manifest.EnvironmentID || e.Process.RuntimeID != p.RemoteOrca.Pair.RemoteRuntime {
 		return output, errors.New("remote public output target mismatch")
 	}
+	if err := p.RemoteOrca.CheckWorkerTerminalInventory(ctx, *e.Process, e.Agent); err != nil {
+		return output, err
+	}
 	settings, err := evidence.RemoteModelSelection(snap.Domain)
 	if err != nil || settings.Model != native.Model || settings.Effort != native.Effort {
 		return output, errors.New("frozen Orca launch selection differs")
@@ -130,6 +133,7 @@ func RemoteDelivery(s *Scenario) {
 	}
 	s.register("orca-remote-worktree", original.Process.WorktreeID, 0)
 	p.verifyRemoteFile(first, "remote first turn")
+	s.Must(p.RemoteOrca.RevealWorker(s.Context, *original.Process))
 	firstOutput, err := p.remoteOutput(s.Context, first, "first")
 	s.Must(err)
 	for _, task := range first.Page.Tasks {
