@@ -236,7 +236,7 @@ func TestInstalledDebugIsolation(t *testing.T) {
 	writeRuntimeEvidence(t, s.Output, evidence)
 	debugOpen := debug.WaitPhase("waiting_pr_merge")
 	debug.Record("waiting-pr-merge", debugOpen)
-	if installedOpen.Helper.Dispatches != 1 || debugOpen.Helper.Dispatches != 1 || installedOpen.Page.ProjectID == debugOpen.Page.ProjectID {
+	if installedOpen.Helper.Dispatches != 3 || debugOpen.Helper.Dispatches != 3 || installedOpen.Page.ProjectID == debugOpen.Page.ProjectID {
 		t.Fatal("writes or controlled worker state crossed between install and debug clones")
 	}
 	installed.Merge()

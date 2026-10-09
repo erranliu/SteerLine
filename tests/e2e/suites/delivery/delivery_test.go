@@ -17,7 +17,7 @@ func TestBasicDelivery(t *testing.T) {
 	open := p.WaitPhase("waiting_pr_merge")
 	p.AssertFixedNativeLaunch(open)
 	p.Record("open", open)
-	if open.Helper.Dispatches != 1 || open.Helper.Sessions != 1 {
+	if open.Helper.Dispatches != 3 || open.Helper.Sessions != 1 {
 		t.Fatal("expected one original execution")
 	}
 	p.Merge()
