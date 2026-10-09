@@ -27,7 +27,7 @@
 | WSR-A5 / 自动 | 继续型 worker 的原运行/待答/停服期间 completed 均可接回；原结果/ack/业务结算不重复、不补发 worker_done，不把结果当 TaskDelivery；晚到不改新 Attempt/兄弟，unknown 不饿死无关执行；Query 反映中心离线与实际 worker 状态 | Plan owner/adapter 与双路径 Query 集成 | 通过；精确候选/映射见结果登记 |
 | WSR-A6 / 自动 | 同构建受控双 worker：local 停止后重开不发送，正式继续同会话新 Attempt；Orca 原运行/待答/离线完成接回原 Attempt/session/Dispatch；重复命令/再次重开不重派、误停止或重复结算，清理完整 | TestWorkerServiceStopRecoveryControlled，复用 integration 的双 helper 和正式接口 | 通过；精确候选/映射见结果登记 |
 | WSR-A7 / 自动 | Windows 真 local 正常停服实际结束旧树，重开不新 turn；正式 continue 复用原 thread/workspace、新进程/Attempt/turn 真实完成；host-exit 原分支和清理保持 | 现有 TestLocalCodexManualRecoveryLive 扩展正常停服，命令见 Plan | 通过；精确候选/映射见结果登记 |
-| WSR-A8 / 自动 | 本机 Orca 真活动停服不停止原 worker，重开接回原 Attempt/terminal/Dispatch；再次停服让原轮次真实完成，重开接回输出及结算一次，零新增业务输入/替代执行，所有原生证据及清理通过 | 现有 L3 live recovery.orca-codex 扩展活动/离线完成，命令见 Plan | 待验收 |
+| WSR-A8 / 自动 | 本机 Orca 真活动停服不停止原 worker，重开接回原 Attempt/terminal/Dispatch；再次停服让原轮次真实完成，重开接回输出及结算一次，零新增业务输入/替代执行，所有原生证据及清理通过 | 现有 L3 live recovery.orca-codex 扩展活动/离线完成，命令见 Plan | 通过；最终记录见下文 |
 
 准备：用户确认纳入/固定文档；实现冻结标识及版本、worker 统一入口、各拟新增测试和现有测试分支；按 Plan 补 controlled 离线行为和 Orca 最小等待窗口。A7/A8 需要本机目标工具/认证/当前权限，独立 scratch/owned 资源，禁止操作安装 101 或现有 Orca 终端。缺场景、skip、零匹配或缺证据不算通过，自动失败阻塞对应交付。
 
@@ -102,3 +102,25 @@ A8 驱动增量 `932919e3`：同一正式 control 请求的原产品准入期限
 `dabae8f3` owner最小回归 `20261009T073242.807876000Z/summary.json` PASS，68.55s。独立reviewer另确认真实started会把原accepted receipt覆盖为只有session/turn的摘要，导致native launch证据丢失；`9c984748` 在通用确认中保留原receipt与原PlatformRequestID，空时才生成摘要；原started/重复started/保存答案真实transition回归通过。E2E model/launch/业务证据与#86原生路径一致，真实usage先只匹配host-owned home下根session metadata的唯一自有worktree，再读匹配session正文，不读取其他session正文，不把缺usage当通过。
 
 当前 PR #260 仍为草稿；新的完整真实 A8 在 `9c984748` 执行中，未登记通过或实现完成。无 installed101 修复、安装替换或长期组合签收结论。
+
+## 最终自动验收闭环（2026-10-09）
+
+最终生产候选 `399c448508371c4e08e85f82688929ccde71531d`，tree `b1d35b51c3b97a1a8d6babf9f77880b56d8c63eb`，Windows/amd64 clean source；含最新主干 `8001fc94`（#263 启动预算/失败回执与原生资源对账），保留本任务更严格的原UUID、effect、terminal/incarnation与全部绑定门槛。独立 reviewer `/root/review87` 对此集成及Started回执保留修复复核 clean，无未修复确认问题。以下是自动验收结果；尚待 PR #260 真实合并核验，未记实现完成。
+
+| 范围 / 精确验证 | 结果及证据 |
+| --- | --- |
+| WSR-A1–A5 / owner最终增量 | `20261009T080938.368260600Z/summary.json` PASS，133.73s；包括原stop对账、树退出不能消除未知输入/发布、同poll幂等、晚答核实重试、停机准备owner、有界原ack、Started/重复Started保留原回执和原请求ID。此前完整owner/兄弟隔离结果按原范围共同覆盖 |
+| WSR-A2/A3/A5 / native adapter及证据driver | `20261009T080706.940823000Z/summary.json` PASS，7.964s；原消息/接回、请求只读、unobserved接受正负例、完整原model/launch与业务结算、UI原稳定输入提交和模型计数。未运行opt-in adapter smoke；该包内部subprocess fixture skip不作为原生A8 |
+| WSR-A6 / 双受控产品分支 | `f6fcd757` 的 `20261009T063140.957081500Z` 全部四个产品子项 PASS（总报告包含旧adapter fixture失败）；明确同主干native worker路径、local fresh Continue同session新Attempt、Orca active/offline/第二次完成重开及live next round、原问题/丢reply/ack。在 `41897854` 只读原startup结果增量后的 native mutation/原session回归 `20261009T064944.872519500Z` PASS，126.25s。之后更严格unobserved接受与原回执保留由定向正负例和真机A7/A8覆盖，不宣称再次跑了完整A6 |
+| WSR-A7 / 真 local正常停服 | `399c4485` 的 `steerline-87-local-delivery-final-20261009.jsonl` PASS，220.83s subtest/0 skip；旧PID33620退出，正式continue后新PID50688；同thread `01a11fc2-d417-7a83-baaa-d7036cdb71c2`，原Attempt `ce5a159b4ff257a4dff00215738e9aad` → 新 `c775918cae20bf705caf9efd32c5cfd8`，原turn `01a11fc2-dec5-7f41-89fe-c0e6d7e4ac38` → 新真实完成turn `01a11fc4-b368-7b60-bdef-54ed731491d3`；同工作区，重开不自动新输入，正式continue只换代一次，测试清理完成。host-exit原分支的原已测基线保留，不把被用户中断的复验算通过 |
+| WSR-A8 / 真 Orca活动停服与离线完成 | `399c4485` 的 `20261009T080915.402600000Z/summary.json` PASS，1 test/0 skip，447.36s；`scenario.json` passed=true/usage_verified=true/cleanup_complete=true/cleanup_errors=null。必须真实started、原运行、原产物与原Dispatch结算，不注入假worker_done |
+| 必要回归 / L1 | `399c4485` clean，`20261009T080926.046879900Z/summary.json` PASS，preparation0.3s/execution141.7s |
+| Linux/amd64编译 | `399c4485` 的 `go build ./cmd/steerline` PASS；隔离临时产物 `steerline-87-linux-delivery-final`，SHA256 `4B677D95C5F638B86D595B2779CED51C98DD98E907F5D480C5E8A601F1F4A915` |
+
+A8 精确原身份：execution `1b4864482da1d46d8e98761d95da91bc`、Attempt `39cce8602d529eddeab602d87768bf68`、native command/turn `6777a96aca9615a46386e61874bc3ce1`；runtime `e11d4024-70e8-46c6-b86a-e17338831ba9`、terminal `term_f795fe50-9da2-4b70-8d40-0208e19d9e2b`、incarnation `c24fc9f1-2bbc-4124-8628-6c4a0c8ecc57`。active-before-stop → active-after-restart → completed-after-offline-window → completed各快照均保持同Attempt/session/command、TurnNumber=1；离线发布/接回后仍零Delivery，实际fixture PR合并核验后只有一个Delivery，后继ready且未启动。
+
+同一原生模型根session `01a11fb8-4917-7993-b80e-1573d7a14ec0`、原物理turn `01a11fb8-f2d0-7210-9e2f-b6384d6ef7a9`，actual model=gpt-6-luna/effort=medium。完成后baseline、again-restart、final usage均 Input387843/Cached344576/Output2862/Reasoning1155/Total390705，严格相等；活动/offline期间允许原轮usage增长，零重派依据原身份/原命令与TurnNumber，未使用“不增长”错误替代活动窗口证明。采集文件只保存该自有根session的最小usage/lifecycle记录。
+
+此前 `20261009T075238.678968200Z`（9c984748，613.46s）已走通活动/离线完成/原launch全部行为，但usage元数据发现遇到他人的空/写入中header而失败，cleanup_complete=true。`399c4485` 只在不能证明自有归属时跳过该header，绝不读取其正文；匹配自有session后仍须完整合法JSON、唯一root、完整原turn、正tokens与实际model/effort，不能用原失败局部成功代替新的PASS。主干新增soft-gap fixture缺mutation/inc/effect的失败 `20261009T080225.905483300Z` 亦保留；已按真实native样本补fixture，生产门槛不降。
+
+WSR-A1–A8自动项通过，无新增人工项；未运行Full或扩大为完整L2/L3。历史101未知停止/跨构建失败未修改，安装版及现有用户Orca终端未处理。#84后续新分步流程、一期单安装/24小时组合签收仍是独立未验范围。本任务只包含用户明确批准的0.162.0更新提示偏好，未升级Codex/Orca、未变更Agent Permissions。PR #260 合并与仓库状态汇总另记真实回执。
