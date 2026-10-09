@@ -18,18 +18,8 @@ import (
 )
 
 func TestCD65SourceCommitAndHostGate(t *testing.T) {
-	t.Run("raw_is_not_collected_and_gap_is_idempotent", TestConversationFactsDoNotStoreRaw)
 	t.Run("host_fact_becomes_a_center_manual_gate", testCD65HostGateKeepsTrustedActionSeparate)
-	t.Run("active_and_historical_source_budgets_rotate", TestCD65HistoryBudgetRotatesSources)
 	t.Run("discovery_cannot_write_a_different_owner", testCD65DiscoveryRejectsForeignOwner)
-	t.Run("native_source_replacement_retains_attempt_evidence", TestCD64SourceReplacementRetainsEvidence)
-}
-
-func TestCD65HistoryAndPreparation(t *testing.T) {
-	t.Run("history_cursor_commits_with_the_conversation_batch", TestCD65HistoryCursorCommitsWithItsConversationBatch)
-	t.Run("readiness_probe_requires_original_tool_receipt", TestWorkerEnvironmentER1ProbeAndSettlementGate)
-	t.Run("recheck_preserves_original_dispatch", TestWorkerEnvironmentER3RecheckKeepsOriginalDispatch)
-	t.Run("deadline_and_restart_keep_manual_gate", TestWorkerEnvironmentER4DeadlineRestartAndLostReceipt)
 }
 
 func testCD65HostGateKeepsTrustedActionSeparate(t *testing.T) {

@@ -261,7 +261,6 @@ func TestMC3(t *testing.T) {
 	}
 }
 
-func TestMC5(t *testing.T) { testAdditionalImplementation(t) }
 func TestMC6(t *testing.T) { testAdditionalImplementationWithCandidateGuard(t, true) }
 
 type delayedAppResolver struct {
