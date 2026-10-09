@@ -98,12 +98,13 @@ type projectState struct {
 	ref    ProjectRef
 	view   ProjectView
 
-	snapshot        ProjectSnapshot
-	snapshotLoaded  bool
-	refreshing      bool
-	refreshID       uint64
-	lastRefresh     time.Time
-	actionPollUntil time.Time
+	snapshot             ProjectSnapshot
+	snapshotLoaded       bool
+	refreshing           bool
+	nativeSessionOpening bool
+	refreshID            uint64
+	lastRefresh          time.Time
+	actionPollUntil      time.Time
 
 	selectedKey        string
 	selectionHold      bool
@@ -672,6 +673,8 @@ func (m Model) Update(message tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateFinalPreview(msg)
 	case actionSubmittedMsg:
 		return m.updateActionSubmitted(msg)
+	case nativeSessionOpenedMsg:
+		return m.applyNativeSessionOpened(msg)
 	case actionReceiptMsg:
 		return m.updateActionReceipt(msg)
 	case tea.KeyMsg:

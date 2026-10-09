@@ -10,6 +10,7 @@
 | 二期节点 | [导航](phase2.md)：[2.1执行UI](phase2-execution.md)、[2.2草稿/人工事项](phase2-planning.md)、[2.3主agent](phase2-main-agent.md)均为节点验收规划，尚未完整排入 |
 | 本机原生待补 | [导航](pending-acceptance.md)：[app-server race](local-codex-app-server.md)、[Orca](worker-flow-orca-native.md)、[停服恢复](worker-service-recovery.md) |
 | Orca直接调整 | [源码验证与真实启动阻塞](orca-native-worker.md)，不进入 roadmap、不阻塞 #84 |
+| 控制台 Codex CLI 入口 | [自动验证与待验原生查看](console-codex-cli.md)，普通开发，Ctrl+N 打开原本机会话 |
 | Orca启动修复 | [101 现场启动预算与失败收敛](orca-startup-recovery-2026-10-09.md)，正常路径保留 L2，异常路径纳入 L3 controlled |
 | 当前规划/流程 | [文档检查](roadmap-planning.md) · [流程与历史准入记录](roadmap-admission.md) |
 | 待合并反馈修复 | [本会话修复与安装现场记录](waiting-pr-feedback.md)，历史范围与本次 rebase 验证分开 |
