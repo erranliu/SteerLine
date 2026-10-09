@@ -192,7 +192,7 @@ Review 复核当前重试实现时补正边界：`retryFileInspection` 对 `Crea
 
 当前 source review 已完成，PR #249 仍因 API2 未闭合而 OPEN、未合并。#84 的实际 worker 状态/格式组合尚未发生；本轮 review 不授权提前集成，也不改变 #44 对 #45 真实合并的等待条件。相对已审源码 `c126560f`，本轮仅修改本验收记录和 `docs/roadmap/execution-map.md`，未改代码。
 
-Round 4 文档同步静态：`python scripts/check_doc_links.py` 271 Markdown/1741 本地链接/0 errors；`python scripts/roadmap_task_id.py check` 85 identity files（10 draft/4 formal），next ID 87；`git diff --check` 通过。原始输出在 `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-round4-docs-609b3f28a5a34a1e96097022cf50a2de`。本轮未分配或修改任何 Task ID。
+Round 4 文档同步静态：`python scripts/check_doc_links.py` 271 Markdown/1741 本地链接/0 errors；`python scripts/roadmap_task_id.py check` 85 identity files（10 draft/4 formal），next ID 87；`git diff --check` 通过。原始输出在 `C:\Users\lmas1\AppData\Local\Temp\steerline-api45-risk-approval-docs-52d61592ac4443ca99c335df5d03f2db`。本轮未分配或修改任何 Task ID。
 
 ## 用户对 API2 有限剩余风险的条件接受
 
