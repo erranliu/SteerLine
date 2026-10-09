@@ -1,6 +1,6 @@
 # Plan：本机 Orca 原生编排接入单 worker
 
-维护说明：本页保留原交付/试验契约与证据定位。当前第一阶段只验本地 Codex/本机 Orca，远端相关历史条目不构成当前一期研发或验收前置；活动任务范围见[一期共同约束](phase1-delivery-constraints.md)。
+维护说明：本页保留原交付/试验契约与证据定位。活动任务范围见[一期共同约束](phase1-delivery-constraints.md)。
 
 适用说明（2026-09-30）：重开后观察、结果结算与人工确认外部写入按[停服恢复 Plan](worker-service-recovery.plan.md)实施；原终端真实验收记录保持历史事实。
 

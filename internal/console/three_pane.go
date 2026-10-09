@@ -108,7 +108,7 @@ func candidateOverviewLines(m Model, state projectState, row *consoleRow, width 
 		lines = append(lines, "环境阻断："+safeTerminalInlineText(run.EnvironmentBlocker.Fact.Reason))
 	}
 	if run.PR.URL != nil {
-		lines = append(lines, "PR："+shortPR(*run.PR.URL)+" · "+safeTerminalInlineText(run.PR.State))
+		lines = append(lines, "PR："+prLink(*run.PR.URL, shortPR(*run.PR.URL))+" · "+safeTerminalInlineText(run.PR.State))
 	} else {
 		lines = append(lines, "PR：尚未核验绑定")
 	}

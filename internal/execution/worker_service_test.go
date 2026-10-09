@@ -122,6 +122,16 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 		}
 	}
 	finishTurn("waiting_decision")
+	initialExecution := service.executionRecord(run)
+	initialPrompt, err := os.ReadFile(filepath.Join(c.RunDir, "runs", run.RunID, "turns", initialExecution.CurrentCommandID, "prompt.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, identity := range []string{"Fixed assigned worktree: " + firstWorktree, "Fixed assigned branch: " + initialExecution.Workspace.Branch, "Fixed base commit: " + receipt.BaseCommit} {
+		if !strings.Contains(string(initialPrompt), identity) {
+			t.Fatalf("initial dispatched prompt lacks %q: %s", identity, initialPrompt)
+		}
+	}
 	if run.Process != nil {
 		pid := run.Process.PID
 		t.Cleanup(func() {
@@ -210,7 +220,10 @@ func testWorkerFlowServiceFirstFeedback(t *testing.T, option, note string, openP
 	feedbackPrompt := workerFeedbackText(answer, run.Decision.Request)
 	fixedConfig, err := service.executionConfigForRun(run)
 	require(t, err)
-	fullPrompt := feedbackPrompt + publicationTargetInstruction(fixedConfig)
+	_, currentExecution := service.workflowRecords(run)
+	workspaceInstruction, err := workerWorkspaceInstruction(currentExecution.Workspace)
+	require(t, err)
+	fullPrompt := feedbackPrompt + workspaceInstruction + publicationTargetInstruction(fixedConfig)
 	feedbackDir := filepath.Join(c.RunDir, "runs", run.RunID, "turns", command.CommandID)
 	savedPrompt, err := os.ReadFile(filepath.Join(feedbackDir, "prompt.txt"))
 	if err != nil || string(savedPrompt) != fullPrompt {

@@ -35,7 +35,7 @@ func (c Config) ValidateStoredExecutions(snapshot reconstruction.Snapshot, direc
 		if resolveErr != nil || execution.Backend != string(entry.Key.Backend) || execution.Agent != entry.Key.Agent || execution.Protocol != string(entry.Key.Protocol) {
 			return nativeErr("unsupported_schema", "fixed execution profile differs from the persisted run identity")
 		}
-		if (execution.Process != nil || execution.SessionID != "") && !awaitingRecoveryResources(&execution) {
+		if (execution.Process != nil || execution.SessionID != "") && !awaitingRecoveryResources(&execution) && !entry.HostManagedPermissions {
 			if execution.PolicyResources == nil {
 				return nativeErr("unsupported_schema", "bound execution requires its original policy resource snapshot; preserve external state")
 			}
@@ -48,6 +48,9 @@ func (c Config) ValidateStoredExecutions(snapshot reconstruction.Snapshot, direc
 			if !matched {
 				return nativeErr("unsupported_schema", "execution policy resources differ from the original snapshot")
 			}
+		}
+		if entry.HostManagedPermissions && execution.PolicyResources != nil {
+			return nativeErr("unsupported_schema", "host-managed launch cannot contain client permission resources")
 		}
 		if entry.ReadinessRequired(fixedConfig) || execution.Environment != nil {
 			env := execution.Environment

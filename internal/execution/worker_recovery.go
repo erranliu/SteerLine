@@ -247,6 +247,9 @@ func (s *Service) markOneServiceRecoveryGate(run *reconstructiontypes.RunView) {
 	if task == nil || workflow == nil || execution == nil || task.Status != "in_progress" || workflow.Status == "completed" || workflow.Status == "abandoned" {
 		return
 	}
+	if s.pristineTaskStartReservation(run) {
+		return // A committed claim with no worker effect can resume its own intent.
+	}
 	execution.RecoveryRequired = true
 	execution.RecoveryVersion++
 	execution.RecoveryState = "unverified"
@@ -254,6 +257,34 @@ func (s *Service) markOneServiceRecoveryGate(run *reconstructiontypes.RunView) {
 	execution.RecoveryMarkedAt = &marked
 	execution.UpdatedAt = marked
 	s.refreshRun(run)
+}
+
+func (s *Service) pristineTaskStartReservation(run *reconstructiontypes.RunView) bool {
+	w, e := s.workflowRecords(run)
+	a := s.workflowAttempt(run, run.AttemptID)
+	if w == nil || e == nil || a == nil || w.Status != "queued" || e.Status != "pending" || a.Status != "planned" || e.Process != nil || e.SessionID != "" || e.TurnNumber != 0 || e.PendingCommandID != "" || e.Workspace.Worktree != "" || e.RecoveryRequired {
+		return false
+	}
+	reserved := false
+	for _, op := range s.domain.Operations {
+		if op.Kind == "claim_task" && op.OperationID == run.RunID {
+			reserved = true
+			continue
+		}
+		for _, identity := range strings.Split(op.IdempotencyKey, ":") {
+			if identity == run.ExecutionID || identity == run.RunID {
+				return false
+			}
+		}
+		var target struct {
+			ExecutionID   string `json:"execution_id"`
+			WorkflowRunID string `json:"workflow_run_id"`
+		}
+		if json.Unmarshal(op.Request, &target) == nil && (target.ExecutionID == run.ExecutionID || target.WorkflowRunID == run.RunID) {
+			return false
+		}
+	}
+	return reserved
 }
 
 func (s *Service) resumeConfiguredWork(ctx context.Context) error {

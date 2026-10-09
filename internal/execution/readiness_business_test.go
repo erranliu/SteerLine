@@ -33,7 +33,7 @@ type neutralPreparationPort struct {
 }
 
 func (r *neutralPreparationResolver) ResolveLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
-	return neutralPreparationPort{neutralOutputPort: neutralOutputPort{LifecyclePort: &neutralLifecycle{setup: setup.Clone()}}, resolver: r}, nil
+	return neutralPreparationPort{neutralOutputPort: neutralOutputPort{LifecyclePort: &neutralLifecycle{Setup: setup.Clone()}}, resolver: r}, nil
 }
 
 func (p neutralPreparationPort) CurrentTurn(executionbackend.LifecycleSnapshot) (*executionbackend.HostTurnFacts, error) {
@@ -199,6 +199,14 @@ func TestManagedFrozenResourceEvidenceIsVerifiedBeforeInput(t *testing.T) {
 		t.Fatal("changed writable roots were accepted")
 	}
 }
+
+type neutralHandle struct {
+	identity executionbackend.ProcessIdentity
+}
+
+func (h neutralHandle) Identity() executionbackend.ProcessIdentity { return h.identity }
+func (neutralHandle) Kill()                                        {}
+func (neutralHandle) Close()                                       {}
 
 type neutralHoldObserver struct {
 	events chan executionbackend.LifecycleEvent

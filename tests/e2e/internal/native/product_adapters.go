@@ -17,7 +17,7 @@ var ErrOrcaRepoUnavailable = orcaworker.ErrRepoUnavailable
 func CodexExecutable(command string) (string, error) { return codexworker.NativeExecutable(command) }
 
 func OrcaWorkerProfile(executable, waitTimeout string) map[string]any {
-	return map[string]any{"executable": executable, "args": []string{}, "shell": "powershell.exe", "wait_timeout": waitTimeout}
+	return map[string]any{"executable": executable, "args": []string{}, "shell": "powershell.exe", "wait_timeout": waitTimeout, "model": Model, "reasoning_effort": Effort}
 }
 
 func WorkerImplementationConfigs(executable string, orca map[string]any) []map[string]any {

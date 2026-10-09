@@ -109,7 +109,7 @@ func VerifyRecoveredDispatch(ctx context.Context, call MetaCall, expected Dispat
 	if err := json.Unmarshal(envelope.Payload, &result); err != nil {
 		return err
 	}
-	if envelope.RuntimeID != expected.RuntimeID || result.Dispatch.ID != expected.DispatchID || result.Dispatch.TaskID != expected.TaskID || result.Dispatch.RunID != expected.RunID || result.Worker.DispatchID != expected.DispatchID || result.Worker.Stage != "injected" || result.Worker.AgentTerminal != expected.Terminal || result.Terminal.Handle != expected.Terminal || result.Terminal.Incarnation != expected.Incarnation || result.Terminal.WorktreeID != expected.WorktreeID {
+	if envelope.RuntimeID != expected.RuntimeID || result.Dispatch.ID != expected.DispatchID || result.Dispatch.TaskID != expected.TaskID || result.Dispatch.RunID != expected.RunID || result.Worker.DispatchID != expected.DispatchID || (result.Worker.Stage != "injected" && result.Worker.Stage != "input_accepted") || result.Worker.AgentTerminal != expected.Terminal || result.Terminal.Handle != expected.Terminal || result.Terminal.Incarnation != expected.Incarnation || result.Terminal.WorktreeID != expected.WorktreeID {
 		return ErrDispatchIdentity
 	}
 	return nil

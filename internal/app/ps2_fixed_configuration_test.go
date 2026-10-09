@@ -21,7 +21,11 @@ func TestPS2FixedWindowsProfilesFreezeAndRestore(t *testing.T) {
 			if !testVerifyFixedExecutionProfile(fixed) {
 				t.Fatal("valid frozen profile rejected")
 			}
-			for _, setting := range []string{"workspace-write", "unelevated", "on-request", "auto_review"} {
+			settings := []string{"workspace-write", "unelevated", "on-request", "auto_review"}
+			if host == "orca" {
+				settings = []string{"Orca"}
+			}
+			for _, setting := range settings {
 				if !strings.Contains(strings.Join(fixed.ImplementationDisplay, " "), setting) {
 					t.Fatal("missing fixed native setting", setting)
 				}

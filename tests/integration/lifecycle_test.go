@@ -6,6 +6,9 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	codexworker "github.com/erranliu/SteerLine/internal/execution/adapters/codex"
+	orcaworker "github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+	testprotocol "github.com/erranliu/SteerLine/internal/testkit/protocol"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,8 +21,7 @@ import (
 	steerlineapp "github.com/erranliu/SteerLine/internal/app"
 	steerline "github.com/erranliu/SteerLine/internal/app/host"
 	"github.com/erranliu/SteerLine/internal/execution"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/codex"
-	"github.com/erranliu/SteerLine/internal/execution/adapters/orca"
+
 	executionbackend "github.com/erranliu/SteerLine/internal/execution/backend"
 	conversationtypes "github.com/erranliu/SteerLine/internal/execution/conversation"
 	executionmodel "github.com/erranliu/SteerLine/internal/execution/model"
@@ -28,19 +30,7 @@ import (
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
 	"github.com/erranliu/SteerLine/internal/storage/sqlite"
 	taskmodel "github.com/erranliu/SteerLine/internal/task/model"
-	"github.com/erranliu/SteerLine/internal/testkit/protocol"
 )
-
-// This suite starts the production service with its formal resolver injection,
-// claims an isolated native task through CommandService, and observes it through
-// the public runtime/task query APIs. The Codex and Orca executables are protocol
-// fixtures implemented by this test binary; no product CLI or user project is used.
-func TestCD64OriginalSessionReconciliation(t *testing.T) {
-	t.Run("remote_admission_stays_blocked", TestRemotePublicationClaimRejectsUnreachableOrca)
-	t.Run("app_server_two_turns", testIntegratedAppServerTwoTurns)
-	t.Run("native_original_session_manual_gate", testIntegratedNativeOriginalSessionGate)
-	t.Run("remote_protocol_original_assertions", testCD64RemoteProtocolAssertions)
-}
 
 func testIntegratedAppServerTwoTurns(t *testing.T) {
 	// Include project setup, first-turn persistence and a second original turn
@@ -108,13 +98,13 @@ func testIntegratedNativeSessionGateWithMutations(t *testing.T, changeConfig, mu
 	ctx, cancel := context.WithTimeout(context.Background(), 8*time.Minute)
 	defer cancel()
 	fixture := newLifecycleProject(t, "orca")
-	initial := testprotocol.NativeOrcaState{EnvironmentMode: true, BusinessActive: true, FirstBusinessDispatch: 2, EndReadinessOnBusiness: true, LoseQuestionAckOnce: true, LoseReplyOnce: true}
+	initial := testprotocol.NativeOrcaState{FirstBusinessDispatch: 1, LoseQuestionAckOnce: true, LoseReplyOnce: true}
 	require(t, testprotocol.WriteNativeOrcaState(fixture.nativeStateDir, initial))
 	createIntegrationTask(t, ctx, fixture, 902)
 	resolver := &integrationLifecycleResolver{beforeNativeExecute: func(request executionbackend.LifecycleRequest) error {
 		if request.Operation.Action == string(executionbackend.LifecycleCreateResource) && request.Input.Resource != nil && request.Input.Resource.Purpose == "conversation" {
 			return testprotocol.UpdateNativeOrcaState(fixture.nativeStateDir, func(state *testprotocol.NativeOrcaState) {
-				if len(state.Tasks) == 5 {
+				if len(state.Tasks) == 4 {
 					state.AgentIncarnation = "replaced-agent"
 				}
 			})
@@ -125,7 +115,7 @@ func testIntegratedNativeSessionGateWithMutations(t *testing.T, changeConfig, mu
 	claimIntegrationTask(t, ctx, fixture, 902, firstService.instanceID)
 	first := waitIntegrationRun(t, ctx, firstService, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
 		return run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute != nil &&
-			execution.CurrentTurnID != "" && execution.Target.Dispatch == "ctx-2" && execution.TurnNumber == 1
+			execution.CurrentTurnID != "" && execution.Target.Dispatch == "ctx-1" && execution.TurnNumber == 1
 	})
 	if first.run.Process == nil {
 		t.Fatal("native receipt omitted its process identity")
@@ -135,7 +125,7 @@ func testIntegratedNativeSessionGateWithMutations(t *testing.T, changeConfig, mu
 	workspace, runID, dispatchID := derefString(first.run.WorktreePath), first.run.Target.OrchestrationRun, first.run.Target.Dispatch
 	questionID := first.run.Decision.Request.QuestionRoute.QuestionID
 	questionDecisionID := first.run.Decision.ID
-	if original.Kind != "orca" || original.Terminal == "" || original.Incarnation == "" || sessionID == "" || sessionGeneration != original.Incarnation || runID != "run-fake" || dispatchID != "ctx-2" {
+	if original.Kind != "orca" || original.Terminal == "" || original.Incarnation == "" || sessionID == "" || sessionGeneration != original.Incarnation || runID != "run-fake" || dispatchID != "ctx-1" {
 		t.Fatalf("native receipt omitted the original Run/Task/Dispatch/session identity: process=%+v session=%q/%q target=%+v", original, sessionID, sessionGeneration, first.run.Target)
 	}
 	acknowledged := waitIntegrationRun(t, ctx, firstService, fixture.config, func(run *reconstructiontypes.RunView, execution *executionmodel.ExecutionRecord) bool {
@@ -166,7 +156,7 @@ func testIntegratedNativeSessionGateWithMutations(t *testing.T, changeConfig, mu
 	if changeConfig && string(integrationFixedProfileJSON(t, first.runtime, first.run.RunID)) != string(integrationFixedProfileJSON(t, recovered.runtime, recovered.run.RunID)) {
 		t.Fatal("changed current config rewrote the original frozen key, codec, target or policy")
 	}
-	if state, err := testprotocol.ReadNativeOrcaState(fixture.nativeStateDir); err != nil || state.Dispatches != 2 || state.Replies != 0 || state.Sends != 0 {
+	if state, err := testprotocol.ReadNativeOrcaState(fixture.nativeStateDir); err != nil || state.Dispatches != 1 || state.Replies != 0 || state.Sends != 0 {
 		t.Fatalf("restart crossed the manual input gate: state=%+v err=%v", state, err)
 	}
 	assertQueriedTaskPhase(t, ctx, fixture.config, "902", "waiting_decision")
@@ -182,7 +172,7 @@ func testIntegratedNativeSessionGateWithMutations(t *testing.T, changeConfig, mu
 	}
 	state, err := testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
 	require(t, err)
-	if state.Dispatches != 2 || state.Replies != 1 || state.Sends != 0 || !state.Acked["delivery-ask-1"] || !state.QuestionAckLossArmed || state.LoseAckOnce || state.LoseReplyOnce {
+	if state.Dispatches != 1 || state.Replies != 1 || state.Sends != 0 || !state.Acked["delivery-ask-1"] || !state.QuestionAckLossArmed || state.LoseAckOnce || state.LoseReplyOnce {
 		t.Fatalf("native dispatch/reply/ack was repeated or changed route: %+v", state)
 	}
 	if resolver.count(executionbackend.ProtocolOrcaTerminalV2) == 0 {
@@ -203,7 +193,7 @@ func testIntegratedNativeSessionGateWithMutations(t *testing.T, changeConfig, mu
 	for _, next := range []struct {
 		dispatch int
 		loss     string
-	}{{3, "dispatch"}, {4, "send"}, {5, "task"}} {
+	}{{2, "dispatch"}, {3, "send"}, {4, "task"}} {
 		t.Logf("native original mutation case: %s", next.loss)
 		require(t, testprotocol.UpdateNativeOrcaState(fixture.nativeStateDir, func(state *testprotocol.NativeOrcaState) {
 			switch next.loss {
@@ -222,7 +212,7 @@ func testIntegratedNativeSessionGateWithMutations(t *testing.T, changeConfig, mu
 				answeredHosts[run.EnvironmentBlocker.ID] = true
 				submitIntegrationAnswerOption(t, ctx, fixture.config, run, "recheck_environment")
 			}
-			if next.loss == "send" && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute == nil && run.EnvironmentBlocker == nil && execution.Target.Dispatch == "ctx-4" && execution.CurrentTurnID != execution.LastStoppedTurnID && !answeredHosts[run.Decision.ID] {
+			if next.loss == "send" && run.Decision != nil && run.Decision.Status == "pending" && run.Decision.Request.QuestionRoute == nil && run.EnvironmentBlocker == nil && execution.Target.Dispatch == "ctx-3" && execution.CurrentTurnID != execution.LastStoppedTurnID && !answeredHosts[run.Decision.ID] {
 				answeredHosts[run.Decision.ID] = true
 				submitIntegrationAnswer(t, ctx, fixture.config, run)
 			}
@@ -258,7 +248,7 @@ func testIntegratedNativeSessionGateWithMutations(t *testing.T, changeConfig, mu
 	}
 	state, err = testprotocol.ReadNativeOrcaState(fixture.nativeStateDir)
 	require(t, err)
-	if state.AgentIncarnation != "replaced-agent" || len(state.Tasks) != 5 || state.Dispatches != 5 || state.Replies != 1 || state.Sends != 1 || rejected.execution.Target.Dispatch != "ctx-5" || rejected.run.Process == nil || !sameNativePhysicalProcess(*rejected.run.Process, original) {
+	if state.AgentIncarnation != "replaced-agent" || len(state.Tasks) != 4 || state.Dispatches != 4 || state.Replies != 1 || state.Sends != 1 || rejected.execution.Target.Dispatch != "ctx-4" || rejected.run.Process == nil || !sameNativePhysicalProcess(*rejected.run.Process, original) {
 		t.Fatal("replaced native incarnation consumed saved input or changed the original resources")
 	}
 	// Protocol cleanup after stopping the fixture verifies the exact saved
@@ -369,6 +359,9 @@ func newLifecycleProjectBase(t *testing.T, host string, openAuthority bool) inte
 	codexPayload, err := codexworker.EncodeProfileConfig(codexProfile)
 	require(t, err)
 	implementationConfigs := []executionbackend.ImplementationConfigInput{{ImplementationKey: codexworker.ProfileCodecKey, CodecVersion: 2, Payload: codexPayload}}
+	if host == "orca" {
+		implementationConfigs = nil
+	}
 	stateDir := filepath.Join(root, "native-protocol")
 	if host == "orca" {
 		// This positive fixture checks original binding, not deadline expiry;
@@ -532,11 +525,7 @@ func (r *integrationLifecycleResolver) ResolveLifecycle(setup executionbackend.L
 		return port, nil
 	case executionbackend.ProtocolOrcaTerminalV2:
 		if r.beforeNativeExecute != nil {
-			host, ok := port.(executionbackend.HostEnvironmentPort)
-			if !ok {
-				return nil, fmt.Errorf("native fixture adapter lacks its host port")
-			}
-			return integrationFaultLifecycle{LifecyclePort: port, HostEnvironmentPort: host, before: r.beforeNativeExecute}, nil
+			return integrationFaultLifecycle{LifecyclePort: port, before: r.beforeNativeExecute}, nil
 		}
 		return port, nil
 	default:
@@ -546,7 +535,6 @@ func (r *integrationLifecycleResolver) ResolveLifecycle(setup executionbackend.L
 
 type integrationFaultLifecycle struct {
 	executionbackend.LifecyclePort
-	executionbackend.HostEnvironmentPort
 	before func(executionbackend.LifecycleRequest) error
 }
 
@@ -659,6 +647,7 @@ func waitIntegrationRun(t *testing.T, ctx context.Context, service *runningInteg
 		if t.Failed() && result.runtime != nil {
 			t.Logf("last public lifecycle: decision=%s current=%s stopped=%s turns=%d pending=%s command=%s pendingCommand=%s status=%s error=%s", mustJSON(result.run.Decision), result.execution.CurrentTurnID, result.execution.LastStoppedTurnID, result.execution.TurnNumber, result.execution.PendingTurnID, result.execution.CurrentCommandID, result.execution.PendingCommandID, result.execution.Status, derefString(result.execution.Error))
 			t.Logf("original preparation evidence: %s; last event: %s", mustJSON(result.execution.Environment), derefString(result.execution.LastEvent))
+			t.Logf("service: %+v; operation count: %d", result.runtime.Service, len(result.runtime.Operations))
 		}
 	})
 	budget := 2 * time.Minute
@@ -891,4 +880,10 @@ func derefString(value *string) string {
 		return ""
 	}
 	return *value
+}
+
+// Keep native multi-turn mutation-loss coverage explicit when broad aggregate
+// fixture cases are simplified on main.
+func TestNativeOrcaMutationRecoveryPreservesOriginalSession(t *testing.T) {
+	testIntegratedNativeSessionGate(t, true)
 }

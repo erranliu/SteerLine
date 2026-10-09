@@ -148,6 +148,14 @@ func (l ExecutionLifecycle) PreflightLifecycle(ctx context.Context, setup execut
 }
 
 func (l ExecutionLifecycle) Next(_ context.Context, snapshot executionbackend.LifecycleSnapshot) (executionbackend.LifecycleCandidate, error) {
+	if snapshot.Workspace.Path == "" && snapshot.WorkspacePlan.Path != "" {
+		if snapshot.Session.SessionID != "" || snapshot.Ref.External.Kind != "" || len(snapshot.Implementation) != 0 {
+			return executionbackend.LifecycleCandidate{}, errors.New("missing original workspace cannot be recreated for a bound worker")
+		}
+		intent := snapshot.WorkspacePlan
+		candidate := executionbackend.LifecycleCandidate{Action: executionbackend.LifecyclePrepareWorkspace, Input: executionbackend.LifecycleInput{Workspace: &intent}}
+		return candidate, candidate.Validate()
+	}
 	if snapshot.PendingTurn == nil {
 		return executionbackend.LifecycleCandidate{Done: true}, nil
 	}
@@ -178,6 +186,8 @@ func (l *ExecutionLifecycle) Execute(ctx context.Context, request executionbacke
 	var observer executionbackend.LifecycleObserver
 	var err error
 	switch executionbackend.LifecycleAction(request.Operation.Action) {
+	case executionbackend.LifecyclePrepareWorkspace:
+		receipt, err = l.prepareWorkspace(ctx, request, false)
 	case executionbackend.LifecyclePrepareSession:
 		receipt, observer, err = l.prepareSession(ctx, snapshot, *request.Input.Turn)
 	case executionbackend.LifecycleStartTurn:
@@ -235,6 +245,10 @@ func (l ExecutionLifecycle) Reconcile(ctx context.Context, request executionback
 		return executionbackend.LifecycleReceipt{Operation: request.Operation, Disposition: executionbackend.OperationUnknown, Diagnostic: err.Error()}, nil, err
 	}
 	snapshot := request.Snapshot.Clone()
+	if executionbackend.LifecycleAction(request.Operation.Action) == executionbackend.LifecyclePrepareWorkspace {
+		receipt, err := l.prepareWorkspace(ctx, request, true)
+		return receipt, nil, err
+	}
 	if executionbackend.LifecycleAction(request.Operation.Action) == executionbackend.LifecycleDeliverFeedback {
 		return l.reconcileFeedback(ctx, request)
 	}

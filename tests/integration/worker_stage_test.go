@@ -41,9 +41,9 @@ func testWorkerStageRun(t *testing.T, host string, unknown bool) {
 	require(t, err)
 	require(t, project.Close())
 	if host == "orca" {
-		state := testprotocol.NativeOrcaState{EnvironmentMode: true, FirstBusinessDispatch: 2, StageProvider: provider, StageRemote: f.bareRemote, StageTranscript: filepath.Join(f.nativeStateDir, "stage-transcript.jsonl")}
+		state := testprotocol.NativeOrcaState{EnvironmentMode: true, FirstBusinessDispatch: 1, StageProvider: provider, StageRemote: f.bareRemote}
 		if unknown {
-			state.LoseDispatchAt = 3
+			state.LoseDispatchAt = 2
 		}
 		require(t, testprotocol.WriteNativeOrcaState(f.nativeStateDir, state))
 	}
@@ -68,7 +68,7 @@ func testWorkerStageRun(t *testing.T, host string, unknown bool) {
 		})
 		native, err := testprotocol.ReadNativeOrcaState(f.nativeStateDir)
 		require(t, err)
-		if native.Dispatches != 3 || recovered.execution.TurnNumber != 2 || len(recovered.runtime.Attempts) != 1 {
+		if native.Dispatches != 2 || recovered.execution.TurnNumber != 2 || len(recovered.runtime.Attempts) != 1 {
 			t.Fatal("reopen blindly reinjected an unknown or queued input")
 		}
 		return
@@ -120,7 +120,7 @@ func testWorkerStageRun(t *testing.T, host string, unknown bool) {
 	if host == "orca" {
 		native, err := testprotocol.ReadNativeOrcaState(f.nativeStateDir)
 		require(t, err)
-		if native.Dispatches != 4 || len(native.StageFinals) != 3 {
+		if native.Dispatches != 3 || len(native.Tasks) != 3 {
 			t.Fatal("unknown report Dispatch was blindly reinjected")
 		}
 	}

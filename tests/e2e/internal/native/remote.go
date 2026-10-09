@@ -220,6 +220,67 @@ func RemoteProfileConfigs(executable string, m RemoteManifest) ([]executionbacke
 	return []executionbackend.ImplementationConfigInput{{ImplementationKey: remote.ProfileCodecKey, CodecVersion: remote.ProfileCodecVersion, Payload: peer}}, err
 }
 
+// CheckWorkerTerminalInventory detects a second agent in the owned workspace;
+// ordinary shells are not agent sessions and remain untouched.
+func (r *RemoteOrca) CheckWorkerTerminalInventory(ctx context.Context, identity executionbackend.ProcessIdentity, agent string) error {
+	env, err := r.Raw(ctx, "terminal", "list", "--worktree", "id:"+identity.WorktreeID, "--environment", r.Manifest.EnvironmentID, "--json")
+	if err != nil {
+		return err
+	}
+	if env.Meta.RuntimeID != identity.RuntimeID || identity.RuntimeID != r.Pair.RemoteRuntime {
+		return errors.New("remote agent inventory changed runtime")
+	}
+	return checkWorkerTerminalInventory(env.Result, identity, agent)
+}
+
+func checkWorkerTerminalInventory(raw json.RawMessage, identity executionbackend.ProcessIdentity, agent string) error {
+	var inventory struct {
+		Terminals []struct {
+			Handle, IncarnationID, WorktreeID, AgentIdentity string
+			Connected                                        bool
+		}
+		Truncated bool
+	}
+	if err := json.Unmarshal(raw, &inventory); err != nil {
+		return err
+	}
+	if inventory.Truncated {
+		return errors.New("remote agent inventory is incomplete")
+	}
+	workers := 0
+	for _, terminal := range inventory.Terminals {
+		if terminal.AgentIdentity == "" {
+			continue
+		}
+		workers++
+		if terminal.AgentIdentity != agent || terminal.Handle != identity.Terminal || terminal.IncarnationID != identity.Incarnation || terminal.WorktreeID != identity.WorktreeID || !terminal.Connected {
+			return fmt.Errorf("owned remote worktree has an additional or changed agent terminal: %s", terminal.Handle)
+		}
+	}
+	if workers != 1 {
+		return fmt.Errorf("owned remote worktree has %d agent terminals; expected the one original worker", workers)
+	}
+	return nil
+}
+
+func (r *RemoteOrca) RevealWorker(ctx context.Context, identity executionbackend.ProcessIdentity) error {
+	env, err := r.Raw(ctx, "terminal", "switch", "--terminal", identity.Terminal, "--environment", r.Manifest.EnvironmentID, "--json")
+	if err != nil {
+		return err
+	}
+	if env.Meta.RuntimeID != identity.RuntimeID {
+		return errors.New("remote worker reveal changed runtime")
+	}
+	// Let the real renderer mount the selected workspace before checking its
+	// durable inventory. A resumed duplicate must not be mistaken for the worker.
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-time.After(2 * time.Second):
+		return nil
+	}
+}
+
 // RemoteOutputEvidence uses only Orca's public, identity-pinned output pages.
 // Source identity is opaque; provider files and session formats are never read.
 type RemoteOutputEvidence struct {

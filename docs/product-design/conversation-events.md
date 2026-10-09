@@ -4,7 +4,9 @@
 
 ## 原生采集
 
-本地 Codex 与绑定到本机 Orca 的 Codex 会话沿原 `codex-app-server` 历史读取接口工作。先核验原 session、workspace 和 Codex home，再以有界 turn 页读取必要状态与 final。只有明确 `agentMessage.phase=final_answer`、原生 turn 有非空 `completedAt` 且正文实际存在时，中心保存完整正文。显式空字符串是完整空回复；缺失 text、未知 phase、失败或取消且没有 final 均保留真实状态与明确缺口，不采用最后一条文字冒充 final。
+本地 Codex 沿原 `codex-app-server` 历史读取接口工作。先核验原 session、workspace 和 Codex home，再以有界 turn 页读取必要状态与 final。只有明确 `agentMessage.phase=final_answer`、原生 turn 有非空 `completedAt` 且正文实际存在时，中心保存完整正文。显式空字符串是完整空回复；缺失 text、未知 phase、失败或取消且没有 final 均保留真实状态与明确缺口，不采用最后一条文字冒充 final。
+
+本机 Orca 通过通用显式输出材料采集，不读取具体 agent 的 home/history 或推断其原生 phase。worker 写入原 workflow/turn/Orca Task/Dispatch 与完整正文，中心同时核原 Dispatch 的真实结算，冻结材料、结算 outcome 和原绑定摘要。它是 `worker_declared` 的应用规范结果，不是原生工具成功证明。正文或结算字段改变均拒绝；释放后从应用冻结证据读取。缺少正文的正常观察和服务恢复均报告缺口，不声称完整 final；一份坏 binding 只产生本来源 gap，不阻断健康来源。详细[契约](../spec/orca-native-worker.spec.md)与[真实验证范围](../acceptance/orca-native-worker.md)。
 
 正在运行的 turn 只保存原 turn 开始事实，不保存部分正文。结束但 final 尚未出现的原 turn 保留有界重访锚点；迟到的 final 仍属于原 turn，不新建会话。原生历史读取游标与最终正文在事务完成后推进；读取失败保存 gap，不推进游标。重复读取按原 source/session/turn/item 身份幂等。终态 final item 内容变化被拒绝，保留原正文并报告缺口。迟到的完整 final 在最终回复索引中解除该 turn 先前的缺正文提示；诊断查询仍可追溯该提示。
 

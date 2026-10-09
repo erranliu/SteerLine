@@ -31,13 +31,6 @@ func (b Backend) Probe(ctx context.Context, target executionbackend.ExecutionTar
 		return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendProtocolInvalid, Diagnostic: "Orca version probe returned no version"}
 	}
 	report := capabilityReport(executionbackend.BackendOrca, executionbackend.ProtocolOrcaTerminalV2, target, agent, version)
-	if b.config.AgentVersion != nil {
-		version, err := b.config.AgentVersion(ctx)
-		if err != nil || strings.TrimSpace(version) == "" {
-			return executionbackend.CapabilityReport{}, &executionbackend.BackendError{Code: executionbackend.BackendUnreachable, Diagnostic: "Orca Codex override version probe failed", Cause: err}
-		}
-		report.AgentVersion = strings.TrimSpace(version)
-	}
 
 	return report, nil
 }
@@ -75,7 +68,7 @@ func (b Backend) InspectWorkspace(ctx context.Context, ref executionbackend.Exec
 	return b.config.InspectWorkspace(ctx, ref)
 }
 
-func (b Backend) StopExecution(ctx context.Context, ref executionbackend.ExecutionRef, _ executionbackend.Operation, handle executionbackend.StopHandle) (executionbackend.StopReceipt, error) {
+func (b Backend) StopExecution(ctx context.Context, ref executionbackend.ExecutionRef, operation executionbackend.Operation, handle executionbackend.StopHandle) (executionbackend.StopReceipt, error) {
 	obs, err := b.Observe(ctx, ref)
 	if err != nil {
 		return executionbackend.StopReceipt{}, err
@@ -89,21 +82,15 @@ func (b Backend) StopExecution(ctx context.Context, ref executionbackend.Executi
 	if handle != nil && handle.Identity() != ref.External {
 		return executionbackend.StopReceipt{}, &executionbackend.BackendError{Code: executionbackend.BackendIdentityMismatch, Diagnostic: "Orca observer handle does not match the fixed terminal identity"}
 	}
-	closeReceipt, err := New(b.config).CloseTerminalChecked(ctx, ref.External.Terminal, ref.External.RuntimeID)
+	_, proof, err := workerResourceAction(ctx, New(b.config).MetaCall, ref.External, "worker-stop", operation.ID)
 	if err != nil {
 		return executionbackend.StopReceipt{}, err
 	}
-	if closeReceipt.Disposition == "confirmed" {
-		return closeReceipt, nil
+	if proof.State == "stopped" {
+		return executionbackend.StopReceipt{Disposition: "confirmed", Diagnostic: "original Orca worker-stop proved stopped"}, nil
 	}
-	obs, err = b.Observe(ctx, ref)
-	if err != nil {
-		return executionbackend.StopReceipt{}, &executionbackend.BackendError{Code: executionbackend.BackendOutcomeUnknown, Diagnostic: "terminal close was accepted but stop could not be confirmed", Cause: err}
-	}
-	if obs.Liveness == "exited" {
-		return executionbackend.StopReceipt{Disposition: "confirmed", Diagnostic: obs.Diagnostic}, nil
-	}
-	return executionbackend.StopReceipt{Disposition: "accepted", Diagnostic: "close accepted; terminal exit is not yet confirmed"}, nil
+	return executionbackend.StopReceipt{Disposition: "accepted", Diagnostic: "Orca worker stop remains " + proof.State + "; settled is not process exit"}, nil
+
 }
 
 func capabilityReport(backend executionbackend.BackendKind, protocol executionbackend.ExecutionProtocol, target executionbackend.ExecutionTarget, agent executionbackend.AgentSpec, version string) executionbackend.CapabilityReport {

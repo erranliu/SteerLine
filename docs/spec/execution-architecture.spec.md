@@ -4,7 +4,7 @@
 
 ## 平台与职责
 
-第一阶段只交付和验收本地 Codex 与本机 Orca。存量远端代码和试验不表示当前远端支持，不成为一期执行前置。Git remote 与 PR provider 仍属于本机交付链。未发布版本不增加旧配置、数据库或协议的迁移、双写和回退路径。
+第一阶段包含本地 Codex、本机 Orca 与远端路径交付。未发布版本不增加旧配置、数据库或协议的迁移、双写和回退路径。
 
 worker 按固定 Spec/Plan 实现、测试、修复、提交并创建 PR；中心负责启动与观察原会话、用户反馈、恢复权限和真实交付核验。测试与审查要求来自对应任务契约，中心在现有 worker 内管理开发流程的步骤与统一 status，流程规则见 [分步契约](worker-staged-flow.spec.md)。测试/审查范围仍来自任务 Spec/Plan，不固定增加 verify/review 阶段。正常 implement.execute/report 与 publish 三轮共用原会话/Attempt；接受结果、转移与下一输入意图原子保存。
 

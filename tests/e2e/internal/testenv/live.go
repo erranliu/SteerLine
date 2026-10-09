@@ -34,6 +34,7 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 	publisher, host := "worker", "local"
 	var orcaConfig map[string]any
 	if chain == "orca-codex" {
+		s.orcaUsageUnavailable = true
 		host, publisher = "orca", "worker"
 		command := os.Getenv("ORCA_CLI_COMMAND")
 		if command == "" {
@@ -41,42 +42,9 @@ func (s *Scenario) NewLiveProject(name, chain string) *Project {
 		}
 		p.OrcaExecutable, err = exec.LookPath(command)
 		s.Must(err)
-		status, err := p.orca(s.Context, "agent", "hooks", "status", "--json")
-		s.Must(err)
-		var hooks struct {
-			Enabled  bool `json:"enabled"`
-			Statuses []struct {
-				Agent, ConfigPath   string
-				ManagedHooksPresent bool
-			} `json:"statuses"`
-		}
-		s.Must(json.Unmarshal(status, &hooks))
-		hookPath := ""
-		for _, h := range hooks.Statuses {
-			if h.Agent == "codex" && h.ManagedHooksPresent {
-				hookPath = h.ConfigPath
-			}
-		}
-		if !hooks.Enabled || hookPath == "" {
-			s.t.Fatal("native Orca tests require its installed Codex transcript hooks")
-		}
-		s.Must(native.SeedOrcaHooks(hookPath, filepath.Join(p.Home, "codex")))
-		// The product still checks native Orca identities and real Codex permissions.
-		shim := filepath.Join(p.Home, "bin", "orca-env.exe")
-		raw, err := os.ReadFile(s.Run.Helper)
-		s.Must(err)
-		s.Must(os.WriteFile(shim, raw, 0700))
-		logDir := filepath.Join(s.Output, name+"-orca")
-		s.Must(os.MkdirAll(logDir, 0700))
-		pwsh, err := exec.LookPath("pwsh")
-		s.Must(err)
-		if strings.Contains(strings.ToLower(pwsh), "windowsapps") {
-			s.t.Fatal("live Orca requires a standalone PowerShell executable for reproducible shell execution")
-		}
-		s.Must(controlled.Write(filepath.Join(p.Home, "orca-env.json"), native.OrcaEnvironment{Executable: p.OrcaExecutable, Home: p.Home, LogDir: logDir, PowerShellDir: filepath.Dir(pwsh)}))
-		// This deadline covers native terminal creation, metadata binding, model
-		// readiness tools and settlement, not one CLI call (bounded separately).
-		orcaConfig = native.OrcaWorkerProfile(shim, "4m")
+		// Orca owns agent launch and permissions. Use the original public native
+		// worker interface, without managed Codex launch/hook/environment rewriting.
+		orcaConfig = native.OrcaWorkerProfile(p.OrcaExecutable, "4m")
 	}
 	var config map[string]any
 	raw, err := os.ReadFile(p.Config)
@@ -266,6 +234,9 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		return u, errors.New("usage needs one bound execution")
 	}
 	e := snap.Domain.Executions[0]
+	if e.Protocol == "orca-terminal-v2" {
+		return u, errors.New("token usage is not exposed by the Orca public interface")
+	}
 	profile, profileErr := evidence.ModelSelection(snap.Domain)
 	if profileErr != nil || profile.Model != native.Model || profile.Effort != native.Effort {
 		return u, errors.New("frozen native model/effort mismatch")
@@ -284,41 +255,7 @@ func (p *Project) NativeUsage(snap Snapshot, label string) (native.Usage, error)
 		}
 		u, usageEvidence, err = native.AppServerTurnUsage(raw, session, e.CurrentTurnID)
 	} else {
-		// Only this project's home is scanned. Exactly one root native session must
-		// match; guardian/subagent logs sharing its cwd are separate executions.
-		matches := 0
-		err = filepath.WalkDir(filepath.Join(p.Home, "codex", "sessions"), func(path string, d os.DirEntry, walkErr error) error {
-			if walkErr != nil {
-				return walkErr
-			}
-			if d.IsDir() || filepath.Ext(path) != ".jsonl" {
-				return nil
-			}
-			raw, readErr := os.ReadFile(path)
-			if readErr != nil {
-				return readErr
-			}
-			matched, matchErr := native.BusinessRolloutMatches(raw, e.Workspace.Worktree)
-			if matchErr != nil {
-				return matchErr
-			}
-			if !matched {
-				return nil
-			}
-			matches++
-			var parseErr error
-			nativeTurn := ""
-			for _, result := range snap.Domain.WorkflowRuns[0].StageResults {
-				if result.CommandID == e.CurrentCommandID {
-					nativeTurn = result.FinalNativeTurnID
-				}
-			}
-			u, usageEvidence, parseErr = native.RolloutTurnUsage(raw, e.Workspace.Worktree, nativeTurn)
-			return parseErr
-		})
-		if err == nil && matches != 1 {
-			err = fmt.Errorf("native rollout matched %d sessions; expected one", matches)
-		}
+		return u, errors.New("selected backend has no bound public usage source")
 	}
 	if err != nil {
 		return u, err
@@ -352,7 +289,7 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	}
 	if chain == "orca-codex" {
 		s.Must(evidence.OrcaExplicitEmptyArgs(before.Domain))
-		s.Must(evidence.OrcaReadiness(e))
+		s.Must(evidence.OrcaStagedContinuity(before.Domain))
 	}
 	for _, task := range before.Page.Tasks {
 		if task.TaskID == p.Tasks["b"].ID && (task.DependencyReady || len(task.WorkflowRuns) > 0) {
@@ -370,20 +307,22 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 	}
 	var usage native.Usage
 	baselineTurn := ""
-	s.Wait("completed native usage baseline", func() (bool, error) {
-		current, err := p.NativeUsage(before, "before")
-		if baselineTurn != "" && current.Turn != baselineTurn {
-			return false, errors.New("native turn changed while awaiting usage completion")
-		}
-		if current.Turn != "" {
-			baselineTurn = current.Turn
-		}
-		if errors.Is(err, native.ErrNativeTurnPending) {
-			return false, nil
-		}
-		usage = current
-		return err == nil, err
-	})
+	if chain == "local-codex" {
+		s.Wait("completed native usage baseline", func() (bool, error) {
+			current, err := p.NativeUsage(before, "before")
+			if baselineTurn != "" && current.Turn != baselineTurn {
+				return false, errors.New("native turn changed while awaiting usage completion")
+			}
+			if current.Turn != "" {
+				baselineTurn = current.Turn
+			}
+			if errors.Is(err, native.ErrNativeTurnPending) {
+				return false, nil
+			}
+			usage = current
+			return err == nil, err
+		})
+	}
 	if restart {
 		p.RestartService()
 		after := p.WaitPhase("waiting_pr_merge")
@@ -397,10 +336,12 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 		if before.Page.ProjectID != after.Page.ProjectID || before.Page.DatabaseID != after.Page.DatabaseID || e.ExecutionID != a.ExecutionID || e.WorkflowRunID != a.WorkflowRunID || originalSession != afterSession || e.Workspace.Worktree != a.Workspace.Worktree || e.CurrentTurnID != a.CurrentTurnID || e.TurnNumber != a.TurnNumber || len(before.Domain.Attempts) != len(after.Domain.Attempts) {
 			s.t.Fatal("restart replaced execution identity or repeated turn")
 		}
-		afterUsage, err := p.NativeUsage(after, "after-restart")
-		s.Must(err)
-		if usage != afterUsage {
-			s.t.Fatal("restart consumed additional model tokens or replaced session")
+		if chain == "local-codex" {
+			afterUsage, err := p.NativeUsage(after, "after-restart")
+			s.Must(err)
+			if usage != afterUsage {
+				s.t.Fatal("restart consumed additional model tokens or replaced session")
+			}
 		}
 	}
 	p.Merge()
@@ -415,10 +356,12 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 			s.t.Fatal("successor not ready and unstarted")
 		}
 	}
-	finalUsage, err := p.NativeUsage(done, "final")
-	s.Must(err)
-	if usage != finalUsage {
-		s.t.Fatal("delivery polling consumed additional tokens")
+	if chain == "local-codex" {
+		finalUsage, err := p.NativeUsage(done, "final")
+		s.Must(err)
+		if usage != finalUsage {
+			s.t.Fatal("delivery polling consumed additional tokens")
+		}
 	}
 	if p.RealPR {
 		if !done.Helper.PR.Merged || done.Helper.PR.State != "merged" {
@@ -427,7 +370,8 @@ func LiveDelivery(s *Scenario, chain string, restart bool) {
 		proof := done.Helper.PR
 		p.RealPRProof = &proof
 	}
-	s.usageVerified = true
+	s.usageVerified = chain == "local-codex"
+	s.orcaUsageUnavailable = chain == "orca-codex"
 	s.Must(s.finishBody())
 	p.StopService()
 }

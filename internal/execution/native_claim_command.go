@@ -38,43 +38,68 @@ func (c CommandService) StartNativeCandidate(ctx context.Context, config Config,
 	return c.ClaimNativeTask(ctx, config, options)
 }
 
+// Preparation performs external checks against copied inputs. The actor commits
+// its declarations atomically after checking the current request and authority.
+type preparedTaskClaim struct {
+	Commit  *storageports.ClaimCommit
+	Receipt executionmodel.TaskClaimReceipt
+}
+
 func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, options TaskClaimOptions) (executionmodel.TaskClaimReceipt, error) {
-	config = copyWorkerFlowConfig(config)
-	sqlite := c.Store
-	if sqlite == nil || c.Project == "" || config.Identity() != c.Project {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("authority_mismatch", "claim requires the configured native project")
-	}
-	if config.WorkflowProtocol != executionmodel.Version {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("unsupported_schema", "only worker-flow-v2 may claim a task")
-	}
-	if err := validateWorkflowConfig(config, c.runtime.Directory); err != nil {
-		return executionmodel.TaskClaimReceipt{}, err
-	}
-	entry, err := registrationFor(config, c.runtime.Directory)
+	prepared, err := c.prepareNativeTaskClaim(ctx, config, options)
 	if err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
 	}
-	if err := config.PrepareWorktreeRoot(); err != nil {
+	return c.commitPreparedTaskClaim(ctx, prepared)
+}
+
+func (c CommandService) commitPreparedTaskClaim(ctx context.Context, prepared preparedTaskClaim) (executionmodel.TaskClaimReceipt, error) {
+	if prepared.Commit == nil {
+		return prepared.Receipt, nil
+	}
+	if err := verifyClaimConfigFiles(c.runtime.ConfigVerifier); err != nil {
 		return executionmodel.TaskClaimReceipt{}, err
+	}
+	return c.Store.CommitTaskClaim(ctx, *prepared.Commit)
+}
+
+func (c CommandService) prepareNativeTaskClaim(ctx context.Context, config Config, options TaskClaimOptions) (preparedTaskClaim, error) {
+	config = copyWorkerFlowConfig(config)
+	sqlite := c.Store
+	if sqlite == nil || c.Project == "" || config.Identity() != c.Project {
+		return preparedTaskClaim{}, nativeErr("authority_mismatch", "claim requires the configured native project")
+	}
+	if config.WorkflowProtocol != executionmodel.Version {
+		return preparedTaskClaim{}, nativeErr("unsupported_schema", "only worker-flow-v1 may claim a task")
+	}
+	if err := validateWorkflowConfig(config, c.runtime.Directory); err != nil {
+		return preparedTaskClaim{}, err
+	}
+	entry, err := registrationFor(config, c.runtime.Directory)
+	if err != nil {
+		return preparedTaskClaim{}, err
+	}
+	if err := config.PrepareWorktreeRoot(); err != nil {
+		return preparedTaskClaim{}, err
 	}
 	if err := taskmodel.ValidateID(options.TaskID); err != nil {
-		return executionmodel.TaskClaimReceipt{}, err
+		return preparedTaskClaim{}, err
 	}
 	if !controlIDPattern.MatchString(options.RequestID) || options.ExpectedTaskVersion == 0 || options.ExpectedAuthorityVersion == 0 || options.WorkflowRunID != "" && !executionbackend.StableExecutionID(options.WorkflowRunID) {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("invalid_batch", "claim requires request ID and current task/project versions")
+		return preparedTaskClaim{}, nativeErr("invalid_batch", "claim requires request ID and current task/project versions")
 	}
 	if options.ServiceInstanceID != "" && !executionbackend.StableExecutionID(options.ServiceInstanceID) {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("invalid_batch", "claim service instance identity is invalid")
+		return preparedTaskClaim{}, nativeErr("invalid_batch", "claim service instance identity is invalid")
 	}
 	if options.ExecutionProfile != nil && (!VerifyFixedExecutionProfile(*options.ExecutionProfile, c.runtime.Directory) ||
 		options.ExecutionProfile.ID != config.selectedProfileID || options.ExecutionProfile.Digest != config.fixedProfileDigest ||
 		options.ExecutionProfile.AcceptedConfigVersion != config.acceptedConfigVersion ||
 		options.ExecutionProfile.Host != config.hostName() || options.ExecutionProfile.Agent != config.agentName()) {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("contract_mismatch", "selected execution profile differs from the claim configuration")
+		return preparedTaskClaim{}, nativeErr("contract_mismatch", "selected execution profile differs from the claim configuration")
 	}
 	if strings.TrimSpace(options.RequestedBy) == "" {
 		if c.Work == nil {
-			return executionmodel.TaskClaimReceipt{}, nativeErr("authority_mismatch", "task work port is required")
+			return preparedTaskClaim{}, nativeErr("authority_mismatch", "task work port is required")
 		}
 		options.RequestedBy = c.Work.DefaultRequestedBy()
 	}
@@ -87,7 +112,7 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		}
 	}
 	if options.ExecutionProfile == nil {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("stale_profile", "claim requires one resolved execution profile")
+		return preparedTaskClaim{}, nativeErr("stale_profile", "claim requires one resolved execution profile")
 	}
 	requestBody := struct {
 		TaskID               string `json:"task_id"`
@@ -106,8 +131,8 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		kind, expectedStatus = "start_candidate", "in_progress"
 		requestBody.TaskVersion, requestBody.AuthorityVersion = options.ExpectedTaskVersion, options.ExpectedAuthorityVersion
 		requestBody.GraphRevision = options.ExpectedGraphRevision
-		requestBody.ControlRequestDigest = options.controlRequestDigest
 	}
+	requestBody.ControlRequestDigest = options.controlRequestDigest
 	if options.ExecutionProfile != nil {
 		requestBody.ProfileID = options.ExecutionProfile.ID
 		requestBody.ProfileDigest = options.ExecutionProfile.Digest
@@ -115,23 +140,24 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	requestRaw, _ := json.Marshal(requestBody)
 	requestPayload, err := taskmodel.CanonicalJSON(requestRaw)
 	if err != nil {
-		return executionmodel.TaskClaimReceipt{}, err
+		return preparedTaskClaim{}, err
 	}
 	if old, found, e := sqlite.LookupCommand(ctx, c.Project, options.RequestID); e != nil {
-		return executionmodel.TaskClaimReceipt{}, e
+		return preparedTaskClaim{}, e
 	} else if found {
-		return replayTaskStart(old, requestPayload, options.TaskID, options.RequestedBy, kind)
+		receipt, err := replayTaskStart(old, requestPayload, options.TaskID, options.RequestedBy, kind)
+		return preparedTaskClaim{Receipt: receipt}, err
 	}
 
 	claimPreparation, err := entry.PrepareClaim(ctx, config)
 	if err != nil {
-		return executionmodel.TaskClaimReceipt{}, err
+		return preparedTaskClaim{}, err
 	}
 	if err := requireWorkerFlowCapabilitiesWithResolver(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, c.runtime.Directory.LifecycleResolver()); err != nil {
-		return executionmodel.TaskClaimReceipt{}, err
+		return preparedTaskClaim{}, err
 	}
 	if err := config.BindPublicationTarget(ctx, c.runtime.ProcessHost); err != nil {
-		return executionmodel.TaskClaimReceipt{}, err
+		return preparedTaskClaim{}, err
 	}
 	if options.ExecutionProfile != nil {
 		// Keep the request payload's selected profile digest unchanged; only the
@@ -142,84 +168,84 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	}
 	graph, err := sqlite.TaskGraphSnapshot(ctx, c.Project)
 	if err != nil {
-		return executionmodel.TaskClaimReceipt{}, err
+		return preparedTaskClaim{}, err
 	}
 	if graph.Authority.AuthorityVersion != options.ExpectedAuthorityVersion {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("stale_version", fmt.Sprintf("expected authority version %d, found %d", options.ExpectedAuthorityVersion, graph.Authority.AuthorityVersion))
+		return preparedTaskClaim{}, nativeErr("stale_version", fmt.Sprintf("expected authority version %d, found %d", options.ExpectedAuthorityVersion, graph.Authority.AuthorityVersion))
 	}
 	if options.startCandidate && (options.ExpectedGraphRevision == 0 || graph.Authority.GraphRevision != options.ExpectedGraphRevision) {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("stale_version", "candidate start requires current graph revision")
+		return preparedTaskClaim{}, nativeErr("stale_version", "candidate start requires current graph revision")
 	}
 	if err = validateNativeConfiguredTarget(ctx, config, graph.Authority, c.runtime.ProcessHost); err != nil {
-		return executionmodel.TaskClaimReceipt{}, err
+		return preparedTaskClaim{}, err
 	}
 	task, exists := graph.ByID[options.TaskID]
 	if !exists {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("task_not_found", "native task was not found")
+		return preparedTaskClaim{}, nativeErr("task_not_found", "native task was not found")
 	}
 	if task.Status == "discarded" {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("task_discarded", "discarded task cannot be claimed")
+		return preparedTaskClaim{}, nativeErr("task_discarded", "discarded task cannot be claimed")
 	}
 	if task.Status != expectedStatus || task.Version != options.ExpectedTaskVersion {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("stale_version", fmt.Sprintf("task is %s at version %d", task.Status, task.Version))
+		return preparedTaskClaim{}, nativeErr("stale_version", fmt.Sprintf("task is %s at version %d", task.Status, task.Version))
 	}
 	_, delivered := graph.Deliveries[task.TaskID]
 	if taskmodel.DeliveryInconsistent(task.Status, delivered) {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("inconsistent_delivery", "task state conflicts with its delivery record")
+		return preparedTaskClaim{}, nativeErr("inconsistent_delivery", "task state conflicts with its delivery record")
 	}
 	if graph.Authority.DispatchPaused {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("dispatch_paused", "dispatch is paused")
+		return preparedTaskClaim{}, nativeErr("dispatch_paused", "dispatch is paused")
 	}
 	if !options.startCandidate && (options.Explicit && graph.Authority.DispatchMode != "manual" || !options.Explicit && graph.Authority.DispatchMode != "auto") {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("wrong_mode", "claim mode does not match project dispatch mode")
+		return preparedTaskClaim{}, nativeErr("wrong_mode", "claim mode does not match project dispatch mode")
 	}
 	if c.Work == nil {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("authority_mismatch", "task work port is required")
+		return preparedTaskClaim{}, nativeErr("authority_mismatch", "task work port is required")
 	}
 	work, err := c.Work.Fixed(ctx, c.Project, options.TaskID, options.ExpectedTaskVersion, options.startCandidate)
 	if err != nil {
-		return executionmodel.TaskClaimReceipt{}, err
+		return preparedTaskClaim{}, err
 	}
 	if work.Authority.AuthorityVersion != graph.Authority.AuthorityVersion || work.Authority.GraphRevision != graph.Authority.GraphRevision {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("stale_version", "fixed work graph changed")
+		return preparedTaskClaim{}, nativeErr("stale_version", "fixed work graph changed")
 	}
 	task = work.Record
 	if !c.Work.CanExecuteType(task.Type) {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("task_not_ready", "task type is not executable in this project")
+		return preparedTaskClaim{}, nativeErr("task_not_ready", "task type is not executable in this project")
 	}
 	contract := work.Contract
 	if c.Work == nil {
-		return executionmodel.TaskClaimReceipt{}, errors.New("task contract verification port is required")
+		return preparedTaskClaim{}, errors.New("task contract verification port is required")
 	}
 	if err = c.Work.VerifyContractFiles(ctx, contract); err != nil {
-		return executionmodel.TaskClaimReceipt{}, err
+		return preparedTaskClaim{}, err
 	}
 	var candidateSnapshot storageports.TaskCandidateSnapshot
 	var commonBase string
 	if options.startCandidate {
 		candidateSnapshot, err = readCommandSnapshot(ctx, sqlite, c.Project, task.TaskID)
 		if err != nil {
-			return executionmodel.TaskClaimReceipt{}, err
+			return preparedTaskClaim{}, err
 		}
 		if participatingCandidates(candidateSnapshot.WorkflowRuns, task.TaskID) >= 5 {
-			return executionmodel.TaskClaimReceipt{}, nativeErr("candidate_limit_reached", "five candidates already participate in this task experiment")
+			return preparedTaskClaim{}, nativeErr("candidate_limit_reached", "five candidates already participate in this task experiment")
 		}
 		commonBase, err = executionmodel.CandidateCommonBase(candidateSnapshot.WorkflowRuns, candidateSnapshot.Executions, task.TaskID)
 		if err != nil {
-			return executionmodel.TaskClaimReceipt{}, err
+			return preparedTaskClaim{}, err
 		}
 		if _, err = verifyKnownCandidatePRs(ctx, config, c.runtime.Directory, c.runtime.ProcessHost, candidateSnapshot, task.TaskID, nil, ""); err != nil {
-			return executionmodel.TaskClaimReceipt{}, err
+			return preparedTaskClaim{}, err
 		}
 	}
 	base, err := acquireNativeBase(ctx, config, c.runtime.ProcessHost)
 	if err != nil {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("task_not_ready", "fixed target branch base could not be acquired: "+err.Error())
+		return preparedTaskClaim{}, nativeErr("task_not_ready", "fixed target branch base could not be acquired: "+err.Error())
 	}
 	if options.startCandidate {
 		base = commonBase
 		if _, err := (Runner{Dir: config.Repository, Timeout: duration(config.CommandTimeout), ProcessHost: c.runtime.ProcessHost}).Output(ctx, config.Git, "cat-file", "-e", base+"^{commit}"); err != nil {
-			return executionmodel.TaskClaimReceipt{}, nativeErr("base_missing_delivery", "selected execution cannot acquire the experiment's common base")
+			return preparedTaskClaim{}, nativeErr("base_missing_delivery", "selected execution cannot acquire the experiment's common base")
 		}
 	}
 	predecessorMerges := map[string]string{}
@@ -230,12 +256,12 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 		pred, ok := graph.ByID[edge.PredecessorID]
 		delivery, delivered := graph.Deliveries[edge.PredecessorID]
 		if !ok || !delivered || pred.Status != "closed" {
-			return executionmodel.TaskClaimReceipt{}, nativeErr("task_not_ready", "predecessor delivery changed during claim preflight")
+			return preparedTaskClaim{}, nativeErr("task_not_ready", "predecessor delivery changed during claim preflight")
 		}
 		predecessorMerges[edge.PredecessorID] = delivery.MergeCommit
 		r := Runner{Dir: config.Repository, Timeout: duration(config.CommandTimeout), ProcessHost: c.runtime.ProcessHost}
 		if _, e := r.Output(ctx, config.Git, "merge-base", "--is-ancestor", delivery.MergeCommit, base); e != nil {
-			return executionmodel.TaskClaimReceipt{}, nativeErr("base_missing_delivery", "acquired branch base does not contain a verified predecessor merge commit")
+			return preparedTaskClaim{}, nativeErr("base_missing_delivery", "acquired branch base does not contain a verified predecessor merge commit")
 		}
 	}
 	backend, protocol := entry.Key.Backend, entry.Key.Protocol
@@ -260,26 +286,26 @@ func (c CommandService) ClaimNativeTask(ctx context.Context, config Config, opti
 	}
 	execution.WorkspaceIntent, err = planWorkspace(config, task.TaskID, workflowRunID, base)
 	if err != nil {
-		return executionmodel.TaskClaimReceipt{}, err
+		return preparedTaskClaim{}, err
 	}
 	attempt := executionmodel.StepAttemptRecord{ProjectIdentity: c.Project, AttemptID: attemptID, ExecutionID: executionID, StepID: "worker", AttemptNumber: 1, Status: "planned", InputRevision: base, ContractDigest: contract.Digest, ExternalBinding: target, CreatedAt: created, UpdatedAt: created}
 	nextTask := task
 	if !options.startCandidate {
 		nextTask, err = c.Work.Claim(work, claimant, created)
 		if err != nil {
-			return executionmodel.TaskClaimReceipt{}, err
+			return preparedTaskClaim{}, err
 		}
 	}
 	operationRequest, _ := json.Marshal(map[string]any{"task_id": task.TaskID, "task_version": options.ExpectedTaskVersion, "authority_version": options.ExpectedAuthorityVersion, "workflow_run_id": workflowRunID, "execution_id": executionID, "attempt_id": attemptID, "base_commit": base, "predecessor_merge_commits": predecessorMerges, "requested_by": options.RequestedBy})
 	if err := verifyClaimConfigFiles(c.runtime.ConfigVerifier); err != nil {
-		return executionmodel.TaskClaimReceipt{}, err
+		return preparedTaskClaim{}, err
 	}
 	if !VerifyFixedExecutionProfile(*wfr.ExecutionProfile, c.runtime.Directory) {
-		return executionmodel.TaskClaimReceipt{}, nativeErr("stale_profile", "claim snapshot changed after evaluation")
+		return preparedTaskClaim{}, nativeErr("stale_profile", "claim snapshot changed after evaluation")
 	}
 	command := storageports.CommandRecord{ProjectIdentity: c.Project, CommandID: options.RequestID, Kind: kind, TargetID: task.TaskID, ExpectedVersion: options.ExpectedTaskVersion, IdempotencyKey: options.RequestID, RequestedBy: options.RequestedBy, Payload: requestPayload, Status: "in_flight", CreatedAt: created}
 	operation := executionmodel.OperationRecord{ProjectIdentity: c.Project, OperationID: options.RequestID, IdempotencyKey: options.RequestID, Kind: kind, Status: "pending", PayloadDigest: operationDigest(operationRequest), Request: operationRequest, CreatedAt: created, UpdatedAt: created}
-	return sqlite.CommitTaskClaim(ctx, storageports.ClaimCommit{Before: task, After: nextTask, Contract: contract, AuthorityVersion: options.ExpectedAuthorityVersion, GraphRevision: graph.Authority.GraphRevision, Candidate: options.startCandidate, Explicit: options.Explicit, ExpectedPRBindings: executionmodel.CandidatePRBindings(candidateSnapshot.WorkflowRuns, task.TaskID), PredecessorMerges: predecessorMerges, Workflow: wfr, Execution: execution, Attempt: attempt, Command: command, Operation: operation})
+	return preparedTaskClaim{Commit: &storageports.ClaimCommit{Before: task, After: nextTask, Contract: contract, AuthorityVersion: options.ExpectedAuthorityVersion, GraphRevision: graph.Authority.GraphRevision, Candidate: options.startCandidate, Explicit: options.Explicit, ExpectedPRBindings: executionmodel.CandidatePRBindings(candidateSnapshot.WorkflowRuns, task.TaskID), PredecessorMerges: predecessorMerges, Workflow: wfr, Execution: execution, Attempt: attempt, Command: command, Operation: operation}}, nil
 }
 
 func freezeClaimExecutionProfile(selected executionmodel.FixedExecutionProfile, config Config) executionmodel.FixedExecutionProfile {

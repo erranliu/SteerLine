@@ -64,7 +64,7 @@ func newMCFixture(t *testing.T) mcFixture {
 type mcResolver struct{}
 
 func (mcResolver) ResolveLifecycle(setup executionbackend.LifecycleSetup) (executionbackend.LifecyclePort, error) {
-	return mcPort{&neutralLifecycle{setup: setup}}, nil
+	return mcPort{&neutralLifecycle{Setup: setup}}, nil
 }
 
 type mcPort struct{ *neutralLifecycle }
@@ -270,8 +270,6 @@ func TestMC2(t *testing.T) {
 	if len(f.s.domain.WorkflowRuns) != 2 {
 		t.Fatal("rejected start created a worker")
 	}
-	t.Run("original_async_receipt", TestSimplifiedLifecycleActorDoesNotWaitForEffect)
-	t.Run("target_profile", TestWorkerFlowContextsDoNotExchangeExecutionProfiles)
 	t.Run("inbox_reservation_receipt_loss", func(t *testing.T) {
 		f := newMCFixture(t)
 		graph, err := f.store.TaskGraphSnapshot(context.Background(), f.c.Identity())
@@ -358,8 +356,6 @@ func TestMC3(t *testing.T) {
 			t.Fatal("feedback crossed fixed execution input")
 		}
 	}
-	t.Run("blocker_keeps_question_rejects_no_queue", TestWorkerEnvironmentER2HostWaitPreservesQuestionAndPR)
-	t.Run("unsent_blocked_feedback", TestSimplifiedEnvironmentSavedInputRequiresFreshAnswer)
 }
 
 func TestMC4(t *testing.T) {
@@ -398,8 +394,6 @@ func TestMC4(t *testing.T) {
 	if len(f.s.domain.Deliveries) != 0 {
 		t.Fatal("unmerged candidates delivered")
 	}
-	t.Run("worker_only_frozen_permissions", TestPublicationPolicyFrozenConfigurationAndCredentials)
-	t.Run("database_gap", TestConversationFactsDoNotStoreRaw)
 }
 
 func TestMC5(t *testing.T) {
@@ -564,7 +558,6 @@ func TestMC7(t *testing.T) {
 	if len(ready) != 0 {
 		t.Fatal("discard unlocked successor")
 	}
-	t.Run("original_single_candidate", TestWorkerFlowClaimNeedsNoProjectSteps)
 	t.Run("discard_full_history_and_exited_set", func(t *testing.T) {
 		f := newMCFixture(t)
 		r, _ := f.start(t, "candidate-b")

@@ -5,7 +5,7 @@ import (
 	reconstructiontypes "github.com/erranliu/SteerLine/internal/execution/reconstruction"
 	productdto "github.com/erranliu/SteerLine/internal/product/api"
 	productquery "github.com/erranliu/SteerLine/internal/product/query"
-	"runtime"
+
 	"testing"
 	"time"
 
@@ -15,17 +15,7 @@ import (
 
 func TestCD65HistoryAndPreparation(t *testing.T) {
 	t.Run("history_commits_without_advancing_business_gate", testCD65HistoryCommitsOnly)
-	t.Run("BindingCannotChangeAttempt", TestCodexHistoryBindingCannotChangeAttempt)
-	t.Run("MissingTextDoesNotClaimFinalBody", TestCodexHistoryMissingTextDoesNotClaimFinalBody)
-	t.Run("NativeFixtures", TestCodexHistoryNativeFixtures)
-	t.Run("RealCancelledTurnFixture", TestCodexHistoryRealCancelledTurnFixture)
-	t.Run("RealFailedTurnFixture", TestCodexHistoryRealFailedTurnFixture)
-	t.Run("RealLocalToolInterleaveFixture", TestCodexHistoryRealLocalToolInterleaveFixture)
-	t.Run("TurnCompletionAndLateFinal", TestCodexHistoryTurnCompletionAndLateFinal)
 
-	if runtime.GOOS == "windows" {
-		t.Run("preparation_reuses_original_host_after_restart", testIntegratedNativeOriginalSessionGate)
-	}
 }
 
 func testCD65HistoryCommitsOnly(t *testing.T) {
