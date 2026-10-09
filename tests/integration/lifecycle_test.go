@@ -877,3 +877,9 @@ func derefString(value *string) string {
 	}
 	return *value
 }
+
+// Keep native multi-turn mutation-loss coverage explicit when broad aggregate
+// fixture cases are simplified on main.
+func TestNativeOrcaMutationRecoveryPreservesOriginalSession(t *testing.T) {
+	testIntegratedNativeSessionGate(t, true)
+}

@@ -81,3 +81,14 @@ A3 保持失败/环境受阻，M1 保持未验。本变更不加入 roadmap、�
 独立只读审计者 `/root/review_orca_code` 与 `/root/review_orca_plan` 提出的全部已确认问题已修复并复核。最终专项复核未发现新必须修复问题；所审停止实现 SHA-256 `62f6910f027fea6f670e7167585a444f2146bff031e60c51a1f3349fe78a405d`。原始首轮回归失败属于新增断言揭示的旧缺口或fixture缺乏正确原生资源回执，均修后复验，不把失败当通过。
 
 ONW-A1/A2 保持上述自动范围通过；ONW-A3 仍为前文 Orca1.4.209 launcher readiness 真实环境阻塞，当前审计不运行模型、不宣称真机闭环通过。ONW-M1 未验。PR用于代码审阅，尚未合并或部署；历史86不进入 roadmap、不阻塞84。
+
+### PR 前最终主干整合
+
+随后默认主干推进到 `26f98994`（并行任务启动、远端健康检查与共享 test fixture）。已通过 merge `61ce007d` 整合，保留主干能力；共享 fixture 的 `Lifecycle.Setup` 字段适配同步修复，未覆盖其他在途工作区。最终定向结果：
+
+- L1 再次通过：12组、469项、0 skip、170.5秒；`C:/Users/lmas1/AppData/Local/Temp/steerline-test-feedback/20261009T060913.911825600Z/summary.json`。
+- sync/background/重启首discard正式服务三场景再次通过（29.39秒）。
+- app配置/冻结/Orca路径回归再次通过（79.600秒），app构建通过；Orca adapter（6.050秒）、remote adapter（3.915秒）、backend（0.749秒）全部通过，tagged local driver编译通过。
+- 主干精简删除了旧 `TestCD67AdditionalImplementation/supported_terminal_recovery_and_original_identity` 子测试：旧选择器实际出现零命中，明确不计通过。为本变更保留独立 `TestNativeOrcaMutationRecoveryPreservesOriginalSession`，以当前正式服务运行多轮、丢回执、反馈、Task损失和incarnation拒绝，实际通过（202.92秒），Plan已使用这个真实入口。
+
+本段测试来源是干净 `61ce007d` 加独立集成入口/Plan修改；未运行全量或重新声称native模型通过。ONW-A3阻塞不变，PR保持草稿供审阅，未授权合并/部署。文档链接与ID静态检查通过，提交diff空白检查通过。
